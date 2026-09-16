@@ -8,6 +8,13 @@
  */
 
 export {
+  type DestructuredName,
+  destructuredNames,
+  type ReadRewrite,
+  rewriteAccessorReads,
+  rewriteReadsInCode,
+} from "./accessor-reads.ts";
+export {
   type CompileResult,
   compileSource,
   createTranslator,
