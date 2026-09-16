@@ -2,6 +2,7 @@ import {
   type Attr,
   type AttributeTag,
   concatMapped,
+  destructuredNames,
   drive,
   type Emitter,
   type Expr,
@@ -11,6 +12,8 @@ import {
   type MappedCode,
   mapped,
   type Position,
+  type ReadRewrite,
+  rewriteAccessorReads,
   TranslateError,
 } from "@mxlang/core";
 
@@ -367,6 +370,173 @@ function hygienicIndex(params: string[], body: string): string {
   return `mxIndex${index}`;
 }
 
+/**
+ * Every identifier appearing anywhere in a `<for>`'s body or params.
+ *
+ * Walks the IR subtree collecting `Expr.code` and bound names, rather than
+ * calling `blockExpression(node.children)` to get one printed string. That
+ * shortcut was a real bug, not a style point: `blockExpression` *drives the
+ * emitter* over the subtree, so merely asking "which names are taken" ran
+ * every nested `<for>`'s own read-rewrite as a side effect, and the body was
+ * then emitted — and rewritten — a second time. Measured on the shortcut:
+ * `<for|{a}| of=xs by="id"><for|q| of=ys by="id">${q.z}` emitted `q()().z`
+ * (a TypeError at render), and two nested destructured rows emitted a
+ * `mxRow` bound nowhere, because the throwaway pass had already consumed that
+ * gensym. Collecting names is now free of side effects.
+ *
+ * The scan of each expression is a regex, unlike every *rewrite* on this
+ * path. The "AST, not regex" rule exists because a regex rewrite is silently
+ * wrong (it renames inside string literals, and misses `x?x:x`); this is a
+ * name-avoidance check, where the only failure mode is over-avoidance —
+ * `<li title="mxRow">` yields `mxRow2`, still correct, merely uglier. Erring
+ * toward more names is the safe direction.
+ */
+function forScopeNames(
+  node: Extract<IrNode, { kind: "For" }>,
+  extra: readonly string[],
+): Set<string> {
+  const names = identifierNames(`${node.params.join(" ")} ${extra.join(" ")}`);
+  const seen = new Set<object>();
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    if (typeof record.code === "string" && "shape" in record) {
+      for (const name of identifierNames(record.code)) names.add(name);
+      return;
+    }
+    if (typeof record.value === "string") {
+      for (const name of identifierNames(record.value)) names.add(name);
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key === "node" || key === "loc") continue;
+      if (typeof child === "string") {
+        for (const name of identifierNames(child)) names.add(name);
+        continue;
+      }
+      visit(child);
+    }
+  };
+  visit(node.children);
+  for (const bound of node.bindings) names.add(bound);
+  return names;
+}
+
+/** A name free in this `<for>`, for a parameter the emitter introduces. */
+function gensym(
+  base: string,
+  node: Extract<IrNode, { kind: "For" }>,
+  extra: readonly string[],
+): string {
+  const used = forScopeNames(node, extra);
+  if (!used.has(base)) return base;
+  let index = 2;
+  while (used.has(`${base}${index}`)) index++;
+  return `${base}${index}`;
+}
+
+/**
+ * Rewrites each named binding's reads in a `<for>` body to read `read`.
+ *
+ * Any generated parameter is registered in `node.bindings` first. That array
+ * is what the core's IR walk reads to decide which names an enclosing
+ * construct binds, so a gensym missing from it is invisible to a *nested*
+ * `<for>`'s own rewrite, which then rewrites this body a second time:
+ * measured, `<for|{a}| of=xs by="id"><for|q| of=ys by="id">${q.z}` emitted
+ * `q()().z` (a TypeError at render), and two nested destructured rows emitted
+ * a `mxRow` bound nowhere.
+ */
+function rewriteForBody(
+  node: Extract<IrNode, { kind: "For" }>,
+  reads: readonly { name: string; read: string }[],
+  generated: readonly string[] = [],
+): void {
+  for (const name of generated) {
+    if (!node.bindings.includes(name)) node.bindings.push(name);
+  }
+  const rewrites = new Map<string, ReadRewrite>();
+  for (const { name, read } of reads) {
+    rewrites.set(name, {
+      read,
+      assignError: `\`<for>\`: \`${name}\` is bound by Solid as an accessor and cannot be assigned; compute a new value instead`,
+    });
+  }
+  rewriteAccessorReads(node.children, rewrites);
+}
+
+/**
+ * The reads one accessor-backed parameter contributes, given the expression
+ * that reads its value.
+ *
+ * A plain identifier reads the accessor call itself. A destructuring pattern
+ * cannot be destructured in the parameter list — Solid passes a function, and
+ * destructuring one throws `TypeError: {} is not iterable` — so each name it
+ * binds reads a member path of that same expression instead.
+ */
+function readsForParam(
+  node: Extract<IrNode, { kind: "For" }>,
+  param: string,
+  value: string,
+): { name: string; read: string }[] {
+  if (isIdentifier(param)) return [{ name: param.trim(), read: value }];
+  const bound = destructuredNames(param);
+  if (bound === null) {
+    fail(
+      `\`<for>\`: the parameter \`${param}\` cannot be bound on this host, because Solid passes it as an accessor and this pattern has no single member read (a rest element, or a pattern that does not parse); bind it whole and read it in the body`,
+      node,
+    );
+  }
+  return bound.map((name) => ({
+    name: name.name,
+    read: `${value}${name.path}`,
+  }));
+}
+
+/**
+ * The callback parameter list for a `<For>`, rewriting the body for each
+ * parameter Solid hands as an accessor.
+ *
+ * A parameter that is a plain identifier keeps its name and its reads become
+ * calls (`p` -> `p()`). A **destructuring pattern** cannot: Solid passes a
+ * function, and destructuring one throws "not iterable". Such a parameter
+ * becomes a gensym accessor and every name it bound reads a member of the
+ * call (`{ name }` -> `mxRow().name`).
+ */
+function accessorParams(
+  node: Extract<IrNode, { kind: "For" }>,
+  slots: readonly { param: string | undefined; accessor: boolean }[],
+): string[] {
+  const params: string[] = [];
+  const reads: { name: string; read: string }[] = [];
+  const generated: string[] = [];
+  for (const { param, accessor } of slots) {
+    if (param === undefined) continue;
+    if (!accessor) {
+      params.push(param);
+      continue;
+    }
+    if (isIdentifier(param)) {
+      params.push(param.trim());
+      reads.push({ name: param.trim(), read: `${param.trim()}()` });
+      continue;
+    }
+    const row = gensym("mxRow", node, generated);
+    generated.push(row);
+    params.push(row);
+    reads.push(...readsForParam(node, param, `${row}()`));
+  }
+  rewriteForBody(node, reads, generated);
+  return params;
+}
+
+function isIdentifier(text: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(text.trim());
+}
+
 /** Solid JSX text emitter over the shared core IR. */
 export class SolidEmitter implements Emitter<string> {
   readonly #out: MappedCode[] = [];
@@ -502,7 +672,6 @@ export class SolidEmitter implements Emitter<string> {
   }
 
   forLoop(node: Extract<IrNode, { kind: "For" }>): void {
-    const body = blockExpression(node.children);
     const [first = "item", second] = node.params;
     if (node.source.kind === "of") {
       let keyed: string;
@@ -515,25 +684,56 @@ export class SolidEmitter implements Emitter<string> {
         keyed = ` keyed={x => x.${field}}`;
       } else if (node.key.code.trim() === "identity") keyed = "";
       else keyed = ` keyed={${node.key.code}}`;
+
+      // Which parameters Solid hands as accessors follows the keying mode
+      // (`solid-js/types/client/flow.d.ts`): with no `keyed` prop the row is
+      // a value and only the index is an accessor; with `keyed={fn}` both
+      // are. Every read of an accessor-backed param is rewritten to call it,
+      // so the read happens inside Solid's tracking scope and stays live when
+      // a same-key row is replaced.
+      const rowIsAccessor = keyed !== "";
+      const params = accessorParams(node, [
+        { param: first, accessor: rowIsAccessor },
+        { param: second, accessor: true },
+      ]);
       this.#out.push(
         concatMapped(
-          `<For each={${node.source.list.code}}${keyed}>{(${node.params.join(", ")}) => `,
-          body,
+          `<For each={${node.source.list.code}}${keyed}>{(${params.join(", ")}) => `,
+          blockExpression(node.children),
           "}</For>",
         ),
       );
       return;
     }
     if (node.source.kind === "in") {
+      // `Object.entries` plus `keyed={e => e[0]}` means Solid hands the whole
+      // entry as one accessor, so the pair cannot be destructured in the
+      // parameter list — destructuring a function throws "not iterable". The
+      // callback takes one gensym instead and each name reads through it.
+      //
+      // Each half goes through the same param handling as `of=`, because a
+      // half may itself be a pattern: `<for|{a}, v| in=obj>` must resolve `a`
+      // to `mxEntry()[0].a`, not drop `{a}` from the parameter list and leave
+      // `a` a free reference that still compiles.
+      const entry = gensym("mxEntry", node, [first, second ?? ""]);
+      rewriteForBody(
+        node,
+        [
+          ...readsForParam(node, first, `${entry}()[0]`),
+          ...(second ? readsForParam(node, second, `${entry}()[1]`) : []),
+        ],
+        [entry],
+      );
       this.#out.push(
         concatMapped(
-          `<For each={Object.entries(${node.source.object.code})} keyed={e => e[0]}>{([${first}, ${second ?? "value"}]) => `,
-          body,
+          `<For each={Object.entries(${node.source.object.code})} keyed={e => e[0]}>{(${entry}) => `,
+          blockExpression(node.children),
           "}</For>",
         ),
       );
       return;
     }
+    const body = blockExpression(node.children);
 
     const from = node.source.from?.code ?? "0";
     const bound = node.source.bound.code;
