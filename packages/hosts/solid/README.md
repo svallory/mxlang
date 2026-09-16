@@ -41,23 +41,52 @@ occupied, so diagnostics and the eventual source map stay anchored to
 covered by `reports a host/expression parse error past the enclosing region
 base` in `src/index.test.ts`.
 
-## `<for>` binds the row as a value, not an accessor (default form)
+## `<for>` bodies read the row as a value, on every form
 
-MX templates are host-agnostic: `${p.name}` inside a plain `<for|p|
-of=...>` (no `by=`) must work identically on every host, so that default
-form binds the row as a **plain value**, never as an `Accessor<T>`. With no
-`by=`, the emitter omits Solid 2's `keyed` prop entirely rather than
-passing `keyed={false}` — Solid's own default (no `keyed` prop) already
-hands the child callback the raw row value and a stable index accessor,
-which is what a body reading `p.name` needs; `keyed={false}` is the *other*
-shape (`item` an accessor, `index` a stable number) and reading `p.name` on
-that accessor renders empty. This matches `by=identity`'s existing lowering
-(also no `keyed` prop) — the two are now the same emitted form.
+MX templates are host-agnostic: `${p.name}` inside a `<for|p| of=...>` must
+work identically on every host, so a `<for>` body is always written against
+**values**, never against `Accessor<T>`. Solid 2 does not hand every
+parameter as a value, so this host makes the two agree by **rewriting the
+reads**, per keying mode
+(`solid-js/types/client/flow.d.ts`):
 
-`by="field"` and `by=(fn)` are unaffected: they select Solid's
-`keyed={fn}` overload, which hands the callback `Accessor<T>` for *both*
-the item and the index regardless of MX's own value-binding stance above —
-that overload is Solid's own shape, not something this host controls.
+| MX form | Emitted `<For>` | Solid hands | Rewritten to |
+|---|---|---|---|
+| `<for\|p\| of=list>` | no `keyed` prop | `p` value | *(nothing)* |
+| `<for\|p, i\| of=list>` | no `keyed` prop | `i` accessor | `${i}` → `${i()}` |
+| `<for\|p, i\| of=list by="id">` | `keyed={x => x.id}` | both accessors | `p.name` → `p().name`, `${i}` → `${i()}` |
+| `<for\|p, i\| of=list by=(fn)>` | `keyed={fn}` | both accessors | same |
+| `<for\|k, v\| in=obj>` | `keyed={e => e[0]}` | one entry accessor | `(mxEntry) =>`, `k` → `mxEntry()[0]`, `v` → `mxEntry()[1]` |
+| `<for\|i\| from to step>` | `Repeat` | `i` value | *(nothing)* |
+
+With no `by=` the emitter omits Solid's `keyed` prop entirely rather than
+passing `keyed={false}`: Solid's default (no `keyed` prop) already hands the
+callback the raw row value, which is what a body reading `p.name` needs;
+`keyed={false}` is the *other* shape (`item` an accessor, `index` a stable
+number). `by=identity` lowers the same way — the two are the same emitted
+form.
+
+**Reads are rewritten, not snapshotted.** The obvious alternative, one
+`const p = p$()` at the top of the callback, runs once per row and goes
+stale the moment Solid replaces a same-key row in place. Rewriting each read
+keeps the call inside Solid's tracking scope, which is the point of being
+handed an accessor. The rewrite is an AST pass
+(`@mxlang/core`'s `rewriteAccessorReads`), not a regex, and it respects
+shadowing at both levels: a nested `<for|p|>` or an arrow parameter `p => …`
+inside the body binds its own `p` and is left alone.
+
+A **destructured** parameter cannot be destructured in the callback list,
+because Solid passes a function and destructuring one throws
+`TypeError: {} is not iterable`. Such a parameter becomes a generated
+accessor parameter and each name it bound reads a member of the call:
+`<for|{ name, id }| of=list by="id">` gives `(mxRow) =>` with `name`
+reading `mxRow().name`. A rest element (`<for|{ a, ...rest }|>`) has no
+single member read and is a positioned compile error.
+
+**Assignment to an accessor-backed parameter is a compile error.** `p = x`
+and `i++` are not expressible — an accessor is not assignable, so the
+emitted code would fail at run time with no diagnostic. Mutating *through*
+the row (`p.count++`) is unaffected and stays legal.
 
 The tradeoff, stated once here rather than repeated per row: rows re-render
 by reference-identity change (Solid's own keyed semantics), not through
@@ -81,8 +110,8 @@ other target can express.
 | `on:` / `oncapture:` / `attr:` / `bool:` / `use:` namespaces | Rejected, each with Solid 2's own replacement in the message (`on:x=fn` → `onX=fn`; `oncapture:` → a `ref` callback with `{ capture: true }`; `attr:`/`bool:` → the plain attribute; `use:foo=opts` → `ref=foo(opts)`) |
 | `IfChain`, 1–2 conditioned branches | `<Show when={cond} fallback={...}>` |
 | `IfChain`, 3+ conditioned branches | `<Switch fallback={...}><Match when={cond}>...</Match></Switch>` |
-| `For`, `of=` | `<For each={list} keyed={...}>{(item, i) => body}</For>`; no `keyed` prop (Solid's default keyed-by-reference form) with no `by=`, `keyed={x => x.field}` for a string `by=`, the raw expression otherwise |
-| `For`, `in=` | `<For each={Object.entries(obj)} keyed={e => e[0]}>{([k, v]) => body}</For>` |
+| `For`, `of=` | `<For each={list} keyed={...}>{(item, i) => body}</For>`; no `keyed` prop (Solid's default keyed-by-reference form) with no `by=`, `keyed={x => x.field}` for a string `by=`, the raw expression otherwise. Reads of each parameter Solid hands as an accessor are rewritten to call it — see the section above |
+| `For`, `in=` | `<For each={Object.entries(obj)} keyed={e => e[0]}>{(mxEntry) => body}</For>`, with `k`/`v` rewritten to `mxEntry()[0]`/`mxEntry()[1]` — the entry arrives as one accessor, so the pair cannot be destructured in the parameter list |
 | `For`, `range` (`from`/`to`/`until`, no `step`) | `<Repeat count={N} from={from}>{(i) => body}</Repeat>`, `N` folded at compile time when both bounds are literal |
 | `For`, `range` with `step` | `<Repeat count={N}>{(mxIndex) => { const i = (from) + mxIndex * (step); return body; }}</Repeat>`; `N` clamped through `Number.isFinite(...) ? Math.max(0, ...) : 0` when not fully literal, so a runtime `step` of `0` renders zero rows instead of an infinite `Repeat` |
 | `HostTag` `<try>` | `<Loading fallback={<@placeholder>}>children</Loading>`, wrapped in `<Errored fallback={(err, ...) => <@catch body>}>` when `<@catch>` is present |

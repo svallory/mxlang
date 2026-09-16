@@ -647,9 +647,10 @@ Five facts worth knowing before editing it:
   compares against `expected.html`. It runs **four** fixtures — `icon` (an L2
   sidecar), `icon-template` (the same tag as an L1 template), `icon-sprite`
   (P5's collecting pair) and `table-of` (L2 without that pair) — for a 24-row
-  count gate. One row is a recorded, reasoned skip (`table-of` on Solid, see
-  the P5 bullet below); a skip still runs, still counts, and still prints its
-  reason, so a fixture that stopped running is still a failure.
+  count gate. All 24 rows pass; the one former skip (`table-of` on Solid) was
+  the accessor-binding bug, fixed in `@mxlang/solid` — see the P5 bullet
+  below. A skip still runs, still counts, and still prints its reason, so a
+  fixture that stopped running is still a failure.
 - **`analyze` / `finalize` / `ctx.store` are P5 and shipped**
   (`packages/core/src/custom-tags.ts`; the contract and the worked example are
   in `packages/core/README.md`). Six invariants worth knowing before touching
@@ -687,15 +688,13 @@ Five facts worth knowing before editing it:
     an empty array. A tag declaring **only** `finalize` is rejected at
     registration, from both `compile.ts` and `fragment.ts`, beside the
     built-in-shadowing check.
-  - **`table-of` is skipped on Solid for a non-custom-tag reason.**
-    `@mxlang/solid` lowers a `<for>` with no `by=` to `<For … keyed={false}>`
-    and binds the row as a plain value, but Solid 2 documents that form as
-    passing an **accessor** (`solid-js/types/client/flow.d.ts`), so any `<for>`
-    body reading a *property* of its row renders empty under SSR — reproducible
-    with a hand-written `<for|p| of=input.people><li>${p.name}</li></for>` and
-    no custom tag in the file. `<icon>`'s own `<for>` passes only because it
-    interpolates the bare param. Reconciling the two is a `@mxlang/solid`
-    change with oracle and twin consequences, tracked separately.
+  - **`table-of` on Solid was skipped and now passes.** The skip recorded a
+    `<for>` body reading a *property* of its row rendering empty under SSR.
+    That was the accessor-binding bug, not a custom-tag matter: `@mxlang/solid`
+    now rewrites every read of a parameter Solid hands as an accessor into a
+    call (`p.name` -> `p().name`), so all 24 rows of `bun run oracle:custom-tags`
+    pass with no recorded skip. See `packages/hosts/solid/README.md`
+    "`<for>` bodies read the row as a value, on every form".
 - **`<try>` is a core-owned custom tag (spec §5 P4), not per-host code.**
   `packages/core/src/builtin-tags.ts` exports `BUILTIN_CUSTOM_TAGS`, and a
   name it lists (today, only `try`) cannot be shadowed by a registered
@@ -948,7 +947,24 @@ Two facts worth knowing before touching it:
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or
   `<Repeat count from>` (`from=`/`to=`/`until=`, with `step` folded into a
   per-row callback when present); `<try>` is a `HostTag` (`claimsTag`/
-  `resolveHostTag`) lowering to `<Loading>`/`<Errored>`. Nothing Solid-specific
+  `resolveHostTag`) lowering to `<Loading>`/`<Errored>`.
+
+- **A `<for>` body always reads its params as values; the emitter rewrites
+  the reads.** Solid 2 hands some `<For>` callback parameters as accessors
+  and the shape follows the keying mode
+  (`solid-js/types/client/flow.d.ts`): no `keyed` prop gives a value row and
+  an accessor index; `keyed={fn}` (`by="field"`/`by=(fn)`) gives accessors for
+  both. Rather than make MX authors write `p().name` on some forms and
+  `p.name` on others, every read of an accessor-backed param is rewritten to
+  call it, through `@mxlang/core`'s `rewriteAccessorReads` (an AST pass that
+  respects shadowing, not a regex). `in=` is the special case: `keyed={e =>
+  e[0]}` makes the entry one accessor, so the pair cannot be destructured in
+  the parameter list — `([k, v]) =>` throws `TypeError: {} is not iterable` —
+  and the callback takes a generated `mxEntry` with `k`/`v` reading
+  `mxEntry()[0]`/`[1]`. Reads are rewritten rather than snapshotted to a
+  `const` at callback top, which would go stale on a same-key row
+  replacement. Assigning to an accessor-backed param is a positioned compile
+  error. Full table in `packages/hosts/solid/README.md`. Nothing Solid-specific
   reaches `packages/core` beyond the two IR fields (`ForSource.range.step`,
   `For.key`) every Marko-syntax host needs regardless of target — see the
   core README's IR table.
