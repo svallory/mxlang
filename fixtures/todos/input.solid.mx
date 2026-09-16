@@ -21,7 +21,7 @@ export function Todos() {
       <if=(todos().length > 0)>
         <ul>
           <!-- default keyed form (no by=): item is the raw row value, index an accessor -->
-          <for|todo, i| of=todos()><li>${i()}: ${todo.text}</li></for>
+          <for|todo, i| of=todos()><li>${i}: ${todo.text}</li></for>
           <!-- identity-keyed (by=identity, same lowering as the default above) -->
           <for|todo, i| of=todos() by=identity><li>${todo.text}</li></for>
         </ul>

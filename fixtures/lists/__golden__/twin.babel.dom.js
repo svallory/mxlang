@@ -101,12 +101,12 @@ export function Lists() {
  return Object.entries(meta());
  },
  keyed: e => e[0],
- children: ([k, v]) => (() => {
+ children: mxEntry => (() => {
  var _el$17 = _tmpl$7(),
  _el$18 = _el$17.firstChild,
  _el$19 = _el$18.nextSibling;
- _$insert(_el$17, k, _el$18);
- _$insert(_el$17, v, _el$19);
+ _$insert(_el$17, () => mxEntry()[0], _el$18);
+ _$insert(_el$17, () => mxEntry()[1], _el$19);
  return _el$17;
  })()
  }), _el$9);

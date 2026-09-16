@@ -14,9 +14,9 @@ export function Lists() {
   return (
     <div>
       <!-- custom key by field name: by="id" -->
-      <for|row, i| of=rows() by="id"><li>${i()}: ${row().label}</li></for>
+      <for|row, i| of=rows() by="id"><li>${i}: ${row.label}</li></for>
       <!-- custom key by function: by=(fn) -->
-      <for|row, i| of=rows() by=(r => r.label)><li>${row().label}</li></for>
+      <for|row, i| of=rows() by=(r => r.label)><li>${row.label}</li></for>
       <!-- inclusive range: from=1 to=count() -->
       <for|i| from=1 to=count()><span>${i}</span></for>
       <!-- exclusive range with literal bounds, folded at lowering time -->
