@@ -105,7 +105,11 @@ describe("Solid IR lowering", () => {
       [
         "each={Object.entries(record)}",
         "keyed={e => e[0]}",
-        "{([key, value]) =>",
+        // `keyed={fn}` means Solid hands the whole entry as one accessor, so
+        // the pair cannot be destructured in the parameter list; each name
+        // reads through the accessor instead.
+        "{(mxEntry) =>",
+        "mxEntry()[0]",
       ],
     ],
     [

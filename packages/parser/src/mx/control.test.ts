@@ -290,7 +290,10 @@ describe("for: Solid 2 list rows", () => {
     expect(each.callee.object.name).toBe("Object");
     expect(each.callee.property.name).toBe("entries");
     expect(list.attr("keyed")?.type).toBe("ArrowFunctionExpression");
-    expect(list.params?.[0]?.type).toBe("ArrayPattern");
+    // A single accessor parameter, not an `ArrayPattern`: `keyed={fn}` makes
+    // Solid pass the entry as a function, and destructuring one throws
+    // `TypeError: {} is not iterable`. `k` and `v` read through it instead.
+    expect(list.params?.[0]?.type).toBe("Identifier");
   });
 
   it("carries no needsImport: both Solid 2 compilers auto-import builtIns", () => {
