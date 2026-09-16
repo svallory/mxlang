@@ -54,10 +54,17 @@ export function Lists() {
         }}
       </Repeat>
       {/* object entries, keyed by the entry key */}
+      {/*
+        `keyed={fn}` makes Solid pass the entry as an accessor, so the pair
+        cannot be destructured in the parameter list: `([k, v]) => …` throws
+        `TypeError: {} is not iterable` at render time (measured against
+        `@solidjs/web`'s `renderToString`). The entry is read through the
+        accessor instead, which is what MX now emits.
+      */}
       <For each={Object.entries(meta())} keyed={(e) => e[0]}>
-        {([k, v]) => (
+        {(mxEntry) => (
           <p>
-            {k}={v}
+            {mxEntry()[0]}={mxEntry()[1]}
           </p>
         )}
       </For>

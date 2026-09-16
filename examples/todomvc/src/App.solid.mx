@@ -1,4 +1,8 @@
-import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+// `For` is imported explicitly although both Solid compilers auto-import the
+// builtIns: the auto-import happens at compile time, so the *typechecker*
+// (`mx-tsc`) otherwise sees an unresolved `For` and falls back to `any` for
+// the `<for>` callback params, which hides real errors in the body.
+import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
 import { Footer } from "./Footer.solid.mx";
 import { TodoItem } from "./TodoItem.solid.mx";
 import type { Filter, Todo } from "./types";
@@ -114,7 +118,7 @@ export function App() {
           <ul class="todo-list">
             <for|todo| of=visible() by="id">
               <TodoItem
-                todo=todo()
+                todo=todo
                 onToggle=toggleTodo
                 onDestroy=destroyTodo
                 onEdit=editTodo

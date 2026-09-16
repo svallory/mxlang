@@ -119,9 +119,13 @@ export function Lists() {
  return Object.entries(meta());
  },
  keyed: (e) => e[0],
- children: ([k, v]) => {
+ children: (mxEntry) => {
  var _v$25, _v$26, _v$27;
- return _v$25 = _$ssrHydrationKey(), _v$26 = _$escape(k), _v$27 = _$escape(v), _$ssr(_tmpl$7, _v$25, _v$26, _v$27);
+ return _v$25 = _$ssrHydrationKey(), _v$26 = () => {
+ return _$escape(mxEntry()[0]);
+ }, _v$27 = () => {
+ return _$escape(mxEntry()[1]);
+ }, _$ssr(_tmpl$7, _v$25, _v$26, _v$27);
  }
  }));
  return _$ssr(_tmpl$, _v$, _v$2, _v$3, _v$4, _v$5, _v$6, _v$7, _v$8, _v$9);
