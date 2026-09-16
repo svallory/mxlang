@@ -821,7 +821,7 @@ function irBoundNames(node: IrNode): string[] {
  * template binding for its whole body, and no single expression's parse can
  * see that.
  */
-function rewriteCodes(
+export function rewriteCodes(
   nodes: unknown,
   rewrite: (
     code: string,
