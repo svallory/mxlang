@@ -39,6 +39,7 @@ import type { Node } from "./core.ts";
 import {
   type CustomTag,
   customTagTaglib,
+  rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 
@@ -61,6 +62,7 @@ function parseOnlyTranslator(
   customTags: Record<string, CustomTag> | undefined,
 ) {
   rejectShadowedRegistration(customTags);
+  rejectUnknownDeclarationKeys(customTags);
   rejectUnreachableHooks(customTags);
   const taglib = customTagTaglib(customTags);
   return taglib

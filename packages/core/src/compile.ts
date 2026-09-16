@@ -22,6 +22,7 @@ import { type Ctx, type MxWarning, type Node, newCtx } from "./core.ts";
 import {
   type CustomTag,
   customTagTaglib,
+  rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
@@ -123,6 +124,7 @@ function printExpression(node: unknown): string {
  */
 export function createTranslator(host: TranslatorOptions = {}) {
   rejectShadowedRegistration(host.customTags);
+  rejectUnknownDeclarationKeys(host.customTags);
   rejectUnreachableHooks(host.customTags);
   const customTags = customTagTaglib(host.customTags);
   return {

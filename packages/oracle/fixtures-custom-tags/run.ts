@@ -105,7 +105,7 @@ const FIXTURES: Fixture[] = [
   load("icon-template", templateIcon()),
   // P5's two dogfoods. `icon-sprite` is the same markup as `icon` through the
   // collecting pair — one `<symbol>` per distinct name, prepended once — and
-  // `table-of` is L2 without that pair, showing `staticOnly` plus the
+  // `table-of` is L2 without that pair, showing `literalOnly` plus the
   // structural builders on their own.
   load("icon-sprite", { icon: spriteIcon }),
   load("table-of", { "table-of": tableOf }),

@@ -40,10 +40,10 @@ const icon: CustomTag = {
     name: {
       type: "string",
       required: true,
-      staticOnly: true,
+      literalOnly: true,
       enum: Object.keys(PATHS),
     },
-    size: { type: "number", staticOnly: true, default: 24 },
+    size: { type: "number", literalOnly: true, default: 24 },
     class: { type: "string" },
   },
 

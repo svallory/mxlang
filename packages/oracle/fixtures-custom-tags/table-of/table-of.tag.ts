@@ -4,7 +4,7 @@
  * The counterpart to `icon-sprite`. Nothing here depends on the set of calls,
  * so there is no `analyze` and no `finalize` — a tag that only needs to see
  * one call writes one hook. What it does need is the other two halves of the
- * L2 surface: `staticOnly`, so the column list is a value this file can read
+ * L2 surface: `literalOnly`, so the column list is a value this file can read
  * at compile time rather than code the host must emit, and `ctx.build`'s
  * structural builders, so the body is a real `<for>` in the IR and each host
  * lowers it with its own loop rather than receiving pre-rendered rows.
@@ -20,7 +20,7 @@ import type {
 /**
  * Reads a `columns=["a", "b"]` attribute back as strings.
  *
- * `staticOnly` has already guaranteed the value is a compile-time constant, so
+ * `literalOnly` has already guaranteed the value is a compile-time constant, so
  * the only thing left to check is that it is a constant of the right *shape*
  * — an array of strings rather than, say, a number. That check is here rather
  * than declared because `attributes.type` describes scalars.
@@ -73,7 +73,7 @@ const tableOf: CustomTag = {
   parseOptions: { openTagOnly: true },
   attributes: {
     value: { type: "expression", required: true },
-    columns: { staticOnly: true, required: true },
+    columns: { literalOnly: true, required: true },
     class: { type: "string" },
   },
 

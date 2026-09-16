@@ -186,7 +186,7 @@ import type { CustomTag } from "@mxlang/core";
 
 const icon: CustomTag = {
   attributes: {
-    name: { type: "string", required: true, staticOnly: true },
+    name: { type: "string", required: true, literalOnly: true },
   },
   transform(call, ctx) {
     const name = call.attrs.find((attr) => attr.kind !== "spread" && attr.name === "name");
@@ -207,7 +207,10 @@ map. Either way the core remains synchronous: it injects only each
 definition's `parseOptions` (`text`,
 `preserveWhitespace`, `openTagOnly`) into `@marko/compiler` before parsing,
 then validates declared `attributes` and `attributeTags` before `transform`.
-Transforms receive resolved author material and return ordinary IR. Builder
+An unknown key in an `attributes`/`attributeTags` declaration (a typo, or a
+retired name such as `staticOnly`/`repeated`) is rejected at registration,
+before any file is parsed, since neither key is checked against a runtime
+schema anywhere else. Transforms receive resolved author material and return ordinary IR. Builder
 output is stamped with the call-site position, `ctx.gensym()` is unique within
 the file, and `ctx.build.hostTag()` is the only route to a host primitive.
 
@@ -306,7 +309,7 @@ call before any of them expands, `finalize` contributes output once, and
 
 ```ts
 const icon: CustomTag = {
-  attributes: { name: { type: "string", required: true, staticOnly: true } },
+  attributes: { name: { type: "string", required: true, literalOnly: true } },
   analyze(calls, ctx) {            // every <icon> in this file, before any expands
     ctx.store.set("used", new Set(calls.map(nameOf)));
   },
