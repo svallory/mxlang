@@ -40,11 +40,11 @@ export interface CustomTagAttribute {
   enum?: string[];
   default?: unknown;
   /** Reject a runtime expression when the tag needs a literal value. */
-  staticOnly?: boolean;
+  literalOnly?: boolean;
 }
 
 export interface CustomTagAttributeTag {
-  repeated?: boolean;
+  repeatable?: boolean;
   required?: boolean;
 }
 
@@ -376,14 +376,14 @@ function literalValue(attr: Attr): LiteralValue | null {
  *
  * Wider than `literalValue`, deliberately. `literalValue` answers "which of
  * `string`/`number`/`boolean` is this?" for the `type` and `enum` checks, so it
- * is scalar by construction. `staticOnly` asks a different question — "can this
+ * is scalar by construction. `literalOnly` asks a different question — "can this
  * tag read this value now, rather than emit code that reads it later?" — and a
  * tag that takes a list (`<table-of columns=["name", "price"]>`) or a lookup
  * map needs that answer to be yes for an array or object literal whose members
- * are themselves static. Composite values are still not `literalValue`s, so
+ * are themselves literals. Composite values are still not `literalValue`s, so
  * declaring a `type` or an `enum` alongside keeps its scalar meaning.
  */
-function isStaticNode(node: Node | null | undefined): boolean {
+function isLiteralNode(node: Node | null | undefined): boolean {
   switch (node?.type) {
     case "StringLiteral":
     case "NumericLiteral":
@@ -392,7 +392,7 @@ function isStaticNode(node: Node | null | undefined): boolean {
       return true;
     case "ArrayExpression":
       return (node.elements as Array<Node | null>).every((element) =>
-        isStaticNode(element),
+        isLiteralNode(element),
       );
     case "ObjectExpression":
       return (node.properties as Node[]).every(
@@ -401,21 +401,21 @@ function isStaticNode(node: Node | null | undefined): boolean {
           property.computed !== true &&
           (property.key.type === "Identifier" ||
             property.key.type === "StringLiteral") &&
-          isStaticNode(property.value),
+          isLiteralNode(property.value),
       );
     case "UnaryExpression":
       // `-1` is a `UnaryExpression` over a `NumericLiteral`, not a literal of
       // its own, and rejecting it would make a negative default unwritable.
-      return node.operator === "-" && isStaticNode(node.argument);
+      return node.operator === "-" && isLiteralNode(node.argument);
     default:
       return false;
   }
 }
 
-function isStaticAttr(attr: Attr): boolean {
+function isLiteralAttr(attr: Attr): boolean {
   if (attr.kind === "static" || attr.kind === "boolean") return true;
   if (attr.kind !== "dynamic") return false;
-  return isStaticNode(attr.value.node);
+  return isLiteralNode(attr.value.node);
 }
 
 /**
@@ -525,10 +525,10 @@ export function validateCustomTagCall(
       present.add(attr.name);
 
       const literal = literalValue(attr);
-      if (declaration.staticOnly && !isStaticAttr(attr)) {
+      if (declaration.literalOnly && !isLiteralAttr(attr)) {
         failAt(
           call.name,
-          `attribute \`${attr.name}\` must be a static literal`,
+          `attribute \`${attr.name}\` must be a literal`,
           attr.loc,
         );
       }
@@ -606,7 +606,7 @@ export function validateCustomTagCall(
     if (!declaration) {
       failAt(call.name, `unknown attribute tag \`<@${tag.name}>\``, tag.loc);
     }
-    if (seen.has(tag.name) && declaration.repeated !== true) {
+    if (seen.has(tag.name) && declaration.repeatable !== true) {
       failAt(
         call.name,
         `attribute tag \`<@${tag.name}>\` may not be repeated`,
@@ -710,6 +710,65 @@ export function rejectUnreachableHooks(
       0,
       0,
     );
+  }
+}
+
+const ATTRIBUTE_KEYS = [
+  "type",
+  "required",
+  "enum",
+  "default",
+  "literalOnly",
+] as const;
+const ATTRIBUTE_TAG_KEYS = ["repeatable", "required"] as const;
+
+/**
+ * Rejects an unknown key in a registered tag's `attributes`/`attributeTags`
+ * declarations, at registration time, before any file is parsed.
+ *
+ * These declaration objects are read directly at runtime (`literalOnly`,
+ * `repeatable`, ...) with no schema check of their own — a `.tag.ts` sidecar
+ * is loaded through `require` and type-stripped, so a renamed or misspelled
+ * key (`staticOnly`, `repeated`, `requried`) would otherwise register
+ * silently and its option would simply never apply. There is deliberately no
+ * legacy alias for the retired `staticOnly`/`repeated` names: they fail this
+ * check exactly like any other unknown key.
+ */
+export function rejectUnknownDeclarationKeys(
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+): void {
+  if (!customTags) return;
+  for (const [tagName, definition] of Object.entries(customTags)) {
+    if (definition.attributes) {
+      for (const [attrName, declaration] of Object.entries(
+        definition.attributes,
+      )) {
+        for (const key of Object.keys(declaration)) {
+          if (!(ATTRIBUTE_KEYS as readonly string[]).includes(key)) {
+            throw new TranslateError(
+              `Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: ${ATTRIBUTE_KEYS.join(", ")}`,
+              0,
+              0,
+            );
+          }
+        }
+      }
+    }
+    if (definition.attributeTags) {
+      for (const [tagAttrName, declaration] of Object.entries(
+        definition.attributeTags,
+      )) {
+        for (const key of Object.keys(declaration)) {
+          if (!(ATTRIBUTE_TAG_KEYS as readonly string[]).includes(key)) {
+            throw new TranslateError(
+              `Unknown key "${key}" in the "${tagAttrName}" attribute tag declaration of tag "${tagName}"; allowed: ${ATTRIBUTE_TAG_KEYS.join(", ")}`,
+              0,
+              0,
+            );
+          }
+        }
+      }
+    }
   }
 }
 

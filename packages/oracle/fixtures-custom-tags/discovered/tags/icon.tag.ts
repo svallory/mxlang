@@ -42,7 +42,7 @@ const icon: CustomTag = {
     name: {
       type: "string",
       required: true,
-      staticOnly: true,
+      literalOnly: true,
       enum: Object.keys(PATHS),
     },
   },

@@ -19,11 +19,11 @@ export interface CustomTagAttribute {
   required?: boolean;
   enum?: string[];
   default?: unknown;
-  staticOnly?: boolean;
+  literalOnly?: boolean;
 }
 
 export interface CustomTagAttributeTag {
-  repeated?: boolean;
+  repeatable?: boolean;
   required?: boolean;
 }
 
@@ -113,7 +113,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | --- | --- |
 | `parseOptions` | Static parser behavior that discovery reads before parsing the caller. |
 | `attributes` | Closed attribute contract, validated before hooks; omit it to leave attributes open. |
-| `attributeTags` | Closed `<@name>` contract with required/repeated controls. |
+| `attributeTags` | Closed `<@name>` contract with required/repeatable controls. |
 | `analyze` | Non-mutating pass over every call of this tag in one file, before transforms. |
 | `transform` | Expands one validated call into ordinary IR; optional only when a template exists. |
 | `finalize` | Adds nodes once per file after expansion; returned nodes are prepended. |
@@ -129,8 +129,8 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `required` | Requires the attribute or attribute tag. |
 | `enum` | Restricts an attribute to listed string literals. |
 | `default` | Supplies an omitted string, number, or boolean attribute after validation. |
-| `staticOnly` | Requires a compile-time scalar, array, or object literal. |
-| `repeated` | Allows an attribute tag name to appear more than once. |
+| `literalOnly` | Requires a compile-time scalar, array, or object literal. |
+| `repeatable` | Allows an attribute tag name to appear more than once. |
 
 ### `TagCall`
 
@@ -182,6 +182,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | Trigger | Diagnostic form |
 | --- | --- |
 | A registration uses a core-owned name such as `try`. | `` `<name>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` |
+| An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …` |
 | A definition declares only `finalize`. | `` `<name>`: a custom tag that defines only `finalize` has no call site and nothing to collect… `` |
 | A called tag has neither a transform nor a template. | `` `<name>`: custom tag has neither a `transform` nor a template file… `` |
 | Nested custom-tag calls exceed 64. | `` `<name>`: custom tag expansion exceeded 64 nested invocations `` |
@@ -199,7 +200,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | A tag declaring `attributes: {}` receives any named or spread attribute. | `` `<name>`: accepts no attributes `` |
 | A closed non-empty contract receives a spread. | `` `<name>`: spread attributes cannot be checked against this tag's declared attributes `` |
 | An undeclared named attribute is present. | `` `<name>`: unknown attribute `x` `` |
-| A `staticOnly` value is not compile-time static. | `` `<name>`: attribute `x` must be a static literal `` |
+| A `literalOnly` value is not compile-time static. | `` `<name>`: attribute `x` must be a literal `` |
 | A scalar literal has the wrong declared type. | `` `<name>`: attribute `x` must be TYPE, got TYPE `` |
 | `type: "expression"` receives static-string or valueless syntax. | `` `<name>`: attribute `x` must be an expression `` |
 | An enum receives a non-literal expression. | `` `<name>`: attribute `x` must be a static value from … `` |
@@ -213,7 +214,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | Trigger | Diagnostic form |
 | --- | --- |
 | A closed contract receives an undeclared attribute tag. | `` `<name>`: unknown attribute tag `<@x>` `` |
-| A name repeats without `repeated: true`. | `` `<name>`: attribute tag `<@x>` may not be repeated `` |
+| A name repeats without `repeatable: true`. | `` `<name>`: attribute tag `<@x>` may not be repeated `` |
 | A required attribute tag is absent. | `` `<name>`: missing required attribute tag `<@x>` `` |
 
 ### Builder boundary errors

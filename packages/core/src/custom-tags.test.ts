@@ -71,7 +71,7 @@ function tryFind<K extends IrNode["kind"]>(
 
 const svgTag: CustomTag = {
   attributes: {
-    name: { type: "string", required: true, staticOnly: true },
+    name: { type: "string", required: true, literalOnly: true },
   },
   transform(call, ctx) {
     const name = named(call.attrs, "name");
@@ -131,7 +131,7 @@ describe("custom tag transforms", () => {
   it("gives transform attrs, content, attribute tags, params, and var", () => {
     let seen: TagCall | null = null;
     const capture: CustomTag = {
-      attributeTags: { column: { repeated: true } },
+      attributeTags: { column: { repeatable: true } },
       transform(call, ctx) {
         seen = call;
         void call.attributeTags;
@@ -264,7 +264,7 @@ describe("custom tag transforms", () => {
     ).toThrowError(
       expect.objectContaining({
         message: expect.stringContaining(
-          "`<icon>`: attribute `name` must be a static literal",
+          "`<icon>`: attribute `name` must be a literal",
         ),
         line: 2,
       }),
@@ -324,13 +324,13 @@ describe("custom tag declarations", () => {
       name: {
         type: "string",
         required: true,
-        staticOnly: true,
+        literalOnly: true,
         enum: ["check", "x"],
       },
-      size: { type: "number", staticOnly: true, default: 24 },
+      size: { type: "number", literalOnly: true, default: 24 },
     },
     attributeTags: {
-      item: { repeated: true, required: true },
+      item: { repeatable: true, required: true },
       footer: {},
     },
     transform(call) {
@@ -361,6 +361,34 @@ describe("custom tag declarations", () => {
         { declared },
       ),
     ).toThrowError(/unknown attribute `toString`/);
+  });
+
+  it("rejects the retired `staticOnly`/`repeated` declaration keys at registration", () => {
+    // `staticOnly`/`repeated` were renamed to `literalOnly`/`repeatable`
+    // (decision 2026-09-16). There is no legacy alias: a sidecar still
+    // written against the old names fails registration like any other
+    // unknown key, rather than registering with the option silently ignored.
+    // Cast through `unknown` to write the retired key past `CustomTag`'s
+    // current type, the same way a type-stripped `.tag.ts` sidecar would.
+    const staleAttribute = {
+      attributes: { name: { type: "string", staticOnly: true } },
+      transform: () => [],
+    } as unknown as CustomTag;
+    expect(() =>
+      lowerWithTags('<stale name="check"/>\n', { stale: staleAttribute }),
+    ).toThrowError(
+      /Unknown key "staticOnly" in the "name" attribute declaration of tag "stale"/,
+    );
+
+    const staleAttributeTag = {
+      attributeTags: { item: { repeated: true } },
+      transform: () => [],
+    } as unknown as CustomTag;
+    expect(() =>
+      lowerWithTags("<stale/>\n", { stale: staleAttributeTag }),
+    ).toThrowError(
+      /Unknown key "repeated" in the "item" attribute tag declaration of tag "stale"/,
+    );
   });
 
   it("rejects a missing required attribute at the call", () => {
@@ -511,7 +539,7 @@ describe("custom tag declarations", () => {
         '\n<declared name="check" size=input.size><@item/></declared>\n',
         { declared },
       ),
-    ).toThrowError(/attribute `size` must be a static literal/);
+    ).toThrowError(/attribute `size` must be a literal/);
   });
 
   it("rejects unknown, repeated, and missing required attribute tags", () => {
@@ -679,7 +707,7 @@ describe("analyze, finalize and the per-file store", () => {
   it("produces identical output across two runs and both call orders", () => {
     const icons: CustomTag = {
       attributes: {
-        name: { type: "string", required: true, staticOnly: true },
+        name: { type: "string", required: true, literalOnly: true },
       },
       analyze(calls, ctx) {
         const used = ctx.store.get<Set<string>>("used") ?? new Set<string>();

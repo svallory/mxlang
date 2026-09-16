@@ -19,10 +19,10 @@ const icon: CustomTag = {
     name: {
       type: "string",
       required: true,
-      staticOnly: true,
+      literalOnly: true,
       enum: Object.keys(PATHS),
     },
-    size: { type: "number", staticOnly: true, default: 24 },
+    size: { type: "number", literalOnly: true, default: 24 },
     class: { type: "string" },
   },
   transform,
@@ -35,11 +35,11 @@ An attribute declaration supports:
 - `required`: reject a call that omits the attribute.
 - `enum`: accept only one of the listed string literals.
 - `default`: append a string, number, or boolean value when the call omits it.
-- `staticOnly`: reject values that cannot be read at compile time. Static arrays and objects are accepted as well as scalar literals.
+- `literalOnly`: reject values that cannot be read at compile time. Literal arrays and objects are accepted as well as scalar literals.
 
 Declaring `attributes` makes a closed contract: undeclared attributes and spreads are errors. Omitting `attributes` leaves attributes open.
 
-`attributeTags` is a map from the name after `@` to `{ required?, repeated? }`. Once present, it is also closed: undeclared names are errors, required names must occur, and a name repeats only when `repeated: true`.
+`attributeTags` is a map from the name after `@` to `{ required?, repeatable? }`. Once present, it is also closed: undeclared names are errors, required names must occur, and a name repeats only when `repeatable: true`.
 
 ## Change how the caller parses
 
