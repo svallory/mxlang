@@ -1,0 +1,21 @@
+<div class={card: true, highlight: highlighted}>
+  <h1>Hello, ${title}</h1>
+
+  <if=loggedIn>
+    <p>Welcome back, ${userName}!</p>
+  </if>
+  <else>
+    <p>Please log in.</p>
+  </else>
+
+  <const/total=items.length/>
+  <p>${total} item(s)</p>
+
+  <ul>
+    <for|item| of=items by=(item => item.id)>
+      <li>${item.label}</li>
+    </for>
+  </ul>
+
+  <button onClick=toggleHighlight>Toggle highlight</button>
+</div>

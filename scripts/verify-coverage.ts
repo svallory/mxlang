@@ -31,6 +31,8 @@ interface Package {
 }
 
 const NO_TEST_EXCEPTIONS: Record<string, string> = {
+  "angular-app":
+    "ng build/ng test only, verified manually — no e2e suite wired yet",
   "astro-static": "e2e only",
   "counter-app": "e2e only",
   "hono-app": "e2e only",
