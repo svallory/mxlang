@@ -35,7 +35,7 @@ import { dirname, join } from "node:path";
 
 /** The host a file compiles through, plus that host's strictness. */
 export interface HostPolicy {
-  host: "html" | "astro" | "solid" | "preact" | "react" | "hono";
+  host: "html" | "astro" | "solid" | "preact" | "react" | "hono" | "angular";
   strict?: boolean;
 }
 
@@ -46,6 +46,7 @@ const HOST_PACKAGES: Record<string, HostPolicy["host"]> = {
   "@mxlang/preact": "preact",
   "@mxlang/react": "react",
   "@mxlang/hono": "hono",
+  "@mxlang/angular": "angular",
 };
 
 const DEFAULT_POLICY: HostPolicy = { host: "html" };
@@ -66,7 +67,8 @@ function isKnownHost(
     value === "solid" ||
     value === "preact" ||
     value === "react" ||
-    value === "hono"
+    value === "hono" ||
+    value === "angular"
   );
 }
 
