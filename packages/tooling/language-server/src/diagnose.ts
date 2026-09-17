@@ -230,6 +230,17 @@ export function diagnoseDocument(
       compileReactMx(text, uri, { customTags });
     } else if (hostPolicy.host === "hono") {
       compileHonoMx(text, uri, { customTags });
+    } else if (hostPolicy.host === "angular") {
+      // `@mxlang/angular` exists (phase 1) but is not wired into this
+      // server yet — falling through to the `else` branch below would
+      // silently diagnose an Angular page template under the vanilla html
+      // host's declarations instead, which is wrong policy, not "no
+      // diagnostics available".
+      throw new TranslateError(
+        "the angular host is not wired into @mxlang/language-server yet (phase 2)",
+        1,
+        0,
+      );
     } else {
       // Through `@mxlang/html`'s own front door, not `compileSource`
       // directly: this registers the host taglib and compiles via the IR.

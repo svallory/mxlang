@@ -71,6 +71,15 @@ async function compileMarko(
     };
     return compileHonoMx(source, filename, { customTags });
   }
+  if (host === "angular") {
+    // `@mxlang/angular` exists (phase 1) but is not wired into this plugin
+    // yet — falling through to the html branch below would silently compile
+    // a page template meant for Angular through the vanilla string emitter
+    // instead, producing plausible-looking but wrong output with no error.
+    throw new Error(
+      "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)",
+    );
+  }
   const { compile } = (await import("@mxlang/html")) as {
     compile: (
       source: string,
