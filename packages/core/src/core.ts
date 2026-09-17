@@ -215,8 +215,14 @@ export interface Ctx {
   customTags?: Readonly<Record<string, CustomTag>>;
   /** Current source nesting, used to cap recursive custom-tag expansion. */
   customTagDepth?: number;
-  /** Per-file serial for hygienic names minted by custom tags. */
-  customTagGensym?: number;
+  /**
+   * Per-file serial for hygienic names minted by custom tags, boxed so a
+   * template context can share the *same counter* by reference (see
+   * `newCtx`'s callers in `lower.ts`) rather than starting its own at zero —
+   * two sibling calls, one inside a tag template and one at the call site,
+   * must never mint the same serial.
+   */
+  customTagGensym: { n: number };
   /**
    * `import` statements already hoisted into this file's module from a tag
    * template, keyed by the local binding name.
@@ -805,6 +811,7 @@ export function newCtx(
     generate,
     declarations,
     lookup,
+    customTagGensym: { n: 0 },
   };
   return ctx;
 }

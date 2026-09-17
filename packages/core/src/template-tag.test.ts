@@ -650,6 +650,26 @@ describe("template custom tags: positions", () => {
   });
 });
 
+describe("template custom tags: gensym sharing", () => {
+  it("mints unique names for sibling calls even when one is nested inside a template", () => {
+    // Repro (TODO.md `custom-tags-gensym-collision`): `outer`'s template
+    // itself calls `<g/>`, and the caller calls `<g/>` again on either
+    // side. If each context started its own counter at zero, the template's
+    // `<g/>` and the caller's first `<g/>` would both mint serial 1.
+    const names: string[] = [];
+    const g: CustomTag = {
+      transform(_call, ctx) {
+        names.push(ctx.gensym("g"));
+        return [];
+      },
+    };
+    const outer: TemplateBackedTag = template("/tags/outer.mx", "<g/>");
+    lowerWithTags("<g/><outer/><g/>\n", { g, outer });
+    expect(names).toHaveLength(3);
+    expect(new Set(names).size).toBe(3);
+  });
+});
+
 describe("template custom tags: cycles and recursion", () => {
   it("errors on a cycle, naming it", () => {
     const tags: Record<string, CustomTag> = {
