@@ -356,18 +356,21 @@ export class PreactEmitter implements Emitter<string> {
     return concatMapped("<>", this.#render(content), "</>");
   }
 
-  #attr(attr: Attr, mapName: boolean): MappedCode {
+  #attr(attr: Attr, mapName: boolean, isComponent: boolean): MappedCode {
     switch (attr.kind) {
       case "spread":
         return concatMapped(` {...${attr.value.code}}`);
       case "boolean":
         return concatMapped(
           " ",
-          mapped(this.#attrName(attr.name), mapName ? attr.nameSpan : null),
+          mapped(
+            this.#attrName(attr.name, isComponent),
+            mapName ? attr.nameSpan : null,
+          ),
           "={true}",
         );
       case "static": {
-        const name = this.#attrName(attr.name);
+        const name = this.#attrName(attr.name, isComponent);
         return concatMapped(
           " ",
           mapped(name, mapName ? attr.nameSpan : null),
@@ -384,7 +387,7 @@ export class PreactEmitter implements Emitter<string> {
           attr,
         );
       case "dynamic": {
-        const name = this.#attrName(attr.name);
+        const name = this.#attrName(attr.name, isComponent);
         // A `class` written as a template literal with no dynamic parts is a
         // constant, and reads better as one in the emitted JSX.
         if (attr.name === "class") {
@@ -425,8 +428,22 @@ export class PreactEmitter implements Emitter<string> {
     }
   }
 
-  /** An attribute name in this target's spelling. */
-  #attrName(name: string): string {
+  /**
+   * An attribute name in this target's spelling.
+   *
+   * The `class`/`for` renames are **DOM** attribute spellings, so they apply to
+   * elements only. A component's attributes are its author's `Input` contract:
+   * a tag whose template reads `input.class` must receive `class`, whatever
+   * this target calls the DOM property. Renaming on a component call silently
+   * dropped the value — the callee read `input.class` and got `undefined` —
+   * which only became reachable once a template tag became a real component
+   * call (decision 95) rather than being expanded inline.
+   */
+  #attrName(name: string, isComponent: boolean): string {
+    // `isComponent` is required, not defaulted: a new call site that forgot it
+    // would silently reinstate the component renaming this guard exists to
+    // prevent, and a dropped prop is invisible in the output.
+    if (isComponent) return name;
     if (name === "class") return this.#target.classAttr;
     if (name === "for") return this.#target.forAttr;
     return name;
@@ -442,8 +459,10 @@ export class PreactEmitter implements Emitter<string> {
    * id and id attribute"* — so a check here would be unreachable code
    * pretending to be a guard.
    */
-  #attrs(attrs: Attr[], mapNames = false): MappedCode {
-    return concatMapped(...attrs.map((attr) => this.#attr(attr, mapNames)));
+  #attrs(attrs: Attr[], mapNames: boolean, isComponent: boolean): MappedCode {
+    return concatMapped(
+      ...attrs.map((attr) => this.#attr(attr, mapNames, isComponent)),
+    );
   }
 
   /** One attribute tag's body, as the value its prop takes. */
@@ -512,7 +531,7 @@ export class PreactEmitter implements Emitter<string> {
         raw,
       );
     }
-    const attrs = this.#attrs(node.attrs);
+    const attrs = this.#attrs(node.attrs, false, false);
     const rawHtml = raw
       ? ` ${this.#target.rawHtmlProp}={${this.#target.rawHtmlValue(raw.expr.code)}}`
       : "";
@@ -586,7 +605,7 @@ export class PreactEmitter implements Emitter<string> {
       );
     }
 
-    const attrs = this.#attrs(node.attrs, true);
+    const attrs = this.#attrs(node.attrs, true, true);
     const tags = this.#attributeTags(node.attributeTags);
     const rawHtml = raw
       ? ` ${this.#target.rawHtmlProp}={${this.#target.rawHtmlValue(raw.expr.code)}}`
