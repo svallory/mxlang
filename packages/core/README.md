@@ -544,6 +544,14 @@ rather than a fabricated span pointing at unrelated text. `mapping.ts`'s
 `GeneratedMapping`, mirroring `mapped(name, nameSpan)` for the attribute-name
 half of the mapped population; adopting it is per host and out of scope here.
 
+`Define.nameSpan`/`paramSpans` and `For.paramSpans` extend the same
+convention to `<define>`'s own name and params and a `<for>`'s params — the
+file-absolute byte spans every other source-derived IR run already carried.
+Each is `undefined` under the same rule as `Expr.span`: no span for a node
+with no authored `loc`. A component call's own tag-name span is not
+duplicated on `ComponentTarget`: `Component.nameSpan` (above) already
+carries it, computed from the same `node.name`.
+
 The five statement kinds — `Static`, `Import`, `Export`, `InputInterface` and
 `Hoisted` — carry their code as a plain string, with no `Expr` and so no Babel
 node to read a span from. They therefore carry an **`end` position** beside

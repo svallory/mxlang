@@ -4,7 +4,7 @@ import type { Ctx, Node } from "./core.ts";
 import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
-import { exprOf, lower } from "./lower.ts";
+import { exprOf, exprSpan, lower, paramSpansOf } from "./lower.ts";
 
 /**
  * The lowerer (decision 79): one fixture per IR kind, plus the error cases.
@@ -1312,5 +1312,154 @@ describe("Expr.span", () => {
     const synthetic = { type: "Id", start: 7, end: 10 };
     const result = exprOf(ctx, synthetic);
     expect(result.span).toBeUndefined();
+  });
+});
+
+/**
+ * `Define.nameSpan`/`paramSpans` and `For.paramSpans` (ref
+ * `ir-define-for-spans`): file-absolute byte spans, same convention as
+ * `Expr.span`, filled at `lowerDefine`/`lowerFor`. Every other
+ * source-derived IR run already carries a span; these were the gap. A
+ * component call's own tag-name span is asserted here too, via the
+ * pre-existing `Component.nameSpan` — not a new `ComponentTarget` field;
+ * see the tests below for why.
+ */
+function spanSlice(
+  source: string,
+  span: { sourceStart: number; sourceEnd: number } | undefined,
+): string {
+  if (!span) throw new Error("expected a span");
+  return source.slice(span.sourceStart, span.sourceEnd);
+}
+
+describe("Define/For param and name spans", () => {
+  it("`<define>` name span", () => {
+    const source = "<define/Row><li>x</li></define>\n";
+    const ir = lowerSource(source);
+    const define = find(ir.body, "Define");
+    expect(spanSlice(source, define.nameSpan)).toBe("Row");
+  });
+
+  it("`<define>` param spans: plain params", () => {
+    const source = "<define/Row|k, v|><li>x</li></define>\n";
+    const ir = lowerSource(source);
+    const define = find(ir.body, "Define");
+    expect(define.params).toEqual(["k", "v"]);
+    expect((define.paramSpans ?? []).map((s) => spanSlice(source, s))).toEqual([
+      "k",
+      "v",
+    ]);
+  });
+
+  it("`<define>` param spans: destructured param", () => {
+    const source = "<define/Row|{ id, name }|><li>x</li></define>\n";
+    const ir = lowerSource(source);
+    const define = find(ir.body, "Define");
+    expect((define.paramSpans ?? []).map((s) => spanSlice(source, s))).toEqual([
+      "{ id, name }",
+    ]);
+  });
+
+  it("`<for>` param spans: single param", () => {
+    const source = "<for|item| of=list.items><p>x</p></for>\n";
+    const ir = lowerSource(source);
+    const loop = find(ir.body, "For");
+    expect((loop.paramSpans ?? []).map((s) => spanSlice(source, s))).toEqual([
+      "item",
+    ]);
+  });
+
+  it("`<for>` param spans: index param (`|item, i|`)", () => {
+    const source = "<for|item, i| of=list.items><p>x</p></for>\n";
+    const ir = lowerSource(source);
+    const loop = find(ir.body, "For");
+    expect((loop.paramSpans ?? []).map((s) => spanSlice(source, s))).toEqual([
+      "item",
+      "i",
+    ]);
+  });
+
+  it("`<for>` param spans: destructured param", () => {
+    const source = "<for|{ id, name }| of=list.items><p>x</p></for>\n";
+    const ir = lowerSource(source);
+    const loop = find(ir.body, "For");
+    expect((loop.paramSpans ?? []).map((s) => spanSlice(source, s))).toEqual([
+      "{ id, name }",
+    ]);
+  });
+
+  it('component call target name span (`kind: "define"`), via `Component.nameSpan`', () => {
+    // `ComponentTarget` carries no `nameSpan` of its own: `Component.nameSpan`
+    // (computed from the same `node.name`) already covers the call's tag
+    // name, for every target kind — see `ir.ts`'s comment on `ComponentTarget`.
+    const source = "<define/Row|item|><li>x</li></define>\n<Row/>\n";
+    const ir = lowerSource(
+      source,
+      fakeDeclarations({ isComponent: (name, ctx) => ctx.defines.has(name) }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toEqual({
+      kind: "define",
+      name: "Row",
+      params: ["item"],
+    });
+    expect(spanSlice(source, component.nameSpan ?? undefined)).toBe("Row");
+  });
+
+  it('component call target name span (`kind: "name"`), via `Component.nameSpan`', () => {
+    const source = "<Row/>\n";
+    const ir = lowerSource(
+      source,
+      fakeDeclarations({ isComponent: (name) => name === "Row" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toEqual({ kind: "name", name: "Row" });
+    expect(spanSlice(source, component.nameSpan ?? undefined)).toBe("Row");
+  });
+
+  it("`paramSpansOf` on a node with no-loc params yields undefined entries, not NaN ones", () => {
+    // Direct unit test of the actual call site (mutation-proved gap: a test
+    // that only calls `exprOf` on a synthetic node never exercises
+    // `paramSpansOf`'s own `node.body.params` traversal, so an unguarded
+    // `nodeSpan` swapped in for `exprSpan` there would still pass). Mirrors
+    // the `Expr.span` no-loc tests' node shapes.
+    const source = "<p>x</p>\n";
+    const ctx = newCtx(
+      source,
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+    );
+    const node = {
+      body: {
+        params: [
+          { type: "Identifier", name: "item" },
+          { type: "Id", start: 7, end: 10 },
+        ],
+      },
+    };
+    expect(paramSpansOf(ctx, node)).toEqual([undefined, undefined]);
+  });
+
+  it("`Define.nameSpan` is undefined for a no-loc `node.var`, not NaN", () => {
+    // Drives the real `lowerDefine` call site end to end: a `<define>` whose
+    // name node carries no `loc` (Marko's own parse always attaches one for
+    // real source, so this exercises the guard the same way a template-tag
+    // synthesized node would).
+    const source = "<define/Row><li>x</li></define>\n";
+    const ir = lowerSource(source);
+    const define = find(ir.body, "Define");
+    expect(define.nameSpan).toBeDefined();
+
+    const ctx = newCtx(
+      source,
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+    );
+    const noLocVar = { type: "Identifier", name: "Row" };
+    expect(exprSpan(ctx, noLocVar)).toBeUndefined();
   });
 });

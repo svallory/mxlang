@@ -236,7 +236,13 @@ export interface AttributeTag extends IrBase {
   block: Block;
 }
 
-/** What a component call resolves its target to. */
+/**
+ * What a component call resolves its target to.
+ *
+ * A call's tag-name span is not repeated here: `Component.nameSpan`
+ * (below) already carries it, computed from the same `node.name` this
+ * target is resolved from — one span, not two copies that could drift.
+ */
 export type ComponentTarget =
   /** An `import` binding or a taglib/`tags/`-discovered tag, by name. */
   | { kind: "name"; name: string }
@@ -308,6 +314,12 @@ export type IrNode =
       /** Every name the params bind, for a host that tracks scopes. */
       bindings: string[];
       /**
+       * File-absolute byte spans of each param, same convention as
+       * `Expr.span` — one per `params`/`paramNodes` entry, `undefined` for a
+       * param whose node carries no `loc`.
+       */
+      paramSpans?: Array<SourceSpan | undefined>;
+      /**
        * The `by=` expression, as resolved source. `null` when the author
        * omitted it. A string-emitting host ignores it (no reconciliation in a
        * one-shot render, decision 65); a reactive host emits it as the
@@ -319,7 +331,15 @@ export type IrNode =
   | ({
       kind: "Define";
       name: string;
+      /** File-absolute byte span of the `<define>`'s own name, e.g. `Row`. */
+      nameSpan?: SourceSpan;
       params: string[];
+      /**
+       * File-absolute byte spans of each param, same convention as
+       * `Expr.span` — one per `params` entry, `undefined` for a param whose
+       * node carries no `loc`.
+       */
+      paramSpans?: Array<SourceSpan | undefined>;
       children: IrNode[];
     } & IrBase)
   | ({ kind: "Const"; name: string; init: Expr } & IrBase)
