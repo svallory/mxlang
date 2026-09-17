@@ -1,12 +1,11 @@
 import { NgClass } from "@angular/common";
 import { Component } from "@angular/core";
-
-// TODO(task 1.7): once tag-file compile lands, call a discovered tag from
-// src/app/tags/ here instead of inlining everything in one component.
+import { ProductList } from "./product-list/product-list.component";
+import Badge from "./tags/badge";
 
 @Component({
   selector: "app-root",
-  imports: [NgClass],
+  imports: [NgClass, Badge, ProductList],
   templateUrl: "./app.component.html",
   styleUrl: "./app.component.css",
 })

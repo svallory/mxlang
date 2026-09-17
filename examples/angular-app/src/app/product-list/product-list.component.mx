@@ -1,0 +1,14 @@
+<html-comment>product-list: for/in, define+call, ngStyle, attr/class/style modifiers</html-comment>
+<div class="product-list">
+  <define/Row|k, v|>
+    <li attr:data-key=k class:featured=(v.featured) style:opacity=(v.featured ? 1 : 0.6)>
+      ${k}: ${v.name} (price ${v.price})
+    </li>
+  </define>
+
+  <ul style={color: textColor}>
+    <for|k, v| in=products>
+      <Row(k, v)/>
+    </for>
+  </ul>
+</div>

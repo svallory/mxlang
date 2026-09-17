@@ -18,4 +18,8 @@
   </ul>
 
   <button onClick=toggleHighlight>Toggle highlight</button>
+
+  <badge kind="ok">All systems nominal</badge>
+
+  <app-product-list/>
 </div>

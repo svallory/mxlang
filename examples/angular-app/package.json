@@ -15,7 +15,7 @@
     "prebuild": "bun ../../packages/hosts/angular/dist/bin.js build",
     "build": "ng build",
     "start": "bun run prebuild && concurrently -k -n mx,ng \"bun ../../packages/hosts/angular/dist/bin.js watch\" \"ng serve\"",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit"
+    "typecheck": "bun ../../packages/hosts/angular/dist/bin.js build && tsc -p tsconfig.app.json --noEmit"
   },
   "dependencies": {
     "@angular/common": "22.1.7",
