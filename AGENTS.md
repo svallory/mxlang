@@ -1671,12 +1671,16 @@ rationale.
 `tagSelectorPrefix`, `onError` — A3's defaults; an unrecognized key is a
 positioned error naming it) and compiles `include` ∪ the discovered tag
 index (a `.mx` file under any `tags/` directory or `package.json#mx.tags`
-entry, found via `@mxlang/core`'s `scanCached` — since that scan only walks
-*upward* from a file, `src/discover.ts` walks the project tree itself to
-find every `tags/` directory and every package boundary, then calls the
-scan from inside each one; a `mx.tags` entry's own `hosts` restriction is
-honored by re-reading that entry directly, since the scan's own
-`DiscoveredTag` drops it). A page compiles to `pageExtension` beside its
+entry). `src/discover.ts` gets this from `@mxlang/core`'s
+`discoverProjectTags(projectDir, { host: "angular" })` — the project-wide
+enumerator (`packages/core/src/scan.ts`), reused rather than reimplemented,
+so the `hosts`-filtering rule and the manifest reader stay in one place. Its
+boundary is core's own: a nested directory holding its own `package.json`
+(other than `projectDir` itself) is a separate project, and its `tags/`
+directory is not discovered from here — a behavior narrower than the
+watcher's own former hand-rolled walk, which continued past a nested
+`package.json` and merely switched which `mx.tags` governed what it found
+underneath. A page compiles to `pageExtension` beside its
 source, with a generated-header comment (a second line naming the
 `import`/`imports:` to add per called MX tag, when the compiled template
 called at least one — sourced from the emitter's own `usedTagNames()`, not
