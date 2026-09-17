@@ -377,10 +377,8 @@
     "packages/parser": {
       "name": "@mxlang/parser",
       "version": "0.0.0",
-      "dependencies": {
-        "@mxlang/solid": "workspace:*",
-      },
       "devDependencies": {
+        "@mxlang/solid": "workspace:*",
         "@types/bun": "1.4.2",
       },
     },
@@ -484,6 +482,7 @@
         "@mxlang/parser": "workspace:*",
         "@mxlang/preact": "workspace:*",
         "@mxlang/react": "workspace:*",
+        "@mxlang/solid": "workspace:*",
       },
     },
   },

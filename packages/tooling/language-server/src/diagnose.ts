@@ -18,6 +18,7 @@ import {
 } from "@mxlang/core";
 import { compileHonoMx } from "@mxlang/hono";
 import { compile } from "@mxlang/html";
+import type { MxRegionCompile } from "@mxlang/parser";
 import { parse } from "@mxlang/parser";
 import { compilePreactMx } from "@mxlang/preact";
 import { compileReactMx } from "@mxlang/react";
@@ -28,6 +29,14 @@ import {
 } from "vscode-languageserver/node";
 
 export type { HostPolicy };
+
+/**
+ * Adapts `compileSolidMx`'s own `(source, options)` signature to the
+ * `MxRegionCompile` shape `parse` calls — the parser no longer defaults to
+ * this host, so every `.solid.mx` caller supplies it explicitly.
+ */
+const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
+  compileSolidMx(source, rest);
 
 export const SOLID_MX_LANGUAGE_IDS = new Set(["solidmx", "SolidMX"]);
 
@@ -215,7 +224,10 @@ export function diagnoseDocument(
       // untitled/mis-suffixed buffer, so give that case the suffix that turns
       // the parser's opt-in MX bridge on.
       const filename = uri.endsWith(".solid.mx") ? uri : `${uri}.solid.mx`;
-      parse(text, filename, { mxCustomTags: customTags });
+      parse(text, filename, {
+        mxCustomTags: customTags,
+        mxRegionCompile: solidRegionCompile,
+      });
     } else if (hostPolicy.host === "solid") {
       // A whole-file `.mx` document routed to the Solid host uses the same
       // fixed Solid profile as an embedded region. Its declarations reject

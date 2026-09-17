@@ -8,13 +8,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "bun build src/index.ts --outdir dist --target node --format esm --external @mxlang/solid --define process.env.BABEL_8_BREAKING=false --define process.env.USE_ESM=true --define process.env.IS_PUBLISH=true",
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --define process.env.BABEL_8_BREAKING=false --define process.env.USE_ESM=true --define process.env.IS_PUBLISH=true",
     "test:bun": "bun --tsconfig-override=../../tsconfig.base.json test src/mx/region-compile.bun.test.ts"
   },
-  "dependencies": {
-    "@mxlang/solid": "workspace:*"
-  },
   "devDependencies": {
+    "@mxlang/solid": "workspace:*",
     "@types/bun": "1.4.2"
   }
 }

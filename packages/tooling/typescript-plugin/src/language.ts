@@ -1,6 +1,8 @@
 import { decode } from "@jridgewell/sourcemap-codec";
 import { getCustomTags } from "@mxlang/core";
-import { print, type RawSourceMap } from "@mxlang/parser";
+import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
+import { print } from "@mxlang/parser";
+import { compileSolidMx } from "@mxlang/solid";
 import type {
   CodeInformation,
   CodeMapping,
@@ -9,6 +11,14 @@ import type {
 } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
+
+/**
+ * Adapts `compileSolidMx`'s own `(source, options)` signature to the
+ * `MxRegionCompile` shape `print` calls — the parser no longer defaults to
+ * this host, so every `.solid.mx` caller supplies it explicitly.
+ */
+export const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
+  compileSolidMx(source, rest);
 
 export const SOLID_MX_EXTENSION = "solid.mx";
 export const SOLID_MX_LANGUAGE_ID = "solidmx";
@@ -54,13 +64,12 @@ export function createSolidMxLanguagePlugin(
         // `vite build` of the same file compiled it fine — the gap the P1
         // review recorded against this path.
         const discovered = getCustomTags(fileName, { host: "solid" });
-        const printed = print(
-          source,
-          fileName,
-          Object.keys(discovered).length > 0
+        const printed = print(source, fileName, {
+          mxRegionCompile: solidRegionCompile,
+          ...(Object.keys(discovered).length > 0
             ? { customTags: discovered }
-            : undefined,
-        );
+            : undefined),
+        });
         syntaxErrors.delete(fileName);
         return createVirtualCode(typescript, printed.code, source, printed.map);
       } catch (cause) {

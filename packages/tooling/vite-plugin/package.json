@@ -19,6 +19,7 @@
     "@mxlang/html": "workspace:*",
     "@mxlang/parser": "workspace:*",
     "@mxlang/preact": "workspace:*",
-    "@mxlang/react": "workspace:*"
+    "@mxlang/react": "workspace:*",
+    "@mxlang/solid": "workspace:*"
   }
 }

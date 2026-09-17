@@ -1,8 +1,25 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { type CustomTag, resolveHostPolicy, scanCached } from "@mxlang/core";
+import type { MxRegionCompile } from "@mxlang/parser";
 import { print } from "@mxlang/parser";
 import type { Plugin } from "vite";
+
+/**
+ * Lazily imported, same reasoning as `@mxlang/html` below: `@mxlang/solid`
+ * also depends on `@marko/compiler`, so a static import would load it (and
+ * break Vite's native-strip-mode config loading) for a `.mx`-only project
+ * that never touches `.solid.mx`. Cached across calls in the same process —
+ * one dynamic `import()` per build/dev-server lifetime, not per file.
+ */
+let solidRegionCompile: MxRegionCompile | undefined;
+async function loadSolidRegionCompile(): Promise<MxRegionCompile> {
+  if (!solidRegionCompile) {
+    const { compileSolidMx } = await import("@mxlang/solid");
+    solidRegionCompile = ({ source, ...rest }) => compileSolidMx(source, rest);
+  }
+  return solidRegionCompile;
+}
 
 /**
  * Lazily imported, and only inside `transform`'s `.mx` branch:
@@ -549,8 +566,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // `.solid.mx` reaches its host through the parser, which lowers each
         // MX region with `compileSolidMx`; the registered tags have to travel
         // with it or a tag registered here is unknown inside a `.solid.mx`.
+        // The parser no longer defaults to this host, so it is supplied
+        // explicitly here, the same as every other `.solid.mx` caller.
         const { code: printed, map } = print(code, source, {
           customTags: tagsFor(source, warn),
+          mxRegionCompile: await loadSolidRegionCompile(),
         });
         return { code: printed, map };
       } catch (err) {
