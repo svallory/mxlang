@@ -9,28 +9,88 @@
 declare module "@mxlang/parser" {
   import type { Expression, File } from "@babel/types";
 
-  // Re-exported, not re-declared: `MxRegionContext`/`MxRegionPositionCheck`
-  // are the real shapes `mx/region-context.ts` computes and calls, so a
-  // hand-duplicated copy here could silently drift from what the parser
-  // actually produces (round 3 review). `src/mx/region-context.ts` is
-  // outside `src/babel/`, so it needs none of this file's tsconfig
-  // relaxations — importing it directly is safe.
-  export type {
-    MxRegionCompile,
-    MxRegionCompileInput,
-    MxRegionCompileResult,
-    MxRegionHoistedImport,
-  } from "./mx/region-compile.ts";
-  export type {
-    MxRegionContext,
-    MxRegionPositionCheck,
-  } from "./mx/region-context.ts";
+  // Declared inline rather than re-exported through a relative import: a
+  // relative import/re-export inside an ambient `declare module` block is
+  // TS2439 ("Import or export declaration in an ambient module declaration
+  // cannot reference module through relative module name"), which every
+  // consumer's `skipLibCheck: true` silently swallows — every name below
+  // degraded to `any` in every host (measured: `const bad: MxRegionContext =
+  // { nope: 1 }` typechecked). `public-types.test.ts` asserts two-way
+  // assignability against the real shapes in `src/mx/*.ts` so this copy
+  // cannot drift unnoticed.
+
+  /** Where a region appeared, described without host-specific knowledge. */
+  export interface MxRegionContext {
+    /** Innermost enclosing object-property key, or null. */
+    propertyKey: string | null;
+    /** Names of every enclosing decorator, innermost first. */
+    decoratorNames: readonly string[];
+    /** The decorator-call argument index enclosing the region, or null. */
+    argumentIndex: number | null;
+    /** True iff the region is the immediate value of a property of the
+     *  decorator argument object itself. */
+    isDirectPropertyValue: boolean;
+  }
+
+  /** A host's veto on a region's syntactic position. */
+  export type MxRegionPositionCheck = (
+    context: MxRegionContext,
+  ) => { ok: true } | { ok: false; message: string };
+
+  /** One synthesized import a region needs written into its module. */
+  export interface MxRegionHoistedImport {
+    /** The `import X from "./y.mx"` statement text. */
+    code: string;
+    /** The local binding the emitted region references. */
+    binding: string;
+    /** The module specifier, as written in `code`. */
+    specifier: string;
+    /** The template's resolved absolute path. */
+    resolvedPath: string;
+  }
+
+  /** The region text and its file-relative position, as the bridge found it. */
+  export interface MxRegionCompileInput {
+    /** The region's own source text, `source.slice(start, end)`. */
+    source: string;
+    /** The file being parsed, from `sourceFilename`. */
+    filename: string;
+    /** The region's absolute start offset in the file. */
+    baseOffset: number;
+    /** The region's 0-based start line in the file. */
+    baseLine: number;
+    /** The region's 0-based start column on that line. */
+    baseColumn: number;
+    /** Custom tag definitions the caller registered, opaque here. */
+    // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
+    customTags?: Record<string, any>;
+    /** Where this region appeared, the same context `mxRegionPositionCheck`
+     *  was given. Undefined when no `mxRegionPositionCheck` is set. */
+    context?: MxRegionContext;
+  }
+
+  /** What the bridge needs back from a host. */
+  export interface MxRegionCompileResult {
+    /** The lowered region, as source text the surrounding grammar can parse. */
+    code: string;
+    /** Imports the compiler minted for discovered tags called inside this
+     *  region. */
+    hoistedImports?: MxRegionHoistedImport[];
+    /** `/var` names this region's call sites bind, for the caller to declare. */
+    returnVars?: string[];
+  }
+
+  /** Lowers one MX region to text the surrounding grammar can parse. */
+  export type MxRegionCompile = (
+    input: MxRegionCompileInput,
+  ) => MxRegionCompileResult;
 
   export interface MxParseOptions {
     sourceType?: "script" | "module" | "unambiguous";
     plugins?: unknown[];
     /**
-     * Custom tags, carried across the parser boundary to the Solid host.
+     * Custom tags, carried across the parser boundary to whichever host
+     * lowers each MX region.
      *
      * Declared explicitly despite the index signature below: this is the only
      * channel the in-tokenizer MX bridge has to the caller, and a misspelling
@@ -45,9 +105,11 @@ declare module "@mxlang/parser" {
      */
     mxRegionPositionCheck?: MxRegionPositionCheck;
     /**
-     * Lowers each MX region the bridge finds. Absent means the Solid host,
-     * which is what every `.solid.mx` parse has always used. Declared
-     * explicitly for the same reason as `mxCustomTags` above.
+     * Lowers each MX region the bridge finds. The parser has no host of its
+     * own: with the grammar on, an absent hook is a compile error at the
+     * first region naming this option. For `.solid.mx`, pass `compileSolidMx`
+     * from `@mxlang/solid`. Declared explicitly for the same reason as
+     * `mxCustomTags` above.
      */
     mxRegionCompile?: MxRegionCompile;
     /**
@@ -170,10 +232,17 @@ declare module "@mxlang/parser" {
   export interface PrintOptions {
     /**
      * Custom tags already discovered and loaded by the calling integration.
-     * Forwarded through the parser to the Solid host, which lowers each MX
-     * region; without it a registered tag is unknown inside `.solid.mx`.
+     * Forwarded through the parser to whichever host lowers each MX region;
+     * without it a registered tag is unknown inside the region.
      */
     customTags?: Record<string, unknown>;
+    /**
+     * Lowers each MX region the bridge finds. Required whenever the grammar
+     * is on. For `.solid.mx`, pass `compileSolidMx` from `@mxlang/solid`.
+     */
+    mxRegionCompile?: MxRegionCompile;
+    /** Turns the MX grammar on explicitly, forwarded to `parse` unchanged. */
+    mx?: boolean;
   }
 
   /**
