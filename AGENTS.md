@@ -1001,8 +1001,12 @@ Five facts worth knowing before editing it:
   became reachable once a template tag became a real component call.
 - **Positions get a third rule** (spec §2): material from a tag template keeps
   that file's line and column, tagged through the optional `Position.file` (and
-  `Expr.file`, since an `Expr` carries no `loc` of its own). `TranslateError`
-  gained a matching optional `file`. Absent means the file being compiled, so
+  `Expr.file`, since an `Expr` carries no `loc` of its own — only the optional
+  `span?: SourceSpan` core contract C4 added, file-absolute byte offsets into
+  `file` when that is set). Neither `Position.file` nor `Expr.file` is written
+  anywhere in `packages/core` today; both are read-only plumbing for a future
+  writer. `TranslateError` gained a matching optional `file`. Absent means the
+  file being compiled, so
   every position that existed before templates is unchanged. The language
   server publishes such a diagnostic against the template's **own URI** at its
   real position and leaves a pointer at the head of the open document (it
