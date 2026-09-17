@@ -58,7 +58,12 @@ export function parse(
     ...options,
     // Turns the forked `jsxParseElementAt` on. Without it the vendored parser
     // is byte-for-byte upstream Babel.
-    mx: filename.endsWith(".solid.mx"),
+    //
+    // An explicit `mx` wins, so a caller owning another file kind (`.ng.mx`,
+    // whose regions this extension test would never match) can turn the
+    // grammar on for itself. Left unset it is the `.solid.mx` test that has
+    // always been here, so every existing caller is unaffected.
+    mx: options.mx ?? filename.endsWith(".solid.mx"),
   } as ParserOptions) as unknown as File;
   hoistRegionImports(file, filename);
   return file;

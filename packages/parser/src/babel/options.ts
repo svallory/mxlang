@@ -121,6 +121,18 @@ export interface Options {
    */
   mxRegionPositionCheck?: import("../mx/region-context.ts").MxRegionPositionCheck;
 
+  /**
+   * MX FORK: lowers each MX region the bridge finds, carried on the options
+   * bag for the same reason as the two above. Absent means the Solid host
+   * (`compileSolidMx`), which is what every `.solid.mx` parse has always
+   * used — so leaving this unset is byte-for-byte the previous behavior.
+   *
+   * A host supplies it to claim its own file kind: `.ng.mx` lowers a region
+   * to an Angular template string, which shares nothing with Solid's JSX
+   * beyond being text the surrounding grammar can parse.
+   */
+  mxRegionCompile?: import("../mx/region-compile.ts").MxRegionCompile;
+
   startIndex?: number;
 
   /**
@@ -195,7 +207,8 @@ type KeepOptionalKeys =
   | "sourceFilename"
   | "strictMode"
   | "mxCustomTags"
-  | "mxRegionPositionCheck";
+  | "mxRegionPositionCheck"
+  | "mxRegionCompile";
 export type OptionsWithDefaults = Omit<Required<Options>, KeepOptionalKeys> &
   Pick<Options, KeepOptionalKeys>;
 
@@ -217,6 +230,9 @@ function createDefaultOptions(): OptionsWithDefaults {
     // MX FORK: same "must default to undefined, not be left out" reasoning
     // as mxCustomTags above.
     mxRegionPositionCheck: undefined,
+    // MX FORK: same reasoning again — `undefined` here, not omitted, or
+    // `getOptions` never copies a caller's hook across.
+    mxRegionCompile: undefined,
     startIndex: 0,
     // Column (0-based) from which to start counting source. Useful for
     // integration with other tools.

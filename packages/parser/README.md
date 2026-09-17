@@ -72,11 +72,44 @@ the region's own start. Absent, nothing is tracked and parsing is unchanged
 — see `notes/investigations/angular-ng-mx-spike.md`
 §Q4 for the design rationale (this is the `.ng.mx` host's C3 contract).
 
-`@mxlang/parser` depends on `@mxlang/solid` for that hand-off; tooling
-packages (`vite-plugin`, `tsc`, `babel-plugin`, `eslint-plugin`,
+**A host can also claim the lowering itself** through the
+`mxRegionCompile` parser option, on the same options-bag channel and for the
+same reason. Where `mxRegionPositionCheck` vetoes *where* a region may
+appear, this decides *who lowers it*: the bridge hands the hook the region's
+text, its filename, its `baseOffset`/`baseLine`/`baseColumn` and the
+registered `customTags` — exactly what it already passed the Solid host —
+and takes back `{ code, hoistedImports?, returnVars? }`, the three fields it
+consumes. The result type is deliberately narrower than any one host's own:
+a host with a source map, expression mappings, warnings or a used-tag list
+keeps those on its richer return type and gives them to its caller directly,
+so this package never learns their shape. Absent, the region goes to
+`compileSolidMx` exactly as before. Angular's `.ng.mx` is the first caller
+to supply one (`@mxlang/angular`'s `compileNgMx`), paired with its own
+position check; see `src/mx/region-compile.ts`. The input also carries the
+region's own `MxRegionContext` — the same one the position check saw — so a
+host that needs the enclosing syntax to shape what it *emits*, not merely to
+accept or reject it, needs no side channel (undefined when no position check
+is set, since the parent-frame stack is only tracked then).
+
+**A hook that throws** must give file-absolute coordinates on a positioned
+error (1-based line, 0-based column): the bridge does not shift them by the
+region's base, so apply `baseLine`/`baseColumn` yourself, as `compileSolidMx`
+does by pre-padding its source. Anything else a hook throws — a plain `Error`,
+or a non-`Error` value — is reported at the region's own start with its
+message preserved, rather than at `error.line`, which for an ordinary `Error`
+is V8's throw site inside the host's own module.
+
+Because a `.ng.mx` filename would never match `parse`'s own `.solid.mx`
+extension test, `parse` honours an explicit `mx: boolean` option as the
+grammar gate, falling back to that test when it is unset.
+
+`@mxlang/parser` depends on `@mxlang/solid` for the **default** hand-off;
+tooling packages (`vite-plugin`, `tsc`, `babel-plugin`, `eslint-plugin`,
 `typescript-plugin`) keep importing `@mxlang/parser` unchanged — the
 `compileSolidMx` call is internal to the bridge, not part of this package's
-public surface (`src/public.d.ts`).
+public surface (`src/public.d.ts`). Dropping that dependency entirely, so
+every caller supplies its own `mxRegionCompile`, would be a breaking change
+for each of them and is left as a follow-up.
 
 `lower.ts`, `control.ts` and `attrs.ts` — the modules that used to lower the
 raw `walk.ts` tree to Solid JSX text directly inside this package — are

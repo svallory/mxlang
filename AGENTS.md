@@ -176,6 +176,8 @@ Consumers typecheck against `src/public.d.ts`, not `src/index.ts`: the vendored 
 
 A host can reject an MX region's syntactic position (e.g. Angular's `.ng.mx` only allowing one as `@Component({ template: … })`'s value) through the `mxRegionPositionCheck` parser option — see `packages/parser/README.md` and `src/mx/region-context.ts`.
 
+A host can also claim the **lowering** of each region through the `mxRegionCompile` parser option, on the same options-bag channel: the bridge hands it the region text, filename and base position (exactly what it passes `compileSolidMx`) and takes back `{ code, hoistedImports?, returnVars? }` — only the fields the bridge itself consumes, so a host's own map/mappings/warnings never become a parser dependency. Unset, every region still goes to `compileSolidMx`, so `.solid.mx` is unchanged. `parse` also honours an explicit `mx?: boolean` gate, since a `.ng.mx` filename never matches its `.solid.mx` extension test. See `src/mx/region-compile.ts` and `UPSTREAM.md` item 8.
+
 Two syntax decisions are settled and encoded in `@mxlang/solid`'s lowering (`packages/hosts/solid/README.md`'s table is the authoritative version; this is the summary):
 
 - **Whitespace follows Marko, not JSX.** A whitespace-only text run containing a newline is dropped entirely, so indented markup renders nothing between children; a whitespace-only run without a newline collapses to one space. `${" "}` is the escape hatch. Comments are dropped from the output and do not count as content when trimming. This is Marko's own `onText` rule (decision 33), the same one every host relies on — see the four Marko facts below.
