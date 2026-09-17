@@ -1,0 +1,1 @@
+<div class=["a", cond && "b"]>x</div>

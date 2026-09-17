@@ -1,0 +1,1 @@
+this template uses [ngComponentOutlet]; add NgComponentOutlet to the component's imports.

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "div",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "name": "span",
+        "attributes": [],
+        "inputs": [
+          {
+            "name": "innerHTML",
+            "type": 0,
+            "securityContext": 1,
+            "value": {
+              "ast": {
+                "receiver": {},
+                "name": "html"
+              }
+            },
+            "unit": null
+          }
+        ],
+        "outputs": [],
+        "directives": [],
+        "children": [],
+        "references": [],
+        "isSelfClosing": false,
+        "isVoid": false
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

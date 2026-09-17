@@ -1,0 +1,1 @@
+a spread attribute cannot be emitted into an Angular template, because Angular binds statically named inputs only. Name the attributes, or pass the object to a single input.

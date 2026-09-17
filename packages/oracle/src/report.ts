@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { parse as mxParser } from "@mxlang/parser";
 import { compare } from "./compare";
 import { discoverFixtures } from "./fixtures";
+import { runAngularTable } from "./report-angular";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = join(here, "..", "..", "..", "fixtures");
@@ -73,5 +74,8 @@ const hasSkipped = rows.some(
   (r) => r.status === "skipped" || r.status === "pending",
 );
 if (strict && hasSkipped) failed = true;
+
+const angular = runAngularTable(updateGoldens);
+if (angular.failed) failed = true;
 
 process.exit(failed ? 1 : 0);

@@ -1,0 +1,29 @@
+[
+  {
+    "value": {
+      "ast": {
+        "strings": [
+          "",
+          "",
+          " not an interpolation ",
+          "",
+          ""
+        ],
+        "expressions": [
+          {
+            "value": "{"
+          },
+          {
+            "value": "{"
+          },
+          {
+            "value": "}"
+          },
+          {
+            "value": "}"
+          }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,1 @@
+this template binds `class` to an object or array value, emitted as [ngClass]; add `NgClass` to the component's imports.

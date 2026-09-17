@@ -1,0 +1,54 @@
+[
+  {
+    "name": "a",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "aria-label",
+        "type": 1,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "l"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": "on",
+        "type": 2,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "c"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": "width",
+        "type": 3,
+        "securityContext": 2,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "w"
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "value": "x"
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

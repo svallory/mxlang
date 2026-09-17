@@ -1,0 +1,17 @@
+[
+  {
+    "value": {
+      "ast": {
+        "strings": [
+          "text ",
+          " more"
+        ],
+        "expressions": [
+          {
+            "value": "}"
+          }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "tagName": "ng-template",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "templateAttrs": [],
+    "children": [
+      {
+        "value": " hi "
+      }
+    ],
+    "references": [
+      {
+        "name": "Empty",
+        "value": ""
+      }
+    ],
+    "variables": [],
+    "isSelfClosing": false
+  }
+]

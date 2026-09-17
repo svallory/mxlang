@@ -1,0 +1,1 @@
+<for|p| of=people by=(p => p.id)>${p}</for>

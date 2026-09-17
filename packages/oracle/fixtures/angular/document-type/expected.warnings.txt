@@ -1,0 +1,1 @@
+`<!doctype>` parses in an Angular template, but a component template is a fragment.

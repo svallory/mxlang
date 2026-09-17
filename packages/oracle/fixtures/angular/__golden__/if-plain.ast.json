@@ -1,0 +1,20 @@
+[
+  {
+    "branches": [
+      {
+        "expression": {
+          "ast": {
+            "receiver": {},
+            "name": "a"
+          }
+        },
+        "children": [
+          {
+            "value": " A "
+          }
+        ],
+        "expressionAlias": null
+      }
+    ]
+  }
+]

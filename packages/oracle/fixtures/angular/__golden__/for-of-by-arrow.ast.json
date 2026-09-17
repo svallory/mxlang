@@ -1,0 +1,68 @@
+[
+  {
+    "item": {
+      "name": "p",
+      "value": "$implicit"
+    },
+    "expression": {
+      "ast": {
+        "receiver": {},
+        "name": "people"
+      }
+    },
+    "trackBy": {
+      "ast": {
+        "receiver": {
+          "receiver": {},
+          "name": "p"
+        },
+        "name": "id"
+      }
+    },
+    "contextVariables": [
+      {
+        "name": "$index",
+        "value": "$index"
+      },
+      {
+        "name": "$first",
+        "value": "$first"
+      },
+      {
+        "name": "$last",
+        "value": "$last"
+      },
+      {
+        "name": "$even",
+        "value": "$even"
+      },
+      {
+        "name": "$odd",
+        "value": "$odd"
+      },
+      {
+        "name": "$count",
+        "value": "$count"
+      }
+    ],
+    "children": [
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              " ",
+              " "
+            ],
+            "expressions": [
+              {
+                "receiver": {},
+                "name": "p"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "empty": null
+  }
+]

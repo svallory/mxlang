@@ -1,0 +1,94 @@
+[
+  {
+    "item": {
+      "name": "mxRow",
+      "value": "$implicit"
+    },
+    "expression": {
+      "ast": {
+        "receiver": {},
+        "name": "people"
+      }
+    },
+    "trackBy": {
+      "ast": {
+        "receiver": {},
+        "name": "$index"
+      }
+    },
+    "contextVariables": [
+      {
+        "name": "$index",
+        "value": "$index"
+      },
+      {
+        "name": "$first",
+        "value": "$first"
+      },
+      {
+        "name": "$last",
+        "value": "$last"
+      },
+      {
+        "name": "$even",
+        "value": "$even"
+      },
+      {
+        "name": "$odd",
+        "value": "$odd"
+      },
+      {
+        "name": "$count",
+        "value": "$count"
+      }
+    ],
+    "children": [
+      {
+        "name": "id",
+        "value": {
+          "ast": {
+            "receiver": {
+              "receiver": {},
+              "name": "mxRow"
+            },
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "name",
+        "value": {
+          "ast": {
+            "receiver": {
+              "receiver": {},
+              "name": "mxRow"
+            },
+            "name": "name"
+          }
+        }
+      },
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              " ",
+              "",
+              " "
+            ],
+            "expressions": [
+              {
+                "receiver": {},
+                "name": "id"
+              },
+              {
+                "receiver": {},
+                "name": "name"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "empty": null
+  }
+]
