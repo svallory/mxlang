@@ -5,13 +5,15 @@ description: "Author L1 custom tags as ordinary MX templates under tags/."
 
 # Template tags
 
-An L1 custom tag is an ordinary `.mx` file in a discovered tag directory. `tags/icon.mx` defines `<icon>`; no sidecar or import is required. The template is lowered once, cached, and spliced into the caller's IR at every call site.
+An L1 custom tag is an ordinary `.mx` file in a discovered tag directory. `tags/icon.mx` defines `<icon>`; no sidecar or import is required.
 
-Every example below is copied from a passing core fixture or template-expansion test.
+A tag's template is a **compilation unit**. It compiles through the same per-file pipeline a page uses, into a module that exports the tag, and a caller emits an import plus a call. The template is never copied into the caller.
 
-## Attributes are `input` reads
+Every example below is copied from a passing core fixture or template test.
 
-Read a call's attributes as `input.<name>` or `input["name"]`:
+## Attributes are `input`
+
+Read a call's attributes as `input.<name>`:
 
 ```marko
 <div>${input.title}${input.count}</div>
@@ -23,13 +25,13 @@ The passing call-site case is:
 <box title="hello" count=2/>
 ```
 
-MX substitutes the attribute expressions into the template. An omitted attribute becomes `undefined`, so ordinary fallbacks work:
+`input` is the tag module's own parameter, so an omitted attribute is `undefined` and ordinary fallbacks work:
 
 ```marko
 <div>${input.size ?? 24}</div>
 ```
 
-Substitution is AST-based and parenthesized where needed, preserving JavaScript scope and operator precedence.
+Because `input` is a real parameter rather than a name resolved at compile time, a template may read an attribute as many times as it likes, use `input` as a value, destructure it, or accept a spread at the call site. The caller's expression is evaluated once, at the call.
 
 ## Body content
 
@@ -45,14 +47,16 @@ For this call:
 <box><em>body</em></box>
 ```
 
-the `<em>` block is spliced into the `<section>`. If a caller supplies body content and the template has no `<${input.content}/>` placeholder, MX warns that the body was dropped.
+the `<em>` block renders inside the `<section>`. `content` is a closure built **at the call site**, so a body written inside a `<for>` captures that row rather than the last one. How often it renders is the tag's choice: never, if the template omits the placeholder; N times if the template writes it N times.
+
+If a caller supplies body content and the template never reads `input.content`, MX warns that the body was dropped, naming the template. A tag that should refuse a body declares `parseOptions.openTagOnly` in a [sidecar](/custom-tags/sidecars/); a call passing one is then an error at the call site: ``​`<x>` does not accept content``.
 
 ## Attribute tags
 
-Place `<@name>` content through `input.<name>.content`:
+Place `<@name>` content through `input.<name>`:
 
 ```marko
-<ul><${input.item.content}/></ul>
+<ul><${input.item}/></ul>
 ```
 
 Repeated attribute tags remain repeated and preserve their order:
@@ -61,7 +65,7 @@ Repeated attribute tags remain repeated and preserve their order:
 <list><@item>one</@item><@item>two</@item></list>
 ```
 
-An unplaced attribute tag produces a warning naming the missing placeholder. Attribute-tag declarations and repeat/required checks belong in an optional [sidecar](/custom-tags/sidecars/).
+An attribute tag the template never reads produces a warning naming it. `<@content>` is rejected, because it would collide with the body slot. Attribute-tag declarations and repeat/required checks belong in an optional [sidecar](/custom-tags/sidecars/).
 
 ## Params
 
@@ -71,42 +75,43 @@ Tag params remain scoped to the caller's body block:
 <box|row|>${row}</box>
 ```
 
-When the template places `<${input.content}/>`, that block still owns `row`; a template declaration cannot capture it.
+When the template places `<${input.content}/>`, that block still owns `row`; the tag's own module cannot see it.
 
-## Hygiene
+## Typing
 
-Render-scope declarations introduced by a template are private. MX renames `<const>` and `<define>` bindings to generated names and rewrites only genuine references, respecting nested JavaScript and MX scopes. A caller cannot read a template's private binding, and a caller binding with the same spelling is unaffected.
+A template's `export interface Input` is the tag's **public type**. It reaches the call site through the injected import, so passing a wrong attribute type is a `tsc` error at the caller's own line and column:
 
-Module statements behave differently because the expanded markup still needs them: `import`, `static`, and `export` statements hoist to the caller's module. Identical imports are deduplicated. The same local import name referring to different modules is an error naming both files. A template's `export interface Input` does not hoist, because it would collide with the caller's interface.
+```marko
+export interface Input { name: string; size?: number }
+```
 
-For example, this import is emitted once even when `<box/>` appears repeatedly:
+Where a template reads `input.content`, the host augments its render signature so a caller passing a body typechecks; where it does not, `Input` is untouched.
+
+## Module scope
+
+A template's `import` and `static` statements stay in the tag's own module. They are the module system's, not the caller's, which means a `static` block runs **once per process**, at import time — not once per calling module.
 
 ```marko
 import helper from "./helper.ts"
 <div>${helper()}</div>
 ```
 
+A tag file is a module, so it may export anything, and it may call other custom tags — including itself. A module importing itself is legal, so a self-recursive tag terminates on its own data rather than on a compiler limit.
+
+## Hygiene
+
+Hygiene is the module boundary. A template's declarations are private because they live in a different module: nothing it declares can reach the caller's scope, and a caller binding of the same spelling is unrelated. There is no renaming pass and no caller-side import merging.
+
+The import MX injects for a discovered tag is generated (`$mx_Icon1`) and minted against the caller's own bindings, so it cannot collide with anything the author wrote. If the caller already imports the same file itself, that binding is reused and no second import appears.
+
 ## What a template cannot do
 
 A template can arrange markup and use MX's structural language, but it cannot examine compile-time AST shapes, compute a new IR structure in TypeScript, or refuse a call with a custom diagnostic. Add an [L2 sidecar](/custom-tags/sidecars/) for those jobs.
 
-Template calls also reject spread attributes. Their keys are unknown until runtime, while `input.<name>` substitution must resolve every read at compile time.
-
-## The inherent evaluation limit
-
-An attribute expression is substituted at each read. If a template reads `input.size` twice, a call such as this evaluates `next()` twice:
-
-```marko
-<box size=next()/>
-```
-
-Do not read a side-effecting attribute more than once in an L1 template. Use a sidecar when the value must be computed once and reused.
-
 ## Errors to recognize
 
-- **`input` used as a value.** Bare `input`, `input?.size`, `typeof input`, destructuring it, or spreading it cannot be resolved. Read only `input.<name>` or `input["name"]`.
 - **Reserved `content`.** A call cannot pass an attribute named `content`; that name is the body slot.
-- **Import collision.** Two templates, or a template and its caller, imported the same local binding from different modules. Rename one import.
-- **Template cycle.** Calls formed a cycle such as `a.mx -> b.mx -> a.mx`. Break the cycle; expansion is depth-first and recursive cycles are never emitted.
+- **`<@content>`.** Reserved for the same reason.
+- **Content on an `openTagOnly` tag.** The tag declared that it takes no body.
 
-Diagnostics raised while lowering template-authored markup point to the template file and its real line. Errors in call attributes stay on the calling file.
+A diagnostic inside a template points at the template file and its real line, because that file is itself being compiled. Errors in call attributes stay on the calling file.
