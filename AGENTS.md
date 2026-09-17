@@ -1765,6 +1765,36 @@ against that file (A5). Containment checks resolve real paths
 directory or output path cannot be used to read or write outside the
 project directory.
 
+**`.ng.mx` (phase 2, `src/ng-mx.ts`'s `compileNgMx`)** is a third output
+kind: an ordinary TypeScript module whose `@Component` template is MX,
+emitting `<basename>.ts` beside the source (`mx.angular.ngExtension`,
+default `.ts`). The parser finds each region and hands it to this host
+through the generic `mxRegionCompile` hook, with `mx: true` (a `.ng.mx`
+filename never matches the parser's own `.solid.mx` extension test) and
+`ngMxPositionCheck`, which rejects every position but the direct value of
+`template:` in `@Component({ … })`'s **first** argument — all four
+`MxRegionContext` fields are load-bearing, `argumentIndex` being the only
+one that separates `@Component({ template })` from `@Component(opts, {
+template })`. The template is emitted as a **backtick literal** with
+`` ` ``, `${` and `\` escaped (decision 99, reversing A4 divergence 3;
+spike §Q3 measured that a double-quoted emit puts Angular's diagnostics in
+escaped coordinates and forces an inverse hop at every newline, while
+backticks are 1:1). Unlike a page, this host **owns the module**, so it
+appends every used MX tag and every needed Angular directive to the
+decorator's own `imports:` array *and* emits their `import` statements —
+A4 divergence 5, the one AST edit no other host performs — and the
+emitter's "add X to the component's imports" warnings are dropped here,
+since MX just made that edit. **Authored `import`/`static`/`export` are
+written in the surrounding module, not inside a region**: a region is
+TypeScript expression position, where those are statement syntax and the
+vendored Babel rejects them before MX sees the file (A4 divergence 4,
+amended by the lead 2026-09-17 after this was measured; pinned by three
+rejection tests). Only a *synthesized* discovered-tag import hoists, via
+`MxRegionCompileResult.hoistedImports`. `result.mappings` is
+identifier-level and empty today — the emitter has no `mapped(...)` call —
+and 2.2b fills it through core's `Expr.span`; a test asserts the empty
+array so that change cannot happen silently.
+
 **The emitted `.html` (and, once 1.7 lands, tag `.ts`) files are generated
 artifacts**: `.gitignore` them, and run `mx-angular build` (or `mx-angular
 watch`, for a long-running dev loop) *before* `ng serve`/`ng build` —

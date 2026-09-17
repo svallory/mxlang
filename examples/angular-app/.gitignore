@@ -32,8 +32,11 @@ yarn-error.log
 # MX-emitted templates and tag modules (mx-angular build/watch)
 src/app/**/*.html.map
 src/app/app.component.html
-src/app/product-list/product-list.component.html
 src/app/tags/*.ts
+# A `.ng.mx` emits its whole component module, so the `.ts` beside it is
+# generated too — unlike a page's, which stays hand-written.
+src/app/product-list/product-list.component.ts
+src/app/product-list/product-list.component.ts.map
 
 # Miscellaneous
 /.angular/cache
