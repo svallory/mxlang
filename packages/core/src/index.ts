@@ -61,6 +61,7 @@ export type {
 export type { HostDeclarations, Policy } from "./declarations.ts";
 export { drive, type Emitter, emit } from "./emit.ts";
 export { escape } from "./escape.ts";
+export { exportNameFor, moduleExportName } from "./export-name.ts";
 export {
   type FragmentBase,
   type FragmentResult,
