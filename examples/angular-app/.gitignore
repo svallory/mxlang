@@ -29,9 +29,11 @@ yarn-error.log
 !.vscode/mcp.json
 .history/*
 
-# MX-emitted templates (mx-angular build/watch)
+# MX-emitted templates and tag modules (mx-angular build/watch)
 src/app/**/*.html.map
 src/app/app.component.html
+src/app/product-list/product-list.component.html
+src/app/tags/*.ts
 
 # Miscellaneous
 /.angular/cache

@@ -1,0 +1,4 @@
+export interface Input { kind: "ok" | "warn" | "error"; label?: string }
+<span class="badge" attr:data-kind=input.kind>
+  <if=input.label>${input.label}: </if>${input.content()}
+</span>
