@@ -2,6 +2,21 @@
 
 ## 0.1.0 (unreleased)
 
+### A `.ng.mx` under `tags/` is rejected like `.solid.mx`, not silently indexed as a tag
+
+`indexDirectory` (shared by `scanCustomTags` and `discoverProjectTags`) used
+to reject only `.solid.mx` under `tags/`; a `.ng.mx` file (the Angular host's
+per-region file kind) was indexed as an ordinary tag instead, since it does
+end with `.mx`. Both are now recognized as host module files — a different
+file kind, not a tag template — via a small allowlist of host segments
+(`solid`, `ng`), and rejected with the same generic, positioned message:
+`` `<name>` is a host module file, not a tag template; tag templates are
+`.mx` ``. The allowlist is deliberately closed rather than "any second dotted
+segment before `.mx`", since `TAG_NAME_RE` allows dots in an ordinary tag
+name and `tags/my.icon.mx` is meant to stay the valid tag `<my.icon>`. `.amx`
+is unaffected either way — it carries no `.mx` suffix and is silently ignored
+under `tags/`, as before.
+
 ### Breaking: a bare `${expr}` line is a dynamic tag, not a text placeholder
 
 A standalone concise-position `${expr}` line (no attributes, no body) used to

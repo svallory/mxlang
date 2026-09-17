@@ -962,10 +962,20 @@ Five facts worth knowing before editing it:
   are skipped and anything else is a positioned diagnostic naming the file.
   This is a guard with teeth: `tags/.mx` has an empty basename, and an empty
   tag name makes `@marko/compiler` throw `"tag.name" is required`, which fails
-  *every* file in the package rather than only a caller. A `.solid.mx` in a
-  `tags/` directory is reported rather than ignored. Note the mtime cache
-  assumes sub-second mtime granularity — true on every platform MX targets,
-  but two writes inside one tick can look like one.
+  *every* file in the package rather than only a caller. A host module file
+  under `tags/` — `<name>.solid.mx` (the Solid host) or `<name>.ng.mx` (the
+  Angular host) — is reported rather than ignored, naming the file: a
+  different file kind, not a tag template. The check is a closed allowlist of
+  host segments (`solid`, `ng`), not "any second dotted segment before
+  `.mx`" — `TAG_NAME_RE` allows dots in an ordinary tag name, so
+  `tags/my.icon.mx` is the valid tag `<my.icon>` and stays indexed; only a
+  listed segment is rejected. `.amx` has no `.mx` suffix at all (a separate
+  three-letter extension), so it never reaches this check either — it is
+  silently ignored under `tags/`, the same as any other non-tag file (a
+  README, a `.css`). `scanCustomTags` and `discoverProjectTags` share the
+  rule through `indexDirectory`, so it cannot drift between the two. Note the
+  mtime cache assumes sub-second mtime granularity — true on every platform MX
+  targets, but two writes inside one tick can look like one.
 - **A missing `mx.tags` directory is a diagnostic, not a throw.** It lands in
   `ScanResult.diagnostics` and the scan continues, so one typo in
   `package.json` does not break compilation of files that never used that
