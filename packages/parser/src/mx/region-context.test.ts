@@ -37,6 +37,7 @@ describe("MxRegionContext", () => {
     expect(context).toEqual({
       propertyKey: "template",
       decoratorNames: ["Component"],
+      enclosingDecoratorNames: [],
       isDirectPropertyValue: true,
       argumentIndex: 0,
     });
@@ -124,6 +125,7 @@ describe("MxRegionContext", () => {
     expect(context).toEqual({
       propertyKey: null,
       decoratorNames: [],
+      enclosingDecoratorNames: [],
       isDirectPropertyValue: false,
       argumentIndex: null,
     });
@@ -141,6 +143,32 @@ describe("MxRegionContext", () => {
       `@Outer\n@Component({ template: <div/> })\nclass X {}`,
     );
     expect(context.decoratorNames).toEqual(["Component"]);
+    expect(context.propertyKey).toBe("template");
+    expect(context.isDirectPropertyValue).toBe(true);
+  });
+
+  it("scopes decoratorNames to the innermost decorator for a class expression nested in an outer decorator's argument", () => {
+    // Nesting is possible: a class expression can sit inside an outer
+    // decorator's own call argument and itself carry a decorator whose
+    // argument encloses the region — decoratorNames must report only the
+    // innermost (Component), with the outer (Directive) in
+    // enclosingDecoratorNames, matching propertyKey/isDirectPropertyValue
+    // which are scoped to Component's own argument.
+    const context = captureContext(
+      `@Directive({ x: class { @Component({ template: <div/> }) y() {} } })\nclass X {}`,
+    );
+    expect(context.decoratorNames).toEqual(["Component"]);
+    expect(context.enclosingDecoratorNames).toEqual(["Directive"]);
+    expect(context.propertyKey).toBe("template");
+    expect(context.isDirectPropertyValue).toBe(true);
+  });
+
+  it("reports the reverse case: a region in the outer decorator's own arg, with an inner decorator on an unrelated class expression", () => {
+    const context = captureContext(
+      `@Directive({ template: <div/>, x: class { @Component({ y: 1 }) z() {} } })\nclass X {}`,
+    );
+    expect(context.decoratorNames).toEqual(["Directive"]);
+    expect(context.enclosingDecoratorNames).toEqual([]);
     expect(context.propertyKey).toBe("template");
     expect(context.isDirectPropertyValue).toBe(true);
   });
@@ -299,9 +327,33 @@ describe("computeMxRegionContext (unit)", () => {
     expect(context).toEqual({
       propertyKey: null,
       decoratorNames: [],
+      enclosingDecoratorNames: [],
       isDirectPropertyValue: false,
       argumentIndex: null,
     });
+  });
+
+  it("scopes decoratorNames to the innermost decorator, reporting the rest in enclosingDecoratorNames", () => {
+    // A class expression nested inside an outer decorator's own argument can
+    // carry its own inner decorator, e.g.
+    // `@Directive({ x: class { @Component({ template: <div/> }) accessor y } })`.
+    // decoratorNames/propertyKey/isDirectPropertyValue/argumentIndex are all
+    // scoped to the innermost decorator (Component); the outer one
+    // (Directive) is reported separately.
+    const stack: MxRegionParentFrame[] = [
+      { kind: "decorator", name: "Directive" },
+      { kind: "boundary", valueStart: 0, argumentIndex: 0 },
+      { kind: "property", key: "x", valueStart: 0 },
+      { kind: "decorator", name: "Component" },
+      { kind: "boundary", valueStart: 100, argumentIndex: 0 },
+      { kind: "property", key: "template", valueStart: 100 },
+    ];
+    const context = computeMxRegionContext(stack, 100);
+    expect(context.decoratorNames).toEqual(["Component"]);
+    expect(context.enclosingDecoratorNames).toEqual(["Directive"]);
+    expect(context.propertyKey).toBe("template");
+    expect(context.isDirectPropertyValue).toBe(true);
+    expect(context.argumentIndex).toBe(0);
   });
 });
 

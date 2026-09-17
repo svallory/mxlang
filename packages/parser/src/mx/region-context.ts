@@ -13,15 +13,23 @@ export interface MxRegionContext {
    *  too (innermost, not `x`). Null in any other position, or when the region
    *  sits inside a spread rather than a named property. */
   propertyKey: string | null;
-  /** Names of every enclosing decorator, innermost first. In practice this
-   *  is at most one entry — a decorator attaches to a declaration, not to an
-   *  arbitrary expression, so JS syntax has no way to write a second real
-   *  `@decorator` whose own argument nests inside a first one's (`Inner(...)`
-   *  inside `@Outer(Inner(...))`'s argument is an ordinary call, not a
-   *  decorator). The list shape is kept general rather than narrowed to
-   *  `string | null` on the chance a future syntax proposal changes that.
-   *  Empty when the region is not inside any decorator call. */
+  /** The innermost enclosing decorator's own name, as a single-element list,
+   *  or `[]` when the region is not inside any decorator call — scoped to
+   *  match `propertyKey`/`isDirectPropertyValue`/`argumentIndex`, which are
+   *  all computed relative to this same innermost decorator frame. A class
+   *  expression nested inside an outer decorator's own argument can carry a
+   *  second, inner decorator (`@Outer({ x: class { @Component({ template:
+   *  <div/> }) accessor y } })`), so more than one decorator really can
+   *  enclose a region; the list shape (rather than `string | null`) is kept
+   *  in case a future syntax proposal makes even the innermost frame
+   *  ambiguous. See `enclosingDecoratorNames` for the rest of the chain. */
   decoratorNames: readonly string[];
+  /** Names of every decorator enclosing the region *other than* the
+   *  innermost one (whose name is `decoratorNames`'s sole entry), outermost
+   *  first. Empty whenever there is one decorator or none. Exists so a host
+   *  can still see the full nesting even though every other field is scoped
+   *  to the innermost frame only. */
+  enclosingDecoratorNames: readonly string[];
   /** The index of the decorator-call argument that (transitively) encloses
    *  the region, or `null` when the region isn't inside any decorator's
    *  argument list at all. `@Component({ template: <div/> })` (the
@@ -129,12 +137,15 @@ export type MxRegionParentFrame =
  * `propertyKey` reads the innermost `property` frame that has a real key
  * (skipping spread frames, which carry `key: null`) — this scans the whole
  * stack and is independent of `isDirectPropertyValue`'s narrower chain-walk.
- * `decoratorNames` lists every enclosing decorator, innermost first — see
- * the `MxRegionContext` field's own doc comment for why this is at most one
- * entry in practice. `isDirectPropertyValue` walks the frames after the
- * innermost decorator (or from the start of the stack, if none) while they
- * are `boundary` frames sharing one common `valueStart` — the first frame's
- * own — then requires the frame right after that run to be a `property`
+ * `decoratorNames` reports only the innermost enclosing decorator (`[]` when
+ * none), scoped to match `propertyKey`/`isDirectPropertyValue`/
+ * `argumentIndex`; every other enclosing decorator, outermost first, goes in
+ * `enclosingDecoratorNames` instead — see the `MxRegionContext` field's own
+ * doc comment for why nesting is possible at all. `isDirectPropertyValue`
+ * walks the frames after the innermost decorator (or from the start of the
+ * stack, if none) while they are `boundary` frames sharing one common
+ * `valueStart` — the first frame's own — then requires the frame right
+ * after that run to be a `property`
  * whose `valueStart` equals the region's own start. Any `boundary` whose
  * `valueStart` breaks from the chain (a call, a ternary branch, an array,
  * …) makes the whole thing `false`, without inspecting anything past it —
@@ -145,7 +156,8 @@ export function computeMxRegionContext(
   regionStart: number,
 ): MxRegionContext {
   let propertyKey: string | null = null;
-  const decoratorNames: string[] = [];
+  const enclosingDecoratorNames: string[] = [];
+  let innermostDecoratorName: string | null = null;
   let innermostDecoratorIndex = -1;
 
   for (let i = 0; i < stack.length; i++) {
@@ -156,10 +168,18 @@ export function computeMxRegionContext(
       // reports "template", not "x".
       if (frame.key !== null) propertyKey = frame.key;
     } else if (frame.kind === "decorator") {
-      decoratorNames.unshift(frame.name);
+      // The stack walks outer-to-inner, so the previous innermost decorator
+      // (if any) becomes an enclosing one once a later, more-inner decorator
+      // frame is found.
+      if (innermostDecoratorName !== null) {
+        enclosingDecoratorNames.push(innermostDecoratorName);
+      }
+      innermostDecoratorName = frame.name;
       innermostDecoratorIndex = i;
     }
   }
+  const decoratorNames: string[] =
+    innermostDecoratorName !== null ? [innermostDecoratorName] : [];
 
   let isDirectPropertyValue = false;
   let argumentIndex: number | null = null;
@@ -190,7 +210,13 @@ export function computeMxRegionContext(
       regionStart === frame.valueStart;
   }
 
-  return { propertyKey, decoratorNames, isDirectPropertyValue, argumentIndex };
+  return {
+    propertyKey,
+    decoratorNames,
+    enclosingDecoratorNames,
+    isDirectPropertyValue,
+    argumentIndex,
+  };
 }
 
 /**
