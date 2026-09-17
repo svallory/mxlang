@@ -37,6 +37,27 @@ describe("diagnoseDocument", () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it("reports nothing for a page calling a discovered template tag", () => {
+    // The unit-model path through this server: `tags/icon.mx` is a template,
+    // so the caller emits an import of its compiled module rather than
+    // expanding it. Undiscovered, `<icon>` would be a compile error naming
+    // the tag, so an empty result is the assertion — the same shape the
+    // stdio test uses for the sidecar tag beside it.
+    const page = join(
+      import.meta.dirname,
+      "fixtures",
+      "discovered-tag",
+      "page.mx",
+    );
+    const diagnostics = diagnoseDocument(
+      '<div><icon name="star"/></div>\n',
+      `file://${page}`,
+      { host: "html" },
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it("renders <let>'s initial value (no error) under the non-strict policy", () => {
     // `${count}` here is MX's own placeholder syntax inside the source
     // string being compiled, not a JS template literal — biome's

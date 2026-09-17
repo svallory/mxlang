@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -390,6 +390,33 @@ describe("mx-tsc", () => {
 
       expect(result.output).toBe("");
       expect(result.status).toBe(0);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "type-checks a template calling a discovered *template* tag",
+    () => {
+      // The unit-model half of the fixture above. `tags/stamp.tag.ts` is a
+      // sidecar that expands to IR; `tags/icon.mx` is a template, which
+      // compiles to its own module and makes the caller emit an import of it.
+      // Zero diagnostics means `mx-tsc` resolved that injected import — the
+      // call site is not yet typed against the unit's own `Input` (phase 3),
+      // so what this pins is that the import resolves rather than reporting
+      // TS2307.
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "discovered-tag"),
+      ]);
+
+      expect(result.output).toBe("");
+      expect(result.status).toBe(0);
+
+      // That the page really does call the template tag — otherwise this
+      // would pass against a fixture someone had quietly emptied.
+      const page = join(fixtures, "discovered-tag", "src", "page.mx");
+      expect(readFileSync(page, "utf8")).toContain('<icon name="star"/>');
     },
     SPAWN_TIMEOUT_MS,
   );

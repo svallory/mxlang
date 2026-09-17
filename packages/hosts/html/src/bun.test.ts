@@ -122,6 +122,38 @@ describe("@mxlang/html/bun", () => {
     }
   });
 
+  test("resolves a discovered template tag's injected import", async () => {
+    Bun.plugin(markoPlugin);
+
+    // The unit-model path, distinct from the sidecar test above: a *template*
+    // tag compiles to its own module and the caller emits an import of it.
+    // This asserts the loader resolves that injected import for real — the
+    // tag file has to be found, compiled and imported, or the page module
+    // fails to load rather than merely rendering the wrong thing.
+    const base = join(import.meta.dirname, "..", "fixtures-marko");
+    const tagsDir = join(base, "tags");
+    const tagFile = join(tagsDir, "bunicon.mx");
+    const page = join(base, "bun-template-page.mx");
+
+    mkdirSync(tagsDir, { recursive: true });
+    writeFileSync(
+      tagFile,
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax, not a JS template
+      '<span class="icon">${input.name}</span>\n',
+    );
+    writeFileSync(page, '<div><bunicon name="star"/></div>\n');
+    try {
+      const mod = await import(page);
+      const render = mod.default as (input: unknown) => string;
+      const html = render({});
+      expect(html).toContain("star");
+      expect(html).toContain('class="icon"');
+    } finally {
+      rmSync(page, { force: true });
+      rmSync(tagsDir, { recursive: true, force: true });
+    }
+  });
+
   // A8, and the half a compile-only test cannot reach: a tag whose template
   // calls its own discovered name becomes a module that imports itself. That
   // is legal ESM (hoisted `function render` + live bindings), but "it compiles"
