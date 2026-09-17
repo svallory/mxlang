@@ -785,6 +785,33 @@ Five facts worth knowing before editing it:
   language plugin — because which tags a template may call follows from where
   the template lives. An explicitly passed `customTags` still wins over a
   discovered tag of the same name.
+- **`DiscoveredTag` carries `hosts`, and every integration's scan honors it.**
+  `getCustomTags`/`scanCached`/`scanCustomTags` accept an optional `host`
+  (`"html"`, `"astro"`, `"solid"`, `"preact"`, `"react"`, `"hono"`,
+  `"angular"`) in their options; a tag whose `mx.tags` entry declared `hosts`
+  excluding that name is left out of both `ScanResult.tags` and
+  `customTags` for that scan entirely, not merely hidden from the compiled
+  map — a name a different host owns must stay resolvable from *its* scan of
+  the same file. No `hosts` on the entry (and every local `tags/` directory,
+  which has no `mx.tags` entry to carry one) means visible to every host,
+  `host` unset included. Every call site that scans passes its own host name
+  — the Bun loaders (`"html"`, `"hono"`), `@mxlang/astro`'s `.amx` plugin
+  (`"astro"`), the SolidMX and whole-file `.mx` typescript-plugin paths
+  (`"solid"`, resolved per file via `resolveHostPolicy`), the language
+  server (`hostPolicy.host`), the Vite plugin (`resolveHostPolicy(file).host`
+  per compiled file), and the Angular build/oracle (`"angular"`) — so a
+  scan's cache key (`scanCached`) now also includes the host, since two hosts
+  scanning the same directory can get different filtered results.
+- **`discoverProjectTags(projectDir, options?)` is the project-wide
+  counterpart to `scanCustomTags`'s single-file upward walk**
+  (`packages/core/src/scan.ts`). It walks every `tags/` directory reachable
+  under `projectDir` (never descending into `node_modules`, a dotdirectory,
+  or a nested package's own tree) plus the root `package.json`'s `mx.tags`
+  entries, reusing `indexDirectory` and the manifest reader `scanCustomTags`
+  uses. Directories are visited shallowest-first so a name two `tags/`
+  directories both claim resolves to the one nearer the project root,
+  deterministically. Accepts the same `host` filter. For tooling that needs
+  the whole tag surface up front rather than per compiled file.
 - **Precedence order (spec §4; ref `custom-tags-import-precedence`):
   core structural tags, then built-in custom tags (`try`, never shadowable),
   then a *PascalCase* name the file itself binds (`import`, `<define>`),
@@ -886,6 +913,29 @@ Five facts worth knowing before editing it:
   document whose message names the offending `package.json` (LSP has no way to
   publish against a different file), and the Vite and TypeScript plugins warn
   once per distinct problem rather than once per compiled file.
+- **`package.json` reads are cached by path and mtime, and a parse failure
+  keeps the previous good manifest rather than dropping `mx.tags`.** Before
+  this the read was `JSON.parse(readFileSync(...))` on every scan, and a
+  parse error silently set the manifest to `undefined` — a page edit during a
+  broken `package.json` (an editor mid-save, a merge conflict) lost every
+  `mx.tags` entry with nothing said. `readManifest` in `scan.ts` now caches
+  the parsed result per path, keyed fresh on the file's mtime; on a parse
+  failure it keeps the *previous* revision's manifest in force and stores the
+  positioned `ScanDiagnostic` naming the `package.json` on the cache entry
+  itself (`ManifestCacheEntry.brokenDiagnostic`) — parsed once per broken
+  revision, but pushed into *every* fresh `ScanResult` built against that
+  revision, including a cache hit: two hosts scanning the same directory
+  (`scanCached`'s cache key now includes `host`, so they are two independent
+  `ScanResult`s) both get the diagnostic, and so does a caller that scans the
+  same broken `package.json` again after `clearScanCache()`. What *is*
+  deduped is a `scanCached` cache hit — its own outer cache short-circuits
+  before `readManifest` runs again at all, so a language server re-scanning
+  the same broken file on every keystroke still gets one diagnostic per
+  `scanCached` call, not one per `readManifest` call. `scanCustomTags` never
+  throws on a broken manifest. `scanCached`'s own freshness check (directory listings,
+  tag file mtimes, `package.json` mtimes) already invalidates a cached scan
+  when the manifest's mtime changes, so the two caches agree without needing
+  to know about each other.
 - **Anything that must run the scan is tested where it can be driven.** The
   Bun loaders are exercised through `Bun.plugin` under `bun test`
   (`packages/hosts/{html,hono}/src/bun.test.ts`, both wired into the root

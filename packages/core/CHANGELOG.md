@@ -14,6 +14,46 @@ existing field changed shape. `mapping.ts` gains `mappedExpr(expr)`, a thin
 wrapper over `mapped(expr.code, expr.span ?? null)`; no host adopts it in
 this change.
 
+### `mx.tags[].hosts` now filters discovery
+
+`getCustomTags`/`scanCached`/`scanCustomTags` accept an optional `host` in
+their options (`"html"`, `"astro"`, `"solid"`, `"preact"`, `"react"`,
+`"hono"`, `"angular"`). A `DiscoveredTag` now carries `hosts` from the
+`mx.tags` entry that declared it, and a tag whose `hosts` excludes the
+passed-in `host` is left out of both `ScanResult.tags` and `customTags`
+entirely. No `hosts` on the entry (or no `mx.tags` entry at all, as with
+every local `tags/` directory) means visible to every host. Every built-in
+integration now passes its own host name when it scans.
+
+`@mxlang/preact`'s `export { getCustomTags } from "@mxlang/core"` is a
+passthrough for `@mxlang/react` and `@mxlang/hono`'s Bun loaders to call with
+*their own* host name (`"react"`, `"hono"`) — it is not itself a call site
+and stays unhosted by design, the same as importing `getCustomTags` directly
+from `@mxlang/core`. `mx-tsc` is covered transitively: it runs the same
+language plugin as the tsserver plugin (`@mxlang/typescript-plugin`), whose
+`mx-language.ts`/`language.ts`/`amx-language.ts` call sites already resolve
+and pass a host (see above).
+
+### `discoverProjectTags`: project-wide tag enumeration
+
+`discoverProjectTags(projectDir, options?)` enumerates every tag reachable
+inside a project — every `tags/` directory found walking down from the
+root, plus the root `package.json`'s `mx.tags` entries — the counterpart to
+`scanCustomTags`'s single-file upward walk. Excludes `node_modules`,
+dotdirectories, and nested packages. Accepts the same `host` filter.
+
+The walk follows symlinked directories (a symlinked `tags/` directory is
+discovered, and any directory reached only through a symlink is walked into
+normally), guarded against symlink cycles so a self-referential link cannot
+recurse forever.
+
+### Tolerant, cached `package.json` reads
+
+A broken `package.json` no longer silently drops `mx.tags`: the previous
+good manifest stays in force, and one positioned diagnostic is reported per
+broken revision (not per scan). Manifest reads are now cached by path and
+mtime.
+
 ### `<return>` and `/var`: a tag hands one value back (decision 95)
 
 A template may end with `<return value=EXPR/>`, and a caller binds that value
