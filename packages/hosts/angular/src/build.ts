@@ -23,6 +23,7 @@ import { discoverFiles, isInside } from "./discover.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
 import { buildMap, writeMap } from "./map-file.ts";
+import { compileTagModuleFile } from "./tag-module.ts";
 
 /**
  * Refuses to write over an output that already exists and was not
@@ -185,30 +186,126 @@ export interface CompileOneResult {
   lines: string[];
   errors: PositionedMessage[];
   warnings: PositionedMessage[];
-  /** Tag names this page called and the IR retained (`usedTags`), for dependency tracking. Empty for a tag file or a failed compile. */
+  /**
+   * Tag names this page called and the IR retained, for dependency tracking.
+   * Empty for a tag file or a failed compile.
+   *
+   * These are the names the author *wrote* (`icon`), which is what the
+   * watcher resolves against the tag scan — not the emitted class name and
+   * not the gensym'd binding a discovered tag lowers to.
+   */
   usedTags: string[];
   /** Every output path this call touched (page `.html`, its `.map`), for `knownOutputs` bookkeeping. */
   outputs: string[];
 }
 
 /**
- * A discovered tag file. 1.5a does not yet have a route to emit an Angular
- * component *class* from a `.mx` tag file — that is task 1.7's tag-unit
- * compile route (`@mxlang/core`'s `template-tag.ts` has no Angular-side
- * consumer yet: `compile()` only emits a template string, never a component
- * module). Reported as a positioned error naming the missing task rather
- * than silently emitting a template where a component module belongs.
+ * Compiles and writes one discovered tag file (task 1.7).
+ *
+ * A tag file's output is a `.ts` component module (`tagExtension`), not a
+ * template — an Angular component is a class with a decorator, so there is no
+ * template-only form (A3's "two output kinds"). Otherwise this mirrors
+ * `buildPage`: the same overwrite guard, the same write-only-if-different, the
+ * same positioned error handling — with the header in `//` form, since the
+ * output is TypeScript.
+ *
+ * No `.map` sidecar: `compileTagModule` wraps the emitted template in a
+ * decorator, so the template's own offsets no longer describe the emitted
+ * file, and a map claiming otherwise would be worse than none.
  */
-function tagNotYetSupported(mxPath: string): {
-  error: PositionedMessage;
-  line: string;
-} {
-  const message =
-    "tag files are not yet compiled by mx-angular: component-module emission needs task 1.7 (tag-unit compile route), not yet landed for the angular host";
-  return {
-    error: { file: mxPath, line: 1, column: 0, message },
-    line: `${mxPath}:1:0 error: ${message}`,
-  };
+function compileTagFile(
+  mxPath: string,
+  config: AngularConfig,
+  knownOutputs: Set<string>,
+): CompileOneResult {
+  const outputPath = outputPathFor(mxPath, config.tagExtension);
+  const sourceBasename = basename(mxPath);
+  // The header's second line names the `imports:` a *page*'s own TypeScript
+  // needs; a tag module writes its own `imports:` array, so there is nothing
+  // for the author to add and the list is empty.
+  const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
+
+  try {
+    const customTags = getCustomTags(mxPath);
+    const result = compileTagModuleFile(mxPath, {
+      customTags,
+      tagSelectorPrefix: config.tagSelectorPrefix,
+    });
+    const content = header + result.code;
+
+    if (existsSync(outputPath)) {
+      const overwriteError = checkOverwriteGuard(outputPath);
+      if (overwriteError) {
+        return {
+          ok: false,
+          lines: [`${outputPath} error: ${overwriteError}`],
+          errors: [
+            { file: mxPath, line: 1, column: 0, message: overwriteError },
+          ],
+          warnings: [],
+          usedTags: [],
+          outputs: [],
+        };
+      }
+    }
+
+    const existed = existsSync(outputPath);
+    const before = existed ? readFileSync(outputPath, "utf8") : undefined;
+    writeIfDiffers(outputPath, content, knownOutputs);
+    const wrote = before !== content;
+
+    const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
+    const warnings = warningsFor(mxPath, result.warnings);
+    for (const w of warnings) {
+      const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
+      lines.push(`${w.file}${position} warning: ${w.message}`);
+    }
+
+    return {
+      ok: true,
+      lines,
+      errors: [],
+      warnings,
+      // A tag's own called tags are already in its emitted `imports:` array,
+      // so it reports none upward: `usedTags` drives the *page* dependency
+      // map, and a tag is tracked by its own path, not by its callees.
+      usedTags: [],
+      outputs: [outputPath],
+    };
+  } catch (err) {
+    const positioned = err instanceof TranslateError;
+    // A tag template's own error carries `file` pointing at the tag, not the
+    // caller, and is reported against that file (A5).
+    const errorFile = positioned && err.file ? err.file : mxPath;
+    const message = positioned
+      ? `${errorFile}:${err.line}:${err.column} ${err.message}`
+      : `${mxPath}: ${err instanceof Error ? err.message : String(err)}`;
+    const applied = applyOnError(
+      outputPath,
+      header,
+      message,
+      config.onError,
+      knownOutputs,
+    );
+    const error: PositionedMessage = positioned
+      ? {
+          file: errorFile,
+          line: err.line,
+          column: err.column,
+          message: err.message,
+        }
+      : { file: mxPath, message };
+    return {
+      ok: false,
+      lines: [`${mxPath} error: ${message}`, applied.line],
+      errors: applied.error
+        ? [{ file: mxPath, line: 1, column: 0, message: applied.error }]
+        : [error],
+      warnings: [],
+      usedTags: [],
+      outputs: [outputPath],
+    };
+  }
 }
 
 /**
@@ -223,16 +320,12 @@ export function compileOne(
   config: AngularConfig,
   knownOutputs: Set<string>,
 ): CompileOneResult {
+  // A tag file routes through this same entry point (so the watcher, the
+  // build and the error policy all share one path) but emits a different
+  // artifact: a `.ts` component module, not a template. See the comment on
+  // `compileTagFile`.
   if (routed.kind === "tag") {
-    const { error, line } = tagNotYetSupported(routed.path);
-    return {
-      ok: false,
-      lines: [line],
-      errors: [error],
-      warnings: [],
-      usedTags: [],
-      outputs: [],
-    };
+    return compileTagFile(routed.path, config, knownOutputs);
   }
 
   const mxPath = routed.path;
@@ -244,8 +337,12 @@ export function compileOne(
 
   try {
     const customTags = getCustomTags(mxPath);
-    const result = compileFile(mxPath, { customTags });
+    const result = compileFile(mxPath, {
+      customTags,
+      tagSelectorPrefix: config.tagSelectorPrefix,
+    });
     const header = buildHeader(sourceBasename, tsFilename, result.usedTags);
+    const usedTagNames = result.usedTags.map((t) => t.name);
     const content = header + result.code;
 
     if (existsSync(outputPath)) {
@@ -258,7 +355,7 @@ export function compileOne(
             { file: mxPath, line: 1, column: 0, message: overwriteError },
           ],
           warnings: [],
-          usedTags: result.usedTags,
+          usedTags: usedTagNames,
           outputs: [],
         };
       }
@@ -296,7 +393,7 @@ export function compileOne(
       lines,
       errors: [],
       warnings,
-      usedTags: result.usedTags,
+      usedTags: usedTagNames,
       outputs,
     };
   } catch (err) {

@@ -4,6 +4,7 @@
  * Emits an Angular template string from the core IR.
  */
 
+import { readFileSync } from "node:fs";
 import {
   type Attr,
   type ComponentTarget,
@@ -11,6 +12,7 @@ import {
   DYNAMIC_TAG,
   type Emitter,
   type Expr,
+  exportNameFor,
   expr,
   type ForSource,
   type HostDeclarations,
@@ -236,11 +238,115 @@ function checkCommentText(text: string, node: { loc: Position }): void {
 }
 
 /** `UserCard` / `user-card` -> `user-card`; the tag's filename, kebab-cased. */
-function kebabCase(name: string): string {
+export function kebabCase(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/[_\s]+/g, "-")
     .toLowerCase();
+}
+
+/** `.../tags/user-card.mx` -> `user-card`; the tag's basename, extension dropped. */
+export function tagBasename(resolvedPath: string): string {
+  const base = resolvedPath.split(/[/\\]/).pop() ?? resolvedPath;
+  return base.replace(/\.mx$/, "");
+}
+
+/**
+ * The default tag selector prefix (design note O9, RULED 2026-09-16):
+ * `mx-` plus the kebab-cased file basename.
+ *
+ * A fixed prefix guarantees the hyphen Angular requires in a custom element
+ * name, so a single-word tag (`tags/icon.mx`) is `mx-icon` rather than the
+ * invalid bare `icon`, and it keeps MX tags from colliding with the app's own
+ * `app-*` components. A tag file overrides it wholesale with
+ * `export const selector`.
+ */
+const TAG_SELECTOR_PREFIX = "mx-";
+
+/**
+ * The module specifier of an authored `import` statement, or undefined.
+ *
+ * A synthesized import carries `specifier` structurally; an authored one
+ * carries only its source text, so it is parsed — through
+ * `@marko/compiler/internal/babel`, the instance the core already uses —
+ * rather than scraped with a regex, which would trip over a specifier
+ * containing an escape or a quote of the other kind.
+ */
+function authoredImportSpecifier(code: string): string | undefined {
+  try {
+    const babel = require("@marko/compiler/internal/babel") as {
+      parse(
+        source: string,
+        options: unknown,
+      ): {
+        program: {
+          body: Array<{ type?: string; source?: { value?: unknown } }>;
+        };
+      };
+    };
+    const ast = babel.parse(code, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
+    for (const statement of ast.program.body) {
+      if (statement.type !== "ImportDeclaration") continue;
+      const value = statement.source?.value;
+      if (typeof value === "string") return value;
+    }
+  } catch {
+    // Not parseable as an import here means it is not one this host can
+    // resolve to a tag module; the core reports a genuine syntax error at
+    // its own position.
+  }
+  return undefined;
+}
+
+/**
+ * Whether an `Import` node binds a `.mx` tag module.
+ *
+ * Both halves of this host ask the same question and must agree: the emitter
+ * resolves such an import to a component reference, and the tag-unit compiler
+ * drops the author's own line for one, because the emitted module re-emits it
+ * under the component class's name. A disagreement here emits the import
+ * twice (a duplicate identifier) or not at all.
+ */
+export function isTagModuleImport(
+  specifierOrCode: string,
+  resolvedPath?: string,
+): boolean {
+  if (resolvedPath) return resolvedPath.endsWith(".mx");
+  const specifier = specifierOrCode.endsWith(".mx")
+    ? specifierOrCode
+    : authoredImportSpecifier(specifierOrCode);
+  return specifier?.endsWith(".mx") === true;
+}
+
+/** One MX tag a template called, as the caller's TypeScript must name it. */
+export interface UsedTag {
+  /**
+   * The tag as the author wrote it (`icon`), for a consumer that resolves it
+   * against the tag scan — the watcher's dependency map does.
+   *
+   * Not the binding the IR carried: a discovered tag's is a gensym
+   * (`$mx_Icon1`) that `scan.tags.get()` will never find.
+   */
+  name: string;
+  /** The class the emitted module exports, e.g. `UserCard`. */
+  className: string;
+  /** The import path of the emitted `.ts`, e.g. `./tags/user-card`. */
+  specifier: string;
+}
+
+/** How a call site references one tag module. */
+interface TagModuleRef {
+  /** The element name the call site emits, e.g. `mx-user-card`. */
+  selector: string;
+  /** The class the emitted module exports, e.g. `UserCard`. */
+  className: string;
+  /** The import path of the emitted `.ts`, e.g. `./tags/user-card`. */
+  specifier: string;
+  /** The tag file this module was compiled from, when it is known. */
+  resolvedPath?: string;
 }
 
 /**
@@ -409,13 +515,113 @@ class AngularEmitter implements Emitter<string> {
   private readonly usedTags = new Map<string, Position>();
   private tracklessForCount = 0;
   private firstLoc: Position | undefined;
+  /**
+   * Local binding -> the tag module the call site must reference, for every
+   * import that binds a `.mx` tag file.
+   *
+   * A *discovered* tag does not reach the emitter under its written name: the
+   * core mints a gensym'd binding for it (`<icon/>` lowers to
+   * `Component.target.name === "$mx_Icon1"`, `template-tag.ts`'s
+   * `bindingForTemplate`), so deriving the selector from `target.name` would
+   * emit the invalid `<mx-$mx-icon1>`. The synthesized `Import` carries
+   * `specifier` and `resolvedPath` structurally (tag-unit phase 2a), so the
+   * binding is resolved back to the file it came from and the RULED selector
+   * rule — `mx-` plus the kebab-cased *file basename* — is applied to that.
+   *
+   * An explicitly imported `import UserCard from "./tags/user-card.mx"` lands
+   * here too, so both spellings of a call produce one selector.
+   */
+  private readonly tagModules = new Map<string, TagModuleRef>();
+  /** Slot names each called tag file projects, by path; see `calleeProjects`. */
+  private readonly calleeSlots = new Map<string, Set<string>>();
+  /** `mx-` by default; `mx.angular.tagSelectorPrefix` overrides it. */
+  private readonly selectorPrefix: string;
 
-  constructor(ctx: Ctx, filename: string) {
+  constructor(
+    ctx: Ctx,
+    filename: string,
+    imports: Ir["imports"] = [],
+    selectorPrefix: string = TAG_SELECTOR_PREFIX,
+  ) {
     this.ctx = ctx;
+    this.selectorPrefix = selectorPrefix;
     // `x.component.mx` -> `x.component.ts`, the emitted sibling the step-1
     // import warning tells the author to edit. Falls back to the bare
     // filename with a `.ts` extension when it has none of MX's own.
     this.tsFilename = filename.replace(/\.mx$/, ".ts");
+    for (const node of imports) {
+      // A *synthesized* import carries `specifier`/`resolvedPath`
+      // structurally (tag-unit phase 2a). An **authored** one carries
+      // neither — only `code` and `bindings` — so its specifier is read back
+      // out of the statement text. Without this an authored
+      // `import Child from "./child.mx"` fell through the `.mx` test below,
+      // so the call site never resolved it: it kept the author's binding as
+      // the class name and guessed `./tags/<name>` as the path, which is
+      // wrong from inside a `tags/` directory, and the tag module emitted
+      // the author's line *and* its own — a duplicate identifier.
+      const specifierSource =
+        node.specifier ?? authoredImportSpecifier(node.code);
+      // Only a `.mx` import names a tag module. An ordinary TypeScript import
+      // the author wrote is not a component this host emits a selector for.
+      if (!specifierSource?.endsWith(".mx")) continue;
+      // `resolvedPath` is the reliable basename when present (two spellings
+      // of one path collapse to one tag); an authored import has only what
+      // the author wrote, which names the same file.
+      const basename = tagBasename(node.resolvedPath ?? specifierSource);
+      // The emitted module sits beside the tag file with a `.ts` extension,
+      // so the call site's import path is the specifier minus `.mx`.
+      const specifier = specifierSource.replace(/\.mx$/, "");
+      for (const binding of node.bindings) {
+        this.tagModules.set(binding, {
+          selector: `${selectorPrefix}${kebabCase(basename)}`,
+          // The same derivation the called tag's own module used to name its
+          // exported class, so the import this warning tells the author to
+          // write binds the name that module actually exports.
+          className: exportNameFor(node.resolvedPath ?? specifierSource),
+          specifier,
+          resolvedPath: node.resolvedPath,
+        });
+      }
+    }
+  }
+
+  /**
+   * Does the tag at `resolvedPath` project `name` as content?
+   *
+   * Answered from the callee's own source, by the same rule its module
+   * emission uses — a zero-argument `input.<name>()` read. Not from core's
+   * `tagMetadata.attributeTags`, which matches a bare `input.x` too
+   * (`template-tag.ts`'s `inputMember`) and would therefore flag an ordinary
+   * string input passed through as an attribute, which is legal.
+   *
+   * Deliberately a source-level scan rather than a nested compile: this runs
+   * per attribute inside the emit walk, and compiling the callee here would
+   * recurse into its own call sites. The read is cached per file.
+   */
+  private calleeProjects(
+    resolvedPath: string | undefined,
+    name: string,
+  ): boolean {
+    if (!resolvedPath) return false;
+    let slots = this.calleeSlots.get(resolvedPath);
+    if (!slots) {
+      slots = new Set<string>();
+      try {
+        const source = readFileSync(resolvedPath, "utf8");
+        // `${input.x()}` with no arguments, the slot spelling. A bare
+        // `${input.x}` deliberately does not match.
+        for (const match of source.matchAll(
+          /\$\{\s*input\s*\.\s*([A-Za-z_$][\w$]*)\s*\(\s*\)\s*\}/g,
+        )) {
+          slots.add(match[1] as string);
+        }
+      } catch {
+        // Unreadable here means the call site cannot prove a misuse; the
+        // callee's own compile reports anything genuinely wrong with it.
+      }
+      this.calleeSlots.set(resolvedPath, slots);
+    }
+    return slots.has(name);
   }
 
   private warnOnce(key: string, message: string, loc: Position): void {
@@ -461,6 +667,16 @@ class AngularEmitter implements Emitter<string> {
   }
 
   text(node: Extract<IrNode, { kind: "Text" }>): void {
+    // A `Text` node the tag-unit compiler substituted for a slot read carries
+    // template markup, not author text, so it is emitted verbatim. Flagged
+    // explicitly rather than relying on `escapeText` happening to leave `<`
+    // alone: that function's job is Angular's own delimiters (`{`/`}`/`@`),
+    // and a future addition of HTML escaping there would otherwise turn every
+    // `<ng-content>` into visible `&lt;ng-content&gt;` text.
+    if ((node as { rawTemplate?: boolean }).rawTemplate) {
+      this.out += node.value;
+      return;
+    }
     this.out += escapeText(node.value);
   }
 
@@ -518,7 +734,34 @@ class AngularEmitter implements Emitter<string> {
         node,
       );
     }
-    const selector = `mx-${kebabCase(target.name)}`;
+    // A tag bound by an import (discovered or explicit) resolves to the file
+    // it came from; anything else is a name the author wrote with no module
+    // behind it, and the bare-name rule is all this host can apply.
+    const tagModule = this.tagModules.get(target.name);
+    const selector =
+      tagModule?.selector ?? `${this.selectorPrefix}${kebabCase(target.name)}`;
+    // Passing a value for a name the callee projects as content is an error,
+    // not a binding: `<ng-content select="[header]">` places nodes the caller
+    // *nested*, and there is no way to hand it a value from an attribute. The
+    // emitted `[header]="…"` would bind an input the component never declares
+    // and render nothing — the same silent blank an unprojected slot gives.
+    if (tagModule) {
+      for (const attr of node.attrs) {
+        if (attr.kind === "spread") continue;
+        if (this.calleeProjects(tagModule.resolvedPath, attr.name)) {
+          // Named by the tag's *file*, not `target.name`: a discovered tag's
+          // binding is a gensym (`$mx_Badge1`) the author never wrote and
+          // cannot find in their source.
+          const tagName = tagModule.resolvedPath
+            ? tagBasename(tagModule.resolvedPath)
+            : target.name;
+          fail(
+            `\`${attr.name}\` is content on \`<${tagName}>\`, which projects it with \`<ng-content select="[${attr.name}]">\` — Angular cannot fill a projection from an attribute. Pass it as a nested \`<@${attr.name}>\` block instead.`,
+            node,
+          );
+        }
+      }
+    }
     const attrs = emitAttrs(node.attrs, (directive) => {
       this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
     });
@@ -837,23 +1080,51 @@ class AngularEmitter implements Emitter<string> {
     if (this.usedTags.size > 0) {
       const names = [...this.usedTags.keys()];
       const loc = this.usedTags.values().next().value as Position;
-      const lines = names
+      // The author never sees the gensym'd binding a discovered tag lowers
+      // to, so the warning names the class its emitted module exports and the
+      // real relative path of that module — the two things they must paste.
+      const refs = names.map(
+        (name) =>
+          this.tagModules.get(name) ?? {
+            className: name,
+            specifier: `./tags/${kebabCase(name)}`,
+          },
+      );
+      const lines = refs
         .map(
-          (name) =>
-            `\`import ${name} from "./tags/${kebabCase(name)}";\` and \`imports: [${name}]\``,
+          (ref) =>
+            `\`import ${ref.className} from "${ref.specifier}";\` and \`imports: [${ref.className}]\``,
         )
         .join(", ");
       warn(this.ctx, {
-        message: `this template calls ${names.length} MX tag(s): ${names.map((n) => `\`${n}\``).join(", ")}. In step 1, MX cannot edit your component's TypeScript. Add to ${this.tsFilename}: ${lines}.`,
+        message: `this template calls ${names.length} MX tag(s): ${refs.map((r) => `\`${r.className}\``).join(", ")}. In step 1, MX cannot edit your component's TypeScript. Add to ${this.tsFilename}: ${lines}.`,
         ...loc,
       } as MxWarning);
     }
     return this.out;
   }
 
-  /** The names of every MX tag this template called, in source order. */
-  usedTagNames(): string[] {
-    return [...this.usedTags.keys()];
+  /**
+   * Every MX tag this template called, in source order, as the call site must
+   * reference it: the class its emitted module exports and that module's
+   * relative path.
+   *
+   * Not the binding the IR carried — a discovered tag's is a gensym
+   * (`$mx_Icon1`) that appears nowhere the author can see.
+   */
+  usedTagRefs(): UsedTag[] {
+    return [...this.usedTags.keys()].map((binding) => {
+      const ref = this.tagModules.get(binding);
+      // A discovered tag's binding is a gensym, so its written name is
+      // recovered from the file it resolved to; an unresolved name is one the
+      // author wrote literally and is already its own name.
+      const name = ref?.resolvedPath ? tagBasename(ref.resolvedPath) : binding;
+      return {
+        name,
+        className: ref?.className ?? binding,
+        specifier: ref?.specifier ?? `./tags/${kebabCase(binding)}`,
+      };
+    });
   }
 
   emitNode(node: IrNode): void {
@@ -916,10 +1187,33 @@ export function emitTemplate(
   ir: Ir,
   ctx: Ctx,
   filename: string,
-  usedTagsOut?: string[],
+  usedTagsOut?: UsedTag[],
+  selectorPrefix: string = TAG_SELECTOR_PREFIX,
+  /**
+   * True when the caller owns a real module around this template (the
+   * tag-unit compiler), so an authored import of a *tag module* is a
+   * component reference it will emit rather than a module-level error.
+   * A page template has no module scope, so it leaves this false.
+   */
+  ownsModule = false,
 ): string {
+  // A *synthesized* import is not a module-level statement the author wrote:
+  // the core minted it for a discovered tag the template calls, and there is
+  // no other place it could live (`template-tag.ts`'s `bindingForTemplate`).
+  // Rejecting it would make calling a discovered tag an error on this host
+  // while every other host emits it, so it is resolved to a component
+  // reference instead — the emitter reads these to derive each selector, and
+  // the once-per-file warning names the `imports:` entry the author must add.
+  //
+  // An import the author wrote by hand still has a real TypeScript module to
+  // go in, so it stays the module-level error, as do `static`/`export` and
+  // `export interface Input`.
   const moduleLevel = [
-    ...ir.imports,
+    ...ir.imports.filter(
+      (node) =>
+        !node.synthesized &&
+        !(ownsModule && isTagModuleImport(node.code, node.resolvedPath)),
+    ),
     ...ir.hoisted,
     ...(ir.inputInterface ? [ir.inputInterface] : []),
   ];
@@ -927,10 +1221,10 @@ export function emitTemplate(
     fail(`a \`<${node.kind}>\` ${MODULE_LEVEL_MESSAGE}`, node);
   }
 
-  const emitter = new AngularEmitter(ctx, filename);
+  const emitter = new AngularEmitter(ctx, filename, ir.imports, selectorPrefix);
   for (const node of ir.body) emitter.emitNode(node);
   const code = emitter.done();
-  if (usedTagsOut) usedTagsOut.push(...emitter.usedTagNames());
+  if (usedTagsOut) usedTagsOut.push(...emitter.usedTagRefs());
   return code;
 }
 
