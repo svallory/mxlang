@@ -42,7 +42,7 @@ All dependencies below are pinned to an exact version (no `^`/`~`) at the root `
 | `@solidjs/web` | 2.0.0-rc.7 |
 | `@solidjs/babel-plugin` | 2.0.0-rc.7 |
 | `@solidjs/compiler` | 2.0.0-rc.7 |
-| `typescript` | 5.9.3 |
+| `typescript` | 6.0.3 |
 | `vitest` | 3.2.7 |
 | `@biomejs/biome` | 2.5.12 |
 | `@babel/preset-typescript` | 7.29.7 |
@@ -75,7 +75,9 @@ installed as a package (see `UPSTREAM.md`'s "Local modifications"); its
 pinned version (7.27.1) is recorded there, not here, since there's no
 `package.json` entry for it.
 
-Note: Babel 8 (8.0.x) and TypeScript 7 (7.0.x) were released but are new majors; the spec's parser fork targets Babel 7's `parserOverride`/JSX-plugin shape and TS's current plugin API, so this scaffold pins the latest stable Babel 7 / TypeScript 5 line instead.
+Note: Babel 8 (8.0.x) and TypeScript 7 (7.0.x) were released but are new majors; the spec's parser fork targets Babel 7's `parserOverride`/JSX-plugin shape, so this scaffold pins the latest stable Babel 7 line. TypeScript is pinned to the 6.0 line for a harder reason: TS 7 removes `compilerOptions.plugins` entirely, which is the extension point `@mxlang/typescript-plugin` is built on — see `notes/investigations/ts7-go-impact.md`.
+
+The two tooling packages that load TypeScript at runtime (`@mxlang/tsc`, `@mxlang/typescript-plugin`) declare it as a `peerDependencies` range (`>=5.9.0 <7`) rather than an exact pin, since a peer is resolved from the consumer's own project; the exact pin above is what this repo builds and tests against. `@mxlang/language-server` declares no peer — TypeScript is only its build tool. See `AGENTS.md` "Exact-pin policy".
 
 ### Solid 2 RC policy
 

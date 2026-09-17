@@ -114,6 +114,39 @@ than silently rotting.
 
 All dependencies in the root `package.json` are pinned to an exact version (no `^`/`~`). `parser`'s output must be byte-reproducible wire format across the parser, the Babel plugin, and the TS plugin's virtual-file generator; an unpinned transitive bump in Babel or TypeScript could silently change AST shape or emitted output. See `README.md` "Pinned versions" for the current set and rationale.
 
+**A published package's `peerDependencies` is the one exception, and
+`typescript` is the case.** `@mxlang/tsc` and `@mxlang/typescript-plugin`
+declare `peerDependencies.typescript: ">=5.9.0 <7"`, because a peer is resolved
+from the *consumer's* project and an exact peer makes the package uninstallable
+for anyone on a different patch. The exact-pin policy still holds for every
+`devDependencies`/`dependencies` entry, including those packages' own exact
+`devDependencies.typescript` — the range is what a consumer may satisfy, the pin
+is what CI and local builds actually run (`typescript@6.0.3` today, bumped from
+`5.9.3`).
+
+TypeScript must resolve to **one** copy: the TS plugin is handed the `ts` object
+by tsserver, and `mx-tsc` passes `require('typescript')` to Volar's `runTsc`, so
+a nested second copy breaks `instanceof` across that boundary and silently
+mistypes every file. `packages/tooling/tsc/src/peer-typescript.test.ts` asserts
+the property rather than the manifest text — every package declaring the peer
+resolves the same file on disk, and it is the workspace's own copy. Note the
+`examples/*` apps pin `typescript` themselves and are deliberately not covered.
+
+**`@mxlang/language-server` declares no `typescript` peer**, deliberately. It
+has no reference to `typescript` anywhere in its source: TypeScript is only its
+*build tool*, running `tsc --emitDeclarationOnly` to produce `dist/*.d.ts`. It
+therefore keeps an exact `devDependencies.typescript` and nothing else — a peer
+would force every consumer to resolve a module the package never loads. The same
+test pins this, so the distinction cannot rot into a copy-paste peer.
+
+**A package that emits declarations sets `rootDir` explicitly in its
+`tsconfig.build.json`.** TS 6 stopped inferring a common source directory when a
+build config and the `tsconfig.json` it extends disagree about one (`TS5011`) —
+which they do whenever `include` covers `test` and the build config excludes it,
+as `packages/hosts/angular` does. It belongs in the *build* config: putting
+`rootDir: "src"` in the base `tsconfig.json` instead makes the ordinary
+typecheck fail with `TS6059` for every file under `test/`.
+
 ## Solid 2 target and pin policy
 
 SolidMX targets **Solid 2 only** — no Solid 1 lowering table, no dual target. Pins: `solid-js`, `@solidjs/web`, `@solidjs/babel-plugin`, `@solidjs/compiler` all at `2.0.0-rc.7`. `babel-preset-solid` and `vite-plugin-solid` are dead ends (renamed upstream).
