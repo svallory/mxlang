@@ -61,7 +61,13 @@ function lowerSource(source: string, policy = fakeDeclarations()): Ir {
     translate: {
       Program: {
         exit(path: { node: { body: Node[] } }) {
-          const ctx: Ctx = newCtx(source, printExpression, policy);
+          const ctx: Ctx = newCtx(
+            source,
+            printExpression,
+            policy,
+            undefined,
+            "test.mx",
+          );
           try {
             ir = lower(ctx, path.node.body);
           } catch (error) {
@@ -791,7 +797,13 @@ describe("binding scopes are per JS block", () => {
       arg.end = undefined;
       arg.loc = undefined;
 
-      const ctx = newCtx(source, printExpression, fakeDeclarations());
+      const ctx = newCtx(
+        source,
+        printExpression,
+        fakeDeclarations(),
+        undefined,
+        "test.mx",
+      );
       ctx.bindings.register("count", (name: string) => `${name}()`);
 
       // This node was parsed directly (not through `@marko/compiler`'s own

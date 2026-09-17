@@ -513,14 +513,15 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
   if (tag.parseOptions) definition.parseOptions = tag.parseOptions;
 
   // The `x.mx` template, when one exists, read on first use. A tag with a
-  // template and no sidecar (L1-only) is complete as it stands: the core
-  // expands the template at the call site. A tag with both is composed — the
-  // sidecar's `transform` wins and may expand this template through
-  // `ctx.build.template(call)` — so the template is attached either way.
+  // template and no sidecar (L1-only) is complete as it stands: the call
+  // routes to the template's own compiled module. A tag with both is
+  // composed — the sidecar's `transform` wins and may route the call to this
+  // template through `ctx.build.template(call)` — so the template is attached
+  // either way.
   //
   // Read lazily, and re-read per scan rather than cached here, for the same
   // reason the sidecar hooks are lazy: a project with fifty tags should touch
-  // only the files a compilation actually calls. The expansion's own cache
+  // only the files a compilation actually calls. The unit's own metadata cache
   // (keyed by path, mtime and source) is what keeps repeated calls cheap.
   if (tag.template) {
     const path = tag.template;

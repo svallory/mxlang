@@ -140,7 +140,13 @@ export function compileSolidMx(
   const baseLine = options.baseLine ?? 0;
   const baseColumn = options.baseColumn ?? 0;
   const positionedSource = `${"\n".repeat(baseLine)}${" ".repeat(Math.max(baseOffset - baseLine, baseColumn))}${source}`;
-  const ctx = newCtx(positionedSource, generateExpression, solidDeclarations);
+  const ctx = newCtx(
+    positionedSource,
+    generateExpression,
+    solidDeclarations,
+    undefined,
+    options.filename,
+  );
   ctx.customTags = options.customTags;
   const ir = lower(ctx, body);
   if (

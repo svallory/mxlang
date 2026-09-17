@@ -20,8 +20,8 @@ import type {
   Position,
 } from "./ir.ts";
 import {
-  expandTemplate,
   hasTemplate,
+  routeTemplateCall,
   type TemplateBackedTag,
 } from "./template-tag.ts";
 
@@ -105,7 +105,7 @@ export interface CustomTag {
   attributes?: Record<string, CustomTagAttribute>;
   attributeTags?: Record<string, CustomTagAttributeTag>;
   analyze?(calls: readonly TagCall[], ctx: AnalyzeContext): void;
-  transform?(call: TagCall, ctx: TransformContext): IrNode[];
+  transform?(call: TagCall, ctx: TransformContext): IrNode[] | TagCall;
   finalize?(ctx: FinalizeContext): IrNode[];
 }
 
@@ -141,13 +141,12 @@ export interface IrBuilders {
     attributeTags: AttributeTag[],
   ): IrNode;
   /**
-   * Expands this tag's own template (`tags/x.mx`) with a call's inputs.
+   * Routes this tag's own template (`tags/x.mx`) as an imported component.
    *
    * Available only to a tag that has a template beside it. It is what makes
    * L1 and L2 compose rather than compete: a sidecar's `transform` wins over
    * the template, and this is how that transform uses the template as raw
-   * material — validate or compute first, then `return ctx.build.template(call)`
-   * — instead of having to rebuild the markup with the other builders.
+   * unit — validate or rewrite first, then `return ctx.build.template(call)`.
    *
    * A sidecar with no `transform` at all (a *declaration-only* sidecar, one
    * that adds `attributes` or `parseOptions`) needs no call: the template
@@ -155,9 +154,6 @@ export interface IrBuilders {
    */
   template(call: TagCall): IrNode[];
 }
-
-export const MAX_EXPANSION_DEPTH = 64;
-export const MAX_EXPANSION_NODES = 100_000;
 
 const CUSTOM_TAGLIB_ID = "mx-custom-tags";
 
@@ -212,9 +208,8 @@ export function customTagTaglib(
           ...(configured.preserveWhitespace === undefined
             ? {}
             : { preserveWhitespace: configured.preserveWhitespace }),
-          ...(configured.openTagOnly === undefined
-            ? {}
-            : { openTagOnly: configured.openTagOnly }),
+          // `openTagOnly` is enforced by the MX lowerer so a body produces a
+          // positioned MX TranslateError rather than Marko's parser error.
         }
       : undefined;
     definitions[`<${name}>`] = parseOptions ? { parseOptions } : {};
@@ -226,8 +221,22 @@ function syntheticExpr(code: string): Expr {
   return { code, shape: "other", node: null as unknown as Node };
 }
 
+/**
+ * A positioned custom-tag diagnostic, keeping the position's own file.
+ *
+ * `at.file` is forwarded rather than dropped: a call written *inside a tag
+ * template* is lowered while that template's own unit is compiled, so its
+ * position measures against the template's text. Losing the file reports the
+ * template's line and column against the caller instead — the cross-file
+ * position rule (`Position.file`) exists for exactly this case.
+ */
 function failAt(tagName: string, message: string, at: Position): never {
-  throw new TranslateError(`\`<${tagName}>\`: ${message}`, at.line, at.column);
+  throw new TranslateError(
+    `\`<${tagName}>\`: ${message}`,
+    at.line,
+    at.column,
+    at.file,
+  );
 }
 
 function buildersFor(
@@ -340,7 +349,7 @@ function buildersFor(
           loc,
         );
       }
-      return expandTemplate(ctx, definition, call);
+      return routeTemplateCall(ctx, definition, call);
     },
   };
 }
@@ -491,6 +500,9 @@ export function validateCustomTagCall(
   definition: CustomTag,
   call: TagCall,
 ): void {
+  if (definition.parseOptions?.openTagOnly && call.content) {
+    failAt(call.name, "does not accept content", call.loc);
+  }
   const attributes = definition.attributes;
   if (attributes) {
     // A tag declaring no attributes at all (`attributes: {}`) rejects a
@@ -624,37 +636,6 @@ export function validateCustomTagCall(
       );
     }
   }
-}
-
-function countNodes(nodes: IrNode[]): number {
-  let total = 0;
-  const pending = [...nodes];
-  const enqueue = (children: IrNode[]) => {
-    for (const child of children) pending.push(child);
-  };
-  for (let node = pending.pop(); node; node = pending.pop()) {
-    total++;
-    if (total > MAX_EXPANSION_NODES) return total;
-    if ("children" in node && Array.isArray(node.children)) {
-      enqueue(node.children as IrNode[]);
-    }
-    if (node.kind === "IfChain") {
-      for (const branch of node.branches) enqueue(branch.children);
-    }
-    if (node.kind === "Component") {
-      if (node.content) enqueue(node.content.children);
-      for (const tag of node.attributeTags) {
-        enqueue(tag.block.children);
-      }
-    }
-    if (node.kind === "HostTag") {
-      enqueue(node.tag.children);
-      for (const tag of node.tag.attributeTags) {
-        enqueue(tag.block.children);
-      }
-    }
-  }
-  return total;
 }
 
 /**
@@ -859,14 +840,6 @@ export function runFinalizeHooks(
     if (!Array.isArray(nodes)) {
       failAt(name, "`finalize` must return an array of IR nodes", loc);
     }
-    const total = countNodes(nodes);
-    if (total > MAX_EXPANSION_NODES) {
-      failAt(
-        name,
-        `\`finalize\` produced ${total} nodes, over the ${MAX_EXPANSION_NODES} limit`,
-        loc,
-      );
-    }
     prepended.push(...nodes);
   }
   return prepended;
@@ -933,24 +906,12 @@ export function transformCustomTag(
     attrs: applyCustomTagDefaults(definition, call),
   };
 
-  // A real template compile must retain the calls its cached IR contains so
-  // a later analyze-pass cache hit can observe the same nested calls without
-  // rerunning transforms. Nested-template metadata is replayed into this map
-  // by `expandTemplate`, making the resulting cache entry transitive.
-  const templateCalls = ctx.customTagTemplateCalls;
-  if (templateCalls && templateCalls !== ctx.customTagAnalyzePass?.calls) {
-    const recorded = templateCalls.get(call.name);
-    if (recorded) recorded.push(withDefaults);
-    else templateCalls.set(call.name, [withDefaults]);
-  }
-
   // The analyze pre-pass. Validation above has already run, so a bad call is
   // reported once at its real position rather than twice or (worse) only on
   // the second walk; from here the call is merely recorded and expands to
   // nothing, because its `transform` must not run until every `analyze` in
-  // the file has seen every call. A template-backed tag is still expanded on
-  // this scratch walk: its own nested custom-tag calls are part of the file's
-  // call set, even though neither its transform nor any nested transform runs.
+  // the file has seen every call. Calls inside a template belong to that
+  // template's own compilation unit and are not replayed into its caller.
   const analyzePass = ctx.customTagAnalyzePass;
   if (analyzePass) {
     const recorded = analyzePass.calls.get(call.name);
@@ -958,9 +919,6 @@ export function transformCustomTag(
       recorded.push(withDefaults);
     } else {
       analyzePass.calls.set(call.name, [withDefaults]);
-    }
-    if (hasTemplate(definition)) {
-      expandTemplate(ctx, definition as TemplateBackedTag, withDefaults);
     }
     return [];
   }
@@ -974,17 +932,14 @@ export function transformCustomTag(
     store: storeFor(ctx, call.name),
   };
 
-  let nodes: IrNode[];
+  let result: IrNode[] | TagCall;
   try {
-    // The sidecar wins when it has a `transform`: it may call
-    // `ctx.build.template(call)` to expand the template with the call's
-    // inputs, or ignore the template entirely and build its own IR. A
-    // declaration-only sidecar — `attributes`/`parseOptions` and no
-    // `transform` — expands the template as an L1-only tag does, now
-    // validated by the declarations it added.
-    nodes = definition.transform
+    // A sidecar may remain a macro by returning IR, or return a rewritten
+    // TagCall for the adjacent template unit. A declaration-only sidecar
+    // routes the validated call unchanged.
+    result = definition.transform
       ? definition.transform(observed.call, tagContext)
-      : expandTemplate(ctx, definition as TemplateBackedTag, observed.call);
+      : routeTemplateCall(ctx, definition as TemplateBackedTag, observed.call);
   } catch (error) {
     if (error instanceof TranslateError) throw error;
     throw new TranslateError(
@@ -994,23 +949,29 @@ export function transformCustomTag(
     );
   }
 
-  if (!Array.isArray(nodes)) {
-    failAt(call.name, "custom tag must return an array of IR nodes", call.loc);
-  }
-  const total = countNodes(nodes);
-  if (total > MAX_EXPANSION_NODES) {
+  let routed = false;
+  let nodes: IrNode[];
+  if (Array.isArray(result)) {
+    nodes = result;
+  } else if (
+    hasTemplate(definition) &&
+    typeof result.name === "string" &&
+    Array.isArray(result.attrs)
+  ) {
+    routed = true;
+    nodes = routeTemplateCall(ctx, definition, result);
+  } else {
     failAt(
       call.name,
-      `custom tag expansion produced ${total} nodes, over the ${MAX_EXPANSION_NODES} limit`,
+      "custom tag transform must return an array of IR nodes or a TagCall for its template",
       call.loc,
     );
   }
-  // A template expansion reports its own, more precise version of this
-  // warning (it knows which placeholder was missing), and reads
-  // `attributeTags` through a path this proxy does not see, so the generic
-  // check applies only to a real `transform`.
+  // A routed template call reports dropped attribute tags from its metadata;
+  // this proxy guard applies only to a transform that returned macro IR.
   if (
     definition.transform &&
+    !routed &&
     call.attributeTags.length > 0 &&
     !observed.attributeTagsRead()
   ) {
