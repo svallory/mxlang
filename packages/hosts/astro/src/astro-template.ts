@@ -128,25 +128,18 @@ const declarations: HostDeclarations = {
     return [value, ...attrs.slice(0, index), ...attrs.slice(index + 1)];
   },
   claimsTag: (name) => name === DYNAMIC_TAG,
-  resolveHostTag: (name, node, ctx): HostTagData => {
+  resolveHostTag: (name, node): HostTagData => {
     if (name !== DYNAMIC_TAG) {
       fail(`unknown Astro host tag ${JSON.stringify(name)}`, node);
     }
 
-    // A bare top-level `${expr}` is Marko's expression-named tag shape. It is
-    // still an interpolation; a dynamic tag has attributes or a body and is a
-    // host-specific error. The decision is recorded in `data`, so emission
-    // never re-inspects the Marko node.
-    if ((node.attributes ?? []).length === 0 && !node.body?.body?.length) {
-      return {
-        kind: "interpolation",
-        expr: {
-          code: ctx.generate(node.name),
-          shape: "other",
-          node: node.name,
-        },
-      };
-    }
+    // A bare top-level `${expr}` line and a tagged `<${expr} .../>` both
+    // parse to Marko's expression-named tag shape, and both are the
+    // dynamic-tag construct (see the "four Marko facts" in AGENTS.md, and
+    // `@mxlang/core`'s `lowerTag`) — Astro resolves component names
+    // statically and cannot express either, so both are the same
+    // host-specific error rather than the bare shape silently becoming an
+    // interpolation.
     fail(
       "a dynamic tag name (`<${expr}>`) is not supported in an `.amx` template; Astro resolves component names statically",
       node,

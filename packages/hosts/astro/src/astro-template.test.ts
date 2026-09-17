@@ -339,6 +339,16 @@ describe("unsupported constructs", () => {
       /resolves component names statically/,
     );
   });
+
+  it("rejects a bare `${expr}` concise-position line the same way, not as a silent interpolation", () => {
+    // A bare line and the tagged form parse to the same dynamic-tag shape
+    // (see AGENTS.md's "four Marko facts"); Astro cannot express either, so
+    // both are the same error rather than the bare shape silently rendering
+    // as an interpolation of the tag-name expression.
+    expect(errorFor("${Tag}\n").message).toMatch(
+      /resolves component names statically/,
+    );
+  });
 });
 
 describe("error positions", () => {
