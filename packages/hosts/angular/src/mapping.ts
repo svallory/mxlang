@@ -296,6 +296,49 @@ export function encodeMappings(
  * re-stringifying the prefix per mapping, which was quadratic in the
  * template's length.
  */
+/**
+ * Rebases template-relative mappings onto text that embeds the template
+ * under a per-character escaping function, starting at `embeddedStart`.
+ *
+ * The general form of `templateMappingsToModule`: `escapeChar` gives the
+ * escaped form of one character, and a run whose escaped form differs from
+ * its raw form is **dropped** rather than mapped to bytes it does not
+ * cover. The escaped length of every prefix is accumulated in one pass, so
+ * this is linear in the template's length.
+ */
+export function rebaseThroughEscaping(
+  template: string,
+  mappings: readonly GeneratedMapping[],
+  embeddedStart: number,
+  escapeChar: (char: string) => string,
+): GeneratedMapping[] {
+  const escapedUpTo = new Int32Array(template.length + 1);
+  for (let i = 0; i < template.length; i += 1) {
+    escapedUpTo[i + 1] =
+      (escapedUpTo[i] as number) + escapeChar(template[i] as string).length;
+  }
+
+  const out: GeneratedMapping[] = [];
+  for (const mapping of mappings) {
+    const run = template.slice(mapping.generatedStart, mapping.generatedEnd);
+    const escapedRunLength =
+      (escapedUpTo[mapping.generatedEnd] as number) -
+      (escapedUpTo[mapping.generatedStart] as number);
+    // An escaped character inside the run would make the embedded bytes
+    // differ from the source text this mapping claims.
+    if (escapedRunLength !== run.length) continue;
+    const start =
+      embeddedStart + (escapedUpTo[mapping.generatedStart] as number);
+    out.push({
+      sourceStart: mapping.sourceStart,
+      sourceEnd: mapping.sourceEnd,
+      generatedStart: start,
+      generatedEnd: start + run.length,
+    });
+  }
+  return out;
+}
+
 export function templateMappingsToModule(
   template: string,
   mappings: readonly GeneratedMapping[],
