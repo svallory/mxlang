@@ -77,10 +77,12 @@ function statefulErrors(targetName: string): HostDeclarations["tags"] {
       reason:
         "`<await>` needs Marko's suspense; use `<try>` with a `<@placeholder>`, whose body may suspend",
     },
-    return: {
-      kind: "error",
-      reason: `\`<return>\` hands a value to a parent template; a ${targetName} component returns its own markup`,
-    },
+    // `<return>` is **not** an error here. It was, on the grounds that "a
+    // component returns its own markup" — true while a tag template was
+    // expanded into its caller, but under the unit model (decision 95) the
+    // tag is its own module and the caller invokes it, so it has a caller to
+    // return to. A returning unit's component returns `{ value, output }`
+    // and the call site unwraps it; the core owns the grammar.
     else: { kind: "error", reason: "`<else>` must follow an `<if>`" },
     "else-if": { kind: "error", reason: "`<else-if>` must follow an `<if>`" },
   };
@@ -295,15 +297,59 @@ export class PreactEmitter implements Emitter<string> {
    * knows which names were actually called.
    */
   readonly #aliases: Set<string>;
+  /**
+   * Statements a `/var` call site needs above the component's `return`.
+   *
+   * A `/var` binds what a unit returns with `<return>`, so the call has to be
+   * *evaluated* and its result destructured — and JSX has no statement
+   * position. The call is emitted as an ordinary function call here, not as a
+   * JSX element: a JSX element is a description of a call the runtime makes
+   * later, so `<Counter/>` in expression position never hands the
+   * `{ value, output }` pair back to the caller at all.
+   *
+   * Shared by reference through `#child()`, like the two sets above, so a
+   * call inside an `<if>` branch or a `<for>` body still reaches the one
+   * function body that can hold a statement.
+   */
+  readonly #varStatements: string[];
+  /** Serial for the temps those statements bind, per emitted module. */
+  #varSerial: { n: number };
+  /**
+   * This emitter is filling a JSX **callback**, not the component body.
+   *
+   * Every structural kind on this target lowers to an expression — a `<for>`
+   * to `.map((item) => …)`, an `<if>` to a ternary, an attribute tag to a
+   * prop — so the statements a `/var` needs have nowhere to go inside one.
+   * Hoisting them to the component body is what round 1 caught: the call
+   * escapes the scope it was written in, so it reads loop variables that do
+   * not exist there and runs once for a body that renders N times.
+   *
+   * Invariant §7.5-8 says the escape is rejected, never hoisted, so a `/var`
+   * here is a positioned error rather than a silent miscompile. Lifting the
+   * restriction means giving each callback its own statement position (an
+   * IIFE), which is filed as MX 2 work.
+   */
+  readonly #callbackScope: boolean;
 
   constructor(
     target: Target = preactTarget,
     runtimeImports?: Set<string>,
     aliases?: Set<string>,
+    varStatements?: string[],
+    varSerial?: { n: number },
+    callbackScope = false,
   ) {
     this.#target = target;
     this.#runtimeImports = runtimeImports ?? new Set();
     this.#aliases = aliases ?? new Set();
+    this.#varStatements = varStatements ?? [];
+    this.#varSerial = varSerial ?? { n: 0 };
+    this.#callbackScope = callbackScope;
+  }
+
+  /** Statements a `/var` call site needs above the component's `return`. */
+  get varStatements(): string[] {
+    return this.#varStatements;
   }
 
   /** Component names that need a capitalized alias in the emitted module. */
@@ -317,12 +363,19 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /** A child emitter sharing this one's target and import collection. */
-  #child(): PreactEmitter {
-    return new PreactEmitter(this.#target, this.#runtimeImports, this.#aliases);
+  #child(callbackScope = this.#callbackScope): PreactEmitter {
+    return new PreactEmitter(
+      this.#target,
+      this.#runtimeImports,
+      this.#aliases,
+      this.#varStatements,
+      this.#varSerial,
+      callbackScope,
+    );
   }
 
-  #render(nodes: IrNode[]): MappedCode {
-    const child = this.#child();
+  #render(nodes: IrNode[], callbackScope?: boolean): MappedCode {
+    const child = this.#child(callbackScope);
     drive(child, nodes);
     return child.result();
   }
@@ -335,7 +388,7 @@ export class PreactEmitter implements Emitter<string> {
    * slot to fill. A lone escaped placeholder becomes its bare expression,
    * which keeps `<if=c>${x}</if>` from emitting `<>{x}</>`.
    */
-  #expression(nodes: IrNode[]): MappedCode {
+  #expression(nodes: IrNode[], callbackScope?: boolean): MappedCode {
     const content = meaningful(nodes);
     if (content.length === 0) return concatMapped("null");
     if (content.length === 1) {
@@ -350,10 +403,54 @@ export class PreactEmitter implements Emitter<string> {
         only.kind === "For" ||
         only.kind === "HostTag"
       ) {
-        return this.#render(content);
+        return this.#render(content, callbackScope);
       }
     }
-    return concatMapped("<>", this.#render(content), "</>");
+    return concatMapped("<>", this.#render(content, callbackScope), "</>");
+  }
+
+  /**
+   * One attribute's *value*, as a JS expression, for object syntax.
+   *
+   * The counterpart of `#attr` for a unit that is called rather than
+   * described (see `#propsObject`). It repeats `#attr`'s per-kind decisions
+   * — the structured `class` helper, the `style` object rule, `:=`'s
+   * rejection, a method attribute's function expression — because those are
+   * decisions about the *value*, while `#attr`'s remaining work is the
+   * attribute-name syntax an object literal does not use.
+   */
+  #attrValue(attr: Attr): string {
+    switch (attr.kind) {
+      case "spread":
+        // Handled by the caller: a spread has no name to pair a value with.
+        return attr.value.code;
+      case "boolean":
+        return "true";
+      case "static":
+        return JSON.stringify(attr.value);
+      case "bound":
+        return fail(
+          `\`:=\` is Marko's two-way binding; ${this.#target.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
+          attr,
+        );
+      case "dynamic": {
+        if (attr.name === "class") {
+          const fixed = staticTemplateValue(attr.value);
+          if (fixed !== null) return JSON.stringify(fixed);
+          if (attr.value.shape === "object" || attr.value.shape === "array") {
+            this.#runtimeImports.add("mxClass");
+            return `mxClass(${attr.value.code})`;
+          }
+        }
+        if (attr.name === "style" && attr.value.shape !== "object") {
+          return fail(
+            "`style=` takes an object literal (`style={color: c}`); a non-object value is not supported",
+            attr,
+          );
+        }
+        return methodExpression(attr.value) ?? attr.value.code;
+      }
+    }
   }
 
   #attr(attr: Attr, mapName: boolean, isComponent: boolean): MappedCode {
@@ -467,7 +564,10 @@ export class PreactEmitter implements Emitter<string> {
 
   /** One attribute tag's body, as the value its prop takes. */
   #attributeTagValue(tag: AttributeTag): MappedCode {
-    const value = this.#expression(tag.block.children);
+    // An attribute tag's body becomes a prop value, and with params a
+    // function — either way a scope the component body's statements cannot
+    // reach.
+    const value = this.#expression(tag.block.children, true);
     if (!tag.block.hasParams) return value;
     return concatMapped(`(${tag.block.params.join(", ")}) => `, value);
   }
@@ -509,6 +609,61 @@ export class PreactEmitter implements Emitter<string> {
         return concatMapped(" ", nameCode, "={[", ...joined, "]}");
       }),
     );
+  }
+
+  /**
+   * One call's props as an object literal, for a call that is *invoked*.
+   *
+   * A unit declaring `<return>` has to be called rather than described as a
+   * JSX element, so its props need object syntax instead of attribute
+   * syntax. Built from the IR rather than by re-parsing the JSX `#attrs`
+   * produced: the two syntaxes differ per attribute kind (a spread is
+   * `{...x}` in JSX and `...x` in an object; a static value is a quoted
+   * attribute and a string literal), and text surgery over emitted JSX
+   * would have to re-derive exactly the cases `#attr` already decided.
+   *
+   * The value expressions themselves are shared with `#attr` through
+   * `#attrValue`, so a structured `class`, a rejected `:=`, and the `style`
+   * object rule cannot drift between a called unit and a described one.
+   */
+  #propsObject(node: Extract<IrNode, { kind: "Component" }>): string {
+    const parts: string[] = [];
+    for (const attr of node.attrs) {
+      if (attr.kind === "spread") {
+        parts.push(`...${attr.value.code}`);
+        continue;
+      }
+      // A component's props are its author's `Input` contract, so names are
+      // never renamed here — the same rule `#attrName(name, true)` applies.
+      parts.push(`${JSON.stringify(attr.name)}: ${this.#attrValue(attr)}`);
+    }
+
+    // Repeated `<@name>` becomes an array, exactly as in attribute syntax.
+    const byName = new Map<string, MappedCode[]>();
+    for (const tag of node.attributeTags) {
+      const values = byName.get(tag.name);
+      const value = this.#attributeTagValue(tag);
+      if (values) values.push(value);
+      else byName.set(tag.name, [value]);
+    }
+    for (const [name, values] of byName) {
+      const codes = values.map((value) => value.code);
+      parts.push(
+        `${JSON.stringify(name)}: ${
+          codes.length === 1 ? codes[0] : `[${codes.join(", ")}]`
+        }`,
+      );
+    }
+
+    const content = node.content?.children ?? [];
+    if (content.length > 0) {
+      // Marko's `content` and JSX's `children` are the same slot; a called
+      // unit reads `input.content`, so it is passed under that name.
+      const rendered = this.#expression(content);
+      parts.push(`content: () => <>${rendered.code}</>`);
+    }
+
+    return `{ ${parts.join(", ")} }`;
   }
 
   text(node: Extract<IrNode, { kind: "Text" }>): void {
@@ -607,6 +762,35 @@ export class PreactEmitter implements Emitter<string> {
 
     const attrs = this.#attrs(node.attrs, true, true);
     const tags = this.#attributeTags(node.attributeTags);
+
+    // A unit that declares `<return>` hands back `{ value, output }`, so the
+    // call is evaluated rather than described. With a `/var` it becomes two
+    // statements above the `return` and renders its output half here; without
+    // one only the output is wanted, and the call can stay an expression.
+    if (node.returnsValue) {
+      const props = this.#propsObject(node);
+      if (node.var) {
+        // Every structural kind on this target is an *expression*, so a
+        // callback scope has no statement position of its own. Hoisting the
+        // call to the component body would take it out of the scope it was
+        // written in: inside a `<for>` it would read a row binding that does
+        // not exist there and run once for a body that renders N times.
+        // Invariant §7.5-8 rejects the escape rather than emitting it.
+        if (this.#callbackScope) {
+          fail(
+            `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#target.name} yet; bind it at the top level of the template`,
+            node,
+          );
+        }
+        const temp = `$mx_ret${this.#varSerial.n++}`;
+        this.#varStatements.push(`const ${temp} = ${name}(${props});`);
+        this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
+        this.#out.push(concatMapped(`{${temp}.output}`));
+        return;
+      }
+      this.#out.push(concatMapped("{", `${name}(${props})`, ".output}"));
+      return;
+    }
     const rawHtml = raw
       ? ` ${this.#target.rawHtmlProp}={${this.#target.rawHtmlValue(raw.expr.code)}}`
       : "";
@@ -629,10 +813,10 @@ export class PreactEmitter implements Emitter<string> {
     const children = node.content.hasParams
       ? concatMapped(
           `{(${node.content.params.join(", ")}) => `,
-          this.#expression(contentNodes),
+          this.#expression(contentNodes, true),
           "}",
         )
-      : this.#render(contentNodes);
+      : this.#render(contentNodes, true);
     if (children.code === "") {
       this.#out.push(
         concatMapped("<", mapped(name, node.nameSpan), attrs, tags, " />"),
@@ -686,11 +870,12 @@ export class PreactEmitter implements Emitter<string> {
         parts.push(
           branch.condition.code,
           " ? ",
-          this.#expression(branch.children),
+          // A branch is a ternary arm: an expression, evaluated lazily.
+          this.#expression(branch.children, true),
           " : ",
         );
       } else {
-        parts.push(this.#expression(branch.children));
+        parts.push(this.#expression(branch.children, true));
       }
     }
     if (node.branches.at(-1)?.condition) parts.push("null");
@@ -707,7 +892,10 @@ export class PreactEmitter implements Emitter<string> {
    * documented in the README as this host's rule rather than left implicit.
    */
   forLoop(node: Extract<IrNode, { kind: "For" }>): void {
-    const body = this.#expression(node.children);
+    // `.map((item) => …)`: the body is a callback, so a statement written
+    // here would have to be hoisted out of the loop to reach the component
+    // body — losing both the row binding and the per-row evaluation.
+    const body = this.#expression(node.children, true);
     const [first = "item", second] = node.params;
     const source = node.source;
 
