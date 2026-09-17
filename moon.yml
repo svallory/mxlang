@@ -1,6 +1,15 @@
 # https://moonrepo.dev/docs/config/project
 $schema: "https://moonrepo.dev/schemas/project.json"
 
+# Pinned explicitly because the root project is globbed as "." in
+# .moon/workspace.yml, and moon derives an unpinned id from the *directory
+# name* -- which for a worktree is the branch's folder, not the repo. A
+# worktree named after a package (e.g. worktrees/angular-checker, beside
+# packages/tooling/angular-checker) then collides: "A project already exists
+# with the identifier angular-checker". Pinning the id makes moon independent
+# of what a checkout happens to be called.
+id: "mx"
+
 language: "typescript"
 
 tasks:
