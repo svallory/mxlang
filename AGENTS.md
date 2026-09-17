@@ -1375,6 +1375,13 @@ silently skipped. Command-line checks use `mx-tsc --astro --noEmit`.
 Both paths also type-check `.amx` itself through the composed AstroMX plugin;
 without Astro mode, `.amx` files are ignored.
 
+## `@mxlang/angular`: the Angular host on `@mxlang/core` (in progress)
+
+`packages/hosts/angular` emits an Angular template string from a `.mx` page
+template. Structural kinds only so far (task 1.2); `For`, `Define`,
+`Component`, attribute tags and non-`html-comment` host tags are task 1.3.
+See `notes/investigations/angular-host-design.md` for the design.
+
 ## `@mxlang/language-server`: diagnostics-only LSP server (decision 71/72)
 
 `packages/tooling/language-server` (`@mxlang/language-server`) exists to close one
