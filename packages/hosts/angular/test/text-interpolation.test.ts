@@ -79,8 +79,13 @@ describe("Text", () => {
 
 describe("Interpolation", () => {
   it("emits an escaped interpolation as {{ }}", () => {
-    const out = emit("${user.name}");
-    expect(out).toBe("{{ user.name }}");
+    // Wrapped in a real element: a placeholder inside an HTML-syntax body
+    // parses as a genuine `MarkoPlaceholder`, unlike a bare top-level
+    // `${expr}` line, which is a dynamic-tag construct on every host since
+    // core PR #103 (main 50877ea8) — see `component.test.ts`'s dynamic-tag
+    // tests for that shape.
+    const out = emit("<div>${user.name}</div>");
+    expect(out).toBe("<div>{{ user.name }}</div>");
     assertAngularParses(out);
   });
 

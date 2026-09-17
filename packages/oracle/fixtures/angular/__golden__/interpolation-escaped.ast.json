@@ -1,21 +1,33 @@
 [
   {
-    "value": {
-      "ast": {
-        "strings": [
-          "",
-          ""
-        ],
-        "expressions": [
-          {
-            "receiver": {
-              "receiver": {},
-              "name": "user"
-            },
-            "name": "name"
+    "name": "div",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              "",
+              ""
+            ],
+            "expressions": [
+              {
+                "receiver": {
+                  "receiver": {},
+                  "name": "user"
+                },
+                "name": "name"
+              }
+            ]
           }
-        ]
+        }
       }
-    }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
   }
 ]

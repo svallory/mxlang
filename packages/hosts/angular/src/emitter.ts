@@ -1101,16 +1101,11 @@ class AngularEmitter implements Emitter<string> {
       fail(TRY_MESSAGE, node);
     }
     if (data.kind === "dynamic-component") {
-      // A bare `${expr}` placeholder (no attributes, no body) parses through
-      // this exact same core branch as `<${expr} a=1/>` — claiming
-      // `DYNAMIC_TAG` is a single boolean gate covering both shapes
-      // (`lower.ts`'s `lowerTag`), so the split has to happen here instead.
-      // With neither attrs nor children this is a plain interpolation, not a
-      // component call.
-      if (tag.attrs.length === 0 && tag.children.length === 0) {
-        this.out += `{{ ${data.expr} }}`;
-        return;
-      }
+      // core PR #103 (main 50877ea8, decision "bare placeholder is a dynamic
+      // tag"): a bare `${expr}` placeholder and `<${expr}/>` are the same
+      // construct on every host now, not a text/component split this host
+      // used to draw for itself. Both shapes lower through this branch and
+      // both emit `ngComponentOutlet`.
       this.emitDynamicComponent(
         data.expr,
         tag.attrs,
