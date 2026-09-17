@@ -157,6 +157,18 @@ function domEventName(attrName: string): string {
 
 const MODIFIER_PREFIXES = new Set(["attr", "class", "style"]);
 
+// A1:112-113's exact wording, one per directive — "class" takes "object or
+// array" (both structured shapes route here) while "style" takes only
+// "object" (an array-valued `style=` is not a shape the emitter's own
+// structured-value handling recognizes, so this directive never fires for
+// an array).
+const NGCLASS_NGSTYLE_WARNING: Record<"ngClass" | "ngStyle", string> = {
+  ngClass:
+    "this template binds `class` to an object or array value, emitted as [ngClass]; add `NgClass` to the component's imports.",
+  ngStyle:
+    "this template binds `style` to an object value, emitted as [ngStyle]; add `NgStyle` to the component's imports.",
+};
+
 function emitAttrs(
   attrs: Attr[],
   onceWarn: (kind: "ngClass" | "ngStyle") => void,
@@ -458,7 +470,7 @@ class AngularEmitter implements Emitter<string> {
     } else {
       warn(this.ctx, {
         message:
-          "$!{…} has no exact Angular equivalent; emitted as [innerHTML], which Angular sanitizes, wrapped in a <span>; invalid inside <tbody>/<select>/<ul>.",
+          "$!{…} has no exact Angular equivalent; emitted as [innerHTML] wrapped in a <span>, which Angular sanitizes. The wrapper is invalid inside <tbody>/<select>/<ul>, where only certain child elements are allowed — restructure those cases.",
         ...node.loc,
       } as MxWarning);
       this.out += `<span [innerHTML]="${esc(node.expr.code)}"></span>`;
@@ -467,11 +479,7 @@ class AngularEmitter implements Emitter<string> {
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
     const attrs = emitAttrs(node.attrs, (directive) => {
-      this.warnOnce(
-        directive,
-        `this template uses [${directive}]; add ${directive === "ngClass" ? "NgClass" : "NgStyle"} to the component's imports.`,
-        node.loc,
-      );
+      this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
     });
     this.out += `<${node.name}${attrs}>`;
     if (node.void) return;
@@ -506,17 +514,13 @@ class AngularEmitter implements Emitter<string> {
   ): void {
     if (node.content?.hasParams) {
       fail(
-        "`<{Tag}|…|>` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a `<define>` and pass it as an input the component renders with `ngTemplateOutlet`.",
+        `\`<${target.name}|…|>\` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a \`<define>\` and pass it as an input the component renders with \`ngTemplateOutlet\`.`,
         node,
       );
     }
     const selector = `mx-${kebabCase(target.name)}`;
     const attrs = emitAttrs(node.attrs, (directive) => {
-      this.warnOnce(
-        directive,
-        `this template uses [${directive}]; add ${directive === "ngClass" ? "NgClass" : "NgStyle"} to the component's imports.`,
-        node.loc,
-      );
+      this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
     });
     if (!this.usedTags.has(target.name)) {
       this.usedTags.set(target.name, node.loc);
@@ -526,7 +530,7 @@ class AngularEmitter implements Emitter<string> {
     for (const tag of node.attributeTags) {
       if (tag.block.hasParams) {
         fail(
-          "`<{Tag}|…|>` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a `<define>` and pass it as an input the component renders with `ngTemplateOutlet`.",
+          `\`<${target.name}><@${tag.name}|…|>\` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a \`<define>\` and pass it as an input the component renders with \`ngTemplateOutlet\`.`,
           tag,
         );
       }

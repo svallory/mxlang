@@ -42,9 +42,9 @@ describe("Component name target", () => {
     assertAngularParses(out);
   });
 
-  it("rejects content with tag params", () => {
+  it("rejects content with tag params, naming the real tag rather than a literal {Tag} placeholder", () => {
     expect(() => emit("<Card|row|>${row}</Card>")).toThrow(
-      /Angular's content projection cannot express/,
+      "`<Card|…|>` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a `<define>` and pass it as an input the component renders with `ngTemplateOutlet`.",
     );
   });
 
@@ -56,9 +56,9 @@ describe("Component name target", () => {
     assertAngularParses(out);
   });
 
-  it("rejects an attribute tag with params", () => {
+  it("rejects an attribute tag with params, naming the component and the attribute tag", () => {
     expect(() => emit("<Card><@header|x|>${x}</@header></Card>")).toThrow(
-      /Angular's content projection cannot express/,
+      "`<Card><@header|…|>` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a `<define>` and pass it as an input the component renders with `ngTemplateOutlet`.",
     );
   });
 
