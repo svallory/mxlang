@@ -78,6 +78,27 @@ describe("Solid IR lowering", () => {
     ],
     ["prop namespace", `<input prop:value=v>`, ["prop:value={v}"]],
     [
+      "dynamic tag (tagged)",
+      `<\${which} n=1>x</>`,
+      [
+        "= which; return typeof",
+        '=== "string" || typeof',
+        '=== "function" ?',
+        "<Dynamic component={",
+        " n={1}>",
+        "x",
+        "</Dynamic>",
+        " : ",
+        "; })()}",
+      ],
+    ],
+    [
+      "dynamic tag (bare concise-position line)",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+      "${which}\n",
+      ["= which; return typeof", "<Dynamic component={", " /> : ", "; })()}"],
+    ],
+    [
       "class and id shorthand",
       `<div#main.card.big>x</div>`,
       [`id="main"`, `class="card big"`],
@@ -207,7 +228,6 @@ describe("Solid host errors", () => {
     ["bool modifier", `<div bool:hidden=value/>`, "plain attribute"],
     ["use modifier", `<div use:tip=opts/>`, "ref=foo(opts)"],
     ["dynamic style", `<div style=value/>`, "non-object"],
-    ["dynamic tag", `<\${which}>x</>`, "dynamic tag name"],
     ["try params", `<try|value|><p>x</p></try>`, "tag params"],
     ["try variable", `<try/value><p>x</p></try>`, "tag variable"],
     ["try arguments", `<try(value)><p>x</p></try>`, "tag arguments"],
