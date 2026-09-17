@@ -54,6 +54,30 @@ good manifest stays in force, and one positioned diagnostic is reported per
 broken revision (not per scan). Manifest reads are now cached by path and
 mtime.
 
+### TypeScript 6.0.3, and `typescript` as a peer dependency
+
+The repo builds and typechecks on `typescript@6.0.3` (from `5.9.3`).
+
+`@mxlang/tsc` and `@mxlang/typescript-plugin` now declare
+`peerDependencies.typescript: ">=5.9.0 <7"` instead of an exact pin. TypeScript
+must come from the consumer's project: the TS plugin is handed the `ts` object by
+tsserver and `mx-tsc` passes `require('typescript')` to Volar's `runTsc`, so a
+second nested copy breaks `instanceof` across that boundary. Both keep an exact
+`devDependencies.typescript` so CI stays pinned.
+
+`@mxlang/language-server` declares no `typescript` peer. It has no reference to
+`typescript` in its source at all — TypeScript is only its build tool, emitting
+`dist/*.d.ts` — so it keeps an exact `devDependencies.typescript` and nothing
+else, rather than making consumers resolve a module it never loads.
+
+The bump itself needed one source change: `packages/hosts/angular`'s
+`tsconfig.build.json` now sets `rootDir: "src"` explicitly. TS 6 no longer
+infers a common source directory when a build config and its base config
+disagree about it (`TS5011`). No other package was affected, no deprecation
+warning was reported anywhere in the build, typecheck, test or oracle runs, and
+emitted `.d.ts` output is unchanged. The full TS 6 findings — and what they do
+and do not imply for TS 7 — are in `notes/investigations/ts7-go-impact.md` §7.
+
 ### `<return>` and `/var`: a tag hands one value back (decision 95)
 
 A template may end with `<return value=EXPR/>`, and a caller binds that value
