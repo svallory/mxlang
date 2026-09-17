@@ -836,8 +836,15 @@ export function compileTagModule(
     template.includes(marker),
   ).map(({ symbol }) => symbol);
 
+  // `export interface Input` is the tag-module contract's own name for the
+  // props interface, so the `@Input` decorator import — always `Input` in
+  // `@angular/core` — collides with it whenever there is at least one input
+  // prop (`TS2440: Import declaration conflicts with local declaration`).
+  // Importing it under an alias sidesteps the clash without renaming the
+  // interface the author wrote.
   const angularImports = ["Component"];
-  if (inputProps.length > 0) angularImports.push("Input");
+  const hasInputs = inputProps.length > 0;
+  if (hasInputs) angularImports.push("Input as NgInput");
 
   const lines: string[] = [
     `import { ${angularImports.join(", ")} } from "@angular/core";`,
@@ -867,7 +874,9 @@ export function compileTagModule(
   for (const prop of inputProps) {
     // A non-optional property is `required: true`, so Angular reports a
     // missing attribute at the call site rather than rendering `undefined`.
-    const decorator = prop.optional ? "@Input()" : "@Input({ required: true })";
+    const decorator = prop.optional
+      ? "@NgInput()"
+      : "@NgInput({ required: true })";
     // `!` on a required input: it is assigned by Angular, not the constructor,
     // which `strictPropertyInitialization` cannot see.
     const mark = prop.optional ? "?" : "!";

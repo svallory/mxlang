@@ -1,4 +1,4 @@
-import { Component, Input } from "@angular/core";
+import { Component, Input as NgInput } from "@angular/core";
 
 export interface Input { name: string; size?: number }
 
@@ -9,7 +9,7 @@ export interface Input { name: string; size?: number }
   template: "<span class=\"icon\">{{ name }}</span>",
 })
 export class Inputs {
-  @Input({ required: true }) name!: string;
-  @Input() size?: number;
+  @NgInput({ required: true }) name!: string;
+  @NgInput() size?: number;
 }
 export default Inputs;

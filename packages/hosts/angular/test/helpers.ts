@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { parseTemplate } from "@angular/compiler";
 import type { MxWarning } from "@mxlang/core";
+import ts from "typescript";
 import { compile } from "../src/index.ts";
 
 /** Compiles a `.mx` source string, returning both the template and any warnings. */
@@ -48,4 +52,57 @@ export function angularAstSnapshot(template: string): unknown {
       SPAN_KEY.test(key) ? undefined : value,
     ),
   );
+}
+
+/**
+ * Writes an emitted `.ts` module to disk and typechecks it for real with
+ * `ts.createProgram`, `@angular/core` on the type path.
+ *
+ * `parseTemplate` alone only proves the `template:` string is syntax Angular
+ * accepts — it never sees the surrounding module, so an emitted
+ * `import { Component, Input } from "@angular/core"` colliding with the
+ * tag's own `export interface Input` (`TS2440`) compiled clean and passed
+ * every existing test. This is the real `tsc` pass that catches that class
+ * of bug.
+ */
+export function assertModuleTypechecks(
+  code: string,
+  filename = "tag.ts",
+): void {
+  // Written under this package's own directory, not the system temp dir:
+  // module resolution walks up from the file looking for `node_modules`,
+  // and only this package's own `node_modules` (real or bun-linked) has
+  // `@angular/core` on the type path.
+  const dir = mkdtempSync(
+    join(new URL("..", import.meta.url).pathname, ".typecheck-tmp-"),
+  );
+  try {
+    const filePath = join(dir, filename);
+    writeFileSync(filePath, code);
+
+    const program = ts.createProgram([filePath], {
+      strict: true,
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      experimentalDecorators: true,
+      skipLibCheck: true,
+      noEmit: true,
+      types: [],
+    });
+
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    if (diagnostics.length > 0) {
+      const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+        getCanonicalFileName: (f) => f,
+        getCurrentDirectory: () => dir,
+        getNewLine: () => "\n",
+      });
+      throw new Error(
+        `emitted module failed to typecheck:\n${code}\n\n${formatted}`,
+      );
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
