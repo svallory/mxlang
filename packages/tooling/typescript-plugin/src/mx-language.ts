@@ -10,9 +10,9 @@ import {
   type IrNode,
   type Lookup,
   lower,
-  type Node,
   newCtx,
   parseFragment,
+  printExpression,
   resolveHostPolicy,
   scanCached,
 } from "@mxlang/core";
@@ -303,16 +303,13 @@ export function createHtmlMappings(
       buildLookup(directory: string, translator: unknown): Lookup | undefined;
     };
   };
-  const { generator } = require("@marko/compiler/internal/babel") as {
-    generator(node: Node, options: { concise: boolean }): { code: string };
-  };
   const { body } = parseFragment(source, {
     filename: fileName,
     customTags,
   });
   const ctx = newCtx(
     source,
-    (node) => generator(node, { concise: true }).code,
+    printExpression,
     declarations ?? (strict ? strictPolicy : policy),
     compiler.taglib.buildLookup(dirname(fileName), translator),
     fileName,
