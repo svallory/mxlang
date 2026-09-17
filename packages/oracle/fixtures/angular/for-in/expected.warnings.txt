@@ -1,0 +1,1 @@
+this template uses `<for in=>`, emitted with Angular's `keyvalue` pipe; add `KeyValuePipe` to the component's imports.

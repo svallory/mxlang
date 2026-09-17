@@ -1,0 +1,41 @@
+[
+  {
+    "tagName": "ng-template",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "templateAttrs": [],
+    "children": [
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              " ",
+              " "
+            ],
+            "expressions": [
+              {
+                "receiver": {},
+                "name": "x"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "references": [
+      {
+        "name": "Row",
+        "value": ""
+      }
+    ],
+    "variables": [
+      {
+        "name": "x",
+        "value": ""
+      }
+    ],
+    "isSelfClosing": false
+  }
+]

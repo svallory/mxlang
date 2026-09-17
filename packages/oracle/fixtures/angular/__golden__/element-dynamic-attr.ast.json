@@ -1,0 +1,30 @@
+[
+  {
+    "name": "a",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "value",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "expr"
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "value": "x"
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

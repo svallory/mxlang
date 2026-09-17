@@ -1,0 +1,48 @@
+[
+  {
+    "name": "ng-container",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "ngComponentOutlet",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "Cmp"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": "ngComponentOutletInputs",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "keys": [
+              {
+                "kind": "property",
+                "key": "a",
+                "quoted": false
+              }
+            ],
+            "values": [
+              {
+                "value": 1
+              }
+            ]
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

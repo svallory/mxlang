@@ -1,0 +1,1 @@
+this template has 1 `<for>` loop(s) with no `by=`; Angular requires a `track`, so MX emitted `track $index`. Reordering such a list re-renders instead of moving DOM nodes — add `by=(p => p.id)` to track by identity.

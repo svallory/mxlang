@@ -23,7 +23,8 @@
     "oracle:preact": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-preact-cli.ts",
     "oracle:react": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-react-cli.ts",
     "oracle:hono": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-hono-cli.ts",
-    "oracle:custom-tags": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/fixtures-custom-tags/run.ts"
+    "oracle:custom-tags": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/fixtures-custom-tags/run.ts",
+    "oracle:angular": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-angular.ts"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",

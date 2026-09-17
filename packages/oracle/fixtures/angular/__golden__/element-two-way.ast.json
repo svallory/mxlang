@@ -1,0 +1,39 @@
+[
+  {
+    "name": "input",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "value",
+        "type": 5,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "w"
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [
+      {
+        "name": "valueChange",
+        "type": 2,
+        "handler": {
+          "ast": {
+            "receiver": {},
+            "name": "w"
+          }
+        },
+        "target": null,
+        "phase": null
+      }
+    ],
+    "directives": [],
+    "children": [],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": true
+  }
+]

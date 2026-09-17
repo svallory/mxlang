@@ -1,0 +1,128 @@
+[
+  {
+    "item": {
+      "name": "a",
+      "value": "$implicit"
+    },
+    "expression": {
+      "ast": {
+        "receiver": {},
+        "name": "xs"
+      }
+    },
+    "trackBy": {
+      "ast": {
+        "receiver": {},
+        "name": "$index"
+      }
+    },
+    "contextVariables": [
+      {
+        "name": "$index",
+        "value": "$index"
+      },
+      {
+        "name": "$first",
+        "value": "$first"
+      },
+      {
+        "name": "$last",
+        "value": "$last"
+      },
+      {
+        "name": "$even",
+        "value": "$even"
+      },
+      {
+        "name": "$odd",
+        "value": "$odd"
+      },
+      {
+        "name": "$count",
+        "value": "$count"
+      }
+    ],
+    "children": [
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              " ",
+              " "
+            ],
+            "expressions": [
+              {
+                "receiver": {},
+                "name": "a"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "empty": null
+  },
+  {
+    "item": {
+      "name": "b",
+      "value": "$implicit"
+    },
+    "expression": {
+      "ast": {
+        "receiver": {},
+        "name": "ys"
+      }
+    },
+    "trackBy": {
+      "ast": {
+        "receiver": {},
+        "name": "$index"
+      }
+    },
+    "contextVariables": [
+      {
+        "name": "$index",
+        "value": "$index"
+      },
+      {
+        "name": "$first",
+        "value": "$first"
+      },
+      {
+        "name": "$last",
+        "value": "$last"
+      },
+      {
+        "name": "$even",
+        "value": "$even"
+      },
+      {
+        "name": "$odd",
+        "value": "$odd"
+      },
+      {
+        "name": "$count",
+        "value": "$count"
+      }
+    ],
+    "children": [
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              " ",
+              " "
+            ],
+            "expressions": [
+              {
+                "receiver": {},
+                "name": "b"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "empty": null
+  }
+]

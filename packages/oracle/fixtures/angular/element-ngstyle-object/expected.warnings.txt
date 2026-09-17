@@ -1,0 +1,1 @@
+this template binds `style` to an object value, emitted as [ngStyle]; add `NgStyle` to the component's imports.

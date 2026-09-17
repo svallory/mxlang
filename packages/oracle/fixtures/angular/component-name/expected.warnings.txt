@@ -1,0 +1,1 @@
+this template calls 1 MX tag(s): `UserCard`. In step 1, MX cannot edit your component's TypeScript. Add to x.ts: `import UserCard from "./tags/user-card";` and `imports: [UserCard]`.

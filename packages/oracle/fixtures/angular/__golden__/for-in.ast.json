@@ -1,0 +1,108 @@
+[
+  {
+    "item": {
+      "name": "mxEntry",
+      "value": "$implicit"
+    },
+    "expression": {
+      "ast": {
+        "expression": {
+          "exp": {
+            "receiver": {},
+            "name": "obj"
+          },
+          "name": "keyvalue",
+          "args": [
+            {
+              "value": null
+            }
+          ],
+          "type": 0
+        }
+      }
+    },
+    "trackBy": {
+      "ast": {
+        "receiver": {
+          "receiver": {},
+          "name": "mxEntry"
+        },
+        "name": "key"
+      }
+    },
+    "contextVariables": [
+      {
+        "name": "$index",
+        "value": "$index"
+      },
+      {
+        "name": "$first",
+        "value": "$first"
+      },
+      {
+        "name": "$last",
+        "value": "$last"
+      },
+      {
+        "name": "$even",
+        "value": "$even"
+      },
+      {
+        "name": "$odd",
+        "value": "$odd"
+      },
+      {
+        "name": "$count",
+        "value": "$count"
+      }
+    ],
+    "children": [
+      {
+        "name": "k",
+        "value": {
+          "ast": {
+            "receiver": {
+              "receiver": {},
+              "name": "mxEntry"
+            },
+            "name": "key"
+          }
+        }
+      },
+      {
+        "name": "v",
+        "value": {
+          "ast": {
+            "receiver": {
+              "receiver": {},
+              "name": "mxEntry"
+            },
+            "name": "value"
+          }
+        }
+      },
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              " ",
+              "",
+              " "
+            ],
+            "expressions": [
+              {
+                "receiver": {},
+                "name": "k"
+              },
+              {
+                "receiver": {},
+                "name": "v"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "empty": null
+  }
+]

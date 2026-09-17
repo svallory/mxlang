@@ -1426,9 +1426,27 @@ without Astro mode, `.amx` files are ignored.
 ## `@mxlang/angular`: the Angular host on `@mxlang/core` (in progress)
 
 `packages/hosts/angular` emits an Angular template string from a `.mx` page
-template. Structural kinds only so far (task 1.2); `For`, `Define`,
-`Component`, attribute tags and non-`html-comment` host tags are task 1.3.
-See `notes/investigations/angular-host-design.md` for the design.
+template. See `notes/investigations/angular-host-design.md` for the design.
+
+`bun run oracle:angular` (`packages/oracle/src/report-angular.ts`,
+`runAngularTable`) is the oracle table: each fixture under
+`packages/oracle/fixtures/angular/<name>/` is either a **pass** fixture
+(`input.mx` + `expected.html`, byte-compared to the emitted template, plus
+`expected.warnings.txt` for a fixture whose A1 row is a Warning — one
+message per line, byte-exact, in emission order; absent means zero
+warnings) or an **error** fixture (`input.mx` + `expected.error.txt`,
+matched exactly against the `TranslateError` message with `compile()`'s
+absolute-path prefix stripped). Every pass fixture is additionally checked
+against the real `@angular/compiler@22.1.7`:
+`parseTemplate(emitted, name).errors === null` and a span-stripped AST
+snapshot in `packages/oracle/fixtures/angular/__golden__/<name>.ast.json`
+(regenerated with `--update`). `bun run oracle` runs this table too (after
+its own Solid twin table) and folds its result into the exit code, and
+`packages/oracle/test/angular.test.ts` runs it through `bun run test` /
+`bun run verify` so a regression here fails CI, not only a developer's own
+`oracle:angular` run. See `packages/oracle/fixtures/angular/README.md` for
+the two A1 rows intentionally absent (tag-file `<ng-content>` forms, task
+1.7's scope) and the `<for in=>` ordering rationale.
 
 ## `@mxlang/language-server`: diagnostics-only LSP server (decision 71/72)
 

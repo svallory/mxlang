@@ -1,0 +1,30 @@
+[
+  {
+    "name": "div",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "class",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "someExpr"
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "value": "x"
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

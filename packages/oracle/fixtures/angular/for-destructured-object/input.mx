@@ -1,0 +1,1 @@
+<for|{id, name}| of=people>${id}${name}</for>

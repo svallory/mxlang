@@ -1,0 +1,34 @@
+[
+  {
+    "name": "total",
+    "value": {
+      "ast": {
+        "operation": "+",
+        "left": {
+          "receiver": {},
+          "name": "a"
+        },
+        "right": {
+          "receiver": {},
+          "name": "b"
+        }
+      }
+    }
+  },
+  {
+    "value": {
+      "ast": {
+        "strings": [
+          "",
+          ""
+        ],
+        "expressions": [
+          {
+            "receiver": {},
+            "name": "total"
+          }
+        ]
+      }
+    }
+  }
+]

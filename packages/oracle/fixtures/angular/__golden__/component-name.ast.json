@@ -1,0 +1,26 @@
+[
+  {
+    "name": "mx-user-card",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "name",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "n"
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

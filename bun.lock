@@ -321,6 +321,7 @@
       "name": "@mxlang/oracle",
       "version": "0.0.0",
       "dependencies": {
+        "@mxlang/angular": "workspace:*",
         "@mxlang/core": "workspace:*",
         "@mxlang/hono": "workspace:*",
         "@mxlang/html": "workspace:*",
@@ -330,6 +331,7 @@
         "@mxlang/solid": "workspace:*",
       },
       "devDependencies": {
+        "@angular/compiler": "22.1.7",
         "@marko/compiler": "5.42.5",
         "@marko/runtime-tags": "6.3.51",
         "@types/react": "19.3.0",

@@ -12,6 +12,7 @@
       "!**/fixtures/**/__golden__",
       "!**/fixtures/**/*.solid.mx",
       "!**/fixtures-marko",
+      "!**/fixtures/angular/**",
       "!**/.probe*",
       "!packages/parser/src/babel",
       "!packages/parser/dist",

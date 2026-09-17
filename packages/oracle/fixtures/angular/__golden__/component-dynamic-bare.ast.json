@@ -1,0 +1,18 @@
+[
+  {
+    "value": {
+      "ast": {
+        "strings": [
+          "",
+          ""
+        ],
+        "expressions": [
+          {
+            "receiver": {},
+            "name": "Cmp"
+          }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,21 @@
+[
+  {
+    "value": {
+      "ast": {
+        "strings": [
+          "",
+          ""
+        ],
+        "expressions": [
+          {
+            "receiver": {
+              "receiver": {},
+              "name": "user"
+            },
+            "name": "name"
+          }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "div",
+    "attributes": [
+      {
+        "name": "class",
+        "value": "a"
+      }
+    ],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "value": "x"
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

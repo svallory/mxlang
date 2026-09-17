@@ -1,0 +1,34 @@
+[
+  {
+    "name": "mx-card",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "name": "ng-container",
+        "attributes": [
+          {
+            "name": "ngProjectAs",
+            "value": "[header]"
+          }
+        ],
+        "inputs": [],
+        "outputs": [],
+        "directives": [],
+        "children": [
+          {
+            "value": "H"
+          }
+        ],
+        "references": [],
+        "isSelfClosing": false,
+        "isVoid": false
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]
