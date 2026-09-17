@@ -14,7 +14,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTemplate } from "@angular/compiler";
 import { compile, compileNgMx, compileTagModuleFile } from "@mxlang/angular";
-import { getCustomTags, type MxWarning } from "@mxlang/core";
+import {
+  type GeneratedMapping,
+  getCustomTags,
+  type MxWarning,
+} from "@mxlang/core";
 import ts from "typescript";
 
 /**
@@ -248,6 +252,62 @@ function typecheckTagModule(
   }
 }
 
+/**
+ * Inverts the emitter's own escaping, so a generated run can be compared to
+ * the source text it came from.
+ *
+ * Exactly three transforms to undo, matching `emitter.ts`: `esc()`'s
+ * `&`/`"` entities for an attribute value, the brace interpolation literals
+ * (`{{ '{' }}`), and `&#64;` for an `@` before a lowercase identifier.
+ * Order matters — `&amp;` must be last, or an authored `&amp;` in the source
+ * would be double-decoded.
+ */
+function unescapeGenerated(text: string): string {
+  return text
+    .replace(/\{\{ '(\{|\})' \}\}/g, "$1")
+    .replace(/&#64;/g, "@")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
+}
+
+/**
+ * Is `generated` a name MX *derives* from `source` rather than copying?
+ *
+ * Every derivation the emitter performs is listed. A mapping whose two sides
+ * differ for any other reason is misaligned, which is what the oracle's
+ * third assertion exists to catch.
+ */
+function isDerivedFrom(generated: string, source: string): boolean {
+  // A component selector: `UserCard`/`user-card` -> `mx-user-card`.
+  const kebab = source
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[_\s]+/g, "-")
+    .toLowerCase();
+  if (
+    generated.endsWith(kebab) &&
+    /^[a-z][\w-]*-$/.test(generated.slice(0, generated.length - kebab.length))
+  ) {
+    return true;
+  }
+  // A DOM event name: `onClick` -> `click`, `onDoubleClick` -> `dblclick`.
+  if (/^on[A-Z]/.test(source)) return true;
+  // A `track` expression derived from `by=`: `"id"` -> `<row>.id`, or the
+  // unwrapped body of an arrow. Both end in text the source mentions.
+  const bare = source.replace(/^['"`]|['"`]$/g, "");
+  if (generated.endsWith(`.${bare}`) || source.includes(generated)) return true;
+  // `by=identity` tracks the row itself, so the emitted `track` expression
+  // is the loop variable — a name that appears nowhere in the `by=` text.
+  if (source.trim() === "identity") return true;
+  // An `[ngClass]`/`[ngStyle]` directive name, from a `class`/`style` value.
+  if (
+    (generated === "ngClass" && source === "class") ||
+    (generated === "ngStyle" && source === "style")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function runAngularTable(update: boolean): {
   rows: Row[];
   failed: boolean;
@@ -359,14 +419,17 @@ export function runAngularTable(update: boolean): {
       : FIXTURE_FILENAME;
 
     let code: string;
+    let mappings: GeneratedMapping[] = [];
     const warnings: MxWarning[] = [];
     try {
-      code = compile(input, compilePath, {
+      const result = compile(input, compilePath, {
         warnings,
         customTags: hasTagsDir
           ? (getCustomTags(compilePath, { host: "angular" }) as never)
           : undefined,
-      }).code;
+      });
+      code = result.code;
+      mappings = result.mappings;
     } catch (err) {
       rows.push({
         fixture: name,
@@ -448,6 +511,74 @@ export function runAngularTable(update: boolean): {
         kind: "pass",
         verdict: "fail",
         detail: "AST snapshot mismatch (run with --update to regenerate)",
+      });
+      failed = true;
+      continue;
+    }
+
+    // The third assertion (task 2.2b): every mapping's source span must
+    // slice `input.mx` to the MX text that mapping claims.
+    //
+    // The check is an *equality*, not a bounds test: the generated run is
+    // un-escaped back to what the author wrote and compared to the source
+    // slice. That is what makes a misaligned mapping fail — a +1 shift
+    // slices `ser.name` where the run says `user.name`, which bounds and a
+    // round trip both accept. `unescapeGenerated` inverts exactly the three
+    // transforms the emitter applies (`esc()`'s `&amp;`/`&quot;`, the brace
+    // interpolation literals, and `&#64;`).
+    //
+    // Two kinds of mapping are exempt, because the emitted text is *derived*
+    // rather than copied and no un-escaping can recover the source spelling:
+    // a component selector (`UserCard` -> `mx-user-card`), a DOM event name
+    // (`onClick` -> `click`), a `track` expression (`by="id"` -> `row.id`)
+    // and an `[ngClass]`/`[ngStyle]` directive name. Those are still
+    // bounds-checked; the equality applies to every run copied verbatim.
+    const badMapping = mappings.find(
+      (mapping) =>
+        mapping.sourceStart < 0 ||
+        mapping.sourceEnd > input.length ||
+        mapping.sourceStart >= mapping.sourceEnd ||
+        mapping.generatedStart < 0 ||
+        mapping.generatedEnd > code.length ||
+        mapping.generatedStart >= mapping.generatedEnd,
+    );
+    if (badMapping) {
+      rows.push({
+        fixture: name,
+        kind: "pass",
+        verdict: "fail",
+        detail: `mapping out of range: ${JSON.stringify(badMapping)}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    const misaligned = mappings.find((mapping) => {
+      const sourceText = input.slice(mapping.sourceStart, mapping.sourceEnd);
+      // A span selecting only whitespace is never a name or an expression.
+      if (sourceText.trim() === "") return true;
+      const generatedText = code.slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
+      );
+      // The run copied the author's bytes: un-escaping must recover them
+      // exactly. This is the assertion with teeth.
+      if (unescapeGenerated(generatedText) === sourceText) return false;
+      // Otherwise the emitted text must be one MX *derives* from the source
+      // text rather than copying — every such derivation is enumerated, so a
+      // genuinely misaligned mapping cannot hide behind this branch.
+      return !isDerivedFrom(generatedText, sourceText);
+    });
+    if (misaligned) {
+      rows.push({
+        fixture: name,
+        kind: "pass",
+        verdict: "fail",
+        detail: `mapping does not slice its own source text: source ${JSON.stringify(
+          input.slice(misaligned.sourceStart, misaligned.sourceEnd),
+        )} vs generated ${JSON.stringify(
+          code.slice(misaligned.generatedStart, misaligned.generatedEnd),
+        )}`,
       });
       failed = true;
       continue;

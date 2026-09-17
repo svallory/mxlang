@@ -777,7 +777,101 @@ describe("onError policy (A3's 3x2 table)", () => {
 });
 
 describe("mx-angular map", () => {
-  it("prints the source file, and says fine-grained mapping isn't available yet, since compile()'s map has no real positions", () => {
+  /** Runs `mx-angular map <arg>`, capturing what it printed. */
+  function runMapCli(arg: string): {
+    exitCode: number | Promise<number>;
+    logs: string[];
+  } {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (msg: string) => logs.push(msg);
+    try {
+      return { exitCode: runCli(["map", arg]), logs };
+    } finally {
+      console.log = originalLog;
+    }
+  }
+
+  it("resolves an emitted position back to its line and column in the .mx", () => {
+    // Multi-line on both sides: the expression is on source line 3, so a
+    // resolver that ignored line structure would answer line 1 here.
+    const source = "<div>\n  <p>x</p>\n  <p>${user.name}</p>\n</div>\n";
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/greeting.mx": source,
+    });
+    build(projectDir);
+
+    // Ask about the emitted `user.name`, wherever the emitter put it.
+    const emitted = readFileSync(join(projectDir, "src/greeting.html"), "utf8");
+    const at = emitted.indexOf("user.name");
+    const before = emitted.slice(0, at);
+    const line = before.split("\n").length;
+    const column = at - (before.lastIndexOf("\n") + 1);
+
+    const { exitCode, logs } = runMapCli(
+      `${join(projectDir, "src/greeting.html")}:${line}:${column}`,
+    );
+    expect(exitCode).toBe(0);
+    // Line 3, column 7: `  <p>${user.name}` — two spaces, `<p>`, `${`.
+    expect(source.split("\n")[2]?.slice(7)).toBe("user.name}</p>");
+    expect(logs).toEqual(["greeting.mx:3:7"]);
+  });
+
+  it("says so when the position came from no source text", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/greeting.mx": "<div>${user.name}</div>",
+    });
+    build(projectDir);
+
+    // Column 0 is the `<` of `<div>`: generated punctuation, not source text.
+    const { exitCode, logs } = runMapCli(
+      `${join(projectDir, "src/greeting.html")}:1:0`,
+    );
+    expect(exitCode).toBe(0);
+    expect(logs).toEqual([
+      "greeting.mx",
+      "that position came from no source text (generated punctuation)",
+    ]);
+  });
+
+  it("does not fabricate a position for punctuation *after* a mapped run", () => {
+    // The bug this pins: a v3 segment marks where a run starts and the run
+    // extends to the next segment, so without a terminator at each run's end
+    // every byte after the last expression -- `</div>` here, to the end of
+    // the line -- resolved to that expression's source position.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/greeting.mx": "<div>${user.name}</div>",
+    });
+    build(projectDir);
+
+    const emitted = readFileSync(join(projectDir, "src/greeting.html"), "utf8");
+    // Somewhere inside the trailing `</div>`, past the end of `user.name`.
+    const at = emitted.lastIndexOf("</div>") + 2;
+    const before = emitted.slice(0, at);
+    const line = before.split("\n").length;
+    const column = at - (before.lastIndexOf("\n") + 1);
+
+    const { exitCode, logs } = runMapCli(
+      `${join(projectDir, "src/greeting.html")}:${line}:${column}`,
+    );
+    expect(exitCode).toBe(0);
+    expect(logs).toEqual([
+      "greeting.mx",
+      "that position came from no source text (generated punctuation)",
+    ]);
+  });
+
+  it("says so when the sidecar carries no mappings at all", () => {
+    // A text-only template derives nothing from source, so its map is empty.
     writeProject({
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
@@ -786,22 +880,13 @@ describe("mx-angular map", () => {
     });
     build(projectDir);
 
-    const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (msg: string) => logs.push(msg);
-    try {
-      const exitCode = runCli([
-        "map",
-        `${join(projectDir, "src/greeting.html")}:1:0`,
-      ]);
-      expect(exitCode).toBe(0);
-    } finally {
-      console.log = originalLog;
-    }
-
+    const { exitCode, logs } = runMapCli(
+      `${join(projectDir, "src/greeting.html")}:1:0`,
+    );
+    expect(exitCode).toBe(0);
     expect(logs).toEqual([
       "greeting.mx",
-      "no fine-grained mapping yet (mappings empty); see the header comment",
+      "no fine-grained mapping in this sidecar (mappings empty)",
     ]);
   });
 
