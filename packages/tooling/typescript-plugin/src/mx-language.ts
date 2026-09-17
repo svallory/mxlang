@@ -115,6 +115,16 @@ export function createMxLanguagePlugin(
         const customTags = tagsFor(fileName);
         const strict =
           hostPolicy.host === "astro" || hostPolicy.strict === true;
+        if (hostPolicy.host === "angular") {
+          // `@mxlang/angular` exists (phase 1) but is not wired into this
+          // plugin yet — falling through to the vanilla `compile()` below
+          // would silently type-check an Angular page template against the
+          // html host's generated TypeScript instead, which is wrong, not
+          // merely incomplete.
+          throw new Error(
+            "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
+          );
+        }
         const compiled =
           hostPolicy.host === "solid"
             ? compileSolidMx(source, {

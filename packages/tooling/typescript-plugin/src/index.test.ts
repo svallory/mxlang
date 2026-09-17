@@ -704,6 +704,23 @@ describe("MX language plugin", () => {
     expect(plugin.getSyntaxError(honoFile)).toBeUndefined();
   });
 
+  it("reports the angular host as not wired in yet, rather than falling through to html", () => {
+    const angularFile = `${here}/fixtures/angular-policy/card.mx`;
+    const plugin = createMxLanguagePlugin(ts);
+    const source = ["<div>hi</div>"].join("\n");
+    plugin.createVirtualCode?.(
+      angularFile,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+
+    const syntaxError = plugin.getSyntaxError(angularFile);
+    expect(syntaxError?.message).toContain(
+      "the angular host is not wired into @mxlang/typescript-plugin yet",
+    );
+  });
+
   it("parses `<` comparisons and generic calls in the virtual TSX", () => {
     // The regression the TSX script kind could plausibly have introduced: in
     // TSX, `<T>x` is JSX rather than a type assertion. It does not reach a

@@ -338,6 +338,21 @@ describe("the Hono host", () => {
   });
 });
 
+describe("the Angular host", () => {
+  it("reports the host as not wired in yet, rather than diagnosing under html's declarations", () => {
+    const diagnostics = diagnoseDocument(
+      "<div>hi</div>\n",
+      "file:///app/greeting.mx",
+      { host: "angular" },
+    );
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain(
+      "the angular host is not wired into @mxlang/language-server yet",
+    );
+  });
+});
+
 describe("custom tag template positions", () => {
   const template = (source: string): Record<string, CustomTag> => {
     const box: TemplateBackedTag = {
