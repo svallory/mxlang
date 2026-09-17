@@ -53,7 +53,7 @@ export function compile(
   const result = compileSource(source, filename, angularDeclarations, {
     customTags: options.customTags,
     warnings,
-    emitIr: (ir, ctx) => emitTemplate(ir, ctx),
+    emitIr: (ir, ctx) => emitTemplate(ir, ctx, filename),
   });
   return { ...result, warnings };
 }

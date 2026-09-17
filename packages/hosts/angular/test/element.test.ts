@@ -52,6 +52,14 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
+  it("maps onDoubleClick to the real DOM event name, not a lowercased camelCase", () => {
+    // A plain `.toLowerCase()` of the MX attribute name gives `doubleclick`,
+    // not the DOM event `dblclick` Angular's `(dblclick)` binds to.
+    const out = emit("<button onDoubleClick=handler>x</button>");
+    expect(out).toBe('<button (dblclick)="(handler)($event)">x</button>');
+    assertAngularParses(out);
+  });
+
   it("emits a two-way binding", () => {
     const out = emit("<input value:=w>");
     expect(out).toBe('<input [(value)]="w">');

@@ -48,6 +48,27 @@ describe("Comment", () => {
   });
 });
 
+describe("HostTag html-comment", () => {
+  it("emits a plain-text html-comment", () => {
+    const out = emit("<html-comment>plain text</html-comment>");
+    expect(out).toBe("<!-- plain text -->");
+    assertAngularParses(out);
+  });
+
+  it("rejects an interpolation inside an html-comment (R-1)", () => {
+    // R-1: `@mxlang/html`'s own emitter accepts an Interpolation child
+    // here and evaluates it server-side into the comment text
+    // (packages/hosts/html/src/emitter.ts:604-606) — Angular has no such
+    // evaluation inside a comment (probed: `<!-- {{ x }} -->` parses to no
+    // node at all, the whole thing stays one opaque comment, so `{{ x }}`
+    // would render literally, never `x`'s value). A hard error here, not
+    // the html host's silent-render behavior.
+    expect(() => emit("<html-comment>build ${sha}</html-comment>")).toThrow(
+      "`<html-comment>` cannot contain `${…}` on Angular: comments are not interpolated; move the value out of the comment.",
+    );
+  });
+});
+
 describe("DocumentType", () => {
   it("emits a doctype with a warning", () => {
     const out = emit("<!doctype html>");

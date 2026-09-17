@@ -76,8 +76,11 @@
         "packages/tooling/language-server/src/diagnose.test.ts",
         "packages/core/src/template-tag.ts",
         "packages/core/src/template-tag.test.ts",
+        "packages/hosts/angular/src/emitter.ts",
+        "packages/hosts/angular/test/component.test.ts",
         "packages/hosts/angular/test/control-flow.test.ts",
-        "packages/hosts/angular/test/not-implemented.test.ts",
+        "packages/hosts/angular/test/define.test.ts",
+        "packages/hosts/angular/test/for.test.ts",
         "packages/hosts/angular/test/text-interpolation.test.ts"
       ],
       "linter": {
