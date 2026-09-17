@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { PluginConfig } from "../babel/typings.d.ts";
-import { parse } from "../index.ts";
 import {
   computeMxRegionContext,
   type MxRegionContext,
   type MxRegionParentFrame,
 } from "./region-context.ts";
+import { parseSolid } from "./test-helpers.ts";
 
 /**
  * Runs one `.solid.mx` decorator/property fixture and captures the
@@ -18,7 +18,7 @@ const DECORATOR_PLUGINS: PluginConfig[] = ["typescript", "jsx", "decorators"];
 
 function captureContext(source: string): MxRegionContext {
   let captured: MxRegionContext | undefined;
-  parse(source, "test.solid.mx", {
+  parseSolid(source, "test.solid.mx", {
     plugins: DECORATOR_PLUGINS,
     mxRegionPositionCheck: (context) => {
       captured = context;
@@ -231,7 +231,7 @@ describe("mxRegionPositionCheck rejection", () => {
 
     let error: unknown;
     try {
-      parse(source, "test.solid.mx", {
+      parseSolid(source, "test.solid.mx", {
         plugins: DECORATOR_PLUGINS,
         mxRegionPositionCheck: () => ({
           ok: false,
@@ -308,17 +308,19 @@ describe("computeMxRegionContext (unit)", () => {
 describe("MX region positioning: option absent leaves behavior unchanged", () => {
   it("parses the same shapes with no mxRegionPositionCheck set", () => {
     expect(() =>
-      parse(`@Component({ template: <div/> })\nclass X {}`, "test.solid.mx", {
-        plugins: DECORATOR_PLUGINS,
-      }),
+      parseSolid(
+        `@Component({ template: <div/> })\nclass X {}`,
+        "test.solid.mx",
+        { plugins: DECORATOR_PLUGINS },
+      ),
     ).not.toThrow();
     expect(() =>
-      parse(
+      parseSolid(
         `@Component({ x: { template: <div/> } })\nclass X {}`,
         "test.solid.mx",
         { plugins: DECORATOR_PLUGINS },
       ),
     ).not.toThrow();
-    expect(() => parse(`<div/>;`, "test.solid.mx")).not.toThrow();
+    expect(() => parseSolid(`<div/>;`, "test.solid.mx")).not.toThrow();
   });
 });

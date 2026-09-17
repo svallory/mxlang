@@ -4,9 +4,9 @@ import generate from "@babel/generator";
 import type { Expression } from "@babel/types";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
-import { parse } from "../index.ts";
+import { parseSolid } from "./test-helpers.ts";
 
-const parseMx = (source: string) => parse(source, "test.solid.mx");
+const parseMx = (source: string) => parseSolid(source);
 
 /** Prints the sole top-level statement's expression for a `const el = <...>;` source. */
 function printFirstExpression(source: string): string {
@@ -35,7 +35,7 @@ function compilesThroughSolid(source: string): string {
   const overridePlugin = {
     name: "mx-control-test-parser-override",
     parserOverride(code: string) {
-      return parse(code, "test.solid.mx");
+      return parseMx(code);
     },
   } as unknown as PluginObj;
   const parsed = transformSync(source, {

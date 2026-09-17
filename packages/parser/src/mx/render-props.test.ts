@@ -1,9 +1,9 @@
 import generate from "@babel/generator";
 import type { Expression } from "@babel/types";
 import { describe, expect, it } from "vitest";
-import { parse } from "../index.ts";
+import { parseSolid } from "./test-helpers.ts";
 
-const parseMx = (source: string) => parse(source, "test.solid.mx");
+const parseMx = (source: string) => parseSolid(source);
 
 /** Prints the sole top-level statement's expression for a `const el = <...>;` source. */
 function printFirstExpression(source: string): string {

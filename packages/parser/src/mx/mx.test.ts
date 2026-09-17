@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { collectMxRegions, parse } from "../index.ts";
+import { collectMxRegions } from "../index.ts";
+import { parseSolid } from "./test-helpers.ts";
 
 /** Walks the AST collecting every node of a given type. */
 function collect(node: unknown, type: string, out: unknown[] = []): unknown[] {
@@ -17,7 +18,7 @@ function collect(node: unknown, type: string, out: unknown[] = []): unknown[] {
   return out;
 }
 
-const parseMx = (source: string) => parse(source, "test.solid.mx");
+const parseMx = (source: string) => parseSolid(source);
 
 describe("MX element parsing", () => {
   it("lowers an attr method to a block-body arrow", () => {
@@ -177,7 +178,7 @@ describe("unsupported constructs raise a clear error", () => {
     it(`rejects ${name}`, () => {
       let error: unknown;
       try {
-        parse(source, "test.solid.mx");
+        parseMx(source);
       } catch (err) {
         error = err;
       }
@@ -275,7 +276,7 @@ describe("error reporting (review #2, #3)", () => {
     ]) {
       let error: unknown;
       try {
-        parse(source, "test.solid.mx", { errorRecovery: true });
+        parseSolid(source, "test.solid.mx", { errorRecovery: true });
       } catch (err) {
         error = err;
       }
