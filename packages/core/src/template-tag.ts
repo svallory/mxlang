@@ -87,6 +87,29 @@ const templateCache = new Map<string, CacheEntry>();
 const MAX_CACHED_TEMPLATES = 256;
 let compileCount = 0;
 
+/**
+ * Sets `key` to `value`, refreshing its recency, then evicts the oldest
+ * entries until `cache.size <= max` — never evicting `key` itself, even at
+ * the bound.
+ *
+ * `delete` before `set`: `set` on an existing key keeps its original
+ * insertion ordinal, which would let eviction drop the entry just written.
+ */
+export function touchAndEvict<K, V>(
+  cache: Map<K, V>,
+  key: K,
+  value: V,
+  max: number,
+): void {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > max) {
+    const oldest = cache.keys().next();
+    if (oldest.done || oldest.value === key) break;
+    cache.delete(oldest.value);
+  }
+}
+
 export function templateCompileCount(): number {
   return compileCount;
 }
@@ -159,21 +182,12 @@ export function metadataForTemplate(
   compileCount++;
   try {
     const metadata = compileMetadata(ctx, tag);
-    // Deleted before being re-set so insertion order is true recency: `set` on
-    // an existing key keeps its original ordinal, which would let the eviction
-    // below drop the entry just computed.
-    templateCache.delete(tag.filename);
-    templateCache.set(tag.filename, {
-      mtimeMs: tag.mtimeMs,
-      source: tag.source,
-      metadata,
-    });
-    while (templateCache.size > MAX_CACHED_TEMPLATES) {
-      const oldest = templateCache.keys().next();
-      // Never evict the entry this call just produced, even at the bound.
-      if (oldest.done || oldest.value === tag.filename) break;
-      templateCache.delete(oldest.value);
-    }
+    touchAndEvict(
+      templateCache,
+      tag.filename,
+      { mtimeMs: tag.mtimeMs, source: tag.source, metadata },
+      MAX_CACHED_TEMPLATES,
+    );
     return metadata;
   } catch (error) {
     templateCache.delete(tag.filename);
