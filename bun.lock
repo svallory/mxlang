@@ -225,6 +225,18 @@
       "name": "@mxlang/zed",
       "version": "0.0.0",
     },
+    "packages/hosts/angular": {
+      "name": "@mxlang/angular",
+      "version": "0.1.0",
+      "dependencies": {
+        "@marko/compiler": "5.42.5",
+        "@mxlang/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@angular/compiler": "22.1.7",
+        "@types/bun": "1.4.2",
+      },
+    },
     "packages/hosts/astro": {
       "name": "@mxlang/astro",
       "version": "0.0.0",
@@ -427,6 +439,8 @@
   },
   "packages": {
     "@ampproject/remapping": ["@ampproject/remapping@2.3.0", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw=="],
+
+    "@angular/compiler": ["@angular/compiler@22.1.7", "", { "dependencies": { "tslib": "^2.3.0" } }, "sha512-qhoHAByh805nT4Xy4Wd2kE5FvkTc7wcg8Qps+EH6+z4KRfwGiL5cwdgooGWjTAldFCeqTgJ0BO/0dB6GHZjdkQ=="],
 
     "@astrojs/compiler": ["@astrojs/compiler@2.13.1", "", {}, "sha512-f3FN83d2G/v32ipNClRKgYv30onQlMZX1vCeZMjPsMMPl1mDpmbl0+N5BYo4S/ofzqJyS5hvwacEo0CCVDn/Qg=="],
 
@@ -781,6 +795,8 @@
     "@marko/compiler": ["@marko/compiler@5.42.5", "", { "dependencies": { "@luxass/strip-json-comments": "^2.0.1", "complain": "^1.6.1", "htmljs-parser": "^5.14.0", "jsesc": "^3.1.0", "kleur": "^4.1.5", "lasso-package-root": "^1.0.1", "magic-string": "^0.30.21", "raptor-regexp": "^1.0.1", "raptor-util": "^3.2.0", "relative-import-path": "^1.0.1", "resolve-from": "^5.0.0", "self-closing-tags": "^1.0.1", "source-map-support": "^0.5.21" } }, "sha512-9Gf2azZ4Dgd+oPKHCvznAEwGNqHOlBiUyna/RH9Fb6Wlf07cOPUmIyNisONW3tLgx/QsIejnUYl2M2W8IuQtwA=="],
 
     "@marko/runtime-tags": ["@marko/runtime-tags@6.3.51", "", { "dependencies": { "@marko/compiler": "^5.42.5", "csstype": "^3.2.3", "fastest-levenshtein": "^1.0.16", "magic-string": "^0.30.21" } }, "sha512-IivshvS+qXjtUH8PYqZbYdLpXn3A36rjcIvcZRN/YkI1ydtd1iG5mHv2S6ZpHmTlxEMPOpL/JfhUhK24aa+olQ=="],
+
+    "@mxlang/angular": ["@mxlang/angular@workspace:packages/hosts/angular"],
 
     "@mxlang/astro": ["@mxlang/astro@workspace:packages/hosts/astro"],
 

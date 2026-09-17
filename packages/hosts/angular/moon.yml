@@ -1,0 +1,21 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "typescript"
+
+tasks:
+  typecheck:
+    command: "tsc"
+    args: ["--noEmit"]
+    inputs:
+      - "src/**/*"
+      - "test/**/*"
+      - "tsconfig.json"
+
+  test:
+    command: "vitest"
+    args: ["run", "--root", "../..", "--project", "@mxlang/angular"]
+    inputs:
+      - "src/**/*"
+      - "test/**/*"
+      - "/vitest.config.ts"
