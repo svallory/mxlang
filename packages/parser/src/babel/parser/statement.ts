@@ -31,6 +31,9 @@ import type { Undone } from "./node.ts";
 import type Parser from "./index.ts";
 import { ParseBindingListFlags } from "./lval.ts";
 import { LoopLabelKind } from "../tokenizer/state.ts";
+// MX FORK: the enclosing-decorator frame `mxRegionPositionCheck` reads (see
+// ../../mx/region-context.ts).
+import { decoratorNameFromExpression } from "../../mx/region-context.ts";
 
 const loopLabel = { kind: LoopLabelKind.Loop } as const,
   switchLabel = { kind: LoopLabelKind.Switch } as const;
@@ -852,7 +855,20 @@ export default abstract class StatementParser extends ExpressionParser {
     if (this.eat(tt.parenL)) {
       const node = this.startNodeAt<N.CallExpression>(startLoc);
       node.callee = expr;
-      node.arguments = this.parseCallExpressionArguments();
+      // MX FORK: push the enclosing-decorator frame `mxRegionPositionCheck`
+      // reads (see ../../mx/region-context.ts) around the argument list, so
+      // a region inside `@Component({ ... })` sees "Component" as enclosing.
+      const mxName = this.options.mxRegionPositionCheck
+        ? decoratorNameFromExpression(expr)
+        : null;
+      if (mxName !== null) {
+        this.state.mxRegionParents.push({ kind: "decorator", name: mxName });
+      }
+      try {
+        node.arguments = this.parseCallExpressionArguments();
+      } finally {
+        if (mxName !== null) this.state.mxRegionParents.pop();
+      }
       this.toReferencedList(node.arguments);
       return this.finishNode(node, "CallExpression");
     }

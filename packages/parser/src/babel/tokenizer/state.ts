@@ -6,6 +6,10 @@ import { types as ct, type TokContext } from "./context.ts";
 import { tt, type TokenType } from "./types.ts";
 import type { Errors } from "../parse-error.ts";
 import type { ParseError } from "../parse-error.ts";
+// MX FORK: the enclosing-syntax parent stack `mxRegionPositionCheck` reads
+// (see `../../mx/region-context.ts`). Only pushed/popped when a host set
+// that option; see `parser/expression.ts`/`parser/statement.ts`.
+import type { MxRegionParentFrame } from "../../mx/region-context.ts";
 
 export type DeferredStrictError =
   | typeof Errors.StrictNumericEscape
@@ -166,6 +170,19 @@ export default class State {
   // or ends a string template
   context: TokContext[] = [ct.brace];
 
+  // MX FORK: the minimal syntactic-parent stack `mxRegionPositionCheck`
+  // consults. Empty and untouched unless that option is set — see
+  // `../../mx/region-context.ts`.
+  mxRegionParents: MxRegionParentFrame[] = [];
+
+  // MX FORK: a transient handoff from `parseExprList`'s loop to
+  // `parseExprListItem`'s boundary push — the index of the list item about
+  // to be parsed, so a decorator's own argument list can record which
+  // argument (transitively) encloses a region (`MxRegionContext.argumentIndex`,
+  // `../../mx/region-context.ts`). Read and cleared by the very next
+  // `parseExprListItem` call; `null` the rest of the time.
+  mxNextBoundaryIndex: number | null = null;
+
   // Used to track whether a JSX element is allowed to form
   @bit accessor canStartJSXElement = true;
 
@@ -230,6 +247,7 @@ export default class State {
     state.lastTokEndLoc = this.lastTokEndLoc;
     state.lastTokStartLoc = this.lastTokStartLoc;
     state.context = this.context.slice();
+    state.mxRegionParents = this.mxRegionParents.slice();
     state.firstInvalidTemplateEscapePos = this.firstInvalidTemplateEscapePos;
     state.strictErrors = this.strictErrors;
     state.tokensLength = this.tokensLength;

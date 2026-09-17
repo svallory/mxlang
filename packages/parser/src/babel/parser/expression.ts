@@ -65,6 +65,9 @@ import type { Undone } from "./node.ts";
 import type Parser from "./index.ts";
 
 import { OptionFlags, type SourceType } from "../options.ts";
+// MX FORK: the enclosing-property/boundary frames `mxRegionPositionCheck`
+// reads (see ../../mx/region-context.ts).
+import { mxPropertyKeyName } from "../../mx/region-context.ts";
 
 export default abstract class ExpressionParser extends LValParser {
   // Forward-declaration: defined in statement.js
@@ -1065,6 +1068,14 @@ export default abstract class ExpressionParser extends LValParser {
         }
       }
 
+      // MX FORK: same index handoff as `parseExprList`'s own loop below —
+      // see that copy's comment and ../../mx/region-context.ts. This is the
+      // loop a decorator's own call arguments actually go through
+      // (`parseMaybeDecoratorArguments` calls this method directly, not
+      // `parseExprList`).
+      if (this.options.mxRegionPositionCheck) {
+        this.state.mxNextBoundaryIndex = elts.length;
+      }
       elts.push(
         this.parseExprListItem(
           tt.parenR,
@@ -2107,50 +2118,78 @@ export default abstract class ExpressionParser extends LValParser {
       N.ObjectExpression | N.ObjectPattern | N.RecordExpression
     >();
 
+    // MX FORK: captured before `next()` eats the opening brace, so this is
+    // the object literal's own start offset — see the "boundary" push below
+    // (../../mx/region-context.ts).
+    const mxObjectStart = this.state.start;
     node.properties = [];
     this.next();
 
-    while (!this.match(close)) {
-      if (first) {
-        first = false;
-      } else {
-        this.expect(tt.comma);
-        if (this.match(close)) {
-          this.addTrailingCommaExtraToNode(node);
-          break;
+    // MX FORK: push a "boundary" frame around the object literal's own
+    // properties (see ../../mx/region-context.ts). `valueStart` here is
+    // where the `{` itself sits, not where the properties start — this is
+    // what lets `isDirectPropertyValue` tell "the decorator's own single
+    // call argument is exactly this object literal, with nothing between
+    // its `(` and this `{`" apart from "a call/ternary/array sits in
+    // between" (where the enclosing `parseExprListItem` boundary's own
+    // `valueStart` would point at a different, earlier token instead). No-op
+    // unless a host set that option.
+    const mxPushed = Boolean(this.options.mxRegionPositionCheck);
+    if (mxPushed) {
+      this.state.mxRegionParents.push({
+        kind: "boundary",
+        valueStart: mxObjectStart,
+        // An object literal's own braces are never one of a decorator's own
+        // top-level call arguments themselves (an argument *containing* an
+        // object literal is a different frame, the `parseExprListItem` one).
+        argumentIndex: null,
+      });
+    }
+    try {
+      while (!this.match(close)) {
+        if (first) {
+          first = false;
+        } else {
+          this.expect(tt.comma);
+          if (this.match(close)) {
+            this.addTrailingCommaExtraToNode(node);
+            break;
+          }
         }
-      }
 
-      let prop;
-      if (isPattern) {
-        prop = this.parseBindingProperty();
-      } else {
-        prop = this.parsePropertyDefinition(refExpressionErrors);
-        sawProto = this.checkProto(
-          prop,
-          isRecord,
-          sawProto,
-          refExpressionErrors,
-        );
-      }
-
-      if (
-        isRecord &&
-        !this.isObjectProperty(prop) &&
-        prop.type !== "SpreadElement"
-      ) {
-        this.raise(Errors.InvalidRecordProperty, prop);
-      }
-
-      if (!process.env.BABEL_8_BREAKING) {
-        // @ts-expect-error shorthand may not index prop
-        if (prop.shorthand) {
-          this.addExtra(prop, "shorthand", true);
+        let prop;
+        if (isPattern) {
+          prop = this.parseBindingProperty();
+        } else {
+          prop = this.parsePropertyDefinition(refExpressionErrors);
+          sawProto = this.checkProto(
+            prop,
+            isRecord,
+            sawProto,
+            refExpressionErrors,
+          );
         }
-      }
 
-      // @ts-expect-error Fixme: refine typings
-      node.properties.push(prop);
+        if (
+          isRecord &&
+          !this.isObjectProperty(prop) &&
+          prop.type !== "SpreadElement"
+        ) {
+          this.raise(Errors.InvalidRecordProperty, prop);
+        }
+
+        if (!process.env.BABEL_8_BREAKING) {
+          // @ts-expect-error shorthand may not index prop
+          if (prop.shorthand) {
+            this.addExtra(prop, "shorthand", true);
+          }
+        }
+
+        // @ts-expect-error Fixme: refine typings
+        node.properties.push(prop);
+      }
+    } finally {
+      if (mxPushed) this.state.mxRegionParents.pop();
     }
 
     this.next();
@@ -2211,7 +2250,32 @@ export default abstract class ExpressionParser extends LValParser {
 
     if (this.match(tt.ellipsis)) {
       if (decorators.length) this.unexpected();
-      return this.parseSpread();
+      // MX FORK: an object-literal spread (`...expr`) has no property key,
+      // but its own operand still opens a nested value position exactly the
+      // way a named property's value does — push a keyless "property" frame
+      // (see ../../mx/region-context.ts) so `isDirectPropertyValue`'s
+      // outermost-frame anchor correctly sees `{ ...{ template: <div/> } }`
+      // as one object-literal level deeper than `{ template: <div/> }`,
+      // without needing frame-kind counting. `valueStart` is the `...`
+      // token's own start rather than the operand's (which `parseSpread`,
+      // shared with call/array spread, doesn't expose separately) — any
+      // offset strictly before the operand works equally well here, since a
+      // region can only ever start at `<`, never at `.`. `parseSpread` is
+      // also used for call/array spread (`foo(...x)`, `[...x]`), which never
+      // reach here.
+      const mxPushed = Boolean(this.options.mxRegionPositionCheck);
+      if (mxPushed) {
+        this.state.mxRegionParents.push({
+          kind: "property",
+          key: null,
+          valueStart: this.state.start,
+        });
+      }
+      try {
+        return this.parseSpread();
+      } finally {
+        if (mxPushed) this.state.mxRegionParents.pop();
+      }
     }
 
     if (decorators.length) {
@@ -2353,12 +2417,33 @@ export default abstract class ExpressionParser extends LValParser {
     prop.shorthand = false;
 
     if (this.eat(tt.colon)) {
-      prop.value = isPattern
-        ? this.parseMaybeDefault(this.state.startLoc)
-        : this.parseMaybeAssignAllowInOrVoidPattern(
-            tt.braceR,
-            refExpressionErrors,
-          );
+      // MX FORK: push the enclosing-property frame `mxRegionPositionCheck`
+      // reads (see ../../mx/region-context.ts). No-op unless a host set that
+      // option — mxKeyName is then always null and nothing is pushed.
+      const mxKeyName = this.options.mxRegionPositionCheck
+        ? mxPropertyKeyName(Boolean(prop.computed), prop.key as N.Expression)
+        : null;
+      if (mxKeyName !== null) {
+        // `eat(tt.colon)` has already advanced the tokenizer, so `state.start`
+        // is exactly the offset the value expression is about to start at —
+        // the anchor `isDirectPropertyValue`'s exact-position test compares
+        // a region's own `startLoc.index` against (../../mx/region-context.ts).
+        this.state.mxRegionParents.push({
+          kind: "property",
+          key: mxKeyName,
+          valueStart: this.state.start,
+        });
+      }
+      try {
+        prop.value = isPattern
+          ? this.parseMaybeDefault(this.state.startLoc)
+          : this.parseMaybeAssignAllowInOrVoidPattern(
+              tt.braceR,
+              refExpressionErrors,
+            );
+      } finally {
+        if (mxKeyName !== null) this.state.mxRegionParents.pop();
+      }
 
       return this.finishObjectProperty(prop);
     }
@@ -2764,6 +2849,17 @@ export default abstract class ExpressionParser extends LValParser {
         }
       }
 
+      // MX FORK: stashes this item's own index for `parseExprListItem`'s
+      // boundary push to pick up (see ../../mx/region-context.ts and the
+      // push site below) — `MxRegionContext.argumentIndex` needs to know
+      // which decorator-call argument (transitively) encloses a region, and
+      // `parseExprListItem` has no other channel to its own position in the
+      // list. Harmless when the option is unset (never read) and for any
+      // non-decorator list (array/object-literal callers never read
+      // `argumentIndex` either).
+      if (this.options.mxRegionPositionCheck) {
+        this.state.mxNextBoundaryIndex = elts.length;
+      }
       elts.push(this.parseExprListItem(close, allowEmpty, refExpressionErrors));
     }
     return elts;
@@ -2796,37 +2892,66 @@ export default abstract class ExpressionParser extends LValParser {
     | N.VoidPattern
     | N.AssignmentPattern
     | null {
-    let elt;
-    if (this.match(tt.comma)) {
-      if (!allowEmpty) {
-        this.raise(Errors.UnexpectedToken, this.state.curPosition(), {
-          unexpected: ",",
-        });
-      }
-      elt = null;
-    } else if (this.match(tt.ellipsis)) {
-      const spreadNodeStartLoc = this.state.startLoc;
-
-      elt = this.parseParenItem(
-        this.parseSpread(refExpressionErrors),
-        spreadNodeStartLoc,
-      );
-    } else if (this.match(tt.question)) {
-      this.expectPlugin("partialApplication");
-      if (!allowPlaceholder) {
-        this.raise(Errors.UnexpectedArgumentPlaceholder, this.state.startLoc);
-      }
-      const node = this.startNode<N.ArgumentPlaceholder>();
-      this.next();
-      elt = this.finishNode(node, "ArgumentPlaceholder");
-    } else {
-      elt = this.parseMaybeAssignAllowInOrVoidPattern(
-        close,
-        refExpressionErrors,
-        this.parseParenItem,
-      );
+    // MX FORK: push a "boundary" frame around one list item — this is the
+    // single choke point call arguments and array elements both go through.
+    // `valueStart` is this item's own first-token offset, recorded before
+    // anything is parsed — `isDirectPropertyValue` (see
+    // ../../mx/region-context.ts) compares it against the enclosing object
+    // literal's own boundary to tell "the decorator's sole argument is
+    // exactly this object literal" apart from "a call/ternary/array wraps
+    // it." `argumentIndex` carries `parseExprList`'s own item-index handoff
+    // (`state.mxNextBoundaryIndex`) when this item is a decorator's own
+    // top-level argument; consumed (read then cleared) here so a stale value
+    // never leaks into an unrelated, deeper `parseExprListItem` call this
+    // item's own parse makes. No-op unless a host set that option.
+    const mxPushed = Boolean(this.options.mxRegionPositionCheck);
+    if (mxPushed) {
+      const mxArgumentIndex = this.state.mxNextBoundaryIndex;
+      this.state.mxNextBoundaryIndex = null;
+      this.state.mxRegionParents.push({
+        kind: "boundary",
+        valueStart: this.state.start,
+        argumentIndex: mxArgumentIndex,
+      });
     }
-    return elt;
+    try {
+      let elt;
+      if (this.match(tt.comma)) {
+        if (!allowEmpty) {
+          this.raise(Errors.UnexpectedToken, this.state.curPosition(), {
+            unexpected: ",",
+          });
+        }
+        elt = null;
+      } else if (this.match(tt.ellipsis)) {
+        const spreadNodeStartLoc = this.state.startLoc;
+
+        elt = this.parseParenItem(
+          this.parseSpread(refExpressionErrors),
+          spreadNodeStartLoc,
+        );
+      } else if (this.match(tt.question)) {
+        this.expectPlugin("partialApplication");
+        if (!allowPlaceholder) {
+          this.raise(
+            Errors.UnexpectedArgumentPlaceholder,
+            this.state.startLoc,
+          );
+        }
+        const node = this.startNode<N.ArgumentPlaceholder>();
+        this.next();
+        elt = this.finishNode(node, "ArgumentPlaceholder");
+      } else {
+        elt = this.parseMaybeAssignAllowInOrVoidPattern(
+          close,
+          refExpressionErrors,
+          this.parseParenItem,
+        );
+      }
+      return elt;
+    } finally {
+      if (mxPushed) this.state.mxRegionParents.pop();
+    }
   }
 
   // Parse the next token as an identifier. If `liberal` is true (used

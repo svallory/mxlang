@@ -3,6 +3,10 @@ import { parseExpression } from "../babel/index.ts";
 import { types as tc } from "../babel/tokenizer/context.ts";
 import { Position } from "../babel/util/location.ts";
 import { MxErrors } from "./errors.ts";
+import {
+  computeMxRegionContext,
+  type MxRegionPositionCheck,
+} from "./region-context.ts";
 import { type MxElement, type MxRange, walkMxRegion } from "./walk.ts";
 
 /**
@@ -22,6 +26,8 @@ export interface MxParserHost {
     startLoc: Position;
     end: number;
     endLoc: Position;
+    // biome-ignore lint/suspicious/noExplicitAny: MxRegionParentFrame kept structural, to avoid a tokenizer-state dependency cycle
+    mxRegionParents: any[];
   };
   // biome-ignore lint/suspicious/noExplicitAny: matches the vendored raise signature
   raise(toParseError: any, at: Position | any, details?: any): unknown;
@@ -68,6 +74,27 @@ export function mxParseElementAt(
     throw raiseAndThrow(parser, MxErrors.HtmlParserError, at, {
       message: first?.message ?? "Invalid MX element.",
     });
+  }
+
+  // A host's veto on where this region may appear, computed from the
+  // parser's own syntactic state (region-context.ts) — no Angular (or any
+  // other host) knowledge here. `startLoc` is used for the raise, same as
+  // the walk-error fallback above: the offending thing is the region's
+  // placement, so no inner offset is more informative.
+  const positionCheck = parser.options?.mxRegionPositionCheck as
+    | MxRegionPositionCheck
+    | undefined;
+  if (positionCheck) {
+    const context = computeMxRegionContext(
+      parser.state.mxRegionParents,
+      startLoc.index,
+    );
+    const result = positionCheck(context);
+    if (!result.ok) {
+      throw raiseAndThrow(parser, MxErrors.PositionRejected, startLoc, {
+        message: result.message,
+      });
+    }
   }
 
   let node: unknown;
