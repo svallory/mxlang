@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import type { Ctx, Node } from "./core.ts";
-import { expr, newCtx } from "./core.ts";
+import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
@@ -492,6 +492,57 @@ describe("one fixture per IR kind", () => {
     expect(ir.body.some((n) => n.kind === "Element" && n.name === "p")).toBe(
       true,
     );
+  });
+});
+
+/**
+ * A bare `${expr}` line and `<${expr}/>` parse to the same Marko node (no
+ * attrs, no body) — see the "four Marko facts" in `AGENTS.md`. `claimsTag`'s
+ * `shape` argument is the only signal that lets a host tell them apart.
+ */
+describe("a dynamic tag's bare shape", () => {
+  it("stays an Interpolation when a host claims DYNAMIC_TAG only for the tagged shape", () => {
+    const ir = lowerSource(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+      "${input.tag}\n",
+      fakeDeclarations({
+        claimsTag: (name, _ctx, shape) =>
+          name === DYNAMIC_TAG && shape !== "bare",
+      }),
+    );
+    expect(find(ir.body, "Interpolation")).toMatchObject({
+      escaped: true,
+      expr: { code: "input.tag" },
+    });
+  });
+
+  it("reaches the host when it has attributes, even under a bare-excluding claim", () => {
+    const ir = lowerSource(
+      "<${input.tag} a=1/>\n",
+      fakeDeclarations({
+        claimsTag: (name, _ctx, shape) =>
+          name === DYNAMIC_TAG && shape !== "bare",
+        resolveHostTag: () => ({ seen: true }),
+      }),
+    );
+    const hosted = find(ir.body, "HostTag").tag;
+    expect(hosted.name).toBe(DYNAMIC_TAG);
+    expect(hosted.attrs).toMatchObject([{ kind: "dynamic", name: "a" }]);
+    expect(hosted.data).toEqual({ seen: true });
+  });
+
+  it("reaches the host for the bare shape when the host claims it explicitly", () => {
+    const ir = lowerSource(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+      "${input.tag}\n",
+      fakeDeclarations({
+        claimsTag: (name) => name === DYNAMIC_TAG,
+        resolveHostTag: () => ({ seen: true }),
+      }),
+    );
+    const hosted = find(ir.body, "HostTag").tag;
+    expect(hosted.name).toBe(DYNAMIC_TAG);
+    expect(hosted.data).toEqual({ seen: true });
   });
 });
 

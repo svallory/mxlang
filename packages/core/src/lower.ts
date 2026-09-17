@@ -910,8 +910,14 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // expression, with no attributes and no body — Marko's concise mode has no
   // other shape for it. Treated as the escaped placeholder the author wrote.
   if (node.name && node.name.type !== "StringLiteral") {
-    const claimed = ctx.declarations.claimsTag?.(DYNAMIC_TAG, ctx);
-    if ((node.attributes ?? []).length === 0 && !node.body?.body?.length) {
+    const isBare =
+      (node.attributes ?? []).length === 0 && !node.body?.body?.length;
+    const claimed = ctx.declarations.claimsTag?.(
+      DYNAMIC_TAG,
+      ctx,
+      isBare ? "bare" : "tagged",
+    );
+    if (isBare) {
       if (claimed) return lowerHostTag(ctx, node, DYNAMIC_TAG);
       return {
         kind: "Interpolation",
