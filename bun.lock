@@ -404,6 +404,7 @@
       },
       "devDependencies": {
         "@types/bun": "1.4.2",
+        "typescript": "5.9.3",
         "vscode-jsonrpc": "9.0.2",
       },
     },
@@ -418,8 +419,11 @@
         "@volar/language-core": "2.4.28",
         "@volar/typescript": "2.4.28",
       },
-      "peerDependencies": {
+      "devDependencies": {
         "typescript": "5.9.3",
+      },
+      "peerDependencies": {
+        "typescript": ">=5.9.0 <7",
       },
     },
     "packages/tooling/typescript-plugin": {
@@ -442,10 +446,11 @@
       },
       "devDependencies": {
         "@astrojs/language-server": "2.16.16",
+        "typescript": "5.9.3",
       },
       "peerDependencies": {
         "@astrojs/language-server": "2.16.16",
-        "typescript": "5.9.3",
+        "typescript": ">=5.9.0 <7",
       },
       "optionalPeers": [
         "@astrojs/language-server",

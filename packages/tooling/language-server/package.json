@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@types/bun": "1.4.2",
+    "typescript": "5.9.3",
     "vscode-jsonrpc": "9.0.2"
   }
 }
