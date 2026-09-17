@@ -331,7 +331,6 @@
       "name": "@mxlang/solid",
       "version": "0.0.0",
       "dependencies": {
-        "@babel/generator": "7.29.8",
         "@babel/parser": "7.29.8",
         "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",

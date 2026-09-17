@@ -1,4 +1,3 @@
-import generate from "@babel/generator";
 import { parse as parseBabel } from "@babel/parser";
 import {
   type CustomTag,
@@ -8,6 +7,7 @@ import {
   type Node,
   newCtx,
   parseFragment,
+  printExpression,
   TranslateError,
 } from "@mxlang/core";
 import MagicString from "magic-string";
@@ -95,21 +95,6 @@ export interface HoistedImport {
 }
 
 /**
- * `@babel/generator` ships as CJS with an interop default; under
- * `esModuleInterop` the namespace can arrive as either the function itself or
- * a `{ default }` wrapper depending on the loader. Normalize once.
- */
-const generator = (
-  typeof generate === "function"
-    ? generate
-    : (generate as { default: typeof generate }).default
-) as typeof generate;
-
-function generateExpression(node: Node): string {
-  return generator(node, { concise: true }).code;
-}
-
-/**
  * Marko parses attribute-method bodies as ordinary TypeScript, where a nested
  * JSX/MX expression is reported as a `MarkoParseError` statement. SolidMX's
  * surrounding language is TSX, so retry only those statement-shaped failures
@@ -184,7 +169,7 @@ export function compileSolidMx(
   const positionedSource = `${"\n".repeat(baseLine)}${" ".repeat(Math.max(baseOffset - baseLine, baseColumn))}${source}`;
   const ctx = newCtx(
     positionedSource,
-    generateExpression,
+    printExpression,
     solidDeclarations,
     undefined,
     options.filename,
@@ -284,7 +269,7 @@ export function compileSolidUnit(
   repairEmbeddedTsx(body);
   const ctx = newCtx(
     source,
-    generateExpression,
+    printExpression,
     solidDeclarations,
     undefined,
     options.filename,
