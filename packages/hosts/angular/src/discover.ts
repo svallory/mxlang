@@ -11,11 +11,13 @@ import {
   readFileSync,
   realpathSync,
 } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import {
   discoverProjectTags,
+  hostModuleSegment,
   type MxTagsEntry,
   normalizeMxTags,
+  TranslateError,
 } from "@mxlang/core";
 import type { AngularConfig } from "./config.ts";
 
@@ -95,11 +97,20 @@ export interface DiscoverResult {
  * out of the tree — is dropped rather than compiled: this tool writes output
  * beside every file it compiles, so a path outside the project must never be
  * treated as one of its sources.
+ *
+ * A matched file carrying a host-module segment core does not route to this
+ * host (`.solid.mx`, or any future one besides `.ng`) is excluded from page
+ * compilation with a positioned diagnostic — it is a different file kind,
+ * not a page, and silently dropping it would leave an author wondering why
+ * it never compiled. `diagnostics` is optional because the second caller
+ * below (the `.ng.mx`-only glob) can never match a non-`ng` segment, so it
+ * has nothing to report here.
  */
 function expandInclude(
   projectDir: string,
   realProjectDir: string,
   include: string[],
+  diagnostics?: DiscoverDiagnostic[],
 ): Set<string> {
   const matched = new Set<string>();
   for (const pattern of include) {
@@ -107,7 +118,16 @@ function expandInclude(
       cwd: projectDir,
       exclude: ["**/node_modules/**"],
     })) {
-      if (!file.endsWith(".mx") || file.endsWith(".solid.mx")) continue;
+      if (!file.endsWith(".mx")) continue;
+      const segment = hostModuleSegment(basename(file));
+      if (segment !== undefined && segment !== "ng") {
+        const resolved = resolve(projectDir, file);
+        diagnostics?.push({
+          file: resolved,
+          message: `\`${basename(file)}\` is a host module file, not a tag template; tag templates are \`.mx\``,
+        });
+        continue;
+      }
       const resolved = resolve(projectDir, file);
       if (isInside(realProjectDir, realResolve(resolved)))
         matched.add(resolved);
@@ -160,6 +180,24 @@ function excludedMxTagsDirs(projectDir: string): Set<string> {
 }
 
 /**
+ * Whether `err` is core's `rejectHostModuleFile` rejection (`.ng.mx`/
+ * `.solid.mx` under `tags/`), as opposed to any other `TranslateError`
+ * `discoverProjectTags` can raise (an invalid `mx.tags` shape, a bad tag
+ * filename). There is no non-throwing variant of that check to call instead,
+ * so this narrows by the message core owns rather than catching every
+ * `TranslateError` as though it were this one case. Returns the rejected
+ * file's path (`failIn` bakes `${file}: ${message}` into `err.message`,
+ * since `TranslateError.file` is only set for a foreign-file position),
+ * or `undefined` if this is not that rejection at all.
+ */
+function hostModuleFileErrorPath(err: TranslateError): string | undefined {
+  const match = /^(.*): `[^`]+` is a host module file, not a tag template/.exec(
+    err.message,
+  );
+  return match?.[1];
+}
+
+/**
  * Every `.mx` tag file discovered under `projectDir`, via `@mxlang/core`'s
  * project-wide enumerator (`discoverProjectTags`, the `"angular"` host
  * filter already excluding any `mx.tags` entry that scopes itself to other
@@ -173,8 +211,36 @@ function discoverTagFiles(
   projectDir: string,
   realProjectDir: string,
   diagnostics: DiscoverDiagnostic[],
-): { templates: Set<string>; tagDirectories: string[] } {
-  const result = discoverProjectTags(projectDir, { host: "angular" });
+): { templates: Set<string>; tagDirectories: string[]; rejected: Set<string> } {
+  let result: ReturnType<typeof discoverProjectTags>;
+  try {
+    result = discoverProjectTags(projectDir, { host: "angular" });
+  } catch (err) {
+    // A host module file (`.ng.mx`, `.solid.mx`) under a `tags/` directory:
+    // core's own `rejectHostModuleFile` throws a positioned `TranslateError`
+    // naming the file — reported here as a diagnostic rather than left to
+    // escape as an uncaught exception, since it is not a tag template. Any
+    // other `TranslateError` from this scan (an invalid `mx.tags` shape, a
+    // broken tag file) stays fatal, matching `readAngularConfig`'s own
+    // fatal-on-bad-config contract: only this one rejection is a "different
+    // file kind, not a configuration mistake" case worth downgrading.
+    const rejectedPath =
+      err instanceof TranslateError ? hostModuleFileErrorPath(err) : undefined;
+    if (err instanceof TranslateError && rejectedPath !== undefined) {
+      diagnostics.push({ file: projectDir, message: err.message });
+      // The whole project-wide scan aborted on this one file, so nothing
+      // discovered elsewhere in the tree is known — but the rejected path
+      // itself must still be kept out of the page/`.ng.mx` routing below, or
+      // a `.ng.mx` under `tags/` would still be compiled as a component
+      // module even though it was just rejected as "not a tag".
+      return {
+        templates: new Set(),
+        tagDirectories: [],
+        rejected: new Set([resolve(rejectedPath)]),
+      };
+    }
+    throw err;
+  }
   for (const d of result.diagnostics) {
     diagnostics.push({ file: d.file, message: d.message });
   }
@@ -217,7 +283,11 @@ function discoverTagFiles(
     }
   }
 
-  return { templates, tagDirectories: [...tagDirectories] };
+  return {
+    templates,
+    tagDirectories: [...tagDirectories],
+    rejected: new Set<string>(),
+  };
 }
 
 /**
@@ -235,12 +305,17 @@ export function discoverFiles(
   // un-realpath'd projectDir would report every file as "outside" even
   // with no symlink escape at all.
   const realProjectDir = realResolve(projectDir);
-  const included = expandInclude(projectDir, realProjectDir, config.include);
-  const { templates: tagFiles, tagDirectories } = discoverTagFiles(
+  const included = expandInclude(
     projectDir,
     realProjectDir,
+    config.include,
     diagnostics,
   );
+  const {
+    templates: tagFiles,
+    tagDirectories,
+    rejected,
+  } = discoverTagFiles(projectDir, realProjectDir, diagnostics);
   // Discovered project-wide rather than through `include`, exactly as the
   // tag index is. A `.ng.mx` emits the component module Angular compiles, so
   // a narrowed `include` (`src/pages/**/*.mx`, say) silently skipping one
@@ -250,28 +325,15 @@ export function discoverFiles(
 
   const overlapWarnings: string[] = [];
   const files: RoutedFile[] = [];
-  const seen = new Set<string>();
+  const seen = new Set<string>(rejected);
 
   for (const path of included) {
     if (seen.has(path)) continue;
     seen.add(path);
-    // `.ng.mx` is checked **before** tag membership: a `.ng.mx` under a
-    // `tags/` directory is not a tag, it is a component module that happens
-    // to live there, and routing it to the tag compiler produced a nonsense
-    // error about its `@Component` decorator rather than saying so.
-    if (path.endsWith(".ng.mx")) {
-      if (tagFiles.has(path)) {
-        diagnostics.push({
-          file: path,
-          message:
-            "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
-        });
-        continue;
-      }
-      // `.ng.mx` is its own file kind, not a page: it emits a whole
-      // TypeScript module rather than a bare template, so it must never take
-      // the page route — which would write a `.html` beside it and drop the
-      // module.
+    // `.ng.mx` is its own file kind, not a page: it emits a whole TypeScript
+    // module rather than a bare template, so it must never take the page
+    // route — which would write a `.html` beside it and drop the module.
+    if (hostModuleSegment(basename(path)) === "ng") {
       files.push({ path, kind: "ngmx" });
       continue;
     }
@@ -289,14 +351,6 @@ export function discoverFiles(
   for (const path of ngMxFiles) {
     if (seen.has(path)) continue;
     seen.add(path);
-    if (tagFiles.has(path)) {
-      diagnostics.push({
-        file: path,
-        message:
-          "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
-      });
-      continue;
-    }
     files.push({ path, kind: "ngmx" });
   }
 

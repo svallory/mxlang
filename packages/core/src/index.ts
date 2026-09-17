@@ -100,6 +100,8 @@ export {
   type DiscoveredTag,
   type DiscoverProjectTagsOptions,
   discoverProjectTags,
+  HOST_MODULE_SEGMENTS,
+  hostModuleSegment,
   loadSidecar,
   type MxTagsEntry,
   normalizeMxTags,

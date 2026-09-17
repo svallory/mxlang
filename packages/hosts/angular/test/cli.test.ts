@@ -988,9 +988,12 @@ describe("build: .ng.mx round 2 review", () => {
     for (let i = 0; i < headerLines; i++) expect(lines[i]).toBe("");
   });
 
-  it("rejects a .ng.mx inside a tags/ directory", () => {
-    // Routed as a tag it reached the tag compiler and failed with a nonsense
-    // error about its `@Component` decorator instead of saying what is wrong.
+  it("rejects a .ng.mx inside a tags/ directory with core's own positioned error", () => {
+    // Routed as a tag it used to reach the tag compiler and fail with a
+    // nonsense error about its `@Component` decorator. Now core's own
+    // `rejectHostModuleFile` (shared with `.solid.mx`) rejects it during
+    // discovery, and this host surfaces that same message rather than a
+    // second, host-owned wording.
     writeProject({
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
@@ -1006,12 +1009,77 @@ describe("build: .ng.mx round 2 review", () => {
 
     expect(
       result.warnings.some((w) =>
-        /a `\.ng\.mx` file is a component module, not a tag/.test(w.message),
+        /`bad\.component\.ng\.mx` is a host module file, not a tag template/.test(
+          w.message,
+        ),
       ),
     ).toBe(true);
     // And no tag module written beside it.
     expect(existsSync(join(projectDir, "src/tags/bad.component.ts"))).toBe(
       false,
     );
+  });
+});
+
+describe("discovery: core's host-module extension rule", () => {
+  it("routes a `.ng.mx` file to the ng.mx module compiler", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/x.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-x", template: <p>hi</p> })',
+        "export class XComponent {}",
+      ].join("\n"),
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    const routed = result.files.find((f) => f.path.endsWith(".ng.mx"));
+    expect(routed?.kind).toBe("ngmx");
+  });
+
+  it("excludes a `.solid.mx` page from page compilation with a positioned diagnostic", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/x.solid.mx": "const x = () => <p>hi</p>;",
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    expect(result.files.some((f) => f.path.endsWith(".solid.mx"))).toBe(false);
+    expect(
+      result.diagnostics.some((d) =>
+        /`x\.solid\.mx` is a host module file, not a tag template/.test(
+          d.message,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports the same positioned error core owns for a `.ng.mx` under tags/", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/tags/bad.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-bad", template: <p>x</p> })',
+        "export class BadComponent {}",
+      ].join("\n"),
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    expect(
+      result.diagnostics.some((d) =>
+        /`bad\.component\.ng\.mx` is a host module file, not a tag template; tag templates are `\.mx`/.test(
+          d.message,
+        ),
+      ),
+    ).toBe(true);
   });
 });

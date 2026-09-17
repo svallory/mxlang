@@ -79,13 +79,13 @@ const TEMPLATE_SUFFIX = ".mx";
  * name (`"angular"`) — the two happen to coincide for `"solid"` but not for
  * `"ng"`.
  */
-const HOST_MODULE_SEGMENTS = [
+export const HOST_MODULE_SEGMENTS = [
   "solid",
   "ng",
 ] as const satisfies readonly string[];
 
 /** The host segment `<name>.mx` under `tags/` carries, if any. */
-function hostModuleSegment(entry: string): string | undefined {
+export function hostModuleSegment(entry: string): string | undefined {
   if (!entry.endsWith(TEMPLATE_SUFFIX)) return undefined;
   const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
   const dot = bare.lastIndexOf(".");

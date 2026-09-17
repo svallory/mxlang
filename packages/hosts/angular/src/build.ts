@@ -17,7 +17,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { getCustomTags, type MxWarning, TranslateError } from "@mxlang/core";
+import {
+  getCustomTags,
+  hostModuleSegment,
+  type MxWarning,
+  TranslateError,
+} from "@mxlang/core";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { discoverFiles, isInside } from "./discover.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
@@ -59,9 +64,10 @@ export function outputPathFor(mxPath: string, extension: string): string {
   // leaves `x.component.ng`, so the emitted module would be
   // `x.component.ng.ts` rather than the `x.component.ts` Angular expects
   // beside it.
-  const base = mxPath.endsWith(".ng.mx")
-    ? basename(mxPath, ".ng.mx")
-    : basename(mxPath, ".mx");
+  const base =
+    hostModuleSegment(basename(mxPath)) === "ng"
+      ? basename(mxPath, ".ng.mx")
+      : basename(mxPath, ".mx");
   return join(dirname(mxPath), `${base}${extension}`);
 }
 
@@ -497,9 +503,10 @@ export function compileOne(
   const outputPath = outputPathFor(mxPath, config.pageExtension);
   const mapPath = `${outputPath}.map`;
   const sourceBasename = basename(mxPath);
-  const tsFilename = sourceBasename.endsWith(".ng.mx")
-    ? sourceBasename.replace(/\.ng\.mx$/, ".ts")
-    : sourceBasename.replace(/\.mx$/, ".ts");
+  const tsFilename =
+    hostModuleSegment(sourceBasename) === "ng"
+      ? sourceBasename.replace(/\.ng\.mx$/, ".ts")
+      : sourceBasename.replace(/\.mx$/, ".ts");
   const outputs = [outputPath, mapPath];
 
   try {
