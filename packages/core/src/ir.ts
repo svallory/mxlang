@@ -77,14 +77,32 @@ export interface Expr {
   shape: ExprShape;
   node: Node;
   /**
+   * File-absolute byte offsets of this expression's authored source text.
+   * Absent when the expression has no authored source — a synthesized `Expr`
+   * built with no backing node, or a fabricated literal default — rather
+   * than a fabricated span pointing at unrelated text. When `file` is set,
+   * these offsets are measured into *that* file (in principle: nothing in
+   * `packages/core` sets `Expr.file` today, so no live construct exercises
+   * this yet — see `file`'s own comment).
+   *
+   * `node`'s position objects are shared between a parent expression and the
+   * child at its coincident boundary (both hold the same offset, which is
+   * correct to read), never between sibling expressions — each sibling gets
+   * its own distinct position objects.
+   */
+  span?: SourceSpan;
+  /**
    * The file this expression's source text lives in, when it is not the file
    * being compiled — an expression inlined from a tag template.
    *
-   * `Expr` carries no `loc`: its position is read off `node`, whose position
-   * objects Marko shares between sibling nodes, so the file is recorded here
-   * instead of written onto the parser's tree. Absent for every expression
-   * authored in the file under compilation, which is why nothing that existed
-   * before templates has to read it.
+   * Unset anywhere in `packages/core` today: a tag unit (`template-tag.ts`)
+   * compiles under its *own* `Ctx` (`tag.source`/`tag.filename`), so every
+   * `Expr` inside it is already absolute against that file without needing
+   * this field — only `Position.file` is ever forwarded (`call.loc.file`,
+   * `template-tag.ts`/`custom-tags.ts`), and even that is read from a value
+   * nothing in this package originates. The field is plumbing for a future
+   * writer (e.g. a caller that inlines a template's body into its own tree),
+   * not a currently-exercised contract.
    */
   file?: string;
 }

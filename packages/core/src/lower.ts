@@ -107,6 +107,21 @@ function nodeSpan(ctx: Ctx, node: Node): SourceSpan {
   };
 }
 
+/**
+ * `nodeSpan`, but `undefined` when `node` carries no `loc` — a synthesized
+ * node with no real position. `nodeSpan`/`offsetOf` read `{line, column,
+ * index?}`-shaped positions, never a bare number: a node with a numeric
+ * `start`/`end` but no `loc` (e.g. `{type:"Id", start:7, end:10}`) is not
+ * enough on its own — `offsetOf` would read `.column` off that raw number
+ * and produce `NaN`, same as the no-position case this guards against. Only
+ * `loc.start`/`loc.end` are ever position-shaped here, so `loc` alone is the
+ * correct gate.
+ */
+function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
+  if (!node?.loc) return undefined;
+  return nodeSpan(ctx, node);
+}
+
 function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});
   const sourceName = attr.modifier
@@ -130,8 +145,17 @@ export function expressionShape(node: Node): ExprShape {
   }
 }
 
-/** An expression, printed and classified through the binding registry. */
-function exprOf(ctx: Ctx, node: Node): Expr {
+/**
+ * An expression, printed and classified through the binding registry.
+ *
+ * Exported for `lower.test.ts` alone, to unit-test `span`'s guard directly
+ * against a loc-less node — no construction site in this file currently
+ * hands `exprOf` one (both of `custom-tags.ts`'s synthesized/fabricated
+ * `Expr`s build the object literal directly, bypassing this function), but
+ * the guard exists precisely so a future one cannot regress into a `NaN`
+ * span.
+ */
+export function exprOf(ctx: Ctx, node: Node): Expr {
   if (node?.type === "MarkoParseError") {
     fail(node.label ?? "invalid expression", {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
@@ -139,7 +163,12 @@ function exprOf(ctx: Ctx, node: Node): Expr {
   }
   const code = expr(ctx, node);
   checkTagVarReads(ctx, code, node);
-  return { code, shape: expressionShape(node), node };
+  return {
+    code,
+    shape: expressionShape(node),
+    node,
+    span: exprSpan(ctx, node),
+  };
 }
 
 /**
