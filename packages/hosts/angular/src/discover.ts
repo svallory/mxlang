@@ -60,7 +60,7 @@ function realResolve(path: string): string {
 
 export interface RoutedFile {
   path: string;
-  kind: "page" | "tag";
+  kind: "page" | "tag" | "ngmx";
 }
 
 export interface DiscoverResult {
@@ -241,6 +241,12 @@ export function discoverFiles(
     realProjectDir,
     diagnostics,
   );
+  // Discovered project-wide rather than through `include`, exactly as the
+  // tag index is. A `.ng.mx` emits the component module Angular compiles, so
+  // a narrowed `include` (`src/pages/**/*.mx`, say) silently skipping one
+  // would leave a component that never builds and no diagnostic saying why.
+  // Its own extension makes it unambiguous, so there is nothing to configure.
+  const ngMxFiles = expandInclude(projectDir, realProjectDir, ["**/*.ng.mx"]);
 
   const overlapWarnings: string[] = [];
   const files: RoutedFile[] = [];
@@ -249,6 +255,26 @@ export function discoverFiles(
   for (const path of included) {
     if (seen.has(path)) continue;
     seen.add(path);
+    // `.ng.mx` is checked **before** tag membership: a `.ng.mx` under a
+    // `tags/` directory is not a tag, it is a component module that happens
+    // to live there, and routing it to the tag compiler produced a nonsense
+    // error about its `@Component` decorator rather than saying so.
+    if (path.endsWith(".ng.mx")) {
+      if (tagFiles.has(path)) {
+        diagnostics.push({
+          file: path,
+          message:
+            "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
+        });
+        continue;
+      }
+      // `.ng.mx` is its own file kind, not a page: it emits a whole
+      // TypeScript module rather than a bare template, so it must never take
+      // the page route — which would write a `.html` beside it and drop the
+      // module.
+      files.push({ path, kind: "ngmx" });
+      continue;
+    }
     const isTag = tagFiles.has(path);
     if (isTag) overlapWarnings.push(path);
     files.push({ path, kind: isTag ? "tag" : "page" });
@@ -258,6 +284,20 @@ export function discoverFiles(
     if (seen.has(path)) continue;
     seen.add(path);
     files.push({ path, kind: "tag" });
+  }
+
+  for (const path of ngMxFiles) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    if (tagFiles.has(path)) {
+      diagnostics.push({
+        file: path,
+        message:
+          "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
+      });
+      continue;
+    }
+    files.push({ path, kind: "ngmx" });
   }
 
   return { files, overlapWarnings, diagnostics, tagDirectories };

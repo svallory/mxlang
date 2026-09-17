@@ -1,12 +1,18 @@
 # @mxlang/angular
 
 **Preview.** This host is not yet a complete "Angular host" by decision
-70's own bar (a host is not done without its TypeScript plugin — that is
-step 2, `.ng.mx`, not built yet). What exists today is step 1: an MX
-(`.mx`) page template compiles to a plain Angular template string, and
-`mx-angular build`/`watch`/`map` write it beside a hand-written
-`x.component.ts` whose `templateUrl` points at it. See
-`notes/investigations/angular-host-design.md` for the full design.
+70's own bar (a host is not done without its TypeScript plugin; that part
+of step 2 is still open). Two file kinds compile today:
+
+- **step 1** — an MX (`.mx`) page template compiles to a plain Angular
+  template string, and `mx-angular build`/`watch`/`map` write it beside a
+  hand-written `x.component.ts` whose `templateUrl` points at it.
+- **step 2** — a `.ng.mx` file is an ordinary TypeScript module whose
+  `@Component` template is MX; `compileNgMx` emits `<basename>.ts` beside
+  it, and because this host owns that module it maintains the decorator's
+  own `imports:` array rather than warning you to. See "`.ng.mx`" below.
+
+See `notes/investigations/angular-host-design.md` for the full design.
 
 MX (Markup eXtended) is a template language born from Marko: it takes
 Marko's syntax and brings it to wherever JSX lives today, MX 1.0 being a
@@ -80,12 +86,63 @@ after the caller's own last observed change — the shape the CLI's `Ctrl-C`
 (`SIGINT`/`SIGTERM`, exit 0) and `--once` (initial build only, then exit —
 CI and tests) both build on.
 
+## `.ng.mx`
+
+`compileNgMx(source, filename, options)` compiles a module whose
+`@Component` template is an MX region:
+
+```ts
+@Component({
+  selector: "app-x",
+  template: <ul><for|p| of=people by=(p => p.id)><li>${p.name}</li></for></ul>,
+})
+export class XComponent { people = []; }
+```
+
+Four things are worth knowing before editing `src/ng-mx.ts`:
+
+- **A region is legal in exactly one position** — the direct value of
+  `template:` in `@Component({ … })`'s *first* argument, enforced through
+  the parser's generic `mxRegionPositionCheck` (C3). All four
+  `MxRegionContext` fields are checked and none implies another:
+  `isDirectPropertyValue` carries no decorator-adjacency guarantee, and
+  `argumentIndex` is the only one that tells `@Component({ template })`
+  from `@Component(opts, { template })`.
+- **The template is a backtick literal**, with `` ` ``, `${` and `\`
+  escaped (decision 99, reversing the design note's A4 divergence 3). The
+  reversal is a mapping decision, not a taste one: the spike measured that
+  a double-quoted emit hands back Angular diagnostics in *escaped*
+  coordinates, forcing an escape-aware inverse hop at every newline in
+  every template, while a backtick emit is 1:1.
+- **This host owns the surrounding module**, so it appends each used MX tag
+  and each needed Angular directive to `imports:` *and* emits their
+  `import` statements — the one AST edit no other host performs (A4
+  divergence 5). The emitter's "add X to the component's imports" warnings
+  are filtered out on this path, since repeating them would tell an author
+  to redo an edit MX just made.
+- **Authored `import`/`static`/`export` go in the module, not the region.**
+  A region is TypeScript *expression* position, where those are statement
+  syntax, so the vendored Babel rejects them before MX sees the file — a
+  measured limit, pinned by three rejection tests, and the reason A4
+  divergence 4 was amended. Only a *synthesized* discovered-tag import
+  hoists, through `MxRegionCompileResult.hoistedImports`.
+
+`.ng.mx` files are discovered project-wide (any `**/*.ng.mx` inside the
+project boundary), not through `include` — the same treatment the tag index
+gets, and for the same reason: the emitted module is what Angular compiles,
+so a narrowed `include` must not be able to drop one without saying so.
+
+`result.mappings` is identifier-level and empty today (the emitter builds
+text with no `mapped(...)` call anywhere); task 2.2b fills it through
+core's `Expr.span`, and a test asserts the empty array so that cannot
+change silently.
+
 ## Not yet in this package
 
-- `.ng.mx` / step 2 and its tooling integration (typescript-plugin,
-  language-server, vite-plugin) — attempting to compile a `.mx` file
-  through those tools today reports the host as not wired in yet, rather
-  than silently falling back to the vanilla HTML host.
+- The tooling integration for `.ng.mx` (typescript-plugin, language-server,
+  vite-plugin) — attempting to compile through those tools today reports
+  the host as not wired in yet, rather than silently falling back to the
+  vanilla HTML host.
 
 ## Warnings
 

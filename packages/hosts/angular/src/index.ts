@@ -25,6 +25,15 @@ export {
   type UsedTag,
 } from "./emitter.ts";
 export {
+  type CompileNgMxOptions,
+  type CompileNgMxResult,
+  compileNgMx,
+  escapeTemplateLiteral,
+  NG_MX_POSITION_MESSAGE,
+  type NgMxRegion,
+  ngMxPositionCheck,
+} from "./ng-mx.ts";
+export {
   type CompileTagModuleOptions,
   type CompileTagModuleResult,
   compileTagModule,

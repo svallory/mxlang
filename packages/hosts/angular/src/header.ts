@@ -48,9 +48,9 @@ export function buildHeader(
 
 /**
  * Whether `content` starts with a header this tool generated — either
- * comment style, since `checkOverwriteGuard` also guards a `tagExtension`
- * output (a `.ts` file, `//`-commented) once task 1.7 starts writing one,
- * even though `buildHeader` only builds the `.html` (`<!--`) form today.
+ * comment style, because all three output kinds are guarded: a page's
+ * `.html` (`<!--`), and a tag module's and a `.ng.mx` module's `.ts`
+ * (`//`).
  */
 export function hasGeneratedHeader(content: string): boolean {
   return (
