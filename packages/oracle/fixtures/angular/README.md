@@ -15,20 +15,35 @@ file is present:
 - **error** — `input.mx` + `expected.error.txt` (the exact `TranslateError`
   message A2 pins, with `compile()`'s absolute-path prefix stripped
   deterministically — see `stripPathPrefix` in the runner).
+- **tag** — `input.mx` + `expected.ts` (task 1.7): the tag file compiles
+  through `compileTagModule` and the emitted **component module** is
+  byte-compared, then the `template:` string inside it is extracted and put
+  through the same `parseTemplate` gate a pass fixture's template gets. A
+  third kind rather than a variant of *pass*, because a `.mx` compiles to one
+  of two very different artifacts on this host (A3's "two output kinds").
+
+Two staging details, both load-bearing rather than incidental:
+
+- A **tag** fixture is compiled under its *own* basename, taken from the
+  fixture directory with the `tag-` prefix dropped (`tag-named-slot/`
+  compiles as `named-slot.mx`). A tag's selector and exported class are both
+  derived from its filename, so compiling as `input.mx` would name every
+  fixture's component `Input` — colliding with the `export interface Input`
+  it also emits.
+- A fixture with its own `tags/` directory is copied to a temp directory
+  first, because tag discovery walks *upward* from the compiled file. The
+  staged directory gets a `package.json` so the scan stops there, and the
+  staged path is stripped back out of the warning text, which would otherwise
+  carry this machine's temp directory into the golden.
 
 ## Rows intentionally absent here
 
-Two A1 rows have no fixture in this directory, on purpose — both are **tag
-file** (task 1.7) constructs, not page-template constructs, and this oracle
-covers the page-template emitter (`emitTemplate`) only:
-
-- **a tag's own `<content>`** (`${input.content()}` → `<ng-content></ng-content>`)
-- **a named slot in a tag file** (`${input.header()}` → `<ng-content select="[header]"></ng-content>`)
-
-Both require compiling a `tags/*.mx` file through the tag-unit path (design
-note "Custom tags: a `.mx` tag file becomes an Angular component") rather
-than a bare page template, which this fixture set has no harness for yet.
-They belong with task 1.7's own fixtures when that emitter lands.
+None. The two A1 rows this file used to list as absent — a tag's own
+`<content>` and a named slot in a tag file — now have fixtures
+(`tag-content`, `tag-named-slot`), along with the rest of task 1.7's surface:
+inputs (`tag-inputs`), the selector override (`tag-selector-override`),
+module-level statements (`tag-static-import`), and a page calling a
+discovered tag (`page-calls-discovered-tag`).
 
 ## `for-in` iteration order
 

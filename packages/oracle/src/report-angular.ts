@@ -1,16 +1,19 @@
 import {
+  cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTemplate } from "@angular/compiler";
-import { compile } from "@mxlang/angular";
-import type { MxWarning } from "@mxlang/core";
+import { compile, compileTagModuleFile } from "@mxlang/angular";
+import { getCustomTags, type MxWarning } from "@mxlang/core";
 
 /**
  * `oracle:angular`'s one table (design note A6): every fixture under
@@ -90,15 +93,68 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = join(here, "..", "fixtures", "angular");
 const goldenDir = join(fixturesRoot, "__golden__");
 
-const MIN_FIXTURES = 59;
+const MIN_FIXTURES = 67;
 
 type Verdict = "pass" | "fail";
 
 interface Row {
   fixture: string;
-  kind: "pass" | "error";
+  kind: "pass" | "error" | "tag";
   verdict: Verdict;
   detail?: string;
+}
+
+/**
+ * Copies a fixture's `tags/` directory into a temp directory and writes its
+ * template there as `FIXTURE_FILENAME`, returning that path.
+ *
+ * Lets a fixture exercise real tag discovery (which walks upward from the
+ * compiled file) while every emitted name the goldens pin stays derived from
+ * `x.mx`, not from wherever this repository happens to be checked out.
+ */
+function stageWithTags(fixtureDir: string, source: string): string {
+  const staged = mkdtempSync(join(tmpdir(), "mx-angular-fixture-"));
+  cpSync(join(fixtureDir, "tags"), join(staged, "tags"), { recursive: true });
+  // A package boundary stops the upward scan at the staged directory, so a
+  // `tags/` directory above the temp dir can never leak into a fixture.
+  writeFileSync(join(staged, "package.json"), JSON.stringify({ name: "f" }));
+  const path = join(staged, FIXTURE_FILENAME);
+  writeFileSync(path, source);
+  return path;
+}
+
+/**
+ * Rewrites the staged temp directory out of a warning message.
+ *
+ * The import warning names the TypeScript file the author must edit, echoing
+ * whatever filename it was compiled under (`x.mx` -> `x.ts`) — correct
+ * behavior, but a staged fixture's path is this machine's temp directory, so
+ * the golden would never match on another checkout. Reduced to the bare
+ * filename the non-staged fixtures already produce.
+ */
+function stripStagedDir(message: string, stagedPath: string): string {
+  return message.replaceAll(`${dirname(stagedPath)}/`, "");
+}
+
+/**
+ * Copies a tag fixture into a temp directory under `filename`, plus any
+ * `tags/` directory it has, and returns the staged path.
+ */
+function stageTag(fixtureDir: string, filename: string): string {
+  const staged = mkdtempSync(join(tmpdir(), "mx-angular-tagfix-"));
+  if (existsSync(join(fixtureDir, "tags"))) {
+    cpSync(join(fixtureDir, "tags"), join(staged, "tags"), { recursive: true });
+  }
+  writeFileSync(join(staged, "package.json"), JSON.stringify({ name: "f" }));
+  const path = join(staged, filename);
+  writeFileSync(path, readFileSync(join(fixtureDir, "input.mx"), "utf8"));
+  return path;
+}
+
+/** The `template: "…"` string of an emitted component module, unescaped. */
+function templateOf(code: string): string | null {
+  const match = code.match(/^ {2}template: (".*"),$/m);
+  return match ? (JSON.parse(match[1] as string) as string) : null;
 }
 
 export function runAngularTable(update: boolean): {
@@ -123,20 +179,32 @@ export function runAngularTable(update: boolean): {
 
   const passFixtures: string[] = [];
   const errorFixtures: string[] = [];
+  const tagFixtures: string[] = [];
   for (const dir of dirs) {
     const hasInput = existsSync(join(fixturesRoot, dir, "input.mx"));
     const hasExpected = existsSync(join(fixturesRoot, dir, "expected.html"));
     const hasError = existsSync(join(fixturesRoot, dir, "expected.error.txt"));
-    if (!hasInput || (hasExpected && hasError) || (!hasExpected && !hasError)) {
+    // A tag fixture's expected output is a component *module*, not a
+    // template, so it is a third kind rather than a variant of `pass`
+    // (A3's two output kinds: a `.mx` compiles to one of two very different
+    // artifacts on this host).
+    const hasTag = existsSync(join(fixturesRoot, dir, "expected.ts"));
+    const kinds = [hasExpected, hasError, hasTag].filter(Boolean).length;
+    if (!hasInput || kinds !== 1) {
       throw new Error(
-        `fixture "${dir}" must have input.mx and exactly one of expected.html / expected.error.txt`,
+        `fixture "${dir}" must have input.mx and exactly one of expected.html / expected.error.txt / expected.ts`,
       );
     }
     if (hasExpected) passFixtures.push(dir);
+    else if (hasTag) tagFixtures.push(dir);
     else errorFixtures.push(dir);
   }
 
-  if (passFixtures.length === 0 && errorFixtures.length === 0) {
+  if (
+    passFixtures.length === 0 &&
+    errorFixtures.length === 0 &&
+    tagFixtures.length === 0
+  ) {
     console.error(
       `oracle:angular: fixture glob expanded to nothing under ${fixturesRoot}`,
     );
@@ -155,10 +223,28 @@ export function runAngularTable(update: boolean): {
       ? readFileSync(warningsPath, "utf8").split("\n").filter(Boolean)
       : [];
 
+    // A fixture with its own `tags/` directory exercises the discovered-tag
+    // call site. Tag discovery walks upward from the compiled file, so the
+    // file must sit beside that directory on disk — but compiling at the
+    // fixture's real path would bake this checkout's absolute path into the
+    // emitted warning text, and every existing warning golden is written
+    // against the bare `x.ts`. Staged into a temp directory as
+    // `FIXTURE_FILENAME` instead, which satisfies both: discovery finds the
+    // copied `tags/`, and every emitted name stays machine-independent.
+    const hasTagsDir = existsSync(join(dir, "tags"));
+    const compilePath = hasTagsDir
+      ? stageWithTags(dir, input)
+      : FIXTURE_FILENAME;
+
     let code: string;
     const warnings: MxWarning[] = [];
     try {
-      code = compile(input, FIXTURE_FILENAME, { warnings }).code;
+      code = compile(input, compilePath, {
+        warnings,
+        customTags: hasTagsDir
+          ? (getCustomTags(compilePath) as never)
+          : undefined,
+      }).code;
     } catch (err) {
       rows.push({
         fixture: name,
@@ -181,7 +267,9 @@ export function runAngularTable(update: boolean): {
       continue;
     }
 
-    const actualWarnings = warnings.map((w) => w.message);
+    const actualWarnings = warnings.map((w) =>
+      hasTagsDir ? stripStagedDir(w.message, compilePath) : w.message,
+    );
     if (
       actualWarnings.length !== expectedWarnings.length ||
       actualWarnings.some((w, i) => w !== expectedWarnings[i])
@@ -244,6 +332,77 @@ export function runAngularTable(update: boolean): {
     }
 
     rows.push({ fixture: name, kind: "pass", verdict: "pass" });
+  }
+
+  for (const name of tagFixtures) {
+    const dir = join(fixturesRoot, name);
+    // Compiled at its real path, not under `FIXTURE_FILENAME`: a tag's
+    // selector and class name are both derived from its *basename*, so
+    // compiling `input.mx` as `x.mx` would assert the wrong names entirely.
+    const expected = readFileSync(join(dir, "expected.ts"), "utf8");
+    // Staged under the *tag's own* basename rather than compiled as
+    // `input.mx`: a tag's selector and exported class are both derived from
+    // its filename, so `input.mx` would name every fixture's component
+    // `Input` — colliding with the `export interface Input` it also emits.
+    // The name comes from the fixture directory with its `tag-` prefix
+    // dropped, so `tag-named-slot/` compiles as `named-slot.mx`.
+    const tagName = name.replace(/^tag-/, "");
+    const inputPath = stageTag(dir, `${tagName}.mx`);
+
+    let code: string;
+    try {
+      code = compileTagModuleFile(inputPath, {
+        customTags: getCustomTags(inputPath) as never,
+      }).code;
+    } catch (err) {
+      rows.push({
+        fixture: name,
+        kind: "tag",
+        verdict: "fail",
+        detail: `unexpected throw: ${(err as Error).message.slice(0, 80)}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    if (code !== expected) {
+      rows.push({
+        fixture: name,
+        kind: "tag",
+        verdict: "fail",
+        detail: "emitted module mismatch",
+      });
+      failed = true;
+      continue;
+    }
+
+    // The module is TypeScript, which Angular's template parser cannot read,
+    // so the template is extracted and checked on its own — the same
+    // `parseTemplate` gate every pass fixture gets.
+    const template = templateOf(code);
+    if (template === null) {
+      rows.push({
+        fixture: name,
+        kind: "tag",
+        verdict: "fail",
+        detail: "no template line found in the emitted module",
+      });
+      failed = true;
+      continue;
+    }
+    const parsedTag = parseTemplate(template, `${name}.html`);
+    if (parsedTag.errors) {
+      rows.push({
+        fixture: name,
+        kind: "tag",
+        verdict: "fail",
+        detail: `angular parseTemplate reported errors: ${parsedTag.errors.map((e) => e.msg).join("; ")}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    rows.push({ fixture: name, kind: "tag", verdict: "pass" });
   }
 
   for (const name of errorFixtures) {

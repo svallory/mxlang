@@ -1,0 +1,1 @@
+<section>${input.header()}${input.content()}</section>
