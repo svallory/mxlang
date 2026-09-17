@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { clearScanCache } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +34,79 @@ describe("diagnoseDocument", () => {
     const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
       host: "html",
     });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it("reports `/var` on a tag whose template has no <return>", () => {
+    // Acceptance C5, through the editor path. `tags/icon.mx` declares no
+    // `<return>`, so there is nothing for `/var` to bind and the binding
+    // would otherwise read `undefined` at run time with no diagnostic.
+    const page = join(
+      import.meta.dirname,
+      "fixtures",
+      "discovered-tag",
+      "page.mx",
+    );
+    const diagnostics = diagnoseDocument(
+      '<icon/x name="star"/>\n',
+      pathToFileURL(page).href,
+      { host: "html" },
+    );
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(1);
+    expect(diagnostics[0]?.message).toMatch(/does not return a value/);
+    expect(diagnostics[0]?.range.start.line).toBe(0);
+  });
+
+  it("reports a `/var` read outside its declaring block", () => {
+    const page = join(
+      import.meta.dirname,
+      "fixtures",
+      "discovered-tag",
+      "page.mx",
+    );
+    const diagnostics = diagnoseDocument(
+      "<if=true><counter/n start=1/></if>\n<p>${n}</p>\n",
+      pathToFileURL(page).href,
+      { host: "html" },
+    );
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toMatch(/not in scope here/);
+  });
+
+  it("reports a `/var` read before the call that binds it", () => {
+    // C5's third case through the editor path; the other two are above.
+    const page = join(
+      import.meta.dirname,
+      "fixtures",
+      "discovered-tag",
+      "page.mx",
+    );
+    const diagnostics = diagnoseDocument(
+      "<p>${n}</p>\n<counter/n start=1/>\n",
+      pathToFileURL(page).href,
+      { host: "html" },
+    );
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toMatch(/read before the `\/var`/);
+  });
+
+  it("reports nothing for a legal `/var` on a returning tag", () => {
+    const page = join(
+      import.meta.dirname,
+      "fixtures",
+      "discovered-tag",
+      "page.mx",
+    );
+    const diagnostics = diagnoseDocument(
+      "<counter/n start=1/>\n<p>${n}</p>\n",
+      pathToFileURL(page).href,
+      { host: "html" },
+    );
 
     expect(diagnostics).toEqual([]);
   });

@@ -1,0 +1,5 @@
+export interface Input {
+  size: number;
+}
+<span class="icon" style={fontSize: input.size}>icon</span>
+<return value=input.size * 2/>

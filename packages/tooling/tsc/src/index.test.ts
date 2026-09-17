@@ -420,4 +420,44 @@ describe("mx-tsc", () => {
     },
     SPAWN_TIMEOUT_MS,
   );
+
+  it(
+    "types a discovered tag's call site against its own Input, and its /var",
+    () => {
+      // Acceptance C6. The discovered-tag test above pinned only that the
+      // injected import *resolves*; this pins that the call is checked
+      // against the unit's `export interface Input` through that import, and
+      // that a `/var` binding carries the `<return>` value's inferred type.
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "returning-tag-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      // Exactly two diagnostics, one per fixture file, and nothing else: a
+      // `toContain` pair alone would still pass if a regression added
+      // spurious errors at other positions, which is most of what this
+      // fixture exists to catch.
+      const errors = result.output
+        .split("\n")
+        .filter((line) => line.includes("): error TS"));
+      expect(errors).toHaveLength(2);
+      // `<icon size="x"/>` against `Input { size: number }` — the diagnostic
+      // lands on the attribute, in the *caller's* file.
+      expect(result.output).toContain("WrongProp.mx(5,7): error TS2322");
+      expect(result.output).toContain(
+        "Type 'string' is not assignable to type 'number'",
+      );
+      // `<icon/doubled size=8/>` returns `input.size * 2`, so `doubled` is a
+      // number. This is why the returning unit's export carries no return
+      // annotation: the type is inferred from the `<return>` expression, and
+      // an annotation could only widen it.
+      expect(result.output).toContain("VarType.mx(6,14): error TS2339");
+      expect(result.output).toContain(
+        "Property 'toUpperCase' does not exist on type 'number'",
+      );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 });
