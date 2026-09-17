@@ -2,6 +2,24 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking: a bare `${expr}` line is a dynamic tag, not a text placeholder
+
+A standalone concise-position `${expr}` line (no attributes, no body) used to
+lower to an escaped `Interpolation` whenever no host claimed `DYNAMIC_TAG`.
+It now lowers the same way the tagged `<${expr} .../>` form does: a claiming
+host still gets a `HostTag` (`shape: "bare"`), and an unclaiming host gets a
+`Component` with `target: { kind: "dynamic", expr }` instead of a silent
+interpolation — matching real Marko, which parses both shapes to the
+identical `MarkoTag` node and treats an expression-named tag as a dynamic
+tag (see Marko's own `error-dynamic-tag-name` fixture). Previously, lowering
+a bare, unclaimed dynamic tag with attributes or a body threw `"dynamic tag
+name is not supported in a standalone template"`; that error is gone — every
+host now either claims the tag or emits a dynamic component. Text on its own
+line still needs the escape hatch, `-- ${expr}`; a placeholder inside an
+HTML-syntax body (`<div>${expr}</div>`) is unaffected, since it parses as
+`MarkoPlaceholder` and never reaches this code path. See `divergences.md`
+and `AGENTS.md`'s "four Marko facts" for the full history.
+
 ### `Expr` gains a file-absolute span (core contract C4)
 
 `Expr.span?: SourceSpan` carries file-absolute byte offsets of an
