@@ -1,0 +1,13 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-people",
+  template: <ul>
+    <for|p| of=people by=(p => p.id)>
+      <li><if=p.active>${p.name}</if><else>(inactive)</else></li>
+    </for>
+  </ul>,
+})
+export class PeopleComponent {
+  people = [{ id: 1, name: "Ada", active: true }];
+}

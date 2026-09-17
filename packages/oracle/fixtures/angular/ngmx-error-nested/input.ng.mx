@@ -1,0 +1,7 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-x",
+  host: { template: <div>one object too deep</div> },
+})
+export class XComponent {}

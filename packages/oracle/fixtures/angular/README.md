@@ -1,6 +1,6 @@
 # Angular oracle fixtures
 
-Each `<name>/` holds one of two fixture kinds — never both, and the runner
+Each `<name>/` holds one fixture kind — never more than one, and the runner
 (`packages/oracle/src/report-angular.ts`) classifies a directory by which
 file is present:
 
@@ -21,6 +21,26 @@ file is present:
   through the same `parseTemplate` gate a pass fixture's template gets. A
   third kind rather than a variant of *pass*, because a `.mx` compiles to one
   of two very different artifacts on this host (A3's "two output kinds").
+- **ngmx** — `input.ng.mx` + either `expected.ts` or `expected.error.txt`
+  (phase 2): a whole TypeScript module whose `@Component` template is MX.
+  The emitted module is byte-compared, its `template:` literal extracted and
+  put through `parseTemplate`, and the module itself typechecked with the
+  same real `tsc` pass a **tag** fixture gets. The `.ng.mx` extension is its
+  own discriminator, so this kind needs no name-prefix convention (unlike
+  **tag**'s `tag-`); the `ngmx-` names are for reading the table, not for
+  routing.
+
+  Its `template:` is a **backtick** literal, not a double-quoted string
+  (decision 99, reversing A4 divergence 3), so `templateOf` carries two
+  patterns and unescapes ``\` ``, `\${` and `\\` — the inverse of the
+  host's own `escapeTemplateLiteral`. `ngmx-escapes` is the fixture that
+  pins all three.
+
+  An **ngmx error** fixture covers one rejected region position each
+  (C3/A4 divergence 2): wrong property, one object too deep, a ternary, a
+  non-`Component` decorator, a plain call with no decorator, and a region in
+  the decorator's *second* argument — the last being the case only
+  `argumentIndex` can distinguish.
 
 Two staging details, both load-bearing rather than incidental:
 

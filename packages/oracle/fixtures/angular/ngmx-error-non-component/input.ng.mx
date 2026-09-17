@@ -1,0 +1,7 @@
+import { Directive } from "@angular/core";
+
+@Directive({
+  selector: "[appX]",
+  template: <div>directives have no template</div>,
+})
+export class XDirective {}

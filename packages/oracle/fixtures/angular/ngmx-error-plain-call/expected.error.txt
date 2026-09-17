@@ -1,0 +1,1 @@
+an MX region in a `.ng.mx` file is only valid as the `template` property of an `@Component({ … })` decorator. (2:12)
