@@ -1,4 +1,4 @@
-import { compileSolidMx } from "@mxlang/solid";
+import { compileSolidMx, type HoistedImport } from "@mxlang/solid";
 import { parseExpression } from "../babel/index.ts";
 import { types as tc } from "../babel/tokenizer/context.ts";
 import { Position } from "../babel/util/location.ts";
@@ -73,7 +73,7 @@ export function mxParseElementAt(
   let node: unknown;
   try {
     const region = source.slice(start, end);
-    const { code } = compileSolidMx(region, {
+    const { code, hoistedImports } = compileSolidMx(region, {
       filename: parser.options?.sourceFilename ?? "input.solid.mx",
       baseOffset: start,
       baseLine: startLoc.line - 1,
@@ -91,7 +91,7 @@ export function mxParseElementAt(
       startColumn: startLoc.column,
     });
     remapExpressionLocations(node, root, code, source, start, end);
-    stampRoot(node, source, start, end);
+    stampRoot(node, source, start, end, hoistedImports);
   } catch (err) {
     const error = err as {
       message?: string;
@@ -317,6 +317,7 @@ function stampRoot(
   source: string,
   start: number,
   end: number,
+  hoistedImports: HoistedImport[] = [],
 ): void {
   if (!node || typeof node !== "object") return;
   const root = node as Record<string, unknown>;
@@ -329,7 +330,14 @@ function stampRoot(
   root.range = [start, end];
   root.extra = {
     ...(root.extra as object | undefined),
-    mx: { range: [start, end] },
+    // `hoistedImports` rides the region root rather than a parser-level
+    // collector because this function runs *speculatively*: the TypeScript
+    // plugin tries the MX grammar inside a `tryParse` on every `<` in
+    // expression position, and an attempt that loses (a generic arrow, say)
+    // throws its node away. A collector would keep that attempt's imports;
+    // a stamp on the discarded node goes with it. Only a region that made it
+    // into the final AST can contribute an import to the module.
+    mx: { range: [start, end], hoistedImports },
   };
 }
 

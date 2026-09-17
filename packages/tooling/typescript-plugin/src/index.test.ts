@@ -35,6 +35,28 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 
 describe("SolidMX language plugin", () => {
+  it("puts a discovered tag's hoisted import in the virtual file", () => {
+    const plugin = createSolidMxLanguagePlugin(ts);
+    const fileName = `${here}/fixtures/solid-tags/page.solid.mx`;
+    const source = `const a = <div><icon name="star"/></div>;\n`;
+    const virtual = plugin.createVirtualCode?.(
+      fileName,
+      SOLID_MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+
+    if (!virtual) throw new Error("Expected SolidMX virtual code");
+    const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    // A region is an expression, so the import the compiler minted for
+    // `<icon>` belongs to the surrounding module. If it does not reach the
+    // virtual file the editor reports an unresolved binding on a file that
+    // builds fine — the two disagreeing is the whole failure mode.
+    expect(code).toMatch(/import \$mx_Icon\d+ from "\.\/tags\/icon\.mx"/);
+    const binding = code.match(/import (\$mx_Icon\d+)/)?.[1];
+    expect(code).toContain(`<${binding}`);
+  });
+
   it("recognizes .solid.mx and exposes a TSX service script", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const source = "export const answer: number = 42;\n";

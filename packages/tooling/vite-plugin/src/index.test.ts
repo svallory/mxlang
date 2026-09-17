@@ -676,6 +676,42 @@ describe("mx()", () => {
       expect(result?.code).toContain("found");
     });
 
+    it("hoists a discovered tag's import into a .solid.mx module", async () => {
+      // The integration layer for B1: a `.solid.mx` region calls a tag it
+      // never imported, and the module this plugin hands Vite must carry the
+      // import that makes the call resolve. A region is an expression, so the
+      // import can only live in the surrounding TypeScript module.
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-solid-tags-"));
+      scratches.push(dir);
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"v","mx":{"host":"solid"}}',
+      );
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      writeFileSync(
+        join(dir, "tags", "icon.mx"),
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax, not a JS template
+        '<span class="icon">${input.name}</span>\n',
+      );
+      const source = `const a = <div><icon name="star"/></div>;\n`;
+      const caller = join(dir, "page.solid.mx");
+      writeFileSync(caller, source);
+
+      const result = await transformOf(mx()).call(
+        {},
+        source,
+        `${caller}${MX_SUFFIX}`,
+      );
+
+      expect(result?.code).toMatch(
+        /import \$mx_Icon\d+ from "\.\/tags\/icon\.mx"/,
+      );
+      const binding = result?.code.match(/import (\$mx_Icon\d+)/)?.[1];
+      expect(result?.code).toContain(`<${binding}`);
+      // The lowercase author-facing name is never what the module references.
+      expect(result?.code).not.toContain("<icon");
+    });
+
     it("rescans a caller after its tag file is edited", async () => {
       const { tagFile, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('first')] };\n",

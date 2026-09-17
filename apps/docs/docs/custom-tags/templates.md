@@ -104,6 +104,8 @@ Hygiene is the module boundary. A template's declarations are private because th
 
 The import MX injects for a discovered tag is generated (`$mx_Icon1`) and minted against the caller's own bindings, so it cannot collide with anything the author wrote. If the caller already imports the same file itself, that binding is reused and no second import appears.
 
+On Solid the import lands one level out. A `.solid.mx` file is a TypeScript module containing MX regions, and a region is an *expression*, so it has no module scope to hold an import: MX writes the injected import into the surrounding TypeScript module instead — once per module per tag, reusing an import the module already wrote for the same file. Calling a discovered tag from a region needs nothing from the author either way. Writing an `import` or `static` yourself *inside* a region remains an error, because there the surrounding module is where it belongs.
+
 ## What a template cannot do
 
 A template can arrange markup and use MX's structural language, but it cannot examine compile-time AST shapes, compute a new IR structure in TypeScript, or refuse a call with a custom diagnostic. Add an [L2 sidecar](/custom-tags/sidecars/) for those jobs.

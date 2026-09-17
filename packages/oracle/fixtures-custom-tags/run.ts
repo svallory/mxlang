@@ -16,7 +16,7 @@ import { compileHonoMx } from "@mxlang/hono";
 import { compile as compileHtml } from "@mxlang/html";
 import { compilePreactMx } from "@mxlang/preact";
 import { compileReactMx } from "@mxlang/react";
-import { compileSolidMx } from "@mxlang/solid";
+import { compileSolidMx, compileSolidUnit } from "@mxlang/solid";
 import { transform as nativeTransform } from "@solidjs/compiler";
 import { normalizeHtml } from "../src/normalize-html.ts";
 import icon from "./icon/icon.tag.ts";
@@ -122,10 +122,7 @@ function templateIcon(): Record<string, CustomTag> {
 const FIXTURES: Fixture[] = [
   load("icon", { icon }),
   {
-    ...load("icon-template", templateIcon(), {
-      solid:
-        "a discovered template is imported by the caller (decision 95), but a `.solid.mx` MX region is an *expression* with no module scope to hold the import; the parser bridge writes it into the surrounding TypeScript module, which is tag-unit phase 2 (design §3.2, §10)",
-    }),
+    ...load("icon-template", templateIcon()),
     templates: [ICON_TEMPLATE],
   },
   // P5's two dogfoods. `icon-sprite` is the same markup as `icon` through the
@@ -351,13 +348,40 @@ async function runHono(fixture: Fixture): Promise<string> {
  * so Solid emits no hydration markers and the bytes can be compared directly
  * against `expected.html`.
  */
+/**
+ * Wraps lowered region text as a Solid component module.
+ *
+ * An MX region is an expression, so an import the compiler minted for a
+ * discovered tag has nowhere inside it to live: it belongs to the
+ * surrounding module. For a real `.solid.mx` the parser bridge writes it
+ * there; this harness builds the module by hand, so it places them itself —
+ * the same contract, one layer down.
+ */
+function solidModule(
+  code: string,
+  hoistedImports: Array<{ code: string }>,
+): string {
+  const hoisted = hoistedImports.map((one) => `${one.code};`).join("\n");
+  return `import { For, Show } from "solid-js";
+${hoisted}
+export default function Fixture(input) { return <>${code}</>; }`;
+}
+
 async function runSolid(fixture: Fixture): Promise<string> {
-  const { code } = compileSolidMx(fixture.source, {
+  // A tag unit is a `.mx` file whose markup is the whole module. On Solid
+  // that lowers exactly as a region does, then gets wrapped as a component —
+  // the same shape the caller itself takes, which is the unit model's claim.
+  const compileUnit = (source: string, filename: string) =>
+    compileSolidUnit(source, {
+      filename,
+      customTags: fixture.customTags,
+    }).code;
+
+  const { code, hoistedImports } = compileSolidMx(fixture.source, {
     filename: fixture.filename.replace(/\.mx$/, ".solid.mx"),
     customTags: fixture.customTags,
   });
-  const wrapped = `import { For, Show } from "solid-js";
-export default function Fixture(input) { return <>${code}</>; }`;
+  const wrapped = solidModule(code, hoistedImports);
   const compiled = nativeTransform(wrapped, {
     filename: join(here, "fixture.tsx"),
     generate: "ssr",
@@ -372,8 +396,8 @@ export default function Fixture(input) { return <>${code}</>; }`;
   // Solid's runtime is hoisted to the workspace root, which the scratch
   // directory's symlinked `node_modules` does not reach; resolve both from
   // here, exactly as the other hosts' imports are resolved.
-  const mod = await loadModule(
-    compiled.code
+  const resolveSolidRuntime = (source: string): string =>
+    source
       .replaceAll(
         'from "@solidjs/web"',
         `from ${JSON.stringify(require.resolve("@solidjs/web"))}`,
@@ -381,8 +405,34 @@ export default function Fixture(input) { return <>${code}</>; }`;
       .replaceAll(
         'from "solid-js"',
         `from ${JSON.stringify(require.resolve("solid-js"))}`,
-      ),
+      );
+
+  // Each unit goes through Solid's own compiler too: it is a component
+  // module like the caller, not pre-compiled output to splice in.
+  // Checked against `wrapped`, not the bare region: on this host the import
+  // is hoisted into the surrounding module, which is what `wrapped` is.
+  const units = unitsFor(fixture, compileUnit, wrapped).map((unit) => {
+    const unitCompiled = nativeTransform(unit.code, {
+      filename: join(here, "unit.tsx"),
+      generate: "ssr",
+      hydratable: false,
+    });
+    if (!unitCompiled?.code) {
+      throw new Error(
+        `@solidjs/compiler produced no output for the tag unit ${unit.specifier}`,
+      );
+    }
+    return {
+      specifier: unit.specifier,
+      code: resolveSolidRuntime(unitCompiled.code),
+    };
+  });
+
+  const mod = await loadModule(
+    resolveSolidRuntime(compiled.code),
     "jsx",
+    undefined,
+    units,
   );
   const { renderToString } = (await import("@solidjs/web")) as {
     renderToString: (fn: () => unknown) => string;

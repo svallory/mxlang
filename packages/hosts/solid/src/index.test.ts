@@ -1,5 +1,41 @@
+import { readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { compileSolidMx } from "./index.ts";
+import { compileSolidMx, compileSolidUnit } from "./index.ts";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const TAGS = join(HERE, "fixtures", "tags");
+const ICON_TEMPLATE = join(TAGS, "icon.mx");
+const PANEL_TEMPLATE = join(TAGS, "panel.mx");
+
+/** The discovered `<panel>` tag, whose template reads `input.content`. */
+function panelTag(): Record<string, never> {
+  return {
+    panel: {
+      template: {
+        filename: PANEL_TEMPLATE,
+        source: readFileSync(PANEL_TEMPLATE, "utf8"),
+        mtimeMs: statSync(PANEL_TEMPLATE).mtimeMs,
+      },
+    },
+    // biome-ignore lint/suspicious/noExplicitAny: a CustomTag map, shaped by the scan
+  } as any;
+}
+
+/** The discovered `<icon>` tag, as an integration's scan would supply it. */
+function iconTag(): Record<string, never> {
+  return {
+    icon: {
+      template: {
+        filename: ICON_TEMPLATE,
+        source: readFileSync(ICON_TEMPLATE, "utf8"),
+        mtimeMs: statSync(ICON_TEMPLATE).mtimeMs,
+      },
+    },
+    // biome-ignore lint/suspicious/noExplicitAny: a CustomTag map, shaped by the scan
+  } as any;
+}
 
 const compile = (source: string) =>
   compileSolidMx(source, { filename: "fixture.solid.mx" });
@@ -224,5 +260,87 @@ describe("Solid host errors", () => {
       error = caught;
     }
     expect(error).toMatchObject({ line: 8, column: 20 });
+  });
+});
+
+describe("discovered tag imports inside a region", () => {
+  const compileRegion = (source: string) =>
+    compileSolidMx(source, {
+      filename: join(HERE, "fixtures", "page.solid.mx"),
+      customTags: iconTag(),
+    });
+
+  it("hands the synthesized import back instead of rejecting it", () => {
+    const result = compileRegion(`<div><icon name="star"/></div>`);
+
+    expect(result.hoistedImports).toHaveLength(1);
+    const [hoisted] = result.hoistedImports;
+    expect(hoisted?.specifier).toBe("./tags/icon.mx");
+    expect(hoisted?.code).toBe(
+      `import ${hoisted?.binding} from "./tags/icon.mx"`,
+    );
+    // The region references the generated binding, never the author's `icon`:
+    // a lowercase name is not a component call on any host.
+    expect(result.code).toContain(`<${hoisted?.binding}`);
+  });
+
+  it("emits no hoisted import for a region that calls no discovered tag", () => {
+    expect(compileRegion(`<div>plain</div>`).hoistedImports).toEqual([]);
+  });
+
+  it("still rejects a module-level MX statement the author wrote", () => {
+    let error: unknown;
+    try {
+      compileRegion(`<import x from "./x.ts"/>`);
+    } catch (caught) {
+      error = caught;
+    }
+    expect((error as Error | undefined)?.message).toContain(
+      "module-level MX statements cannot appear inside a `.solid.mx` expression",
+    );
+  });
+
+  it("passes a region's body to a unit that reads input.content", () => {
+    const result = compileSolidMx(`<panel title="T"><b>slot</b></panel>`, {
+      filename: join(HERE, "fixtures", "page.solid.mx"),
+      customTags: panelTag(),
+    });
+
+    const [hoisted] = result.hoistedImports;
+    expect(hoisted?.specifier).toBe("./tags/panel.mx");
+    // Solid's calling convention for a body is JSX children, so the body
+    // reaches the unit as `props.children` and the unit's `input.content`
+    // bridges to it. What this pins is the call site: the body is passed
+    // through rather than dropped, which is the silent-drop class.
+    expect(result.code).toContain(`<${hoisted?.binding}`);
+    expect(result.code).toContain("<b>slot</b>");
+  });
+});
+
+describe("compileSolidUnit", () => {
+  const unitOf = (name: string) =>
+    compileSolidUnit(readFileSync(join(TAGS, name), "utf8"), {
+      filename: join(TAGS, name),
+    }).code;
+
+  it("emits a default export and keeps the markup", () => {
+    const code = unitOf("icon.mx");
+
+    expect(code).toContain("export default function (input)");
+    expect(code).toContain("icon");
+  });
+
+  it("drops `export interface Input` rather than emitting it", () => {
+    // Pinned, not incidental: Solid's compiler takes source text and has no
+    // TypeScript frontend, so a type declaration in the emitted unit is a
+    // syntax error downstream. Typing a unit's props is phase 3's job. If
+    // this ever starts emitting, that decision has changed and the CHANGELOG
+    // note about it is stale.
+    const code = unitOf("panel.mx");
+
+    expect(code).not.toContain("interface Input");
+    expect(code).toContain("export default function (input)");
+    // The body that reads `input.title` is still emitted.
+    expect(code).toContain("input.title");
   });
 });

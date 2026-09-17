@@ -45,3 +45,28 @@ call — the shape an explicitly imported tag already produced on all six hosts.
 - **fixed:** a discovered tag whose template contains a `static` block no
   longer crashes the compiler with `unexpected module-level node kind "Static"
   in the body walk`.
+- **added:** `Import` carries `synthesized`, plus `specifier` and
+  `resolvedPath`, set only on an import the compiler minted for a discovered
+  tag. They exist for one host: a `.solid.mx` MX region is an *expression* with
+  no module scope of its own, so `@mxlang/solid` now splits its
+  module-level-statement rejection by **origin** rather than by kind. An
+  authored `import`/`static`/`export` inside a region is still the same error;
+  a synthesized one is returned on `CompileSolidMxResult.hoistedImports`, and
+  `@mxlang/parser` writes it into the surrounding TypeScript module — once per
+  **resolved path**, reusing the module's own authored default import of the
+  same file when present, and never reusing a *type-only* import (it binds no
+  runtime value) or one shadowed by a scope enclosing the region (the reused
+  name would resolve to the shadow). This closes the last `oracle:custom-tags`
+  skip: the gate is
+  **24/24 with none recorded**. Every other host emits both kinds identically
+  and ignores the flag.
+- **added:** `@mxlang/solid` gains `compileSolidUnit`, a whole-file entry point
+  beside the region entry point `compileSolidMx`. A tag unit is a file, so its
+  module-level statements are placed rather than rejected. It **silently drops
+  `export interface Input`** rather than emitting it — Solid's compiler takes
+  source text and has no TypeScript frontend, so a type declaration there is a
+  downstream syntax error. This is deliberate and pinned by a test, but it is
+  an asymmetry worth knowing: the region path *errors* on an authored
+  `export interface Input` while the unit path accepts and ignores it. Typing a
+  unit's props is phase 3, through the same virtual-file projection the
+  TypeScript plugin already does for `.solid.mx`.

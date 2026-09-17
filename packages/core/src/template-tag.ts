@@ -301,6 +301,9 @@ function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
     bindings: [binding],
     loc: call.loc,
     end: call.loc,
+    synthesized: true,
+    specifier,
+    resolvedPath: path,
   });
   return binding;
 }

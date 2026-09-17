@@ -647,14 +647,13 @@ Five facts worth knowing before editing it:
   compares against `expected.html`. It runs **four** fixtures — `icon` (an L2
   sidecar), `icon-template` (the same tag as an L1 template), `icon-sprite`
   (P5's collecting pair) and `table-of` (L2 without that pair) — for a 24-row
-  count gate. 23 rows pass and one is a recorded skip: `icon-template` on
-  **solid**, because a discovered template is now imported by its caller
-  (decision 95) and a `.solid.mx` MX region is an expression with no module
-  scope to hold that import — the parser bridge writing it into the surrounding
-  TypeScript module is tag-unit phase 2. (The earlier `table-of`-on-Solid skip
-  was the accessor-binding bug, fixed in `@mxlang/solid` — see the P5 bullet
-  below.) A skip still runs, still counts, and still prints its reason, so a
-  fixture that stopped running is still a failure.
+  count gate. **All 24 rows pass, with no recorded skip.** (Two skips used to
+  live here and both are fixed: `table-of` on Solid was the accessor-binding
+  bug — see the P5 bullet below — and `icon-template` on Solid was a discovered
+  unit's import having no module scope inside a `.solid.mx` region, now hoisted
+  by the parser bridge; see the bullet on that below.) A skip still runs, still
+  counts, and still prints its reason, so a fixture that stopped running is
+  still a failure.
 - **`analyze` / `finalize` / `ctx.store` are P5 and shipped**
   (`packages/core/src/custom-tags.ts`; the contract and the worked example are
   in `packages/core/README.md`). Six invariants worth knowing before touching
@@ -945,10 +944,59 @@ Five facts worth knowing before editing it:
   owes.
 - **`oracle:custom-tags` compiles each fixture's tag units through the caller's
   own host** and writes them beside the caller, because the tag is a real
-  import now. `icon-template` on **solid** is a recorded skip: a `.solid.mx` MX
-  region is an *expression* with no module scope for the injected import, and
-  writing it into the surrounding TypeScript module through the parser bridge
-  is tag-unit phase 2.
+  import now. All 24 rows pass, Solid included.
+- **A synthesized import is told apart from an authored one by
+  `Import.synthesized`, and only Solid cares.** A `.solid.mx` MX region is an
+  *expression* inside a TypeScript module, so it has no module scope to hold a
+  discovered tag's injected import. The Solid host therefore splits its
+  module-level-statement rejection **by origin, not by kind**: an authored
+  `import`/`static`/`export`/`export interface` inside a region is still the
+  same positioned error (the author has a real module to put it in), while a
+  synthesized import is handed back on `CompileSolidMxResult.hoistedImports`
+  for the caller to place. `packages/parser`'s bridge stamps those on the
+  region root's `extra.mx` and `parse` writes them into the surrounding
+  module: once per **resolved path** (the node carries `specifier` and
+  `resolvedPath` beside `synthesized`, so no consumer parses the statement
+  text), reusing the module's own authored *default* import of the same file
+  when it has one, inserted after the last import. Every other host emits both
+  kinds identically and ignores the flag.
+  **A type-only import is never reused** — `import type Icon from "./icon.mx"`
+  binds no runtime value, so reusing it would leave the call referencing a
+  name erased before the module runs.
+  **Nor is one shadowed at the region.** Reuse emits the authored name *inside
+  the region*, so a scope between the module and the region that re-declares
+  it (`function f(Icon) { <icon/> }`) would make the reference resolve to the
+  parameter — silently, to whatever the caller passed. The check is
+  deliberately coarse (any binder of that name on the path from module root to
+  region), because over-reporting costs one import under a generated name,
+  which is always correct, while under-reporting is the silent bug.
+  **The rename onto an authored binding is scope- and position-aware**, and
+  each guard is a measured bug: it rewrites only inside a region's stamped
+  `[start, end)` range (else a module that happens to declare
+  `const $mx_Icon1 = …` gets that declaration renamed onto the author's
+  import, a duplicate-binding `SyntaxError`), never a binding position, and
+  never a non-computed object key or member property (`{ $mx_Icon1: 1 }` and
+  `o.$mx_Icon1` are not references to a binding at all).
+  The placement decision itself lives in `packages/parser/src/mx/hoist-imports.ts`
+  (`planHoistedImports`) because **two** consumers need it: `parse`, and
+  `@mxlang/typescript-plugin`'s `.solid.mx` path, which reaches it through
+  `print()` — `mx-language.ts` never sees a `.solid.mx` file (`isMx` excludes
+  the extension), so the editor and the build agree by construction.
+  **The stamp rides the AST rather than a parser-level collector, and that is
+  load-bearing**: the bridge runs *speculatively* — the TypeScript plugin
+  tries the MX grammar inside a `tryParse` on every `<` in expression
+  position, including ones that turn out to be generic arrows — so a losing
+  attempt throws its node away. A collector would keep that attempt's imports;
+  a stamp goes with the node. Same pattern as `collectMxRegions`.
+- **`compileSolidUnit` is the Solid host's whole-file entry point**, beside the
+  region entry point `compileSolidMx`. A tag unit is a *file*, so its
+  module-level statements are **placed** rather than rejected — which is the
+  one thing the region compiler cannot do. It deliberately does **not** emit
+  `export interface Input`: Solid's compiler takes source text and has no
+  TypeScript frontend (the caller is stripped before it ever sees it), so a
+  type declaration there is a downstream syntax error. Typing a unit's props
+  is phase 3, through the same virtual-file projection the TypeScript plugin
+  already does for `.solid.mx`.
 
 ## `@mxlang/solid`: the Solid host on `@mxlang/core`
 
