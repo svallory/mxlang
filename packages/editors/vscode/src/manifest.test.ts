@@ -34,6 +34,17 @@ describe("Manifest", () => {
     expect(solidMxIndex).toBeLessThan(mxIndex);
   });
 
+  it("orders ngmx before mx in language contributions", () => {
+    // Same reasoning as solidmx: .ng.mx must not be mistakenly matched as .mx
+    const mxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "mx",
+    );
+    const ngMxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "ngmx",
+    );
+    expect(ngMxIndex).toBeLessThan(mxIndex);
+  });
+
   it("references existing configuration", () => {
     for (const lang of pkg.contributes.languages) {
       if (lang.configuration) {
