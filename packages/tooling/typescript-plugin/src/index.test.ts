@@ -24,6 +24,7 @@ import {
   createSolidMxLanguagePlugin,
   decodeMappings,
   SOLID_MX_LANGUAGE_ID,
+  solidRegionCompile,
 } from "./language.ts";
 import {
   createAstroTypeSurface,
@@ -92,7 +93,9 @@ describe("SolidMX language plugin", () => {
 
   it("decodes the printer source map into feature-enabled mappings", () => {
     const source = "const el = <button title=value()>ok</button>;\n";
-    const printed = print(source, "mapping.solid.mx");
+    const printed = print(source, "mapping.solid.mx", {
+      mxRegionCompile: solidRegionCompile,
+    });
 
     const mappings = decodeMappings(printed.map, printed.code, source);
 

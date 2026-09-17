@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { print } from "../index.ts";
+import { solidRegionCompile } from "./test-helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ICON_TEMPLATE = join(HERE, "fixtures", "tags", "icon.mx");
@@ -23,7 +24,10 @@ function iconTag(): Record<string, unknown> {
 }
 
 const compile = (source: string) =>
-  print(source, PAGE, { customTags: iconTag() }).code;
+  print(source, PAGE, {
+    customTags: iconTag(),
+    mxRegionCompile: solidRegionCompile,
+  }).code;
 
 /**
  * Every `import … from "<specifier>"` statement in the printed module.
@@ -219,6 +223,7 @@ describe("hoisting a region's `/var` bindings", () => {
           },
         },
       },
+      mxRegionCompile: solidRegionCompile,
     }).code;
 
   it("declares the let in the surrounding module", () => {

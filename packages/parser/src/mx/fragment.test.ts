@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "../index.ts";
+import { parseSolid } from "./test-helpers.ts";
 
 /** Walks the AST collecting every node of a given type. */
 function collect(node: unknown, type: string, out: unknown[] = []): unknown[] {
@@ -17,7 +17,7 @@ function collect(node: unknown, type: string, out: unknown[] = []): unknown[] {
   return out;
 }
 
-const parseMx = (source: string) => parse(source, "test.solid.mx");
+const parseMx = (source: string) => parseSolid(source);
 
 describe("TSX fragments in .solid.mx", () => {
   it("prints a JSXFragment with two MX-lowered children", () => {

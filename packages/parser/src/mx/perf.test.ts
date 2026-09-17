@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "../index.ts";
+import { parseSolid } from "./test-helpers.ts";
 import { walkMxRegion } from "./walk.ts";
 
 /**
@@ -31,7 +31,7 @@ describe("MX parser performance", () => {
     expect(elements).toBeGreaterThanOrEqual(49);
 
     const started = performance.now();
-    parse(source, "perf.solid.mx");
+    parseSolid(source, "perf.solid.mx");
     const elapsed = performance.now() - started;
 
     // Reported in the task notes; the bound is deliberately loose because the

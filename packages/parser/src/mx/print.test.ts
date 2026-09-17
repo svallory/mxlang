@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { ParserOptions } from "../babel/index.ts";
 import { parseBabel } from "../index.ts";
 import { print } from "./print.ts";
+import { solidRegionCompile } from "./test-helpers.ts";
 
 const fixtures = fileURLToPath(
   new URL("../../../../fixtures/", import.meta.url),
@@ -78,14 +79,18 @@ describe("print", () => {
     const source = readFileSync(`${fixtures}counter/input.solid.mx`, "utf8");
     const twin = readFileSync(`${fixtures}counter/twin.tsx`, "utf8");
 
-    const { code } = print(source, "input.solid.mx");
+    const { code } = print(source, "input.solid.mx", {
+      mxRegionCompile: solidRegionCompile,
+    });
 
     expect(programShape(code)).toEqual(programShape(twin));
   });
 
   it("emits a source map pointing into the MX region", () => {
     const source = readFileSync(`${fixtures}counter/input.solid.mx`, "utf8");
-    const { map } = print(source, "input.solid.mx");
+    const { map } = print(source, "input.solid.mx", {
+      mxRegionCompile: solidRegionCompile,
+    });
 
     expect(map.version).toBe(3);
     expect(map.sources).toContain("input.solid.mx");
