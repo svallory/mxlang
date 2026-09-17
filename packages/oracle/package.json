@@ -20,6 +20,7 @@
     "@mxlang/solid": "workspace:*"
   },
   "devDependencies": {
+    "@angular/common": "22.1.7",
     "@angular/compiler": "22.1.7",
     "@angular/core": "22.1.7",
     "@marko/compiler": "5.42.5",

@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -14,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { parseTemplate } from "@angular/compiler";
 import { compile, compileTagModuleFile } from "@mxlang/angular";
 import { getCustomTags, type MxWarning } from "@mxlang/core";
+import ts from "typescript";
 
 /**
  * `oracle:angular`'s one table (design note A6): every fixture under
@@ -45,6 +47,15 @@ import { getCustomTags, type MxWarning } from "@mxlang/core";
  */
 const FIXTURE_FILENAME = "x.mx";
 const ERROR_PREFIX_PATTERN = new RegExp(`^\\S*${FIXTURE_FILENAME}: `);
+// A tag fixture stages under its own basename (`${tagName}.mx`, not
+// `x.mx` — see `stageTag`'s own comment on why), so its thrown message
+// carries a different filename in the same position. Matched generically
+// by shape rather than a second fixed name.
+const ANY_MX_PATH_PREFIX_PATTERN = /^\S*\.mx: /;
+
+function stripAnyPathPrefix(message: string): string {
+  return message.replace(ANY_MX_PATH_PREFIX_PATTERN, "");
+}
 
 function stripPathPrefix(message: string): string {
   return message.replace(ERROR_PREFIX_PATTERN, "");
@@ -157,6 +168,44 @@ function templateOf(code: string): string | null {
   return match ? (JSON.parse(match[1] as string) as string) : null;
 }
 
+/**
+ * Typechecks an emitted tag component module for real, with
+ * `ts.createProgram` and `@angular/core` on the type path — `parseTemplate`
+ * alone only proves the `template:` string is syntax Angular accepts, and
+ * never sees the surrounding module. This is exactly the bug class the
+ * `Input`/`export interface Input` collision was (`TS2440`): every existing
+ * gate here passed while a real `ng build` failed on every tag declaring at
+ * least one input. Returns the formatted diagnostics, or `null` when clean.
+ */
+function typecheckTagModule(code: string): string | null {
+  const dir = mkdtempSync(join(here, ".typecheck-tmp-"));
+  try {
+    const filePath = join(dir, "tag.ts");
+    writeFileSync(filePath, code);
+
+    const program = ts.createProgram([filePath], {
+      strict: true,
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      experimentalDecorators: true,
+      skipLibCheck: true,
+      noEmit: true,
+      types: [],
+    });
+
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    if (diagnostics.length === 0) return null;
+    return ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+      getCanonicalFileName: (f) => f,
+      getCurrentDirectory: () => dir,
+      getNewLine: () => "\n",
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export function runAngularTable(update: boolean): {
   rows: Row[];
   failed: boolean;
@@ -180,6 +229,7 @@ export function runAngularTable(update: boolean): {
   const passFixtures: string[] = [];
   const errorFixtures: string[] = [];
   const tagFixtures: string[] = [];
+  const tagErrorFixtures: string[] = [];
   for (const dir of dirs) {
     const hasInput = existsSync(join(fixturesRoot, dir, "input.mx"));
     const hasExpected = existsSync(join(fixturesRoot, dir, "expected.html"));
@@ -189,13 +239,22 @@ export function runAngularTable(update: boolean): {
     // (A3's two output kinds: a `.mx` compiles to one of two very different
     // artifacts on this host).
     const hasTag = existsSync(join(fixturesRoot, dir, "expected.ts"));
-    const kinds = [hasExpected, hasError, hasTag].filter(Boolean).length;
-    if (!hasInput || kinds !== 1) {
+    // A tag fixture whose own compile is expected to *throw* has neither
+    // `expected.ts` nor `expected.html` — only `expected.error.txt`, plus a
+    // `tags/` marker (its own `tag-` name prefix) distinguishing it from an
+    // ordinary page-level error fixture, which compiles through `compile()`
+    // rather than `compileTagModuleFile`.
+    const hasTagError = hasError && dir.startsWith("tag-");
+    const kinds = [hasExpected, hasError && !hasTagError, hasTag].filter(
+      Boolean,
+    ).length;
+    if (!hasInput || (kinds !== 1 && !hasTagError)) {
       throw new Error(
         `fixture "${dir}" must have input.mx and exactly one of expected.html / expected.error.txt / expected.ts`,
       );
     }
     if (hasExpected) passFixtures.push(dir);
+    else if (hasTagError) tagErrorFixtures.push(dir);
     else if (hasTag) tagFixtures.push(dir);
     else errorFixtures.push(dir);
   }
@@ -203,7 +262,8 @@ export function runAngularTable(update: boolean): {
   if (
     passFixtures.length === 0 &&
     errorFixtures.length === 0 &&
-    tagFixtures.length === 0
+    tagFixtures.length === 0 &&
+    tagErrorFixtures.length === 0
   ) {
     console.error(
       `oracle:angular: fixture glob expanded to nothing under ${fixturesRoot}`,
@@ -402,6 +462,23 @@ export function runAngularTable(update: boolean): {
       continue;
     }
 
+    // `parseTemplate` above only proves the extracted template string is
+    // syntax Angular accepts — it never sees the surrounding module, so the
+    // `Input`/`export interface Input` collision (TS2440) compiled clean
+    // through every gate above until a real `ng build` hit it. This is the
+    // real `tsc` pass that closes that gap.
+    const typeErrors = typecheckTagModule(code);
+    if (typeErrors !== null) {
+      rows.push({
+        fixture: name,
+        kind: "tag",
+        verdict: "fail",
+        detail: `emitted module failed to typecheck:\n${typeErrors}`,
+      });
+      failed = true;
+      continue;
+    }
+
     rows.push({ fixture: name, kind: "tag", verdict: "pass" });
   }
 
@@ -443,6 +520,60 @@ export function runAngularTable(update: boolean): {
     }
 
     rows.push({ fixture: name, kind: "error", verdict: "pass" });
+  }
+
+  // A tag whose own compile must throw — unlike `errorFixtures` above,
+  // compiled through `compileTagModuleFile` (a tag file is its own
+  // compilation unit, task 1.7), not `compile()` against a page. A page
+  // calling such a tag does not itself throw: the call site resolves
+  // against the tag's *cached metadata* (`{ readsContent, attributeTags }`),
+  // never the tag's own emitted host module, so this error is only
+  // observable where `mx-angular build` actually compiles the tag file.
+  for (const name of tagErrorFixtures) {
+    const dir = join(fixturesRoot, name);
+    const tagName = name.replace(/^tag-/, "");
+    const expectedMessage = readFileSync(
+      join(dir, "expected.error.txt"),
+      "utf8",
+    ).trim();
+    const inputPath = stageTag(dir, `${tagName}.mx`);
+
+    let thrown: string | null = null;
+    try {
+      compileTagModuleFile(inputPath, {
+        customTags: getCustomTags(inputPath) as never,
+      });
+    } catch (err) {
+      thrown = stripStagedDir(
+        stripAnyPathPrefix((err as Error).message),
+        inputPath,
+      );
+    }
+
+    if (thrown === null) {
+      rows.push({
+        fixture: name,
+        kind: "tag",
+        verdict: "fail",
+        detail:
+          "expected a TranslateError, but compileTagModuleFile() did not throw",
+      });
+      failed = true;
+      continue;
+    }
+
+    if (thrown !== expectedMessage) {
+      rows.push({
+        fixture: name,
+        kind: "tag",
+        verdict: "fail",
+        detail: `expected error ${JSON.stringify(expectedMessage)}, got ${JSON.stringify(thrown)}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    rows.push({ fixture: name, kind: "tag", verdict: "pass" });
   }
 
   const nameWidth = Math.max(8, ...rows.map((r) => r.fixture.length));
