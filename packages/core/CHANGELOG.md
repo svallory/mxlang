@@ -2,6 +2,18 @@
 
 ## 0.1.0 (unreleased)
 
+### `Expr` gains a file-absolute span (core contract C4)
+
+`Expr.span?: SourceSpan` carries file-absolute byte offsets of an
+expression's own authored source text, filled by `exprOf` for every
+construction site (attribute values, spreads, interpolations, `<for>`
+sources and keys, `<const>`/`<return>` initializers, component call
+arguments) and absent only for a synthesized `Expr` or a fabricated literal
+default — never a fabricated span pointing at unrelated text. Additive: no
+existing field changed shape. `mapping.ts` gains `mappedExpr(expr)`, a thin
+wrapper over `mapped(expr.code, expr.span ?? null)`; no host adopts it in
+this change.
+
 ### `<return>` and `/var`: a tag hands one value back (decision 95)
 
 A template may end with `<return value=EXPR/>`, and a caller binds that value
