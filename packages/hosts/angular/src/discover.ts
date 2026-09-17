@@ -7,22 +7,17 @@
 import {
   existsSync,
   globSync,
-  lstatSync,
   readdirSync,
   readFileSync,
   realpathSync,
 } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import {
-  type DiscoveredTag,
+  discoverProjectTags,
   type MxTagsEntry,
   normalizeMxTags,
-  scanCached,
 } from "@mxlang/core";
 import type { AngularConfig } from "./config.ts";
-
-/** `@mxlang/core`'s own fixed directory name for a package's tags (`scan.ts`'s `TAGS_DIR`). */
-const TAGS_DIR = "tags";
 
 export interface DiscoverDiagnostic {
   file: string;
@@ -78,11 +73,14 @@ export interface DiscoverResult {
   overlapWarnings: string[];
   diagnostics: DiscoverDiagnostic[];
   /**
-   * Every `tags/` directory found under `projectDir` — including one whose
-   * only contents are sidecar `.tag.ts` files with no `.mx` template, which
-   * never appear in `files` (that list is `.mx` only). A watcher needs this
-   * to know which directories to watch even when they contain no `.mx` file
-   * of their own.
+   * Every `tags/` directory `discoverProjectTags` walked, plus every
+   * `mx.tags` entry directory claimed for `"angular"` — including one that
+   * is empty, or whose every name was shadowed by a shallower `tags/`
+   * directory of the same name, or that holds only sidecar `.tag.ts` files
+   * with no `.mx` template (none of which leave a `DiscoveredTag` behind, so
+   * deriving this list from surviving tags alone would silently drop it). A
+   * watcher needs the complete list to know which directories to watch even
+   * when one currently yields nothing.
    */
   tagDirectories: string[];
 }
@@ -118,165 +116,104 @@ function expandInclude(
   return matched;
 }
 
-/** One `tags/` directory, plus the nearest package boundary above it — the directory whose own `mx.tags` (and `hosts` filter) governs it, matching core's upward-walk semantics (`scan.ts:706-727`): a file's tag index comes from the *nearest* `package.json` above it, not the project root. */
-interface TagsDirEntry {
-  dir: string;
-  /** The nearest ancestor directory (inclusive) holding a `package.json`, or `undefined` if none exists above it within the walk. */
-  packageBoundary: string | undefined;
-}
-
 /**
- * Finds every `tags/` directory under `dir`, plus every distinct package
- * boundary encountered (a directory holding a `package.json`). Always
- * recurses past a nested `package.json` — core's own scan never refuses to
- * look inside a subdirectory merely because it happens to be a separate
- * package; it just changes which `package.json`'s `mx.tags` governs
- * anything found there. `excludedMxTagsDirs` reads each `tagsDir`'s own
- * `packageBoundary` to decide which `mx.tags` entries apply. Symlinked
- * entries are neither followed nor descended into: a symlink loop would
- * otherwise recurse without bound, and a symlink pointing outside the
- * project would let a `tags/` directory smuggle in files (and later,
- * outputs) from outside `projectDir`.
+ * `mx.tags` entries declaring `hosts` that exclude `"angular"` — read
+ * directly from `projectDir`'s own `package.json`, the only manifest
+ * `discoverProjectTags` itself consults (core's project boundary means a
+ * nested package's `mx.tags` is out of scope entirely, see the module
+ * doc). `ScanResult.directories` carries every `mx.tags` entry's directory
+ * unconditionally (`indexMxTagsEntries` pushes it before applying `hosts`),
+ * so this host must re-derive the exclusion itself to keep a
+ * different-host-only tag directory out of the watched set, the same as
+ * `ScanResult.tags`/`customTags` already do for the compiled tag map.
  */
-function walkForTagSources(
-  dir: string,
-  nearestPackageBoundary: string | undefined,
-  diagnostics: DiscoverDiagnostic[],
-): { tagsDirs: TagsDirEntry[]; packageBoundaries: string[] } {
-  const tagsDirs: TagsDirEntry[] = [];
-  const packageBoundaries: string[] = [];
-  const ownBoundary = existsSync(join(dir, "package.json"))
-    ? dir
-    : nearestPackageBoundary;
-  if (ownBoundary === dir) packageBoundaries.push(dir);
-
-  let entries: string[];
+function excludedMxTagsDirs(projectDir: string): Set<string> {
+  const packageJson = join(projectDir, "package.json");
+  if (!existsSync(packageJson)) return new Set();
+  let manifest: { mx?: { tags?: unknown } } | undefined;
   try {
-    entries = readdirSync(dir);
-  } catch (err) {
-    // ENOENT (deleted mid-walk) is an ordinary race, not worth reporting;
-    // anything else (most notably EACCES) silently means "no tags found
-    // here" with zero explanation, which is worse than a diagnostic line.
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT") {
-      diagnostics.push({
-        file: dir,
-        message: `could not read directory: ${err instanceof Error ? err.message : String(err)}`,
-      });
-    }
-    return { tagsDirs, packageBoundaries };
+    manifest = JSON.parse(readFileSync(packageJson, "utf8"));
+  } catch {
+    // Silent, not swallowed: discoverProjectTags reads this same
+    // package.json through readManifest and already pushes a
+    // ScanResult.diagnostics entry naming it on a parse failure — pushing
+    // one here too would double-warn for one broken file.
+    return new Set();
   }
-  for (const entry of entries) {
-    if (entry === "node_modules" || entry.startsWith(".")) continue;
-    const full = join(dir, entry);
-    let stat: ReturnType<typeof lstatSync>;
-    try {
-      stat = lstatSync(full);
-    } catch {
-      // A race (entry removed between readdir and lstat) — not worth a
-      // diagnostic, since there is nothing left at `full` to point at.
-      continue;
-    }
-    if (stat.isSymbolicLink() || !stat.isDirectory()) continue;
-    if (entry === TAGS_DIR) {
-      tagsDirs.push({ dir: full, packageBoundary: ownBoundary });
-      continue;
-    }
-    const nested = walkForTagSources(full, ownBoundary, diagnostics);
-    tagsDirs.push(...nested.tagsDirs);
-    packageBoundaries.push(...nested.packageBoundaries);
+  let entries: MxTagsEntry[];
+  try {
+    entries = normalizeMxTags(manifest?.mx?.tags, projectDir, packageJson);
+  } catch {
+    // Same reasoning: discoverProjectTags's own indexMxTagsEntries calls
+    // normalizeMxTags against this manifest and reports an invalid
+    // `mx.tags` shape (e.g. a bad `hosts` entry) as a TranslateError caught
+    // and diagnosed upstream of this function ever running.
+    return new Set();
   }
-  return { tagsDirs, packageBoundaries };
-}
-
-/** `mx.tags` entries declaring `hosts` that exclude `"angular"` — not claimed by this host. */
-function excludedMxTagsDirs(
-  packageBoundaries: string[],
-  diagnostics: DiscoverDiagnostic[],
-): Set<string> {
   const excluded = new Set<string>();
-  for (const packageDir of packageBoundaries) {
-    const packageFile = join(packageDir, "package.json");
-    let manifest: { mx?: { tags?: unknown } } | undefined;
-    try {
-      manifest = JSON.parse(readFileSync(packageFile, "utf8"));
-    } catch (err) {
-      diagnostics.push({
-        file: packageFile,
-        message: `could not read package.json: ${err instanceof Error ? err.message : String(err)}`,
-      });
-      continue;
-    }
-    let entries: MxTagsEntry[];
-    try {
-      entries = normalizeMxTags(manifest?.mx?.tags, packageDir, packageFile);
-    } catch (err) {
-      diagnostics.push({
-        file: packageFile,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      continue;
-    }
-    for (const entry of entries) {
-      if (entry.hosts && !entry.hosts.includes("angular")) {
-        excluded.add(entry.dir);
-      }
+  for (const entry of entries) {
+    if (entry.hosts && !entry.hosts.includes("angular")) {
+      excluded.add(resolve(entry.dir));
     }
   }
   return excluded;
 }
 
 /**
- * Every `.mx` tag file discovered under `projectDir`: every `tags/`
- * directory's contents (`@mxlang/core`'s scan, called once per directory
- * found, since the scan only walks *upward* from a file) plus
- * `package.json#mx.tags` entries (discovered from any file under the
- * project root), minus any `mx.tags` entry whose `hosts` excludes
- * `"angular"` — a tag scoped to other hosts is not claimed here. A
- * discovered template outside `projectDir` (a followed `mx.tags` entry with
- * an absolute or `../`-escaping `dir`) is dropped for the same reason
- * `expandInclude` drops one.
+ * Every `.mx` tag file discovered under `projectDir`, via `@mxlang/core`'s
+ * project-wide enumerator (`discoverProjectTags`, the `"angular"` host
+ * filter already excluding any `mx.tags` entry that scopes itself to other
+ * hosts from `tags`/`customTags`). A discovered template or `tags/`
+ * directory outside `projectDir` (a followed `mx.tags` entry with an
+ * absolute or `../`-escaping `dir`, or a `tags/` directory symlink pointing
+ * outside the project — `discoverProjectTags`'s walk follows directory
+ * symlinks) is dropped for the same reason `expandInclude` drops one.
  */
 function discoverTagFiles(
   projectDir: string,
   realProjectDir: string,
   diagnostics: DiscoverDiagnostic[],
 ): { templates: Set<string>; tagDirectories: string[] } {
-  const { tagsDirs, packageBoundaries } = walkForTagSources(
-    projectDir,
-    undefined,
-    diagnostics,
-  );
-  const excludedDirs = excludedMxTagsDirs(packageBoundaries, diagnostics);
+  const result = discoverProjectTags(projectDir, { host: "angular" });
+  for (const d of result.diagnostics) {
+    diagnostics.push({ file: d.file, message: d.message });
+  }
 
   const templates = new Set<string>();
-  const tagDirectories = new Set<string>();
-  const collect = (result: ReturnType<typeof scanCached>) => {
-    for (const tag of result.tags.values() as IterableIterator<DiscoveredTag>) {
-      if (tag.sourceDir && excludedDirs.has(resolve(tag.sourceDir))) continue;
-      if (tag.sourceDir) {
-        const resolvedDir = resolve(tag.sourceDir);
-        if (isInside(realProjectDir, realResolve(resolvedDir))) {
-          tagDirectories.add(resolvedDir);
-        }
-      }
-      if (!tag.template) continue;
-      const resolved = resolve(tag.template);
-      if (isInside(realProjectDir, realResolve(resolved))) {
-        templates.add(resolved);
-      }
+  for (const tag of result.tags.values()) {
+    if (!tag.template) continue;
+    const resolved = resolve(tag.template);
+    if (isInside(realProjectDir, realResolve(resolved))) {
+      templates.add(resolved);
     }
-  };
+  }
 
-  // package.json#mx.tags and any tags/ directory an ancestor of the project
-  // root would find — discovered from the project root itself.
-  collect(scanCached(join(projectDir, "__mx_angular_probe__")));
+  // Every tags/ directory core walked, not just the ones a surviving tag's
+  // sourceDir points at: an empty tags/ dir, or one whose every name was
+  // shadowed by a shallower tags/ dir of the same name, leaves no
+  // DiscoveredTag behind but must still be watched.
+  const excludedDirs = excludedMxTagsDirs(projectDir);
+  const tagDirectories = new Set<string>();
+  for (const dir of result.directories) {
+    const resolvedDir = resolve(dir);
+    if (excludedDirs.has(resolvedDir)) continue;
+    if (!isInside(realProjectDir, realResolve(resolvedDir))) continue;
+    tagDirectories.add(resolvedDir);
 
-  for (const tagsDir of tagsDirs) {
-    collect(scanCached(join(tagsDir.dir, "__mx_angular_probe__")));
-    const resolvedDir = resolve(tagsDir.dir);
-    if (isInside(realProjectDir, realResolve(resolvedDir))) {
-      tagDirectories.add(resolvedDir);
+    // core's own indexDirectory swallows a readdir failure silently (a
+    // missing mx.tags-named directory is diagnosed separately, above, but
+    // an existing, unreadable one — EACCES — is not); probe it once here so
+    // an author learns why a subtree yielded nothing, rather than the
+    // silent "found zero tags" the old per-directory walk also used to
+    // report through a diagnostic.
+    if (!existsSync(resolvedDir)) continue;
+    try {
+      readdirSync(resolvedDir);
+    } catch (err) {
+      diagnostics.push({
+        file: resolvedDir,
+        message: `could not read directory: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
   }
 

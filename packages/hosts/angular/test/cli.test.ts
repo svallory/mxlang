@@ -1,7 +1,9 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -12,7 +14,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { build, checkOverwriteGuard } from "../src/build.ts";
 import { runCli } from "../src/cli.ts";
-import { readAngularConfig } from "../src/config.ts";
+import { type AngularConfig, readAngularConfig } from "../src/config.ts";
 import { discoverFiles } from "../src/discover.ts";
 
 let projectDir: string;
@@ -283,18 +285,15 @@ describe("build: tag routing", () => {
     ).toBe(true);
   });
 
-  it("discovers a tags/ directory two levels below a nested package boundary", () => {
-    // proj/a has no package.json; proj/a/b does. A tags/ dir under
-    // proj/a/b must still be discovered as b's own tag index — the walk
-    // must not stop merely because it passed through a's non-package
-    // directory on the way, nor because b's own package.json marks a
-    // separate scan root: it changes which mx.tags applies, not whether
-    // the walk continues.
+  it("discovers a tags/ directory two levels below a project-root-owned path", () => {
+    // proj/a has no package.json; proj/a/b doesn't either. A tags/ dir
+    // under proj/a/b must still be discovered as the project root's own
+    // tag index — the walk must not stop merely because it passed through
+    // non-package directories on the way.
     writeProject({
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["a/b/pages/**/*.mx"] } },
       }),
-      "a/b/package.json": JSON.stringify({ name: "nested" }),
       "a/b/pages/home.mx": "<div>home</div>",
       "a/b/tags/y.mx": "<span>y</span>",
     });
@@ -308,6 +307,149 @@ describe("build: tag routing", () => {
     // Misrouted as a page would have emitted a/b/tags/y.html — must not.
     build(projectDir);
     expect(existsSync(join(projectDir, "a/b/tags/y.html"))).toBe(false);
+  });
+
+  it("does not descend into a nested package's own tags/ directory", () => {
+    // @mxlang/core's discoverProjectTags (packages/core/src/scan.ts) treats
+    // any directory holding its own package.json, other than the project
+    // root, as a separate project's boundary and never descends into it —
+    // its tags belong to *its* project, not this one. This is a behavior
+    // change from the angular watcher's own former walk, which continued
+    // past a nested package.json (only switching which mx.tags governed
+    // tags found underneath); adopting core's shared enumerator means a
+    // nested package's tags/ directory is no longer discovered here.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["a/b/pages/**/*.mx"] } },
+      }),
+      "a/b/package.json": JSON.stringify({ name: "nested" }),
+      "a/b/pages/home.mx": "<div>home</div>",
+      "a/b/tags/y.mx": "<span>y</span>",
+    });
+
+    const { files } = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    const tag = files.find((f) => f.path.endsWith("a/b/tags/y.mx"));
+    expect(tag).toBeUndefined();
+  });
+
+  it("watches an empty tags/ directory and a tags/ directory whose names were all shadowed", () => {
+    // tagDirectories must come from every tags/ directory core's walk
+    // visited, not only from a surviving DiscoveredTag's own sourceDir:
+    // neither an empty directory nor one whose every name lost to a
+    // shallower tags/ directory of the same name leaves a DiscoveredTag
+    // behind, but a watcher still needs to know about both.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/home.mx": "<div>home</div>",
+      "tags/icon.mx": "<span>icon</span>",
+      "src/tags/icon.mx": "<span>shadowed</span>",
+    });
+    mkdirSync(join(projectDir, "empty/tags"), { recursive: true });
+
+    const { tagDirectories } = discoverFiles(
+      projectDir,
+      readAngularConfig(projectDir),
+    );
+
+    expect(tagDirectories).toContain(join(projectDir, "tags"));
+    expect(tagDirectories).toContain(join(projectDir, "src/tags"));
+    expect(tagDirectories).toContain(join(projectDir, "empty/tags"));
+  });
+
+  it("warns when a tags/ directory exists but cannot be read", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/home.mx": "<div>home</div>",
+    });
+    const tagsDir = join(projectDir, "tags");
+    mkdirSync(tagsDir, { recursive: true });
+    chmodSync(tagsDir, 0o000);
+
+    try {
+      // root running the suite ignores permission bits entirely, so the
+      // directory stays readable and there is nothing to assert.
+      const stillReadable = (() => {
+        try {
+          readdirSync(tagsDir);
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (stillReadable) return;
+
+      const { diagnostics } = discoverFiles(
+        projectDir,
+        readAngularConfig(projectDir),
+      );
+
+      expect(
+        diagnostics.some(
+          (d) => d.file === tagsDir && d.message.includes("could not read"),
+        ),
+      ).toBe(true);
+    } finally {
+      chmodSync(tagsDir, 0o755);
+    }
+  });
+
+  it("reports a broken package.json exactly once, from discoverProjectTags's own manifest cache", () => {
+    // excludedMxTagsDirs (discover.ts) re-reads package.json itself and
+    // swallows a JSON.parse failure silently. This proves the guarantee
+    // that silence relies on: discoverProjectTags's own readManifest
+    // already reads and diagnoses the same file, so a second diagnostic
+    // from excludedMxTagsDirs's catch would double-warn for one broken
+    // file. Called directly with a hand-built AngularConfig, bypassing
+    // readAngularConfig (which reads package.json independently and would
+    // throw on this same malformed JSON before discoverFiles ever runs —
+    // see the next test for that path's own contract).
+    writeProject({ "src/home.mx": "<div>home</div>" });
+    writeFileSync(join(projectDir, "package.json"), "{ broken", "utf8");
+
+    const config: AngularConfig = {
+      include: ["src/**/*.mx"],
+      pageExtension: ".html",
+      tagExtension: ".ts",
+      tagSelectorPrefix: "mx-",
+      onError: "keep-last",
+    };
+    const { diagnostics } = discoverFiles(projectDir, config);
+
+    const packageJson = join(projectDir, "package.json");
+    const matching = diagnostics.filter((d) => d.file === packageJson);
+    expect(matching).toHaveLength(1);
+    expect(matching[0]?.message).toContain("could not be parsed as JSON");
+  });
+
+  it("an invalid mx.tags shape is a fatal, positioned error — not a silently continued build", () => {
+    // discoverProjectTags's own indexMxTagsEntries calls normalizeMxTags
+    // uncaught: an invalid mx.tags entry throws a TranslateError through
+    // discoverFiles rather than being recorded as a diagnostic. This is
+    // deliberate, matching readAngularConfig's own fatal-on-bad-config
+    // contract elsewhere in this file ("rejects an unrecognized key,
+    // positioned against package.json") — silently continuing with an
+    // incomplete tag index would be worse than failing loud. excludedMxTagsDirs's
+    // own normalizeMxTags catch is therefore never reached on this path:
+    // discoverProjectTags throws before excludedMxTagsDirs runs at all.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: {
+          host: "angular",
+          angular: { include: ["src/**/*.mx"] },
+          tags: [{ dir: "tags", hosts: "not-an-array" }],
+        },
+      }),
+      "src/home.mx": "<div>home</div>",
+    });
+
+    expect(() =>
+      discoverFiles(projectDir, readAngularConfig(projectDir)),
+    ).toThrow(/mx\.tags\[0\]\.hosts.*must be an array of strings/);
   });
 });
 
@@ -378,7 +520,12 @@ describe("checkOverwriteGuard", () => {
 });
 
 describe("security: symlinks and path escape", () => {
-  it("does not follow a symlinked tags/ directory (may point outside the project)", () => {
+  it("drops tags from a symlinked tags/ directory pointing outside the project", () => {
+    // @mxlang/core's discoverProjectTags walk does follow a directory
+    // symlink (packages/core/src/scan.ts's walkProjectDirectories) — this
+    // host's own containment check (isInside + realResolve) is what drops
+    // the escape, for both the discovered template and the watched
+    // directory list.
     const outsideDir = mkdtempSync(join(tmpdir(), "mx-angular-outside-"));
     try {
       mkdirSync(join(outsideDir, "tags"), { recursive: true });
@@ -395,12 +542,15 @@ describe("security: symlinks and path escape", () => {
       });
       symlinkSync(join(outsideDir, "tags"), join(projectDir, "tags"), "dir");
 
-      const { files } = discoverFiles(
+      const { files, tagDirectories } = discoverFiles(
         projectDir,
         readAngularConfig(projectDir),
       );
 
       expect(files.some((f) => f.path.includes("leak.mx"))).toBe(false);
+      expect(tagDirectories.some((d) => d === join(projectDir, "tags"))).toBe(
+        false,
+      );
     } finally {
       rmSync(outsideDir, { recursive: true, force: true });
     }
