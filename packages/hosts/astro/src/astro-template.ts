@@ -604,6 +604,9 @@ export function lowerAstroMx(
       filename,
     );
     ctx.customTags = options.customTags;
+    // An `.amx` file is an Astro component module, so it has a declaration to
+    // name and a tag may call itself without importing itself.
+    ctx.emitsModule = true;
     const ir = lower(ctx, body);
     const statements: HoistedStatement[] = [
       ...ir.imports,

@@ -52,6 +52,7 @@ import {
   transformCustomTag,
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
 import type {
   Attr,
@@ -998,6 +999,30 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
     runCustomTagAnalyze(ctx, body);
   }
 
+  // Computed before the body walk, because a self-recursive call resolves to
+  // it *during* that walk: `bindingForTemplate` returns this name instead of
+  // minting a self-import (invariant §7.5-7). Minted against what the file
+  // already binds, so the declaration a host emits can never shadow an import
+  // or a `<define>`. `ctx.source` is scanned too, the same belt-and-braces
+  // `generatedBinding` uses: a name can reach the emitted module without
+  // passing through `ctx.imports`/`ctx.defines` (a `<const>`, a tag param).
+  //
+  // Only when the caller actually emits a module. A `.solid.mx` *region* is
+  // an expression with no `export default function` of its own, so a name
+  // here would be one nothing declares — and `bindingForTemplate` would hand
+  // a region calling its own file's tag a dangling identifier rather than an
+  // error. `=`, not `??=`: a reused or pre-seeded `Ctx` must not keep a
+  // previous file's name.
+  ctx.exportName = ctx.emitsModule
+    ? exportNameFor(
+        ctx.filename,
+        (name) =>
+          ctx.imports.has(name) ||
+          ctx.defines.has(name) ||
+          new RegExp(`(^|[^\\w$])${name}([^\\w$]|$)`).test(ctx.source),
+      )
+    : undefined;
+
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
 
   const ir: Ir = {
@@ -1012,6 +1037,7 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
     })),
     body: [],
     tagMetadata: { readsContent: false, attributeTags: [] },
+    exportName: ctx.exportName,
   };
 
   for (const node of nodes) {
@@ -1088,6 +1114,9 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
     ctx.filename,
   );
   scratch.customTags = customTags;
+  // Mirrors the parent: this walk is the same file, so whether it emits a
+  // module is the same answer.
+  scratch.emitsModule = ctx.emitsModule;
   scratch.customTagStores = ctx.customTagStores;
   scratch.customTagGensym = ctx.customTagGensym;
   // Absorbed rather than forwarded: every warning this walk raises is raised
@@ -1115,6 +1144,9 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
     tag.filename,
   );
   templateCtx.customTags = ctx.customTags;
+  // A tag unit is a file that compiles to a module of its own, whatever the
+  // caller is — so its self-recursive calls resolve to its own export.
+  templateCtx.emitsModule = true;
   // Shared by reference, which is the whole point of boxing the counter: a
   // name minted while compiling this unit and one minted by the caller must
   // never be the same serial. The unit's names do land in the unit's own

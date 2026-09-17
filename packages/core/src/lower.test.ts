@@ -638,6 +638,38 @@ describe("the lowerer runs under the real front door", () => {
     );
     expect(code).toBe("p");
   });
+
+  it("names the export after the file", () => {
+    const { code } = compileSource(
+      "<p>hi</p>\n",
+      "/tmp/mx-core-test/table-of.mx",
+      fakeDeclarations(),
+      { emitIr: (ir) => ir.exportName ?? "missing" },
+    );
+    expect(code).toBe("TableOf");
+  });
+
+  it("re-mints the export name against a real binding in the file", () => {
+    // The synthetic `taken` set in `export-name.test.ts` proves the re-mint
+    // logic; this proves the *wiring* — that `lower` passes the file's own
+    // bindings to it. `import Probe from …` puts `Probe` in `ctx.imports`,
+    // which is exactly the name `probe.mx` would otherwise take.
+    const { code } = compileSource(
+      'import Probe from "./other.ts"\n<p>hi</p>\n',
+      "/tmp/mx-core-test/probe.mx",
+      fakeDeclarations(),
+      { emitIr: (ir) => ir.exportName ?? "missing" },
+    );
+    expect(code).toBe("Probe2");
+  });
+
+  it("leaves the export name unset when the compilation is not a module", () => {
+    // `lowerSource` never sets `Ctx.emitsModule`, which is the shape of a
+    // `.solid.mx` region: an expression spliced into someone else's module,
+    // declaring nothing. No name is what makes a self-call a positioned
+    // error rather than a reference to a binding that does not exist.
+    expect(lowerSource("<p>hi</p>\n").exportName).toBeUndefined();
+  });
 });
 
 /**

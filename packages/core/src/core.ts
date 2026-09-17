@@ -224,6 +224,27 @@ export interface Ctx {
    * must never mint the same serial.
    */
   customTagGensym: { n: number };
+  /**
+   * The name this file's default export is declared under, once lowering has
+   * computed it.
+   *
+   * Set by `lower` before the body walk, because a self-recursive tag call
+   * resolves to it *during* that walk — `bindingForTemplate` returns this
+   * instead of minting an import of the file into itself (invariant §7.5-7).
+   * `Ir.exportName` carries the same value onward to the host emitters.
+   */
+  exportName?: string;
+  /**
+   * This compilation emits a module with a default export.
+   *
+   * False for a `.solid.mx` **region**, which is an expression spliced into
+   * someone else's module and has no `export default function` of its own.
+   * It gates the export name and, through it, the self-recursion branch: a
+   * region calling its own file's tag must be a positioned error, not a
+   * reference to a declaration that does not exist. Set by the whole-file
+   * entry points; absent means "not a module".
+   */
+  emitsModule?: boolean;
   /** Resolved template path -> default import binding, authored or injected. */
   customTagImports?: Map<string, string>;
   /** Imports synthesized while lowering discovered template calls. */

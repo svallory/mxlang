@@ -21,12 +21,16 @@
  *
  * export interface Input { … }
  *
- * export default function (props: Input) {
+ * export default function <Name>(props: Input) {
  *   const input = { ...props, content: props.content ?? props.children };
  *   <const> and <define> bindings, in source order
  *   return (<jsx/>);
  * }
  * ```
+ *
+ * `<Name>` is derived from the file (`card.mx` -> `Card`), never anonymous:
+ * a tag whose template calls its own name resolves to that declaration, so
+ * self-recursion needs no self-import (design invariant §7.5-7).
  *
  * The template's own expressions read `input`, because that is the name MX
  * templates already use (`${input.title}`) and renaming it at the boundary
@@ -60,6 +64,7 @@ import {
   type Ir,
   type IrNode,
   type MappedCode,
+  moduleExportName,
   type RawSourceMap,
 } from "@mxlang/core";
 import {
@@ -212,7 +217,10 @@ export function emitModuleWithMappings(
     "",
     ir.inputInterface?.code ?? "export interface Input {}",
     "",
-    "export default function (props: Input) {",
+    // Named after the file, never anonymous: a tag whose template calls its
+    // own name resolves to this declaration, so self-recursion needs no
+    // self-import (design invariant §7.5-7).
+    `export default function ${moduleExportName(ir, "@mxlang/preact")}(props: Input) {`,
   );
   // Marko names a component's ordinary children `content`, and a template
   // reads them as `${input.content}`. JSX has its own name for the same slot —

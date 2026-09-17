@@ -345,4 +345,24 @@ export interface Ir {
   body: IrNode[];
   /** Facts about this file consumed by discovered callers and host typing. */
   tagMetadata: TemplateMetadata;
+  /**
+   * The PascalCase name this module's default export is declared under.
+   *
+   * Derived from the file's basename (`icon.mx` -> `Icon`) and re-minted if it
+   * collides with a binding the file already has, so it is always a valid,
+   * free identifier. Every host that emits a module emits
+   * `export default function <exportName>(…)` rather than an anonymous
+   * function, which is what makes **a tag's self-recursion need no import**
+   * (design invariant §7.5-7): a template that calls its own name resolves to
+   * this declaration, in its own module scope.
+   *
+   * Computed at lower time rather than passed to each emitter, because the
+   * collision check needs the file's bindings and those live on `Ctx`.
+   *
+   * **Absent when this compilation is not a module**: a `.solid.mx` region is
+   * an expression spliced into someone else's module, so there is no
+   * declaration to name. A host that emits a module sets `Ctx.emitsModule`
+   * and can rely on this being present.
+   */
+  exportName?: string;
 }

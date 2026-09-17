@@ -62,6 +62,48 @@ describe("wrapAsPage", () => {
     expect(wrapAsPage("export const x = 1;\n")).toBeNull();
   });
 
+  it("renames the branded render function, not a helper that also takes input", () => {
+    // The matcher anchors on the name the branded tail declares. Anchored on
+    // "the first function taking `input`" instead — which is what dropping
+    // the literal `render` left behind — this renames `helperOnInput` and
+    // leaves the real render function untouched, so the page renders nothing.
+    // A hoisted helper or a bundler-inlined tag unit puts such a function
+    // above the render function for real.
+    const code = [
+      "function helperOnInput(input) { return input; }",
+      "function About(input) { return helperOnInput(input); }",
+      'Object.defineProperty(About, Symbol.for("mx.component"), { value: true });',
+      "export default About;",
+      "",
+    ].join("\n");
+
+    const wrapped = wrapAsPage(code);
+
+    expect(wrapped).not.toBeNull();
+    expect(wrapped).toContain("function __mxRenderPage(input) {");
+    // The helper keeps its own name and its own body.
+    expect(wrapped).toContain(
+      "function helperOnInput(input) { return input; }",
+    );
+    expect(wrapped).not.toContain(
+      "function __mxRenderPage(input) { return input; }",
+    );
+  });
+
+  it("returns null when the brand and the default export name disagree", () => {
+    // Both halves of the tail must name the same function. A module where
+    // they differ is not `brandRender`'s output, and wrapping it would brand
+    // one function while exporting another.
+    const code = [
+      'function About(input) { return ""; }',
+      'Object.defineProperty(Other, Symbol.for("mx.component"), { value: true });',
+      "export default Different;",
+      "",
+    ].join("\n");
+
+    expect(wrapAsPage(code)).toBeNull();
+  });
+
   it("wraps a no-layout page in createComponent, returning renderTemplate of unescapeHTML", () => {
     const compiled = compilePage("<h1>Hello</h1>\n");
     const wrapped = wrapAsPage(compiled);

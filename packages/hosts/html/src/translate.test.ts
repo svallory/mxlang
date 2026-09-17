@@ -211,7 +211,7 @@ describe("statement blocks", () => {
     const { code } = compile(src(body), file);
     expect(code).toContain("const S = 41 + 1");
     expect(code.indexOf("const S = 41 + 1")).toBeLessThan(
-      code.indexOf("function render(input: Input): string {"),
+      code.indexOf("function Probe(input: Input): string {"),
     );
     expect(code).toContain("escape(S)");
   });
@@ -363,8 +363,8 @@ describe("module shape", () => {
   it("imports escape and default-exports the renderer", () => {
     const { code } = compile(src("<p>hi</p>"), file);
     expect(code).toContain('import { escape } from "@mxlang/html";');
-    expect(code).toContain("function render(input: Input): string {");
-    expect(code).toContain("export default render;");
+    expect(code).toContain("function Probe(input: Input): string {");
+    expect(code).toContain("export default Probe;");
   });
 
   it("brands the default export so a host's `check()` can recognize it", () => {
@@ -379,29 +379,32 @@ describe("module shape", () => {
     // one on disk, so the two sides cannot agree by import identity.
     const { code } = compile(src("<p>hi</p>"), file);
     expect(code).toContain(
-      'Object.defineProperty(render, Symbol.for("mx.component"), { value: true });',
+      'Object.defineProperty(Probe, Symbol.for("mx.component"), { value: true });',
     );
   });
 
   it("throws rather than silently skipping the brand when the export line drifts", () => {
-    // The brand is injected by matching a literal, so a change to the core's
-    // emitted export line would otherwise make `brandRender` a no-op: the
-    // module compiles, nothing reports a problem, and every `check()` in the
-    // Astro host answers false — a whole host quietly failing to claim its own
+    // The brand is injected by matching the emitted export line's *shape*, so
+    // a change to it would otherwise make `brandRender` a no-op: the module
+    // compiles, nothing reports a problem, and every `check()` in the Astro
+    // host answers false — a whole host quietly failing to claim its own
     // components. Decision 61: fail loud at the seam that broke.
+    //
+    // Drifted in the parameter type, which the shape pins; the *name* is
+    // deliberately not pinned, since it is derived from the filename now.
     const drifted = [
       'import { escape } from "@mxlang/html";',
       "",
       "export interface Input {}",
       "",
-      "export default function render(input: Input): string {",
+      "export default function Probe(props: Input): string {",
       '  return "";',
       "}",
       "",
     ].join("\n");
 
     expect(() => brandRender(drifted)).toThrow(
-      /does not contain the expected default export line/,
+      /does not match the expected default export shape/,
     );
   });
 
@@ -413,16 +416,16 @@ describe("module shape", () => {
     const { code } = compile(src("<p class={a: true}>hi</p>"), file);
     expect(code).toContain("function classValue(value) {");
     expect(code).toContain(
-      'Object.defineProperty(render, Symbol.for("mx.component"), { value: true });',
+      'Object.defineProperty(Probe, Symbol.for("mx.component"), { value: true });',
     );
-    expect(code).toContain("export default render;");
+    expect(code).toContain("export default Probe;");
   });
 
   it("hoists imports and static blocks above the render function", () => {
     const body = 'static const G = "hi"\n<p>x</p>';
     const { code } = compile(src(body), file);
     expect(code.indexOf('const G = "hi"')).toBeLessThan(
-      code.indexOf("function render(input: Input): string {"),
+      code.indexOf("function Probe(input: Input): string {"),
     );
   });
 });
@@ -452,24 +455,24 @@ describe("the strict policy (decision 68's fold): reactive tags error by name", 
     [
       "<effect>",
       "<effect() { go() }/>",
-      "function render(input: Input): string {",
+      "function Probe(input: Input): string {",
     ],
     [
       "<lifecycle>",
       "<lifecycle onCreate() { go() }/>",
-      "function render(input: Input): string {",
+      "function Probe(input: Input): string {",
     ],
     [
       "<script>",
       "<script>go()</script>",
-      "function render(input: Input): string {",
+      "function Probe(input: Input): string {",
     ],
     [
       "client block",
       "client\n  const x = 1",
-      "function render(input: Input): string {",
+      "function Probe(input: Input): string {",
     ],
-    ["<id>", "<id/x/>", "function render(input: Input): string {"],
+    ["<id>", "<id/x/>", "function Probe(input: Input): string {"],
   ])(
     "the default policy still renders %s the same as before (unaffected by strict)",
     (_name, body, expectedSubstring) => {
@@ -569,13 +572,13 @@ describe("a tag template compiles as its own module", () => {
       unitFile,
     );
     expect(code).toContain(
-      "function render(input: Input & { content?: () => string }): string",
+      "function Unit(input: Input & { content?: () => string }): string",
     );
   });
 
   it("leaves Input alone when the template never reads content", () => {
     const { code } = compile(src("<section>fixed</section>"), unitFile);
-    expect(code).toContain("function render(input: Input): string");
+    expect(code).toContain("function Unit(input: Input): string");
     expect(code).not.toContain("content?: () => string");
   });
 
@@ -589,7 +592,7 @@ describe("a tag template compiles as its own module", () => {
       unitFile,
     );
     const statementLine = code.indexOf('const LABEL = "ok"');
-    const renderLine = code.indexOf("function render(");
+    const renderLine = code.indexOf("function Unit(");
     expect(statementLine).toBeGreaterThan(-1);
     // Module scope means *before* the render function, not hoisted into it.
     expect(statementLine).toBeLessThan(renderLine);
@@ -609,7 +612,13 @@ describe("a tag template compiles as its own module", () => {
     const { code } = compile(source, "/tmp/mx-translator-test/tags/tree.mx", {
       customTags: { tree },
     });
-    expect(code).toMatch(/import\s+\$mx_Tree\d+\s+from\s+"\.\/tree\.mx"/);
-    expect(code).toContain("function render(");
+    // Invariant §7.5-7: the render function is a named declaration, so the
+    // recursive call resolves to it in this module's own scope. Importing the
+    // file into itself works under ESM but is a module importing a binding it
+    // already has.
+    expect(code).not.toMatch(/import\s+\$mx_Tree\d+\s+from\s+"\.\/tree\.mx"/);
+    expect(code).toContain("function Tree(");
+    // The call site is the export's own name.
+    expect(code).toMatch(/Tree\(\{/);
   });
 });
