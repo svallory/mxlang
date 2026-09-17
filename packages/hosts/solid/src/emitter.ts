@@ -258,6 +258,19 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
         "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
         attr,
       );
+    // Phase A of `dom-events` (decision 101): core now lowers an element's
+    // `on<Name>`/`on-<exact>` to `kind: "event"`. This case is a deliberate
+    // TEMPORARY passthrough that reproduces byte-for-byte what the `dynamic`
+    // case did for the same attribute before the kind existed, so this PR is
+    // output-neutral; phase B replaces it with Solid's ruled emission
+    // (camelCase recomposed from `attr.event`, and a `ref`-callback fix-it for
+    // a dashed custom-event name Solid cannot express as a prop).
+    case "event":
+      return concatMapped(
+        " ",
+        mapped(attr.name, mapName ? attr.nameSpan : null),
+        `={${methodExpression(attr.value) ?? attr.value.code}}`,
+      );
     case "dynamic": {
       if (attr.name === "style" && attr.value.shape !== "object") {
         return fail("`style=` with a non-object value", attr);

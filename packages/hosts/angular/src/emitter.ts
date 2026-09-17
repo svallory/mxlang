@@ -275,6 +275,18 @@ function emitAttrs(
       case "boolean":
         out += ` ${attr.name}`;
         break;
+      // Phase A of `dom-events` (decision 101): core now lowers an element's
+      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough: it
+      // deliberately re-derives the name with this host's existing
+      // `domEventName` instead of reading `attr.event`, because today's
+      // `dynamic` path does exactly that and this PR must be output-neutral —
+      // the two differ precisely for `onDoubleClick` (`dblclick` here,
+      // `doubleclick` from core). Phase B deletes `IRREGULAR_EVENTS` and emits
+      // `(${attr.event})=` from core's resolved name, which is the whole point
+      // of the kind.
+      case "event":
+        out += ` (${domEventName(attr.name)})="(${esc(attr.value.code)})($event)"`;
+        break;
       case "dynamic": {
         const name = attr.name;
         if (EVENT_NAME.test(name)) {
