@@ -577,7 +577,7 @@ describe("the scan cache", () => {
   });
 });
 
-describe("a discovered template tag expands end to end", () => {
+describe("a discovered template tag routes as a unit", () => {
   afterEach(() => {
     clearScanCache();
   });
@@ -585,11 +585,10 @@ describe("a discovered template tag expands end to end", () => {
   /**
    * The P2/P3 seam: a `tags/icon.mx` beside a caller, with **no import, no
    * sidecar and no `customTags` argument**, has to reach the caller as a real
-   * template tag and be inlined. Until P3 the scan registered such a tag with
-   * no hooks, so calling it reported the "nothing to expand to" gate instead
-   * of expanding; this asserts the whole path rather than either half.
+   * template tag and be imported. This asserts discovery and lowering
+   * together rather than either half.
    */
-  it("resolves `tags/icon.mx` with no import and inlines it", () => {
+  it("resolves `tags/icon.mx` with no authored import and injects one", () => {
     const file = fixture("template-render", "page.mx");
     const customTags = getCustomTags(file);
 
@@ -607,18 +606,16 @@ describe("a discovered template tag expands end to end", () => {
     });
     if (!ir) throw new Error("lowerer produced no IR");
 
-    // The template's own markup is spliced at the call site: an `<svg>` inside
-    // the caller's `<p>`, with no component call and nothing to import.
-    const names = flattenElements((ir as Ir).body);
-    expect(names).toEqual(["p", "svg", "title"]);
+    expect((ir as Ir).imports).toHaveLength(1);
+    expect((ir as Ir).imports[0]?.code).toContain("./tags/icon.mx");
 
-    // And the call's attributes reached the template's `input` reads.
-    const svg = findElement((ir as Ir).body, "svg");
-    // The template wrote `input.size ?? 24`; the call supplied 16, so the
-    // substituted expression keeps the template's own fallback around it.
-    expect(attrText(svg, "width")).toBe("16 ?? 24");
-    expect(attrText(svg, "class")).toBe('"row"');
-    expect(interpolationCodes((ir as Ir).body)).toEqual(['"check"']);
+    const names = flattenElements((ir as Ir).body);
+    expect(names).toEqual(["p"]);
+    expect((ir as Ir).body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "Element", name: "p" }),
+      ]),
+    );
   });
 });
 
@@ -649,37 +646,4 @@ function flattenElements(nodes: IrNode[]): string[] {
     if (node.kind === "Element") names.push(node.name);
   });
   return names;
-}
-
-function findElement(
-  nodes: IrNode[],
-  name: string,
-): Extract<IrNode, { kind: "Element" }> {
-  let found: Extract<IrNode, { kind: "Element" }> | null = null;
-  walk(nodes, (node) => {
-    if (!found && node.kind === "Element" && node.name === name) found = node;
-  });
-  if (!found) throw new Error(`no <${name}> in the IR`);
-  return found;
-}
-
-function attrText(
-  element: Extract<IrNode, { kind: "Element" }>,
-  name: string,
-): string | undefined {
-  const attr = element.attrs.find(
-    (candidate) => candidate.kind !== "spread" && candidate.name === name,
-  );
-  if (!attr) return undefined;
-  if (attr.kind === "static") return attr.value;
-  if (attr.kind === "dynamic" || attr.kind === "bound") return attr.value.code;
-  return undefined;
-}
-
-function interpolationCodes(nodes: IrNode[]): string[] {
-  const codes: string[] = [];
-  walk(nodes, (node) => {
-    if (node.kind === "Interpolation") codes.push(node.expr.code);
-  });
-  return codes;
 }

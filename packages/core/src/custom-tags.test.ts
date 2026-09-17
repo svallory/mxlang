@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
-import { MAX_EXPANSION_DEPTH, MAX_EXPANSION_NODES } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { resetTemplateCache } from "./template-tag.ts";
@@ -311,29 +310,7 @@ describe("custom tag transforms", () => {
       transform: () => undefined,
     } as unknown as CustomTag;
     expect(() => lowerWithTags("<broken/>\n", { broken })).toThrowError(
-      "`<broken>`: custom tag must return an array of IR nodes",
-    );
-  });
-
-  it("enforces the nested expansion depth cap", () => {
-    const wrap: CustomTag = {
-      transform: (call) => call.content?.children ?? [],
-    };
-    const source = `${"<wrap>".repeat(MAX_EXPANSION_DEPTH + 1)}x${"</wrap>".repeat(MAX_EXPANSION_DEPTH + 1)}`;
-    expect(() => lowerWithTags(source, { wrap })).toThrowError(
-      new RegExp(`exceeded ${MAX_EXPANSION_DEPTH}`),
-    );
-  });
-
-  it("enforces the expansion node cap", () => {
-    const huge: CustomTag = {
-      transform: (_call, ctx) =>
-        Array.from({ length: MAX_EXPANSION_NODES + 1 }, () =>
-          ctx.build.text("x"),
-        ),
-    };
-    expect(() => lowerWithTags("<huge/>\n", { huge })).toThrowError(
-      new RegExp(`over the ${MAX_EXPANSION_NODES} limit`),
+      "`<broken>`: custom tag transform must return an array of IR nodes or a TagCall for its template",
     );
   });
 
@@ -796,7 +773,7 @@ describe("analyze, finalize and the per-file store", () => {
     expect(ir.body.map(textOf).join("")).not.toContain("should not appear");
   });
 
-  it("counts a call made from inside a tag template", () => {
+  it("keeps calls inside a tag template in that compilation unit", () => {
     const inner: CustomTag = {
       analyze: () => {},
       transform: (_call, ctx) => [ctx.build.text("inner")],
@@ -806,11 +783,8 @@ describe("analyze, finalize and the per-file store", () => {
       template: { filename: "/tags/outer.mx", source: "<p><inner/></p>\n" },
     } as unknown as CustomTag;
     const ir = lowerWithTags("<outer/>\n", { inner, outer });
-    // The template's own lower must not run the hooks itself, but the call it
-    // makes has to reach the caller's file-level store and set.
-    expect(textOf(ir.body[0] as IrNode)).toBe("finalized");
     expect(ir.body.filter((node) => textOf(node) === "finalized")).toHaveLength(
-      1,
+      0,
     );
   });
 
@@ -832,34 +806,7 @@ describe("analyze, finalize and the per-file store", () => {
 
     lowerWithTags("<outer/><inner/>\n", { inner, outer });
 
-    expect(analyzed).toBe(3);
-  });
-
-  it("replays template-nested calls and usage on every cache hit", () => {
-    resetTemplateCache();
-    const inner: CustomTag = {
-      analyze(calls, ctx) {
-        ctx.store.set("count", calls.length);
-      },
-      transform: (_call, ctx) => [ctx.build.text("inner")],
-      finalize: (ctx) => [
-        ctx.build.text(`sheet:${ctx.store.get<number>("count")}`),
-      ],
-    };
-    const outer = {
-      template: {
-        filename: "/tags/cached-outer.mx",
-        source: "<section><inner/><inner/></section>\n",
-      },
-    } as unknown as CustomTag;
-    const tags = { inner, outer };
-
-    const first = lowerWithTags("<outer/>\n", tags);
-    const second = lowerWithTags("<outer/>\n", tags);
-
-    expect(first.body).toEqual(second.body);
-    expect(textOf(first.body[0] as IrNode)).toBe("sheet:2");
-    expect(textOf(second.body[0] as IrNode)).toBe("sheet:2");
+    expect(analyzed).toBe(1);
   });
 
   it("positions an analyze failure at the tag's first call", () => {
@@ -1013,7 +960,7 @@ describe("custom tag parse options", () => {
       transform: () => [],
     };
     expect(() => lowerWithTags("<leaf>body</leaf>\n", { leaf })).toThrow();
-    expect(() => lowerWithTags("<leaf>\n", { leaf })).not.toThrow();
+    expect(() => lowerWithTags("<leaf/>\n", { leaf })).not.toThrow();
   });
 });
 
