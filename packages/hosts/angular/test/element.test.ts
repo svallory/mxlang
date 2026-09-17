@@ -52,6 +52,29 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
+  it("keeps `on-<exact>` a plain property binding in the temporary passthrough", () => {
+    // Round 1 regression guard (phase A of `dom-events`): core lowers
+    // `on-my-event` to the new `event` kind, but this host's phase-A
+    // passthrough must stay byte-identical to base — and base never matched
+    // `on-` against `EVENT_NAME` (`/^on[A-Z]/` requires a capital, not a
+    // dash), so it emitted a plain `[on-my-event]=` binding. Routing it
+    // through `domEventName` emitted `(-my-event)="…"`, which is not valid
+    // Angular. Phase B replaces this with `(my-event)=`.
+    const out = emit("<div on-my-event=f>x</div>");
+    expect(out).toBe('<div [on-my-event]="f">x</div>');
+    assertAngularParses(out);
+  });
+
+  it("leaves a bare or string-valued `onClick` alone", () => {
+    // The `event` kind is derived only for an expression value, so neither of
+    // these reaches the event path: a bare `onClick` is a boolean attribute
+    // and a string-valued one is an ordinary HTML attribute.
+    expect(emit("<div onClick>x</div>")).toBe("<div onClick>x</div>");
+    expect(emit('<div onClick="alert(1)">x</div>')).toBe(
+      '<div onClick="alert(1)">x</div>',
+    );
+  });
+
   it("maps onDoubleClick to the real DOM event name, not a lowercased camelCase", () => {
     // A plain `.toLowerCase()` of the MX attribute name gives `doubleclick`,
     // not the DOM event `dblclick` Angular's `(dblclick)` binds to.

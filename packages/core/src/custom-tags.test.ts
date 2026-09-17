@@ -127,6 +127,25 @@ describe("custom tag transforms", () => {
     });
   });
 
+  it("keeps `on*` on a custom tag call a dynamic prop, not an event", () => {
+    // The `isElement` gate (decision 101): a custom tag is a call, so its
+    // `onClick` is the tag author's own prop contract, not a DOM event. Only a
+    // native element lowers `on<Name>` to `kind: "event"`.
+    let seen: TagCall | null = null;
+    const capture: CustomTag = {
+      attributes: { onClick: { type: "expression" } },
+      transform(call, ctx) {
+        seen = call;
+        return [ctx.build.text("")];
+      },
+    };
+    lowerWithTags("<capture onClick=pick/>\n", { capture });
+    expect(named((seen as unknown as TagCall).attrs, "onClick")).toMatchObject({
+      kind: "dynamic",
+      name: "onClick",
+    });
+  });
+
   it("gives transform attrs, content, attribute tags, and params", () => {
     let seen: TagCall | null = null;
     const capture: CustomTag = {
