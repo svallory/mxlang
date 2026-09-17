@@ -28,6 +28,9 @@
       "default": "./dist/index.js"
     }
   },
+  "bin": {
+    "mx-angular": "./dist/bin.js"
+  },
   "files": [
     "dist",
     "README.md"
@@ -35,7 +38,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
+    "build": "rm -rf dist && bun build src/index.ts src/bin.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
     "@marko/compiler": "5.42.5",

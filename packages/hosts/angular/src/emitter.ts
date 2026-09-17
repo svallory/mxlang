@@ -31,8 +31,8 @@ function positionOf(node: { loc: Position }): Position {
 }
 
 function fail(message: string, node: { loc: Position }): never {
-  const { line, column } = positionOf(node);
-  throw new TranslateError(message, line, column);
+  const { line, column, file } = positionOf(node);
+  throw new TranslateError(message, line, column, file);
 }
 
 function rawPosition(node: { loc?: { start?: Position } }): Position {
@@ -46,8 +46,8 @@ function rawPosition(node: { loc?: { start?: Position } }): Position {
 }
 
 function rawFail(message: string, node: { loc?: { start?: Position } }): never {
-  const { line, column } = rawPosition(node);
-  throw new TranslateError(message, line, column);
+  const { line, column, file } = rawPosition(node);
+  throw new TranslateError(message, line, column, file);
 }
 
 const MODULE_LEVEL_MESSAGE =
@@ -851,6 +851,11 @@ class AngularEmitter implements Emitter<string> {
     return this.out;
   }
 
+  /** The names of every MX tag this template called, in source order. */
+  usedTagNames(): string[] {
+    return [...this.usedTags.keys()];
+  }
+
   emitNode(node: IrNode): void {
     switch (node.kind) {
       case "Text":
@@ -898,8 +903,21 @@ class AngularEmitter implements Emitter<string> {
   }
 }
 
-/** Emits an Angular template string from the resolved IR. */
-export function emitTemplate(ir: Ir, ctx: Ctx, filename: string): string {
+/**
+ * Emits an Angular template string from the resolved IR.
+ *
+ * `usedTagsOut`, when given, is filled with the names of every MX tag the
+ * template called (source order) — the same list `done()`'s own step-1
+ * import warning describes in prose, exposed structurally for a caller
+ * (`mx-angular build`'s header second line) that needs the names without
+ * parsing a warning message.
+ */
+export function emitTemplate(
+  ir: Ir,
+  ctx: Ctx,
+  filename: string,
+  usedTagsOut?: string[],
+): string {
   const moduleLevel = [
     ...ir.imports,
     ...ir.hoisted,
@@ -911,7 +929,9 @@ export function emitTemplate(ir: Ir, ctx: Ctx, filename: string): string {
 
   const emitter = new AngularEmitter(ctx, filename);
   for (const node of ir.body) emitter.emitNode(node);
-  return emitter.done();
+  const code = emitter.done();
+  if (usedTagsOut) usedTagsOut.push(...emitter.usedTagNames());
+  return code;
 }
 
 export { TranslateError };

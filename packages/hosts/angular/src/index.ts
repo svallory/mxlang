@@ -35,6 +35,8 @@ export interface CompileOptions {
 
 export interface CompileAngularResult extends CompileResult {
   warnings: MxWarning[];
+  /** The names of every MX tag this template called, in source order. */
+  usedTags: string[];
 }
 
 /**
@@ -50,12 +52,13 @@ export function compile(
   options: CompileOptions = {},
 ): CompileAngularResult {
   const warnings: MxWarning[] = options.warnings ?? [];
+  const usedTags: string[] = [];
   const result = compileSource(source, filename, angularDeclarations, {
     customTags: options.customTags,
     warnings,
-    emitIr: (ir, ctx) => emitTemplate(ir, ctx, filename),
+    emitIr: (ir, ctx) => emitTemplate(ir, ctx, filename, usedTags),
   });
-  return { ...result, warnings };
+  return { ...result, warnings, usedTags };
 }
 
 /** `compile()` over a file on disk. */
