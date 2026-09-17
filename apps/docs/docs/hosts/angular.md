@@ -165,15 +165,103 @@ future editor integration.
 A `.mx` file under a `tags/` directory, or a `package.json#mx.tags` entry,
 is discovered the same way every MX host discovers one — including a
 `mx.tags` entry's own `hosts` restriction: an entry declaring `"hosts":
-["solid"]` is not claimed by `mx-angular` at all. **Emitting a discovered
-tag as an Angular component module is not built yet** — an Angular
-component needs a class and a decorator, which is a different compilation
-route (`@mxlang/core`'s tag-unit compile) than the one this host uses for a
-page template today. Until that lands, a discovered tag file reports a
-positioned error rather than emitting a plain template where a component
-belongs. A page *calling* a discovered tag with a sidecar (`.tag.ts`) still
-compiles normally — only the tag's own emission is blocked, not a caller
-that references it.
+["solid"]` is not claimed by `mx-angular` at all.
+
+On this host a tag file compiles to a **standalone component module**
+(`tags/user-card.mx` → `tags/user-card.ts`), not a template: an Angular
+component is a class with a decorator, so there is no template-only form.
+
+```marko
+// tags/user-card.mx
+export interface Input { name: string; size?: number }
+<div class="card">
+  <h2>${input.name}</h2>
+  ${input.content()}
+</div>
+```
+
+```ts
+// tags/user-card.ts — generated
+import { Component, Input } from "@angular/core";
+
+export interface Input { name: string; size?: number }
+
+@Component({
+  selector: "mx-user-card",
+  standalone: true,
+  imports: [],
+  template: "<div class=\"card\"><h2>{{ name }}</h2><ng-content></ng-content></div>",
+})
+export class UserCard {
+  @Input({ required: true }) name!: string;
+  @Input() size?: number;
+}
+export default UserCard;
+```
+
+What the emitted module does with each part:
+
+- **Inputs** come from `export interface Input` — one `@Input()` per
+  property, `required: true` when the property is not optional, and the
+  TypeScript type copied verbatim. No `Input` interface means no inputs.
+  A template reads an input by its **bare name** (`{{ name }}`), because an
+  Angular template resolves against the component instance.
+- **No `@Output()` inference.** A function-typed property is a plain
+  `@Input()`; a caller passes a callback as an ordinary dynamic attribute
+  (`[onSelect]="handle"`), exactly as on every other MX host.
+- **Content.** `${input.content()}` emits `<ng-content></ng-content>`;
+  `${input.header()}` emits `<ng-content select="[header]"></ng-content>`.
+  Reading the same attribute tag twice is an error — Angular matches each
+  selector once, so the second projection would silently render empty.
+- **Selector**: `mx-` plus the kebab-cased file basename
+  (`tags/icon.mx` → `mx-icon`). The fixed prefix guarantees the hyphen
+  Angular requires. Change it project-wide with
+  `mx.angular.tagSelectorPrefix`, or per tag with
+  `export const selector = "liuna-card";`, which wins over both.
+- **`static` / `import`** stay in the tag's own module as ordinary
+  module-level statements, and other `export`s pass through. An
+  `import Child from "./child.mx"` is the exception: MX emits that import
+  itself, pointing at the child's *generated* module, so the author's line
+  is not passed through as well.
+
+### What is an error
+
+A template inside a tag component resolves against the component instance,
+so MX rewrites `input.x` to the bare `x` — including `input?.x`,
+`input["x"]` and `input.a.b`, and leaving alone any read where `input` is
+shadowed (a `<for|input|>` param, a `<const/input=…>`, a function
+parameter). Two cases have no correct rewrite and are reported rather than
+rendered blank:
+
+| Written | Why |
+|---|---|
+| `${input[k]}` | The property is not known until run time, so there is no class member to bind. |
+| `${input.x}` where `x` is also `${input.x()}` | One read wants an `@Input()`, the other a projection; they cannot both hold. |
+| `${input.header(1)}` | `<ng-content>` places nodes and cannot pass them values. |
+| `<child header=input.header/>`, where `child` projects `header` | Angular cannot fill a projection from an attribute — nest a `<@header>` block instead. |
+
+Passing an ordinary input through to a child (`<child label=input.label/>`)
+is fine; only a name the child *projects* is refused.
+
+### Calling a tag
+
+A page that calls a discovered tag emits its element, and MX warns once per
+file with the exact import and `imports:` entry the page's own TypeScript
+needs — in step 1 MX does not edit that file:
+
+```marko
+<div><user-card name="Ada"/></div>
+```
+
+```html
+<div><mx-user-card name="Ada"></mx-user-card></div>
+<!-- Add to x.component.ts: `import UserCard from "./tags/user-card";` and `imports: [UserCard]` -->
+```
+
+Without that `imports:` entry Angular renders an unknown element as an inert
+empty tag with no error, which is why the warning exists. **In step 2
+(`.ng.mx`) this obligation disappears** — MX owns the module and injects
+both lines itself.
 
 ## Errors
 

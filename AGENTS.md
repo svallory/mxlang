@@ -1471,9 +1471,18 @@ snapshot in `packages/oracle/fixtures/angular/__golden__/<name>.ast.json`
 its own Solid twin table) and folds its result into the exit code, and
 `packages/oracle/test/angular.test.ts` runs it through `bun run test` /
 `bun run verify` so a regression here fails CI, not only a developer's own
-`oracle:angular` run. See `packages/oracle/fixtures/angular/README.md` for
-the two A1 rows intentionally absent (tag-file `<ng-content>` forms, task
-1.7's scope) and the `<for in=>` ordering rationale.
+`oracle:angular` run. A third kind joined the two above in task 1.7: a
+**tag** fixture (`input.mx` + `expected.ts`) compiles through
+`compileTagModule` and byte-compares the emitted component module, then
+extracts its `template:` string and puts that through the same
+`parseTemplate` gate. A tag fixture is staged under its *own* basename (the
+directory name minus `tag-`), since a tag's selector and class come from its
+filename and `input.mx` would name every component `Input`; a fixture with
+its own `tags/` directory is staged in a temp directory with a
+`package.json` boundary, because discovery walks upward from the compiled
+file. See `packages/oracle/fixtures/angular/README.md` — its "rows
+intentionally absent" list is now empty — and the `<for in=>` ordering
+rationale.
 
 **`mx-angular build`/`map` (task 1.5a); `watch` (task 1.5b, incremental).**
 `mx-angular build [--project <dir>] [--config <file>]` (`src/cli.ts`) reads
@@ -1495,12 +1504,47 @@ envelope; `compile()`'s own `mappings` is always empty today, so
 `mx-angular map` reports the source file and says fine-grained mapping
 isn't available yet, rather than fabricating a line/column). Every warning
 `compile()` produces prints to the terminal, `file:line:col warning: ...`.
-**A discovered tag file cannot be emitted yet** — an Angular component
-needs a class, not a template, and that route is task 1.7's tag-unit
-compile (not landed for this host) — so a tag file reports a positioned
-error instead of a page; a *caller* referencing a tag with a sidecar still
-compiles normally, since `getCustomTags(mxPath)` is threaded into every
-page's own `compile()` call. Only writes an output when its bytes differ,
+**A discovered tag file compiles to a component module** (task 1.7,
+`src/tag-module.ts`'s `compileTagModule`): a `.mx` under `tags/` emits
+`tagExtension` (`.ts`) holding a standalone `@Component` — inputs from
+`export interface Input` (`required: true` when not optional, the type
+copied verbatim, **no `@Output()` inference**), `<ng-content>` for
+`${input.content()}` and `<ng-content select="[x]">` for `${input.x()}`
+(repeating one is an error: Angular matches each selector once), `mx-` +
+kebab-cased basename as the selector unless the tag exports its own, and
+the tag's `static`/`import` placed at module scope. The class is named by
+core's `exportNameFor`/`moduleExportName` (tag-unit 2b), the same
+derivation every module-emitting host uses. The *template* is built by the
+page emitter, so the two output kinds cannot disagree about how a construct
+lowers. Two things the emitted module must get right, both measured rather
+than assumed: a template reads an input by its **bare name**, because
+Angular resolves against the component instance — emitting
+`{{ input.name }}` parses cleanly and renders **empty** (`parseTemplate`
+cannot catch it, so the tests assert the expression text); and a
+*discovered* tag reaches the emitter under a gensym'd binding
+(`$mx_Icon1`, `template-tag.ts`'s `bindingForTemplate`), so the selector is
+resolved through the import's specifier rather than from
+`Component.target.name`, which would emit the invalid `<mx-$mx-icon1>`.
+The rewrite covers `input.x`, `input?.x` (a distinct
+`OptionalMemberExpression`), `input["x"]`, nested `input.a.b` and arrow
+bodies, and honours every binder that shadows the name — a `<for|input|>`
+param (read off the core's `For.bindings`; `params` beside it is *source
+text* and never matches), a `<const/input=…>` (sequentially, as the emitted
+`@let` rebinds from that point), a function parameter and a destructuring
+pattern. `input[k]` is a positioned error. `Input` itself is parsed with
+Babel (the core's own instance) taking each type as a verbatim source
+slice; the text scan that stood here first dropped newline-separated
+properties, mis-sliced arrow types and broke on comments. Three slot
+misuses are errors rather than silent blanks: a name read both as a slot
+and bare, a slot called with arguments, and a slot passed through as an
+attribute. An authored `import Child from "./child.mx"` is emitted once,
+by MX, pointing at the generated module — `isTagModuleImport` is the one
+rule both halves consult so they cannot disagree and emit it twice.
+`mx.angular.tagSelectorPrefix` is wired through both entry points.
+Calling a discovered tag from a page is no longer the module-level error:
+the synthesized `Import` is resolved to a component reference, while an
+**author-written** `import`/`static`/`export` still is one. Only writes an
+output when its bytes differ,
 and refuses to overwrite any output — page or tag — lacking the generated
 header (`checkOverwriteGuard`, `src/build.ts`, wired into `build()` itself,
 not merely exported for direct testing — including the `onError` failure
