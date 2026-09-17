@@ -413,6 +413,21 @@ export function routeTemplateCall(
     });
   }
 
+  // `/var` binds what the unit returns, so a unit that returns nothing has
+  // nothing to bind and the binding would read `undefined` at run time with
+  // no diagnostic anywhere. A pending unit is mid-compile and its
+  // `returnsValue` is a placeholder, so the call is let through rather than
+  // accused: the same unit's own compile validates its `<return>`, and a
+  // self-recursive call that binds its own result is legal.
+  if (call.var && !metadata.returnsValue && !metadata.pending) {
+    throw new TranslateError(
+      `\`<${call.name}>\` does not return a value; add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``,
+      call.loc.line,
+      call.loc.column,
+      call.loc.file,
+    );
+  }
+
   return [
     {
       kind: "Component",
@@ -422,6 +437,14 @@ export function routeTemplateCall(
       content: call.content,
       attributeTags: call.attributeTags,
       args: [],
+      // Carried to the emitters because the `{ value, output }` shape is
+      // invisible at the call site: a host cannot compile the callee to find
+      // out how to unwrap the result, and the answer is the same on all six.
+      var: call.var,
+      returnsValue: metadata.returnsValue === true,
+      // The call routes to a generated binding, so a host reporting on this
+      // call has to be able to name the tag as written.
+      authoredName: call.name,
       loc: call.loc,
     },
   ];
