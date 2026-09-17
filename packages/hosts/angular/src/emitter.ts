@@ -18,18 +18,34 @@ import {
   exportNameFor,
   expr,
   type ForSource,
+  type GeneratedMapping,
   type HostDeclarations,
   type Ir,
   type IrNode,
   type MxWarning,
   type Position,
+  type SourceSpan,
   TranslateError,
   warn,
 } from "@mxlang/core";
+import { TemplateWriter } from "./mapping.ts";
 
 type TryData = { kind: "try" };
 type HtmlCommentData = { kind: "html-comment" };
 export type DynamicComponentData = { kind: "dynamic-component"; expr: Expr };
+
+/** The span of a Marko-nested Babel node, or null when it has no position. */
+function spanOf(node: {
+  start?: number;
+  end?: number;
+  loc?: { start?: { index?: number }; end?: { index?: number } };
+}): SourceSpan | null {
+  const start = node.start ?? node.loc?.start?.index;
+  const end = node.end ?? node.loc?.end?.index;
+  return typeof start === "number" && typeof end === "number"
+    ? { sourceStart: start, sourceEnd: end }
+    : null;
+}
 
 function positionOf(node: { loc: Position }): Position {
   return node.loc;
@@ -149,6 +165,10 @@ export const angularDeclarations: HostDeclarations = {
           code: expr(ctx, node.name),
           shape: "other",
           node: node.name,
+          // The span is read off the same node `expr()` sliced — a
+          // synthesized node with no position yields undefined and the
+          // emitted expression stays unmapped.
+          span: spanOf(node.name) ?? undefined,
         },
       };
     }
@@ -277,7 +297,18 @@ const NGCLASS_NGSTYLE_WARNING: Record<"ngClass" | "ngStyle", string> = {
     "this template binds `style` to an object value, emitted as [ngStyle]; add `NgStyle` to the component's imports.",
 };
 
+/**
+ * Writes an attribute list into `out`.
+ *
+ * Attribute *names* and expression *values* are mapped to the source text
+ * they came from; the syntax around them (` [`, `]="`, `"`) is generated
+ * punctuation and stays unmapped. A `static` attribute's value is an
+ * author-written literal whose `esc()`-escaped form would map whole-to-whole
+ * onto the source literal, per `mapping.ts`'s escaping rule — but the IR
+ * carries no span for it, so only the name is mapped there.
+ */
 function emitAttrs(
+  out: TemplateWriter,
   attrs: Attr[],
   onceWarn: (kind: "ngClass" | "ngStyle") => void,
   // The lowercase `onclick=fn` mapping is a native-element rule: on a
@@ -285,15 +316,19 @@ function emitAttrs(
   // (components have props; elements have events), so the distinction is
   // threaded in exactly like the core's `isElement` gate.
   isElement = false,
-): string {
-  let out = "";
+): void {
   for (const attr of attrs) {
     switch (attr.kind) {
       case "static":
-        out += ` ${attr.name}="${esc(attr.value)}"`;
+        out.write(" ");
+        out.writeMapped(attr.name, attr.nameSpan);
+        // The value is a plain string literal in the IR with no span of its
+        // own, so only the name is mapped here.
+        out.write(`="${esc(attr.value)}"`);
         break;
       case "boolean":
-        out += ` ${attr.name}`;
+        out.write(" ");
+        out.writeMapped(attr.name, attr.nameSpan);
         break;
       // Phase B of `dom-events` (decision 101): Angular's `(x)` binds a real
       // DOM event name, and core resolved it — `on<Name>` lowercased,
@@ -302,7 +337,14 @@ function emitAttrs(
       // `(click)`, `on-my-event` gives `(my-event)`, and `onDoubleClick`
       // gives `(doubleclick)` with core's warning, never a rewrite.
       case "event":
-        out += ` (${attr.event})="(${esc(attr.value.code)})($event)"`;
+        // The emitted DOM event name is derived from the author's
+        // attribute name (`onClick` -> `click`), so it maps back to that
+        // name even though the two spellings differ.
+        out.write(" (");
+        out.writeMapped(attr.event, attr.nameSpan);
+        out.write(')="(');
+        out.writeMapped(esc(attr.value.code), attr.value.span);
+        out.write(')($event)"');
         break;
       case "dynamic": {
         const name = attr.name;
@@ -313,15 +355,27 @@ function emitAttrs(
           // string would have driven, so a function value routes there
           // instead of a dead `[onclick]` property binding. On a component
           // call the same attribute stays the callee's `[onclick]` input.
-          out += ` (${name.slice(2)})="(${esc(attr.value.code)})($event)"`;
+          out.write(" (");
+          out.writeMapped(name.slice(2), attr.nameSpan);
+          out.write(')="(');
+          out.writeMapped(esc(attr.value.code), attr.value.span);
+          out.write(')($event)"');
         } else if (name === "class" || name === "style") {
           const shape = attr.value.shape;
           if (shape === "object" || shape === "array") {
             const directive = name === "class" ? "ngClass" : "ngStyle";
             onceWarn(directive);
-            out += ` [${directive}]="${esc(attr.value.code)}"`;
+            out.write(" [");
+            out.writeMapped(directive, attr.nameSpan);
+            out.write(']="');
+            out.writeMapped(esc(attr.value.code), attr.value.span);
+            out.write('"');
           } else {
-            out += ` [${name}]="${esc(attr.value.code)}"`;
+            out.write(" [");
+            out.writeMapped(name, attr.nameSpan);
+            out.write(']="');
+            out.writeMapped(esc(attr.value.code), attr.value.span);
+            out.write('"');
           }
         } else if (DATA_OR_ARIA.test(name)) {
           // A1 (design note), decision 86: Angular property vs attribute
@@ -331,14 +385,26 @@ function emitAttrs(
           // attribute has no property to bind (Angular has no `.dataFoo`/
           // `.ariaFoo` DOM property for most of these), so it emits
           // `[attr.name]`; every other dynamic attribute stays `[name]`.
-          out += ` [attr.${name}]="${esc(attr.value.code)}"`;
+          out.write(" [attr.");
+          out.writeMapped(name, attr.nameSpan);
+          out.write(']="');
+          out.writeMapped(esc(attr.value.code), attr.value.span);
+          out.write('"');
         } else {
-          out += ` [${name}]="${esc(attr.value.code)}"`;
+          out.write(" [");
+          out.writeMapped(name, attr.nameSpan);
+          out.write(']="');
+          out.writeMapped(esc(attr.value.code), attr.value.span);
+          out.write('"');
         }
         break;
       }
       case "bound":
-        out += ` [(${attr.name})]="${esc(attr.value.code)}"`;
+        out.write(" [(");
+        out.writeMapped(attr.name, attr.nameSpan);
+        out.write(')]="');
+        out.writeMapped(esc(attr.value.code), attr.value.span);
+        out.write('"');
         break;
       case "spread":
         fail(
@@ -347,7 +413,6 @@ function emitAttrs(
         );
     }
   }
-  return out;
 }
 
 // A real HTML comment cannot contain `--` (a nested `--` or a trailing `-`
@@ -627,7 +692,7 @@ function bakeRange(
 }
 
 class AngularEmitter implements Emitter<string> {
-  private out = "";
+  private readonly out = new TemplateWriter();
   private readonly ctx: Ctx;
   private readonly tsFilename: string;
   private readonly warnedOnce = new Set<string>();
@@ -819,37 +884,46 @@ class AngularEmitter implements Emitter<string> {
     // and a future addition of HTML escaping there would otherwise turn every
     // `<ng-content>` into visible `&lt;ng-content&gt;` text.
     if ((node as { rawTemplate?: boolean }).rawTemplate) {
-      this.out += node.value;
+      this.out.write(node.value);
       return;
     }
-    this.out += escapeText(node.value);
+    // Text runs are deliberately unmapped: a diagnostic never points at
+    // literal text, and mapping it would shadow the expressions inside the
+    // same element with a coarser span.
+    this.out.write(escapeText(node.value));
   }
 
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {
     if (node.escaped) {
-      this.out += `{{ ${node.expr.code} }}`;
+      this.out.write("{{ ");
+      this.out.writeMapped(node.expr.code, node.expr.span);
+      this.out.write(" }}");
     } else {
       warn(this.ctx, {
         message:
           "$!{…} has no exact Angular equivalent; emitted as [innerHTML] wrapped in a <span>, which Angular sanitizes. The wrapper is invalid inside <tbody>/<select>/<ul>, where only certain child elements are allowed — restructure those cases.",
         ...node.loc,
       } as MxWarning);
-      this.out += `<span [innerHTML]="${esc(node.expr.code)}"></span>`;
+      this.out.write(`<span [innerHTML]="${esc(node.expr.code)}"></span>`);
     }
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
-    const attrs = emitAttrs(
+    // An `Element`'s name carries no span in the IR (only a `Component`'s
+    // does), so the tag name itself is unmapped; its attributes are not.
+    this.out.write(`<${node.name}`);
+    emitAttrs(
+      this.out,
       node.attrs,
       (directive) => {
         this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
       },
       true,
     );
-    this.out += `<${node.name}${attrs}>`;
+    this.out.write(">");
     if (node.void) return;
     for (const child of node.children) this.emitNode(child);
-    this.out += `</${node.name}>`;
+    this.out.write(`</${node.name}>`);
   }
 
   component(node: Extract<IrNode, { kind: "Component" }>): void {
@@ -911,13 +985,18 @@ class AngularEmitter implements Emitter<string> {
         }
       }
     }
-    const attrs = emitAttrs(node.attrs, (directive) => {
-      this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
-    });
     if (!this.usedTags.has(target.name)) {
       this.usedTags.set(target.name, node.loc);
     }
-    this.out += `<${selector}${attrs}>`;
+    // The selector is derived from the tag name (`UserCard` becomes
+    // `mx-user-card`), so it maps whole-to-whole back to the name the author
+    // wrote — the spellings differ, which is exactly what the mapping is for.
+    this.out.write("<");
+    this.out.writeMapped(selector, node.nameSpan);
+    emitAttrs(this.out, node.attrs, (directive) => {
+      this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
+    });
+    this.out.write(">");
     for (const prop of node.attrTagProps) {
       this.validateAttributeTagProp(prop, node);
       this.emitAttributeTagNodes(prop.source);
@@ -925,7 +1004,7 @@ class AngularEmitter implements Emitter<string> {
     if (node.content) {
       for (const child of node.content.children) this.emitNode(child);
     }
-    this.out += `</${selector}>`;
+    this.out.write(`</${selector}>`);
   }
 
   private validateAttributeTagProp(
@@ -999,9 +1078,9 @@ class AngularEmitter implements Emitter<string> {
   }
 
   private emitAttributeTag(tag: AttributeTag): void {
-    this.out += `<ng-container ngProjectAs="[${tag.name}]">`;
+    this.out.write(`<ng-container ngProjectAs="[${tag.name}]">`);
     for (const child of tag.block.children) this.emitNode(child);
-    this.out += "</ng-container>";
+    this.out.write("</ng-container>");
   }
 
   private emitAttributeTagNodes(nodes: AttributeTagNode[]): void {
@@ -1018,12 +1097,14 @@ class AngularEmitter implements Emitter<string> {
       }
       node.branches.forEach((branch, index) => {
         if (branch.test) {
-          this.out += `${index === 0 ? "@if" : " @else if"} (${branch.test.code}) { `;
+          this.out.write(`${index === 0 ? "@if" : " @else if"} (`);
+          this.out.writeMapped(branch.test.code, branch.test.span);
+          this.out.write(") { ");
         } else {
-          this.out += " @else { ";
+          this.out.write(" @else { ");
         }
         this.emitAttributeTagNodes(branch.nodes);
-        this.out += " }";
+        this.out.write(" }");
       });
     }
   }
@@ -1044,21 +1125,31 @@ class AngularEmitter implements Emitter<string> {
         node,
       );
     }
-    const context =
-      target.params.length === 0
-        ? "{}"
-        : `{ ${target.params
-            .map((param, i) =>
-              i === 0
-                ? `$implicit: ${node.args[i]?.code}`
-                : `${param}: ${node.args[i]?.code}`,
-            )
-            .join(", ")} }`;
-    this.out += `<ng-container [ngTemplateOutlet]="${target.name}" [ngTemplateOutletContext]="${esc(context)}"></ng-container>`;
+    // The context object is built into the writer piece by piece so each
+    // argument expression keeps its own mapping. `esc()` is applied per
+    // fragment rather than to the joined string: it escapes `&` and `"`
+    // independently of position, so escaping the parts and concatenating
+    // gives the same bytes as escaping the whole.
+    this.out.write(`<ng-container [ngTemplateOutlet]="${target.name}" `);
+    this.out.write('[ngTemplateOutletContext]="');
+    if (target.params.length === 0) {
+      this.out.write(esc("{}"));
+    } else {
+      this.out.write(esc("{ "));
+      target.params.forEach((param, i) => {
+        if (i > 0) this.out.write(esc(", "));
+        this.out.write(esc(i === 0 ? "$implicit: " : `${param}: `));
+        const arg = node.args[i];
+        if (arg) this.out.writeMapped(esc(arg.code), arg.span);
+      });
+      this.out.write(esc(" }"));
+    }
+    this.out.write('"></ng-container>');
   }
 
   private emitDynamicComponent(
     exprCode: string,
+    exprSpan: SourceSpan | null | undefined,
     attrs: Attr[],
     hasContent: boolean,
     args: Expr[],
@@ -1081,43 +1172,74 @@ class AngularEmitter implements Emitter<string> {
       "this template uses [ngComponentOutlet]; add NgComponentOutlet to the component's imports.",
       node.loc,
     );
-    const inputs = attrs
-      .map((attr) => {
-        if (attr.kind === "dynamic") return `${attr.name}: ${attr.value.code}`;
-        // JSON.stringify for the JS-literal layer (a `"` or `\` in the
-        // attribute value must be escaped as JS, e.g. `\"`), then `esc()`
-        // for the surrounding HTML attribute layer on the whole
-        // `[ngComponentOutletInputs]="..."` string below — two passes for
-        // two nesting layers. Building this with a plain `"${attr.value}"`
-        // corrupted the output on a value containing `"`.
-        if (attr.kind === "static")
-          return `${attr.name}: ${JSON.stringify(attr.value)}`;
-        return fail(
+    // Rejected up front, before anything is written: `fail` throws, and a
+    // half-written element would otherwise be left in the output. The
+    // narrowed list is what the emit loop below walks, so the two cannot
+    // disagree about which kinds are allowed.
+    const inputs: Array<
+      Extract<Attr, { kind: "dynamic" } | { kind: "static" }>
+    > = [];
+    for (const attr of attrs) {
+      if (attr.kind !== "dynamic" && attr.kind !== "static") {
+        fail(
           `attribute kind \`${attr.kind}\` cannot be passed to a dynamic component outlet`,
           attr,
         );
-      })
-      .join(", ");
-    const inputsAttr = inputs
-      ? ` [ngComponentOutletInputs]="${esc(`{ ${inputs} }`)}"`
-      : "";
-    this.out += `<ng-container [ngComponentOutlet]="${esc(exprCode)}"${inputsAttr}></ng-container>`;
+      }
+      inputs.push(attr);
+    }
+    this.out.write('<ng-container [ngComponentOutlet]="');
+    this.out.writeMapped(esc(exprCode), exprSpan);
+    this.out.write('"');
+    if (inputs.length > 0) {
+      // Written piece by piece so each input's name and value keeps its own
+      // mapping, the same shape `emitDefineCall` uses for the outlet
+      // context. `esc()` escapes `&` and `"` independently of position, so
+      // escaping the parts and concatenating gives the same bytes as
+      // escaping the whole.
+      this.out.write(' [ngComponentOutletInputs]="');
+      this.out.write(esc("{ "));
+      inputs.forEach((attr, i) => {
+        if (i > 0) this.out.write(esc(", "));
+        this.out.writeMapped(esc(attr.name), attr.nameSpan);
+        this.out.write(esc(": "));
+        if (attr.kind === "dynamic") {
+          this.out.writeMapped(esc(attr.value.code), attr.value.span);
+        } else {
+          // JSON.stringify for the JS-literal layer (a `"` or `\` in the
+          // attribute value must be escaped as JS, e.g. `\"`), then `esc()`
+          // for the surrounding HTML attribute layer — two passes for two
+          // nesting layers. Building this with a plain `"${attr.value}"`
+          // corrupted the output on a value containing `"`. The literal's
+          // text is not the author's own bytes (it gains quotes), so it is
+          // written unmapped; its name above carries the position.
+          this.out.write(esc(JSON.stringify(attr.value)));
+        }
+      });
+      this.out.write(esc(" }"));
+      this.out.write('"');
+    }
+    this.out.write("></ng-container>");
   }
 
   ifChain(node: Extract<IrNode, { kind: "IfChain" }>): void {
     node.branches.forEach((branch, i) => {
       const close = i === 0 ? "" : "} ";
       if (branch.condition === null) {
-        this.out += `${close}@else { `;
+        this.out.write(`${close}@else { `);
       } else if (i === 0) {
-        this.out += `@if (${branch.condition.code}) { `;
+        this.out.write("@if (");
+        this.out.writeMapped(branch.condition.code, branch.condition.span);
+        this.out.write(") { ");
       } else {
-        this.out += `${close}@else if (${branch.condition.code}) { `;
+        this.out.write(`${close}@else if (`);
+        this.out.writeMapped(branch.condition.code, branch.condition.span);
+        this.out.write(") { ");
       }
       for (const child of branch.children) this.emitNode(child);
-      this.out += " ";
+      this.out.write(" ");
     });
-    this.out += "}";
+    this.out.write("}");
   }
 
   /**
@@ -1204,12 +1326,19 @@ class AngularEmitter implements Emitter<string> {
       }
       const second = this.aliasName(node.paramNodes[1], "");
       const aliasLets = second ? `; let ${second} = $index` : "";
-      this.out += `@for (${row} of ${source.list.code}; track ${track}${aliasLets}) { `;
+      // `track` is derived text (`by="id"` becomes `row.id`), so it maps to
+      // the whole `by=` expression; with `by=` omitted it is the synthesized
+      // `$index` and maps to nothing.
+      this.out.write(`@for (${row} of `);
+      this.out.writeMapped(source.list.code, source.list.span);
+      this.out.write("; track ");
+      this.out.writeMapped(track, node.key?.span);
+      this.out.write(`${aliasLets}) { `);
       for (const field of destructure) {
-        this.out += `@let ${field} = ${row}.${field}; `;
+        this.out.write(`@let ${field} = ${row}.${field}; `);
       }
       for (const child of node.children) this.emitNode(child);
-      this.out += " }";
+      this.out.write(" }");
       return;
     }
     if (source.kind === "in") {
@@ -1221,18 +1350,22 @@ class AngularEmitter implements Emitter<string> {
       const k = this.aliasName(node.paramNodes[0], "$key");
       const v = this.aliasName(node.paramNodes[1], "$value");
       const entry = this.gensym("mxEntry");
-      this.out += `@for (${entry} of (${source.object.code} | keyvalue: null); track ${entry}.key) { @let ${k} = ${entry}.key; @let ${v} = ${entry}.value; `;
+      this.out.write(`@for (${entry} of (`);
+      this.out.writeMapped(source.object.code, source.object.span);
+      this.out.write(
+        ` | keyvalue: null); track ${entry}.key) { @let ${k} = ${entry}.key; @let ${v} = ${entry}.value; `,
+      );
       for (const child of node.children) this.emitNode(child);
-      this.out += " }";
+      this.out.write(" }");
       return;
     }
     // range
     const values = bakeRange(source, node);
     const rowNode = node.paramNodes[0];
     const row = this.aliasName(rowNode, "$item");
-    this.out += `@for (${row} of [${values.join(", ")}]; track $index) { `;
+    this.out.write(`@for (${row} of [${values.join(", ")}]; track $index) { `);
     for (const child of node.children) this.emitNode(child);
-    this.out += " }";
+    this.out.write(" }");
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
@@ -1242,16 +1375,24 @@ class AngularEmitter implements Emitter<string> {
     // outlet context is `{ $implicit: first, rest: rest }` (see
     // `ngTemplateOutlet`'s context below), so only the first param rides
     // `$implicit`; every later one names its own context key.
-    const params = node.params
-      .map((p, i) => (i === 0 ? `let-${p}` : `let-${p}="${p}"`))
-      .join(" ");
-    this.out += `<ng-template #${node.name}${params ? ` ${params}` : ""}> `;
+    this.out.write(`<ng-template #`);
+    this.out.writeMapped(node.name, node.nameSpan);
+    node.params.forEach((param, i) => {
+      this.out.write(" ");
+      // The `let-` prefix is generated, so the whole `let-x` token maps
+      // whole-to-whole onto the param the author wrote.
+      this.out.writeMapped(`let-${param}`, node.paramSpans?.[i]);
+      if (i > 0) this.out.write(`="${param}"`);
+    });
+    this.out.write("> ");
     for (const child of node.children) this.emitNode(child);
-    this.out += " </ng-template>";
+    this.out.write(" </ng-template>");
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
-    this.out += `@let ${node.name} = ${node.init.code};`;
+    this.out.write(`@let ${node.name} = `);
+    this.out.writeMapped(node.init.code, node.init.span);
+    this.out.write(";");
   }
 
   hoisted(node: Extract<IrNode, { kind: "Hoisted" }>): void {
@@ -1272,6 +1413,7 @@ class AngularEmitter implements Emitter<string> {
       // both emit `ngComponentOutlet`.
       this.emitDynamicComponent(
         data.expr.code,
+        data.expr.span,
         tag.attrs,
         tag.children.length > 0 || tag.attrTagProps.length > 0,
         tag.args ?? [],
@@ -1303,7 +1445,7 @@ class AngularEmitter implements Emitter<string> {
       text += child.value;
     }
     checkCommentText(text, node);
-    this.out += `<!-- ${text} -->`;
+    this.out.write(`<!-- ${text} -->`);
   }
 
   documentType(node: Extract<IrNode, { kind: "DocumentType" }>): void {
@@ -1312,13 +1454,13 @@ class AngularEmitter implements Emitter<string> {
         "`<!doctype>` parses in an Angular template, but a component template is a fragment.",
       ...node.loc,
     } as MxWarning);
-    this.out += `<!${node.value}>`;
+    this.out.write(`<!${node.value}>`);
   }
 
   comment(node: Extract<IrNode, { kind: "Comment" }>): void {
     if (!node.html) return;
     checkCommentText(node.value, node);
-    this.out += `<!--${node.value}-->`;
+    this.out.write(`<!--${node.value}-->`);
   }
 
   done(): string {
@@ -1357,7 +1499,19 @@ class AngularEmitter implements Emitter<string> {
         code: IMPORTS_ADVICE_CODE,
       } as MxWarning);
     }
-    return this.out;
+    return this.out.code;
+  }
+
+  /**
+   * The mappings recorded during the walk, generated-relative to `done()`'s
+   * own return value.
+   *
+   * Kept beside `done()` rather than folded into it because `Emitter<Out>`'s
+   * single return value is the template text every caller already consumes;
+   * a caller that wants positions asks for them.
+   */
+  mappings(): GeneratedMapping[] {
+    return [...this.out.mappings];
   }
 
   /**
@@ -1452,6 +1606,15 @@ export function emitTemplate(
    * A page template has no module scope, so it leaves this false.
    */
   ownsModule = false,
+  /**
+   * Filled, when given, with the mappings from the emitted template back to
+   * the `.mx` source — generated offsets relative to the returned string.
+   *
+   * An out-parameter for the same reason `usedTagsOut` is one: `emitIr`'s
+   * core signature returns the module text alone, so a second result has no
+   * return channel of its own.
+   */
+  mappingsOut?: GeneratedMapping[],
 ): string {
   // A *synthesized* import is not a module-level statement the author wrote:
   // the core minted it for a discovered tag the template calls, and there is
@@ -1481,6 +1644,7 @@ export function emitTemplate(
   for (const node of ir.body) emitter.emitNode(node);
   const code = emitter.done();
   if (usedTagsOut) usedTagsOut.push(...emitter.usedTagRefs());
+  if (mappingsOut) mappingsOut.push(...emitter.mappings());
   return code;
 }
 

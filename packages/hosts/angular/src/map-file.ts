@@ -1,28 +1,45 @@
 /**
  * The `.map` sidecar (design note A3, "Output mapping").
  *
- * Two cases, and the sidecar is the same v3 envelope for both:
+ * Two cases, and the sidecar is the same v3 envelope for both — since task
+ * 2.2b, both carry a real map:
  *
- * - A **page**'s `compile()` map has an empty `mappings` string — this host
- *   emits text directly, with no per-position mappings to derive one from
- *   yet (`src/index.ts`'s own doc comment). `mx-angular map` reports the
- *   source file the sidecar names and says there is nothing finer.
- * - A **`.ng.mx`**'s map is real: `compileNgMx` rewrites the module with
- *   `MagicString`, which emits a hires mapping for the whole file. That one
- *   is decoded and resolved to a genuine line and column.
+ * - A **page**'s `compile()` map is built from the spans the emitter records
+ *   for every run of source-derived text it writes (`./mapping.ts`).
+ * - A **`.ng.mx`**'s map is `compileNgMx`'s `MagicString` rewrite, whose
+ *   hires mapping covers the whole file, plus the per-region identifier
+ *   mappings the same emitter recorded.
  *
- * Task 2.2b makes the page case real too, at which point the first branch
- * stops being reachable — nothing here needs to change when it does.
+ * Either way `mx-angular map` resolves an emitted `line:col` to the position
+ * in the `.mx` it came from. A position in text the emitter *invented* — the
+ * `<` of a tag, the `="` around a binding, the punctuation after an
+ * expression — resolves to no line/column and is reported as such, never
+ * fabricated.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
 import type { RawSourceMap } from "@mxlang/core";
+import { lookupMapping } from "./mapping.ts";
 
-/** Builds the sidecar for `outputFile` compiled from `sourceFile`. */
+/**
+ * Builds the sidecar for `outputFile` compiled from `sourceFile`.
+ *
+ * `headerLines` is how many lines the generated header prepends to the
+ * emitted output. The sidecar describes the file **on disk**, header
+ * included, while `compileMap` is relative to the emitted body alone — so
+ * every generated line shifts down by that many. A v3 `mappings` string
+ * encodes one `;` per generated line, so the shift is exactly that many
+ * leading semicolons, no re-encoding needed.
+ *
+ * The `.ng.mx` path in `build.ts` applies this same shift to its own map
+ * before calling here, and passes no `headerLines`, so the offset is never
+ * applied twice.
+ */
 export function buildMap(
   sourceFile: string,
   outputFile: string,
   compileMap: RawSourceMap,
+  headerLines = 0,
 ): RawSourceMap {
   return {
     version: 3,
@@ -30,7 +47,10 @@ export function buildMap(
     sources: [sourceFile],
     sourcesContent: [null],
     names: [],
-    mappings: compileMap.mappings,
+    mappings:
+      compileMap.mappings.length > 0
+        ? ";".repeat(headerLines) + compileMap.mappings
+        : compileMap.mappings,
   };
 }
 
@@ -42,73 +62,12 @@ export function readMap(mapPath: string): RawSourceMap {
   return JSON.parse(readFileSync(mapPath, "utf8"));
 }
 
-/** One decoded mapping segment, in source-map v3 order. */
-interface Segment {
-  generatedColumn: number;
-  sourceLine: number;
-  sourceColumn: number;
-}
-
-const BASE64 =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-/**
- * Decodes a whole VLQ-encoded `mappings` string, one entry per generated
- * line.
- *
- * Hand-rolled rather than pulled from a dependency: this reads four-field
- * segments of an envelope this package itself wrote, and the alternative is
- * a runtime dependency on a source-map library for one consumer of one CLI
- * subcommand.
- */
-function decodeAll(mappings: string): Segment[][] {
-  const out: Segment[][] = [];
-  let sourceLine = 0;
-  let sourceColumn = 0;
-
-  for (const line of mappings.split(";")) {
-    // Reset per line; the two source fields deliberately do not.
-    let generatedColumn = 0;
-    const segments: Segment[] = [];
-    for (const raw of line.split(",")) {
-      if (raw === "") continue;
-      const fields: number[] = [];
-      let value = 0;
-      let shift = 0;
-      for (const char of raw) {
-        const digit = BASE64.indexOf(char);
-        if (digit === -1) return out; // not something we wrote; give up
-        const hasContinuation = (digit & 32) !== 0;
-        value += (digit & 31) << shift;
-        if (hasContinuation) {
-          shift += 5;
-          continue;
-        }
-        const negative = (value & 1) === 1;
-        const magnitude = value >> 1;
-        fields.push(negative ? -magnitude : magnitude);
-        value = 0;
-        shift = 0;
-      }
-      // A 1-field segment marks generated code with no source; only a 4- or
-      // 5-field one carries a source position.
-      if (fields.length < 4) continue;
-      generatedColumn += fields[0] as number;
-      sourceLine += fields[2] as number;
-      sourceColumn += fields[3] as number;
-      segments.push({ generatedColumn, sourceLine, sourceColumn });
-    }
-    out.push(segments);
-  }
-  return out;
-}
-
 export interface ResolvedPosition {
   file: string;
   hasFineGrainedMapping: boolean;
-  /** 1-based, present only when the map carried a real mapping. */
+  /** 1-based, present only when the position resolved to source text. */
   line?: number;
-  /** 0-based, present only when the map carried a real mapping. */
+  /** 0-based, present only when the position resolved to source text. */
   column?: number;
 }
 
@@ -116,11 +75,12 @@ export interface ResolvedPosition {
  * Resolves an emitted `line:col` back to a source position, per
  * `mx-angular map`.
  *
- * With `mappings` empty (a page today) there is nothing fine-grained to
- * resolve, and this reports the source file alone rather than fabricating a
- * position. With a real map (a `.ng.mx`) the nearest segment at or before
- * the requested column wins — the standard source-map lookup, since a
- * segment covers from its own column up to the next one.
+ * With `mappings` empty there is nothing to resolve and the source file is
+ * reported alone. Otherwise the lookup runs through `lookupMapping`
+ * (`./mapping.ts`), which honours the terminator segments the encoder emits
+ * at each mapped run's end — so a position *past* a run resolves to no
+ * position rather than inheriting that run's, which a plain
+ * nearest-segment-at-or-before search would do.
  */
 export function resolvePosition(
   map: RawSourceMap,
@@ -137,31 +97,15 @@ export function resolvePosition(
     return { file, hasFineGrainedMapping };
   }
 
-  // Decoded from the first line, not just the requested one: `sourceLine`
-  // and `sourceColumn` are deltas that accumulate across the **whole** map,
-  // while `generatedColumn` resets per line. Decoding one line in isolation
-  // starts both source fields at zero and yields a position that is wrong by
-  // every delta before it — measured as a *negative* column, which is how
-  // this was caught.
-  const decoded = decodeAll(map.mappings);
-  const segments = decoded[generatedLine - 1] ?? [];
-  if (segments.length === 0) return { file, hasFineGrainedMapping };
-
-  // The nearest segment at or before the requested column. Seeded with
-  // `undefined` rather than `segments[0]`: when even the first segment
-  // starts after the column asked for, nothing on this line covers it, and
-  // reporting that first segment anyway yields a position the column
-  // arithmetic never visited.
-  let best: Segment | undefined;
-  for (const segment of segments) {
-    if (segment.generatedColumn > generatedColumn) break;
-    best = segment;
-  }
-  if (!best) return { file, hasFineGrainedMapping };
+  const source = lookupMapping(map.mappings, {
+    line: generatedLine,
+    column: generatedColumn,
+  });
+  if (!source) return { file, hasFineGrainedMapping };
   return {
     file,
     hasFineGrainedMapping,
-    line: best.sourceLine + 1,
-    column: best.sourceColumn,
+    line: source.line,
+    column: source.column,
   };
 }
