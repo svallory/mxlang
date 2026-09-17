@@ -9,6 +9,7 @@ import {
   resetTemplateCache,
   type TemplateBackedTag,
   templateCompileCount,
+  touchAndEvict,
 } from "./template-tag.ts";
 
 const CALLER = "/tmp/mx-template-test/page.mx";
@@ -352,5 +353,55 @@ describe("template custom tags as compilation units", () => {
       expect(error).toBeInstanceOf(TranslateError);
       expect((error as TranslateError).file).toBe(broken.template.filename);
     }
+  });
+});
+
+describe("touchAndEvict", () => {
+  it("moves a refreshed key to most-recent, evicting the oldest OTHER entry", () => {
+    const cache = new Map<string, string>([
+      ["a", "a1"],
+      ["b", "b1"],
+      ["c", "c1"],
+    ]);
+    // Refresh "a": naive `set` without `delete` would leave it at its
+    // original ordinal, so an insertion-order eviction would drop "a" (the
+    // just-refreshed entry) instead of "b" (the true oldest).
+    touchAndEvict(cache, "a", "a2", 2);
+    expect(cache.has("a")).toBe(true);
+    expect(cache.get("a")).toBe("a2");
+    expect(cache.has("b")).toBe(false);
+    expect(cache.has("c")).toBe(true);
+  });
+
+  it("never evicts the key just written, even at exactly max + 1", () => {
+    const cache = new Map<string, string>([
+      ["a", "a1"],
+      ["b", "b1"],
+    ]);
+    touchAndEvict(cache, "new", "new1", 2);
+    expect(cache.size).toBe(2);
+    expect(cache.has("new")).toBe(true);
+    expect(cache.has("a")).toBe(false);
+    expect(cache.has("b")).toBe(true);
+  });
+
+  it("evicts the oldest entry on a normal insert over the bound", () => {
+    const cache = new Map<string, string>([
+      ["a", "a1"],
+      ["b", "b1"],
+      ["c", "c1"],
+    ]);
+    touchAndEvict(cache, "d", "d1", 3);
+    expect(cache.size).toBe(3);
+    expect(cache.has("a")).toBe(false);
+    expect([...cache.keys()]).toEqual(["b", "c", "d"]);
+  });
+
+  it("still refuses to evict the just-written key when max is 0, leaving it alone above the bound", () => {
+    const cache = new Map<string, string>([["a", "a1"]]);
+    touchAndEvict(cache, "b", "b1", 0);
+    expect(cache.size).toBe(1);
+    expect(cache.has("a")).toBe(false);
+    expect(cache.has("b")).toBe(true);
   });
 });
