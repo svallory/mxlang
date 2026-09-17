@@ -702,13 +702,14 @@ describe("mx()", () => {
       const when = new Date(Date.now() + 10_000);
       utimesSync(tagFile, when, when);
 
-      // The new tag is discovered and its template inlined, so the compile
-      // succeeds and the second tag's own markup is in the output. Before P3
-      // this asserted the template-expansion gate instead, which is what a
-      // discovered template tag used to report; the rescan being tested is
-      // the same either way.
+      // The new tag is discovered, so the compile succeeds and the caller
+      // imports it. Under the unit model (decision 95) the tag's own markup
+      // stays in its own module, so what proves the rescan is the injected
+      // import naming the newly discovered template — not inlined markup.
       const rescanned = await transform.call({}, "<marker/><extra/>\n", id);
-      expect(rescanned?.code).toContain("a second tag");
+      expect(rescanned?.code).toMatch(
+        /import\s+\$mx_\w+\s+from\s+"[^"]*extra\.mx"/,
+      );
 
       // The negative half the old assertion carried: a name the rescan did
       // *not* find is still an error, so the success above is discovery
