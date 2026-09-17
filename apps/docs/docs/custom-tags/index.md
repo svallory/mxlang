@@ -5,18 +5,18 @@ description: "Define portable compile-time tags once, as templates or TypeScript
 
 # Custom tags
 
-A custom tag gives a project its own markup vocabulary. Define `<icon>` once and call it like any other tag, without importing it at each call site. MX expands the call into its host-independent IR **before any emitter runs**, so the same definition works on HTML, Astro, React, Preact, Hono, and Solid.
+A custom tag gives a project its own markup vocabulary. Define `<icon>` once and call it like any other tag, without importing it at each call site. A tag's template is a **compilation unit**: it compiles to a module through the same per-file pipeline a page uses, and the caller emits an import plus a call. Discovery only maps a tag name to a path, so the same definition works on HTML, Astro, React, Preact, Hono, and Solid.
 
-Custom tags do not add an IR kind and cannot inspect the active host. After expansion, an emitter sees only the ordinary elements, branches, loops, expressions, and host primitives it already knows how to render.
+Custom tags do not add an IR kind and cannot inspect the active host. An emitter sees only the ordinary elements, branches, loops, expressions, host primitives and component calls it already knows how to render.
 
 ## Two authoring layers
 
 | Layer | File | Reach for it when |
 | --- | --- | --- |
-| **L1: template** | `tags/x.mx` | Markup and structural tags can express the expansion. This is the default: smallest surface, readable as MX, portable by construction. |
+| **L1: template** | `tags/x.mx` | Markup and structural tags can express the tag. This is the default: smallest surface, readable as MX, portable by construction. |
 | **L2: sidecar** | `tags/x.tag.ts` | The tag must validate a contract, compute IR, reject a call, change parsing, or collect all calls in a file. |
 
-The layers compose. Put both files beside each other when a template needs declarations or a small amount of compile-time logic. A declaration-only sidecar adds validation and parse options while the template still expands. A sidecar with `transform` takes control and can include its template with `ctx.build.template(call)`.
+The layers compose. Put both files beside each other when a template needs declarations or a small amount of compile-time logic. A declaration-only sidecar adds validation and parse options while the call still routes to the template. A sidecar with `transform` takes control: it may build its own IR, or hand the call back to its template with `ctx.build.template(call)`.
 
 Raw parser hooks are a later layer, deferred until after MX 1.x. They are not part of the current custom-tag API.
 

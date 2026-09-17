@@ -647,9 +647,13 @@ Five facts worth knowing before editing it:
   compares against `expected.html`. It runs **four** fixtures — `icon` (an L2
   sidecar), `icon-template` (the same tag as an L1 template), `icon-sprite`
   (P5's collecting pair) and `table-of` (L2 without that pair) — for a 24-row
-  count gate. All 24 rows pass; the one former skip (`table-of` on Solid) was
-  the accessor-binding bug, fixed in `@mxlang/solid` — see the P5 bullet
-  below. A skip still runs, still counts, and still prints its reason, so a
+  count gate. 23 rows pass and one is a recorded skip: `icon-template` on
+  **solid**, because a discovered template is now imported by its caller
+  (decision 95) and a `.solid.mx` MX region is an expression with no module
+  scope to hold that import — the parser bridge writing it into the surrounding
+  TypeScript module is tag-unit phase 2. (The earlier `table-of`-on-Solid skip
+  was the accessor-binding bug, fixed in `@mxlang/solid` — see the P5 bullet
+  below.) A skip still runs, still counts, and still prints its reason, so a
   fixture that stopped running is still a failure.
 - **`analyze` / `finalize` / `ctx.store` are P5 and shipped**
   (`packages/core/src/custom-tags.ts`; the contract and the worked example are
@@ -670,19 +674,21 @@ Five facts worth knowing before editing it:
     `lower()` knows it is not the file root and runs no hooks of its own.
   - **A file containing a tag that defines `analyze` is lowered twice.** The
     first walk runs over a scratch `Ctx` (same source, declarations, lookup,
-    tags and stores; its own prelude, bindings, imports, warnings and template
-    imports) that records each call and is then discarded — so `analyze` gets
+    tags, stores and filename; its own prelude, bindings, imports and
+    warnings) that records each call and is then discarded — so `analyze` gets
     the identical `TagCall` its `transform` will get, while the walk's hoists
-    and warnings are not emitted twice. That scratch walk expands templates
-    far enough to record nested calls without running transforms, and its
-    suppressed-output IR is never cached. No registered `analyze` means one
-    walk, exactly as before.
-  - **Template boundaries and cache state are invisible to the pair.** A
-    file-level `analyze` sees calls nested inside tag templates alongside calls
-    written directly in the file. Every compiled-template cache entry records
-    its transitive call list and used tag names and replays both on a hit, so a
-    template-nested tag is finalized identically on the cache's first use and
-    every later use in the process.
+    and warnings are not emitted twice. Its suppressed-output IR is never
+    cached. No registered `analyze` means one walk, exactly as before.
+  - **A unit boundary is a hook boundary** (decision 95). A call written inside
+    a tag template belongs to *that template's* compilation unit and is not
+    replayed into the caller, so a file-level `analyze` sees only the calls its
+    own file wrote — measured: a caller whose template calls `<inner/>` reports
+    an empty call list for `inner`. This is the reverse of the inlined model,
+    where the scratch walk expanded templates far enough to record nested calls
+    and every cache entry replayed a transitive call list. A tag that must
+    collect across units has to do it through its own module state, not through
+    `analyze`. The cached metadata a unit exposes to its caller is
+    `{ readsContent, attributeTags }` and nothing else.
   - **Only a tag the file actually calls is finalized** (`ctx.customTagsUsed`),
     and a tag with `analyze` but no calls is skipped rather than analyzed with
     an empty array. A tag declaring **only** `finalize` is rejected at
@@ -812,8 +818,8 @@ Five facts worth knowing before editing it:
   its own registry; Bun and Node both do re-evaluate, which is what ships. A
   Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
-- **A template-only tag is discovered with no hooks**, so calling one reports
-  P1's template-expansion gate rather than "unknown tag". Inlining is P3.
+- **A template-only tag is discovered with no hooks**; calling one routes to
+  its compiled unit.
 - **The scan never hands a core-owned name onward.** A `tags/try.tag.ts` is
   excluded from the map with a diagnostic naming the file, because
   `rejectShadowedRegistration` refuses the *whole* `customTags` map when a
@@ -857,51 +863,64 @@ Five facts worth knowing before editing it:
   `file://` URI, because `resolve("file:///a/page.mx")` yields
   `<cwd>/file:/a/page.mx` — passing a raw URI discovered zero tags for every
   real document while a unit test using a plain path stayed green.
-- **A template custom tag is inlined, and `input` is substituted rather than
-  bound** (`packages/core/src/template-tag.ts`). A `tags/x.mx` template is
-  lowered to IR once per (path, mtime, source) and spliced at the call site, so
-  a host sees ordinary IR and never learns which layer authored it. The spec
-  and the P1 report both sketched binding the call's attributes to one
-  synthetic `Const` and leaving the template's `input.x` reads alone; that is
-  **not** what ships, and the reason is measured: a `Const` is a *statement*,
-  and the four JSX hosts (Preact, React, Hono, Solid) emit a template body as a
-  single expression and reject a `<const>` nested in markup outright — which a
-  call site inside a `<for>` or an `<if>` is. Binding would have made one
-  definition work on two hosts and fail on four, against decision 80.
-  Substituting each `input.x` with the attribute's own expression (parenthesized,
-  so precedence survives; `undefined` when the call omits it) produces no node
-  a host must be able to emit. A **spread attribute is a compile error** on a
-  template tag for the same reason: its keys are not known until run time, so
-  no read can be resolved, and silently resolving them to `undefined` would
-  drop the author's values. A surviving bare `input` (`typeof input`,
-  `input?.size`, a destructure) is likewise a positioned error, and `content`
-  is reserved as an attribute name since it names the body slot.
-  **The one inherent limit: N reads are N evaluations** — a template reading
-  `input.size` twice evaluates the caller's `size=` expression twice, so a
-  template must not read a side-effecting attribute more than once. Pinned by
-  a test so a future change is deliberate.
-- **Both rewrites are AST-based, never textual** (`rewriteExpressionCode`).
-  Each `Expr.code` is parsed with the vendored Babel expression parser,
-  rewritten on the AST through `isReferencedIdentifier()` and
-  `path.scope.getBinding()`, and reprinted. A regex over printed JavaScript was
-  tried first and was silently wrong on ordinary MX expressions: `x?x:x`
-  renamed only the test, leaving the consequent pointing at the *caller's*
-  binding — the exact leak hygiene exists to prevent — while string and
-  template literals, class methods and `case`/label colons all misfired. A
-  substituted *compound* expression is parenthesized, because it is grafted
-  into whatever operator surrounded the read and Babel does not re-derive
-  precedence for a node it did not parse there (`size=a ?? b` into
-  `input.size ?? 24` printed `a ?? b ?? 24`, which is a syntax error). Names
-  the IR binds rather than any one expression — `<for>` and `<define>` params —
-  are carried down the walk separately, since no single expression's parse can
-  see them.
-- **Hygiene is two rules.** A template's render-scope declarations (`<const>`,
-  `<define>`) are renamed to `gensym` names with their references rewritten, so
-  a caller using the same name cannot pick up the template's binding; its
-  module-level statements (`import`, `static`, `export`) hoist to the caller's
-  *module*, where the template's helpers have to live for its body to reach
-  them. Its `export interface Input` is deliberately not carried over — it
-  would collide with the caller's own.
+- **A template custom tag is a compilation unit, and `input` is a real
+  parameter** (decision 95, `packages/core/src/template-tag.ts`). A `tags/x.mx`
+  template compiles through the **same per-file pipeline a page uses**, into a
+  module exporting the tag; the caller emits an injected `import` plus an
+  ordinary `Component` call. Nothing is spliced into the caller. This is not
+  new machinery but *less* of it: an explicitly imported tag already lowered and
+  emitted exactly this way on all six hosts, so the work was routing a
+  *discovered* tag down that same path and deleting the substitution engine
+  (~1000 lines: `input` substitution, hygiene renaming, caller-side
+  import/static merging, `templateStack`/`templateImports`, the expansion depth
+  and node caps, and the cycle detector). Consequences, each one a limit that
+  simply stopped existing: N reads are N reads rather than N evaluations; a
+  spread attribute is ordinary; bare `input`/`typeof input`/destructuring are
+  ordinary; a self-recursive tag is legal ESM. `content` stays reserved as an
+  attribute name, and `<@content>` is rejected, because both would collide with
+  the body slot. A tag declaring `parseOptions.openTagOnly` reports a
+  positioned MX error at the call site (``` `<x>`: does not accept content ```)
+  rather than a Marko parse error, which is why `openTagOnly` is deliberately
+  *not* forwarded into the injected taglib.
+- **The injected import is gensym'd and deduped by resolved path.** A
+  discovered tag may be named `icon`, which `lower.ts`'s casing rule will never
+  resolve as a component, and the caller may already bind that name for
+  something else — so the local is always generated (`$mx_Icon1`), minted from
+  the file-level counter against the caller's bindings *and* its source text.
+  One import per module per tag, keyed by the template's resolved path; if the
+  caller already imports that same path itself, its binding is reused and
+  nothing is injected (ruling 3). The specifier is the relative posix path with
+  `.mx` kept, since every loader resolves `.mx` per file.
+- **`static` in a tag now runs once per process, not once per calling module.**
+  The tag's module-level statements are its own module's, evaluated at import
+  time — Marko's model. This is an observable behavior change for any tag whose
+  `static` block has side effects.
+- **A template's caller-facing facts come from cached metadata, not from
+  expanding it.** Compiling a unit yields `{ readsContent, attributeTags }`
+  (with `returnsValue` reserved for `<return>`), cached by path + mtime +
+  source, bounded at 256 entries, with a provisional entry seeded before the
+  compile so direct and mutual recursion terminate. This is what preserves MX's
+  improvement over Marko: a body passed to a tag that never reads
+  `input.content` still warns at the call site, even though the caller no
+  longer sees the template's body. Marko does the same thing through
+  `loadFileForTag`.
+- **A sidecar `transform` may return IR or a `TagCall`.** Returning IR is a
+  macro the author wrote — the only expansion left in the language. Returning a
+  `TagCall` (or calling `ctx.build.template(call)`) validates or rewrites the
+  call and then routes it to the adjacent template unit.
+- **The html host augments `Input` only when the template reads
+  `input.content`**: the render signature becomes
+  `input: Input & { content?: () => string }`, so an imported call passing a
+  body typechecks; a tag that ignores the body keeps a bare `Input`. The
+  brand/helper rewrites in `translate.ts` key off whichever of the two
+  signature lines was emitted — and the `function ` prefix they replace carries
+  its trailing space, or the emitted code gets a stray one.
+- **`class`/`for` are renamed to `className`/`htmlFor` on *elements only*.** The
+  shared JSX emitter's `#attrName` takes the component flag: a component's
+  attributes are its author's `Input` contract, so a tag whose template reads
+  `input.class` must receive `class` whatever the target calls the DOM
+  property. Renaming on a component call silently dropped the value; it only
+  became reachable once a template tag became a real component call.
 - **Positions get a third rule** (spec §2): material from a tag template keeps
   that file's line and column, tagged through the optional `Position.file` (and
   `Expr.file`, since an `Expr` carries no `loc` of its own). `TranslateError`
@@ -920,17 +939,16 @@ Five facts worth knowing before editing it:
   being edited — which is the one place a dropped-content report is worth
   anything. Both P1's unread-`attributeTags` warning and P3's unplaced-content
   warnings use it.
-- **A template's `import`s are deduped into the caller's module**, and the same
-  local name from a different module is a positioned error naming both files.
-  Import bindings are deliberately *not* `gensym`-renamed the way `<const>` and
-  `<define>` are: an import binding also names a module the author wrote, so
-  renaming means rewriting the statement's own syntax in all four forms.
-- **The template cache is bounded** (256 entries, oldest-inserted evicted), not
-  an unbounded process-wide map — a language server compiling an edited file
-  over and over is long-lived, the same discipline P2's scan cache owes.
-- **A cycle between tag templates is an error naming the path**
-  (`a.mx -> b.mx -> a.mx`), reported on the call that closes it, separately
-  from the depth cap.
+- **The template metadata cache is bounded** (256 entries, oldest-inserted
+  evicted), not an unbounded process-wide map — a language server compiling an
+  edited file over and over is long-lived, the same discipline P2's scan cache
+  owes.
+- **`oracle:custom-tags` compiles each fixture's tag units through the caller's
+  own host** and writes them beside the caller, because the tag is a real
+  import now. `icon-template` on **solid** is a recorded skip: a `.solid.mx` MX
+  region is an *expression* with no module scope for the injected import, and
+  writing it into the surrounding TypeScript module through the parser bridge
+  is tag-unit phase 2.
 
 ## `@mxlang/solid`: the Solid host on `@mxlang/core`
 

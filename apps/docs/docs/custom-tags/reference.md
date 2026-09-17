@@ -234,12 +234,15 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 
 | Trigger | Diagnostic form |
 | --- | --- |
-| Template calls form a cycle. | `` `<name>`: custom tag templates form a cycle: a.mx -> b.mx -> a.mx `` |
-| A template call uses a spread attribute. | `` `<name>`: a spread attribute cannot be passed to a tag template… `` |
 | A template call supplies the `content` attribute. | `` `<name>`: `content` is reserved on a template tag; it names the body slot `` |
-| A template uses bare/optional/destructured/spread `input`. | `` `<name>`: `input` can only be read as `input.<name>` inside a tag template `` |
-| A template import reuses a local name for a different module. | `` `<name>`: tag template `FILE` imports `BINDING` from a different module than … already did… `` |
-| Lowering the template itself fails. | The underlying positioned compiler message, annotated with the template's file. |
+| A template call passes `<@content>`. | `` `<@content>` is reserved for the body of `<name>` `` |
+| A call passes a body to an `openTagOnly` tag. | `` `<name>`: does not accept content `` |
+| Compiling the template itself fails. | The underlying positioned compiler message, against the template's own file. |
+
+A template is a separate module, so the cycle, spread, bare-`input` and
+import-collision errors the inlining model needed no longer exist: recursion is
+ordinary ESM, a spread is an ordinary object, `input` is a parameter, and a
+template's imports never enter the caller's module.
 
 ### Discovery and sidecar errors
 

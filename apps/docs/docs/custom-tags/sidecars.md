@@ -197,7 +197,7 @@ Only tags actually called in the file are finalized. A definition with only `fin
 
 ## Compose with a template
 
-When `x.mx` and `x.tag.ts` coexist, a sidecar with no `transform` supplies declarations while the template expands normally. If the sidecar defines `transform`, it wins. Include the template as raw material with the passing composition pattern:
+When `x.mx` and `x.tag.ts` coexist, a sidecar with no `transform` supplies declarations while the call routes to the template as usual. If the sidecar defines `transform`, it wins. Route the call to the template with the passing composition pattern:
 
 ```ts
 transform(call, ctx) {
@@ -205,4 +205,4 @@ transform(call, ctx) {
 },
 ```
 
-`ctx.build.template(call)` is available only when that tag has an `x.mx` template, and it is unavailable from `finalize`.
+`ctx.build.template(call)` is available only when that tag has an `x.mx` template, and it is unavailable from `finalize`. It routes the call to that template's module rather than expanding it, so a `transform` may validate or rewrite the `TagCall` first — returning the `TagCall` itself does the same thing.
