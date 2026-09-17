@@ -1,0 +1,1 @@
+a `server` block runs only during a server render; Angular has no server-render pass to run it in — move its statements into the component class

@@ -1,0 +1,1 @@
+a `client` block is Marko's client-runtime split; an Angular component is already client code — move its statements into the component class

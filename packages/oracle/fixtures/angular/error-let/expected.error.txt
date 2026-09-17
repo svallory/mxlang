@@ -1,0 +1,1 @@
+`<let>` is Marko reactive state; use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`

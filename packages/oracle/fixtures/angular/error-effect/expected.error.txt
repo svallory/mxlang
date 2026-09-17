@@ -1,0 +1,1 @@
+`<effect>` is a Marko reactive effect; use Angular's `effect()` in the component class

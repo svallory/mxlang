@@ -58,9 +58,72 @@ const MODULE_LEVEL_MESSAGE =
 const TRY_MESSAGE =
   "`<try>` cannot be emitted into an Angular template: Angular has no template-level error boundary. `@defer`'s `@error` block only covers a failed lazy chunk load, not a render error. Handle the error in the component and render the fallback with `<if>`.";
 
+/**
+ * The Marko stateful tags this host refuses, each naming what to write
+ * instead on Angular (spec §11, §13.3 bug 1). Same wording family as
+ * `@mxlang/preact`'s `statefulErrors` and `@mxlang/solid`'s
+ * `STATEFUL_ERRORS` — these are Marko's own reactivity, and Angular has its
+ * own. Left undeclared, each name falls through `isElement`'s bare case test
+ * and becomes a literal lowercase element in the emitted template (the S8
+ * silent-wrong-render class), which is the bug this table closes.
+ */
+const STATEFUL_ERRORS: HostDeclarations["tags"] = {
+  let: {
+    kind: "error",
+    reason:
+      "`<let>` is Marko reactive state; use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`",
+  },
+  effect: {
+    kind: "error",
+    reason:
+      "`<effect>` is a Marko reactive effect; use Angular's `effect()` in the component class",
+  },
+  lifecycle: {
+    kind: "error",
+    reason:
+      "`<lifecycle>` is a Marko lifecycle hook; use Angular's own lifecycle hooks (`ngOnInit`, etc.) in the component class",
+  },
+  script: {
+    kind: "error",
+    reason:
+      "`<script>` is a Marko client-runtime tag; write client code in the component class",
+  },
+  log: {
+    kind: "error",
+    reason:
+      "`<log>` is a Marko debug tag; call `console.log` from the component class",
+  },
+  debug: {
+    kind: "error",
+    reason:
+      "`<debug>` is a Marko debugger hook; use the component class instead",
+  },
+  client: {
+    kind: "error",
+    reason:
+      "a `client` block is Marko's client-runtime split; an Angular component is already client code — move its statements into the component class",
+  },
+  server: {
+    kind: "error",
+    reason:
+      "a `server` block runs only during a server render; Angular has no server-render pass to run it in — move its statements into the component class",
+  },
+  id: {
+    kind: "error",
+    reason:
+      "`<id>` allocates an identifier for Marko's reactive runtime; use Angular's own `inject(...)`-based id generation or a static string",
+  },
+  await: {
+    kind: "error",
+    reason:
+      "`<await>` needs Marko's suspense; use `@defer` with an `@placeholder`/`@loading` block instead",
+  },
+};
+
 /** Resolve-time questions for Angular's template target. */
 export const angularDeclarations: HostDeclarations = {
   tags: {
+    ...STATEFUL_ERRORS,
     try: { kind: "error", reason: TRY_MESSAGE },
   },
   isElement: (name) => !/^[A-Z]/.test(name),
@@ -79,23 +142,31 @@ export const angularDeclarations: HostDeclarations = {
     }
     rawFail(`unknown Angular host tag ${name}`, node);
   },
+  // `class:`/`style:`/`attr:` modifiers are not Marko syntax at all
+  // (decision 86, spec §4, §13.3 bug 7): every other host errors on them,
+  // and Angular must too rather than inventing a spelling MX does not have.
+  // No `resolveModifier` — every modifier falls through to this rejection.
   // Marko's own node shape: `attr.name` is the modifier prefix
   // (`attr`/`class`/`style`) and `attr.modifier` is the attribute name that
   // follows the colon (measured: `attr:aria-label=l` gives
   // `{ name: "attr", modifier: "aria-label" }`).
-  resolveModifier(attr): string | undefined {
-    const prefix = (attr as unknown as { name: string }).name;
-    const target = (attr as unknown as { modifier?: string }).modifier;
-    if (prefix === "attr" || prefix === "class" || prefix === "style") {
-      return `${prefix}:${target}`;
-    }
-    return undefined;
-  },
   rejectModifier(attr): void {
     const prefix = (attr as unknown as { name: string }).name;
     const target = (attr as unknown as { modifier?: string }).modifier;
+    const replacement =
+      prefix === "class"
+        ? "an object/array `class=` value, lowered to `[ngClass]`"
+        : prefix === "style"
+          ? "an object `style=` value, lowered to `[ngStyle]`"
+          : "a plain dynamic attribute (`" +
+            (target ?? "") +
+            "=`); the emitter binds a dynamic `data-*`/`aria-*` attribute as `[attr." +
+            (target ?? "") +
+            "]` and every other dynamic attribute as `[" +
+            (target ?? "") +
+            "]`";
     rawFail(
-      `attribute modifier \`${prefix}:${target}\` is not supported by Angular`,
+      `attribute modifier \`${prefix}:${target}\` is not Marko syntax; use ${replacement} instead`,
       attr,
     );
   },
@@ -157,7 +228,10 @@ function domEventName(attrName: string): string {
   return IRREGULAR_EVENTS[attrName] ?? attrName.slice(2).toLowerCase();
 }
 
-const MODIFIER_PREFIXES = new Set(["attr", "class", "style"]);
+// A dynamic `data-*`/`aria-*` attribute has no Angular DOM property to bind,
+// so it emits `[attr.name]`; every other dynamic attribute stays `[name]`
+// (A1 design note, decision 86).
+const DATA_OR_ARIA = /^(data|aria)-/;
 
 // A1:112-113's exact wording, one per directive — "class" takes "object or
 // array" (both structured shapes route here) while "style" takes only
@@ -198,15 +272,15 @@ function emitAttrs(
           } else {
             out += ` [${name}]="${esc(attr.value.code)}"`;
           }
-        } else if (name.includes(":")) {
-          const [prefix, target] = name.split(":", 2);
-          if (!MODIFIER_PREFIXES.has(prefix ?? "")) {
-            fail(
-              `attribute modifier \`${name}\` is not supported by Angular`,
-              attr,
-            );
-          }
-          out += ` [${prefix}.${target}]="${esc(attr.value.code)}"`;
+        } else if (DATA_OR_ARIA.test(name)) {
+          // A1 (design note), decision 86: Angular property vs attribute
+          // binding is the emitter's own call, not an author-written
+          // modifier — `class:`/`style:`/`attr:` are rejected as not Marko
+          // syntax (`rejectModifier` above). A dynamic `data-*`/`aria-*`
+          // attribute has no property to bind (Angular has no `.dataFoo`/
+          // `.ariaFoo` DOM property for most of these), so it emits
+          // `[attr.name]`; every other dynamic attribute stays `[name]`.
+          out += ` [attr.${name}]="${esc(attr.value.code)}"`;
         } else {
           out += ` [${name}]="${esc(attr.value.code)}"`;
         }
