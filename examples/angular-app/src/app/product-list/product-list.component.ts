@@ -1,9 +1,14 @@
-import { KeyValuePipe, NgStyle, NgTemplateOutlet } from "@angular/common";
+import {
+  KeyValuePipe,
+  NgClass,
+  NgStyle,
+  NgTemplateOutlet,
+} from "@angular/common";
 import { Component } from "@angular/core";
 
 @Component({
   selector: "app-product-list",
-  imports: [NgStyle, KeyValuePipe, NgTemplateOutlet],
+  imports: [NgClass, NgStyle, KeyValuePipe, NgTemplateOutlet],
   templateUrl: "./product-list.component.html",
 })
 export class ProductList {

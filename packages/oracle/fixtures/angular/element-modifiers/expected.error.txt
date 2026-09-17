@@ -1,0 +1,1 @@
+attribute modifier `attr:aria-label` is not Marko syntax; use a plain dynamic attribute (`aria-label=`); the emitter binds a dynamic `data-*`/`aria-*` attribute as `[attr.aria-label]` and every other dynamic attribute as `[aria-label]` instead

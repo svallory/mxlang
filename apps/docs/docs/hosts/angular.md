@@ -102,10 +102,20 @@ A few of Angular's own idioms:
 | `<for\|k, v\| in=obj>` | `@for (entry of (obj \| keyvalue: null); track entry.key) { @let k = entry.key; @let v = entry.value; ... }` |
 | `<define>` | an `<ng-template>` with `let-` params |
 | a component call | an Angular component element |
+| a dynamic `data-*`/`aria-*` attribute | `[attr.data-x]`/`[attr.aria-x]` (no DOM property to bind) |
+| every other dynamic attribute | `[x]` |
 
-`<let>`, `<effect>`, `<lifecycle>`, `<script>` and `:=` are compile errors —
-this host has no reactive runtime of its own; that state belongs in the
-hand-written component class.
+`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `<id>`,
+`<await>`, `client`/`server` blocks and `:=` are compile errors — this host
+has no reactive runtime of its own; that state belongs in the hand-written
+component class.
+
+`class:`/`style:`/`attr:` attribute modifiers are **not Marko syntax at all**
+(decision 86) and are a compile error naming the replacement, the same as
+every other MX host: write an object/array `class=`/`style=` value (already
+lowers to `[ngClass]`/`[ngStyle]`), and write the attribute plainly
+(`data-kind=x`, not `attr:data-kind=x`) — the emitter decides property vs.
+attribute binding for you, per the row above.
 
 ## `mx-angular`
 
@@ -174,7 +184,7 @@ component is a class with a decorator, so there is no template-only form.
 ```marko
 // tags/badge.mx
 export interface Input { kind: "ok" | "warn" | "error"; label?: string }
-<span class="badge" attr:data-kind=input.kind>
+<span class="badge" data-kind=input.kind>
   <if=input.label>${input.label}: </if>${input.content()}
 </span>
 ```

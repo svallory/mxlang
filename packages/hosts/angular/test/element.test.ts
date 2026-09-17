@@ -66,11 +66,27 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("emits attr:/class:/style: modifiers", () => {
-    const out = emit("<a attr:aria-label=l class:on=c style:width=w>x</a>");
-    expect(out).toBe(
-      '<a [attr.aria-label]="l" [class.on]="c" [style.width]="w">x</a>',
+  it("rejects attr:/class:/style: modifiers as not Marko syntax (decision 86)", () => {
+    expect(() => emit("<a attr:aria-label=l>x</a>")).toThrow(
+      /attribute modifier `attr:aria-label` is not Marko syntax/,
     );
+    expect(() => emit("<a class:on=c>x</a>")).toThrow(
+      /attribute modifier `class:on` is not Marko syntax.*\[ngClass\]/,
+    );
+    expect(() => emit("<a style:width=w>x</a>")).toThrow(
+      /attribute modifier `style:width` is not Marko syntax.*\[ngStyle\]/,
+    );
+  });
+
+  it("binds a dynamic data-*/aria-* attribute as [attr.name]", () => {
+    const out = emit("<div data-kind=k aria-label=l>x</div>");
+    expect(out).toBe('<div [attr.data-kind]="k" [attr.aria-label]="l">x</div>');
+    assertAngularParses(out);
+  });
+
+  it("keeps a static data-*/aria-* attribute as a plain attribute", () => {
+    const out = emit('<div data-kind="ok">x</div>');
+    expect(out).toBe('<div data-kind="ok">x</div>');
     assertAngularParses(out);
   });
 
@@ -119,12 +135,9 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("rejects an unknown attribute modifier prefix", () => {
-    // A modifier this host never resolves reaches rejectModifier, not the
-    // dynamic-attr `includes(":")` branch — but the branch's own guard is
-    // exercised directly here via a name that already contains a colon.
+  it("rejects an unknown attribute modifier prefix, without the data-*/aria-* detail", () => {
     expect(() => emit("<div prop:x=v>y</div>")).toThrow(
-      /attribute modifier `prop:x` is not supported by Angular/,
+      "attribute modifier `prop:x` is not Marko syntax; MX has no attribute modifiers — write the attribute plainly (`x=`)",
     );
   });
 

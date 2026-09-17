@@ -1,1 +1,1 @@
-attribute modifier `prop:x` is not supported by Angular
+attribute modifier `prop:x` is not Marko syntax; MX has no attribute modifiers — write the attribute plainly (`x=`)

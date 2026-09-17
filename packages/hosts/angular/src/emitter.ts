@@ -153,6 +153,15 @@ export const angularDeclarations: HostDeclarations = {
   rejectModifier(attr): void {
     const prefix = (attr as unknown as { name: string }).name;
     const target = (attr as unknown as { modifier?: string }).modifier;
+    if (prefix !== "class" && prefix !== "style" && prefix !== "attr") {
+      // An unknown modifier prefix (`prop:x`, and the like): no attr:/
+      // class:/style: name to explain, so the data-*/aria-* detail below
+      // does not apply — just point at the plain attribute spelling.
+      rawFail(
+        `attribute modifier \`${prefix}:${target}\` is not Marko syntax; MX has no attribute modifiers — write the attribute plainly (\`${target ?? ""}=\`)`,
+        attr,
+      );
+    }
     const replacement =
       prefix === "class"
         ? "an object/array `class=` value, lowered to `[ngClass]`"
