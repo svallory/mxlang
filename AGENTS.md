@@ -252,7 +252,16 @@ lowering path.
 `@mxlang/parser` and `@mxlang/core` resolve to `dist/`, so a freshly created worktree
 needs `bun install` **and** `bun run build` before any dependent package's
 tests will run — without `dist/` consumers fail to resolve those packages
-(the oracle fails the same way). `bun run verify` builds before it tests,
+(the oracle fails the same way).
+
+**A *stale* `dist/` is worse than a missing one, because it fails silently.**
+Editing `packages/core/src` and then running a host's tests, an oracle, or a
+one-off `bun run` script exercises the *last built* core, not the edit: the run
+succeeds and reports the old behavior, so a new diagnostic appears not to fire
+and a new field reads as `undefined`. (The per-edit typecheck hook does read the
+sources, so typecheck passing is not evidence the built artifact is current.)
+Rebuild `@mxlang/core` after editing it — `cd packages/core && bun run build`,
+or `bun run build` at the root — before running anything downstream. `bun run verify` builds before it tests,
 so this only bites when running one package's tests directly. The per-edit
 typecheck hook in `.claude/hyper.json` also expects a prior build for full
 coverage (it skips checking packages that rely on the built `mx-tsc` wrapper if
