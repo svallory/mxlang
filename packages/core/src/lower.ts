@@ -23,6 +23,7 @@
  * walk enters and leaves each binding construct, exactly as before.
  */
 
+import { freeIdentifiersIn } from "./accessor-reads.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   attrByName,
@@ -69,6 +70,7 @@ import type {
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import {
+  hasTemplate,
   metadataOfIr,
   registerAuthoredTemplateImport,
   registerTemplateMetadataCompiler,
@@ -135,7 +137,73 @@ function exprOf(ctx: Ctx, node: Node): Expr {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });
   }
-  return { code: expr(ctx, node), shape: expressionShape(node), node };
+  const code = expr(ctx, node);
+  checkTagVarReads(ctx, code, node);
+  return { code, shape: expressionShape(node), node };
+}
+
+/**
+ * Rejects a `/var` read the emitted JS could not honour (design §3.4, C5).
+ *
+ * Two shapes, both of which JavaScript would let through as `undefined` or a
+ * run-time TDZ rather than a diagnostic:
+ *
+ * - a read **before** the call that declares it, in the same block. Marko
+ *   makes this a compile error by comparing sibling indices
+ *   (`references.ts:597-602`); the equivalent here is the `pending` flag a
+ *   block sets on its own `/var` names before walking and clears when the
+ *   walk reaches each declaring call.
+ * - a read **outside** the declaring block. Marko hoists the binding into a
+ *   getter instead (`hoist-custom-tag-var/`), which changes its
+ *   user-visible type; MX rejects the escape and keeps `/var` an ordinary
+ *   `let` in the call site's own scope (invariant §7.5-8).
+ *
+ * The expression is **parsed**, not pattern-matched. A regex over the printed
+ * text was measured wrong in both directions on real templates: `${"the
+ * letter n"}` matched a string literal's contents and rejected a valid
+ * program, and `<for|n|>` matched the loop's own parameter, which shadows the
+ * `/var` and has nothing to do with it. `freeIdentifiersIn` reports only
+ * genuine free references, and `Ctx.tagVarShadowed` carries the names an
+ * enclosing tag's params bind — the shadowing a single expression's own scope
+ * cannot see.
+ *
+ * The walk runs only when a `/var` is in scope at all, which is never for a
+ * file that does not use one.
+ */
+function checkTagVarReads(ctx: Ctx, code: string, node: Node): void {
+  const declared = ctx.tagVars;
+  if (!declared?.size) return;
+  const here = ctx.tagVarBlock ?? [];
+
+  const read = freeIdentifiersIn(code);
+  if (read.size === 0) return;
+
+  for (const [name, binding] of declared) {
+    if (!read.has(name)) continue;
+    // A tag param of the same spelling is a different variable.
+    if (ctx.tagVarShadowed?.has(name)) continue;
+    // In scope exactly when the declaring block is this block or an ancestor
+    // of it — a prefix of the path. A sibling block shares the declaring
+    // block's *depth* but not its path, which is the case a depth counter
+    // cannot tell apart.
+    const inScope =
+      binding.block.length <= here.length &&
+      binding.block.every((id, index) => here[index] === id);
+    if (!inScope) {
+      fail(
+        `\`${name}\` is a \`/var\` bound inside a nested block and is not in scope here; a \`/var\` binds in the call site's own scope only`,
+        node,
+      );
+    }
+    // Still pending: the walk has not reached the declaring call yet, so
+    // this read is earlier in the block than the binding.
+    if (binding.pending) {
+      fail(
+        `\`${name}\` is read before the \`/var\` that binds it; move the read after the call that declares it`,
+        node,
+      );
+    }
+  }
 }
 
 /**
@@ -750,14 +818,18 @@ function lowerCustomTag(
     // non-builtin call, with the message this construct actually needs.
     var: true,
   });
-  // `/var` on a custom tag call reads nothing today: a tag has no way to
-  // hand a value back to its caller until `<return>` ships. Left silent,
-  // `<icon/x name="a"/>` would drop the binding with no diagnostic at all.
-  // A core-owned built-in (e.g. `<try>`) is exempted here because it
-  // validates `/var` itself, with its own wording, inside its `transform`.
-  if (!isBuiltin && node.var) {
+  // `/var` binds the value the target unit returns with `<return>`. Whether
+  // it *has* one is a fact about the other module, so it is checked where
+  // that module's metadata is available — `routeTemplateCall`, for a
+  // template-backed tag. A tag with no template at all (an L2 sidecar, or a
+  // core-owned built-in like `<try>`) has no `<return>` to read and no unit
+  // to compile, so the binding could never be filled.
+  //
+  // A core-owned built-in is exempt: it validates `/var` itself, with its
+  // own wording, inside its `transform`.
+  if (!isBuiltin && node.var && !hasTemplate(definition)) {
     fail(
-      `\`/var\` on \`<${name}>\` is not supported yet; a tag returns a value with \`<return>\` (planned)`,
+      `\`/var\` on \`<${name}>\` is not supported: it has no template, so it has no \`<return>\` to bind`,
       node,
     );
   }
@@ -773,6 +845,19 @@ function lowerCustomTag(
     params: paramsOf(ctx, node),
     var: node.var ? declName(ctx, node.var) : null,
   };
+  // The binding was pre-registered by `lowerChildList` at its sibling index;
+  // reaching the call is what makes it readable, so its sequence drops to
+  // "already seen". Recorded after the call's own attributes were lowered,
+  // so a tag's attributes cannot read the `/var` that same tag declares —
+  // Marko's rule (`references.ts:556-560`), and the emitted order makes it
+  // necessary: the binding is assigned from this call's own result.
+  if (call.var) {
+    ctx.tagVars ??= new Map();
+    ctx.tagVars.set(call.var, {
+      block: [...(ctx.tagVarBlock ?? [])],
+      pending: false,
+    });
+  }
   // A core-owned built-in like `<try>` is not a registered tag the caller
   // can finalize. The analyze scratch walk records into its own discarded
   // set; a template lower also owns a local set which is stored with the
@@ -984,14 +1069,58 @@ export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
   // a child list is added.
   const depth = ctx.returnDepth ?? 0;
   ctx.returnDepth = depth + 1;
+  // Each block gets an id, and the path to it is what decides whether a
+  // `/var` declared in one block is readable from another (see
+  // `checkTagVarReads`). Two sibling blocks get different ids, which is the
+  // distinction depth alone cannot make.
+  const outerBlock = ctx.tagVarBlock ?? [];
+  ctx.tagVarBlockSeq = (ctx.tagVarBlockSeq ?? 0) + 1;
+  ctx.tagVarBlock = [...outerBlock, ctx.tagVarBlockSeq];
   try {
     return lowerChildList(ctx, children);
   } finally {
     ctx.returnDepth = depth;
+    ctx.tagVarBlock = outerBlock;
+    // A `/var` declared in this block goes out of scope with it, exactly as
+    // the `let` it emits does. Its entry is kept rather than deleted, holding
+    // the *block path* it was declared at: a later read is then a diagnosable
+    // escape ("not in scope here") instead of an ordinary unknown identifier
+    // that would reach the emitted JS as `undefined`. A sibling block that
+    // binds the same name overwrites the entry, which is right — that is a
+    // new binding, and ordinary JS.
   }
 }
 
 function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
+  // Every `/var` this block declares is registered *before* the walk, at the
+  // sibling index it is declared at. A read earlier in the same block then
+  // finds a binding whose sequence is greater than its own and reports
+  // "read before the call", rather than finding nothing and compiling to a
+  // reference the emitted JS leaves in the temporal dead zone — Marko's own
+  // check (`references.ts:597-602`), which compares sibling indices for
+  // exactly this reason.
+  for (const child of children) {
+    if (child?.type !== "MarkoTag" || !child.var) continue;
+    // Only a *custom tag call* binds a `/var` from a unit's `<return>`.
+    // `<let>`, `<const>` and every other core construct that takes a `/var`
+    // declares an ordinary binding whose scope rules already work, and
+    // pre-registering those made a legal read of one report as out of scope.
+    const tagName = child.name?.value;
+    if (
+      typeof tagName !== "string" ||
+      !ctx.customTags ||
+      !Object.hasOwn(ctx.customTags, tagName)
+    ) {
+      continue;
+    }
+    const name = declName(ctx, child.var);
+    ctx.tagVars ??= new Map();
+    ctx.tagVars.set(name, {
+      block: [...(ctx.tagVarBlock ?? [])],
+      pending: true,
+    });
+  }
+
   const out: IrNode[] = [];
   let index = 0;
 
@@ -1114,6 +1243,10 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
   // report as nested.
   ctx.returnDepth = -1;
   ctx.returnValue = null;
+  // Reset for the same reason: a reused `Ctx` must not carry a previous
+  // file's block path, which would make a legal read look out of scope.
+  ctx.tagVarBlock = [];
+  ctx.tagVars = undefined;
 
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
 

@@ -909,8 +909,10 @@ describe("<return>", () => {
 
     expect(ir.returnValue?.code).toBe("input.count");
     // Not a rendered node: the value is part of the unit's signature, so a
-    // host emits it in the return statement, never in document order.
-    expect(ir.body.some((node) => node.kind === "Return")).toBe(false);
+    // host emits it in the return statement, never in document order. The
+    // body is the `<p>` and the empty text the tag lowers to, and nothing
+    // in it carries the expression.
+    expect(JSON.stringify(ir.body)).not.toContain("input.count");
   });
 
   it("reports the value in the metadata a caller reads", () => {

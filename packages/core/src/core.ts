@@ -272,6 +272,43 @@ export interface Ctx {
    */
   returnDepth?: number;
   /**
+   * Every `/var` a tag call has bound so far, and where.
+   *
+   * `/var` binds in the call site's own scope only (invariant §7.5-8): MX
+   * rejects the escape rather than emitting Marko's hoisted getter, which
+   * would change the binding's user-visible type. Two reads are errors, and
+   * neither is a run-time TDZ MX can afford to leave uncaught —
+   * `error-custom-tag-own-body-read-before-return/` is a Marko fixture that
+   * fails at run time with "Cannot access 'x' before initialization".
+   *
+   * Each block pre-registers its own `/var` names as `pending` before it
+   * walks, and clears that flag when the walk reaches the declaring call. A
+   * read that finds a `pending` binding is therefore earlier in the block
+   * than the call — Marko catches the same case by comparing sibling
+   * indices (`references.ts:597-602`).
+   */
+  tagVars?: Map<string, { block: number[]; pending: boolean }>;
+  /**
+   * The chain of block ids from the template body down to the block being
+   * lowered, innermost last.
+   *
+   * Depth alone cannot answer the scope question: a read inside a sibling
+   * `<p>` sits at the same depth as a binding declared inside an `<if>`, yet
+   * only one of them is in scope. The path makes "is the declaring block an
+   * ancestor of mine" a prefix test, which is exactly JS block scoping.
+   */
+  tagVarBlock?: number[];
+  /**
+   * Names an enclosing tag's params bind, which therefore are not a `/var`.
+   *
+   * `<counter/n/>` followed by `<for|n| of=xs>${n}</for>` reads the *loop's*
+   * `n`, not the binding — same spelling, different variable. Maintained by
+   * `shadowBindings`, which already runs at every site that binds params.
+   */
+  tagVarShadowed?: ReadonlySet<string>;
+  /** Serial for block ids, so two sibling blocks are never confused. */
+  tagVarBlockSeq?: number;
+  /**
    * Positioned warnings raised during lowering: a construct that compiles but
    * drops something the author wrote.
    *
@@ -447,8 +484,18 @@ export function shadowBindings(ctx: Ctx, names: string[]): () => void {
     saved.push([name, rewrite]);
     ctx.bindings.unregister(name);
   }
+  // Every shadowed name is recorded, not only the host-registered ones the
+  // loop above had something to unregister. A plain `<for|n|>` registers no
+  // rewrite at all, yet `n` inside that body is the loop's parameter — so a
+  // `/var` of the same spelling is not what the body reads, and
+  // `checkTagVarReads` has to know that (round 1, finding 4).
+  const outerShadowed = ctx.tagVarShadowed;
+  if (names.length > 0) {
+    ctx.tagVarShadowed = new Set([...(outerShadowed ?? []), ...names]);
+  }
   return () => {
     for (const [name, rewrite] of saved) ctx.bindings.register(name, rewrite);
+    ctx.tagVarShadowed = outerShadowed;
   };
 }
 

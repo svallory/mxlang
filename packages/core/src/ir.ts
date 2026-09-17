@@ -251,6 +251,33 @@ export type IrNode =
       attributeTags: AttributeTag[];
       /** Tag arguments, `<Row(a, b)/>`, for a positional `<define>` call. */
       args: Expr[];
+      /**
+       * The `/var` binding this call declares, as source text.
+       *
+       * Only ever set on a call to a unit that declares `<return>` — the
+       * core rejects `/var` on one that does not, so an emitter never has to
+       * decide what an unbackable binding means. Null for every other call.
+       */
+      var?: string | null;
+      /**
+       * This call's target returns `{ value, output }` rather than output
+       * alone (design §3.3).
+       *
+       * Resolved at lower time from the target unit's cached metadata,
+       * because the shape is invisible at the call site and an emitter
+       * cannot compile the callee to find out. It is set even when the call
+       * declares no `/var`: the output still has to be unwrapped out of the
+       * pair.
+       */
+      returnsValue?: boolean;
+      /**
+       * The tag name the author wrote, when it differs from `target`.
+       *
+       * A discovered template tag routes to a *generated* import binding
+       * (`$mx_Counter1`), so a diagnostic about the call would otherwise
+       * name a binding the author never typed. Only set where they differ.
+       */
+      authoredName?: string;
     } & IrBase)
   | ({ kind: "IfChain"; branches: Branch[] } & IrBase)
   | ({

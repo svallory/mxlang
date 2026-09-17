@@ -158,7 +158,12 @@ describe("custom tag transforms", () => {
     expect(call?.content?.children.length).toBeGreaterThan(0);
   });
 
-  it("rejects `/var` on a template-backed custom tag call", () => {
+  // Both of these tags are *template-less*: a sidecar `transform`, with no
+  // `.mx` unit behind it. `/var` binds what a unit returns with `<return>`,
+  // so a tag with no template has nothing to bind — which is a different
+  // rejection from "this tag's template declares no `<return>`" (that one is
+  // raised where the target's metadata is known, in `routeTemplateCall`).
+  it("rejects `/var` on a template-less custom tag call", () => {
     const passthrough: CustomTag = {
       transform: (call) => call.content?.children ?? [],
     };
@@ -170,7 +175,7 @@ describe("custom tag transforms", () => {
       expect.objectContaining({
         name: "TranslateError",
         message: expect.stringContaining(
-          "`/var` on `<box>` is not supported yet; a tag returns a value with `<return>` (planned)",
+          "`/var` on `<box>` is not supported: it has no template, so it has no `<return>` to bind",
         ),
         line: 2,
         column: 0,
@@ -185,7 +190,7 @@ describe("custom tag transforms", () => {
       expect.objectContaining({
         name: "TranslateError",
         message: expect.stringContaining(
-          "`/var` on `<icon>` is not supported yet; a tag returns a value with `<return>` (planned)",
+          "`/var` on `<icon>` is not supported: it has no template, so it has no `<return>` to bind",
         ),
         line: 2,
         column: 0,

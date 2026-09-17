@@ -191,6 +191,54 @@ export function rewriteReadsInCode(
   return generator(file.program.body[0].expression, { concise: true }).code;
 }
 
+/**
+ * Every name one expression reads *freely* — not bound inside it, not a
+ * member property, not an object key.
+ *
+ * The read half of `rewriteReadsInCode`, for a caller that needs to know
+ * which names an expression references without rewriting any of them:
+ * `checkTagVarReads` asks whether an expression reads a `/var` that is out of
+ * scope or not yet bound.
+ *
+ * Scope is Babel's, for the reasons the module note gives. A regex over the
+ * printed text gets this wrong in both directions, and both were measured on
+ * real templates: `${"the letter n"}` matched the string's *content* and
+ * rejected a valid program, and `<for|n|>` matched the loop's own parameter,
+ * which shadows the `/var` and has nothing to do with it. Here the first is
+ * not an `Identifier` at all and the second has a binding in the expression's
+ * own scope, so neither is reported.
+ *
+ * An expression the parser cannot read yields no names rather than throwing:
+ * it reached here already printed by the lowerer, so failing the compile on a
+ * parse the emitter would have accepted would be its own regression — the
+ * same stance `rewriteReadsInCode` takes.
+ */
+export function freeIdentifiersIn(code: string): Set<string> {
+  const names = new Set<string>();
+  const { parseExpression, traverse, types } = markoBabel();
+
+  let parsed: Node;
+  try {
+    parsed = parseExpression(code, { plugins: [["typescript", {}]] });
+  } catch {
+    return names;
+  }
+
+  const file = types.file(
+    types.program([types.expressionStatement(parsed as Node)]),
+  );
+  traverse(file, {
+    Identifier(path: Node) {
+      if (!path.isReferencedIdentifier()) return;
+      // A name an inner scope rebinds (`xs.map(n => n + 1)`) is that
+      // binding's, not the template's.
+      if (path.scope.getBinding(path.node.name)) return;
+      names.add(path.node.name);
+    },
+  });
+  return names;
+}
+
 /** One name a destructuring pattern binds, with the path that reads it. */
 export type DestructuredName = {
   readonly name: string;
