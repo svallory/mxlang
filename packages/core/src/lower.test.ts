@@ -1623,6 +1623,33 @@ describe("event attributes", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("leaves a bare `onClick` a boolean attribute", () => {
+    // Round 1: the event branch used to precede the boolean/static checks, so
+    // `<div onClick>` became `event{value: true}` and rendered as
+    // `<div onClick="true">` on html — real output drift. The kind is derived
+    // only when the value is an expression.
+    const ir = lowerSource("<div onClick>x</div>\n");
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "boolean", name: "onClick" },
+    ]);
+  });
+
+  it("leaves a string-valued `onClick` a static attribute", () => {
+    // An inline handler string is an ordinary HTML attribute on every host, as
+    // in Marko. MX does not invent a policy against them; it only stops
+    // *creating* one from a function. (Phase B decides the html story.)
+    const ir = lowerSource('<button onClick="alert(1)">x</button>\n');
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "static", name: "onClick", value: "alert(1)" },
+    ]);
+  });
+
+  it("rejects a bare `on-` with no event name", () => {
+    expect(() => lowerSource("<div on-=f>x</div>\n")).toThrow(
+      "`on-` needs an event name (`on-<event>`)",
+    );
+  });
+
   it("records a nameSpan covering the attribute name", () => {
     const source = "<button onClick=f>x</button>\n";
     const ir = lowerSource(source);

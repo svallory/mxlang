@@ -270,6 +270,16 @@ describe("attributes", () => {
     );
   });
 
+  it("leaves a bare or string-valued `onClick` alone", () => {
+    // Phase A of `dom-events`: core derives the `event` kind only for an
+    // expression value, so neither form reaches the event path and both emit
+    // exactly as they did before the kind existed.
+    expect(lower("<div onClick>x</div>")).toBe("<div onClick>x</div>");
+    expect(lower('<div onClick="alert(1)">x</div>')).toBe(
+      '<div onClick="alert(1)">x</div>',
+    );
+  });
+
   it("rejects an event-handler attribute method", () => {
     expect(errorFor("<button onClick() { go() }>x</button>").message).toMatch(
       /event handler and requires a runtime/,
