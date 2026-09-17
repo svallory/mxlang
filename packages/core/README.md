@@ -525,7 +525,15 @@ shape `TranslateError` reports, which is what an editor squiggle needs):
 An expression arrives as `Expr`: the printed `code` (sliced from source if untouched, or rewritten through
 the binding registry, so an emitter stays dumb) plus the original `node`, for a
 host that must inspect the shape — `class={a: true}` versus `class=someCall()`
-is an `ObjectExpression` test, not a string test.
+is an `ObjectExpression` test, not a string test. `Expr.span?: SourceSpan`
+(core contract C4) carries file-absolute byte offsets of the expression's own
+authored source text, filled by `exprOf` for every construction site and
+absent only when the expression has no authored source — a synthesized `Expr`
+built with no backing node, or a custom tag's fabricated literal default —
+rather than a fabricated span pointing at unrelated text. `mapping.ts`'s
+`mappedExpr(expr)` is the thin wrapper a host emitter uses to turn one into a
+`GeneratedMapping`, mirroring `mapped(name, nameSpan)` for the attribute-name
+half of the mapped population; adopting it is per host and out of scope here.
 
 The five statement kinds — `Static`, `Import`, `Export`, `InputInterface` and
 `Hoisted` — carry their code as a plain string, with no `Expr` and so no Babel
