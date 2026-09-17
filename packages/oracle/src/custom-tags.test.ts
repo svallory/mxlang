@@ -28,6 +28,11 @@ const FIXTURES = [
   // row is what proves invariant §7.5-7 — the recursive call resolves to the
   // unit's own named export, with no import of the file into itself.
   "tree",
+  // A unit that hands a value back with `<return>`, bound at the call site
+  // with `/var`. The unit's export shape differs per host — `{ value, output }`
+  // on html/Astro and the JSX hosts, a callback prop on Solid (design §2.4) —
+  // so this row is what proves all six still render the same bytes.
+  "counter-return",
 ] as const;
 
 /**

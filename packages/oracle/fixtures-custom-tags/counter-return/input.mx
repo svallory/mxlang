@@ -1,0 +1,4 @@
+<section>
+  <counter/next start=input.start/>
+  <p class="next">${next}</p>
+</section>
