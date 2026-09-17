@@ -276,16 +276,31 @@ function emitAttrs(
         out += ` ${attr.name}`;
         break;
       // Phase A of `dom-events` (decision 101): core now lowers an element's
-      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough: it
-      // deliberately re-derives the name with this host's existing
-      // `domEventName` instead of reading `attr.event`, because today's
-      // `dynamic` path does exactly that and this PR must be output-neutral —
-      // the two differ precisely for `onDoubleClick` (`dblclick` here,
-      // `doubleclick` from core). Phase B deletes `IRREGULAR_EVENTS` and emits
-      // `(${attr.event})=` from core's resolved name, which is the whole point
-      // of the kind.
+      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough,
+      // reproducing base byte-for-byte rather than using the new `attr.event`
+      // — which means reproducing *which branch* the old `dynamic` path took,
+      // not just its camelCase one:
+      //
+      //   - `on<Name>` matched `EVENT_NAME` (`/^on[A-Z]/`) and went through
+      //     this host's own `domEventName`. That still differs from core's
+      //     `attr.event` precisely for `onDoubleClick` (`dblclick` here,
+      //     `doubleclick` from core), so reading `attr.event` would change
+      //     output in this PR.
+      //   - `on-<exact>` never matched `EVENT_NAME` (the regex requires a
+      //     capital after `on`, and a dash is not one), so it fell through to
+      //     the plain `[name]=` binding: `on-my-event=f` emitted
+      //     `[on-my-event]="f"`. Routing it through `domEventName` here would
+      //     have emitted `(-my-event)="…"`, which is not valid Angular.
+      //
+      // Phase B deletes `IRREGULAR_EVENTS` and emits `(${attr.event})=` from
+      // core's resolved name for both forms, which is the whole point of the
+      // kind.
       case "event":
-        out += ` (${domEventName(attr.name)})="(${esc(attr.value.code)})($event)"`;
+        if (EVENT_NAME.test(attr.name)) {
+          out += ` (${domEventName(attr.name)})="(${esc(attr.value.code)})($event)"`;
+        } else {
+          out += ` [${attr.name}]="${esc(attr.value.code)}"`;
+        }
         break;
       case "dynamic": {
         const name = attr.name;
