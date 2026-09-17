@@ -1,0 +1,38 @@
+{
+  "name": "@mxlang/example-angular-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "mx": {
+    "angular": {
+      "include": [
+        "src/app/**/*.mx"
+      ]
+    }
+  },
+  "scripts": {
+    "ng": "ng",
+    "prebuild": "bun ../../packages/hosts/angular/dist/bin.js build",
+    "build": "ng build",
+    "start": "bun run prebuild && concurrently -k -n mx,ng \"bun ../../packages/hosts/angular/dist/bin.js watch\" \"ng serve\"",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit"
+  },
+  "dependencies": {
+    "@angular/common": "22.1.7",
+    "@angular/compiler": "22.1.7",
+    "@angular/core": "22.1.7",
+    "@angular/forms": "22.1.7",
+    "@angular/platform-browser": "22.1.7",
+    "@angular/router": "22.1.7",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1"
+  },
+  "devDependencies": {
+    "@angular/build": "22.1.8",
+    "@angular/cli": "22.1.8",
+    "@angular/compiler-cli": "22.1.7",
+    "@mxlang/angular": "workspace:*",
+    "concurrently": "9.2.1",
+    "typescript": "6.0.3"
+  }
+}

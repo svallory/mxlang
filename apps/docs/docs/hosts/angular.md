@@ -267,3 +267,18 @@ both lines itself.
 
 Exit code `0` on a clean build, `1` on any error. Every message is
 positioned: `file:line:col message`.
+
+## Examples
+
+- `examples/angular-app` — a stock Angular CLI 22 app (`@angular/build:application`,
+  no custom builder). Its one component keeps `templateUrl` pointing at a
+  gitignored, `mx-angular`-emitted `.html`; the `.mx` source exercises text and
+  interpolation, `<if>`/`<else>`, `<for … by=>`, `<const>`, an event binding,
+  and `[ngClass]` (with `NgClass` added to the component's own `imports`, per
+  the warning above). `bun run build` runs `mx-angular build` (via
+  `prebuild`) then `ng build`; `bun run start` runs
+  `bun run prebuild && concurrently -k -n mx,ng "mx-angular watch" "ng serve"`
+  (one process, both `mx-angular watch` and `ng serve` running together) —
+  `mx-angular watch` (in this repo: `bun ../../packages/hosts/angular/dist/bin.js watch`),
+  since a fresh checkout has no `node_modules/.bin/mx-angular` symlink until
+  root `bun run build` produces `dist/`.
