@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { CustomTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
@@ -371,5 +372,94 @@ describe("compileSolidUnit", () => {
     expect(code).toContain("export default function Panel(input)");
     // The body that reads `input.title` is still emitted.
     expect(code).toContain("input.title");
+  });
+});
+
+/**
+ * `<return>` and `/var` on Solid (acceptance C4).
+ *
+ * This is the one host where the `{ value, output }` shape does not fit: a
+ * Solid component's return value is its view, and the caller writes JSX
+ * rather than a call — so the value travels back on a callback prop
+ * (design §2.4), verified there against solid-js 2.0.0-rc.7.
+ */
+describe("a unit that returns a value", () => {
+  const counterSource = [
+    "<span>${input.start}</span>",
+    "<return value=input.start + 1/>",
+  ].join("\n");
+
+  const counter = {
+    template: { filename: "/fixtures/tags/counter.mx", source: counterSource },
+  } as unknown as CustomTag;
+
+  it("calls the callback prop with the value during setup", () => {
+    const code = compileSolidUnit(counterSource, {
+      filename: "/fixtures/tags/counter.mx",
+    }).code;
+
+    // Before the return, so it has run by the time the caller's next
+    // statement executes — the property the whole channel depends on.
+    expect(code).toContain('input["$mxReturn"]?.(input.start + 1);');
+    const call = code.indexOf('input["$mxReturn"]');
+    expect(code.indexOf("return <>")).toBeGreaterThan(call);
+  });
+
+  it("declares the /var above the JSX and fills it from the prop", () => {
+    const code = compileSolidUnit("<counter/n start=1/>\n<p>${n}</p>", {
+      filename: "/fixtures/page.mx",
+      customTags: { counter },
+    }).code;
+
+    // `let`, not `const`: the callback assigns it during the child's
+    // synchronous setup, which happens as the JSX is evaluated.
+    expect(code).toContain("let n;");
+    expect(code).toContain("$mxReturn={($mxV) => { n = $mxV; }}");
+    // One-shot, not reactive (risk 4): a plain binding read, with no
+    // accessor call wrapped around it. A tag wanting reactivity returns an
+    // accessor and the author calls it.
+    expect(code).toContain("<p>{n}</p>");
+  });
+
+  // Round 1, finding 3. The `let` this host declares sits at the component's
+  // head, so one binding was shared by every `<For>` row, and a read beside
+  // the call ran while the fragment was being built — before that row's
+  // callback had fired. Invariant §7.5-8 rejects the escape.
+  it("rejects /var inside <for>, naming the tag as written", () => {
+    expect(() =>
+      compileSolidUnit(
+        "<for|i| of=[1,2]><counter/n start=i/><p>${n}</p></for>",
+        { filename: "/fixtures/page.mx", customTags: { counter } },
+      ),
+    ).toThrow(/`\/var` on `<counter>` inside `<for>`\/`<if>` is not supported/);
+  });
+
+  it("rejects /var inside <if>", () => {
+    expect(() =>
+      compileSolidUnit("<if=true><counter/n start=1/><p>${n}</p></if>", {
+        filename: "/fixtures/page.mx",
+        customTags: { counter },
+      }),
+    ).toThrow(/is not supported on Solid yet/);
+  });
+
+  it("still allows a call with no /var inside <for>", () => {
+    const code = compileSolidUnit("<for|i| of=[1,2]><counter start=i/></for>", {
+      filename: "/fixtures/page.mx",
+      customTags: { counter },
+    }).code;
+
+    expect(code).toContain("<For each={");
+    expect(code).not.toContain("$mxReturn");
+  });
+
+  it("emits no callback prop for a call that binds no /var", () => {
+    const code = compileSolidUnit("<counter start=1/>", {
+      filename: "/fixtures/page.mx",
+      customTags: { counter },
+    }).code;
+
+    expect(code).not.toContain("$mxReturn");
+    expect(code).not.toContain("let ");
   });
 });

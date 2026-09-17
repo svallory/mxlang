@@ -40,6 +40,79 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
   },
 };
 
+/**
+ * The prop a returning unit calls to hand its `<return>` value back.
+ *
+ * Solid is the one host where the `{ value, output }` shape does not fit: a
+ * component's return value is its view, and the caller writes JSX rather than
+ * a call. Measured against solid-js 2.0.0-rc.7 (design §2.4), the component
+ * function runs synchronously at the JSX site under both `dom` and `ssr`
+ * generation, so a callback it invokes during setup has already run by the
+ * caller's next statement.
+ *
+ * **One-shot, not reactive** (risk 4): the binding holds the value from that
+ * single invocation. That matches `/var`'s meaning on every other host, but a
+ * Solid author may reasonably expect a signal — a tag wanting reactivity
+ * should return an accessor for the caller to call.
+ *
+ * Carries the `$mx` prefix every generated name here uses, so it cannot
+ * collide with a prop an author declares in the unit's own `Input`.
+ */
+export const MX_RETURN_PROP = "$mxReturn";
+
+/**
+ * `/var` names the emitted module must declare above the JSX that fills them.
+ *
+ * Module-level rather than a field on the emitter because this host builds
+ * child emitters freely (`renderWithNewEmitter`) with no shared state, so a
+ * call inside an `<if>` or a `<for>` body would otherwise report into an
+ * emitter the module assembly never sees. `collectReturnVars` scopes it to
+ * one compile; nothing here is retained between compiles.
+ */
+let returnVars: Set<string> | null = null;
+
+/**
+ * The emitter is filling a lazily-evaluated or per-row scope.
+ *
+ * A `<For>` body is a callback run once per row, and a `<Show>`/`<Match>`
+ * body is evaluated only when its condition holds — so the single `let` this
+ * host declares at the component's head cannot serve them. Round 1 measured
+ * both failures: every `<For>` iteration aliased one binding, and a read
+ * beside the call ran before the child's callback had fired.
+ *
+ * Invariant §7.5-8 rejects the escape rather than emitting it. Lifting the
+ * restriction means a declaration per callback scope, filed as MX 2 work.
+ * Module-level for the same reason `returnVars` is: this host creates child
+ * emitters freely, with no shared instance state.
+ */
+let lazyScope = false;
+
+/** Runs `emit` with `/var` refused, for a body that is lazy or per-row. */
+function inLazyScope<T>(emit: () => T): T {
+  const outer = lazyScope;
+  lazyScope = true;
+  try {
+    return emit();
+  } finally {
+    lazyScope = outer;
+  }
+}
+
+/** Runs `emit` while collecting the `/var` names its call sites declare. */
+export function collectReturnVars(emit: () => string): {
+  code: string;
+  vars: string[];
+} {
+  const outer = returnVars;
+  const collected = new Set<string>();
+  returnVars = collected;
+  try {
+    return { code: emit(), vars: [...collected] };
+  } finally {
+    returnVars = outer;
+  }
+}
+
 type TryData = { kind: "try" };
 
 function positionOf(node: { loc: Position }): Position {
@@ -596,6 +669,25 @@ export class SolidEmitter implements Emitter<string> {
     const attrs = renderAttrs(node.attrs, true);
     const tags = concatMapped(...node.attributeTags.map(attributeTag));
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
+    // A `/var` on a returning unit rides along as a callback prop, and the
+    // JSX stays JSX: this host calls components through JSX, so the value
+    // channel has to be a prop rather than a destructured return (§2.4).
+    // The `let` the callback assigns is declared by the module assembly,
+    // before the JSX that runs it.
+    if (node.var && lazyScope) {
+      // The `let` this host declares sits at the component's head, so one
+      // binding would be shared by every `<For>` row and read before a
+      // `<Show>` body's child had set it. Invariant §7.5-8 rejects the
+      // escape rather than emitting either.
+      fail(
+        `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on Solid yet; bind it at the top level of the template`,
+        node,
+      );
+    }
+    const returnProp = node.var
+      ? ` ${MX_RETURN_PROP}={($mxV) => { ${node.var} = $mxV; }}`
+      : "";
+    if (node.var) returnVars?.add(node.var);
     if (!node.content || raw) {
       this.#out.push(
         concatMapped(
@@ -603,23 +695,23 @@ export class SolidEmitter implements Emitter<string> {
           mapped(name, node.nameSpan),
           attrs,
           tags,
-          `${innerHtml} />`,
+          `${returnProp}${innerHtml} />`,
         ),
       );
       return;
     }
 
-    const body = blockExpression(contentNodes);
+    const body = inLazyScope(() => blockExpression(contentNodes));
     const children = node.content.hasParams
       ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
-      : renderWithNewEmitter(contentNodes);
+      : inLazyScope(() => renderWithNewEmitter(contentNodes));
     this.#out.push(
       concatMapped(
         "<",
         mapped(name, node.nameSpan),
         attrs,
         tags,
-        ">",
+        `${returnProp}>`,
         children,
         `</${name}>`,
       ),
@@ -645,11 +737,13 @@ export class SolidEmitter implements Emitter<string> {
         `<Show when={${branch.condition.code}}`,
         fallbackAttr,
         ">",
-        blockExpression(branch.children),
+        inLazyScope(() => blockExpression(branch.children)),
         "</Show>",
       );
     };
-    const fallbackCode = fallback ? blockExpression(fallback.children) : null;
+    const fallbackCode = fallback
+      ? inLazyScope(() => blockExpression(fallback.children))
+      : null;
     if (conditioned.length <= 2) {
       this.#out.push(renderShow(0, fallbackCode));
       return;
@@ -661,7 +755,7 @@ export class SolidEmitter implements Emitter<string> {
       ...conditioned.map((branch) =>
         concatMapped(
           `<Match when={${branch.condition?.code}}>`,
-          blockExpression(branch.children),
+          inLazyScope(() => blockExpression(branch.children)),
           "</Match>",
         ),
       ),
@@ -699,7 +793,7 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(
         concatMapped(
           `<For each={${node.source.list.code}}${keyed}>{(${params.join(", ")}) => `,
-          blockExpression(node.children),
+          inLazyScope(() => blockExpression(node.children)),
           "}</For>",
         ),
       );
@@ -727,13 +821,13 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(
         concatMapped(
           `<For each={Object.entries(${node.source.object.code})} keyed={e => e[0]}>{(${entry}) => `,
-          blockExpression(node.children),
+          inLazyScope(() => blockExpression(node.children)),
           "}</For>",
         ),
       );
       return;
     }
-    const body = blockExpression(node.children);
+    const body = inLazyScope(() => blockExpression(node.children));
 
     const from = node.source.from?.code ?? "0";
     const bound = node.source.bound.code;
