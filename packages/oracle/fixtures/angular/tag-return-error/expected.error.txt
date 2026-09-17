@@ -1,0 +1,1 @@
+`<return>` is not supported on Angular: a component is called by its selector, as a plain element, and Angular template syntax has no binding position to receive a returned value. Declare the value as an `@Input()` instead, or expose it as a `static`/`export` from the tag's module.
