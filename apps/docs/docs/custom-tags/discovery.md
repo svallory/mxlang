@@ -44,7 +44,13 @@ This passing scan fixture prefixes two tags and supplies text mode by default:
 
 Paths are relative to the package containing the manifest. `prefix` is prepended to each file basename. Directory `parseOptions` are defaults; a sidecar's own statically declared values override them.
 
-`hosts` is accepted as an array of strings and validated by the current scanner, but it does **not currently filter discovery**. Do not rely on it for host-specific availability; one custom-tag definition is expected to work across hosts.
+`hosts` is an array of strings that restricts an `mx.tags` entry to the named hosts (`"html"`, `"astro"`, `"solid"`, `"preact"`, `"react"`, `"hono"`, `"angular"`). Each integration passes its own host name when it scans, so a tag whose `hosts` excludes that host is left out of discovery for it entirely — not merely hidden from the compiled map. An entry with no `hosts` is visible to every host, and a local `tags/` directory (no `mx.tags` entry backing it) is always visible everywhere, since only an explicit `hosts` list narrows availability.
+
+## Project-wide enumeration
+
+`scanCustomTags` (and `getCustomTags`/`scanCached`) answer "what can this file call," walking upward from one path. `discoverProjectTags(projectDir, options?)` answers the complementary question — "what tags exist in this project" — walking every `tags/` directory reachable under a project root, plus the root `package.json`'s `mx.tags` entries, without descending into `node_modules`, a dotdirectory, or a nested package's own directory tree. It accepts the same `host` filter. Used by tooling that needs the whole tag surface up front (an Angular build's dependency graph, a project index), rather than per compiled file.
+
+The walk follows symlinked directories — a symlinked `tags/` directory is discovered like any other — guarded against symlink cycles so a self-referential link terminates rather than recursing forever.
 
 ## Precedence
 
