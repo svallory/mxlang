@@ -1,3 +1,5 @@
+import type { Expr } from "./ir.ts";
+
 /** A byte range in an MX source file. */
 export interface SourceSpan {
   sourceStart: number;
@@ -52,6 +54,15 @@ export function mapped(code: string, span: SourceSpan | null): MappedCode {
         ]
       : [],
   };
+}
+
+/**
+ * The sibling of `mapped(name, nameSpan)` for the other half of the mapped
+ * population. Unmapped when the expression has no authored source (a
+ * synthesized `Expr`, or a fabricated literal default).
+ */
+export function mappedExpr(expr: Expr): MappedCode {
+  return mapped(expr.code, expr.span ?? null);
 }
 
 /** Applies one generated-text replacement and keeps non-overlapping mappings aligned. */
