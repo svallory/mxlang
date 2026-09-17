@@ -274,9 +274,21 @@ Four Marko facts that are easy to get wrong (all measured against
   are then re-parsed with `parseBabel`, never regex-scraped.
 - **A bare top-level `${expr}` line is a `MarkoTag` whose `name` is the
   expression**, not a `MarkoPlaceholder` — concise mode has no other shape for
-  it. A tag with an expression name, no attributes and no body is that
-  placeholder; treating every expression-named tag as a dynamic tag error
-  breaks a template whose first content is a placeholder.
+  it, and it is the dynamic-tag construct, the same as the tagged
+  `<${expr} .../>` form: `@mxlang/core`'s `lowerTag` routes both shapes to a
+  claiming host's `HostTag` (`shape` "bare"/"tagged"), or, when no host
+  claims `DYNAMIC_TAG`, to a `Component` with a dynamic target. Marko's own
+  fixture `error-dynamic-tag-name`
+  (`packages/hosts/html/fixtures-marko/error-dynamic-tag-name/`) is the
+  proof: `static const tagName = "hello world"` then `${tagName}` at column 0
+  fails at render with "Invalid tag name" — it compiled to a dynamic tag, not
+  a placeholder. Text on its own line needs the escape hatch, `-- ${x}`. A
+  placeholder inside an HTML-syntax body (`<div>${x}</div>`) is unrelated: it
+  parses as a real `MarkoPlaceholder`, never a `MarkoTag`, and never reaches
+  `lowerTag` at all. See `divergences.md`'s "Fixed: undocumented divergence
+  in the bare `${expr}` line" for the history — MX 1.0 used to treat every
+  unclaimed bare shape as a silent interpolation, which was never a
+  documented divergence from Marko.
 - **`<!doctype html>` arrives as a `MarkoDocumentType` node** whose `value` is
   `doctype html` (delimiters stripped), so it is re-emitted as `<!${value}>`.
   Marko strips comment delimiters too, which is why an HTML comment and a `//`

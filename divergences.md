@@ -17,6 +17,27 @@ the structural core, no longer a contract in itself.
 |---|---|---|---|
 | _(none yet — MX 1.0 has no deliberate divergences)_ | | | |
 
+## Fixed: undocumented divergence in the bare `${expr}` line
+
+A standalone concise-position `${expr}` line (no attributes, no body) used to
+lower to an escaped interpolation whenever no host claimed `DYNAMIC_TAG` —
+treating Marko's placeholder-shaped `MarkoTag` as though it always meant a
+text placeholder. Real Marko does not: Marko's own fixture
+`error-dynamic-tag-name`
+(`packages/hosts/html/fixtures-marko/error-dynamic-tag-name/`,
+`static const tagName = "hello world"` then `${tagName}` at column 0) fails at
+render with `"Invalid tag name"`, because it compiled to a dynamic tag, not a
+placeholder. A bare `${expr}` line and `<${expr}/>` parse to the identical
+Marko node (see the "four Marko facts" in `AGENTS.md`); MX 1.0's bare-is-text
+special case was an undocumented divergence from that, never a recorded one.
+Fixed: `@mxlang/core`'s `lowerTag` now treats both shapes as the dynamic-tag
+construct — a claiming host still gets its `HostTag`, and an unclaiming host
+gets a `Component` with a dynamic target instead of a silent `Interpolation`.
+Text on its own line is written `-- ${x}`, and a placeholder inside an
+HTML-syntax body (`<div>${x}</div>`) is unaffected — it parses as
+`MarkoPlaceholder`, never `MarkoTag`, and never reaches `lowerTag`. Test:
+`packages/core/src/lower.test.ts`, "a dynamic tag's bare shape".
+
 ## Deferred to MX 2
 
 | Construct | Why it was wanted | Marko verdict | Test |
