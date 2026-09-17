@@ -1014,4 +1014,36 @@ describe("build: .ng.mx round 2 review", () => {
       false,
     );
   });
+
+  it("diagnoses a .ng.mx under tags/ without dropping other tags directories", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: {
+          host: "angular",
+          angular: { include: ["src/**/*.mx"] },
+          tags: [{ dir: "src/tags" }, { dir: "src/other-tags" }]
+        },
+      }),
+      "src/page.mx": "<div><good/><fine/></div>",
+      "src/tags/bad.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-bad", template: <p>x</p> })',
+        "export class BadComponent {}",
+      ].join("\n"),
+      "src/tags/good.mx": "<p>good</p>",
+      "src/other-tags/fine.mx": "<p>fine</p>",
+    });
+
+    const result = build(projectDir);
+
+    expect(
+      result.warnings.some((w) =>
+        /a `\.ng\.mx` file is a component module, not a tag/.test(w.message),
+      ),
+    ).toBe(true);
+
+    expect(existsSync(join(projectDir, "src/tags/bad.component.ts"))).toBe(false);
+    expect(existsSync(join(projectDir, "src/tags/good.ts"))).toBe(true);
+    expect(existsSync(join(projectDir, "src/other-tags/fine.ts"))).toBe(true);
+  });
 });

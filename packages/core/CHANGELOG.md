@@ -2,7 +2,9 @@
 
 ## 0.1.0 (unreleased)
 
-### A `.ng.mx` under `tags/` is rejected like `.solid.mx`, not silently indexed as a tag
+### `discoverProjectTags` reports host-module files under `tags/` as a diagnostic instead of throwing
+
+`indexDirectory` (and therefore `scanCustomTags` and `discoverProjectTags`) now reports host-module files under `tags/` (like `.ng.mx` or `.solid.mx`) as a scan diagnostic rather than throwing, allowing the rest of the project's tags to be successfully discovered.
 
 `indexDirectory` (shared by `scanCustomTags` and `discoverProjectTags`) used
 to reject only `.solid.mx` under `tags/`; a `.ng.mx` file (the Angular host's

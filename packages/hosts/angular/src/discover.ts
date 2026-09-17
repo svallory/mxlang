@@ -180,29 +180,18 @@ function discoverTagFiles(
   rejected: Set<string>;
 } {
   const rejected = new Set<string>();
-  let result: ReturnType<typeof discoverProjectTags>;
-  try {
-    result = discoverProjectTags(projectDir, { host: "angular" });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (!/is a host module file, not a tag template/.test(message)) throw err;
-    // Core's `failIn` puts the path in the message (`<file>: <reason>`)
-    // rather than on a field, so it is read back from there; `TranslateError`
-    // carries `file` only when the caller supplied one, which this one does
-    // not.
-    const file =
-      (err as { file?: string }).file ??
-      (/^(.*?): /.exec(message)?.[1] || projectDir);
-    diagnostics.push({
-      file,
-      message:
-        "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
-    });
-    rejected.add(resolve(file));
-    return { templates: new Set<string>(), tagDirectories: [], rejected };
-  }
+  const result = discoverProjectTags(projectDir, { host: "angular" });
+
   for (const d of result.diagnostics) {
-    diagnostics.push({ file: d.file, message: d.message });
+    if (/is a host module file, not a tag template/.test(d.message)) {
+      diagnostics.push({
+        file: d.file,
+        message: "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
+      });
+      rejected.add(resolve(d.file));
+    } else {
+      diagnostics.push({ file: d.file, message: d.message });
+    }
   }
 
   const templates = new Set<string>();
