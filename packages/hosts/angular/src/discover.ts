@@ -77,6 +77,14 @@ export interface DiscoverResult {
    */
   overlapWarnings: string[];
   diagnostics: DiscoverDiagnostic[];
+  /**
+   * Every `tags/` directory found under `projectDir` — including one whose
+   * only contents are sidecar `.tag.ts` files with no `.mx` template, which
+   * never appear in `files` (that list is `.mx` only). A watcher needs this
+   * to know which directories to watch even when they contain no `.mx` file
+   * of their own.
+   */
+  tagDirectories: string[];
 }
 
 /**
@@ -233,7 +241,7 @@ function discoverTagFiles(
   projectDir: string,
   realProjectDir: string,
   diagnostics: DiscoverDiagnostic[],
-): Set<string> {
+): { templates: Set<string>; tagDirectories: string[] } {
   const { tagsDirs, packageBoundaries } = walkForTagSources(
     projectDir,
     undefined,
@@ -242,10 +250,17 @@ function discoverTagFiles(
   const excludedDirs = excludedMxTagsDirs(packageBoundaries, diagnostics);
 
   const templates = new Set<string>();
+  const tagDirectories = new Set<string>();
   const collect = (result: ReturnType<typeof scanCached>) => {
     for (const tag of result.tags.values() as IterableIterator<DiscoveredTag>) {
-      if (!tag.template) continue;
       if (tag.sourceDir && excludedDirs.has(resolve(tag.sourceDir))) continue;
+      if (tag.sourceDir) {
+        const resolvedDir = resolve(tag.sourceDir);
+        if (isInside(realProjectDir, realResolve(resolvedDir))) {
+          tagDirectories.add(resolvedDir);
+        }
+      }
+      if (!tag.template) continue;
       const resolved = resolve(tag.template);
       if (isInside(realProjectDir, realResolve(resolved))) {
         templates.add(resolved);
@@ -259,9 +274,13 @@ function discoverTagFiles(
 
   for (const tagsDir of tagsDirs) {
     collect(scanCached(join(tagsDir.dir, "__mx_angular_probe__")));
+    const resolvedDir = resolve(tagsDir.dir);
+    if (isInside(realProjectDir, realResolve(resolvedDir))) {
+      tagDirectories.add(resolvedDir);
+    }
   }
 
-  return templates;
+  return { templates, tagDirectories: [...tagDirectories] };
 }
 
 /**
@@ -280,7 +299,11 @@ export function discoverFiles(
   // with no symlink escape at all.
   const realProjectDir = realResolve(projectDir);
   const included = expandInclude(projectDir, realProjectDir, config.include);
-  const tagFiles = discoverTagFiles(projectDir, realProjectDir, diagnostics);
+  const { templates: tagFiles, tagDirectories } = discoverTagFiles(
+    projectDir,
+    realProjectDir,
+    diagnostics,
+  );
 
   const overlapWarnings: string[] = [];
   const files: RoutedFile[] = [];
@@ -300,5 +323,5 @@ export function discoverFiles(
     files.push({ path, kind: "tag" });
   }
 
-  return { files, overlapWarnings, diagnostics };
+  return { files, overlapWarnings, diagnostics, tagDirectories };
 }
