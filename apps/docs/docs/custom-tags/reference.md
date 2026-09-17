@@ -144,6 +144,10 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `params` | Tag parameter source text. |
 | `var` | `/var` binding source text, or `null`. |
 
+`/var` on a custom tag call (e.g. `<icon/x name="a"/>`) is a positioned
+compile error until `<return>` ships, since a tag has no way to hand a value
+back to its caller yet.
+
 ### Contexts and store
 
 | Member | Meaning |
