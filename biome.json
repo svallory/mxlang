@@ -78,6 +78,7 @@
         "packages/core/src/template-tag.ts",
         "packages/core/src/template-tag.test.ts",
         "packages/hosts/angular/src/emitter.ts",
+        "packages/hosts/angular/test/cli.test.ts",
         "packages/hosts/angular/test/component.test.ts",
         "packages/hosts/angular/test/control-flow.test.ts",
         "packages/hosts/angular/test/define.test.ts",
