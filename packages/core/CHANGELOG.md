@@ -2,6 +2,44 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking: an element's `on<Name>`/`on-<exact>` attribute lowers to a new `event` attr kind
+
+An attribute on an **element** matching `/^on[A-Z-]/` is now lowered to an
+`Attr` of kind `"event"` carrying the source spelling (`name`), the resolved
+DOM event name (`event`), the handler `Expr` and a `nameSpan` — instead of the
+`dynamic` prop it used to be. `on<Name>` lowercases everything after `on`
+(`onClick` → `click`, `onDblClick` → `dblclick`); `on-<exact>` is verbatim
+(`on-my-event` → `my-event`). The rule is Marko's own, so an MX template and
+the equivalent Marko template bind the same event, and every host now
+recomposes its own spelling from one resolved name rather than re-deriving it.
+
+**Why it is breaking for hosts:** `Attr` is a discriminated union every
+emitter switches on, so a host that does not handle `"event"` no longer
+type-checks. That is deliberate — the core's rule is that a host which cannot
+express a kind must say so, never silently drop it. In this release every
+in-tree host handles the kind with a **temporary passthrough** that reproduces
+byte-for-byte what it emitted for the same attribute before, so output is
+unchanged on every host and oracle; each host's real emission (and its
+rejections) follows in phase B.
+
+**Only on an element.** On a component call, a `<define>` call, a custom tag, a
+host tag (`<try onClick=…>`) or an attribute tag, an `on*` attribute stays a
+`dynamic` prop, because it is the callee's own prop contract rather than a DOM
+event.
+
+**Behaviour change for authors:** MX has no aliases. `onDoubleClick` lowers to
+`doubleclick`, a nonexistent DOM event, and core raises a **non-rewriting**
+warning positioned at the attribute name (`` `onDoubleClick` is not a DOM
+event; did you mean `onDblclick` ``). Checked against `lib.dom.d.ts`, only
+`onDoubleClick`, `onDragExit` and `onEncrypted` are affected; every other React
+camelCase spelling already lowercases to the real DOM name. A template relying
+on Preact's case-preserving custom events (`onMyEvent` → `MyEvent`) changes
+meaning — it now lowercases to `myevent`, and the author must write
+`on-MyEvent`.
+
+`on:*` and `oncapture:*` are unchanged: core gives them no meaning and they
+reach the host through the existing modifier hook.
+
 ### `discoverProjectTags` reports host-module files under `tags/` as a diagnostic instead of throwing
 
 `indexDirectory` (and therefore `scanCustomTags` and `discoverProjectTags`) now reports host-module files under `tags/` (like `.ng.mx` or `.solid.mx`) as a scan diagnostic rather than throwing, allowing the rest of the project's tags to be successfully discovered.

@@ -35,6 +35,10 @@
       "children": [
         { "title": "Structural tags", "path": "/language/structural-tags/" },
         {
+          "title": "Attributes",
+          "path": "/language/attributes/"
+        },
+        {
           "title": "Attribute tags and tag params",
           "path": "/language/attribute-tags-and-params/"
         },
