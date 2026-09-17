@@ -99,6 +99,15 @@ interface State {
    */
   moduleHoisted: string[];
   indent: number;
+  /**
+   * Serial for the temps a `/var` call site binds its result to.
+   *
+   * Per emit rather than on the IR: one MX IR is emitted by six host
+   * emitters, and a generated name cached on shared IR is exactly the bug
+   * Marko paid for by sharing uid counters between its two backends
+   * (invariant §7.5-6).
+   */
+  returnTemp: number;
 }
 
 export interface StringEmitter extends Emitter<string[]> {
@@ -120,6 +129,7 @@ export function createEmitter(): StringEmitter {
     prelude: [],
     moduleHoisted: [],
     indent: 1,
+    returnTemp: 0,
   };
 
   const push = (line: string | MappedCode): void => {
@@ -433,19 +443,57 @@ export function createEmitter(): StringEmitter {
         return;
       }
 
+      // No props at all: the call's empty object literal is where
+      // TypeScript anchors a missing-required-property error (`{}` is
+      // the diagnostic's own span). With no attribute to map, fall back
+      // to the tag name so that diagnostic still lands inside the `.mx`
+      // file instead of being dropped as unmapped generated text.
+      const props =
+        parts.length === 0
+          ? mapped("{  }", node.nameSpan)
+          : concatMapped("{ ", joinedParts, " }");
+
+      // A unit that declares `<return>` hands back `{ value, output }`, so
+      // the call site unwraps it whether or not it binds the value.
+      if (node.returnsValue) {
+        if (node.var) {
+          // The statement sequence of invariant §7.5-4: the attribute-tag
+          // statements (already pushed by `propsOf`), then the call bound to
+          // a temp, then the `/var`, then the output where the call stood.
+          // The temp exists because the call must be evaluated exactly once
+          // while both of its halves are read.
+          const temp = `$mx_ret${state.returnTemp++}`;
+          push(
+            concatMapped(
+              `const ${temp} = `,
+              mapped(target.name, node.nameSpan),
+              "(",
+              props,
+              ");",
+            ),
+          );
+          push(`const ${node.var} = ${temp}.value;`);
+          push(`out += ${temp}.output;`);
+          return;
+        }
+        push(
+          concatMapped(
+            "out += ",
+            mapped(target.name, node.nameSpan),
+            "(",
+            props,
+            ").output;",
+          ),
+        );
+        return;
+      }
+
       push(
         concatMapped(
           "out += ",
           mapped(target.name, node.nameSpan),
           "(",
-          // No props at all: the call's empty object literal is where
-          // TypeScript anchors a missing-required-property error (`{}` is
-          // the diagnostic's own span). With no attribute to map, fall back
-          // to the tag name so that diagnostic still lands inside the `.mx`
-          // file instead of being dropped as unmapped generated text.
-          parts.length === 0
-            ? mapped("{  }", node.nameSpan)
-            : concatMapped("{ ", joinedParts, " }"),
+          props,
           ");",
         ),
       );
@@ -725,7 +773,18 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
     // Named after the file, never anonymous: a tag whose template calls its
     // own name resolves to this declaration, so self-recursion needs no
     // self-import (design invariant §7.5-7).
-    `export default function ${moduleExportName(ir, "@mxlang/html")}(input: ${inputType}): string {`,
+    // A unit that declares `<return>` hands back `{ value, output }` rather
+    // than the output alone (design §3.3). Two shapes, chosen by the tag and
+    // never by a call site — and because the tag compiles without seeing its
+    // callers, the choice is made once here rather than resolved across them.
+    //
+    // The returning shape is left un-annotated so the value's type is
+    // *inferred* from the `<return>` expression: that inference is what gives
+    // a `/var` binding at the call site its type (C6), and an annotation here
+    // could only widen it.
+    `export default function ${moduleExportName(ir, "@mxlang/html")}(input: ${inputType})${
+      ir.returnValue ? "" : ": string"
+    } {`,
     `${INDENT}let out = "";`,
     // Hoisted statements precede the body but follow `out`, so a hoisted
     // declaration may not reference the buffer — which is the point: it is a
@@ -737,7 +796,9 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
       code,
       mappings: emitter.state.bodyMappings[index] ?? [],
     })),
-    `${INDENT}return out;`,
+    ir.returnValue
+      ? `${INDENT}return { value: ${ir.returnValue.code}, output: out };`
+      : `${INDENT}return out;`,
     "}",
     "",
   );

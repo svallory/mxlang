@@ -81,11 +81,12 @@ const TAGS: HostDeclarations["tags"] = {
     reason:
       "`<await>` needs a suspense-capable renderer; `.amx` renders static markup at build time",
   },
-  return: {
-    kind: "error",
-    reason:
-      "`<return>` hands a value to a parent template; an Astro component has no parent template to return to",
-  },
+  // `<return>` is **not** listed. A `.amx` file cannot declare one — it is an
+  // Astro component, whose output is its markup — but this table is consulted
+  // while compiling whichever file contains the tag, so an entry here also
+  // refused a `.amx` file that merely *called* a returning `.mx` tag. That
+  // call is legal: the unit is a separate module, and `component()` below
+  // unwraps its `{ value, output }` pair.
   const: {
     kind: "error",
     reason:
@@ -304,6 +305,15 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
       }
 
       const name = node.target.name;
+      if (node.var) {
+        // The unwrap below is an expression, and an `.amx` template has no
+        // statement position to bind a value in — the `---` fence is the
+        // author's, written before any of this. Refused rather than dropped.
+        fail(
+          `\`/var\` on \`<${node.authoredName ?? name}>\` is not supported in \`.amx\` yet; call the tag without \`/var\`, or bind the value in the \`---\` fence`,
+          node,
+        );
+      }
       if (node.content?.params.length) {
         fail(
           `tag params (\`<${name}|…|>\`) lower to a render prop, which Astro has no equivalent for — Astro passes markup through slots, not functions`,
@@ -608,6 +618,21 @@ export function lowerAstroMx(
     // name and a tag may call itself without importing itself.
     ctx.emitsModule = true;
     const ir = lower(ctx, body);
+    // The `.amx` emitter has nowhere to put a returned value — an Astro
+    // component's output is its markup, and the `---` fence is the author's,
+    // written before any of this runs. The core parses `<return>` for every
+    // host, so leaving this unchecked dropped the tag silently: it emitted
+    // clean markup with the value gone, which is the failure class (S8) the
+    // field guard exists to close. `/var` on a *call* is refused for the
+    // same reason, in `component()`.
+    if (ir.returnValue) {
+      const at = ir.returnValue.node?.loc?.start;
+      throw new AstroTemplateError(
+        "`<return>` hands a value to whoever called this unit; an `.amx` file is an Astro component, whose output is its markup, so there is nothing to return it to — move the markup into a `.mx` tag file if the value is what you need",
+        at?.line ?? 0,
+        at?.column ?? 0,
+      );
+    }
     const statements: HoistedStatement[] = [
       ...ir.imports,
       ...ir.hoisted,

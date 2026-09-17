@@ -130,11 +130,13 @@ const TAGS: Record<string, Disposition> = {
     reason:
       "`<await>` suspends on a promise; this target is a synchronous `(input) => string` and cannot await. Marko itself refuses to render one to a string (\"Cannot consume asynchronous render with 'toString'\")",
   },
-  return: {
-    kind: "error",
-    reason:
-      "`<return>` provides a value to the *parent* template that rendered this one. A module compiled to `(input) => string` has no parent to return to — its only output is the string. Marko emits no markup for it either, so accepting it silently would read as support for something that cannot work here",
-  },
+  // `<return>` is **not** listed here. It was, and the reason it gave — "a
+  // module compiled to `(input) => string` has no parent to return to" — was
+  // true only while a tag template was expanded into its caller. Under the
+  // unit model (decision 95) a tag is its own module and its caller invokes
+  // it, so there is a caller to return to: the unit's export becomes
+  // `{ value, output }` and the call site unwraps it. The core owns the
+  // grammar, in the tag's own compilation.
 };
 
 /**
@@ -614,8 +616,11 @@ const RENDER_DYNAMIC = `function renderDynamic(target, props) {
  * Both `finalizeModule`'s helper injection and `brandRender` key off this exact
  * line, so it is written once rather than twice.
  */
+// The return annotation is optional because a unit that declares `<return>`
+// is emitted without one: its result is `{ value, output }`, left to be
+// *inferred* so the value's type reaches the call site's `/var` binding.
 const DEFAULT_EXPORT =
-  /\nexport default function ([A-Za-z_$][\w$]*)\(input: Input(?: & \{ content\?: \(\) => string \})?\): string \{/;
+  /\nexport default function ([A-Za-z_$][\w$]*)\(input: Input(?: & \{ content\?: \(\) => string \})?\)(?:: string)? \{/;
 
 /**
  * The core's emitted default-export line, and the name it declares.
