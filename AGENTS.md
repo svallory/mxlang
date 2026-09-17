@@ -702,6 +702,25 @@ Five facts worth knowing before editing it:
 - **Every host implements `Emitter<Out>`**, one method per IR kind, and the
   core's `drive`/`emit` owns the walk. A host that cannot express a kind throws;
   no optional callback may silently drop it.
+- **An element's `on<Name>`/`on-<exact>` is an `event` attr, and only on an
+  element** (decision 101). Core lowers an attribute matching `/^on[A-Z-]/` to
+  `Attr` kind `"event"`, carrying the source spelling (`name`), the resolved
+  DOM event name (`event`), the handler `Expr` and a `nameSpan`: `on<Name>`
+  lowercases everything after `on` (`onClick` → `click`), `on-<exact>` is
+  verbatim (`on-my-event` → `my-event`). Marko's own rule, copied rather than
+  re-derived. The **`isElement` gate** is what makes it correct: `lowerAttrs`
+  defaults its `on` parameter to `"element"` and a `HostTag` takes that
+  default, so the gate travels as a separate `isElement` boolean set only at
+  the real `Element` call site — on a component call, a `<define>` call, a
+  custom tag, a host tag (`<try onClick=…>`) or an attribute tag, `on*` stays a
+  `dynamic` prop, because it is the callee's prop contract, not a DOM event.
+  The boolean is deliberately *not* a third `on` value: `resolveModifier`,
+  `rejectAttributeMethod` and `orderAttrs` all take `on` and none of them wants
+  a third case. **No aliases:** `onDoubleClick` lowers to `doubleclick` and
+  core warns without rewriting (`warn(ctx, …)`, positioned at the attribute
+  name); the table is the three React spellings whose lowercase is not a DOM
+  event, verified against `lib.dom.d.ts`. `on:*`/`oncapture:*` get no meaning
+  from core and reach the host through the existing modifier hook.
 - **Three stateful-tag hooks** (decision 70), unit-tested through
   `src/lower.test.ts`: `claimsTag`/`resolveHostTag` (the lower-time tag
   handler), `ctx.hoist(code)` (lift a statement to the enclosing function's
