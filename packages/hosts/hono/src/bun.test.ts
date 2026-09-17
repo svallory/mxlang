@@ -42,6 +42,38 @@ describe("@mxlang/hono/bun", () => {
     }
   });
 
+  test("resolves a discovered template tag's injected import", async () => {
+    Bun.plugin(honoPlugin);
+
+    // The unit-model path, distinct from the sidecar test above: a *template*
+    // tag compiles to its own module and the caller emits an import of it.
+    // This asserts the loader resolves that injected import for real —
+    // `tags/hicon.mx` has to be found, compiled and imported, or the page
+    // module fails to load rather than merely rendering the wrong thing.
+    const base = join(import.meta.dirname, "..");
+    const tagsDir = join(base, "tags");
+    const tagFile = join(tagsDir, "hicon.mx");
+    const page = join(base, "bun-template-page.mx");
+
+    mkdirSync(tagsDir, { recursive: true });
+    writeFileSync(
+      tagFile,
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax, not a JS template
+      '<span class="icon">${input.name}</span>\n',
+    );
+    writeFileSync(page, '<div><hicon name="star"/></div>\n');
+    try {
+      const mod = await import(page);
+      const render = mod.default as (input: unknown) => unknown;
+      const html = String(render({}));
+      expect(html).toContain("star");
+      expect(html).toContain('class="icon"');
+    } finally {
+      rmSync(page, { force: true });
+      rmSync(tagsDir, { recursive: true, force: true });
+    }
+  });
+
   test("does not claim a .solid.mx path", async () => {
     Bun.plugin(honoPlugin);
 

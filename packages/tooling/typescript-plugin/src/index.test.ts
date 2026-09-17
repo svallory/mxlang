@@ -253,6 +253,29 @@ describe("SolidMX language plugin", () => {
 });
 
 describe("MX language plugin", () => {
+  it("puts a discovered template tag's import in the virtual file", () => {
+    const plugin = createMxLanguagePlugin(ts);
+    const fileName = `${here}/fixtures/html-tags/page.mx`;
+    const source = '<div><icon name="star"/></div>\n';
+    const virtual = plugin.createVirtualCode?.(
+      fileName,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+
+    if (!virtual) throw new Error("Expected MX virtual code");
+    const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    // A discovered *template* tag compiles to its own module, so the page
+    // emits an import of it. The editor must see that import, or it reports
+    // an unresolved binding on a page a build compiles fine.
+    expect(generated).toMatch(/import \$mx_Icon\d+ from "\.\/tags\/icon\.mx"/);
+    const binding = generated.match(/import (\$mx_Icon\d+)/)?.[1];
+    expect(generated).toContain(`${binding}(`);
+    // And no syntax error was recorded for the file.
+    expect(plugin.getSyntaxError(fileName)).toBeUndefined();
+  });
+
   it("recognizes .mx and exposes a TypeScript service script", () => {
     const plugin = createMxLanguagePlugin(ts);
     const source = [
