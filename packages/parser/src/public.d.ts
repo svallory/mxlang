@@ -16,6 +16,12 @@ declare module "@mxlang/parser" {
   // outside `src/babel/`, so it needs none of this file's tsconfig
   // relaxations — importing it directly is safe.
   export type {
+    MxRegionCompile,
+    MxRegionCompileInput,
+    MxRegionCompileResult,
+    MxRegionHoistedImport,
+  } from "./mx/region-compile.ts";
+  export type {
     MxRegionContext,
     MxRegionPositionCheck,
   } from "./mx/region-context.ts";
@@ -38,6 +44,18 @@ declare module "@mxlang/parser" {
      * Declared explicitly for the same reason as `mxCustomTags` above.
      */
     mxRegionPositionCheck?: MxRegionPositionCheck;
+    /**
+     * Lowers each MX region the bridge finds. Absent means the Solid host,
+     * which is what every `.solid.mx` parse has always used. Declared
+     * explicitly for the same reason as `mxCustomTags` above.
+     */
+    mxRegionCompile?: MxRegionCompile;
+    /**
+     * Turns the MX grammar on explicitly, for a caller owning a file kind
+     * whose extension `parse`'s own `.solid.mx` test would not match. Unset,
+     * that test still decides.
+     */
+    mx?: boolean;
     [option: string]: unknown;
   }
 

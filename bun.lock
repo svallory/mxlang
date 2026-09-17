@@ -380,6 +380,9 @@
       "dependencies": {
         "@mxlang/solid": "workspace:*",
       },
+      "devDependencies": {
+        "@types/bun": "1.4.2",
+      },
     },
     "packages/tooling/angular-checker": {
       "name": "@mxlang/angular-checker",

@@ -3,8 +3,10 @@ import { parseExpression } from "../babel/index.ts";
 import { types as tc } from "../babel/tokenizer/context.ts";
 import { Position } from "../babel/util/location.ts";
 import { MxErrors } from "./errors.ts";
+import type { MxRegionCompile } from "./region-compile.ts";
 import {
   computeMxRegionContext,
+  type MxRegionContext,
   type MxRegionPositionCheck,
 } from "./region-context.ts";
 import { type MxElement, type MxRange, walkMxRegion } from "./walk.ts";
@@ -84,11 +86,16 @@ export function mxParseElementAt(
   const positionCheck = parser.options?.mxRegionPositionCheck as
     | MxRegionPositionCheck
     | undefined;
+  // Kept in scope past the check so the compile hook below can be handed the
+  // same context, rather than a host having to re-derive it through a side
+  // channel the parser does not offer.
+  let regionContext: MxRegionContext | undefined;
   if (positionCheck) {
     const context = computeMxRegionContext(
       parser.state.mxRegionParents,
       startLoc.index,
     );
+    regionContext = context;
     const result = positionCheck(context);
     if (!result.ok) {
       throw raiseAndThrow(parser, MxErrors.PositionRejected, startLoc, {
@@ -100,16 +107,40 @@ export function mxParseElementAt(
   let node: unknown;
   try {
     const region = source.slice(start, end);
-    const { code, hoistedImports, returnVars } = compileSolidMx(region, {
-      filename: parser.options?.sourceFilename ?? "input.solid.mx",
+    // Which host lowers this region is the caller's to decide, on the same
+    // options-bag channel `mxRegionPositionCheck` uses — the bridge runs
+    // inside the tokenizer and has no other route to an integration. Absent,
+    // it is the Solid host, exactly as every `.solid.mx` parse has always
+    // done; `compileSolidMx`'s own option names are what this input mirrors.
+    const regionCompile = parser.options?.mxRegionCompile as
+      | MxRegionCompile
+      | undefined;
+    // One position/tag bag for both arms: the two used to repeat five
+    // arguments, where a change to one could silently miss the other.
+    const base = {
       baseOffset: start,
       baseLine: startLoc.line - 1,
       baseColumn: startLoc.column,
-      // Registered custom tags reach the Solid host only through here: the
-      // bridge runs inside the tokenizer, so the parser options are the one
-      // channel an integration has to the region being lowered.
+      // Registered custom tags reach a host only through here, for the same
+      // reason the hook itself does.
       customTags: parser.options?.mxCustomTags,
-    });
+    };
+    const { code, hoistedImports, returnVars } = regionCompile
+      ? regionCompile({
+          source: region,
+          filename: parser.options?.sourceFilename ?? "input.mx",
+          // The region's syntactic position, already computed for the veto
+          // above. Handed over so a host that needs it downstream — to shape
+          // its emit, not merely to accept or reject — needs no side channel
+          // back into the parser. Undefined when no position check ran, since
+          // the stack is only tracked then.
+          context: regionContext,
+          ...base,
+        })
+      : compileSolidMx(region, {
+          filename: parser.options?.sourceFilename ?? "input.solid.mx",
+          ...base,
+        });
     node = parseExpression(code, {
       ...mxSubParseOptions(parser.options),
       mx: false,
@@ -122,13 +153,48 @@ export function mxParseElementAt(
   } catch (err) {
     const error = err as {
       message?: string;
+      name?: string;
       line?: number;
       column?: number;
+      reasonCode?: unknown;
+      code?: unknown;
       loc?: { start?: { line?: number; column?: number; index?: number } };
     };
     const line = error.line ?? error.loc?.start?.line;
     const column = error.column ?? error.loc?.start?.column;
-    if (typeof line === "number" && typeof column === "number") {
+    // `line`/`column` are only believed when the thrower is recognizably
+    // *positioned*: a Babel syntax error, or something carrying a real source
+    // offset at `loc.start.index`. Every `Error` has a `line` in V8, and it
+    // is the **throw site inside the throwing module** — measured: a host
+    // throwing from its own line 11 for a region on line 3 reported (14:1)
+    // in the user's `.mx` file, a position that exists in neither file.
+    //
+    // A positioned error's coordinates are trusted as file-absolute and are
+    // *not* shifted by the region's base, because the one in-tree producer
+    // (`compileSolidMx`) already pre-pads its source so the core computes
+    // file-absolute positions. That contract is documented on
+    // `MxRegionCompile` for every other host.
+    //
+    // The predicate must be **runtime-independent**, and this is the trap:
+    // under Bun (JavaScriptCore), which is what this repo runs on, *every*
+    // plain `Error` carries own numeric `line`/`column` naming its JS throw
+    // site — measured: `Object.getOwnPropertyNames(new Error("x"))` includes
+    // `line`, `column`, `originalLine`, `originalColumn`, `sourceURL`. V8
+    // does not, so "an own line/column pair means someone set it
+    // deliberately" holds on Node and fails here, sending a host's exception
+    // to the host's own source line in the user's `.mx`.
+    //
+    // Each marker below is therefore a *deliberate* one, never a property a
+    // runtime might add on its own: `TranslateError`'s name (the one shape
+    // an in-tree host actually throws — it carries only `line`/`column`, no
+    // `loc` and no `reasonCode`, measured against `@mxlang/core`'s class),
+    // Babel's own error code / `reasonCode`, or a real source offset.
+    const positioned =
+      error.name === "TranslateError" ||
+      error.code === "BABEL_PARSER_SYNTAX_ERROR" ||
+      typeof error.reasonCode === "string" ||
+      typeof error.loc?.start?.index === "number";
+    if (positioned && typeof line === "number" && typeof column === "number") {
       const offset = offsetAt(source, line, column);
       throw raiseAndThrow(
         parser,
@@ -136,9 +202,18 @@ export function mxParseElementAt(
         positionAt(source, offset, parser.state.startIndex),
         { message: error.message ?? "Invalid MX element." },
       );
-    } else {
-      throw err;
     }
+    // Anything else — a plain `Error`, or a non-`Error` value a host threw —
+    // is reported at the region's own start, the same fallback the walk-error
+    // and position-check raises use. Rethrowing raw would escape the
+    // positioned-`SyntaxError` contract `toSyntaxError` relies on, and would
+    // break `tryParse`'s speculative-parse discipline for a non-`Error`.
+    throw raiseAndThrow(parser, MxErrors.HostError, startLoc, {
+      message:
+        typeof error?.message === "string" && error.message
+          ? error.message
+          : String(err),
+    });
   }
 
   repositionTokenizer(parser, source, start, end, contextDepth);
