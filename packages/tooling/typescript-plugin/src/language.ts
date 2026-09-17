@@ -53,7 +53,7 @@ export function createSolidMxLanguagePlugin(
         // nothing of a registered tag inside a `.solid.mx` region while a
         // `vite build` of the same file compiled it fine — the gap the P1
         // review recorded against this path.
-        const discovered = getCustomTags(fileName);
+        const discovered = getCustomTags(fileName, { host: "solid" });
         const printed = print(
           source,
           fileName,

@@ -131,7 +131,7 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
    * rather than leaving `.amx` the one place a `tags/` directory is invisible.
    */
   const tagsFor = (file: string): Record<string, CustomTag> | undefined => {
-    const discovered = getCustomTags(file);
+    const discovered = getCustomTags(file, { host: "astro" });
     const merged = customTags ? { ...discovered, ...customTags } : discovered;
     return Object.keys(merged).length > 0 ? merged : undefined;
   };

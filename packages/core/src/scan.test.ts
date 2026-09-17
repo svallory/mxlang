@@ -2,7 +2,9 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -15,7 +17,14 @@ import { TranslateError } from "./core.ts";
 import { customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
-import { normalizeMxTags, readParseOptions, scanCustomTags } from "./scan.ts";
+import {
+  clearManifestCache,
+  discoverProjectTags,
+  normalizeMxTags,
+  readParseOptions,
+  scanCustomTags,
+  walkProjectDirectories,
+} from "./scan.ts";
 import {
   clearScanCache,
   getCustomTags,
@@ -53,6 +62,7 @@ function touchInFuture(path: string): void {
 
 afterEach(() => {
   clearScanCache();
+  clearManifestCache();
   for (const dir of scratches.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -347,6 +357,339 @@ describe("scanCustomTags", () => {
     // a tag belongs to a package, not to whatever happens to sit above it.
     const result = scanCustomTags(join(dir, "outer", "pkg", "caller.mx"));
     expect(result.tags.has("outside")).toBe(false);
+  });
+});
+
+describe("host-filtered discovery", () => {
+  it("carries hosts onto a DiscoveredTag from an mx.tags entry", () => {
+    const result = scanCustomTags(fixture("hosts", "caller.mx"));
+    expect(result.tags.get("gizmo")?.hosts).toEqual(["solid"]);
+  });
+
+  it("is visible from the host it names", () => {
+    const result = scanCustomTags(fixture("hosts", "caller.mx"), {
+      host: "solid",
+    });
+    expect(result.tags.has("gizmo")).toBe(true);
+    expect(Object.keys(result.customTags)).toEqual(["gizmo"]);
+  });
+
+  it("is absent from a host it does not name", () => {
+    const result = scanCustomTags(fixture("hosts", "caller.mx"), {
+      host: "html",
+    });
+    expect(result.tags.has("gizmo")).toBe(false);
+    expect(Object.keys(result.customTags)).toEqual([]);
+  });
+
+  it("is visible to every host when the scan carries no host option", () => {
+    const result = scanCustomTags(fixture("hosts", "caller.mx"));
+    expect(result.tags.has("gizmo")).toBe(true);
+  });
+
+  it("a local tags/ directory has no hosts restriction", () => {
+    const result = scanCustomTags(fixture("nearest", "caller.mx"), {
+      host: "html",
+    });
+    expect(result.tags.get("badge")?.hosts).toBeUndefined();
+    expect(result.tags.has("badge")).toBe(true);
+  });
+});
+
+describe("discoverProjectTags", () => {
+  it("enumerates every tags/ directory under the project, plus mx.tags", () => {
+    const result = discoverProjectTags(fixture("project-wide"));
+    expect([...result.tags.keys()].sort()).toEqual([
+      "alpha",
+      "beta",
+      "epsilon",
+    ]);
+  });
+
+  it("excludes a nested package's tags/ directory", () => {
+    const result = discoverProjectTags(fixture("project-wide"));
+    expect(result.tags.has("gamma")).toBe(false);
+  });
+
+  it("excludes node_modules", () => {
+    // Built at runtime rather than checked in: a `node_modules/` fixture
+    // directory is gitignored by the repo's own root `.gitignore`, so a file
+    // placed there would never reach a clone and this test would pass
+    // vacuously with nothing to exclude.
+    const dir = scratch();
+    mkdirSync(join(dir, "node_modules", "tags"), { recursive: true });
+    writeFileSync(join(dir, "node_modules", "tags", "delta.mx"), "<div/>\n");
+    writeFileSync(join(dir, "package.json"), '{"name":"node-modules-test"}');
+
+    const result = discoverProjectTags(dir);
+    expect(result.tags.has("delta")).toBe(false);
+  });
+
+  it("records sourceDir for every discovered tag", () => {
+    const result = discoverProjectTags(fixture("project-wide"));
+    expect(result.tags.get("alpha")?.sourceDir).toBe(
+      fixture("project-wide", "tags"),
+    );
+    expect(result.tags.get("beta")?.sourceDir).toBe(
+      fixture("project-wide", "nested", "tags"),
+    );
+  });
+
+  it("is stably ordered across repeated calls", () => {
+    const first = [...discoverProjectTags(fixture("project-wide")).tags.keys()];
+    const second = [
+      ...discoverProjectTags(fixture("project-wide")).tags.keys(),
+    ];
+    expect(first).toEqual(second);
+  });
+
+  it("applies the host filter the same way scanCustomTags does", () => {
+    const result = discoverProjectTags(fixture("hosts"), { host: "html" });
+    expect(result.tags.has("gizmo")).toBe(false);
+
+    const solidResult = discoverProjectTags(fixture("hosts"), {
+      host: "solid",
+    });
+    expect(solidResult.tags.has("gizmo")).toBe(true);
+  });
+
+  it("follows a symlinked tags/ directory", () => {
+    const dir = scratch();
+    writeFileSync(join(dir, "package.json"), '{"name":"symlink-test"}');
+    mkdirSync(join(dir, "real-tags"), { recursive: true });
+    writeFileSync(join(dir, "real-tags", "linked.mx"), "<div/>\n");
+    symlinkSync(join(dir, "real-tags"), join(dir, "tags"), "dir");
+
+    const result = discoverProjectTags(dir);
+    expect(result.tags.has("linked")).toBe(true);
+  });
+
+  it("does not loop forever on a symlink cycle", () => {
+    const dir = scratch();
+    writeFileSync(join(dir, "package.json"), '{"name":"symlink-cycle-test"}');
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "tags", "real.mx"), "<div/>\n");
+    // `nested/` has no `package.json` of its own, so the package-boundary
+    // check does not stop the walk from descending into it — the
+    // self-referential symlink inside it (`nested/loop` -> `nested`) is what
+    // must be caught by the realpath guard, or the walk never terminates.
+    mkdirSync(join(dir, "nested"), { recursive: true });
+    symlinkSync(join(dir, "nested"), join(dir, "nested", "loop"), "dir");
+
+    expect(() => discoverProjectTags(dir)).not.toThrow();
+
+    const result = discoverProjectTags(dir);
+    expect(result.tags.has("real")).toBe(true);
+  });
+});
+
+describe("walkProjectDirectories", () => {
+  it("visits every real directory exactly once", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "a"), { recursive: true });
+    mkdirSync(join(dir, "b"), { recursive: true });
+
+    const visited: string[] = [];
+    walkProjectDirectories(dir, (visitedDir) => visited.push(visitedDir));
+
+    expect(visited.sort()).toEqual(
+      [dir, join(dir, "a"), join(dir, "b")].sort(),
+    );
+  });
+
+  it("is the guard that stops a two-node symlink cycle from recursing forever", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "a"), { recursive: true });
+    mkdirSync(join(dir, "b"), { recursive: true });
+    // `a/link` -> `b`, `b/link` -> `a`: no directory in this cycle has a
+    // `package.json` of its own, so nothing but the realpath guard can stop
+    // the walk from bouncing `a` -> `a/link` (== `b`) -> `a/link/link`
+    // (== `a`) -> ... forever. Each hop is a *distinct path string*, so only
+    // comparing realpaths (not raw path strings) can detect the repeat and
+    // stop *descending further* — `visit` itself still fires for every path
+    // reached, one hop past where the guard catches the repeat.
+    symlinkSync(join(dir, "b"), join(dir, "a", "link"), "dir");
+    symlinkSync(join(dir, "a"), join(dir, "b", "link"), "dir");
+
+    const visited: string[] = [];
+    walkProjectDirectories(dir, (visitedDir) => visited.push(visitedDir));
+
+    // `root`, `a`, `a/link` (realpath `b`), `a/link/link` (realpath `a`,
+    // already visited — recursion stops here) and `b` (reached directly as
+    // root's own second child, realpath already visited — recursion stops
+    // there too). Five visits total, all distinct *path strings*, covering
+    // only three distinct *realpaths*. A missing guard would make this list
+    // unbounded instead of exactly these five.
+    expect(visited.sort()).toEqual(
+      [
+        dir,
+        join(dir, "a"),
+        join(dir, "a", "link"),
+        join(dir, "a", "link", "link"),
+        join(dir, "b"),
+      ].sort(),
+    );
+
+    // Proof the guard is load-bearing, not merely lucky: a `visited` set
+    // pre-seeded with `a`'s realpath already present stops the walk from
+    // descending into `a` at all — `visit(a)` still fires (every reached path
+    // is visited), but nothing under it does, since the guard gates
+    // recursion, not the visit call itself. `b` is not preseeded, so it is
+    // both visited and descended into, reaching `b/link` (realpath `a`,
+    // already preseeded, so recursion stops there).
+    const preseeded = new Set([realpathSync(join(dir, "a"))]);
+    const secondVisit: string[] = [];
+    walkProjectDirectories(
+      dir,
+      (visitedDir) => secondVisit.push(visitedDir),
+      preseeded,
+    );
+    expect(secondVisit.sort()).toEqual(
+      [dir, join(dir, "a"), join(dir, "b"), join(dir, "b", "link")].sort(),
+    );
+  });
+
+  it("excludes node_modules and dotdirectories from the walk", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "node_modules", "pkg"), { recursive: true });
+    mkdirSync(join(dir, ".git"), { recursive: true });
+    mkdirSync(join(dir, "src"), { recursive: true });
+
+    const visited: string[] = [];
+    walkProjectDirectories(dir, (visitedDir) => visited.push(visitedDir));
+
+    expect(visited.sort()).toEqual([dir, join(dir, "src")].sort());
+  });
+
+  it("stops at a nested package boundary, excluding the boundary directory itself", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "nested"), { recursive: true });
+    writeFileSync(join(dir, "nested", "package.json"), '{"name":"nested"}');
+    mkdirSync(join(dir, "nested", "tags"), { recursive: true });
+
+    const visited: string[] = [];
+    walkProjectDirectories(dir, (visitedDir) => visited.push(visitedDir));
+
+    // `nested/` itself carries the package.json that makes it a boundary, so
+    // it is excluded along with everything inside it — only the project root
+    // is visited.
+    expect(visited).toEqual([dir]);
+  });
+});
+
+describe("tolerant, cached manifest reads", () => {
+  it("recovers from a broken package.json, keeping the previous mx.tags", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "shared"), { recursive: true });
+    writeFileSync(join(dir, "shared", "widget.tag.ts"), "export default {};\n");
+    const packageJson = join(dir, "package.json");
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ name: "manifest-test", mx: { tags: ["shared"] } }),
+    );
+
+    const good = scanCustomTags(join(dir, "caller.mx"));
+    expect(good.tags.has("widget")).toBe(true);
+    expect(good.diagnostics).toHaveLength(0);
+
+    // Break the manifest: an editor mid-save, or a typo.
+    touchInFuture(packageJson);
+    writeFileSync(packageJson, "{ this is not json");
+
+    const broken = scanCustomTags(join(dir, "caller.mx"));
+    // The previous good `mx.tags` stays in force — the file does not go dark
+    // because `package.json` is momentarily invalid.
+    expect(broken.tags.has("widget")).toBe(true);
+    expect(broken.diagnostics).toHaveLength(1);
+    expect(broken.diagnostics[0]?.file).toBe(packageJson);
+    expect(broken.diagnostics[0]?.message).toContain("could not be parsed");
+
+    // A second *fresh* scan of the same broken revision still carries the
+    // diagnostic — `readManifest`'s cache skips re-parsing (the mtime is
+    // unchanged), not re-diagnosing: the parse error is a fact about this
+    // revision, owed to every `ScanResult` built against it, not just the
+    // first one that happened to trigger the parse. (Dedup belongs to
+    // `scanCached`'s own outer cache, which short-circuits before
+    // `readManifest` runs again at all — see the two-host test below.)
+    const brokenAgain = scanCustomTags(join(dir, "caller.mx"));
+    expect(brokenAgain.diagnostics).toHaveLength(1);
+    expect(brokenAgain.diagnostics[0]?.message).toContain(
+      "could not be parsed",
+    );
+
+    // Fixing it clears the diagnostic and re-establishes discovery from the
+    // new content.
+    touchInFuture(packageJson);
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ name: "manifest-test", mx: { tags: ["shared"] } }),
+    );
+    const fixed = scanCustomTags(join(dir, "caller.mx"));
+    expect(fixed.tags.has("widget")).toBe(true);
+    expect(fixed.diagnostics).toHaveLength(0);
+  });
+
+  it("never throws on a broken manifest", () => {
+    const dir = scratch();
+    writeFileSync(join(dir, "package.json"), "not json at all");
+    expect(() => scanCustomTags(join(dir, "caller.mx"))).not.toThrow();
+  });
+
+  it("reports the diagnostic to every host scanning the same broken manifest, not just the first", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "shared"), { recursive: true });
+    writeFileSync(join(dir, "shared", "widget.tag.ts"), "export default {};\n");
+    const packageJson = join(dir, "package.json");
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ name: "two-host-test", mx: { tags: ["shared"] } }),
+    );
+    writeFileSync(join(dir, "caller.mx"), "<div/>\n");
+
+    // Establish a good cached scan for one host first, so the failure below
+    // exercises `readManifest`'s cache-hit path, not its first-parse path.
+    scanCached(join(dir, "caller.mx"), { host: "html" });
+
+    touchInFuture(packageJson);
+    writeFileSync(packageJson, "{ still not json");
+
+    // Two hosts, two independent `scanCached` entries (the cache key
+    // includes `host`) — each is a *fresh* `ScanResult` built against the
+    // same broken `package.json` revision, so each must carry its own copy
+    // of the diagnostic. Before this fix, `readManifest`'s cache hit
+    // returned the cached manifest without re-pushing the diagnostic, so
+    // only the first caller to hit the parse error ever saw it.
+    const htmlResult = scanCached(join(dir, "caller.mx"), { host: "html" });
+    const solidResult = scanCached(join(dir, "caller.mx"), { host: "solid" });
+
+    expect(htmlResult.diagnostics).toHaveLength(1);
+    expect(htmlResult.diagnostics[0]?.message).toContain("could not be parsed");
+    expect(solidResult.diagnostics).toHaveLength(1);
+    expect(solidResult.diagnostics[0]?.message).toContain(
+      "could not be parsed",
+    );
+
+    // A repeat call for the *same* host is a `scanCached` cache hit (nothing
+    // about the directory or the manifest changed), so it returns the exact
+    // same `ScanResult` object rather than re-running `readManifest` at all —
+    // the diagnostic is still there because it is the same array, not
+    // because anything re-pushed into it.
+    const htmlAgain = scanCached(join(dir, "caller.mx"), { host: "html" });
+    expect(htmlAgain).toBe(htmlResult);
+    expect(htmlAgain.diagnostics).toHaveLength(1);
+
+    // Force `scanCached`'s own outer cache to miss (a third host it has
+    // never scanned this directory for) while the manifest's mtime stays
+    // exactly as broken as before: this exercises `readManifest`'s *own*
+    // cache-hit path (mtime unchanged since the last parse) on a genuinely
+    // fresh `ScanResult`, and it must still carry the diagnostic — this is
+    // the exact case the fix targets.
+    const reactResult = scanCached(join(dir, "caller.mx"), { host: "react" });
+    expect(reactResult).not.toBe(htmlResult);
+    expect(reactResult.diagnostics).toHaveLength(1);
+    expect(reactResult.diagnostics[0]?.message).toContain(
+      "could not be parsed",
+    );
   });
 });
 

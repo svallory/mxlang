@@ -226,7 +226,7 @@ function compileTagFile(
   const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
 
   try {
-    const customTags = getCustomTags(mxPath);
+    const customTags = getCustomTags(mxPath, { host: "angular" });
     const result = compileTagModuleFile(mxPath, {
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
@@ -336,7 +336,7 @@ export function compileOne(
   const outputs = [outputPath, mapPath];
 
   try {
-    const customTags = getCustomTags(mxPath);
+    const customTags = getCustomTags(mxPath, { host: "angular" });
     const result = compileFile(mxPath, {
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,

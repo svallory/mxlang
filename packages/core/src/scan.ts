@@ -37,7 +37,13 @@
  * the same reason.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
@@ -105,6 +111,13 @@ export interface DiscoveredTag {
   parseOptions?: CustomTagParseOptions;
   /** The directory this tag was found in; drives the nearest-wins rule. */
   sourceDir?: string;
+  /**
+   * Hosts this tag is visible to, from the `mx.tags` entry that declared it.
+   * `undefined` means every host; a local `tags/` directory (no `mx.tags`
+   * entry backing it) always carries `undefined` here, since only an
+   * explicit `hosts` list narrows visibility.
+   */
+  hosts?: string[];
 }
 
 /** What one scan found, plus everything needed to know when it went stale. */
@@ -565,10 +578,102 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
   return definition;
 }
 
+interface ManifestCacheEntry {
+  mtimeMs: number;
+  manifest: { mx?: { tags?: unknown } } | undefined;
+  /**
+   * Set only when this revision failed to parse. Carried on the cache entry
+   * (rather than only pushed once at parse time) so a *later* scan — a
+   * different host, or any other fresh call reusing this cached revision —
+   * still learns about the broken manifest instead of silently getting
+   * `diagnostics: []`. Re-pushed into every caller's own `diagnostics` array
+   * on a cache hit; per-scan-result dedup is `scanCached`'s job (its outer
+   * cache short-circuits before `readManifest` is even called again for an
+   * unchanged directory), not this cache's.
+   */
+  brokenDiagnostic?: ScanDiagnostic;
+}
+
+/**
+ * `package.json` reads, cached by path and keyed fresh by mtime.
+ *
+ * `JSON.parse` on every scan is real work repeated for every file a project
+ * compiles, and a parse failure mid-edit used to silently set `manifest =
+ * undefined` — dropping every `mx.tags` entry, with no diagnostic, for as
+ * long as the file stayed broken. Both are fixed here: the parsed manifest
+ * is reused while the file's mtime is unchanged, and a parse failure keeps
+ * the *previous* good manifest in force (an editor mid-save is not a reason
+ * to make every open file's tags disappear) while still surfacing a
+ * diagnostic — into *every* `ScanResult` a caller builds against this broken
+ * revision (see `ManifestCacheEntry.brokenDiagnostic`), not merely the first
+ * one that happened to hit the parse error.
+ */
+const manifestCache = new Map<string, ManifestCacheEntry>();
+
+/** For tests: drops every cached `package.json` read. */
+export function clearManifestCache(): void {
+  manifestCache.clear();
+}
+
+function readManifest(
+  packageJson: string,
+  diagnostics: ScanDiagnostic[],
+): { mx?: { tags?: unknown } } | undefined {
+  let mtimeMs: number;
+  try {
+    mtimeMs = statSync(packageJson).mtimeMs;
+  } catch {
+    manifestCache.delete(packageJson);
+    return undefined;
+  }
+
+  const cached = manifestCache.get(packageJson);
+  if (cached && cached.mtimeMs === mtimeMs) {
+    // Already resolved for this revision: reuse the manifest (good or, on a
+    // parse failure, the previous good one). The diagnostic is still owed to
+    // *this* result, though — a cache hit means the parse itself was not
+    // redone, not that this particular `ScanResult` already carries it.
+    if (cached.brokenDiagnostic) diagnostics.push(cached.brokenDiagnostic);
+    return cached.manifest;
+  }
+
+  let parsed: { mx?: { tags?: unknown } } | undefined;
+  let parseError: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(packageJson, "utf8"));
+  } catch (cause) {
+    parseError = cause;
+  }
+
+  if (parseError === undefined) {
+    manifestCache.set(packageJson, { mtimeMs, manifest: parsed });
+    return parsed;
+  }
+
+  // Keep-last: a broken revision does not erase the `mx.tags` a good one
+  // already established.
+  const previous = cached?.manifest;
+  const brokenDiagnostic: ScanDiagnostic = {
+    file: packageJson,
+    message: `\`package.json\` could not be parsed as JSON: ${(parseError as Error).message}; the previous valid \`mx.tags\` stays in force`,
+    line: 1,
+    column: 0,
+  };
+  manifestCache.set(packageJson, {
+    mtimeMs,
+    manifest: previous,
+    brokenDiagnostic,
+  });
+  diagnostics.push(brokenDiagnostic);
+  return previous;
+}
+
 interface IndexOptions {
   /** Directory-level defaults from an `mx.tags` entry. */
   prefix?: string;
   parseOptions?: CustomTagParseOptions;
+  /** The `mx.tags` entry's `hosts` restriction, carried onto each tag found. */
+  hosts?: string[];
 }
 
 /**
@@ -658,7 +763,11 @@ function indexDirectory(
     if (existing && existing.sourceDir !== dir) continue;
 
     files.push({ path, mtimeMs });
-    const tag: DiscoveredTag = existing ?? { name, sourceDir: dir };
+    const tag: DiscoveredTag = existing ?? {
+      name,
+      sourceDir: dir,
+      hosts: options.hosts,
+    };
     if (isSidecar) {
       tag.sidecar = path;
       // The sidecar's own declaration overrides the directory default, which
@@ -683,6 +792,78 @@ export interface ScanOptions {
    * nearest `package.json`), as the spec describes.
    */
   stopAt?: string;
+  /**
+   * The calling integration's host name (`"html"`, `"solid"`, `"preact"`,
+   * `"react"`, `"hono"`, `"astro"`, `"angular"`). A tag whose `mx.tags`
+   * entry declared `hosts` excluding this name is left out of `tags` and
+   * `customTags` entirely — not merely hidden, since a name a different
+   * host owns must stay callable from that host's own scan of the same
+   * file. A tag with no `hosts` restriction (every local `tags/` directory,
+   * and any `mx.tags` entry that did not declare `hosts`) is visible to
+   * every host, `host` unset included.
+   */
+  host?: string;
+}
+
+/**
+ * Applies a `host` restriction to an in-progress scan's tags, in place.
+ *
+ * A `hosts` restriction excludes the tag from the result entirely, not
+ * merely from `customTags`: a name a different host owns must stay
+ * resolvable (e.g. as "not visible here") rather than appear to exist with
+ * no map entry backing it. Shared by `scanCustomTags` and
+ * `discoverProjectTags`, so the rule cannot drift between the two.
+ */
+function applyHostFilter(tags: Map<string, DiscoveredTag>, host: string): void {
+  for (const [name, tag] of tags) {
+    if (tag.hosts && !tag.hosts.includes(host)) tags.delete(name);
+  }
+}
+
+/** Builds the lazy `customTags` map a compiler consumes from a tag map. */
+function buildCustomTags(
+  tags: Map<string, DiscoveredTag>,
+): Record<string, CustomTag> {
+  const customTags: Record<string, CustomTag> = Object.create(null);
+  for (const [name, tag] of tags) customTags[name] = lazyTag(tag);
+  return customTags;
+}
+
+/**
+ * Indexes one package's `mx.tags` entries into `tags`, lowest precedence: a
+ * name a local `tags/` directory already claimed is left alone. Shared by
+ * `scanCustomTags` and `discoverProjectTags`, which each locate their own
+ * `packageDir`/`packageJson` first (by walking upward, or by taking the
+ * project root) and then index identically from there.
+ */
+function indexMxTagsEntries(
+  packageDir: string,
+  packageJson: string,
+  tags: Map<string, DiscoveredTag>,
+  files: Array<{ path: string; mtimeMs: number }>,
+  diagnostics: ScanDiagnostic[],
+  directories: string[],
+): void {
+  const manifest = readManifest(packageJson, diagnostics);
+  const entries = normalizeMxTags(manifest?.mx?.tags, packageDir, packageJson);
+  for (const entry of entries) {
+    directories.push(entry.dir);
+    if (!existsSync(entry.dir)) {
+      // Recorded, not thrown: see `ScanResult.diagnostics`.
+      diagnostics.push({
+        file: packageJson,
+        message: `\`mx.tags\` names a directory that does not exist: ${entry.dir}`,
+        line: 1,
+        column: 0,
+      });
+      continue;
+    }
+    indexDirectory(entry.dir, tags, files, diagnostics, {
+      prefix: entry.prefix,
+      parseOptions: entry.parseOptions,
+      hosts: entry.hosts,
+    });
+  }
 }
 
 /**
@@ -726,42 +907,192 @@ export function scanCustomTags(
     dir = parent;
   }
 
-  // `mx.tags` entries are lowest precedence, so they are indexed last: a name
-  // a local `tags/` directory already claimed is left alone.
   if (packageDir && packageJson) {
     packageFiles.push(packageJson);
-    let manifest: { mx?: { tags?: unknown } } | undefined;
-    try {
-      manifest = JSON.parse(readFileSync(packageJson, "utf8"));
-    } catch {
-      manifest = undefined;
-    }
-    const entries = normalizeMxTags(
-      manifest?.mx?.tags,
+    indexMxTagsEntries(
       packageDir,
       packageJson,
+      tags,
+      files,
+      diagnostics,
+      directories,
     );
-    for (const entry of entries) {
-      directories.push(entry.dir);
-      if (!existsSync(entry.dir)) {
-        // Recorded, not thrown: see `ScanResult.diagnostics`.
-        diagnostics.push({
-          file: packageJson,
-          message: `\`mx.tags\` names a directory that does not exist: ${entry.dir}`,
-          line: 1,
-          column: 0,
-        });
-        continue;
-      }
-      indexDirectory(entry.dir, tags, files, diagnostics, {
-        prefix: entry.prefix,
-        parseOptions: entry.parseOptions,
-      });
-    }
   }
 
-  const customTags: Record<string, CustomTag> = Object.create(null);
-  for (const [name, tag] of tags) customTags[name] = lazyTag(tag);
+  if (options.host !== undefined) applyHostFilter(tags, options.host);
 
-  return { tags, customTags, directories, packageFiles, files, diagnostics };
+  return {
+    tags,
+    customTags: buildCustomTags(tags),
+    directories,
+    packageFiles,
+    files,
+    diagnostics,
+  };
+}
+
+/** Whether a symlink entry resolves (following the link) to a directory. */
+function isDirectorySymlink(
+  dir: string,
+  entry: { name: string; isSymbolicLink(): boolean },
+): boolean {
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return statSync(join(dir, entry.name)).isDirectory();
+  } catch {
+    // A broken symlink (target deleted, or a cycle `statSync` itself
+    // refuses) is not a directory to descend into.
+    return false;
+  }
+}
+
+/**
+ * Walks the directory tree under `root`, calling `visit(dir)` once per real
+ * directory reached — never descending into `node_modules`, a dotdirectory,
+ * or a nested package (a directory holding its own `package.json`, other
+ * than `root` itself).
+ *
+ * A symlinked directory is followed (`Dirent.isDirectory()` is false for a
+ * symlink regardless of its target, so `isDirectorySymlink` checks
+ * explicitly). `visit(dir)` fires once for every *path* reached, named as
+ * its parent named it — a `tags/` directory that happens to be a symlink is
+ * still visited as `tags/`, never silently renamed to whatever its target is
+ * called. What is guarded by `visited` (a set of `realpathSync` results) is
+ * *descending further*: a path whose realpath was already read is visited
+ * (so its own name is never missed) but not read again, which is what stops
+ * a symlink cycle from recursing forever while still reporting every alias
+ * that points at real content.
+ *
+ * Exported as a test seam, not public API: `discoverProjectTags` is the
+ * function callers use. Splitting the walk out lets a test assert the
+ * `visited` guard is what stops a symlink cycle from recursing forever,
+ * which `discoverProjectTags`'s own return value cannot distinguish from
+ * "happened to terminate some other way" (a cycle can also hit an OS-level
+ * symlink or path-length limit before recursing very deep, which would make
+ * an unguarded walk *appear* to terminate correctly on a short fixture
+ * without the `visited` guard actually doing anything).
+ */
+export function walkProjectDirectories(
+  root: string,
+  visit: (dir: string) => void,
+  visited: Set<string> = new Set(),
+): void {
+  const walk = (dir: string, isRoot: boolean): void => {
+    if (!isRoot && existsSync(join(dir, "package.json"))) return;
+
+    visit(dir);
+
+    let realDir: string;
+    try {
+      realDir = realpathSync(dir);
+    } catch {
+      return;
+    }
+    if (visited.has(realDir)) return;
+    visited.add(realDir);
+
+    let entries: Array<{ name: string; isDirectory: boolean }>;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+        .map((entry) => ({
+          name: entry.name,
+          // `Dirent.isDirectory()` is false for a symlink regardless of what
+          // it points to; a symlinked `tags/` directory must still resolve
+          // through `statSync` (following the link) to be recognized.
+          isDirectory: entry.isDirectory() || isDirectorySymlink(dir, entry),
+        }))
+        .filter((entry) => entry.isDirectory);
+    } catch {
+      return;
+    }
+
+    for (const { name } of entries.sort((left, right) =>
+      left.name.localeCompare(right.name),
+    )) {
+      if (name.startsWith(".") || name === "node_modules") continue;
+      walk(join(dir, name), false);
+    }
+  };
+  walk(root, true);
+}
+
+export interface DiscoverProjectTagsOptions {
+  /** Same meaning as `ScanOptions.host`: filters the returned tags by host. */
+  host?: string;
+}
+
+/**
+ * Enumerates every tag reachable inside a project root: every `tags/`
+ * directory found by walking the tree downward from `projectDir`, plus the
+ * root `package.json`'s `mx.tags` entries — the project-wide counterpart to
+ * `scanCustomTags`'s single-file upward walk (spec §4).
+ *
+ * The walk never descends into `node_modules`, a dotdirectory, or a nested
+ * package (a directory holding its own `package.json`, other than
+ * `projectDir` itself) — a nested package's tags belong to *its* project, not
+ * this one, the same boundary the upward walk stops at. A symlinked
+ * directory is followed (`Dirent.isDirectory()` is false for a symlink
+ * regardless of its target, so this is checked explicitly), guarded by a
+ * visited-realpath set so a symlink cycle cannot recurse forever.
+ *
+ * Directories are visited in a stable, depth-then-name sorted order, so a
+ * name two `tags/` directories both claim resolves to the shallower one
+ * deterministically across runs — the same nearest-wins rule
+ * `scanCustomTags`'s upward walk expresses by visiting nearer directories
+ * first; here "nearer" means closer to the project root. `mx.tags` entries
+ * are indexed last, exactly as in `scanCustomTags`, so a name a `tags/`
+ * directory already claimed is left alone.
+ */
+export function discoverProjectTags(
+  projectDir: string,
+  options: DiscoverProjectTagsOptions = {},
+): ScanResult {
+  const root = resolve(projectDir);
+  const tags = new Map<string, DiscoveredTag>();
+  const directories: string[] = [];
+  const packageFiles: string[] = [];
+  const files: Array<{ path: string; mtimeMs: number }> = [];
+  const diagnostics: ScanDiagnostic[] = [];
+
+  const tagsDirs: string[] = [];
+  walkProjectDirectories(root, (dir) => {
+    if (basename(dir) === TAGS_DIR) tagsDirs.push(dir);
+  });
+
+  // Shallower directories first, so a name two `tags/` directories both
+  // claim resolves to the one nearer the project root.
+  tagsDirs.sort((left, right) => {
+    const depthDiff = left.split(/[/\\]/).length - right.split(/[/\\]/).length;
+    return depthDiff !== 0 ? depthDiff : left.localeCompare(right);
+  });
+
+  for (const dir of tagsDirs) {
+    directories.push(dir);
+    indexDirectory(dir, tags, files, diagnostics);
+  }
+
+  const packageJson = join(root, "package.json");
+  if (existsSync(packageJson)) {
+    packageFiles.push(packageJson);
+    indexMxTagsEntries(
+      root,
+      packageJson,
+      tags,
+      files,
+      diagnostics,
+      directories,
+    );
+  }
+
+  if (options.host !== undefined) applyHostFilter(tags, options.host);
+
+  return {
+    tags,
+    customTags: buildCustomTags(tags),
+    directories,
+    packageFiles,
+    files,
+    diagnostics,
+  };
 }

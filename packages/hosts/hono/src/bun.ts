@@ -31,7 +31,7 @@ const honoPlugin: BunPlugin = {
     build.onLoad({ filter: MX_FILTER }, ({ path }) => {
       const source = readFileSync(path, "utf8");
       const { code } = compileHonoMx(source, path, {
-        customTags: getCustomTags(path),
+        customTags: getCustomTags(path, { host: "hono" }),
       });
       return { contents: code, loader: "tsx" };
     });

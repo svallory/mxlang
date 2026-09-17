@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { type CustomTag, getCustomTags, scanCached } from "@mxlang/core";
+import { type CustomTag, resolveHostPolicy, scanCached } from "@mxlang/core";
 import { print } from "@mxlang/parser";
 import type { Plugin } from "vite";
 
@@ -352,7 +352,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     file: string,
     warn: (message: string) => void,
   ): Record<string, CustomTag> | undefined => {
-    const scan = scanCached(file);
+    const host = resolveHostPolicy(file).host;
+    const scan = scanCached(file, { host });
 
     // A misconfigured `mx.tags` is not fatal — the local `tags/` directories
     // still work — but it is silent without this, which is worse: an author
@@ -387,7 +388,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       tagSources.set(location, dependents);
     }
 
-    const discovered = getCustomTags(file);
+    const discovered = scan.customTags;
     if (!options.customTags) {
       return Object.keys(discovered).length > 0 ? discovered : undefined;
     }

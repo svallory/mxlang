@@ -37,7 +37,7 @@ const markoPlugin: BunPlugin = {
     build.onLoad({ filter: MX_FILTER }, ({ path }) => {
       const source = readFileSync(path, "utf8");
       const { code } = compile(source, path, {
-        customTags: getCustomTags(path),
+        customTags: getCustomTags(path, { host: "html" }),
       });
       return { contents: code, loader: "ts" };
     });
