@@ -1,0 +1,1 @@
+`<script>` is a Marko client-runtime tag; write client code in the component class

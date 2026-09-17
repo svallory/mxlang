@@ -1,0 +1,1 @@
+`<lifecycle>` is a Marko lifecycle hook; use Angular's own lifecycle hooks (`ngOnInit`, etc.) in the component class
