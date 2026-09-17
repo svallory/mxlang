@@ -27,6 +27,7 @@
  * arrow parameter `p => p.x` inside the body is left alone.
  */
 
+import { printExpression } from "./compile.ts";
 import { markoBabel, type Node, TranslateError } from "./core.ts";
 import type { IrNode, Position } from "./ir.ts";
 import { rewriteCodes } from "./rewrite-codes.ts";
@@ -74,7 +75,7 @@ export function rewriteReadsInCode(
   loc: Position,
   shadowed: ReadonlySet<string> = new Set(),
 ): string {
-  const { parseExpression, traverse, types, generator } = markoBabel();
+  const { parseExpression, traverse, types } = markoBabel();
 
   let parsed: Node;
   try {
@@ -188,7 +189,7 @@ export function rewriteReadsInCode(
   // Reprinting is not free and it normalizes the author's own spacing, so an
   // expression that rewrote nothing keeps its original text verbatim.
   if (!changed) return code;
-  return generator(file.program.body[0].expression, { concise: true }).code;
+  return printExpression(file.program.body[0].expression);
 }
 
 /**

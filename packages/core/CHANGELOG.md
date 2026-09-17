@@ -47,6 +47,22 @@ existing field changed shape. `mapping.ts` gains `mappedExpr(expr)`, a thin
 wrapper over `mapped(expr.code, expr.span ?? null)`; no host adopts it in
 this change.
 
+### `printExpression` is now a public export
+
+`printExpression(node: Node): string` — printing a Marko-owned expression
+node back to source text with the same Babel generator instance that parsed
+it (`@marko/compiler/internal/babel`'s `generator`, concise mode) — was
+module-private to `compile.ts`. It is now exported from `@mxlang/core`'s
+public entry, so a host no longer has to carry its own copy over a
+different Babel instance's generator to get the same result. Additive: no
+existing export changed shape, and `newCtx`'s `generate` parameter is
+unchanged — a caller still passes it explicitly. `@mxlang/solid` switched
+its two `newCtx` call sites from its own `generateExpression` (over
+`@babel/generator`) to this export and dropped that dependency; no output
+change — `@babel/generator` and Marko's bundled generator were verified
+byte-identical across the node kinds `.solid.mx` compiles through this
+path.
+
 ### `mx.tags[].hosts` now filters discovery
 
 `getCustomTags`/`scanCached`/`scanCustomTags` accept an optional `host` in
