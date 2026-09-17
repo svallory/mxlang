@@ -60,6 +60,21 @@ call — the shape an explicitly imported tag already produced on all six hosts.
   skip: the gate is
   **24/24 with none recorded**. Every other host emits both kinds identically
   and ignores the flag.
+- **breaking:** **every emitted module's default export is now named after its
+  file** — `icon.mx` emits `export default function Icon(…)`, `table-of.mx`
+  emits `TableOf` — on html, the shared preact/react/hono emitter, and
+  `compileSolidUnit`. `Ir.exportName` carries the derived name, re-minted if it
+  collides with anything the file already binds. This is observable for any
+  consumer that matched the compiled module's export line as *text*: the
+  name varies per file now, so a matcher must read it back rather than pin
+  `render`. Four in-tree matchers were updated accordingly.
+- **added:** **a self-recursive tag calls its own export, with no self-import**
+  (design invariant §7.5-7). When a discovered tag's resolved path is the file
+  being compiled, the caller emits a call to the module's own named
+  declaration rather than `import $mx_Tree1 from "./tree.mx"`. Importing a
+  file into itself is legal ESM and did work, but it is a module importing a
+  binding it already has. The `tree` oracle fixture covers it on all six
+  hosts, three levels deep.
 - **added:** `@mxlang/solid` gains `compileSolidUnit`, a whole-file entry point
   beside the region entry point `compileSolidMx`. A tag unit is a file, so its
   module-level statements are placed rather than rejected. It **silently drops

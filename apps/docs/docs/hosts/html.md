@@ -23,7 +23,7 @@ import { escape } from "@mxlang/html";
 
 export interface Input {}
 
-function render(input: Input): string {
+function Greeting(input: Input): string {
   let out = "";
   out += "<h1";
   {
@@ -35,12 +35,12 @@ function render(input: Input): string {
   out += "!</h1>";
   return out;
 }
-Object.defineProperty(render, Symbol.for("mx.component"), { value: true });
+Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 
-export default render;
+export default Greeting;
 ```
 
-The default export is named `render` and carries a `Symbol.for("mx.component")` brand. The brand is what lets a host that receives a compiled module as an opaque value — the Astro renderer, for one — recognize it as an MX component without sniffing the function's name. `classValue` is one of four helpers (`classValue`, `styleValue`, `escapeComment`, `renderDynamic`) appended to the module only when the template actually calls them; a template using none of them compiles to `escape` and string concatenation alone.
+The default export is a **named** declaration, after the file (`greeting.mx` gives `Greeting`, `table-of.mx` gives `TableOf`), and carries a `Symbol.for("mx.component")` brand. The name is derived, never authored — and it is what lets a tag call itself with no self-import. The brand is what lets a host that receives a compiled module as an opaque value — the Astro renderer, for one — recognize it as an MX component without sniffing the function's name. `classValue` is one of four helpers (`classValue`, `styleValue`, `escapeComment`, `renderDynamic`) appended to the module only when the template actually calls them; a template using none of them compiles to `escape` and string concatenation alone.
 
 ## Install
 
@@ -173,7 +173,7 @@ A `<try>` with `<@catch>` lowers to a real `try`/`catch` around the block's outp
 compiles to:
 
 ```typescript
-function render(input: Input): string {
+function Risky(input: Input): string {
   let out = "";
   try {
     out += "<p>";
