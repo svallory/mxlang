@@ -120,6 +120,25 @@ function templateIcon(): Record<string, CustomTag> {
 }
 
 /** The self-recursive L1 tag: `tags/tree.mx` calls `<tree>` in its own body. */
+const COUNTER_RETURN_TEMPLATE = join(
+  here,
+  "counter-return",
+  "tags",
+  "counter.mx",
+);
+
+function templateCounterReturn(): Record<string, CustomTag> {
+  return {
+    counter: {
+      template: {
+        filename: COUNTER_RETURN_TEMPLATE,
+        source: readFileSync(COUNTER_RETURN_TEMPLATE, "utf8"),
+        mtimeMs: statSync(COUNTER_RETURN_TEMPLATE).mtimeMs,
+      },
+    } as TemplateBackedTag,
+  };
+}
+
 const TREE_TEMPLATE = join(here, "tree", "tags", "tree.mx");
 
 function templateTree(): Record<string, CustomTag> {
@@ -154,6 +173,15 @@ const FIXTURES: Fixture[] = [
   {
     ...load("tree", templateTree()),
     templates: [TREE_TEMPLATE],
+  },
+  // A unit that hands a value back with `<return>`, bound at the call site
+  // with `/var`. The rendered bytes are the gate: the unit's export shape
+  // differs per host — `{ value, output }` on html/Astro and the JSX hosts,
+  // a callback prop on Solid (design §2.4) — and this row is what proves all
+  // six arrive at the same HTML regardless.
+  {
+    ...load("counter-return", templateCounterReturn()),
+    templates: [COUNTER_RETURN_TEMPLATE],
   },
 ];
 
@@ -384,11 +412,17 @@ async function runHono(fixture: Fixture): Promise<string> {
 function solidModule(
   code: string,
   hoistedImports: Array<{ code: string }>,
+  returnVars: string[] = [],
 ): string {
   const hoisted = hoistedImports.map((one) => `${one.code};`).join("\n");
+  // A region is an expression, so a `/var` it binds has no statement position
+  // of its own; the surrounding function declares it and the region's JSX
+  // closes over it. Same contract as `hoistedImports` (design §2.4).
+  const declared =
+    returnVars.length > 0 ? `let ${returnVars.join(", ")}; ` : "";
   return `import { For, Show } from "solid-js";
 ${hoisted}
-export default function Fixture(input) { return <>${code}</>; }`;
+export default function Fixture(input) { ${declared}return <>${code}</>; }`;
 }
 
 async function runSolid(fixture: Fixture): Promise<string> {
@@ -401,11 +435,11 @@ async function runSolid(fixture: Fixture): Promise<string> {
       customTags: fixture.customTags,
     }).code;
 
-  const { code, hoistedImports } = compileSolidMx(fixture.source, {
+  const { code, hoistedImports, returnVars } = compileSolidMx(fixture.source, {
     filename: fixture.filename.replace(/\.mx$/, ".solid.mx"),
     customTags: fixture.customTags,
   });
-  const wrapped = solidModule(code, hoistedImports);
+  const wrapped = solidModule(code, hoistedImports, returnVars);
   const compiled = nativeTransform(wrapped, {
     filename: join(here, "fixture.tsx"),
     generate: "ssr",

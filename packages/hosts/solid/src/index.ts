@@ -64,6 +64,16 @@ export interface CompileSolidMxResult {
    * that calls no discovered tag.
    */
   hoistedImports: HoistedImport[];
+  /**
+   * `/var` names this region's call sites bind, for the caller to declare.
+   *
+   * A region is an *expression*, so it has no statement position for the
+   * `let` a `/var` needs — the same reason `hoistedImports` exists. The
+   * callback prop assigns during the child's synchronous setup (design
+   * §2.4), so the declaration has to be somewhere the region's JSX can close
+   * over: the surrounding function. Empty for a region that binds none.
+   */
+  returnVars: string[];
 }
 
 /** One synthesized import a region needs in its surrounding module. */
@@ -225,7 +235,14 @@ export function compileSolidMx(
         resolvedPath: node.resolvedPath,
       };
     });
-  const emitted = emitSolidWithMappings(ir);
+  // One emit, with the `/var` names collected during it: emitting twice to
+  // get them separately would also duplicate the mappings work, and any
+  // divergence between the two passes would be silent.
+  let emitted!: ReturnType<typeof emitSolidWithMappings>;
+  const { vars: returnVars } = collectReturnVars(() => {
+    emitted = emitSolidWithMappings(ir);
+    return emitted.code;
+  });
   const code = emitted.code;
   const rewritten = new MagicString(source);
   rewritten.overwrite(0, source.length, code);
@@ -240,6 +257,7 @@ export function compileSolidMx(
     map: map as RawSourceMap,
     mappings: emitted.mappings,
     hoistedImports,
+    returnVars,
   };
 }
 
