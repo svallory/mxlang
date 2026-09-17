@@ -425,6 +425,19 @@ documented prerequisite, not a bug (see `packages/editors/zed/UPSTREAM.md`
 
 Design docs, specs, and research notes live outside this repo, at the project space root under `notes/` (not inside this worktree).
 
+## Language spec
+
+`notes/specs/mx-language.md` is the normative MX language specification — one
+section per construct, each carrying its syntax, its semantics per host, the
+errors core owns, and the decision numbers that fixed it. It is the answer to
+"what does this construct mean", where the docs site (`apps/docs/docs/`)
+answers "how do I use it" and the decision log answers "when did we choose
+this". A PR that changes syntax or semantics updates
+`notes/specs/mx-language.md` in the same change, citing the decision number; a
+decision entry that changes the language names the spec section it updates.
+The spec currently lives in the space's `notes/` (not committed here);
+moving it into the repo is Saulo's call.
+
 ## Oracle harness
 
 `packages/oracle` (`@mxlang/oracle`) compares compiled `dom-expressions` output between `fixtures/<name>/input.solid.mx` and its hand-written `fixtures/<name>/twin.tsx` twin, across **both Solid 2 backends and both generate variants** — four rows per fixture. `bun run oracle` runs it standalone and prints a fixture/backend/variant/status table; see `fixtures/README.md` for the fixture and `divergences.md` contract.
