@@ -686,9 +686,9 @@ function dedupeImports(
  * expansion and an L2 transform in the same file can never mint the same name.
  */
 function gensymFor(ctx: Ctx, hint: string): string {
-  ctx.customTagGensym = (ctx.customTagGensym ?? 0) + 1;
+  const serial = ++ctx.customTagGensym.n;
   const safe = hint.replace(/[^A-Za-z0-9_]/g, "_");
-  return `$mx_${safe}_${ctx.customTagGensym}`;
+  return `$mx_${safe}_${serial}`;
 }
 
 /**

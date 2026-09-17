@@ -890,8 +890,7 @@ function wrapHookError(
 
 /** The per-file hygienic name generator, shared by every context that has one. */
 function gensymFor(ctx: Ctx, tagName: string, hint?: string): string {
-  ctx.customTagGensym = (ctx.customTagGensym ?? 0) + 1;
-  const serial = ctx.customTagGensym;
+  const serial = ++ctx.customTagGensym.n;
   const safeTag = tagName.replace(/[^A-Za-z0-9_]/g, "_");
   const safeHint = (hint ?? "t").replace(/[^A-Za-z0-9_]/g, "_");
   return `$mx_${safeTag}_${safeHint}${serial}`;
