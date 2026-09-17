@@ -1,0 +1,2 @@
+static const PREFIX = "#";
+<i>${PREFIX}</i>

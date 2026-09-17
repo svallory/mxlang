@@ -1,0 +1,3 @@
+export interface Input { title: string }
+<define/Row|row|>${row.label}</define>
+<div>${input.title}<Row(item)/></div>

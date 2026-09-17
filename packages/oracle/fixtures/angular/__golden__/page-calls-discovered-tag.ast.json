@@ -1,0 +1,30 @@
+[
+  {
+    "name": "div",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "name": "mx-icon",
+        "attributes": [
+          {
+            "name": "name",
+            "value": "star"
+          }
+        ],
+        "inputs": [],
+        "outputs": [],
+        "directives": [],
+        "children": [],
+        "references": [],
+        "isSelfClosing": false,
+        "isVoid": false
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]
