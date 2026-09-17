@@ -58,10 +58,6 @@ export type {
   TagStore,
   TransformContext,
 } from "./custom-tags.ts";
-export {
-  MAX_EXPANSION_DEPTH,
-  MAX_EXPANSION_NODES,
-} from "./custom-tags.ts";
 export type { HostDeclarations, Policy } from "./declarations.ts";
 export { drive, type Emitter, emit } from "./emit.ts";
 export { escape } from "./escape.ts";
@@ -115,10 +111,12 @@ export {
   scanCached,
 } from "./scan-cache.ts";
 export {
-  expandTemplate,
   hasTemplate,
+  metadataForTemplate,
+  peekTemplateMetadata,
   resetTemplateCache,
   type TemplateBackedTag,
+  type TemplateMetadata,
   type TemplateTag,
   templateCompileCount,
 } from "./template-tag.ts";

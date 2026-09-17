@@ -29,7 +29,7 @@
 
 import { markoBabel, type Node, TranslateError } from "./core.ts";
 import type { IrNode, Position } from "./ir.ts";
-import { rewriteCodes } from "./template-tag.ts";
+import { rewriteCodes } from "./rewrite-codes.ts";
 
 /** How one bound name is read where it is referenced. */
 export type ReadRewrite = {

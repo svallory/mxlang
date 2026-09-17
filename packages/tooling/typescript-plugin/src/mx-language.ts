@@ -300,6 +300,7 @@ export function createHtmlMappings(
     (node) => generator(node, { concise: true }).code,
     declarations ?? (strict ? strictPolicy : policy),
     compiler.taglib.buildLookup(dirname(fileName), translator),
+    fileName,
   );
   // This is the second lowering of the same source. It must see the same tag
   // map as compilation or a custom tag can make the entire mapping pass fail.

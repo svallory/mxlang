@@ -92,6 +92,7 @@ export interface HostOptions extends TranslatorOptions {
  */
 let current: {
   source: string;
+  filename: string;
   code: string | null;
   policy: Policy;
   lookup?: Lookup;
@@ -141,6 +142,7 @@ export function createTranslator(host: TranslatorOptions = {}) {
             printExpression,
             state.policy,
             state.lookup,
+            state.filename,
           );
           ctx.customTags = state.customTags;
           ctx.warnings = state.warnings;
@@ -174,6 +176,7 @@ export function compileSource(
 
   const state = {
     source,
+    filename,
     code: null as string | null,
     policy,
     postEmit: host.postEmit,

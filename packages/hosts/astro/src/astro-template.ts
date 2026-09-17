@@ -596,7 +596,13 @@ export function lowerAstroMx(
   });
 
   try {
-    const ctx = newCtx(source, (node) => sourceOf(source, node), declarations);
+    const ctx = newCtx(
+      source,
+      (node) => sourceOf(source, node),
+      declarations,
+      undefined,
+      filename,
+    );
     ctx.customTags = options.customTags;
     const ir = lower(ctx, body);
     const statements: HoistedStatement[] = [

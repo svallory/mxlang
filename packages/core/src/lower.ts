@@ -45,7 +45,6 @@ import {
 } from "./core.ts";
 import {
   type CustomTag,
-  MAX_EXPANSION_DEPTH,
   runAnalyzeHooks,
   runFinalizeHooks,
   shadowedBuiltinMessage,
@@ -68,7 +67,12 @@ import type {
   Position,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
-import { registerTemplateLowerer, type TemplateTag } from "./template-tag.ts";
+import {
+  metadataOfIr,
+  registerAuthoredTemplateImport,
+  registerTemplateMetadataCompiler,
+  type TemplateTag,
+} from "./template-tag.ts";
 
 /** A node's start position, in `TranslateError`'s own 1-based/0-based shape. */
 function posOf(node: Node): Position {
@@ -601,15 +605,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     // registered only after the whole body resolved would make every
     // imported component an unbound capitalized tag.
     for (const binding of bindings) ctx.imports.add(binding);
-    // Also recorded against the template-import table, so a tag template that
-    // imports the same helper the caller already imported contributes no
-    // second statement, and one that imports a *different* module under the
-    // same local name is a diagnostic rather than a silent shadow.
-    ctx.templateImports ??= new Map();
-    const table = ctx.templateImports;
-    for (const binding of bindings) {
-      if (!table.has(binding)) table.set(binding, { code: line, file: "" });
-    }
+    registerAuthoredTemplateImport(ctx, line);
     return { kind: "Import", code: line, bindings, loc, end };
   }
   if (name === "static") {
@@ -677,59 +673,46 @@ function lowerCustomTag(
   definition: CustomTag,
   isBuiltin = false,
 ): IrNode[] {
-  const depth = (ctx.customTagDepth ?? 0) + 1;
-  if (depth > MAX_EXPANSION_DEPTH) {
+  rejectUnsupportedFields(ctx, node, `\`<${name}>\``, {
+    attributeTags: true,
+    params: true,
+    // `var: true` only opts out of this generic rejector's own wording;
+    // the dedicated check right below still rejects `/var` for every
+    // non-builtin call, with the message this construct actually needs.
+    var: true,
+  });
+  // `/var` on a custom tag call reads nothing today: a tag has no way to
+  // hand a value back to its caller until `<return>` ships. Left silent,
+  // `<icon/x name="a"/>` would drop the binding with no diagnostic at all.
+  // A core-owned built-in (e.g. `<try>`) is exempted here because it
+  // validates `/var` itself, with its own wording, inside its `transform`.
+  if (!isBuiltin && node.var) {
     fail(
-      `\`<${name}>\`: custom tag expansion exceeded ${MAX_EXPANSION_DEPTH} nested invocations`,
+      `\`/var\` on \`<${name}>\` is not supported yet; a tag returns a value with \`<return>\` (planned)`,
       node,
     );
   }
+  validateAttributeTagShape(node);
 
-  ctx.customTagDepth = depth;
-  try {
-    rejectUnsupportedFields(ctx, node, `\`<${name}>\``, {
-      attributeTags: true,
-      params: true,
-      // `var: true` only opts out of this generic rejector's own wording;
-      // the dedicated check right below still rejects `/var` for every
-      // non-builtin call, with the message this construct actually needs.
-      var: true,
-    });
-    // `/var` on a custom tag call reads nothing today: a tag has no way to
-    // hand a value back to its caller until `<return>` ships. Left silent,
-    // `<icon/x name="a"/>` would drop the binding with no diagnostic at all.
-    // A core-owned built-in (e.g. `<try>`) is exempted here because it
-    // validates `/var` itself, with its own wording, inside its `transform`.
-    if (!isBuiltin && node.var) {
-      fail(
-        `\`/var\` on \`<${name}>\` is not supported yet; a tag returns a value with \`<return>\` (planned)`,
-        node,
-      );
-    }
-    validateAttributeTagShape(node);
-
-    const children = node.body?.body ?? [];
-    const call: TagCall = {
-      name,
-      loc: posOf(node),
-      attrs: lowerAttrs(ctx, node, name, "component"),
-      content: isBuiltin || hasContent(children) ? lowerBlock(ctx, node) : null,
-      attributeTags: lowerAttributeTags(ctx, node),
-      params: paramsOf(ctx, node),
-      var: node.var ? declName(ctx, node.var) : null,
-    };
-    // A core-owned built-in like `<try>` is not a registered tag the caller
-    // can finalize. The analyze scratch walk records into its own discarded
-    // set; a template lower also owns a local set which is stored with the
-    // compiled template and replayed into the caller on every cache hit.
-    if (!isBuiltin) {
-      ctx.customTagsUsed ??= new Set();
-      ctx.customTagsUsed.add(name);
-    }
-    return transformCustomTag(ctx, definition, call, node);
-  } finally {
-    ctx.customTagDepth = depth - 1;
+  const children = node.body?.body ?? [];
+  const call: TagCall = {
+    name,
+    loc: posOf(node),
+    attrs: lowerAttrs(ctx, node, name, "component"),
+    content: isBuiltin || hasContent(children) ? lowerBlock(ctx, node) : null,
+    attributeTags: lowerAttributeTags(ctx, node),
+    params: paramsOf(ctx, node),
+    var: node.var ? declName(ctx, node.var) : null,
+  };
+  // A core-owned built-in like `<try>` is not a registered tag the caller
+  // can finalize. The analyze scratch walk records into its own discarded
+  // set; a template lower also owns a local set which is stored with the
+  // compiled template and replayed into the caller on every cache hit.
+  if (!isBuiltin) {
+    ctx.customTagsUsed ??= new Set();
+    ctx.customTagsUsed.add(name);
   }
+  return transformCustomTag(ctx, definition, call, node);
 }
 
 /** A component call, with its props, children and attribute tags. */
@@ -1028,6 +1011,7 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
       end: endPosOf(node),
     })),
     body: [],
+    tagMetadata: { readsContent: false, attributeTags: [] },
   };
 
   for (const node of nodes) {
@@ -1054,6 +1038,8 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
     }
   }
 
+  ir.imports.push(...(ctx.customTagImportNodes ?? []));
+
   if (isFileRoot && ctx.customTags) {
     // Prepended as one block, after the body is assembled: a `finalize` node
     // is program-level output (a sprite sheet, a collected style block), not
@@ -1066,6 +1052,8 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
     );
     if (prepended.length > 0) ir.body.unshift(...prepended);
   }
+
+  ir.tagMetadata = metadataOfIr(ir);
 
   return ir;
 }
@@ -1097,13 +1085,11 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
     ctx.generate,
     ctx.declarations,
     ctx.lookup,
+    ctx.filename,
   );
   scratch.customTags = customTags;
   scratch.customTagStores = ctx.customTagStores;
-  scratch.customTagDepth = ctx.customTagDepth;
   scratch.customTagGensym = ctx.customTagGensym;
-  scratch.templateStack = [];
-  scratch.templateImports = new Map();
   // Absorbed rather than forwarded: every warning this walk raises is raised
   // again by the real walk, at the same position, and reporting a dropped
   // attribute tag twice would read as two mistakes.
@@ -1115,26 +1101,8 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
   runAnalyzeHooks(ctx, customTags, calls);
 }
 
-/**
- * Lowers one tag-template file to IR, for `template-tag.ts` to splice.
- *
- * Registered rather than imported by that module because the dependency runs
- * the other way: `lower.ts` calls the expander, so the expander cannot import
- * `lower.ts` back without a cycle.
- *
- * The template is parsed and lowered with **its own `Ctx`, over its own
- * source**. That is the whole of the third position rule's mechanism: every
- * `fail()` raised while lowering the template already measures against the
- * template's text, and `template-tag.ts` only has to attach the file name
- * afterwards. It is also the hygiene boundary — `bindings`, `defines` and
- * `imports` are the template's own, so nothing it declares is visible to the
- * caller's scope.
- *
- * The host's declarations and taglib lookup are the caller's, deliberately: a
- * template is compiled *for* the host that is compiling the caller, which is
- * what lets one `tags/icon.mx` render on all six.
- */
-registerTemplateLowerer((ctx: Ctx, tag: TemplateTag) => {
+/** Compiles one tag unit only to produce its cached caller metadata. */
+registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
   const { body } = parseFragment(tag.source, {
     filename: tag.filename,
     customTags: ctx.customTags as Record<string, CustomTag> | undefined,
@@ -1144,53 +1112,24 @@ registerTemplateLowerer((ctx: Ctx, tag: TemplateTag) => {
     ctx.generate,
     ctx.declarations,
     ctx.lookup,
+    tag.filename,
   );
   templateCtx.customTags = ctx.customTags;
-  templateCtx.customTagDepth = ctx.customTagDepth;
-  // Shared by reference (see `Ctx.customTagGensym`'s own doc comment): a tag
-  // called from inside this template and one called at the caller's own
-  // scope must never mint the same serial.
+  // Shared by reference, which is the whole point of boxing the counter: a
+  // name minted while compiling this unit and one minted by the caller must
+  // never be the same serial. The unit's names do land in the unit's own
+  // module, so a repeat is not observable in today's emitted output — but the
+  // counter is the file-level identity supply, and PR #81 fixed exactly this
+  // collision for the path this one replaced. Left unshared it silently comes
+  // back the moment anything reads a generated name across the boundary.
   templateCtx.customTagGensym = ctx.customTagGensym;
-  // Shared by reference, which is both the hook gate and the store's scope: a
-  // non-undefined `customTagStores` tells this nested `lower()` it is not the
-  // file root (so it runs no `analyze` and no `finalize`), and a tag called
-  // from inside a template writes into the same file-level store as one called
-  // at the top level — a template's `<icon>` contributes to the caller's
-  // sprite sheet rather than to a sheet nothing prepends.
-  templateCtx.customTagStores = ctx.customTagStores;
-  // Template-local collectors become cache metadata. They must not point at
-  // the caller's containers: `compileTemplate` replays the completed,
-  // transitive metadata exactly once on both misses and hits.
-  const templateCalls = new Map<string, TagCall[]>();
-  const templateUsed = new Set<string>();
-  templateCtx.customTagTemplateCalls = templateCalls;
-  templateCtx.customTagAnalyzePass = ctx.customTagAnalyzePass
-    ? { calls: templateCalls }
-    : undefined;
-  templateCtx.customTagsUsed = templateUsed;
-  // Shared by reference, not copied, and that is what makes the cycle check
-  // correct across the cache. The stack is pushed and popped by
-  // `expandTemplate` *around* the cache lookup, so it reflects the call path
-  // currently being expanded rather than anything the cache holds — a cached
-  // template's body still re-enters `expandTemplate` for each nested tag it
-  // calls, which is where the check runs. A copy would make a cycle through
-  // two levels invisible to the inner one.
-  templateCtx.templateStack = ctx.templateStack;
-  templateCtx.templateImports = ctx.templateImports;
-
+  // Metadata compilation is an independent unit. Its warnings are not caller
+  // diagnostics, and its analyze/finalize stores must not run as a side effect
+  // of a caller asking only for metadata.
+  templateCtx.warnings = [];
+  templateCtx.customTagStores = new Map();
   const ir = lower(templateCtx, body);
-  return {
-    body: ir.body,
-    // A template's module-level statements are the caller's module's: its
-    // `import`s are how the template reaches its helpers, and its `static`
-    // blocks are evaluated once per module rather than once per call. The
-    // author's `export interface Input` is the tag's own typed contract and
-    // is deliberately *not* carried over — it would collide with the caller's
-    // own `Input`, which is the interface the caller's render function takes.
-    module: [...ir.imports, ...ir.hoisted, ...ir.prelude],
-    customTagCalls: templateCalls,
-    customTagsUsed: templateUsed,
-  };
+  return ir.tagMetadata;
 });
 
 export type { HostDeclarations };

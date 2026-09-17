@@ -36,6 +36,7 @@
 import { createRequire } from "node:module";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import type { IrNode } from "./ir.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -184,6 +185,8 @@ export interface BindingRegistry {
 
 export interface Ctx {
   source: string;
+  /** Absolute or caller-supplied filename used to resolve injected imports. */
+  filename: string;
   lines: string[];
   /**
    * Statements to place at the head of the function currently being emitted
@@ -213,8 +216,6 @@ export interface Ctx {
   lookup?: { getTag(name: string): { taglibId?: string } | undefined };
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Readonly<Record<string, CustomTag>>;
-  /** Current source nesting, used to cap recursive custom-tag expansion. */
-  customTagDepth?: number;
   /**
    * Per-file serial for hygienic names minted by custom tags, boxed so a
    * template context can share the *same counter* by reference (see
@@ -223,16 +224,10 @@ export interface Ctx {
    * must never mint the same serial.
    */
   customTagGensym: { n: number };
-  /**
-   * `import` statements already hoisted into this file's module from a tag
-   * template, keyed by the local binding name.
-   *
-   * Two call sites of one template, or two templates importing the same
-   * helper, must contribute one `import` rather than one per expansion; and
-   * two templates importing *different* modules under the same local name must
-   * be a diagnostic rather than an ambiguous binding both bodies then read.
-   */
-  templateImports?: Map<string, { code: string; file: string }>;
+  /** Resolved template path -> default import binding, authored or injected. */
+  customTagImports?: Map<string, string>;
+  /** Imports synthesized while lowering discovered template calls. */
+  customTagImportNodes?: Array<Extract<IrNode, { kind: "Import" }>>;
   /**
    * Positioned warnings raised during lowering: a construct that compiles but
    * drops something the author wrote.
@@ -245,14 +240,6 @@ export interface Ctx {
    * `warn()` falls back to `console.warn`, so no caller has to opt in.
    */
   warnings?: MxWarning[];
-  /**
-   * Template files currently being expanded, outermost first.
-   *
-   * A template tag may call other custom tags, so expansion is depth-first;
-   * this is the path that makes a cycle detectable and reportable by name
-   * (`a.mx -> b.mx -> a.mx`) rather than only as a depth-cap failure.
-   */
-  templateStack?: string[];
   /**
    * Per-file, per-tag stores for `analyze` / `transform` / `finalize`.
    *
@@ -275,16 +262,6 @@ export interface Ctx {
    * output is produced and nothing the scratch `Ctx` collected is kept.
    */
   customTagAnalyzePass?: { calls: Map<string, TagCall[]> };
-  /**
-   * Calls found while compiling one tag template for the process-wide cache.
-   *
-   * Unlike `customTagAnalyzePass`, this collector does not suppress
-   * transforms. It lets a real template compile retain the exact calls that
-   * a later analyze-pass cache hit must replay without walking the template
-   * again. Each nested template gets its own map; cache metadata is replayed
-   * into the enclosing map so the stored result is transitive.
-   */
-  customTagTemplateCalls?: Map<string, TagCall[]>;
   /**
    * Names of registered custom tags actually called while lowering this file.
    *
@@ -775,11 +752,22 @@ export function newCtx(
   source: string,
   generate: (node: Node) => string,
   declarations: HostDeclarations,
-  lookup?: Ctx["lookup"],
+  lookup: Ctx["lookup"] | undefined,
+  filename: string,
 ): Ctx {
+  // Required, never defaulted: `filename` is what an injected custom-tag
+  // import is made relative to. A placeholder would not fail — it would emit a
+  // syntactically valid but wrong specifier (`../../../../abs/path/icon.mx`),
+  // which is the silent-garbage failure a default is supposed to prevent.
+  if (!filename) {
+    throw new Error(
+      "@mxlang/core: newCtx requires the filename being compiled; it is what an injected tag import resolves against",
+    );
+  }
   const rewrites = new Map<string, BindingRewrite>();
   const ctx: Ctx = {
     source,
+    filename,
     lines: source.split("\n"),
     prelude: [],
     hoist(code: string, node: Node) {

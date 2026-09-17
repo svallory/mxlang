@@ -37,6 +37,7 @@
 
 import type { Node } from "./core.ts";
 import type { SourceSpan } from "./mapping.ts";
+import type { TemplateMetadata } from "./template-tag.ts";
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -312,4 +313,6 @@ export interface Ir {
   prelude: Array<Extract<IrNode, { kind: "Hoisted" }>>;
   /** The template body. */
   body: IrNode[];
+  /** Facts about this file consumed by discovered callers and host typing. */
+  tagMetadata: TemplateMetadata;
 }
