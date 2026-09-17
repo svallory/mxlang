@@ -43,6 +43,7 @@ import {
   shadowBindings,
   sliceLoc,
   VOID_TAGS,
+  warn,
 } from "./core.ts";
 import {
   type CustomTag,
@@ -266,6 +267,53 @@ function withPrelude<T>(ctx: Ctx, run: () => T): [T, Ctx["prelude"]] {
  */
 const EVENT_ATTR = /^on[A-Z-]/;
 
+/**
+ * React spellings whose plain lowercase is *not* a DOM event name.
+ *
+ * MX has no aliases: `onDoubleClick` lowers to `doubleclick` and is emitted as
+ * `doubleclick`, which no element ever fires. Rather than rewrite the author's
+ * name — which would make one spelling silently mean another, the thing the
+ * no-alias rule exists to prevent — core warns and emits what was written.
+ *
+ * Derived by checking every React DOM event prop against the event names in
+ * TypeScript's `lib.dom.d.ts` (`GlobalEventHandlersEventMap` and friends), not
+ * by hand: of React's ~80 `on*` props only these three lowercase to a
+ * non-event. The other React camelCase spellings a table might list —
+ * `onKeyDown`, `onMouseEnter`, `onFocusIn`, `onPointerDown`, `onTimeUpdate`,
+ * and so on — lowercase to the real DOM name (`keydown`, `mouseenter`,
+ * `focusin`, `pointerdown`, `timeupdate`) and are therefore correct in MX and
+ * must not warn.
+ *
+ * `onDragExit` and `onEncrypted` are React-only synthetic events with no DOM
+ * counterpart, so neither has a spelling to suggest.
+ */
+const REACT_EVENT_SPELLINGS: Record<string, string | null> = {
+  onDoubleClick: "onDblclick",
+  onDragExit: null,
+  onEncrypted: null,
+};
+
+/**
+ * Warns — without rewriting — when an event attribute uses a React spelling
+ * whose lowercase is not a real DOM event.
+ *
+ * Positioned at the attribute name so the language server underlines the
+ * attribute rather than the whole tag.
+ */
+function warnOnReactEventSpelling(ctx: Ctx, attr: Node, name: string): void {
+  if (!(name in REACT_EVENT_SPELLINGS)) return;
+  const suggestion = REACT_EVENT_SPELLINGS[name];
+  const pos = posOf(attr);
+  warn(ctx, {
+    message:
+      `\`${name}\` is not a DOM event` +
+      (suggestion ? `; did you mean \`${suggestion}\`` : ""),
+    line: pos.line,
+    column: pos.column,
+    file: ctx.filename,
+  });
+}
+
 /** Resolves one attribute of an element or component call. */
 function lowerAttr(
   ctx: Ctx,
@@ -304,6 +352,7 @@ function lowerAttr(
   if (isElement && EVENT_ATTR.test(attr.name) && !attr.modifier) {
     const name = String(attr.name);
     const event = name[2] === "-" ? name.slice(3) : name.slice(2).toLowerCase();
+    warnOnReactEventSpelling(ctx, attr, name);
     return {
       kind: "event",
       name,
