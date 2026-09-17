@@ -708,7 +708,11 @@ Five facts worth knowing before editing it:
   DOM event name (`event`), the handler `Expr` and a `nameSpan`: `on<Name>`
   lowercases everything after `on` (`onClick` → `click`), `on-<exact>` is
   verbatim (`on-my-event` → `my-event`). Marko's own rule, copied rather than
-  re-derived. The **`isElement` gate** is what makes it correct: `lowerAttrs`
+  re-derived. **Only for an expression value**, and so placed *after* the
+  boolean/static checks in `lowerAttr`: a bare `<div onClick>` stays `boolean`
+  and `<button onClick="alert(1)">` stays `static` (deriving the kind first
+  rendered `<div onClick="true">` on html and `(click)="(true)($event)"` on
+  Angular). `on-` with no name after the dash is a positioned error. The **`isElement` gate** is what makes it correct: `lowerAttrs`
   defaults its `on` parameter to `"element"` and a `HostTag` takes that
   default, so the gate travels as a separate `isElement` boolean set only at
   the real `Element` call site — on a component call, a `<define>` call, a

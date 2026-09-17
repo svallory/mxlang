@@ -39,6 +39,18 @@ gets `onDblClick`, Angular gets `(dblclick)` — from the one resolved name, so
 A name that is not event-shaped is an ordinary attribute: `onclick`, `once` and
 `on` are plain data, and `<div on="x">` renders an `on` attribute.
 
+**The value has to be an expression.** Only a handler expression makes an event
+handler, so these two are ordinary attributes and render exactly as written:
+
+```marko
+<div onClick>x</div>
+<div onClick="alert(1)">x</div>
+```
+
+The first is HTML's way of writing `true`; the second is an attribute string.
+MX has no opinion about inline handler strings — it simply never creates one
+for you out of a function.
+
 ### Events belong to elements; components get props
 
 An `on*` attribute on a **component** — or a `<define>` call, a custom tag, a
@@ -65,12 +77,20 @@ ever fires. MX emits what you wrote and warns:
 
 > ``  `onDoubleClick` is not a DOM event; did you mean `onDblclick` ``
 
-The warning points at the attribute name, so your editor underlines it. Only
-three React spellings need it — `onDoubleClick`, and `onDragExit` and
-`onEncrypted`, which are React-only synthetic events with no DOM equivalent.
-Every other React name you know (`onKeyDown`, `onMouseEnter`, `onFocusIn`,
-`onPointerDown`, `onTimeUpdate`, …) already lowercases to the real DOM event and
-works unchanged.
+The rule is simply this: **if the lowercased `on<Name>` is not a DOM event
+name, MX warns** — and suggests the right spelling when one exists. It never
+rewrites what you wrote. The warning points at the attribute name, so your
+editor underlines it.
+
+In practice that catches very little, because most React names are already
+correct: `onKeyDown`, `onMouseEnter`, `onFocusIn`, `onPointerDown`,
+`onTimeUpdate` and the rest all lowercase to the real DOM event and work
+unchanged. Today the rule bites on just three — `onDoubleClick`, plus
+`onDragExit` and `onEncrypted`, which are React-only synthetic events with no
+DOM equivalent to suggest.
+
+`on-<exact>` is never checked: naming an event MX cannot know about is exactly
+what it is for. (`on-` with nothing after the dash is an error.)
 
 ### `on:click` and `oncapture:click` are not MX syntax
 
