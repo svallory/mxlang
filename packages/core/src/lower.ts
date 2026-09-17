@@ -935,9 +935,12 @@ function targetName(target: ComponentTarget): string {
 }
 
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
-  // A bare `${expr}` on its own line parses as a tag whose *name* is the
-  // expression, with no attributes and no body — Marko's concise mode has no
-  // other shape for it. Treated as the escaped placeholder the author wrote.
+  // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
+  // *name* is the expression — Marko's concise mode has no other shape for
+  // a bare one (see the "four Marko facts" in AGENTS.md). Both are dynamic
+  // tags: when a host claims DYNAMIC_TAG it gets the HostTag (shape "bare"
+  // or "tagged", as before); otherwise core lowers a `Component` with a
+  // dynamic target, resolved at run time like any other host.
   if (node.name && node.name.type !== "StringLiteral") {
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
@@ -946,17 +949,11 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx,
       isBare ? "bare" : "tagged",
     );
-    if (isBare) {
-      if (claimed) return lowerHostTag(ctx, node, DYNAMIC_TAG);
-      return {
-        kind: "Interpolation",
-        expr: exprOf(ctx, node.name),
-        escaped: true,
-        loc: posOf(node),
-      };
-    }
     if (claimed) return lowerHostTag(ctx, node, DYNAMIC_TAG);
-    fail("dynamic tag name is not supported in a standalone template", node);
+    return lowerComponent(ctx, node, {
+      kind: "dynamic",
+      expr: exprOf(ctx, node.name),
+    });
   }
 
   const name = String(node.name.value);

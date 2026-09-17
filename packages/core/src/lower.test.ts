@@ -144,6 +144,17 @@ describe("one fixture per IR kind", () => {
     expect(text.loc.line).toBe(1);
   });
 
+  it("`-- ${expr}` is a text placeholder, not a dynamic tag", () => {
+    // A concise-position `${expr}` line is the dynamic-tag shape (see below);
+    // `--` is the escape hatch that keeps it text — Marko's own rule.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const ir = lowerSource("-- ${input.a}\n");
+    expect(find(ir.body, "Interpolation")).toMatchObject({
+      escaped: true,
+      expr: { code: "input.a" },
+    });
+  });
+
   it("Interpolation records escaped and raw placeholders apart", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const escaped = lowerSource("<p>${input.a}</p>\n");
@@ -501,7 +512,7 @@ describe("one fixture per IR kind", () => {
  * `shape` argument is the only signal that lets a host tell them apart.
  */
 describe("a dynamic tag's bare shape", () => {
-  it("stays an Interpolation when a host claims DYNAMIC_TAG only for the tagged shape", () => {
+  it("lowers to a dynamic Component when a host claims DYNAMIC_TAG only for the tagged shape", () => {
     const ir = lowerSource(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       "${input.tag}\n",
@@ -510,9 +521,8 @@ describe("a dynamic tag's bare shape", () => {
           name === DYNAMIC_TAG && shape !== "bare",
       }),
     );
-    expect(find(ir.body, "Interpolation")).toMatchObject({
-      escaped: true,
-      expr: { code: "input.tag" },
+    expect(find(ir.body, "Component")).toMatchObject({
+      target: { kind: "dynamic", expr: { code: "input.tag" } },
     });
   });
 
@@ -543,6 +553,14 @@ describe("a dynamic tag's bare shape", () => {
     const hosted = find(ir.body, "HostTag").tag;
     expect(hosted.name).toBe(DYNAMIC_TAG);
     expect(hosted.data).toEqual({ seen: true });
+  });
+
+  it("lowers the tagged shape to a dynamic Component when no host claims it", () => {
+    const ir = lowerSource("<${input.tag} a=1/>\n", fakeDeclarations({}));
+    expect(find(ir.body, "Component")).toMatchObject({
+      target: { kind: "dynamic", expr: { code: "input.tag" } },
+      attrs: [{ kind: "dynamic", name: "a" }],
+    });
   });
 });
 
@@ -1195,16 +1213,21 @@ describe("Expr.span", () => {
   });
 
   // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in the test title
-  it("a bare `${expr}` tag (concise mode's placeholder shape)", () => {
+  it("a bare `${expr}` tag (concise mode's dynamic-tag shape)", () => {
     // A top-level `${expr}` with no attributes and no body parses as a
     // `MarkoTag` whose `name` is the expression — concise mode's only shape
-    // for a placeholder — and lowers through the same `exprOf` call a
-    // dynamic tag name would use if one produced an `Expr`-bearing node.
+    // for it — and lowers to a dynamic-target `Component` through the same
+    // `exprOf` call a tagged dynamic tag name would use.
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const source = "<${dyn.tag}/>\n";
     const ir = lowerSource(source);
-    const interpolation = find(ir.body, "Interpolation");
-    expect(slice(source, interpolation.expr)).toBe("dyn.tag");
+    const component = find(ir.body, "Component");
+    expect(component.target.kind).toBe("dynamic");
+    expect(
+      component.target.kind === "dynamic"
+        ? slice(source, component.target.expr)
+        : null,
+    ).toBe("dyn.tag");
   });
 
   it("sibling-sharing case: four byte-identical exprs get four distinct spans", () => {
