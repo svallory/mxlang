@@ -14,7 +14,12 @@ const goldenDir = join(here, "..", "fixtures", "angular", "__golden__");
  * `oracle:angular` script a developer has to remember to run by hand.
  */
 describe("oracle:angular fixtures", () => {
-  it("every fixture passes", () => {
+  // Compiles 67 fixtures and parses each emitted template through
+  // `@angular/compiler`. It runs in ~3s alone, which leaves little room under
+  // vitest's 5s default once the root suite runs in parallel on a loaded
+  // machine — and that default is a machine-load timeout, not a budget for the
+  // work. Same reasoning, and same value, as `src/custom-tags.test.ts`.
+  it("every fixture passes", { timeout: 60_000 }, () => {
     const { rows, failed } = runAngularTable(false);
     const failures = rows.filter((r) => r.verdict === "fail");
     expect(failures, JSON.stringify(failures, null, 2)).toEqual([]);
