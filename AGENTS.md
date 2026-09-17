@@ -1475,7 +1475,7 @@ its own Solid twin table) and folds its result into the exit code, and
 the two A1 rows intentionally absent (tag-file `<ng-content>` forms, task
 1.7's scope) and the `<for in=>` ordering rationale.
 
-**`mx-angular build`/`map` (task 1.5a; `watch` is 1.5b, not yet built).**
+**`mx-angular build`/`map` (task 1.5a); `watch` (task 1.5b, incremental).**
 `mx-angular build [--project <dir>] [--config <file>]` (`src/cli.ts`) reads
 `package.json#mx.angular` (`include`, `pageExtension`, `tagExtension`,
 `tagSelectorPrefix`, `onError` — A3's defaults; an unrecognized key is a
@@ -1513,11 +1513,41 @@ directory or output path cannot be used to read or write outside the
 project directory.
 
 **The emitted `.html` (and, once 1.7 lands, tag `.ts`) files are generated
-artifacts**: `.gitignore` them, and run `mx-angular build` (or, once 1.5b
-lands, `mx-angular watch`) *before* `ng serve`/`ng build` — Angular's own
-template resolution needs the emitted file to already exist on disk; there
-is no in-memory hand-off. Exclude `.mx` sources (not emitted tag `.ts`
-modules) from `tsconfig.json` and from `angular.json`'s `assets` array.
+artifacts**: `.gitignore` them, and run `mx-angular build` (or `mx-angular
+watch`, for a long-running dev loop) *before* `ng serve`/`ng build` —
+Angular's own template resolution needs the emitted file to already exist
+on disk; there is no in-memory hand-off. Exclude `.mx` sources (not emitted
+tag `.ts` modules) from `tsconfig.json` and from `angular.json`'s `assets`
+array.
+
+**`mx-angular watch`** (`src/watch.ts`, `startWatch(projectDir, options)`)
+runs the initial `build()`-equivalent pass, then an incremental loop:
+`fs.watch` on `include` ∪ every discovered `tags/` directory (`discoverFiles`'s
+new `tagDirectories`, since a `tags/` directory holding only a sidecar
+`.tag.ts` — no `.mx` template — never appears in `files`, which is `.mx`
+only) ∪ the project root (for `package.json`), one non-recursive watcher per
+directory (portable across platforms rather than relying on macOS/Windows-only
+recursive support), debounced 50ms per A3. Dependency tracking: each page's
+last compile records the `usedTags` names the IR actually kept (a
+`Component` node survived); a sidecar `transform` returning IR directly
+(a macro, per `@mxlang/core`'s own docs "the only expansion left in the
+language") leaves no `Component` node and therefore no `usedTags` entry, so
+`recordDeps` also scans the page's raw source for every discovered tag name
+as a literal `<name` occurrence — a deliberate over-approximation (a
+spurious rebuild costs nothing; a missed one silently serves stale output).
+A changed page recompiles only itself; a changed tag path (template or
+sidecar) recompiles every page whose recorded dependency set contains it; a
+`package.json` change, or an `.mx` file appearing/disappearing outside the
+already-routed set, triggers a full rebuild, since either can change
+routing itself. `onIdle` cannot fast-path on "nothing pending right now" —
+a caller reads it right after a synchronous `writeFileSync`, before
+`fs.watch`'s genuinely-async delivery has necessarily fired — so it polls
+for a *quiet* window (no debounce timer, no in-flight rebuild) sustained for
+`max(100ms, debounceMs * 4)`, long enough to absorb realistic `fs.watch`
+delivery latency without becoming a fixed sleep. `--once` skips starting any
+watcher and resolves `onIdle` off the initial build alone (for CI and tests).
+The CLI's non-`--once` path resolves on `SIGINT`/`SIGTERM` (`Ctrl-C`, exit
+0).
 
 ## `@mxlang/language-server`: diagnostics-only LSP server (decision 71/72)
 

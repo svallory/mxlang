@@ -9,8 +9,8 @@ description: "The Angular host — a .mx page template compiles to a plain Angul
 every other host meets: its TypeScript plugin (step 2, `.ng.mx`) doesn't
 exist yet, and until it does, a template's MX tag imports must be
 hand-maintained in the caller's `.ts` file. What's here — page compilation,
-the `mx-angular` CLI's `build`/`map` — is real and tested, just not the
-whole story.
+the `mx-angular` CLI's `build`/`watch`/`map` — is real and tested, just not
+the whole story.
 
 `@mxlang/angular` compiles a `.mx` page template to a plain Angular template
 string: no MX runtime, no Angular dependency in the compiled output. The
@@ -42,19 +42,27 @@ Configure the host and the `mx-angular` CLI in `package.json`:
 
 Run `mx-angular build` before `ng serve`/`ng build` — Angular's own template
 resolution needs the emitted `.html` file to already exist on disk, since
-there is no in-memory hand-off between the two tools:
+there is no in-memory hand-off between the two tools. For development, run
+`mx-angular watch` alongside `ng serve`'s own watcher with `concurrently`
+(a devDependency of your app, not of this host) — a plain `&` suffix
+backgrounds the process but doesn't kill it when `ng serve` exits or is
+`Ctrl-C`'d, orphaning it:
 
 ```jsonc
 // package.json scripts
 {
-  "start": "mx-angular build && ng serve",
+  "mx": "mx-angular watch",
+  "start": "mx-angular build && concurrently -k -n mx,ng -c cyan,red \"mx-angular watch\" \"ng serve\"",
   "build": "mx-angular build && ng build"
 }
 ```
 
-An incremental `mx-angular watch`, run alongside `ng serve`'s own watcher,
-is task 1.5b and not built yet — for now, rerun `mx-angular build` after
-editing a `.mx` file.
+The `mx-angular build &&` prefix guarantees the first pass has already run
+before `ng serve` starts — Angular's own watcher, once started, does pick up
+a template-only change and rebuild without touching the `.ts` file
+(verified against a real `@angular/cli` app). `concurrently`'s `-k` kills
+every process in the group when one exits, so `Ctrl-C` (or `ng serve`
+crashing) stops `mx-angular watch` too, rather than leaving it running.
 
 Emitted `.html` files (and, once tag files compile, emitted `.ts` component
 modules) are **generated artifacts**: `.gitignore` them, and exclude the
@@ -102,12 +110,10 @@ hand-written component class.
 ## `mx-angular`
 
 ```
-mx-angular build [--project <dir>] [--config <file>]   # one-shot; CI and prebuild
-mx-angular map   <file.html:line:col>                   # emitted position -> .mx source file
+mx-angular build [--project <dir>] [--config <file>]           # one-shot; CI and prebuild
+mx-angular watch [--project <dir>] [--config <file>] [--once]  # incremental
+mx-angular map   <file.html:line:col>                           # emitted position -> .mx source file
 ```
-
-`watch` (incremental, alongside `ng serve`'s own watcher) is task 1.5b and
-not built yet.
 
 **`build`** compiles every routed file. It writes an output only when its
 compiled bytes differ from what's already on disk, and it refuses to
@@ -122,6 +128,19 @@ warning: ...`; a warning never fails the build.
 appears when the compiled template called at least one MX tag: it names the
 `import`/`imports:` line to add for each one, since step 1 cannot edit the
 caller's TypeScript for you.
+
+**`watch`** runs the initial build, then recompiles incrementally on every
+subsequent change. A changed page recompiles only that page; a changed tag
+(a template `.mx` under `tags/`, or a sidecar `.tag.ts`) recompiles every
+page that depends on it, tracked from each page's own last compile; a
+`package.json` edit, or a new/deleted/moved `.mx` file, triggers a full
+rebuild, since either can change routing itself. Changes are debounced 50ms
+and coalesced, and a write happens only when the compiled bytes differ, so
+an editor's own autosave doesn't retrigger Angular's watcher on a no-op
+save. One line per write/skip/error prints to the terminal, in the same
+`file:line:col message` shape as `build`. `Ctrl-C` exits `0`. `--once` runs
+the initial build only and exits — for CI and tests, where an indefinitely
+running watch process isn't wanted.
 
 **`onError`** decides what a compile error does to a previous good output —
 `keep-last` (default) leaves it in place and prints the error to the
