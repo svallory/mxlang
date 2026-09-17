@@ -1426,7 +1426,9 @@ without Astro mode, `.amx` files are ignored.
 ## `@mxlang/angular`: the Angular host on `@mxlang/core` (in progress)
 
 `packages/hosts/angular` emits an Angular template string from a `.mx` page
-template. See `notes/investigations/angular-host-design.md` for the design.
+template (`compile()`, `src/index.ts`); the emitter (task 1.3) covers every
+structural kind. See `notes/investigations/angular-host-design.md` for the
+design (A1: the lowering table; A3: the CLI).
 
 `bun run oracle:angular` (`packages/oracle/src/report-angular.ts`,
 `runAngularTable`) is the oracle table: each fixture under
@@ -1447,6 +1449,50 @@ its own Solid twin table) and folds its result into the exit code, and
 `oracle:angular` run. See `packages/oracle/fixtures/angular/README.md` for
 the two A1 rows intentionally absent (tag-file `<ng-content>` forms, task
 1.7's scope) and the `<for in=>` ordering rationale.
+
+**`mx-angular build`/`map` (task 1.5a; `watch` is 1.5b, not yet built).**
+`mx-angular build [--project <dir>] [--config <file>]` (`src/cli.ts`) reads
+`package.json#mx.angular` (`include`, `pageExtension`, `tagExtension`,
+`tagSelectorPrefix`, `onError` — A3's defaults; an unrecognized key is a
+positioned error naming it) and compiles `include` ∪ the discovered tag
+index (a `.mx` file under any `tags/` directory or `package.json#mx.tags`
+entry, found via `@mxlang/core`'s `scanCached` — since that scan only walks
+*upward* from a file, `src/discover.ts` walks the project tree itself to
+find every `tags/` directory and every package boundary, then calls the
+scan from inside each one; a `mx.tags` entry's own `hosts` restriction is
+honored by re-reading that entry directly, since the scan's own
+`DiscoveredTag` drops it). A page compiles to `pageExtension` beside its
+source, with a generated-header comment (a second line naming the
+`import`/`imports:` to add per called MX tag, when the compiled template
+called at least one — sourced from the emitter's own `usedTagNames()`, not
+parsed out of its warning text) and a `.map` sidecar (a plain source-map v3
+envelope; `compile()`'s own `mappings` is always empty today, so
+`mx-angular map` reports the source file and says fine-grained mapping
+isn't available yet, rather than fabricating a line/column). Every warning
+`compile()` produces prints to the terminal, `file:line:col warning: ...`.
+**A discovered tag file cannot be emitted yet** — an Angular component
+needs a class, not a template, and that route is task 1.7's tag-unit
+compile (not landed for this host) — so a tag file reports a positioned
+error instead of a page; a *caller* referencing a tag with a sidecar still
+compiles normally, since `getCustomTags(mxPath)` is threaded into every
+page's own `compile()` call. Only writes an output when its bytes differ,
+and refuses to overwrite any output — page or tag — lacking the generated
+header (`checkOverwriteGuard`, `src/build.ts`, wired into `build()` itself,
+not merely exported for direct testing — including the `onError` failure
+path: a compile error never overwrites or deletes a hand-written file at
+the output path, in any of the three modes). A tag-template's own compile
+error carries `file` pointing at the tag, not the caller, and is reported
+against that file (A5). Containment checks resolve real paths
+(`fs.realpathSync`), not merely normalized ones, so a symlinked `tags/`
+directory or output path cannot be used to read or write outside the
+project directory.
+
+**The emitted `.html` (and, once 1.7 lands, tag `.ts`) files are generated
+artifacts**: `.gitignore` them, and run `mx-angular build` (or, once 1.5b
+lands, `mx-angular watch`) *before* `ng serve`/`ng build` — Angular's own
+template resolution needs the emitted file to already exist on disk; there
+is no in-memory hand-off. Exclude `.mx` sources (not emitted tag `.ts`
+modules) from `tsconfig.json` and from `angular.json`'s `assets` array.
 
 ## `@mxlang/language-server`: diagnostics-only LSP server (decision 71/72)
 

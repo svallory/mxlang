@@ -3,9 +3,10 @@
 **Preview.** This host is not yet a complete "Angular host" by decision
 70's own bar (a host is not done without its TypeScript plugin — that is
 step 2, `.ng.mx`, not built yet). What exists today is step 1: an MX
-(`.mx`) page template compiles to a plain Angular template string, for a
-watcher (not yet built — task 1.5) to write beside a hand-written
-`x.component.ts` whose `templateUrl` points at it. See
+(`.mx`) page template compiles to a plain Angular template string, and
+`mx-angular build`/`map` (task 1.5a) write it beside a hand-written
+`x.component.ts` whose `templateUrl` points at it — `mx-angular watch`
+(task 1.5b, incremental) is not yet built. See
 `notes/investigations/angular-host-design.md` for the full design.
 
 MX (Markup eXtended) is a template language born from Marko: it takes
@@ -46,11 +47,26 @@ const { code, warnings } = compile(source, "app.component.mx");
 - `For` (`of`/`in`/`range`), `Define` and its call, `Component` (all three
   `ComponentTarget` kinds), attribute-tag content projection.
 
+## `mx-angular` (task 1.5a: `build`/`map`)
+
+Reads `package.json#mx.angular` (`include`, `pageExtension`, `tagExtension`,
+`tagSelectorPrefix`, `onError` — see the design note's A3 for defaults) and
+compiles `include` ∪ the discovered tag index (a `.mx` under any `tags/`
+directory, or a `package.json#mx.tags` entry — `@mxlang/core`'s own
+discovery, not a naming convention). A page compiles to `pageExtension`
+beside its source with a generated-header comment and a `.html.map`
+sidecar; `mx-angular map <file.html:line:col>` reads that sidecar and prints
+the `.mx` position. Writes only when bytes differ, and refuses to overwrite
+a `tagExtension` output that doesn't carry the generated header. See
+`apps/docs/docs/hosts/angular.md` for the full CLI reference.
+
 ## Not yet in this package
 
 - Tag-file compilation (a `.mx` in `tags/` becoming a real
-  `@Component`-decorated `.ts` module — task 1.7).
-- The `mx-angular` watcher CLI (task 1.5) and the oracle fixture harness
+  `@Component`-decorated `.ts` module — task 1.7). Until it lands, a
+  discovered tag file reports a positioned error from `mx-angular build`
+  rather than emitting a plain template where a component belongs.
+- `mx-angular watch` (task 1.5b, incremental) and the oracle fixture harness
   (task 1.4).
 - `.ng.mx` / step 2 and its tooling integration (typescript-plugin,
   language-server, vite-plugin) — attempting to compile a `.mx` file
