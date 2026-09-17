@@ -41,6 +41,24 @@ occupied, so diagnostics and the eventual source map stay anchored to
 covered by `reports a host/expression parse error past the enclosing region
 base` in `src/index.test.ts`.
 
+### A region's discovered-tag imports are hoisted; a tag *file* is a unit
+
+A region is an **expression**, so it has no module scope of its own. An
+import the compiler mints for a discovered tag therefore comes back on
+`CompileSolidMxResult.hoistedImports` for the caller to write into the
+surrounding TypeScript module — once per resolved path, reusing the module's
+own authored default import of the same file where there is one. An
+`import`/`static`/`export` the *author* wrote inside a region is still the
+same error, because they have a real module to put it in.
+
+`compileSolidUnit` is the whole-file entry point beside it. A tag file **is**
+a module, so its module-level statements are placed rather than rejected, and
+its default export is a named declaration after the file (`icon.mx` exports
+`Icon`) — which is what lets a tag call itself with no self-import. It
+deliberately drops `export interface Input`: Solid's compiler takes source
+text and has no TypeScript frontend, so a type declaration in the emitted
+unit is a syntax error downstream. Typing a unit's props is phase 3.
+
 ## `<for>` bodies read the row as a value, on every form
 
 MX templates are host-agnostic: `${p.name}` inside a `<for|p| of=...>` must

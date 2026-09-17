@@ -285,7 +285,8 @@ resolved relative to the root.
 
 Emitted module shape: the `escape` import, the author's hoisted `import`s and
 `static` blocks, their `export interface Input` verbatim, and
-`export default function (input: Input): string` building one local by `out +=`
+`export default function <Name>(input: Input): string` (named after the file —
+see the export-name bullet below) building one local by `out +=`
 concatenation (**not** an array join — the goldens diff this code).
 
 Whitespace on **every** host, SolidMX included, is decision 33's rule
@@ -644,10 +645,11 @@ Five facts worth knowing before editing it:
   `mxCustomTags` parser option (`print(source, file, { customTags })`), the
   only channel the in-tokenizer bridge has to the caller.
   `bun run oracle:custom-tags` is the six-host gate; every row renders and
-  compares against `expected.html`. It runs **four** fixtures — `icon` (an L2
+  compares against `expected.html`. It runs **five** fixtures — `icon` (an L2
   sidecar), `icon-template` (the same tag as an L1 template), `icon-sprite`
-  (P5's collecting pair) and `table-of` (L2 without that pair) — for a 24-row
-  count gate. **All 24 rows pass, with no recorded skip.** (Two skips used to
+  (P5's collecting pair), `table-of` (L2 without that pair) and `tree` (a
+  self-recursive L1 template, three levels deep) — for a 30-row count gate.
+  **All 30 rows pass, with no recorded skip.** (Two skips used to
   live here and both are fixed: `table-of` on Solid was the accessor-binding
   bug — see the P5 bullet below — and `icon-template` on Solid was a discovered
   unit's import having no module scope inside a `.solid.mx` region, now hoisted
@@ -944,7 +946,30 @@ Five facts worth knowing before editing it:
   owes.
 - **`oracle:custom-tags` compiles each fixture's tag units through the caller's
   own host** and writes them beside the caller, because the tag is a real
-  import now. All 24 rows pass, Solid included.
+  import now. All 30 rows pass, Solid included.
+- **Every emitted module's default export is named after its file**, never
+  anonymous: `icon.mx` becomes `export default function Icon(…)`,
+  `table-of.mx` becomes `TableOf`. `Ir.exportName` carries it, derived by
+  `exportNameFor` (`-` and `_` separate words, `$` does not; a basename that
+  would not start an identifier is prefixed `Tag`) and re-minted if it
+  collides with anything the file already binds — `ctx.imports`,
+  `ctx.defines`, or a match in the source text, since a name can reach the
+  emitted module without passing through either set (a `<const>`, a tag
+  param). It is computed in `lower` **before** the body walk, because a
+  self-recursive call resolves during that walk.
+  **That name is what makes self-recursion need no import** (design invariant
+  §7.5-7): when a discovered tag's resolved path is the file being compiled,
+  `bindingForTemplate` returns the export name instead of minting an import.
+  A module importing itself is legal ESM and does work, but it is a module
+  importing a binding it already has. The `tree` oracle fixture is the row
+  that proves it end to end on all six hosts.
+  **Consequence for anything that matches the emitted module as text:** the
+  export line's *name* is now per-file, so four places match its shape and
+  read the name back rather than pinning `render` — `@mxlang/html`'s
+  `brandRender`/`finalizeModule`, `@mxlang/typescript-plugin`'s
+  `createAstroTypeSurface`, and `@mxlang/astro`'s two `vite-pages` patterns.
+  Pinning the literal there is what made every `.mx` import report
+  "is not a module" under `mx-tsc --astro` when the name first changed.
 - **A synthesized import is told apart from an authored one by
   `Import.synthesized`, and only Solid cares.** A `.solid.mx` MX region is an
   *expression* inside a TypeScript module, so it has no module scope to hold a
@@ -1850,9 +1875,15 @@ and rewrites the already-compiled module — by the time this stage runs the
 bundler has already stripped TypeScript types from the code (measured: no
 `: Input`/`: string` annotations survive), so the rewrite injects plain JS,
 not TS. It matches `@mxlang/html`'s exact branded tail (`function
-render(input) {...}; Object.defineProperty(render,
-Symbol.for("mx.component"), ...); export default render;` — see
-`translate.ts`'s `brandRender`) and replaces it with an Astro
+About(input) {...}; Object.defineProperty(About,
+Symbol.for("mx.component"), ...); export default About;` — see
+`translate.ts`'s `brandRender`), where the name is the file's own derived
+export name and the **same** name in both halves of the tail. The tail is
+matched first and the name read out of it; the function declaration is then
+anchored on that name, never on "the first function taking `input`" — such
+a function can be a hoisted helper or a bundler-inlined tag unit, and
+renaming *it* would leave the real render function untouched. It replaces
+the tail with an Astro
 `createComponent` factory built with Astro's own
 `renderTemplate`/`renderComponent`/`unescapeHTML` runtime helpers
 (`astro/runtime/server/index.js`), never a hand-rolled factory invocation —

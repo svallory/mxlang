@@ -96,7 +96,19 @@ import helper from "./helper.ts"
 <div>${helper()}</div>
 ```
 
-A tag file is a module, so it may export anything, and it may call other custom tags — including itself. A module importing itself is legal, so a self-recursive tag terminates on its own data rather than on a compiler limit.
+A tag file is a module, so it may export anything, and it may call other custom tags — including itself. A compiled tag's default export is a **named** declaration (`icon.mx` exports `Icon`, `table-of.mx` exports `TableOf`), so a tag calling its own name resolves to that declaration in its own module scope: recursion needs no import, and terminates on the tag's own data rather than on a compiler limit.
+
+```mx
+<!-- tags/tree.mx -->
+<li>
+  ${input.node.label}
+  <if=input.node.kids>
+    <ul><for|kid| of=input.node.kids><tree node=kid/></for></ul>
+  </if>
+</li>
+```
+
+The name is derived from the filename, not written by the author, and is re-minted if it would collide with something the file already binds.
 
 ## Hygiene
 

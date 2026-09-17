@@ -391,7 +391,7 @@ host sees an ordinary component call and never learns which layer wrote the
 markup.
 
 **`input` is a real parameter**, bound by the call, because the tag is a
-separate module with its own `render(input)`. Attributes become that object;
+separate module with its own named `(input)` export. Attributes become that object;
 an omitted one is `undefined`, so `input.size ?? 24` behaves as written. Every
 restriction the old substitution strategy carried is gone with it: a template
 may read an attribute as many times as it likes (the caller's expression is
