@@ -162,12 +162,6 @@ describe("MX element parsing", () => {
 describe("unsupported constructs raise a clear error", () => {
   const cases: [string, string, string][] = [
     [
-      "dynamic tag name",
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX syntax, not a JS template literal
-      "const el = <${Which}>x</>;",
-      "dynamic tag name",
-    ],
-    [
       "attribute tag outside a tag body",
       `const el = <@header>x</@header>;`,
       "@tags must be nested within another element",
@@ -272,13 +266,12 @@ describe("error reporting (review #2, #3)", () => {
     // with errorRecovery on, so throwing matches it.
     for (const source of [
       `const a = <button>oops;`,
-      // A dynamic tag name (`<${x}>`) is still unsupported, so this keeps
-      // exercising the LowerError-to-SyntaxError conversion path distinct
-      // from the htmljs-parser walk-error path the first case covers. An
-      // attribute tag no longer serves: `<Layout><@header>` lowers now
-      // (decision 51).
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX syntax, not a JS template literal
-      "const b = <${Which}>x</>;",
+      // A raw placeholder mixed with other children is still unsupported, so
+      // this keeps exercising the LowerError-to-SyntaxError conversion path
+      // distinct from the htmljs-parser walk-error path the first case
+      // covers. A dynamic tag name no longer serves: `<${Which}>x</>` lowers
+      // now, to Solid's `<Dynamic>` (see the "bare placeholder" task).
+      `const b = <p>x$!{raw}</p>;`,
     ]) {
       let error: unknown;
       try {
