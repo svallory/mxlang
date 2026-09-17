@@ -183,7 +183,15 @@ function discoverTagFiles(
   const result = discoverProjectTags(projectDir, { host: "angular" });
 
   for (const d of result.diagnostics) {
-    if (/is a host module file, not a tag template/.test(d.message)) {
+    // A host-module rejection is told apart by the rejected file's own name,
+    // never by message prose: core's `rejectHostModuleFile` is the only scan
+    // path that reports a `.<segment>.mx` file (`indexDirectory` skips it
+    // right after, so no second diagnostic can name the same file). Only
+    // `.ng.mx` gets this host's friendlier wording and the nowhere-route —
+    // another host's module file (a `.solid.mx` in an Angular project)
+    // keeps core's own message, since it is not this host's file to advise
+    // on and could never be routed here anyway.
+    if (d.file.endsWith(".ng.mx")) {
       diagnostics.push({
         file: d.file,
         message:

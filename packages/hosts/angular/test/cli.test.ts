@@ -1161,4 +1161,38 @@ describe("build: .ng.mx round 2 review", () => {
     expect(existsSync(join(projectDir, "src/tags/good.ts"))).toBe(true);
     expect(existsSync(join(projectDir, "src/other-tags/fine.ts"))).toBe(true);
   });
+
+  it("treats a .solid.mx under tags/ as core's rejection, never as .ng.mx", () => {
+    // Core's `rejectHostModuleFile` skips *any* host-module file with a scan
+    // diagnostic. A `.solid.mx` in an Angular project gets that same core
+    // behavior — the file is skipped and core's own message reported — and
+    // must never be rewritten into this host's `.ng.mx` wording, which would
+    // tell the author the wrong thing about a file this host does not own.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/tags/widget.solid.mx": [
+        'const Widget = () => <div class="widget">hi</div>;',
+        "export default Widget;",
+      ].join("\n"),
+    });
+
+    const result = build(projectDir);
+
+    expect(result.errors).toEqual([]);
+    expect(
+      result.warnings.some((w) =>
+        /is a host module file, not a tag template/.test(w.message),
+      ),
+    ).toBe(true);
+    expect(
+      result.warnings.some((w) =>
+        /a `\.ng\.mx` file is a component module, not a tag/.test(w.message),
+      ),
+    ).toBe(false);
+    // And nothing is compiled beside it.
+    expect(existsSync(join(projectDir, "src/tags/widget.ts"))).toBe(false);
+    expect(existsSync(join(projectDir, "src/tags/widget.html"))).toBe(false);
+  });
 });
