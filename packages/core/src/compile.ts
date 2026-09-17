@@ -108,9 +108,13 @@ let current: {
  * The emitted module is text rather than a Babel AST, so every expression
  * Marko already parsed has to become code again. Marko bundles its own Babel
  * and these nodes belong to that instance, so its generator is the one that
- * can print them — the export is `generator`, not `generate`.
+ * can print them — the export is `generator`, not `generate`. A different
+ * Babel instance's generator can still print the same node shape, but it is
+ * the wrong generator for a Marko-owned node: only the instance a node's own
+ * parser produced it with is guaranteed to agree with that parser's AST
+ * shape and options across a version bump.
  */
-function printExpression(node: unknown): string {
+export function printExpression(node: Node): string {
   const { generator } = require("@marko/compiler/internal/babel");
   return generator(node, { concise: true }).code;
 }

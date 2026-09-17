@@ -20,6 +20,7 @@ export {
   createTranslator,
   type HostOptions,
   type Lookup,
+  printExpression,
   type RawSourceMap,
   type TranslatorOptions,
 } from "./compile.ts";
