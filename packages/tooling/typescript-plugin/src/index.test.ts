@@ -275,7 +275,7 @@ describe("MX language plugin", () => {
     const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     expect(virtual.languageId).toBe("typescript");
     expect(generated).toContain("export interface Input { title: string }");
-    expect(generated).toContain("function render(input: Input): string");
+    expect(generated).toContain("function Card(input: Input): string");
     expect(generated).toContain("out += escape(input.title)");
     expect(virtual.mappings.length).toBeGreaterThan(0);
     // TSX, not TS, for every host. The Preact host emits a component module
@@ -669,7 +669,7 @@ describe("MX language plugin", () => {
     const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     // The Preact host's own module shape, not the string host's.
     expect(generated).toContain("/** @jsxImportSource preact */");
-    expect(generated).toContain("export default function (props: Input) {");
+    expect(generated).toContain("export default function Card(props: Input) {");
     expect(generated).toContain("<h1>{input.title}</h1>");
     expect(generated).not.toContain("let out =");
     expect(virtual.mappings.length).toBeGreaterThan(0);
@@ -1186,11 +1186,11 @@ describe("Astro type surface", () => {
     [
       `export interface Input {${inputMembers}}`,
       "",
-      "function render(input: Input): string {",
+      "function Card(input: Input): string {",
       '  return "";',
       "}",
       "",
-      "export default render;",
+      "export default Card;",
     ].join("\n");
 
   it("offers children to a component whose Input declares content", () => {

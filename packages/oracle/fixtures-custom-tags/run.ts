@@ -119,6 +119,21 @@ function templateIcon(): Record<string, CustomTag> {
   };
 }
 
+/** The self-recursive L1 tag: `tags/tree.mx` calls `<tree>` in its own body. */
+const TREE_TEMPLATE = join(here, "tree", "tags", "tree.mx");
+
+function templateTree(): Record<string, CustomTag> {
+  return {
+    tree: {
+      template: {
+        filename: TREE_TEMPLATE,
+        source: readFileSync(TREE_TEMPLATE, "utf8"),
+        mtimeMs: statSync(TREE_TEMPLATE).mtimeMs,
+      },
+    } satisfies TemplateBackedTag,
+  };
+}
+
 const FIXTURES: Fixture[] = [
   load("icon", { icon }),
   {
@@ -131,6 +146,15 @@ const FIXTURES: Fixture[] = [
   // structural builders on their own.
   load("icon-sprite", { icon: spriteIcon }),
   load("table-of", { "table-of": tableOf }),
+  // A self-recursive unit: `tags/tree.mx` calls `<tree>` from its own body,
+  // three levels deep on this input. Invariant §7.5-7 says the recursive call
+  // resolves to the unit's own named export rather than an import of the file
+  // into itself, so this row is what proves the emitted module has no
+  // self-import on any host.
+  {
+    ...load("tree", templateTree()),
+    templates: [TREE_TEMPLATE],
+  },
 ];
 
 const HOSTS = 6;
