@@ -23,6 +23,15 @@ If `user.name` is `<script>`, the output contains the escaped entities, not a li
 
 `$!{...}` is not accepted inside an attribute value at all; Marko's own parser rejects it there before any host runs.
 
+A `${expr}` on its own line (concise mode's tag position, not inside an element's body) is not a text placeholder — it's a dynamic tag, the concise form of `<${expr}/>`. Write `-- ${expr}` to put an expression on its own line as text.
+
+```html
+${MyComponent}
+-- ${user.name}
+```
+
+The first line renders `MyComponent` as a component; the second interpolates `user.name` as text. `${expr}` written inside an element's body (like `<p>Hello, ${user.name}</p>` above) stays an ordinary placeholder — this rule only applies to a standalone line.
+
 ## Whitespace
 
 MX follows Marko's whitespace rule, not JSX's:
