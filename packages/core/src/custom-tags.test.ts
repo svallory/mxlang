@@ -527,6 +527,27 @@ describe("custom tag declarations", () => {
     ]);
   });
 
+  it("a declared default's fabricated literal carries no span", () => {
+    // The text was never authored, so a span would point at unrelated
+    // source — `Expr.span` must stay undefined rather than fabricated
+    // (core contract C4, §3).
+    let sizeExpr: { span?: unknown } | undefined;
+    const defaulted: CustomTag = {
+      attributes: { size: { type: "number", default: 24 } },
+      transform(call) {
+        const attr = call.attrs.find(
+          (candidate) => candidate.kind === "dynamic",
+        );
+        sizeExpr = attr?.kind === "dynamic" ? attr.value : undefined;
+        return [];
+      },
+    };
+
+    lowerWithTags("<defaulted/>\n", { defaulted });
+
+    expect(sizeExpr?.span).toBeUndefined();
+  });
+
   it("leaves a supplied attribute alone rather than defaulting it", () => {
     let size: string | undefined;
     const defaulted: CustomTag = {

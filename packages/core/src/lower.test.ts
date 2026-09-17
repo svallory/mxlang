@@ -4,7 +4,7 @@ import type { Ctx, Node } from "./core.ts";
 import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
-import { lower } from "./lower.ts";
+import { exprOf, lower } from "./lower.ts";
 
 /**
  * The lowerer (decision 79): one fixture per IR kind, plus the error cases.
@@ -1059,5 +1059,235 @@ describe("<return>", () => {
     expect(() =>
       lowerSource("<p>a</p>\n<return value=1/>\n<return value=2/>\n"),
     ).toThrow(expect.objectContaining({ line: 3 }));
+  });
+});
+
+/**
+ * `Expr.span` (core contract C4): file-absolute byte offsets, filled by
+ * `exprOf` for every construction site, absent for a synthesized expr.
+ *
+ * One test per distinct `exprOf` caller family (`notes/investigations/
+ * angular-c4-expr-span.md` §2's seventeen-site table), each asserting
+ * `source.slice(span.sourceStart, span.sourceEnd)` equals the authored
+ * expression text — the only assertion that catches an off-by-one.
+ */
+function slice(
+  source: string,
+  expr: { span?: { sourceStart: number; sourceEnd: number } },
+): string {
+  if (!expr.span) throw new Error("expected a span");
+  return source.slice(expr.span.sourceStart, expr.span.sourceEnd);
+}
+
+describe("Expr.span", () => {
+  it("dynamic attribute value", () => {
+    const source = "<div a=x.y>x</div>\n";
+    const ir = lowerSource(source);
+    const [attr] = find(ir.body, "Element").attrs;
+    if (attr?.kind !== "dynamic") throw new Error("expected dynamic attr");
+    expect(slice(source, attr.value)).toBe("x.y");
+  });
+
+  it("spread attribute", () => {
+    const source = "<div ...s.o>x</div>\n";
+    const ir = lowerSource(source);
+    const [attr] = find(ir.body, "Element").attrs;
+    if (attr?.kind !== "spread") throw new Error("expected spread attr");
+    expect(slice(source, attr.value)).toBe("s.o");
+  });
+
+  it("bound (`:=`) attribute", () => {
+    const source = "<div v:=b.v>x</div>\n";
+    const ir = lowerSource(source);
+    const [attr] = find(ir.body, "Element").attrs;
+    if (attr?.kind !== "bound") throw new Error("expected bound attr");
+    expect(slice(source, attr.value)).toBe("b.v");
+  });
+
+  it("modifier attribute resolved to a host's own name (e.g. `class:foo=`)", () => {
+    const source = "<div class:foo=m.v>x</div>\n";
+    const ir = lowerSource(
+      source,
+      fakeDeclarations({
+        resolveModifier: (attr) => `${attr.name}-${attr.modifier}`,
+      }),
+    );
+    const [attr] = find(ir.body, "Element").attrs;
+    if (attr?.kind !== "dynamic") throw new Error("expected dynamic attr");
+    expect(slice(source, attr.value)).toBe("m.v");
+  });
+
+  it("placeholder/interpolation", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const source = "<div>${x.y}</div>\n";
+    const ir = lowerSource(source);
+    const interpolation = find(
+      find(ir.body, "Element").children,
+      "Interpolation",
+    );
+    expect(slice(source, interpolation.expr)).toBe("x.y");
+  });
+
+  it("control-flow test expression (`<if>`/`<else-if>`)", () => {
+    const source =
+      "<if=a.b>\n  <p>a</p>\n</if>\n<else if=c.d>\n  <p>b</p>\n</else>\n";
+    const ir = lowerSource(source);
+    const chain = find(ir.body, "IfChain");
+    expect(slice(source, chain.branches[0]?.condition ?? {})).toBe("a.b");
+    expect(slice(source, chain.branches[1]?.condition ?? {})).toBe("c.d");
+  });
+
+  it("`<for>` source and `by=` key", () => {
+    const source = '<for|item| of=list.items by="(p)=>p.id"><p>x</p></for>\n';
+    const ir = lowerSource(source);
+    const loop = find(ir.body, "For");
+    if (loop.source.kind !== "of") throw new Error("expected of-source");
+    expect(slice(source, loop.source.list)).toBe("list.items");
+    expect(slice(source, loop.key ?? {})).toBe('"(p)=>p.id"');
+  });
+
+  it("`<for in=>` source", () => {
+    const source = "<for|k, v| in=obj.entries><p>x</p></for>\n";
+    const ir = lowerSource(source);
+    const loop = find(ir.body, "For");
+    if (loop.source.kind !== "in") throw new Error("expected in-source");
+    expect(slice(source, loop.source.object)).toBe("obj.entries");
+  });
+
+  it("`<for>` range bounds (`from=`/`to=`/`step=`)", () => {
+    const source = "<for|n| from=1 to=5 step=2><p>x</p></for>\n";
+    const ir = lowerSource(source);
+    const loop = find(ir.body, "For");
+    if (loop.source.kind !== "range") throw new Error("expected range-source");
+    expect(slice(source, loop.source.from ?? {})).toBe("1");
+    expect(slice(source, loop.source.bound ?? {})).toBe("5");
+    expect(slice(source, loop.source.step ?? {})).toBe("2");
+  });
+
+  it("`<const>` initializer", () => {
+    const source = "<const/c=1 + two.v/>\n<p>x</p>\n";
+    const ir = lowerSource(source);
+    expect(slice(source, find(ir.body, "Const").init)).toBe("1 + two.v");
+  });
+
+  it("`<return>` value", () => {
+    const source = "<return value=v.x/>\n";
+    const ir = lowerSource(source);
+    if (!ir.returnValue) throw new Error("expected a return value");
+    expect(slice(source, ir.returnValue)).toBe("v.x");
+  });
+
+  it("component call arguments, distinct spans", () => {
+    const source =
+      "<define/Row|item|><li>x</li></define>\n<Row(a.one, a.two)/>\n";
+    const ir = lowerSource(
+      source,
+      fakeDeclarations({ isComponent: (name) => name === "Row" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.args.map((a) => slice(source, a))).toEqual([
+      "a.one",
+      "a.two",
+    ]);
+    expect(component.args[0]?.span?.sourceStart).not.toBe(
+      component.args[1]?.span?.sourceStart,
+    );
+  });
+
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in the test title
+  it("a bare `${expr}` tag (concise mode's placeholder shape)", () => {
+    // A top-level `${expr}` with no attributes and no body parses as a
+    // `MarkoTag` whose `name` is the expression — concise mode's only shape
+    // for a placeholder — and lowers through the same `exprOf` call a
+    // dynamic tag name would use if one produced an `Expr`-bearing node.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const source = "<${dyn.tag}/>\n";
+    const ir = lowerSource(source);
+    const interpolation = find(ir.body, "Interpolation");
+    expect(slice(source, interpolation.expr)).toBe("dyn.tag");
+  });
+
+  it("sibling-sharing case: four byte-identical exprs get four distinct spans", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const source = "<div a=x.y b=x.y>${x.y}${x.y}</div>\n";
+    const ir = lowerSource(source);
+    const element = find(ir.body, "Element");
+    const attrExprs = element.attrs.map((attr) =>
+      attr.kind === "dynamic" || attr.kind === "bound" || attr.kind === "spread"
+        ? attr.value
+        : null,
+    );
+    const interpolations = element.children.filter(
+      (child) => child.kind === "Interpolation",
+    );
+    const exprs = [...attrExprs, ...interpolations.map((i) => i.expr)].filter(
+      (e): e is NonNullable<typeof e> => e !== null,
+    );
+    expect(exprs).toHaveLength(4);
+    for (const e of exprs) expect(slice(source, e)).toBe("x.y");
+    const starts = exprs.map((e) => e.span?.sourceStart);
+    expect(new Set(starts).size).toBe(4);
+  });
+
+  it("a span computed under a distinct ctx.source is absolute in that source", () => {
+    // This mirrors the *shape* of `registerTemplateMetadataCompiler`'s own
+    // callback (`lower.ts:1396`) — a `lower()` call against a `Ctx` built
+    // from a template's own `tag.source`/`tag.filename` rather than the
+    // caller's — using `lowerSource` directly rather than going through a
+    // real caller/tag-unit compile.
+    //
+    // It does NOT exercise `Expr.file`: nothing in `packages/core` sets that
+    // field today (see `ir.ts`'s comment on it), and a tag unit does not
+    // need it to get an absolute span — its own `ctx.source` already *is*
+    // its own file, so offsets computed against it are correct with no
+    // shifting. `template-tag.test.ts`'s "compiles a called template unit's
+    // own expressions through the real metadata path" test drives the actual
+    // production callsite end to end; this test only pins that a `Ctx` whose
+    // `source` differs from some other file's does not need special-casing
+    // for its own spans to be correct.
+    const templateSource = "<const/doubled=tpl.n * 2/>\n<p>x</p>\n";
+    const ir = lowerSource(templateSource);
+    const constNode = find(ir.body, "Const");
+    expect(slice(templateSource, constNode.init)).toBe("tpl.n * 2");
+    expect(constNode.init.span).toBeDefined();
+  });
+
+  it("a loc-less node produces no span, not a NaN one", () => {
+    const source = "<p>x</p>\n";
+    const ir = lowerSource(source);
+    const ctx = newCtx(
+      source,
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+    );
+    const synthetic = { type: "NumericLiteral", value: 1 };
+    const result = exprOf(ctx, synthetic);
+    expect(result.span).toBeUndefined();
+    expect(result.code).toBe("1");
+    // Sanity: the guard is specific to a loc-less node, not to every call.
+    expect(find(ir.body, "Text").value).toBe("x");
+  });
+
+  it("a node with a numeric start/end but no loc still produces no span", () => {
+    // Round 2: `exprSpan`'s guard used to admit this shape (`node?.start` is
+    // a number, so the old `!node?.loc && typeof node?.start !== "number"`
+    // check passed it through to `nodeSpan`), which then fed the raw number
+    // `7` to `offsetOf` as if it were a `{line, column}` position — reading
+    // `.column` off a number is `undefined`, producing `NaN`. `offsetOf`
+    // only ever reads position-shaped values from `loc.start`/`loc.end`, so
+    // `loc` alone is the correct — and only correct — gate.
+    const source = "<p>x</p>\n";
+    const ctx = newCtx(
+      source,
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+    );
+    const synthetic = { type: "Id", start: 7, end: 10 };
+    const result = exprOf(ctx, synthetic);
+    expect(result.span).toBeUndefined();
   });
 });
