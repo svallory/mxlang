@@ -110,6 +110,7 @@ describe("compileNgMx", () => {
       ngMxPositionCheck({
         propertyKey,
         decoratorNames,
+        enclosingDecoratorNames: [],
         isDirectPropertyValue,
         argumentIndex,
       });
