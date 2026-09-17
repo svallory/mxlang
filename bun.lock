@@ -381,6 +381,17 @@
         "@mxlang/solid": "workspace:*",
       },
     },
+    "packages/tooling/angular-checker": {
+      "name": "@mxlang/angular-checker",
+      "version": "0.1.0",
+      "dependencies": {
+        "@angular/compiler-cli": "22.1.7",
+      },
+      "devDependencies": {
+        "@angular/core": "22.1.7",
+        "typescript": "6.0.3",
+      },
+    },
     "packages/tooling/babel-plugin": {
       "name": "@mxlang/babel-plugin",
       "version": "0.0.0",
@@ -949,6 +960,8 @@
     "@msgpackr-extract/msgpackr-extract-win32-x64": ["@msgpackr-extract/msgpackr-extract-win32-x64@3.0.4", "", { "os": "win32", "cpu": "x64" }, "sha512-CmCXPQrkbwExx3j946/PtHWHbYJiCRBRDl4BlkRQcJB/YOwQxJRTpoo7aTsortjgoJ1x7opzTSxn7C+ASSLVjQ=="],
 
     "@mxlang/angular": ["@mxlang/angular@workspace:packages/hosts/angular"],
+
+    "@mxlang/angular-checker": ["@mxlang/angular-checker@workspace:packages/tooling/angular-checker"],
 
     "@mxlang/astro": ["@mxlang/astro@workspace:packages/hosts/astro"],
 

@@ -1,0 +1,48 @@
+{
+  "name": "@mxlang/angular-checker",
+  "version": "0.1.0",
+  "description": "Angular template type-check diagnostics for MX, as plain records (decision 99)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mxlang/mx",
+    "directory": "packages/tooling/angular-checker"
+  },
+  "keywords": [
+    "mx",
+    "angular",
+    "diagnostics",
+    "template",
+    "type-check"
+  ],
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18",
+    "bun": ">=1.3"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @angular/compiler-cli --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@angular/compiler-cli": "22.1.7"
+  },
+  "devDependencies": {
+    "@angular/core": "22.1.7",
+    "typescript": "6.0.3"
+  }
+}
