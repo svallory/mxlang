@@ -242,7 +242,7 @@ export function runAngularTable(update: boolean): {
       code = compile(input, compilePath, {
         warnings,
         customTags: hasTagsDir
-          ? (getCustomTags(compilePath) as never)
+          ? (getCustomTags(compilePath, { host: "angular" }) as never)
           : undefined,
       }).code;
     } catch (err) {
@@ -352,7 +352,7 @@ export function runAngularTable(update: boolean): {
     let code: string;
     try {
       code = compileTagModuleFile(inputPath, {
-        customTags: getCustomTags(inputPath) as never,
+        customTags: getCustomTags(inputPath, { host: "angular" }) as never,
       }).code;
     } catch (err) {
       rows.push({

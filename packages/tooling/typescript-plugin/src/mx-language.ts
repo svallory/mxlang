@@ -83,7 +83,8 @@ export function createMxLanguagePlugin(
     // channel for a problem in a *different* file than the one being checked,
     // so this goes to the log, which is tsserver's own log in an editor and
     // stderr under `mx-tsc`.
-    for (const diagnostic of scanCached(fileName).diagnostics) {
+    const host = resolveHostPolicy(fileName).host;
+    for (const diagnostic of scanCached(fileName, { host }).diagnostics) {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
       reported.add(key);
@@ -92,7 +93,7 @@ export function createMxLanguagePlugin(
       );
     }
 
-    const discovered = getCustomTags(fileName);
+    const discovered = getCustomTags(fileName, { host });
     const merged = options.customTags
       ? { ...discovered, ...options.customTags }
       : discovered;

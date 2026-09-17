@@ -1,0 +1,11 @@
+{
+  "name": "scan-project-wide",
+  "private": true,
+  "mx": {
+    "tags": [
+      {
+        "dir": "mx-tags-dir"
+      }
+    ]
+  }
+}

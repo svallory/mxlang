@@ -1,0 +1,14 @@
+{
+  "name": "scan-hosts",
+  "private": true,
+  "mx": {
+    "tags": [
+      {
+        "dir": "only-solid",
+        "hosts": [
+          "solid"
+        ]
+      }
+    ]
+  }
+}

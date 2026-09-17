@@ -197,14 +197,15 @@ export function diagnoseDocument(
     // no path at all; the walk then finds no `package.json` and returns an
     // empty map, which is correct.
     const path = documentPath(uri);
-    const scan = scanCached(path);
+    const scan = scanCached(path, { host: hostPolicy.host });
     scanWarnings = scan.diagnostics.map(scanDiagnosticToLsp);
     // Tags the caller supplied win over the scan's. Normally nothing is
     // supplied and discovery is the whole story; a caller that does pass a map
     // (a test, or an integration that scanned once for a batch of documents)
     // has already decided what this file sees, and re-scanning would either
     // overwrite that or silently merge two answers to one question.
-    const discovered = explicitTags ?? getCustomTags(path);
+    const discovered =
+      explicitTags ?? getCustomTags(path, { host: hostPolicy.host });
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
 

@@ -183,7 +183,7 @@ export function scanCached(
   filePath: string,
   options: ScanOptions = {},
 ): ScanResult {
-  const key = `${dirname(resolve(filePath))}\0${options.stopAt ?? ""}`;
+  const key = `${dirname(resolve(filePath))}\0${options.stopAt ?? ""}\0${options.host ?? ""}`;
   const cached = scans.get(key);
   if (cached && isFresh(cached)) return cached.result;
 

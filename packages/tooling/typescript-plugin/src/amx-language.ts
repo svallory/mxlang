@@ -42,7 +42,7 @@ export function createAmxLanguagePlugin(
         // file. Without them a tag that compiles under `astro build` is an
         // unknown tag in the editor and under `mx-tsc --astro` — the
         // asymmetry already closed for `.solid.mx`.
-        const discovered = getCustomTags(fileName);
+        const discovered = getCustomTags(fileName, { host: "astro" });
         const lowered = lowerAstroMx(
           source,
           fileName,

@@ -97,6 +97,8 @@ export {
 export {
   checkParseOptions,
   type DiscoveredTag,
+  type DiscoverProjectTagsOptions,
+  discoverProjectTags,
   loadSidecar,
   type MxTagsEntry,
   normalizeMxTags,
