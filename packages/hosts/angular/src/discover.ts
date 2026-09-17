@@ -186,7 +186,8 @@ function discoverTagFiles(
     if (/is a host module file, not a tag template/.test(d.message)) {
       diagnostics.push({
         file: d.file,
-        message: "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
+        message:
+          "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
       });
       rejected.add(resolve(d.file));
     } else {

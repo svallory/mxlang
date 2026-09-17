@@ -1021,7 +1021,7 @@ describe("build: .ng.mx round 2 review", () => {
         mx: {
           host: "angular",
           angular: { include: ["src/**/*.mx"] },
-          tags: [{ dir: "src/tags" }, { dir: "src/other-tags" }]
+          tags: [{ dir: "src/tags" }, { dir: "src/other-tags" }],
         },
       }),
       "src/page.mx": "<div><good/><fine/></div>",
@@ -1042,7 +1042,9 @@ describe("build: .ng.mx round 2 review", () => {
       ),
     ).toBe(true);
 
-    expect(existsSync(join(projectDir, "src/tags/bad.component.ts"))).toBe(false);
+    expect(existsSync(join(projectDir, "src/tags/bad.component.ts"))).toBe(
+      false,
+    );
     expect(existsSync(join(projectDir, "src/tags/good.ts"))).toBe(true);
     expect(existsSync(join(projectDir, "src/other-tags/fine.ts"))).toBe(true);
   });

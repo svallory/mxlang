@@ -319,7 +319,9 @@ describe("scanCustomTags", () => {
     // author wondering why their file is invisible.
     const result = scanCustomTags(join(dir, "caller.mx"));
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toMatch(/`widget\.solid\.mx` is a host module file/);
+    expect(result.diagnostics[0]?.message).toMatch(
+      /`widget\.solid\.mx` is a host module file/,
+    );
   });
 
   it("reports a .ng.mx in a tags/ directory instead of ignoring it", () => {
@@ -330,7 +332,9 @@ describe("scanCustomTags", () => {
 
     const result = scanCustomTags(join(dir, "caller.mx"));
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toMatch(/`widget\.ng\.mx` is a host module file/);
+    expect(result.diagnostics[0]?.message).toMatch(
+      /`widget\.ng\.mx` is a host module file/,
+    );
   });
 
   it("indexes <unlisted>.mx as an ordinary dotted tag name", () => {
@@ -481,7 +485,9 @@ describe("discoverProjectTags", () => {
     expect(result.directories).toContainEqual(join(dir, "tags"));
     expect(result.directories).toContainEqual(join(dir, "nested", "tags"));
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toMatch(/`widget\.ng\.mx` is a host module file/);
+    expect(result.diagnostics[0]?.message).toMatch(
+      /`widget\.ng\.mx` is a host module file/,
+    );
   });
 
   it("excludes node_modules", () => {
