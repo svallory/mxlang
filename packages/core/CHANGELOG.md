@@ -65,6 +65,16 @@ change — `@babel/generator` and Marko's bundled generator were verified
 byte-identical across the node kinds `.solid.mx` compiles through this
 path.
 
+### `Define`/`For` gain file-absolute name and param spans
+
+`Define.nameSpan?: SourceSpan`, `Define.paramSpans?: Array<SourceSpan |
+undefined>`, and `For.paramSpans?: Array<SourceSpan | undefined>` extend
+C4's span convention to `<define>`'s own name and params and a `<for>`'s
+params — the file-absolute byte offsets every other source-derived IR run
+already carried, filled at `lowerDefine`/`lowerFor` and `undefined` only for
+a param or name node with no authored `loc`. Additive: no existing field
+changed shape, no emitter change required.
+
 ### `mx.tags[].hosts` now filters discovery
 
 `getCustomTags`/`scanCached`/`scanCustomTags` accept an optional `host` in

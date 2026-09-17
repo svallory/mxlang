@@ -116,8 +116,13 @@ function nodeSpan(ctx: Ctx, node: Node): SourceSpan {
  * and produce `NaN`, same as the no-position case this guards against. Only
  * `loc.start`/`loc.end` are ever position-shaped here, so `loc` alone is the
  * correct gate.
+ *
+ * Exported for `lower.test.ts` alone, to unit-test the guard directly
+ * against every construction site that shares it (`Define.nameSpan`,
+ * `paramSpansOf`), not only through `exprOf` — same rationale as `exprOf`'s
+ * own export comment below.
  */
-function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
+export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
   if (!node?.loc) return undefined;
   return nodeSpan(ctx, node);
 }
@@ -358,6 +363,22 @@ function paramsOf(ctx: Ctx, node: Node): string[] {
     const source = p.loc ? sliceLoc(ctx, p.loc) : "";
     return source || declName(ctx, p);
   });
+}
+
+/**
+ * File-absolute byte spans of `<for|a, b|>` / `<define|p|>` params, one per
+ * `paramsOf`/`paramNodes` entry — same convention as `Expr.span`, `undefined`
+ * for a param whose node carries no `loc`.
+ *
+ * Exported for `lower.test.ts` alone, to unit-test the no-`loc` guard
+ * directly against a synthesized param node — same rationale as `exprOf`'s
+ * own export comment above.
+ */
+export function paramSpansOf(
+  ctx: Ctx,
+  node: Node,
+): Array<SourceSpan | undefined> {
+  return (node.body?.params ?? []).map((p: Node) => exprSpan(ctx, p));
 }
 
 /** Marko keeps non-empty params as nodes but represents both absent and `||` as `[]`. */
@@ -614,6 +635,7 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
     params,
     paramNodes: [...(node.body?.params ?? [])],
     bindings,
+    paramSpans: paramSpansOf(ctx, node),
     key: by ? exprOf(ctx, by.value) : null,
     children,
     loc: posOf(node),
@@ -678,7 +700,9 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
   return {
     kind: "Define",
     name,
+    nameSpan: exprSpan(ctx, node.var),
     params,
+    paramSpans: paramSpansOf(ctx, node),
     children: [...hoisted, ...children],
     loc,
   };
