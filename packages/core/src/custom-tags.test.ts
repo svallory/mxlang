@@ -128,7 +128,7 @@ describe("custom tag transforms", () => {
     });
   });
 
-  it("gives transform attrs, content, attribute tags, params, and var", () => {
+  it("gives transform attrs, content, attribute tags, and params", () => {
     let seen: TagCall | null = null;
     const capture: CustomTag = {
       attributeTags: { column: { repeatable: true } },
@@ -140,7 +140,7 @@ describe("custom tag transforms", () => {
     };
     lowerWithTags(
       [
-        "<table-of/rows|row| rows=input.rows>",
+        "<table-of|row| rows=input.rows>",
         "  <@column>a</@column>",
         "  <@column>b</@column>",
         "  body",
@@ -151,12 +151,47 @@ describe("custom tag transforms", () => {
     const call = seen as TagCall | null;
     expect(call?.name).toBe("table-of");
     expect(call?.params).toEqual(["row"]);
-    expect(call?.var).toBe("rows");
+    expect(call?.var).toBeNull();
     expect(call?.attributeTags.map((tag) => tag.name)).toEqual([
       "column",
       "column",
     ]);
     expect(call?.content?.children.length).toBeGreaterThan(0);
+  });
+
+  it("rejects `/var` on a template-backed custom tag call", () => {
+    const passthrough: CustomTag = {
+      transform: (call) => call.content?.children ?? [],
+    };
+    expect(() =>
+      lowerWithTags('\n<box/x name="a"><p>hi</p></box>\n', {
+        box: passthrough,
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "TranslateError",
+        message: expect.stringContaining(
+          "`/var` on `<box>` is not supported yet; a tag returns a value with `<return>` (planned)",
+        ),
+        line: 2,
+        column: 0,
+      }),
+    );
+  });
+
+  it("rejects `/var` on a sidecar custom tag call", () => {
+    expect(() =>
+      lowerWithTags('\n<icon/x name="check"/>\n', { icon: svgTag }),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "TranslateError",
+        message: expect.stringContaining(
+          "`/var` on `<icon>` is not supported yet; a tag returns a value with `<return>` (planned)",
+        ),
+        line: 2,
+        column: 0,
+      }),
+    );
   });
 
   it("expands nested source calls inside-out", () => {

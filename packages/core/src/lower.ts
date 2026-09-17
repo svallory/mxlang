@@ -690,8 +690,22 @@ function lowerCustomTag(
     rejectUnsupportedFields(ctx, node, `\`<${name}>\``, {
       attributeTags: true,
       params: true,
+      // `var: true` only opts out of this generic rejector's own wording;
+      // the dedicated check right below still rejects `/var` for every
+      // non-builtin call, with the message this construct actually needs.
       var: true,
     });
+    // `/var` on a custom tag call reads nothing today: a tag has no way to
+    // hand a value back to its caller until `<return>` ships. Left silent,
+    // `<icon/x name="a"/>` would drop the binding with no diagnostic at all.
+    // A core-owned built-in (e.g. `<try>`) is exempted here because it
+    // validates `/var` itself, with its own wording, inside its `transform`.
+    if (!isBuiltin && node.var) {
+      fail(
+        `\`/var\` on \`<${name}>\` is not supported yet; a tag returns a value with \`<return>\` (planned)`,
+        node,
+      );
+    }
     validateAttributeTagShape(node);
 
     const children = node.body?.body ?? [];
@@ -1087,6 +1101,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
   scratch.customTags = customTags;
   scratch.customTagStores = ctx.customTagStores;
   scratch.customTagDepth = ctx.customTagDepth;
+  scratch.customTagGensym = ctx.customTagGensym;
   scratch.templateStack = [];
   scratch.templateImports = new Map();
   // Absorbed rather than forwarded: every warning this walk raises is raised
@@ -1132,6 +1147,10 @@ registerTemplateLowerer((ctx: Ctx, tag: TemplateTag) => {
   );
   templateCtx.customTags = ctx.customTags;
   templateCtx.customTagDepth = ctx.customTagDepth;
+  // Shared by reference (see `Ctx.customTagGensym`'s own doc comment): a tag
+  // called from inside this template and one called at the caller's own
+  // scope must never mint the same serial.
+  templateCtx.customTagGensym = ctx.customTagGensym;
   // Shared by reference, which is both the hook gate and the store's scope: a
   // non-undefined `customTagStores` tells this nested `lower()` it is not the
   // file root (so it runs no `analyze` and no `finalize`), and a tag called
