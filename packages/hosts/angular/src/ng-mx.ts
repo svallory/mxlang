@@ -13,9 +13,9 @@ import {
   type GeneratedMapping,
   lower,
   type MxWarning,
-  type Node,
   newCtx,
   parseFragment,
+  printExpression,
   TranslateError,
 } from "@mxlang/core";
 import {
@@ -34,19 +34,6 @@ import {
   IMPORTS_ADVICE_CODE,
   type UsedTag,
 } from "./emitter.ts";
-
-/**
- * Prints a Marko-owned Babel expression node back to source text.
- *
- * Marko bundles its own Babel and these nodes belong to that instance, so its
- * generator is the one that can print them — and the export is `generator`,
- * not `generate`. `packages/core` keeps an identical private copy for its
- * whole-file path; this is the region path's, which cannot reach it.
- */
-function printExpression(node: Node): string {
-  const { generator } = require("@marko/compiler/internal/babel");
-  return generator(node, { concise: true }).code;
-}
 
 /**
  * The message C3's position check reports for a region Angular cannot place.
