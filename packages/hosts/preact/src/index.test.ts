@@ -10,6 +10,7 @@
  */
 
 import type { CustomTag } from "@mxlang/core";
+import { h } from "preact";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
@@ -375,15 +376,116 @@ describe("components", () => {
     expect(callee).toContain("(props as { children?: unknown }).children");
   });
 
-  it("rejects a dynamic tag name that has a body", () => {
-    expect(errorOf("<${input.tag}>hi</>")).toContain("dynamic tag name");
+  it("emits a dynamic tag name (with a body) through the inlined mxDynamic helper", () => {
+    // JSX's tag position is static and Marko's dynamic tag is polymorphic at
+    // run time (a tag-name string, a render function, or already-rendered
+    // content passed straight through — see the `nested-layout` oracle
+    // fixture), so this host inlines a small helper rather than binding the
+    // expression to a JSX tag position.
+    expect(markup("<${input.tag}>hi</>")).toBe(
+      "{mxDynamic(input.tag, { content: () => <><>hi</></> })}",
+    );
+    expect(compile("<${input.tag}>hi</>")).toContain("function mxDynamic(");
   });
 
-  it("treats a bare `<${expr}/>` as the placeholder Marko parses it as", () => {
-    // Marko's concise mode has no other shape for a top-level `${expr}` line:
-    // an expression-named tag with no attributes and no body *is* the
-    // placeholder, so it lowers to an interpolation rather than a tag.
-    expect(markup("<${input.tag}/>")).toBe("{input.tag}");
+  it("emits a bare `${expr}` line the same way, as a dynamic tag", () => {
+    // A bare concise-position `${expr}` line and `<${expr}/>` parse to the
+    // same Marko node and both are the dynamic-tag shape — see the "four
+    // Marko facts" in AGENTS.md.
+    expect(markup("<${input.tag}/>")).toBe("{mxDynamic(input.tag, {  })}");
+  });
+
+  it("passes attributes through on a dynamic tag", () => {
+    expect(markup("<${input.tag} n=1/>")).toBe(
+      '{mxDynamic(input.tag, { "n": 1 })}',
+    );
+  });
+
+  it("only inlines mxDynamic when a template actually uses a dynamic tag", () => {
+    expect(compile("<p>x</p>")).not.toContain("mxDynamic");
+  });
+});
+
+/**
+ * `mxDynamic`'s three value kinds, rendered for real through
+ * `preact-render-to-string` — Marko's own dynamic-tag polymorphism (a
+ * tag-name string, a render function/component, or already-rendered content
+ * such as a caller's `input.content`/`children`, passed straight through
+ * rather than called again). The `nested-layout` oracle fixture
+ * (`<main><${input.content}/></main>`) is the real-world case for the third
+ * kind: this host's `content` is JSX children, not a callable.
+ */
+describe("mxDynamic's three value kinds (rendered)", () => {
+  async function renderCompiled(
+    source: string,
+    input: unknown,
+  ): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const code = compilePreactMx(source, "/fixtures/dyn.mx").code;
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-dyn-"));
+    try {
+      const repoNodeModules = dirname(
+        dirname(require.resolve("preact/package.json")),
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      const entry = join(scratch, "dyn.tsx");
+      writeFileSync(entry, code);
+      // biome-ignore lint/suspicious/noExplicitAny: bridges the compiled module's real props type into `h`'s untyped generic
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: any;
+      };
+      return render(h(mod.default, input as Record<string, unknown>));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("renders a string target as an element with that tag name", async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+    const html = await renderCompiled('<${input.tag} class="x"/>', {
+      tag: "span",
+    });
+    expect(html).toBe('<span class="x"></span>');
+  });
+
+  it("renders a function target by calling it as a component", async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+    const html = await renderCompiled("<${input.tag} n=1/>", {
+      tag: (props: { n: number }) => `<em>${props.n}</em>`,
+    });
+    // A plain JS function used as a JSX tag renders through Preact's own
+    // function-component path, not through the html host's string return —
+    // `preact-render-to-string` calls it and renders whatever it returns.
+    expect(html).toContain("1");
+  });
+
+  it("passes already-rendered content straight through, rather than calling it again", async () => {
+    // The `nested-layout` oracle fixture's real shape: a caller's ordinary
+    // JSX children become `input.content`, and `<${input.content}/>` must
+    // render that tree as-is, not treat it as a component or tag name.
+    const html = await renderCompiled(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+      "<div><${input.content}/></div>",
+      { children: h("em", null) },
+    );
+    expect(html).toBe("<div><em></em></div>");
   });
 });
 
