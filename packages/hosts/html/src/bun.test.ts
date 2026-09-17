@@ -121,4 +121,44 @@ describe("@mxlang/html/bun", () => {
       rmSync(tagsDir, { recursive: true, force: true });
     }
   });
+
+  // A8, and the half a compile-only test cannot reach: a tag whose template
+  // calls its own discovered name becomes a module that imports itself. That
+  // is legal ESM (hoisted `function render` + live bindings), but "it compiles"
+  // says nothing about whether it terminates and nests correctly, so this
+  // renders a real tree three levels deep, each level passing a body.
+  test("a self-recursive discovered tag renders to full depth", async () => {
+    Bun.plugin(markoPlugin);
+
+    const base = join(import.meta.dirname, "..", "fixtures-marko");
+    const tagsDir = join(base, "tags");
+    const tagFile = join(tagsDir, "buntree.mx");
+    const page = join(base, "bun-recursive.mx");
+
+    mkdirSync(tagsDir, { recursive: true });
+    // `\${` keeps the MX placeholder literal: this string is template source,
+    // not a JS template to interpolate.
+    writeFileSync(
+      tagFile,
+      `<li>\${input.node.label}` +
+        "<if=input.node.kids>" +
+        "<ul><for|k| of=input.node.kids><buntree node=k/></for></ul>" +
+        "</if>" +
+        "</li>\n",
+    );
+    writeFileSync(page, "<ul><buntree node=input.root/></ul>\n");
+    try {
+      const mod = await import(page);
+      const render = mod.default as (input: unknown) => string;
+      const html = render({
+        root: { label: "a", kids: [{ label: "b", kids: [{ label: "c" }] }] },
+      });
+      expect(html).toBe(
+        "<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>",
+      );
+    } finally {
+      rmSync(page, { force: true });
+      rmSync(tagsDir, { recursive: true, force: true });
+    }
+  });
 });
