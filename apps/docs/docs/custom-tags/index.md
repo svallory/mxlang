@@ -44,7 +44,7 @@ For each file, MX walks toward the nearest `package.json`, collecting `tags/` di
 
 ## Continue
 
-- [Template tags](/custom-tags/templates/) — inputs, slots, hygiene, limits, and errors.
+- [Template tags](/custom-tags/templates/) — inputs, slots, returning a value with `<return>`, hygiene, limits, and errors.
 - [Sidecars](/custom-tags/sidecars/) — declarations, builders, transforms, and file-wide collection.
 - [Discovery](/custom-tags/discovery/) — directories, package configuration, invalidation, and diagnostics.
 - [API and diagnostics reference](/custom-tags/reference/) — the exported TypeScript contract and every custom-tag diagnostic.

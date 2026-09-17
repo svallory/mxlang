@@ -144,9 +144,11 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `params` | Tag parameter source text. |
 | `var` | `/var` binding source text, or `null`. |
 
-`/var` on a custom tag call (e.g. `<icon/x name="a"/>`) is a positioned
-compile error until `<return>` ships, since a tag has no way to hand a value
-back to its caller yet.
+`/var` on a custom tag call (e.g. `<counter/n start=1/>`) binds the value the
+tag's template hands back with `<return>` — see
+[Returning a value](./templates.md#returning-a-value). A tag with no template
+at all (a sidecar that builds IR) has no `<return>` to bind, so `/var` on one
+is a positioned compile error.
 
 ### Contexts and store
 
