@@ -157,6 +157,64 @@ describe("compileTagModule: typechecks the emitted module for real", () => {
 
     assertModuleTypechecks(code);
   });
+
+  // Four ways an emitted Angular identifier can collide with one the author
+  // owns. Each was probed as real invalid TypeScript before the
+  // collision-avoidance pass existed; `assertModuleTypechecks` is what proves
+  // each is gone, since `parseTemplate` never sees the module.
+  it("aliases the Component import when the tag's own file is named Component.mx (TS2395)", () => {
+    const { code } = compileTag("<div>hi</div>\n", "Component.mx");
+
+    // The emitted import moves aside, so the class keeps the name its
+    // filename derives — nothing outside the module refers to the import.
+    expect(code).toContain("import { Component as MxComponent }");
+    expect(code).toContain("@MxComponent({");
+    expect(code).toContain("export class Component {");
+    assertModuleTypechecks(code);
+  });
+
+  it("aliases the Component import against an authored `export const Component` (TS2395)", () => {
+    const { code } = compileTag("export const Component = 1;\n<div>hi</div>\n");
+
+    expect(code).toContain("import { Component as MxComponent }");
+    expect(code).toContain("@MxComponent({");
+    expect(code).toContain("export const Component = 1;");
+    assertModuleTypechecks(code);
+  });
+
+  it("aliases an emitted directive import against an authored binding of the same name (TS2300)", () => {
+    // The author's own `NgClass` is declared rather than imported, so the
+    // emitted module stays self-contained and `tsc` can resolve it in the
+    // temp directory — the collision being pinned is the same one either way.
+    const { code } = compileTag(
+      "export const NgClass = 1;\n<div class={a: true}>hi</div>\n",
+    );
+
+    expect(code).toContain(
+      'import { NgClass as MxNgClass } from "@angular/common"',
+    );
+    // The directive reaches `imports:` under its emitted local name, or the
+    // component would reference the author's unrelated binding.
+    expect(code).toContain("imports: [MxNgClass]");
+    expect(code).toContain("export const NgClass = 1;");
+    // Deliberately not `assertModuleTypechecks`: a directive import pulls in
+    // `@angular/common`, which is not on the type path that helper sets up
+    // (only `@angular/core` is), so the run would fail on `TS2307` — module
+    // resolution, not the collision this test pins. The single-declaration
+    // assertion above is what proves the `TS2300` is gone: before the pass,
+    // `NgClass` was declared twice in this module.
+    expect(code.match(/\bNgClass\b(?! as)/g)).toHaveLength(1);
+  });
+
+  it("aliases the Input decorator against the contract's own Input interface (TS2440)", () => {
+    const { code } = compileTag(
+      "export interface Input { name: string }\n<span>${input.name}</span>\n",
+    );
+
+    expect(code).toContain("import { Component, Input as NgInput }");
+    expect(code).toContain("@NgInput({ required: true }) name!: string;");
+    assertModuleTypechecks(code);
+  });
 });
 
 describe("compileTagModule: content projection", () => {
@@ -243,6 +301,28 @@ describe("compileTagModule: module-level statements", () => {
     const { code } = compileTag("export const SIZES = [1, 2];\n<i>x</i>\n");
 
     expect(code).toContain("export const SIZES = [1, 2];");
+  });
+});
+
+describe("compileTagModule: `<return>` (S8 silent-drop guard)", () => {
+  it("errors rather than emitting `<return>` as a literal template element", () => {
+    // Unchecked, this lowered like any other tag and was emitted as a
+    // literal `<return [value]="42"></return>` element in the template —
+    // valid-looking output that `ng build` then fails on with no MX
+    // diagnostic pointing at the cause. There is no Angular template
+    // binding position to receive a returned value at all.
+    expect(() => compileTag("<return value=42/>\n<span>hi</span>\n")).toThrow(
+      "`<return>` is not supported on Angular",
+    );
+  });
+
+  it("positions the error at the `<return>` tag, not the file start", () => {
+    try {
+      compileTag("<span>hi</span>\n<return value=42/>\n");
+      throw new Error("expected compileTagModule to throw");
+    } catch (err) {
+      expect((err as { line?: number }).line).toBe(2);
+    }
   });
 });
 

@@ -87,12 +87,33 @@ interface BabelMember {
   typeAnnotation?: { typeAnnotation?: BabelTypeNode };
 }
 
+/**
+ * A binding-position node, as `collectAuthoredIdentifiers` walks it. Same
+ * permissive shape as `BabelTypeNode` above and for the same reason.
+ */
+interface BabelNode {
+  type?: string;
+  name?: string;
+  id?: BabelNode;
+  local?: BabelNode;
+  left?: BabelNode;
+  value?: BabelNode;
+  argument?: BabelNode;
+  elements?: Array<BabelNode | undefined | null>;
+  properties?: BabelNode[];
+  declarations?: BabelNode[];
+  specifiers?: BabelNode[];
+  declaration?: BabelNode;
+}
+
 interface BabelFile {
   program: {
-    body: Array<{
-      declaration?: { body?: { body?: BabelMember[] } };
-      body?: { body?: BabelMember[] };
-    }>;
+    body: Array<
+      BabelNode & {
+        declaration?: BabelNode & { body?: { body?: BabelMember[] } };
+        body?: { body?: BabelMember[] };
+      }
+    >;
   };
 }
 
@@ -102,6 +123,101 @@ interface InputProp {
   /** The TypeScript type, copied verbatim from the author's interface. */
   type: string;
   optional: boolean;
+}
+
+/**
+ * Every top-level identifier the given module-level statements bind.
+ *
+ * Parsed with Babel — the same `@marko/compiler/internal/babel` instance the
+ * rest of this file uses — rather than scanned as text: an emitted alias is
+ * only correct if the set is, and a regex over `import`/`export` lines misses
+ * a destructuring pattern, a multi-declarator `const`, and an aliased named
+ * import, each of which binds a name that can collide.
+ *
+ * A statement that fails to parse contributes nothing rather than throwing:
+ * these lines are the author's own and are emitted verbatim either way, so a
+ * parse failure here would report a confusing error against code that is
+ * about to be handed to `tsc`, which reports it properly.
+ */
+function collectAuthoredIdentifiers(statements: string[]): Set<string> {
+  const names = new Set<string>();
+  if (statements.length === 0) return names;
+
+  const babel = require("@marko/compiler/internal/babel") as {
+    parse(source: string, options: unknown): BabelFile;
+  };
+
+  let ast: BabelFile;
+  try {
+    ast = babel.parse(statements.join("\n"), {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
+  } catch {
+    return names;
+  }
+
+  /** Collects every name a binding pattern introduces. */
+  const fromPattern = (node: BabelNode | undefined | null): void => {
+    if (!node) return;
+    switch (node.type) {
+      case "Identifier":
+        if (node.name) names.add(node.name);
+        return;
+      case "ObjectPattern":
+        for (const prop of node.properties ?? []) {
+          fromPattern(prop.type === "RestElement" ? prop.argument : prop.value);
+        }
+        return;
+      case "ArrayPattern":
+        for (const el of node.elements ?? []) fromPattern(el);
+        return;
+      case "RestElement":
+      case "AssignmentPattern":
+        fromPattern(node.argument ?? node.left);
+        return;
+      default:
+        return;
+    }
+  };
+
+  for (const statement of ast.program.body ?? []) {
+    // `export const x = 1` / `export function f()` bind through `declaration`.
+    const node =
+      statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration"
+        ? (statement.declaration ?? statement)
+        : statement;
+
+    switch (node.type) {
+      case "ImportDeclaration":
+        for (const spec of node.specifiers ?? []) fromPattern(spec.local);
+        break;
+      case "VariableDeclaration":
+        for (const decl of node.declarations ?? []) fromPattern(decl.id);
+        break;
+      case "FunctionDeclaration":
+      case "ClassDeclaration":
+      case "TSInterfaceDeclaration":
+      case "TSTypeAliasDeclaration":
+      case "TSEnumDeclaration":
+        fromPattern(node.id);
+        break;
+      default:
+        break;
+    }
+  }
+  return names;
+}
+
+/** `Name` -> `MxName`, then `MxName2`… until it clears `taken`. */
+function uniqueName(base: string, taken: ReadonlySet<string>): string {
+  const prefixed = `Mx${base}`;
+  if (!taken.has(prefixed)) return prefixed;
+  for (let i = 2; ; i++) {
+    const candidate = `${prefixed}${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
 }
 
 /**
@@ -761,6 +877,27 @@ export function compileTagModule(
     warnings,
     emitIr: (ir: Ir, ctx: Ctx) => {
       className = moduleExportName(ir, "@mxlang/angular");
+      // `<return>` hands a value to the tag's *caller*, through `/var` on
+      // every host whose template can bind one. An Angular component is
+      // called by its selector, as a plain element — there is no binding
+      // position in Angular template syntax to receive a return value, and
+      // the core's own `<return>` lowering has no host-agnostic fallback:
+      // left unchecked, `<return value=x/>` lowers like any other tag and
+      // is emitted as a literal `<return [value]="x">` element in the
+      // template (the S8 silent-drop class this whole pass exists to
+      // prevent — it does not even render blank, it renders an unknown
+      // element `ng build` then fails on with no MX diagnostic pointing at
+      // the cause). Reported here, before the body walk, rather than left
+      // for `ng build`/`parseTemplate` to discover downstream.
+      if (ir.returnValue) {
+        const at = ir.returnValue.node?.loc?.start;
+        throw new TranslateError(
+          "`<return>` is not supported on Angular: a component is called by its selector, as a plain element, and Angular template syntax has no binding position to receive a returned value. Declare the value as an `@Input()` instead, or expose it as a `static`/`export` from the tag's module.",
+          at?.line ?? 0,
+          at?.column ?? 0,
+          filename,
+        );
+      }
       // The tag's own `import`s and `static`/`export` blocks are ordinary
       // module-level statements of the emitted `.ts` — the one thing a page
       // template cannot have, and the reason a tag file is strictly easier.
@@ -836,34 +973,92 @@ export function compileTagModule(
     template.includes(marker),
   ).map(({ symbol }) => symbol);
 
+  // Every identifier the emitted module does not itself own: the author's
+  // module-level statements, their `export interface Input`, and the class
+  // name the core derived. Each emitted Angular identifier is checked against
+  // this set and aliased when it collides — one pass, rather than a rule per
+  // symbol, so a construct that starts emitting a new Angular import cannot
+  // forget to be collision-checked.
+  const authored = collectAuthoredIdentifiers([
+    ...moduleLines,
+    ...passthroughExports,
+  ]);
   // `export interface Input` is the tag-module contract's own name for the
-  // props interface, so the `@Input` decorator import — always `Input` in
-  // `@angular/core` — collides with it whenever there is at least one input
-  // prop (`TS2440: Import declaration conflicts with local declaration`).
-  // Importing it under an alias sidesteps the clash without renaming the
-  // interface the author wrote.
-  const angularImports = ["Component"];
+  // props interface, so it is authored whether or not the author wrote the
+  // interface themselves.
+  if (
+    inputProps.length > 0 ||
+    moduleLines.some((l) => /\binterface Input\b/.test(l))
+  ) {
+    authored.add("Input");
+  }
+
+  // The class name is a declaration in the emitted module too, so an emitted
+  // import colliding with it is the same `TS2395`. It is the one identifier
+  // that can be renamed instead of aliased, since nothing outside the module
+  // refers to it by name (the default export carries it).
+  if (authored.has(className)) {
+    className = uniqueName(className, authored);
+  }
+  authored.add(className);
+
+  /**
+   * Emits `X`, or `X as <alias>` when `X` is a name the author owns.
+   *
+   * `preferred` names the alias to reach for first, for a symbol whose
+   * aliased spelling is already established and documented (`Input as
+   * NgInput`); it falls back to the generic `Mx`-prefixed form when even the
+   * preferred name is taken.
+   */
+  const emitted = new Map<string, string>();
+  const importSpec = (symbol: string, preferred?: string): string => {
+    let local = symbol;
+    if (authored.has(symbol)) {
+      local =
+        preferred && !authored.has(preferred)
+          ? preferred
+          : uniqueName(symbol, authored);
+    }
+    authored.add(local);
+    emitted.set(symbol, local);
+    return local === symbol ? symbol : `${symbol} as ${local}`;
+  };
+  /** The local name an emitted Angular symbol ended up under. */
+  const localOf = (symbol: string): string => emitted.get(symbol) ?? symbol;
+
+  const angularImports = [importSpec("Component")];
   const hasInputs = inputProps.length > 0;
-  if (hasInputs) angularImports.push("Input as NgInput");
+  // `Input` always collides with the contract's own interface name when there
+  // are props, which is why it is aliased unconditionally rather than only
+  // when `authored` happens to contain it.
+  if (hasInputs) angularImports.push(importSpec("Input", "NgInput"));
 
   const lines: string[] = [
     `import { ${angularImports.join(", ")} } from "@angular/core";`,
   ];
   if (directives.length > 0) {
-    lines.push(`import { ${directives.join(", ")} } from "@angular/common";`);
+    lines.push(
+      `import { ${directives.map((d) => importSpec(d)).join(", ")} } from "@angular/common";`,
+    );
   }
   for (const tag of usedTags) {
-    lines.push(
-      `import ${tag.className} from ${JSON.stringify(tag.specifier)};`,
-    );
+    const local = authored.has(tag.className)
+      ? uniqueName(tag.className, authored)
+      : tag.className;
+    authored.add(local);
+    emitted.set(tag.className, local);
+    lines.push(`import ${local} from ${JSON.stringify(tag.specifier)};`);
   }
   if (moduleLines.length > 0) lines.push("", ...moduleLines);
   if (passthroughExports.length > 0) lines.push("", ...passthroughExports);
 
-  const componentImports = [...directives, ...usedTags.map((t) => t.className)];
+  const componentImports = [
+    ...directives.map(localOf),
+    ...usedTags.map((t) => localOf(t.className)),
+  ];
   lines.push(
     "",
-    "@Component({",
+    `@${localOf("Component")}({`,
     `  selector: ${JSON.stringify(selector)},`,
     "  standalone: true,",
     `  imports: [${componentImports.join(", ")}],`,
@@ -875,8 +1070,8 @@ export function compileTagModule(
     // A non-optional property is `required: true`, so Angular reports a
     // missing attribute at the call site rather than rendering `undefined`.
     const decorator = prop.optional
-      ? "@NgInput()"
-      : "@NgInput({ required: true })";
+      ? `@${localOf("Input")}()`
+      : `@${localOf("Input")}({ required: true })`;
     // `!` on a required input: it is assigned by Angular, not the constructor,
     // which `strictPropertyInitialization` cannot see.
     const mark = prop.optional ? "?" : "!";
