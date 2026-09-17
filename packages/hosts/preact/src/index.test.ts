@@ -548,3 +548,199 @@ describe("import precedence over registered custom tags", () => {
     expect(code).toContain("mx-marker");
   });
 });
+
+/**
+ * `<return>` and `/var` on the JSX hosts (acceptance C3).
+ *
+ * The call to a returning unit is emitted as an ordinary *function call*,
+ * not as a JSX element, and that is the whole point: a JSX element is a
+ * description of a call the runtime makes later, so `<Counter/>` in
+ * expression position would never hand the `{ value, output }` pair back.
+ */
+describe("a unit that returns a value", () => {
+  const counterSource = [
+    "export interface Input { start: number }",
+    "<span>${input.start}</span>",
+    "<return value=input.start + 1/>",
+  ].join("\n");
+
+  const counter: CustomTag = {
+    template: { filename: "/fixtures/tags/counter.mx", source: counterSource },
+  } as CustomTag;
+
+  const callerCode = (source: string): string =>
+    compilePreactMx(source, "/fixtures/page.mx", {
+      customTags: { counter },
+    }).code;
+
+  it("returns { value, output } instead of markup alone", () => {
+    const code = compilePreactMx(
+      counterSource,
+      "/fixtures/tags/counter.mx",
+    ).code;
+
+    expect(code).toContain("return { value: input.start + 1, output: (<>");
+  });
+
+  it("evaluates the call above the return and binds the /var", () => {
+    const code = callerCode("<counter/n start=1/>\n<p>${n}</p>");
+
+    // Invariant §7.5-4's sequence, in the one place this target has a
+    // statement position: the call, then the binding, then the output where
+    // the call stood.
+    const call = code.indexOf("const $mx_ret0 = $mx_Counter1(");
+    const bind = code.indexOf("const n = $mx_ret0.value;");
+    const ret = code.indexOf("return (<>");
+    expect(call).toBeGreaterThan(-1);
+    expect(bind).toBeGreaterThan(call);
+    expect(ret).toBeGreaterThan(bind);
+    expect(code).toContain("{$mx_ret0.output}");
+    expect(code).toContain("<p>{n}</p>");
+  });
+
+  it("unwraps the output when the call binds no /var", () => {
+    const code = callerCode("<counter start=1/>");
+
+    expect(code).toContain('{$mx_Counter1({ "start": 1 }).output}');
+    expect(code).not.toContain("$mx_ret");
+  });
+
+  it("gives each /var call site its own temp", () => {
+    const code = callerCode(
+      "<counter/a start=1/>\n<counter/b start=2/>\n<p>${a}${b}</p>",
+    );
+
+    expect(code).toContain("const a = $mx_ret0.value;");
+    expect(code).toContain("const b = $mx_ret1.value;");
+  });
+
+  // Round 1, findings 1 and 2. Every structural kind on this target is an
+  // expression, so a callback scope has no statement position — and hoisting
+  // the call to the component body took it out of the scope it was written
+  // in: inside a `<for>` it read a row binding that did not exist there and
+  // ran once for a body rendered N times. Invariant §7.5-8 rejects the
+  // escape rather than emitting it.
+  it("rejects /var inside <for>, naming the tag as written", () => {
+    expect(() =>
+      callerCode("<for|i| of=[1,2]><counter/n start=i/><p>${n}</p></for>"),
+    ).toThrow(/`\/var` on `<counter>` inside `<for>`\/`<if>` is not supported/);
+  });
+
+  it("rejects /var inside <if>", () => {
+    expect(() =>
+      callerCode("<if=true><counter/n start=1/><p>${n}</p></if>"),
+    ).toThrow(/is not supported on Preact yet/);
+  });
+
+  it("still allows a call with no /var inside <for>", () => {
+    // Only the *binding* is refused; the call itself is an ordinary one and
+    // its output renders per row.
+    const code = callerCode("<for|i| of=[1,2]><counter start=i/></for>");
+
+    expect(code).toContain(".output}");
+  });
+
+  it("rejects a hook in a unit that declares <return>", () => {
+    // A returning unit is invoked as a plain function, so its hooks would
+    // bind to the *calling* component's hook list rather than its own.
+    expect(() =>
+      compilePreactMx(
+        [
+          'import { useState } from "preact/hooks"',
+          "<const/s=useState(0)/>",
+          "<p>x</p>",
+          "<return value=1/>",
+        ].join("\n"),
+        "/fixtures/tags/hooky.mx",
+      ),
+    ).toThrow(/`useState` cannot be used in a tag that declares `<return>`/);
+  });
+
+  // Round 2, finding A. The first guard matched the module as a
+  // double-quoted substring of the printed import and tested the *local*
+  // binding name, so each of these three spellings walked straight past it.
+  // They are now decided on the parsed statement: the source's own value,
+  // and the name the module exports rather than the name this file calls it.
+  it.each([
+    ["a single-quoted specifier", "import { useState } from 'preact/hooks'"],
+    ["a namespace import", 'import * as h from "preact/hooks"'],
+    ["an aliased import", 'import { useState as us } from "preact/hooks"'],
+  ])("rejects a hook reached through %s", (_what, statement) => {
+    expect(() =>
+      compilePreactMx(
+        [statement, "<p>x</p>", "<return value=1/>"].join("\n"),
+        "/fixtures/tags/hooky.mx",
+      ),
+    ).toThrow(/cannot be used in a tag that declares `<return>`/);
+  });
+
+  it("names the hook by its exported name when it is aliased", () => {
+    // `us` is what the author reads in this file, but `useState` is what
+    // identifies the hook — so the message carries both.
+    expect(() =>
+      compilePreactMx(
+        [
+          'import { useState as us } from "preact/hooks"',
+          "<p>x</p>",
+          "<return value=us(0)/>",
+        ].join("\n"),
+        "/fixtures/tags/hooky.mx",
+      ),
+    ).toThrow(/`useState` \(imported as `us`\)/);
+  });
+
+  it("leaves a non-hook export of a hook module alone", () => {
+    // The module is on the list, but `createContext` is not a hook: the test
+    // is the imported *name*, not where it came from.
+    const code = compilePreactMx(
+      [
+        'import { createContext } from "preact/compat"',
+        "<p>x</p>",
+        "<return value=1/>",
+      ].join("\n"),
+      "/fixtures/tags/ctx.mx",
+    ).code;
+
+    expect(code).toContain("return { value: 1, output: (<>");
+  });
+
+  it("leaves a hook alone in a unit that does not return", () => {
+    const code = compilePreactMx(
+      [
+        'import { useState } from "preact/hooks"',
+        "<const/s=useState(0)/>",
+        "<p>x</p>",
+      ].join("\n"),
+      "/fixtures/tags/hooky.mx",
+    ).code;
+
+    expect(code).toContain("const s = useState(0);");
+  });
+
+  it("leaves a local use-prefixed helper alone", () => {
+    // The guard keys on the *module* a hook comes from, not the name alone:
+    // a local `useTotal` is ordinary code.
+    const code = compilePreactMx(
+      [
+        'import { useTotal } from "./helpers.ts"',
+        "<p>x</p>",
+        "<return value=useTotal()/>",
+      ].join("\n"),
+      "/fixtures/tags/total.mx",
+    ).code;
+
+    expect(code).toContain("return { value: useTotal(), output: (<>");
+  });
+
+  it("accepts <return> in a page, where it used to be an error", () => {
+    // This host rejected `<return>` outright while a tag template was
+    // expanded into its caller. Under the unit model every `.mx` file is a
+    // module with a caller, so a page is not a special case.
+    const code = compilePreactMx(
+      "<p>x</p>\n<return=42/>",
+      "/fixtures/p.mx",
+    ).code;
+
+    expect(code).toContain("return { value: 42, output: (<>");
+  });
+});

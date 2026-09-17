@@ -655,6 +655,63 @@ export function importBindings(line: string): string[] {
   }
 }
 
+/** One name an `import` statement brings in, and how it was written. */
+export interface ImportedName {
+  /**
+   * The name as exported by the *module* — `useState` for both
+   * `import { useState }` and `import { useState as us }`.
+   *
+   * `"default"` for a default import, and `"*"` for a namespace import,
+   * where every export is reachable through the local object and no single
+   * imported name exists.
+   */
+  imported: string;
+  /** The binding this file refers to it by, which may be an alias. */
+  local: string;
+}
+
+/**
+ * What an `import` statement brings in, with its module and both names.
+ *
+ * `importBindings` answers only "which locals does this bind", which is all
+ * tag routing needs. A caller deciding something about *what was imported* —
+ * the JSX hosts' hook guard — needs the module's own spelling of the name and
+ * the source it came from, and neither survives in the local binding.
+ *
+ * Parsed, never matched against the printed text. The statement's source may
+ * be single- or double-quoted, the import may be a namespace or an alias, and
+ * a substring test over the printed line got all three wrong: measured, a
+ * guard written that way accepted `'preact/hooks'`, `import * as h from …`
+ * and `{ useState as us }` alike.
+ */
+export function importedNames(
+  line: string,
+): { source: string; names: ImportedName[] } | null {
+  try {
+    const file = markoBabel().parse(line, { sourceType: "module" });
+    const declaration = file.program.body[0] as Node;
+    if (declaration?.type !== "ImportDeclaration") return null;
+    const source = declaration.source?.value;
+    if (typeof source !== "string") return null;
+    return {
+      source,
+      names: declaration.specifiers.map((specifier: Node) => ({
+        imported:
+          specifier.type === "ImportDefaultSpecifier"
+            ? "default"
+            : specifier.type === "ImportNamespaceSpecifier"
+              ? "*"
+              : // A string-literal specifier (`import { "a-b" as ab }`) has a
+                // `value` rather than a `name`.
+                (specifier.imported?.name ?? specifier.imported?.value ?? ""),
+        local: specifier.local?.name ?? "",
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** True when a child list holds anything that renders. */
 export function hasContent(children: Node[]): boolean {
   return children.some((child: Node) => {

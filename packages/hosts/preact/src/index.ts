@@ -63,9 +63,11 @@ import {
   type HostDeclarations,
   type Ir,
   type IrNode,
+  importedNames,
   type MappedCode,
   moduleExportName,
   type RawSourceMap,
+  TranslateError,
 } from "@mxlang/core";
 import {
   componentAlias,
@@ -188,6 +190,14 @@ export function emitModuleWithMappings(
   drive(emitter, markup);
   const body = emitter.result();
 
+  // A `/var` call site needs its call evaluated above the `return`, and the
+  // emitter collects those while walking (see `varStatements`). Appended
+  // after the author's own `<const>`/`<define>` statements, in the order the
+  // calls were met, so a binding is declared before the markup that reads it.
+  for (const statement of emitter.varStatements) {
+    statements.push(concatMapped(statement));
+  }
+
   const lines: string[] = [`/** @jsxImportSource ${target.jsxImportSource} */`];
   const imports = importLines(emitter.runtimeImports, target);
   if (imports.length > 0) lines.push(...imports);
@@ -245,12 +255,118 @@ export function emitModuleWithMappings(
   const statementCode = concatMapped(
     ...statements.flatMap((statement) => ["  ", statement, "\n"]),
   );
+  // A unit that declares `<return>` hands back `{ value, output }` rather
+  // than its markup alone (design §3.3), so the call site can bind the value
+  // with `/var` and still render the output. `output` is the element, not a
+  // string: on this target that is what "the rendered thing" is.
+  if (ir.returnValue) {
+    rejectHooksInReturningUnit(ir);
+    return concatMapped(
+      prefix,
+      statementCode,
+      `  return { value: ${ir.returnValue.code}, output: (<>`,
+      body,
+      "</>) };\n}\n",
+    );
+  }
+
   return concatMapped(
     prefix,
     statementCode,
     "  return (<>",
     body,
     "</>);\n}\n",
+  );
+}
+
+/**
+ * The hook modules a returning unit may not import from.
+ *
+ * Deliberately a list of module specifiers rather than a name test alone: a
+ * local helper called `useTotal` is ordinary code, while `useState` imported
+ * from `preact/hooks` is the thing that breaks.
+ */
+const HOOK_MODULES = [
+  "preact/hooks",
+  "preact/compat",
+  "react",
+  "hono/jsx",
+] as const;
+
+type HookModule = (typeof HOOK_MODULES)[number];
+
+/**
+ * Refuses a returning unit that imports a hook (round 1, finding 2).
+ *
+ * A returning unit is **invoked as a plain function**, not mounted as a
+ * component — that is what lets it hand `{ value, output }` back, since a JSX
+ * element is only a description of a call the runtime makes later. The cost
+ * is that it has no component identity of its own: Preact's and React's hook
+ * dispatchers bind to the *calling* component's hook list, so a `useState`
+ * inside the unit silently becomes a hook of the caller. It is then
+ * order-dependent, breaks outright when the call is conditional or looped,
+ * and `useContext` reads the caller's position in the tree.
+ *
+ * All of that is invisible at run time until it corrupts state, so it is a
+ * compile error here. A unit that needs hooks should not return a value;
+ * Solid is unaffected, because its callback prop keeps the component a
+ * component.
+ */
+function rejectHooksInReturningUnit(ir: Ir): void {
+  for (const node of ir.imports) {
+    // Parsed, not matched against the printed statement. A substring test
+    // over `node.code` was wrong three ways at once, all measured: it missed
+    // `'preact/hooks'` (single-quoted), and — reading `node.bindings`, which
+    // holds *local* names — it missed `import * as h from "preact/hooks"`
+    // and `import { useState as us }`, since neither local is `use`-prefixed.
+    const parsed = importedNames(node.code);
+    if (!parsed || !HOOK_MODULES.includes(parsed.source as HookModule)) {
+      continue;
+    }
+
+    const hook = parsed.names.find(({ imported }) => isHookName(imported));
+    if (hook) {
+      // Named by the module's own spelling, since that is what identifies the
+      // hook; an alias is reported alongside so the message points at
+      // something the author can find in their own file.
+      throw hookError(
+        hook.imported === hook.local
+          ? `\`${hook.imported}\``
+          : `\`${hook.imported}\` (imported as \`${hook.local}\`)`,
+        node,
+      );
+    }
+
+    // A namespace import reaches every hook the module has through one local
+    // object (`h.useState(0)`), so there is no imported name to test. The
+    // whole namespace is refused rather than scanning the template for member
+    // reads: this is a hook module, and a returning unit has no business
+    // holding a handle to one.
+    const namespace = parsed.names.find(({ imported }) => imported === "*");
+    if (namespace) {
+      throw hookError(
+        `the \`${namespace.local}\` namespace from \`${parsed.source}\``,
+        node,
+      );
+    }
+  }
+}
+
+/** Whether a name the module exports is one of its hooks. */
+function isHookName(imported: string): boolean {
+  return /^use[A-Z]/.test(imported);
+}
+
+/** The one diagnostic both branches above raise, worded once. */
+function hookError(
+  what: string,
+  node: Extract<IrNode, { kind: "Import" }>,
+): TranslateError {
+  return new TranslateError(
+    `${what} cannot be used in a tag that declares \`<return>\`: a returning unit is called as a plain function, so its hooks would bind to the calling component's hook list rather than its own. Drop the \`<return>\` or move the hook to the caller.`,
+    node.loc.line,
+    node.loc.column,
+    node.loc.file,
   );
 }
 
