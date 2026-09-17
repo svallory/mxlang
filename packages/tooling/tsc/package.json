@@ -23,6 +23,9 @@
     "@volar/typescript": "2.4.28"
   },
   "peerDependencies": {
+    "typescript": ">=5.9.0 <7"
+  },
+  "devDependencies": {
     "typescript": "5.9.3"
   }
 }

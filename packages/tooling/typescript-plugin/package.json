@@ -31,7 +31,7 @@
   },
   "peerDependencies": {
     "@astrojs/language-server": "2.16.16",
-    "typescript": "5.9.3"
+    "typescript": ">=5.9.0 <7"
   },
   "peerDependenciesMeta": {
     "@astrojs/language-server": {
@@ -39,6 +39,7 @@
     }
   },
   "devDependencies": {
-    "@astrojs/language-server": "2.16.16"
+    "@astrojs/language-server": "2.16.16",
+    "typescript": "5.9.3"
   }
 }
