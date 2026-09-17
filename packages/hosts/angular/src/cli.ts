@@ -164,17 +164,19 @@ function runMap(args: string[]): number {
   const mapPath = `${file}.map`;
   try {
     const map = readMap(mapPath);
-    const source = resolvePosition(map, line, column);
-    // A real position when the sidecar carried one (a `.ng.mx`'s does); the
-    // bare source file otherwise (a page's map has no `mappings` yet).
+    const resolved = resolvePosition(map, line, column);
+    // `file:line:col` when the position resolves, so the output is the same
+    // shape the argument took and an editor can jump to it.
     console.log(
-      source.line !== undefined
-        ? `${source.file}:${source.line}:${source.column}`
-        : source.file,
+      resolved.line !== undefined
+        ? `${resolved.file}:${resolved.line}:${resolved.column}`
+        : resolved.file,
     );
-    if (!source.hasFineGrainedMapping) {
+    if (resolved.line === undefined) {
       console.log(
-        "no fine-grained mapping yet (mappings empty); see the header comment",
+        resolved.hasFineGrainedMapping
+          ? "that position came from no source text (generated punctuation)"
+          : "no fine-grained mapping in this sidecar (mappings empty)",
       );
     }
     return 0;

@@ -14,16 +14,27 @@ import {
   type CompileResult,
   type CustomTag,
   compileSource,
+  type GeneratedMapping,
   type MxWarning,
   TranslateError,
 } from "@mxlang/core";
 import { angularDeclarations, emitTemplate, type UsedTag } from "./emitter.ts";
+import { encodeMappings } from "./mapping.ts";
 
 export {
   angularDeclarations,
   TranslateError,
   type UsedTag,
 } from "./emitter.ts";
+export {
+  type LineColumn,
+  lineColumnAt,
+  lookupMapping,
+  offsetAt,
+  offsetMappings,
+  resolveLineColumn,
+  sourceOffsetFor,
+} from "./mapping.ts";
 export {
   type CompileNgMxOptions,
   type CompileNgMxResult,
@@ -61,6 +72,15 @@ export interface CompileOptions {
 export interface CompileAngularResult extends CompileResult {
   warnings: MxWarning[];
   /**
+   * Every position in the emitted template that came from the `.mx` source,
+   * generated offsets relative to `code`.
+   *
+   * This is what the `.ng.mx` diagnostics path consumes: Angular reports a
+   * template diagnostic as an offset into the template string, and
+   * `sourceOffsetFor` (`./mapping.ts`) turns it back into a source offset.
+   */
+  mappings: GeneratedMapping[];
+  /**
    * Every MX tag this template called, in source order, as the caller's own
    * TypeScript must name it: the class the tag's emitted module exports and
    * that module's relative import path.
@@ -75,9 +95,12 @@ export interface CompileAngularResult extends CompileResult {
 /**
  * Compiles a `.mx` page template to an Angular template string.
  *
- * The returned `map` is an identity placeholder, matching `@mxlang/html`'s
- * own `compile()`: this emitter builds text directly rather than printing an
- * AST, so there are no node positions to derive real mappings from yet.
+ * The returned `map` is a real source map v3, and `mappings` carries the same
+ * information as byte spans: the emitter records a span for every run of
+ * source-derived text it writes (tag and attribute names, every expression),
+ * so a position inside the emitted template resolves back to the `.mx`.
+ * Text runs are deliberately unmapped — see `./mapping.ts` for the
+ * whole-to-whole rule that keeps this correct under escaping.
  */
 export function compile(
   source: string,
@@ -86,6 +109,7 @@ export function compile(
 ): CompileAngularResult {
   const warnings: MxWarning[] = options.warnings ?? [];
   const usedTags: UsedTag[] = [];
+  const mappings: GeneratedMapping[] = [];
   const result = compileSource(source, filename, angularDeclarations, {
     customTags: options.customTags,
     warnings,
@@ -110,10 +134,24 @@ export function compile(
         filename,
         usedTags,
         options.tagSelectorPrefix,
+        false,
+        mappings,
       );
     },
   });
-  return { ...result, warnings, usedTags };
+  return {
+    ...result,
+    // A real v3 map, replacing the identity placeholder `compileSource`
+    // returns: the emitter recorded a span per source-derived run, and those
+    // encode directly into the v3 `mappings` field.
+    map: {
+      ...result.map,
+      mappings: encodeMappings(result.code, source, mappings),
+    },
+    mappings,
+    warnings,
+    usedTags,
+  };
 }
 
 /** `compile()` over a file on disk. */

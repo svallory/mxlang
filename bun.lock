@@ -254,6 +254,7 @@
         "mx-angular": "./dist/bin.js",
       },
       "dependencies": {
+        "@jridgewell/sourcemap-codec": "1.6.0",
         "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",
         "@mxlang/parser": "workspace:*",

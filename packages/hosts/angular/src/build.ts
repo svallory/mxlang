@@ -537,7 +537,14 @@ export function compileOne(
     // (round 1 R-b): an unconditional map write on every compile — even a
     // no-op recompile — is itself a self-triggering fs event.
     const mapContent = `${JSON.stringify(
-      buildMap(sourceBasename, basename(outputPath), result.map),
+      buildMap(
+        sourceBasename,
+        basename(outputPath),
+        result.map,
+        // The header is prepended to the emitted template, so the sidecar's
+        // generated lines are offset by however many lines it occupies.
+        header.split("\n").length - 1,
+      ),
       null,
       2,
     )}\n`;
