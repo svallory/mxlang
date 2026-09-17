@@ -1463,3 +1463,151 @@ describe("Define/For param and name spans", () => {
     expect(exprSpan(ctx, noLocVar)).toBeUndefined();
   });
 });
+
+/**
+ * Event attributes (decision 101).
+ *
+ * The rule under test is a *contract*, not an emission: core resolves one DOM
+ * event name from two source spellings and hands it to every host, so the
+ * assertions here are about `kind`, `event` and position. What each host then
+ * emits is phase B, and is asserted by that host's own suite and the oracles.
+ */
+describe("event attributes", () => {
+  it("lowers `on<Name>` on an element to an event attr carrying the DOM name", () => {
+    const ir = lowerSource("<button onClick=f>x</button>\n");
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "event", name: "onClick", event: "click", value: { code: "f" } },
+    ]);
+  });
+
+  it("resolves the three `dblclick` spellings to one DOM name", () => {
+    // The portability claim, made checkable: two of these are correct MX and
+    // collapse to the same event, so every host emits the same binding from
+    // either. `onDoubleClick` is the React spelling and is *not* an alias —
+    // it lowers to what it literally says (below).
+    const ir = lowerSource(
+      "<button onDblClick=f>x</button>\n<button on-dblclick=f>y</button>\n",
+    );
+    const [first, second] = ir.body.filter(
+      (node): node is Extract<IrNode, { kind: "Element" }> =>
+        node.kind === "Element",
+    );
+    expect(first?.attrs).toMatchObject([
+      { kind: "event", name: "onDblClick", event: "dblclick" },
+    ]);
+    expect(second?.attrs).toMatchObject([
+      { kind: "event", name: "on-dblclick", event: "dblclick" },
+    ]);
+  });
+
+  it("golden: the IR of the three `dblclick`-ish spellings", () => {
+    // The whole contract in one table: what each source spelling hands a host.
+    // Two are correct MX and collapse onto `dblclick`, so every host emits the
+    // same binding from either; the React spelling lowers to what it literally
+    // says. A change to any cell here is a change to the cross-host contract
+    // and must be a deliberate edit of this golden.
+    const ir = lowerSource(
+      "<button onDblClick=f>a</button>\n" +
+        "<button on-dblclick=f>b</button>\n" +
+        "<button onDoubleClick=f>c</button>\n",
+      fakeDeclarations(),
+    );
+    const events = ir.body
+      .filter(
+        (node): node is Extract<IrNode, { kind: "Element" }> =>
+          node.kind === "Element",
+      )
+      .flatMap((element) => element.attrs)
+      .map((attr) =>
+        attr.kind === "event"
+          ? { name: attr.name, kind: attr.kind, event: attr.event }
+          : { name: "?", kind: attr.kind, event: "?" },
+      );
+    expect(events).toEqual([
+      { name: "onDblClick", kind: "event", event: "dblclick" },
+      { name: "on-dblclick", kind: "event", event: "dblclick" },
+      { name: "onDoubleClick", kind: "event", event: "doubleclick" },
+    ]);
+  });
+
+  it("carries `on-<exact>` through verbatim for a custom event", () => {
+    const ir = lowerSource("<div on-my-event=f>x</div>\n");
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "event", name: "on-my-event", event: "my-event" },
+    ]);
+  });
+
+  it("records a nameSpan covering the attribute name", () => {
+    const source = "<button onClick=f>x</button>\n";
+    const ir = lowerSource(source);
+    const attr = find(ir.body, "Element").attrs[0];
+    if (attr?.kind !== "event") throw new Error("expected an event attr");
+    expect(
+      source.slice(attr.nameSpan.sourceStart, attr.nameSpan.sourceEnd),
+    ).toBe("onClick");
+  });
+
+  it("lowers an attribute method on an element to an event with an arrow value", () => {
+    // A host with no runtime rejects the method form outright; this rule is
+    // about the shape the *runtime* hosts receive, so the fake allows it as
+    // Solid/Preact do.
+    const ir = lowerSource(
+      "<button onClick() { go() }>x</button>\n",
+      fakeDeclarations({ resolveAttributeMethod: () => true }),
+    );
+    const attr = find(ir.body, "Element").attrs[0];
+    expect(attr).toMatchObject({
+      kind: "event",
+      name: "onClick",
+      event: "click",
+    });
+    if (attr?.kind !== "event") throw new Error("expected an event attr");
+    expect(attr.value.code).toContain("go()");
+  });
+});
+
+/**
+ * The `isElement` gate: `on*` is a DOM event only on a native element.
+ *
+ * Everywhere else it is the callee's own prop contract — a component's
+ * `onSelect` is a prop its author declared, exactly as `class` is not renamed
+ * on a component call — so it must stay `dynamic`. Each case below is a
+ * distinct lowering path, which is why they are not one parameterised test.
+ */
+describe("`on*` outside a native element stays a prop", () => {
+  it("stays dynamic on a component call", () => {
+    const ir = lowerSource(
+      "<define/Row>x</define>\n<Row onClick=f/>\n",
+      fakeDeclarations({ isElement: (name) => name !== "Row" }),
+    );
+    expect(find(ir.body, "Component").attrs).toMatchObject([
+      { kind: "dynamic", name: "onClick" },
+    ]);
+  });
+
+  it("stays dynamic on a `<define>` call", () => {
+    const ir = lowerSource(
+      "<define/Card>x</define>\n<Card onClick=f/>\n",
+      fakeDeclarations({ isElement: (name) => name !== "Card" }),
+    );
+    expect(find(ir.body, "Component").attrs).toMatchObject([
+      { kind: "dynamic", name: "onClick" },
+    ]);
+  });
+
+  it("stays dynamic on a host tag", () => {
+    // The gap the design note found by reading the call sites: `lowerAttrs`
+    // defaults `on` to `"element"`, and a `HostTag` took that default — so a
+    // gate keyed on `on` alone would wrongly make `<try onClick=f>` an event.
+    const ir = lowerSource(
+      "<signal onClick=f>body</signal>\n",
+      fakeDeclarations({
+        claimsTag: (name) => name === "signal",
+        resolveHostTag: (name) => ({ seen: name }),
+      }),
+    );
+    expect(find(ir.body, "HostTag").tag.attrs).toMatchObject([
+      { kind: "dynamic", name: "onClick" },
+    ]);
+  });
+});

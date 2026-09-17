@@ -148,6 +148,30 @@ export type Attr =
       value: Expr;
       nameSpan: SourceSpan;
     } & IrBase)
+  /**
+   * An event handler on an *element*: `onClick=fn` or `on-my-event=fn`.
+   *
+   * `event` is the resolved DOM event name — everything after `on`,
+   * lowercased, for the `on<Name>` form; verbatim after `on-` for the
+   * `on-<exact>` form — so a host emits its own spelling from one source of
+   * truth rather than re-deriving it from `name`.
+   *
+   * A handler on a *component call* is never this kind: it stays an ordinary
+   * `dynamic` prop, because a component's `onSelect` is its author's prop
+   * contract, not a DOM event (the same reason `class` is not renamed on a
+   * component call). The same holds for a `<define>` call, a custom tag, a
+   * host tag (`<try onClick=fn>`) and an attribute tag — only a native
+   * element lowers to this kind.
+   */
+  | ({
+      kind: "event";
+      /** The source spelling, for diagnostics: `onClick`, `on-my-event`. */
+      name: string;
+      /** The DOM event name: `click`, `my-event`. */
+      event: string;
+      value: Expr;
+      nameSpan: SourceSpan;
+    } & IrBase)
   | ({ kind: "spread"; value: Expr } & IrBase);
 
 /**

@@ -258,11 +258,20 @@ function withPrelude<T>(ctx: Ctx, run: () => T): [T, Ctx["prelude"]] {
   return [result, prelude];
 }
 
+/**
+ * An event attribute: `on<Name>` (camelCase, lowercased to the DOM name) or
+ * `on-<exact>` (verbatim, for a custom event or a name camelCase cannot
+ * spell). Marko's own `isEventHandler` regex, deliberately identical — a
+ * parity target must not re-derive a rule it can copy.
+ */
+const EVENT_ATTR = /^on[A-Z-]/;
+
 /** Resolves one attribute of an element or component call. */
 function lowerAttr(
   ctx: Ctx,
   attr: Node,
   on: "element" | "component" = "element",
+  isElement = true,
 ): Attr {
   const loc = posOf(attr);
   const nameSpan = attrNameSpan(ctx, attr);
@@ -279,6 +288,30 @@ function lowerAttr(
         attr,
       );
     }
+  }
+
+  // An event attribute is `on<Name>` or `on-<exact>`, and only on a native
+  // element: on a component call, a `<define>` call, a custom tag, a host tag
+  // (`<try onClick=fn>`) or an attribute tag, `on*` is the author's own prop
+  // contract and stays a `dynamic` prop. `on` is a real signal for the three
+  // `HostDeclarations` hooks below and must keep its two cases, so the element
+  // gate travels as its own boolean rather than a third `on` value.
+  //
+  // The attribute-method form (`onClick() { … }`) reaches here too: the check
+  // above lets it through on a host that allows methods, and `exprOf` gives
+  // the same arrow-function `Expr` the handler-prop form produces, so a host
+  // implements one branch and not two.
+  if (isElement && EVENT_ATTR.test(attr.name) && !attr.modifier) {
+    const name = String(attr.name);
+    const event = name[2] === "-" ? name.slice(3) : name.slice(2).toLowerCase();
+    return {
+      kind: "event",
+      name,
+      event,
+      value: exprOf(ctx, attr.value),
+      nameSpan,
+      loc,
+    };
   }
 
   if (attr.bound) {
@@ -346,9 +379,10 @@ function lowerAttrs(
   node: Node,
   name: string,
   on: "element" | "component" = "element",
+  isElement = false,
 ): Attr[] {
   const attrs = (node.attributes ?? []).map((attr: Node) =>
-    lowerAttr(ctx, attr, on),
+    lowerAttr(ctx, attr, on, isElement),
   );
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
 }
@@ -1110,7 +1144,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   return {
     kind: "Element",
     name,
-    attrs: lowerAttrs(ctx, node, name),
+    attrs: lowerAttrs(ctx, node, name, "element", true),
     children: isVoid ? [] : lowerChildren(ctx, node.body?.body ?? []),
     void: isVoid,
     loc: posOf(node),
