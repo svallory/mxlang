@@ -433,6 +433,15 @@ export class PreactEmitter implements Emitter<string> {
           `\`:=\` is Marko's two-way binding; ${this.#target.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
+      // Phase A of `dom-events` (decision 101): core now lowers an element's
+      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough
+      // reproducing exactly what the `dynamic` case produced for the same
+      // attribute before the kind existed, so this PR is output-neutral;
+      // phase B replaces it with the shared JSX hosts' ruled emission
+      // (camelCase recomposed from `attr.event`, React's inverse rename map,
+      // and a uniform error for a custom DOM event).
+      case "event":
+        return methodExpression(attr.value) ?? attr.value.code;
       case "dynamic": {
         if (attr.name === "class") {
           const fixed = staticTemplateValue(attr.value);
@@ -483,6 +492,21 @@ export class PreactEmitter implements Emitter<string> {
           `\`:=\` is Marko's two-way binding; ${this.#target.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
+      // Phase A of `dom-events` (decision 101): core now lowers an element's
+      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough
+      // reproducing exactly what the `dynamic` case produced for the same
+      // attribute before the kind existed, so this PR is output-neutral;
+      // phase B replaces it with the shared JSX hosts' ruled emission
+      // (camelCase recomposed from `attr.event`, React's inverse rename map,
+      // and a uniform error for a custom DOM event).
+      case "event": {
+        const name = this.#attrName(attr.name, isComponent);
+        return concatMapped(
+          " ",
+          mapped(name, mapName ? attr.nameSpan : null),
+          `={${methodExpression(attr.value) ?? attr.value.code}}`,
+        );
+      }
       case "dynamic": {
         const name = this.#attrName(attr.name, isComponent);
         // A `class` written as a template literal with no dynamic parts is a

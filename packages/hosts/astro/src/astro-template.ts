@@ -222,6 +222,29 @@ function emitAttrs(
           attr,
         );
         break;
+      // Phase A of `dom-events` (decision 101): core now lowers an element's
+      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough
+      // reproducing exactly what the `dynamic` case emitted for the same
+      // attribute before the kind existed (an `on*` name is never the
+      // structured-`class` case), so this PR is output-neutral; phase B
+      // replaces it with `.amx`'s ruled rejection — an event handler needs a
+      // runtime and `.amx` renders static markup at build time.
+      case "event": {
+        write(" ");
+        writeMapped(attr.name, {
+          loc: {
+            start: attr.loc,
+            end: {
+              line: attr.loc.line,
+              column: attr.loc.column + attr.name.length,
+            },
+          },
+        });
+        write("={");
+        writeMapped(attr.value.code, attr.value.node);
+        write("}");
+        break;
+      }
       case "dynamic": {
         const structuredClass =
           attr.name === "class" &&
