@@ -16,6 +16,7 @@ import {
   type Ctx,
   type CustomTag,
   compileSource,
+  type GeneratedMapping,
   type Ir,
   type IrNode,
   type MxWarning,
@@ -32,6 +33,7 @@ import {
   tagBasename,
   type UsedTag,
 } from "./emitter.ts";
+import { encodeMappings, templateMappingsToModule } from "./mapping.ts";
 
 export interface CompileTagModuleOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
@@ -53,6 +55,17 @@ export interface CompileTagModuleResult extends CompileResult {
   className: string;
   /** The element name the component matches, e.g. `mx-user-card`. */
   selector: string;
+  /**
+   * Mappings from the emitted module back to the `.mx` source, generated
+   * offsets relative to `code` — the whole module, not the template alone.
+   *
+   * The template is embedded as a quoted TypeScript string, so the emitter's
+   * own template-relative offsets are rebased onto the module here. A run
+   * whose quoted form differs from its raw form (one containing a quote or a
+   * backslash) is dropped rather than mapped to a span that would slice the
+   * wrong bytes — see `templateMappingsToModule`.
+   */
+  mappings: GeneratedMapping[];
 }
 
 /**
@@ -856,6 +869,7 @@ export function compileTagModule(
   // `emitIr`, where the lowered `Ir` carrying it is in hand.
   let className = "";
   let template = "";
+  const templateMappings: GeneratedMapping[] = [];
   let moduleLines: string[] = [];
   let inputProps: InputProp[] = [];
   const passthroughExports: string[] = [];
@@ -952,6 +966,7 @@ export function compileTagModule(
         usedTags,
         prefix,
         true,
+        templateMappings,
       );
       return template;
     },
@@ -1065,9 +1080,36 @@ export function compileTagModule(
   }
   lines.push("}", `export default ${className};`, "");
 
+  const code = lines.join("\n");
+  // Located in the assembled module rather than computed from the pieces:
+  // the quoted template is a unique, unambiguous string, and finding it is
+  // immune to any change in how the lines above are built.
+  const quoted = quoteTemplate(template);
+  const quotedStart = code.indexOf(quoted);
+  // The quoted template was written into `lines` a few statements above, so
+  // not finding it means this assembly and `quoteTemplate` have diverged.
+  // Returning no mappings would degrade silently into "this tag has no
+  // positions", which reads as a template with nothing to map rather than a
+  // compiler bug.
+  if (quotedStart < 0) {
+    throw new Error(
+      `@mxlang/angular internal: the quoted template is not present in the emitted module for ${filename}`,
+    );
+  }
+  const mappings = templateMappingsToModule(
+    template,
+    templateMappings,
+    quotedStart,
+  );
+
   return {
     ...result,
-    code: lines.join("\n"),
+    code,
+    map: {
+      ...result.map,
+      mappings: encodeMappings(code, source, mappings),
+    },
+    mappings,
     warnings,
     usedTags,
     className,

@@ -23,6 +23,7 @@ import { discoverFiles, isInside } from "./discover.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
 import { buildMap, writeMap } from "./map-file.ts";
+import { encodeMappings } from "./mapping.ts";
 import { compileNgMx } from "./ng-mx.ts";
 import { compileTagModuleFile } from "./tag-module.ts";
 
@@ -395,9 +396,24 @@ function compileNgMxFile(
     // `;` per header line shifts the whole map down without touching a single
     // VLQ segment.
     const headerLines = header.split("\n").length - 1;
+    // The identifier- and expression-level mappings the emitter recorded per
+    // region (2.2b) are encoded over the *module* text, then shifted by the
+    // header like the MagicString map beside them. They replace rather than
+    // extend that map: MagicString's hires mapping covers the whole rewrite
+    // line by line, which resolves a position inside an emitted template to
+    // the region's own line rather than to the expression it came from,
+    // while these resolve to the expression. Both describe the same file, so
+    // the finer one wins for `mx-angular map`.
+    const templateMappings = encodeMappings(
+      result.code,
+      readFileSync(mxPath, "utf8"),
+      result.mappings,
+    );
     const shiftedMap = {
       ...result.map,
-      mappings: ";".repeat(headerLines) + result.map.mappings,
+      mappings:
+        ";".repeat(headerLines) +
+        (templateMappings.length > 0 ? templateMappings : result.map.mappings),
     };
 
     if (existsSync(outputPath)) {
@@ -537,7 +553,14 @@ export function compileOne(
     // (round 1 R-b): an unconditional map write on every compile — even a
     // no-op recompile — is itself a self-triggering fs event.
     const mapContent = `${JSON.stringify(
-      buildMap(sourceBasename, basename(outputPath), result.map),
+      buildMap(
+        sourceBasename,
+        basename(outputPath),
+        result.map,
+        // The header is prepended to the emitted template, so the sidecar's
+        // generated lines are offset by however many lines it occupies.
+        header.split("\n").length - 1,
+      ),
       null,
       2,
     )}\n`;

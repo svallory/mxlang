@@ -325,16 +325,23 @@ describe("compileNgMx", () => {
     expect(source.slice(region?.start, region?.end)).toBe(template);
   });
 
-  it("keeps template mappings empty until 2.2b fills them", () => {
-    // The seam, asserted rather than assumed: the Angular emitter is a string
-    // builder with no `mapped(...)` call, so there is nothing to derive
-    // mappings from yet (spike §Q3). When 2.2b lands this expectation flips,
-    // which is the point — a silent change here would be a regression.
-    const result = compileNgMx(
-      componentFile("<p>${name}</p>"),
-      "/p/x.component.ng.mx",
-    );
-    expect(result.mappings).toEqual([]);
+  it("maps each region's expressions back to the .ng.mx source (2.2b)", () => {
+    // The flip this test was written to catch: mappings used to be `[]`
+    // because the emitter was a plain string builder. It now records a span
+    // per source-derived run, and `compileNgMx` rebases each region's spans
+    // onto the finished module — so a generated offset slices the module to
+    // the same text its source offset slices the `.ng.mx` to.
+    const source = componentFile("<p>${name}</p>");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    expect(result.mappings.length).toBeGreaterThan(0);
+    const pairs = result.mappings.map((mapping) => ({
+      generated: result.code.slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
+      ),
+      source: source.slice(mapping.sourceStart, mapping.sourceEnd),
+    }));
+    expect(pairs).toContainEqual({ generated: "name", source: "name" });
   });
 });
 

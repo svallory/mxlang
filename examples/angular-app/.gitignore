@@ -37,6 +37,9 @@ src/app/tags/*.ts
 # generated too — unlike a page's, which stays hand-written.
 src/app/product-list/product-list.component.ts
 src/app/product-list/product-list.component.ts.map
+# The same build also emits the template beside it, from the region's own
+# `template:` — generated like every other `.html` here.
+src/app/product-list/product-list.component.html
 
 # Miscellaneous
 /.angular/cache

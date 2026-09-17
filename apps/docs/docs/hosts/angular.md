@@ -164,13 +164,33 @@ right choice for CI, where a stale template silently shipping is worse than
 a missing one.
 
 **`map`** reads the sidecar written beside every emitted `.html` file and
-prints the `.mx` source file it came from. `compile()`'s map has no real
-per-position mappings yet (an acknowledged placeholder — this emitter builds
-text directly rather than printing an AST), so `map` also prints a line
-saying so rather than fabricating a line/column; once the emitter carries
-real positions, this becomes a true line:col round trip. Angular itself
-never reads the sidecar — it exists for `mx-angular map`, tooling, and any
-future editor integration.
+resolves a position in that file back to the `.mx` it came from:
+
+```
+$ mx-angular map src/greeting.html:3:12
+greeting.mx:3:7
+```
+
+The emitter records a span for every run of text it takes from the source —
+tag and attribute names, interpolation and event-handler expressions,
+`@if`/`@for`/`@let` conditions, `track` expressions, `[ngClass]`/`[ngStyle]`
+values and dynamic component expressions — and those become the sidecar's
+source map v3 `mappings`.
+
+Two properties worth knowing. A position in text the emitter *invented* —
+the `<` of a tag, the `="` around a binding, the `</div>` after an
+expression — resolves to no line/column, and `map` says so rather than
+fabricating one; only source-derived text is mapped, and literal text runs
+are deliberately not. Each mapped run is bounded on both sides in the
+emitted map, so a position *after* a run does not inherit that run's
+position. And a mapping covers a whole run: a position *inside* an emitted
+expression resolves to the start of that expression in the `.mx`, not to the
+matching character. That is forced by escaping — `&` becomes `&amp;`, `{`
+becomes an interpolation literal, so the two sides do not advance in step —
+and a coarser-but-correct answer beats a precise-looking wrong one.
+
+Angular itself never reads the sidecar — it exists for `mx-angular map`,
+tooling, and editor integration.
 
 ## Custom tags (preview)
 

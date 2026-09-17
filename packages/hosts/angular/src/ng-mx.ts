@@ -34,6 +34,7 @@ import {
   IMPORTS_ADVICE_CODE,
   type UsedTag,
 } from "./emitter.ts";
+import { offsetMappings, rebaseThroughEscaping } from "./mapping.ts";
 
 /**
  * Prints a Marko-owned Babel expression node back to source text.
@@ -252,6 +253,7 @@ function lowerRegion(
   for (const node of ir.hoisted) moduleStatements.push(node.code);
   if (ir.inputInterface) moduleStatements.push(ir.inputInterface.code);
 
+  const templateMappings: GeneratedMapping[] = [];
   const template = emitTemplate(
     {
       ...ir,
@@ -269,6 +271,7 @@ function lowerRegion(
     // This region *does* own a module — the author's own `.ng.mx` file —
     // which is exactly what a `.solid.mx` region cannot say.
     true,
+    templateMappings,
   );
 
   return {
@@ -278,12 +281,22 @@ function lowerRegion(
     moduleStatements,
     directives: directivesFor(template),
     usedTags,
-    // Identifier-level today and empty in practice: the Angular emitter is a
-    // string builder with no `mapped(...)` call anywhere, so there are no
-    // node positions to derive mappings from yet (spike §Q3). 2.2b adds them
-    // through core's `Expr.span`; the field is the seam, already the right
-    // shape, so nothing downstream changes when it starts being populated.
-    mappings: [],
+    // Real mappings since 2.2b, from core's `Expr.span` (C4) through the
+    // emitter's own span recording.
+    //
+    // Offsets are relative to this region's **literal**, not to the module:
+    // the module's text is not built until every region has been spliced and
+    // the hoisted statements inserted, and each insertion shifts everything
+    // after it. `compileNgMx` rebases these onto the finished module once it
+    // knows where each literal landed.
+    //
+    // The +1 skips the opening backtick, and the escaping is the template
+    // literal's own (`\``, `\${`, `\\`): a run containing any of those
+    // occupies more bytes escaped than raw, so it is dropped rather than
+    // mapped to bytes it does not cover.
+    mappings: rebaseThroughEscaping(template, templateMappings, 1, (char) =>
+      escapeTemplateLiteral(char),
+    ),
     warnings,
     hoistedImports,
   };
@@ -654,15 +667,32 @@ export function compileNgMx(
     );
   if (options.warnings) options.warnings.push(...warnings);
 
+  const code = rewritten.toString();
+  // Each region's mappings are relative to its own literal (see
+  // `lowerRegion`), so they are rebased onto the finished module by where
+  // that literal actually landed — after every splice and every hoisted
+  // statement has shifted the text. The literal is located by search rather
+  // than by arithmetic over the insertions, which would have to model each
+  // one; `searchFrom` advances monotonically so two regions emitting the
+  // same literal cannot both resolve to the first occurrence.
+  let searchFrom = 0;
+  const moduleMappings: GeneratedMapping[] = [];
+  for (const region of lowered) {
+    const at = code.indexOf(region.literal, searchFrom);
+    if (at < 0) continue;
+    searchFrom = at + region.literal.length;
+    moduleMappings.push(...offsetMappings(region.mappings, at));
+  }
+
   return {
-    code: rewritten.toString(),
+    code,
     map: rewritten.generateMap({
       file: filename,
       source: filename,
       includeContent: true,
       hires: true,
     }),
-    mappings: lowered.flatMap((region) => region.mappings),
+    mappings: moduleMappings,
     warnings,
     usedTags,
     regions: lowered.map(

@@ -1717,10 +1717,25 @@ underneath. A page compiles to `pageExtension` beside its
 source, with a generated-header comment (a second line naming the
 `import`/`imports:` to add per called MX tag, when the compiled template
 called at least one — sourced from the emitter's own `usedTagNames()`, not
-parsed out of its warning text) and a `.map` sidecar (a plain source-map v3
-envelope; `compile()`'s own `mappings` is always empty today, so
-`mx-angular map` reports the source file and says fine-grained mapping
-isn't available yet, rather than fabricating a line/column). Every warning
+parsed out of its warning text) and a `.map` sidecar carrying a **real**
+source-map v3 (task 2.2b). The emitter records a span per run of
+source-derived text — tag and attribute names, every expression; literal
+text runs deliberately not — exposed as `compile().mappings` and encoded
+into the map, so `mx-angular map` resolves `file.html:line:col` to
+`source.mx:line:col`. Two invariants: a mapping is **whole-to-whole** (the
+entire generated run maps to the entire source span, never character by
+character), which is what keeps it correct when escaping changes the
+generated length — so a position *inside* an expression resolves to that
+expression's start; and a position in generated punctuation resolves to
+nothing and is reported as such rather than fabricated — each run is
+bounded by a terminator segment in the emitted v3 map, so a position *after*
+a run does not inherit it (the encoder emits one segment at each run's start
+and a source-less one at its end; `@jridgewell/sourcemap-codec` does the
+encode/decode). `buildMap` shifts
+the map by the generated header's line count, since the sidecar describes
+the file on disk while the compile map is template-relative. A *discovered*
+tag call has no `nameSpan` (core derives it from the gensym'd binding it
+minted), so its selector is emitted unmapped. Every warning
 `compile()` produces prints to the terminal, `file:line:col warning: ...`.
 **A discovered tag file compiles to a component module** (task 1.7,
 `src/tag-module.ts`'s `compileTagModule`): a `.mx` under `tags/` emits
