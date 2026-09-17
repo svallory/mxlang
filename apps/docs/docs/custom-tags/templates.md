@@ -87,6 +87,72 @@ export interface Input { name: string; size?: number }
 
 Where a template reads `input.content`, the host augments its render signature so a caller passing a body typechecks; where it does not, `Input` is untouched.
 
+## Returning a value
+
+A template can hand a value back to its caller with `<return>`, and the caller binds it with `/var`:
+
+```marko
+export interface Input { start: number }
+<span class="count">${input.start}</span>
+<return value=input.start + 1/>
+```
+
+```marko
+<counter/next start=41/>
+<p>${next}</p>
+```
+
+The binding's type is the `<return>` expression's inferred type — `next` is a `number` above — so reading it the wrong way is a `tsc` error at the caller's own line.
+
+`<return>` is **value only**: MX has no `valueChange` and no two-way channel.
+
+### The grammar
+
+A template may declare **at most one** `<return>`, and it must sit at the **top level** of the template. It cannot be nested inside a native tag, an `<if>`/`<else>`, a `<for>`, an attribute tag or a `<define>` — a returning tag returns unconditionally, which is what makes its signature one shape rather than "a value on some paths".
+
+`<return>` takes a required `value=` and nothing else: no arguments, no params, no body, no spread, no `/var` of its own, and no other attribute. Each violation is a positioned compile error.
+
+A `<return>` in a page is legal and means the same thing — a page is a module that returns a value nobody reads yet.
+
+### Rules for `/var`
+
+- **The tag must declare `<return>`.** `/var` on a tag whose template returns nothing is an error, rather than a binding that silently reads `undefined`.
+- **The binding is scoped to the block the call is in**, like any `let`. Reading it from outside that block is an error rather than a binding hoisted somewhere the reader cannot see.
+- **The call has to come first.** Reading a `/var` earlier in the same block than the call that binds it is an error, not a run-time crash.
+
+### Where `/var` can be written, per host
+
+On **html** and **Astro `.mx`** components, a `/var` works anywhere a call does — including inside `<if>` and `<for>`, where the binding lands in that block and the call runs per iteration.
+
+On the **JSX hosts** (Preact, React, Hono) and **Solid**, a `/var` must be at the **top level of the template**. Those targets lower `<if>` and `<for>` to expressions — a ternary, a `.map` callback, a `<For>` render prop — and an expression has no statement position to hold the binding. Writing one there is a positioned compile error rather than a silent miscompile:
+
+```
+`/var` on `<counter>` inside `<for>`/`<if>` is not supported on Preact yet;
+bind it at the top level of the template
+```
+
+Calling the tag *without* `/var` works everywhere; only the binding is restricted. Lifting the restriction is planned for MX 2.
+
+`/var` is not supported in a `.amx` (AstroMX) file at all — an Astro template has no statement position of its own. Calling a returning tag from `.amx` works, and renders its output.
+
+### A returning unit on a JSX host cannot use hooks
+
+On the JSX hosts, a returning unit is **invoked as a plain function** rather than mounted as a component — that is what lets it hand a value back, since a JSX element is only a description of a call the runtime makes later.
+
+The cost is that it has no component identity: Preact's and React's hook dispatchers bind to the *calling* component's hook list, so a `useState` inside a returning unit would silently become a hook of the caller. Importing a hook into a unit that declares `<return>` is therefore a compile error. Drop the `<return>`, or move the hook to the caller.
+
+Solid is unaffected — its callback prop keeps the unit a real component.
+
+### On Solid, the value is one-shot
+
+Every host delivers the value the same way to an author, but Solid's mechanism differs: a Solid component's return value is its view, so the value comes back on a generated callback prop the tag calls during setup, and the caller reads an ordinary `let`.
+
+That binding is **not reactive**. It holds the value from the single call that produced it and does not update afterwards, which matches `/var`'s meaning on every other host. If you want a value that tracks, return an accessor and call it:
+
+```marko
+<return value=() => count()/>
+```
+
 ## Module scope
 
 A template's `import` and `static` statements stay in the tag's own module. They are the module system's, not the caller's, which means a `static` block runs **once per process**, at import time — not once per calling module.
@@ -127,5 +193,10 @@ A template can arrange markup and use MX's structural language, but it cannot ex
 - **Reserved `content`.** A call cannot pass an attribute named `content`; that name is the body slot.
 - **`<@content>`.** Reserved for the same reason.
 - **Content on an `openTagOnly` tag.** The tag declared that it takes no body.
+- **`<x>` does not return a value.** A `/var` on a tag whose template declares no `<return>`.
+- **A `/var` read out of scope**, or read before the call that binds it.
+- **`/var` inside `<for>`/`<if>` on a JSX host or Solid**, where those constructs are expressions with no statement position; bind it at the top level.
+- **A hook in a returning unit** on a JSX host, where the unit is called as a plain function.
+- **`<return>` must be at the top level**, and there may be only one per template.
 
 A diagnostic inside a template points at the template file and its real line, because that file is itself being compiled. Errors in call attributes stay on the calling file.

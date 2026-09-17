@@ -645,11 +645,14 @@ Five facts worth knowing before editing it:
   `mxCustomTags` parser option (`print(source, file, { customTags })`), the
   only channel the in-tokenizer bridge has to the caller.
   `bun run oracle:custom-tags` is the six-host gate; every row renders and
-  compares against `expected.html`. It runs **five** fixtures — `icon` (an L2
+  compares against `expected.html`. It runs **six** fixtures — `icon` (an L2
   sidecar), `icon-template` (the same tag as an L1 template), `icon-sprite`
   (P5's collecting pair), `table-of` (L2 without that pair) and `tree` (a
-  self-recursive L1 template, three levels deep) — for a 30-row count gate.
-  **All 30 rows pass, with no recorded skip.** (Two skips used to
+  self-recursive L1 template, three levels deep) and `counter-return` (a unit
+  that hands a value back with `<return>`, bound at the call site with `/var`,
+  whose export shape differs per host so the rendered bytes are the gate) —
+  for a 36-row count gate.
+  **All 36 rows pass, with no recorded skip.** (Two skips used to
   live here and both are fixed: `table-of` on Solid was the accessor-binding
   bug — see the P5 bullet below — and `icon-template` on Solid was a discovered
   unit's import having no module scope inside a `.solid.mx` region, now hoisted
@@ -897,14 +900,60 @@ Five facts worth knowing before editing it:
   time — Marko's model. This is an observable behavior change for any tag whose
   `static` block has side effects.
 - **A template's caller-facing facts come from cached metadata, not from
-  expanding it.** Compiling a unit yields `{ readsContent, attributeTags }`
-  (with `returnsValue` reserved for `<return>`), cached by path + mtime +
-  source, bounded at 256 entries, with a provisional entry seeded before the
+  expanding it.** Compiling a unit yields `{ readsContent, attributeTags }`,
+  plus `returnsValue` and the `<return>` value's source text when the unit
+  declares one, cached by path + mtime + source, bounded at 256 entries, with a provisional entry seeded before the
   compile so direct and mutual recursion terminate. This is what preserves MX's
   improvement over Marko: a body passed to a tag that never reads
   `input.content` still warns at the call site, even though the caller no
   longer sees the template's body. Marko does the same thing through
   `loadFileForTag`.
+- **`<return>` hands one value back, and `/var` binds it.** A template may end
+  with `<return value=EXPR/>`: value only (no `valueChange`), at most one per
+  template, at the **top level** only — not inside a native tag, `<if>`,
+  `<for>`, an attribute tag or a `<define>`. It takes a required `value=` and
+  nothing else. Every rule is validated in the **tag's own compilation**, which
+  is what makes the signature one shape rather than `T | undefined` per path:
+  a unit cannot see its callers, so no call site can widen it. The grammar is
+  Marko's own, ported with MX wording; its eleven compile-time error fixtures
+  each have a counterpart test in `lower.test.ts`. `<return>` in a *page* is
+  legal and means the same thing.
+  **The export shape is the host's business**: `{ value, output }` on html and
+  the three JSX hosts (where the call is emitted as an ordinary *function
+  call*, not a JSX element — a JSX element is a description of a call the
+  runtime makes later, so it could never hand the pair back); on Solid a
+  generated `$mxReturn` callback prop the unit calls during setup, because a
+  Solid component's return value is its view. **The Solid binding is one-shot,
+  not reactive** (design §2.4, risk 4) — a tag wanting reactivity returns an
+  accessor.
+  **Astro** renders an MX component through its own renderer rather than a
+  call site, so `server.ts` unwraps the pair there; a `.amx` template may
+  *call* a returning tag but cannot bind one, since it has no statement
+  position of its own (`/var` in `.amx` is a positioned error).
+  **`/var` is top-level-only on the JSX hosts and Solid.** Every structural
+  kind lowers to an expression there — a ternary, a `.map` callback, a `<For>`
+  render prop — so a callback scope has no statement position for the binding.
+  Hoisting the call to the component body took it out of the scope it was
+  written in (it read row bindings that did not exist there, and ran once for
+  a body rendered N times), so invariant §7.5-8's "reject the escape" applies:
+  a positioned error naming the tag. html keeps supporting the nested case,
+  where the temp lands inside the emitted `for`/`if` block. Lifting the
+  restriction means a statement position per callback scope — MX 2.
+  **A returning unit on a JSX host may not import hooks.** It is invoked as a
+  plain function, so Preact's/React's dispatcher would bind its hooks to the
+  *calling* component's hook list — order-dependent, broken under conditional
+  or looped calls, and `useContext` reads the caller's position. Importing a
+  `use*` binding from `preact/hooks`, `preact/compat`, `react` or `hono/jsx`
+  into a unit that declares `<return>` is a compile error. Solid is unaffected;
+  its callback prop keeps the unit a component.
+  Three positioned diagnostics stand in for what JavaScript would leave as
+  `undefined` or a TDZ crash: `/var` on a tag whose template has no `<return>`;
+  a read **outside** the declaring block (MX rejects the escape rather than
+  hoisting the binding into a getter as Marko does, which would change its
+  user-visible type — invariant §7.5-8); and a read **before** the declaring
+  call. Scope is tracked as a path of block ids rather than a depth, because a
+  read in a sibling block sits at the same depth as the binding yet is not in
+  scope.
 - **A sidecar `transform` may return IR or a `TagCall`.** Returning IR is a
   macro the author wrote — the only expansion left in the language. Returning a
   `TagCall` (or calling `ctx.build.template(call)`) validates or rewrites the
@@ -946,7 +995,7 @@ Five facts worth knowing before editing it:
   owes.
 - **`oracle:custom-tags` compiles each fixture's tag units through the caller's
   own host** and writes them beside the caller, because the tag is a real
-  import now. All 30 rows pass, Solid included.
+  import now. All 36 rows pass, Solid included.
 - **Every emitted module's default export is named after its file**, never
   anonymous: `icon.mx` becomes `export default function Icon(…)`,
   `table-of.mx` becomes `TableOf`. `Ir.exportName` carries it, derived by
@@ -1233,8 +1282,10 @@ byte-identical against Marko): `<effect>`, `<lifecycle>`, `<script>`, `<id>`,
 `server` block is **not** inert — this is the server render, so it runs and
 hoists like `static`, and its bindings are readable from the template
 (verified: `server const S = 41 + 1` then `${S}` renders `42`). `<return>` is
-an error: it hands a value to a parent template, and a module compiled to
-`(input) => string` has no parent. **Evaluate initial
+**not** an error any more: under the unit model a tag is its own module and
+its caller invokes it, so a returning unit's export hands back
+`{ value, output }` and the call site unwraps it (see the `<return>` bullet in
+the core section above). **Evaluate initial
 value**: `<let>`, `<const>`, `:=`. **Error** — only what the target genuinely
 cannot: `<await>` (Marko itself refuses to render one to a string) and
 `<try>` with a `<@placeholder>` (needs a second pass). A plain `<try>` with

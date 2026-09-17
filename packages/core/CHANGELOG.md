@@ -2,6 +2,74 @@
 
 ## 0.1.0 (unreleased)
 
+### `<return>` and `/var`: a tag hands one value back (decision 95)
+
+A template may end with `<return value=EXPR/>`, and a caller binds that value
+with `/var`:
+
+```marko
+<!-- tags/counter.mx -->
+<span>${input.start}</span>
+<return value=input.start + 1/>
+```
+
+```marko
+<counter/next start=41/>
+<p>${next}</p>
+```
+
+- **`<return>` is value only.** Marko also accepts `valueChange`; MX 1 ships no
+  two-way channel, so that attribute is rejected by name rather than accepted
+  and dropped.
+- **At most one per template, at the top level only.** Not inside a native tag,
+  `<if>`/`<else>`, `<for>`, an attribute tag or a `<define>`. A returning tag
+  returns unconditionally, which is what makes its signature a single shape
+  rather than `T | undefined` per path — and because a unit compiles without
+  seeing any of its callers, no call site can widen it. The grammar is Marko's,
+  ported from its own `<return>` translator with MX wording; all eleven of its
+  compile-time error fixtures have a counterpart test.
+- **`<return>` in a page is legal** and means the same thing: a page is a module
+  that returns a value nobody reads yet. It used to be a hard error on the html
+  and JSX hosts, on the grounds that a compiled template "has no parent to
+  return to" — true only while a tag was expanded into its caller.
+- **breaking:** a unit that declares `<return>` changes its export shape. On
+  html and the JSX hosts the default export returns `{ value, output }` rather
+  than the output alone; on Solid the value comes back through a generated
+  callback prop, because a Solid component's return value is its view. A unit
+  with no `<return>` is unchanged. Astro renders an MX component through its
+  own renderer, which unwraps the pair there.
+- **`/var` is top-level-only on the JSX hosts and Solid.** Those targets lower
+  `<if>` and `<for>` to *expressions* — a ternary, a `.map` callback, a `<For>`
+  render prop — so a callback scope has no statement position to hold the
+  binding, and hoisting the call out of it would read bindings that do not
+  exist there and run once for a body rendered N times. Writing one there is a
+  positioned error naming the tag; the call itself, without `/var`, works
+  everywhere. html and Astro `.mx` support the nested case. Lifting the
+  restriction is MX 2 work.
+- **`/var` is not supported in a `.amx` file**, which has no statement position
+  of its own; a `.amx` template may still *call* a returning tag and render its
+  output.
+- **A returning unit on a JSX host may not import hooks.** It is invoked as a
+  plain function rather than mounted, so Preact's and React's hook dispatchers
+  would bind its hooks to the *calling* component's hook list: order-dependent,
+  broken under a conditional or looped call, and `useContext` reading the
+  caller's position in the tree. Importing a `use*` binding from
+  `preact/hooks`, `preact/compat`, `react` or `hono/jsx` into a unit that
+  declares `<return>` is a compile error. Solid is unaffected — its callback
+  prop keeps the unit a real component.
+- **The Solid binding is one-shot, not reactive.** It holds the value from the
+  single invocation that produced it, which matches `/var`'s meaning on every
+  other host — but a Solid author may reasonably expect a signal, so a tag
+  wanting reactivity should return an accessor for the caller to call.
+- **The binding's type is the `<return>` expression's inferred type**, and a
+  wrong prop at a discovered tag's call site is a TypeScript error at the
+  caller's own position, through the tag's `export interface Input`.
+- Three positioned diagnostics replace what would otherwise be `undefined` or a
+  run-time crash: `/var` on a tag whose template has no `<return>`; a `/var`
+  read outside its declaring block (MX rejects the escape rather than hoisting
+  the binding into a getter as Marko does, which would change its type); and a
+  read before the call that binds it.
+
 ### A custom tag's template is a compilation unit (decision 95)
 
 A discovered template tag (`tags/icon.mx`) is no longer expanded into its
