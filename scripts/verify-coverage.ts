@@ -9,7 +9,7 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 const root = `${import.meta.dir}/../`;
 const vitestJsonPath = join(root, "vitest-results.json");
@@ -24,25 +24,59 @@ const amxGrammarMarkerPath = join(
 const verifyStartPath = join(root, ".verify-start");
 
 interface Package {
-  name: string;
-  type: "package" | "example";
   path: string;
   reason?: string;
 }
 
+// Resolves a vitest test file's absolute path to the workspace package it
+// belongs to, by finding the longest known package path that is a prefix of
+// the test file's own relative path — no hardcoded group list (hosts/
+// tooling/editors/...), so a package nested at any depth under packages/*/*
+// or examples/* resolves correctly as soon as getPackages() discovers it.
+// Returns null if no known package path is a prefix.
+export function packageKeyOfTestPath(
+  absPath: string,
+  repoRoot: string,
+  knownPaths: readonly string[],
+): string | null {
+  const rel = relative(repoRoot, absPath);
+
+  let best: string | null = null;
+  for (const pkgPath of knownPaths) {
+    if (
+      (rel === pkgPath || rel.startsWith(`${pkgPath}/`)) &&
+      (best === null || pkgPath.length > best.length)
+    ) {
+      best = pkgPath;
+    }
+  }
+  return best;
+}
+
+// Exception keys that no longer name a discovered workspace package — a
+// guard against the exception list rotting silently as packages are
+// renamed or removed (A2).
+export function findStaleExceptions(
+  knownPaths: ReadonlySet<string>,
+  exceptions: Record<string, string>,
+): string[] {
+  return Object.keys(exceptions).filter((key) => !knownPaths.has(key));
+}
+
 const NO_TEST_EXCEPTIONS: Record<string, string> = {
-  "angular-app":
+  "examples/angular-app":
     "ng build/ng test only, verified manually — no e2e suite wired yet",
-  "astro-static": "e2e only",
-  "counter-app": "e2e only",
-  "hono-app": "e2e only",
-  "mx-site": "e2e only",
-  "mx-vite": "e2e only",
-  "preact-app": "e2e only",
-  "react-app": "e2e only",
-  todomvc: "e2e only",
-  zed: "grammar and Rust extension, both build-verified in CI (zed-compile-check, zed-compile-check)",
-  docs: "docs site: built in verify",
+  "examples/astro-static": "e2e only",
+  "examples/counter-app": "e2e only",
+  "examples/hono-app": "e2e only",
+  "examples/mx-site": "e2e only",
+  "examples/mx-vite": "e2e only",
+  "examples/preact-app": "e2e only",
+  "examples/react-app": "e2e only",
+  "examples/todomvc": "e2e only",
+  "packages/editors/zed":
+    "grammar and Rust extension, both build-verified in CI (zed-compile-check, zed-compile-check)",
+  "apps/docs": "docs site: built in verify",
 };
 
 // The one package whose real test (packages/editors/tree-sitter-solidmx/scripts/test.sh,
@@ -68,12 +102,13 @@ async function getPackages(): Promise<Package[]> {
   const workspaceDirs = new Set<string>();
 
   for (const pattern of workspaces) {
-    const isPackages = pattern.startsWith("packages/");
-    const base = isPackages
+    const base = pattern.startsWith("packages/")
       ? "packages"
       : pattern.startsWith("examples/")
         ? "examples"
-        : null;
+        : pattern.startsWith("apps/")
+          ? "apps"
+          : null;
     if (!base) continue;
     const dir = join(root, base);
     if (!existsSync(dir)) continue;
@@ -100,24 +135,26 @@ async function getPackages(): Promise<Package[]> {
   }
 
   for (const relPath of Array.from(workspaceDirs).sort()) {
-    const nameParts = relPath.split("/");
-    const name = nameParts[nameParts.length - 1];
-    const type = relPath.startsWith("examples/") ? "example" : "package";
-    const baseName = `${type === "example" ? "examples/" : ""}${name}`;
-
     packages.push({
-      name: baseName,
-      type,
       path: relPath,
-      reason: NO_TEST_EXCEPTIONS[name],
+      reason: NO_TEST_EXCEPTIONS[relPath],
     });
+  }
+
+  const knownPaths = new Set(packages.map((p) => p.path));
+  const staleExceptions = findStaleExceptions(knownPaths, NO_TEST_EXCEPTIONS);
+  if (staleExceptions.length > 0) {
+    console.error(
+      `ERROR: NO_TEST_EXCEPTIONS has stale entries for packages that no longer exist: ${staleExceptions.join(", ")}\n`,
+    );
+    process.exit(1);
   }
 
   return packages;
 }
 
 function formatRow(name: string, wiring: string, status: string): string {
-  return name.padEnd(30) + wiring.padEnd(35) + status;
+  return name.padEnd(38) + wiring.padEnd(35) + status;
 }
 
 interface VitestResult {
@@ -136,7 +173,10 @@ function isFreshEvidence(path: string, verifyStart: number): boolean {
   return statSync(path).mtimeMs >= verifyStart;
 }
 
-function getTestedPackagesFromVitest(verifyStart: number): Set<string> {
+function getTestedPackagesFromVitest(
+  verifyStart: number,
+  knownPaths: readonly string[],
+): Set<string> {
   const tested = new Set<string>();
 
   if (!isFreshEvidence(vitestJsonPath, verifyStart)) {
@@ -149,12 +189,9 @@ function getTestedPackagesFromVitest(verifyStart: number): Set<string> {
   if (!content.testResults) return tested;
 
   for (const result of content.testResults) {
-    const fullPath = result.name;
-    const pkgMatch =
-      fullPath.match(/\/packages\/(?:hosts\/|tooling\/|editors\/)?([^/]+)\//) ||
-      fullPath.match(/\/examples\/([^/]+)\//);
-    if (pkgMatch && result.assertionResults?.length > 0) {
-      tested.add(pkgMatch[1]);
+    const key = packageKeyOfTestPath(result.name, root, knownPaths);
+    if (key && result.assertionResults?.length > 0) {
+      tested.add(key);
     }
   }
 
@@ -176,7 +213,8 @@ async function main() {
   console.log(formatRow("Package", "Test Wiring", "Ran"));
   console.log("-".repeat(75));
 
-  const testedPackages = getTestedPackagesFromVitest(verifyStart);
+  const knownPaths = packages.map((p) => p.path);
+  const testedPackages = getTestedPackagesFromVitest(verifyStart, knownPaths);
   const solidmxGrammarRan = isFreshEvidence(grammarMarkerPath, verifyStart);
   const amxGrammarRan = isFreshEvidence(amxGrammarMarkerPath, verifyStart);
 
@@ -185,32 +223,29 @@ async function main() {
   const exceptions: Package[] = [];
 
   for (const pkg of packages) {
-    const shortName = pkg.name.replace("examples/", "");
-
     if (pkg.reason) {
       exceptions.push(pkg);
-      console.log(formatRow(pkg.name, `(exception: ${pkg.reason})`, "OK"));
+      console.log(formatRow(pkg.path, `(exception: ${pkg.reason})`, "OK"));
       continue;
     }
 
-    if (
-      shortName === GRAMMAR_MARKER_PACKAGE ||
-      shortName === "tree-sitter-amx"
-    ) {
-      const ran =
-        shortName === GRAMMAR_MARKER_PACKAGE
-          ? solidmxGrammarRan
-          : amxGrammarRan;
+    const isGrammarPackage =
+      pkg.path.endsWith(`/${GRAMMAR_MARKER_PACKAGE}`) ||
+      pkg.path.endsWith("/tree-sitter-amx");
+    if (isGrammarPackage) {
+      const ran = pkg.path.endsWith(`/${GRAMMAR_MARKER_PACKAGE}`)
+        ? solidmxGrammarRan
+        : amxGrammarRan;
       if (ran) {
         ranCount++;
         console.log(
-          formatRow(pkg.name, "moon test task (scripts/test.sh)", "ran"),
+          formatRow(pkg.path, "moon test task (scripts/test.sh)", "ran"),
         );
       } else {
         hasFailure = true;
         console.log(
           formatRow(
-            pkg.name,
+            pkg.path,
             "moon test task (scripts/test.sh)",
             "ERROR: did not run",
           ),
@@ -219,13 +254,13 @@ async function main() {
       continue;
     }
 
-    if (testedPackages.has(shortName)) {
+    if (testedPackages.has(pkg.path)) {
       ranCount++;
-      console.log(formatRow(pkg.name, "vitest project", "ran"));
+      console.log(formatRow(pkg.path, "vitest project", "ran"));
     } else {
       hasFailure = true;
       console.log(
-        formatRow(pkg.name, "vitest project", "ERROR: no evidence it ran"),
+        formatRow(pkg.path, "vitest project", "ERROR: no evidence it ran"),
       );
     }
   }
@@ -238,7 +273,7 @@ async function main() {
   if (exceptions.length > 0) {
     console.log("Exceptions (no test required):");
     for (const exc of exceptions) {
-      console.log(`  • ${exc.name}: ${exc.reason}`);
+      console.log(`  • ${exc.path}: ${exc.reason}`);
     }
     console.log();
   }
@@ -256,7 +291,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((e) => {
-  console.error("Error:", e);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((e) => {
+    console.error("Error:", e);
+    process.exit(1);
+  });
+}
