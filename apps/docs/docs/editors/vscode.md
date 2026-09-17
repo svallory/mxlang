@@ -1,6 +1,6 @@
 ---
 title: "VS Code"
-description: "Highlighting, formatting, and diagnostics for .mx, .solid.mx, and .amx files in VS Code."
+description: "Highlighting, formatting, and diagnostics for .mx, .solid.mx, .ng.mx, and .amx files in VS Code."
 ---
 
 # VS Code
@@ -20,6 +20,7 @@ The extension provides:
 - **MX (`.mx`, `.marko`)**: Full highlighting powered by the official Marko TextMate grammar.
 - **AstroMX (`.amx`)**: Highlighting for the Astro frontmatter and delegates the body to the Marko grammar.
 - **SolidMX (`.solid.mx`)**: Highlighting as `source.tsx`. *Note: True grammar injection for MX regions within SolidMX is not feasible via regex alone, so `.solid.mx` falls back to standard TSX highlighting for now.*
+- **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as SolidMX — an ordinary TypeScript module whose `@Component` template is MX.
 
 ## Formatting
 

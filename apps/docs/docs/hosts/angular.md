@@ -172,6 +172,21 @@ real positions, this becomes a true line:col round trip. Angular itself
 never reads the sidecar — it exists for `mx-angular map`, tooling, and any
 future editor integration.
 
+## Editors
+
+`.ng.mx` — an ordinary TypeScript module whose `@Component({ template: ... })`
+value is an MX region — is registered in both VS Code and Zed the same way
+`.solid.mx` is: the surrounding TypeScript highlights as TypeScript
+(decorators included), and the MX region inside `template:` highlights as MX.
+Zed's `AngularMX` language reuses `SolidMX`'s grammar package unchanged (the
+grammar's only MX-specific addition, the opaque `mx_element` token, is
+neither Solid- nor Angular-specific); VS Code's `ngmx` language falls back to
+`source.tsx` highlighting, the same fallback `solidmx` uses. See
+[VS Code](/editors/vscode/) and [Zed](/editors/zed/) for setup. Type-checking
+and language-server diagnostics for `.ng.mx` are a separate task
+(`.ng.mx`'s TypeScript plugin, mentioned in the "Preview" note above) and are
+not covered by this editor registration.
+
 ## Custom tags (preview)
 
 A `.mx` file under a `tags/` directory, or a `package.json#mx.tags` entry,
