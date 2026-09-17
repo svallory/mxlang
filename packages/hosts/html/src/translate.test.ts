@@ -336,6 +336,13 @@ describe("dynamic tags", () => {
     expect(code).toContain("renderDynamic(input.tag");
     expect(code).toContain("function renderDynamic");
   });
+
+  it("lowers a bare `${expr}` concise-position line the same way, since this host claims DYNAMIC_TAG for both shapes", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko concise-mode placeholder/dynamic-tag syntax in template source
+    const { code } = compile(src("${input.tag}\n"), file);
+    expect(code).toContain("renderDynamic(input.tag");
+    expect(code).toContain("function renderDynamic");
+  });
 });
 
 describe("comments", () => {
