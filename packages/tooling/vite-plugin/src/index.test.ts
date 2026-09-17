@@ -440,7 +440,7 @@ describe("mx()", () => {
       const result = await transform.call({}, GREETING, path + MX_SUFFIX);
 
       expect(result).not.toBeNull();
-      expect(result?.code).toContain("export default render;");
+      expect(result?.code).toContain("export default Greeting;");
       expect(result?.code).toContain("escape(input.name)");
       // No real map yet for this path (see the plugin's own doc comment).
       expect(result?.map).toBeNull();

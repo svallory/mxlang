@@ -241,19 +241,23 @@ export function createMxLanguagePlugin(
  * renderer's own parameter name and never something an Astro caller passes.
  */
 export function createAstroTypeSurface(code: string): string {
-  const defaultExport = "export default render;";
-  if (!code.includes(defaultExport)) {
+  // The export is named after the file (`card.mx` -> `Card`), so this matches
+  // the statement's shape and reads the name back rather than pinning a fixed
+  // `render`.
+  const match = code.match(/export default ([A-Za-z_$][\w$]*);/);
+  if (!match?.[1]) {
     throw new Error(
       "@mxlang/typescript-plugin: the Astro host could not find the compiled MX default export.",
     );
   }
+  const name = match[1];
   return code.replace(
-    defaultExport,
+    match[0],
     [
       'type MxAstroInput = "content" extends keyof Input',
       '  ? Omit<Input, "content"> & { children?: unknown }',
       "  : Input;",
-      "const mxAstroRender = render as unknown as (input: MxAstroInput) => string;",
+      `const mxAstroRender = ${name} as unknown as (input: MxAstroInput) => string;`,
       "export default mxAstroRender;",
     ].join("\n"),
   );

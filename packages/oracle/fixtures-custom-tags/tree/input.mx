@@ -1,0 +1,7 @@
+<nav>
+  <ul class="tree">
+    <for|root| of=input.roots>
+      <tree node=root/>
+    </for>
+  </ul>
+</nav>

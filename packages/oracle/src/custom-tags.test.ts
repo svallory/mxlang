@@ -19,7 +19,16 @@ const HOSTS = ["html", "astro", "preact", "react", "hono", "solid"] as const;
  * however many times the tag is called, the second is L2 with neither hook, so
  * the collecting pair is shown to be opt-in rather than the price of L2.
  */
-const FIXTURES = ["icon", "icon-template", "icon-sprite", "table-of"] as const;
+const FIXTURES = [
+  "icon",
+  "icon-template",
+  "icon-sprite",
+  "table-of",
+  // Self-recursive: `tags/tree.mx` calls `<tree>` from its own body, so this
+  // row is what proves invariant §7.5-7 — the recursive call resolves to the
+  // unit's own named export, with no import of the file into itself.
+  "tree",
+] as const;
 
 /**
  * Rows deliberately not compared, each with the reason the runner prints.

@@ -1,0 +1,11 @@
+export interface Input { node: { label: string; kids?: unknown[] } }
+<li>
+  <span class="label">${input.node.label}</span>
+  <if=input.node.kids>
+    <ul>
+      <for|kid| of=input.node.kids>
+        <tree node=kid/>
+      </for>
+    </ul>
+  </if>
+</li>

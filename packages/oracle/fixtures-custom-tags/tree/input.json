@@ -1,0 +1,12 @@
+{
+  "roots": [
+    {
+      "label": "src",
+      "kids": [
+        { "label": "core", "kids": [{ "label": "ir.ts" }] },
+        { "label": "index.ts" }
+      ]
+    },
+    { "label": "README.md" }
+  ]
+}
