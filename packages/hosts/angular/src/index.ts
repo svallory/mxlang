@@ -15,6 +15,7 @@ import {
   type CustomTag,
   compileSource,
   type MxWarning,
+  TranslateError,
 } from "@mxlang/core";
 import { angularDeclarations, emitTemplate, type UsedTag } from "./emitter.ts";
 
@@ -79,8 +80,29 @@ export function compile(
   const result = compileSource(source, filename, angularDeclarations, {
     customTags: options.customTags,
     warnings,
-    emitIr: (ir, ctx) =>
-      emitTemplate(ir, ctx, filename, usedTags, options.tagSelectorPrefix),
+    emitIr: (ir, ctx) => {
+      // Same guard as `compileTagModule` (tag-module.ts), for a *page*: a
+      // page has no caller to bind `/var`, and Angular template syntax has
+      // no binding position to receive a returned value either. Left
+      // unchecked, `<return value=x/>` is accepted and emits nothing (spec
+      // §13.3 bug 8) — the S8 silent-drop class this checks against.
+      if (ir.returnValue) {
+        const at = ir.returnValue.node?.loc?.start;
+        throw new TranslateError(
+          "`<return>` is not supported on Angular: a page has no caller to hand a value to, and Angular template syntax has no binding position to receive one. Declare the value as a `@Input()`/class member instead, or expose it as a `static`/`export`.",
+          at?.line ?? 0,
+          at?.column ?? 0,
+          filename,
+        );
+      }
+      return emitTemplate(
+        ir,
+        ctx,
+        filename,
+        usedTags,
+        options.tagSelectorPrefix,
+      );
+    },
   });
   return { ...result, warnings, usedTags };
 }
