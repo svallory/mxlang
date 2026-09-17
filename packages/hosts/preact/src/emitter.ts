@@ -712,21 +712,20 @@ export class PreactEmitter implements Emitter<string> {
 
   component(node: Extract<IrNode, { kind: "Component" }>): void {
     if (node.target.kind === "dynamic") {
-      // A dynamic tag name is a component *value* in JSX, and JSX requires a
-      // capitalized identifier in tag position — so the expression has to be
-      // bound to one first, which a template expression cannot do.
-      //
-      // The core refuses one before it reaches here, since this host declares
-      // no `claimsTag` for `DYNAMIC_TAG`; the branch stays because `Component`
-      // carries the case in its type and silently emitting nothing for it
-      // would drop authored markup from a successful compile. Note a *bare*
-      // `<${expr}/>` never arrives here at all: with no attributes and no body
-      // that is Marko's placeholder shape, and it resolves to an ordinary
-      // interpolation.
-      fail(
-        "a dynamic tag name (`<${expr}>`) cannot be a JSX tag; bind the component to a capitalized name in the surrounding module",
-        node,
+      // Marko's own dynamic tag is polymorphic at run time: the target can
+      // be a tag-name string, a render function, or already-rendered content
+      // (a caller's `input.content`/`children`, passed straight through
+      // rather than called again — see the `nested-layout` oracle fixture,
+      // where `<${input.content}/>` passes an already-rendered JSX tree, not
+      // a callable). JSX's tag position is static, so this host inlines a
+      // small `mxDynamic` helper into the module (mirroring `@mxlang/html`'s
+      // `renderDynamic`) instead of writing the expression there directly.
+      this.#runtimeImports.add("mxDynamic");
+      const props = this.#propsObject(node);
+      this.#out.push(
+        concatMapped("{mxDynamic(", node.target.expr.code, ", ", props, ")}"),
       );
+      return;
     }
     if (node.target.kind === "define") {
       // A `<define>` is a local block; this host lowers one to a local

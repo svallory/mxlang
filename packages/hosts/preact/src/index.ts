@@ -147,6 +147,25 @@ function importLines(names: Set<string>, target: Target): string[] {
 }
 
 /**
+ * `mxDynamic`'s source, inlined into a module rather than imported.
+ *
+ * Marko's own dynamic tag is polymorphic at run time — the target can be a
+ * tag-name string, a render function, or already-rendered content (a
+ * caller's `input.content`/`children`, passed straight through rather than
+ * called again). JSX's tag position is static, so a module using a dynamic
+ * tag gets this helper inlined, the same way `@mxlang/html` inlines
+ * `renderDynamic` — no runtime package, so nothing to import.
+ */
+const MX_DYNAMIC = `function mxDynamic(target, props) {
+  if (typeof target === "string" || typeof target === "function") {
+    const Tag = target;
+    const { content, ...rest } = props;
+    return <Tag {...rest}>{content ? content() : undefined}</Tag>;
+  }
+  return props.content ? props.content() : target;
+}`;
+
+/**
  * Builds the emitted component module for one resolved template.
  *
  * `<const>` and `<define>` are lifted out of the body first: both are
@@ -220,6 +239,12 @@ export function emitModuleWithMappings(
         ? `const ${componentAlias(name)} = ${name};`
         : `import ${componentAlias(name)} from "./tags/${name}.marko";`,
     ),
+    // Placed after the author's own hoisted module scope, same as
+    // `@mxlang/html`'s inlined helpers. `mxDynamic` is a reserved name: an
+    // author who also declares one gets a duplicate-declaration
+    // `SyntaxError` at this position, the same pre-existing behaviour
+    // `@mxlang/html`'s `renderDynamic` has.
+    ...(emitter.runtimeImports.has("mxDynamic") ? [MX_DYNAMIC] : []),
   ];
   if (hoisted.length > 0) lines.push("", ...hoisted);
 
