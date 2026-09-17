@@ -319,7 +319,7 @@ function lowerAttr(
   ctx: Ctx,
   attr: Node,
   on: "element" | "component" = "element",
-  isElement = true,
+  isElement = false,
 ): Attr {
   const loc = posOf(attr);
   const nameSpan = attrNameSpan(ctx, attr);
@@ -349,20 +349,6 @@ function lowerAttr(
   // above lets it through on a host that allows methods, and `exprOf` gives
   // the same arrow-function `Expr` the handler-prop form produces, so a host
   // implements one branch and not two.
-  if (isElement && EVENT_ATTR.test(attr.name) && !attr.modifier) {
-    const name = String(attr.name);
-    const event = name[2] === "-" ? name.slice(3) : name.slice(2).toLowerCase();
-    warnOnReactEventSpelling(ctx, attr, name);
-    return {
-      kind: "event",
-      name,
-      event,
-      value: exprOf(ctx, attr.value),
-      nameSpan,
-      loc,
-    };
-  }
-
   if (attr.bound) {
     return {
       kind: "bound",
@@ -414,6 +400,43 @@ function lowerAttr(
       loc,
     };
   }
+  // An event attribute is `on<Name>` or `on-<exact>`, and only on a native
+  // element: on a component call, a `<define>` call, a custom tag, a host tag
+  // (`<try onClick=fn>`) or an attribute tag, `on*` is the author's own prop
+  // contract and stays a `dynamic` prop. `on` is a real signal for the three
+  // `HostDeclarations` hooks above and must keep its two cases, so the element
+  // gate travels as its own boolean rather than a third `on` value.
+  //
+  // Placed *after* the boolean and string checks, so the kind is derived only
+  // when the value is an **expression**. A bare `<div onClick>` is HTML's
+  // spelling of `true` and stays `boolean`; `<button onClick="alert(1)">` is
+  // an ordinary HTML attribute string and stays `static` (MX does not invent a
+  // policy against inline handlers — it only stops *creating* one from a
+  // function). Deriving the kind before these checks changed real output:
+  // `<div onClick>` rendered as `<div onClick="true">` on html, and Angular
+  // emitted `(click)="(true)($event)"`.
+  //
+  // The attribute-method form (`onClick() { … }`) reaches here too: the check
+  // above lets it through on a host that allows methods, and `exprOf` gives
+  // the same arrow-function `Expr` the handler-prop form produces, so a host
+  // implements one branch and not two.
+  if (isElement && EVENT_ATTR.test(attr.name) && !attr.modifier) {
+    const name = String(attr.name);
+    if (name === "on-") {
+      fail("`on-` needs an event name (`on-<event>`)", attr);
+    }
+    const event = name[2] === "-" ? name.slice(3) : name.slice(2).toLowerCase();
+    warnOnReactEventSpelling(ctx, attr, name);
+    return {
+      kind: "event",
+      name,
+      event,
+      value: exprOf(ctx, value),
+      nameSpan,
+      loc,
+    };
+  }
+
   return {
     kind: "dynamic",
     name: attr.name,
