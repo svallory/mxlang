@@ -9,6 +9,17 @@
 declare module "@mxlang/parser" {
   import type { Expression, File } from "@babel/types";
 
+  // Re-exported, not re-declared: `MxRegionContext`/`MxRegionPositionCheck`
+  // are the real shapes `mx/region-context.ts` computes and calls, so a
+  // hand-duplicated copy here could silently drift from what the parser
+  // actually produces (round 3 review). `src/mx/region-context.ts` is
+  // outside `src/babel/`, so it needs none of this file's tsconfig
+  // relaxations — importing it directly is safe.
+  export type {
+    MxRegionContext,
+    MxRegionPositionCheck,
+  } from "./mx/region-context.ts";
+
   export interface MxParseOptions {
     sourceType?: "script" | "module" | "unambiguous";
     plugins?: unknown[];
@@ -21,6 +32,12 @@ declare module "@mxlang/parser" {
      * the P1 review hit when the option was first added.
      */
     mxCustomTags?: Record<string, unknown>;
+    /**
+     * A host's veto on where an MX region may appear (e.g. Angular's
+     * `.ng.mx` only allowing one as `@Component({ template: … })`'s value).
+     * Declared explicitly for the same reason as `mxCustomTags` above.
+     */
+    mxRegionPositionCheck?: MxRegionPositionCheck;
     [option: string]: unknown;
   }
 

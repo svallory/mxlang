@@ -33,6 +33,45 @@ lowering itself.
 
   **Note on fragments:** TSX fragments (`<>...</>`) are supported in `.solid.mx` files, but their text children are parsed by Babel as standard TSX text, not MX text. MX parsing rules (like Marko's whitespace collapsing) only apply inside an explicit MX element. Because `${x}` would silently parse as literal text `$` followed by a JSX expression `{x}` in TSX, the parser detects and throws an error for `${` in fragment text. Use standard `{x}` for expressions outside of an MX element.
 
+**A host can veto a region's syntactic position** through the
+`mxRegionPositionCheck` parser option, carried on the options bag beside
+`mxCustomTags` for the same reason (the bridge runs inside the tokenizer and
+has no other channel to the caller). Before compiling a region,
+`mxParseElementAt` computes an `MxRegionContext` — `propertyKey` (the
+innermost enclosing object-property key, or null; a computed key or a
+method-shorthand key, which has no `:` to anchor a value position at,
+contributes none), `decoratorNames` (every enclosing decorator's name,
+innermost first) and `isDirectPropertyValue` (an *exact-position* test: true
+iff the region is the immediate value of a property of the decorator
+argument object itself — the *first* frame directly enclosed by the
+decorator, or by nothing if the region isn't inside a decorator at all, must
+already be that property. A call wrapping the object, a ternary choosing it,
+an array holding it, or a further-nested object
+(`{ x: { template: <region/> } }`, `false` even though `propertyKey` reports
+the innermost `"template"`) all make it `false`, whether or not the region is
+an exact match one level deeper — there's no need to special-case each
+wrapper shape, since any of them either shifts the immediate frame's own
+start away from the region, or opens a boundary before the property is ever
+reached. It carries **no decorator-adjacency guarantee** — a region can be
+the direct, unwrapped value of some property with no decorator anywhere
+above it at all, so a host must also check `decoratorNames`) — and
+`argumentIndex` (the index of the decorator-call argument that (transitively)
+encloses the region, or null when there isn't one; distinguishes
+`@Component({ template: <div/> })` (`0`) from `@Component(opts, { template:
+<div/> })` (`1`), which `propertyKey`/`isDirectPropertyValue` alone can't) —
+from a small explicit parent-frame stack the
+vendored parser now tracks (`parseObjectProperty` in `src/babel/parser/expression.ts`
+pushes the property frame; `parseMaybeDecoratorArguments` in
+`src/babel/parser/statement.ts` pushes the decorator frame around a
+decorator's own call-argument parse; both push/pop `state.mxRegionParents`;
+see `src/mx/region-context.ts` for how the frames are turned into a
+context). No host knowledge (Angular's or anyone else's) lives in this
+package: the option is a plain callback returning `{ ok: true }` or
+`{ ok: false, message }`, and a rejection raises a positioned parse error at
+the region's own start. Absent, nothing is tracked and parsing is unchanged
+— see `notes/investigations/angular-ng-mx-spike.md`
+§Q4 for the design rationale (this is the `.ng.mx` host's C3 contract).
+
 `@mxlang/parser` depends on `@mxlang/solid` for that hand-off; tooling
 packages (`vite-plugin`, `tsc`, `babel-plugin`, `eslint-plugin`,
 `typescript-plugin`) keep importing `@mxlang/parser` unchanged — the

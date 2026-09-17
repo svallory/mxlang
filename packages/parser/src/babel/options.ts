@@ -111,6 +111,16 @@ export interface Options {
   // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
   mxCustomTags?: Record<string, any>;
 
+  /**
+   * MX FORK: a host's veto on where an MX region may appear, computed from
+   * the parser's own syntactic state (`mx/region-context.ts`'s
+   * `MxRegionContext`) and carried on the options bag beside `mxCustomTags`
+   * for the same reason — the bridge runs inside the tokenizer and has no
+   * other channel to the caller. Absent means every position is accepted
+   * (unchanged behavior).
+   */
+  mxRegionPositionCheck?: import("../mx/region-context.ts").MxRegionPositionCheck;
+
   startIndex?: number;
 
   /**
@@ -181,7 +191,11 @@ export const enum OptionFlags {
   AnnexB = 1 << 13,
 }
 
-type KeepOptionalKeys = "sourceFilename" | "strictMode" | "mxCustomTags";
+type KeepOptionalKeys =
+  | "sourceFilename"
+  | "strictMode"
+  | "mxCustomTags"
+  | "mxRegionPositionCheck";
 export type OptionsWithDefaults = Omit<Required<Options>, KeepOptionalKeys> &
   Pick<Options, KeepOptionalKeys>;
 
@@ -200,6 +214,9 @@ function createDefaultOptions(): OptionsWithDefaults {
     // caller's values by iterating over *this* object's keys — a key with no
     // default entry is silently never read.
     mxCustomTags: undefined,
+    // MX FORK: same "must default to undefined, not be left out" reasoning
+    // as mxCustomTags above.
+    mxRegionPositionCheck: undefined,
     startIndex: 0,
     // Column (0-based) from which to start counting source. Useful for
     // integration with other tools.
