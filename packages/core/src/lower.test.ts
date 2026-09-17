@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
-import type { Ctx, Node } from "./core.ts";
+import type { Ctx, MxWarning, Node } from "./core.ts";
 import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
@@ -89,6 +89,60 @@ function lowerSource(source: string, policy = fakeDeclarations()): Ir {
   if (thrown) throw thrown;
   if (!ir) throw new Error("lowerer produced no IR");
   return ir;
+}
+
+/**
+ * Lowers `source` with a warnings sink attached, returning both.
+ *
+ * `warn` prints to the console when no sink is collecting, so a test that
+ * asserts a warning has to supply one — and asserting the *position* is the
+ * point: the language server turns these into editor squiggles on the
+ * attribute name, so a warning that compiles but lands on the wrong line is a
+ * silent regression a message-only assertion would miss.
+ */
+function lowerWithWarnings(
+  source: string,
+  policy = fakeDeclarations(),
+): { ir: Ir; warnings: MxWarning[] } {
+  const warnings: MxWarning[] = [];
+  let ir: Ir | null = null;
+  let thrown: unknown = null;
+
+  const translator = {
+    taglibs: [] as Array<[string, unknown]>,
+    tagDiscoveryDirs: [] as string[],
+    translate: {
+      Program: {
+        exit(path: { node: { body: Node[] } }) {
+          const ctx: Ctx = newCtx(
+            source,
+            printExpression,
+            policy,
+            undefined,
+            "test.mx",
+          );
+          ctx.warnings = warnings;
+          try {
+            ir = lower(ctx, path.node.body);
+          } catch (error) {
+            thrown = error;
+          }
+          path.node.body = [];
+        },
+      },
+    },
+  };
+
+  const require = createRequire(import.meta.url);
+  const compiler = require("@marko/compiler");
+  compiler.compileSync(source, "/tmp/mx-core-test/lower.mx", {
+    translator,
+    output: "html",
+    writeVersionComment: false,
+  });
+  if (thrown) throw thrown;
+  if (!ir) throw new Error("lowerer produced no IR");
+  return { ir, warnings };
 }
 
 import { createRequire } from "node:module";
@@ -1537,6 +1591,38 @@ describe("event attributes", () => {
     ]);
   });
 
+  it("lowers a React spelling literally and warns instead of rewriting", () => {
+    // No aliases: the emitted event stays `doubleclick`, which is what the
+    // author wrote and what no element fires. Rewriting it to `dblclick` would
+    // make one spelling silently mean another.
+    const { ir, warnings } = lowerWithWarnings(
+      "<button onDoubleClick=f>x</button>\n",
+    );
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "event", name: "onDoubleClick", event: "doubleclick" },
+    ]);
+    expect(warnings).toEqual([
+      {
+        message:
+          "`onDoubleClick` is not a DOM event; did you mean `onDblclick`",
+        line: 1,
+        column: 8,
+        file: "test.mx",
+      },
+    ]);
+  });
+
+  it("does not warn on a camelCase spelling whose lowercase is the DOM name", () => {
+    // `onKeyDown`, `onMouseEnter`, `onPointerDown` and the rest of the React
+    // surface lowercase to real DOM events (`keydown`, `mouseenter`,
+    // `pointerdown`), so they are correct MX and must stay silent — a table
+    // that warned on them would fire on correct code.
+    const { warnings } = lowerWithWarnings(
+      "<div onKeyDown=f onMouseEnter=g onPointerDown=h onFocusIn=i>x</div>\n",
+    );
+    expect(warnings).toEqual([]);
+  });
+
   it("records a nameSpan covering the attribute name", () => {
     const source = "<button onClick=f>x</button>\n";
     const ir = lowerSource(source);
@@ -1609,5 +1695,37 @@ describe("`on*` outside a native element stays a prop", () => {
     expect(find(ir.body, "HostTag").tag.attrs).toMatchObject([
       { kind: "dynamic", name: "onClick" },
     ]);
+  });
+});
+
+/**
+ * `on:*` / `oncapture:*` are given no meaning by core (decision 101b).
+ *
+ * They are an ordinary `name:modifier` and must reach the host's existing
+ * modifier hook untouched, so each host maps or rejects them in its own
+ * vocabulary. Core neither rewrites them nor warns.
+ */
+describe("`on:` and `oncapture:` reach the modifier hook unchanged", () => {
+  it("hands both to resolveModifier with no event lowering and no warning", () => {
+    const seen: Array<{ name: string; modifier: string }> = [];
+    const { ir, warnings } = lowerWithWarnings(
+      "<button on:click=f oncapture:focus=g>x</button>\n",
+      fakeDeclarations({
+        resolveModifier: (attr) => {
+          const node = attr as unknown as { name: string; modifier: string };
+          seen.push({ name: node.name, modifier: node.modifier });
+          return `${node.name}:${node.modifier}`;
+        },
+      }),
+    );
+    expect(seen).toEqual([
+      { name: "on", modifier: "click" },
+      { name: "oncapture", modifier: "focus" },
+    ]);
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "dynamic", name: "on:click" },
+      { kind: "dynamic", name: "oncapture:focus" },
+    ]);
+    expect(warnings).toEqual([]);
   });
 });
