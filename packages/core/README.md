@@ -148,6 +148,15 @@ If a future `@marko/compiler` removes or reshapes that subpath, the blast radius
 is `markoBabel()` — one function, four named values — and the failure is a
 missing export at require time, not silent wrong output.
 
+**`printExpression(node)` is a public export** for the same reason: printing a
+Marko-owned expression node back to source text needs the same generator
+instance that parsed it, for the reasons above, so every host needing this
+prints through the one function `newCtx`'s `translate` visitor already uses,
+rather than reaching into `@marko/compiler/internal/babel` (or a different
+Babel instance's own generator) a second time per host. `@mxlang/solid` used
+to carry its own copy over `@babel/generator` — a *different* Babel instance
+from the one that parsed the node — before switching to this export.
+
 ## The two front doors
 
 **`compileSource(source, filename, declarations, host)`** — a whole file,

@@ -690,6 +690,15 @@ Five facts worth knowing before editing it:
   single `parse` call. It now asks `@marko/compiler/internal/babel`
   (`parse`/`parseExpression`/`traverse`/`types`, all present), which is also
   the instance Marko's own nodes belong to. Do not reintroduce a second Babel.
+  **`printExpression(node): string`** (`compile.ts`, public from `@mxlang/core`)
+  is the one function that prints a Marko-owned expression node back to source
+  text, with that same generator instance — it is what `compileSource`'s
+  `translate` visitor hands `newCtx` as its `generate` argument, and every
+  host printing an expression back to text should call this rather than
+  reaching for its own Babel generator. `@mxlang/solid` used to carry its own
+  copy (`generateExpression`, over `@babel/generator` — a different Babel
+  instance from the one that parsed the node) before switching to this
+  export.
 - **Every host implements `Emitter<Out>`**, one method per IR kind, and the
   core's `drive`/`emit` owns the walk. A host that cannot express a kind throws;
   no optional callback may silently drop it.
