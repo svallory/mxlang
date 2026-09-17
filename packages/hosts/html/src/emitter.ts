@@ -713,12 +713,15 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
     ...ir.hoisted.map((node) => node.code),
     ...emitter.state.moduleHoisted,
   ];
+  const inputType = ir.tagMetadata.readsContent
+    ? "Input & { content?: () => string }"
+    : "Input";
   if (hoisted.length > 0) lines.push("", ...hoisted);
   lines.push(
     "",
     ir.inputInterface?.code ?? "export interface Input {}",
     "",
-    "export default function (input: Input): string {",
+    `export default function (input: ${inputType}): string {`,
     `${INDENT}let out = "";`,
     // Hoisted statements precede the body but follow `out`, so a hoisted
     // declaration may not reference the buffer — which is the point: it is a

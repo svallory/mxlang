@@ -615,6 +615,26 @@ const RENDER_DYNAMIC = `function renderDynamic(target, props) {
  * line, so it is written once rather than twice.
  */
 const DEFAULT_EXPORT = "\nexport default function (input: Input): string {";
+const DEFAULT_EXPORT_WITH_CONTENT =
+  "\nexport default function (input: Input & { content?: () => string }): string {";
+
+/**
+ * The same signature line, rebound to a named `render` declaration.
+ *
+ * The `function ` prefix carries its trailing space deliberately: the emitted
+ * line is `export default function (input…`, so replacing the prefix without
+ * it leaves `function render (input…` with a stray space the goldens diff.
+ */
+function namedRenderFrom(defaultExport: string): string {
+  return defaultExport.replace("export default function ", "function render");
+}
+
+function defaultExportIn(code: string): string | null {
+  if (code.includes(DEFAULT_EXPORT_WITH_CONTENT)) {
+    return DEFAULT_EXPORT_WITH_CONTENT;
+  }
+  return code.includes(DEFAULT_EXPORT) ? DEFAULT_EXPORT : null;
+}
 
 /**
  * The brand a host's `check()` tests for.
@@ -666,7 +686,8 @@ export const MX_COMPONENT = Symbol.for("mx.component");
  * where `packages/oracle/src/translator-render.ts` has the same brittleness.
  */
 export function brandRender(code: string): string {
-  if (!code.includes(DEFAULT_EXPORT)) {
+  const defaultExport = defaultExportIn(code);
+  if (!defaultExport) {
     throw new Error(
       "@mxlang/html: cannot brand the compiled module — the emitted " +
         `code does not contain the expected default export line ${JSON.stringify(
@@ -677,10 +698,7 @@ export function brandRender(code: string): string {
     );
   }
 
-  return `${code.replace(
-    DEFAULT_EXPORT,
-    "\nfunction render(input: Input): string {",
-  )}
+  return `${code.replace(defaultExport, namedRenderFrom(defaultExport))}
 Object.defineProperty(render, Symbol.for("mx.component"), { value: true });
 
 export default render;
@@ -710,14 +728,13 @@ export function finalizeModule(code: string): string {
     .map(([, source]) => source);
 
   if (helpers.length === 0) return brandRender(code);
+  const defaultExport = defaultExportIn(code);
+  if (!defaultExport) return brandRender(code);
 
   // Placed after the author's own hoisted module scope so it cannot shadow a
   // binding they declared.
   return brandRender(
-    code.replace(
-      DEFAULT_EXPORT,
-      `\n${helpers.join("\n\n")}\n${DEFAULT_EXPORT}`,
-    ),
+    code.replace(defaultExport, `\n${helpers.join("\n\n")}\n${defaultExport}`),
   );
 }
 
@@ -731,18 +748,24 @@ export function finalizeModuleWithMappings(emitted: MappedCode): MappedCode {
   ]
     .filter(([call]) => emitted.code.includes(call as string))
     .map(([, source]) => source);
+  const defaultExport = defaultExportIn(emitted.code);
+  if (!defaultExport) {
+    // Reuse the detailed seam failure from the string-only path.
+    brandRender(emitted.code);
+    throw new Error("@mxlang/html: unreachable missing default export");
+  }
   const withHelpers =
     helpers.length === 0
       ? emitted
       : replaceMapped(
           emitted,
-          DEFAULT_EXPORT,
-          `\n${helpers.join("\n\n")}\n${DEFAULT_EXPORT}`,
+          defaultExport,
+          `\n${helpers.join("\n\n")}\n${defaultExport}`,
         );
   const branded = replaceMapped(
     withHelpers,
-    DEFAULT_EXPORT,
-    "\nfunction render(input: Input): string {",
+    defaultExport,
+    namedRenderFrom(defaultExport),
   );
   return concatMapped(
     branded,

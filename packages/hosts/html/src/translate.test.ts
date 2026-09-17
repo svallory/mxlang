@@ -1,4 +1,4 @@
-import type { CustomTag } from "@mxlang/core";
+import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 import { brandRender } from "./translate.ts";
@@ -549,5 +549,67 @@ describe("import precedence over registered custom tags", () => {
       customTags: { Widget: marker },
     });
     expect(code).toContain("mx-marker");
+  });
+});
+
+/**
+ * A tag template is a compilation unit (decision 95), so these compile the
+ * *unit itself* through this host rather than only its caller — the half a
+ * caller-side test cannot reach, since the template's body never enters the
+ * caller's module.
+ */
+describe("a tag template compiles as its own module", () => {
+  const unitFile = "/tmp/mx-translator-test/tags/unit.mx";
+
+  // A6. The augmentation is what makes an imported call passing `content`
+  // typecheck; without a test, deleting it would fail nothing.
+  it("augments Input with content when the template reads it", () => {
+    const { code } = compile(
+      src("<section><${input.content}/></section>"),
+      unitFile,
+    );
+    expect(code).toContain(
+      "function render(input: Input & { content?: () => string }): string",
+    );
+  });
+
+  it("leaves Input alone when the template never reads content", () => {
+    const { code } = compile(src("<section>fixed</section>"), unitFile);
+    expect(code).toContain("function render(input: Input): string");
+    expect(code).not.toContain("content?: () => string");
+  });
+
+  // A7. The old crash was `unexpected module-level node kind "Static" in the
+  // body walk`, raised while lowering a template *into* its caller. Compiling
+  // the unit is what actually exercises the path that used to crash: the
+  // `static` has to resolve to this module's own scope.
+  it("compiles a template containing static, at module scope", () => {
+    const { code } = compile(
+      src('static const LABEL = "ok"\n<span>${LABEL}</span>'),
+      unitFile,
+    );
+    const statementLine = code.indexOf('const LABEL = "ok"');
+    const renderLine = code.indexOf("function render(");
+    expect(statementLine).toBeGreaterThan(-1);
+    // Module scope means *before* the render function, not hoisted into it.
+    expect(statementLine).toBeLessThan(renderLine);
+    expect(code).toContain("escape(LABEL)");
+  });
+
+  // A8. A self-recursive tag: the unit imports itself, which is legal ESM.
+  it("compiles a self-recursive template", () => {
+    const source = src(
+      "<li>${input.node.label}" +
+        "<if=input.node.kids><ul><for|k| of=input.node.kids><tree node=k/></for></ul></if>" +
+        "</li>",
+    );
+    const tree: TemplateBackedTag = {
+      template: { filename: "/tmp/mx-translator-test/tags/tree.mx", source },
+    };
+    const { code } = compile(source, "/tmp/mx-translator-test/tags/tree.mx", {
+      customTags: { tree },
+    });
+    expect(code).toMatch(/import\s+\$mx_Tree\d+\s+from\s+"\.\/tree\.mx"/);
+    expect(code).toContain("function render(");
   });
 });
