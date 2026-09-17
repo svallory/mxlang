@@ -24,19 +24,14 @@ const FIXTURES = ["icon", "icon-template", "icon-sprite", "table-of"] as const;
 /**
  * Rows deliberately not compared, each with the reason the runner prints.
  *
- * Empty: the `table-of`/`solid` row that used to be skipped here (the
- * `@mxlang/solid` `<for>` accessor/value bug — see task `solid-for-accessor`)
- * is fixed; every fixture now compares on every host. See `run.ts` for the
- * fixture definitions.
+ * Empty, and twice over: the `table-of`/`solid` row (the `@mxlang/solid`
+ * `<for>` accessor/value bug, task `solid-for-accessor`) and the
+ * `icon-template`/`solid` row (a discovered unit's import had no module scope
+ * inside a `.solid.mx` region until the parser bridge hoisted it, tag-unit
+ * phase 2) are both fixed. Every fixture now compares on every host. See
+ * `run.ts` for the fixture definitions.
  */
-const SKIPPED: ReadonlyArray<readonly [string, string]> = [
-  // A discovered template is a compilation unit the caller imports (decision
-  // 95). A `.solid.mx` MX region is an expression with no module scope for that
-  // import; the parser bridge writes it into the surrounding TypeScript module,
-  // which is tag-unit phase 2. The reason is asserted from `run.ts`'s output
-  // below, so this cannot quietly become permanent.
-  ["icon-template", "solid"],
-];
+const SKIPPED: ReadonlyArray<readonly [string, string]> = [];
 
 function isSkipped(fixture: string, host: string): boolean {
   return SKIPPED.some(([f, h]) => f === fixture && h === host);

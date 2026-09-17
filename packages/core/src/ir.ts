@@ -285,6 +285,36 @@ export type IrNode =
       code: string;
       bindings: string[];
       end: Position;
+      /**
+       * True when the compiler minted this import for a discovered template
+       * tag, rather than the author writing it.
+       *
+       * The distinction is load-bearing exactly once, on Solid: a `.solid.mx`
+       * MX region is an *expression* inside a TypeScript module, so it has no
+       * module scope of its own. An author writing `import` inside a region
+       * is still an error — they have a real module to put it in — but a
+       * synthesized import has nowhere else to go, so the parser bridge
+       * hoists it into the surrounding module. Every other host emits both
+       * kinds identically and ignores this flag.
+       */
+      synthesized?: boolean;
+      /**
+       * The module specifier, as written in `code`, for a synthesized import.
+       *
+       * Carried structurally so a consumer never has to parse it back out of
+       * the statement text. Set with `synthesized`, absent otherwise.
+       */
+      specifier?: string;
+      /**
+       * The template's resolved absolute path, for a synthesized import.
+       *
+       * This is what dedupe and authored-import reuse key on (decision 95
+       * ruling 3: "reused by resolved path"). Two specifiers can spell one
+       * file — `./tags/icon.mx` and `./tags/../tags/icon.mx` — and resolving
+       * is what collapses them to one entry. Set with `synthesized`, absent
+       * otherwise.
+       */
+      resolvedPath?: string;
     } & IrBase)
   /** Any other top-level `export`, hoisted verbatim to module scope. */
   | ({ kind: "Export"; code: string; end: Position } & IrBase)
