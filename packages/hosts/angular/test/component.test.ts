@@ -150,25 +150,28 @@ describe("Component dynamic target (via HostTag routing)", () => {
     expect(out).toContain("title: &quot;a\\\\c&quot;");
   });
 
-  it("treats a bare, attribute-less <${expr}/> as a plain interpolation", () => {
-    // `<${Cmp}/>` with neither attributes nor a body parses through the
-    // exact same core branch as a bare `${Cmp}` placeholder (`lower.ts`'s
-    // `lowerTag`, the "A bare `${expr}`..." comment) — MX's own grammar has
-    // no way to tell them apart, so this host treats it as the
-    // interpolation it is indistinguishable from, not a component outlet.
+  it("treats a bare, attribute-less <${expr}/> as a dynamic component, same as the tagged form", () => {
+    // core PR #103 (main 50877ea8): a bare `${Cmp}` placeholder and
+    // `<${Cmp}/>` are the identical dynamic-tag construct on every host now
+    // (Marko's own grammar has no way to tell them apart, and Marko itself
+    // treats both as a dynamic tag — AGENTS.md's "four Marko facts"). This
+    // host no longer draws its own bare/tagged split; both emit
+    // `ngComponentOutlet`.
     const out = emit("<${Cmp}/>");
-    expect(out).toBe("{{ Cmp }}");
+    expect(out).toBe('<ng-container [ngComponentOutlet]="Cmp"></ng-container>');
     assertAngularParses(out);
   });
 
-  it("the bare-vs-attributed split is load-bearing: adding one attribute flips the shape", () => {
-    // Same DYNAMIC_TAG claim, same core branch — the only difference between
-    // these two inputs is whether any attribute is present. Asserted side
-    // by side so a regression that makes both collapse to one shape (either
-    // direction) fails visibly here, not just in the two separate tests
+  it("a bare ${expr} placeholder emits ngComponentOutlet exactly like the tagged form", () => {
+    // Asserted side by side so a regression reintroducing the old
+    // bare-vs-tagged split fails visibly here, not just in the fixture
     // above.
-    expect(emit("${Cmp}")).toBe("{{ Cmp }}");
-    expect(emit("<${Cmp}/>")).toBe("{{ Cmp }}");
+    expect(emit("${Cmp}")).toBe(
+      '<ng-container [ngComponentOutlet]="Cmp"></ng-container>',
+    );
+    expect(emit("<${Cmp}/>")).toBe(
+      '<ng-container [ngComponentOutlet]="Cmp"></ng-container>',
+    );
     expect(emit("<${Cmp} a=1/>")).toBe(
       '<ng-container [ngComponentOutlet]="Cmp" [ngComponentOutletInputs]="{ a: 1 }"></ng-container>',
     );
