@@ -15,4 +15,8 @@ export const MxErrors = ParseErrorEnum`mx`({
     // biome-ignore lint/suspicious/noTemplateCurlyInString: error message text
     "MX interpolation `${...}` is only valid inside an MX region. In a TSX fragment, use `{...}` instead.",
   PositionRejected: ({ message }: { message: string }) => message,
+  MissingRegionCompile: ({ filename }: { filename: string }) =>
+    `An MX region needs \`mxRegionCompile\` to lower it, but none was given for "${filename}". ` +
+    "Pass a `mxRegionCompile` hook when calling `parse`/`print` — for `.solid.mx`, that is " +
+    '`compileSolidMx` from "@mxlang/solid".',
 });

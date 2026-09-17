@@ -1,8 +1,8 @@
-import { compileSolidMx, type HoistedImport } from "@mxlang/solid";
 import { parseExpression } from "../babel/index.ts";
 import { types as tc } from "../babel/tokenizer/context.ts";
 import { Position } from "../babel/util/location.ts";
 import { MxErrors } from "./errors.ts";
+import type { HoistedImport } from "./hoist-imports.ts";
 import type { MxRegionCompile } from "./region-compile.ts";
 import {
   computeMxRegionContext,
@@ -104,43 +104,39 @@ export function mxParseElementAt(
     }
   }
 
+  // Which host lowers this region is the caller's to decide, on the same
+  // options-bag channel `mxRegionPositionCheck` uses — the bridge runs
+  // inside the tokenizer and has no other route to an integration. The
+  // parser owns no host of its own, so a region with the grammar on and no
+  // hook is a compile error naming the missing option, not a silent default.
+  const regionCompile = parser.options?.mxRegionCompile as
+    | MxRegionCompile
+    | undefined;
+  if (!regionCompile) {
+    throw raiseAndThrow(parser, MxErrors.MissingRegionCompile, startLoc, {
+      filename: parser.options?.sourceFilename ?? "input.mx",
+    });
+  }
+
   let node: unknown;
   try {
     const region = source.slice(start, end);
-    // Which host lowers this region is the caller's to decide, on the same
-    // options-bag channel `mxRegionPositionCheck` uses — the bridge runs
-    // inside the tokenizer and has no other route to an integration. Absent,
-    // it is the Solid host, exactly as every `.solid.mx` parse has always
-    // done; `compileSolidMx`'s own option names are what this input mirrors.
-    const regionCompile = parser.options?.mxRegionCompile as
-      | MxRegionCompile
-      | undefined;
-    // One position/tag bag for both arms: the two used to repeat five
-    // arguments, where a change to one could silently miss the other.
-    const base = {
+    const { code, hoistedImports, returnVars } = regionCompile({
+      source: region,
+      filename: parser.options?.sourceFilename ?? "input.mx",
+      // The region's syntactic position, already computed for the veto
+      // above. Handed over so a host that needs it downstream — to shape
+      // its emit, not merely to accept or reject — needs no side channel
+      // back into the parser. Undefined when no position check ran, since
+      // the stack is only tracked then.
+      context: regionContext,
       baseOffset: start,
       baseLine: startLoc.line - 1,
       baseColumn: startLoc.column,
       // Registered custom tags reach a host only through here, for the same
       // reason the hook itself does.
       customTags: parser.options?.mxCustomTags,
-    };
-    const { code, hoistedImports, returnVars } = regionCompile
-      ? regionCompile({
-          source: region,
-          filename: parser.options?.sourceFilename ?? "input.mx",
-          // The region's syntactic position, already computed for the veto
-          // above. Handed over so a host that needs it downstream — to shape
-          // its emit, not merely to accept or reject — needs no side channel
-          // back into the parser. Undefined when no position check ran, since
-          // the stack is only tracked then.
-          context: regionContext,
-          ...base,
-        })
-      : compileSolidMx(region, {
-          filename: parser.options?.sourceFilename ?? "input.solid.mx",
-          ...base,
-        });
+    });
     node = parseExpression(code, {
       ...mxSubParseOptions(parser.options),
       mx: false,

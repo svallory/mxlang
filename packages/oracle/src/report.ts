@@ -1,9 +1,22 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parse as mxParser } from "@mxlang/parser";
+import type { MxRegionCompile } from "@mxlang/parser";
+import { parse } from "@mxlang/parser";
+import { compileSolidMx } from "@mxlang/solid";
 import { compare } from "./compare";
 import { discoverFixtures } from "./fixtures";
 import { runAngularTable } from "./report-angular";
+
+/**
+ * Adapts `compileSolidMx`'s own `(source, options)` signature to the
+ * `MxRegionCompile` shape `parse` calls — the parser no longer defaults to
+ * this host, so every `.solid.mx` caller supplies it explicitly.
+ */
+const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
+  compileSolidMx(source, rest);
+
+const mxParser = (source: string, filename: string) =>
+  parse(source, filename, { mxRegionCompile: solidRegionCompile });
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = join(here, "..", "..", "..", "fixtures");

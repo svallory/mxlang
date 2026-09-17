@@ -401,6 +401,12 @@ function renameRegionReferences(
  * source offsets, read off `node.extra.mx.range` (stamped by the bridge on
  * each region root — see `mx/bridge.ts`'s `stampRoot`) rather than threading
  * a dedicated parser option: the AST already carries this fact.
+ *
+ * Only a region's *boundary* is read back, never its lowered content, so a
+ * caller with no host of its own (grammar-differential tooling, an editor
+ * merely mapping region extents) does not need one either: absent an
+ * explicit `mxRegionCompile`, this defaults to a stub that returns a trivial,
+ * always-parseable placeholder.
  */
 export function collectMxRegions(
   source: string,
@@ -410,7 +416,11 @@ export function collectMxRegions(
   const regions: Array<{ start: number; end: number }> = [];
   let file: File;
   try {
-    file = parse(source, filename, { ...options, errorRecovery: true });
+    file = parse(source, filename, {
+      mxRegionCompile: () => ({ code: "null" }),
+      ...options,
+      errorRecovery: true,
+    });
   } catch {
     return regions;
   }

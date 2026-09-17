@@ -106,6 +106,19 @@ describe("print", () => {
 
     expect(programShape(code)).toEqual(programShape(plain));
   });
+
+  it("forwards `mx` and `mxRegionCompile` to `parse` for a non-.solid.mx filename", () => {
+    const calls: string[] = [];
+    print("const view = <div>hi</div>;", "x.ng.mx", {
+      mx: true,
+      mxRegionCompile: (input) => {
+        calls.push(input.source);
+        return { code: "null" };
+      },
+    });
+
+    expect(calls).toEqual(["<div>hi</div>"]);
+  });
 });
 
 /**

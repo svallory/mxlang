@@ -1,6 +1,7 @@
 import generate from "@babel/generator";
 import type { File } from "@babel/types";
 import { parse } from "../index.ts";
+import type { MxRegionCompile } from "./region-compile.ts";
 
 /**
  * A source map in the shape `@babel/generator` produces, which is also the
@@ -25,11 +26,24 @@ export interface PrintResult {
 export interface PrintOptions {
   /**
    * Custom tags already discovered and loaded by the calling integration.
-   * Forwarded through the parser to `compileSolidMx`, which lowers each MX
-   * region; without it a registered tag is an unknown tag inside `.solid.mx`.
+   * Forwarded through the parser to whichever host lowers each MX region
+   * (`mxRegionCompile` below); without it a registered tag is unknown inside
+   * the region.
    */
   // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
   customTags?: Record<string, any>;
+  /**
+   * Lowers each MX region the bridge finds. Required whenever the grammar is
+   * on (`.solid.mx` by name, or `mx: true`) — the parser has no host of its
+   * own, so an absent hook is a compile error at the first region. For
+   * `.solid.mx`, pass `compileSolidMx` from `@mxlang/solid`.
+   */
+  mxRegionCompile?: MxRegionCompile;
+  /**
+   * Turns the MX grammar on explicitly, forwarded to `parse` unchanged. Unset,
+   * `parse`'s own `.solid.mx` filename test decides.
+   */
+  mx?: boolean;
 }
 
 /**
@@ -94,7 +108,11 @@ export function print(
   options: PrintOptions = {},
 ): PrintResult {
   return printAst(
-    parse(source, filename, { mxCustomTags: options.customTags }),
+    parse(source, filename, {
+      mxCustomTags: options.customTags,
+      mxRegionCompile: options.mxRegionCompile,
+      mx: options.mx,
+    }),
     filename,
   );
 }
