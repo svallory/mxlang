@@ -318,8 +318,59 @@ describe("scanCustomTags", () => {
     // A different file kind, not a tag template. Silence would leave an
     // author wondering why their file is invisible.
     expect(() => scanCustomTags(join(dir, "caller.mx"))).toThrow(
-      /tag templates are `\.mx`; `\.solid\.mx` is not supported as a tag/,
+      /`widget\.solid\.mx` is a host module file, not a tag template; tag templates are `\.mx`/,
     );
+  });
+
+  it("reports a .ng.mx in a tags/ directory instead of ignoring it", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"ngtag"}');
+    writeFileSync(join(dir, "tags", "widget.ng.mx"), "export const x = 1;\n");
+
+    expect(() => scanCustomTags(join(dir, "caller.mx"))).toThrow(
+      /`widget\.ng\.mx` is a host module file, not a tag template; tag templates are `\.mx`/,
+    );
+  });
+
+  it("indexes <unlisted>.mx as an ordinary dotted tag name", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"footag"}');
+    writeFileSync(join(dir, "tags", "widget.foo.mx"), "");
+
+    // `foo` is not a recognized host segment (only `solid`/`ng` are today):
+    // the host-module list is a closed allowlist, not "any second dotted
+    // segment", precisely so a future dotted tag name is never mistaken for
+    // a host module file it isn't.
+    expect(
+      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+    ).toEqual(["widget.foo"]);
+  });
+
+  it("still indexes a plain .mx tag with no host-module suffix", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"plaintag"}');
+    writeFileSync(join(dir, "tags", "icon.mx"), "");
+
+    expect(
+      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+    ).toEqual(["icon"]);
+  });
+
+  it("indexes a dotted tag name that is not a host-module convention", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"dottedtag"}');
+    // `my.icon` is not a recognized host segment (only `solid`/`ng` are), so
+    // `TAG_NAME_RE` — which allows dots in a tag name — still wins: this is
+    // the valid tag `<my.icon>`, unaffected by the host-module rule.
+    writeFileSync(join(dir, "tags", "my.icon.mx"), "");
+
+    expect(
+      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+    ).toEqual(["my.icon"]);
   });
 
   it("refuses to register a tag file shadowing a core-owned built-in", () => {
@@ -409,6 +460,19 @@ describe("discoverProjectTags", () => {
   it("excludes a nested package's tags/ directory", () => {
     const result = discoverProjectTags(fixture("project-wide"));
     expect(result.tags.has("gamma")).toBe(false);
+  });
+
+  it("rejects a .ng.mx under tags/ the same way scanCustomTags does", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"projectng"}');
+    writeFileSync(join(dir, "tags", "widget.ng.mx"), "export const x = 1;\n");
+
+    // `discoverProjectTags` shares `indexDirectory` with `scanCustomTags`, so
+    // the host-module rule cannot drift between the two.
+    expect(() => discoverProjectTags(dir)).toThrow(
+      /`widget\.ng\.mx` is a host module file, not a tag template; tag templates are `\.mx`/,
+    );
   });
 
   it("excludes node_modules", () => {

@@ -63,6 +63,56 @@ const SIDECAR_SUFFIX = ".tag.ts";
 const TEMPLATE_SUFFIX = ".mx";
 
 /**
+ * Host segments that make `<segment>.mx` a host module file — a TypeScript
+ * (or similar) module carrying MX regions, compiled by that host directly —
+ * rather than a tag template. Currently: `.solid.mx` (the Solid host) and
+ * `.ng.mx` (the Angular host's per-region file kind).
+ *
+ * A literal list, not "any second dotted segment before `.mx`": `TAG_NAME_RE`
+ * allows dots in an ordinary tag name (`tags/my.icon.mx` is the valid tag
+ * `<my.icon>`), so a segment-shaped rule with no allowlist would reject every
+ * dotted tag name as a false positive. `.amx` is a separate three-letter
+ * extension with no `.mx` suffix at all, so it never reaches this check (or
+ * `TEMPLATE_SUFFIX`) in the first place.
+ *
+ * A segment is the file-extension spelling (`"ng"`), not the `HostPolicy`
+ * name (`"angular"`) — the two happen to coincide for `"solid"` but not for
+ * `"ng"`.
+ */
+const HOST_MODULE_SEGMENTS = [
+  "solid",
+  "ng",
+] as const satisfies readonly string[];
+
+/** The host segment `<name>.mx` under `tags/` carries, if any. */
+function hostModuleSegment(entry: string): string | undefined {
+  if (!entry.endsWith(TEMPLATE_SUFFIX)) return undefined;
+  const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
+  const dot = bare.lastIndexOf(".");
+  if (dot === -1) return undefined;
+  const segment = bare.slice(dot + 1);
+  return (HOST_MODULE_SEGMENTS as readonly string[]).includes(segment)
+    ? segment
+    : undefined;
+}
+
+/**
+ * Rejects `entry` if it is a host module file (`.solid.mx`, `.ng.mx`, ...)
+ * rather than a tag template — a different file kind, silently skipping
+ * which would leave an author wondering why their file is invisible.
+ * Positioned at the file. Shared by `indexDirectory`, so `scanCustomTags`
+ * and `discoverProjectTags` cannot drift on the rule.
+ */
+function rejectHostModuleFile(dir: string, entry: string): void {
+  const segment = hostModuleSegment(entry);
+  if (segment === undefined) return;
+  failIn(
+    join(dir, entry),
+    `\`${entry}\` is a host module file, not a tag template; tag templates are \`.mx\``,
+  );
+}
+
+/**
  * What a tag file's basename may be, and therefore what a call name may be.
  *
  * The rule: a letter, digit or underscore to start, then letters, digits,
@@ -707,19 +757,10 @@ function indexDirectory(
     if (entry.startsWith(".")) continue;
 
     const isSidecar = entry.endsWith(SIDECAR_SUFFIX);
-    const isSolidTemplate = entry.endsWith(`.solid${TEMPLATE_SUFFIX}`);
-    const isTemplate = entry.endsWith(TEMPLATE_SUFFIX) && !isSolidTemplate;
 
-    // `.solid.mx` is a different file kind — a TypeScript module with MX
-    // regions, compiled by the Solid host — not a tag template. Silently
-    // skipping it would leave an author wondering why their file is invisible,
-    // so say so.
-    if (isSolidTemplate) {
-      failIn(
-        join(dir, entry),
-        "tag templates are `.mx`; `.solid.mx` is not supported as a tag",
-      );
-    }
+    rejectHostModuleFile(dir, entry);
+    const isTemplate = entry.endsWith(TEMPLATE_SUFFIX);
+
     if (!isSidecar && !isTemplate) continue;
 
     const bare = isSidecar
