@@ -173,8 +173,34 @@ function discoverTagFiles(
   projectDir: string,
   realProjectDir: string,
   diagnostics: DiscoverDiagnostic[],
-): { templates: Set<string>; tagDirectories: string[] } {
-  const result = discoverProjectTags(projectDir, { host: "angular" });
+): {
+  templates: Set<string>;
+  tagDirectories: string[];
+  /** Files core rejected outright; routed nowhere, reported as a diagnostic. */
+  rejected: Set<string>;
+} {
+  const rejected = new Set<string>();
+  let result: ReturnType<typeof discoverProjectTags>;
+  try {
+    result = discoverProjectTags(projectDir, { host: "angular" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/is a host module file, not a tag template/.test(message)) throw err;
+    // Core's `failIn` puts the path in the message (`<file>: <reason>`)
+    // rather than on a field, so it is read back from there; `TranslateError`
+    // carries `file` only when the caller supplied one, which this one does
+    // not.
+    const file =
+      (err as { file?: string }).file ??
+      (/^(.*?): /.exec(message)?.[1] || projectDir);
+    diagnostics.push({
+      file,
+      message:
+        "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
+    });
+    rejected.add(resolve(file));
+    return { templates: new Set<string>(), tagDirectories: [], rejected };
+  }
   for (const d of result.diagnostics) {
     diagnostics.push({ file: d.file, message: d.message });
   }
@@ -217,7 +243,7 @@ function discoverTagFiles(
     }
   }
 
-  return { templates, tagDirectories: [...tagDirectories] };
+  return { templates, tagDirectories: [...tagDirectories], rejected };
 }
 
 /**
@@ -236,11 +262,11 @@ export function discoverFiles(
   // with no symlink escape at all.
   const realProjectDir = realResolve(projectDir);
   const included = expandInclude(projectDir, realProjectDir, config.include);
-  const { templates: tagFiles, tagDirectories } = discoverTagFiles(
-    projectDir,
-    realProjectDir,
-    diagnostics,
-  );
+  const {
+    templates: tagFiles,
+    tagDirectories,
+    rejected,
+  } = discoverTagFiles(projectDir, realProjectDir, diagnostics);
   // Discovered project-wide rather than through `include`, exactly as the
   // tag index is. A `.ng.mx` emits the component module Angular compiles, so
   // a narrowed `include` (`src/pages/**/*.mx`, say) silently skipping one
@@ -255,6 +281,9 @@ export function discoverFiles(
   for (const path of included) {
     if (seen.has(path)) continue;
     seen.add(path);
+    // Core rejected it and the diagnostic is already recorded; routing it
+    // anywhere would compile a file the author was just told to move.
+    if (rejected.has(path)) continue;
     // `.ng.mx` is checked **before** tag membership: a `.ng.mx` under a
     // `tags/` directory is not a tag, it is a component module that happens
     // to live there, and routing it to the tag compiler produced a nonsense
@@ -289,6 +318,7 @@ export function discoverFiles(
   for (const path of ngMxFiles) {
     if (seen.has(path)) continue;
     seen.add(path);
+    if (rejected.has(path)) continue;
     if (tagFiles.has(path)) {
       diagnostics.push({
         file: path,
