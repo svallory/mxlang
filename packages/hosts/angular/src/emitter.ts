@@ -989,7 +989,15 @@ class AngularEmitter implements Emitter<string> {
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
-    const params = node.params.map((p) => `let-${p}`).join(" ");
+    // A bare `let-x` binds `$implicit`, so emitting one per param gives every
+    // param the *first* outlet argument — `${v}` reads the key, silently, with
+    // `ng build` green because a `let-` variable is implicitly `any`. The
+    // outlet context is `{ $implicit: first, rest: rest }` (see
+    // `ngTemplateOutlet`'s context below), so only the first param rides
+    // `$implicit`; every later one names its own context key.
+    const params = node.params
+      .map((p, i) => (i === 0 ? `let-${p}` : `let-${p}="${p}"`))
+      .join(" ");
     this.out += `<ng-template #${node.name}${params ? ` ${params}` : ""}> `;
     for (const child of node.children) this.emitNode(child);
     this.out += " </ng-template>";
