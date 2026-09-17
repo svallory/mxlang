@@ -51,10 +51,15 @@ export interface HostDeclarations {
    * kind with its attributes, children, attribute tags, params and `var`
    * already resolved, and the host's emitter renders it.
    *
-   * `DYNAMIC_TAG` is passed for `<${expr}/>`; match the exported constant
-   * rather than retyping the sentinel.
+   * `DYNAMIC_TAG` is passed for `<${expr}/>`. `shape` distinguishes the bare
+   * form (no attributes, no body — indistinguishable at parse time from a
+   * plain `${expr}` placeholder) from a form carrying at least one, only for
+   * `DYNAMIC_TAG`; omitted for every other name. A host that ignores the
+   * third argument keeps claiming both shapes, which is every existing
+   * host's behaviour — the parameter only lets a *new* host opt out of the
+   * bare shape and leave it to the `Interpolation` fallback.
    */
-  claimsTag?(name: string, ctx: Ctx): boolean;
+  claimsTag?(name: string, ctx: Ctx, shape?: "bare" | "tagged"): boolean;
   /**
    * Records whatever this host decided about a claimed tag, into the
    * `HostTag` node's `data` slot.

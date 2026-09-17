@@ -38,7 +38,7 @@ alias of that type only. Every member is a lower-time question:
 | `tags` | Per-tag-name dispositions: `inert` (accepted, no output, in a declared shape) or `error` (this target cannot express it). Decision 65: never "my code cannot". |
 | `isElement(name, ctx)` | Whether an unbound lowercase tag name is a real element. |
 | `isComponent(name, ctx)` | Whether a tag name resolves to a component in this host. |
-| `claimsTag?(name, ctx)` | Whether the host owns a tag the structural core does not. |
+| `claimsTag?(name, ctx, shape?)` | Whether the host owns a tag the structural core does not. |
 | `resolveHostTag?(name, node, ctx)` | Records the host's decision in `HostTag.data` while the Marko node is available. |
 | `rejectModifier?`, `rejectAttributeMethod?` | Replace generic attribute diagnostics with the host's own wording. |
 | `rejectElementAttributeTags?`, `rejectComponentTag?`, `rejectUnknownTag?` | Replace generic tag-routing diagnostics with the host's own wording. |
@@ -46,7 +46,15 @@ alias of that type only. Every member is a lower-time question:
 | `keepComments?` | Whether an HTML comment reaches the output. |
 
 `DYNAMIC_TAG` is the sentinel name `claimsTag` receives for `<${expr}/>`;
-match against the exported constant rather than retyping it.
+match against the exported constant rather than retyping it. A bare
+`${expr}` placeholder and `<${expr}/>` parse to the identical Marko node (no
+attrs, no body), so `claimsTag`'s third argument carries `"bare"` or
+`"tagged"` — `"bare"` only for the no-attrs-no-body shape, `"tagged"`
+otherwise — letting a host opt out of claiming the bare shape and leave it to
+the `Interpolation` fallback. The argument is passed only alongside
+`DYNAMIC_TAG`; every other tag name gets `undefined`. A `claimsTag` that
+ignores the third argument keeps claiming both shapes, which is every
+current host's behavior — the parameter is opt-in, not a required change.
 
 ## The three stateful-tag hooks (decision 70)
 
