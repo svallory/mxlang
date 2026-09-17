@@ -1295,12 +1295,14 @@ function createPluginService(
 
 describe("custom tag template mappings", () => {
   /**
-   * The template's expression is byte-identical to one the caller writes, and
-   * both survive into the generated module — `helper` is a `static` binding
-   * the template reads, not an `input` read that substitution would replace.
-   * So the generated text contains `helper.count` twice while the caller's
-   * source contains it once, which is the case a mapping pass must not get
-   * wrong by mapping the expansion's copy onto the caller's text.
+   * The template writes an expression byte-identical to one the caller writes.
+   *
+   * Under the unit model (decision 95) the template is a separate module the
+   * caller imports, so its copy never enters the caller's generated text at
+   * all — the property these tests assert (no mapping may point at the
+   * caller's text for something the caller did not write) now holds by
+   * construction rather than by the mapping pass being careful. They are kept
+   * as the regression that would catch expansion returning by any route.
    */
   const CALLER = [
     "static const helper = { count: 1 };",
@@ -1343,11 +1345,13 @@ describe("custom tag template mappings", () => {
     };
   }
 
-  it("expands the template into the generated module", () => {
+  it("imports the template instead of expanding it", () => {
     const { generated } = mappingsFor(CALLER, customTags);
-    // The premise of the two tests below: the expansion really is there, and
-    // really does repeat the caller's own expression text.
-    expect(generated.split("helper.count")).toHaveLength(3);
+    // The template's body stays in its own module: the caller's generated text
+    // holds its own `helper.count` once, and the tag arrives as an import.
+    expect(generated.split("helper.count")).toHaveLength(2);
+    expect(generated).toMatch(/import\s+\$mx_\w+\s+from\s+"[^"]*box\.mx"/);
+    expect(generated).not.toContain("<span>");
   });
 
   it("keeps exactly the caller's own expression mapped", () => {

@@ -1,4 +1,5 @@
 import {
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -8,7 +9,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { compileHonoMx } from "@mxlang/hono";
@@ -67,6 +68,23 @@ interface Fixture {
    * cannot quietly become permanent.
    */
   skip?: Partial<Record<CustomTagHost, string>>;
+  /**
+   * Template units this fixture's caller imports, by emitted specifier.
+   *
+   * Each is compiled through the same host as the caller and written beside it,
+   * which is what makes this gate test the unit model rather than the harness:
+   * the tag is a separate module on every host, exactly as it ships.
+   */
+  templates?: string[];
+}
+
+/** The specifier `lower.ts` mints for a discovered template, as a relative path. */
+function unitSpecifier(callerFile: string, templateFile: string): string {
+  const specifier = relative(dirname(callerFile), templateFile).replaceAll(
+    "\\",
+    "/",
+  );
+  return specifier.startsWith(".") ? specifier : `./${specifier}`;
 }
 
 function load(
@@ -87,14 +105,15 @@ function load(
 }
 
 /** The L1 tag: `tags/icon.mx`, registered by path as P2's scan later will. */
+const ICON_TEMPLATE = join(here, "icon-template", "tags", "icon.mx");
+
 function templateIcon(): Record<string, CustomTag> {
-  const filename = join(here, "icon-template", "tags", "icon.mx");
   return {
     icon: {
       template: {
-        filename,
-        source: readFileSync(filename, "utf8"),
-        mtimeMs: statSync(filename).mtimeMs,
+        filename: ICON_TEMPLATE,
+        source: readFileSync(ICON_TEMPLATE, "utf8"),
+        mtimeMs: statSync(ICON_TEMPLATE).mtimeMs,
       },
     } satisfies TemplateBackedTag,
   };
@@ -102,7 +121,13 @@ function templateIcon(): Record<string, CustomTag> {
 
 const FIXTURES: Fixture[] = [
   load("icon", { icon }),
-  load("icon-template", templateIcon()),
+  {
+    ...load("icon-template", templateIcon(), {
+      solid:
+        "a discovered template is imported by the caller (decision 95), but a `.solid.mx` MX region is an *expression* with no module scope to hold the import; the parser bridge writes it into the surrounding TypeScript module, which is tag-unit phase 2 (design §3.2, §10)",
+    }),
+    templates: [ICON_TEMPLATE],
+  },
   // P5's two dogfoods. `icon-sprite` is the same markup as `icon` through the
   // collecting pair — one `<symbol>` per distinct name, prepended once — and
   // `table-of` is L2 without that pair, showing `literalOnly` plus the
@@ -114,10 +139,25 @@ const FIXTURES: Fixture[] = [
 const HOSTS = 6;
 const EXPECTED_ROWS = FIXTURES.length * HOSTS;
 
+/**
+ * A module the entry imports, written beside it under the entry's own name.
+ *
+ * A template tag is a compilation unit (decision 95): the caller emits
+ * `import $mx_Icon1 from "./tags/icon.mx"` rather than expanding the template
+ * inline, so the tag's own compiled module has to exist on disk beside the
+ * caller for that import to resolve.
+ */
+interface SiblingModule {
+  /** The specifier the caller imports, exactly as emitted (`./tags/icon.mx`). */
+  specifier: string;
+  code: string;
+}
+
 async function loadModule(
   code: string,
   extension: "ts" | "tsx" | "jsx",
   jsxImportSource?: string,
+  siblings: SiblingModule[] = [],
 ): Promise<{ default: (input: unknown) => unknown }> {
   const scratch = mkdtempSync(join(tmpdir(), "mx-custom-tags-"));
   try {
@@ -139,16 +179,35 @@ async function loadModule(
       "dir",
     );
     const entry = join(scratch, `mod.${extension}`);
-    const rewritten = code
-      .replace(
-        'from "@mxlang/html"',
-        `from ${JSON.stringify(require.resolve("@mxlang/html"))}`,
-      )
-      .replace(
-        '"@mxlang/preact/runtime"',
-        JSON.stringify(require.resolve("@mxlang/preact/runtime")),
+    const resolveRuntimes = (source: string): string =>
+      source
+        .replace(
+          'from "@mxlang/html"',
+          `from ${JSON.stringify(require.resolve("@mxlang/html"))}`,
+        )
+        .replace(
+          '"@mxlang/preact/runtime"',
+          JSON.stringify(require.resolve("@mxlang/preact/runtime")),
+        );
+
+    // A tag unit is written beside the caller at the path the caller imports,
+    // but under a runnable extension: Bun resolves a bare `.mx` import to the
+    // file's *path string*, not a module (that is what `@mxlang/html/bun`
+    // exists to fix, and this harness loads compiled output directly rather
+    // than through a loader). The caller's specifier is repointed to match, so
+    // what is under test stays the emitted import, not the extension.
+    let entryCode = code;
+    for (const sibling of siblings) {
+      const runnable = sibling.specifier.replace(/\.mx$/, `.${extension}`);
+      const target = join(scratch, runnable);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, resolveRuntimes(sibling.code));
+      entryCode = entryCode.replaceAll(
+        `"${sibling.specifier}"`,
+        `"${runnable}"`,
       );
-    writeFileSync(entry, rewritten);
+    }
+    writeFileSync(entry, resolveRuntimes(entryCode));
     return (await import(`${entry}?t=${Date.now()}`)) as {
       default: (input: unknown) => unknown;
     };
@@ -173,20 +232,64 @@ function compared(
       };
 }
 
-async function runHtml(fixture: Fixture, strict: boolean): Promise<string> {
-  const { code } = compileHtml(fixture.source, fixture.filename, {
-    customTags: fixture.customTags,
-    strict,
+/**
+ * Compiles each of a fixture's template units through the caller's own host.
+ *
+ * This is the unit model's whole claim in one function: a tag template goes
+ * through the same per-file compiler a page does, on every host, and the
+ * caller reaches it by an ordinary import.
+ */
+function unitsFor(
+  fixture: Fixture,
+  compileUnit: (source: string, filename: string) => string,
+  callerCode: string,
+): SiblingModule[] {
+  return (fixture.templates ?? []).map((templateFile) => {
+    const specifier = unitSpecifier(fixture.filename, templateFile);
+    // `unitSpecifier` reimplements the compiler's own `importSpecifier`, so
+    // assert the caller actually emitted that specifier. Without this the two
+    // could drift into agreement by coincidence: the rewrite below simply
+    // finds nothing, and the failure surfaces as an unrelated resolve error.
+    if (!callerCode.includes(`from "${specifier}"`)) {
+      throw new Error(
+        `expected the caller to import the tag unit as "${specifier}", but it did not; emitted imports: ${
+          callerCode.match(/^import .*$/gm)?.join(" | ") ?? "none"
+        }`,
+      );
+    }
+    return {
+      specifier,
+      code: compileUnit(readFileSync(templateFile, "utf8"), templateFile),
+    };
   });
-  const mod = await loadModule(code, "ts");
+}
+
+async function runHtml(fixture: Fixture, strict: boolean): Promise<string> {
+  const compileUnit = (source: string, filename: string) =>
+    compileHtml(source, filename, {
+      customTags: fixture.customTags,
+      strict,
+    }).code;
+  const code = compileUnit(fixture.source, fixture.filename);
+  const mod = await loadModule(
+    code,
+    "ts",
+    undefined,
+    unitsFor(fixture, compileUnit, code),
+  );
   return String(mod.default(fixture.input));
 }
 
 async function runPreact(fixture: Fixture): Promise<string> {
-  const { code } = compilePreactMx(fixture.source, fixture.filename, {
-    customTags: fixture.customTags,
-  });
-  const mod = await loadModule(code, "tsx", "preact");
+  const compileUnit = (source: string, filename: string) =>
+    compilePreactMx(source, filename, { customTags: fixture.customTags }).code;
+  const code = compileUnit(fixture.source, fixture.filename);
+  const mod = await loadModule(
+    code,
+    "tsx",
+    "preact",
+    unitsFor(fixture, compileUnit, code),
+  );
   const { render } = (await import("preact-render-to-string")) as {
     render: (vnode: unknown) => string;
   };
@@ -197,10 +300,15 @@ async function runPreact(fixture: Fixture): Promise<string> {
 }
 
 async function runReact(fixture: Fixture): Promise<string> {
-  const { code } = compileReactMx(fixture.source, fixture.filename, {
-    customTags: fixture.customTags,
-  });
-  const mod = await loadModule(code, "tsx", "react");
+  const compileUnit = (source: string, filename: string) =>
+    compileReactMx(source, filename, { customTags: fixture.customTags }).code;
+  const code = compileUnit(fixture.source, fixture.filename);
+  const mod = await loadModule(
+    code,
+    "tsx",
+    "react",
+    unitsFor(fixture, compileUnit, code),
+  );
   const { createElement } = (await import("react")) as {
     createElement: (type: unknown, props: unknown) => unknown;
   };
@@ -213,10 +321,15 @@ async function runReact(fixture: Fixture): Promise<string> {
 }
 
 async function runHono(fixture: Fixture): Promise<string> {
-  const { code } = compileHonoMx(fixture.source, fixture.filename, {
-    customTags: fixture.customTags,
-  });
-  const mod = await loadModule(code, "tsx", "hono/jsx");
+  const compileUnit = (source: string, filename: string) =>
+    compileHonoMx(source, filename, { customTags: fixture.customTags }).code;
+  const code = compileUnit(fixture.source, fixture.filename);
+  const mod = await loadModule(
+    code,
+    "tsx",
+    "hono/jsx",
+    unitsFor(fixture, compileUnit, code),
+  );
   const { jsx } = (await import("hono/jsx")) as {
     jsx: (
       type: unknown,
