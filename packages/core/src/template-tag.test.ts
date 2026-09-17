@@ -163,6 +163,48 @@ describe("template custom tags as compilation units", () => {
     for (const binding of bindings) expect(names).not.toContain(binding);
   });
 
+  it("compiles a called template unit's own expressions through the real metadata path (core contract C4)", () => {
+    // Calling a discovered/imported tag routes through
+    // `registerTemplateMetadataCompiler`'s registered callback
+    // (`lower.ts:1396`), which runs `parseFragment` + `lower` against the
+    // *template's own* `Ctx` (`tag.source`/`tag.filename`) to derive its
+    // cached `TemplateMetadata`. This drives that real path — not a
+    // hand-rolled stand-in — with a template whose body has expressions at
+    // several `exprOf` call sites, proving the `span` guard (`exprSpan`)
+    // survives it without producing a `NaN` offset or throwing.
+    //
+    // `TemplateMetadata` itself only exposes `{ readsContent, attributeTags,
+    // returnsValue, returnValueCode }` — the template's own lowered `Ir`
+    // (and therefore its `Expr.span`s) is not threaded back to any caller-
+    // observable surface, so this cannot assert a specific offset the way
+    // `lower.test.ts`'s per-construction-site tests do. What it proves is
+    // that the guarded path used in production, not just a direct `lower()`
+    // call, is exercised end to end without crashing — and `returnValueCode`
+    // pins that the `<return>` expression's `Expr.code` (produced by the
+    // same `exprOf` call the span comes from) survived the real path intact,
+    // so the test asserts something beyond "did not throw".
+    const richTag = template(
+      "/tmp/mx-template-test/tags/rich.mx",
+      [
+        '<div a=input.x by="(p)=>p.id">',
+        "${input.y}",
+        "<for|item| of=input.items>${item}</for>",
+        "</div>",
+        "<const/doubled=input.x * 2/>",
+        "<return value=doubled/>",
+      ].join("\n"),
+    );
+    expect(() =>
+      lowerWithTags('<rich x="1" y="2" items="[]"/>\n', { rich: richTag }),
+    ).not.toThrow();
+    expect(
+      peekTemplateMetadata("/tmp/mx-template-test/tags/rich.mx"),
+    ).toMatchObject({
+      returnsValue: true,
+      returnValueCode: "doubled",
+    });
+  });
+
   it("reports openTagOnly content as a positioned MX error", () => {
     const leaf = template("/tmp/mx-template-test/tags/leaf.mx", "<i/>", {
       parseOptions: { openTagOnly: true },
