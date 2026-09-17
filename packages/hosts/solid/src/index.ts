@@ -12,9 +12,11 @@ import {
 } from "@mxlang/core";
 import MagicString from "magic-string";
 import {
+  collectReturnVars,
   createEmitter,
   emitSolid,
   emitSolidWithMappings,
+  MX_RETURN_PROP,
   SolidEmitter,
   solidDeclarations,
 } from "./emitter.ts";
@@ -23,6 +25,7 @@ export {
   createEmitter,
   emitSolid,
   emitSolidWithMappings,
+  MX_RETURN_PROP,
   SolidEmitter,
   solidDeclarations,
 };
@@ -300,8 +303,33 @@ export function compileSolidUnit(
   // Named after the file, never anonymous: a tag whose template calls its own
   // name resolves to this declaration, so self-recursion needs no self-import
   // (design invariant §7.5-7).
+  // A unit that declares `<return>` hands its value back through a
+  // **callback prop**, not through the return value — the one host where the
+  // `{ value, output }` shape does not fit, because a Solid component's
+  // return value is its view and the caller writes JSX rather than a call.
+  //
+  // Measured against solid-js 2.0.0-rc.7 (design §2.4): the component
+  // function runs synchronously at the JSX site under both `dom` and `ssr`
+  // generation, so a callback invoked during setup has already run by the
+  // caller's next statement. The value is therefore **one-shot, not
+  // reactive** — the binding holds the value from that single invocation.
+  // That matches `/var`'s meaning on every other host, and it is documented
+  // as risk 4: a Solid author may reasonably expect a signal, and a tag
+  // wanting reactivity should return an accessor for the caller to call.
+  // `/var` names are collected while emitting, because only the emitter
+  // knows which call sites declared one — a call inside an `<if>` branch or
+  // a `<for>` body reaches a child emitter, not this scope.
+  const { code: rendered, vars } = collectReturnVars(() => emitSolid(ir));
+  // Declared above the JSX that fills them: the callback prop assigns during
+  // the child's synchronous setup, which happens as the JSX is evaluated.
+  const varDecls = vars.length > 0 ? `let ${vars.join(", ")}; ` : "";
+  const name = moduleExportName(ir, "@mxlang/solid");
   lines.push(
-    `export default function ${moduleExportName(ir, "@mxlang/solid")}(input) { return <>${emitSolid(ir)}</>; }`,
+    ir.returnValue
+      ? `export default function ${name}(input) { ${varDecls}input[${JSON.stringify(
+          MX_RETURN_PROP,
+        )}]?.(${ir.returnValue.code}); return <>${rendered}</>; }`
+      : `export default function ${name}(input) { ${varDecls}return <>${rendered}</>; }`,
   );
   return { code: lines.join("\n") };
 }

@@ -1,0 +1,3 @@
+export interface Input { start: number }
+<span class="count">${input.start}</span>
+<return value=input.start + 1/>

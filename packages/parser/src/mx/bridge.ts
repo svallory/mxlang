@@ -73,7 +73,7 @@ export function mxParseElementAt(
   let node: unknown;
   try {
     const region = source.slice(start, end);
-    const { code, hoistedImports } = compileSolidMx(region, {
+    const { code, hoistedImports, returnVars } = compileSolidMx(region, {
       filename: parser.options?.sourceFilename ?? "input.solid.mx",
       baseOffset: start,
       baseLine: startLoc.line - 1,
@@ -91,7 +91,7 @@ export function mxParseElementAt(
       startColumn: startLoc.column,
     });
     remapExpressionLocations(node, root, code, source, start, end);
-    stampRoot(node, source, start, end, hoistedImports);
+    stampRoot(node, source, start, end, hoistedImports, returnVars);
   } catch (err) {
     const error = err as {
       message?: string;
@@ -318,6 +318,7 @@ function stampRoot(
   start: number,
   end: number,
   hoistedImports: HoistedImport[] = [],
+  returnVars: string[] = [],
 ): void {
   if (!node || typeof node !== "object") return;
   const root = node as Record<string, unknown>;
@@ -337,7 +338,11 @@ function stampRoot(
     // throws its node away. A collector would keep that attempt's imports;
     // a stamp on the discarded node goes with it. Only a region that made it
     // into the final AST can contribute an import to the module.
-    mx: { range: [start, end], hoistedImports },
+    // `returnVars` rides along for the same reason and with the same
+    // speculative-parse caveat: a `/var` inside a region binds a `let` the
+    // region itself has no statement position for, so the surrounding module
+    // declares it (design §2.4).
+    mx: { range: [start, end], hoistedImports, returnVars },
   };
 }
 

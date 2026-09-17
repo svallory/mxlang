@@ -90,6 +90,12 @@ function hoistRegionImports(file: File, filename: string): void {
   if (!Array.isArray(program?.body)) return;
 
   const hoisted: HoistedImport[] = [];
+  // A `/var` inside a region binds a value the region's own JSX has no
+  // statement position for, so the module declares the `let` and the
+  // region's callback prop assigns it (design §2.4). Same channel as the
+  // imports beside it, and the same speculative-parse discipline: only a
+  // region that survived into the final AST contributes one.
+  const returnVars = new Set<string>();
   const regions: Array<[number, number]> = [];
   const seen = new Set<unknown>();
   const visit = (node: unknown): void => {
@@ -104,18 +110,40 @@ function hoistRegionImports(file: File, filename: string): void {
     const mx = (
       record.extra as
         | {
-            mx?: { hoistedImports?: HoistedImport[]; range?: [number, number] };
+            mx?: {
+              hoistedImports?: HoistedImport[];
+              returnVars?: string[];
+              range?: [number, number];
+            };
           }
         | undefined
     )?.mx;
     if (mx?.range) regions.push(mx.range);
     for (const entry of mx?.hoistedImports ?? []) hoisted.push(entry);
+    for (const name of mx?.returnVars ?? []) returnVars.add(name);
     for (const key of Object.keys(record)) {
       if (key === "loc") continue;
       visit(record[key]);
     }
   };
   visit(program.body);
+
+  if (returnVars.size > 0) {
+    // Placed directly after the module's imports, which is above every
+    // region that could fill one: a `let` declared *after* the region that
+    // references it would be a temporal-dead-zone error at run time, and a
+    // region can appear in any statement of the module.
+    const declaration = babelParse(`let ${[...returnVars].join(", ")};`, {
+      sourceType: "module",
+      plugins: MX_DEFAULT_PLUGINS,
+    }) as unknown as { program: { body: Array<Record<string, unknown>> } };
+    program.body.splice(
+      authoredImportsOf(program.body).lastImportIndex + 1,
+      0,
+      declaration.program.body[0] as Record<string, unknown>,
+    );
+  }
+
   if (hoisted.length === 0) return;
 
   const { authored, lastImportIndex } = authoredImportsOf(program.body);

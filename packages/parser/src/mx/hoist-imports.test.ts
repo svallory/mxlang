@@ -6,6 +6,7 @@ import { print } from "../index.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ICON_TEMPLATE = join(HERE, "fixtures", "tags", "icon.mx");
+const COUNTER_TEMPLATE = join(HERE, "fixtures", "tags", "counter.mx");
 const PAGE = join(HERE, "fixtures", "page.solid.mx");
 
 /** The discovered `<icon>` tag, as an integration's scan would supply it. */
@@ -195,5 +196,50 @@ describe("hoisting a region's discovered-tag imports", () => {
     // Neither is a reference to a binding, so neither is a collision.
     expect(code).toContain("$mx_Icon1: 1");
     expect(code).toContain("o.$mx_Icon1");
+  });
+});
+
+/**
+ * A `/var` inside a region binds a value the region has no statement
+ * position for — a region is an *expression* inside a TypeScript module.
+ * The surrounding module declares the `let` and the region's callback prop
+ * assigns it, the same channel the injected imports above ride (design
+ * §2.4). Without this the emitted module referenced an undeclared binding,
+ * silently (round 1, finding 6).
+ */
+describe("hoisting a region's `/var` bindings", () => {
+  const withCounter = (source: string) =>
+    print(source, PAGE, {
+      customTags: {
+        counter: {
+          template: {
+            filename: COUNTER_TEMPLATE,
+            source: readFileSync(COUNTER_TEMPLATE, "utf8"),
+            mtimeMs: statSync(COUNTER_TEMPLATE).mtimeMs,
+          },
+        },
+      },
+    }).code;
+
+  it("declares the let in the surrounding module", () => {
+    const code = withCounter(
+      "const a = <div><counter/n start=1/><p>${n}</p></div>;",
+    );
+
+    expect(code).toContain("let n;");
+    expect(code).toContain("$mxReturn=");
+    // After the import and before the region that fills it: a `let`
+    // declared below its reader would be a temporal-dead-zone error.
+    expect(code.indexOf("let n;")).toBeGreaterThan(
+      code.indexOf('from "./tags/counter.mx"'),
+    );
+    expect(code.indexOf("let n;")).toBeLessThan(code.indexOf("$mxReturn="));
+  });
+
+  it("declares nothing for a region that binds no /var", () => {
+    const code = withCounter("const a = <div><counter start=1/></div>;");
+
+    expect(code).not.toContain("let n;");
+    expect(code).not.toContain("$mxReturn=");
   });
 });
