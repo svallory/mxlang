@@ -338,17 +338,6 @@ function lowerAttr(
     }
   }
 
-  // An event attribute is `on<Name>` or `on-<exact>`, and only on a native
-  // element: on a component call, a `<define>` call, a custom tag, a host tag
-  // (`<try onClick=fn>`) or an attribute tag, `on*` is the author's own prop
-  // contract and stays a `dynamic` prop. `on` is a real signal for the three
-  // `HostDeclarations` hooks below and must keep its two cases, so the element
-  // gate travels as its own boolean rather than a third `on` value.
-  //
-  // The attribute-method form (`onClick() { … }`) reaches here too: the check
-  // above lets it through on a host that allows methods, and `exprOf` gives
-  // the same arrow-function `Expr` the handler-prop form produces, so a host
-  // implements one branch and not two.
   if (attr.bound) {
     return {
       kind: "bound",
@@ -420,7 +409,12 @@ function lowerAttr(
   // above lets it through on a host that allows methods, and `exprOf` gives
   // the same arrow-function `Expr` the handler-prop form produces, so a host
   // implements one branch and not two.
-  if (isElement && EVENT_ATTR.test(attr.name) && !attr.modifier) {
+  //
+  // No `!attr.modifier` guard is needed: the modifier block above either
+  // returns the host's resolved name or fails, so nothing carrying a modifier
+  // reaches this point. `on:click`/`oncapture:click` therefore keep going to
+  // the host's own modifier hook and never become events here (decision 101b).
+  if (isElement && EVENT_ATTR.test(attr.name)) {
     const name = String(attr.name);
     if (name === "on-") {
       fail("`on-` needs an event name (`on-<event>`)", attr);
