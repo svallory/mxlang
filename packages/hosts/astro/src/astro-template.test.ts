@@ -312,7 +312,6 @@ describe("unsupported constructs", () => {
     ["lifecycle", "<lifecycle onMount=f/>", /reactive lifecycle hook/],
     ["id", "<id/x/>", /allocates an identifier/],
     ["await", "<await=p><p>x</p></await>", /suspense-capable renderer/],
-    ["return", "<return=1/>", /has no parent template/],
   ])("rejects <%s>", (_name, template, pattern) => {
     expect(errorFor(template).message).toMatch(pattern);
   });
@@ -355,5 +354,62 @@ describe("error positions", () => {
       expect(error).toBeInstanceOf(AstroTemplateError);
       expect((error as AstroTemplateError).line).toBe(4);
     }
+  });
+});
+
+/**
+ * Calling a returning tag from `.amx` (round 1, finding 5).
+ *
+ * The `<return>` error disposition used to live in this host's table, which
+ * refused a `.amx` file that merely *called* a returning `.mx` tag — the
+ * table is consulted while compiling whichever file holds the tag. The call
+ * is legal: the unit is a separate module, and Astro's renderer unwraps the
+ * `{ value, output }` pair (`server.ts`). Only `/var` is refused, because an
+ * `.amx` template has no statement position to bind a value in.
+ */
+describe("a tag that returns a value", () => {
+  const counter = {
+    template: {
+      filename: "/fixtures/tags/counter.mx",
+      source: [
+        "export interface Input { start: number }",
+        "<span>${input.start}</span>",
+        "<return value=input.start + 1/>",
+      ].join("\n"),
+    },
+  } as never;
+
+  it("can be called from .amx without /var", () => {
+    const { code } = lowerAstroMx(
+      "---\n---\n<div><counter start=1/></div>\n",
+      "/fixtures/page.amx",
+      { customTags: { counter } },
+    );
+
+    expect(code).toContain("start={1}");
+    expect(code).toContain('import $mx_Counter1 from "./tags/counter.mx"');
+  });
+
+  it("rejects the .amx file's own <return>", () => {
+    // Removing the stale error disposition (round 1, finding 5) let the core
+    // parse `<return>` here, and this emitter never reads `ir.returnValue` —
+    // so the tag compiled clean with the value silently gone, which is worse
+    // than the rejection it replaced.
+    expect(() =>
+      lowerAstroMx(
+        "---\n---\n<div>x</div>\n<return value=41 + 1/>\n",
+        "Test.amx",
+      ),
+    ).toThrow(/`<return>` hands a value to whoever called this unit/);
+  });
+
+  it("rejects /var on it, naming the tag as written", () => {
+    expect(() =>
+      lowerAstroMx(
+        "---\n---\n<div><counter/n start=1/></div>\n",
+        "/fixtures/page.amx",
+        { customTags: { counter } },
+      ),
+    ).toThrow(/`\/var` on `<counter>` is not supported in `\.amx` yet/);
   });
 });

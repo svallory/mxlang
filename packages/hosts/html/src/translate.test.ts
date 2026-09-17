@@ -216,10 +216,16 @@ describe("statement blocks", () => {
     expect(code).toContain("escape(S)");
   });
 
-  it("rejects <return>, naming the parent template it cannot reach", () => {
-    expect(() => compile(src("<return=42/>"), file)).toThrow(
-      /`<return>` provides a value to the \*parent\* template/,
-    );
+  // This host used to reject `<return>` outright, on the grounds that "a
+  // module compiled to `(input) => string` has no parent to return to". That
+  // was true only while a tag template was expanded into its caller. Under
+  // the unit model (decision 95) every `.mx` file is a module and a caller
+  // invokes it, so the tag has somewhere to return to — and a *page* is not
+  // a special case: it is a module that returns a value nobody reads yet.
+  it("accepts <return> in a page, with the same meaning as in a tag", () => {
+    const { code } = compile(src("<p>x</p>\n<return=42/>"), file);
+
+    expect(code).toContain("return { value: 42, output: out };");
   });
 });
 
@@ -620,5 +626,157 @@ describe("a tag template compiles as its own module", () => {
     expect(code).toContain("function Tree(");
     // The call site is the export's own name.
     expect(code).toMatch(/Tree\(\{/);
+  });
+});
+
+/**
+ * `<return>` and `/var` on this host (acceptance C3).
+ *
+ * The two halves have to be asserted together: the unit's export shape is
+ * what the call site unwraps, so a test of either alone would pass against a
+ * pair that does not fit.
+ */
+describe("a unit that returns a value", () => {
+  const counterFile = "/tmp/mx-return-test/tags/counter.mx";
+  const pageFile = "/tmp/mx-return-test/page.mx";
+
+  const counterSource = src(
+    [
+      "export interface Input { start: number }",
+      "<span>${input.start}</span>",
+      "<return value=input.start + 1/>",
+    ].join("\n"),
+  );
+
+  const counter: TemplateBackedTag = {
+    template: { filename: counterFile, source: counterSource },
+  };
+
+  it("returns { value, output } instead of the output alone", () => {
+    const { code } = compile(counterSource, counterFile);
+
+    expect(code).toContain("return { value: input.start + 1, output: out };");
+    // Un-annotated, so the value's type is inferred from the expression —
+    // that inference is what types the `/var` binding at the call site.
+    expect(code).toContain("function Counter(input: Input) {");
+    expect(code).not.toContain("function Counter(input: Input): string");
+  });
+
+  it("binds /var through a temp, then emits the output where the call stood", () => {
+    const { code } = compile(
+      src("<counter/n start=1/>\n<p>${n}</p>"),
+      pageFile,
+      {
+        customTags: { counter },
+      },
+    );
+
+    // Invariant §7.5-4's sequence: the call bound to a temp, the `/var` read
+    // off it, then the output. The temp is what makes the call evaluate once
+    // while both halves are read.
+    const call = code.indexOf("const $mx_ret0 = ");
+    const bind = code.indexOf("const n = $mx_ret0.value;");
+    const out = code.indexOf("out += $mx_ret0.output;");
+    expect(call).toBeGreaterThan(-1);
+    expect(bind).toBeGreaterThan(call);
+    expect(out).toBeGreaterThan(bind);
+    // And the binding is readable after the call.
+    expect(code).toContain("escape(n)");
+  });
+
+  it("unwraps the output when the call binds no /var", () => {
+    const { code } = compile(src("<counter start=1/>"), pageFile, {
+      customTags: { counter },
+    });
+
+    expect(code).toContain(").output;");
+    expect(code).not.toContain("$mx_ret");
+  });
+
+  it("gives each /var call site its own temp", () => {
+    const { code } = compile(
+      src("<counter/a start=1/>\n<counter/b start=2/>\n<p>${a}${b}</p>"),
+      pageFile,
+      { customTags: { counter } },
+    );
+
+    expect(code).toContain("const a = $mx_ret0.value;");
+    expect(code).toContain("const b = $mx_ret1.value;");
+  });
+
+  it("rejects /var on a tag whose template has no <return>", () => {
+    const plain: TemplateBackedTag = {
+      template: {
+        filename: "/tmp/mx-return-test/tags/plain.mx",
+        source: src("<span>x</span>"),
+      },
+    };
+
+    expect(() =>
+      compile(src("<plain/x/>"), pageFile, { customTags: { plain } }),
+    ).toThrow(/`<plain>` does not return a value/);
+  });
+
+  // Ruling 7 / invariant §7.5-8. A `/var` is an ordinary `let` in the call
+  // site's own scope; Marko instead hoists it into a getter, which changes
+  // the binding's user-visible type. MX rejects the escape, and both of
+  // these would otherwise reach the emitted JS as `undefined` or a run-time
+  // TDZ rather than as a diagnostic.
+  it("rejects a /var read outside its declaring block", () => {
+    expect(() =>
+      compile(
+        src("<if=true><counter/n start=1/></if>\n<p>${n}</p>"),
+        pageFile,
+        { customTags: { counter } },
+      ),
+    ).toThrow(/`n` is a `\/var` bound inside a nested block/);
+  });
+
+  it("rejects a /var read before the call that binds it", () => {
+    expect(() =>
+      compile(src("<p>${n}</p>\n<counter/n start=1/>"), pageFile, {
+        customTags: { counter },
+      }),
+    ).toThrow(/`n` is read before the `\/var` that binds it/);
+  });
+
+  // Both of these were rejected by the first implementation, which matched
+  // the *printed* expression text against the bound name. They are the two
+  // shapes a regex cannot tell from a real read, and each rejected a valid
+  // program with an error its author could not act on.
+  it("does not mistake a string literal's contents for a read", () => {
+    const { code } = compile(
+      src('<p>${"the letter n"}</p>\n<counter/n start=1/>\n<p>${n}</p>'),
+      pageFile,
+      { customTags: { counter } },
+    );
+
+    expect(code).toContain("const n = $mx_ret0.value;");
+  });
+
+  it("does not mistake a shadowing tag param for the /var", () => {
+    // `n` inside the loop is the loop's own parameter — same spelling, a
+    // different variable — so the `/var` bound in the `<if>` is not what
+    // this body reads and its scope is irrelevant here.
+    const { code } = compile(
+      src(
+        "<if=true><counter/n start=1/></if>\n<for|n| of=[1,2]><p>${n}</p></for>",
+      ),
+      pageFile,
+      { customTags: { counter } },
+    );
+
+    expect(code).toContain("escape(n)");
+  });
+
+  it("allows a read from a block nested inside the declaring one", () => {
+    const { code } = compile(
+      src("<counter/n start=1/>\n<if=true><p>${n}</p></if>"),
+      pageFile,
+      { customTags: { counter } },
+    );
+
+    // Ordinary JS closure scoping: the binding is in scope for the block.
+    expect(code).toContain("escape(n)");
   });
 });
