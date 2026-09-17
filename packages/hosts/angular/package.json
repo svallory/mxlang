@@ -42,7 +42,9 @@
   },
   "dependencies": {
     "@marko/compiler": "5.42.5",
-    "@mxlang/core": "workspace:*"
+    "@mxlang/core": "workspace:*",
+    "@mxlang/parser": "workspace:*",
+    "magic-string": "0.30.21"
   },
   "devDependencies": {
     "@angular/compiler": "22.1.7",

@@ -14,7 +14,7 @@ function usage(): string {
     "Usage:",
     "  mx-angular build [--project <dir>] [--config <file>]",
     "  mx-angular watch [--project <dir>] [--config <file>] [--once]",
-    "  mx-angular map <file.html:line:col>",
+    "  mx-angular map <file.html:line:col>   (also file.ts for a .ng.mx)",
   ].join("\n");
 }
 
@@ -148,9 +148,7 @@ function parseMapArg(arg: string): {
 } {
   const match = /^(.+):(\d+):(\d+)$/.exec(arg);
   if (!match) {
-    throw new Error(
-      `invalid position, expected file.html:line:col, got "${arg}"`,
-    );
+    throw new Error(`invalid position, expected file:line:col, got "${arg}"`);
   }
   const [, file, line, column] = match;
   return { file: file as string, line: Number(line), column: Number(column) };
@@ -162,12 +160,18 @@ function runMap(args: string[]): number {
     console.error(usage());
     return 1;
   }
-  const { file } = parseMapArg(arg);
+  const { file, line, column } = parseMapArg(arg);
   const mapPath = `${file}.map`;
   try {
     const map = readMap(mapPath);
-    const source = resolvePosition(map);
-    console.log(source.file);
+    const source = resolvePosition(map, line, column);
+    // A real position when the sidecar carried one (a `.ng.mx`'s does); the
+    // bare source file otherwise (a page's map has no `mappings` yet).
+    console.log(
+      source.line !== undefined
+        ? `${source.file}:${source.line}:${source.column}`
+        : source.file,
+    );
     if (!source.hasFineGrainedMapping) {
       console.log(
         "no fine-grained mapping yet (mappings empty); see the header comment",

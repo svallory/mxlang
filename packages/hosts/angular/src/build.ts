@@ -23,6 +23,7 @@ import { discoverFiles, isInside } from "./discover.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
 import { buildMap, writeMap } from "./map-file.ts";
+import { compileNgMx } from "./ng-mx.ts";
 import { compileTagModuleFile } from "./tag-module.ts";
 
 /**
@@ -54,7 +55,13 @@ export interface BuildResult {
 }
 
 export function outputPathFor(mxPath: string, extension: string): string {
-  const base = basename(mxPath, ".mx");
+  // Both extension segments come off a `.ng.mx`: `basename(…, ".mx")` alone
+  // leaves `x.component.ng`, so the emitted module would be
+  // `x.component.ng.ts` rather than the `x.component.ts` Angular expects
+  // beside it.
+  const base = mxPath.endsWith(".ng.mx")
+    ? basename(mxPath, ".ng.mx")
+    : basename(mxPath, ".mx");
   return join(dirname(mxPath), `${base}${extension}`);
 }
 
@@ -169,6 +176,46 @@ function applyOnError(
     return { error: err, line: `${outputPath} error: ${err}` };
   }
   return { line: `${outputPath} skipped (keeping last good output)` };
+}
+
+/**
+ * Reads a position off whatever a compile threw.
+ *
+ * Two shapes reach here and only one is a `TranslateError`. A `.ng.mx`
+ * compile runs inside the parser bridge, which re-raises a host's error as a
+ * **Babel `SyntaxError`**: the position moves to `err.loc` and the message
+ * gains a `(line:column)` suffix. Testing `instanceof TranslateError` alone
+ * therefore took the unpositioned branch for every `.ng.mx` error, so the
+ * CLI and watcher printed the message with no line or column at all.
+ *
+ * The suffix is stripped because the caller re-adds `file:line:column`
+ * itself; leaving it would print the position twice, in two spellings.
+ */
+function positionOf(
+  err: unknown,
+  fallbackFile: string,
+): { file: string; line?: number; column?: number; message: string } {
+  if (err instanceof TranslateError) {
+    // A tag template's own error carries `file` pointing at the tag, not the
+    // caller, and is reported against that file (A5).
+    return {
+      file: err.file ?? fallbackFile,
+      line: err.line,
+      column: err.column,
+      message: err.message,
+    };
+  }
+  const loc = (err as { loc?: { line?: number; column?: number } } | null)?.loc;
+  const raw = err instanceof Error ? err.message : String(err);
+  if (typeof loc?.line === "number" && typeof loc.column === "number") {
+    return {
+      file: fallbackFile,
+      line: loc.line,
+      column: loc.column,
+      message: raw.replace(/ \(\d+:\d+\)$/, ""),
+    };
+  }
+  return { file: fallbackFile, message: raw };
 }
 
 function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
@@ -309,14 +356,129 @@ function compileTagFile(
 }
 
 /**
- * Compiles one routed file — page or tag — and applies every write/guard/
- * error policy exactly once (round 1 R-a). `knownOutputs` accumulates every
- * path this call wrote or would have written, so a caller with a live
- * `fs.watch` on the same directory can ignore its own self-triggered events
- * (round 1 R-b).
+ * Compiles one `.ng.mx` file to its Angular component module.
+ *
+ * The third output kind, beside a page's template and a tag's component
+ * module (A3's "two output kinds", now three). What is emitted here is the
+ * author's *own* TypeScript module with each MX region replaced by the
+ * template it lowers to — so unlike `compileTagFile`, a `.map` sidecar is
+ * meaningful: `compileNgMx` rewrites the file with `MagicString` and the
+ * resulting map describes the whole emitted module, not a fragment of it.
+ *
+ * `ngExtension` rather than `tagExtension`: see the config field's own
+ * comment for why the two are not one key.
+ */
+function compileNgMxFile(
+  mxPath: string,
+  config: AngularConfig,
+  knownOutputs: Set<string>,
+): CompileOneResult {
+  const outputPath = outputPathFor(mxPath, config.ngExtension);
+  const mapPath = `${outputPath}.map`;
+  const sourceBasename = basename(mxPath);
+  // Nothing for the author to add: `compileNgMx` writes the `imports:` array
+  // itself (A4 divergence 5), which is the whole point of that edit.
+  const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
+
+  try {
+    const customTags = getCustomTags(mxPath, { host: "angular" });
+    const result = compileNgMx(readFileSync(mxPath, "utf8"), mxPath, {
+      customTags,
+      tagSelectorPrefix: config.tagSelectorPrefix,
+    });
+    const content = `${header + result.code}\n//# sourceMappingURL=${basename(mapPath)}\n`;
+    // The map was generated over `result.code` alone, but the header is
+    // prepended to it — so every generated line in the written file sits one
+    // line lower per header line than the map claims, and `mx-angular map`
+    // reports the wrong source position for every `.ng.mx`. A source-map
+    // `mappings` string is `;`-separated per generated line, so prefixing one
+    // `;` per header line shifts the whole map down without touching a single
+    // VLQ segment.
+    const headerLines = header.split("\n").length - 1;
+    const shiftedMap = {
+      ...result.map,
+      mappings: ";".repeat(headerLines) + result.map.mappings,
+    };
+
+    if (existsSync(outputPath)) {
+      const overwriteError = checkOverwriteGuard(outputPath);
+      if (overwriteError) {
+        return {
+          ok: false,
+          lines: [`${outputPath} error: ${overwriteError}`],
+          errors: [
+            { file: mxPath, line: 1, column: 0, message: overwriteError },
+          ],
+          warnings: [],
+          usedTags: [],
+          outputs: [],
+        };
+      }
+    }
+
+    const before = existsSync(outputPath)
+      ? readFileSync(outputPath, "utf8")
+      : undefined;
+    writeIfDiffers(outputPath, content, knownOutputs);
+    writeIfDiffers(mapPath, JSON.stringify(shiftedMap), knownOutputs);
+    const wrote = before !== content;
+
+    const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
+    const warnings = warningsFor(mxPath, result.warnings);
+    for (const w of warnings) {
+      const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
+      lines.push(`${w.file}${position} warning: ${w.message}`);
+    }
+
+    return {
+      ok: true,
+      lines,
+      errors: [],
+      warnings,
+      // The tags this module's regions called, by the name the scan knows —
+      // what the watcher's dependency map is keyed on, so editing a tag
+      // rebuilds every `.ng.mx` that calls it.
+      usedTags: result.usedTags.map((tag) => tag.name),
+      outputs: [outputPath, mapPath],
+    };
+  } catch (err) {
+    // Not `instanceof TranslateError`: a `.ng.mx` compile runs inside the
+    // parser bridge, which re-raises as a Babel `SyntaxError` carrying its
+    // position on `err.loc`. See `positionOf`.
+    const at = positionOf(err, mxPath);
+    const message =
+      at.line !== undefined
+        ? `${at.file}:${at.line}:${at.column} ${at.message}`
+        : `${at.file}: ${at.message}`;
+    const applied = applyOnError(
+      outputPath,
+      header,
+      message,
+      config.onError,
+      knownOutputs,
+    );
+    return {
+      ok: false,
+      lines: [`${mxPath} error: ${message}`, applied.line],
+      errors: applied.error
+        ? [{ file: mxPath, line: 1, column: 0, message: applied.error }]
+        : [at],
+      warnings: [],
+      usedTags: [],
+      outputs: [outputPath, mapPath],
+    };
+  }
+}
+
+/**
+ * Compiles one routed file — page, tag or `.ng.mx` — and applies every
+ * write/guard/error policy exactly once (round 1 R-a). `knownOutputs`
+ * accumulates every path this call wrote or would have written, so a caller
+ * with a live `fs.watch` on the same directory can ignore its own
+ * self-triggered events (round 1 R-b).
  */
 export function compileOne(
-  routed: { path: string; kind: "page" | "tag" },
+  routed: { path: string; kind: "page" | "tag" | "ngmx" },
   config: AngularConfig,
   knownOutputs: Set<string>,
 ): CompileOneResult {
@@ -327,12 +489,17 @@ export function compileOne(
   if (routed.kind === "tag") {
     return compileTagFile(routed.path, config, knownOutputs);
   }
+  if (routed.kind === "ngmx") {
+    return compileNgMxFile(routed.path, config, knownOutputs);
+  }
 
   const mxPath = routed.path;
   const outputPath = outputPathFor(mxPath, config.pageExtension);
   const mapPath = `${outputPath}.map`;
   const sourceBasename = basename(mxPath);
-  const tsFilename = sourceBasename.replace(/\.mx$/, ".ts");
+  const tsFilename = sourceBasename.endsWith(".ng.mx")
+    ? sourceBasename.replace(/\.ng\.mx$/, ".ts")
+    : sourceBasename.replace(/\.mx$/, ".ts");
   const outputs = [outputPath, mapPath];
 
   try {
@@ -466,8 +633,21 @@ export function removeOutputsFor(
   mxPath: string,
   config: AngularConfig,
   knownOutputs: Set<string>,
+  /**
+   * Which output the source produced. A page's is `pageExtension`, a tag's
+   * and a `.ng.mx`'s are their own — and getting this wrong means looking
+   * for a file that was never written while the real one stays on disk, for
+   * Angular to keep compiling long after its source is gone.
+   */
+  kind: "page" | "tag" | "ngmx" = "page",
 ): { line: string } {
-  const outputPath = outputPathFor(mxPath, config.pageExtension);
+  const extension =
+    kind === "ngmx"
+      ? config.ngExtension
+      : kind === "tag"
+        ? config.tagExtension
+        : config.pageExtension;
+  const outputPath = outputPathFor(mxPath, extension);
   const mapPath = `${outputPath}.map`;
   if (!existsSync(outputPath)) {
     knownOutputs.delete(outputPath);

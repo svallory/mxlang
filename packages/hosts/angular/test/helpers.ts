@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+
 import { join } from "node:path";
 import { parseTemplate } from "@angular/compiler";
 import type { MxWarning } from "@mxlang/core";

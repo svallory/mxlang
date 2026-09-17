@@ -305,16 +305,31 @@ export function startWatch(
     const nextRouted = new Map<string, RoutedFile>();
     for (const f of files) nextRouted.set(f.path, f);
 
-    // A page that vanished since the last routed set (round 1 R-d): apply
+    // A source that vanished since the last routed set (round 1 R-d): apply
     // onError to its now-orphaned output.
+    //
+    // Every kind, not only pages. A deleted `.ng.mx` or tag left its emitted
+    // `.ts` on disk, which Angular goes on compiling — a component that
+    // still exists as far as the build is concerned, with no source left to
+    // explain it.
     for (const [path, routed] of previousRouted) {
-      if (routed.kind !== "page") continue;
       if (nextRouted.has(path)) continue;
       if (config.onError === "delete") {
-        const { line } = removeOutputsFor(path, config, knownOutputs);
+        const { line } = removeOutputsFor(
+          path,
+          config,
+          knownOutputs,
+          routed.kind,
+        );
         onLine(line);
       } else {
-        const outputPath = outputPathFor(path, config.pageExtension);
+        const extension =
+          routed.kind === "ngmx"
+            ? config.ngExtension
+            : routed.kind === "tag"
+              ? config.tagExtension
+              : config.pageExtension;
+        const outputPath = outputPathFor(path, extension);
         onLine(
           `${outputPath} warning: output for ${path} is orphaned (source removed; onError=${config.onError} leaves it in place)`,
         );

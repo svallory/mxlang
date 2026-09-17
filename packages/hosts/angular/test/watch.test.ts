@@ -481,3 +481,33 @@ describe("startWatch incremental rebuilds", () => {
     expect(lines.some((l) => l.includes("home"))).toBe(true);
   });
 });
+
+describe("watch: .ng.mx orphan cleanup", () => {
+  it("removes a deleted .ng.mx's emitted module under onError: delete", async () => {
+    // Orphan cleanup used to skip every kind but `page`, so a deleted
+    // `.ng.mx` left its emitted `.ts` behind — a component Angular goes on
+    // compiling with no source left to explain it.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: {
+          host: "angular",
+          angular: { include: ["src/**/*.mx"], onError: "delete" },
+        },
+      }),
+      "src/gone.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-gone", template: <p>bye</p> })',
+        "export class GoneComponent {}",
+      ].join("\n"),
+    });
+
+    handle = startWatch(projectDir, { debounceMs: 10 });
+    await handle.onIdle;
+    expect(existsSync(join(projectDir, "src/gone.component.ts"))).toBe(true);
+
+    rmSync(join(projectDir, "src/gone.component.ng.mx"));
+    await handle.onIdle;
+
+    expect(existsSync(join(projectDir, "src/gone.component.ts"))).toBe(false);
+  });
+});

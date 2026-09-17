@@ -242,6 +242,14 @@ function domEventName(attrName: string): string {
 // (A1 design note, decision 86).
 const DATA_OR_ARIA = /^(data|aria)-/;
 
+/**
+ * Marks a warning as "add this symbol to the component's `imports:`".
+ *
+ * Exported so `.ng.mx` — which performs that edit rather than asking for it
+ * — can drop exactly these, without matching on message text.
+ */
+export const IMPORTS_ADVICE_CODE = "angular.imports-advice";
+
 // A1:112-113's exact wording, one per directive — "class" takes "object or
 // array" (both structured shapes route here) while "style" takes only
 // "object" (an array-valued `style=` is not a shape the emitter's own
@@ -631,7 +639,11 @@ class AngularEmitter implements Emitter<string> {
     // `x.component.mx` -> `x.component.ts`, the emitted sibling the step-1
     // import warning tells the author to edit. Falls back to the bare
     // filename with a `.ts` extension when it has none of MX's own.
-    this.tsFilename = filename.replace(/\.mx$/, ".ts");
+    // Both extension segments, not just `.mx`: a `.ng.mx` otherwise names
+    // `x.component.ng.ts`, a file that never exists.
+    this.tsFilename = filename.endsWith(".ng.mx")
+      ? filename.replace(/\.ng\.mx$/, ".ts")
+      : filename.replace(/\.mx$/, ".ts");
     for (const node of imports) {
       // A *synthesized* import carries `specifier`/`resolvedPath`
       // structurally (tag-unit phase 2a). An **authored** one carries
@@ -707,10 +719,26 @@ class AngularEmitter implements Emitter<string> {
     return slots.has(name);
   }
 
+  /**
+   * A once-per-file warning telling the author to add a symbol to their
+   * component's `imports:`.
+   *
+   * Every such warning is stamped with `code: IMPORTS_ADVICE_CODE`, because
+   * a consumer that *makes* that edit itself has to drop the advice, and
+   * matching the prose to do it would silently start leaking (or swallowing)
+   * the day anyone rewords a message. `.ng.mx` is that consumer — see
+   * `ng-mx.ts`. `MxWarning` has no `code` field of its own (it is core's
+   * type, owned by the tag-unit squad), so the marker rides as an extra
+   * property; a reader that does not know it simply ignores it.
+   */
   private warnOnce(key: string, message: string, loc: Position): void {
     if (this.warnedOnce.has(key)) return;
     this.warnedOnce.add(key);
-    warn(this.ctx, { message, ...loc } as MxWarning);
+    warn(this.ctx, {
+      message,
+      ...loc,
+      code: IMPORTS_ADVICE_CODE,
+    } as MxWarning);
   }
 
   /**
@@ -1185,6 +1213,11 @@ class AngularEmitter implements Emitter<string> {
       warn(this.ctx, {
         message: `this template calls ${names.length} MX tag(s): ${refs.map((r) => `\`${r.className}\``).join(", ")}. In step 1, MX cannot edit your component's TypeScript. Add to ${this.tsFilename}: ${lines}.`,
         ...loc,
+        // Import advice like every `warnOnce` one, and stamped the same way:
+        // a `.ng.mx` writes these imports itself, so it drops them by this
+        // code. Left unstamped, it told those authors to add an import MX
+        // had already written — naming a file that does not exist.
+        code: IMPORTS_ADVICE_CODE,
       } as MxWarning);
     }
     return this.out;

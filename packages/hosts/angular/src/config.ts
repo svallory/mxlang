@@ -12,6 +12,16 @@ export interface AngularConfig {
   include: string[];
   pageExtension: string;
   tagExtension: string;
+  /**
+   * The extension a `.ng.mx` component compiles to, beside its source.
+   *
+   * Its own key rather than a reuse of `tagExtension`: the two outputs have
+   * different overwrite risks. A tag module is wholly MX-generated, while a
+   * `.ng.mx` emits a module whose TypeScript the author wrote, so a project
+   * may well want them routed differently — and sharing one key would make
+   * that impossible without changing both.
+   */
+  ngExtension: string;
   tagSelectorPrefix: string;
   onError: OnError;
 }
@@ -20,6 +30,7 @@ interface AngularConfigShape {
   include?: unknown;
   pageExtension?: unknown;
   tagExtension?: unknown;
+  ngExtension?: unknown;
   tagSelectorPrefix?: unknown;
   onError?: unknown;
 }
@@ -32,6 +43,7 @@ const DEFAULTS: AngularConfig = {
   include: [],
   pageExtension: ".html",
   tagExtension: ".ts",
+  ngExtension: ".ts",
   tagSelectorPrefix: "mx-",
   onError: "keep-last",
 };
@@ -91,6 +103,7 @@ export function readAngularConfig(projectDir: string): AngularConfig {
     "include",
     "pageExtension",
     "tagExtension",
+    "ngExtension",
     "tagSelectorPrefix",
     "onError",
   ]);
@@ -117,6 +130,13 @@ export function readAngularConfig(projectDir: string): AngularConfig {
       packageFile,
       raw.pageExtension,
       "mx.angular.pageExtension",
+    );
+  }
+  if (raw.ngExtension !== undefined) {
+    config.ngExtension = readString(
+      packageFile,
+      raw.ngExtension,
+      "mx.angular.ngExtension",
     );
   }
   if (raw.tagExtension !== undefined) {

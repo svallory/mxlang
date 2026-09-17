@@ -23,6 +23,7 @@ import {
   type Position,
   TranslateError,
 } from "@mxlang/core";
+import { directivesFor } from "./directives.ts";
 import {
   angularDeclarations,
   emitTemplate,
@@ -31,19 +32,6 @@ import {
   tagBasename,
   type UsedTag,
 } from "./emitter.ts";
-
-/** Angular directives the emitted template may need in the component's `imports:`. */
-const DIRECTIVE_IMPORTS = [
-  // Each entry pairs the text the emitter emits with the symbol Angular needs
-  // in `imports:`. Detected from the emitted template rather than tracked
-  // through the emitter, so a construct that starts emitting one of these can
-  // never forget to declare it.
-  { marker: "[ngClass]", symbol: "NgClass" },
-  { marker: "[ngStyle]", symbol: "NgStyle" },
-  { marker: "| keyvalue", symbol: "KeyValuePipe" },
-  { marker: "[ngComponentOutlet]", symbol: "NgComponentOutlet" },
-  { marker: "[ngTemplateOutlet]", symbol: "NgTemplateOutlet" },
-] as const;
 
 export interface CompileTagModuleOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
@@ -969,9 +957,7 @@ export function compileTagModule(
     },
   });
 
-  const directives = DIRECTIVE_IMPORTS.filter(({ marker }) =>
-    template.includes(marker),
-  ).map(({ symbol }) => symbol);
+  const directives = directivesFor(template);
 
   // Every identifier the emitted module does not itself own: the author's
   // module-level statements, their `export interface Input`, and the class
