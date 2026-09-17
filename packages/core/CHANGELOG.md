@@ -4,10 +4,19 @@
 
 ### Breaking: an element's `on<Name>`/`on-<exact>` attribute lowers to a new `event` attr kind
 
-An attribute on an **element** matching `/^on[A-Z-]/` is now lowered to an
-`Attr` of kind `"event"` carrying the source spelling (`name`), the resolved
-DOM event name (`event`), the handler `Expr` and a `nameSpan` — instead of the
-`dynamic` prop it used to be. `on<Name>` lowercases everything after `on`
+An attribute on an **element** matching `/^on[A-Z-]/` **whose value is an
+expression** is now lowered to an `Attr` of kind `"event"` carrying the source
+spelling (`name`), the resolved DOM event name (`event`), the handler `Expr`
+and a `nameSpan` — instead of the `dynamic` prop it used to be. The
+attribute-method form (`onClick() { … }`) lowers to the same kind, with an
+arrow-function `Expr`.
+
+**The value has to be an expression.** A bare `<div onClick>` is HTML's
+spelling of `true` and stays a `boolean` attribute; `<button
+onClick="alert(1)">` is an ordinary HTML attribute string and stays `static`.
+MX does not invent a policy against inline handler strings — it only stops
+*creating* one from a function. (What the html host does with such a string is
+phase B's decision.) `on<Name>` lowercases everything after `on`
 (`onClick` → `click`, `onDblClick` → `dblclick`); `on-<exact>` is verbatim
 (`on-my-event` → `my-event`). The rule is Marko's own, so an MX template and
 the equivalent Marko template bind the same event, and every host now
@@ -17,10 +26,20 @@ recomposes its own spelling from one resolved name rather than re-deriving it.
 emitter switches on, so a host that does not handle `"event"` no longer
 type-checks. That is deliberate — the core's rule is that a host which cannot
 express a kind must say so, never silently drop it. In this release every
-in-tree host handles the kind with a **temporary passthrough** that reproduces
-byte-for-byte what it emitted for the same attribute before, so output is
+in-tree host handles the kind with a **temporary passthrough**, so output is
 unchanged on every host and oracle; each host's real emission (and its
 rejections) follows in phase B.
+
+Reproducing the old output means reproducing *which branch* the old `dynamic`
+path took, not merely its most common one. On Angular that is visible: base
+matched `on<Name>` against its own `EVENT_NAME` (`/^on[A-Z]/`) and routed it
+through `IRREGULAR_EVENTS`/`domEventName`, while `on-<exact>` never matched
+that regex (a dash is not a capital) and fell through to a plain `[name]=`
+binding — so `on-my-event=f` emitted `[on-my-event]="f"`, and the passthrough
+emits exactly that. The passthrough therefore keeps reading `attr.name`, not
+the new `attr.event`: the two disagree precisely for `onDoubleClick`
+(`dblclick` from Angular's table, `doubleclick` from core). Phase B switches
+every host to `attr.event` and deletes `IRREGULAR_EVENTS`.
 
 **Only on an element.** On a component call, a `<define>` call, a custom tag, a
 host tag (`<try onClick=…>`) or an attribute tag, an `on*` attribute stays a
@@ -39,6 +58,9 @@ meaning — it now lowercases to `myevent`, and the author must write
 
 `on:*` and `oncapture:*` are unchanged: core gives them no meaning and they
 reach the host through the existing modifier hook.
+
+`on-` with no event name after the dash is a positioned error (`` `on-` needs
+an event name (`on-<event>`) ``) rather than a silently empty event name.
 
 ### `discoverProjectTags` reports host-module files under `tags/` as a diagnostic instead of throwing
 
