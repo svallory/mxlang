@@ -1,0 +1,8 @@
+{
+  "scopeName": "source.ngmx",
+  "patterns": [
+    {
+      "include": "source.tsx"
+    }
+  ]
+}

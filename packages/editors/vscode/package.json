@@ -25,7 +25,8 @@
   "activationEvents": [
     "onLanguage:mx",
     "onLanguage:solidmx",
-    "onLanguage:astromx"
+    "onLanguage:astromx",
+    "onLanguage:ngmx"
   ],
   "extensionDependencies": [
     "Marko-JS.marko-vscode"
@@ -40,6 +41,17 @@
         ],
         "extensions": [
           ".solid.mx"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "ngmx",
+        "aliases": [
+          "AngularMX",
+          "ngmx"
+        ],
+        "extensions": [
+          ".ng.mx"
         ],
         "configuration": "./language-configuration.json"
       },
@@ -81,6 +93,11 @@
         "language": "solidmx",
         "scopeName": "source.solidmx",
         "path": "./syntaxes/solidmx.tmLanguage.json"
+      },
+      {
+        "language": "ngmx",
+        "scopeName": "source.ngmx",
+        "path": "./syntaxes/ngmx.tmLanguage.json"
       }
     ],
     "typescriptServerPlugins": [

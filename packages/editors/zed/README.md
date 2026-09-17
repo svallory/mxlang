@@ -1,6 +1,6 @@
 # `mxlang` — Zed extension
 
-Ships three languages:
+Ships four languages:
 
 - `MX` (`.mx`, the only extension this language registers — MX only supports
   the MX 1.0 subset of Marko syntax) on Marko's own unmodified tree-sitter
@@ -15,6 +15,11 @@ Ships three languages:
 - `SolidMX` (`.solid.mx`), backed by `packages/editors/tree-sitter-solidmx` (a
   patched `tree-sitter-typescript` tsx dialect with an `mx_element` external
   token in expression position).
+- `AngularMX` (`.ng.mx`), backed by the same `tree-sitter-solidmx` grammar
+  package — the grammar's only MX-specific addition (`mx_element`) is
+  neither Solid- nor Angular-specific, so `languages/ngmx/config.toml`
+  declares `grammar = "solidmx"` directly rather than this extension
+  compiling a second, identical grammar.
 - `AstroMX` (`.amx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
 
 Also registers a language server: `src/lib.rs` (a minimal Rust extension,
@@ -113,18 +118,20 @@ Grammar-only extension no longer describes this package (it now also ships a
 language server) — see `UPSTREAM.md` for the Rust provenance and "What you
 get in Zed today" below for what each language gets in practice.
 
-## Zed suffix precedence: `.mx` vs `.solid.mx`
+## Zed suffix precedence: `.mx` vs `.solid.mx` vs `.ng.mx`
 
 Zed's suffix matcher takes the text after a file's **last** dot as the
 extension, then picks the language whose `path_suffixes` entry is the
 **longest match**. `MX` declares `path_suffixes = ["mx"]`; `SolidMX` declares
-`path_suffixes = ["solid.mx"]`. Both match `Counter.solid.mx` (its last-dot
-suffix is `mx`, and `solid.mx` matches too via Zed's own multi-segment suffix
-check), so `SolidMX`'s longer, more specific entry wins and the file
-resolves to `SolidMX`, not `MX`. Verified by inspection of the existing
-`languages/solidmx/config.toml` (already `path_suffixes = ["solid.mx"]` from
-when it was the only language shipped here) — no change was needed to keep
-this precedence correct when `MX` was added back.
+`path_suffixes = ["solid.mx"]`; `AngularMX` declares `path_suffixes =
+["ng.mx"]`. `Counter.solid.mx` matches both `MX` (its last-dot suffix is
+`mx`) and `SolidMX` (`solid.mx` matches too via Zed's own multi-segment
+suffix check), so `SolidMX`'s longer, more specific entry wins; the same
+holds for `Counter.ng.mx` against `MX` and `AngularMX`. Verified by
+inspection of the existing `languages/solidmx/config.toml` (already
+`path_suffixes = ["solid.mx"]` from when it was the only language shipped
+here) — no change was needed to keep this precedence correct when `MX` was
+added back, and `languages/ngmx/config.toml` follows the identical shape.
 
 ## What you get in Zed today
 
@@ -140,15 +147,21 @@ this precedence correct when `MX` was added back.
   `<tag>` child highlights as its own `mx_element` region, the same as a
   fragment-free file (task `solidmx-grammar-fragments`; see
   `packages/editors/tree-sitter-solidmx/UPSTREAM.md` "Local modifications").
+- `AngularMX` (`.ng.mx`): syntax highlighting, brackets, outline, and
+  injected `mx_element` highlighting, all identical to `SolidMX` above since
+  it reuses the same grammar and queries. No language server registration
+  yet — `@mxlang/language-server` does not compile `.ng.mx` (see
+  `AGENTS.md`'s Zed extension section).
 
 `.amx` needs no precedence rule of its own: Zed's matcher reads the text after
 the last dot, and `amx` is not `mx`, so `AstroMX` and `MX` never contend the
-way `MX` and `SolidMX` do above.
+way `MX` and `SolidMX`/`AngularMX` do above.
 
 ## Prerequisite: install the official Marko extension too
 
-A `.solid.mx` file's `mx_element` regions are highlighted by injecting a
-language named `"marko"` (`base/solidmx/injections.scm`) — Zed resolves that
+A `.solid.mx` or `.ng.mx` file's `mx_element` regions are highlighted by
+injecting a language named `"marko"` (`base/solidmx/injections.scm`,
+`base/ngmx/injections.scm`) — Zed resolves that
 by name against installed languages, and the only extension that provides a
 language named `Marko` is the official `marko-js/zed` extension. **Install
 it from Zed's extension registry (Command Palette → "zed: extensions" →
@@ -156,13 +169,16 @@ search "Marko") before installing this dev extension.** Without it,
 `mx_element` regions render as unhighlighted plain text — everything else
 (the `SolidMX` TypeScript host, brackets, outline) still works.
 
-## Dev install (Zed) — `SolidMX`
+## Dev install (Zed) — `SolidMX` and `AngularMX`
 
 `SolidMX`'s grammar lives in this monorepo at `packages/editors/tree-sitter-solidmx`,
 so `extension.toml`'s `[grammars.solidmx]` uses the **`file://` dev form**
 with `path = "packages/editors/tree-sitter-solidmx"` (Zed clones the whole repo at
 `rev`, then looks for `src/` under that `path` — `GrammarManifestEntry.path`
-in Zed's own `extension_manifest.rs`).
+in Zed's own `extension_manifest.rs`). `AngularMX` reuses this exact grammar
+(`languages/ngmx/config.toml` declares `grammar = "solidmx"`, no
+`[grammars.ngmx]` entry exists), so every step below that bumps
+`[grammars.solidmx]`'s `rev` affects both languages at once.
 
 Even in dev form, Zed still requires a **committed** `rev` — it runs `git
 init` + `git remote add origin <url>` + `git fetch --depth 1 origin <rev>` +
@@ -190,7 +206,8 @@ The dev loop is therefore **commit, then bump `rev`, then reinstall**:
    with the TypeScript host language highlighted, brackets matched, an
    outline of its declarations, and each `mx_element` region highlighted via
    its `marko` injection (requires the official Marko extension — see
-   "Prerequisite" above).
+   "Prerequisite" above). A `.ng.mx` file gets the identical treatment under
+   `AngularMX`.
 
 **First compile is slow.** `tree-sitter-solidmx`'s generated `src/parser.c`
 is ~8.2 MB; clang's first compile of it after a fresh dev-install can take

@@ -1,6 +1,6 @@
 id = "mxlang"
 name = "MX"
-description = "MX (.mx, Marko syntax), AstroMX (.amx, Marko syntax in an Astro component) and SolidMX (.solid.mx, Marko syntax with Solid host-language expressions) language support for Zed."
+description = "MX (.mx, Marko syntax), AstroMX (.amx, Marko syntax in an Astro component), SolidMX (.solid.mx, Marko syntax with Solid host-language expressions) and AngularMX (.ng.mx, Marko syntax with Angular host-language expressions) language support for Zed."
 version = "0.1.0"
 schema_version = 1
 authors = ["Saulo Vallory <me@saulo.engineer>"]
@@ -28,6 +28,13 @@ name = "MX Language Server"
 languages = ["MX", "SolidMX"]
 
 [grammars.solidmx]
+# Also backs the AngularMX language (`languages/ngmx/config.toml`,
+# `path_suffixes = ["ng.mx"]`): this grammar is a patched
+# tree-sitter-typescript tsx dialect whose only MX-specific addition is an
+# opaque `mx_element` external token in expression position — nothing about
+# it is Solid-specific, so AngularMX declares `grammar = "solidmx"` directly
+# rather than this extension compiling a second, identical grammar package.
+#
 # DEV FORM. Zed still requires a committed `rev` even for a `file://`
 # repository — it runs `git init` + `git remote add origin <url>` +
 # `git fetch --depth 1 origin <rev>` + `git checkout <rev>`, so uncommitted
