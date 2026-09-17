@@ -337,3 +337,38 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
     expect(html).toContain("value 6");
   });
 });
+
+/**
+ * A dynamic tag's target is polymorphic at run time (a tag-name string, a
+ * component function, or already-rendered content passed straight through)
+ * — the same guard `@mxlang/html`'s `renderDynamic` and `@mxlang/preact`'s
+ * inlined `mxDynamic` apply, since Solid's own `<Dynamic component=…>` only
+ * accepts a string or a component and throws on a rendered node.
+ */
+describe("Solid SSR render: dynamic tag", () => {
+  it("renders a string target as an element with that tag name", () => {
+    const html = renderApp(
+      `<\${input.tag} class="x">hi</>`,
+      `const input = { tag: "span" };`,
+    );
+    expect(html).toContain('class="x"');
+    expect(html).toContain("<span");
+    expect(html).toContain(">hi</span>");
+  });
+
+  it("renders a function target as a component", () => {
+    const html = renderApp(
+      `<\${input.tag} n=1/>`,
+      `function Comp(props) { return <em>{props.n}</em>; }\nconst input = { tag: Comp };`,
+    );
+    expect(html).toContain("<em>1</em>");
+  });
+
+  it("passes already-rendered content straight through, rather than treating it as a component", () => {
+    const html = renderApp(
+      `<div><\${input.content}/></div>`,
+      `const input = { content: <em>already rendered</em> };`,
+    );
+    expect(html).toContain("<div><em>already rendered</em></div>");
+  });
+});

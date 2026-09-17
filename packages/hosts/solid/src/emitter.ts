@@ -87,6 +87,15 @@ let returnVars: Set<string> | null = null;
  */
 let lazyScope = false;
 
+/**
+ * Gensym counter for the dynamic-tag IIFE's temp binding.
+ *
+ * Module-level, same reason `returnVars`/`lazyScope` are: monotonic across
+ * every compile in the process is still unique within any one compile's
+ * output, which is all uniqueness this binding needs.
+ */
+const dynSerial = { n: 0 };
+
 /** Runs `emit` with `/var` refused, for a body that is lazy or per-row. */
 function inLazyScope<T>(emit: () => T): T {
   const outer = lazyScope;
@@ -652,8 +661,8 @@ export class SolidEmitter implements Emitter<string> {
 
   component(node: Extract<IrNode, { kind: "Component" }>): void {
     if (node.target.kind === "dynamic") {
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX syntax, not interpolation
-      fail("dynamic tag name (`<${...}>`)", node);
+      this.#dynamicComponent(node, node.target.expr);
+      return;
     }
     const name = node.target.name;
     const contentNodes = node.content?.children ?? [];
@@ -714,6 +723,93 @@ export class SolidEmitter implements Emitter<string> {
         `${returnProp}>`,
         children,
         `</${name}>`,
+      ),
+    );
+  }
+
+  /**
+   * A dynamic-target `Component` — `<${expr} .../>` or a bare `${expr}`
+   * line — is polymorphic at run time, the same as `@mxlang/html`'s
+   * `renderDynamic` and `@mxlang/preact`'s inlined `mxDynamic`: the target
+   * can be a tag-name string, a component function, or already-rendered
+   * content (e.g. a caller's `content` prop) passed straight through rather
+   * than called again. Solid's own `<Dynamic component=…>` only accepts the
+   * first two (`ValidComponent = IntrinsicElement | Component<any> |
+   * string`); handing it a rendered node throws at render time.
+   *
+   * A `.solid.mx` *region* is an expression, not a module — `compileSolidMx`
+   * refuses any module-level statement inside one — so there is nowhere to
+   * hoist a named helper function the way the whole-file HTML/Preact hosts
+   * do. The dispatch is inlined as an IIFE per call site instead, still with
+   * no runtime import.
+   */
+  #dynamicComponent(
+    node: Extract<IrNode, { kind: "Component" }>,
+    expr: Expr,
+  ): void {
+    const contentNodes = node.content?.children ?? [];
+    const raw = node.content ? rawChild(contentNodes) : null;
+    rejectMixedRaw(contentNodes);
+    if (raw && hasNamedAttr(node.attrs, "innerHTML")) {
+      fail(
+        "`$!{...}` sole child combined with an explicit `innerHTML=` attribute",
+        raw,
+      );
+    }
+
+    const attrs = renderAttrs(node.attrs, true);
+    const tags = concatMapped(...node.attributeTags.map(attributeTag));
+    const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
+    if (node.var && lazyScope) {
+      fail(
+        `\`/var\` on a dynamic tag inside \`<for>\`/\`<if>\` is not supported on Solid yet; bind it at the top level of the template`,
+        node,
+      );
+    }
+    const returnProp = node.var
+      ? ` ${MX_RETURN_PROP}={($mxV) => { ${node.var} = $mxV; }}`
+      : "";
+    if (node.var) returnVars?.add(node.var);
+    const temp = `$mxDyn${dynSerial.n++}`;
+    const component = ` component={${temp}}`;
+    const guard = (rendered: MappedCode | string) =>
+      concatMapped(
+        `{(() => { const ${temp} = `,
+        expr.code,
+        `; return typeof ${temp} === "string" || typeof ${temp} === "function" ? `,
+        rendered,
+        ` : ${temp}; })()}`,
+      );
+    if (!node.content || raw) {
+      this.#out.push(
+        guard(
+          concatMapped(
+            "<Dynamic",
+            component,
+            attrs,
+            tags,
+            `${returnProp}${innerHtml} />`,
+          ),
+        ),
+      );
+      return;
+    }
+
+    const body = inLazyScope(() => blockExpression(contentNodes));
+    const children = node.content.hasParams
+      ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
+      : inLazyScope(() => renderWithNewEmitter(contentNodes));
+    this.#out.push(
+      guard(
+        concatMapped(
+          "<Dynamic",
+          component,
+          attrs,
+          tags,
+          `${returnProp}>`,
+          children,
+          "</Dynamic>",
+        ),
       ),
     );
   }
