@@ -48,6 +48,7 @@ import {
   type IrNode,
   type MappedCode,
   mapped,
+  moduleExportName,
   propKey,
   quote,
   TranslateError,
@@ -721,7 +722,10 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
     "",
     ir.inputInterface?.code ?? "export interface Input {}",
     "",
-    `export default function (input: ${inputType}): string {`,
+    // Named after the file, never anonymous: a tag whose template calls its
+    // own name resolves to this declaration, so self-recursion needs no
+    // self-import (design invariant §7.5-7).
+    `export default function ${moduleExportName(ir, "@mxlang/html")}(input: ${inputType}): string {`,
     `${INDENT}let out = "";`,
     // Hoisted statements precede the body but follow `out`, so a hoisted
     // declaration may not reference the buffer — which is the point: it is a

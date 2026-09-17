@@ -21,22 +21,37 @@
 import type { Plugin } from "vite";
 
 /**
- * The exact tail `@mxlang/html`'s `brandRender` (`translate.ts`)
- * always appends: the render function renamed to `render`, the
- * `Symbol.for("mx.component")` brand, and `export default render;`.
- * Matched literally rather than a general "any default export" regex, since
- * a page-mode rewrite only applies to this fixed shape, not to arbitrary
- * code some other plugin might hand this transform. Pages don't need the
- * brand — Astro's router calls a page's default export directly rather than
- * routing it through a renderer's `check()` — so this rewrite drops it along
- * with the `export default` line and keeps only the render function, renamed
- * so the wrapper below can call it without colliding with `render` as a name
- * some other hoisted export might also use.
+ * The exact tail `@mxlang/html`'s `brandRender` (`translate.ts`) always
+ * appends: the `Symbol.for("mx.component")` brand on the render function,
+ * then `export default <Name>;` — where `<Name>` is the file's own derived
+ * export name (`about.mx` -> `About`), the *same* name in both halves.
+ * Matched as this fixed shape rather than a general "any default export"
+ * regex, since a page-mode rewrite only applies to it, not to arbitrary code
+ * some other plugin might hand this transform. Pages don't need the brand —
+ * Astro's router calls a page's default export directly rather than routing
+ * it through a renderer's `check()` — so this rewrite drops it along with the
+ * `export default` line and keeps only the render function, renamed to
+ * `__mxRenderPage` so the wrapper below can call it without colliding with
+ * any name some other hoisted export might also use.
  */
-const BRANDED_TAIL_RE =
-  /\n?function render\(input(?::\s*Input)?\)(?::\s*string)?\s*\{/;
+// The render function is named after its file (`about.mx` -> `About`), not a
+// fixed `render`, so the name has to be *read* rather than pinned — and read
+// from the branded tail, which is the only place it is unambiguous.
+//
+// Matching "the first function taking `input`" instead would bind to whatever
+// such function comes first in the module: a hoisted helper the author wrote,
+// or an imported tag unit inlined by the bundler, would be renamed to
+// `__mxRenderPage` and the real render function left alone. The tail names
+// exactly one function, and the same name must appear in both halves of it.
 const EXPORT_DEFAULT_RENDER_RE =
-  /\n*Object\.defineProperty\(render,\s*Symbol\.for\("mx\.component"\),\s*\{\s*value:\s*true\s*\}\);\n*export default render;\n*$/;
+  /\n*Object\.defineProperty\(([A-Za-z_$][\w$]*),\s*Symbol\.for\("mx\.component"\),\s*\{\s*value:\s*true\s*\}\);\n*export default \1;\n*$/;
+
+/** The declaration of `name`, as the compiled module writes it. */
+function brandedTailRe(name: string): RegExp {
+  return new RegExp(
+    `\\n?function ${name.replaceAll("$", "\\$")}\\(input(?::\\s*Input)?\\)(?::\\s*string)?\\s*\\{`,
+  );
+}
 
 /**
  * `export const layout = "../layouts/Base.astro";`, MX's frontmatter
@@ -99,21 +114,24 @@ const RESERVED_FRONTMATTER_NAMES = new Set([
  * convention ever changes shape.
  */
 export function wrapAsPage(code: string): string | null {
-  if (!BRANDED_TAIL_RE.test(code) || !EXPORT_DEFAULT_RENDER_RE.test(code)) {
-    return null;
-  }
+  // The tail first: it names the function, and that name is what anchors the
+  // declaration match below.
+  const brandedName = code.match(EXPORT_DEFAULT_RENDER_RE)?.[1];
+  if (!brandedName) return null;
+  const brandedTail = brandedTailRe(brandedName);
+  if (!brandedTail.test(code)) return null;
 
   const layoutMatch = code.match(LAYOUT_EXPORT_RE);
   const withoutLayout = layoutMatch ? code.replace(LAYOUT_EXPORT_RE, "") : code;
 
   // Plain JS below, deliberately: by the time this `enforce: "post"` plugin
   // runs, the bundler has already stripped TypeScript types from `code` —
-  // measured against the actual build output, `function render(input) {`
+  // measured against the actual build output, `function About(input) {`
   // with no type annotations at all — so injecting `(input: Input)`/`as
   // Input` here would hand rolldown's plain-JS parser syntax it no longer
   // expects anywhere else in the module.
   const rendered = withoutLayout
-    .replace(BRANDED_TAIL_RE, "\nfunction __mxRenderPage(input) {")
+    .replace(brandedTail, "\nfunction __mxRenderPage(input) {")
     .replace(EXPORT_DEFAULT_RENDER_RE, "");
 
   const imports = [
@@ -224,7 +242,7 @@ export function mxPages(srcDir: URL): Plugin {
             "module did not match @mxlang/html's expected branded " +
             "export shape. This file is under src/pages and should be a " +
             "page; if @mxlang/html's emit format changed, update " +
-            "BRANDED_TAIL_RE/EXPORT_DEFAULT_RENDER_RE in vite-pages.ts to match.",
+            "EXPORT_DEFAULT_RENDER_RE/brandedTailRe in vite-pages.ts to match.",
         );
       }
 

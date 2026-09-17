@@ -286,6 +286,29 @@ function generatedBinding(ctx: Ctx, tagName: string): string {
 
 function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
   const path = resolve(tag.filename);
+
+  if (path === resolve(ctx.filename)) {
+    // A tag calling *itself* already has the function in scope: it is the
+    // declaration this module exports. Importing the file into itself is
+    // legal ESM and does work, but it is a module importing a binding it
+    // already has, and design invariant §7.5-7 rules it out — "the tag's
+    // render function is a named declaration, so self-recursion needs no
+    // import".
+    if (ctx.exportName) return ctx.exportName;
+
+    // Unless there is no declaration to call. A `.solid.mx` **region** is an
+    // expression spliced into someone else's module, so it exports nothing
+    // and has no name for a self-call to resolve to. Returning one anyway
+    // emitted a reference to a binding nothing declares — valid-looking JSX
+    // that fails at runtime with no diagnostic anywhere.
+    throw new TranslateError(
+      `\`<${call.name}>\` is this file's own tag, and a \`.solid.mx\` region has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file`,
+      call.loc.line,
+      call.loc.column,
+      call.loc.file,
+    );
+  }
+
   ctx.customTagImports ??= new Map();
   const existing = ctx.customTagImports.get(path);
   if (existing) return existing;

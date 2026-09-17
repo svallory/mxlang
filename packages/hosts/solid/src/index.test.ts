@@ -300,6 +300,34 @@ describe("discovered tag imports inside a region", () => {
     );
   });
 
+  it("rejects a region calling its own file's tag", () => {
+    // A region is an expression spliced into someone else's module, so it
+    // declares nothing a self-call could resolve to. Before this was gated on
+    // `Ctx.emitsModule`, the self-recursion branch fired on path equality
+    // alone and emitted `<PageSolid />` — a reference to a binding nothing
+    // declares, with no import and no diagnostic anywhere.
+    const page = join(HERE, "fixtures", "page.solid.mx");
+    let error: unknown;
+    try {
+      compileSolidMx(`<div><page/></div>`, {
+        filename: page,
+        customTags: {
+          page: {
+            template: { filename: page, source: "<b>x</b>\n", mtimeMs: 0 },
+          },
+          // biome-ignore lint/suspicious/noExplicitAny: a CustomTag map, shaped by the scan
+        } as any,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect((error as Error | undefined)?.message).toContain(
+      "is this file's own tag",
+    );
+    expect(error).toMatchObject({ line: expect.any(Number) });
+  });
+
   it("passes a region's body to a unit that reads input.content", () => {
     const result = compileSolidMx(`<panel title="T"><b>slot</b></panel>`, {
       filename: join(HERE, "fixtures", "page.solid.mx"),
@@ -326,7 +354,8 @@ describe("compileSolidUnit", () => {
   it("emits a default export and keeps the markup", () => {
     const code = unitOf("icon.mx");
 
-    expect(code).toContain("export default function (input)");
+    // Named after the file (`icon.mx` -> `Icon`), never anonymous.
+    expect(code).toContain("export default function Icon(input)");
     expect(code).toContain("icon");
   });
 
@@ -339,7 +368,7 @@ describe("compileSolidUnit", () => {
     const code = unitOf("panel.mx");
 
     expect(code).not.toContain("interface Input");
-    expect(code).toContain("export default function (input)");
+    expect(code).toContain("export default function Panel(input)");
     // The body that reads `input.title` is still emitted.
     expect(code).toContain("input.title");
   });

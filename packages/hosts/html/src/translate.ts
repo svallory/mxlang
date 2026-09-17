@@ -614,26 +614,30 @@ const RENDER_DYNAMIC = `function renderDynamic(target, props) {
  * Both `finalizeModule`'s helper injection and `brandRender` key off this exact
  * line, so it is written once rather than twice.
  */
-const DEFAULT_EXPORT = "\nexport default function (input: Input): string {";
-const DEFAULT_EXPORT_WITH_CONTENT =
-  "\nexport default function (input: Input & { content?: () => string }): string {";
+const DEFAULT_EXPORT =
+  /\nexport default function ([A-Za-z_$][\w$]*)\(input: Input(?: & \{ content\?: \(\) => string \})?\): string \{/;
 
 /**
- * The same signature line, rebound to a named `render` declaration.
+ * The core's emitted default-export line, and the name it declares.
  *
- * The `function ` prefix carries its trailing space deliberately: the emitted
- * line is `export default function (input…`, so replacing the prefix without
- * it leaves `function render (input…` with a stray space the goldens diff.
+ * The name is the file's, not a fixed `render` (`icon.mx` -> `Icon`), so this
+ * matches the shape and reads the name back rather than pinning a literal.
+ * Both `finalizeModule`'s helper injection and `brandRender` key off it.
  */
-function namedRenderFrom(defaultExport: string): string {
-  return defaultExport.replace("export default function ", "function render");
+function defaultExportIn(code: string): { line: string; name: string } | null {
+  const match = code.match(DEFAULT_EXPORT);
+  return match?.[1] ? { line: match[0], name: match[1] } : null;
 }
 
-function defaultExportIn(code: string): string | null {
-  if (code.includes(DEFAULT_EXPORT_WITH_CONTENT)) {
-    return DEFAULT_EXPORT_WITH_CONTENT;
-  }
-  return code.includes(DEFAULT_EXPORT) ? DEFAULT_EXPORT : null;
+/**
+ * The same signature line, rebound to a plain named declaration.
+ *
+ * `export default function Icon(…)` becomes `function Icon(…)`, so the brand
+ * below has a binding to hang a property off and the module exports it at the
+ * end instead.
+ */
+function namedRenderFrom(defaultExport: string): string {
+  return defaultExport.replace("export default function ", "function ");
 }
 
 /**
@@ -657,9 +661,11 @@ export const MX_COMPONENT = Symbol.for("mx.component");
  * minifier is free to rewrite and which any function could collide with; an
  * explicit brand is exact.
  *
- * The core emits the default export anonymously, so the function is given a
- * name here, branded, and then exported: `export default function (input) {}`
- * has no binding to hang a property off.
+ * The core emits `export default function <Name>(input) {}`, named after the
+ * file. That statement still has no binding to hang a property off, so this
+ * rewrites it to a plain `function <Name>(input) {}` declaration, brands that,
+ * and exports it at the end — keeping the author's own name rather than
+ * imposing one, since a tag's self-recursive call resolves to it.
  *
  * `Object.defineProperty` rather than `render[Symbol.for(…)] = true`: the
  * emitted module is TypeScript, and a consumer runs `tsc` over it. Assigning
@@ -690,18 +696,19 @@ export function brandRender(code: string): string {
   if (!defaultExport) {
     throw new Error(
       "@mxlang/html: cannot brand the compiled module — the emitted " +
-        `code does not contain the expected default export line ${JSON.stringify(
-          DEFAULT_EXPORT.trimStart(),
+        `code does not match the expected default export shape ${String(
+          DEFAULT_EXPORT,
         )}. The core's emitter has changed shape; update DEFAULT_EXPORT in ` +
         "translate.ts to match, or an Astro host's `check()` will silently " +
         "stop recognising MX components.",
     );
   }
 
-  return `${code.replace(defaultExport, namedRenderFrom(defaultExport))}
-Object.defineProperty(render, Symbol.for("mx.component"), { value: true });
+  const { line, name } = defaultExport;
+  return `${code.replace(line, namedRenderFrom(line))}
+Object.defineProperty(${name}, Symbol.for("mx.component"), { value: true });
 
-export default render;
+export default ${name};
 `;
 }
 
@@ -734,7 +741,10 @@ export function finalizeModule(code: string): string {
   // Placed after the author's own hoisted module scope so it cannot shadow a
   // binding they declared.
   return brandRender(
-    code.replace(defaultExport, `\n${helpers.join("\n\n")}\n${defaultExport}`),
+    code.replace(
+      defaultExport.line,
+      `\n${helpers.join("\n\n")}\n${defaultExport.line}`,
+    ),
   );
 }
 
@@ -754,21 +764,14 @@ export function finalizeModuleWithMappings(emitted: MappedCode): MappedCode {
     brandRender(emitted.code);
     throw new Error("@mxlang/html: unreachable missing default export");
   }
+  const { line, name } = defaultExport;
   const withHelpers =
     helpers.length === 0
       ? emitted
-      : replaceMapped(
-          emitted,
-          defaultExport,
-          `\n${helpers.join("\n\n")}\n${defaultExport}`,
-        );
-  const branded = replaceMapped(
-    withHelpers,
-    defaultExport,
-    namedRenderFrom(defaultExport),
-  );
+      : replaceMapped(emitted, line, `\n${helpers.join("\n\n")}\n${line}`);
+  const branded = replaceMapped(withHelpers, line, namedRenderFrom(line));
   return concatMapped(
     branded,
-    'Object.defineProperty(render, Symbol.for("mx.component"), { value: true });\n\nexport default render;\n',
+    `Object.defineProperty(${name}, Symbol.for("mx.component"), { value: true });\n\nexport default ${name};\n`,
   );
 }

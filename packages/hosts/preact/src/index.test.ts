@@ -41,7 +41,9 @@ describe("module shape", () => {
     const code = compile("<p>hi</p>");
     expect(code).toContain("/** @jsxImportSource preact */");
     expect(code).toContain("export interface Input {}");
-    expect(code).toContain("export default function (props: Input) {");
+    // Named after the file (`test.mx` -> `Test`), never anonymous: that is
+    // what lets a self-recursive tag call itself with no self-import.
+    expect(code).toContain("export default function Test(props: Input) {");
     // The template's own expressions read `input`; the JSX parameter is
     // `props`, and the bridge between them also maps JSX's `children` onto
     // Marko's `content`.

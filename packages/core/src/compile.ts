@@ -146,6 +146,10 @@ export function createTranslator(host: TranslatorOptions = {}) {
           );
           ctx.customTags = state.customTags;
           ctx.warnings = state.warnings;
+          // Every host reaching `compileSource` emits a whole module with a
+          // default export, so the file has a declaration to name and a tag
+          // may call itself without importing itself.
+          ctx.emitsModule = true;
           const code = state.emitIr(lower(ctx, path.node.body), ctx);
           state.code = state.postEmit ? state.postEmit(code) : code;
           path.node.body = [];

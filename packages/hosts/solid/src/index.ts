@@ -4,6 +4,7 @@ import {
   type CustomTag,
   type GeneratedMapping,
   lower,
+  moduleExportName,
   type Node,
   newCtx,
   parseFragment,
@@ -268,6 +269,10 @@ export function compileSolidUnit(
     options.filename,
   );
   ctx.customTags = options.customTags;
+  // A tag unit is a whole file compiling to a module, unlike the region path
+  // above: it has a `export default function <Name>` to name, so a tag that
+  // calls itself resolves to that declaration rather than importing itself.
+  ctx.emitsModule = true;
   const ir = lower(ctx, body);
   // A `prelude` node is a statement a hoist hook lifted to the enclosing
   // function's head. No Solid-host construct mints one today, so rather than
@@ -292,8 +297,11 @@ export function compileSolidUnit(
   // syntax error downstream, not a contract the emitted module can carry.
   // Typing a tag unit's props is phase 3's job, through the same virtual-file
   // projection the TypeScript plugin already does for `.solid.mx`.
+  // Named after the file, never anonymous: a tag whose template calls its own
+  // name resolves to this declaration, so self-recursion needs no self-import
+  // (design invariant §7.5-7).
   lines.push(
-    `export default function (input) { return <>${emitSolid(ir)}</>; }`,
+    `export default function ${moduleExportName(ir, "@mxlang/solid")}(input) { return <>${emitSolid(ir)}</>; }`,
   );
   return { code: lines.join("\n") };
 }
