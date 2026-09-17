@@ -26,8 +26,24 @@ export interface TemplateTag {
 export interface TemplateMetadata {
   readsContent: boolean;
   attributeTags: string[];
-  /** Reserved for the value-return phase. */
+  /**
+   * This unit declares `<return>`, so its default export returns
+   * `{ value, output }` rather than the output alone (design §3.3).
+   *
+   * The caller consumes it for two decisions it cannot make on its own: how
+   * to unwrap the call (the `{ value, output }` shape is invisible at the
+   * call site), and whether a `/var` on the call is legal at all — C5's
+   * "`<x>` does not return a value".
+   */
   returnsValue?: boolean;
+  /**
+   * The source text of the `<return>` value expression, when there is one.
+   *
+   * Carried for typing: the `/var` binding's type is this expression's
+   * inferred type, and a host that projects a virtual module needs the
+   * expression rather than just the fact that one exists.
+   */
+  returnValueCode?: string;
   /**
    * This unit is still being compiled, so the other fields are placeholders.
    *
@@ -179,7 +195,9 @@ function inputMember(code: string): string | null {
 }
 
 /** Computes the public metadata of one already-lowered tag unit. */
-export function metadataOfIr(ir: Pick<Ir, "body">): TemplateMetadata {
+export function metadataOfIr(
+  ir: Pick<Ir, "body"> & Partial<Pick<Ir, "returnValue">>,
+): TemplateMetadata {
   let readsContent = false;
   const attributeTags = new Set<string>();
   const seen = new Set<object>();
@@ -234,7 +252,18 @@ export function metadataOfIr(ir: Pick<Ir, "body">): TemplateMetadata {
   };
 
   visit(ir.body);
-  return { readsContent, attributeTags: [...attributeTags] };
+  const metadata: TemplateMetadata = {
+    readsContent,
+    attributeTags: [...attributeTags],
+  };
+  // Only when there is one: the field's absence is what every existing
+  // caller (and every cached entry written before `<return>` shipped) reads
+  // as "this unit returns output only".
+  if (ir.returnValue) {
+    metadata.returnsValue = true;
+    metadata.returnValueCode = ir.returnValue.code;
+  }
+  return metadata;
 }
 
 /** Records an authored default import so discovery can reuse it by path. */

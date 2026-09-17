@@ -618,6 +618,39 @@ describe("custom tag phase boundaries", () => {
  * would carry one page's collected state into the next.
  */
 describe("analyze, finalize and the per-file store", () => {
+  // A file using a tag with `analyze` is lowered twice: once over a scratch
+  // `Ctx` to collect the calls, then for real. The scratch walk enters
+  // through `lowerChildren` rather than `lower`, so it never got `lower`'s
+  // `returnDepth = -1` and started one level deep — which made a
+  // legitimately top-level `<return>` report as nested, but *only* in a file
+  // that also used an `analyze` tag. Nothing else runs that second walk.
+  it("accepts a top-level <return> in a file that also uses an analyze tag", () => {
+    const collector: CustomTag = {
+      analyze() {},
+      transform: (_call, ctx) => [ctx.build.element("span", [], [])],
+    };
+
+    const ir = lowerWithTags("<marker/>\n<p>x</p>\n<return value=1/>\n", {
+      marker: collector,
+    });
+
+    expect(ir.returnValue?.code).toBe("1");
+  });
+
+  it("still rejects a nested <return> in such a file", () => {
+    // The fix restores the starting depth; it must not disable the rule.
+    const collector: CustomTag = {
+      analyze() {},
+      transform: (_call, ctx) => [ctx.build.element("span", [], [])],
+    };
+
+    expect(() =>
+      lowerWithTags("<marker/>\n<div><return value=1/></div>\n", {
+        marker: collector,
+      }),
+    ).toThrow(/`<return>` must be at the top level/);
+  });
+
   function textOf(node: IrNode): string {
     return node.kind === "Text" ? node.value : "";
   }
