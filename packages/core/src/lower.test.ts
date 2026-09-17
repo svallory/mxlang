@@ -887,3 +887,124 @@ describe("a claimed tag's children are lowered exactly once", () => {
     ]);
   });
 });
+
+/**
+ * `<return>`: the unit's value channel (design §3.3, acceptance C1).
+ *
+ * The grammar is Marko's, ported from `translator/core/return.ts`; each error
+ * case below names the Marko fixture it came from so the mapping stays
+ * checkable. The one deliberate subtraction is `valueChange` — Marko accepts
+ * it, MX 1 ships a value only — so it is rejected by name rather than silently
+ * accepted and dropped, which is the failure class (S8) the field guard
+ * exists to close.
+ *
+ * Every case is validated in the *tag's own* compilation, which is what makes
+ * the `{ value, output }` signature a single shape rather than `T | undefined`
+ * per path (invariant §7.5-5): a unit cannot see its callers, so no call site
+ * can widen it.
+ */
+describe("<return>", () => {
+  it("lifts the value onto the IR rather than into the body", () => {
+    const ir = lowerSource("<p>hi</p>\n<return value=input.count/>\n");
+
+    expect(ir.returnValue?.code).toBe("input.count");
+    // Not a rendered node: the value is part of the unit's signature, so a
+    // host emits it in the return statement, never in document order.
+    expect(ir.body.some((node) => node.kind === "Return")).toBe(false);
+  });
+
+  it("reports the value in the metadata a caller reads", () => {
+    const ir = lowerSource("<return value=1 + 1/>\n");
+
+    expect(ir.tagMetadata.returnsValue).toBe(true);
+    expect(ir.tagMetadata.returnValueCode).toBe("1 + 1");
+  });
+
+  it("leaves a unit without one reporting no value", () => {
+    const ir = lowerSource("<p>hi</p>\n");
+
+    expect(ir.returnValue).toBeNull();
+    // Absent rather than `false`: every entry cached before `<return>`
+    // shipped reads the same way.
+    expect(ir.tagMetadata.returnsValue).toBeUndefined();
+  });
+
+  it("accepts the shorthand value form", () => {
+    expect(lowerSource("<return=input.x/>\n").returnValue?.code).toBe(
+      "input.x",
+    );
+  });
+
+  it.each([
+    // Marko `error-return-multiple/`
+    [
+      "more than one per template",
+      "<return value=1/>\n<return value=2/>\n",
+      /multiple `<return>` tags/,
+    ],
+    // Marko `error-return-if-else/`
+    [
+      "one under a control-flow tag",
+      "<if=true>\n  <return value=1/>\n</if>\n",
+      /must be at the top level/,
+    ],
+    // Marko `error-return-if-else/`, the `<for>` half of unconditionality
+    [
+      "one inside a loop",
+      "<for|x| of=[1]>\n  <return value=x/>\n</for>\n",
+      /must be at the top level/,
+    ],
+    // Marko `error-return-in-native-tag/`
+    [
+      "one inside a native tag",
+      "<div>\n  <return value=1/>\n</div>\n",
+      /must be at the top level/,
+    ],
+    // Marko `error-return-no-default-value/`
+    ["one with no value", "<return/>\n", /requires a `value=` attribute/],
+    // Marko `error-return-duplicate-value/`
+    [
+      "a duplicate value attribute",
+      "<return value=1 value=2/>\n",
+      /duplicate `value` attribute/,
+    ],
+    // Marko `error-return-args/`
+    ["arguments", "<return('a') value=1/>\n", /tag arguments/],
+    // Marko `error-return-params/`
+    ["params", "<return|a| value=1></return>\n", /tag params/],
+    // Marko `error-return-var/`
+    ["a tag variable", "<return/x value=1/>\n", /tag variable/],
+    // Marko `error-return-spread-attr/`
+    [
+      "spread attributes",
+      "<return ...rest value=1/>\n",
+      /does not support spread attributes/,
+    ],
+    // Marko `error-return-extra-attr/`
+    [
+      "an unknown attribute",
+      "<return value=1 y=2/>\n",
+      /does not support the `y` attribute/,
+    ],
+    // Marko `error-return-body-content/`
+    [
+      "body content",
+      "<return value=1>x</return>\n",
+      /does not support body content/,
+    ],
+  ])("rejects %s", (_what, source, message) => {
+    expect(() => lowerSource(source)).toThrow(message);
+  });
+
+  it("rejects `valueChange` by name: MX returns a value only", () => {
+    expect(() => lowerSource("<return value=x valueChange=setX/>\n")).toThrow(
+      /`valueChange`.*value only/,
+    );
+  });
+
+  it("positions the error at the offending tag", () => {
+    expect(() =>
+      lowerSource("<p>a</p>\n<return value=1/>\n<return value=2/>\n"),
+    ).toThrow(expect.objectContaining({ line: 3 }));
+  });
+});

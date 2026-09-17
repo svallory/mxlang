@@ -667,6 +667,74 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
  * bodies (`<try>  </try>`) that used to render. `isBuiltin` therefore skips
  * the gate and always lowers the raw block.
  */
+/**
+ * `<return value=EXPR/>` — the unit's value channel (design §3.3).
+ *
+ * Validated entirely in the tag's *own* compilation, which is what makes the
+ * `{ value, output }` signature well-typed: a unit cannot see its callers, so
+ * "at most one, unconditional" is decided once, here, rather than resolved
+ * from the set of all call sites (invariant §7.5-5). The grammar is Marko's,
+ * ported from `translator/core/return.ts` with MX wording; the one deliberate
+ * subtraction is `valueChange`, which MX 1 does not ship (value only), so it
+ * is rejected by name like any other unknown attribute.
+ *
+ * `nested` is the whole unconditionality check. Reaching this function from
+ * anywhere but the file's own top-level body — inside a native tag, under
+ * `<if>`/`<for>`, inside an attribute tag or a `<define>` — means the return
+ * would be conditional or scoped, so it is refused there rather than lowered.
+ */
+function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
+  rejectUnsupportedFields(ctx, node, "`<return>`");
+
+  if (node.body?.body?.length) {
+    fail("`<return>` does not support body content", node);
+  }
+
+  for (const attr of node.attributes ?? []) {
+    if (attr.type === "MarkoSpreadAttribute") {
+      fail("`<return>` does not support spread attributes", attr);
+    }
+  }
+
+  let valueAttr: Node | undefined;
+  for (const attr of node.attributes ?? []) {
+    if (attr.type !== "MarkoAttribute") continue;
+    // The parser spells `<return=x/>` as the `default` attribute and
+    // `<return value=x/>` as `value`; both are the same authored thing.
+    const attrName = attr.default ? "value" : String(attr.name);
+    if (attrName !== "value") {
+      fail(
+        attrName === "valueChange"
+          ? "`<return>` does not support the `valueChange` attribute; MX returns a value only, with no two-way channel"
+          : `\`<return>\` does not support the \`${attrName}\` attribute`,
+        attr,
+      );
+    }
+    if (valueAttr) fail("invalid duplicate `value` attribute", attr);
+    valueAttr = attr;
+  }
+
+  if (!valueAttr?.value) {
+    fail("`<return>` requires a `value=` attribute", node);
+  }
+
+  if (nested) {
+    fail(
+      "`<return>` must be at the top level of its template; it declares the value the whole unit returns, so it cannot be conditional or nested",
+      node,
+    );
+  }
+
+  if (ctx.returnValue) {
+    fail("cannot have multiple `<return>` tags for the template", node);
+  }
+
+  ctx.returnValue = { expr: exprOf(ctx, valueAttr.value), loc: posOf(node) };
+  // Contributes nothing to the rendered output: the value is lifted onto the
+  // `Ir` and emitted as part of the unit's signature, not in document order.
+  return { kind: "Text", value: "", loc: posOf(node) };
+}
+
 function lowerCustomTag(
   ctx: Ctx,
   node: Node,
@@ -792,6 +860,8 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       return lowerConst(ctx, node);
     case "define":
       return lowerDefine(ctx, node);
+    case "return":
+      return lowerReturn(ctx, node, ctx.returnDepth !== 0);
     case "else": {
       const label = attrByName(node, "if") ? "else if" : "else";
       return fail(`\`<${label}>\` without a preceding \`<if>\``, node);
@@ -907,6 +977,21 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
 }
 
 export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
+  // Every call but the template body's own (`lower`, which resets it to 0
+  // around its walk) is lowering the children of *some* container, so
+  // counting here rather than at each of the eight call sites is what keeps
+  // `<return>`'s position rule from drifting the next time a construct with
+  // a child list is added.
+  const depth = ctx.returnDepth ?? 0;
+  ctx.returnDepth = depth + 1;
+  try {
+    return lowerChildList(ctx, children);
+  } finally {
+    ctx.returnDepth = depth;
+  }
+}
+
+function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   const out: IrNode[] = [];
   let index = 0;
 
@@ -1023,6 +1108,13 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
       )
     : undefined;
 
+  // -1, so the template body's own `lowerChildren` sits at depth 0 — the one
+  // position `<return>` is legal in. `=`, not `??=`: a reused `Ctx` must not
+  // inherit a previous walk's depth, which would make a legal `<return>`
+  // report as nested.
+  ctx.returnDepth = -1;
+  ctx.returnValue = null;
+
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
 
   const ir: Ir = {
@@ -1079,6 +1171,9 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
     if (prepended.length > 0) ir.body.unshift(...prepended);
   }
 
+  // Read off `Ctx` rather than returned from the walk: `lowerReturn` records
+  // it wherever the tag was met, and the walk's own result is the body.
+  ir.returnValue = (ctx as Ctx).returnValue?.expr ?? null;
   ir.tagMetadata = metadataOfIr(ir);
 
   return ir;
@@ -1119,6 +1214,14 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
   scratch.emitsModule = ctx.emitsModule;
   scratch.customTagStores = ctx.customTagStores;
   scratch.customTagGensym = ctx.customTagGensym;
+  // -1, exactly as `lower` sets it, because this walk enters through
+  // `lowerChildren` rather than through `lower`: the body's own child list
+  // then sits at depth 0, the one position `<return>` is legal in. Left
+  // unset, `lowerChildren`'s `?? 0` started this walk at depth 1 and a
+  // legitimately top-level `<return>` was rejected — but *only* in a file
+  // that also used a tag with an `analyze` hook, since nothing else runs
+  // this second walk.
+  scratch.returnDepth = -1;
   // Absorbed rather than forwarded: every warning this walk raises is raised
   // again by the real walk, at the same position, and reporting a dropped
   // attribute tag twice would read as two mistakes.

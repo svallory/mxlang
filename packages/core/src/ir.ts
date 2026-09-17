@@ -365,4 +365,19 @@ export interface Ir {
    * and can rely on this being present.
    */
   exportName?: string;
+  /**
+   * The `<return value=EXPR/>` this unit declares, or null.
+   *
+   * Present means the module's default export returns `{ value, output }`
+   * rather than the output alone — the two shapes of design §3.3, chosen by
+   * the **tag** and never by a call site. Because a tag unit compiles without
+   * seeing any of its callers, that choice is enforced by construction
+   * (invariant §7.5-5): the grammar validated at the tag's own compile
+   * guarantees at most one `<return>`, unconditional, so the signature is a
+   * single shape rather than `T | undefined` per path.
+   *
+   * Lifted out of `body` the way `inputInterface` is: it is a property of the
+   * unit, not a node to render in document order.
+   */
+  returnValue?: Expr | null;
 }

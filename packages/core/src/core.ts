@@ -36,7 +36,7 @@
 import { createRequire } from "node:module";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
-import type { IrNode } from "./ir.ts";
+import type { Expr, IrNode, Position } from "./ir.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -249,6 +249,28 @@ export interface Ctx {
   customTagImports?: Map<string, string>;
   /** Imports synthesized while lowering discovered template calls. */
   customTagImportNodes?: Array<Extract<IrNode, { kind: "Import" }>>;
+  /**
+   * The `<return>` this unit has already declared, if any.
+   *
+   * Only ever set while lowering a file's own top-level body, which is the
+   * single legal position (design §3.3). It exists so the second `<return>`
+   * is a positioned error naming the construct rather than a silent
+   * last-one-wins, and it is read back into `Ir.returnValue` when the walk
+   * ends.
+   */
+  returnValue?: { expr: Expr; loc: Position } | null;
+  /**
+   * How many containers deep the walk currently is, for `<return>`'s
+   * unconditionality rule.
+   *
+   * Zero means the file's own top-level body — the only position a `<return>`
+   * is legal in. Anything that makes its evaluation conditional or scoped (a
+   * native element, `<if>`, `<for>`, an attribute tag, a `<define>` body, a
+   * tag's content block) raises it while lowering its children, so the check
+   * is one comparison instead of a parent-chain walk Marko needs because it
+   * validates from a Babel path rather than during the walk.
+   */
+  returnDepth?: number;
   /**
    * Positioned warnings raised during lowering: a construct that compiles but
    * drops something the author wrote.
