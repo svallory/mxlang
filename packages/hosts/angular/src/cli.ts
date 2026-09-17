@@ -7,11 +7,13 @@ import { resolve } from "node:path";
 import { TranslateError } from "@mxlang/core";
 import { build } from "./build.ts";
 import { readMap, resolvePosition } from "./map-file.ts";
+import { startWatch } from "./watch.ts";
 
 function usage(): string {
   return [
     "Usage:",
     "  mx-angular build [--project <dir>] [--config <file>]",
+    "  mx-angular watch [--project <dir>] [--config <file>] [--once]",
     "  mx-angular map <file.html:line:col>",
   ].join("\n");
 }
@@ -19,11 +21,13 @@ function usage(): string {
 interface Flags {
   project?: string;
   config?: string;
+  once?: boolean;
 }
 
-const KNOWN_FLAGS = new Set(["--project", "--config"]);
+const KNOWN_FLAGS = new Set(["--project", "--config", "--once"]);
+const BOOLEAN_FLAGS = new Set(["--once"]);
 
-/** Parses `--project <dir>`/`--config <file>` in either `--flag value` or `--flag=value` form. Unknown flags are rejected. */
+/** Parses `--project <dir>`/`--config <file>`/`--once` in either `--flag value` or `--flag=value` form (`--once` takes no value). Unknown flags are rejected. */
 function parseFlags(args: string[]): { flags: Flags; rest: string[] } {
   const flags: Flags = {};
   const rest: string[] = [];
@@ -41,6 +45,12 @@ function parseFlags(args: string[]): { flags: Flags; rest: string[] } {
     }
     if (!KNOWN_FLAGS.has(name as string)) {
       throw new Error(`unknown flag: ${name}`);
+    }
+
+    if (BOOLEAN_FLAGS.has(name as string)) {
+      if (name === "--once") flags.once = true;
+      i++;
+      continue;
     }
 
     let value: string;
@@ -93,6 +103,43 @@ function formatMessage(
   return `${m.file}${position} ${kind}: ${m.message}`;
 }
 
+/**
+ * Runs `mx-angular watch`. With `--once`, runs the initial build only and
+ * resolves once it's done (for tests and CI, A3). Without it, starts the
+ * incremental watcher and resolves only when it's asked to stop — via
+ * `SIGINT`/`SIGTERM` (`Ctrl-C`, exit 0, A3).
+ */
+function runWatch(args: string[]): Promise<number> {
+  const { flags } = parseFlags(args);
+  const projectDir = flags.project ? resolve(flags.project) : process.cwd();
+  if (flags.config) {
+    console.warn(
+      `--config is accepted but not yet used; mx-angular reads package.json#mx.angular in ${projectDir}`,
+    );
+  }
+
+  const handle = startWatch(projectDir, {
+    once: flags.once,
+    onLine: (line) => console.log(line),
+  });
+
+  if (flags.once) {
+    return handle.onIdle.then(() => {
+      handle.close();
+      return 0;
+    });
+  }
+
+  return new Promise<number>((resolvePromise) => {
+    const stop = () => {
+      handle.close();
+      resolvePromise(0);
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
+}
+
 /** Parses `file.html:line:col`. */
 function parseMapArg(arg: string): {
   file: string;
@@ -135,12 +182,30 @@ function runMap(args: string[]): number {
   }
 }
 
-export function runCli(argv: string[]): number {
+function handleCliError(err: unknown): number {
+  if (err instanceof TranslateError) {
+    console.error(
+      formatMessage("error", {
+        file: err.file ?? "<unknown>",
+        line: err.line,
+        column: err.column,
+        message: err.message,
+      }),
+    );
+  } else {
+    console.error(err instanceof Error ? err.message : String(err));
+  }
+  return 1;
+}
+
+export function runCli(argv: string[]): number | Promise<number> {
   const [command, ...rest] = argv;
   try {
     switch (command) {
       case "build":
         return runBuild(rest);
+      case "watch":
+        return runWatch(rest).catch(handleCliError);
       case "map":
         return runMap(rest);
       default:
@@ -148,18 +213,6 @@ export function runCli(argv: string[]): number {
         return 1;
     }
   } catch (err) {
-    if (err instanceof TranslateError) {
-      console.error(
-        formatMessage("error", {
-          file: err.file ?? "<unknown>",
-          line: err.line,
-          column: err.column,
-          message: err.message,
-        }),
-      );
-    } else {
-      console.error(err instanceof Error ? err.message : String(err));
-    }
-    return 1;
+    return handleCliError(err);
   }
 }

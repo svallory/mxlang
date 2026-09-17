@@ -2,6 +2,11 @@
  * `mx-angular build` (design note A3): compiles every routed `.mx` file to
  * its Angular output, applying the `onError` policy and writing only when
  * bytes differ.
+ *
+ * `compileOne()` is the single per-file compile path (round 1 R-a): both
+ * `build()` here and `watch.ts`'s full/incremental rebuilds call it, so the
+ * `onError` 3x2 table, the overwrite guard, the symlink guards, the header
+ * and the map write exist in exactly one place.
  */
 
 import {
@@ -47,7 +52,7 @@ export interface BuildResult {
   warnings: PositionedMessage[];
 }
 
-function outputPathFor(mxPath: string, extension: string): string {
+export function outputPathFor(mxPath: string, extension: string): string {
   const base = basename(mxPath, ".mx");
   return join(dirname(mxPath), `${base}${extension}`);
 }
@@ -67,7 +72,13 @@ function isSymlink(path: string): boolean {
   }
 }
 
-function writeIfDiffers(path: string, content: string): void {
+/** Writes `path` only when its bytes differ from what's on disk, and records it in `knownOutputs` (round 1 R-b) either way — even an unchanged write is this tool's own output, so a watcher must never treat its mtime-refreshing fs event as a foreign change. */
+function writeIfDiffers(
+  path: string,
+  content: string,
+  knownOutputs?: Set<string>,
+): void {
+  knownOutputs?.add(path);
   if (isSymlink(path)) {
     throw new Error(`refusing to write through a symlink: ${path}`);
   }
@@ -78,13 +89,13 @@ function writeIfDiffers(path: string, content: string): void {
   writeFileSync(path, content, "utf8");
 }
 
-/** The visible `<pre>` error template written on a cold start (A3's `onError` table). */
-function errorTemplate(message: string): string {
+/** The visible `<pre>` error template written on a cold start (A3's `onError` table). Always carries the generated header, so a later fix is never blocked by the overwrite guard (round 1 finding: an unheadered error template bricks the page forever). */
+function errorTemplate(headerPrefix: string, message: string): string {
   const escaped = message
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  return `<!-- mx-angular: compile error -->\n<pre style="white-space:pre-wrap;color:#b00">${escaped}</pre>\n`;
+  return `${headerPrefix}<!-- mx-angular: compile error -->\n<pre style="white-space:pre-wrap;color:#b00">${escaped}</pre>\n`;
 }
 
 /**
@@ -102,7 +113,8 @@ function applyOnError(
   headerPrefix: string,
   message: string,
   onError: AngularConfig["onError"],
-): string | undefined {
+  knownOutputs: Set<string>,
+): { error?: string; line: string } {
   const hadPrevious = existsSync(outputPath);
   const generatedByUs = hadPrevious
     ? hasGeneratedHeader(readFileSync(outputPath, "utf8"))
@@ -110,19 +122,33 @@ function applyOnError(
 
   if (onError === "delete") {
     if (hadPrevious) {
-      if (!generatedByUs) return checkOverwriteGuard(outputPath);
+      if (!generatedByUs) {
+        const err = checkOverwriteGuard(outputPath);
+        return { error: err, line: `${outputPath} error: ${err}` };
+      }
       if (isSymlink(outputPath)) {
         throw new Error(`refusing to delete through a symlink: ${outputPath}`);
       }
       unlinkSync(outputPath);
+      knownOutputs.delete(outputPath);
+      return { line: `${outputPath} skipped (deleted on error)` };
     }
-    return undefined;
+    return {
+      line: `${outputPath} skipped (no previous output; onError=delete)`,
+    };
   }
 
   if (onError === "error-template") {
-    if (hadPrevious && !generatedByUs) return checkOverwriteGuard(outputPath);
-    writeIfDiffers(outputPath, headerPrefix + errorTemplate(message));
-    return undefined;
+    if (hadPrevious && !generatedByUs) {
+      const err = checkOverwriteGuard(outputPath);
+      return { error: err, line: `${outputPath} error: ${err}` };
+    }
+    writeIfDiffers(
+      outputPath,
+      errorTemplate(headerPrefix, message),
+      knownOutputs,
+    );
+    return { line: `${outputPath} wrote (error template)` };
   }
 
   // keep-last (default): leave a previous good output; write the error
@@ -130,85 +156,18 @@ function applyOnError(
   // existing file is neither ours nor a good previous output — but never
   // over a file MX did not generate.
   if (!hadPrevious) {
-    writeIfDiffers(outputPath, headerPrefix + errorTemplate(message));
-    return undefined;
+    writeIfDiffers(
+      outputPath,
+      errorTemplate(headerPrefix, message),
+      knownOutputs,
+    );
+    return { line: `${outputPath} wrote (error template, cold start)` };
   }
   if (!generatedByUs) {
-    return checkOverwriteGuard(outputPath);
+    const err = checkOverwriteGuard(outputPath);
+    return { error: err, line: `${outputPath} error: ${err}` };
   }
-  return undefined;
-}
-
-/** Compiles and writes one page file. Returns any errors/warnings, positioned. */
-function buildPage(
-  mxPath: string,
-  config: AngularConfig,
-): { error?: PositionedMessage; warnings: PositionedMessage[] } {
-  const outputPath = outputPathFor(mxPath, config.pageExtension);
-  const mapPath = `${outputPath}.map`;
-  const sourceBasename = basename(mxPath);
-  const tsFilename = basename(mxPath).replace(/\.mx$/, ".ts");
-
-  try {
-    // Discovered per file, matching every other integration (the Bun
-    // loaders, the Vite plugin, mx-tsc): which tags a template may call
-    // follows from where the template lives, not from the whole build.
-    const customTags = getCustomTags(mxPath);
-    const result = compileFile(mxPath, { customTags });
-    const header = buildHeader(sourceBasename, tsFilename, result.usedTags);
-    const content = header + result.code;
-
-    const overwriteError = existsSync(outputPath)
-      ? checkOverwriteGuard(outputPath)
-      : undefined;
-    if (overwriteError) {
-      return {
-        error: { file: mxPath, line: 1, column: 0, message: overwriteError },
-        warnings: [],
-      };
-    }
-
-    writeIfDiffers(outputPath, content);
-    writeMap(
-      mapPath,
-      buildMap(sourceBasename, basename(outputPath), result.map),
-    );
-    const warnings = warningsFor(mxPath, result.warnings);
-    return { warnings };
-  } catch (err) {
-    const positioned = err instanceof TranslateError;
-    // A tag template's own error carries `file` (A5) — a call site inside
-    // a discovered tag's sidecar `transform`, for instance — and must be
-    // reported against that file, not the page that called it.
-    const errorFile = positioned && err.file ? err.file : mxPath;
-    const message = positioned
-      ? `${errorFile}:${err.line}:${err.column} ${err.message}`
-      : `${mxPath}: ${err instanceof Error ? err.message : String(err)}`;
-    const header = buildHeader(sourceBasename, tsFilename, []);
-    const overwriteError = applyOnError(
-      outputPath,
-      header,
-      message,
-      config.onError,
-    );
-    if (overwriteError) {
-      return {
-        error: { file: mxPath, line: 1, column: 0, message: overwriteError },
-        warnings: [],
-      };
-    }
-    return {
-      error: positioned
-        ? {
-            file: errorFile,
-            line: err.line,
-            column: err.column,
-            message: err.message,
-          }
-        : { file: mxPath, message },
-      warnings: [],
-    };
-  }
+  return { line: `${outputPath} skipped (keeping last good output)` };
 }
 
 function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
@@ -220,6 +179,18 @@ function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
   }));
 }
 
+export interface CompileOneResult {
+  ok: boolean;
+  /** One line per write/skip/error, in `file:line:col message` shape where positioned. */
+  lines: string[];
+  errors: PositionedMessage[];
+  warnings: PositionedMessage[];
+  /** Tag names this page called and the IR retained (`usedTags`), for dependency tracking. Empty for a tag file or a failed compile. */
+  usedTags: string[];
+  /** Every output path this call touched (page `.html`, its `.map`), for `knownOutputs` bookkeeping. */
+  outputs: string[];
+}
+
 /**
  * A discovered tag file. 1.5a does not yet have a route to emit an Angular
  * component *class* from a `.mx` tag file — that is task 1.7's tag-unit
@@ -228,14 +199,198 @@ function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
  * module). Reported as a positioned error naming the missing task rather
  * than silently emitting a template where a component module belongs.
  */
-function buildTag(mxPath: string): PositionedMessage {
+function tagNotYetSupported(mxPath: string): {
+  error: PositionedMessage;
+  line: string;
+} {
+  const message =
+    "tag files are not yet compiled by mx-angular: component-module emission needs task 1.7 (tag-unit compile route), not yet landed for the angular host";
   return {
-    file: mxPath,
-    line: 1,
-    column: 0,
-    message:
-      "tag files are not yet compiled by mx-angular: component-module emission needs task 1.7 (tag-unit compile route), not yet landed for the angular host",
+    error: { file: mxPath, line: 1, column: 0, message },
+    line: `${mxPath}:1:0 error: ${message}`,
   };
+}
+
+/**
+ * Compiles one routed file — page or tag — and applies every write/guard/
+ * error policy exactly once (round 1 R-a). `knownOutputs` accumulates every
+ * path this call wrote or would have written, so a caller with a live
+ * `fs.watch` on the same directory can ignore its own self-triggered events
+ * (round 1 R-b).
+ */
+export function compileOne(
+  routed: { path: string; kind: "page" | "tag" },
+  config: AngularConfig,
+  knownOutputs: Set<string>,
+): CompileOneResult {
+  if (routed.kind === "tag") {
+    const { error, line } = tagNotYetSupported(routed.path);
+    return {
+      ok: false,
+      lines: [line],
+      errors: [error],
+      warnings: [],
+      usedTags: [],
+      outputs: [],
+    };
+  }
+
+  const mxPath = routed.path;
+  const outputPath = outputPathFor(mxPath, config.pageExtension);
+  const mapPath = `${outputPath}.map`;
+  const sourceBasename = basename(mxPath);
+  const tsFilename = sourceBasename.replace(/\.mx$/, ".ts");
+  const outputs = [outputPath, mapPath];
+
+  try {
+    const customTags = getCustomTags(mxPath);
+    const result = compileFile(mxPath, { customTags });
+    const header = buildHeader(sourceBasename, tsFilename, result.usedTags);
+    const content = header + result.code;
+
+    if (existsSync(outputPath)) {
+      const overwriteError = checkOverwriteGuard(outputPath);
+      if (overwriteError) {
+        return {
+          ok: false,
+          lines: [`${outputPath} error: ${overwriteError}`],
+          errors: [
+            { file: mxPath, line: 1, column: 0, message: overwriteError },
+          ],
+          warnings: [],
+          usedTags: result.usedTags,
+          outputs: [],
+        };
+      }
+    }
+
+    const existed = existsSync(outputPath);
+    const before = existed ? readFileSync(outputPath, "utf8") : undefined;
+    writeIfDiffers(outputPath, content, knownOutputs);
+    const wrote = before !== content;
+
+    // Gate the map write behind the same bytes-differ check as the output
+    // (round 1 R-b): an unconditional map write on every compile — even a
+    // no-op recompile — is itself a self-triggering fs event.
+    const mapContent = `${JSON.stringify(
+      buildMap(sourceBasename, basename(outputPath), result.map),
+      null,
+      2,
+    )}\n`;
+    const mapExisted = existsSync(mapPath);
+    const mapBefore = mapExisted ? readFileSync(mapPath, "utf8") : undefined;
+    if (mapBefore !== mapContent) {
+      writeMap(mapPath, JSON.parse(mapContent));
+    }
+    knownOutputs.add(mapPath);
+
+    const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
+    const warnings = warningsFor(mxPath, result.warnings);
+    for (const w of warnings) {
+      const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
+      lines.push(`${w.file}${position} warning: ${w.message}`);
+    }
+
+    return {
+      ok: true,
+      lines,
+      errors: [],
+      warnings,
+      usedTags: result.usedTags,
+      outputs,
+    };
+  } catch (err) {
+    const positioned = err instanceof TranslateError;
+    // A tag template's own error carries `file` (A5) — a call site inside
+    // a discovered tag's sidecar `transform`, for instance — and must be
+    // reported against that file, not the page that called it.
+    const errorFile = positioned && err.file ? err.file : mxPath;
+    // `@marko/compiler`'s own Babel plugin invocation prefixes a thrown
+    // error's `.message` with the file path (`${filename}: ...`) before it
+    // propagates out of `compileSync` — this affects both a `TranslateError`
+    // (`fail()`'s own message text) and a plain `Error`, so the prefix must
+    // be stripped from `err.message` itself before it's reused for either
+    // display or the structured `errors` array, or the file path shows up
+    // twice in one line (`errorFile:line:col error: ${errorFile}: msg`).
+    const rawMessage = err instanceof Error ? err.message : String(err);
+    const strippedMessage = rawMessage.startsWith(`${errorFile}: `)
+      ? rawMessage.slice(errorFile.length + 2)
+      : rawMessage;
+    // The on-page error template (written by applyOnError -> errorTemplate)
+    // needs the filename too, not just line:column — round 2 finding 2:
+    // stripping the Babel-added `${errorFile}: ` prefix above must not
+    // also drop the filename from what actually lands in the `<pre>`.
+    const message = positioned
+      ? `${errorFile}:${err.line}:${err.column} ${strippedMessage}`
+      : `${errorFile}: ${strippedMessage}`;
+    const header = buildHeader(sourceBasename, tsFilename, []);
+    const { error: overwriteError, line: onErrorLine } = applyOnError(
+      outputPath,
+      header,
+      message,
+      config.onError,
+      knownOutputs,
+    );
+    if (overwriteError) {
+      return {
+        ok: false,
+        lines: [onErrorLine],
+        errors: [{ file: mxPath, line: 1, column: 0, message: overwriteError }],
+        warnings: [],
+        usedTags: [],
+        outputs: [],
+      };
+    }
+    return {
+      ok: false,
+      lines: [
+        onErrorLine,
+        `${errorFile}:${positioned ? `${err.line}:${err.column}` : "1:0"} error: ${strippedMessage}`,
+      ],
+      errors: positioned
+        ? [
+            {
+              file: errorFile,
+              line: err.line,
+              column: err.column,
+              message: strippedMessage,
+            },
+          ]
+        : [{ file: mxPath, message: strippedMessage }],
+      warnings: [],
+      usedTags: [],
+      outputs,
+    };
+  }
+}
+
+/** Removes a page's outputs and forgets them (round 1 R-d: a vanished .mx with `onError: "delete"`). Never touches a hand-written file lacking the generated header. */
+export function removeOutputsFor(
+  mxPath: string,
+  config: AngularConfig,
+  knownOutputs: Set<string>,
+): { line: string } {
+  const outputPath = outputPathFor(mxPath, config.pageExtension);
+  const mapPath = `${outputPath}.map`;
+  if (!existsSync(outputPath)) {
+    knownOutputs.delete(outputPath);
+    knownOutputs.delete(mapPath);
+    return { line: `${outputPath} skipped (already gone)` };
+  }
+  const overwriteError = checkOverwriteGuard(outputPath);
+  if (overwriteError) {
+    return { line: `${outputPath} error: ${overwriteError}` };
+  }
+  if (isSymlink(outputPath)) {
+    return {
+      line: `${outputPath} error: refusing to delete through a symlink: ${outputPath}`,
+    };
+  }
+  unlinkSync(outputPath);
+  if (existsSync(mapPath) && !isSymlink(mapPath)) unlinkSync(mapPath);
+  knownOutputs.delete(outputPath);
+  knownOutputs.delete(mapPath);
+  return { line: `${outputPath} skipped (deleted; source removed)` };
 }
 
 export function build(projectDir: string): BuildResult {
@@ -257,6 +412,7 @@ export function build(projectDir: string): BuildResult {
     ...diagnostics.map((d) => ({ file: d.file, message: d.message })),
   ];
 
+  const knownOutputs = new Set<string>();
   for (const routed of files) {
     // Belt and suspenders: discoverFiles() already filters to projectDir,
     // but a build() caller other than the CLI could hand in a file list of
@@ -269,13 +425,9 @@ export function build(projectDir: string): BuildResult {
       });
       continue;
     }
-    if (routed.kind === "tag") {
-      errors.push(buildTag(routed.path));
-      continue;
-    }
-    const { error, warnings: pageWarnings } = buildPage(routed.path, config);
-    if (error) errors.push(error);
-    warnings.push(...pageWarnings);
+    const result = compileOne(routed, config, knownOutputs);
+    errors.push(...result.errors);
+    warnings.push(...result.warnings);
   }
 
   return { ok: errors.length === 0, errors, warnings };
