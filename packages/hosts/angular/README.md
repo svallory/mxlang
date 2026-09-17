@@ -82,13 +82,6 @@ CI and tests) both build on.
 
 ## Not yet in this package
 
-- Tag-file compilation (a `.mx` in `tags/` becoming a real
-  `@Component`-decorated `.ts` module — task 1.7). Until it lands, a
-  discovered tag file reports a positioned error from `mx-angular build`/
-  `watch` rather than emitting a plain template where a component belongs,
-  and calling a discovered *template* tag from a page still hits the
-  step-1 import problem (A3) on this host.
-- The oracle fixture harness (task 1.4).
 - `.ng.mx` / step 2 and its tooling integration (typescript-plugin,
   language-server, vite-plugin) — attempting to compile a `.mx` file
   through those tools today reports the host as not wired in yet, rather
