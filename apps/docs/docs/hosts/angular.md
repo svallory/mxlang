@@ -72,14 +72,16 @@ array if the project copies `src/**` wholesale.
 
 ## The idea
 
-A `.mx` file on this host compiles to one of two outputs, decided by
-**discovery, not naming convention** — the same rule that decides whether a
-call resolves to a custom tag anywhere else in MX:
+A file on this host compiles to one of three outputs. The first two are
+`.mx` files, told apart by **discovery, not naming convention** — the same
+rule that decides whether a call resolves to a custom tag anywhere else in
+MX; the third is its own extension:
 
 | input | output | why |
 |---|---|---|
 | a page template — matched by `include`, not discovered as a tag | `x.component.html` | the body of a `templateUrl` a hand-written `x.component.ts` points at |
 | a tag file — discovered under a `tags/` directory or `package.json#mx.tags` | an Angular component module | a component is a class plus a decorator; there is no template-only form |
+| `x.component.ng.mx` | `x.component.ts` | one file holding both the class and its MX template — see [`.ng.mx`](#ngmx) |
 
 `mx-angular` compiles `include` ∪ the discovered tag index, so a tag that
 `include` doesn't match (the common case — a `tags/` directory usually sits
@@ -283,6 +285,74 @@ exactly as it would in a `.html` template — `<app-product-list/>` — with no
 warning and no `imports:` obligation, because MX never touches that
 component's module; the page's own `.ts` imports it directly, like any
 other Angular component.
+
+## `.ng.mx` {#ngmx}
+
+A `.ng.mx` file is an ordinary TypeScript module whose `@Component`
+template is written in MX. One file holds the class and its template, and
+`mx-angular` emits `x.component.ts` beside it.
+
+```ts title="src/app/product-list/product-list.component.ng.mx"
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-product-list",
+  template: <ul>
+    <for|p| of=products by=(p => p.id)>
+      <li><if=p.featured>★ </if>${p.name}</li>
+    </for>
+  </ul>,
+})
+export class ProductList {
+  protected products = [{ id: 1, name: "MX", featured: true }];
+}
+```
+
+Everything outside the region is your own TypeScript, passed through
+untouched. MX replaces the region with the Angular template it lowers to,
+as a template literal.
+
+**MX maintains `imports:` for you.** This is the difference from a page
+template: an MX tag the template calls, and every Angular directive the
+lowering needs (`NgClass`, `NgStyle`, `KeyValuePipe`, `NgComponentOutlet`,
+`NgTemplateOutlet`), is added to the decorator's `imports:` array *and*
+given its `import` statement. A symbol you already listed is left alone. On
+a page template you do this by hand and MX warns; here the warning is gone
+because the edit is made.
+
+### Where a region may appear
+
+Exactly one place: the **direct value of `template:`** in an
+`@Component({ … })` decorator's first argument. Angular has nowhere else to
+put a template, so every other position is an error naming the rule rather
+than something MX tries to lower — a wrapping call, a ternary, an object one
+level deeper, a non-`Component` decorator, no decorator at all, or a second
+decorator argument.
+
+A region is one expression, so it has exactly one root element — the same
+rule a `.solid.mx` region follows. Wrap siblings in a container.
+
+### Module-level tags stay in the module
+
+`import`, `static` and `export interface Input` are **not** written inside a
+region: it sits in TypeScript expression position, where those are statement
+syntax and the parser rejects them before MX sees the file. Write them at
+the top of the module, where they would go anyway. (An import MX mints for a
+discovered tag is different — it never passes through expression position,
+and MX places it for you.)
+
+### Build
+
+`.ng.mx` files are discovered **project-wide**, like the tag index and
+unlike page templates — `include` does not have to match them. A component
+module Angular compiles is not something a narrowed `include` should be
+able to skip silently.
+
+`mx-angular build` and `watch` route `.ng.mx` automatically; the emitted
+`.ts` carries the generated header and a `.map` sidecar, and MX refuses to
+overwrite a module it did not generate. Configure the output extension with
+`mx.angular.ngExtension` (default `.ts`). **Gitignore the emitted `.ts`** —
+it is a build artifact, like the `.html` a page template emits.
 
 ## Errors
 

@@ -1,0 +1,32 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-product-list",
+  // A region is one expression, so it has exactly one root element — the
+  // same rule a `.solid.mx` region follows.
+  template: <div class="product-list">
+    <html-comment>product-list: for/in, define+call, ngClass/ngStyle, dynamic data-* attribute</html-comment>
+    <define/Row|k, v|>
+      <li data-key=k class={featured: v.featured} style={opacity: v.featured ? 1 : 0.6}>
+        ${k}: ${v.name} (price ${v.price})
+      </li>
+    </define>
+
+    <ul style={color: textColor}>
+      <for|k, v| in=products>
+        <Row(k, v)/>
+      </for>
+    </ul>
+  </div>,
+})
+export class ProductList {
+  protected textColor = "#333";
+  protected products: Record<
+    string,
+    { name: string; price: number; featured: boolean }
+  > = {
+    mx: { name: "MX", price: 0, featured: true },
+    angular: { name: "Angular", price: 0, featured: false },
+    bun: { name: "Bun", price: 0, featured: true },
+  };
+}
