@@ -141,6 +141,8 @@ MX parsing is opt-in through the `mx` parser option, which `parse` sets. Without
 
 Consumers typecheck against `src/public.d.ts`, not `src/index.ts`: the vendored tree needs tsconfig relaxations that must not leak into packages that merely call `parse`.
 
+A host can reject an MX region's syntactic position (e.g. Angular's `.ng.mx` only allowing one as `@Component({ template: … })`'s value) through the `mxRegionPositionCheck` parser option — see `packages/parser/README.md` and `src/mx/region-context.ts`.
+
 Two syntax decisions are settled and encoded in `@mxlang/solid`'s lowering (`packages/hosts/solid/README.md`'s table is the authoritative version; this is the summary):
 
 - **Whitespace follows Marko, not JSX.** A whitespace-only text run containing a newline is dropped entirely, so indented markup renders nothing between children; a whitespace-only run without a newline collapses to one space. `${" "}` is the escape hatch. Comments are dropped from the output and do not count as content when trimming. This is Marko's own `onText` rule (decision 33), the same one every host relies on — see the four Marko facts below.
