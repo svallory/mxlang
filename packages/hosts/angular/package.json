@@ -46,6 +46,8 @@
   },
   "devDependencies": {
     "@angular/compiler": "22.1.7",
-    "@types/bun": "1.4.2"
+    "@angular/core": "22.1.7",
+    "@types/bun": "1.4.2",
+    "typescript": "5.9.3"
   }
 }

@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compileTagModule } from "../src/tag-module.ts";
-import { assertAngularParses } from "./helpers.ts";
+import { assertAngularParses, assertModuleTypechecks } from "./helpers.ts";
 
 /** Compiles a tag file's source, with tag discovery rooted at a real dir. */
 function compileTag(
@@ -56,7 +56,7 @@ describe("compileTagModule: inputs", () => {
     );
 
     expect(code).toBe(
-      `import { Component, Input } from "@angular/core";
+      `import { Component, Input as NgInput } from "@angular/core";
 
 export interface Input { name: string; size?: number }
 
@@ -67,13 +67,14 @@ export interface Input { name: string; size?: number }
   template: "<span>{{ name }}</span>",
 })
 export class Icon {
-  @Input({ required: true }) name!: string;
-  @Input() size?: number;
+  @NgInput({ required: true }) name!: string;
+  @NgInput() size?: number;
 }
 export default Icon;
 `,
     );
     assertAngularParses(templateOf(code));
+    assertModuleTypechecks(code);
   });
 
   it("emits no inputs, and no `Input` import, when the tag declares no interface", () => {
@@ -104,7 +105,7 @@ export default Icon;
     );
 
     expect(code).toContain(
-      "@Input({ required: true }) onSelect!: (e: MouseEvent) => void;",
+      "@NgInput({ required: true }) onSelect!: (e: MouseEvent) => void;",
     );
     expect(code).not.toContain("@Output");
     expect(code).not.toContain("EventEmitter");
@@ -133,6 +134,28 @@ export default Icon;
       "@for (input of rows; track $index) { <li>{{ input }}</li> }",
     );
     assertAngularParses(templateOf(code));
+  });
+});
+
+describe("compileTagModule: typechecks the emitted module for real", () => {
+  // `parseTemplate` (used throughout this file) only proves the
+  // `template:` string is syntax Angular accepts — it never sees the
+  // surrounding module, so a real `TS2440` (the emitted
+  // `import { Component, Input } from "@angular/core"` colliding with the
+  // tag's own `export interface Input`) compiled clean and every existing
+  // test still passed. This is the real `tsc` pass that catches it.
+  it("a tag with a required and an optional input typechecks with tsc", () => {
+    const { code } = compileTag(
+      "export interface Input { name: string; size?: number }\n<span>${input.name}</span>\n",
+    );
+
+    assertModuleTypechecks(code);
+  });
+
+  it("a tag with no inputs at all still typechecks", () => {
+    const { code } = compileTag("<span>hi</span>\n");
+
+    assertModuleTypechecks(code);
   });
 });
 
@@ -269,8 +292,8 @@ describe("compileTagModule: `Input` parsing (R-a)", () => {
       "export interface Input {\n  name: string\n  size: number\n}\n<i>x</i>\n",
     );
 
-    expect(code).toContain("@Input({ required: true }) name!: string;");
-    expect(code).toContain("@Input({ required: true }) size!: number;");
+    expect(code).toContain("@NgInput({ required: true }) name!: string;");
+    expect(code).toContain("@NgInput({ required: true }) size!: number;");
   });
 
   it("reads through `//` and `/* */` comments", () => {
@@ -278,8 +301,8 @@ describe("compileTagModule: `Input` parsing (R-a)", () => {
       "export interface Input {\n  // the label\n  a: string\n  /* block */\n  b: number\n}\n<i>x</i>\n",
     );
 
-    expect(code).toContain("@Input({ required: true }) a!: string;");
-    expect(code).toContain("@Input({ required: true }) b!: number;");
+    expect(code).toContain("@NgInput({ required: true }) a!: string;");
+    expect(code).toContain("@NgInput({ required: true }) b!: number;");
   });
 
   it("slices a function type verbatim, with another property on the same line", () => {
@@ -290,9 +313,9 @@ describe("compileTagModule: `Input` parsing (R-a)", () => {
     );
 
     expect(code).toContain(
-      "@Input({ required: true }) onSel!: (e: X) => void;",
+      "@NgInput({ required: true }) onSel!: (e: X) => void;",
     );
-    expect(code).toContain("@Input({ required: true }) size!: number;");
+    expect(code).toContain("@NgInput({ required: true }) size!: number;");
   });
 
   it("keeps a union, an object type with `;` inside, and a template-literal type verbatim", () => {
@@ -300,9 +323,9 @@ describe("compileTagModule: `Input` parsing (R-a)", () => {
       'export interface Input { u: "a" | "b"; o: { a: 1; b: 2 }; t: `x-${string}` }\n<i>x</i>\n',
     );
 
-    expect(code).toContain('@Input({ required: true }) u!: "a" | "b";');
-    expect(code).toContain("@Input({ required: true }) o!: { a: 1; b: 2 };");
-    expect(code).toContain("@Input({ required: true }) t!: `x-${string}`;");
+    expect(code).toContain('@NgInput({ required: true }) u!: "a" | "b";');
+    expect(code).toContain("@NgInput({ required: true }) o!: { a: 1; b: 2 };");
+    expect(code).toContain("@NgInput({ required: true }) t!: `x-${string}`;");
   });
 
   it("errors on a member that is not a property", () => {

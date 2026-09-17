@@ -168,43 +168,47 @@ is discovered the same way every MX host discovers one — including a
 ["solid"]` is not claimed by `mx-angular` at all.
 
 On this host a tag file compiles to a **standalone component module**
-(`tags/user-card.mx` → `tags/user-card.ts`), not a template: an Angular
+(`tags/badge.mx` → `tags/badge.ts`), not a template: an Angular
 component is a class with a decorator, so there is no template-only form.
 
 ```marko
-// tags/user-card.mx
-export interface Input { name: string; size?: number }
-<div class="card">
-  <h2>${input.name}</h2>
-  ${input.content()}
-</div>
+// tags/badge.mx
+export interface Input { kind: "ok" | "warn" | "error"; label?: string }
+<span class="badge" attr:data-kind=input.kind>
+  <if=input.label>${input.label}: </if>${input.content()}
+</span>
 ```
 
 ```ts
-// tags/user-card.ts — generated
-import { Component, Input } from "@angular/core";
+// tags/badge.ts — generated
+import { Component, Input as NgInput } from "@angular/core";
 
-export interface Input { name: string; size?: number }
+export interface Input { kind: "ok" | "warn" | "error"; label?: string }
 
 @Component({
-  selector: "mx-user-card",
+  selector: "mx-badge",
   standalone: true,
   imports: [],
-  template: "<div class=\"card\"><h2>{{ name }}</h2><ng-content></ng-content></div>",
+  template: "<span class=\"badge\" [attr.data-kind]=\"kind\">@if (label) { {{ label }}:  }<ng-content></ng-content></span>",
 })
-export class UserCard {
-  @Input({ required: true }) name!: string;
-  @Input() size?: number;
+export class Badge {
+  @NgInput({ required: true }) kind!: "ok" | "warn" | "error";
+  @NgInput() label?: string;
 }
-export default UserCard;
+export default Badge;
 ```
+
+The `@Input` decorator is imported under the alias `NgInput`: an
+`export interface Input` — the tag-module contract's own name for the
+props interface — would otherwise collide with `@angular/core`'s own
+`Input` in the same module (`TS2440`).
 
 What the emitted module does with each part:
 
 - **Inputs** come from `export interface Input` — one `@Input()` per
   property, `required: true` when the property is not optional, and the
   TypeScript type copied verbatim. No `Input` interface means no inputs.
-  A template reads an input by its **bare name** (`{{ name }}`), because an
+  A template reads an input by its **bare name** (`{{ kind }}`), because an
   Angular template resolves against the component instance.
 - **No `@Output()` inference.** A function-typed property is a plain
   `@Input()`; a caller passes a callback as an ordinary dynamic attribute
@@ -214,7 +218,7 @@ What the emitted module does with each part:
   Reading the same attribute tag twice is an error — Angular matches each
   selector once, so the second projection would silently render empty.
 - **Selector**: `mx-` plus the kebab-cased file basename
-  (`tags/icon.mx` → `mx-icon`). The fixed prefix guarantees the hyphen
+  (`tags/badge.mx` → `mx-badge`). The fixed prefix guarantees the hyphen
   Angular requires. Change it project-wide with
   `mx.angular.tagSelectorPrefix`, or per tag with
   `export const selector = "liuna-card";`, which wins over both.
@@ -250,18 +254,25 @@ file with the exact import and `imports:` entry the page's own TypeScript
 needs — in step 1 MX does not edit that file:
 
 ```marko
-<div><user-card name="Ada"/></div>
+<div><badge kind="ok">All systems nominal</badge></div>
 ```
 
 ```html
-<div><mx-user-card name="Ada"></mx-user-card></div>
-<!-- Add to x.component.ts: `import UserCard from "./tags/user-card";` and `imports: [UserCard]` -->
+<div><mx-badge kind="ok">All systems nominal</mx-badge></div>
+<!-- Add to x.component.ts: `import Badge from "./tags/badge";` and `imports: [Badge]` -->
 ```
 
 Without that `imports:` entry Angular renders an unknown element as an inert
 empty tag with no error, which is why the warning exists. **In step 2
 (`.ng.mx`) this obligation disappears** — MX owns the module and injects
 both lines itself.
+
+Hand-written Angular components: use their selector as an element; PascalCase calls are for MX tag files. A `.mx` template can call a plain hand-written
+component (`product-list.component.ts`, `selector: "app-product-list"`)
+exactly as it would in a `.html` template — `<app-product-list/>` — with no
+warning and no `imports:` obligation, because MX never touches that
+component's module; the page's own `.ts` imports it directly, like any
+other Angular component.
 
 ## Errors
 
@@ -271,11 +282,23 @@ positioned: `file:line:col message`.
 ## Examples
 
 - `examples/angular-app` — a stock Angular CLI 22 app (`@angular/build:application`,
-  no custom builder). Its one component keeps `templateUrl` pointing at a
-  gitignored, `mx-angular`-emitted `.html`; the `.mx` source exercises text and
-  interpolation, `<if>`/`<else>`, `<for … by=>`, `<const>`, an event binding,
-  and `[ngClass]` (with `NgClass` added to the component's own `imports`, per
-  the warning above). `bun run build` runs `mx-angular build` (via
+  no custom builder), three components:
+  - `app.component.mx` — the root shell: text and interpolation,
+    `<if>`/`<else>`, `<for … by=>`, `<const>`, an event binding, and
+    `[ngClass]` (with `NgClass` added to the component's own `imports`, per
+    the warning above); calls the other two components below.
+  - `product-list/product-list.component.mx` — a hand-written component
+    (`selector: "app-product-list"`, called from `app.component.mx` as
+    a plain element) whose template exercises `<for in=>` (Angular's
+    `keyvalue` pipe), `<define>` + a call (`ngTemplateOutlet`), `[ngStyle]`
+    from an object literal, the `attr.`/`class.`/`style.` binding
+    modifiers, and an `<html-comment>`.
+  - `tags/badge.mx` — a discovered custom tag, the same one this page's
+    "Custom tags" section walks through above.
+
+  Every component keeps `templateUrl` pointing at a gitignored,
+  `mx-angular`-emitted `.html` (and `tags/badge.ts` is itself a gitignored,
+  emitted component module). `bun run build` runs `mx-angular build` (via
   `prebuild`) then `ng build`; `bun run start` runs
   `bun run prebuild && concurrently -k -n mx,ng "mx-angular watch" "ng serve"`
   (one process, both `mx-angular watch` and `ng serve` running together) —
