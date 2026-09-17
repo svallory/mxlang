@@ -1,0 +1,7 @@
+const config = makeConfig({
+  template: <div>not a decorator at all</div>,
+});
+
+function makeConfig(x: unknown) {
+  return x;
+}

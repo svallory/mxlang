@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTemplate } from "@angular/compiler";
-import { compile, compileTagModuleFile } from "@mxlang/angular";
+import { compile, compileNgMx, compileTagModuleFile } from "@mxlang/angular";
 import { getCustomTags, type MxWarning } from "@mxlang/core";
 import ts from "typescript";
 
@@ -104,13 +104,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = join(here, "..", "fixtures", "angular");
 const goldenDir = join(fixturesRoot, "__golden__");
 
-const MIN_FIXTURES = 67;
+const MIN_FIXTURES = 88;
 
 type Verdict = "pass" | "fail";
 
 interface Row {
   fixture: string;
-  kind: "pass" | "error" | "tag";
+  kind: "pass" | "error" | "tag" | "ngmx";
   verdict: Verdict;
   detail?: string;
 }
@@ -162,10 +162,37 @@ function stageTag(fixtureDir: string, filename: string): string {
   return path;
 }
 
+/**
+ * Copies a `.ng.mx` fixture and its `tags/` directory into a temp directory
+ * with a `package.json` boundary, and returns the staged path.
+ *
+ * The boundary is what stops the upward tag scan at the fixture: without it
+ * a fixture would discover this repository's own `tags/` directories.
+ */
+function stageNgMx(fixtureDir: string): string {
+  const staged = mkdtempSync(join(tmpdir(), "mx-angular-ngmxfix-"));
+  cpSync(join(fixtureDir, "tags"), join(staged, "tags"), { recursive: true });
+  writeFileSync(join(staged, "package.json"), JSON.stringify({ name: "f" }));
+  const path = join(staged, "input.ng.mx");
+  writeFileSync(path, readFileSync(join(fixtureDir, "input.ng.mx"), "utf8"));
+  return path;
+}
+
 /** The `template: "…"` string of an emitted component module, unescaped. */
 function templateOf(code: string): string | null {
-  const match = code.match(/^ {2}template: (".*"),$/m);
-  return match ? (JSON.parse(match[1] as string) as string) : null;
+  const quoted = code.match(/^ {2}template: (".*"),$/m);
+  if (quoted) return JSON.parse(quoted[1] as string) as string;
+  // A `.ng.mx` module emits a **backtick** template literal rather than a
+  // double-quoted string (decision 99), so the two module kinds need two
+  // patterns. Unescaping is the inverse of `escapeTemplateLiteral`'s three
+  // substitutions, and `\\` must come last or it would consume the
+  // backslashes the other two just removed.
+  const backticked = code.match(/^ {2}template: `([\s\S]*?)`,$/m);
+  if (!backticked) return null;
+  return (backticked[1] as string)
+    .replace(/\\`/g, "`")
+    .replace(/\\\$\{/g, "${")
+    .replace(/\\\\/g, "\\");
 }
 
 /**
@@ -177,11 +204,26 @@ function templateOf(code: string): string | null {
  * gate here passed while a real `ng build` failed on every tag declaring at
  * least one input. Returns the formatted diagnostics, or `null` when clean.
  */
-function typecheckTagModule(code: string): string | null {
+function typecheckTagModule(
+  code: string,
+  /**
+   * Modules the checked code imports, as `relative path -> source`. A
+   * `.ng.mx` that calls a discovered tag imports that tag's *emitted*
+   * module, so the sibling has to exist or `tsc` reports TS2307 for code
+   * that is in fact correct. Writing the real compiled tag beside it also
+   * checks the two halves agree about the class name and path.
+   */
+  siblings: Record<string, string> = {},
+): string | null {
   const dir = mkdtempSync(join(here, ".typecheck-tmp-"));
   try {
     const filePath = join(dir, "tag.ts");
     writeFileSync(filePath, code);
+    for (const [relative, source] of Object.entries(siblings)) {
+      const target = join(dir, relative);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, source);
+    }
 
     const program = ts.createProgram([filePath], {
       strict: true,
@@ -230,7 +272,25 @@ export function runAngularTable(update: boolean): {
   const errorFixtures: string[] = [];
   const tagFixtures: string[] = [];
   const tagErrorFixtures: string[] = [];
+  const ngMxFixtures: string[] = [];
+  const ngMxErrorFixtures: string[] = [];
   for (const dir of dirs) {
+    // A `.ng.mx` fixture is a whole TypeScript module, not a template, so
+    // its input is `input.ng.mx` and it never goes through `compile()`.
+    // Its own extension is the discriminator — no name-prefix convention
+    // needed, unlike a tag fixture's `tag-`.
+    if (existsSync(join(fixturesRoot, dir, "input.ng.mx"))) {
+      if (existsSync(join(fixturesRoot, dir, "expected.error.txt"))) {
+        ngMxErrorFixtures.push(dir);
+      } else if (existsSync(join(fixturesRoot, dir, "expected.ts"))) {
+        ngMxFixtures.push(dir);
+      } else {
+        throw new Error(
+          `fixture "${dir}" has input.ng.mx and must have expected.ts or expected.error.txt`,
+        );
+      }
+      continue;
+    }
     const hasInput = existsSync(join(fixturesRoot, dir, "input.mx"));
     const hasExpected = existsSync(join(fixturesRoot, dir, "expected.html"));
     const hasError = existsSync(join(fixturesRoot, dir, "expected.error.txt"));
@@ -263,7 +323,9 @@ export function runAngularTable(update: boolean): {
     passFixtures.length === 0 &&
     errorFixtures.length === 0 &&
     tagFixtures.length === 0 &&
-    tagErrorFixtures.length === 0
+    tagErrorFixtures.length === 0 &&
+    ngMxFixtures.length === 0 &&
+    ngMxErrorFixtures.length === 0
   ) {
     console.error(
       `oracle:angular: fixture glob expanded to nothing under ${fixturesRoot}`,
@@ -574,6 +636,146 @@ export function runAngularTable(update: boolean): {
     }
 
     rows.push({ fixture: name, kind: "tag", verdict: "pass" });
+  }
+
+  for (const name of ngMxFixtures) {
+    const dir = join(fixturesRoot, name);
+    const expected = readFileSync(join(dir, "expected.ts"), "utf8");
+    // Compiled under its own basename — unlike a tag, a `.ng.mx`'s class and
+    // selector are written by the author in the file itself, so nothing is
+    // derived from the filename. A fixture with its own `tags/` directory is
+    // staged in a temp directory with a `package.json` boundary, because tag
+    // discovery walks *upward* and would otherwise escape the fixture and
+    // find this repository's own tags.
+    const inputPath = existsSync(join(dir, "tags"))
+      ? stageNgMx(dir)
+      : join(dir, "input.ng.mx");
+
+    let code: string;
+    try {
+      code = compileNgMx(readFileSync(inputPath, "utf8"), inputPath, {
+        customTags: getCustomTags(inputPath, { host: "angular" }) as never,
+      }).code;
+    } catch (err) {
+      rows.push({
+        fixture: name,
+        kind: "ngmx",
+        verdict: "fail",
+        detail: `unexpected throw: ${(err as Error).message.slice(0, 80)}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    if (code !== expected) {
+      rows.push({
+        fixture: name,
+        kind: "ngmx",
+        verdict: "fail",
+        detail: "emitted module mismatch",
+      });
+      failed = true;
+      continue;
+    }
+
+    // The emitted module is TypeScript, so the template is extracted and put
+    // through Angular's own parser on its own — the same gate every pass and
+    // tag fixture gets.
+    const template = templateOf(code);
+    if (template === null) {
+      rows.push({
+        fixture: name,
+        kind: "ngmx",
+        verdict: "fail",
+        detail: "no template line found in the emitted module",
+      });
+      failed = true;
+      continue;
+    }
+    const parsedNg = parseTemplate(template, `${name}.html`);
+    if (parsedNg.errors) {
+      rows.push({
+        fixture: name,
+        kind: "ngmx",
+        verdict: "fail",
+        detail: `angular parseTemplate reported errors: ${parsedNg.errors.map((e) => e.msg).join("; ")}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    // And the module itself through `tsc`, which is what catches a decorator
+    // edit producing valid-looking text but invalid TypeScript. A fixture
+    // whose template calls a discovered tag also needs that tag's *emitted*
+    // module written beside it, or `tsc` reports TS2307 for an import that
+    // is in fact correct — and compiling it here proves the two halves
+    // agree on the class name and the path.
+    const siblings: Record<string, string> = {};
+    if (existsSync(join(dir, "tags"))) {
+      for (const entry of readdirSync(join(dir, "tags"))) {
+        if (!entry.endsWith(".mx")) continue;
+        const tagPath = join(dirname(inputPath), "tags", entry);
+        siblings[`tags/${entry.replace(/\.mx$/, ".ts")}`] =
+          compileTagModuleFile(tagPath, {
+            customTags: getCustomTags(tagPath, { host: "angular" }) as never,
+          }).code;
+      }
+    }
+    const typeErrors = typecheckTagModule(code, siblings);
+    if (typeErrors !== null) {
+      rows.push({
+        fixture: name,
+        kind: "ngmx",
+        verdict: "fail",
+        detail: `tsc reported errors: ${typeErrors}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    rows.push({ fixture: name, kind: "ngmx", verdict: "pass" });
+  }
+
+  for (const name of ngMxErrorFixtures) {
+    const dir = join(fixturesRoot, name);
+    const inputPath = join(dir, "input.ng.mx");
+    const expectedMessage = readFileSync(
+      join(dir, "expected.error.txt"),
+      "utf8",
+    ).trim();
+
+    let thrown: string | null = null;
+    try {
+      compileNgMx(readFileSync(inputPath, "utf8"), inputPath, {
+        customTags: getCustomTags(inputPath, { host: "angular" }) as never,
+      });
+    } catch (err) {
+      thrown = stripPathPrefix((err as Error).message);
+    }
+
+    if (thrown === null) {
+      rows.push({
+        fixture: name,
+        kind: "ngmx",
+        verdict: "fail",
+        detail: "expected a throw, but compileNgMx() did not throw",
+      });
+      failed = true;
+      continue;
+    }
+
+    if (thrown !== expectedMessage) {
+      rows.push({
+        fixture: name,
+        kind: "ngmx",
+        verdict: "fail",
+        detail: `expected error ${JSON.stringify(expectedMessage)}, got ${JSON.stringify(thrown)}`,
+      });
+      failed = true;
+      continue;
+    }
+
+    rows.push({ fixture: name, kind: "ngmx", verdict: "pass" });
   }
 
   const nameWidth = Math.max(8, ...rows.map((r) => r.fixture.length));

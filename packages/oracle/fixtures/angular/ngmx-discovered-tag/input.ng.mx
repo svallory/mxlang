@@ -1,0 +1,9 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-listing",
+  template: <ul>
+    <li>MX <badge/></li>
+  </ul>,
+})
+export class ListingComponent {}

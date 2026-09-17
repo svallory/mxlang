@@ -1,0 +1,7 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-x",
+  styles: <div>not a template</div>,
+})
+export class XComponent {}

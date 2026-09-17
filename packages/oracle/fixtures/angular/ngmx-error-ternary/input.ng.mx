@@ -1,0 +1,9 @@
+import { Component } from "@angular/core";
+
+const useA = true;
+
+@Component({
+  selector: "app-x",
+  template: useA ? <div>a</div> : <div>b</div>,
+})
+export class XComponent {}
