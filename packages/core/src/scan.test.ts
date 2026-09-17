@@ -317,9 +317,9 @@ describe("scanCustomTags", () => {
 
     // A different file kind, not a tag template. Silence would leave an
     // author wondering why their file is invisible.
-    expect(() => scanCustomTags(join(dir, "caller.mx"))).toThrow(
-      /`widget\.solid\.mx` is a host module file, not a tag template; tag templates are `\.mx`/,
-    );
+    const result = scanCustomTags(join(dir, "caller.mx"));
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toMatch(/`widget\.solid\.mx` is a host module file/);
   });
 
   it("reports a .ng.mx in a tags/ directory instead of ignoring it", () => {
@@ -328,9 +328,9 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "package.json"), '{"name":"ngtag"}');
     writeFileSync(join(dir, "tags", "widget.ng.mx"), "export const x = 1;\n");
 
-    expect(() => scanCustomTags(join(dir, "caller.mx"))).toThrow(
-      /`widget\.ng\.mx` is a host module file, not a tag template; tag templates are `\.mx`/,
-    );
+    const result = scanCustomTags(join(dir, "caller.mx"));
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toMatch(/`widget\.ng\.mx` is a host module file/);
   });
 
   it("indexes <unlisted>.mx as an ordinary dotted tag name", () => {
@@ -462,17 +462,26 @@ describe("discoverProjectTags", () => {
     expect(result.tags.has("gamma")).toBe(false);
   });
 
-  it("rejects a .ng.mx under tags/ the same way scanCustomTags does", () => {
+  it("reports a .ng.mx under tags/ without failing the project scan", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });
+    mkdirSync(join(dir, "nested", "tags"), { recursive: true });
     writeFileSync(join(dir, "package.json"), '{"name":"projectng"}');
-    writeFileSync(join(dir, "tags", "widget.ng.mx"), "export const x = 1;\n");
-
-    // `discoverProjectTags` shares `indexDirectory` with `scanCustomTags`, so
-    // the host-module rule cannot drift between the two.
-    expect(() => discoverProjectTags(dir)).toThrow(
-      /`widget\.ng\.mx` is a host module file, not a tag template; tag templates are `\.mx`/,
+    writeFileSync(
+      join(dir, "mx.tags"),
+      JSON.stringify([{ dir: "tags" }, { dir: "nested/tags" }]),
     );
+    writeFileSync(join(dir, "tags", "widget.ng.mx"), "export const x = 1;\n");
+    writeFileSync(join(dir, "tags", "legit.mx"), "<div/>\n");
+    writeFileSync(join(dir, "nested", "tags", "another.mx"), "<div/>\n");
+
+    const result = discoverProjectTags(dir);
+    expect(result.tags.has("legit")).toBe(true);
+    expect(result.tags.has("another")).toBe(true);
+    expect(result.directories).toContainEqual(join(dir, "tags"));
+    expect(result.directories).toContainEqual(join(dir, "nested", "tags"));
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toMatch(/`widget\.ng\.mx` is a host module file/);
   });
 
   it("excludes node_modules", () => {

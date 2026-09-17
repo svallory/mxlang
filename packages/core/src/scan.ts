@@ -103,13 +103,20 @@ function hostModuleSegment(entry: string): string | undefined {
  * Positioned at the file. Shared by `indexDirectory`, so `scanCustomTags`
  * and `discoverProjectTags` cannot drift on the rule.
  */
-function rejectHostModuleFile(dir: string, entry: string): void {
+function rejectHostModuleFile(
+  dir: string,
+  entry: string,
+  diagnostics: ScanDiagnostic[],
+): boolean {
   const segment = hostModuleSegment(entry);
-  if (segment === undefined) return;
-  failIn(
-    join(dir, entry),
-    `\`${entry}\` is a host module file, not a tag template; tag templates are \`.mx\``,
-  );
+  if (segment === undefined) return false;
+  diagnostics.push({
+    file: join(dir, entry),
+    message: `\`${entry}\` is a host module file, not a tag template; tag templates are \`.mx\``,
+    line: 1,
+    column: 0,
+  });
+  return true;
 }
 
 /**
@@ -758,7 +765,7 @@ function indexDirectory(
 
     const isSidecar = entry.endsWith(SIDECAR_SUFFIX);
 
-    rejectHostModuleFile(dir, entry);
+    if (rejectHostModuleFile(dir, entry, diagnostics)) continue;
     const isTemplate = entry.endsWith(TEMPLATE_SUFFIX);
 
     if (!isSidecar && !isTemplate) continue;
