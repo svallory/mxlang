@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **BREAKING:** `MxRegionContext.decoratorNames` no longer accumulates every
+  enclosing decorator — it now reports only the innermost enclosing
+  decorator's name (`[]` when none), scoped to match
+  `propertyKey`/`isDirectPropertyValue`/`argumentIndex`, which were already
+  computed relative to the innermost decorator only. Nesting is possible: a
+  class expression inside an outer decorator's own argument can itself carry
+  a decorator whose argument encloses the region. A new
+  `enclosingDecoratorNames: readonly string[]` field carries the rest of the
+  chain (outermost first, excluding the innermost) for a host that needs the
+  full nesting. No in-repo consumer reads `decoratorNames` yet, so this has
+  no downstream fix in this repo — any external host built against the old
+  accumulated-list shape must switch to `decoratorNames` +
+  `enclosingDecoratorNames`.
 - **BREAKING:** `parse`/`print` of a `.solid.mx` (or any file with `mx: true`)
   now require `mxRegionCompile`. The parser no longer imports `@mxlang/solid`
   or any other host — with the grammar on and no `mxRegionCompile` supplied, a

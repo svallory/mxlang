@@ -23,8 +23,12 @@ declare module "@mxlang/parser" {
   export interface MxRegionContext {
     /** Innermost enclosing object-property key, or null. */
     propertyKey: string | null;
-    /** Names of every enclosing decorator, innermost first. */
+    /** The innermost enclosing decorator's own name, as a single-element
+     *  list, or `[]` when none. */
     decoratorNames: readonly string[];
+    /** Every decorator enclosing the region other than the innermost one,
+     *  outermost first. Empty when there is one decorator or none. */
+    enclosingDecoratorNames: readonly string[];
     /** The decorator-call argument index enclosing the region, or null. */
     argumentIndex: number | null;
     /** True iff the region is the immediate value of a property of the

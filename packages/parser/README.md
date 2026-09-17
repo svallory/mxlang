@@ -42,8 +42,12 @@ has no other channel to the caller). Before compiling a region,
 `mxParseElementAt` computes an `MxRegionContext` — `propertyKey` (the
 innermost enclosing object-property key, or null; a computed key or a
 method-shorthand key, which has no `:` to anchor a value position at,
-contributes none), `decoratorNames` (every enclosing decorator's name,
-innermost first) and `isDirectPropertyValue` (an *exact-position* test: true
+contributes none), `decoratorNames` (the innermost enclosing decorator's own
+name, as a single-element list, or `[]` when none — nesting is possible, e.g.
+a class expression inside an outer decorator's own argument carrying a
+further decorator, so the rest of the chain is reported separately in
+`enclosingDecoratorNames`, outermost first) and `isDirectPropertyValue`
+(an *exact-position* test: true
 iff the region is the immediate value of a property of the decorator
 argument object itself — the *first* frame directly enclosed by the
 decorator, or by nothing if the region isn't inside a decorator at all, must
