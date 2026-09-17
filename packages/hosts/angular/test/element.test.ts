@@ -74,13 +74,14 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("emits [ngClass] for an object-valued class, with a once-per-file warning", () => {
+  it("emits [ngClass] for an object-valued class, with a once-per-file warning matching A1:112 verbatim", () => {
     const { code, warnings } = compileMx("<div class={a: cond}>x</div>");
     expect(code).toBe('<div [ngClass]="{a: cond}">x</div>');
     assertAngularParses(code);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.message).toMatch(/\[ngClass\]/);
-    expect(warnings[0]?.message).toMatch(/NgClass/);
+    expect(warnings[0]?.message).toBe(
+      "this template binds `class` to an object or array value, emitted as [ngClass]; add `NgClass` to the component's imports.",
+    );
   });
 
   it("emits [ngClass] for an array-valued class", () => {
@@ -94,12 +95,13 @@ describe("Element", () => {
     ]);
   });
 
-  it("emits [ngStyle] for an object-valued style, warning once", () => {
+  it("emits [ngStyle] for an object-valued style, warning once, matching A1:113 verbatim", () => {
     const { code, warnings } = compileMx("<div style={color: c}>x</div>");
     expect(code).toBe('<div [ngStyle]="{color: c}">x</div>');
     assertAngularParses(code);
-    expect(warnings[0]?.message).toMatch(/\[ngStyle\]/);
-    expect(warnings[0]?.message).toMatch(/NgStyle/);
+    expect(warnings[0]?.message).toBe(
+      "this template binds `style` to an object value, emitted as [ngStyle]; add `NgStyle` to the component's imports.",
+    );
   });
 
   it("warns [ngClass]/[ngStyle] once per file, not once per use", () => {

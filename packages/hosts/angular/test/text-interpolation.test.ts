@@ -90,7 +90,7 @@ describe("Interpolation", () => {
     assertAngularParses(code);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toBe(
-      "$!{…} has no exact Angular equivalent; emitted as [innerHTML], which Angular sanitizes, wrapped in a <span>; invalid inside <tbody>/<select>/<ul>.",
+      "$!{…} has no exact Angular equivalent; emitted as [innerHTML] wrapped in a <span>, which Angular sanitizes. The wrapper is invalid inside <tbody>/<select>/<ul>, where only certain child elements are allowed — restructure those cases.",
     );
   });
 });
