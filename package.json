@@ -16,7 +16,7 @@
     "test:grammar": "moon run tree-sitter-solidmx:test --force && moon run tree-sitter-amx:test --force",
     "lint": "biome check .",
     "verify": "bun run scripts/pre-verify.ts && bun run build && bun run typecheck && bun run lint && bun run test && bun run test:bun && bun run test:grammar && bun run consumer-check:html && bun run --cwd apps/docs build && bun run scripts/verify-coverage.ts",
-    "build": "cd packages/core && bun run build && cd ../parser && bun run build && cd ../../packages/hosts/html && bun run build && cd ../../../packages/tooling/language-server && bun run build && cd ../typescript-plugin && bun run build && cd ../tsc && bun run build",
+    "build": "cd packages/core && bun run build && cd ../parser && bun run build && cd ../../packages/hosts/html && bun run build && cd ../angular && bun run build && cd ../../../packages/tooling/language-server && bun run build && cd ../typescript-plugin && bun run build && cd ../tsc && bun run build",
     "consumer-check:html": "bun run packages/hosts/html/scripts/consumer-check.ts",
     "oracle": "bun run packages/oracle/src/report.ts",
     "oracle:marko": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-marko.ts",
