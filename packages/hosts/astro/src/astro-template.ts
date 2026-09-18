@@ -146,6 +146,16 @@ const declarations: HostDeclarations = {
     );
   },
   rejectModifier: (attr) => {
+    // Decision 101 (b): `on:`/`oncapture:` get the event fix-it naming
+    // `on-<exact>`, in `.amx` vocabulary (design note §4).
+    if (attr.name === "on" || attr.name === "oncapture") {
+      const event =
+        attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
+      fail(
+        `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
+        attr,
+      );
+    }
     fail(
       `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in an \`.amx\` template`,
       attr,
@@ -222,29 +232,17 @@ function emitAttrs(
           attr,
         );
         break;
-      // Phase A of `dom-events` (decision 101): core now lowers an element's
-      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough
-      // reproducing exactly what the `dynamic` case emitted for the same
-      // attribute before the kind existed (an `on*` name is never the
-      // structured-`class` case), so this PR is output-neutral; phase B
-      // replaces it with `.amx`'s ruled rejection — an event handler needs a
-      // runtime and `.amx` renders static markup at build time.
-      case "event": {
-        write(" ");
-        writeMapped(attr.name, {
-          loc: {
-            start: attr.loc,
-            end: {
-              line: attr.loc.line,
-              column: attr.loc.column + attr.name.length,
-            },
-          },
-        });
-        write("={");
-        writeMapped(attr.value.code, attr.value.node);
-        write("}");
+      // Phase B of `dom-events` (decision 101, design note §8): an
+      // expression-valued event handler needs a runtime, and `.amx` renders
+      // static markup at build time — so it is rejected rather than emitted
+      // as dead markup. A *string*-valued handler (`onclick="…"`) is an
+      // ordinary static attribute and passes through verbatim above.
+      case "event":
+        fail(
+          `\`${attr.name}\` is an event handler and requires a runtime; .amx renders static markup at build time`,
+          attr,
+        );
         break;
-      }
       case "dynamic": {
         const structuredClass =
           attr.name === "class" &&

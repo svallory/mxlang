@@ -433,3 +433,40 @@ describe("a tag that returns a value", () => {
     ).toThrow(/`\/var` on `<counter>` is not supported in `\.amx` yet/);
   });
 });
+
+describe("event attributes (decision 101, phase B of dom-events)", () => {
+  it("rejects an expression-valued event handler: .amx has no runtime", () => {
+    expect(errorFor("<button onClick=handler>x</button>").message).toBe(
+      "`onClick` is an event handler and requires a runtime; .amx renders static markup at build time",
+    );
+  });
+
+  it("rejects a custom event name the same way", () => {
+    expect(errorFor("<div on-my-event=fn>x</div>").message).toBe(
+      "`on-my-event` is an event handler and requires a runtime; .amx renders static markup at build time",
+    );
+  });
+
+  it("passes a static inline handler string through verbatim", () => {
+    // Spec §4: a string-valued `onClick` stays an ordinary static attribute;
+    // MX does not invent a policy against inline handler strings.
+    expect(
+      lowerAstroMx('<button onClick="alert(1)">x</button>', "T.amx").code,
+    ).toBe('<button onClick="alert(1)">x</button>');
+  });
+
+  it("rejects on: with a fix-it naming on-<exact>", () => {
+    expect(errorFor("<div on:click=fn>x</div>").message).toContain(
+      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+    );
+  });
+});
+
+describe("event error positions", () => {
+  it("positions the event error at the attribute name", () => {
+    // The helper lowers under a three-line fence, so the template{2019}s
+    // first line is source line 4; the column is still the name{2019}s.
+    const error = errorFor("<div   onClick=fn>x</div>");
+    expect(error).toMatchObject({ line: 4, column: 7 });
+  });
+});
