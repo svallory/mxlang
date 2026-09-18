@@ -724,7 +724,34 @@ Five facts worth knowing before editing it:
   core warns without rewriting (`warn(ctx, …)`, positioned at the attribute
   name); the table is the three React spellings whose lowercase is not a DOM
   event, verified against `lib.dom.d.ts`. `on:*`/`oncapture:*` get no meaning
-  from core and reach the host through the existing modifier hook.
+  from core and reach the host through the existing modifier hook, which every
+  host rejects with a per-prefix fix-it naming `on-<exact>`.
+  **Phase B emission (each host recomposes from `attr.event`):** Solid and the
+  Preact/hono targets emit `on` + the capitalized DOM name (`click` →
+  `onClick`, `dblclick` → `onDblclick` — capitalize-first, so `onDblClick` and
+  `on-dblclick` are byte-identical there), and those runtimes lowercase the
+  prop at bind time, so `onDblclick` binds `dblclick`. The React target is
+  different in kind: React's prop names are camelCase data from react-dom's
+  own registration table (`simpleEventPluginEvents`), which no derivation can
+  reverse (`keydown` → `onKeyDown`), so the React target vendors the list and
+  looks the spelling up (`buildReactEventPropNames` in
+  `packages/hosts/react/src/target.ts`, guarded by a drift test against the
+  installed react-dom). A custom DOM
+  event a JSX prop cannot spell (`on-my-event`) is a uniform positioned error
+  on solid/preact/react/hono naming the `ref` route — JSX hosts cannot express
+  it, and the same source must not silently do nothing on one host. Angular
+  emits `(${attr.event})="(handler)($event)"` for both forms (custom events
+  bind verbatim) and maps a lowercase expression `onclick=fn` to `(click)`;
+  its old `IRREGULAR_EVENTS` table is deleted — `onDoubleClick` emits
+  `(doubleclick)` under the warning, never a rewrite. html and astro *reject*
+  an expression-valued event attribute (no runtime; previously html emitted
+  dead inline JS). Event-attribute errors are positioned at the attribute
+  name — Marko's attr `loc.start` is the name start, the same offset
+  `nameSpan.sourceStart` carries, so the language server underlines the name
+  (pinned by position tests on solid/preact/html/astro). Everywhere, a
+  *string*-valued `onclick="…"` stays an
+  ordinary static attribute verbatim — MX does not invent a policy against
+  inline handler strings — and an `on*` on a component stays a plain prop.
 - **Three stateful-tag hooks** (decision 70), unit-tested through
   `src/lower.test.ts`: `claimsTag`/`resolveHostTag` (the lower-time tag
   handler), `ctx.hoist(code)` (lift a statement to the enclosing function's
