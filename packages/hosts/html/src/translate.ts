@@ -278,6 +278,17 @@ function rejectModifier(
       attr,
     );
   }
+  // Decision 101 (b): `on:`/`oncapture:` get the event fix-it, not the
+  // class-shaped object suggestion — `on={ click: condition }` is nonsense
+  // for this prefix (design note §4).
+  if (attr.name === "on" || attr.name === "oncapture") {
+    const event =
+      attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
+    fail(
+      `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
+      attr,
+    );
+  }
   fail(
     `\`${attr.name}:${attr.modifier}\` is not a valid attribute; Marko rejects this form too — write \`${attr.name}={ ${attr.modifier}: condition }\``,
     attr,

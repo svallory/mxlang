@@ -21,6 +21,13 @@ and the always-quoted form is safer and more readable.
 - **fix:** an unresolved hyphenated tag (`<my-widget>` with no taglib entry)
   now errors with Marko's own message ("Unable to find entry point for
   custom tag...") instead of rendering as literal HTML.
+- **breaking:** an expression-valued event attribute on an element
+  (`onClick=fn`, `on-my-event=fn`) is now a compile error naming the
+  attribute — an event handler requires a runtime, and this host renders
+  once to a string (decision 101, phase B of `dom-events`). Previously it
+  silently emitted dead inline JS. A *string*-valued `onclick="alert(1)"`
+  stays an ordinary attribute verbatim; a bare `onClick` stays boolean.
+  `on:`/`oncapture:` now reject with a fix-it naming `on-<exact>`.
 - **build:** publishable from `dist/` (ESM + `.d.ts`); `exports` map for
   `.` and `./bun`.
 
