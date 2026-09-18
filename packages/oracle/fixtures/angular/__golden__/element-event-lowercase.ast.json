@@ -1,0 +1,40 @@
+[
+  {
+    "name": "button",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "click",
+        "type": 0,
+        "handler": {
+          "ast": {
+            "receiver": {
+              "expression": {
+                "receiver": {},
+                "name": "handler"
+              }
+            },
+            "args": [
+              {
+                "receiver": {},
+                "name": "$event"
+              }
+            ]
+          }
+        },
+        "target": null,
+        "phase": null
+      }
+    ],
+    "directives": [],
+    "children": [
+      {
+        "value": "x"
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

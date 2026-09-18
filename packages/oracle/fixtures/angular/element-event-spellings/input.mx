@@ -1,0 +1,1 @@
+<button onDoubleClick=a>x</button><button onDblClick=b>y</button><button on-dblclick=c>z</button>
