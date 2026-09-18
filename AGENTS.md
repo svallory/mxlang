@@ -722,7 +722,7 @@ Five facts worth knowing before editing it:
   `rejectAttributeMethod` and `orderAttrs` all take `on` and none of them wants
   a third case. **No aliases:** `onDoubleClick` lowers to `doubleclick` and
   core warns without rewriting (`warn(ctx, …)`, positioned at the attribute
-  name); the table is the three React spellings whose lowercase is not a DOM
+  name); core's warning table is the three React spellings whose lowercase is not a DOM
   event, verified against `lib.dom.d.ts`. `on:*`/`oncapture:*` get no meaning
   from core and reach the host through the existing modifier hook, which every
   host rejects with a per-prefix fix-it naming `on-<exact>`.

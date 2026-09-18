@@ -12,6 +12,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { compileReactMx } from "./index.ts";
 import {
@@ -100,18 +101,23 @@ describe("vendored React event names", () => {
   });
 
   it("matches React's table against the installed react-dom (drift test)", () => {
-    let bundlePath: string;
+    let packageJson = "";
     try {
-      bundlePath = require.resolve(
-        "react-dom/cjs/react-dom-client.development.js",
-      );
+      // The bundle itself is not an exported subpath; resolve the package
+      // root and reach the development bundle on disk.
+      packageJson = require.resolve("react-dom/package.json");
     } catch {
-      bundlePath = "";
+      packageJson = "";
     }
-    if (!bundlePath || !existsSync(bundlePath)) {
-      // No react-dom resolvable: the vendored list stands alone.
-      return;
-    }
+    // A disarmed guard must fail loudly: the vendored list is only
+    // trustworthy while it is checked against react-dom itself, so a
+    // missing package is an assertion failure, not a skip.
+    expect(packageJson).toBeTruthy();
+    const bundlePath = join(
+      dirname(packageJson),
+      "cjs/react-dom-client.development.js",
+    );
+    expect(existsSync(bundlePath)).toBe(true);
     const source = readFileSync(bundlePath, "utf8");
     const listMatch = source.match(
       /simpleEventPluginEvents\s*=\s*"([^"]+)"\.split\(/,
