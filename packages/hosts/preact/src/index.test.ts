@@ -846,3 +846,90 @@ describe("a unit that returns a value", () => {
     expect(code).toContain("return { value: 42, output: (<>");
   });
 });
+
+describe("event attributes (decision 101, phase B of dom-events)", () => {
+  it("recomposes the prop from the DOM event name, not the authored spelling", () => {
+    expect(markup("<button onClick=handler>x</button>")).toBe(
+      "<button onClick={handler}>x</button>",
+    );
+  });
+
+  it("collapses onDblClick and on-dblclick byte-identically", () => {
+    const a = markup("<button onDblClick=f>x</button>");
+    const b = markup("<button on-dblclick=f>x</button>");
+    expect(a).toBe("<button onDblclick={f}>x</button>");
+    expect(a).toBe(b);
+  });
+
+  it("emits onDoubleClick as onDoubleclick without rewriting (no aliases)", () => {
+    // Core warns (`onDoubleClick` is not a DOM event) but never rewrites;
+    // the prop is recomposed from the DOM name exactly as written. The
+    // warning itself is pinned in the core's lower tests.
+    expect(markup("<button onDoubleClick=handler>x</button>")).toBe(
+      "<button onDoubleclick={handler}>x</button>",
+    );
+  });
+
+  it("rejects a custom DOM event name uniformly, pointing at a ref", () => {
+    expect(errorOf("<div on-my-event=fn>x</div>")).toContain(
+      '`on-my-event` names a custom DOM event (`my-event`) a JSX prop cannot spell; use a `ref` to add a custom event listener (`ref={el => el?.addEventListener("my-event", fn)}`)',
+    );
+  });
+
+  it("passes a static inline handler string through verbatim", () => {
+    // Spec §4: a string-valued `onClick` stays an ordinary static attribute;
+    // MX does not invent a policy against inline handler strings.
+    expect(markup('<button onClick="alert(1)">x</button>')).toBe(
+      '<button onClick="alert(1)">x</button>',
+    );
+  });
+
+  it("rejects on: with a fix-it naming on-<exact>", () => {
+    expect(errorOf("<div on:click=fn>x</div>")).toContain(
+      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+    );
+  });
+
+  it("rejects oncapture: with the capture explanation", () => {
+    expect(errorOf("<div oncapture:click=fn>x</div>")).toContain(
+      "MX has no capture spelling in the name",
+    );
+  });
+});
+
+describe("event name positions and plain-recomposition spellings", () => {
+  it("recomposes multi-word DOM names with capitalize-first (onKeydown), unlike React", () => {
+    // Preact/hono/solid lowercase the prop at bind time, so `onKeydown`
+    // binds `keydown`; only the React target looks React's camelCase up.
+    expect(markup("<input onKeyDown=handler>")).toBe(
+      "<input onKeydown={handler} />",
+    );
+    expect(markup("<div onPointerDown=f>x</div>")).toBe(
+      "<div onPointerdown={f}>x</div>",
+    );
+  });
+
+  it("positions the custom-event error at the attribute name", () => {
+    let error: unknown;
+    try {
+      markup("<div   on-my-event=fn>x</div>");
+    } catch (caught) {
+      error = caught;
+    }
+    // `<div` is 4 chars, three spaces, the name starts at column 7 — the
+    // same offset `nameSpan.sourceStart` carries, so the language server
+    // underlines the name rather than the tag.
+    expect(error).toMatchObject({ line: 1, column: 7 });
+    expect((error as Error).message).toContain("on-my-event");
+  });
+
+  it("positions the error on the attribute's own line", () => {
+    let error: unknown;
+    try {
+      markup("<p>x</p>\n<div  on-my-event=fn>y</div>");
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ line: 2, column: 6 });
+  });
+});

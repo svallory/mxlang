@@ -64,3 +64,53 @@ describe("React target", () => {
     expect(() => compile("<let/count=0/>")).toThrow("React's `useState`");
   });
 });
+
+describe("event attributes (decision 101, phase B of dom-events)", () => {
+  it("recomposes the prop from the DOM event name", () => {
+    expect(markup("<button onClick=handler>x</button>")).toBe(
+      "<button onClick={handler}>x</button>",
+    );
+  });
+
+  it("uses React's own irregular spellings", () => {
+    // react-dom's registration table (measured): `dblclick` → `onDoubleClick`,
+    // `focusin` → `onFocus`, `focusout` → `onBlur`; every other DOM name is
+    // the plain `on` + capitalized form.
+    expect(markup("<button onDblClick=f>x</button>")).toBe(
+      "<button onDoubleClick={f}>x</button>",
+    );
+    expect(markup("<button on-dblclick=g>y</button>")).toBe(
+      "<button onDoubleClick={g}>y</button>",
+    );
+    expect(markup("<input onFocusIn=h>")).toBe("<input onFocus={h} />");
+    expect(markup("<input on-focusout=i>")).toBe("<input onBlur={i} />");
+  });
+
+  it("emits onDoubleClick as onDoubleclick plus core's warning, never a rewrite", () => {
+    // No aliases (decision 101 (c)): the authored `onDoubleClick` lowercases
+    // to `doubleclick`, which React would silently drop; core warns and the
+    // prop is recomposed exactly as written. The warning is pinned in the
+    // core's lower tests.
+    expect(markup("<button onDoubleClick=handler>x</button>")).toBe(
+      "<button onDoubleclick={handler}>x</button>",
+    );
+  });
+
+  it("rejects a custom DOM event name uniformly, pointing at a ref", () => {
+    expect(() => compile("<div on-my-event=fn>x</div>")).toThrow(
+      '`on-my-event` names a custom DOM event (`my-event`) a JSX prop cannot spell; use a `ref` to add a custom event listener (`ref={el => el?.addEventListener("my-event", fn)}`)',
+    );
+  });
+
+  it("passes a static inline handler string through verbatim", () => {
+    expect(markup('<button onClick="alert(1)">x</button>')).toBe(
+      '<button onClick="alert(1)">x</button>',
+    );
+  });
+
+  it("rejects on: with a fix-it naming on-<exact>", () => {
+    expect(() => compile("<div on:click=fn>x</div>")).toThrow(
+      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+    );
+  });
+});

@@ -160,8 +160,15 @@ export function createJsxDeclarations(targetName: string): HostDeclarations {
       return { kind: "try" };
     },
     rejectModifier(attr) {
+      // `on:`/`oncapture:` get the event fix-it rather than the class-shaped
+      // default — decision 101 (b), design note §4's per-prefix wording.
+      const eventFixIts: Record<string, string> = {
+        on: `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${attr.modifier[0].toUpperCase()}${attr.modifier.slice(1)}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
+        oncapture: `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${attr.modifier[0].toUpperCase()}${attr.modifier.slice(1)}=fn\` — MX has no capture spelling in the name, so use a \`ref\` callback calling \`addEventListener("${attr.modifier}", fn, { capture: true })\` if you need capture (Marko rejects this form too)`,
+      };
       rawFail(
-        `attribute modifier \`${attr.name}:${attr.modifier}\` is not ${targetName} syntax; write the prop directly (\`class={{ active: cond }}\` rather than \`class:active\`)`,
+        eventFixIts[attr.name] ??
+          `attribute modifier \`${attr.name}:${attr.modifier}\` is not ${targetName} syntax; write the prop directly (\`class={{ active: cond }}\` rather than \`class:active\`)`,
         attr,
       );
     },
@@ -433,15 +440,20 @@ export class PreactEmitter implements Emitter<string> {
           `\`:=\` is Marko's two-way binding; ${this.#target.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
-      // Phase A of `dom-events` (decision 101): core now lowers an element's
-      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough
-      // reproducing exactly what the `dynamic` case produced for the same
-      // attribute before the kind existed, so this PR is output-neutral;
-      // phase B replaces it with the shared JSX hosts' ruled emission
-      // (camelCase recomposed from `attr.event`, React's inverse rename map,
-      // and a uniform error for a custom DOM event).
-      case "event":
+      // Phase B of `dom-events` (decision 101): recompose the prop from the
+      // DOM event name core resolved — `on` + capitalized (`click` →
+      // `onClick`, `dblclick` → `onDblclick`), with the React target.s own
+      // irregular spellings (`onDoubleClick`, `onFocus`, `onBlur`) through
+      // `Target.eventPropNames`. A custom DOM event name JSX cannot spell
+      // errors uniformly on all three shared targets.
+      case "event": {
+        // Only the value lands here; the paired `#attr` emits the recomposed
+        // prop name. Validate the name on both paths so a custom-event name
+        // errors whether the unit is described (`#attr`) or called
+        // (`#attrValue`).
+        this.#eventPropName(attr);
         return methodExpression(attr.value) ?? attr.value.code;
+      }
       case "dynamic": {
         if (attr.name === "class") {
           const fixed = staticTemplateValue(attr.value);
@@ -492,18 +504,17 @@ export class PreactEmitter implements Emitter<string> {
           `\`:=\` is Marko's two-way binding; ${this.#target.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
-      // Phase A of `dom-events` (decision 101): core now lowers an element's
-      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough
-      // reproducing exactly what the `dynamic` case produced for the same
-      // attribute before the kind existed, so this PR is output-neutral;
-      // phase B replaces it with the shared JSX hosts' ruled emission
-      // (camelCase recomposed from `attr.event`, React's inverse rename map,
-      // and a uniform error for a custom DOM event).
+      // Phase B of `dom-events` (decision 101): the prop is recomposed from
+      // the DOM event name core resolved (`#eventPropName`) — never the
+      // authored spelling, so `onDblClick` and `on-dblclick` both emit
+      // `onDblclick`. The recomposed name is deliberately not span-mapped:
+      // it is generated text, not source text, and a mapping whose texts
+      // differ is worse than none.
       case "event": {
-        const name = this.#attrName(attr.name, isComponent);
+        const name = this.#eventPropName(attr);
         return concatMapped(
           " ",
-          mapped(name, mapName ? attr.nameSpan : null),
+          mapped(name, null),
           `={${methodExpression(attr.value) ?? attr.value.code}}`,
         );
       }
@@ -568,6 +579,34 @@ export class PreactEmitter implements Emitter<string> {
     if (name === "class") return this.#target.classAttr;
     if (name === "for") return this.#target.forAttr;
     return name;
+  }
+
+  /**
+   * The JSX prop name for an `event` attribute, recomposed from the DOM
+   * event name core resolved (decision 101, design note §7): `on` plus the
+   * capitalized DOM name — `click` → `onClick`, `dblclick` → `onDblclick`.
+   * The React target passes its own irregular spellings through
+   * `Target.eventPropNames` (`dblclick` → `onDoubleClick`, `focusin` →
+   * `onFocus`, `focusout` → `onBlur`), React's own registration table in
+   * `react-dom`, not an MX invention.
+   *
+   * A name JSX cannot spell as one identifier — a custom DOM event such as
+   * `my-event` from `on-my-event` — is a uniform error on all three shared
+   * targets (decision 101 (d)): even where a runtime could bind it, the same
+   * MX source must not silently do nothing on another. The `ref` route the
+   * error names works identically on Preact, React and hono.
+   */
+  #eventPropName(attr: Attr & { kind: "event" }): string {
+    if (!/^[A-Za-z0-9]+$/.test(attr.event)) {
+      fail(
+        `\`${attr.name}\` names a custom DOM event (\`${attr.event}\`) a JSX prop cannot spell; use a \`ref\` to add a custom event listener (\`ref={el => el?.addEventListener("${attr.event}", fn)}\`)`,
+        attr,
+      );
+    }
+    const irregular = this.#target.eventPropNames?.[attr.event];
+    const middle =
+      irregular ?? attr.event.charAt(0).toUpperCase() + attr.event.slice(1);
+    return `on${middle}`;
   }
 
   /**

@@ -45,6 +45,43 @@ React and Preact share one structural emitter. `@mxlang/react` depends on
 `@mxlang/preact` and supplies a React target object containing only the names
 that differ. Its runtime is native React—not a Preact compatibility layer.
 
+## Events
+
+An element's `on<Name>=fn` (`onClick`, `onKeyDown`) or `on-<exact>=fn`
+(`on-my-event`) is an event handler. MX derives the **DOM event name** —
+everything after `on` lowercased, or the exact text after `on-` — and that
+name is the *input*; React's prop spelling is a **lookup** in React's own
+event registration table, vendored into this target (`buildReactEventPropNames`
+in `packages/hosts/react/src/target.ts`, from react-dom's
+`simpleEventPluginEvents`). There is no rule an author can derive in reverse:
+React's names are camelCase data that react-dom lowercases for the DOM, so
+`keydown` → `onKeyDown`, `mousedown` → `onMouseDown`, `timeupdate` →
+`onTimeUpdate`, `dblclick` → `onDoubleClick`, `focusin` → `onFocus`,
+`focusout` → `onBlur`. `onClick=f` → `onClick={f}`; `onDblClick=f` and
+`on-dblclick=f` both → `onDoubleClick={f}`. A drift test compares the
+vendored list against the installed react-dom on every run.
+
+- **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
+  a DOM event and which React would silently drop: the compiler warns at the
+  attribute and emits `onDoubleclick={f}` exactly as written.
+- **Custom DOM events** (`on-my-event=f`) are a compile error naming the
+  portable route: a `ref` callback calling
+  `addEventListener("my-event", fn)`. The error is uniform across Preact,
+  React and hono, so the same MX source never binds on one and dies on
+  another.
+- **Static strings** (`onClick="alert(1)"`) are an ordinary attribute and
+  pass through verbatim; MX does not invent a policy against inline handler
+  strings — it only stops creating one from a function.
+- **`on:` / `oncapture:`** are rejected with a fix-it naming `on-<exact>`:
+  `on:click=fn` → `onClick=fn` (or `on-click=fn` for a custom name).
+- On a **component**, an `on*` attribute is an ordinary prop (`<Row
+  onSelect=pick/>` passes the callback), never an event.
+
+The handler receives React's synthetic event wrapping the DOM event, as React
+always delivers. React's `onChange`-binds-`input` behavior on text fields is
+React's own — see the `onChange` gotcha in
+[Attributes](/language/attributes).
+
 ## Hooks and boundaries
 
 ```marko
