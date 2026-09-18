@@ -104,7 +104,7 @@ name. `onClick=f` → `onClick={f}`; `onDblClick=f` and `on-dblclick=f` both
 
 - **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
   a DOM event: the compiler warns at the attribute and emits
-  `onDoubleclick={f}` exactly as written — never silently `onDblClick`.
+  `onDoubleclick={f}` exactly as written — never silently `onDblclick`.
 - **Custom DOM events** (`on-my-event=f`) are a compile error: Solid has no
   custom-event prop. The error names the escape hatch Solid's own docs give
   for listener options — a `ref` callback calling
