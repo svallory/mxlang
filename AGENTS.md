@@ -471,21 +471,19 @@ documented prerequisite, not a bug (see `packages/editors/zed/UPSTREAM.md`
 "SolidMX injection prerequisite").
 
 ## Design docs
-
+Design docs and research notes live outside this repo, at the project space root under `notes/` (not inside this worktree). The language spec is the exception: it lives in the repo at `apps/docs/docs/specification.md` (see below).
 Design docs, specs, and research notes live outside this repo, at the project space root under `notes/` (not inside this worktree).
 
 ## Language spec
 
-`notes/specs/mx-language.md` is the normative MX language specification — one
+`apps/docs/docs/specification.md` is the normative MX language specification — one
 section per construct, each carrying its syntax, its semantics per host, the
 errors core owns, and the decision numbers that fixed it. It is the answer to
 "what does this construct mean", where the docs site (`apps/docs/docs/`)
 answers "how do I use it" and the decision log answers "when did we choose
 this". A PR that changes syntax or semantics updates
-`notes/specs/mx-language.md` in the same change, citing the decision number; a
+`apps/docs/docs/specification.md` in the same change, citing the decision number; a
 decision entry that changes the language names the spec section it updates.
-The spec currently lives in the space's `notes/` (not committed here);
-moving it into the repo is Saulo's call.
 
 ## Oracle harness
 

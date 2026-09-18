@@ -54,6 +54,7 @@
         { "title": "Errors", "path": "/language/errors/" }
       ]
     },
+    { "title": "Specification", "path": "/specification/", "icon": "scroll" },
     {
       "title": "Custom tags",
       "icon": "tags",
@@ -127,6 +128,10 @@
         {
           "title": "MX vs JSX for framework authors",
           "path": "/design-notes/mx-vs-jsx/"
+        },
+        {
+          "title": "Custom tags build spec",
+          "path": "/design-notes/custom-tags/"
         }
       ]
     },
