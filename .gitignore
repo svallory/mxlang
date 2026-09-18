@@ -30,3 +30,8 @@ packages/editors/zed/grammars/
 # docs site build output (apps/docs); the build is the verify check, the
 # output is not committed
 apps/docs/site/
+
+# secrets
+.env
+.env.*
+!.env.example
