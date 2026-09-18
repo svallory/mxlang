@@ -206,3 +206,21 @@ describe("Element", () => {
     );
   });
 });
+
+describe("lowercase onclick mapping is native-element-only", () => {
+  it("maps onclick=fn to (click) on a native element", () => {
+    const out = emit("<button onclick=handler>x</button>");
+    expect(out).toBe('<button (click)="(handler)($event)">x</button>');
+    assertAngularParses(out);
+  });
+
+  it("keeps onclick=fn as the component's own [onclick] input", () => {
+    // emitAttrs is shared between elements and component calls; the
+    // lowercase mapping must not rewire a component's input into an output
+    // binding (components have props; elements have events — the PR
+    // body's claim, pinned).
+    const out = emit("<UserCard onclick=handler/>");
+    expect(out).toBe('<mx-user-card [onclick]="handler"></mx-user-card>');
+    assertAngularParses(out);
+  });
+});

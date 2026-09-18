@@ -268,6 +268,11 @@ const NGCLASS_NGSTYLE_WARNING: Record<"ngClass" | "ngStyle", string> = {
 function emitAttrs(
   attrs: Attr[],
   onceWarn: (kind: "ngClass" | "ngStyle") => void,
+  // The lowercase `onclick=fn` mapping is a native-element rule: on a
+  // component call the same attribute is the callee's own `[onclick]` input
+  // (components have props; elements have events), so the distinction is
+  // threaded in exactly like the core's `isElement` gate.
+  isElement = false,
 ): string {
   let out = "";
   for (const attr of attrs) {
@@ -289,12 +294,13 @@ function emitAttrs(
         break;
       case "dynamic": {
         const name = attr.name;
-        if (LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) {
-          // `onclick=fn` (lowercase, expression): not event-shaped for the
-          // core kind, but decision 101 maps it on this host — Angular's
-          // `(click)` is the binding an inline handler string would have
-          // driven, so a function value routes there instead of a dead
-          // `[onclick]` property binding.
+        if (isElement && LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) {
+          // `onclick=fn` (lowercase, expression) on a native element: not
+          // event-shaped for the core kind, but decision 101 maps it on this
+          // host — Angular's `(click)` is the binding an inline handler
+          // string would have driven, so a function value routes there
+          // instead of a dead `[onclick]` property binding. On a component
+          // call the same attribute stays the callee's `[onclick]` input.
           out += ` (${name.slice(2)})="(${esc(attr.value.code)})($event)"`;
         } else if (name === "class" || name === "style") {
           const shape = attr.value.shape;
@@ -821,9 +827,13 @@ class AngularEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
-    const attrs = emitAttrs(node.attrs, (directive) => {
-      this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
-    });
+    const attrs = emitAttrs(
+      node.attrs,
+      (directive) => {
+        this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
+      },
+      true,
+    );
     this.out += `<${node.name}${attrs}>`;
     if (node.void) return;
     for (const child of node.children) this.emitNode(child);
