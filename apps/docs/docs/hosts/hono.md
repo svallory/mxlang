@@ -55,6 +55,36 @@ error boundary or suspense component** — Hono's `hono/jsx` provides
 `ErrorBoundary` and `Suspense` natively, so this host's runtime supplies only
 `mxClass`.
 
+## Events
+
+An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
+(`on-my-event`) is an event handler. MX derives the **DOM event name** —
+everything after `on` lowercased, or the exact text after `on-` — and this
+host emits a JSX prop recomposed from it: `on` plus the capitalized DOM
+name. `onClick=f` → `onClick={f}`; `onDblClick=f` and `on-dblclick=f` both
+→ `onDblclick={f}` (hono lowercases the prop name at bind time, so it binds `dblclick`).
+
+- **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
+  a DOM event: the compiler warns at the attribute and emits
+  `onDoubleclick={f}` exactly as written.
+- **Custom DOM events** (`on-my-event=f`) are a compile error naming the
+  portable route: a `ref` callback calling
+  `addEventListener("my-event", fn)`. The error is uniform across Preact,
+  React and hono, so the same MX source never binds on one and dies on
+  another.
+- **`onChange` binds the `input` event**, for React compatibility — on every
+  keystroke, not on commit the way `change` fires elsewhere. If you need one
+  behaviour, say so: `onInput` for per-keystroke, or handle `change`'s
+  timing in the handler. This is hono's runtime semantics, documented not
+  shimmed; see the gotcha in [Attributes](/language/attributes).
+- **Static strings** (`onClick="alert(1)"`) are an ordinary attribute and
+  pass through verbatim; MX does not invent a policy against inline handler
+  strings — it only stops creating one from a function.
+- **`on:` / `oncapture:`** are rejected with a fix-it naming `on-<exact>`:
+  `on:click=fn` → `onClick=fn` (or `on-click=fn` for a custom name).
+- On a **component**, an `on*` attribute is an ordinary prop (`<Row
+  onSelect=pick/>` passes the callback), never an event.
+
 ## Hooks and boundaries
 
 ```marko

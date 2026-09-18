@@ -77,3 +77,53 @@ describe("Hono target", () => {
     expect(() => compile("<let/count=0/>")).toThrow("Hono's `useState`");
   });
 });
+
+describe("event attributes (decision 101, phase B of dom-events)", () => {
+  it("recomposes the prop from the DOM event name", () => {
+    expect(markup("<button onClick=handler>x</button>")).toBe(
+      "<button onClick={handler}>x</button>",
+    );
+  });
+
+  it("collapses onDblClick and on-dblclick byte-identically", () => {
+    const a = markup("<button onDblClick=f>x</button>");
+    const b = markup("<button on-dblclick=f>x</button>");
+    expect(a).toBe("<button onDblclick={f}>x</button>");
+    expect(a).toBe(b);
+  });
+
+  it("emits onChange for the change event and leaves hono's input alias to hono", () => {
+    // Decision 101 (d): hono's runtime binds `onChange` to the `input` event
+    // for React compatibility; MX emits the prop unchanged and documents the
+    // divergence rather than papering over it.
+    expect(markup("<input onChange=handler>")).toBe(
+      "<input onChange={handler} />",
+    );
+  });
+
+  it("rejects a custom DOM event name uniformly, pointing at a ref", () => {
+    expect(() => compile("<div on-my-event=fn>x</div>")).toThrow(
+      '`on-my-event` names a custom DOM event (`my-event`) a JSX prop cannot spell; use a `ref` to add a custom event listener (`ref={el => el?.addEventListener("my-event", fn)}`)',
+    );
+  });
+
+  it("passes a static inline handler string through verbatim", () => {
+    expect(markup('<button onClick="alert(1)">x</button>')).toBe(
+      '<button onClick="alert(1)">x</button>',
+    );
+  });
+
+  it("rejects on: with a fix-it naming on-<exact>", () => {
+    expect(() => compile("<div on:click=fn>x</div>")).toThrow(
+      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+    );
+  });
+});
+
+describe("event name plain-recomposition spellings", () => {
+  it("recomposes multi-word DOM names with capitalize-first (onKeydown), unlike React", () => {
+    expect(markup("<input onKeyDown=handler>")).toBe(
+      "<input onKeydown={handler} />",
+    );
+  });
+});

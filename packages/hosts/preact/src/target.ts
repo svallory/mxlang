@@ -70,6 +70,20 @@ export interface Target {
   suspenseName: string;
   /** Module the JSX `Fragment` is imported from, for an explicit import. */
   fragmentModule: string;
+  /**
+   * This target's event-prop names, keyed by DOM event name — the value is
+   * the middle of the prop (`"KeyDown"` → `onKeyDown`), so the plain
+   * `on` + capitalized-DOM-name recomposition is the fallback, not the
+   * rule. Only the React target sets this, and it is a *lookup into React's
+   * own registration table*, vendored in
+   * `@mxlang/react`'s `target.ts` (`buildReactEventPropNames`, from
+   * react-dom's `simpleEventPluginEvents` plus the registrations outside
+   * that loop): React's names are camelCase data lowercased for the DOM,
+   * which no derivation can reverse (`keydown` → `onKeyDown`, never
+   * `onKeydown`). Preact and hono omit this and get the plain
+   * recomposition (`dblclick` → `onDblclick`).
+   */
+  eventPropNames?: Record<string, string>;
 }
 
 /** The Preact target. */
