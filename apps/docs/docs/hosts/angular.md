@@ -119,6 +119,37 @@ lowers to `[ngClass]`/`[ngStyle]`), and write the attribute plainly
 (`data-kind=x`, not `attr:data-kind=x`) — the emitter decides property vs.
 attribute binding for you, per the row above.
 
+## Events
+
+An element's `on<Name>=fn` (`onClick`, `onDblClick`), `on-<exact>=fn`
+(`on-my-event`), or a lowercase `onclick=fn` is an event handler. MX derives
+the **DOM event name** — everything after `on` lowercased, or the exact text
+after `on-` — and this host emits an Angular event binding from it:
+`onClick=f` → `(click)="(f)($event)"`. The handler is wrapped so it is
+*called* with `$event`, not returned: an arrow handler writes
+`onClick=(e => handle(e))` → `(click)="(e => handle(e))($event)"`.
+
+- **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
+  a DOM event: the compiler warns at the attribute and emits
+  `(doubleclick)="(f)($event)"` exactly as written — never silently
+  `dblclick`. Spell the DOM name (`onDblClick`).
+- **`on-<exact>` works verbatim** — `(my-event)="(f)($event)"` — which is
+  what makes custom events first-class on this host, the one MX host whose
+  binding syntax takes any event name.
+- **Lowercase `onclick=fn`** (an expression, not a string) maps to
+  `(click)="(f)($event)"` — the binding an inline handler string would have
+  driven — rather than a dead `[onclick]` property binding.
+- **Static strings** (`onClick="alert(1)"`) are an ordinary attribute and
+  pass through verbatim; MX does not invent a policy against inline handler
+  strings — it only stops creating one from a function.
+- **`on:` / `oncapture:`** are rejected with a fix-it naming `on-<exact>`:
+  `on:click=fn` → `onClick=fn` (or `on-click=fn` for a custom name).
+- On a **component**, an `on*` attribute is an ordinary input prop (`<Row
+  onSelect=pick/>` binds `[onSelect]`), never an output binding — MX does
+  not infer `@Output()`.
+
+`$event` is typed by Angular's own template checker from the event name.
+
 ## `mx-angular`
 
 ```
