@@ -442,7 +442,7 @@ export class PreactEmitter implements Emitter<string> {
         );
       // Phase B of `dom-events` (decision 101): recompose the prop from the
       // DOM event name core resolved — `on` + capitalized (`click` →
-      // `onClick`, `dblclick` → `onDblclick`), with the React target.s own
+      // `onClick`, `dblclick` → `onDblclick`), with the React target's own
       // irregular spellings (`onDoubleClick`, `onFocus`, `onBlur`) through
       // `Target.eventPropNames`. A custom DOM event name JSX cannot spell
       // errors uniformly on all three shared targets.
