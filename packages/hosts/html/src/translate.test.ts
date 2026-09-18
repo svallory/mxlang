@@ -787,3 +787,51 @@ describe("a unit that returns a value", () => {
     expect(code).toContain("escape(n)");
   });
 });
+
+describe("event attributes (decision 101, phase B of dom-events)", () => {
+  it("rejects an expression-valued event handler: a string render has no runtime", () => {
+    const body = "<button onClick=handler>x</button>";
+    expect(() => compile(src(body), file)).toThrow(
+      "`onClick` is an event handler and requires a runtime; @mxlang/html renders once to a string",
+    );
+  });
+
+  it("rejects a custom event name the same way", () => {
+    const body = "<div on-my-event=fn>x</div>";
+    expect(() => compile(src(body), file)).toThrow(
+      "`on-my-event` is an event handler and requires a runtime; @mxlang/html renders once to a string",
+    );
+  });
+
+  it("emits a static inline handler string verbatim", () => {
+    // Spec §4: a string-valued `onclick` stays an ordinary static attribute;
+    // MX does not invent a policy against inline handler strings.
+    const { code } = compile(
+      src('<button onclick="alert(1)">x</button>'),
+      file,
+    );
+    // The emitted module escapes the quotes for its own JS string, which is
+    // what "verbatim" means at this layer — the rendered attribute is
+    // `onclick="alert(1)"`.
+    expect(code).toContain('onclick=\\"alert(1)\\"');
+  });
+
+  it("rejects on: with a fix-it naming on-<exact>", () => {
+    const body = "<div on:click=fn>x</div>";
+    expect(() => compile(src(body), file)).toThrow(
+      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+    );
+  });
+});
+
+describe("event error positions", () => {
+  it("positions the event error at the attribute name", () => {
+    let error: unknown;
+    try {
+      compile(src("<div   onClick=fn>x</div>"), file);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ line: 1, column: 7 });
+  });
+});

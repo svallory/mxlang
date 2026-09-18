@@ -263,6 +263,19 @@ export function createEmitter(): StringEmitter {
       return;
     }
 
+    // Phase B of `dom-events` (decision 101, design note §8): an expression-
+    // valued event handler needs a runtime, and this target renders once to
+    // a string. A *string*-valued handler (`onclick="…"`) is an ordinary
+    // static attribute and passes through verbatim above; only a function
+    // value reaches this kind, and it is rejected rather than silently
+    // emitted as dead inline JS.
+    if (attr.kind === "event") {
+      fail(
+        `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
+        attr,
+      );
+    }
+
     const source = structured(attr.name, attr.value.code);
     if (source) {
       // A structured value renders itself; interpolating it into quotes would

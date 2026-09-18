@@ -159,6 +159,22 @@ Inert is a *shape*, not permission to drop content. Each inert tag still declare
 | A capitalized tag with no matching binding | No HTML element is capitalized, so this is a missing import rather than an element |
 | `class:foo`, `style:foo` | Not Marko syntax at all — see [Errors](/language/errors/) |
 
+## Events
+
+An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
+(`on-my-event`) is an event handler — and this host has nowhere to bind one:
+`@mxlang/html` renders once to a string, so an expression-valued event
+attribute is a compile error naming the attribute and the host.
+
+- **Static strings** (`onclick="alert(1)"`) are an ordinary attribute and
+  pass through verbatim; MX does not invent a policy against inline handler
+  strings — it only stops creating one from a function. A *bare* `onClick`
+  is HTML's spelling of `true` and renders as the boolean attribute.
+- **`on:` / `oncapture:`** are rejected with a fix-it naming `on-<exact>`:
+  `on:click=fn` → `onClick=fn` (or `on-click=fn` for a custom name).
+- On a **component** (a `<define>` or an imported template), an `on*`
+  attribute is an ordinary prop, never an event.
+
 ## `<try>`
 
 A `<try>` with `<@catch>` lowers to a real `try`/`catch` around the block's output:
