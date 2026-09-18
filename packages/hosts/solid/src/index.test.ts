@@ -284,6 +284,55 @@ describe("Solid host errors", () => {
   });
 });
 
+describe("event attributes (decision 101, phase B of dom-events)", () => {
+  it("recomposes the prop from the DOM event name", () => {
+    expect(compile(`<button onClick=handler>x</button>`).code).toContain(
+      "onClick={handler}",
+    );
+  });
+
+  it("collapses onDblClick and on-dblclick byte-identically", () => {
+    const a = compile(`<button onDblClick=f>x</button>`).code;
+    const b = compile(`<button on-dblclick=f>x</button>`).code;
+    expect(a).toContain("onDblclick={f}");
+    expect(a).toBe(b);
+  });
+
+  it("emits onDoubleClick as onDoubleclick without rewriting (no aliases)", () => {
+    // Core warns (`onDoubleClick` is not a DOM event) but never rewrites;
+    // the prop is recomposed from the DOM name exactly as written. The
+    // warning itself is pinned in the core's lower tests.
+    expect(compile(`<button onDoubleClick=handler>x</button>`).code).toContain(
+      "onDoubleclick={handler}",
+    );
+  });
+
+  it("rejects a custom DOM event name with the ref route", () => {
+    expectError(
+      `<div on-my-event=fn>x</div>`,
+      '`on-my-event` names a custom DOM event (`my-event`) Solid cannot bind as a prop; use a `ref` callback calling `addEventListener("my-event", fn)`',
+    );
+  });
+
+  it("passes a static inline handler string through verbatim", () => {
+    // Spec §4: a string-valued `onClick` stays an ordinary static attribute;
+    // MX does not invent a policy against inline handler strings.
+    expect(compile(`<button onClick="alert(1)">x</button>`).code).toContain(
+      'onClick="alert(1)"',
+    );
+  });
+
+  it("points the on: fix-it at on-<exact>", () => {
+    let error: unknown;
+    try {
+      compile(`<div on:click=fn/>`);
+    } catch (caught) {
+      error = caught;
+    }
+    expect((error as Error).message).toContain("`on-x=fn` for a custom event");
+  });
+});
+
 describe("discovered tag imports inside a region", () => {
   const compileRegion = (source: string) =>
     compileSolidMx(source, {
@@ -481,5 +530,19 @@ describe("a unit that returns a value", () => {
 
     expect(code).not.toContain("$mxReturn");
     expect(code).not.toContain("let ");
+  });
+});
+
+describe("event error positions", () => {
+  it("positions the custom-event error at the attribute name", () => {
+    let error: unknown;
+    try {
+      compileSolidMx("<div   on-my-event=fn>x</div>", {
+        filename: "pos.solid.mx",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ line: 1, column: 7 });
   });
 });

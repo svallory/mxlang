@@ -93,11 +93,38 @@ Every `<for>` form lowers to one of Solid's own iteration primitives:
 
 The builtins (`For`, `Show`, `Switch`, `Match`, `Loading`, `Errored`, `Repeat`, and the rest) are auto-imported by Solid's own compilers, so nothing here adds an import of its own.
 
+## Events
+
+An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
+(`on-my-event`) is an event handler. MX derives the **DOM event name** —
+everything after `on` lowercased, or the exact text after `on-` — and this
+host emits Solid's prop recomposed from it: `on` plus the capitalized DOM
+name. `onClick=f` → `onClick={f}`; `onDblClick=f` and `on-dblclick=f` both
+→ `onDblclick={f}` (Solid derives the event name from the prop, so it binds `dblclick`).
+
+- **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
+  a DOM event: the compiler warns at the attribute and emits
+  `onDoubleclick={f}` exactly as written — never silently `onDblClick`.
+- **Custom DOM events** (`on-my-event=f`) are a compile error: Solid has no
+  custom-event prop. The error names the escape hatch Solid's own docs give
+  for listener options — a `ref` callback calling
+  `addEventListener("my-event", fn)`.
+- **Static strings** (`onClick="alert(1)"`) are an ordinary attribute and
+  pass through verbatim; MX does not invent a policy against inline handler
+  strings — it only stops creating one from a function.
+- **`on:` / `oncapture:`** keep their removed-in-Solid-2 rejection, with a
+  fix-it naming `on-<exact>`: `on:click=fn` → `onClick=fn` (or `on-click=fn`
+  for a custom name).
+- On a **component**, an `on*` attribute is an ordinary prop (`<Row
+  onSelect=pick/>` passes the callback), never an event.
+
+The handler receives the DOM event, as Solid always delivers it.
+
 ## Errors
 
 **Stateful tags.** `<let>`, `<effect>`, `<lifecycle>`, `<script>` and `:=` are compile errors, each naming Solid's own primitive instead — `createSignal`, `createEffect`, the lifecycle primitives, an explicit event handler. State is framework territory, and in a `.solid.mx` file it belongs in the surrounding TypeScript module, which is a real place to put it.
 
-**Removed Solid 2 namespaces.** `on:`, `oncapture:`, `attr:`, `bool:` and `use:` are gone from Solid 2, so each is rejected with its replacement in the message: `on:x=fn` → `onX=fn`, `oncapture:` → a `ref` callback with `{ capture: true }`, `attr:`/`bool:` → the plain attribute, `use:foo=opts` → `ref=foo(opts)`. Only `prop:` survives.
+**Removed Solid 2 namespaces.** `on:`, `oncapture:`, `attr:`, `bool:` and `use:` are gone from Solid 2, so each is rejected with its replacement in the message: `on:x=fn` → `onX=fn` or `on-x=fn` for a custom event name, `oncapture:` → `onX=fn` (capture needs a `ref` callback with `{ capture: true }`), `attr:`/`bool:` → the plain attribute, `use:foo=opts` → `ref=foo(opts)`. Only `prop:` survives.
 
 **Wrong scope.** `<define>`, `<const>`, hoisted statements and `<!doctype html>` inside a JSX expression are errors: a `.solid.mx` file is already a TypeScript module, and that is where they belong.
 

@@ -168,9 +168,9 @@ export const solidDeclarations: HostDeclarations = {
   },
   rejectModifier(attr) {
     const replacements: Record<string, string> = {
-      on: "`on:x=fn` was removed in Solid 2; use `onX=fn` for a delegated event, or a `ref` callback calling `addEventListener` for listener options",
+      on: "`on:x=fn` was removed in Solid 2; use `onX=fn` for a delegated event or `on-x=fn` for a custom event name (Marko rejects this form too)",
       oncapture:
-        "`oncapture:x=fn` was removed in Solid 2; use a `ref` callback calling `addEventListener(..., { capture: true })`",
+        "`oncapture:x=fn` was removed in Solid 2; use `onX=fn` — MX has no capture spelling in the name, so use a `ref` callback calling `addEventListener(..., { capture: true })` if you need capture",
       attr: "`attr:x=v` was removed in Solid 2; use the plain attribute `x=v`",
       bool: "`bool:x=v` was removed in Solid 2; use the plain attribute `x=v`",
       use: "`use:foo=opts` was removed in Solid 2; use `ref=foo(opts)` (a directive is now a function returning a ref callback)",
@@ -258,19 +258,29 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
         "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
         attr,
       );
-    // Phase A of `dom-events` (decision 101): core now lowers an element's
-    // `on<Name>`/`on-<exact>` to `kind: "event"`. This case is a deliberate
-    // TEMPORARY passthrough that reproduces byte-for-byte what the `dynamic`
-    // case did for the same attribute before the kind existed, so this PR is
-    // output-neutral; phase B replaces it with Solid's ruled emission
-    // (camelCase recomposed from `attr.event`, and a `ref`-callback fix-it for
-    // a dashed custom-event name Solid cannot express as a prop).
-    case "event":
+    // Phase B of `dom-events` (decision 101): recompose Solid's prop from the
+    // DOM event name core resolved — `on` + the capitalized name
+    // (`click` → `onClick`, `dblclick` → `onDblclick`) — never the authored
+    // spelling, so `onDblClick` and `on-dblclick` emit byte-identically.
+    // Solid has no custom-event prop (its own types only declare the DOM
+    // names), so a name JSX cannot spell as one identifier — a custom DOM
+    // event such as `my-event` from `on-my-event` — is a positioned error
+    // naming the `ref` route, the same escape hatch Solid's own docs give
+    // for listener options.
+    case "event": {
+      if (!/^[A-Za-z0-9]+$/.test(attr.event)) {
+        return fail(
+          `\`${attr.name}\` names a custom DOM event (\`${attr.event}\`) Solid cannot bind as a prop; use a \`ref\` callback calling \`addEventListener("${attr.event}", fn)\``,
+          attr,
+        );
+      }
+      const prop = `on${attr.event.charAt(0).toUpperCase()}${attr.event.slice(1)}`;
       return concatMapped(
         " ",
-        mapped(attr.name, mapName ? attr.nameSpan : null),
+        mapped(prop, null),
         `={${methodExpression(attr.value) ?? attr.value.code}}`,
       );
+    }
     case "dynamic": {
       if (attr.name === "style" && attr.value.shape !== "object") {
         return fail("`style=` with a non-object value", attr);
