@@ -171,8 +171,19 @@ Nothing silently degrades: every construct this target cannot express is a build
 - Tag params, and attribute-tag params — these lower to a render prop, and Astro passes markup through slots, not functions.
 - Attribute tags on a plain HTML element — named slots exist only on a component.
 - Attribute methods (`onClick() { … }`) — an event handler needs a runtime.
+- Expression-valued event attributes (`onClick=fn`, `on-my-event=fn`) — same reason: `.amx` renders static markup at build time and has no runtime to bind a handler to. A *string*-valued `onclick="alert(1)"` is an ordinary static attribute and passes through verbatim; MX does not invent a policy against inline handler strings.
 - `:=` — a two-way binding needs a reactive runtime.
 - A dynamic tag name (`<${expr}>`) — Astro resolves component names statically.
+
+## Events
+
+The event rule is the MX-wide one — an element's `on<Name>` lowercases to the
+DOM event name, `on-<exact>` is verbatim — but on this host every
+expression-valued form is a compile error: an event handler requires a
+runtime, and an `.amx` template renders static markup at build time. The
+error names the attribute and the host. `on:` / `oncapture:` are rejected
+with a fix-it naming `on-<exact>`; a string-valued `onclick="…"` stays an
+ordinary attribute; an `on*` attribute on a component is an ordinary prop.
 
 ## Typing `.mx` imports
 
