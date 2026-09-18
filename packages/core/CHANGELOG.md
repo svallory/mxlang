@@ -59,6 +59,39 @@ meaning — it now lowercases to `myevent`, and the author must write
 `on:*` and `oncapture:*` are unchanged: core gives them no meaning and they
 reach the host through the existing modifier hook.
 
+### Phase B: hosts emit from the `event` kind (decision 101)
+
+The phase-A passthroughs are replaced by each host's ruled emission,
+recomposed from the one source of truth (`attr.event`, the DOM name):
+
+- **Solid and the Preact/hono targets** emit `on` plus the capitalized DOM
+  name — `click` → `onClick`, `dblclick` → `onDblclick` (capitalize-first) —
+  so `onDblClick` and `on-dblclick` produce byte-identical output, and those
+  runtimes lowercase the prop at bind time. **React is a lookup, not a
+  derivation:** its prop names are camelCase data from react-dom's own
+  registration table (`simpleEventPluginEvents`), which no rule can reverse
+  (`keydown` → `onKeyDown`, `timeupdate` → `onTimeUpdate`), so the React
+  target vendors the list plus the registrations outside it
+  (`buildReactEventPropNames` in `packages/hosts/react/src/target.ts`,
+  react-dom 19.3.0) and a drift test compares it against the installed
+  react-dom. A custom DOM event a JSX
+  prop cannot spell (`on-my-event`) is a uniform positioned error on all
+  three naming the `ref` route, even though Preact alone could carry it.
+- **Angular** emits `(${attr.event})="(handler)($event)"` for both
+  `on<Name>` and `on-<exact>` — custom events bind verbatim — and maps a
+  lowercase expression `onclick=fn` to `(click)`. The host's invented
+  `IRREGULAR_EVENTS` table is deleted; `onDoubleClick` now emits
+  `(doubleclick)` under core's warning, never a rewrite. Component `on*`
+  attributes stay ordinary `[prop]` inputs (no `@Output()` inference).
+- **html and astro** reject an expression-valued event attribute: an event
+  handler requires a runtime, and both targets render once to a string /
+  static markup. Previously html silently emitted dead inline JS. A
+  *string*-valued `onclick="…"` stays an ordinary static attribute on every
+  host — MX does not invent a policy against inline handler strings.
+- **`on:`/`oncapture:`** are rejected on every host with a per-prefix fix-it
+  naming `on-<exact>` (replacing the shared JSX emitter's wrong class-shaped
+  hint and html's nonsense object suggestion).
+
 `on-` with no event name after the dash is a positioned error (`` `on-` needs
 an event name (`on-<event>`) ``) rather than a silently empty event name.
 
