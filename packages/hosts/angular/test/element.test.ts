@@ -52,17 +52,31 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("keeps `on-<exact>` a plain property binding in the temporary passthrough", () => {
-    // Round 1 regression guard (phase A of `dom-events`): core lowers
-    // `on-my-event` to the new `event` kind, but this host's phase-A
-    // passthrough must stay byte-identical to base — and base never matched
-    // `on-` against `EVENT_NAME` (`/^on[A-Z]/` requires a capital, not a
-    // dash), so it emitted a plain `[on-my-event]=` binding. Routing it
-    // through `domEventName` emitted `(-my-event)="…"`, which is not valid
-    // Angular. Phase B replaces this with `(my-event)=`.
+  it("emits `on-<exact>` as an event binding from core's resolved name", () => {
+    // Phase B of `dom-events` (decision 101): core lowers `on-my-event` to
+    // the `event` kind carrying `event: "my-event"` verbatim, and Angular's
+    // `(x)` can bind it — the phase-A `[on-my-event]=` passthrough is gone.
     const out = emit("<div on-my-event=f>x</div>");
-    expect(out).toBe('<div [on-my-event]="f">x</div>');
+    expect(out).toBe('<div (my-event)="(f)($event)">x</div>');
     assertAngularParses(out);
+  });
+
+  it("maps a lowercase expression `onclick=fn` to (click), per decision 101", () => {
+    // A lowercase `onclick` is not event-shaped for the core kind (the
+    // `/^on[A-Z-]/` gate keeps it `dynamic`), but decision 101 maps it on
+    // this host instead of leaving a dead `[onclick]` property binding.
+    const out = emit("<button onclick=handler>x</button>");
+    expect(out).toBe('<button (click)="(handler)($event)">x</button>');
+    assertAngularParses(out);
+  });
+
+  it("rejects on:/oncapture: with a fix-it naming `on-<exact>`", () => {
+    expect(() => emit("<a on:click=f>x</a>")).toThrow(
+      /`on:click=fn` is not MX syntax; write `onClick=fn`.*or `on-click=fn`/,
+    );
+    expect(() => emit("<a oncapture:click=f>x</a>")).toThrow(
+      /`oncapture:click=fn` is not MX syntax; write `onClick=fn`/,
+    );
   });
 
   it("leaves a bare or string-valued `onClick` alone", () => {
@@ -75,12 +89,34 @@ describe("Element", () => {
     );
   });
 
-  it("maps onDoubleClick to the real DOM event name, not a lowercased camelCase", () => {
-    // A plain `.toLowerCase()` of the MX attribute name gives `doubleclick`,
-    // not the DOM event `dblclick` Angular's `(dblclick)` binds to.
-    const out = emit("<button onDoubleClick=handler>x</button>");
-    expect(out).toBe('<button (dblclick)="(handler)($event)">x</button>');
-    assertAngularParses(out);
+  it("emits onDoubleClick as (doubleclick) with core's warning, never a rewrite", () => {
+    // No aliases (decision 101 (c)): `onDoubleClick` lowercases to
+    // `doubleclick`, which is not a DOM event; core warns at the attribute
+    // name and the binding emits exactly what was written. The old
+    // IRREGULAR_EVENTS table that rewrote this to `(dblclick)` is deleted.
+    const { code, warnings } = compileMx(
+      "<button onDoubleClick=handler>x</button>",
+    );
+    expect(code).toBe('<button (doubleclick)="(handler)($event)">x</button>');
+    assertAngularParses(code);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toBe(
+      "`onDoubleClick` is not a DOM event; did you mean `onDblclick`",
+    );
+  });
+
+  it("makes onDoubleClick, onDblClick and on-dblclick collapse except the warned one", () => {
+    // Portability claim (design note §7): the two correct spellings emit
+    // byte-identically; the React-trained spelling emits `(doubleclick)`
+    // under the same warning the core pins.
+    const { code, warnings } = compileMx(
+      "<button onDblClick=a>x</button><button on-dblclick=b>y</button>",
+    );
+    expect(code).toBe(
+      '<button (dblclick)="(a)($event)">x</button><button (dblclick)="(b)($event)">y</button>',
+    );
+    assertAngularParses(code);
+    expect(warnings).toHaveLength(0);
   });
 
   it("emits a two-way binding", () => {

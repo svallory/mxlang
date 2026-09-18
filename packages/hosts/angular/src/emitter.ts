@@ -153,6 +153,18 @@ export const angularDeclarations: HostDeclarations = {
   rejectModifier(attr): void {
     const prefix = (attr as unknown as { name: string }).name;
     const target = (attr as unknown as { modifier?: string }).modifier;
+    if (prefix === "on" || prefix === "oncapture") {
+      // Decision 101 (b): core gives `on:`/`oncapture:` no meaning; each
+      // host rejects with a fix-it naming `on-<exact>` (design note §4's
+      // per-prefix wording), this one in Angular vocabulary.
+      const event = (target ?? "")[0]?.toUpperCase() + (target ?? "").slice(1);
+      rawFail(
+        prefix === "on"
+          ? `\`on:${target}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${target}=fn\` for a custom event name (Marko rejects this form too)`
+          : `\`oncapture:${target}=fn\` is not MX syntax; write \`on${event}=fn\` — MX has no capture spelling in the name, so use a host listener with \`{ capture: true }\` if you need capture (Marko rejects this form too)`,
+        attr,
+      );
+    }
     if (prefix !== "class" && prefix !== "style" && prefix !== "attr") {
       // An unknown modifier prefix (`prop:x`, and the like): no attr:/
       // class:/style: name to explain, so the data-*/aria-* detail below
@@ -214,28 +226,19 @@ function esc(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
-// An event handler: `on` followed by an uppercase letter (`onClick`, not
-// `once`/`onto`, matching React/Preact's own event-name convention).
-const EVENT_NAME = /^on[A-Z]/;
-
-// Irregular DOM event names that don't survive a plain lowercase of the
-// camelCase MX attribute name — `onDoubleClick`.toLowerCase().slice(2) would
-// give `doubleclick`, not the real DOM event `dblclick`. Preact/React pass
-// event names straight through as JSX prop names, so neither host's own
-// emitter has a table to reuse; this one is needed because Angular's `(x)`
-// binds a real DOM event name, not a framework-level prop. Extend as a real
-// gap turns up rather than trying to be exhaustive up front.
-const IRREGULAR_EVENTS: Record<string, string> = {
-  onDoubleClick: "dblclick",
-  onMouseEnter: "mouseenter",
-  onMouseLeave: "mouseleave",
-  onFocusIn: "focusin",
-  onFocusOut: "focusout",
-};
-
-function domEventName(attrName: string): string {
-  return IRREGULAR_EVENTS[attrName] ?? attrName.slice(2).toLowerCase();
-}
+// Phase B of `dom-events` (decision 101): core lowers an element's
+// `on<Name>`/`on-<exact>` to `kind: "event"` carrying the resolved DOM name,
+// so this host recomposes `(${attr.event})=` from it and the invented
+// `IRREGULAR_EVENTS` table this file used to carry is gone — `onDoubleClick`
+// is *not* rewritten to `dblclick` (no aliases, decision 101 (c)); core warns
+// and the binding emits `(doubleclick)` exactly as written. A lowercase
+// `onclick=fn` never reaches the `event` kind (the core's `/^on[A-Z-]/` gate
+// keeps it `dynamic`), so the `dynamic` case below maps it, as decision 101
+// requires for this host.
+const LOWERCASE_EVENT = /^on[a-z]+$/;
+// `once=`/`onto=` are ordinary words, not events — spec §4 names `once`, and
+// the element tests pin both as plain property bindings.
+const NOT_EVENTS = new Set(["once", "onto"]);
 
 // A dynamic `data-*`/`aria-*` attribute has no Angular DOM property to bind,
 // so it emits `[attr.name]`; every other dynamic attribute stays `[name]`
@@ -275,38 +278,24 @@ function emitAttrs(
       case "boolean":
         out += ` ${attr.name}`;
         break;
-      // Phase A of `dom-events` (decision 101): core now lowers an element's
-      // `on<Name>`/`on-<exact>` to `kind: "event"`. TEMPORARY passthrough,
-      // reproducing base byte-for-byte rather than using the new `attr.event`
-      // — which means reproducing *which branch* the old `dynamic` path took,
-      // not just its camelCase one:
-      //
-      //   - `on<Name>` matched `EVENT_NAME` (`/^on[A-Z]/`) and went through
-      //     this host's own `domEventName`. That still differs from core's
-      //     `attr.event` precisely for `onDoubleClick` (`dblclick` here,
-      //     `doubleclick` from core), so reading `attr.event` would change
-      //     output in this PR.
-      //   - `on-<exact>` never matched `EVENT_NAME` (the regex requires a
-      //     capital after `on`, and a dash is not one), so it fell through to
-      //     the plain `[name]=` binding: `on-my-event=f` emitted
-      //     `[on-my-event]="f"`. Routing it through `domEventName` here would
-      //     have emitted `(-my-event)="…"`, which is not valid Angular.
-      //
-      // Phase B deletes `IRREGULAR_EVENTS` and emits `(${attr.event})=` from
-      // core's resolved name for both forms, which is the whole point of the
-      // kind.
+      // Phase B of `dom-events` (decision 101): Angular's `(x)` binds a real
+      // DOM event name, and core resolved it — `on<Name>` lowercased,
+      // `on-<exact>` verbatim — so both forms emit `(${attr.event})=` from
+      // the one source of truth: `onClick` and `on-click` both give
+      // `(click)`, `on-my-event` gives `(my-event)`, and `onDoubleClick`
+      // gives `(doubleclick)` with core's warning, never a rewrite.
       case "event":
-        if (EVENT_NAME.test(attr.name)) {
-          out += ` (${domEventName(attr.name)})="(${esc(attr.value.code)})($event)"`;
-        } else {
-          out += ` [${attr.name}]="${esc(attr.value.code)}"`;
-        }
+        out += ` (${attr.event})="(${esc(attr.value.code)})($event)"`;
         break;
       case "dynamic": {
         const name = attr.name;
-        if (EVENT_NAME.test(name)) {
-          const event = domEventName(name);
-          out += ` (${event})="(${esc(attr.value.code)})($event)"`;
+        if (LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) {
+          // `onclick=fn` (lowercase, expression): not event-shaped for the
+          // core kind, but decision 101 maps it on this host — Angular's
+          // `(click)` is the binding an inline handler string would have
+          // driven, so a function value routes there instead of a dead
+          // `[onclick]` property binding.
+          out += ` (${name.slice(2)})="(${esc(attr.value.code)})($event)"`;
         } else if (name === "class" || name === "style") {
           const shape = attr.value.shape;
           if (shape === "object" || shape === "array") {
