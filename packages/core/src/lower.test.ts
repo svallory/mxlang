@@ -486,6 +486,32 @@ describe("one fixture per IR kind", () => {
     expect(component.attributeTags[1]?.block.params).toEqual(["year"]);
   });
 
+  // attribute-tag-silent-drops B1/B2: the IR itself already carries every
+  // repeated `<@name>` (a flat array, never last-wins) and forwards
+  // `attributeTags` on a `HostTag` too — the bugs found by the spec backfill
+  // were emitter-only (Solid's JSX-prop-per-tag last-wins for a repeat;
+  // html's dynamic-tag path building its own synthetic `Component` with a
+  // hardcoded `attributeTags: []`), not a core lowering gap. These tests
+  // pin the core contract those fixes rely on.
+  it("Component keeps every repeated attribute tag, not just the last", () => {
+    const ir = lowerSource(
+      [
+        'import Layout from "./layout.marko"',
+        "<Layout>",
+        "  <@item>1</@item>",
+        "  <@item>2</@item>",
+        "</Layout>",
+        "",
+      ].join("\n"),
+      fakeDeclarations({ isComponent: (name) => name === "Layout" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.attributeTags.map((t) => t.name)).toEqual([
+      "item",
+      "item",
+    ]);
+  });
+
   it("Component records a define target with its declared params", () => {
     const ir = lowerSource(
       "<define/Row|item|><li>x</li></define>\n<Row('a')/>\n",
@@ -593,6 +619,27 @@ describe("a dynamic tag's bare shape", () => {
     expect(hosted.name).toBe(DYNAMIC_TAG);
     expect(hosted.attrs).toMatchObject([{ kind: "dynamic", name: "a" }]);
     expect(hosted.data).toEqual({ seen: true });
+  });
+
+  // attribute-tag-silent-drops B2: html's dynamic-tag path claims
+  // DYNAMIC_TAG and gets a `HostTag`, not a `Component` — its emitter used to
+  // build its own synthetic `Component` with a hardcoded `attributeTags: []`
+  // instead of this field, dropping every attribute tag on the call. The
+  // core side of the contract (this field is populated) was never the bug,
+  // but is pinned here so a future regression is caught before it reaches an
+  // emitter.
+  it("a claimed dynamic tag's HostTag carries its attribute tags", () => {
+    const ir = lowerSource(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+      "<${input.comp}><@header>hi</@header></>\n",
+      fakeDeclarations({
+        claimsTag: (name) => name === DYNAMIC_TAG,
+        resolveHostTag: () => ({ seen: true }),
+      }),
+    );
+    const hosted = find(ir.body, "HostTag").tag;
+    expect(hosted.name).toBe(DYNAMIC_TAG);
+    expect(hosted.attributeTags.map((t) => t.name)).toEqual(["header"]);
   });
 
   it("reaches the host for the bare shape when the host claims it explicitly", () => {
