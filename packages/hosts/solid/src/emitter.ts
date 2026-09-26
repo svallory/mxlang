@@ -458,15 +458,17 @@ function attributeTagValue(tag: AttributeTag): MappedCode {
 /**
  * A component's `<@name>` attribute tags, one JSX prop per distinct name.
  *
- * A name given more than once becomes an **array**, exactly as
- * `@mxlang/preact` does it and matching Marko's own iterable `attrTag`
- * shape (measured against `@marko/compiler` 5.42.5/`marko` 6.3.51: a
- * repeated `<@item>` is not last-wins and not a plain array, but its
- * property access and `for..of` both work the way an array of the same
- * values would for a callee that only reads or iterates it — see
- * `notes/briefs/attribute-tag-silent-drops.md`). Emitting the prop twice
- * (the shape this replaced) let the last one win, so a callee's
- * `<for|it| of=input.item>` iterated a single node instead of every tag.
+ * A name given more than once becomes an **array**, matching
+ * `@mxlang/preact`. Emitting the prop twice (the shape this replaced) let
+ * the last one win, so a callee's `<for|it| of=input.item>` iterated a
+ * single node instead of every tag.
+ *
+ * This is MX's own shape, not Marko's (decision 104,
+ * `attribute-tag-silent-drops`): attribute-tag value cardinality/shape is
+ * being redesigned under decision 106 — the consumer's `Input` type will
+ * declare what it expects per name — a deliberate divergence from Marko's
+ * own `attrTag`/`attrTags` runtime record rather than an attempt to match
+ * it.
  */
 function attributeTags(tags: AttributeTag[]): MappedCode {
   const byName = new Map<
