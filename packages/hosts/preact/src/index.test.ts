@@ -489,6 +489,90 @@ describe("mxDynamic's three value kinds (rendered)", () => {
   });
 });
 
+/**
+ * Attribute-tag rendered shape (decision 104, `attribute-tag-silent-drops`)
+ * — executed, not just emitted-JSX-text, assertions, since the whole point
+ * is what a real prop read/iteration does.
+ *
+ * A single `<@name>` is a bare value; a repeated `<@name>` is an array, in
+ * source order. This shape is expected to change under the upcoming
+ * decision 106 (attribute-tag value cardinality declared by the consumer's
+ * `Input` type); these tests pin today's behavior so that change has a
+ * clear before/after.
+ */
+describe("attribute tag values (executed)", () => {
+  /**
+   * `<define/Row|item|>` reports what it received back as JSON-ish markup so
+   * the assertion runs against the real value the callee saw at render time
+   * (not the emitted source text), without needing a real component file on
+   * disk the way `mxDynamic`'s own `renderCompiled` above does for a full
+   * JSX render.
+   */
+  async function renderCompiled(
+    callerBody: string,
+    rowBody: string,
+  ): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const callerCode = compilePreactMx(
+      callerBody,
+      "/fixtures/attrtag.mx",
+    ).code.replace('from "./row.mx"', 'from "./row.tsx"');
+    const rowCode = compilePreactMx(rowBody, "/fixtures/row.mx").code;
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-attrtag-"));
+    try {
+      const repoNodeModules = dirname(
+        dirname(require.resolve("preact/package.json")),
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      writeFileSync(join(scratch, "row.tsx"), rowCode);
+      const entry = join(scratch, "attrtag.tsx");
+      writeFileSync(entry, callerCode);
+      // biome-ignore lint/suspicious/noExplicitAny: bridges the compiled module's real props type into `h`'s untyped generic
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: any;
+      };
+      return render(h(mod.default, {}));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("a single attribute tag is a bare, non-iterable value", async () => {
+    const html = await renderCompiled(
+      'import Row from "./row.mx"\n<Row><@item>solo</@item></Row>',
+      '<div>isArray=${String(Array.isArray(input.item))} iterable=${String(typeof input.item[Symbol.iterator] === "function")}</div>',
+    );
+    expect(html).toContain("isArray=false");
+    expect(html).toContain("iterable=false");
+  });
+
+  it("a repeated attribute tag is an array", async () => {
+    const html = await renderCompiled(
+      'import Row from "./row.mx"\n<Row><@item>a</@item><@item>b</@item></Row>',
+      "<div>isArray=${String(Array.isArray(input.item))} length=${String(input.item.length)}</div>",
+    );
+    expect(html).toContain("isArray=true");
+    expect(html).toContain("length=2");
+  });
+});
+
 describe("component aliases", () => {
   it("renames a lowercase component JSX would read as an element", () => {
     // JSX decides element-vs-component by case: emitted verbatim, a

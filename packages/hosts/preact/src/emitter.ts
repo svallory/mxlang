@@ -638,11 +638,18 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * A component's attribute tags, as props.
    *
-   * A name given more than once becomes an **array**, exactly as Marko does
-   * it — which is what lets the callee write
-   * `<for|it| of=input.item><${it}/></for>` over `<@item>` repeated. Emitting
-   * the prop twice instead (the shape this replaced) let the last one win, so
-   * the callee's loop iterated a single node and threw on the spread.
+   * A name given more than once becomes an **array** — which is what lets
+   * the callee write `<for|it| of=input.item><${it}/></for>` over `<@item>`
+   * repeated. Emitting the prop twice instead (the shape this replaced) let
+   * the last one win, so the callee's loop iterated a single node and threw
+   * on the spread.
+   *
+   * This is MX's own shape, not Marko's (decision 104,
+   * `attribute-tag-silent-drops`): attribute-tag value cardinality/shape is
+   * being redesigned under decision 106 — the consumer's `Input` type will
+   * declare what it expects per name — a deliberate divergence from Marko's
+   * own `attrTag`/`attrTags` runtime record rather than an attempt to match
+   * it.
    */
   #attributeTags(tags: AttributeTag[]): MappedCode {
     const byName = new Map<
