@@ -868,6 +868,30 @@ written names, not what a spread holds at runtime, matching JSX's
 
 `children` counts as a name, because ordinary children lower into that prop.
 
+### Repeated `<@name>` (decision 104, `attribute-tag-silent-drops`)
+
+Writing the same `<@name>` more than once on an **ordinary component call**
+(no declared `attributeTags` schema) is allowed — core keeps every
+occurrence, in source order, in `Component.attributeTags`; nothing at the
+core lowering layer rejects or collapses a repeat. Measured against
+`@marko/compiler`/`marko` 6.3.51: Marko does the same, and the resulting
+value there is not a plain array but an iterable `attrTag`/`attrTags`
+object (property access reads the first occurrence; `for..of`/spread yields
+every occurrence). Every MX host now reproduces the same observable
+behavior — a property read gets the first tag, and iterating gets all of
+them — through whatever shape is idiomatic on that target:
+
+- **Preact/React/Hono** (shared JSX emitter) and **Solid**: an **array**.
+  `input.item.length`/`Array.isArray` therefore differ from real Marko for a
+  repeat (Marko's `attrTag` has neither), a narrower gap than the
+  previous last-wins bug and out of this task's scope — see §15.
+- **HTML**: an array too (`item: [fn1, fn2]`), same divergence.
+
+A **custom tag** with its own declared `attributeTags` schema restricts this:
+unless a name's declaration sets `repeatable: true`, a second `<@name>` is
+`` `<@name>` may not be repeated `` (§9/§13.1). This restriction is opt-in
+per custom tag and does not apply to an ordinary component call.
+
 ### Deferred to MX 2
 
 Both rejected by Marko, so both out of MX 1 (`divergences.md`):
@@ -886,7 +910,7 @@ Marko parity and no legacy aliases** (decision 94a): `literalOnly` (not
 `staticOnly`) and `repeatable` (not `repeated`). Unknown keys are rejected at
 registration (§13.1).
 
-**Decisions:** 19, 28, 37, 51, 66, 70, 79, 94a, 95(1), 95(7), 96.
+**Decisions:** 19, 28, 37, 51, 66, 70, 79, 94a, 95(1), 95(7), 96, 104.
 
 ---
 
@@ -1543,10 +1567,11 @@ deferred (decision 85).
 1. **Event attribute naming** (§4). No rule today; behavior differs per host by
    accident. Blocked on `notes/investigations/dom-events.md`.
 2. **Dynamic tags** (§7). No decision fixes their behavior; hosts may claim them.
-   **And an attribute tag on a dynamic tag is silently dropped on the HTML host
-   — measured, a real bug, not merely undocumented.** Needs a ruling: forward
-   the attribute tags into `renderDynamic`'s props, or make the combination a
-   positioned error.
+   The attribute-tag-on-a-dynamic-tag silent drop on the HTML host (and on
+   Solid's own dynamic-tag path, which shares the bug) is fixed: both now
+   forward the attribute tags into the resolved target's props, matching
+   Marko 6.3.51 (measured: it forwards them too — decision 104,
+   `attribute-tag-silent-drops`).
 3. **`--` text lines** (§3). Legal by inheritance, untested — no fixture.
 4. **`.solid.mx` as a final spelling** (§1). Left "for now" three times, never
    ruled on.
@@ -1557,6 +1582,15 @@ deferred (decision 85).
    and the custom-tags spec's substitution design. Decision 94d is explicitly
    awaiting his ruling; decision 92 is marked "Saulo may veto"; decision 65's
    policy statement is marked "lead's assumption, Saulo to confirm".
+8. **Repeated `<@name>` is an array on every MX host, not Marko's iterable
+   `attrTag`/`attrTags` object** (§8, decision 104). Fixing the two silent
+   drops this task was scoped to (Solid's last-wins, HTML's dynamic-tag
+   `renderDynamic({})`) surfaced this narrower, pre-existing divergence: a
+   callee that reads `input.item.length` or calls `Array.isArray(input.item)`
+   sees different results than real Marko would for the same template.
+   Out of scope for `attribute-tag-silent-drops` (the brief scoped B1 to the
+   last-wins bug specifically); needs its own ruling on whether to special-case
+   an iterable-but-not-array shape or accept the divergence.
 
 ---
 
@@ -1571,7 +1605,6 @@ reported, not edited (per this task's brief).
 | `language/stateful-tags.md` | "A reactive host (**a future SolidMX or React host**)" | Solid, Preact, React, Hono, Astro and Angular hosts all exist. |
 | `language/structural-tags.md` | "SolidMX lowers the same tag to Solid's `<Show>`/**ternary** form" | The Solid host uses `<Show>` for ≤2 conditioned branches and `<Switch>`/`<Match>` for 3+. |
 | `language/attribute-tags-and-params.md` | "A string-emitting host like the HTML host does **not currently support tag params on a component call** — only on the native control tags" | **Measured false.** `<Card\|x\|>${x}</Card>` against an imported component and `<Row\|x\|>${x}</Row>` against a `<define>` both compile on the html host. |
-| `language/errors.md` | "Combining a dynamic tag name with an attribute tag is not supported **and is reported as such**" | **Nothing is reported.** Measured on the html host (which claims `DYNAMIC_TAG`): `<${T}><@head>x</@head>y</${T}>` compiles clean and drops `head` with no diagnostic, while the same call on a named component keeps it. A silent drop, not an error — see §7 and §15. |
 | `language/define-const-static-import.md` | Shows `import { formatDate } from "./util.mx"` | A `.mx` file is a template compiling to a component, not a module exporting `formatDate`. The example should import from a `.ts` file. |
 | `language/errors.md`, `stateful-tags.md` | Both describe the strict policy as covering "the same six constructs" | Correct, but neither page states that the `input`-shadowing check is **not** strict-only. `define-const-static-import.md` does say it. |
 | — | No docs page covers `<return>`, `/var`, custom tag units, discovery, or sidecars | Partly closed 2026-09-18: the custom tags build spec is on the site at `/design-notes/custom-tags/`; dedicated language pages for `<return>`, `/var`, discovery and sidecars are still missing. |

@@ -43,6 +43,12 @@ This passes `header` as a separate prop from `content` — the ordinary children
 
 Props are emitted in a fixed order: the parent tag's own attributes first, in source order, then its attribute-tag children, in source order.
 
+### Repeating the same name
+
+Writing `<@name>` more than once on the same call is allowed, matching Marko (decision 104: MX does exactly what Marko does, measured, not guessed): each host receives every occurrence rather than only the last one, so a callee can iterate them (`<for|it| of=input.item>`) the same way it would a list. Measured against `@marko/compiler`/`marko` 6.3.51: a repeated `<@item>` there is a Marko `attrTag`/`attrTags` object, not a plain array, but both a property read (first occurrence) and a `for..of`/spread (all occurrences) behave the same as MX's per-host shape.
+
+A **custom tag** with its own declared `attributeTags` schema (a `.tag.ts` sidecar) can restrict this: unless its declaration marks the tag `repeatable`, a second `<@name>` is `` `<@name>` may not be repeated ``. This restriction is opt-in per custom tag, not a general rule — an ordinary component call (an `import`ed or `<define>`d one, with no declared schema) always allows a repeat.
+
 ## Collision rules
 
 An attribute tag whose name is already taken — by an explicit attribute on the parent, or by the ordinary children (`children` itself) — is a parse error rather than a silent overwrite:
@@ -50,7 +56,7 @@ An attribute tag whose name is already taken — by an explicit attribute on the
 | Written | Error |
 |---|---|
 | `<@name attr=...>` | attribute tags take params or a body, not attributes |
-| the same `<@name>` twice on one parent | attribute tag given twice (repeatable attribute tags aren't supported) |
+| the same `<@name>` twice, on a **custom tag** whose declared schema doesn't mark it `repeatable` | attribute tag may not be repeated (see "Repeating the same name" above — an ordinary component call has no such restriction) |
 | `<@name>` whose name is already an attribute on the parent | attribute tag collides with attribute of the same name |
 | `<@children>` beside any ordinary child | attribute tag collides with the parent's ordinary children |
 | `<@name>` at the top level, or inside another attribute tag's body | attribute tag outside a tag body / inside another attribute tag |
