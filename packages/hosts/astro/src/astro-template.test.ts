@@ -308,6 +308,16 @@ describe("components and slots", () => {
     );
   });
 
+  // attribute-tag-silent-drops round 2: a repeated `<@item>` used to compile
+  // clean to two `<Fragment slot="item">` siblings, which Astro's own
+  // slot-by-name renderer would silently collapse to one — measured, a real
+  // drop, not merely undocumented.
+  it("rejects a repeated attribute tag, since an Astro slot is keyed by name", () => {
+    expect(
+      errorFor("<Card><@item>a</@item><@item>b</@item></Card>").message,
+    ).toMatch(/is repeated/);
+  });
+
   it("rejects tag params, which Astro has no render-prop form for", () => {
     expect(errorFor("<Card|item|><p>x</p></Card>").message).toMatch(
       /Astro passes markup through slots, not functions/,

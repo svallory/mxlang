@@ -345,6 +345,14 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
 
       write(">");
       if (node.content) drive(emitter, node.content.children);
+      // attribute-tag-silent-drops round 2: Astro's own slot mechanism is
+      // keyed by name, one value per name — a repeated `<@name>` compiled
+      // clean to two `<Fragment slot="name">` siblings, and Astro's renderer
+      // silently keeps only one (measured: the same class of drop as
+      // Angular's `ngComponentOutlet` content limit). Rejected here rather
+      // than reproducing Marko's `attrTag`/`attrTags` shape, since a named
+      // slot has no equivalent to "iterate every occurrence" at all.
+      const seenSlots = new Set<string>();
       for (const tag of node.attributeTags) {
         if (tag.block.params.length > 0) {
           fail(
@@ -352,6 +360,13 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
             tag,
           );
         }
+        if (seenSlots.has(tag.name)) {
+          fail(
+            `\`<@${tag.name}>\` is repeated, but an Astro slot is keyed by name — Astro's renderer would silently keep only one and drop the rest`,
+            tag,
+          );
+        }
+        seenSlots.add(tag.name);
         write(`<Fragment slot="${escapeAttr(tag.name)}">`);
         drive(emitter, tag.block.children);
         write("</Fragment>");
