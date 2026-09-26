@@ -47,10 +47,6 @@ because a tag param opens a genuinely nested scope, the same way an ordinary Jav
 
 is rejected: `<@children>` would silently overwrite the `children` prop (or an explicit attribute of the same name), and MX treats that as an error rather than "last writer wins." See [Attribute tags and tag params](/language/attribute-tags-and-params/) for the full table.
 
-## A dynamic tag name with an attribute tag
-
-Combining a dynamic tag name (`<${expr}>`) with an attribute tag on it is not supported and is reported as such — the two features haven't been connected yet.
-
 ## `class:foo` and `style:foo`
 
 ```html
