@@ -1163,7 +1163,7 @@ class AngularEmitter implements Emitter<string> {
       this.emitDynamicComponent(
         data.expr,
         tag.attrs,
-        tag.children.length > 0,
+        tag.children.length > 0 || tag.attributeTags.length > 0,
         node,
       );
       return;
