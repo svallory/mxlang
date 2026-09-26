@@ -743,7 +743,11 @@ export function createEmitter(): StringEmitter {
           // like any other component call.
           attrs: tag.attrs,
           content,
-          attributeTags: [],
+          // `tag.attributeTags` is what the core already resolved for this
+          // `HostTag` — forwarding it is what keeps `<${expr}><@header>…</@header></>`
+          // from silently dropping the attribute tag (measured against Marko
+          // 6.3.51: attribute tags on a dynamic tag ARE forwarded).
+          attributeTags: tag.attributeTags,
           args: [],
           loc: tag.loc,
         });
