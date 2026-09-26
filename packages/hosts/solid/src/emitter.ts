@@ -449,17 +449,50 @@ function blockExpression(nodes: IrNode[]): MappedCode {
   return concatMapped("<>", renderWithNewEmitter(content), "</>");
 }
 
-function attributeTag(tag: AttributeTag): MappedCode {
+function attributeTagValue(tag: AttributeTag): MappedCode {
   const value = blockExpression(tag.block.children);
-  if (!tag.block.hasParams) {
-    return concatMapped(" ", mapped(tag.name, tag.nameSpan), "={", value, "}");
+  if (!tag.block.hasParams) return value;
+  return concatMapped(`(${tag.block.params.join(", ")}) => `, value);
+}
+
+/**
+ * A component's `<@name>` attribute tags, one JSX prop per distinct name.
+ *
+ * A name given more than once becomes an **array**, exactly as
+ * `@mxlang/preact` does it and matching Marko's own iterable `attrTag`
+ * shape (measured against `@marko/compiler` 5.42.5/`marko` 6.3.51: a
+ * repeated `<@item>` is not last-wins and not a plain array, but its
+ * property access and `for..of` both work the way an array of the same
+ * values would for a callee that only reads or iterates it — see
+ * `notes/briefs/attribute-tag-silent-drops.md`). Emitting the prop twice
+ * (the shape this replaced) let the last one win, so a callee's
+ * `<for|it| of=input.item>` iterated a single node instead of every tag.
+ */
+function attributeTags(tags: AttributeTag[]): MappedCode {
+  const byName = new Map<
+    string,
+    Array<{ tag: AttributeTag; value: MappedCode }>
+  >();
+  for (const tag of tags) {
+    const value = { tag, value: attributeTagValue(tag) };
+    const values = byName.get(tag.name);
+    if (values) values.push(value);
+    else byName.set(tag.name, [value]);
   }
   return concatMapped(
-    " ",
-    mapped(tag.name, tag.nameSpan),
-    `={(${tag.block.params.join(", ")}) => `,
-    value,
-    "}",
+    ...[...byName].map(([name, values]) => {
+      const nameCode = mapped(name, values[0]?.tag.nameSpan ?? null);
+      if (values.length === 1) {
+        return concatMapped(" ", nameCode, "={", values[0]?.value ?? "", "}");
+      }
+      const joined = values.flatMap(({ value }, index) =>
+        index === 0 ? [value] : [", ", value],
+      );
+      // Only the first occurrence's name has a real position in the
+      // generated text; a repeated `<@name>` contributes another array
+      // entry with no name string of its own to map to.
+      return concatMapped(" ", nameCode, "={[", ...joined, "]}");
+    }),
   );
 }
 
@@ -699,7 +732,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const attrs = renderAttrs(node.attrs, true);
-    const tags = concatMapped(...node.attributeTags.map(attributeTag));
+    const tags = attributeTags(node.attributeTags);
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     // A `/var` on a returning unit rides along as a callback prop, and the
     // JSX stays JSX: this host calls components through JSX, so the value
@@ -781,7 +814,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const attrs = renderAttrs(node.attrs, true);
-    const tags = concatMapped(...node.attributeTags.map(attributeTag));
+    const tags = attributeTags(node.attributeTags);
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     if (node.var && lazyScope) {
       fail(
