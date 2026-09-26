@@ -343,6 +343,22 @@ describe("dynamic tags", () => {
     expect(code).toContain("renderDynamic(input.tag");
     expect(code).toContain("function renderDynamic");
   });
+
+  // attribute-tag-silent-drops B2: `renderDynamic` used to receive `{}` for
+  // every attribute tag on a dynamic tag, silently dropping it (measured
+  // against `marko` 6.3.51: attribute tags ARE forwarded to a dynamic tag's
+  // resolved target). `apps/docs/docs/language/errors.md`'s claim that this
+  // case "is reported as such" was also wrong — it compiled clean and lost
+  // the content.
+  it("forwards an attribute tag on a dynamic tag into the renderDynamic call, not `{}`", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+    const { code } = compile(
+      src("<${input.comp}><@header>hi</@header></>"),
+      file,
+    );
+    expect(code).toContain("renderDynamic(input.comp, { header:");
+    expect(code).not.toContain("renderDynamic(input.comp, {  });");
+  });
 });
 
 describe("comments", () => {
