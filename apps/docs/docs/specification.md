@@ -868,29 +868,39 @@ written names, not what a spread holds at runtime, matching JSX's
 
 `children` counts as a name, because ordinary children lower into that prop.
 
-### Repeated `<@name>` (decision 104, `attribute-tag-silent-drops`)
+### Repeated `<@name>` — today's per-host shape (decision 104, `attribute-tag-silent-drops`)
 
 Writing the same `<@name>` more than once on an **ordinary component call**
 (no declared `attributeTags` schema) is allowed — core keeps every
 occurrence, in source order, in `Component.attributeTags`; nothing at the
-core lowering layer rejects or collapses a repeat. Measured against
-`@marko/compiler`/`marko` 6.3.51: Marko does the same, and the resulting
-value there is not a plain array but an iterable `attrTag`/`attrTags`
-object (property access reads the first occurrence; `for..of`/spread yields
-every occurrence). Every MX host now reproduces the same observable
-behavior — a property read gets the first tag, and iterating gets all of
-them — through whatever shape is idiomatic on that target:
+core lowering layer rejects or collapses a repeat.
 
-- **Preact/React/Hono** (shared JSX emitter) and **Solid**: an **array**.
-  `input.item.length`/`Array.isArray` therefore differ from real Marko for a
-  repeat (Marko's `attrTag` has neither), a narrower gap than the
-  previous last-wins bug and out of this task's scope — see §15.
-- **HTML**: an array too (`item: [fn1, fn2]`), same divergence.
+Today's per-host value shape, factually, with no claim of Marko parity:
 
-A **custom tag** with its own declared `attributeTags` schema restricts this:
-unless a name's declaration sets `repeatable: true`, a second `<@name>` is
-`` `<@name>` may not be repeated `` (§9/§13.1). This restriction is opt-in
-per custom tag and does not apply to an ordinary component call.
+- **HTML, Preact, React, Hono, Solid**: a single `<@name>` is its plain
+  renderable value; a repeated `<@name>` is an **array** of that value, in
+  source order — which is what lets a callee write
+  `<for|it| of=input.item>` over the repeat.
+- **Angular**: an attribute-tag-only dynamic-tag body is rejected outright
+  (`ngComponentOutlet` has no content-projection mechanism); elsewhere,
+  same array shape.
+- **Astro**: a repeated `<@name>` is rejected outright, since an Astro slot
+  is keyed by name and its renderer would silently keep only one occurrence.
+
+**Attribute-tag value shape and cardinality is being redesigned under
+decision 106** (upcoming): the consumer's `Input` type will declare the
+cardinality/shape it expects for a given attribute-tag name, and MX will
+honor that declaration — a deliberate divergence from Marko's own
+`attrTag`/`attrTags` runtime shape (an iterable record whose property read
+hits the first occurrence), not an attempt to reproduce it. This section
+will be rewritten once decision 106 lands; until then, the array-for-a-repeat
+behavior above is what ships.
+
+A **custom tag** with its own declared `attributeTags` schema restricts
+repeats: unless a name's declaration sets `repeatable: true`, a second
+`<@name>` is `` `<@name>` may not be repeated `` (§9/§13.1). This
+restriction is opt-in per custom tag and does not apply to an ordinary
+component call.
 
 ### Deferred to MX 2
 
@@ -1569,9 +1579,8 @@ deferred (decision 85).
 2. **Dynamic tags** (§7). No decision fixes their behavior; hosts may claim them.
    The attribute-tag-on-a-dynamic-tag silent drop on the HTML host (and on
    Solid's own dynamic-tag path, which shares the bug) is fixed: both now
-   forward the attribute tags into the resolved target's props, matching
-   Marko 6.3.51 (measured: it forwards them too — decision 104,
-   `attribute-tag-silent-drops`).
+   forward the attribute tags into the resolved target's props (decision
+   104, `attribute-tag-silent-drops`).
 3. **`--` text lines** (§3). Legal by inheritance, untested — no fixture.
 4. **`.solid.mx` as a final spelling** (§1). Left "for now" three times, never
    ruled on.
@@ -1582,15 +1591,14 @@ deferred (decision 85).
    and the custom-tags spec's substitution design. Decision 94d is explicitly
    awaiting his ruling; decision 92 is marked "Saulo may veto"; decision 65's
    policy statement is marked "lead's assumption, Saulo to confirm".
-8. **Repeated `<@name>` is an array on every MX host, not Marko's iterable
-   `attrTag`/`attrTags` object** (§8, decision 104). Fixing the two silent
-   drops this task was scoped to (Solid's last-wins, HTML's dynamic-tag
-   `renderDynamic({})`) surfaced this narrower, pre-existing divergence: a
-   callee that reads `input.item.length` or calls `Array.isArray(input.item)`
-   sees different results than real Marko would for the same template.
-   Out of scope for `attribute-tag-silent-drops` (the brief scoped B1 to the
-   last-wins bug specifically); needs its own ruling on whether to special-case
-   an iterable-but-not-array shape or accept the divergence.
+8. **Attribute-tag value shape and cardinality is under redesign** (§8,
+   decision 104, superseded by upcoming decision 106,
+   `attribute-tag-silent-drops`). Every host currently emits a plain array
+   for a repeated `<@name>` and a bare value for a single one. Decision 106
+   will have the consumer's `Input` type declare the cardinality/shape it
+   expects per attribute-tag name, a deliberate divergence from Marko's own
+   `attrTag`/`attrTags` runtime shape rather than an attempt to reproduce
+   it. §8 will be rewritten once that decision lands.
 
 ---
 

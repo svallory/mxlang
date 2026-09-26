@@ -45,9 +45,13 @@ Props are emitted in a fixed order: the parent tag's own attributes first, in so
 
 ### Repeating the same name
 
-Writing `<@name>` more than once on the same call is allowed, matching Marko (decision 104: MX does exactly what Marko does, measured, not guessed): each host receives every occurrence rather than only the last one, so a callee can iterate them (`<for|it| of=input.item>`) the same way it would a list. Measured against `@marko/compiler`/`marko` 6.3.51: a repeated `<@item>` there is a Marko `attrTag`/`attrTags` object, not a plain array, but both a property read (first occurrence) and a `for..of`/spread (all occurrences) behave the same as MX's per-host shape.
+Writing `<@name>` more than once on the same call is allowed (decision 104): a repeat is not last-wins — each host receives every occurrence.
 
-A **custom tag** with its own declared `attributeTags` schema (a `.tag.ts` sidecar) can restrict this: unless its declaration marks the tag `repeatable`, a second `<@name>` is `` `<@name>` may not be repeated ``. This restriction is opt-in per custom tag, not a general rule — an ordinary component call (an `import`ed or `<define>`d one, with no declared schema) always allows a repeat.
+Today's behavior, factually, per host: a single `<@name>` is its plain renderable value, and a repeated `<@name>` is an **array** of that value in source order, on HTML, Preact, React, Hono and Solid — so a callee can iterate them (`<for|it| of=input.item>`) the same way it would iterate any array. Angular rejects an attribute-tag-only dynamic-tag body outright (`ngComponentOutlet` has no content-projection mechanism). Astro rejects a *repeated* `<@name>` outright, since an Astro slot is keyed by name and its renderer would otherwise silently keep only one occurrence.
+
+**This shape is being redesigned under decision 106** (upcoming): the consumer's `Input` type will declare the cardinality/shape it expects for a given attribute-tag name — a deliberate divergence from Marko's own runtime shape (an iterable record whose property read always hits the first occurrence), not an attempt to match it. This page will be updated once that decision lands.
+
+A **custom tag** with its own declared `attributeTags` schema (a `.tag.ts` sidecar) can restrict repeats: unless its declaration marks the tag `repeatable`, a second `<@name>` is `` `<@name>` may not be repeated ``. This restriction is opt-in per custom tag, not a general rule — an ordinary component call (an `import`ed or `<define>`d one, with no declared schema) always allows a repeat.
 
 ## Collision rules
 
