@@ -126,6 +126,19 @@ describe("Component dynamic target (via HostTag routing)", () => {
     );
   });
 
+  // attribute-tag-silent-drops round 2: an attribute-tag-only body (no
+  // ordinary children) used to slip past the `hasContent` check — measured,
+  // `<${Cmp}><@header>hi</@header></>` compiled clean to a bare
+  // `[ngComponentOutlet]="Cmp"` with the attribute tag silently gone, no
+  // warning. `ngComponentOutlet` has no content-projection mechanism at all
+  // (same limit the ordinary-content case already reports), so this is the
+  // same error, not a new one.
+  it("rejects an attribute-tag-only body on a dynamic component the same way", () => {
+    expect(() => emit("<${Cmp}><@header>hi</@header></>")).toThrow(
+      /ngComponentOutletContent/,
+    );
+  });
+
   it("escapes a quote in a static input without corrupting the outlet binding", () => {
     // A plain `"${attr.value}"` (no JS-layer escaping) let an unescaped `"`
     // in the attribute value close the JS object literal early, corrupting
