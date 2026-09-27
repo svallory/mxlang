@@ -22,10 +22,12 @@ export type {
 export {
   type AttrTagDecl,
   type CalleeInput,
+  type CalleeInputReader,
   type CalleeInputResult,
   type ResolveContext,
   readCalleeInput,
   readOwnInput,
+  registerCalleeInputReader,
   resetCalleeInputCache,
   resolveSpecifier,
 } from "./callee-input.ts";

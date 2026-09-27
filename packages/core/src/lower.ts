@@ -23,6 +23,7 @@
  * walk enters and leaves each binding construct, exactly as before.
  */
 
+import { readFileSync } from "node:fs";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
@@ -629,6 +630,80 @@ function schemaFor(input: CalleeInput, owner: string): AttrSchema {
     };
   }
   return { open: true, owner };
+}
+
+function spanPosition(
+  ctx: Ctx,
+  span: { file?: string; sourceStart: number },
+): { file: string; line: number; column: number } {
+  const file = span.file ?? ctx.filename;
+  let source = ctx.source;
+  if (file !== ctx.filename) {
+    try {
+      source = readFileSync(file, "utf8");
+    } catch {
+      source = "";
+    }
+  }
+  const before = source.slice(0, span.sourceStart);
+  const line = before.split("\n").length;
+  const lastLine = before.lastIndexOf("\n");
+  return {
+    file,
+    line,
+    column: span.sourceStart - lastLine,
+  };
+}
+
+function cleanParseMessage(message: string): string {
+  return message.replace(/\s*\(\d+:\d+\)\s*$/, "");
+}
+
+/** Raises only an invalid declaration used by this particular call site. */
+function raiseInvalidCalleeInput(
+  ctx: Ctx,
+  input: CalleeInput,
+  owner: string,
+  tags: AttributeTag[],
+): void {
+  if (input.kind !== "invalid" || tags.length === 0) return;
+  const firstTag = tags[0];
+  if (!firstTag) return;
+  const parseError = input.errors.get("<parse>");
+  if (parseError) {
+    const position = spanPosition(ctx, parseError.span);
+    fail(
+      `can't read \`<${owner}>\`'s Input (${position.file}:${position.line}:${position.column}): ${cleanParseMessage(parseError.message)}`,
+      { loc: { start: attributeTagNamePosition(ctx, firstTag) } },
+    );
+  }
+  for (const tag of tags) {
+    const entry = [...input.errors].find(
+      ([name]) => name === tag.name || name.startsWith(`${tag.name}.`),
+    );
+    if (!entry) continue;
+    const [name, error] = entry;
+    const position = spanPosition(ctx, error.span);
+    fail(
+      `can't read \`<${owner}>\`'s declaration of \`${name}\` (${position.file}:${position.line}); ${error.message}`,
+      { loc: { start: attributeTagNamePosition(ctx, tag) } },
+    );
+  }
+}
+
+/** A component's own malformed Input is an error even before it is called. */
+function raiseInvalidOwnInput(ctx: Ctx, input: CalleeInput): void {
+  if (input.kind !== "invalid") return;
+  const [name, error] = input.errors.entries().next().value ?? [];
+  if (!name || !error) return;
+  const position = spanPosition(ctx, error.span);
+  const message =
+    name === "<parse>"
+      ? `can't read this component's Input (${position.file}:${position.line}:${position.column}): ${cleanParseMessage(error.message)}`
+      : `can't read this component's declaration of \`${name}\` (${position.file}:${position.line}); ${error.message}`;
+  fail(message, {
+    loc: { start: positionAtOffset(ctx, error.span.sourceStart) },
+  });
 }
 
 function declarationFor(
@@ -1437,6 +1512,12 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
     node,
     schemaFor(resolvedInput, targetName(target)),
   );
+  raiseInvalidCalleeInput(
+    ctx,
+    resolvedInput,
+    targetName(target),
+    loweredTags.flat,
+  );
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(node));
   const children = lowerChildren(ctx, loweredTags.contentChildren);
@@ -1632,6 +1713,7 @@ function lowerCustomTag(
     ? (ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input)
     : ({ kind: "none" } as const);
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, name));
+  raiseInvalidCalleeInput(ctx, input, name, loweredTags.flat);
   const children = loweredTags.contentChildren;
   const call: TagCall = {
     name,
@@ -1698,17 +1780,7 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     });
   }
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, owner));
-  if (input.kind === "invalid" && loweredTags.flat.length > 0) {
-    const tag = loweredTags.flat[0]!;
-    const invalid =
-      input.errors.get(tag.name) ?? input.errors.values().next().value;
-    if (invalid) {
-      fail(
-        `can't read \`<${owner}>\`'s Input (${invalid.span.file ?? input.path}): ${invalid.message}`,
-        { loc: { start: attributeTagNamePosition(ctx, tag) } },
-      );
-    }
-  }
+  raiseInvalidCalleeInput(ctx, input, owner, loweredTags.flat);
   const children = loweredTags.contentChildren;
   return {
     kind: "Component",
@@ -1804,8 +1876,6 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
     const dynamicExpr = exprOf(ctx, node.name);
     const member = /^input\.([A-Za-z_$][\w$]*)$/.exec(dynamicExpr.code);
-    // TODO(attr-tags-post-1a): populate ownInput from task 1a's reader when
-    // rebasing, so this callee-side check is reachable outside test seams.
     if (member && ctx.ownInput?.kind === "declared") {
       const declaration = ctx.ownInput.attrTags.get(member[1] as string);
       if (declaration?.as === "data") {
@@ -2128,8 +2198,9 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
   ctx.ownInput ??= readOwnInput(
     ctx,
     ownInputCode.join("\n") || undefined,
-    ownInputAux.join("\n") || undefined,
+    ownInputAux,
   );
+  raiseInvalidOwnInput(ctx, ctx.ownInput);
 
   // The file root owns the collecting hooks; a tag template's own lower is
   // handed the caller's stores and must not run them a second time.

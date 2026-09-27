@@ -117,8 +117,27 @@ export interface CalleeInputResult {
   dependencies: string[];
 }
 
+/**
+ * A host-owned parser for a compound component extension.
+ *
+ * Core deliberately does not import every surrounding-language parser. The
+ * host parses its module and hands the resulting Babel-compatible top-level
+ * nodes back to the shared syntactic Input analyzer.
+ */
+export type CalleeInputReader = (request: {
+  path: string;
+  source: string;
+  analyze(program: readonly unknown[]): CalleeInput;
+}) => CalleeInput;
+
 const MAX_ALIAS_DEPTH = 4;
 const MAX_CACHED_CALLEES = 256;
+const calleeInputReaders = new Map<string, CalleeInputReader>();
+const resolverIds = new WeakMap<
+  NonNullable<ResolveContext["resolveImport"]>,
+  number
+>();
+let nextResolverId = 1;
 
 const calleeCache = new Map<
   string,
@@ -136,6 +155,28 @@ const calleeCache = new Map<
 /** Clears the callee-input cache. Test-only: production reads are mtime-keyed. */
 export function resetCalleeInputCache(): void {
   calleeCache.clear();
+}
+
+/** Registers the Input reader for one compound extension (longest match wins). */
+export function registerCalleeInputReader(
+  extension: string,
+  reader: CalleeInputReader,
+): void {
+  calleeInputReaders.set(extension, reader);
+  resetCalleeInputCache();
+}
+
+function cacheKey(
+  path: string,
+  resolver: ResolveContext["resolveImport"],
+): string {
+  if (!resolver) return `${path}\0default`;
+  let id = resolverIds.get(resolver);
+  if (id === undefined) {
+    id = nextResolverId++;
+    resolverIds.set(resolver, id);
+  }
+  return `${path}\0resolver:${id}`;
 }
 
 /**
@@ -180,9 +221,8 @@ export function readCalleeInput(
     return { input: { kind: "none", path: resolved.path }, dependencies: [] };
   }
 
-  const cached = context.resolveImport
-    ? undefined
-    : calleeCache.get(resolved.path);
+  const key = cacheKey(resolved.path, context.resolveImport);
+  const cached = calleeCache.get(key);
   if (
     cached &&
     cached.mtimeMs === mtimeMs &&
@@ -225,10 +265,10 @@ export function readCalleeInput(
       dependencies: [resolved.path],
     };
   }
-  if (!context.resolveImport && !pending) {
+  if (!pending) {
     touchAndEvict(
       calleeCache,
-      resolved.path,
+      key,
       {
         mtimeMs,
         source,
@@ -332,6 +372,7 @@ function probeFile(base: string, probes?: string[]): string | undefined {
   for (const candidate of [
     base,
     ...EXTENSION_PROBES.map((ext) => base + ext),
+    ...["", ...EXTENSION_PROBES].map((ext) => resolvePath(base, `index${ext}`)),
   ]) {
     probes?.push(candidate);
     try {
@@ -363,10 +404,20 @@ export function resolveSpecifier(
   if (context.resolveImport) {
     const aliased = context.resolveImport(specifier, importer);
     if (typeof aliased === "string") {
-      const probed = probeFile(
-        isAbsolute(aliased) ? aliased : resolvePath(dirname(importer), aliased),
-        probes,
-      );
+      const probed =
+        isAbsolute(aliased) || aliased.startsWith(".")
+          ? probeFile(
+              isAbsolute(aliased)
+                ? aliased
+                : resolvePath(dirname(importer), aliased),
+              probes,
+            )
+          : resolveSpecifier(
+              aliased,
+              { ...context, resolveImport: undefined },
+              importer,
+              probes,
+            );
       if (probed) return probed;
     }
   }
@@ -409,6 +460,41 @@ function readInputAt(
   parsedSources: Map<string, string>;
 } {
   const parsedSources = new Map<string, string>([[path, source]]);
+  const readerEntry = [...calleeInputReaders]
+    .sort(([left], [right]) => right.length - left.length)
+    .find(([extension]) => path.endsWith(extension));
+  if (readerEntry) {
+    const dependencies = [path];
+    const analyzer = new InputAnalyzer(
+      path,
+      source,
+      dependencies,
+      context,
+      parsedSources,
+    );
+    const input = readerEntry[1]({
+      path,
+      source,
+      analyze(program) {
+        analyzer.addNodes(program as Node[]);
+        const declaration = analyzer.findInput(false);
+        return declaration
+          ? analyzer.analyzeInput(declaration)
+          : { kind: "none", path };
+      },
+    });
+    return { input, dependencies, parsedSources };
+  }
+  // Compound hosts are ordinary TypeScript modules, not Marko templates.
+  // Until their package registers a reader, an absent schema is the safe
+  // fallback and must never become an invalid Marko parse.
+  if (path.endsWith(".solid.mx")) {
+    return {
+      input: { kind: "none", path },
+      dependencies: [path],
+      parsedSources,
+    };
+  }
   if (path.endsWith(".mx")) {
     if (!context.ctx) {
       // A `.mx` callee's Input is read through the template-metadata cache,
@@ -498,11 +584,14 @@ function readInputFromText(
 export function readOwnInput(
   ctx: Ctx,
   inputCode: string | undefined,
-  auxCode: string | undefined,
+  auxCode: string | readonly string[] | undefined,
 ): CalleeInput {
+  const auxUnits = typeof auxCode === "string" ? [auxCode] : (auxCode ?? []);
   if (
     inputCode === undefined &&
-    !/(?:^|\n)\s*(?:interface|type)\s+Input\b/.test(auxCode ?? "")
+    !auxUnits.some((unit) =>
+      /(?:^|\n)\s*(?:interface|type)\s+Input\b/.test(unit),
+    )
   ) {
     return { kind: "none", path: ctx.filename };
   }
@@ -518,7 +607,7 @@ export function readOwnInput(
     },
     new Map([[ctx.filename, ctx.source]]),
   );
-  for (const unit of (auxCode ?? "").split("\n")) {
+  for (const unit of auxUnits) {
     if (!unit.trim()) continue;
     try {
       analyzer.addAux(unit);
@@ -572,6 +661,11 @@ class InputAnalyzer {
     for (const node of parseDeclarationModule(code, this.path)) {
       this.addNode(node, this.path, offset);
     }
+  }
+
+  /** Merges already-parsed Babel-compatible top-level nodes. */
+  addNodes(nodes: readonly Node[]): void {
+    for (const node of nodes) this.addNode(node, this.path);
   }
 
   /**
@@ -1174,7 +1268,18 @@ class InputAnalyzer {
         seen,
         propertyDepth,
       );
-      if (!resolved) return undefined; // An unresolvable reference is an ordinary prop.
+      if (!resolved) {
+        return this.namedTypeEventuallyContainsAttrTag(
+          node.typeName.name,
+          this.nodeFiles.get(node) ?? this.path,
+          new Set(),
+        )
+          ? {
+              message: "declare this attribute tag's config literally",
+              span: this.spanOf(type),
+            }
+          : undefined; // An unrelated unresolvable reference is an ordinary prop.
+      }
       const aliasDecl = resolved.node;
       const aliasType =
         aliasDecl.type === "TSTypeAliasDeclaration"
@@ -1306,6 +1411,36 @@ class InputAnalyzer {
       };
     }
     return decl;
+  }
+
+  /** Detects an AttrTag hidden beyond the supported property-alias depth. */
+  private namedTypeEventuallyContainsAttrTag(
+    name: string,
+    fromPath: string,
+    seen: Set<string>,
+  ): boolean {
+    const key = `${fromPath}::${name}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    const resolved =
+      this.declarations.get(key) ??
+      this.resolveNamedType(name, fromPath, new Set(), 0);
+    const declaration = resolved?.node;
+    const type =
+      declaration?.type === "TSTypeAliasDeclaration"
+        ? declaration.typeAnnotation
+        : undefined;
+    if (!type) return false;
+    if (containsAttrTag(type)) return true;
+    return (
+      type.type === "TSTypeReference" &&
+      type.typeName.type === "Identifier" &&
+      this.namedTypeEventuallyContainsAttrTag(
+        type.typeName.name,
+        resolved?.fromPath ?? fromPath,
+        seen,
+      )
+    );
   }
 
   /**
