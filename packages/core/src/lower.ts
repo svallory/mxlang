@@ -560,10 +560,15 @@ interface LoweredAttributeTags {
   contentChildren: Node[];
 }
 
-function requireAttrTagsV2(ctx: Ctx, construct: string, node: Node): void {
+function requireAttrTagsV2(
+  ctx: Ctx,
+  construct: string,
+  verb: "isn't" | "aren't",
+  node: Node,
+): void {
   if (ctx.declarations.attrTags === 2) return;
   fail(
-    `${construct} isn't supported by ${ctx.declarations.name ?? "the current host"} yet`,
+    `${construct} ${verb} supported by ${ctx.declarations.name ?? "the current host"} yet`,
     node,
   );
 }
@@ -805,7 +810,12 @@ function planAttributeTags(
         cardinality !== flatCardinality ||
         (cardinality === "array" && range.max === 0))
     ) {
-      requireAttrTagsV2(ctx, `the declared shape of \`<@${name}>\``, ownerNode);
+      requireAttrTagsV2(
+        ctx,
+        `the declared shape of \`<@${name}>\``,
+        "isn't",
+        ownerNode.name ?? ownerNode,
+      );
     }
     return {
       name,
@@ -836,7 +846,12 @@ function lowerOneAttributeTag(
     );
   }
   if (attrs.length > 0) {
-    requireAttrTagsV2(ctx, "attributes on an attribute tag", attrs[0]);
+    requireAttrTagsV2(
+      ctx,
+      `\`<@${name}>\`: attributes on attribute tags`,
+      "aren't",
+      attrs[0],
+    );
   }
   if (declaration?.as === "renderable" && attrs.length > 0) {
     fail(
@@ -877,7 +892,8 @@ function lowerOneAttributeTag(
   if (nested.flat.length > 0) {
     requireAttrTagsV2(
       ctx,
-      "nested attribute tags",
+      `\`<@${name}>\`: nested attribute tags`,
+      "aren't",
       node.attributeTags?.[0] ?? node,
     );
     if (declaration?.as === "renderable") {
@@ -906,7 +922,7 @@ function lowerAttributeFor(
   node: Node,
   schema: AttrSchema,
 ): AttributeTagNode {
-  requireAttrTagsV2(ctx, "an attribute tag inside `<for>`", node);
+  requireAttrTagsV2(ctx, "attribute tags inside `<for>`", "aren't", node);
   const loop = lowerForHead(ctx, node, true);
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, loop.bindings);
@@ -928,7 +944,7 @@ function lowerAttributeIf(
   schema: AttrSchema,
 ): [AttributeTagNode, number] {
   const first = siblings[index];
-  requireAttrTagsV2(ctx, "an attribute tag inside `<if>`", first);
+  requireAttrTagsV2(ctx, "attribute tags inside `<if>`", "aren't", first);
   const branches: Array<{
     test?: Expr;
     span: SourceSpan;
@@ -1518,9 +1534,19 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   return { kind: "Text", value: "", loc: posOf(node) };
 }
 
-function rejectCustomAttributeTagShapes(ownerName: string, node: Node): void {
+function rejectCustomAttributeTagShapes(
+  ownerName: string,
+  node: Node,
+  controlName?: string,
+): void {
   for (const tag of node.attributeTags ?? []) {
     const name = attrName(tag);
+    if (controlName) {
+      fail(
+        `\`<${ownerName}>\`: attribute tag \`<@${name}>\` may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve attribute-tag control flow`,
+        tag.name ?? tag,
+      );
+    }
     const attrs = tag.attributes ?? [];
     if (attrs.length > 0) {
       fail(
@@ -1537,7 +1563,20 @@ function rejectCustomAttributeTagShapes(ownerName: string, node: Node): void {
     }
   }
   for (const child of node.body?.body ?? []) {
-    if (isControl(child)) rejectCustomAttributeTagShapes(ownerName, child);
+    const childName = child.name?.value;
+    if (
+      child.type === "MarkoTag" &&
+      (childName === "if" ||
+        childName === "else-if" ||
+        childName === "else" ||
+        childName === "for")
+    ) {
+      rejectCustomAttributeTagShapes(
+        ownerName,
+        child,
+        childName === "for" ? "for" : "if",
+      );
+    }
   }
 }
 
@@ -1684,36 +1723,65 @@ function targetName(target: ComponentTarget): string {
   return target.kind === "dynamic" ? "dynamic tag" : target.name;
 }
 
-function referencesUnboundAttrTagType(typeText: string): boolean {
-  if (!typeText.trim()) return false;
-  try {
-    const { parse, traverse } = markoBabel();
-    const file = parse(typeText, {
-      sourceType: "module",
-      plugins: ["typescript"],
-    });
-    let declaredLocally = false;
-    let referenced = false;
-    traverse(file, {
-      TSTypeAliasDeclaration(path: Node) {
-        if (path.node.id?.name === "AttrTag") declaredLocally = true;
-      },
-      TSInterfaceDeclaration(path: Node) {
-        if (path.node.id?.name === "AttrTag") declaredLocally = true;
-      },
-      TSTypeReference(path: Node) {
-        if (
-          path.node.typeName?.type === "Identifier" &&
-          path.node.typeName.name === "AttrTag"
-        ) {
-          referenced = true;
-        }
-      },
-    });
-    return referenced && !declaredLocally;
-  } catch {
-    return false;
+function referencesUnboundAttrTagType(typeUnits: string[]): boolean {
+  const { parse, traverse } = markoBabel();
+  let declaredLocally = false;
+  let referenced = false;
+  for (const typeText of typeUnits) {
+    if (!typeText.trim()) continue;
+    try {
+      const file = parse(typeText, {
+        sourceType: "module",
+        plugins: ["typescript"],
+        errorRecovery: true,
+      });
+      traverse(file, {
+        ImportDeclaration(path: Node) {
+          if (
+            path.node.specifiers?.some(
+              (specifier: Node) => specifier.local?.name === "AttrTag",
+            )
+          ) {
+            declaredLocally = true;
+          }
+        },
+        ClassDeclaration(path: Node) {
+          if (path.node.id?.name === "AttrTag") declaredLocally = true;
+        },
+        TSEnumDeclaration(path: Node) {
+          if (path.node.id?.name === "AttrTag") declaredLocally = true;
+        },
+        TSTypeAliasDeclaration(path: Node) {
+          if (path.node.id?.name === "AttrTag") declaredLocally = true;
+        },
+        TSInterfaceDeclaration(path: Node) {
+          if (path.node.id?.name === "AttrTag") declaredLocally = true;
+        },
+        TSTypeReference(path: Node) {
+          if (
+            path.node.typeName?.type === "Identifier" &&
+            path.node.typeName.name === "AttrTag"
+          ) {
+            referenced = true;
+          }
+        },
+        TSExpressionWithTypeArguments(path: Node) {
+          if (
+            path.node.expression?.type === "Identifier" &&
+            path.node.expression.name === "AttrTag"
+          ) {
+            referenced = true;
+          }
+        },
+      });
+    } catch {
+      // Type syntax in an independent static unit must not suppress a valid
+      // Input reference. If Babel cannot recover, conservatively request the
+      // import whenever this unit contains the standalone type name.
+      if (/\bAttrTag\b/.test(typeText)) referenced = true;
+    }
   }
+  return referenced && !declaredLocally;
 }
 
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
@@ -2119,7 +2187,7 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
 
   ir.imports.push(...(ctx.customTagImportNodes ?? []));
 
-  const typeText = [
+  const typeUnits = [
     ir.inputInterface?.code ?? "",
     ...ir.hoisted
       .filter(
@@ -2127,9 +2195,9 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
           node.kind === "Static",
       )
       .map((node) => node.code),
-  ].join("\n");
+  ];
   ir.needsAttrTagImport =
-    referencesUnboundAttrTagType(typeText) && !ctx.imports.has("AttrTag");
+    referencesUnboundAttrTagType(typeUnits) && !ctx.imports.has("AttrTag");
 
   if (isFileRoot && ctx.customTags) {
     // Prepended as one block, after the body is assembled: a `finalize` node

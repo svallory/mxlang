@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { compileHonoMx } from "./index.ts";
+import { compileHonoMx, honoDeclarations, honoTarget } from "./index.ts";
 
 function compile(source: string): string {
   return compileHonoMx(source, "/fixtures/test.mx").code;
 }
+
+it("keeps framework diagnostics separate from host capability diagnostics", () => {
+  expect(honoTarget.name).toBe("Hono");
+  expect(honoDeclarations.name).toBe("@mxlang/hono");
+});
 
 function markup(source: string): string {
   const match = compile(source).match(/return \(<>([\s\S]*)<\/>\);/);

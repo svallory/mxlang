@@ -70,6 +70,37 @@ function components(
 }
 
 describe("template custom tags as compilation units", () => {
+  it.each([
+    [
+      "missing required attribute tags",
+      "<panel/>",
+      { item: { required: true } },
+      "missing required attribute tag `<@item>`",
+    ],
+    [
+      "repeated non-repeatable attribute tags",
+      "<panel><@item/><@item/></panel>",
+      { item: {} },
+      "attribute tag `<@item>` may not be repeated",
+    ],
+    [
+      "unknown attribute tags",
+      "<panel><@other/></panel>",
+      { item: {} },
+      "unknown attribute tag `<@other>`",
+    ],
+  ])(
+    "enforces sidecar contracts on template tags: %s",
+    (_case, source, attributeTags, message) => {
+      const panel = template(
+        "/tmp/mx-template-test/tags/panel.mx",
+        "<${input.item}/>",
+        { attributeTags },
+      );
+      expect(() => lowerWithTags(source, { panel })).toThrowError(message);
+    },
+  );
+
   it("routes attributes, spread, body and attribute tags through a component", () => {
     const box = template(
       "/tmp/mx-template-test/tags/box.mx",
@@ -297,6 +328,32 @@ describe("template custom tags as compilation units", () => {
     );
     expect(warnings).toEqual([]);
     expect(templateCompileCount()).toBe(1);
+  });
+
+  it("rebuilds a template plan when its sidecar replaces attribute tags", () => {
+    const panel = template(
+      "/tmp/mx-template-test/tags/filter-panel.mx",
+      "<section><${input.item}/></section>",
+      {
+        attributeTags: { item: {}, other: {} },
+        transform(call) {
+          return {
+            ...call,
+            attributeTags: call.attributeTags.filter(
+              (tag) => tag.name !== "other",
+            ),
+          };
+        },
+      },
+    );
+    const call = components(
+      lowerWithTags("<panel><@item/><@other/></panel>\n", { panel }).body,
+    )[0];
+    expect(call?.attributeTags.map((tag) => tag.name)).toEqual(["item"]);
+    expect(call?.attributeTagTree).toMatchObject([
+      { kind: "AttributeTag", tag: { name: "item" } },
+    ]);
+    expect(call?.attrTagProps.map((prop) => prop.name)).toEqual(["item"]);
   });
 
   it("compiles metadata for a template containing static", () => {

@@ -1086,18 +1086,40 @@ describe("core-owned custom tags", () => {
     ]);
   });
 
-  it("extracts controlled attribute tags while preserving sibling content", () => {
-    const ir = lowerWithTags(
+  it.each([
+    [
+      "if",
       "<try><if=input.waiting><@placeholder>wait</@placeholder></if><p>body</p></try>\n",
-      {},
-      { ...tryDeclarations, attrTags: 2 },
-    );
-    const hostTag = find(ir.body, "HostTag");
-    expect(hostTag.tag.attributeTags.map((tag) => tag.name)).toEqual([
-      "placeholder",
-    ]);
-    expect(find(hostTag.tag.children, "Element").name).toBe("p");
-  });
+      24,
+    ],
+    [
+      "for",
+      "<try><for|item| of=input.items><@placeholder>wait</@placeholder></for><p>body</p></try>\n",
+      32,
+    ],
+    [
+      "if",
+      "<try><if=input.waiting><p/></if><else><@placeholder>wait</@placeholder></else></try>\n",
+      39,
+    ],
+  ])(
+    "rejects controlled attribute tags under <%s>",
+    (control, source, column) => {
+      let error: unknown;
+      try {
+        lowerWithTags(source, {}, { ...tryDeclarations, attrTags: 2 });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: expect.stringContaining(
+          `attribute tag \`<@placeholder>\` may not appear inside \`<${control}>\``,
+        ),
+        line: 1,
+        column,
+      });
+    },
+  );
 
   it.each([
     [

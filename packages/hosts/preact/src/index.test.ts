@@ -12,12 +12,17 @@
 import type { CustomTag } from "@mxlang/core";
 import { h } from "preact";
 import { describe, expect, it } from "vitest";
-import { compilePreactMx } from "./index.ts";
+import { compilePreactMx, preactDeclarations, preactTarget } from "./index.ts";
 
 /** Compiles one template and returns the emitted module. */
 function compile(source: string): string {
   return compilePreactMx(source, "/fixtures/test.mx").code;
 }
+
+it("keeps framework diagnostics separate from host capability diagnostics", () => {
+  expect(preactTarget.name).toBe("Preact");
+  expect(preactDeclarations.name).toBe("@mxlang/preact");
+});
 
 /** The body of the emitted component's `return (…)`, without the wrapper. */
 function markup(source: string): string {
@@ -699,7 +704,7 @@ describe("stateful Marko tags are errors naming the Preact equivalent", () => {
 
   it("rejects a document type, which belongs in the HTML shell", () => {
     expect(errorOf("<!doctype html>\n<p>x</p>")).toContain(
-      "cannot appear in a @mxlang/preact component",
+      "cannot appear in a Preact component",
     );
   });
 });
@@ -815,7 +820,7 @@ describe("a unit that returns a value", () => {
   it("rejects /var inside <if>", () => {
     expect(() =>
       callerCode("<if=true><counter/n start=1/><p>${n}</p></if>"),
-    ).toThrow(/is not supported on @mxlang\/preact yet/);
+    ).toThrow(/is not supported on Preact yet/);
   });
 
   it("still allows a call with no /var inside <for>", () => {
