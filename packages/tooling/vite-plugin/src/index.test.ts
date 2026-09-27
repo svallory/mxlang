@@ -321,6 +321,24 @@ describe("mx()", () => {
   });
 
   describe("transform", () => {
+    it("loads the Solid Input reader before compiling a .mx caller", async () => {
+      const solid = `export interface Input {
+  item?: AttrTag<{ as: "renderable" }>;
+}
+export default () => <div />;
+`;
+      const solidPath = writeMx("Card.solid.mx", solid);
+      const callerPath = join(dirname(solidPath), "caller.mx");
+      const caller = `import Card from "./Card.solid.mx"
+<Card><@item/><@item/></Card>
+`;
+      writeFileSync(callerPath, caller);
+
+      await expect(
+        transformOf(mx()).call({}, caller, callerPath + MX_SUFFIX),
+      ).rejects.toThrow("`<@item>` may appear at most once");
+    }, 20_000);
+
     it("prints a .solid.mx module to JSX text plus a map", async () => {
       const path = writeMx("Counter.solid.mx", COUNTER);
       const transform = transformOf(mx());
