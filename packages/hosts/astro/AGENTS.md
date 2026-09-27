@@ -136,10 +136,12 @@ without Astro mode, `.amx` files are ignored.
 This host declares `attrTags: 2`; `.amx` emits only core's resolved
 `attrTagProps` plan. A singular tag is a `<Fragment slot="name">`, and a
 singular plan under `<if>`/`<else if>`/`<else>` becomes a conditional named
-slot so Astro receives only the taken branch. Arrays (including a declared
+slot so Astro receives only the taken branch, including nested conditionals
+and empty branches. Arrays (including a declared
 `AttrTag[]` with no occurrences), attributes, params, and nested attribute
 tags are positioned errors naming `@mxlang/astro`: an Astro slot is keyed by
-one name and carries rendered markup only.
+one name and carries rendered markup only. A bodiless `<@name/>` is also an
+error because there is no markup to project.
 
 Astro's renderer gives a named slot one observable payload, `() => string`.
 `renderToStaticMarkup` also installs that same thunk as its own `.content`

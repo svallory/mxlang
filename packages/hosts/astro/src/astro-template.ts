@@ -146,7 +146,7 @@ const declarations: HostDeclarations = {
     // host-specific error rather than the bare shape silently becoming an
     // interpolation.
     fail(
-      "a dynamic tag name (`<${expr}>`) is not supported in an `.amx` template; Astro resolves component names statically",
+      "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/astro: Astro resolves component names statically",
       node,
     );
   },
@@ -308,6 +308,12 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
         tag.attributeTagTree[0] ?? tag,
       );
     }
+    if (!tag.hasBody) {
+      fail(
+        `<@${tag.name}/> has no body; @mxlang/astro projects attribute-tag bodies by name`,
+        tag,
+      );
+    }
   };
   const visitAttributeTags = (
     nodes: AttributeTagNode[],
@@ -330,9 +336,24 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
     owner: Positioned,
   ): void => {
     if (prop.cardinality === "array") {
+      const tags: AttributeTag[] = [];
+      let loopTag: AttributeTag | undefined;
+      const collect = (nodes: AttributeTagNode[], inLoop = false): void => {
+        for (const node of nodes) {
+          if (node.kind === "AttributeTag") {
+            tags.push(node.tag);
+            if (inLoop && !loopTag) loopTag = node.tag;
+          } else if (node.kind === "AttributeTagFor") {
+            collect(node.nodes, true);
+          } else {
+            for (const branch of node.branches) collect(branch.nodes, inLoop);
+          }
+        }
+      };
+      collect(prop.source);
       fail(
         `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/astro: a slot is keyed by name`,
-        owner,
+        loopTag ?? tags[1] ?? tags[0] ?? owner,
       );
     }
     visitAttributeTags(prop.source, validateAttributeTag);
@@ -342,35 +363,37 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
     drive(emitter, tag.block.children);
     write("</Fragment>");
   };
-  const emitAttributeTagNodes = (nodes: AttributeTagNode[]): void => {
-    for (const node of nodes) {
-      if (node.kind === "AttributeTag") {
-        emitAttributeTag(node.tag);
-        continue;
-      }
-      if (node.kind === "AttributeTagFor") {
-        fail(
-          "attribute tags inside `<for>` aren't supported by @mxlang/astro: repeated slots cannot share one name",
-          node,
-        );
-      }
-      write("{");
-      node.branches.forEach((branch, index) => {
-        if (index > 0) write(" : ");
-        if (branch.test) {
-          writeExpr(branch.test);
-          write(" ? (");
-          emitAttributeTagNodes(branch.nodes);
-          write(")");
-        } else {
-          write("(");
-          emitAttributeTagNodes(branch.nodes);
-          write(")");
-        }
-      });
-      if (node.branches.at(-1)?.test) write(" : null");
-      write("}");
+  const emitAttributeTagExpression = (nodes: AttributeTagNode[]): void => {
+    if (nodes.length === 0) {
+      write("null");
+      return;
     }
+    const node = nodes[0] as AttributeTagNode;
+    if (node.kind === "AttributeTag") {
+      write("(");
+      emitAttributeTag(node.tag);
+      write(")");
+      return;
+    }
+    if (node.kind === "AttributeTagFor") {
+      fail(
+        "attribute tags inside `<for>` aren't supported by @mxlang/astro: repeated slots cannot share one name",
+        node,
+      );
+    }
+    write("(");
+    node.branches.forEach((branch, index) => {
+      if (index > 0) write(" : ");
+      if (branch.test) {
+        writeExpr(branch.test);
+        write(" ? ");
+        emitAttributeTagExpression(branch.nodes);
+      } else {
+        emitAttributeTagExpression(branch.nodes);
+      }
+    });
+    if (node.branches.at(-1)?.test) write(" : null");
+    write(")");
   };
 
   const emitter: Emitter<string> = {
@@ -401,7 +424,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
         fail(
           node.target.kind === "define"
             ? "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.amx` file and import it"
-            : "a dynamic tag name (`<${expr}>`) is not supported in an `.amx` template; Astro resolves component names statically",
+            : "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/astro: Astro resolves component names statically",
           node,
         );
       }
@@ -434,7 +457,15 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
       if (node.content) drive(emitter, node.content.children);
       for (const prop of node.attrTagProps) {
         validateAttributeTagProp(prop, node);
-        emitAttributeTagNodes(prop.source);
+        if (prop.source.length === 0) continue;
+        const only = prop.source[0];
+        if (prop.source.length === 1 && only?.kind === "AttributeTag") {
+          emitAttributeTag(only.tag);
+        } else {
+          write("{");
+          emitAttributeTagExpression(prop.source);
+          write("}");
+        }
       }
       write(`</${name}>`);
     },
