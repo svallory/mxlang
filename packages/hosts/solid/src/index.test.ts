@@ -90,7 +90,7 @@ describe("Solid IR lowering", () => {
       "dynamic tag (tagged)",
       `<\${which} n=1>x</>`,
       [
-        "= which; return typeof",
+        "= which; if (",
         '=== "string" || typeof',
         '=== "function" ?',
         "<Dynamic component={",
@@ -105,7 +105,7 @@ describe("Solid IR lowering", () => {
       "dynamic tag (bare concise-position line)",
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       "${which}\n",
-      ["= which; return typeof", "<Dynamic component={", " /> : ", "; })()}"],
+      ["= which; if (", "<Dynamic component={", " /> : ", "; })()}"],
     ],
     [
       "class and id shorthand",
@@ -126,7 +126,9 @@ describe("Solid IR lowering", () => {
       "component render props",
       `<Layout|input| id="x"><@head><h1>H</h1></@head><@foot|year|>\${year}</@foot><p>\${input}</p></Layout>`,
       [
-        `<Layout id="x" head={{ content: () => <h1>H</h1> }} foot={{ content: (year) => () => year }}>`,
+        `<Layout id="x" head={{ content: () => <h1>H</h1> }} foot={{ content: (year) => () => <>{() => {`,
+        "$mxEscape",
+        `}</> }}>`,
         `{(input) => <p>{input}</p>}`,
       ],
     ],
@@ -648,12 +650,12 @@ describe("compileSolidUnit", () => {
     expect(code).toContain("input.title");
   });
 
-  it("adds the host AttrTag type import when Input uses the ambient name", () => {
+  it("does not emit the erased Input declaration's AttrTag type import", () => {
     const code = compileSolidUnit(
       "export interface Input { item: AttrTag }\n<div/>",
       { filename: "/fixtures/typed.mx" },
     ).code;
-    expect(code).toContain('import type { AttrTag } from "@mxlang/solid";');
+    expect(code).not.toContain('import type { AttrTag } from "@mxlang/solid";');
   });
 
   it("strictly types params in an attribute-tag <for>", () => {
@@ -674,16 +676,19 @@ describe("compileSolidUnit", () => {
         ].join("\n"),
       );
       const caller = join(scratch, "caller.tsx");
-      const region = compileSolidMx(
+      const compiled = compileSolidMx(
         `<Row><for|value| of=values><@item|label| id=value>\${label.toUpperCase()}:\${value.toFixed()}</@item></for></Row>`,
         {
           filename: join(scratch, "caller.solid.mx"),
           importSpecifiers: new Map([["Row", "./Row.tsx"]]),
         },
-      ).code;
+      );
+      const regionImports = compiled.hoistedImports
+        .map((entry) => entry.code)
+        .join("\n");
       writeFileSync(
         caller,
-        `import Row from "./Row.tsx";\ndeclare const values: number[];\nexport const view = ${region};\n`,
+        `${regionImports}\nimport Row from "./Row.tsx";\ndeclare const values: number[];\nexport const view = ${compiled.code};\n`,
       );
       writeFileSync(
         join(scratch, "tsconfig.json"),

@@ -21,6 +21,7 @@ import {
   createEmitter,
   emitSolid,
   emitSolidWithMappings,
+  MX_ESCAPE_BINDING,
   MX_RETURN_PROP,
   SolidEmitter,
   solidDeclarations,
@@ -31,6 +32,7 @@ export {
   createEmitter,
   emitSolid,
   emitSolidWithMappings,
+  MX_ESCAPE_BINDING,
   MX_RETURN_PROP,
   SolidEmitter,
   solidDeclarations,
@@ -263,10 +265,18 @@ export function compileSolidMx(
   // get them separately would also duplicate the mappings work, and any
   // divergence between the two passes would be silent.
   let emitted!: ReturnType<typeof emitSolidWithMappings>;
-  const { vars: returnVars } = collectReturnVars(() => {
+  const { vars: returnVars, needsEscapeImport } = collectReturnVars(() => {
     emitted = emitSolidWithMappings(ir);
     return emitted.code;
   });
+  if (needsEscapeImport) {
+    hoistedImports.unshift({
+      code: `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";`,
+      binding: MX_ESCAPE_BINDING,
+      specifier: "@solidjs/web",
+      resolvedPath: "@solidjs/web#mx-escape",
+    });
+  }
   const code = emitted.code;
   const rewritten = new MagicString(source);
   rewritten.overwrite(0, source.length, code);
@@ -335,9 +345,6 @@ export function compileSolidUnit(
   }
 
   const lines: string[] = [];
-  if (ir.needsAttrTagImport) {
-    lines.push('import type { AttrTag } from "@mxlang/solid";');
-  }
   for (const node of ir.imports) lines.push(node.code);
   for (const node of ir.hoisted) lines.push(node.code);
   // `export interface Input` is deliberately not emitted. Solid's own
@@ -365,7 +372,16 @@ export function compileSolidUnit(
   // `/var` names are collected while emitting, because only the emitter
   // knows which call sites declared one — a call inside an `<if>` branch or
   // a `<for>` body reaches a child emitter, not this scope.
-  const { code: rendered, vars } = collectReturnVars(() => emitSolid(ir));
+  const {
+    code: rendered,
+    vars,
+    needsEscapeImport,
+  } = collectReturnVars(() => emitSolid(ir));
+  if (needsEscapeImport) {
+    lines.unshift(
+      `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";`,
+    );
+  }
   // Declared above the JSX that fills them: the callback prop assigns during
   // the child's synchronous setup, which happens as the JSX is evaluated.
   const varDecls = vars.length > 0 ? `let ${vars.join(", ")}; ` : "";

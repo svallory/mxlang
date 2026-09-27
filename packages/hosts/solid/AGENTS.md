@@ -6,7 +6,7 @@ SolidMX targets **Solid 2 only** — no Solid 1 lowering table, no dual target. 
 
 Solid 2 is pre-stable and RCs ship weekly. Policy: **pin one RC and stay on it**; re-sync the research note on each bump we choose to take, and do not chase every RC. See `README.md` "Solid 2 RC policy".
 
-Consequences encoded in the lowering table: `Index`/`Key`/`mxRange` are gone (one `For` with a `keyed` prop, plus `Repeat`); `classList` is gone (one `class` prop taking a string, object, or recursive array); `on:`/`oncapture:`/`attr:`/`bool:`/`use:` are parse errors with fix-it hints (only `prop:` survives); `<try>` lowers to `Errored`/`Loading`. No runtime-helper imports and no `needsImport` machinery: both compilers auto-import the builtIns (`For Show Switch Match Loading Reveal Portal Repeat Dynamic Errored`).
+Consequences encoded in the lowering table: `Index`/`Key`/`mxRange` are gone (one `For` with a `keyed` prop, plus `Repeat`); `classList` is gone (one `class` prop taking a string, object, or recursive array); `on:`/`oncapture:`/`attr:`/`bool:`/`use:` are parse errors with fix-it hints (only `prop:` survives); `<try>` lowers to `Errored`/`Loading`. Both compilers auto-import the builtIns (`For Show Switch Match Loading Reveal Portal Repeat Dynamic Errored`), and escaped block values additionally request `@solidjs/web`'s public `escape` helper through the region's hoisted-import channel.
 
 ## `@mxlang/solid`: the Solid host on `@mxlang/core`
 
@@ -63,6 +63,11 @@ Two facts worth knowing before touching it:
   `() => SolidElement`: it stays live, renders more than once, works through
   direct insertion and `<Dynamic>`, and composes inside reactive arrays.
   Parameters add the outer render-prop function, `(p) => () => JSX`.
+  Consumers pass those parameters at the dynamic call site
+  (`<${input.item.content("Ada")}/>` for data,
+  `<${input.item("Ada")}/>` for renderable). Escaped root interpolations use
+  Solid's public server `escape` helper while retaining the original value in
+  the browser, which preserves both SSR safety and reactive DOM insertion.
 - **A region receives its surrounding module imports and reports callee
   dependencies.** `compileSolidMx` seeds `ctx.importSpecifiers` from the
   parser bridge and returns `ctx.dependencies`, allowing imported callees to

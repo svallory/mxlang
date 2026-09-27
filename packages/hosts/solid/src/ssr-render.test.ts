@@ -34,10 +34,11 @@ function renderSolidMx(
     filename: "fixture.solid.mx",
   },
 ): string {
-  const { code: forCode } = compileSolidMx(mxFragment, {
+  const { code: forCode, hoistedImports } = compileSolidMx(mxFragment, {
     ...options,
   });
-  const jsxSource = `import { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;
+  const imports = hoistedImports.map((entry) => entry.code).join("\n");
+  const jsxSource = `${imports}\nimport { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;
 
   const ssr = transformSync(jsxSource, {
     filename: "fixture.tsx",

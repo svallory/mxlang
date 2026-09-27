@@ -74,21 +74,25 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
       callee,
       'import type { AttrTag } from "@mxlang/solid"; export interface Input { item: AttrTag[] }',
     );
-    const region = compileSolidMx(
+    const compiled = compileSolidMx(
       `<Row><for|value| of=items()><@item>\${value}:\${label()}</@item></for></Row>`,
       {
         filename: join(dir, "caller.solid.mx"),
         importSpecifiers: new Map([["Row", "./Row.tsx"]]),
       },
-    ).code;
+    );
+    const imports = compiled.hoistedImports
+      .map((entry) => entry.code)
+      .join("\n");
     const source = `
+      ${imports}
       import { createSignal, flush, For } from "solid-js";
       import { Dynamic, render } from "@solidjs/web";
       const [items, setItems] = createSignal(["a"]);
       const [label, setLabel] = createSignal("A");
       function Row(input) { return <main><div>{input.item[0]?.content}{input.item[0]?.content}</div><div><Dynamic component={input.item[0]?.content}/></div><div><For each={input.item}>{item => <i>{item.content}</i>}</For></div></main>; }
       const root = document.createElement("root");
-      render(() => ${region}, root);
+      render(() => ${compiled.code}, root);
       const before = root.textContent;
       setLabel("B"); setItems(["x", "y"]); flush();
       console.log(JSON.stringify({ before, after: root.textContent }));

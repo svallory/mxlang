@@ -74,6 +74,12 @@ export const MX_RETURN_PROP = "$mxReturn";
  */
 let returnVars: Set<string> | null = null;
 
+/** Whether the current module needs Solid's server-only HTML escape helper. */
+let escapeUse: { used: boolean } | null = null;
+
+/** Hygienic-enough alias shared by emitted expressions and module assembly. */
+export const MX_ESCAPE_BINDING = "$mxEscape";
+
 /**
  * The emitter is filling a lazily-evaluated or per-row scope.
  *
@@ -114,14 +120,23 @@ function inLazyScope<T>(emit: () => T): T {
 export function collectReturnVars(emit: () => string): {
   code: string;
   vars: string[];
+  needsEscapeImport: boolean;
 } {
   const outer = returnVars;
+  const outerEscapeUse = escapeUse;
   const collected = new Set<string>();
+  const collectedEscapeUse = { used: false };
   returnVars = collected;
+  escapeUse = collectedEscapeUse;
   try {
-    return { code: emit(), vars: [...collected] };
+    return {
+      code: emit(),
+      vars: [...collected],
+      needsEscapeImport: collectedEscapeUse.used,
+    };
   } finally {
     returnVars = outer;
+    escapeUse = outerEscapeUse;
   }
 }
 
@@ -434,12 +449,32 @@ function renderWithNewEmitter(nodes: IrNode[]): MappedCode {
   return child.result();
 }
 
+/**
+ * Preserve Solid client values while escaping strings in the SSR build.
+ *
+ * Solid 2's SSR renderer treats a string returned from a component/function
+ * hole as trusted HTML. Its public `escape` export is the real escaper in the
+ * server condition and a no-op returning `undefined` in the browser
+ * condition, so the fallback preserves the original client value.
+ */
+function escapedBlockValue(expr: Expr): MappedCode {
+  if (escapeUse) escapeUse.used = true;
+  const serial = dynSerial.n++;
+  const value = `$mxText${serial}`;
+  const escaped = `$mxEscaped${serial}`;
+  return concatMapped(
+    `() => { const ${value} = `,
+    expr.code,
+    `; const ${escaped} = ${MX_ESCAPE_BINDING}(${value}); return ${escaped} === undefined ? ${value} : ${escaped}; }`,
+  );
+}
+
 function blockExpression(nodes: IrNode[]): MappedCode {
   const content = meaningful(nodes);
   if (content.length === 1) {
     const only = content[0] as IrNode;
     if (only.kind === "Interpolation" && only.escaped) {
-      return concatMapped(only.expr.code);
+      return concatMapped("<>{", escapedBlockValue(only.expr), "}</>");
     }
     if (
       only.kind === "Element" ||
@@ -451,7 +486,15 @@ function blockExpression(nodes: IrNode[]): MappedCode {
       return renderWithNewEmitter(content);
     }
   }
-  return concatMapped("<>", renderWithNewEmitter(content), "</>");
+  return concatMapped(
+    "<>",
+    ...content.map((node) =>
+      node.kind === "Interpolation" && node.escaped
+        ? concatMapped("{", escapedBlockValue(node.expr), "}")
+        : renderWithNewEmitter([node]),
+    ),
+    "</>",
+  );
 }
 
 function attributeTagAttrValue(
@@ -1043,15 +1086,21 @@ export class SolidEmitter implements Emitter<string> {
       ? ` ${MX_RETURN_PROP}={($mxV) => { ${node.var} = $mxV; }}`
       : "";
     if (node.var) returnVars?.add(node.var);
-    const temp = `$mxDyn${dynSerial.n++}`;
-    const component = ` component={${temp}}`;
+    const serial = dynSerial.n++;
+    const temp = `$mxDyn${serial}`;
+    const value = node.args.length > 0 ? `$mxDynValue${serial}` : temp;
+    const invoke =
+      node.args.length > 0
+        ? ` const ${value} = typeof ${temp} === "function" ? ${temp}(${node.args.map((arg) => arg.code).join(", ")}) : ${temp};`
+        : "";
+    const component = ` component={${value}}`;
     const guard = (rendered: MappedCode | string) =>
       concatMapped(
         `{(() => { const ${temp} = `,
         expr.code,
-        `; return typeof ${temp} === "string" || typeof ${temp} === "function" ? `,
+        `;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); return typeof ${value} === "string" || typeof ${value} === "function" ? `,
         rendered,
-        ` : ${temp}; })()}`,
+        ` : ${value}; })()}`,
       );
     if (!node.content || raw) {
       this.#out.push(
