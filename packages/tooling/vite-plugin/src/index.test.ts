@@ -8,7 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { type CustomTag, clearScanCache } from "@mxlang/core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import mx, { MX_SUFFIX } from "./index";
 
 const COUNTER = `import { createSignal } from "solid-js";
@@ -888,6 +888,59 @@ describe("mx()", () => {
       // output until a manual restart.
       expect(invalidated).toContain(mod);
       expect(updated).toContain(mod);
+    });
+
+    it("invalidates callers when a compile dependency changes", async () => {
+      const { dir, caller } = project(
+        "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
+      );
+      const dependency = join(dir, "Card.tsx");
+      writeFileSync(dependency, "export interface Input {}\n");
+
+      vi.resetModules();
+      vi.doMock("@mxlang/html", () => ({
+        compile: () => ({
+          code: "export default () => '';",
+          dependencies: [dependency],
+        }),
+      }));
+      try {
+        const fresh = await import("./index.ts");
+        const plugin = fresh.default();
+        const transform = plugin.transform as unknown as (
+          this: unknown,
+          code: string,
+          id: string,
+        ) => Promise<{ code: string } | null>;
+        await transform.call({}, "<div/>\n", `${caller}${fresh.MX_SUFFIX}`);
+
+        const mod = { id: `${caller}${fresh.MX_SUFFIX}`, url: caller };
+        const invalidated: unknown[] = [];
+        const handle = plugin.handleHotUpdate as unknown as (
+          this: unknown,
+          ctx: unknown,
+        ) => unknown[] | undefined;
+        const updated = handle.call(
+          {},
+          {
+            file: dependency,
+            modules: [],
+            server: {
+              moduleGraph: {
+                getModuleById: (id: string) =>
+                  id === `${caller}${fresh.MX_SUFFIX}` ? mod : undefined,
+                invalidateModule: (target: unknown) => invalidated.push(target),
+              },
+            },
+          },
+        );
+
+        expect(invalidated).toEqual([mod]);
+        expect(updated).toEqual([mod]);
+      } finally {
+        vi.doUnmock("@mxlang/html");
+        vi.resetModules();
+      }
     });
   });
 });
