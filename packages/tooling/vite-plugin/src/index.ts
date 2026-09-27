@@ -53,6 +53,7 @@ async function compileMarko(
   filename: string,
   strict: boolean,
   customTags: Record<string, CustomTag> | undefined,
+  resolveImport: (specifier: string, importer: string) => string | undefined,
 ): Promise<Pick<CompileResult, "code"> & Partial<CompileResult>> {
   // Which host owns this file is the nearest `package.json`'s answer, the
   // same resolver the language server and `mx-tsc` use — so an editor, a
@@ -64,30 +65,39 @@ async function compileMarko(
       compilePreactMx: (
         source: string,
         filename: string,
-        options?: { customTags?: Record<string, CustomTag> },
+        options?: {
+          customTags?: Record<string, CustomTag>;
+          resolveImport?: typeof resolveImport;
+        },
       ) => { code: string };
     };
-    return compilePreactMx(source, filename, { customTags });
+    return compilePreactMx(source, filename, { customTags, resolveImport });
   }
   if (host === "react") {
     const { compileReactMx } = (await import("@mxlang/react")) as {
       compileReactMx: (
         source: string,
         filename: string,
-        options?: { customTags?: Record<string, CustomTag> },
+        options?: {
+          customTags?: Record<string, CustomTag>;
+          resolveImport?: typeof resolveImport;
+        },
       ) => { code: string };
     };
-    return compileReactMx(source, filename, { customTags });
+    return compileReactMx(source, filename, { customTags, resolveImport });
   }
   if (host === "hono") {
     const { compileHonoMx } = (await import("@mxlang/hono")) as {
       compileHonoMx: (
         source: string,
         filename: string,
-        options?: { customTags?: Record<string, CustomTag> },
+        options?: {
+          customTags?: Record<string, CustomTag>;
+          resolveImport?: typeof resolveImport;
+        },
       ) => { code: string };
     };
-    return compileHonoMx(source, filename, { customTags });
+    return compileHonoMx(source, filename, { customTags, resolveImport });
   }
   if (host === "angular") {
     // `@mxlang/angular` exists (phase 1) but is not wired into this plugin
@@ -105,10 +115,11 @@ async function compileMarko(
       options?: {
         strict?: boolean;
         customTags?: Record<string, CustomTag>;
+        resolveImport?: typeof resolveImport;
       },
     ) => { code: string };
   };
-  return compile(source, filename, { strict, customTags });
+  return compile(source, filename, { strict, customTags, resolveImport });
 }
 
 export interface MxPluginOptions {
@@ -301,6 +312,21 @@ export function codeFrame(
  * specifiers at all.
  */
 export default function mx(options: MxPluginOptions = {}): Plugin {
+  let aliases: Array<{ find: string | RegExp; replacement: string }> = [];
+  const resolveImport = (specifier: string): string | undefined => {
+    for (const alias of aliases) {
+      if (typeof alias.find === "string") {
+        if (specifier !== alias.find && !specifier.startsWith(`${alias.find}/`))
+          continue;
+        return alias.replacement + specifier.slice(alias.find.length);
+      }
+      if (alias.find.test(specifier)) {
+        alias.find.lastIndex = 0;
+        return specifier.replace(alias.find, alias.replacement);
+      }
+    }
+    return undefined;
+  };
   // MX only supports the MX 1.0 subset of Marko syntax, so a caller cannot
   // opt back into `.marko` through `extensions` — that would silently claim
   // support this plugin does not have. Rejected eagerly, at plugin
@@ -490,6 +516,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     name: "mx",
     enforce: "pre",
 
+    configResolved(config) {
+      aliases = [...config.resolve.alias];
+    },
+
     async resolveId(id: string, importer: string | undefined) {
       const [path, suffix] = splitId(id);
 
@@ -614,6 +644,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             source,
             options.strict ?? false,
             tagsFor(source, warn),
+            resolveImport,
           );
           recordDependencies(source, dependencies);
           return { code: compiled, map: null };
