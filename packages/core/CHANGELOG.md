@@ -2,6 +2,13 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking: attribute-tag lowering carries declared shape and control flow
+
+`AttributeTag`, `Component`, `HostTag`, and `Ir` gained required fields for
+attribute-tag source spans, nested/control-flow trees, callee-aware property
+plans, and host capability/import metadata. Hosts must consume these fields
+instead of reconstructing attribute-tag shape from the flat list.
+
 ### Breaking: an element's `on<Name>`/`on-<exact>` attribute lowers to a new `event` attr kind
 
 An attribute on an **element** matching `/^on[A-Z-]/` **whose value is an

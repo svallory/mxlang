@@ -88,7 +88,7 @@ export interface Target {
 
 /** The Preact target. */
 export const preactTarget: Target = {
-  name: "Preact",
+  name: "@mxlang/preact",
   jsxImportSource: "preact",
   classAttr: "class",
   forAttr: "for",

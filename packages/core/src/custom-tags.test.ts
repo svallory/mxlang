@@ -1086,6 +1086,59 @@ describe("core-owned custom tags", () => {
     ]);
   });
 
+  it("extracts controlled attribute tags while preserving sibling content", () => {
+    const ir = lowerWithTags(
+      "<try><if=input.waiting><@placeholder>wait</@placeholder></if><p>body</p></try>\n",
+      {},
+      { ...tryDeclarations, attrTags: 2 },
+    );
+    const hostTag = find(ir.body, "HostTag");
+    expect(hostTag.tag.attributeTags.map((tag) => tag.name)).toEqual([
+      "placeholder",
+    ]);
+    expect(find(hostTag.tag.children, "Element").name).toBe("p");
+  });
+
+  it.each([
+    [
+      "attributes",
+      '<try><@placeholder class="x">wait</@placeholder></try>\n',
+      "does not support attributes",
+    ],
+    [
+      "nested tags",
+      "<try><@placeholder><@deep/></@placeholder></try>\n",
+      "does not support nested attribute tags",
+    ],
+  ])(
+    "rejects %s on registered attribute tags even on a v2 host",
+    (_case, source, message) => {
+      let error: unknown;
+      try {
+        lowerWithTags(source, {}, { ...tryDeclarations, attrTags: 2 });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: expect.stringContaining(message),
+        line: 1,
+        column: expect.any(Number),
+      });
+    },
+  );
+
+  it("rejects registered attribute-tag shapes before the legacy-host gate", () => {
+    expect(() =>
+      lowerWithTags(
+        '<try><@placeholder class="x">wait</@placeholder></try>\n',
+        {},
+        tryDeclarations,
+      ),
+    ).toThrowError(
+      "attribute tag `<@placeholder>` does not support attributes",
+    );
+  });
+
   it("rejects tag params on `<try>`", () => {
     expect(() =>
       lowerWithTags("<try|a|><p>x</p></try>\n", {}, tryDeclarations),

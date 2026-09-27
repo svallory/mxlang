@@ -699,7 +699,7 @@ describe("stateful Marko tags are errors naming the Preact equivalent", () => {
 
   it("rejects a document type, which belongs in the HTML shell", () => {
     expect(errorOf("<!doctype html>\n<p>x</p>")).toContain(
-      "cannot appear in a Preact component",
+      "cannot appear in a @mxlang/preact component",
     );
   });
 });
@@ -815,7 +815,7 @@ describe("a unit that returns a value", () => {
   it("rejects /var inside <if>", () => {
     expect(() =>
       callerCode("<if=true><counter/n start=1/><p>${n}</p></if>"),
-    ).toThrow(/is not supported on Preact yet/);
+    ).toThrow(/is not supported on @mxlang\/preact yet/);
   });
 
   it("still allows a call with no /var inside <for>", () => {

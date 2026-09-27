@@ -12,6 +12,8 @@ import { TranslateError, warn } from "./core.ts";
 import type {
   Attr,
   AttributeTag,
+  AttributeTagNode,
+  AttrTagProp,
   Block,
   Branch,
   Expr,
@@ -82,6 +84,10 @@ export interface TagCall {
   attrs: Attr[];
   content: Block | null;
   attributeTags: AttributeTag[];
+  /** Preserved control-flow shape for a template-backed component call. */
+  attributeTagTree?: AttributeTagNode[];
+  /** Callee-aware property plan for a template-backed component call. */
+  attrTagProps?: AttrTagProp[];
   params: string[];
   var: string | null;
 }
@@ -627,7 +633,25 @@ export function validateCustomTagCall(
     }
   }
 
+  if (hasTemplate(definition)) return;
+
   const declaredTags = definition.attributeTags;
+  for (const tag of call.attributeTags) {
+    if (tag.attrs.length > 0) {
+      failAt(
+        call.name,
+        `attribute tag \`<@${tag.name}>\` does not support attributes`,
+        tag.attrs[0]?.loc ?? tag.loc,
+      );
+    }
+    if (tag.attributeTags.length > 0) {
+      failAt(
+        call.name,
+        `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
+        tag.attributeTags[0]?.loc ?? tag.loc,
+      );
+    }
+  }
   if (!declaredTags) return;
 
   const seen = new Map<string, AttributeTag>();

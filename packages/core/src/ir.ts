@@ -308,7 +308,7 @@ export interface AttrTagProp {
  */
 export type ComponentTarget =
   /** An `import` binding or a taglib/`tags/`-discovered tag, by name. */
-  | { kind: "name"; name: string }
+  | { kind: "name"; name: string; resolvedPath?: string }
   /** A `<define>` in scope, with the parameter names it declared. */
   | { kind: "define"; name: string; params: string[] }
   /** `<${expr}/>`, resolved at run time by the host. */

@@ -211,14 +211,14 @@ describe("attribute tag parse errors", () => {
   it("routes nested attribute tags to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><@header><@inner>x</@inner></@header></Layout>;`,
-      "Solid does not support nested attribute tags; its declarations must set `attrTags: 2`",
+      "nested attribute tags isn't supported by @mxlang/solid yet",
     );
   });
 
   it("routes attributes on an attribute tag to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><@header class="x">H</@header></Layout>;`,
-      "Solid does not support attributes on an attribute tag; its declarations must set `attrTags: 2`",
+      "attributes on an attribute tag isn't supported by @mxlang/solid yet",
     );
   });
 
@@ -232,14 +232,14 @@ describe("attribute tag parse errors", () => {
   it("routes an attribute tag inside `<if>` to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><if=cond><@header>x</@header></if></Layout>;`,
-      "Solid does not support an attribute tag inside `<if>`; its declarations must set `attrTags: 2`",
+      "an attribute tag inside `<if>` isn't supported by @mxlang/solid yet",
     );
   });
 
   it("routes an attribute tag inside `<for>` to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><for|x| of=xs()><@header>y</@header></for></Layout>;`,
-      "Solid does not support an attribute tag inside `<for>`; its declarations must set `attrTags: 2`",
+      "an attribute tag inside `<for>` isn't supported by @mxlang/solid yet",
     );
   });
 
