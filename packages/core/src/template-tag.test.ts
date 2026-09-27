@@ -35,9 +35,10 @@ function lowerWithTags(
   customTags: Readonly<Record<string, CustomTag>>,
   filename = CALLER,
   warnings: MxWarning[] = [],
+  policy: Policy = declarations(),
 ): Ir {
   let ir: Ir | null = null;
-  compileSource(source, filename, declarations(), {
+  compileSource(source, filename, policy, {
     customTags,
     warnings,
     tagDiscoveryDirs: [],
@@ -48,6 +49,10 @@ function lowerWithTags(
   });
   if (!ir) throw new Error("lowerer produced no IR");
   return ir;
+}
+
+function attrTagsV2(): Policy {
+  return { ...declarations(), attrTags: 2 };
 }
 
 function components(
@@ -354,6 +359,138 @@ describe("template custom tags as compilation units", () => {
       { kind: "AttributeTag", tag: { name: "item" } },
     ]);
     expect(call?.attrTagProps.map((prop) => prop.name)).toEqual(["item"]);
+  });
+
+  it("preserves control flow when a sidecar copies attribute tags", () => {
+    const panel = template(
+      "/tmp/mx-template-test/tags/copy-panel.mx",
+      "<section><${input.item}/></section>",
+      {
+        attributeTags: { item: {} },
+        transform(call) {
+          return { ...call, attributeTags: [...call.attributeTags] };
+        },
+      },
+    );
+    const call = components(
+      lowerWithTags(
+        "<panel><if=input.ok><@item/></if></panel>\n",
+        { panel },
+        CALLER,
+        [],
+        attrTagsV2(),
+      ).body,
+    )[0];
+    expect(call?.attributeTagTree).toMatchObject([
+      { kind: "AttributeTagIf", branches: [{ nodes: [{}] }] },
+    ]);
+    expect(call?.attrTagProps[0]).toMatchObject({
+      name: "item",
+      cardinality: "single",
+      source: [{ kind: "AttributeTagIf" }],
+    });
+  });
+
+  it("removes stale plan entries after an in-place sidecar splice", () => {
+    const panel = template(
+      "/tmp/mx-template-test/tags/splice-panel.mx",
+      "<section><${input.item}/></section>",
+      {
+        attributeTags: { item: {}, other: {} },
+        transform(call) {
+          call.attributeTags.splice(1, 1);
+          return call;
+        },
+      },
+    );
+    const call = components(
+      lowerWithTags("<panel><@item/><@other/></panel>\n", { panel }).body,
+    )[0];
+    expect(call?.attributeTags.map((tag) => tag.name)).toEqual(["item"]);
+    expect(call?.attributeTagTree).toMatchObject([
+      { kind: "AttributeTag", tag: { name: "item" } },
+    ]);
+    expect(call?.attrTagProps.map((prop) => prop.name)).toEqual(["item"]);
+  });
+
+  it("appends sidecar-created attribute tags as unconditional", () => {
+    const panel = template(
+      "/tmp/mx-template-test/tags/add-panel.mx",
+      "<section><${input.item}/><${input.other}/></section>",
+      {
+        attributeTags: { item: {}, other: {} },
+        transform(call) {
+          const first = call.attributeTags[0];
+          if (!first) return call;
+          const added = { ...first, name: "other" };
+          return { ...call, attributeTags: [...call.attributeTags, added] };
+        },
+      },
+    );
+    const call = components(
+      lowerWithTags(
+        "<panel><if=input.ok><@item/></if></panel>\n",
+        { panel },
+        CALLER,
+        [],
+        attrTagsV2(),
+      ).body,
+    )[0];
+    expect(call?.attributeTagTree.map((node) => node.kind)).toEqual([
+      "AttributeTagIf",
+      "AttributeTag",
+    ]);
+    expect(call?.attrTagProps).toMatchObject([
+      { name: "item", cardinality: "single" },
+      {
+        name: "other",
+        cardinality: "single",
+        source: [{ kind: "AttributeTag" }],
+      },
+    ]);
+  });
+
+  it("allows non-repeatable attribute tags on mutually exclusive paths", () => {
+    const panel = template(
+      "/tmp/mx-template-test/tags/exclusive-panel.mx",
+      "<section><${input.item}/></section>",
+      { attributeTags: { item: {} } },
+    );
+    expect(() =>
+      lowerWithTags(
+        "<panel><if=input.ok><@item/></if><else><@item/></else></panel>\n",
+        { panel },
+        CALLER,
+        [],
+        attrTagsV2(),
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects a required attribute tag missing from one conditional path", () => {
+    const panel = template(
+      "/tmp/mx-template-test/tags/required-panel.mx",
+      "<section><${input.item}/></section>",
+      { attributeTags: { item: { required: true } } },
+    );
+    expect(() =>
+      lowerWithTags(
+        "\n<panel><if=input.ok><@item/></if></panel>\n",
+        { panel },
+        CALLER,
+        [],
+        attrTagsV2(),
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "TranslateError",
+        message: expect.stringContaining(
+          "missing required attribute tag `<@item>`",
+        ),
+        line: 2,
+        column: 0,
+      }),
+    );
   });
 
   it("compiles metadata for a template containing static", () => {
