@@ -1,5 +1,13 @@
 import { expectTypeOf, it } from "vitest";
-import type { AttrTag, AttrTagConfig, AttrTagOf } from "./attr-tag.ts";
+import type {
+  AttrTag,
+  AttrTagAttrs,
+  AttrTagConfig,
+  AttrTagOf,
+  AttrTagParams,
+} from "./attr-tag.ts";
+
+type EmptyConfig = Record<never, never>;
 
 it("types data attribute tags as attrs plus optional content", () => {
   type Value = AttrTagOf<
@@ -29,4 +37,21 @@ it("exports the generic core AttrTag and its config constraint", () => {
     attrs: object;
     params: readonly unknown[];
   }>().toMatchTypeOf<AttrTagConfig>();
+});
+
+it("exports helpers for a host to specialize AttrTag", () => {
+  expectTypeOf<
+    AttrTagParams<{ params: [id: number, label?: string] }>
+  >().toEqualTypeOf<[id: number, label?: string]>();
+  expectTypeOf<AttrTagParams<EmptyConfig>>().toEqualTypeOf<[]>();
+  expectTypeOf<AttrTagAttrs<{ attrs: { title: string } }>>().toEqualTypeOf<{
+    title: string;
+  }>();
+  expectTypeOf<AttrTagAttrs<EmptyConfig>>().toEqualTypeOf<EmptyConfig>();
+});
+
+it("keeps core AttrTag to one public type parameter", () => {
+  // @ts-expect-error decision 106 removed the temporary Renderable parameter
+  type TwoParameterAttrTag = AttrTag<EmptyConfig, string>;
+  expectTypeOf<TwoParameterAttrTag>().toMatchTypeOf<unknown>();
 });

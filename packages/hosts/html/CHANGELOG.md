@@ -28,6 +28,11 @@ and the always-quoted form is safer and more readable.
   silently emitted dead inline JS. A *string*-valued `onclick="alert(1)"`
   stays an ordinary attribute verbatim; a bare `onClick` stays boolean.
   `on:`/`oncapture:` now reject with a fix-it naming `on-<exact>`.
+- **breaking:** attribute-tag values now follow the consumer-declared
+  decision-106 shape. `data` tags receive attributes and nested tags plus an
+  optional `content: (...params) => string`; `renderable` tags receive that
+  render function directly; repeated/looped tags are real arrays. The host
+  exports its specialized one-parameter `AttrTag<C>` type.
 - **build:** publishable from `dist/` (ESM + `.d.ts`); `exports` map for
   `.` and `./bun`.
 

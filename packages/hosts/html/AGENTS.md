@@ -146,6 +146,22 @@ through raw, matching Marko's own `_escape_comment`. Filtering placeholders
 out (an earlier bug) turned `<html-comment>build ${input.sha}</html-comment>`
 into `<!--build -->`.
 
+## Attribute-tag values (decisions 106–107)
+
+This host declares `attrTags: 2` and emits only core's resolved
+`attrTagProps` plan. It never regroups the legacy flat `attributeTags` list.
+Cardinality comes from the callee's `Input`: singular values are one value or
+`undefined`, arrays are real arrays (including `[]`), and control-flow tags
+become conditional values or push loops in source order. Nested plans are
+emitted recursively.
+
+`@mxlang/html` exports its own `AttrTag<C>`. A renderable value is always an
+HTML block function `(...params) => string` (with `[]` when params are absent).
+A data value is `attrs & nestedProps & { content?: (...params) => string }`;
+`content` is explicitly `undefined` when the occurrence has no body. Dynamic
+tag arguments are forwarded so a callee can invoke a parameterized data
+`content` or renderable tag with `<${value}(args)/>`.
+
 
 ## Bun loader
 
@@ -200,4 +216,3 @@ something an ambient wildcard declaration can derive. A consumer references it b
 there is no package-level `types` wiring that pulls it in automatically,
 since a `.solid.mx`-only project (the Solid examples) has no reason to load
 it.
-

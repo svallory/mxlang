@@ -10,6 +10,9 @@
 
 import { readFileSync } from "node:fs";
 import {
+  type AttrTagAttrs,
+  type AttrTagConfig,
+  type AttrTagParams,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -29,10 +32,19 @@ import {
   strictPolicy,
 } from "./translate.ts";
 
-export type { AttrTag } from "@mxlang/core";
 export { escape } from "@mxlang/core";
 export { policy, strictPolicy, TranslateError } from "./translate.ts";
 export type { CompileResult, RawSourceMap };
+
+/** Attribute-tag value received by an `@mxlang/html` component. */
+export type AttrTag<
+  // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default from decision 106
+  C extends AttrTagConfig = {},
+> = C["as"] extends "renderable"
+  ? (...args: AttrTagParams<C>) => string
+  : AttrTagAttrs<C> & {
+      content?: (...args: AttrTagParams<C>) => string;
+    };
 
 /**
  * This host's options for the core's whole-file front door.

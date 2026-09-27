@@ -845,8 +845,12 @@ of ordinary children. With params, `<@name|p|>` becomes a **function** prop.
 Ordinary children stay the child callback. Props are emitted in a fixed order:
 the parent's own attributes in source order, then attribute tags in source order.
 
-An attribute-tag **value is "renderable"** in MX's contract, read as
-`<${input.head}/>`; each host materializes it (decision 95(1)).
+The callee's `Input` declares whether an attribute-tag value is `data` (the
+default) or `renderable`, and whether the prop is singular or an array
+(decision 106). On the HTML host a renderable is `(...params) => string`, read
+with `<${input.head}/>`; data is the declared attributes and nested tag props
+plus `content?: (...params) => string`, read with
+`<${input.head.content}/>`.
 
 Attribute-tag names are stored with the leading `@` stripped, and their name span
 starts one character in so the `@` is excluded from diagnostics.
@@ -868,7 +872,7 @@ written names, not what a spread holds at runtime, matching JSX's
 
 `children` counts as a name, because ordinary children lower into that prop.
 
-### Repeated `<@name>` — today's per-host shape (decision 104, `attribute-tag-silent-drops`)
+### Repeated `<@name>` — host rollout (decisions 104 and 106)
 
 Writing the same `<@name>` more than once on an **ordinary component call**
 (no declared `attributeTags` schema) is allowed — core keeps every
@@ -877,24 +881,21 @@ core lowering layer rejects or collapses a repeat.
 
 Today's per-host value shape, factually, with no claim of Marko parity:
 
-- **HTML, Preact, React, Hono, Solid**: a single `<@name>` is its plain
-  renderable value; a repeated `<@name>` is an **array** of that value, in
-  source order — which is what lets a callee write
-  `<for|it| of=input.item>` over the repeat.
+- **HTML**: consumer-declared cardinality and shape are implemented. An array
+  prop is always a real array, including `[]`; conditions contribute zero or
+  one value and loops push every iteration in source order. Nested attribute
+  tags use the same rules recursively.
+- **Preact, React, Hono, Solid**: phase-2 host rollout is separate; until each
+  declares the v2 capability, core rejects shapes it could otherwise drop.
 - **Angular**: an attribute-tag-only dynamic-tag body is rejected outright
   (`ngComponentOutlet` has no content-projection mechanism); elsewhere,
   same array shape.
 - **Astro**: a repeated `<@name>` is rejected outright, since an Astro slot
   is keyed by name and its renderer would silently keep only one occurrence.
 
-**Attribute-tag value shape and cardinality is being redesigned under
-decision 106** (upcoming): the consumer's `Input` type will declare the
-cardinality/shape it expects for a given attribute-tag name, and MX will
-honor that declaration — a deliberate divergence from Marko's own
-`attrTag`/`attrTags` runtime shape (an iterable record whose property read
-hits the first occurrence), not an attempt to reproduce it. This section
-will be rewritten once decision 106 lands; until then, the array-for-a-repeat
-behavior above is what ships.
+This is a deliberate divergence from Marko's own `attrTag`/`attrTags` runtime
+shape (an iterable record whose property read hits the first occurrence), not
+an attempt to reproduce it.
 
 A **custom tag** with its own declared `attributeTags` schema restricts
 repeats: unless a name's declaration sets `repeatable: true`, a second
@@ -911,7 +912,7 @@ Both rejected by Marko, so both out of MX 1 (`divergences.md`):
 | Tag params on native elements (`<div\|x\|>`) | `Tag does not support parameters.` |
 | Attribute tags on native elements (`<div><@head>…</@head></div>`) | `Tag does not support nested attribute tags.` |
 
-Also deferred: **conditional attribute tags** (decision 95(7)).
+Conditional and looped attribute tags are part of MX 1 under decision 106.
 
 ### Declaration keys
 
@@ -920,7 +921,7 @@ Marko parity and no legacy aliases** (decision 94a): `literalOnly` (not
 `staticOnly`) and `repeatable` (not `repeated`). Unknown keys are rejected at
 registration (§13.1).
 
-**Decisions:** 19, 28, 37, 51, 66, 70, 79, 94a, 95(1), 95(7), 96, 104.
+**Decisions:** 19, 28, 37, 51, 66, 70, 79, 94a, 95(1), 95(7), 96, 104, 106, 107.
 
 ---
 

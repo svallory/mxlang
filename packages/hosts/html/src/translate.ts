@@ -475,6 +475,7 @@ function resolveHostTag(name: string, node: Node, ctx: Ctx): HostTagData {
 
 export const policy: Policy = {
   name: "@mxlang/html",
+  attrTags: 2,
   tags: TAGS,
   isElement,
   isComponent,
@@ -606,7 +607,7 @@ const ESCAPE_COMMENT = `function escapeComment(value) {
   return String(value).replace(/>/g, "&gt;");
 }`;
 
-const RENDER_DYNAMIC = `function renderDynamic(target, props) {
+const RENDER_DYNAMIC = `function renderDynamic(target, props, args) {
   if (target === null || target === undefined) return "";
   if (typeof target === "string") {
     let out = "<" + target;
@@ -619,7 +620,7 @@ const RENDER_DYNAMIC = `function renderDynamic(target, props) {
     if (props.content) out += props.content();
     return out + "</" + target + ">";
   }
-  return target(props);
+  return args ? target(...args) : target(props);
 }`;
 
 /**

@@ -16,8 +16,10 @@ export {
 } from "./accessor-reads.ts";
 export type {
   AttrTag,
+  AttrTagAttrs,
   AttrTagConfig,
   AttrTagOf,
+  AttrTagParams,
 } from "./attr-tag.ts";
 export {
   type AttrTagDecl,

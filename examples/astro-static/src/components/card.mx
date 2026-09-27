@@ -3,7 +3,7 @@ import type { AttrTag } from "@mxlang/html";
 export interface Input {
   title: string;
   content: () => string;
-  footer?: AttrTag<{ as: "renderable" }, () => string>;
+  footer?: AttrTag<{ as: "renderable" }>;
 }
 
 <article class="card">

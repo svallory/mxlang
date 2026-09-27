@@ -38,6 +38,8 @@ Five facts worth knowing before editing it:
   does not regroup the flat list or resolve declarations itself. Until a host
   declares that capability, core positions an error on every construct whose
   v2 shape could otherwise be silently dropped.
+  A claimed dynamic `HostTag` also retains its tag arguments in `args`; an
+  emitter must forward them when it reconstructs a `Component` call.
 
 - **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
   `core.ts` used to parse
