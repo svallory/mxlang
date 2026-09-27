@@ -1021,6 +1021,55 @@ export default () => <div />;
       }
     });
 
+    it("records a real compileSolidMx dependency for a .solid.mx caller", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-solid-real-deps-"));
+      scratches.push(dir);
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"v","mx":{"host":"solid"}}',
+      );
+      const caller = join(dir, "caller.solid.mx");
+      const dependency = join(dir, "Card.tsx");
+      const source =
+        'import Card from "./Card.tsx";\nexport const view = <Card><@item>x</@item></Card>;\n';
+      writeFileSync(caller, source);
+      writeFileSync(
+        dependency,
+        'import type { AttrTag } from "@mxlang/solid";\nexport interface Input { item: AttrTag<{ as: "renderable" }> }\nexport default function Card() { return null; }\n',
+      );
+
+      vi.resetModules();
+      const fresh = await import("./index.ts");
+      const plugin = fresh.default();
+      await transformOf(plugin).call({}, source, `${caller}${fresh.MX_SUFFIX}`);
+
+      const mod = { id: `${caller}${fresh.MX_SUFFIX}`, url: caller };
+      const invalidated: unknown[] = [];
+      const updated = (
+        plugin.handleHotUpdate as unknown as (
+          this: unknown,
+          ctx: unknown,
+        ) => unknown[] | undefined
+      ).call(
+        {},
+        {
+          file: dependency,
+          modules: [],
+          server: {
+            moduleGraph: {
+              getModuleById: (id: string) =>
+                id === `${caller}${fresh.MX_SUFFIX}` ? mod : undefined,
+              invalidateModule: (target: unknown) => invalidated.push(target),
+            },
+          },
+        },
+      );
+
+      expect(invalidated).toEqual([mod]);
+      expect(updated).toEqual([mod]);
+      vi.resetModules();
+    });
+
     it("prunes compile dependencies a caller no longer reads", async () => {
       const { dir, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
