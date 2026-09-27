@@ -2716,69 +2716,112 @@ export default abstract class ExpressionParser extends LValParser {
     const isExpression = allowExpression && !this.match(tt.braceL);
     this.expressionScope.enter(newExpressionScope());
 
-    if (isExpression) {
-      // https://tc39.es/ecma262/#prod-ExpressionBody
-      (node as Undone<N.ArrowFunctionExpression>).body =
-        this.parseMaybeAssign();
-      this.checkParams(node, false, allowExpression, false);
-    } else {
-      const oldStrict = this.state.strict;
-      // Start a new scope with regard to labels
-      // flag (restore them to their old value afterwards).
-      const oldLabels = this.state.labels;
-      this.state.labels = [];
+    // MX FORK: `checkParams` registers these names only after a block body
+    // has parsed, but an MX region in that body must already know that a
+    // parameter shadows a module import. This stack is parser state so
+    // speculative parses clone and restore it with the rest of the tokenizer.
+    const mxParamNames = new Set<string>();
+    const collectMxParamNames = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      const record = value as Record<string, unknown>;
+      if (record.type === "Identifier" && typeof record.name === "string") {
+        mxParamNames.add(record.name);
+        return;
+      }
+      switch (record.type) {
+        case "AssignmentPattern":
+          collectMxParamNames(record.left);
+          return;
+        case "RestElement":
+          collectMxParamNames(record.argument);
+          return;
+        case "TSParameterProperty":
+          collectMxParamNames(record.parameter);
+          return;
+        case "ArrayPattern":
+          collectMxParamNames(record.elements);
+          return;
+        case "ObjectPattern":
+          collectMxParamNames(record.properties);
+          return;
+        case "ObjectProperty":
+          collectMxParamNames(record.value);
+          return;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) collectMxParamNames(item);
+      }
+    };
+    collectMxParamNames(node.params);
+    this.state.mxFunctionParamNames.push(mxParamNames);
 
-      // FunctionBody[Yield, Await]:
-      //   StatementList[?Yield, ?Await, +Return] opt
-      this.prodParam.enter(
-        this.prodParam.currentFlags() | ParamKind.PARAM_RETURN,
-      );
-      node.body = this.parseBlock(
-        true,
-        false,
-        // Strict mode function checks after we parse the statements in the function body.
-        (hasStrictModeDirective: boolean) => {
-          const nonSimple = !this.isSimpleParamList(node.params);
+    try {
+      if (isExpression) {
+        // https://tc39.es/ecma262/#prod-ExpressionBody
+        (node as Undone<N.ArrowFunctionExpression>).body =
+          this.parseMaybeAssign();
+        this.checkParams(node, false, allowExpression, false);
+      } else {
+        const oldStrict = this.state.strict;
+        // Start a new scope with regard to labels
+        // flag (restore them to their old value afterwards).
+        const oldLabels = this.state.labels;
+        this.state.labels = [];
 
-          if (hasStrictModeDirective && nonSimple) {
-            // This logic is here to align the error location with the ESTree plugin.
-            this.raise(
-              Errors.IllegalLanguageModeDirective,
-              // @ts-expect-error kind may not index node
-              (node.kind === "method" || node.kind === "constructor") &&
-                // @ts-expect-error key may not index node
-                !!node.key
-                ? // @ts-expect-error node.key has been guarded
-                  node.key.loc.end
-                : node,
-            );
-          }
+        // FunctionBody[Yield, Await]:
+        //   StatementList[?Yield, ?Await, +Return] opt
+        this.prodParam.enter(
+          this.prodParam.currentFlags() | ParamKind.PARAM_RETURN,
+        );
+        node.body = this.parseBlock(
+          true,
+          false,
+          // Strict mode function checks after we parse the statements in the function body.
+          (hasStrictModeDirective: boolean) => {
+            const nonSimple = !this.isSimpleParamList(node.params);
 
-          const strictModeChanged = !oldStrict && this.state.strict;
+            if (hasStrictModeDirective && nonSimple) {
+              // This logic is here to align the error location with the ESTree plugin.
+              this.raise(
+                Errors.IllegalLanguageModeDirective,
+                // @ts-expect-error kind may not index node
+                (node.kind === "method" || node.kind === "constructor") &&
+                  // @ts-expect-error key may not index node
+                  !!node.key
+                  ? // @ts-expect-error node.key has been guarded
+                    node.key.loc.end
+                  : node,
+              );
+            }
 
-          // Add the params to varDeclaredNames to ensure that an error is thrown
-          // if a let/const declaration in the function clashes with one of the params.
-          this.checkParams(
-            node,
-            !this.state.strict && !allowExpression && !isMethod && !nonSimple,
-            allowExpression,
-            strictModeChanged,
-          );
+            const strictModeChanged = !oldStrict && this.state.strict;
 
-          // Ensure the function name isn't a forbidden identifier in strict mode, e.g. 'eval'
-          if (this.state.strict && node.id) {
-            this.checkIdentifier(
-              node.id,
-              BindingFlag.TYPE_OUTSIDE,
+            // Add the params to varDeclaredNames to ensure that an error is thrown
+            // if a let/const declaration in the function clashes with one of the params.
+            this.checkParams(
+              node,
+              !this.state.strict && !allowExpression && !isMethod && !nonSimple,
+              allowExpression,
               strictModeChanged,
             );
-          }
-        },
-      );
-      this.prodParam.exit();
-      this.state.labels = oldLabels;
+
+            // Ensure the function name isn't a forbidden identifier in strict mode, e.g. 'eval'
+            if (this.state.strict && node.id) {
+              this.checkIdentifier(
+                node.id,
+                BindingFlag.TYPE_OUTSIDE,
+                strictModeChanged,
+              );
+            }
+          },
+        );
+        this.prodParam.exit();
+        this.state.labels = oldLabels;
+      }
+    } finally {
+      this.state.mxFunctionParamNames.pop();
+      this.expressionScope.exit();
     }
-    this.expressionScope.exit();
   }
 
   isSimpleParameter(node: N.Pattern | N.TSParameterProperty): boolean {

@@ -14,7 +14,9 @@ const parseMx = (source: string) => parseSolid(source);
 /** Prints the sole top-level statement's expression for a `const el = <...>;` source. */
 function printFirstExpression(source: string): string {
   const file = parseMx(source);
-  const stmt = file.program.body[0] as unknown as {
+  const stmt = file.program.body.find(
+    (item: { type?: string }) => item.type === "VariableDeclaration",
+  ) as unknown as {
     declarations: [{ init: Expression }];
   };
   const init = stmt.declarations[0].init;
@@ -112,7 +114,27 @@ describe("attribute tags become props", () => {
   it("does not recurse when two SolidMX callees import each other", () => {
     const filename = join(HERE, "fixtures", "mutual-a.solid.mx");
     const source = readFileSync(filename, "utf8");
-    expect(() => parseSolid(source, filename)).not.toThrow();
+    const result = print(source, filename, {
+      mxRegionCompile: solidRegionCompile,
+    });
+    expect(result.code.replace(/\s+/g, " ")).toContain(
+      "<MutualB b={() => <>B</>} />",
+    );
+    expect(result.dependencies).toEqual([
+      join(HERE, "fixtures", "mutual-b.solid.mx"),
+    ]);
+  });
+
+  it("does not resolve a locally shadowed component through its module import", () => {
+    const filename = join(HERE, "fixtures", "shadowed.solid.mx");
+    const source =
+      'import AttrCallee from "./attr-callee.tsx";\nfunction view(AttrCallee: unknown) { return <AttrCallee><@item>local</@item></AttrCallee>; }';
+    const result = print(source, filename, {
+      mxRegionCompile: solidRegionCompile,
+    });
+    expect(result.dependencies).not.toContain(
+      join(HERE, "fixtures", "attr-callee.tsx"),
+    );
   });
   it("turns an element body into a prop", () => {
     const code = printFirstExpression(
@@ -154,7 +176,7 @@ describe("attribute tags become props", () => {
     expect(attrOrder[0]).toBeLessThan(attrOrder[1] as number);
     expect(attrOrder[1]).toBeLessThan(attrOrder[2] as number);
     expect(code.replace(/\s+/g, " ")).toContain(
-      "footer={{ content: year => () => year }}",
+      "footer={{ content: year => () => <>{() => {",
     );
     // The non-attribute-tag children stay children.
     expect(code).toContain("<p>body</p>");
