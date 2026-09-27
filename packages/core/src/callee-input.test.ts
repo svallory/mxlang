@@ -578,6 +578,18 @@ describe("readCalleeInput", () => {
     } satisfies CalleeInputResult);
   });
 
+  it("returns none for an untyped .marko callee", () => {
+    expect(
+      readCalleeInput(
+        namedTarget("Panel"),
+        context({ imports: new Map([["Panel", "./untyped.marko"]]) }),
+      ),
+    ).toEqual({
+      input: { kind: "none", path: fixture("untyped.marko") },
+      dependencies: [fixture("untyped.marko")],
+    } satisfies CalleeInputResult);
+  });
+
   it("resolves directory imports through index files", () => {
     const source = fixtureSource("directory/index.ts");
     expect(
