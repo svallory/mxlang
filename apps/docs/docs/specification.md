@@ -861,6 +861,14 @@ change its value shape. Fallback cardinality remains singular when at most one
 occurrence can be taken on a path and becomes an array for repeats or loops.
 An explicit `Input` is unchanged: its `as` still defaults to `data`.
 
+On the Solid host both forms are reusable accessors. Data tags are read with
+`<${input.head.content}/>` and renderable tags with `<${input.head}/>`;
+parameterized forms pass arguments at that same dynamic call site, for example
+`<${input.head.content("Ada")}/>` or `<${input.head("Ada")}/>` respectively.
+Omitting those arguments is a positioned compile error. Escaped interpolation
+inside the accessor remains escaped during SSR and stays reactive text in the
+browser.
+
 Astro and Angular are projection hosts rather than value hosts. A singular
 attribute tag becomes an Astro named slot or Angular `ngProjectAs` projection;
 `data` and `renderable` declarations select that same named content. Astro's
