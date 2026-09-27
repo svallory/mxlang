@@ -1292,6 +1292,79 @@ describe("one fixture per IR kind", () => {
       ]);
     });
 
+    it("keeps nested fallback plans isolated between sibling parent names", () => {
+      const shape = find(
+        lowerSource(
+          '<Panel><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Panel>',
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(
+        shape.attributeTags.map((parent) => parent.attrTagProps),
+      ).toMatchObject([
+        [{ name: "icon", cardinality: "single", as: "renderable" }],
+        [{ name: "icon", cardinality: "single", as: "data" }],
+      ]);
+
+      const cardinality = find(
+        lowerSource(
+          "<Panel><@tab><@icon>I</@icon></@tab><@card><@icon>J</@icon><@icon>K</@icon></@card></Panel>",
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(
+        cardinality.attributeTags.map((parent) => parent.attrTagProps),
+      ).toMatchObject([
+        [{ name: "icon", cardinality: "single", as: "renderable" }],
+        [{ name: "icon", cardinality: "array", as: "renderable" }],
+      ]);
+
+      const names = find(
+        lowerSource(
+          "<Panel><@tab><@icon>I</@icon></@tab><@card><@badge>B</@badge></@card></Panel>",
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(
+        names.attributeTags.map((parent) => parent.attrTagProps),
+      ).toMatchObject([
+        [{ name: "icon", cardinality: "single", as: "renderable" }],
+        [{ name: "badge", cardinality: "single", as: "renderable" }],
+      ]);
+    });
+
+    it("does not leak a declared nested plan into an undeclared sibling parent", () => {
+      const tab = attrTagDecl({
+        as: "data",
+        nested: new Map([["icon", attrTagDecl({ as: "renderable" })]]),
+      });
+      const component = find(
+        lowerSource(
+          '<Panel><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Panel>',
+          v2(),
+          declaredInput({ tab }, [], true),
+        ).body,
+        "Component",
+      );
+      expect(component.attributeTags[0]?.attrTagProps).toMatchObject([
+        {
+          name: "icon",
+          cardinality: "single",
+          as: "renderable",
+          declared: true,
+        },
+      ]);
+      expect(component.attributeTags[1]?.attrTagProps).toMatchObject([
+        { name: "icon", cardinality: "single", as: "data" },
+      ]);
+      expect(component.attributeTags[1]?.attrTagProps[0]).not.toHaveProperty(
+        "declared",
+      );
+    });
+
     it("unifies fallback shape recursively below the second level", () => {
       const component = find(
         lowerSource(

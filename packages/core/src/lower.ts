@@ -25,7 +25,10 @@
 
 import { readFileSync } from "node:fs";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
-import { fallbackAttrTagShape, unifyNestedAttrTagPlans } from "./attr-tag.ts";
+import {
+  fallbackAttrTagShape,
+  unifyNestedAttrTagPlanGroups,
+} from "./attr-tag.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
@@ -1240,7 +1243,7 @@ function lowerAttributeTags(
     }
   };
   collect(tree);
-  unifyNestedAttrTagPlans(flat);
+  unifyNestedAttrTagPlanGroups(flat);
   if (makePlan && hasContent(contentChildren)) {
     const childrenTag = flat.find((tag) => tag.name === "children");
     if (childrenTag) {

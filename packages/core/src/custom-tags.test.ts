@@ -306,6 +306,36 @@ describe("custom tag transforms", () => {
     }
   });
 
+  it("keeps sibling parent plans isolated when a transform rebuilds them", () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-transform-siblings-"));
+    const filename = join(directory, "tag.mx");
+    const source = "<div/>\n";
+    writeFileSync(filename, source);
+    const tag: CustomTag = {
+      template: { filename, source },
+      transform(call, ctx) {
+        return ctx.build.template(call);
+      },
+    } as CustomTag;
+    try {
+      const ir = lowerWithTags(
+        '<tag><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></tag>\n',
+        { tag },
+        {
+          ...fakeDeclarations(),
+          attrTags: 2,
+        },
+      );
+      const parents = find(ir.body, "Component").attributeTags;
+      expect(parents.map((parent) => parent.attrTagProps)).toMatchObject([
+        [{ name: "icon", cardinality: "single", as: "renderable" }],
+        [{ name: "icon", cardinality: "single", as: "data" }],
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   // Both of these tags are *template-less*: a sidecar `transform`, with no
   // `.mx` unit behind it. `/var` binds what a unit returns with `<return>`,
   // so a tag with no template has nothing to bind — which is a different

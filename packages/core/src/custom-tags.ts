@@ -7,7 +7,10 @@
  * custom tag existed.
  */
 
-import { fallbackAttrTagShape, unifyNestedAttrTagPlans } from "./attr-tag.ts";
+import {
+  fallbackAttrTagShape,
+  unifyNestedAttrTagPlanGroups,
+} from "./attr-tag.ts";
 import type { Ctx, Node } from "./core.ts";
 import { TranslateError, warn } from "./core.ts";
 import type {
@@ -235,7 +238,7 @@ function rebuildAttributeTagPlan(
       attributeTagTree.push({ kind: "AttributeTag", tag, loc: tag.loc });
     }
   }
-  unifyNestedAttrTagPlans(tags);
+  unifyNestedAttrTagPlanGroups(tags);
 
   const declarations = new Map(
     originalProps

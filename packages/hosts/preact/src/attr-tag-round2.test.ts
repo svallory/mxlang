@@ -226,6 +226,49 @@ describe("attribute tags round-2 regressions (executed)", () => {
       expect(html).toBe("<p>true:I</p><p>true:JK</p>");
     });
 
+    it(`${host}: keeps nested fallback shape isolated between sibling parent names`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Row>',
+        "row.mx":
+          '<p>${String("content" in input.tab.icon)}|${String("content" in input.card.icon)}:${input.card.icon.k}:<${input.tab.icon}/>:<${input.card.icon.content}/></p>',
+      });
+      expect(html).toBe("<p>false|true:1:I:J</p>");
+    });
+
+    it(`${host}: keeps nested fallback cardinality isolated between sibling parent names`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon>J</@icon><@icon>K</@icon></@card></Row>',
+        "row.mx":
+          "<p>${String(Array.isArray(input.tab.icon))}|${String(Array.isArray(input.card.icon))}:<${input.tab.icon}/>:<for|icon| of=input.card.icon><${icon}/></for></p>",
+      });
+      expect(html).toBe("<p>false|true:I:JK</p>");
+    });
+
+    it(`${host}: keeps only each sibling parent's own nested props`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@badge>B</@badge></@card></Row>',
+        "row.mx":
+          "<p>${typeof input.tab.badge}|${typeof input.card.icon}:<${input.tab.icon}/>:<${input.card.badge}/></p>",
+      });
+      expect(html).toBe("<p>undefined|undefined:I:B</p>");
+    });
+
+    it(`${host}: does not apply a declared sibling's nested shape to an undeclared parent`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@card><@icon k="1">J</@icon></@card></Row>',
+        "row.mx": [
+          'export interface Input { tab?: AttrTag<{ attrs: { icon?: AttrTag<{ as: "renderable" }> } }>; [key: string]: unknown }',
+          "<const/card=(input.card as any)/>",
+          '<p>${String("content" in card.icon)}:${card.icon.k}:<${card.icon.content}/></p>',
+        ].join("\n"),
+      });
+      expect(html).toBe("<p>true:1:J</p>");
+    });
+
     it(`${host}: executes mixed fallback occurrences and parameterized bare tags`, async () => {
       const html = await renderFixture(host, {
         "main.mx":
