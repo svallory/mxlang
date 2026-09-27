@@ -9,6 +9,20 @@ attribute-tag source spans, nested/control-flow trees, callee-aware property
 plans, and host capability/import metadata. Hosts must consume these fields
 instead of reconstructing attribute-tag shape from the flat list.
 
+### Feature: syntactic callee `Input` resolution for attribute tags (decisions 106 and 107)
+
+Core now exports `readCalleeInput`, which synchronously resolves a component
+target and reads its exported `Input` declaration from `.mx`, TypeScript, TSX,
+or JavaScript modules. It recognizes literal `AttrTag` declarations, follows
+bounded same-file and type-import aliases, reports invalid configurations at
+callee spans, and recursively describes nested attribute tags declared inside
+`attrs`.
+
+`CompileResult` now includes `dependencies: string[]`, containing every callee
+and followed type-import file read during lowering. Integrations must use these
+edges to invalidate callers when a callee's `Input` changes; the array remains
+empty until lowering invokes the resolver.
+
 ### Breaking: an element's `on<Name>`/`on-<exact>` attribute lowers to a new `event` attr kind
 
 An attribute on an **element** matching `/^on[A-Z-]/` **whose value is an

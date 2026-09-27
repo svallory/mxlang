@@ -355,6 +355,24 @@ export interface Ctx {
    * let a tag the file never mentions prepend nodes to it.
    */
   customTagsUsed?: Set<string>;
+  /**
+   * Every file the callee-`Input` resolver read while lowering this file
+   * (decision 106), including followed `import type` targets.
+   *
+   * Written by `callee-input.ts`'s `readCalleeInput` as it resolves callees;
+   * drained into `CompileResult.dependencies` so an integration (the Vite
+   * plugin today, the language server in phase 4) can invalidate callers when
+   * a callee's `Input` changes. Empty until lowering actually resolves a
+   * callee — a file with no component calls records nothing.
+   */
+  dependencies?: Set<string>;
+  /**
+   * A tool-supplied synchronous import resolver (decision 107), tried before
+   * the built-in relative/`require.resolve` resolution: tsconfig `paths`, Vite
+   * `resolve.alias`. Passed through `TranslatorOptions.resolveImport`; unset
+   * for every integration that has no aliases to contribute.
+   */
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 /** One positioned warning: a compile that succeeded while dropping something. */

@@ -43,6 +43,15 @@ export interface RawSourceMap {
 export interface CompileResult {
   code: string;
   map: RawSourceMap;
+  /**
+   * Every file the callee-`Input` resolver read while compiling this file
+   * (decision 106), including followed `import type` targets. An integration
+   * invalidates this file's module when one of these changes — the Vite
+   * plugin does from phase 1a — so a callee's `Input` edit cannot leave a
+   * caller serving a stale attribute-tag shape. Empty until lowering
+   * actually resolves a callee (task 1b wires the resolver in).
+   */
+  dependencies: string[];
 }
 
 /** The taglib lookup `@marko/compiler` builds for a translator. */
@@ -68,6 +77,14 @@ export interface TranslatorOptions {
    * before; a language server passes an array and publishes them instead.
    */
   warnings?: MxWarning[];
+  /**
+   * A synchronous import resolver (decision 107), tried before the built-in
+   * relative/`require.resolve` resolution whenever lowering reads a callee
+   * file. Lets a tool supply aliases — tsconfig `paths`, Vite
+   * `resolve.alias` — so an aliased import resolves to the same file the
+   * bundler sees instead of falling back with a stale-shape warning.
+   */
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 export interface HostOptions extends TranslatorOptions {
@@ -100,6 +117,8 @@ let current: {
   emitIr: (ir: Ir, ctx: Ctx) => string;
   customTags?: Readonly<Record<string, CustomTag>>;
   warnings?: MxWarning[];
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
+  dependencies: string[];
 } | null = null;
 
 /**
@@ -150,12 +169,14 @@ export function createTranslator(host: TranslatorOptions = {}) {
           );
           ctx.customTags = state.customTags;
           ctx.warnings = state.warnings;
+          ctx.resolveImport = state.resolveImport;
           // Every host reaching `compileSource` emits a whole module with a
           // default export, so the file has a declaration to name and a tag
           // may call itself without importing itself.
           ctx.emitsModule = true;
           const code = state.emitIr(lower(ctx, path.node.body), ctx);
           state.code = state.postEmit ? state.postEmit(code) : code;
+          state.dependencies = [...(ctx.dependencies ?? [])];
           path.node.body = [];
         },
       },
@@ -191,6 +212,8 @@ export function compileSource(
     emitIr: host.emitIr,
     customTags: host.customTags,
     warnings: host.warnings,
+    resolveImport: host.resolveImport,
+    dependencies: [] as string[],
     // The lookup is keyed on the translator object, so asking for it here gets
     // exactly the taglibs this host registers plus Marko's own element
     // taglibs — and the tag-discovery directories beside this particular file.
@@ -217,6 +240,7 @@ export function compileSource(
 
   return {
     code: state.code,
+    dependencies: state.dependencies,
     map: {
       version: 3,
       file: filename,

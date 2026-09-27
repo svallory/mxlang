@@ -6,5 +6,13 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    // Callee-input fixtures are *data*: they intentionally reference the
+    // ambient `AttrTag` type, which does not exist as a real type until the
+    // AttrTag types land (attr-tags phase 1b). The callee-Input reader reads
+    // them syntactically; typechecking them would test a type that is not
+    // shipped yet.
+    "src/fixtures/callee-input"
+  ]
 }
