@@ -1,0 +1,4 @@
+{
+  "marko": "divergence",
+  "reason": "intentional divergence (decision 106): repeated untyped attribute tags are a real array of data values `{ content }`; Marko 6 exposes its iterable attribute-tag record of bare renderables"
+}

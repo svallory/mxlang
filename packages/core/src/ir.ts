@@ -229,6 +229,8 @@ export interface Branch extends IrBase {
 export interface HostTag<Data = unknown> extends IrBase {
   name: string;
   attrs: Attr[];
+  /** Tag arguments, retained for a claimed dynamic tag. */
+  args?: Expr[];
   children: IrNode[];
   attributeTags: AttributeTag[];
   attributeTagTree: AttributeTagNode[];

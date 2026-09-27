@@ -1,0 +1,4 @@
+{
+  "marko": "divergence",
+  "reason": "intentional divergence (decision 106): an untyped callee falls back to a data attribute-tag value `{ content }`, while Marko 6 passes a bare renderable read directly with `<${input.header}/>`"
+}

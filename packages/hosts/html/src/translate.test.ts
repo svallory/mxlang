@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
@@ -19,6 +23,42 @@ import { brandRender } from "./translate.ts";
 
 const src = (body: string) => (body.endsWith("\n") ? body : `${body}\n`);
 const file = "/tmp/mx-translator-test/probe.marko";
+
+async function renderModules(
+  sources: Record<string, string>,
+  entry: string,
+  input: unknown = {},
+): Promise<string> {
+  const dir = mkdtempSync(join(tmpdir(), "mx-html-render-"));
+  try {
+    for (const [name, source] of Object.entries(sources)) {
+      writeFileSync(join(dir, name), src(source));
+    }
+    writeFileSync(
+      join(dir, "runtime.js"),
+      [
+        "export function escape(value) {",
+        '  if (value === null || value === undefined) return "";',
+        '  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\\"/g, "&quot;").replace(/\'/g, "&#39;");',
+        "}",
+      ].join("\n"),
+    );
+    for (const [name, source] of Object.entries(sources)) {
+      if (!name.endsWith(".mx")) continue;
+      const path = join(dir, name);
+      const code = compile(src(source), path)
+        .code.replaceAll('from "@mxlang/html"', 'from "./runtime.js"')
+        .replace(/(from\s+")(\.[^"]+)\.mx(")/g, "$1$2.ts$3");
+      writeFileSync(path.replace(/\.mx$/, ".ts"), code);
+    }
+    const module = (await import(
+      `${pathToFileURL(join(dir, entry.replace(/\.mx$/, ".ts"))).href}?t=${Date.now()}`
+    )) as { default: (value: unknown) => string };
+    return module.default(input);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 describe("an inert tag is inert only in its declared shape", () => {
   // Inert means the construct emits nothing — never that a body or an extra
@@ -303,22 +343,135 @@ describe("class and style take Marko's structured values", () => {
   });
 });
 
-describe("attribute tags are renderables, Marko's convention", () => {
-  // `@mxlang/html` passes callable function props (S3); Marko passes
-  // renderables read with `<${input.header}/>`, and a repeated attribute tag
-  // is an array. The two conventions are incompatible, which is exactly why
-  // this is a separate package rather than a flag.
-  it("passes a single attribute tag as a named prop", () => {
-    const body =
-      'import Panel from "./panel.marko"\n<Panel><@header>H</@header></Panel>';
-    expect(compile(src(body), file).code).toContain("header: (");
+describe("attribute-tag v2 values (executed)", () => {
+  it("renders declared data and renderable tags through their callee forms", async () => {
+    const html = await renderModules(
+      {
+        "callee.mx": [
+          "export interface Input {",
+          '  head?: AttrTag<{ as: "renderable" }>;',
+          "  row?: AttrTag<{ attrs: { label: string }; params: [suffix: string] }>;",
+          "}",
+          '<section><${input.head}/><if=input.row><b>${input.row.label}:<${input.row.content}("!")/></b></if></section>',
+        ].join("\n"),
+        "entry.mx": [
+          'import Callee from "./callee.mx"',
+          '<Callee><@head>H</@head><@row|suffix| label="R">${suffix}</@row></Callee>',
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<section>H<b>R:!</b></section>");
   });
 
-  it("passes a repeated attribute tag as an array", () => {
-    const body =
-      'import List from "./list.marko"\n<List><@item>a</@item><@item>b</@item></List>';
-    const { code } = compile(src(body), file);
-    expect(code).toMatch(/item: \[\(/);
+  it("merges static, if/else and for occurrences into a real array", async () => {
+    const html = await renderModules(
+      {
+        "list.ts": [
+          "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
+          "export default function List(input: Input): string {",
+          '  return input.item.map((item) => `<i>${item.id}:${item.content?.()}</i>`).join("");',
+          "}",
+        ].join("\n"),
+        "entry.mx": [
+          'import List from "./list.ts"',
+          "<List>",
+          "  <@item id=0>S</@item>",
+          "  <if=input.on><@item id=1>I</@item></if>",
+          "  <else><@item id=2>E</@item></else>",
+          "  <for|n| of=input.values><@item id=n>${n}</@item></for>",
+          "</List>",
+        ].join("\n"),
+      },
+      "entry.mx",
+      { on: true, values: [3, 4] },
+    );
+    expect(html).toBe("<i>0:S</i><i>1:I</i><i>3:3</i><i>4:4</i>");
+  });
+
+  it("passes an empty array when a declared repeated tag has no occurrences", async () => {
+    const html = await renderModules(
+      {
+        "list.ts": [
+          "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
+          "export default function List(input: Input): string {",
+          "  return `items:${input.item.length}`;",
+          "}",
+        ].join("\n"),
+        "entry.mx": 'import List from "./list.ts"\n<List/>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("items:0");
+  });
+
+  it("emits nested data tags recursively through two levels", async () => {
+    const html = await renderModules(
+      {
+        "tree.mx": [
+          "export interface Input {",
+          "  group?: AttrTag<{ attrs: {",
+          "    title: string;",
+          "    item: AttrTag<{ attrs: {",
+          "      label: string;",
+          '      icon?: AttrTag<{ as: "renderable" }>;',
+          "    } }>[];",
+          "  } }>;",
+          "}",
+          "<if=input.group>",
+          "  <h1>${input.group.title}</h1>",
+          "  <for|item| of=input.group.item><p>${item.label}:<${item.icon}/></p></for>",
+          "</if>",
+        ].join("\n"),
+        "entry.mx": [
+          'import Tree from "./tree.mx"',
+          '<Tree><@group title="G"><@item label="A"><@icon>I</@icon></@item><@item label="B"><@icon>J</@icon></@item></@group></Tree>',
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<h1>G</h1><p>A:I</p><p>B:J</p>");
+  });
+
+  it("uses the data fallback for an untyped dynamic callee", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": '<${input.callee}><@slot label="F">fallback</@slot></>',
+      },
+      "entry.mx",
+      {
+        callee: (props: { slot: { label: string; content?: () => string } }) =>
+          `${props.slot.label}:${props.slot.content?.()}`,
+      },
+    );
+    expect(html).toBe("F:fallback");
+  });
+
+  it("sets data content to undefined when the tag has no body", async () => {
+    const html = await renderModules(
+      {
+        "callee.mx": [
+          "export interface Input { badge?: AttrTag<{ attrs: { label: string } }> }",
+          "<if=input.badge><p>${input.badge.label}:${String(input.badge.content)}</p></if>",
+        ].join("\n"),
+        "entry.mx": [
+          'import Callee from "./callee.mx"',
+          '<Callee><@badge label="empty"/></Callee>',
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<p>empty:undefined</p>");
+  });
+
+  it("imports the html-specialized AttrTag type when Input uses it", () => {
+    const code = compile(
+      src(
+        'export interface Input { slot?: AttrTag<{ as: "renderable" }> }\n<div/>',
+      ),
+      file,
+    ).code;
+    expect(code).toContain('import type { AttrTag } from "@mxlang/html";');
   });
 
   it("names ordinary children `content`, the prop Marko's own tags read", () => {
@@ -351,7 +504,6 @@ describe("dynamic tags", () => {
   // case "is reported as such" was also wrong — it compiled clean and lost
   // the content.
   it("forwards an attribute tag on a dynamic tag into the renderDynamic call, not `{}`", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     const { code } = compile(
       src("<${input.comp}><@header>hi</@header></>"),
       file,

@@ -35,6 +35,8 @@
 import {
   type Attr,
   type AttributeTag,
+  type AttributeTagNode,
+  type AttrTagProp,
   type Block,
   type ComponentTarget,
   concatMapped,
@@ -43,6 +45,7 @@ import {
   type Expr,
   // biome-ignore lint/suspicious/noShadowRestrictedNames: the compiler calls the same helper the emitted module imports, so a static value and a runtime one are escaped by one implementation
   escape,
+  type ForHead,
   type GeneratedMapping,
   type HostTag,
   type Ir,
@@ -109,6 +112,8 @@ interface State {
    * (invariant §7.5-6).
    */
   returnTemp: number;
+  /** Serial for local arrays and source temporaries in attribute-tag loops. */
+  attrTagTemp: number;
 }
 
 export interface StringEmitter extends Emitter<string[]> {
@@ -131,6 +136,7 @@ export function createEmitter(): StringEmitter {
     moduleHoisted: [],
     indent: 1,
     returnTemp: 0,
+    attrTagTemp: 0,
   };
 
   const push = (line: string | MappedCode): void => {
@@ -204,6 +210,217 @@ export function createEmitter(): StringEmitter {
       `\n${INDENT.repeat(outerIndent)}}`,
     );
   };
+
+  /** Object-literal parts for ordinary component or data-tag attributes. */
+  const propPartsOfAttrs = (attrs: Attr[]): MappedCode[] =>
+    attrs.map((attr) => {
+      if (attr.kind === "spread") {
+        return concatMapped(`...${attr.value.code}`);
+      }
+      const value =
+        attr.kind === "boolean"
+          ? "true"
+          : attr.kind === "static"
+            ? quote(attr.value)
+            : attr.value.code;
+      return concatMapped(
+        mapped(propKey(attr.name), attr.nameSpan),
+        ": ",
+        value,
+      );
+    });
+
+  const joinParts = (parts: MappedCode[]): MappedCode =>
+    concatMapped(
+      ...parts.flatMap((part, index) => (index === 0 ? [part] : [", ", part])),
+    );
+
+  /** First authored tag-name span represented by a resolved source tree. */
+  const attrTagNameSpan = (
+    nodes: AttributeTagNode[],
+  ): { sourceStart: number; sourceEnd: number } | null => {
+    for (const node of nodes) {
+      if (node.kind === "AttributeTag") return node.tag.nameSpan;
+      const nested =
+        node.kind === "AttributeTagIf"
+          ? node.branches.flatMap((branch) => branch.nodes)
+          : node.nodes;
+      const span = attrTagNameSpan(nested);
+      if (span) return span;
+    }
+    return null;
+  };
+
+  /** One concrete attribute-tag occurrence in its declared host shape. */
+  const attrTagValue = (
+    tag: AttributeTag,
+    as: AttrTagProp["as"],
+  ): MappedCode => {
+    const content = blockFunction(
+      tag.block.children,
+      tag.block.params.join(", "),
+    );
+    if (as === "renderable") return content;
+
+    const parts = propPartsOfAttrs(tag.attrs);
+    for (const nested of tag.attrTagProps) {
+      parts.push(
+        concatMapped(
+          mapped(propKey(nested.name), attrTagNameSpan(nested.source)),
+          ": ",
+          attrTagPropValue(nested),
+        ),
+      );
+    }
+    parts.push(concatMapped("content: ", tag.hasBody ? content : "undefined"));
+    return concatMapped("{ ", joinParts(parts), " }");
+  };
+
+  const singleNodeValue = (
+    node: AttributeTagNode,
+    as: AttrTagProp["as"],
+  ): MappedCode => {
+    if (node.kind === "AttributeTag") return attrTagValue(node.tag, as);
+    if (node.kind === "AttributeTagFor") {
+      return fail(
+        "internal attribute-tag plan error: a singular value cannot contain `<for>`",
+        node,
+      );
+    }
+
+    let alternate = concatMapped("undefined");
+    for (let index = node.branches.length - 1; index >= 0; index--) {
+      const branch = node.branches[index];
+      if (!branch) continue;
+      const value = singleSourceValue(branch.nodes, as);
+      alternate = branch.test
+        ? concatMapped(
+            "(",
+            branch.test.code,
+            " ? ",
+            value,
+            " : ",
+            alternate,
+            ")",
+          )
+        : value;
+    }
+    return alternate;
+  };
+
+  const singleSourceValue = (
+    source: AttributeTagNode[],
+    as: AttrTagProp["as"],
+  ): MappedCode => {
+    if (source.length === 0) return concatMapped("undefined");
+    const values = source.map((node) => singleNodeValue(node, as));
+    if (values.length === 1) return values[0] as MappedCode;
+    return concatMapped(
+      "(",
+      ...values.flatMap((value, index) =>
+        index === 0 ? [value] : [" ?? ", value],
+      ),
+      ")",
+    );
+  };
+
+  const arrayLoopValue = (
+    node: Extract<AttributeTagNode, { kind: "AttributeTagFor" }>,
+    as: AttrTagProp["as"],
+  ): MappedCode => {
+    const source: ForHead["source"] = node.loop.source;
+    if (source.kind === "range" && source.step) {
+      return fail(
+        "`<for step=...>`: step is not supported; use a computed array",
+        node,
+      );
+    }
+
+    const serial = state.attrTagTemp++;
+    const result = `$attrTags${serial}`;
+    const sourceName = `$attrTagSource${serial}`;
+    const [first = "item", second] = node.loop.params;
+    const body = arraySourceValue(node.nodes, as);
+
+    if (source.kind === "of") {
+      const head = second
+        ? `for (const [${second}, ${first}] of [...${sourceName}].entries())`
+        : `for (const ${first} of ${sourceName})`;
+      return concatMapped(
+        `(() => { const ${result} = []; const ${sourceName} = ${source.list.code}; ${head} { ${result}.push(...(`,
+        body,
+        `)); } return ${result}; })()`,
+      );
+    }
+
+    if (source.kind === "in") {
+      return concatMapped(
+        `(() => { const ${result} = []; const ${sourceName} = ${source.object.code}; for (const [${first}, ${second ?? "value"}] of Object.entries(${sourceName})) { ${result}.push(...(`,
+        body,
+        `)); } return ${result}; })()`,
+      );
+    }
+
+    const start = `$attrTagStart${serial}`;
+    const bound = `$attrTagBound${serial}`;
+    const compare = source.inclusive ? "<=" : "<";
+    return concatMapped(
+      `(() => { const ${result} = []; const ${start} = ${source.from ? source.from.code : "0"}; const ${bound} = ${source.bound.code}; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
+      body,
+      `)); } return ${result}; })()`,
+    );
+  };
+
+  const arrayNodeValue = (
+    node: AttributeTagNode,
+    as: AttrTagProp["as"],
+  ): MappedCode => {
+    if (node.kind === "AttributeTag") {
+      return concatMapped("[", attrTagValue(node.tag, as), "]");
+    }
+    if (node.kind === "AttributeTagFor") return arrayLoopValue(node, as);
+
+    let alternate = concatMapped("[]");
+    for (let index = node.branches.length - 1; index >= 0; index--) {
+      const branch = node.branches[index];
+      if (!branch) continue;
+      const value = arraySourceValue(branch.nodes, as);
+      alternate = branch.test
+        ? concatMapped(
+            "(",
+            branch.test.code,
+            " ? ",
+            value,
+            " : ",
+            alternate,
+            ")",
+          )
+        : value;
+    }
+    return alternate;
+  };
+
+  const arraySourceValue = (
+    source: AttributeTagNode[],
+    as: AttrTagProp["as"],
+  ): MappedCode => {
+    if (source.length === 0) return concatMapped("[]");
+    const values = source.map((node) => arrayNodeValue(node, as));
+    if (values.length === 1) return values[0] as MappedCode;
+    return concatMapped(
+      "[",
+      ...values.flatMap((value, index) =>
+        index === 0 ? ["...(", value, ")"] : [", ...(", value, ")"],
+      ),
+      "]",
+    );
+  };
+
+  function attrTagPropValue(prop: AttrTagProp): MappedCode {
+    return prop.cardinality === "array"
+      ? arraySourceValue(prop.source, prop.as)
+      : singleSourceValue(prop.source, prop.as);
+  }
 
   /**
    * `class` and `style` take structured values in Marko, and render as a
@@ -298,7 +515,7 @@ export function createEmitter(): StringEmitter {
   /** A component's props, in Marko's own convention. */
   const propsOf = (
     attrs: Attr[],
-    attributeTags: AttributeTag[],
+    attrTagProps: AttrTagProp[],
     content: Block | null,
   ): {
     parts: MappedCode[];
@@ -343,31 +560,11 @@ export function createEmitter(): StringEmitter {
       }
     }
 
-    // A repeated attribute tag is an array, exactly as Marko does it — which
-    // is what lets a component write `<for|it| of=input.item><${it}/></for>`.
-    const blocks = new Map<
-      string,
-      Array<{ tag: AttributeTag; fn: MappedCode }>
-    >();
-    for (const tag of attributeTags) {
-      const fn = blockFunction(tag.block.children, tag.block.params.join(", "));
-      const existing = blocks.get(tag.name);
-      if (existing) existing.push({ tag, fn });
-      else blocks.set(tag.name, [{ tag, fn }]);
-    }
-    for (const [name, entries] of blocks) {
-      const fns = entries.map(({ fn }) => fn);
-      setNamed(
-        name,
-        fns.length === 1
-          ? (fns[0] as MappedCode)
-          : concatMapped(
-              "[",
-              ...fns.flatMap((fn, index) => (index === 0 ? [fn] : [", ", fn])),
-              "]",
-            ),
-        entries[0]?.tag.nameSpan ?? null,
-      );
+    // Decision 106: cardinality and value shape come from the callee's Input,
+    // already resolved by core. The legacy flat occurrence list is retained
+    // for tooling only; v2 hosts emit exclusively from this plan.
+    for (const prop of attrTagProps) {
+      setNamed(prop.name, attrTagPropValue(prop), attrTagNameSpan(prop.source));
     }
 
     // Ordinary children become `content`, not `children`: that is the prop
@@ -407,7 +604,7 @@ export function createEmitter(): StringEmitter {
     component(node) {
       const { parts, named, spreads } = propsOf(
         node.attrs,
-        node.attributeTags,
+        node.attrTagProps,
         node.content,
       );
       const target = node.target;
@@ -427,7 +624,11 @@ export function createEmitter(): StringEmitter {
           concatMapped(
             `out += renderDynamic(${target.expr.code}, { `,
             joinedParts,
-            " });",
+            " }",
+            node.args.length > 0
+              ? `, [${node.args.map((arg) => arg.code).join(", ")}]`
+              : "",
+            ");",
           ),
         );
         return;
@@ -742,7 +943,7 @@ export function createEmitter(): StringEmitter {
           attributeTags: tag.attributeTags,
           attributeTagTree: tag.attributeTagTree,
           attrTagProps: tag.attrTagProps,
-          args: [],
+          args: tag.args ?? [],
           loc: tag.loc,
         });
         return;
@@ -768,6 +969,9 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
   const lines: Array<string | MappedCode> = [
     `import { escape } from "${escapeFrom}";`,
   ];
+  if (ir.needsAttrTagImport) {
+    lines.push(`import type { AttrTag } from "${escapeFrom}";`);
+  }
   const hoisted = [
     ...ir.imports.map((node) => node.code),
     ...ir.hoisted.map((node) => node.code),

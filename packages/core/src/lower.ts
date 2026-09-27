@@ -593,15 +593,18 @@ function isLayout(node: Node): boolean {
 }
 
 function isControl(node: Node): boolean {
-  const name = node?.name?.value;
+  const name = String(node?.name?.value ?? "").replace(/^@/, "");
   return node?.type === "MarkoTag" && (name === "if" || name === "for");
 }
 
 function containsAttributeTags(node: Node): boolean {
   if ((node.attributeTags ?? []).length > 0) return true;
-  return (node.body?.body ?? []).some(
-    (child: Node) => isControl(child) && containsAttributeTags(child),
-  );
+  return (node.body?.body ?? []).some((child: Node) => {
+    const name = String(child?.name?.value ?? "");
+    return (
+      name.startsWith("@") || (isControl(child) && containsAttributeTags(child))
+    );
+  });
 }
 
 function validateParentCollision(node: Node, schema: AttrSchema): void {
@@ -1040,7 +1043,7 @@ function lowerAttributeIf(
   let cursor = index;
   while (cursor < siblings.length) {
     const branch = siblings[cursor];
-    const name = branch.name?.value;
+    const name = String(branch.name?.value ?? "").replace(/^@/, "");
     if (cursor > index && name !== "else" && name !== "else-if") break;
     const conditionAttr =
       name === "if"
@@ -1080,7 +1083,7 @@ function attributeIfChainEnd(body: Node[], index: number): number {
   while (cursor < body.length) {
     while (cursor < body.length && isLayout(body[cursor])) cursor++;
     const branch = body[cursor];
-    const name = branch?.name?.value;
+    const name = String(branch?.name?.value ?? "").replace(/^@/, "");
     if (name !== "else" && name !== "else-if") break;
     cursor++;
     const conditional =
@@ -1106,18 +1109,43 @@ function lowerAttributeTags(
     kind: "tag" | "control";
     node: Node;
     index?: number;
+    siblings?: Node[];
   }> = [];
-  for (const tag of node.attributeTags ?? []) {
-    candidates.push({
-      offset: nodeSpan(ctx, tag).sourceStart,
-      kind: "tag",
-      node: tag,
-    });
+  const directTags = node.attributeTags ?? [];
+  for (let index = 0; index < directTags.length; index++) {
+    const tag = directTags[index];
+    if (isControl(tag) && containsAttributeTags(tag)) {
+      candidates.push({
+        offset: nodeSpan(ctx, tag).sourceStart,
+        kind: "control",
+        node: tag,
+        index,
+        siblings: directTags,
+      });
+      if (String(tag.name?.value ?? "").replace(/^@/, "") === "if") {
+        index = attributeIfChainEnd(directTags, index) - 1;
+      }
+    } else {
+      candidates.push({
+        offset: nodeSpan(ctx, tag).sourceStart,
+        kind: "tag",
+        node: tag,
+      });
+    }
   }
   const body = node.body?.body ?? [];
   const consumed = new Set<number>();
   for (let index = 0; index < body.length; index++) {
     const child = body[index];
+    if (String(child?.name?.value ?? "").startsWith("@") && !isControl(child)) {
+      candidates.push({
+        offset: nodeSpan(ctx, child).sourceStart,
+        kind: "tag",
+        node: child,
+      });
+      consumed.add(index);
+      continue;
+    }
     if (!isControl(child)) continue;
     const chainEnd =
       child.name?.value === "if" ? attributeIfChainEnd(body, index) : index + 1;
@@ -1145,24 +1173,31 @@ function lowerAttributeTags(
     if (candidate.kind === "tag") {
       const tag = lowerOneAttributeTag(ctx, candidate.node, activeSchema);
       tree.push({ kind: "AttributeTag", tag, loc: tag.loc });
-    } else if (candidate.node.name?.value === "for") {
+    } else if (
+      String(candidate.node.name?.value ?? "").replace(/^@/, "") === "for"
+    ) {
       tree.push(lowerAttributeFor(ctx, candidate.node, activeSchema));
     } else {
       const [ifNode, next] = lowerAttributeIf(
         ctx,
-        body,
+        candidate.siblings ?? body,
         candidate.index as number,
         activeSchema,
       );
       tree.push(ifNode);
-      for (let i = (candidate.index as number) + 1; i < next; i++)
-        consumed.add(i);
+      if (!candidate.siblings) {
+        for (let i = (candidate.index as number) + 1; i < next; i++)
+          consumed.add(i);
+      }
     }
   }
 
   const controlStarts = new Set(
     candidates
-      .filter((candidate) => candidate.kind === "control")
+      .filter(
+        (candidate) =>
+          candidate.kind === "control" && candidate.siblings === undefined,
+      )
       .map((candidate) => candidate.index),
   );
   const contentChildren = body.filter(
@@ -1537,6 +1572,9 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
     tag: {
       name,
       attrs: lowerAttrs(ctx, node, name),
+      args: (node.arguments ?? []).map((argument: Node) =>
+        exprOf(ctx, argument),
+      ),
       children,
       attributeTags: loweredTags.flat,
       attributeTagTree: loweredTags.tree,

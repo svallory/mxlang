@@ -1,0 +1,4 @@
+{
+  "marko": "divergence",
+  "reason": "intentional divergence (decision 106): a dynamic untyped callee receives the fallback data shape `{ content }`, while this Marko fixture consumes the value as a bare renderable"
+}
