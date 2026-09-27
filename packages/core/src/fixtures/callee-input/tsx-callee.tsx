@@ -1,3 +1,4 @@
+// biome-ignore lint/correctness/noUnusedVariables: non-exported decoy declaration
 interface Draft {
   discarded?: AttrTag;
 }
