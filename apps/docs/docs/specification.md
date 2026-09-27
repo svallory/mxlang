@@ -847,9 +847,14 @@ the parent's own attributes in source order, then attribute tags in source order
 
 The callee's `Input` declares whether an attribute-tag value is `data` (the
 default) or `renderable`, and whether the prop is singular or an array
-(decision 106). On the HTML host a renderable is `(...params) => string`, read
-with `<${input.head}/>`; data is the declared attributes and nested tag props
-plus `content?: (...params) => string`, read with
+(decision 106): `x?: AttrTag<C>` is 0..1, `x: AttrTag<C>` is exactly one on
+every path, and `x: AttrTag<C>[]` is 0..n and always receives a real array.
+`C` conforms to `AttrTagConfig` —
+`{ as?: "data" | "renderable"; attrs?: object; params?: readonly unknown[] }`.
+`attrs` may recursively contain `AttrTag` declarations. On the HTML host a
+renderable is `(...params) => string`, read with `<${input.head}/>`; data is
+the declared attributes and nested tag props plus
+`content?: (...params) => string`, read with
 `<${input.head.content}/>`.
 
 When the callee has no resolvable exported `Input` — including a dynamic
@@ -860,6 +865,14 @@ occurrence for that prop is `data`, so branches and loop iterations never
 change its value shape. Fallback cardinality remains singular when at most one
 occurrence can be taken on a path and becomes an array for repeats or loops.
 An explicit `Input` is unchanged: its `as` still defaults to `data`.
+
+Core reads `Input` syntactically from the same file or imported `.mx`, `.ts`,
+`.tsx`, and `.solid.mx` files. Script callees must export the name `Input`;
+`Props`, parameter annotations, and unexported declarations do not count.
+Literal aliases are followed recursively. Tools may provide synchronous
+`resolveImport`; an unresolved import warns and uses the fallback. A resolved
+unknown extension is also an untyped fallback and is never guessed to be MX or
+TypeScript.
 
 On the Solid host both forms are reusable accessors. Data tags are read with
 `<${input.head.content}/>` and renderable tags with `<${input.head}/>`;
@@ -889,8 +902,15 @@ starts one character in so the `@` is excluded from diagnostics.
 |---|---|
 | `attribute tag \`@${name}\` collides with attribute \`${name}\`` | Name equals a non-spread attribute on the same parent. |
 | `attribute tag \`@children\` collides with the parent's ordinary children` | `<@children>` beside any ordinary child. |
-| `attribute tags take params or a body, not attributes (v1)` | The attribute tag carries attributes. |
-| `attribute tag \`<${innerName}>\` inside attribute tag \`<@${name}>\`` | Nested attribute tags. |
+| `` `content` is reserved on an attribute tag; it names the body `` | An attribute tag authors `content=`, which is reserved for its body. |
+| `` `<@${name}>` may appear at most once (`${name}` is declared `AttrTag`, not `AttrTag[]`) `` | A declared singular occurs more than once on one path. |
+| `` `<@${name}>` may not appear inside `<for>` (`${name}` is declared `AttrTag`, not `AttrTag[]`) `` | A declared singular occurs in a loop. |
+| `` missing required attribute tag `<@${name}>` `` | A required singular is absent. |
+| `` `<@${name}>` is required but not provided on every `<if>` path `` | A required singular is conditional without coverage of every path. |
+| `` `<@${name}>` declares params in `<${owner}>`; add `|…|` `` | The declaration has a params tuple and the call omits tag params. |
+| `` `<@${name}>` declares no params in `<${owner}>`; remove `|…|` `` | The call authors tag params but the declaration has none. |
+| `` `<@${name}>` is renderable in `<${owner}>`; it can't take attributes or nested attribute tags `` | A renderable occurrence attempts to carry data. |
+| `Cannot have attribute tags and body content under a control flow tag.` | One `<if>`/`<for>` body mixes attribute tags with ordinary content. |
 | `attribute tag \`<${name}>\` is only valid directly inside a component call` | An `@`-named tag reached the general tag path. |
 | `attribute tag \`@${tagName}\` on ${what}; attribute tags are props of components, so they are only valid directly inside a component call` | Attribute tags on `<if>`, `<for>`, an element, etc. |
 
@@ -900,7 +920,7 @@ written names, not what a spread holds at runtime, matching JSX's
 
 `children` counts as a name, because ordinary children lower into that prop.
 
-### Repeated `<@name>` — host rollout (decisions 104, 106 and 108)
+### Repeated `<@name>` — final host behavior (decisions 104, 106 and 108)
 
 Writing the same `<@name>` more than once on an **ordinary component call**
 (no declared `attributeTags` schema) is allowed — core keeps every
@@ -915,8 +935,9 @@ Today's per-host value shape, factually, with no claim of Marko parity:
   one value and loops push every iteration in source order. Nested attribute
   tags use the same rules recursively. Untyped body-only props use decision
   108's renderable fallback.
-- **Solid**: its phase-2 host rollout is separate; until it declares the v2
-  capability, core rejects shapes it could otherwise drop.
+- **Solid**: data content and renderables are reusable accessors
+  `() => SolidElement`; params add an outer function. Arrays, conditional
+  values, loops, and nested tags use the same core plan as the JSX hosts.
 - **Angular**: singular tags become `ngProjectAs` projections, including
   conditional branches. Arrays are rejected because a projection is keyed by
   selector. In a callee the four render idioms above become `<ng-content>`;
@@ -930,7 +951,10 @@ Today's per-host value shape, factually, with no claim of Marko parity:
 Declared cardinality and `data` values deliberately diverge from Marko's own
 `attrTag`/`attrTags` runtime shape (an iterable record whose property read hits
 the first occurrence). Decision 108 restores Marko-compatible bare renderables
-for untyped body-only tags while retaining MX arrays for fallback repeats.
+for untyped body-only tags while retaining MX arrays for fallback repeats. MX
+also passes every authored attribute, while Marko may tree-shake attributes the
+callee never reads. The user-facing side-by-side table and migration guidance
+are in [`/language/attr-tag/`](https://mxlang.dev/language/attr-tag/).
 
 A **custom tag** with its own declared `attributeTags` schema restricts
 repeats: unless a name's declaration sets `repeatable: true`, a second
@@ -1477,7 +1501,7 @@ differences noted), **Astro `.amx`**, **Angular**.
 | `class:foo` | **error**, quoting Marko | error | **error** | error | error | **error** | error, naming the replacement — fixed 2026-09-17; was **accepted** → `[class.active]` (bug 7) |
 | dynamic tag | `renderDynamic()` | **error** | error | error | error | **error** | `[ngComponentOutlet]` + warning |
 | component resolution | Marko's rule (binding + case) | **case only** | Marko's rule, with `componentAlias` | same | same | **case only** | **case only** |
-| repeated `<@item>` | array of renderables | **duplicate JSX props, last wins** — bug 4 | array | array | array | repeated `slot=` | **error** |
+| repeated `<@item>` | declared real array; fallback array | declared real array; fallback array | declared real array; fallback array | same | same | **error** — a slot is keyed by name | **error** — a projection is keyed by name |
 | tag params | body block | child callback | render-prop child | same | same | **error** — Astro has no render-prop form | `let-x` |
 | `<!doctype>` | emitted | **error** | **error** | error | error | emitted | emitted + warning |
 | HTML comments | **stripped** (Marko parity) | stripped | stripped | stripped | stripped | **kept** | **kept** |
@@ -1556,12 +1580,12 @@ does something else, silently.
 | 1 | Angular | **FIXED 2026-09-17** (task `angular-spec-gaps`). Was: no stateful-tag policy at all — the emitter declared only `try`. `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `client`/`server` all emitted **literal elements** (`<effect [value]="…">`); `<let>`/`<id>`/`<await>` failed only incidentally, via the generic field guard, so `<let x=1/>` with no `/var` also emitted a literal element. Now every one of these is its own positioned error (`STATEFUL_ERRORS`, `packages/hosts/angular/src/emitter.ts`), same wording family as `@mxlang/preact`'s `statefulErrors`. |
 | 2 | html, Preact | **`<return>` is documented as a compile error and is not.** Both READMEs list it under "Errors"; the code reverses this under decision 95 and both hosts emit `{ value, output }`. |
 | 3 | Astro `.amx` | **Every range `<for>` emits invalid JavaScript.** `Math.max(0, (` opens two parens and only one closes: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserts only a substring (`toContain("(3) - (1) + 1")`), which passes regardless. |
-| 4 | Solid | **Repeated attribute tags emit duplicate JSX props**, so the last wins and the first is silently lost. Every other JSX host builds an array. |
+| 4 | Solid | **FIXED 2026-09-27**, decision 106. Repeated attribute tags now emit real arrays. |
 | 5 | html-strict | **`<log>`/`<debug>` survive `strict`.** `STRICT_TAGS` overrides six names but not these two, so they stay inert under strict — and therefore under the Astro `.mx` host, whose README claims all stateful tags are build errors. |
 | 6 | Preact | README claims a non-object `style=` is an error; `<div style="color:red"/>` compiles. |
 | 7 | Angular | **FIXED 2026-09-17**, decision 86. Was: silently accepted `class:`/`style:`/`attr:` modifiers, lowering `class:active=c` to `[class.active]="c"`. Every other host errors, on the grounds that this is **not Marko syntax at all** (§4). Now rejected the same way, naming the replacement (an object/array `class=`/`style=` value, or a plain dynamic attribute — the emitter itself decides `[attr.x]` vs `[x]` for a dynamic `data-*`/`aria-*` attribute). |
 | 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.amx` does. |
-| 9 | html | **An attribute tag on a dynamic tag is silently dropped** (§7). |
+| 9 | html | **FIXED 2026-09-26**, decision 104. Dynamic tags receive attribute-tag props. |
 
 ### Host selection
 
@@ -1591,7 +1615,6 @@ own `strict` value, because that host has no other mode.
 | `migrate` | A source-printing mode | 87b |
 | `mode: "inline"` | The inline-vs-component hybrid for custom tags | 94d |
 | `tag-var-in-callback-scope` | Per-scope `/var` binding inside `<for>`/`<if>`/attribute-tag/content scopes | 97f, 98 |
-| **Conditional attribute tags** | — | 95(7) |
 | `lowercase-local-component-diagnostic` | Marko's PascalCase rule as one positioned core error on every host | 94c |
 | Tag params on `<if>` | `<if\|u\|=cond>` — Marko rejects it | `divergences.md` |
 | Tag params on native elements | `<div\|x\|>` — Marko rejects it | `divergences.md` |
@@ -1627,6 +1650,14 @@ deferred (decision 85).
    and the custom-tags spec's substitution design. Decision 94d is explicitly
    awaiting his ruling; decision 92 is marked "Saulo may veto"; decision 65's
    policy statement is marked "lead's assumption, Saulo to confirm".
+
+### Closed questions
+
+8. **Attribute-tag cardinality and value shape — closed by decisions 106–108.**
+   `Input` declares singular versus array and data versus renderable. Untyped,
+   unresolved, and dynamic callees use decision 108's body-only renderable
+   fallback; attributed or nested occurrences use data. Conditional and looped
+   attribute tags and recursive nested tags are part of MX 1.
 ---
 
 ## 16. Docs to fix

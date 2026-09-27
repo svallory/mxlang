@@ -35,7 +35,14 @@ The rule holds until MX 2. From MX 2 on, MX may diverge from Marko, but only del
 
 ## Divergence policy
 
-Every deliberate divergence from Marko syntax is recorded in a table — what changed, why, and what test guards it — before it ships, and it lands only together with the tooling it affects (grammar, formatter, language server). As of this writing there are no deliberate divergences: MX 1.0 is Marko syntax, unmodified. Two cases where the HTML host used to be more permissive than Marko were implementation bugs rather than divergences, and both are fixed — the Marko-parity oracle now reports no translator bugs.
+Every deliberate divergence from Marko is recorded in a table — what changed,
+why, and what test guards it — before it ships. Syntax divergences land only
+with the tooling they affect (grammar, formatter, language server). MX 1.0 uses
+Marko syntax unmodified; its one deliberate semantic divergence is the
+consumer-declared [AttrTag value shape](/language/attr-tag/#marko-6-compared-with-mx).
+Two cases where the HTML host used to be more permissive than Marko were
+implementation bugs rather than divergences, and both are fixed — the
+Marko-parity oracle now reports no translator bugs.
 
 ## Start here
 

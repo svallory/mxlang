@@ -54,13 +54,13 @@ export interface Input {
 }
 ```
 
-An optional or required `AttrTag` is singular; `AttrTag[]` is an array. The default `data` shape is `{ ...attrs, ...nestedTags, content }`. `content` is the host's renderable, or a render function when the tag declares `params`. `as: "renderable"` passes the body itself (or that render function) and therefore cannot carry attributes or nested tags.
+An optional or required `AttrTag` is singular; `AttrTag[]` is an array. The default `data` shape is `{ ...attrs, ...nestedTags, content }`. `content` is the host's renderable, or a render function when the tag declares `params`. `as: "renderable"` passes the body itself (or that render function) and therefore cannot carry attributes or nested tags. The dedicated [AttrTag guide](/language/attr-tag/) covers every config field, exact cardinality errors, Input resolution, host value types, nested tags, and worked examples.
 
 For an untyped, unresolved, or dynamic callee, MX infers a fallback (decision 108). A property is renderable when none of its occurrences anywhere in `<if>`/`<for>` control flow has attributes or nested attribute tags. If any occurrence has either, all occurrences use the data shape. Cardinality is still singular when at most one occurrence can be selected on a path, and an array for repeats or loops. A declared `Input` remains authoritative and still defaults to data.
 
 ### Repeating the same name
 
-Writing `<@name>` more than once on the same call is allowed (decision 104): a repeat is not last-wins — each host receives every occurrence. A declared singular prop rejects a repeat; a declared array receives every occurrence in source order and receives `[]` when none is taken. The untyped fallback uses an array when a name repeats or appears inside `<for>`.
+Writing `<@name>` more than once on the same call is allowed when the callee accepts an array: a repeat is not last-wins — each host receives every occurrence. A declared singular prop rejects a repeat; a declared array receives every occurrence in source order and receives `[]` when none is taken. The untyped fallback uses an array when a name repeats or appears inside `<for>`.
 
 MX's declared arrays and data values deliberately differ from Marko's iterable attribute-tag record (decision 106). Body-only fallback values align with Marko again under decision 108, while repeated fallback values remain real arrays.
 
@@ -72,12 +72,13 @@ An attribute tag whose name is already taken — by an explicit attribute on the
 
 | Written | Error |
 |---|---|
-| the same `<@name>` twice, on a **custom tag** whose declared schema doesn't mark it `repeatable` | attribute tag may not be repeated (see "Repeating the same name" above — an ordinary component call has no such restriction) |
-| `<@name>` whose name is already an attribute on the parent | attribute tag collides with attribute of the same name |
-| `<@children>` beside any ordinary child | attribute tag collides with the parent's ordinary children |
-| `<@name>` at the top level or on a native element | attribute tag outside a component call / unsupported nested attribute tag |
-| attributes or nested tags on a declared `as: "renderable"` tag | renderable attribute tags cannot carry data; declare `as: "data"` |
-| attribute tags mixed with ordinary body content inside the same control-flow body | cannot have attribute tags and body content under a control flow tag |
+| a singular `<@name>` twice | `` `<@name>` may appear at most once (`name` is declared `AttrTag`, not `AttrTag[]`) `` |
+| a custom tag's non-repeatable `<@name>` twice | `` attribute tag `<@name>` may not be repeated `` |
+| `<@name>` whose name is already an attribute on the parent | `` attribute tag `@name` collides with attribute `name` `` |
+| `<@children>` beside ordinary children | `` attribute tag `@children` collides with the parent's ordinary children `` |
+| authored `content=` on `<@name>` | `` `content` is reserved on an attribute tag; it names the body `` |
+| attributes or nested tags on a declared `as: "renderable"` tag | `` `<@name>` is renderable in `<Owner>`; it can't take attributes or nested attribute tags `` |
+| attribute tags mixed with ordinary content inside one control-flow body | `Cannot have attribute tags and body content under a control flow tag.` |
 
 A spread attribute is not treated as a collision — `<Layout ...props><@id>x</@id></Layout>` is fine, since the collision check only knows the parent's explicitly written attribute names, not what a spread might contain at runtime. This matches how JSX treats `{...props} id="x"`.
 

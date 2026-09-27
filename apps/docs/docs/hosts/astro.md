@@ -59,9 +59,16 @@ Astro hands a renderer its slots as already-rendered HTML strings, and MX's comp
 
 Render slot content with `$!{...}`, never `${...}` — the slot is markup Astro has already rendered, and `${...}` would escape it into visible angle brackets.
 
-One real limitation follows from slots being plain strings: an attribute tag declaring params, like `<@footer|year|>`, compiles to a `footer: (year) => string` a caller can invoke with an argument — but a slot from Astro is already rendered, with nothing left to pass a value into. Astro's slot contract has no channel for this, so it is documented rather than fixed: the renderer receives a compiled function, not the template that declared the params.
+Astro exposes each named-slot payload as a `() => string` thunk. A declared
+`as: "renderable"` property receives that thunk directly; the default data
+shape exposes the same thunk as `.content`. This is projection, not a general
+value channel: arrays/repeats/loops, authored attrs, params, nested tags, and
+bodiless `<@name/>` are positioned compile errors. Mutually exclusive
+`<if>` branches are supported because only the selected slot renders. Import
+the specialized type from `@mxlang/astro`; see
+[AttrTag](/language/attr-tag/) for the complete contract.
 
-**Supported**: the structural core — `<if>`/`<else if>`/`<else>`, every `<for>` form, attribute tags, tag params, `<define>`, `<const>`, `static`, `import` — props, slots, and one MX component calling another.
+**Supported**: the structural core — `<if>`/`<else if>`/`<else>`, every `<for>` form, singular attribute-tag projections, generic tag params where the target can express them, `<define>`, `<const>`, `static`, `import` — props, slots, and one MX component calling another.
 
 **Not supported**: the stateful tags — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>` — are compile errors naming the construct. This host has no reactive target at all: it renders once, at build time, so a construct that only means something with a runtime is a build error rather than markup that silently renders once and never updates. This is a stricter policy than the HTML host's own default, and it applies unconditionally here, not behind a flag.
 

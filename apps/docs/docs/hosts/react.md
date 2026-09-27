@@ -45,6 +45,12 @@ React and Preact share one structural emitter. `@mxlang/react` depends on
 `@mxlang/preact` and supplies a React target object containing only the names
 that differ. Its runtime is native React—not a Preact compatibility layer.
 
+Attribute-tag contracts import `AttrTag` from `@mxlang/react`. A renderable is
+a `ReactNode`; data is `{ ...attrs, ...nestedTags, content?: ReactNode }`.
+Params turn either renderable position into a function returning `ReactNode`,
+and repeated tags are real arrays. See [AttrTag](/language/attr-tag/) for the
+shared cardinality, fallback, nesting, and TSX-consumer rules.
+
 ## Events
 
 An element's `on<Name>=fn` (`onClick`, `onKeyDown`) or `on-<exact>=fn`

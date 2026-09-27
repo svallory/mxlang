@@ -260,6 +260,15 @@ What the emitted module does with each part:
   `${input.header()}` emits `<ng-content select="[header]"></ng-content>`.
   Reading the same attribute tag twice is an error — Angular matches each
   selector once, so the second projection would silently render empty.
+- **Attribute-tag declarations.** Import `AttrTag` from `@mxlang/angular`.
+  It is a `never` marker in TypeScript because projection is not a class
+  property value; core still reads its config from the exported `Input`.
+  `${input.x()}`, `${input.x.content()}`, `<${input.x.content}/>` and a
+  renderable `<${input.x}/>` all become the matching `<ng-content>`. Conditions,
+  pass-throughs, property reads, and other value uses are errors with a render
+  fix-it. Arrays/repeats/loops, attrs, params, nested tags, and bodiless tags
+  are also errors. Mutually exclusive conditional projections are supported.
+  See [AttrTag](/language/attr-tag/) for the cross-host rules.
 - **Selector**: `mx-` plus the kebab-cased file basename
   (`tags/badge.mx` → `mx-badge`). The fixed prefix guarantees the hyphen
   Angular requires. Change it project-wide with

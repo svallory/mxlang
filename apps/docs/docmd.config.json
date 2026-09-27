@@ -42,6 +42,7 @@
           "title": "Attribute tags and tag params",
           "path": "/language/attribute-tags-and-params/"
         },
+        { "title": "AttrTag", "path": "/language/attr-tag/" },
         {
           "title": "Define, const, static, import",
           "path": "/language/define-const-static-import/"
@@ -75,7 +76,8 @@
         { "title": "React host", "path": "/hosts/react/" },
         { "title": "Preact host", "path": "/hosts/preact/" },
         { "title": "Hono host", "path": "/hosts/hono/" },
-        { "title": "SolidMX", "path": "/hosts/solidmx/" }
+        { "title": "SolidMX", "path": "/hosts/solidmx/" },
+        { "title": "Angular host", "path": "/hosts/angular/" }
       ]
     },
     {

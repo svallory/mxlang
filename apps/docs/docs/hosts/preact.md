@@ -54,6 +54,14 @@ Hooks go in `<const>`, which lowers to a statement in the **component body** whe
 
 **Children cross the `content`/`children` gap.** Marko names a component's ordinary children `content`; JSX names the same slot `children`. The host emits calls the JSX way — so a hand-written Preact component can be called from MX — and the emitted component bridges the two names, so a template's own `${input.content}` still reads them.
 
+**Attribute tags use Preact values.** Import `AttrTag` from
+`@mxlang/preact`. A renderable tag is `ComponentChildren`; a data tag is
+`{ ...attrs, ...nestedTags, content?: ComponentChildren }`. With params, the
+renderable or `.content` becomes a function returning `ComponentChildren`.
+Repeated tags are real arrays, including `[]`. The [AttrTag
+guide](/language/attr-tag/) includes a hand-written TSX component and executed
+Preact examples.
+
 ## Events
 
 An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
