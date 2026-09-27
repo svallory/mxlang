@@ -85,6 +85,7 @@ export interface CompileOptions {
    * place a silent-drop report is worth anything.
    */
   warnings?: MxWarning[];
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 export interface CompileHtmlResult extends CompileResult {
@@ -118,6 +119,7 @@ export function compile(
       ...host,
       customTags: options.customTags,
       warnings: options.warnings,
+      resolveImport: options.resolveImport,
       // Decision 79: this host emits from the core's IR. `postEmit` still
       // appends the helpers a template actually calls and brands the default
       // export, both of which are properties of this target rather than of

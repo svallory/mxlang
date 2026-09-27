@@ -210,6 +210,8 @@ export interface Ctx {
   defines: Map<string, string[]>;
   /** Local bindings introduced by the template's `import` statements. */
   imports: Set<string>;
+  /** Authored import binding -> module specifier, for callee Input lookup. */
+  importSpecifiers: Map<string, string>;
   generate: (node: Node) => string;
   /** What the host declares, as `lower()` consults it (decision 79). */
   declarations: HostDeclarations;
@@ -969,6 +971,7 @@ export function newCtx(
     },
     defines: new Map(),
     imports: new Set(),
+    importSpecifiers: new Map(),
     generate,
     declarations,
     lookup,

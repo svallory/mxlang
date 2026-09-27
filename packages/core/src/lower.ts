@@ -29,6 +29,7 @@ import {
   type AttrTagDecl,
   type CalleeInput,
   readCalleeInput,
+  readOwnInput,
 } from "./callee-input.ts";
 import {
   attrByName,
@@ -817,12 +818,14 @@ function planAttributeTags(
         ownerNode.name ?? ownerNode,
       );
     }
-    return {
+    const prop: AttrTagProp = {
       name,
       cardinality,
       as,
       source: filterAttributeTagNodes(tree, name),
     };
+    if (declaration) Object.defineProperty(prop, "declared", { value: true });
+    return prop;
   });
 }
 
@@ -1387,11 +1390,16 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 
   if (name === "import") {
     const bindings = importBindings(line);
+    const authoredSpecifier = line.match(/\bfrom\s+["']([^"']+)["']/)?.[1];
     // Recorded *now*, not in `lower`'s post-pass: a component call later in
     // the body asks `isComponent`, which consults `ctx.imports`, so a binding
     // registered only after the whole body resolved would make every
     // imported component an unbound capitalized tag.
-    for (const binding of bindings) ctx.imports.add(binding);
+    for (const binding of bindings) {
+      ctx.imports.add(binding);
+      if (authoredSpecifier)
+        ctx.importSpecifiers.set(binding, authoredSpecifier);
+    }
     registerAuthoredTemplateImport(ctx, line);
     return { kind: "Import", code: line, bindings, loc, end };
   }
@@ -1690,15 +1698,15 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     });
   }
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, owner));
-  if (input.kind === "invalid") {
-    for (const tag of loweredTags.flat) {
-      const invalid = input.errors.get(tag.name);
-      if (invalid) {
-        fail(
-          `can't read \`<${owner}>\`'s declaration of \`${tag.name}\` (${input.path}); declare its config literally`,
-          { loc: { start: attributeTagNamePosition(ctx, tag) } },
-        );
-      }
+  if (input.kind === "invalid" && loweredTags.flat.length > 0) {
+    const tag = loweredTags.flat[0]!;
+    const invalid =
+      input.errors.get(tag.name) ?? input.errors.values().next().value;
+    if (invalid) {
+      fail(
+        `can't read \`<${owner}>\`'s Input (${invalid.span.file ?? input.path}): ${invalid.message}`,
+        { loc: { start: attributeTagNamePosition(ctx, tag) } },
+      );
     }
   }
   const children = loweredTags.contentChildren;
@@ -2096,6 +2104,33 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
  * filtering the tree for statement nodes.
  */
 export function lower(ctx: Ctx, body: Node[]): Ir {
+  const ownInputCode: string[] = [];
+  const ownInputAux: string[] = [];
+  for (const node of body) {
+    if (node.type !== "MarkoTag" || node.name?.type !== "StringLiteral")
+      continue;
+    const statementName = node.name.value as string;
+    if (
+      statementName !== "import" &&
+      statementName !== "static" &&
+      statementName !== "export"
+    )
+      continue;
+    const code = sliceLoc(ctx, node.loc).trim();
+    if (/^export\s+(?:interface|type)\s+Input\b/.test(code)) {
+      ownInputCode.push(code);
+    } else if (statementName === "import") {
+      ownInputAux.push(code);
+    } else if (statementName === "static") {
+      ownInputAux.push(code.replace(/^static\s+/, ""));
+    }
+  }
+  ctx.ownInput ??= readOwnInput(
+    ctx,
+    ownInputCode.join("\n") || undefined,
+    ownInputAux.join("\n") || undefined,
+  );
+
   // The file root owns the collecting hooks; a tag template's own lower is
   // handed the caller's stores and must not run them a second time.
   const isFileRoot = ctx.customTagStores === undefined;

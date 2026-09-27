@@ -117,6 +117,7 @@ export interface CompilePreactOptions {
   target?: Target;
   /** Resolve-time declarations paired with a custom JSX target. */
   declarations?: HostDeclarations;
+  resolveImport?: (specifier: string, importer: string) => string | undefined;
 }
 
 /**
@@ -425,6 +426,7 @@ export function compilePreactMx(
     {
       ...host,
       customTags: options.customTags,
+      resolveImport: options.resolveImport,
       emitIr: (ir) => {
         const emitted = emitModuleWithMappings(ir, target);
         mappings = emitted.mappings;

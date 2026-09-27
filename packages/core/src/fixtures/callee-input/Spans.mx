@@ -1,0 +1,4 @@
+<p>hello world, some leading template text</p>
+export interface Input {
+  icon?: AttrTag<{ as: "renderable" }>;
+}

@@ -25,6 +25,7 @@ export {
   type CalleeInputResult,
   type ResolveContext,
   readCalleeInput,
+  readOwnInput,
   resetCalleeInputCache,
   resolveSpecifier,
 } from "./callee-input.ts";

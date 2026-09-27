@@ -19,7 +19,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/parser && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
