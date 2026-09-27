@@ -29,6 +29,11 @@ cardinality in end-to-end attribute-tag plans. Resolver scopes are per file;
 file-qualified spans, re-exports, parse failures, missing resolution candidates,
 and dependency edits participate in diagnostics and cache invalidation.
 
+Dynamic tag calls now reject arguments combined with attributes, attribute
+tags, or body content using Marko's positioned diagnostic. This prevents a
+host from forwarding the arguments while silently dropping the rest of the
+call shape; argument-only claimed host tags still retain their `args`.
+
 ### Breaking: an element's `on<Name>`/`on-<exact>` attribute lowers to a new `event` attr kind
 
 An attribute on an **element** matching `/^on[A-Z-]/` **whose value is an
