@@ -46,7 +46,35 @@ Two rules make MX markup work naturally inside Solid, both applying to any tag, 
 </Show>
 ```
 
-**Attribute tags become props.** `<@name>body</@name>` inside any tag becomes `name={body}` on the parent; `<@name|p|>body</@name>` becomes `name={(p) => body}`.
+**Attribute tags follow the callee's `AttrTag` declaration.** Solid uses a
+reusable accessor as its renderable: `() => SolidElement`. A data tag receives
+`{ ...attrs, ...nestedTags, content }`, where `content` is that accessor; a
+declared `as: "renderable"` tag receives the accessor directly. Arrays are real
+arrays of those values. For example:
+
+```tsx
+import type { AttrTag } from "@mxlang/solid";
+
+export interface Input {
+  header: AttrTag;
+  row: AttrTag<{ params: [name: string] }>[];
+}
+
+// Data content is reusable through either Solid idiom.
+<Dynamic component={input.header.content} />
+{input.header.content}
+
+// Params add an outer function. Call it first, then render its accessor.
+<Dynamic component={input.row[0].content("Ada")} />
+```
+
+The equivalent MX dynamic-tag spelling for params is
+`<${input.row[0].content("Ada")}/>`; the dynamic-tag-arguments spelling
+`<${input.row[0].content}("Ada")/>` is equivalent, while a bare
+`${input.row[0].content}` omits the required argument. The compiler diagnoses a
+statically known parameterized tag used without its arguments. Placeholder-only
+bodies remain reactive and are escaped under SSR; `$!{...}` is still the
+explicit raw-HTML form.
 
 ## `<for>` lowering
 
@@ -91,7 +119,10 @@ Every `<for>` form lowers to one of Solid's own iteration primitives:
 </Errored>
 ```
 
-The builtins (`For`, `Show`, `Switch`, `Match`, `Loading`, `Errored`, `Repeat`, and the rest) are auto-imported by Solid's own compilers, so nothing here adds an import of its own.
+The builtins (`For`, `Show`, `Switch`, `Match`, `Loading`, `Errored`, `Repeat`,
+and the rest) are auto-imported by Solid's own compilers. SolidMX additionally
+hoists `@solidjs/web`'s public `escape` helper only when an escaped lazy body
+needs server-safe insertion.
 
 ## Events
 
