@@ -15,5 +15,8 @@ export type AttrTagOf<C extends AttrTagConfig, R> = C["as"] extends "renderable"
         : R;
     };
 
-// biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default from decision 106
-export type AttrTag<C extends AttrTagConfig = {}> = AttrTagOf<C, unknown>;
+export type AttrTag<
+  // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default from decision 106
+  C extends AttrTagConfig = {},
+  Renderable = unknown,
+> = AttrTagOf<C, Renderable>;

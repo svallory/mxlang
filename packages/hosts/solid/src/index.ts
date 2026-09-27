@@ -1,4 +1,4 @@
-import { parse as parseBabel } from "@babel/parser";
+import { parse as parseBabel, type ParserOptions } from "@babel/parser";
 import {
   type CustomTag,
   type GeneratedMapping,
@@ -8,6 +8,7 @@ import {
   newCtx,
   parseFragment,
   printExpression,
+  registerCalleeInputReader,
   TranslateError,
 } from "@mxlang/core";
 import MagicString from "magic-string";
@@ -29,6 +30,33 @@ export {
   SolidEmitter,
   solidDeclarations,
 };
+
+function parseSolidCalleeProgram(source: string, path: string): Node[] {
+  const options: ParserOptions = {
+    sourceType: "module",
+    sourceFilename: path,
+    plugins: ["typescript", "jsx"],
+  };
+  try {
+    return parseBabel(source, options).program.body;
+  } catch {
+    // MX-only JSX forms such as `<for|item|>` are not upstream TSX. Input
+    // declarations and their type imports/aliases live in the module header,
+    // so parse that header without asking core to understand SolidMX syntax.
+    const valueDeclaration =
+      /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var)\b/m.exec(
+        source,
+      );
+    const header = valueDeclaration
+      ? source.slice(0, valueDeclaration.index)
+      : source;
+    return parseBabel(header, options).program.body;
+  }
+}
+
+registerCalleeInputReader(".solid.mx", ({ path, source, analyze }) =>
+  analyze(parseSolidCalleeProgram(source, path)),
+);
 
 export interface CompileSolidMxOptions {
   filename: string;

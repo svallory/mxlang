@@ -29,6 +29,7 @@ import {
   strictPolicy,
 } from "./translate.ts";
 
+export type { AttrTag } from "@mxlang/core";
 export { escape } from "@mxlang/core";
 export { policy, strictPolicy, TranslateError } from "./translate.ts";
 export type { CompileResult, RawSourceMap };
