@@ -39,7 +39,8 @@ Five facts worth knowing before editing it:
   declares that capability, core positions an error on every construct whose
   v2 shape could otherwise be silently dropped.
 
-- **It depends on `@marko/compiler` and nothing else.** `core.ts` used to parse
+- **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
+  `core.ts` used to parse
   an `import` line with `@mxlang/parser` — the *SolidMX parser* package — for a
   single `parse` call. It now asks `@marko/compiler/internal/babel`
   (`parse`/`parseExpression`/`traverse`/`types`, all present), which is also
@@ -53,6 +54,17 @@ Five facts worth knowing before editing it:
   copy (`generateExpression`, over `@babel/generator` — a different Babel
   instance from the one that parsed the node) before switching to this
   export.
+- **`callee-input.ts` is the synchronous, syntactic cross-file reader for a
+  component's `Input`** (decisions 106 and 107). It resolves discovered and
+  imported callees, parses complete TS/TSX modules with `@babel/parser`'s
+  `typescript` + `jsx` plugins, and reaches `.mx` declarations through the
+  existing template-metadata compile/cache. It follows only bounded literal
+  aliases and `import type` edges, records every file read in
+  `CompileResult.dependencies`, and caches by path + mtime + source. Keep this
+  path synchronous: Bun loaders, Volar, diagnostics, and `mx-tsc` cannot await
+  it. Do not replace full TSX parsing with declaration text extraction, and do
+  not add a `core -> @mxlang/parser` dependency: parser's Solid test path
+  reaches `@mxlang/solid`, which already depends on core.
 - **Every host implements `Emitter<Out>`**, one method per IR kind, and the
   core's `drive`/`emit` owns the walk. A host that cannot express a kind throws;
   no optional callback may silently drop it.
