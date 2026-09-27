@@ -11,7 +11,7 @@ import { renderPreact } from "./preact-render";
  * The claim MX makes about hosts is that the *structure* — elements, text,
  * `<if>`, `<for>`, components, attribute tags — means the same thing on every
  * target. This is that claim, checked rather than asserted: every fixture in
- * the stock `.marko` set (`packages/hosts/html/fixtures-marko/`, the same 43
+ * the stock `.marko` set (`packages/hosts/html/fixtures-marko/`, the same 45
  * `oracle:marko` uses) is compiled through `@mxlang/preact`, rendered with
  * `preact-render-to-string`, and compared against the fixture's own
  * `expected.html` — which was generated from real Marko, so a pass means

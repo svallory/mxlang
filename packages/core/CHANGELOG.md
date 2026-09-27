@@ -2,6 +2,14 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking: body-only fallbacks are renderable (decision 108)
+
+An attribute-tag property on an untyped, unresolved, or dynamic callee now
+uses the bare `renderable` shape when none of its occurrences has attributes
+or nested attribute tags. One such occurrence keeps the whole property
+`data`; cardinality and declared `Input` shapes are unchanged. Custom-tag
+transform rebuilds apply the same inference.
+
 ### Breaking: attribute-tag lowering carries declared shape and control flow
 
 `AttributeTag`, `Component`, `HostTag`, and `Ir` gained required fields for

@@ -33,7 +33,7 @@ describe("React target", () => {
     ).toContain('import type { AttrTag } from "@mxlang/react";');
   });
 
-  it("renders a data-shaped attribute tag through the shared dynamic path", async () => {
+  it("renders a body-only fallback bare through the shared dynamic path", async () => {
     const { dirname, join } = await import("node:path");
     const { tmpdir } = await import("node:os");
     const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
@@ -64,12 +64,12 @@ describe("React target", () => {
       );
       const mod = (await import(`${entry}?t=${Date.now()}`)) as {
         default: (props: {
-          tag: (props: { head: { content: ReactNode } }) => ReactNode;
+          tag: (props: { head: ReactNode }) => ReactNode;
         }) => ReactNode;
       };
       const html = renderToStaticMarkup(
         createElement(mod.default, {
-          tag: (props) => createElement("section", null, props.head.content),
+          tag: (props) => createElement("section", null, props.head),
         }),
       );
       expect(html).toBe("<section>H</section>");

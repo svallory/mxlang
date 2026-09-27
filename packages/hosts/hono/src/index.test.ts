@@ -30,7 +30,7 @@ describe("Hono target", () => {
     ).toContain('import type { AttrTag } from "@mxlang/hono";');
   });
 
-  it("renders a data-shaped attribute tag through the shared dynamic path", async () => {
+  it("renders a body-only fallback bare through the shared dynamic path", async () => {
     const { dirname, join } = await import("node:path");
     const { tmpdir } = await import("node:os");
     const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
@@ -63,13 +63,11 @@ describe("Hono target", () => {
         compileHonoMx("<${input.tag}><@head>H</@head></>", entry).code,
       );
       const mod = (await import(`${entry}?t=${Date.now()}`)) as {
-        default: (props: {
-          tag: (props: { head: { content: Child } }) => Child;
-        }) => Child;
+        default: (props: { tag: (props: { head: Child }) => Child }) => Child;
       };
       const output = await jsx(mod.default, {
-        tag: (props: { head: { content: Child } }) =>
-          createElement("section", null, props.head.content as never),
+        tag: (props: { head: Child }) =>
+          createElement("section", null, props.head as never),
       }).toString();
       expect(output).toBe("<section>H</section>");
     } finally {

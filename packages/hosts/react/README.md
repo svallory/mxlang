@@ -138,9 +138,9 @@ bun run oracle:react
 cd examples/react-app && bun run e2e
 ```
 
-The oracle compiles all 43 stock Marko fixtures, renders through
+The oracle compiles all 45 stock Marko fixtures, renders through
 `react-dom/server`'s `renderToStaticMarkup`, and compares with the HTML host
-using semantic HTML normalization: **30 pass, 13 reasoned skips, 0 bugs**.
+using semantic HTML normalization: **32 pass, 13 reasoned skips, 0 bugs**.
 React 19 injects leading image preload hints during static rendering; the
 oracle removes only those renderer-generated hints before comparing authored
 markup.

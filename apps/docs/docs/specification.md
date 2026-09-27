@@ -852,6 +852,15 @@ with `<${input.head}/>`; data is the declared attributes and nested tag props
 plus `content?: (...params) => string`, read with
 `<${input.head.content}/>`.
 
+When the callee has no resolvable exported `Input` — including a dynamic
+callee — core infers the fallback shape from the whole control-flow tree
+(decision 108). The prop is `renderable` when none of its occurrences has
+attributes or nested attribute tags. If any occurrence has either, every
+occurrence for that prop is `data`, so branches and loop iterations never
+change its value shape. Fallback cardinality remains singular when at most one
+occurrence can be taken on a path and becomes an array for repeats or loops.
+An explicit `Input` is unchanged: its `as` still defaults to `data`.
+
 Astro and Angular are projection hosts rather than value hosts. A singular
 attribute tag becomes an Astro named slot or Angular `ngProjectAs` projection;
 `data` and `renderable` declarations select that same named content. Astro's
@@ -863,7 +872,6 @@ Any other Angular read of a declared projection is a positioned error. Both
 hosts reject arrays, authored attributes, params, nested attribute tags, and
 bodiless `<@name/>` tags with positioned host errors. Mutually exclusive
 conditional occurrences are supported and render only the taken projection.
-
 Attribute-tag names are stored with the leading `@` stripped, and their name span
 starts one character in so the `@` is excluded from diagnostics.
 
@@ -884,7 +892,7 @@ written names, not what a spread holds at runtime, matching JSX's
 
 `children` counts as a name, because ordinary children lower into that prop.
 
-### Repeated `<@name>` — host rollout (decisions 104 and 106)
+### Repeated `<@name>` — host rollout (decisions 104, 106 and 108)
 
 Writing the same `<@name>` more than once on an **ordinary component call**
 (no declared `attributeTags` schema) is allowed — core keeps every
@@ -893,12 +901,14 @@ core lowering layer rejects or collapses a repeat.
 
 Today's per-host value shape, factually, with no claim of Marko parity:
 
-- **HTML**: consumer-declared cardinality and shape are implemented. An array
+- **HTML, Preact, React and Hono**: consumer-declared cardinality and shape are
+  implemented. An array
   prop is always a real array, including `[]`; conditions contribute zero or
   one value and loops push every iteration in source order. Nested attribute
-  tags use the same rules recursively.
-- **Preact, React, Hono, Solid**: phase-2 host rollout is separate; until each
-  declares the v2 capability, core rejects shapes it could otherwise drop.
+  tags use the same rules recursively. Untyped body-only props use decision
+  108's renderable fallback.
+- **Solid**: its phase-2 host rollout is separate; until it declares the v2
+  capability, core rejects shapes it could otherwise drop.
 - **Angular**: singular tags become `ngProjectAs` projections, including
   conditional branches. Arrays are rejected because a projection is keyed by
   selector. In a callee the four render idioms above become `<ng-content>`;
@@ -909,9 +919,10 @@ Today's per-host value shape, factually, with no claim of Marko parity:
   Arrays are rejected because an Astro slot is keyed by name and its renderer
   would silently keep only one occurrence.
 
-This is a deliberate divergence from Marko's own `attrTag`/`attrTags` runtime
-shape (an iterable record whose property read hits the first occurrence), not
-an attempt to reproduce it.
+Declared cardinality and `data` values deliberately diverge from Marko's own
+`attrTag`/`attrTags` runtime shape (an iterable record whose property read hits
+the first occurrence). Decision 108 restores Marko-compatible bare renderables
+for untyped body-only tags while retaining MX arrays for fallback repeats.
 
 A **custom tag** with its own declared `attributeTags` schema restricts
 repeats: unless a name's declaration sets `repeatable: true`, a second
@@ -937,7 +948,7 @@ Marko parity and no legacy aliases** (decision 94a): `literalOnly` (not
 `staticOnly`) and `repeatable` (not `repeated`). Unknown keys are rejected at
 registration (§13.1).
 
-**Decisions:** 19, 28, 37, 51, 66, 70, 79, 94a, 95(1), 95(7), 96, 104, 106, 107.
+**Decisions:** 19, 28, 37, 51, 66, 70, 79, 94a, 95(1), 95(7), 96, 104, 106, 107, 108.
 
 ---
 
@@ -1608,15 +1619,6 @@ deferred (decision 85).
    and the custom-tags spec's substitution design. Decision 94d is explicitly
    awaiting his ruling; decision 92 is marked "Saulo may veto"; decision 65's
    policy statement is marked "lead's assumption, Saulo to confirm".
-8. **Attribute-tag value shape and cardinality is under redesign** (§8,
-   decision 104, superseded by upcoming decision 106,
-   `attribute-tag-silent-drops`). Every host currently emits a plain array
-   for a repeated `<@name>` and a bare value for a single one. Decision 106
-   will have the consumer's `Input` type declare the cardinality/shape it
-   expects per attribute-tag name, a deliberate divergence from Marko's own
-   `attrTag`/`attrTags` runtime shape rather than an attempt to reproduce
-   it. §8 will be rewritten once that decision lands.
-
 ---
 
 ## 16. Docs to fix

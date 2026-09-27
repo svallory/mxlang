@@ -1,4 +1,0 @@
-{
-  "marko": "divergence",
-  "reason": "intentional divergence (decisions 65 and 106): an attribute tag on a dynamic MX call uses the untyped fallback data shape with `content`, while Marko 6 passes a bare renderable. Dynamic callees have no statically resolvable `Input`, so MX deliberately keeps the safe data default; rendering that data value as a tag produces `MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>` from HTML's `renderDynamic` or the JSX hosts' `mxDynamic`."
-}

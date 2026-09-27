@@ -28,7 +28,7 @@ host-specific resolve-time decision goes in `HostTag.data` through
 
 Five facts worth knowing before editing it:
 
-- **Attribute-tag IR has three synchronized views (decisions 106–107).**
+- **Attribute-tag IR has three synchronized views (decisions 106–108).**
   `Component` and a dynamic `HostTag` keep `attributeTags`, the flat
   source-order occurrence list used by existing emitters and tooling; add
   `attributeTagTree` to preserve nested `<if>`/`<for>` structure; and resolve
@@ -38,6 +38,11 @@ Five facts worth knowing before editing it:
   does not regroup the flat list or resolve declarations itself. Until a host
   declares that capability, core positions an error on every construct whose
   v2 shape could otherwise be silently dropped.
+  For an untyped, unresolved or dynamic callee, the fallback plan uses
+  `renderable` when every occurrence of that property is body-only; one
+  occurrence with attributes or nested tags makes the whole property `data`.
+  Cardinality is still derived independently from paths and loops. A declared
+  `Input` remains authoritative and defaults to `data` (decision 108).
   A claimed dynamic `HostTag` also retains its tag arguments in `args`; an
   emitter must forward them when it reconstructs a `Component` call. Marko's
   call shapes remain exclusive: a dynamic tag with arguments cannot also have

@@ -576,21 +576,36 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("S:static");
   });
 
-  it("explains the data attribute-tag body route for an untyped old-style callee", async () => {
-    await expect(
-      renderModules(
-        {
-          "panel.mx": "<div><${input.header}/></div>",
-          "entry.mx": [
-            'import Panel from "./panel.mx"',
-            "<Panel><@header>Hi</@header></Panel>",
-          ].join("\n"),
-        },
-        "entry.mx",
-      ),
-    ).rejects.toThrow(
-      "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>",
+  it("renders a body-only fallback through an untyped MX callee", async () => {
+    const html = await renderModules(
+      {
+        "panel.mx": "<div><${input.header}/></div>",
+        "entry.mx": [
+          'import Panel from "./panel.mx"',
+          "<Panel><@header>Hi</@header></Panel>",
+        ].join("\n"),
+      },
+      "entry.mx",
     );
+    expect(html).toBe("<div>Hi</div>");
+  });
+
+  it("passes a body-only fallback bare to an untyped TSX library component", async () => {
+    const html = await renderModules(
+      {
+        "boundary.tsx": [
+          "export default function Boundary(input: { fallback: () => string }): string {",
+          "  return `<section>${input.fallback()}</section>`;",
+          "}",
+        ].join("\n"),
+        "entry.mx": [
+          'import Boundary from "./boundary.tsx"',
+          "<Boundary><@fallback>ready</@fallback></Boundary>",
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<section>ready</section>");
   });
 
   it("positions a declared data tag's direct-render error at compile time", () => {

@@ -242,6 +242,38 @@ describe("custom tag transforms", () => {
     }
   });
 
+  it("rebuilds an untyped fallback shape from the transformed occurrences", () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-transform-fallback-"));
+    const filename = join(directory, "tag.mx");
+    const source = "<div/>\n";
+    writeFileSync(filename, source);
+    const tag: CustomTag = {
+      attributeTags: { item: { repeatable: true } },
+      template: { filename, source },
+      transform(call, ctx) {
+        return ctx.build.template({
+          ...call,
+          attributeTags: call.attributeTags.slice(0, 1),
+        });
+      },
+    } as CustomTag;
+    try {
+      const ir = lowerWithTags(
+        '<tag><@item/><@item label="removed"/></tag>\n',
+        { tag },
+        {
+          ...fakeDeclarations(),
+          attrTags: 2,
+        },
+      );
+      expect(find(ir.body, "Component").attrTagProps).toMatchObject([
+        { name: "item", cardinality: "single", as: "renderable" },
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   // Both of these tags are *template-less*: a sidecar `transform`, with no
   // `.mx` unit behind it. `/var` binds what a unit returns with `<return>`,
   // so a tag with no template has nothing to bind — which is a different

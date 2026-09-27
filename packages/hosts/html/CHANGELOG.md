@@ -33,6 +33,10 @@ and the always-quoted form is safer and more readable.
   optional `content: (...params) => string`; `renderable` tags receive that
   render function directly; repeated/looped tags are real arrays. The host
   exports its specialized one-parameter `AttrTag<C>` type.
+- **breaking:** decision 108 restores a bare renderable fallback for an
+  untyped attribute-tag property when every occurrence is body-only. Any
+  attributed or nested occurrence keeps the whole fallback property data;
+  declared shapes and cardinality are unchanged.
 - **fix:** data attribute-tag values called through an untyped dynamic target
   now fail with an actionable `content`-route diagnostic instead of an opaque
   "target is not a function" error. Declared tag-param types also survive

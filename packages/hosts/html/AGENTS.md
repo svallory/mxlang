@@ -150,6 +150,9 @@ into `<!--build -->`.
 
 This host declares `attrTags: 2` and emits only core's resolved
 `attrTagProps` plan. It never regroups the legacy flat `attributeTags` list.
+Decision 108 makes an untyped body-only property renderable; attributes or
+nested tags on any occurrence keep the fallback data-shaped. Declared shapes
+remain unchanged.
 Cardinality comes from the callee's `Input`: singular values are one value or
 `undefined`, arrays are real arrays (including `[]`), and control-flow tags
 become conditional values or push loops in source order. Nested plans are

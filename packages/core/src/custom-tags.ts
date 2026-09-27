@@ -7,6 +7,7 @@
  * custom tag existed.
  */
 
+import { fallbackAttrTagShape } from "./attr-tag.ts";
 import type { Ctx, Node } from "./core.ts";
 import { TranslateError, warn } from "./core.ts";
 import type {
@@ -266,7 +267,7 @@ function rebuildAttributeTagPlan(
       cardinality:
         declaration?.cardinality ??
         (range.max <= 1 && !range.inFor ? "single" : "array"),
-      as: declaration?.as ?? "data",
+      as: declaration?.as ?? fallbackAttrTagShape(tags, name),
       source: filterAttributeTagTreeByName(attributeTagTree, name),
     };
   });

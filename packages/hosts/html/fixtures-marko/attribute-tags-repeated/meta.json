@@ -1,4 +1,0 @@
-{
-  "marko": "divergence",
-  "reason": "intentional divergence (decisions 65 and 106): repeated MX fallback attribute tags are a real array of plain data values with `content`, while Marko 6 exposes its attrTags iterable of bare renderables. The stock fixture intentionally keeps Marko's consumer shape; an MX callee declares its array cardinality and value shape with `AttrTag`. A declared data-tag callee gets a positioned compile error for `<${item}/>`, while an untyped callee gets `MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>` from HTML's `renderDynamic` or the JSX hosts' `mxDynamic`."
-}
