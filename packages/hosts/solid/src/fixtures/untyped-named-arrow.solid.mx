@@ -1,0 +1,2 @@
+const Card = (props: { a?: number }) => <div class={on: true}>{props.a}</div>;
+export default Card;

@@ -1,4 +1,4 @@
-import { parse as parseBabel, type ParserOptions } from "@babel/parser";
+import { type ParserOptions, parse as parseBabel } from "@babel/parser";
 import {
   type CustomTag,
   type GeneratedMapping,
@@ -40,23 +40,55 @@ function parseSolidCalleeProgram(source: string, path: string): Node[] {
   try {
     return parseBabel(source, options).program.body;
   } catch {
-    // MX-only JSX forms such as `<for|item|>` are not upstream TSX. Input
-    // declarations and their type imports/aliases live in the module header,
-    // so parse that header without asking core to understand SolidMX syntax.
-    const valueDeclaration =
-      /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var)\b/m.exec(
-        source,
-      );
-    const header = valueDeclaration
-      ? source.slice(0, valueDeclaration.index)
-      : source;
-    return parseBabel(header, options).program.body;
+    // MX-only JSX forms such as `<for|item|>` and object-style attributes are
+    // not upstream TSX. Keep every declaration at its original offset while
+    // blanking the rest of the module, then let Babel parse the resulting
+    // ordinary TypeScript. Unlike slicing a module header, this also sees an
+    // Input written after the component implementation.
+    const declarations = source.replace(/[^\n\r]/g, " ").split("");
+    const starts = source.matchAll(
+      /^[ \t]*(?:(?:import|interface|type)\b|export\s+(?:interface|type|\{))/gm,
+    );
+    let copiedThrough = 0;
+    for (const match of starts) {
+      const start = match.index;
+      if (start < copiedThrough) continue;
+      for (let end = source.indexOf("\n", start); ; ) {
+        if (end === -1) end = source.length;
+        else end++;
+        const fragment = source.slice(start, end);
+        try {
+          if (parseBabel(fragment, options).program.body.length === 0) {
+            if (end === source.length) break;
+            end = source.indexOf("\n", end);
+            continue;
+          }
+          declarations.splice(start, end - start, ...fragment);
+          copiedThrough = end;
+          break;
+        } catch {
+          if (end === source.length) break;
+          end = source.indexOf("\n", end);
+        }
+      }
+    }
+    try {
+      return parseBabel(declarations.join(""), options).program.body;
+    } catch {
+      return [];
+    }
   }
 }
 
-registerCalleeInputReader(".solid.mx", ({ path, source, analyze }) =>
-  analyze(parseSolidCalleeProgram(source, path)),
-);
+registerCalleeInputReader(".solid.mx", ({ path, source, analyze }) => {
+  try {
+    return analyze(parseSolidCalleeProgram(source, path));
+  } catch {
+    // A host reader is advisory. Malformed or unsupported SolidMX must never
+    // make a caller invalid merely because its Input could not be inspected.
+    return { kind: "none", path };
+  }
+});
 
 export interface CompileSolidMxOptions {
   filename: string;
