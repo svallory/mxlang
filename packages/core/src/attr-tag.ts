@@ -1,3 +1,23 @@
+import type { AttributeTag } from "./ir.ts";
+
+/**
+ * Decision 108's shape for a property on an untyped or unresolved callee.
+ * One attributed occurrence makes every occurrence data-shaped so the prop
+ * has one stable value shape across branches and loops.
+ */
+export function fallbackAttrTagShape(
+  tags: readonly AttributeTag[],
+  name: string,
+): "data" | "renderable" {
+  return tags.some(
+    (tag) =>
+      tag.name === name &&
+      (tag.attrs.length > 0 || tag.attributeTags.length > 0),
+  )
+    ? "data"
+    : "renderable";
+}
+
 export interface AttrTagConfig {
   as?: "data" | "renderable";
   attrs?: object;

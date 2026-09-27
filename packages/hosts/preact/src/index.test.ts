@@ -466,9 +466,9 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     expect(html).toBe("<div><em></em></div>");
   });
 
-  it("passes fallback data-shaped attribute tags through a dynamic call", async () => {
+  it("passes body-only fallback attribute tags bare through a dynamic call", async () => {
     const html = await renderCompiled("<${input.tag}><@head>H</@head></>", {
-      tag: (props: { head: { content: unknown } }) => props.head.content,
+      tag: (props: { head: unknown }) => props.head,
     });
     expect(html).toBe("H");
   });
@@ -533,10 +533,10 @@ describe("attribute tag values (executed)", () => {
     }
   }
 
-  it("fallback single and array values use the data shape", async () => {
+  it("body-only fallback single and array values use the renderable shape", async () => {
     const html = await renderCompiled(
       'import Row from "./row.mx"\n<Row><@item>solo</@item><@many>a</@many><@many>b</@many></Row>',
-      '<div>single=${String(!Array.isArray(input.item) && "content" in input.item)} array=${String(Array.isArray(input.many))} entries=${String(input.many.every((item) => "content" in item))}</div>',
+      '<div>single=${String(!Array.isArray(input.item))} array=${String(Array.isArray(input.many))} entries=${String(input.many.every((item) => !(typeof item === "object" && item !== null && "content" in item)))}</div>',
     );
     expect(html).toContain("single=true");
     expect(html).toContain("array=true");

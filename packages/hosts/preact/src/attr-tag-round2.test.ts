@@ -154,15 +154,26 @@ describe("attribute tags round-2 regressions (executed)", () => {
       expect(html.match(/img src=x onerror=alert\(1\)/g)).toHaveLength(2);
     });
 
-    it(`${host}: rejects the old dynamic-tag idiom for an untyped data value`, async () => {
-      await expect(
-        renderFixture(host, {
-          "main.mx": 'import Row from "./row.mx"\n<Row><@head>H</@head></Row>',
-          "row.mx": "<p><${input.head}/></p>",
-        }),
-      ).rejects.toThrow(
-        "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>",
-      );
+    it(`${host}: renders a body-only fallback through an untyped MX callee`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx": 'import Row from "./row.mx"\n<Row><@head>H</@head></Row>',
+        "row.mx": "<p><${input.head}/></p>",
+      });
+      expect(html).toBe("<p>H</p>");
+    });
+
+    it(`${host}: passes a body-only fallback bare to an untyped TSX library component`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Boundary from "./boundary.tsx"\n<Boundary><@fallback>ready</@fallback></Boundary>',
+        "boundary.tsx": [
+          "/** @jsxImportSource HOSTJSX */",
+          "export default function Boundary(input: { fallback: unknown }) {",
+          "  return <section>{input.fallback}</section>;",
+          "}",
+        ].join("\n"),
+      });
+      expect(html).toBe("<section>ready</section>");
     });
   }
 
@@ -353,28 +364,28 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
   );
 
   it.each(hosts)(
-    "%s: #propsObject renders dynamic tags and nested data",
+    "%s: #propsObject renders dynamic tags with a bare fallback and nested data",
     async (host) => {
       const factories = {
-        preact: (props: { head: { content: unknown }; children: unknown }) =>
+        preact: (props: { head: unknown; children: unknown }) =>
           preactCreateElement(
             "section",
             null,
-            props.head.content as never,
+            props.head as never,
             props.children as never,
           ),
-        react: (props: { head: { content: unknown }; children: unknown }) =>
+        react: (props: { head: unknown; children: unknown }) =>
           reactCreateElement(
             "section",
             null,
-            props.head.content as never,
+            props.head as never,
             props.children as never,
           ),
-        hono: (props: { head: { content: unknown }; children: unknown }) =>
+        hono: (props: { head: unknown; children: unknown }) =>
           honoCreateElement(
             "section",
             null,
-            props.head.content as never,
+            props.head as never,
             props.children as never,
           ),
       };

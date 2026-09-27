@@ -25,6 +25,7 @@
 
 import { readFileSync } from "node:fs";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
+import { fallbackAttrTagShape } from "./attr-tag.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
@@ -904,7 +905,7 @@ function planAttributeTags(
         : declaration
           ? "single"
           : fallbackCardinality;
-    const as = declaration?.as ?? "data";
+    const as = declaration?.as ?? fallbackAttrTagShape(flat, name);
     const flatCardinality =
       flat.filter((tag) => tag.name === name).length > 1 ? "array" : "single";
     if (

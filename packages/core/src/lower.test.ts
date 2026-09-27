@@ -1088,7 +1088,7 @@ describe("one fixture per IR kind", () => {
       ).toThrowError("can't take attributes or nested attribute tags");
     });
 
-    it("sets fallback shapes without a declaration", () => {
+    it("sets body-only fallback shapes to renderable without changing cardinality", () => {
       const single = find(
         lowerSource("<Panel><@head/></Panel>", v2()).body,
         "Component",
@@ -1097,11 +1097,58 @@ describe("one fixture per IR kind", () => {
         lowerSource("<Panel><@head/><@head/></Panel>", v2()).body,
         "Component",
       );
+      const parameterized = find(
+        lowerSource("<Panel><@head|value|>${value}</@head></Panel>", v2()).body,
+        "Component",
+      );
       expect(single.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "single", as: "data" },
+        { name: "head", cardinality: "single", as: "renderable" },
       ]);
       expect(repeated.attrTagProps).toMatchObject([
-        { name: "head", cardinality: "array", as: "data" },
+        { name: "head", cardinality: "array", as: "renderable" },
+      ]);
+      expect(parameterized.attrTagProps).toMatchObject([
+        { name: "head", cardinality: "single", as: "renderable" },
+      ]);
+    });
+
+    it("uses one data fallback shape when any occurrence has attributes", () => {
+      const component = find(
+        lowerSource(
+          '<Panel><if=input.ok><@head/></if><else><@head label="x"/></else></Panel>',
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(component.attrTagProps).toMatchObject([
+        { name: "head", cardinality: "single", as: "data" },
+      ]);
+    });
+
+    it("uses a data fallback shape when an occurrence has nested tags", () => {
+      const component = find(
+        lowerSource("<Panel><@head><@icon/></@head></Panel>", v2()).body,
+        "Component",
+      );
+      expect(component.attrTagProps).toMatchObject([
+        { name: "head", cardinality: "single", as: "data" },
+      ]);
+      expect(component.attributeTags[0]?.attrTagProps).toMatchObject([
+        { name: "icon", cardinality: "single", as: "renderable" },
+      ]);
+    });
+
+    it("keeps a declared data shape for a body-only tag", () => {
+      const component = find(
+        lowerSource(
+          "<Panel><@head>H</@head></Panel>",
+          v2(),
+          declaredInput({ head: attrTagDecl({ as: "data" }) }),
+        ).body,
+        "Component",
+      );
+      expect(component.attrTagProps).toMatchObject([
+        { name: "head", cardinality: "single", as: "data" },
       ]);
     });
 
