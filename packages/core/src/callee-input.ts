@@ -379,6 +379,16 @@ function resolveTarget(
 
 /** Extension probes, in the order the brief pins (literal path first). */
 const EXTENSION_PROBES = [".mx", ".solid.mx", ".tsx", ".ts", ".jsx", ".js"];
+const SCRIPT_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".cts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+];
 
 function probeFile(base: string, probes?: string[]): string | undefined {
   for (const candidate of [
@@ -541,6 +551,17 @@ function readInputAt(
       parsedSources,
     );
     return { input, dependencies, parsedSources };
+  }
+
+  // Only known script modules are valid input to the Babel reader. Other
+  // component formats remain untyped fallbacks unless a host registers a
+  // reader for their extension above.
+  if (!SCRIPT_EXTENSIONS.some((extension) => path.endsWith(extension))) {
+    return {
+      input: { kind: "none", path },
+      dependencies: [path],
+      parsedSources,
+    };
   }
 
   const dependencies = [path];
