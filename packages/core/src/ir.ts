@@ -231,6 +231,8 @@ export interface HostTag<Data = unknown> extends IrBase {
   attrs: Attr[];
   children: IrNode[];
   attributeTags: AttributeTag[];
+  attributeTagTree: AttributeTagNode[];
+  attrTagProps: AttrTagProp[];
   params: string[];
   /** The tag's `/var` binding, as source text, when it declares one. */
   var: string | null;
@@ -257,7 +259,44 @@ export interface HostTag<Data = unknown> extends IrBase {
 export interface AttributeTag extends IrBase {
   name: string;
   nameSpan: SourceSpan;
+  attrs: Attr[];
   block: Block;
+  hasBody: boolean;
+  attributeTags: AttributeTag[];
+  attributeTagTree: AttributeTagNode[];
+  attrTagProps: AttrTagProp[];
+}
+
+export interface ForHead {
+  source: ForSource;
+  params: string[];
+  paramNodes: Node[];
+  bindings: string[];
+  paramSpans?: Array<SourceSpan | undefined>;
+  key: Expr | null;
+}
+
+export type AttributeTagNode =
+  | ({ kind: "AttributeTag"; tag: AttributeTag } & IrBase)
+  | ({
+      kind: "AttributeTagIf";
+      branches: Array<{
+        test?: Expr;
+        span: SourceSpan;
+        nodes: AttributeTagNode[];
+      }>;
+    } & IrBase)
+  | ({
+      kind: "AttributeTagFor";
+      loop: ForHead;
+      nodes: AttributeTagNode[];
+    } & IrBase);
+
+export interface AttrTagProp {
+  name: string;
+  cardinality: "single" | "array";
+  as: "data" | "renderable";
+  source: AttributeTagNode[];
 }
 
 /**
@@ -297,6 +336,8 @@ export type IrNode =
       /** Ordinary children, or null when the call has no content. */
       content: Block | null;
       attributeTags: AttributeTag[];
+      attributeTagTree: AttributeTagNode[];
+      attrTagProps: AttrTagProp[];
       /** Tag arguments, `<Row(a, b)/>`, for a positional `<define>` call. */
       args: Expr[];
       /**
@@ -428,6 +469,8 @@ export interface Ir {
   hoisted: Array<Extract<IrNode, { kind: "Static" | "Export" }>>;
   /** The author's `export interface Input`, or null. */
   inputInterface: Extract<IrNode, { kind: "InputInterface" }> | null;
+  /** Whether a host must synthesize its specialised AttrTag type import. */
+  needsAttrTagImport: boolean;
   /** Statements lifted to the render function's head by the hoist hook. */
   prelude: Array<Extract<IrNode, { kind: "Hoisted" }>>;
   /** The template body. */

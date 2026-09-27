@@ -144,6 +144,7 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
 
 /** Resolve-time questions for Solid's JSX target. */
 export const solidDeclarations: HostDeclarations = {
+  name: "Solid",
   tags: STATEFUL_ERRORS,
   isElement: (name) => !/^[A-Z]/.test(name),
   isComponent: (name) => /^[A-Z]/.test(name),

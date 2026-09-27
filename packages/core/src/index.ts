@@ -14,6 +14,16 @@ export {
   rewriteAccessorReads,
   rewriteReadsInCode,
 } from "./accessor-reads.ts";
+export type {
+  AttrTag,
+  AttrTagConfig,
+  AttrTagOf,
+} from "./attr-tag.ts";
+export {
+  type AttrTagDecl,
+  type CalleeInput,
+  readCalleeInput,
+} from "./callee-input.ts";
 export {
   type CompileResult,
   compileSource,
@@ -75,11 +85,14 @@ export { type HostPolicy, resolveHostPolicy } from "./host-policy.ts";
 export type {
   Attr,
   AttributeTag,
+  AttributeTagNode,
+  AttrTagProp,
   Block,
   Branch,
   ComponentTarget,
   Expr,
   ExprShape,
+  ForHead,
   ForSource,
   HostTag,
   Ir,

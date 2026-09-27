@@ -44,6 +44,7 @@ import {
   // biome-ignore lint/suspicious/noShadowRestrictedNames: the compiler calls the same helper the emitted module imports, so a static value and a runtime one are escaped by one implementation
   escape,
   type GeneratedMapping,
+  type HostTag,
   type Ir,
   type IrNode,
   type MappedCode,
@@ -627,16 +628,7 @@ export function createEmitter(): StringEmitter {
    * `data` is what `resolveHostTag` decided while the Marko node was still in
    * hand, so nothing here re-inspects one.
    */
-  function emitHostTag(tag: {
-    name: string;
-    attrs: Attr[];
-    children: IrNode[];
-    attributeTags: AttributeTag[];
-    params: string[];
-    var: string | null;
-    data: unknown;
-    loc: { line: number; column: number };
-  }): void {
+  function emitHostTag(tag: HostTag): void {
     const data = tag.data as HostTagData;
 
     switch (data.kind) {
@@ -748,6 +740,8 @@ export function createEmitter(): StringEmitter {
           // from silently dropping the attribute tag (measured against Marko
           // 6.3.51: attribute tags on a dynamic tag ARE forwarded).
           attributeTags: tag.attributeTags,
+          attributeTagTree: tag.attributeTagTree,
+          attrTagProps: tag.attrTagProps,
           args: [],
           loc: tag.loc,
         });

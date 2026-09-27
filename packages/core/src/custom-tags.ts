@@ -319,6 +319,24 @@ function buildersFor(
           loc,
         );
       }
+      const attributeTagTree = attributeTags.map((tag) => ({
+        kind: "AttributeTag" as const,
+        tag,
+        loc: tag.loc,
+      }));
+      const attrTagProps = [
+        ...new Set(attributeTags.map((tag) => tag.name)),
+      ].map((attributeName) => ({
+        name: attributeName,
+        cardinality:
+          attributeTags.filter((tag) => tag.name === attributeName).length > 1
+            ? ("array" as const)
+            : ("single" as const),
+        as: "data" as const,
+        source: attributeTagTree.filter(
+          (item) => item.tag.name === attributeName,
+        ),
+      }));
       return {
         kind: "HostTag",
         tag: {
@@ -326,6 +344,8 @@ function buildersFor(
           attrs: [],
           children,
           attributeTags,
+          attributeTagTree,
+          attrTagProps,
           params: [],
           var: null,
           data: ctx.declarations.resolveHostTag?.(name, node, ctx),

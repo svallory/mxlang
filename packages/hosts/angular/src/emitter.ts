@@ -122,6 +122,7 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
 
 /** Resolve-time questions for Angular's template target. */
 export const angularDeclarations: HostDeclarations = {
+  name: "Angular",
   tags: {
     ...STATEFUL_ERRORS,
     try: { kind: "error", reason: TRY_MESSAGE },

@@ -208,17 +208,17 @@ describe("consumed attribute tags", () => {
 });
 
 describe("attribute tag parse errors", () => {
-  it("names the enclosing attribute tag when one is nested inside another", () => {
+  it("routes nested attribute tags to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><@header><@inner>x</@inner></@header></Layout>;`,
-      "attribute tag `<@inner>` inside attribute tag `<@header>`",
+      "Solid does not support nested attribute tags; its declarations must set `attrTags: 2`",
     );
   });
 
-  it("rejects attributes on an attribute tag", () => {
+  it("routes attributes on an attribute tag to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><@header class="x">H</@header></Layout>;`,
-      "attribute tags take params or a body, not attributes (v1)",
+      "Solid does not support attributes on an attribute tag; its declarations must set `attrTags: 2`",
     );
   });
 
@@ -229,17 +229,17 @@ describe("attribute tag parse errors", () => {
     );
   });
 
-  it("rejects an attribute tag inside `<if>`", () => {
+  it("routes an attribute tag inside `<if>` to the host capability gate", () => {
     expectSyntaxError(
-      `const el = <if=cond><@header>x</@header></if>;`,
-      "attribute tag `@header` on `<if>`",
+      `const el = <Layout><if=cond><@header>x</@header></if></Layout>;`,
+      "Solid does not support an attribute tag inside `<if>`; its declarations must set `attrTags: 2`",
     );
   });
 
-  it("rejects an attribute tag inside `<for>`", () => {
+  it("routes an attribute tag inside `<for>` to the host capability gate", () => {
     expectSyntaxError(
-      `const el = <for|x| of=xs()><@header>y</@header></for>;`,
-      "attribute tag `@header` on `<for>`",
+      `const el = <Layout><for|x| of=xs()><@header>y</@header></for></Layout>;`,
+      "Solid does not support an attribute tag inside `<for>`; its declarations must set `attrTags: 2`",
     );
   });
 
