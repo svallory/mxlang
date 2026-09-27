@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
-import { glob } from "node:fs/promises";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { $ } from "bun";
 import { collectMxRegions } from "../../../parser/src/index.ts";
 
@@ -9,7 +8,7 @@ const HERE = import.meta.dir;
 const REPO_ROOT = join(HERE, "../../../..");
 const LOCAL_FIXTURES = join(HERE, "../fixtures");
 
-async function findFiles(): Promise<string[]> {
+function findFiles(): string[] {
   const dirs = [
     join(REPO_ROOT, "fixtures"),
     join(REPO_ROOT, "examples"),
@@ -17,17 +16,24 @@ async function findFiles(): Promise<string[]> {
   ];
 
   const files: string[] = [];
-  for (const dir of dirs) {
+  const visit = (dir: string) => {
     try {
-      const globFiles = await Array.fromAsync(
-        glob("**/*.solid.mx", { cwd: dir }),
-      );
-      for (const file of globFiles) {
-        files.push(join(dir, file));
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          visit(path);
+        } else if (entry.isFile() && entry.name.endsWith(".solid.mx")) {
+          files.push(path);
+        }
       }
-    } catch {
-      // Ignore missing directories
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
+  };
+
+  // Like `find -type f` in parse-all.sh, do not follow dependency symlinks.
+  for (const dir of dirs) {
+    visit(dir);
   }
   return files.sort();
 }
@@ -58,17 +64,31 @@ function offsetAt(source: string, line: number, byteColumn: number): number {
 }
 
 async function run() {
-  const files = await findFiles();
+  const files = findFiles();
   let totalFiles = 0;
   let totalRegions = 0;
   let mismatches = 0;
+
+  console.log(`differential: checking ${files.length} source files`);
 
   for (const file of files) {
     totalFiles++;
     const source = readFileSync(file, "utf8");
 
     // 1. Get Tree-sitter regions
-    const xml = await $`bunx tree-sitter parse -x ${file}`.quiet().text();
+    const parsed = await $`bunx tree-sitter parse -x ${file}`.quiet().nothrow();
+    if (parsed.exitCode !== 0) {
+      const output = [
+        parsed.stdout.toString().trim(),
+        parsed.stderr.toString().trim(),
+      ]
+        .filter(Boolean)
+        .join("\n");
+      throw new Error(
+        `tree-sitter parse failed for ${relative(REPO_ROOT, file)} (exit ${parsed.exitCode})${output ? `\n${output}` : "\n(no output)"}`,
+      );
+    }
+    const xml = parsed.stdout.toString();
     const tsRegions: { start: number; end: number }[] = [];
     const regex =
       /<mx_element[^>]*srow="(\d+)" scol="(\d+)" erow="(\d+)" ecol="(\d+)"/g;
@@ -154,11 +174,14 @@ async function run() {
     `differential: ${totalFiles} files, ${totalRegions} regions, ${mismatches} mismatches`,
   );
   if (mismatches > 0) {
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
 run().catch((err) => {
-  console.error(err);
-  process.exit(1);
+  console.error("differential: FAILED");
+  console.error(
+    err instanceof Error ? (err.stack ?? err.message) : String(err),
+  );
+  process.exitCode = 1;
 });
