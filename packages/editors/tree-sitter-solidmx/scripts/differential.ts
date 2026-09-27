@@ -32,13 +32,29 @@ async function findFiles(): Promise<string[]> {
   return files.sort();
 }
 
-function offsetAt(source: string, line: number, column: number): number {
+/** Convert tree-sitter's zero-based UTF-8 byte point to a JS UTF-16 offset. */
+function offsetAt(source: string, line: number, byteColumn: number): number {
   let currentLine = 0;
   let offset = 0;
   while (currentLine < line && offset < source.length) {
     if (source.charCodeAt(offset++) === 10) currentLine++;
   }
-  return Math.min(source.length, offset + column);
+
+  let bytes = 0;
+  while (offset < source.length && source.charCodeAt(offset) !== 10) {
+    const codePoint = source.codePointAt(offset);
+    if (codePoint === undefined || bytes >= byteColumn) break;
+    const character = String.fromCodePoint(codePoint);
+    const width = Buffer.byteLength(character);
+    if (bytes + width > byteColumn) {
+      throw new Error(
+        `tree-sitter column ${byteColumn} splits a UTF-8 code point on line ${line}`,
+      );
+    }
+    bytes += width;
+    offset += character.length;
+  }
+  return offset;
 }
 
 async function run() {

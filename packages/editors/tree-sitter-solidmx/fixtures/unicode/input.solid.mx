@@ -1,0 +1,5 @@
+const greeting = "Olá";
+
+export function Unicode() {
+  return <p>${greeting}: café … 東京</p>;
+}
