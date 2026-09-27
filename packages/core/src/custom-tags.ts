@@ -92,6 +92,170 @@ export interface TagCall {
   var: string | null;
 }
 
+function directAttributeTagTree(
+  tags: readonly AttributeTag[],
+): AttributeTagNode[] {
+  return tags.map((tag) => ({ kind: "AttributeTag", tag, loc: tag.loc }));
+}
+
+/** Copies control-flow containers while retaining attribute-tag identities. */
+function cloneAttributeTagTree(
+  nodes: readonly AttributeTagNode[],
+): AttributeTagNode[] {
+  return nodes.map((node) => {
+    if (node.kind === "AttributeTag") return { ...node };
+    if (node.kind === "AttributeTagIf") {
+      return {
+        ...node,
+        branches: node.branches.map((branch) => ({
+          ...branch,
+          nodes: cloneAttributeTagTree(branch.nodes),
+        })),
+      };
+    }
+    return { ...node, nodes: cloneAttributeTagTree(node.nodes) };
+  });
+}
+
+function filterAttributeTagTree(
+  nodes: readonly AttributeTagNode[],
+  remaining: Map<AttributeTag, number>,
+  kept: Map<AttributeTag, number>,
+): AttributeTagNode[] {
+  const filtered: AttributeTagNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === "AttributeTag") {
+      const count = remaining.get(node.tag) ?? 0;
+      if (count > 0) {
+        remaining.set(node.tag, count - 1);
+        kept.set(node.tag, (kept.get(node.tag) ?? 0) + 1);
+        filtered.push(node);
+      }
+      continue;
+    }
+    if (node.kind === "AttributeTagIf") {
+      const branches = node.branches.flatMap((branch) => {
+        const nested = filterAttributeTagTree(branch.nodes, remaining, kept);
+        return nested.length === 0 ? [] : [{ ...branch, nodes: nested }];
+      });
+      if (branches.length > 0) filtered.push({ ...node, branches });
+      continue;
+    }
+    const nested = filterAttributeTagTree(node.nodes, remaining, kept);
+    if (nested.length > 0) filtered.push({ ...node, nodes: nested });
+  }
+  return filtered;
+}
+
+function attributeTagOccurrenceRange(
+  nodes: readonly AttributeTagNode[],
+  name: string,
+): { min: number; max: number; inFor: boolean } {
+  let min = 0;
+  let max = 0;
+  let inFor = false;
+  for (const node of nodes) {
+    if (node.kind === "AttributeTag") {
+      if (node.tag.name === name) {
+        min++;
+        max++;
+      }
+      continue;
+    }
+    if (node.kind === "AttributeTagFor") {
+      const inner = attributeTagOccurrenceRange(node.nodes, name);
+      if (inner.max > 0) {
+        inFor = true;
+        max = Number.POSITIVE_INFINITY;
+      }
+      continue;
+    }
+    const ranges = node.branches.map((branch) =>
+      attributeTagOccurrenceRange(branch.nodes, name),
+    );
+    if (!node.branches.some((branch) => branch.test === undefined)) {
+      ranges.push({ min: 0, max: 0, inFor: false });
+    }
+    min += Math.min(...ranges.map((range) => range.min));
+    max += Math.max(...ranges.map((range) => range.max));
+    inFor ||= ranges.some((range) => range.inFor);
+  }
+  return { min, max, inFor };
+}
+
+function filterAttributeTagTreeByName(
+  nodes: readonly AttributeTagNode[],
+  name: string,
+): AttributeTagNode[] {
+  const filtered: AttributeTagNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === "AttributeTag") {
+      if (node.tag.name === name) filtered.push(node);
+      continue;
+    }
+    if (node.kind === "AttributeTagIf") {
+      const branches = node.branches.map((branch) => ({
+        ...branch,
+        nodes: filterAttributeTagTreeByName(branch.nodes, name),
+      }));
+      if (branches.some((branch) => branch.nodes.length > 0)) {
+        filtered.push({ ...node, branches });
+      }
+      continue;
+    }
+    const nested = filterAttributeTagTreeByName(node.nodes, name);
+    if (nested.length > 0) filtered.push({ ...node, nodes: nested });
+  }
+  return filtered;
+}
+
+function rebuildAttributeTagPlan(
+  originalTree: readonly AttributeTagNode[],
+  originalProps: readonly AttrTagProp[],
+  tags: readonly AttributeTag[],
+): Pick<TagCall, "attributeTagTree" | "attrTagProps"> {
+  const remaining = new Map<AttributeTag, number>();
+  for (const tag of tags) remaining.set(tag, (remaining.get(tag) ?? 0) + 1);
+  const kept = new Map<AttributeTag, number>();
+  const attributeTagTree = filterAttributeTagTree(
+    originalTree,
+    remaining,
+    kept,
+  );
+
+  // Objects absent from the authored tree were created by the transform and
+  // have no control-flow provenance, so route them as unconditional siblings.
+  for (const tag of tags) {
+    const count = kept.get(tag) ?? 0;
+    if (count > 0) {
+      kept.set(tag, count - 1);
+    } else {
+      attributeTagTree.push({ kind: "AttributeTag", tag, loc: tag.loc });
+    }
+  }
+
+  const declarations = new Map(
+    originalProps.map(({ name, cardinality, as }) => [
+      name,
+      { cardinality, as },
+    ]),
+  );
+  const names = [...new Set(tags.map((tag) => tag.name))];
+  const attrTagProps = names.map((name): AttrTagProp => {
+    const declaration = declarations.get(name);
+    const range = attributeTagOccurrenceRange(attributeTagTree, name);
+    return {
+      name,
+      cardinality:
+        declaration?.cardinality ??
+        (range.max <= 1 && !range.inFor ? "single" : "array"),
+      as: declaration?.as ?? "data",
+      source: filterAttributeTagTreeByName(attributeTagTree, name),
+    };
+  });
+  return { attributeTagTree, attrTagProps };
+}
+
 export interface TransformContext {
   /** Builders that stamp synthetic nodes with the call site's position. */
   build: IrBuilders;
@@ -251,6 +415,7 @@ function buildersFor(
   node: Node | null,
   tagName: string,
   definition: CustomTag,
+  normalizeTemplateCall?: (call: TagCall) => TagCall,
 ): IrBuilders {
   return {
     text: (value) => ({ kind: "Text", value, loc }),
@@ -375,7 +540,11 @@ function buildersFor(
           loc,
         );
       }
-      return routeTemplateCall(ctx, definition, call);
+      return routeTemplateCall(
+        ctx,
+        definition,
+        normalizeTemplateCall?.(call) ?? call,
+      );
     },
   };
 }
@@ -654,7 +823,8 @@ export function validateCustomTagCall(
   }
   if (!declaredTags) return;
 
-  const seen = new Map<string, AttributeTag>();
+  const tree =
+    call.attributeTagTree ?? directAttributeTagTree(call.attributeTags);
   for (const tag of call.attributeTags) {
     const declaration = Object.hasOwn(declaredTags, tag.name)
       ? declaredTags[tag.name]
@@ -662,17 +832,18 @@ export function validateCustomTagCall(
     if (!declaration) {
       failAt(call.name, `unknown attribute tag \`<@${tag.name}>\``, tag.loc);
     }
-    if (seen.has(tag.name) && declaration.repeatable !== true) {
-      failAt(
-        call.name,
-        `attribute tag \`<@${tag.name}>\` may not be repeated`,
-        tag.loc,
-      );
-    }
-    seen.set(tag.name, tag);
   }
   for (const [name, declaration] of Object.entries(declaredTags)) {
-    if (declaration.required && !seen.has(name)) {
+    const range = attributeTagOccurrenceRange(tree, name);
+    if (declaration.repeatable !== true && range.max > 1) {
+      const occurrences = call.attributeTags.filter((tag) => tag.name === name);
+      failAt(
+        call.name,
+        `attribute tag \`<@${name}>\` may not be repeated`,
+        occurrences[1]?.loc ?? occurrences[0]?.loc ?? call.loc,
+      );
+    }
+    if (declaration.required && range.min === 0) {
       failAt(
         call.name,
         `missing required attribute tag \`<@${name}>\``,
@@ -967,7 +1138,34 @@ export function transformCustomTag(
     return [];
   }
   const observed = observedCall(withDefaults);
-  const builders = buildersFor(call.loc, ctx, node, call.name, definition);
+  const originalAttributeTagTree = cloneAttributeTagTree(
+    withDefaults.attributeTagTree ??
+      directAttributeTagTree(withDefaults.attributeTags),
+  );
+  const originalAttrTagProps = (withDefaults.attrTagProps ?? []).map(
+    ({ name, cardinality, as, source }) => ({
+      name,
+      cardinality,
+      as,
+      source: cloneAttributeTagTree(source),
+    }),
+  );
+  const normalizeTemplateCall = (routedCall: TagCall): TagCall => ({
+    ...routedCall,
+    ...rebuildAttributeTagPlan(
+      originalAttributeTagTree,
+      originalAttrTagProps,
+      routedCall.attributeTags,
+    ),
+  });
+  const builders = buildersFor(
+    call.loc,
+    ctx,
+    node,
+    call.name,
+    definition,
+    definition.transform ? normalizeTemplateCall : undefined,
+  );
   const tagContext: TransformContext = {
     build: builders,
     hoist: (code) => ctx.hoist(code, node),
@@ -1003,13 +1201,12 @@ export function transformCustomTag(
     Array.isArray(result.attrs)
   ) {
     routed = true;
-    // A sidecar that replaces the occurrence list has invalidated the tree
-    // and property plan derived from the authored call. Rebuild both from
-    // the returned list rather than routing stale entries to the template.
-    const routedCall =
-      result.attributeTags === observed.call.attributeTags
-        ? result
-        : { ...result, attributeTagTree: undefined, attrTagProps: undefined };
+    // A transform may copy or mutate the occurrence list. In both cases the
+    // authored plan must be reconciled by identity so retained tags keep
+    // their control-flow shape and removed tags cannot survive in stale IR.
+    const routedCall = definition.transform
+      ? normalizeTemplateCall(result)
+      : result;
     nodes = routeTemplateCall(ctx, definition, routedCall);
   } else {
     failAt(
