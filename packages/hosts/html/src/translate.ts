@@ -607,7 +607,7 @@ const ESCAPE_COMMENT = `function escapeComment(value) {
   return String(value).replace(/>/g, "&gt;");
 }`;
 
-const RENDER_DYNAMIC = `function renderDynamic(target, props, args) {
+const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string, any>, args?: any[]) {
   if (target === null || target === undefined) return "";
   if (typeof target === "string") {
     let out = "<" + target;
@@ -619,6 +619,9 @@ const RENDER_DYNAMIC = `function renderDynamic(target, props, args) {
     out += ">";
     if (props.content) out += props.content();
     return out + "</" + target + ">";
+  }
+  if (typeof target === "object") {
+    throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
   }
   return args ? target(...args) : target(props);
 }`;

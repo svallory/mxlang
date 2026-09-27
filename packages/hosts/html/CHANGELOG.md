@@ -33,6 +33,11 @@ and the always-quoted form is safer and more readable.
   optional `content: (...params) => string`; `renderable` tags receive that
   render function directly; repeated/looped tags are real arrays. The host
   exports its specialized one-parameter `AttrTag<C>` type.
+- **fix:** data attribute-tag values called through an untyped dynamic target
+  now fail with an actionable `content`-route diagnostic instead of an opaque
+  "target is not a function" error. Declared tag-param types also survive
+  conditional and looped array emission under strict TypeScript, and one-param
+  `for in` loops no longer shadow an outer binding named `value`.
 - **build:** publishable from `dist/` (ESM + `.d.ts`); `exports` map for
   `.` and `./bun`.
 

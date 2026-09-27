@@ -160,7 +160,16 @@ HTML block function `(...params) => string` (with `[]` when params are absent).
 A data value is `attrs & nestedProps & { content?: (...params) => string }`;
 `content` is explicitly `undefined` when the occurrence has no body. Dynamic
 tag arguments are forwarded so a callee can invoke a parameterized data
-`content` or renderable tag with `<${value}(args)/>`.
+`content` or renderable tag with `<${value}(args)/>`. Calling a data value
+itself through an untyped dynamic target fails with a diagnostic that points
+to its `content` route instead of the engine's opaque "not a function" error.
+
+Declared attribute-tag values retain their contextual types through
+conditional and loop plans: emitted concrete values use `satisfies` against
+the callee's `Input` property, so tag params do not become implicit `any` when
+an array is assembled incrementally. A one-param `for in` loop destructures
+only the key; it never synthesizes a local named `value` that can shadow an
+author binding (the same rule applies to ordinary content loops).
 
 
 ## Bun loader

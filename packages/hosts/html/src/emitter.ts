@@ -255,12 +255,17 @@ export function createEmitter(): StringEmitter {
   const attrTagValue = (
     tag: AttributeTag,
     as: AttrTagProp["as"],
+    valueType: string | null,
   ): MappedCode => {
     const content = blockFunction(
       tag.block.children,
       tag.block.params.join(", "),
     );
-    if (as === "renderable") return content;
+    if (as === "renderable") {
+      return valueType
+        ? concatMapped("((", content, `) satisfies ${valueType})`)
+        : content;
+    }
 
     const parts = propPartsOfAttrs(tag.attrs);
     for (const nested of tag.attrTagProps) {
@@ -268,19 +273,24 @@ export function createEmitter(): StringEmitter {
         concatMapped(
           mapped(propKey(nested.name), attrTagNameSpan(nested.source)),
           ": ",
-          attrTagPropValue(nested),
+          attrTagPropValue(nested, valueType),
         ),
       );
     }
     parts.push(concatMapped("content: ", tag.hasBody ? content : "undefined"));
-    return concatMapped("{ ", joinParts(parts), " }");
+    const value = concatMapped("{ ", joinParts(parts), " }");
+    return valueType
+      ? concatMapped("(", value, ` satisfies ${valueType})`)
+      : value;
   };
 
   const singleNodeValue = (
     node: AttributeTagNode,
     as: AttrTagProp["as"],
+    valueType: string | null,
   ): MappedCode => {
-    if (node.kind === "AttributeTag") return attrTagValue(node.tag, as);
+    if (node.kind === "AttributeTag")
+      return attrTagValue(node.tag, as, valueType);
     if (node.kind === "AttributeTagFor") {
       return fail(
         "internal attribute-tag plan error: a singular value cannot contain `<for>`",
@@ -292,7 +302,7 @@ export function createEmitter(): StringEmitter {
     for (let index = node.branches.length - 1; index >= 0; index--) {
       const branch = node.branches[index];
       if (!branch) continue;
-      const value = singleSourceValue(branch.nodes, as);
+      const value = singleSourceValue(branch.nodes, as, valueType);
       alternate = branch.test
         ? concatMapped(
             "(",
@@ -311,9 +321,10 @@ export function createEmitter(): StringEmitter {
   const singleSourceValue = (
     source: AttributeTagNode[],
     as: AttrTagProp["as"],
+    valueType: string | null,
   ): MappedCode => {
     if (source.length === 0) return concatMapped("undefined");
-    const values = source.map((node) => singleNodeValue(node, as));
+    const values = source.map((node) => singleNodeValue(node, as, valueType));
     if (values.length === 1) return values[0] as MappedCode;
     return concatMapped(
       "(",
@@ -327,6 +338,7 @@ export function createEmitter(): StringEmitter {
   const arrayLoopValue = (
     node: Extract<AttributeTagNode, { kind: "AttributeTagFor" }>,
     as: AttrTagProp["as"],
+    valueType: string | null,
   ): MappedCode => {
     const source: ForHead["source"] = node.loop.source;
     if (source.kind === "range" && source.step) {
@@ -340,7 +352,7 @@ export function createEmitter(): StringEmitter {
     const result = `$attrTags${serial}`;
     const sourceName = `$attrTagSource${serial}`;
     const [first = "item", second] = node.loop.params;
-    const body = arraySourceValue(node.nodes, as);
+    const body = arraySourceValue(node.nodes, as, valueType);
 
     if (source.kind === "of") {
       const head = second
@@ -354,8 +366,9 @@ export function createEmitter(): StringEmitter {
     }
 
     if (source.kind === "in") {
+      const entry = second ? `[${first}, ${second}]` : `[${first}]`;
       return concatMapped(
-        `(() => { const ${result} = []; const ${sourceName} = ${source.object.code}; for (const [${first}, ${second ?? "value"}] of Object.entries(${sourceName})) { ${result}.push(...(`,
+        `(() => { const ${result} = []; const ${sourceName} = ${source.object.code}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
         body,
         `)); } return ${result}; })()`,
       );
@@ -374,17 +387,19 @@ export function createEmitter(): StringEmitter {
   const arrayNodeValue = (
     node: AttributeTagNode,
     as: AttrTagProp["as"],
+    valueType: string | null,
   ): MappedCode => {
     if (node.kind === "AttributeTag") {
-      return concatMapped("[", attrTagValue(node.tag, as), "]");
+      return concatMapped("[", attrTagValue(node.tag, as, valueType), "]");
     }
-    if (node.kind === "AttributeTagFor") return arrayLoopValue(node, as);
+    if (node.kind === "AttributeTagFor")
+      return arrayLoopValue(node, as, valueType);
 
     let alternate = concatMapped("[]");
     for (let index = node.branches.length - 1; index >= 0; index--) {
       const branch = node.branches[index];
       if (!branch) continue;
-      const value = arraySourceValue(branch.nodes, as);
+      const value = arraySourceValue(branch.nodes, as, valueType);
       alternate = branch.test
         ? concatMapped(
             "(",
@@ -403,9 +418,10 @@ export function createEmitter(): StringEmitter {
   const arraySourceValue = (
     source: AttributeTagNode[],
     as: AttrTagProp["as"],
+    valueType: string | null,
   ): MappedCode => {
     if (source.length === 0) return concatMapped("[]");
-    const values = source.map((node) => arrayNodeValue(node, as));
+    const values = source.map((node) => arrayNodeValue(node, as, valueType));
     if (values.length === 1) return values[0] as MappedCode;
     return concatMapped(
       "[",
@@ -416,10 +432,21 @@ export function createEmitter(): StringEmitter {
     );
   };
 
-  function attrTagPropValue(prop: AttrTagProp): MappedCode {
+  function attrTagPropValue(
+    prop: AttrTagProp,
+    ownerType: string | null,
+  ): MappedCode {
+    const propType =
+      prop.declared && ownerType
+        ? `NonNullable<(${ownerType})[${quote(prop.name)}]>`
+        : null;
+    const valueType =
+      propType && prop.cardinality === "array"
+        ? `(${propType})[number]`
+        : propType;
     return prop.cardinality === "array"
-      ? arraySourceValue(prop.source, prop.as)
-      : singleSourceValue(prop.source, prop.as);
+      ? arraySourceValue(prop.source, prop.as, valueType)
+      : singleSourceValue(prop.source, prop.as, valueType);
   }
 
   /**
@@ -517,6 +544,7 @@ export function createEmitter(): StringEmitter {
     attrs: Attr[],
     attrTagProps: AttrTagProp[],
     content: Block | null,
+    ownerType: string | null,
   ): {
     parts: MappedCode[];
     named: Map<string, string>;
@@ -564,7 +592,11 @@ export function createEmitter(): StringEmitter {
     // already resolved by core. The legacy flat occurrence list is retained
     // for tooling only; v2 hosts emit exclusively from this plan.
     for (const prop of attrTagProps) {
-      setNamed(prop.name, attrTagPropValue(prop), attrTagNameSpan(prop.source));
+      setNamed(
+        prop.name,
+        attrTagPropValue(prop, ownerType),
+        attrTagNameSpan(prop.source),
+      );
     }
 
     // Ordinary children become `content`, not `children`: that is the prop
@@ -602,12 +634,15 @@ export function createEmitter(): StringEmitter {
     },
 
     component(node) {
+      const target = node.target;
+      const ownerType =
+        target.kind === "name" ? `Parameters<typeof ${target.name}>[0]` : null;
       const { parts, named, spreads } = propsOf(
         node.attrs,
         node.attrTagProps,
         node.content,
+        ownerType,
       );
-      const target = node.target;
       const joinedParts = concatMapped(
         ...parts.flatMap((part, index) =>
           index === 0 ? [part] : [", ", part],
@@ -771,9 +806,8 @@ export function createEmitter(): StringEmitter {
         }
       } else if (source.kind === "in") {
         const object = bind(source.object.code);
-        push(
-          `for (const [${first}, ${second ?? "value"}] of Object.entries(${object})) {`,
-        );
+        const entry = second ? `[${first}, ${second}]` : `[${first}]`;
+        push(`for (const ${entry} of Object.entries(${object})) {`);
       } else {
         const start = bind(source.from ? source.from.code : "0");
         const bound = bind(source.bound.code);
