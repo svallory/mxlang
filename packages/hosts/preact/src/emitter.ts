@@ -649,14 +649,18 @@ export class PreactEmitter implements Emitter<string> {
     // In particular, a lone placeholder must not become a bare string: a
     // callee following the `<${x.content}/>` fix-it would then reinterpret
     // that string as a dynamic tag name. A JSX element is already a host
-    // renderable; every other body shape is protected by a fragment.
+    // renderable; every other body shape is protected by a fragment. The
+    // trailing null makes that fragment a two-child fragment: Hono's Fragment
+    // drops a sole falsy child (including the renderable number `0`), while a
+    // null sibling is invisible on every JSX host and preserves the ordinary
+    // child semantics for strings, elements, arrays, false and null.
     const only = children.length === 1 ? children[0] : undefined;
     let value =
       only?.kind === "Element" ||
       only?.kind === "Component" ||
       only?.kind === "HostTag"
         ? this.#render(children, true)
-        : concatMapped("<>", this.#render(children, true), "</>");
+        : concatMapped("<>", this.#render(children, true), "{null}</>");
     // The renderable nested inside every array entry needs a key even when
     // the outer entry is data-shaped: consumers commonly render
     // `items.map((item) => item.content)`. Put the key inside parameterized
@@ -1230,7 +1234,13 @@ export class PreactEmitter implements Emitter<string> {
     }
 
     if (source.kind === "in") {
-      const value = second ?? "value";
+      const value =
+        second ??
+        hygienicName(
+          "value",
+          node.params,
+          `${body.code} ${source.object.code}`,
+        );
       const key = keyFrom(first);
       this.#out.push(
         concatMapped(
