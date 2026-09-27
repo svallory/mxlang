@@ -856,10 +856,13 @@ Astro and Angular are projection hosts rather than value hosts. A singular
 attribute tag becomes an Astro named slot or Angular `ngProjectAs` projection;
 `data` and `renderable` declarations select that same named content. Astro's
 `.mx` renderer exposes the slot thunk both directly and as `.content`;
-Angular exposes no class value at all. Both hosts reject arrays, authored
-attributes, params, and nested attribute tags with positioned host errors.
-Mutually exclusive conditional occurrences are supported and render only the
-taken projection.
+Angular exposes no class value at all and rewrites the callee's
+`${input.x()}`, `${input.x.content()}`, `<${input.x.content}/>` and renderable
+`<${input.x}/>` idioms (including optional chains) directly to `<ng-content>`.
+Any other Angular read of a declared projection is a positioned error. Both
+hosts reject arrays, authored attributes, params, nested attribute tags, and
+bodiless `<@name/>` tags with positioned host errors. Mutually exclusive
+conditional occurrences are supported and render only the taken projection.
 
 Attribute-tag names are stored with the leading `@` stripped, and their name span
 starts one character in so the `@` is excluded from diagnostics.
@@ -898,7 +901,9 @@ Today's per-host value shape, factually, with no claim of Marko parity:
   declares the v2 capability, core rejects shapes it could otherwise drop.
 - **Angular**: singular tags become `ngProjectAs` projections, including
   conditional branches. Arrays are rejected because a projection is keyed by
-  selector; an attribute-tag-only dynamic-tag body is also rejected because
+  selector. In a callee the four render idioms above become `<ng-content>`;
+  conditions, pass-throughs, property reads, and other value uses are errors.
+  An attribute-tag-only dynamic-tag body is also rejected because
   `ngComponentOutlet` has no content-projection mechanism.
 - **Astro**: singular tags become named slots, including conditional branches.
   Arrays are rejected because an Astro slot is keyed by name and its renderer

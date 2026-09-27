@@ -29,7 +29,7 @@ import {
 
 type TryData = { kind: "try" };
 type HtmlCommentData = { kind: "html-comment" };
-type DynamicComponentData = { kind: "dynamic-component"; expr: string };
+export type DynamicComponentData = { kind: "dynamic-component"; expr: Expr };
 
 function positionOf(node: { loc: Position }): Position {
   return node.loc;
@@ -143,7 +143,14 @@ export const angularDeclarations: HostDeclarations = {
     if (name === "try") return { kind: "try" };
     if (name === "html-comment") return { kind: "html-comment" };
     if (name === DYNAMIC_TAG) {
-      return { kind: "dynamic-component", expr: expr(ctx, node.name) };
+      return {
+        kind: "dynamic-component",
+        expr: {
+          code: expr(ctx, node.name),
+          shape: "other",
+          node: node.name,
+        },
+      };
     }
     rawFail(`unknown Angular host tag ${name}`, node);
   },
@@ -926,9 +933,24 @@ class AngularEmitter implements Emitter<string> {
     owner: { loc: Position },
   ): void {
     if (prop.cardinality === "array") {
+      const tags: AttributeTag[] = [];
+      let loopTag: AttributeTag | undefined;
+      const collect = (nodes: AttributeTagNode[], inLoop = false): void => {
+        for (const node of nodes) {
+          if (node.kind === "AttributeTag") {
+            tags.push(node.tag);
+            if (inLoop && !loopTag) loopTag = node.tag;
+          } else if (node.kind === "AttributeTagFor") {
+            collect(node.nodes, true);
+          } else {
+            for (const branch of node.branches) collect(branch.nodes, inLoop);
+          }
+        }
+      };
+      collect(prop.source);
       fail(
         `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/angular: a projection is keyed by name`,
-        owner,
+        loopTag ?? tags[1] ?? tags[0] ?? owner,
       );
     }
     this.visitAttributeTags(prop.source, (tag) => {
@@ -948,6 +970,12 @@ class AngularEmitter implements Emitter<string> {
         fail(
           `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/angular: a projection has no nested data shape`,
           tag.attributeTagTree[0] ?? tag,
+        );
+      }
+      if (!tag.hasBody) {
+        fail(
+          `<@${tag.name}/> has no body; @mxlang/angular projects attribute-tag bodies by name`,
+          tag,
         );
       }
     });
@@ -1031,7 +1059,7 @@ class AngularEmitter implements Emitter<string> {
   ): void {
     if (hasContent) {
       fail(
-        "`<${…}>` with content cannot be emitted into an Angular template: `ngComponentOutlet` projects content only through `ngComponentOutletContent`, which takes prepared nodes rather than a template body. Use a static component tag, or render the content into a `<define>` and pass it as an input.",
+        "`<${…}>` with content isn't supported by @mxlang/angular: `ngComponentOutlet` projects content only through `ngComponentOutletContent`, which takes prepared nodes rather than a template body. Use a static component tag, or render the content into a `<define>` and pass it as an input.",
         node,
       );
     }
@@ -1230,7 +1258,7 @@ class AngularEmitter implements Emitter<string> {
       // used to draw for itself. Both shapes lower through this branch and
       // both emit `ngComponentOutlet`.
       this.emitDynamicComponent(
-        data.expr,
+        data.expr.code,
         tag.attrs,
         tag.children.length > 0 || tag.attrTagProps.length > 0,
         node,

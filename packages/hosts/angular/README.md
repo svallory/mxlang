@@ -59,7 +59,12 @@ are positioned errors because a projection is keyed by selector and carries
 nodes only. `as: "data"` and `as: "renderable"` therefore project identically.
 The exported `AttrTag<C>` is a compile-time marker (`never`): the generated
 component gets `<ng-content>`, not an `@Input()` value, and projected
-properties are omitted from the generated class.
+properties are omitted from the generated class. A callee renders projected
+content with `${input.x()}`, `${input.x.content()}`,
+`<${input.x.content}/>` or, for a renderable declaration, `<${input.x}/>`;
+optional-chain forms work too. Any other read of `input.x` is a positioned
+error with that render fix-it. A bodiless `<@name/>` is rejected because it
+has no nodes to project.
 
 ## `mx-angular` (task 1.5a: `build`/`map`; task 1.5b: `watch`)
 

@@ -16,6 +16,7 @@ import {
   type Ctx,
   type CustomTag,
   compileSource,
+  type Expr,
   type Ir,
   type IrNode,
   type MxWarning,
@@ -26,6 +27,7 @@ import {
 import { directivesFor } from "./directives.ts";
 import {
   angularDeclarations,
+  type DynamicComponentData,
   emitTemplate,
   isTagModuleImport,
   kebabCase,
@@ -296,47 +298,88 @@ function parseInputProps(
   return props;
 }
 
-/**
- * The name a zero-argument `input.<name>()` interpolation reads, or null.
- *
- * This is the content/slot signal, and it is read off the IR expression's own
- * AST rather than `Ir["tagMetadata"].attributeTags`. That field is core's
- * *caller-side* warning heuristic and matches a bare `input.x` with no call
- * (`template-tag.ts`'s `inputMember`), so an ordinary string input read as
- * `${input.title}` appears in it — using it here would emit an
- * `<ng-content select="[title]">` for a plain `@Input()`. The design note's
- * rule is specifically a *read of the slot as a function*.
- */
-function slotNameOf(node: IrNode): string | null {
-  if (node.kind !== "Interpolation") return null;
-  const ast = node.expr.node as
-    | {
-        type?: string;
-        arguments?: unknown[];
-        callee?: {
-          type?: string;
-          computed?: boolean;
-          object?: { type?: string; name?: string };
-          property?: { type?: string; name?: string };
-        };
-      }
-    | undefined;
-  if (ast?.type !== "CallExpression" || ast.arguments?.length !== 0)
-    return null;
-  const callee = ast.callee;
-  if (callee?.type !== "MemberExpression" || callee.computed) return null;
-  if (callee.object?.type !== "Identifier" || callee.object.name !== "input") {
+interface ExpressionNode {
+  type?: string;
+  name?: string;
+  value?: unknown;
+  computed?: boolean;
+  object?: ExpressionNode;
+  property?: ExpressionNode;
+  callee?: ExpressionNode;
+  arguments?: unknown[];
+  [key: string]: unknown;
+}
+
+function isMember(node: ExpressionNode | undefined): node is ExpressionNode {
+  return (
+    node?.type === "MemberExpression" ||
+    node?.type === "OptionalMemberExpression"
+  );
+}
+
+/** A direct `input.name`/`input?.name` read, optionally accepting `input["name"]`. */
+function inputMemberName(
+  node: ExpressionNode | undefined,
+  computed = false,
+): string | null {
+  if (!isMember(node) || node?.object?.type !== "Identifier") return null;
+  if (node.object.name !== "input") return null;
+  if (node.computed) {
+    return computed &&
+      node.property?.type === "StringLiteral" &&
+      typeof node.property.value === "string"
+      ? node.property.value
+      : null;
+  }
+  const name = node.property?.type === "Identifier" ? node.property.name : null;
+  return name && /^[A-Za-z_$][\w$]*$/.test(name) ? name : null;
+}
+
+/** The `name` in `input.name.content`, including optional-member spellings. */
+function contentMemberName(node: ExpressionNode | undefined): string | null {
+  if (!isMember(node) || node?.computed) return null;
+  if (
+    node.property?.type !== "Identifier" ||
+    node.property.name !== "content"
+  ) {
     return null;
   }
-  if (callee.property?.type !== "Identifier") return null;
-  const name = callee.property.name;
-  // The name reaches an emitted attribute selector, so it is checked against
-  // the identifier shape rather than trusted. A non-computed member's name is
-  // always an identifier in practice; this makes that an enforced invariant
-  // instead of an assumption, so nothing can interpolate `"]` into the
-  // selector text below.
-  if (!name || !/^[A-Za-z_$][\w$]*$/.test(name)) return null;
-  return name;
+  return inputMemberName(node.object);
+}
+
+/** `${input.x()}` / `${input.x.content()}`, including optional chains. */
+function calledSlotName(expr: Expr): string | null {
+  const ast = expr.node as ExpressionNode | undefined;
+  if (
+    (ast?.type !== "CallExpression" &&
+      ast?.type !== "OptionalCallExpression") ||
+    ast.arguments?.length !== 0
+  ) {
+    return null;
+  }
+  return contentMemberName(ast.callee) ?? inputMemberName(ast.callee);
+}
+
+/** The named projection rendered by one interpolation idiom, or null. */
+function slotNameOf(node: IrNode): string | null {
+  return node.kind === "Interpolation" ? calledSlotName(node.expr) : null;
+}
+
+/** `<${input.x}/>` / `<${input.x.content}/>`, including optional chains. */
+function dynamicSlotNameOf(node: IrNode): string | null {
+  if (node.kind !== "HostTag") return null;
+  const data = node.tag.data as Partial<DynamicComponentData>;
+  if (
+    data.kind !== "dynamic-component" ||
+    !data.expr ||
+    node.tag.attrs.length > 0 ||
+    node.tag.children.length > 0 ||
+    node.tag.attrTagProps.length > 0
+  ) {
+    return null;
+  }
+  const ast = data.expr.node as ExpressionNode | undefined;
+  return contentMemberName(ast) ?? inputMemberName(ast);
 }
 
 /**
@@ -651,15 +694,15 @@ function isIrNode(value: unknown): boolean {
 }
 
 /**
- * Rewrites every `${input.slot()}` read into Angular content projection, and
- * reports the ways a slot cannot be used on this host.
+ * Rewrites every ruled projection-render idiom into Angular content
+ * projection, and reports the ways projected content cannot be used here.
  *
  * `input.content()` is the body slot (`<ng-content>`); any other name is an
  * attribute tag, which Angular matches by attribute selector
  * (`<ng-content select="[header]">`) — both probed, design note A1.
  *
- * Three misuses are errors rather than silently-wrong output, each because
- * Angular's projection is a *placement*, not a value:
+ * Misuses are errors rather than silently-wrong output, each because Angular's
+ * projection is a *placement*, not a value:
  *
  * - **A repeated attribute tag.** Angular matches each selector once, so the
  *   second `<ng-content select="[x]">` renders empty.
@@ -668,79 +711,81 @@ function isIrNode(value: unknown): boolean {
  *   true of one name, and whichever lost would render blank.
  * - **A slot called with arguments** (`${input.header(1)}`). Projection takes
  *   no parameters — the arguments would be dropped in silence.
+ * - **Any value read of a declared `AttrTag`.** Conditions, pass-throughs and
+ *   property reads would observe the unbound `never` marker, not projection.
  */
 function projectSlots(body: IrNode[], ctx: Ctx): Set<string> {
   const slotLoc = new Map<string, Position>();
   const bareLoc = new Map<string, Position>();
+  const projected = new Set(
+    ctx.ownInput?.kind === "declared" ? ctx.ownInput.attrTags.keys() : [],
+  );
 
-  // First pass: every *bare* `input.x` read in the tree, so a name used both
-  // ways is reported against both sites rather than whichever came first.
-  const collectBare = (value: unknown): void => {
+  /** Every direct `input.x` read nested anywhere in an expression AST. */
+  const inputMembers = (
+    value: unknown,
+    names = new Set<string>(),
+  ): Set<string> => {
+    if (!value || typeof value !== "object") return names;
+    if (Array.isArray(value)) {
+      for (const item of value) inputMembers(item, names);
+      return names;
+    }
+    const ast = value as ExpressionNode;
+    const name = inputMemberName(ast, true);
+    if (name) names.add(name);
+    for (const [key, child] of Object.entries(ast)) {
+      if (key === "loc" || key === "extra") continue;
+      inputMembers(child, names);
+    }
+    return names;
+  };
+
+  // First pass: collect every value read except the four ruled render idioms.
+  // Declared AttrTag names are projections, so any such read is an immediate
+  // positioned error. Undeclared names keep the older inferred-slot guard: if
+  // the same name is later rendered as a slot, mixing the two meanings errors.
+  const collectValueReads = (value: unknown, loc?: Position): void => {
     if (!value || typeof value !== "object") return;
     if (Array.isArray(value)) {
-      for (const item of value) collectBare(item);
+      for (const item of value) collectValueReads(item, loc);
       return;
     }
-    const record = value as Record<string, unknown> & { kind?: string };
-    if (record.kind === "Interpolation" || record.kind === undefined) {
-      const expr = record.expr as { node?: unknown } | undefined;
-      if (expr?.node) {
-        const walkAst = (node: unknown): void => {
-          if (!node || typeof node !== "object") return;
-          if (Array.isArray(node)) {
-            for (const item of node) walkAst(item);
-            return;
-          }
-          const ast = node as Record<string, unknown> & { type?: string };
-          // A member read whose parent is *not* a call is a bare read. The
-          // call case is the slot, handled by `slotNameOf`.
-          if (
-            (ast.type === "MemberExpression" ||
-              ast.type === "OptionalMemberExpression") &&
-            ast.computed !== true
-          ) {
-            const object = ast.object as { type?: string; name?: string };
-            const property = ast.property as { type?: string; name?: string };
-            if (
-              object?.type === "Identifier" &&
-              object.name === "input" &&
-              property?.type === "Identifier" &&
-              property.name
-            ) {
-              const loc = record.loc as Position | undefined;
-              if (loc && !bareLoc.has(property.name)) {
-                bareLoc.set(property.name, loc);
-              }
-            }
-          }
-          for (const [key, child] of Object.entries(ast)) {
-            if (key === "loc" || key === "extra") continue;
-            // Skip a call's own callee: that read is the slot, not a bare use.
-            if (
-              key === "callee" &&
-              (ast.type === "CallExpression" ||
-                ast.type === "OptionalCallExpression")
-            ) {
-              continue;
-            }
-            walkAst(child);
-          }
-        };
-        walkAst(expr.node);
+    const record = value as Record<string, unknown> & {
+      kind?: string;
+      loc?: Position;
+    };
+    const here = record.loc ?? loc;
+    if (isIrNode(record)) {
+      const irNode = record as unknown as IrNode;
+      if (slotNameOf(irNode) || dynamicSlotNameOf(irNode)) return;
+    }
+    if (typeof record.code === "string" && record.node) {
+      for (const name of inputMembers(record.node)) {
+        if (projected.has(name)) {
+          throw new TranslateError(
+            `@mxlang/angular can't read projected content \`${name}\` as a value; render it with <\${input.${name}.content}/>`,
+            here?.line ?? 0,
+            here?.column ?? 0,
+            here?.file,
+          );
+        }
+        if (here && !bareLoc.has(name)) bareLoc.set(name, here);
       }
+      return;
     }
     for (const [key, child] of Object.entries(record)) {
       if (key === "node" || key === "loc" || key === "end") continue;
-      collectBare(child);
+      collectValueReads(child, here);
     }
   };
-  collectBare(body);
+  collectValueReads(body);
 
   const visit = (nodes: IrNode[]): void => {
     for (let index = 0; index < nodes.length; index++) {
       const node = nodes[index] as IrNode;
       rejectSlotCallWithArgs(node);
-      const slot = slotNameOf(node);
+      const slot = slotNameOf(node) ?? dynamicSlotNameOf(node);
       if (slot) {
         if (slotLoc.has(slot) && slot !== "content") {
           throw new TranslateError(
@@ -760,6 +805,7 @@ function projectSlots(body: IrNode[], ctx: Ctx): Set<string> {
           );
         }
         slotLoc.set(slot, node.loc);
+        if (slot !== "content") projected.add(slot);
         // Substituted as a `Text` node carrying template markup rather than
         // author text (`rawTemplate`, which the emitter emits verbatim), so
         // the projection is built here — where the slot is identified — with
@@ -775,20 +821,24 @@ function projectSlots(body: IrNode[], ctx: Ctx): Set<string> {
         } as unknown as IrNode;
         continue;
       }
-      for (const key of ["children", "body"] as const) {
-        const children = (node as unknown as Record<string, unknown>)[key];
-        if (Array.isArray(children)) visit(children as IrNode[]);
-      }
-      const content = (node as unknown as { content?: { children?: IrNode[] } })
-        .content;
-      if (content?.children) visit(content.children);
+      const visitNested = (value: unknown): void => {
+        if (!value || typeof value !== "object") return;
+        if (Array.isArray(value)) {
+          if (value.some(isIrNode)) visit(value as IrNode[]);
+          else for (const item of value) visitNested(item);
+          return;
+        }
+        for (const [key, child] of Object.entries(value)) {
+          if (key === "node" || key === "loc" || key === "end") continue;
+          visitNested(child);
+        }
+      };
+      visitNested(node);
     }
   };
 
   visit(body);
-  void ctx;
-  slotLoc.delete("content");
-  return new Set(slotLoc.keys());
+  return projected;
 }
 
 /**
