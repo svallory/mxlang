@@ -236,6 +236,21 @@ describe("compileTagModule: content projection", () => {
     assertAngularParses(templateOf(code));
   });
 
+  it("auto-imports AttrTag and does not emit a projected property as @Input", () => {
+    const { code } = compileTag(
+      "export interface Input { title: string; header?: AttrTag }\n<h2>${input.title}</h2>${input.header()}\n",
+    );
+
+    expect(code).toContain('import type { AttrTag } from "@mxlang/angular";');
+    expect(code).toContain("@NgInput({ required: true }) title!: string;");
+    expect(code).not.toContain("@NgInput() header");
+    expect(templateOf(code)).toContain(
+      '<ng-content select="[header]"></ng-content>',
+    );
+    assertAngularParses(templateOf(code));
+    assertModuleTypechecks(code);
+  });
+
   it("errors on a repeated attribute tag, which Angular projects only once", () => {
     expect(() =>
       compileTag("<div>${input.item()}${input.item()}</div>\n"),

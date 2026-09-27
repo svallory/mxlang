@@ -72,4 +72,29 @@ describe("calling a discovered tag from a page", () => {
       compilePage('import { x } from "./y";\n<div>${x}</div>\n'),
     ).toThrow(/an Angular template has no module scope/);
   });
+
+  it("uses the same projection for declared data and renderable AttrTag shapes", () => {
+    for (const declaration of [
+      "header?: AttrTag",
+      'header?: AttrTag<{ as: "renderable" }>',
+    ]) {
+      const result = compilePage("<card><@header>H</@header></card>\n", {
+        "card.mx": `export interface Input { ${declaration} }\n<section>$${"{input.header()}"}</section>\n`,
+      });
+      expect(result.code).toBe(
+        '<mx-card><ng-container ngProjectAs="[header]">H</ng-container></mx-card>',
+      );
+      assertAngularParses(result.code);
+    }
+  });
+
+  it("rejects a declared AttrTag[] even when the caller passes no occurrence", () => {
+    expect(() =>
+      compilePage("<card/>\n", {
+        "card.mx": "export interface Input { item?: AttrTag[] }\n<section/>\n",
+      }),
+    ).toThrow(
+      "array attribute tag `<@item>` isn't supported by @mxlang/angular",
+    );
+  });
 });

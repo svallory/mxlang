@@ -56,9 +56,66 @@ describe("Component name target", () => {
     assertAngularParses(out);
   });
 
+  it("emits mutually exclusive conditional tags as conditional projections", () => {
+    const out = emit(
+      "<Card><if=primary><@header>A</@header></if><else if=secondary><@header>B</@header></else><else><@header>C</@header></else></Card>",
+    );
+    expect(out).toBe(
+      '<mx-card>@if (primary) { <ng-container ngProjectAs="[header]">A</ng-container> } @else if (secondary) { <ng-container ngProjectAs="[header]">B</ng-container> } @else { <ng-container ngProjectAs="[header]">C</ng-container> }</mx-card>',
+    );
+    assertAngularParses(out);
+  });
+
   it("rejects an attribute tag with params, naming the component and the attribute tag", () => {
-    expect(() => emit("<Card><@header|x|>${x}</@header></Card>")).toThrow(
-      "`<Card><@header|…|>` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a `<define>` and pass it as an input the component renders with `ngTemplateOutlet`.",
+    try {
+      emit("<Card>\n<@header|x|>${x}</@header>\n</Card>");
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "params on `<@header>` aren't supported by @mxlang/angular",
+      );
+      expect((error as { line?: number }).line).toBe(2);
+    }
+  });
+
+  it("rejects attributes on a projection with a positioned host error", () => {
+    try {
+      emit('<Card>\n<@header tone="loud">H</@header>\n</Card>');
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "attributes on `<@header>` aren't supported by @mxlang/angular",
+      );
+      expect((error as { line?: number }).line).toBe(2);
+    }
+  });
+
+  it("rejects nested projections with a positioned host error", () => {
+    try {
+      emit("<Card>\n<@header><@icon>I</@icon></@header>\n</Card>");
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "nested attribute tags inside `<@header>` aren't supported by @mxlang/angular",
+      );
+      expect((error as { line?: number }).line).toBe(2);
+    }
+  });
+
+  it("rejects repeated and looped tags as array projections", () => {
+    try {
+      emit("<Card>\n<@item>A</@item>\n<@item>B</@item>\n</Card>");
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "array attribute tag `<@item>` isn't supported by @mxlang/angular",
+      );
+      expect((error as { line?: number }).line).toBe(1);
+    }
+    expect(() =>
+      emit("<Card><for|item| of=items><@row>${item}</@row></for></Card>"),
+    ).toThrow(
+      "array attribute tag `<@row>` isn't supported by @mxlang/angular",
     );
   });
 

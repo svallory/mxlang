@@ -13,9 +13,16 @@ import BaseMx from "../layouts/BaseMx.amx";
   <h1>AstroMX templates</h1>
 
   <Panel title="A highlighted panel" highlighted=true>
-    <@header>
-      <span class="panel-badge">badge in the named slot</span>
-    </@header>
+    <if=true>
+      <@header>
+        <span class="panel-badge conditional-slot-taken">badge in the named slot</span>
+      </@header>
+    </if>
+    <else>
+      <@header>
+        <span class="conditional-slot-not-taken">wrong conditional slot</span>
+      </@header>
+    </else>
     <p>This paragraph is the default slot.</p>
   </Panel>
 

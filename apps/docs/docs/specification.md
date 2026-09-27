@@ -852,6 +852,15 @@ with `<${input.head}/>`; data is the declared attributes and nested tag props
 plus `content?: (...params) => string`, read with
 `<${input.head.content}/>`.
 
+Astro and Angular are projection hosts rather than value hosts. A singular
+attribute tag becomes an Astro named slot or Angular `ngProjectAs` projection;
+`data` and `renderable` declarations select that same named content. Astro's
+`.mx` renderer exposes the slot thunk both directly and as `.content`;
+Angular exposes no class value at all. Both hosts reject arrays, authored
+attributes, params, and nested attribute tags with positioned host errors.
+Mutually exclusive conditional occurrences are supported and render only the
+taken projection.
+
 Attribute-tag names are stored with the leading `@` stripped, and their name span
 starts one character in so the `@` is excluded from diagnostics.
 
@@ -887,11 +896,13 @@ Today's per-host value shape, factually, with no claim of Marko parity:
   tags use the same rules recursively.
 - **Preact, React, Hono, Solid**: phase-2 host rollout is separate; until each
   declares the v2 capability, core rejects shapes it could otherwise drop.
-- **Angular**: an attribute-tag-only dynamic-tag body is rejected outright
-  (`ngComponentOutlet` has no content-projection mechanism); elsewhere,
-  same array shape.
-- **Astro**: a repeated `<@name>` is rejected outright, since an Astro slot
-  is keyed by name and its renderer would silently keep only one occurrence.
+- **Angular**: singular tags become `ngProjectAs` projections, including
+  conditional branches. Arrays are rejected because a projection is keyed by
+  selector; an attribute-tag-only dynamic-tag body is also rejected because
+  `ngComponentOutlet` has no content-projection mechanism.
+- **Astro**: singular tags become named slots, including conditional branches.
+  Arrays are rejected because an Astro slot is keyed by name and its renderer
+  would silently keep only one occurrence.
 
 This is a deliberate divergence from Marko's own `attrTag`/`attrTags` runtime
 shape (an iterable record whose property read hits the first occurrence), not

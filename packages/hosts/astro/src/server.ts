@@ -123,7 +123,18 @@ export async function renderToStaticMarkup(
   for (const [name, html] of Object.entries(slots ?? {})) {
     // `default` is MX's ordinary children, which the compiler names
     // `content`; every other slot is an attribute tag of the same name.
-    input[name === "default" ? "content" : name] = () => html;
+    const content = () => html;
+    if (name === "default") {
+      input.content = content;
+    } else {
+      // Astro has one observable value for a named slot: a thunk returning
+      // its already-rendered markup. Give that thunk the data-shape `.content`
+      // view too, so both `AttrTag` (data, the default) and
+      // `AttrTag<{ as: "renderable" }>` observe the same slot without
+      // fabricating attributes Astro never carried.
+      Object.defineProperty(content, "content", { value: content });
+      input[name] = content;
+    }
   }
 
   // A unit that declares `<return>` hands back `{ value, output }` rather

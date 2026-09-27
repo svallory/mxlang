@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import {
+  type AttrTagConfig,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -18,6 +19,19 @@ import {
   TranslateError,
 } from "@mxlang/core";
 import { angularDeclarations, emitTemplate, type UsedTag } from "./emitter.ts";
+
+/**
+ * Compile-time marker for Angular content projection.
+ *
+ * An Angular component receives projected nodes through `<ng-content>`, not
+ * as a class property value. The config remains visible to core's syntactic
+ * caller analysis, while `never` prevents treating the projection as an
+ * `@Input()` value in authored TypeScript.
+ */
+export type AttrTag<
+  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  C extends AttrTagConfig = {},
+> = C extends AttrTagConfig ? never : never;
 
 export {
   angularDeclarations,

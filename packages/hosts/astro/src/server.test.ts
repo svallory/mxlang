@@ -105,6 +105,38 @@ describe("renderToStaticMarkup", () => {
     );
   });
 
+  it("exposes a named slot through the default data AttrTag shape", async () => {
+    const component = await compileComponent(
+      "named-slot-data",
+      "export interface Input { note?: AttrTag }\n<aside>$!{input.note?.content?.()}</aside>",
+    );
+    const { html } = await renderToStaticMarkup(
+      component,
+      {},
+      {
+        note: "<strong>data view</strong>",
+      },
+    );
+
+    expect(html).toBe("<aside><strong>data view</strong></aside>");
+  });
+
+  it("exposes the same named slot through the renderable AttrTag shape", async () => {
+    const component = await compileComponent(
+      "named-slot-renderable",
+      'export interface Input { note?: AttrTag<{ as: "renderable" }> }\n<aside>$!{input.note?.()}</aside>',
+    );
+    const { html } = await renderToStaticMarkup(
+      component,
+      {},
+      {
+        note: "<strong>renderable view</strong>",
+      },
+    );
+
+    expect(html).toBe("<aside><strong>renderable view</strong></aside>");
+  });
+
   it("inserts slot HTML verbatim, since Astro already rendered it", async () => {
     // The slot is markup, not text: escaping it here would double-escape what
     // Astro produced.

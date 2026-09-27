@@ -270,7 +270,7 @@ once `.mx` is also registered, it is routed to `/page.astro/` — a literal
 | `attr=expr` | `attr={expr}` | |
 | `...obj` | `{...obj}` | |
 | `class={a: true}` / `class=[…]` | `class:list={…}` | Astro's own structured-class attribute |
-| `<@name>` on a component | `<Fragment slot="name">…</Fragment>` | an attribute tag is a named slot |
+| `<@name>` on a component | `<Fragment slot="name">…</Fragment>` | an attribute tag is a named slot; `<if>` branches emit a conditional slot |
 | children | the default slot | |
 | HTML comments | HTML comments | |
 | several root elements | several root elements | Astro allows a fragment at top level |
@@ -297,11 +297,19 @@ build error naming the construct, the reason, and the line in the `.amx` file.
   tag declaring params (`<@footer|year|>`).
 - **Attribute tags on an HTML element** — named slots exist only on a
   component.
+- **Array attribute tags, attributes on `<@name>`, nested attribute tags, and
+  attribute-tag params** — a named slot is keyed by one name and carries only
+  rendered markup. The host reports each as a positioned error.
 - **Attribute methods** (`onClick() { … }`) — an event handler needs a
   runtime.
 - **`:=`** — a two-way binding needs a reactive runtime.
 - **A dynamic tag name** (`<${expr}>`) — Astro resolves component names
   statically.
+
+`@mxlang/astro` exports `AttrTag<C>` for declarations. A named slot is a
+callable `() => string`; the renderer also exposes that thunk as `.content`,
+so the default data declaration and `as: "renderable"` are equivalent slot
+views on this host. Slots never carry authored attribute data.
 
 ### Dev notes and known limits
 

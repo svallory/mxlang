@@ -203,8 +203,12 @@ describe("astro-static", () => {
     // An attribute tag lowered to an Astro named slot, and the page's
     // `<Fragment slot="header">` landed in the component's `<slot name=...>`.
     expect(html).toContain(
-      '<span class="panel-badge">badge in the named slot</span>',
+      '<span class="panel-badge conditional-slot-taken">badge in the named slot</span>',
     );
+    // A conditional `<@header>` becomes a conditional named slot: Astro must
+    // receive only the taken branch, never both same-name fragments.
+    expect(html).toContain("conditional-slot-taken");
+    expect(html).not.toContain("conditional-slot-not-taken");
     // The default slot still works alongside the named one.
     expect(html).toContain("<p>This paragraph is the default slot.</p>");
 
