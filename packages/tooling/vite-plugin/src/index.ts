@@ -53,7 +53,9 @@ async function compileMarko(
   filename: string,
   strict: boolean,
   customTags: Record<string, CustomTag> | undefined,
-  resolveImport: (specifier: string, importer: string) => string | undefined,
+  resolveImport:
+    | ((specifier: string, importer: string) => string | undefined)
+    | undefined,
 ): Promise<Pick<CompileResult, "code"> & Partial<CompileResult>> {
   // Which host owns this file is the nearest `package.json`'s answer, the
   // same resolver the language server and `mx-tsc` use — so an editor, a
@@ -313,7 +315,7 @@ export function codeFrame(
  */
 export default function mx(options: MxPluginOptions = {}): Plugin {
   let aliases: Array<{ find: string | RegExp; replacement: string }> = [];
-  const resolveImport = (specifier: string): string | undefined => {
+  const aliasResolver = (specifier: string): string | undefined => {
     for (const alias of aliases) {
       if (typeof alias.find === "string") {
         if (specifier !== alias.find && !specifier.startsWith(`${alias.find}/`))
@@ -327,6 +329,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     }
     return undefined;
   };
+  let resolveImport: typeof aliasResolver | undefined;
   // MX only supports the MX 1.0 subset of Marko syntax, so a caller cannot
   // opt back into `.marko` through `extensions` — that would silently claim
   // support this plugin does not have. Rejected eagerly, at plugin
@@ -518,6 +521,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
     configResolved(config) {
       aliases = [...config.resolve.alias];
+      resolveImport = aliases.length > 0 ? aliasResolver : undefined;
     },
 
     async resolveId(id: string, importer: string | undefined) {
