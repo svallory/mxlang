@@ -942,5 +942,49 @@ describe("mx()", () => {
         vi.resetModules();
       }
     });
+
+    it("passes a synchronous resolver built from Vite aliases to the host", async () => {
+      const { dir, caller } = project(
+        "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
+      );
+      let resolved: string | undefined;
+      vi.resetModules();
+      vi.doMock("@mxlang/html", () => ({
+        compile: (
+          _source: string,
+          filename: string,
+          options: {
+            resolveImport?: (
+              specifier: string,
+              importer: string,
+            ) => string | undefined;
+          },
+        ) => {
+          resolved = options.resolveImport?.("@/Card", filename);
+          return { code: "export default () => '';", dependencies: [] };
+        },
+      }));
+      try {
+        const fresh = await import("./index.ts");
+        const plugin = fresh.default();
+        const configResolved = plugin.configResolved as unknown as (
+          config: unknown,
+        ) => void;
+        configResolved({
+          resolve: {
+            alias: [{ find: "@", replacement: `${dir}/src` }],
+          },
+        });
+        await transformOf(plugin).call(
+          {},
+          "<div/>\n",
+          `${caller}${fresh.MX_SUFFIX}`,
+        );
+        expect(resolved).toBe(`${dir}/src/Card`);
+      } finally {
+        vi.doUnmock("@mxlang/html");
+        vi.resetModules();
+      }
+    });
   });
 });

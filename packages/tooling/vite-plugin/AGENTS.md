@@ -112,3 +112,10 @@ server retains stale callers. Tests that need a non-empty compile dependency
 mock the dynamically imported host inside `vi.resetModules()` and dynamically
 import a fresh plugin instance. Rebuild `packages/core/dist` before running
 these tests, because this package resolves core through its built entry.
+
+After Vite resolves configuration, the plugin builds a synchronous resolver
+from `resolve.alias` and passes it through each `.mx` host compiler so core's
+callee reader sees the same aliases as Vite. `.solid.mx` still goes through
+the parser `print()` API, which does not currently surface region compile
+dependencies; do not pretend those edges were recorded without extending that
+parser API.
