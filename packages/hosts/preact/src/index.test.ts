@@ -306,22 +306,6 @@ describe("components", () => {
     ).toBe("<Card><p>body</p></Card>");
   });
 
-  it("passes an attribute tag as a prop", () => {
-    expect(
-      markup(
-        'import Card from "./card.mx"\n<Card><@footer>f</@footer><p>b</p></Card>',
-      ),
-    ).toContain("footer={{ content: <>f</> }}");
-  });
-
-  it("emits repeated fallback attribute tags as an array of data values", () => {
-    expect(
-      markup(
-        'import List from "./list.mx"\n<List><@item>a</@item><@item>b</@item></List>',
-      ),
-    ).toContain("item={[{ content: <>a</> }, { content: <>b</> }]}");
-  });
-
   it("maps only the first repeated attribute tag's name, never a fabricated position for the rest", () => {
     // A second (or later) `<@item>` contributes another array entry with no
     // name string of its own in the generated text — the data-value array has
@@ -351,14 +335,6 @@ describe("components", () => {
       (mapping) => mapping.sourceStart === secondOffset,
     );
     expect(secondMapping).toBeUndefined();
-  });
-
-  it("puts a parameterized fallback body on the data value's content", () => {
-    expect(
-      markup(
-        'import Card from "./card.mx"\n<Card><@row|item|>${item}</@row></Card>',
-      ),
-    ).toContain("row={{ content: (item) => item }}");
   });
 
   it("passes tag params as a render-prop child", () => {
@@ -565,6 +541,17 @@ describe("attribute tag values (executed)", () => {
     expect(html).toContain("single=true");
     expect(html).toContain("array=true");
     expect(html).toContain("entries=true");
+  });
+
+  it("renders a parameterized placeholder body through data content", async () => {
+    const html = await renderCompiled(
+      'import Row from "./row.mx"\n<Row><@item|value|>${value}</@item></Row>',
+      [
+        "export interface Input { item: AttrTag<{ params: [value: string] }> }",
+        '<p><span>${input.item.content("safe")}</span></p>',
+      ].join("\n"),
+    );
+    expect(html).toBe("<p><span>safe</span></p>");
   });
 
   it("emits declared data, array, renderable, params and bodyless shapes", async () => {
