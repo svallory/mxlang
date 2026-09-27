@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -256,6 +262,26 @@ describe("SolidMX language plugin", () => {
 });
 
 describe("MX language plugin", () => {
+  it("keeps the Astro composed panel a module after reading Card's attribute-tag Input", () => {
+    const fileName = join(
+      here,
+      "../../../../examples/astro-static/src/components/panel.mx",
+    );
+    const source = readFileSync(fileName, "utf8");
+    const plugin = createMxLanguagePlugin(ts);
+    const virtual = plugin.createVirtualCode?.(
+      fileName,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    if (!virtual) throw new Error("Expected MX virtual code");
+    expect(plugin.getSyntaxError(fileName)).toBeUndefined();
+    expect(virtual.snapshot.getText(0, virtual.snapshot.getLength())).toContain(
+      "export default mxAstroRender",
+    );
+  });
+
   it("puts a discovered template tag's import in the virtual file", () => {
     const plugin = createMxLanguagePlugin(ts);
     const fileName = `${here}/fixtures/html-tags/page.mx`;

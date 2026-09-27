@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { CustomTag } from "@mxlang/core";
+import { type CustomTag, readCalleeInput } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
@@ -235,6 +235,60 @@ describe("Solid IR lowering", () => {
       expect(result.map.sourcesContent).toEqual([source]);
     });
   }
+});
+
+describe("Solid callee Input reader", () => {
+  it("returns none for a SolidMX callee with MX syntax and no Input", () => {
+    const path = join(HERE, "fixtures", "no-input-control.solid.mx");
+    expect(
+      readCalleeInput(
+        { kind: "name", name: "NoInputControl", resolvedPath: path },
+        { importer: join(HERE, "fixture.mx") },
+      ),
+    ).toEqual({
+      input: { kind: "none", path },
+      dependencies: [path],
+    });
+  });
+
+  it("reads an exported typed Input with the Solid parser", () => {
+    const path = join(HERE, "fixtures", "typed-input.solid.mx");
+    const source = readFileSync(path, "utf8");
+    const typeText = 'AttrTag<{ as: "renderable" }>';
+    const start = source.indexOf(typeText);
+    expect(
+      readCalleeInput(
+        { kind: "name", name: "TypedInput", resolvedPath: path },
+        { importer: join(HERE, "fixture.mx") },
+      ),
+    ).toEqual({
+      input: {
+        kind: "declared",
+        path,
+        attrTags: new Map([
+          [
+            "item",
+            {
+              cardinality: "optional",
+              as: "renderable",
+              hasAttrs: false,
+              hasParams: false,
+              nested: new Map(),
+              nestedOpen: false,
+              span: {
+                file: path,
+                sourceStart: start,
+                sourceEnd: start + typeText.length,
+              },
+            },
+          ],
+        ]),
+        otherProps: new Set(),
+        open: false,
+      },
+      dependencies: [path],
+    });
+  });
 });
 
 describe("Solid host errors", () => {

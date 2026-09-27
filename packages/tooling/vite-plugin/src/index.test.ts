@@ -943,11 +943,151 @@ describe("mx()", () => {
       }
     });
 
-    it("passes a synchronous resolver built from Vite aliases to the host", async () => {
+    it("prunes compile dependencies a caller no longer reads", async () => {
       const { dir, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
       );
-      let resolved: string | undefined;
+      const dependency = join(dir, "Old.ts");
+      writeFileSync(dependency, "export interface Input {}\n");
+      let dependencies = [dependency];
+      vi.resetModules();
+      vi.doMock("@mxlang/html", () => ({
+        compile: () => ({
+          code: "export default () => '';",
+          dependencies,
+        }),
+      }));
+      try {
+        const fresh = await import("./index.ts");
+        const plugin = fresh.default();
+        await transformOf(plugin).call(
+          {},
+          "<div/>\n",
+          `${caller}${fresh.MX_SUFFIX}`,
+        );
+        dependencies = [];
+        await transformOf(plugin).call(
+          {},
+          "<div/>\n",
+          `${caller}${fresh.MX_SUFFIX}`,
+        );
+        const invalidated: unknown[] = [];
+        const updated = (
+          plugin.handleHotUpdate as unknown as (
+            this: unknown,
+            ctx: unknown,
+          ) => unknown[] | undefined
+        ).call(
+          {},
+          {
+            file: dependency,
+            modules: [],
+            server: {
+              moduleGraph: {
+                getModuleById: () => ({ id: caller }),
+                invalidateModule: (target: unknown) => invalidated.push(target),
+              },
+            },
+          },
+        );
+        expect(invalidated).toEqual([]);
+        expect(updated).toBeUndefined();
+      } finally {
+        vi.doUnmock("@mxlang/html");
+        vi.resetModules();
+      }
+    });
+
+    it("forgets compile dependencies when their caller is deleted", async () => {
+      const { dir, caller } = project(
+        "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
+      );
+      const dependency = join(dir, "Card.ts");
+      writeFileSync(dependency, "export interface Input {}\n");
+      vi.resetModules();
+      vi.doMock("@mxlang/html", () => ({
+        compile: () => ({
+          code: "export default () => '';",
+          dependencies: [dependency],
+        }),
+      }));
+      try {
+        const fresh = await import("./index.ts");
+        const plugin = fresh.default();
+        await transformOf(plugin).call(
+          {},
+          "<div/>\n",
+          `${caller}${fresh.MX_SUFFIX}`,
+        );
+        rmSync(caller);
+        const invalidated: unknown[] = [];
+        const handle = plugin.handleHotUpdate as unknown as (
+          this: unknown,
+          ctx: unknown,
+        ) => unknown[] | undefined;
+        const graph = {
+          getModuleById: () => undefined,
+          invalidateModule: (target: unknown) => invalidated.push(target),
+        };
+        handle.call(
+          {},
+          {
+            file: caller,
+            modules: [],
+            server: { moduleGraph: graph },
+          },
+        );
+        const updated = handle.call(
+          {},
+          {
+            file: dependency,
+            modules: [],
+            server: { moduleGraph: graph },
+          },
+        );
+        expect(invalidated).toEqual([]);
+        expect(updated).toBeUndefined();
+      } finally {
+        vi.doUnmock("@mxlang/html");
+        vi.resetModules();
+      }
+    });
+
+    it("passes no resolver to the host when Vite has no aliases", async () => {
+      const { caller } = project(
+        "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
+      );
+      let received: unknown = "unset";
+      vi.resetModules();
+      vi.doMock("@mxlang/html", () => ({
+        compile: (_source: string, _filename: string, options: unknown) => {
+          received = (options as { resolveImport?: unknown }).resolveImport;
+          return { code: "export default () => '';", dependencies: [] };
+        },
+      }));
+      try {
+        const fresh = await import("./index.ts");
+        const plugin = fresh.default();
+        (plugin.configResolved as (config: unknown) => void)({
+          resolve: { alias: [] },
+        });
+        await transformOf(plugin).call(
+          {},
+          "<div/>\n",
+          `${caller}${fresh.MX_SUFFIX}`,
+        );
+        expect(received).toBeUndefined();
+      } finally {
+        vi.doUnmock("@mxlang/html");
+        vi.resetModules();
+      }
+    });
+
+    it("passes a synchronous resolver built from Vite aliases, including bare replacements, to the host", async () => {
+      const { dir, caller } = project(
+        "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
+      );
+      let resolved: Array<string | undefined> = [];
       vi.resetModules();
       vi.doMock("@mxlang/html", () => ({
         compile: (
@@ -960,7 +1100,10 @@ describe("mx()", () => {
             ) => string | undefined;
           },
         ) => {
-          resolved = options.resolveImport?.("@/Card", filename);
+          resolved = [
+            options.resolveImport?.("@/Card", filename),
+            options.resolveImport?.("react", filename),
+          ];
           return { code: "export default () => '';", dependencies: [] };
         },
       }));
@@ -972,7 +1115,10 @@ describe("mx()", () => {
         ) => void;
         configResolved({
           resolve: {
-            alias: [{ find: "@", replacement: `${dir}/src` }],
+            alias: [
+              { find: "@", replacement: `${dir}/src` },
+              { find: "react", replacement: "preact/compat" },
+            ],
           },
         });
         await transformOf(plugin).call(
@@ -980,7 +1126,7 @@ describe("mx()", () => {
           "<div/>\n",
           `${caller}${fresh.MX_SUFFIX}`,
         );
-        expect(resolved).toBe(`${dir}/src/Card`);
+        expect(resolved).toEqual([`${dir}/src/Card`, "preact/compat"]);
       } finally {
         vi.doUnmock("@mxlang/html");
         vi.resetModules();
