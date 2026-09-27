@@ -121,6 +121,22 @@ describe("renderToStaticMarkup", () => {
     expect(html).toBe("<aside><strong>data view</strong></aside>");
   });
 
+  it("renders the data AttrTag body with the <${x.content}/> idiom", async () => {
+    const component = await compileComponent(
+      "named-slot-data-dynamic",
+      "export interface Input { note?: AttrTag }\n<aside><${input.note?.content}/></aside>",
+    );
+    const { html } = await renderToStaticMarkup(
+      component,
+      {},
+      {
+        note: "<strong>dynamic data view</strong>",
+      },
+    );
+
+    expect(html).toBe("<aside><strong>dynamic data view</strong></aside>");
+  });
+
   it("exposes the same named slot through the renderable AttrTag shape", async () => {
     const component = await compileComponent(
       "named-slot-renderable",

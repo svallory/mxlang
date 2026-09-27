@@ -110,13 +110,31 @@ describe("Component name target", () => {
       expect((error as Error).message).toContain(
         "array attribute tag `<@item>` isn't supported by @mxlang/angular",
       );
-      expect((error as { line?: number }).line).toBe(1);
+      expect((error as { line?: number }).line).toBe(3);
     }
-    expect(() =>
-      emit("<Card><for|item| of=items><@row>${item}</@row></for></Card>"),
-    ).toThrow(
-      "array attribute tag `<@row>` isn't supported by @mxlang/angular",
-    );
+    try {
+      emit(
+        "<Card>\n<for|item| of=items>\n<@row>${item}</@row>\n</for>\n</Card>",
+      );
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "array attribute tag `<@row>` isn't supported by @mxlang/angular",
+      );
+      expect((error as { line?: number }).line).toBe(3);
+    }
+  });
+
+  it("rejects a bodiless projection", () => {
+    try {
+      emit("<Card>\n<@header/>\n</Card>");
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "<@header/> has no body; @mxlang/angular projects attribute-tag bodies by name",
+      );
+      expect((error as { line?: number }).line).toBe(2);
+    }
   });
 
   it("warns once per file listing every tag, not once per call", () => {
@@ -179,7 +197,7 @@ describe("Component dynamic target (via HostTag routing)", () => {
 
   it("rejects content on a dynamic component", () => {
     expect(() => emit("<${Cmp}>body</${Cmp}>")).toThrow(
-      /ngComponentOutletContent/,
+      /isn't supported by @mxlang\/angular: `ngComponentOutlet`/,
     );
   });
 
@@ -192,7 +210,7 @@ describe("Component dynamic target (via HostTag routing)", () => {
   // same error, not a new one.
   it("rejects an attribute-tag-only body on a dynamic component the same way", () => {
     expect(() => emit("<${Cmp}><@header>hi</@header></>")).toThrow(
-      /ngComponentOutletContent/,
+      /isn't supported by @mxlang\/angular: `ngComponentOutlet`/,
     );
   });
 

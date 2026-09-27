@@ -236,6 +236,47 @@ describe("compileTagModule: content projection", () => {
     assertAngularParses(templateOf(code));
   });
 
+  it.each([
+    ["direct call", "header?: AttrTag", "${input.header()}"],
+    ["data content call", "header?: AttrTag", "${input.header.content()}"],
+    [
+      "data content dynamic tag",
+      "header?: AttrTag",
+      "<${input.header.content}/>",
+    ],
+    [
+      "renderable dynamic tag",
+      'header?: AttrTag<{ as: "renderable" }>',
+      "<${input.header}/>",
+    ],
+    ["optional direct call", "header?: AttrTag", "${input?.header?.()}"],
+    [
+      "optional data content call",
+      "header?: AttrTag",
+      "${input?.header?.content?.()}",
+    ],
+    [
+      "optional data content dynamic tag",
+      "header?: AttrTag",
+      "<${input?.header?.content}/>",
+    ],
+    [
+      "optional renderable dynamic tag",
+      'header?: AttrTag<{ as: "renderable" }>',
+      "<${input?.header}/>",
+    ],
+  ])("projects the %s idiom", (_name, declaration, render) => {
+    const { code } = compileTag(
+      `export interface Input { ${declaration} }\n<section>${render}</section>\n`,
+    );
+    expect(templateOf(code)).toBe(
+      '<section><ng-content select="[header]"></ng-content></section>',
+    );
+    expect(code).not.toContain("@NgInput() header");
+    assertAngularParses(templateOf(code));
+    assertModuleTypechecks(code);
+  });
+
   it("auto-imports AttrTag and does not emit a projected property as @Input", () => {
     const { code } = compileTag(
       "export interface Input { title: string; header?: AttrTag }\n<h2>${input.title}</h2>${input.header()}\n",
@@ -249,6 +290,30 @@ describe("compileTagModule: content projection", () => {
     );
     assertAngularParses(templateOf(code));
     assertModuleTypechecks(code);
+  });
+
+  it("omits an unused projected property from @Input fields", () => {
+    const { code } = compileTag(
+      "export interface Input { title: string; header?: AttrTag }\n<h2>${input.title}</h2>\n",
+    );
+    expect(code).not.toContain("@NgInput() header");
+    assertModuleTypechecks(code);
+  });
+
+  it.each([
+    ["condition", "<if=input.header>yes</if>"],
+    ["passed value", "<div title=input.header/>"],
+    ["property read", "<div>${input.header.foo}</div>"],
+  ])("rejects a projected tag used as a %s", (_name, body) => {
+    try {
+      compileTag(`export interface Input { header?: AttrTag }\n${body}\n`);
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "@mxlang/angular can't read projected content `header` as a value; render it with <${input.header.content}/>",
+      );
+      expect((error as { line?: number }).line).toBe(2);
+    }
   });
 
   it("errors on a repeated attribute tag, which Angular projects only once", () => {
