@@ -13,10 +13,29 @@ import type { Plugin } from "vite";
  * that never touches `.solid.mx`. Cached across calls in the same process —
  * one dynamic `import()` per build/dev-server lifetime, not per file.
  */
+type SolidModule = typeof import("@mxlang/solid");
+
+let solidModule: Promise<SolidModule> | undefined;
 let solidRegionCompile: MxRegionCompile | undefined;
+
+function loadSolidModule(): Promise<SolidModule> {
+  if (!solidModule) solidModule = import("@mxlang/solid");
+  return solidModule;
+}
+
+async function registerSolidCalleeReader(): Promise<void> {
+  try {
+    await loadSolidModule();
+  } catch {
+    // Optional for an ordinary `.mx` project. With no Solid host installed,
+    // a `.solid.mx` callee has no readable schema and core correctly uses its
+    // conservative `none` fallback.
+  }
+}
+
 async function loadSolidRegionCompile(): Promise<MxRegionCompile> {
   if (!solidRegionCompile) {
-    const { compileSolidMx } = await import("@mxlang/solid");
+    const { compileSolidMx } = await loadSolidModule();
     solidRegionCompile = ({ source, ...rest }) => compileSolidMx(source, rest);
   }
   return solidRegionCompile;
@@ -522,6 +541,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     configResolved(config) {
       aliases = [...config.resolve.alias];
       resolveImport = aliases.length > 0 ? aliasResolver : undefined;
+      void registerSolidCalleeReader();
+    },
+
+    async buildStart() {
+      await registerSolidCalleeReader();
     },
 
     async resolveId(id: string, importer: string | undefined) {
@@ -640,6 +664,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
       try {
         if (ext === ".mx") {
+          // Register compound-host readers before an ordinary template can
+          // inspect one of their Inputs. This also closes the configResolved
+          // import race in direct plugin-hook users and dev-server startup.
+          await registerSolidCalleeReader();
           // `compile()`'s map is presently an identity placeholder (no AST
           // is printed on this path), so there is nothing real to hand Vite
           // — returning it would claim a mapping that does not exist.
