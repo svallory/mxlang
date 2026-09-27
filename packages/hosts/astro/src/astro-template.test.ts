@@ -1,8 +1,27 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
+
+const require = createRequire(import.meta.url);
+const astroRequire = createRequire(
+  realpathSync(require.resolve("astro/package.json")),
+);
+const compilerEntry = astroRequire.resolve("@astrojs/compiler-rs");
+
+async function astroDiagnostics(source: string): Promise<unknown[]> {
+  const compiler = (await import(pathToFileURL(compilerEntry).href)) as {
+    transform(
+      source: string,
+      options: { filename: string },
+    ): Promise<{ diagnostics?: unknown[] }>;
+  };
+  const result = await compiler.transform(source, { filename: "Test.astro" });
+  return result.diagnostics ?? [];
+}
 
 /** Lowers a template with an empty fence, returning just the template half. */
 function lower(template: string): string {
@@ -311,9 +330,34 @@ describe("components and slots", () => {
         "<Card><if=primary><@header>A</@header></if><else if=secondary><@header>B</@header></else><else><@header>C</@header></else></Card>",
       ),
     ).toBe(
-      '<Card>{primary ? (<Fragment slot="header">A</Fragment>) : secondary ? (<Fragment slot="header">B</Fragment>) : (<Fragment slot="header">C</Fragment>)}</Card>',
+      '<Card>{(primary ? (<Fragment slot="header">A</Fragment>) : secondary ? (<Fragment slot="header">B</Fragment>) : (<Fragment slot="header">C</Fragment>))}</Card>',
     );
   });
+
+  it.each([
+    ["a nested if", "<Card><if=a><if=b><@header>A</@header></if></if></Card>"],
+    [
+      "an if inside else",
+      "<Card><if=a><@header>A</@header></if><else><if=b><@header>B</@header></if></else></Card>",
+    ],
+    [
+      "an empty else",
+      "<Card><if=a><@header>A</@header></if><else></else></Card>",
+    ],
+    [
+      "an empty else-if",
+      "<Card><if=a><@header>A</@header></if><else if=b></else></Card>",
+    ],
+  ])(
+    "emits Astro syntax accepted by the compiler for %s",
+    async (_name, template) => {
+      const code = lowerAstroMx(
+        `---\nimport Card from "./Card.astro";\nconst a = true;\nconst b = false;\n---\n${template}`,
+        "Test.amx",
+      ).code;
+      expect(await astroDiagnostics(code)).toEqual([]);
+    },
+  );
 
   it("rejects an attribute tag on an HTML element, which has no slots", () => {
     expect(errorFor("<div><@header>x</@header></div>").message).toMatch(
@@ -332,7 +376,7 @@ describe("components and slots", () => {
     expect(error.message).toBe(
       "array attribute tag `<@item>` isn't supported by @mxlang/astro: a slot is keyed by name",
     );
-    expect(error.line).toBe(4);
+    expect(error.line).toBe(6);
   });
 
   it("rejects tag params, which Astro has no render-prop form for", () => {
@@ -361,10 +405,19 @@ describe("components and slots", () => {
   });
 
   it("rejects an attribute tag inside <for> as an array slot", () => {
-    expect(
-      errorFor("<Card><for|item| of=items><@row>${item}</@row></for></Card>")
-        .message,
-    ).toContain("@mxlang/astro");
+    const error = errorFor(
+      "<Card>\n<for|item| of=items>\n<@row>${item}</@row>\n</for>\n</Card>",
+    );
+    expect(error.message).toContain("@mxlang/astro");
+    expect(error.line).toBe(6);
+  });
+
+  it("rejects a bodiless attribute tag", () => {
+    const error = errorFor("<Card>\n<@header/>\n</Card>");
+    expect(error.message).toBe(
+      "<@header/> has no body; @mxlang/astro projects attribute-tag bodies by name",
+    );
+    expect(error.line).toBe(5);
   });
 
   it("rejects a declared AttrTag[] even when no occurrence is passed", () => {
@@ -426,9 +479,9 @@ describe("unsupported constructs", () => {
   });
 
   it("rejects a dynamic tag name", () => {
-    expect(errorFor("<${Tag}><p>x</p></${Tag}>").message).toMatch(
-      /resolves component names statically/,
-    );
+    const message = errorFor("<${Tag}><p>x</p></${Tag}>").message;
+    expect(message).toContain("isn't supported by @mxlang/astro");
+    expect(message).toContain("resolves component names statically");
   });
 
   it("rejects a bare `${expr}` concise-position line the same way, not as a silent interpolation", () => {
@@ -436,9 +489,9 @@ describe("unsupported constructs", () => {
     // (see AGENTS.md's "four Marko facts"); Astro cannot express either, so
     // both are the same error rather than the bare shape silently rendering
     // as an interpolation of the tag-name expression.
-    expect(errorFor("${Tag}\n").message).toMatch(
-      /resolves component names statically/,
-    );
+    const message = errorFor("${Tag}\n").message;
+    expect(message).toContain("isn't supported by @mxlang/astro");
+    expect(message).toContain("resolves component names statically");
   });
 });
 
