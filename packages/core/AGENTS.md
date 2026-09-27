@@ -28,6 +28,17 @@ host-specific resolve-time decision goes in `HostTag.data` through
 
 Five facts worth knowing before editing it:
 
+- **Attribute-tag IR has three synchronized views (decisions 106–107).**
+  `Component` and a dynamic `HostTag` keep `attributeTags`, the flat
+  source-order occurrence list used by existing emitters and tooling; add
+  `attributeTagTree` to preserve nested `<if>`/`<for>` structure; and resolve
+  `attrTagProps`, the cardinality/shape emission plan. `AttributeTag` carries
+  the same three fields recursively, plus its own lowered `attrs` and
+  `hasBody`. A host declaring `attrTags: 2` emits from `attrTagProps` only and
+  does not regroup the flat list or resolve declarations itself. Until a host
+  declares that capability, core positions an error on every construct whose
+  v2 shape could otherwise be silently dropped.
+
 - **It depends on `@marko/compiler` and nothing else.** `core.ts` used to parse
   an `import` line with `@mxlang/parser` — the *SolidMX parser* package — for a
   single `parse` call. It now asks `@marko/compiler/internal/babel`
@@ -627,4 +638,3 @@ Five facts worth knowing before editing it:
   type declaration there is a downstream syntax error. Typing a unit's props
   is phase 3, through the same virtual-file projection the TypeScript plugin
   already does for `.solid.mx`.
-
