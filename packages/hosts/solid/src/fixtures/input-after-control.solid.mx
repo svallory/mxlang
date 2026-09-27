@@ -1,0 +1,7 @@
+export function Card(props: { items: string[] }) {
+  return <for|item| of=props.items><span>{item}</span></for>;
+}
+
+export interface Input {
+  item?: AttrTag<{ as: "renderable" }>;
+}

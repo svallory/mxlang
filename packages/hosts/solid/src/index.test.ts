@@ -289,6 +289,61 @@ describe("Solid callee Input reader", () => {
       dependencies: [path],
     });
   });
+
+  it.each(["untyped-default-arrow", "untyped-named-arrow"])(
+    "returns none instead of throwing for %s SolidMX",
+    (name) => {
+      const path = join(HERE, "fixtures", `${name}.solid.mx`);
+      expect(
+        readCalleeInput(
+          { kind: "name", name: "Card", resolvedPath: path },
+          { importer: join(HERE, "fixture.mx") },
+        ),
+      ).toEqual({
+        input: { kind: "none", path },
+        dependencies: [path],
+      });
+    },
+  );
+
+  it("reads Input after a component whose earlier region contains MX syntax", () => {
+    const path = join(HERE, "fixtures", "input-after-control.solid.mx");
+    const source = readFileSync(path, "utf8");
+    const typeText = 'AttrTag<{ as: "renderable" }>';
+    const start = source.indexOf(typeText);
+    expect(
+      readCalleeInput(
+        { kind: "name", name: "Card", resolvedPath: path },
+        { importer: join(HERE, "fixture.mx") },
+      ),
+    ).toEqual({
+      input: {
+        kind: "declared",
+        path,
+        attrTags: new Map([
+          [
+            "item",
+            {
+              cardinality: "optional",
+              as: "renderable",
+              hasAttrs: false,
+              hasParams: false,
+              nested: new Map(),
+              nestedOpen: false,
+              span: {
+                file: path,
+                sourceStart: start,
+                sourceEnd: start + typeText.length,
+              },
+            },
+          ],
+        ]),
+        otherProps: new Set(),
+        open: false,
+      },
+      dependencies: [path],
+    });
+  });
 });
 
 describe("Solid host errors", () => {
