@@ -1282,7 +1282,7 @@ describe("readCalleeInput", () => {
             hasParams: false,
             nested: new Map(),
             nestedOpen: false,
-            span: refSpan(source, 'AttrTag<{as:"renderable"}>'),
+            span: refSpan(source, 'AttrTag<{ as: "renderable" }>'),
           },
         ],
       ]),
