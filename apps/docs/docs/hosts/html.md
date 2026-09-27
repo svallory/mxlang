@@ -9,7 +9,22 @@ The HTML host (`@mxlang/html`) is the vanilla MX host. It compiles an `.mx` file
 
 The generic half of the work — consuming Marko's AST, applying the structural lowerings, the string-emit model — lives in the shared core. This host supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
 
-Because MX 1.0 is a strict subset of Marko syntax, this host compiles **stock Marko**, not a dialect: tag discovery through taglibs and `tags/` directories, Marko's own HTML/SVG/MathML element registry, Marko's attribute-tag and component conventions. A template written for Marko compiles here unchanged and renders the same bytes Marko's own server render produces.
+## Attribute-tag values
+
+Import `AttrTag` from `@mxlang/html` in hand-written TypeScript. A renderable
+attribute tag is a thunk `() => string`; params change it to
+`(...params) => string`. The default data shape carries attrs and nested tags
+plus an optional `content` thunk. Arrays are real arrays, and conditional and
+looped occurrences preserve source order. See [AttrTag](/language/attr-tag/)
+for declarations, fallback inference, errors, and compiled examples.
+
+Because MX 1.0 uses a strict subset of Marko syntax, this host compiles
+**stock Marko syntax**, not a parser dialect: tag discovery through taglibs
+and `tags/` directories, Marko's own HTML/SVG/MathML element registry, and
+Marko's component conventions. Consumer-declared `AttrTag` values deliberately
+differ from Marko's iterable record (decision 106); body-only untyped values
+remain compatible under decision 108. Templates outside that recorded
+divergence render the same bytes as Marko's own server render.
 
 ```html
 <!-- greeting.mx -->

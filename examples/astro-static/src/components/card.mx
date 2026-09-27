@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/html";
+import type { AttrTag } from "@mxlang/astro";
 
 export interface Input {
   title: string;

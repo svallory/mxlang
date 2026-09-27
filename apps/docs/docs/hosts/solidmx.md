@@ -76,6 +76,9 @@ statically known parameterized tag used without its arguments. Placeholder-only
 bodies remain reactive and are escaped under SSR; `$!{...}` is still the
 explicit raw-HTML form.
 
+The full cross-host contract, including cardinality, nested tags, fallback
+inference, and the Marko migration table, is in [AttrTag](/language/attr-tag/).
+
 ## `<for>` lowering
 
 Every `<for>` form lowers to one of Solid's own iteration primitives:

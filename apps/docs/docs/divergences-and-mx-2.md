@@ -5,11 +5,35 @@ description: "Divergences from Marko and the MX 2 deferred list."
 
 # Divergences from Marko
 
-MX 1.0 is a strict subset of Marko syntax. Every MX 1.0 file is a valid Marko file with the same meaning for the structural core, and hosts may only *forbid* a tag they cannot honor, never add syntax, attribute forms, or file conventions Marko's parser and language server would reject. Divergence from Marko is permitted only from MX 2 on, and only deliberately: each divergence gets a line below, and a divergence that changes syntax lands only together with the tooling it breaks (grammar, Prettier, language server).
+MX 1.0 uses a strict subset of Marko syntax. Every MX 1.0 file remains valid
+Marko syntax, but decision 106 deliberately changes the runtime value of
+attribute tags so a consumer can state its cardinality and shape. Syntax
+divergences remain reserved for MX 2 and must land with the tooling they affect.
 
 ## Recorded divergences
 
-*(none yet — MX 1.0 has no deliberate divergences)*
+### Attribute-tag values
+
+The syntax is shared; the received value is not.
+
+| Question | Marko 6 | MX |
+| --- | --- | --- |
+| Cardinality | One `attrTag`/`attrTags` record is iterable even for one occurrence. | `x?: AttrTag`, `x: AttrTag`, or `x: AttrTag[]` chooses 0..1, exactly 1, or a real array. |
+| Repeated attributes | Direct property reads expose the first item's attrs; iteration reaches all occurrences. | Each array item owns its attrs, nested tags, and `content`. |
+| Attribute passing | Marko can tree-shake attributes the callee never reads. | MX passes every authored attribute. |
+| Untyped body-only fallback | A bare renderable works in render-prop APIs. | The same bare renderable is preserved by decision 108. Attrs or nested tags switch every occurrence of that property to data; repeats/loops independently switch it to an array. |
+
+The reason is an explicit consumer contract: MX can reject a repeated singular,
+an omitted required block, or a loop that would violate cardinality before a
+host silently loses data. Arrays are ordinary JavaScript arrays across value
+hosts.
+
+For migration, declare every named block in the callee's exported `Input`.
+Use `AttrTag[]` anywhere Marko code iterates, change direct body rendering of a
+data tag to `.content`, and opt into `as: "renderable"` only for body-only
+render-prop APIs. Code that reads attributes directly from a repeated Marko
+record should select an MX array item explicitly. See the complete
+[AttrTag guide](/language/attr-tag/).
 
 ## Deferred to MX 2
 

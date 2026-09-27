@@ -55,6 +55,12 @@ error boundary or suspense component** — Hono's `hono/jsx` provides
 `ErrorBoundary` and `Suspense` natively, so this host's runtime supplies only
 `mxClass`.
 
+Attribute-tag contracts import `AttrTag` from `@mxlang/hono`. A renderable is
+a Hono `Child`; data is `{ ...attrs, ...nestedTags, content?: Child }`. Params
+turn either renderable position into a function returning `Child`, and repeats
+are real arrays. See [AttrTag](/language/attr-tag/) for the shared contract and
+the decision-108 fallback used by untyped library components.
+
 ## Events
 
 An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
