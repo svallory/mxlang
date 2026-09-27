@@ -65,8 +65,9 @@ isn't available yet, rather than fabricating a line/column). Every warning
 `tagExtension` (`.ts`) holding a standalone `@Component` — inputs from
 `export interface Input` (`required: true` when not optional, the type
 copied verbatim, **no `@Output()` inference**), `<ng-content>` for
-`${input.content()}` and `<ng-content select="[x]">` for `${input.x()}`
-(repeating one is an error: Angular matches each selector once), `mx-` +
+`${input.content()}` and `<ng-content select="[x]">` for a projected
+attribute-tag render (repeating one is an error: Angular matches each selector
+once), `mx-` +
 kebab-cased basename as the selector unless the tag exports its own, and
 the tag's `static`/`import` placed at module scope. The class is named by
 core's `exportNameFor`/`moduleExportName` (tag-unit 2b), the same
@@ -90,10 +91,15 @@ text* and never matches), a `<const/input=…>` (sequentially, as the emitted
 pattern. `input[k]` is a positioned error. `Input` itself is parsed with
 Babel (the core's own instance) taking each type as a verbatim source
 slice; the text scan that stood here first dropped newline-separated
-properties, mis-sliced arrow types and broke on comments. Three slot
-misuses are errors rather than silent blanks: a name read both as a slot
-and bare, a slot called with arguments, and a slot passed through as an
-attribute. An authored `import Child from "./child.mx"` is emitted once,
+properties, mis-sliced arrow types and broke on comments. Projected `AttrTag`
+content may be rendered only through `${input.x()}`,
+`${input.x.content()}`, `<${input.x.content}/>` or `<${input.x}/>` for a
+renderable declaration (including optional-chain forms). Any other read of a
+declared projection is a positioned error rather than the silent blank an
+unbound `never` input would produce. The older inferred-slot safeguards also
+remain: a name read both as a slot and bare, a slot called with arguments, and
+a slot passed through as an attribute are errors. An authored `import Child
+from "./child.mx"` is emitted once,
 by MX, pointing at the generated module — `isTagModuleImport` is the one
 rule both halves consult so they cannot disagree and emit it twice.
 `mx.angular.tagSelectorPrefix` is wired through both entry points.
@@ -188,11 +194,14 @@ core's resolved `attrTagProps` plan. A singular tag is an
 branch exclusivity. Arrays (including an absent declared `AttrTag[]`),
 attributes, params, and nested attribute tags are positioned errors naming
 `@mxlang/angular`, because projection is keyed by selector and carries nodes,
-not an object or callback.
+not an object or callback. A bodiless `<@name/>` is also an error because there
+are no nodes to project.
 
-The callee receives no attribute-tag value: `<ng-content>` places the
-caller's nodes in the template. `@mxlang/angular` therefore exports
-`AttrTag<C>` as a `never` projection marker used by core's syntactic `Input`
-reader; tag-module generation excludes projected properties from `@Input()`
-fields and auto-imports the marker type when needed. `as: "data"` and
+The callee receives no run-time attribute-tag value: each supported render
+idiom above is compiled directly to `<ng-content>`. Any other read (a
+condition, pass-through, property read, and so on) errors with a fix-it naming
+`<${input.x.content}/>`. `@mxlang/angular` therefore exports `AttrTag<C>` as a
+`never` projection marker used by core's syntactic `Input` reader; tag-module
+generation excludes every declared projected property from `@Input()` fields
+and auto-imports the marker type when needed. `as: "data"` and
 `as: "renderable"` intentionally select the same projection on this host.

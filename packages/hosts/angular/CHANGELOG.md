@@ -11,6 +11,9 @@
 ### Changed
 
 - Projected `AttrTag` properties are no longer emitted as `@Input()` class
-  fields: Angular supplies projected nodes through `<ng-content>`, not as
-  values. Arrays, attributes, params, and nested attribute tags remain
-  positioned host errors.
+  fields, even when unused: Angular supplies projected nodes through
+  `<ng-content>`, not as values. Direct calls, `.content()` calls, dynamic
+  `.content` tags, renderable dynamic tags, and their optional-chain forms
+  lower to that projection; all other value reads are positioned errors.
+  Arrays, attributes, params, nested tags, and bodiless tags remain positioned
+  host errors.
