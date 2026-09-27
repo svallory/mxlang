@@ -51,6 +51,25 @@ export interface TemplateMetadata {
    * must treat it as "not yet known" rather than as a negative answer.
    */
   pending?: boolean;
+  /**
+   * The verbatim source of this unit's `Input` declaration — `export
+   * interface Input …`, or the `<static>` block's `type Input`/`interface
+   * Input` — when it has one.
+   *
+   * Carried for the callee-`Input` reader (decision 106,
+   * `callee-input.ts`): a caller with attribute tags reads the callee's
+   * `Input` syntactically, and a `.mx` callee's Input is reached through
+   * this metadata rather than by re-parsing the template.
+   */
+  inputCode?: string;
+  /**
+   * The `<static>` block and authored `import` statements of a unit whose
+   * `Input` (or its attribute-tag config aliases) may live there — the
+   * same-file alias and `import type` sources the syntactic resolver
+   * follows. Static blocks joined verbatim, one import statement per line.
+   * Only set when the unit has at least one of them.
+   */
+  inputAuxCode?: string;
 }
 
 export interface TemplateBackedTag extends CustomTag {
@@ -210,7 +229,8 @@ function inputMember(code: string): string | null {
 
 /** Computes the public metadata of one already-lowered tag unit. */
 export function metadataOfIr(
-  ir: Pick<Ir, "body"> & Partial<Pick<Ir, "returnValue">>,
+  ir: Pick<Ir, "body"> &
+    Partial<Pick<Ir, "returnValue" | "inputInterface" | "hoisted" | "imports">>,
 ): TemplateMetadata {
   let readsContent = false;
   const attributeTags = new Set<string>();
@@ -277,6 +297,20 @@ export function metadataOfIr(
     metadata.returnsValue = true;
     metadata.returnValueCode = ir.returnValue.code;
   }
+  // The callee-Input reader's sources (decision 106). The exported interface
+  // is the primary source; the static blocks and authored imports are the
+  // alias/import-type channel a `type Input` in `<static>` or an attribute-
+  // tag config alias may live in. Synthesized imports are skipped: their
+  // targets are template units, not type sources.
+  if (ir.inputInterface) metadata.inputCode = ir.inputInterface.code;
+  const aux: string[] = [];
+  for (const node of ir.imports ?? []) {
+    if (!node.synthesized) aux.push(node.code);
+  }
+  for (const node of ir.hoisted ?? []) {
+    if (node.kind === "Static" || node.kind === "Export") aux.push(node.code);
+  }
+  if (aux.length > 0) metadata.inputAuxCode = aux.join("\n");
   return metadata;
 }
 

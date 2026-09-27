@@ -214,6 +214,7 @@
       "name": "@mxlang/core",
       "version": "0.0.0",
       "dependencies": {
+        "@babel/parser": "7.29.8",
         "@marko/compiler": "5.42.5",
       },
     },

@@ -1,0 +1,5 @@
+export type IconConfig = { as: "renderable" };
+export interface Input {
+  placeholder?: string;
+}
+<i/>

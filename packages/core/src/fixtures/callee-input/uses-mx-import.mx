@@ -1,0 +1,5 @@
+import type { IconConfig } from "./mx-config.mx";
+export interface Input {
+  icon?: AttrTag<IconConfig>;
+}
+<i/>
