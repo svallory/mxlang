@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { AttrTagDecl, CalleeInput } from "./callee-input.ts";
+import {
+  type AttrTagDecl,
+  type CalleeInput,
+  readCalleeInput,
+  readOwnInput,
+} from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
@@ -189,6 +194,26 @@ function declaredInput(
     attrTags: new Map(Object.entries(attrTags)),
     otherProps: new Set(otherProps),
     open,
+  };
+}
+
+function invalidInput(
+  errors: Array<[string, string]> = [
+    ["x", "declare this attribute tag's config literally"],
+  ],
+): CalleeInput {
+  return {
+    kind: "invalid",
+    path: "callee.ts",
+    errors: new Map(
+      errors.map(([name, message]) => [
+        name,
+        {
+          message,
+          span: { file: "callee.ts", sourceStart: 0, sourceEnd: 1 },
+        },
+      ]),
+    ),
   };
 }
 
@@ -595,6 +620,144 @@ describe("one fixture per IR kind", () => {
       expect(component.attrTagProps).toMatchObject([
         { name: "tab", cardinality: "array", as: "data" },
       ]);
+    });
+
+    it.each([
+      ["component", "<Panel><@x/></Panel>", v2(), undefined],
+      [
+        "host tag",
+        "<signal><@x/></signal>",
+        fakeDeclarations({
+          name: "TestHost",
+          attrTags: 2,
+          claimsTag: (name) => name === "signal",
+        }),
+        undefined,
+      ],
+      [
+        "discovered template tag",
+        "<panel><@x/></panel>",
+        v2(),
+        {
+          panel: {
+            template: {
+              filename: "/tmp/mx-core-test/tags/panel.mx",
+              source: "<div/>",
+            },
+          } as CustomTag,
+        },
+      ],
+    ])(
+      "raises an invalid Input at a used tag for a %s",
+      (_case, source, policy, customTags) => {
+        expect(() =>
+          lowerSource(source, policy, invalidInput(), undefined, customTags),
+        ).toThrowError(
+          "can't read `<" +
+            (_case === "component"
+              ? "Panel"
+              : _case === "host tag"
+                ? "signal"
+                : "panel") +
+            ">`'s declaration of `x` (callee.ts:1); declare this attribute tag's config literally",
+        );
+      },
+    );
+
+    it("raises only invalid declarations used at this call", () => {
+      expect(() =>
+        lowerSource(
+          "<Panel><@y/></Panel>",
+          v2(),
+          invalidInput([["x", "bad x"]]),
+        ),
+      ).not.toThrow();
+      expect(() =>
+        lowerSource(
+          "<Panel><@x/></Panel>",
+          v2(),
+          invalidInput([["x", "bad x"]]),
+        ),
+      ).toThrowError("declaration of `x` (callee.ts:1); bad x");
+    });
+
+    it("applies a whole-file parse error to every used attribute tag", () => {
+      expect(() =>
+        lowerSource(
+          "<Panel><@y/></Panel>",
+          v2(),
+          invalidInput([["<parse>", "Unexpected token (1:0)"]]),
+        ),
+      ).toThrowError(
+        "can't read `<Panel>`'s Input (callee.ts:1:1): Unexpected token",
+      );
+    });
+
+    it("keeps multi-line static aliases in own Input, including self calls", () => {
+      const aux = ["type Cfg = {", '  as: "data";', "};"].join("\n");
+      const inputCode = "export interface Input { x?: AttrTag<Cfg> }";
+      const ctx = newCtx(
+        `${aux}\n${inputCode}`,
+        printExpression,
+        v2(),
+        undefined,
+        "test.mx",
+      );
+      const ownInput = readOwnInput(ctx, inputCode, [aux]);
+      expect(() =>
+        lowerSource("<${input.x}/>", v2(), undefined, ownInput),
+      ).toThrowError("is a data attribute tag");
+      const renderable = readOwnInput(
+        newCtx(
+          `${aux.replace('"data"', '"renderable"')}\n${inputCode}`,
+          printExpression,
+          v2(),
+          undefined,
+          "test.mx",
+        ),
+        inputCode,
+        [aux.replace('"data"', '"renderable"')],
+      );
+      const recursiveCtx = newCtx(
+        "<Test><@x/><@x/></Test>",
+        printExpression,
+        v2(),
+        undefined,
+        "test.mx",
+      );
+      recursiveCtx.exportName = "Test";
+      recursiveCtx.ownInput = renderable;
+      expect(
+        readCalleeInput({ kind: "name", name: "Test" }, recursiveCtx).input,
+      ).toBe(renderable);
+      expect(() =>
+        lowerSource(
+          "<Test><@x/><@x/></Test>",
+          fakeDeclarations({
+            name: "TestHost",
+            attrTags: 2,
+            isComponent: (name) => name === "Test",
+          }),
+          renderable,
+        ),
+      ).toThrowError("`<@x>` may appear at most once");
+    });
+
+    it("raises a component's own invalid Input at its declaration", () => {
+      let error: unknown;
+      try {
+        lowerSource(
+          "export interface Input { x?: AttrTag<{ as: string }> }\n<div/>",
+          v2(),
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        "can't read this component's declaration of `x` (test.mx:1); declare this attribute tag's config literally",
+      );
+      expect(error).toMatchObject({ line: 1, column: 29 });
     });
 
     it("keeps mutually-exclusive optional singular tags in one if plan", () => {

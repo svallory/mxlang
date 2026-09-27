@@ -1,0 +1,7 @@
+export interface Input {
+  item?: AttrTag<{ as: "renderable" }>;
+}
+
+export default function TypedInput() {
+  return <div />;
+}

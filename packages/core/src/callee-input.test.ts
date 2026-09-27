@@ -25,9 +25,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type AttrTagDecl,
   type CalleeInput,
+  type CalleeInputResult,
   type ResolveContext,
   readCalleeInput,
   resetCalleeInputCache,
+  resolveSpecifier,
 } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
 import type { MxWarning } from "./core.ts";
@@ -514,10 +516,27 @@ describe("readCalleeInput", () => {
           specifier === "./inline" ? aliased : undefined,
       }),
     );
-    expect(input.kind).toBe("declared");
-    if (input.kind !== "declared") return;
-    expect(input.path).toBe(aliased);
-    expect([...input.attrTags.keys()]).toEqual(["aliased"]);
+    const aliasedSource = fixtureSource("aliased.ts");
+    expect(input).toEqual({
+      kind: "declared",
+      path: aliased,
+      attrTags: new Map([
+        [
+          "aliased",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(aliasedSource, 'AttrTag<{ as: "renderable" }>'),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
 
     // A specifier the tool resolver declines falls through to the ordinary
     // relative probing.
@@ -528,17 +547,69 @@ describe("readCalleeInput", () => {
         resolveImport: () => undefined,
       }),
     );
-    expect(viaBuiltin.input.kind).toBe("declared");
-    if (viaBuiltin.input.kind !== "declared") return;
-    expect(viaBuiltin.input.path).toBe(fixture("inline.ts"));
-    expect([...viaBuiltin.input.attrTags.keys()]).toEqual([
-      "header",
-      "footer",
-      "items",
-      "groups",
-      "readonlyItems",
-      "optionalItems",
-    ]);
+    expect(viaBuiltin.input).toEqual(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./inline"]]) }),
+      ).input,
+    );
+  });
+
+  it("resolves a bare package returned by resolveImport as a package", () => {
+    expect(
+      resolveSpecifier("virtual-core", {
+        importer: CALLER,
+        resolveImport: (specifier) =>
+          specifier === "virtual-core" ? "@mxlang/core" : undefined,
+      }),
+    ).toBe(fileURLToPath(new URL("../dist/index.js", import.meta.url)));
+  });
+
+  it("returns none for an unregistered .solid.mx callee", () => {
+    expect(
+      readCalleeInput(
+        namedTarget("NoInput"),
+        context({ imports: new Map([["NoInput", "./no-input.solid.mx"]]) }),
+      ),
+    ).toEqual({
+      input: { kind: "none", path: fixture("no-input.solid.mx") },
+      dependencies: [fixture("no-input.solid.mx")],
+    } satisfies CalleeInputResult);
+  });
+
+  it("resolves directory imports through index files", () => {
+    const source = fixtureSource("directory/index.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Directory"),
+        context({ imports: new Map([["Directory", "./directory"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("directory/index.ts"),
+      attrTags: new Map([
+        [
+          "item",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: {
+              file: fixture("directory/index.ts"),
+              sourceStart: source.indexOf('AttrTag<{ as: "renderable" }>'),
+              sourceEnd:
+                source.indexOf('AttrTag<{ as: "renderable" }>') +
+                'AttrTag<{ as: "renderable" }>'.length,
+            },
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
   });
 
   it("terminates on a type-import cycle", () => {
@@ -624,6 +695,28 @@ describe("readCalleeInput", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it("keys resolver-backed cache entries by stable resolver identity", () => {
+    const target = namedTarget("Card");
+    const imports = new Map([["Card", "virtual-card"]]);
+    const resolver = () => fixture("aliased.ts");
+    const first = readCalleeInput(
+      target,
+      context({ imports, resolveImport: resolver }),
+    );
+    expect(
+      readCalleeInput(target, context({ imports, resolveImport: resolver })),
+    ).toBe(first);
+    expect(
+      readCalleeInput(
+        target,
+        context({
+          imports,
+          resolveImport: () => fixture("aliased.ts"),
+        }),
+      ),
+    ).not.toBe(first);
   });
 
   it("invalidates a cached result when a followed dependency changes", () => {
@@ -713,14 +806,31 @@ describe("readCalleeInput", () => {
   });
 
   it("marks an Input with an unresolvable extends open", () => {
+    const source = fixtureSource("open-extends.ts");
     const { input } = readCalleeInput(
       namedTarget("Card"),
       context({ imports: new Map([["Card", "./open-extends"]]) }),
     );
-    expect(input.kind).toBe("declared");
-    if (input.kind !== "declared") return;
-    expect(input.open).toBe(true);
-    expect([...input.attrTags.keys()]).toEqual(["known"]);
+    expect(input).toEqual({
+      kind: "declared",
+      path: fixture("open-extends.ts"),
+      attrTags: new Map([
+        [
+          "known",
+          {
+            cardinality: "optional",
+            as: "data",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, "AttrTag"),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: true,
+    } satisfies CalleeInput);
   });
 
   it("does not recognise AttrTag imported from a non-mx module", () => {
@@ -770,14 +880,32 @@ describe("readCalleeInput", () => {
   });
 
   it("reads a discovered tag by its resolvedPath", () => {
+    const source = fixtureSource("aliased.ts");
     const { input, dependencies } = readCalleeInput(
       namedTarget("Card"),
-      context({ discovered: new Map([["Card", fixture("inline.ts")]]) }),
+      context({ discovered: new Map([["Card", fixture("aliased.ts")]]) }),
     );
-    expect(dependencies).toEqual([fixture("inline.ts")]);
-    expect(input.kind).toBe("declared");
-    if (input.kind !== "declared") return;
-    expect(input.path).toBe(fixture("inline.ts"));
+    expect(dependencies).toEqual([fixture("aliased.ts")]);
+    expect(input).toEqual({
+      kind: "declared",
+      path: fixture("aliased.ts"),
+      attrTags: new Map([
+        [
+          "aliased",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, 'AttrTag<{ as: "renderable" }>'),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
   });
 
   it("returns none for dynamic and define targets", () => {
@@ -1166,11 +1294,21 @@ describe("readCalleeInput", () => {
         context({ imports: new Map([["Card", "./prop-depth5"]]) }),
       ).input,
     ).toEqual({
-      kind: "declared",
+      kind: "invalid",
       path: fixture("prop-depth5.ts"),
-      attrTags: new Map(),
-      otherProps: new Set(["x"]),
-      open: false,
+      errors: new Map([
+        [
+          "x",
+          {
+            message: "declare this attribute tag's config literally",
+            span: refSpan(
+              fixtureSource("prop-depth5.ts"),
+              "T1",
+              fixtureSource("prop-depth5.ts").indexOf("export interface"),
+            ),
+          },
+        ],
+      ]),
     } satisfies CalleeInput);
   });
 
@@ -1266,6 +1404,40 @@ describe("readCalleeInput", () => {
         message: expect.stringContaining("not resolvable"),
       }),
     ]);
+  });
+
+  it("compile reports only a used invalid declaration with its callee line", () => {
+    expect(() =>
+      compileSource(
+        'import Multi from "./multi-invalid"\n<Multi><@y/></Multi>\n',
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      compileSource(
+        'import Multi from "./multi-invalid"\n<Multi><@x/></Multi>\n',
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).toThrowError(
+      `can't read \`<Multi>\`'s declaration of \`x\` (${fixture("multi-invalid.ts")}:3); declare this attribute tag's config literally`,
+    );
+  });
+
+  it("compile reports a callee parse error with line and column", () => {
+    expect(() =>
+      compileSource(
+        'import Card from "./parse-error"\n<Card><@x/></Card>\n',
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).toThrowError(
+      `can't read \`<Card>\`'s Input (${fixture("parse-error.ts")}:2:23): Unexpected token`,
+    );
   });
 
   it("compile uses the current unit's own Input for data-tag rendering", () => {
