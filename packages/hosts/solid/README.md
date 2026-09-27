@@ -24,7 +24,8 @@ back to source text through `@mxlang/core`'s `printExpression`, the same
 Babel instance that parsed them (`@marko/compiler/internal/babel`'s own
 generator) rather than a second one. Solid 2 itself (`solid-js`,
 `@solidjs/web`, …) is **not** a dependency of this package — it emits Solid
-JSX *text*, and never imports or runs Solid's runtime.
+JSX *text*. Generated modules import Solid primitives as needed, including
+`@solidjs/web`'s public `escape` helper for server-safe text interpolation.
 
 ## `.solid.mx` bridge
 
@@ -137,8 +138,17 @@ other target can express.
 | `For`, `range` with `step` | `<Repeat count={N}>{(mxIndex) => { const i = (from) + mxIndex * (step); return body; }}</Repeat>`; `N` clamped through `Number.isFinite(...) ? Math.max(0, ...) : 0` when not fully literal, so a runtime `step` of `0` renders zero rows instead of an infinite `Repeat` |
 | `HostTag` `<try>` | `<Loading fallback={<@placeholder>}>children</Loading>`, wrapped in `<Errored fallback={(err, ...) => <@catch body>}>` when `<@catch>` is present |
 | `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `:=` (bound attribute) | Errors: each names the Marko construct and points at Solid's own primitive (`createSignal`, `createEffect`, lifecycle primitives, "surrounding TypeScript module", an explicit event handler) — decision 69, these are framework territory and this host has no reactive lowering for them |
-| Dynamic tag name (`<${expr}/>`) | Error: `dynamic tag name` |
+| Dynamic tag name (`<${expr}/>` or `<${expr}(args)/>`) | Inline runtime dispatch: tag-name strings and component functions go through `<Dynamic>`; already-rendered values pass through. Arguments invoke a function target before dispatch. Data-shaped attribute tags must use `.content` |
 | `<define>`, `<const>`, `Hoisted`, `DocumentType` inside a JSX expression | Errors: these must be declared in the surrounding TypeScript module, which is not this emitter's territory (a `.solid.mx` file is already a TS module — that's where they belong) |
+
+An attribute-tag renderable is always an accessor. Render a data tag with
+`<${input.item.content}/>` and a renderable tag with `<${input.item}/>`.
+Parameterized tags must receive their arguments at that dynamic call site:
+`<${input.item.content("Ada")}/>` for data, or `<${input.item("Ada")}/>` for
+renderable. Calling the tag value without its declared arguments is a
+positioned compile error. Escaped interpolations inside these accessors (and
+inside `<if>`/`<for>` bodies) use Solid's server escape helper; the browser
+path keeps the original value so Solid can insert reactive text normally.
 
 Every emitted lowering row above has one test in
 `src/index.test.ts`'s `Solid IR lowering` block, and every rejection above
