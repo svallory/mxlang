@@ -1,9 +1,11 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX fixture source uses `${...}` placeholders.
+
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { CustomTag } from "@mxlang/core";
 import { createElement as honoCreateElement, jsx } from "hono/jsx";
 import { createElement as preactCreateElement } from "preact";
 import { render as renderPreact } from "preact-render-to-string";
@@ -40,6 +42,7 @@ async function renderFixture(
   host: Host,
   files: Record<string, string>,
   input: Record<string, unknown> = {},
+  registeredTags: Record<string, string> = {},
 ): Promise<string> {
   const scratch = mkdtempSync(join(tmpdir(), `mx-${host}-attr-tags-r2-`));
   try {
@@ -57,12 +60,22 @@ async function renderFixture(
         `${name.endsWith(".tsx") ? "/** @jsxRuntime automatic */\n" : ""}${source.replaceAll("HOSTJSX", jsxSources[host])}`,
       );
     }
+    const customTags = Object.fromEntries(
+      Object.entries(registeredTags).map(([name, filename]) => [
+        name,
+        {
+          template: {
+            filename: join(scratch, filename),
+            source: files[filename] as string,
+          },
+        } as CustomTag,
+      ]),
+    );
     for (const [name, source] of Object.entries(files)) {
       if (!name.endsWith(".mx")) continue;
-      const output = compile(source, join(scratch, name)).code.replace(
-        /from "\.\/(\w+)\.mx"/g,
-        'from "./$1.tsx"',
-      );
+      const output = compile(source, join(scratch, name), {
+        customTags,
+      }).code.replace(/from "\.\/(\w+)\.mx"/g, 'from "./$1.tsx"');
       writeFileSync(
         join(scratch, name.replace(/\.mx$/, ".tsx")),
         `/** @jsxRuntime automatic */\n${output}`,
@@ -100,6 +113,29 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("attribute tags round-2 regressions (executed)", () => {
   for (const host of hosts) {
+    it(`${host}: preserves falsy placeholder bodies and a zero range row`, async () => {
+      const files = {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><@head>${input.n}</@head><@slot>${input.n}</@slot><for|i| from=0 until=1><@items>${i}</@items></for></Row>',
+        "row.mx": dataRow(
+          'head: AttrTag; slot: AttrTag<{ as: "renderable" }>; items: AttrTag[]',
+          "<p>[<${input.head.content}/>][${input.head.content}][<${input.slot}/>][${input.slot}]<for|item| of=input.items><i>[<${item.content}/>][${item.content}]</i></for></p>",
+        ),
+      };
+
+      for (const [value, rendered] of [
+        [0, "0"],
+        ["", ""],
+        [false, ""],
+        [null, ""],
+      ] as const) {
+        const html = await renderFixture(host, files, { n: value });
+        expect(html).toBe(
+          `<p>[${rendered}][${rendered}][${rendered}][${rendered}]<i>[0][0]</i></p>`,
+        );
+      }
+    });
+
     it(`${host}: renders placeholder-only data and renderable bodies as escaped text`, async () => {
       const attack = "<img src=x onerror=alert(1)>";
       const html = await renderFixture(
@@ -203,6 +239,18 @@ describe("attribute tags round-2 regressions (executed)", () => {
         { obj: { a: 1, b: 2 } },
       );
       expect(html).toBe("<p>[a:1][b:2][a:outer][b:outer][1][2][3][u0][u1]</p>");
+    });
+
+    it(`${host}: keeps an outer value binding in a content for-in`, async () => {
+      const html = await renderFixture(
+        host,
+        {
+          "main.mx":
+            '<const/value="OUTER"/><for|k| in=input.obj><span>${k}=${value}</span></for>',
+        },
+        { obj: { a: 1 } },
+      );
+      expect(html).toBe("<span>a=OUTER</span>");
     });
 
     it(`${host}: executes else-if, for-in-if, and if under a nested tag`, async () => {
@@ -338,6 +386,26 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
         { tag: factories[host], value: "H" },
       );
       expect(html).toBe("<section>H<b>B</b></section>");
+    },
+  );
+
+  it.each(hosts)(
+    "%s: #propsObject invokes a returning unit with props, tags, and content",
+    async (host) => {
+      const html = await renderFixture(
+        host,
+        {
+          "main.mx":
+            '<const/rest={label: "L"}/><result ...rest><@head>H</@head><b>B</b></result>',
+          "result.mx": dataRow(
+            "label: string; head: AttrTag",
+            "<p>${input.label}:<${input.head.content}/>:<${input.content}/></p>\n<return value=input.label/>",
+          ),
+        },
+        {},
+        { result: "result.mx" },
+      );
+      expect(html).toBe("<p>L:H:<b>B</b></p>");
     },
   );
 });
