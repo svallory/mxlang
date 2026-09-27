@@ -137,6 +137,23 @@ export function unifyNestedAttrTagPlans(
   }
 }
 
+/**
+ * Unifies nested plans only among occurrences of the same parent property.
+ * Sibling properties are independent contracts even when their nested tag
+ * names happen to overlap.
+ */
+export function unifyNestedAttrTagPlanGroups(
+  parents: readonly AttributeTag[],
+): void {
+  const groups = new Map<string, AttributeTag[]>();
+  for (const parent of parents) {
+    const group = groups.get(parent.name);
+    if (group) group.push(parent);
+    else groups.set(parent.name, [parent]);
+  }
+  for (const group of groups.values()) unifyNestedAttrTagPlans(group);
+}
+
 export interface AttrTagConfig {
   as?: "data" | "renderable";
   attrs?: object;
