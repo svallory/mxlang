@@ -607,6 +607,22 @@ function containsAttributeTags(node: Node): boolean {
   });
 }
 
+/** Marko forbids mixing a dynamic tag's positional args with prop-like input. */
+function rejectDynamicArgsWithProps(node: Node): void {
+  if ((node.arguments ?? []).length === 0) return;
+  if (
+    (node.attributes ?? []).length === 0 &&
+    !containsAttributeTags(node) &&
+    !hasContent(node.body?.body ?? [])
+  ) {
+    return;
+  }
+  fail(
+    "Tag does not support arguments when attributes or body present.",
+    node.name ?? node,
+  );
+}
+
 function validateParentCollision(node: Node, schema: AttrSchema): void {
   const owner = schema.collisionOwner;
   if (!owner) return;
@@ -1918,6 +1934,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // or "tagged", as before); otherwise core lowers a `Component` with a
   // dynamic target, resolved at run time like any other host.
   if (node.name && node.name.type !== "StringLiteral") {
+    rejectDynamicArgsWithProps(node);
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
     const dynamicExpr = exprOf(ctx, node.name);

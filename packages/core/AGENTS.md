@@ -39,7 +39,11 @@ Five facts worth knowing before editing it:
   declares that capability, core positions an error on every construct whose
   v2 shape could otherwise be silently dropped.
   A claimed dynamic `HostTag` also retains its tag arguments in `args`; an
-  emitter must forward them when it reconstructs a `Component` call.
+  emitter must forward them when it reconstructs a `Component` call. Marko's
+  call shapes remain exclusive: a dynamic tag with arguments cannot also have
+  attributes, attribute tags, or body content. Core rejects those combinations
+  with Marko's positioned diagnostic before a host could silently discard the
+  property/body side of the call.
 
 - **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
   `core.ts` used to parse
