@@ -66,7 +66,7 @@ globalThis.document = document;
 `;
 
 interface Fixture {
-  callee: string;
+  callee?: string;
   region: string;
   setup?: string;
   steps?: string;
@@ -87,29 +87,35 @@ function transform(source: string, filename: string, mode: "dom" | "ssr") {
 function runFixture(fixture: Fixture, mode: "dom" | "ssr"): unknown {
   const dir = mkdtempSync(join(packageRoot, ".attr-round2-"));
   try {
-    const calleePath = join(dir, "Row.mx");
-    writeFileSync(calleePath, fixture.callee);
-    const callee = compileSolidUnit(fixture.callee, {
-      filename: calleePath,
-    }).code;
+    const importSpecifiers = new Map<string, string>();
+    let rowImport = "";
+    if (fixture.callee !== undefined) {
+      const calleePath = join(dir, "Row.mx");
+      writeFileSync(calleePath, fixture.callee);
+      const callee = compileSolidUnit(fixture.callee, {
+        filename: calleePath,
+      }).code;
+      writeFileSync(
+        join(dir, "Row.mjs"),
+        transform(`${prelude}${callee}`, "Row.tsx", mode),
+      );
+      importSpecifiers.set("Row", "./Row.mx");
+      rowImport = 'import Row from "./Row.tsx";\n';
+    }
     const compiled = compileSolidMx(fixture.region, {
       filename: join(dir, "caller.solid.mx"),
-      importSpecifiers: new Map([["Row", "./Row.mx"]]),
+      importSpecifiers,
     });
     const imports = compiled.hoistedImports
       .map((entry) => entry.code)
       .join("\n");
 
-    writeFileSync(
-      join(dir, "Row.mjs"),
-      transform(`${prelude}${callee}`, "Row.tsx", mode),
-    );
     const execute =
       mode === "dom"
         ? `const root = document.createElement("root"); const values = []; render(() => ${compiled.code}, root); values.push(root.textContent); ${fixture.steps ?? ""} console.log(JSON.stringify(values));`
         : `console.log(JSON.stringify(renderToString(() => ${compiled.code})));`;
     const entry = transform(
-      `${prelude}${imports}\nimport Row from "./Row.tsx";\n${fixture.setup ?? ""}\n${execute}`,
+      `${prelude}${imports}\n${rowImport}${fixture.setup ?? ""}\n${execute}`,
       "entry.tsx",
       mode,
     ).replace('from "./Row.tsx"', 'from "./Row.mjs"');
@@ -173,6 +179,68 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
     );
     expect(values).toEqual(["AA", "BB"]);
   });
+
+  it("gives untyped Solid built-ins renderable fallback accessors", () => {
+    const code = compileSolidMx(
+      `<div><Show when=false><@fallback>show</@fallback>x</Show><Loading><@fallback>loading</@fallback>x</Loading><Errored><@fallback|e, reset|>error</@fallback>x</Errored></div>`,
+      { filename: "builtins.solid.mx" },
+    ).code.replace(/\s+/g, " ");
+    expect(code).toContain("<Show when={false} fallback={() => <>show</>}");
+    expect(code).toContain("<Loading fallback={() => <>loading</>}");
+    expect(code).toContain(
+      "<Errored fallback={(e, reset) => () => <>error</>}",
+    );
+    expect(code).not.toContain("fallback={{ content:");
+  });
+
+  it.each(["ssr", "dom"] as const)(
+    "renders and escapes Show's untyped fallback accessor in %s mode",
+    (mode) => {
+      const result = runFixture(
+        {
+          region: `<Show when=false><@fallback>\${malicious}</@fallback><b>child</b></Show>`,
+          setup: `const malicious = ${JSON.stringify(malicious)};`,
+        },
+        mode,
+      );
+      if (mode === "ssr") {
+        expect(result as string).not.toContain("<img");
+        expect(result as string).toContain("&lt;img");
+      } else expect(result).toEqual([malicious]);
+    },
+  );
+
+  it.each(["ssr", "dom"] as const)(
+    "renders Loading's untyped fallback accessor in %s mode",
+    (mode) => {
+      const result = runFixture(
+        {
+          region: `<Loading><@fallback><span>loading fallback</span></@fallback><Pending/></Loading>`,
+          setup: `function Pending() { const [value] = createSignal(async () => await new Promise(() => {})); return <span>{value()}</span>; }`,
+        },
+        mode,
+      );
+      if (mode === "ssr")
+        expect(result as string).toContain("<span>loading fallback</span>");
+      else expect(result).toEqual(["loading fallback"]);
+    },
+  );
+
+  it.each(["ssr", "dom"] as const)(
+    "renders Errored's parameterized untyped fallback accessor in %s mode",
+    (mode) => {
+      const result = runFixture(
+        {
+          region: `<Errored><@fallback|e, reset|><span>error:\${e().message}:\${typeof reset}</span></@fallback><Boom/></Errored>`,
+          setup: `function Boom() { throw new Error("boom"); }`,
+        },
+        mode,
+      );
+      if (mode === "ssr")
+        expect(result as string).toContain("<span>error:boom:function</span>");
+      else expect(result).toEqual(["error:boom:function"]);
+    },
+  );
 
   it("escapes placeholder-only <if>/<for> bodies in SSR and preserves client text", () => {
     const fixture: Fixture = {

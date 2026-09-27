@@ -141,7 +141,7 @@ describe("attribute tags become props", () => {
       `const el = <Layout><@header><h1>Title</h1></@header></Layout>;`,
     );
     expect(code.replace(/\s+/g, " ")).toContain(
-      "header={{ content: () => <h1>Title</h1> }}",
+      "header={() => <h1>Title</h1>}",
     );
   });
 
@@ -150,7 +150,7 @@ describe("attribute tags become props", () => {
       `const el = <Errored><@fallback|e, reset|><p>\${e.message}</p></@fallback></Errored>;`,
     );
     expect(code.replace(/\s+/g, " ")).toContain(
-      "fallback={{ content: (e, reset) => () => <p>{e.message}</p> }}",
+      "fallback={(e, reset) => () => <p>{e.message}</p>}",
     );
   });
 
@@ -160,9 +160,7 @@ describe("attribute tags become props", () => {
     const code = printFirstExpression(
       `const el = <Layout><@header>Title</@header></Layout>;`,
     );
-    expect(code.replace(/\s+/g, " ")).toContain(
-      "header={{ content: () => <>Title</> }}",
-    );
+    expect(code.replace(/\s+/g, " ")).toContain("header={() => <>Title</>}");
   });
 
   it("emits own attrs first, then attribute tags in source order, and keeps ordinary children", () => {
@@ -176,7 +174,7 @@ describe("attribute tags become props", () => {
     expect(attrOrder[0]).toBeLessThan(attrOrder[1] as number);
     expect(attrOrder[1]).toBeLessThan(attrOrder[2] as number);
     expect(code.replace(/\s+/g, " ")).toContain(
-      "footer={{ content: year => () => <>{() => {",
+      "footer={year => () => <>{() => {",
     );
     // The non-attribute-tag children stay children.
     expect(code).toContain("<p>body</p>");
@@ -248,7 +246,7 @@ describe("consumed attribute tags", () => {
       ).declarations[0].init,
     ).code;
     expect(text).toContain("u => <b>hi</b>");
-    expect(text).toContain("content: () => <>NOPE</>");
+    expect(text).toContain("fallback={() => <>NOPE</>}");
     expect(text).not.toContain("@fallback");
   });
 });
@@ -259,7 +257,7 @@ describe("attribute tag parse errors", () => {
       `const el = <Layout><@header><@inner>x</@inner></@header></Layout>;`,
     );
     expect(code.replace(/\s+/g, " ")).toContain(
-      'header={{ "inner": { content: () => <>x</> }, content: undefined }}',
+      'header={{ "inner": () => <>x</>, content: undefined }}',
     );
   });
 
@@ -284,7 +282,7 @@ describe("attribute tag parse errors", () => {
       `const el = <Layout><if=cond><@header>x</@header></if></Layout>;`,
     );
     expect(code.replace(/\s+/g, " ")).toContain(
-      "header={cond ? { content: () => <>x</> } : undefined}",
+      "header={cond ? () => <>x</> : undefined}",
     );
   });
 

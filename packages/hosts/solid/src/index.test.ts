@@ -126,9 +126,9 @@ describe("Solid IR lowering", () => {
       "component render props",
       `<Layout|input| id="x"><@head><h1>H</h1></@head><@foot|year|>\${year}</@foot><p>\${input}</p></Layout>`,
       [
-        `<Layout id="x" head={{ content: () => <h1>H</h1> }} foot={{ content: (year) => () => <>{() => {`,
+        `<Layout id="x" head={() => <h1>H</h1>} foot={(year) => () => <>{() => {`,
         "$mxEscape",
-        `}</> }}>`,
+        `}</>}>`,
         `{(input) => <p>{input}</p>}`,
       ],
     ],
@@ -216,17 +216,17 @@ describe("Solid IR lowering", () => {
     ],
     // attribute-tag-silent-drops B1: a repeated `<@item>` used to emit the
     // `item=` prop twice (JSX last-wins), losing every occurrence but the
-    // last. It becomes an array, matching `@mxlang/preact` (this shape is
-    // expected to change under the upcoming decision 106).
+    // last. It becomes an array; decision 108 gives each body-only occurrence
+    // the renderable accessor shape for this untyped callee.
     [
       "repeated attribute tag becomes an array",
       `<Layout><@item>1</@item><@item>2</@item></Layout>`,
-      ["item={[{ content: () => <>1</> }, { content: () => <>2</> }]}"],
+      ["item={[() => <>1</>, () => <>2</>]}"],
     ],
     [
       "single attribute tag stays a plain value",
       `<Layout><@item>1</@item></Layout>`,
-      ["item={{ content: () => <>1</> }}"],
+      ["item={() => <>1</>}"],
     ],
     // attribute-tag-silent-drops B2 (Solid's dynamic-tag path shares the same
     // call site as the named-component path): an attribute tag on a dynamic
