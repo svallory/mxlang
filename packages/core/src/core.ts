@@ -651,7 +651,10 @@ export function sliceLoc(ctx: Ctx, loc: Node): string {
  */
 export function importBindings(line: string): string[] {
   try {
-    const file = markoBabel().parse(line, { sourceType: "module" });
+    const file = markoBabel().parse(line, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
     const declaration = file.program.body[0] as Node;
     if (declaration?.type !== "ImportDeclaration") return [];
     return declaration.specifiers.map((s: Node) => s.local.name);

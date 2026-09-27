@@ -3,6 +3,7 @@ import type { AttrTagDecl, CalleeInput } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
+import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
 import { exprOf, exprSpan, lower, paramSpansOf } from "./lower.ts";
@@ -52,8 +53,11 @@ function fakeDeclarations(overrides: Partial<Policy> = {}): Policy {
 function lowerSource(
   source: string,
   policy = fakeDeclarations(),
-  calleeInput?: CalleeInput,
+  calleeInput?:
+    | CalleeInput
+    | ((target: import("./ir.ts").ComponentTarget) => CalleeInput),
   ownInput?: CalleeInput,
+  customTags?: Readonly<Record<string, CustomTag>>,
 ): Ir {
   let ir: Ir | null = null;
   let thrown: unknown = null;
@@ -62,7 +66,9 @@ function lowerSource(
   // `newCtx` plus the compiler's parse is the seam: a
   // translator whose Program visitor lowers instead of emitting.
   const translator = {
-    taglibs: [] as Array<[string, unknown]>,
+    taglibs: [...(customTags ? [customTagTaglib(customTags)] : [])].filter(
+      (entry): entry is [string, unknown] => entry !== null,
+    ),
     tagDiscoveryDirs: [] as string[],
     translate: {
       Program: {
@@ -74,8 +80,14 @@ function lowerSource(
             undefined,
             "test.mx",
           );
-          if (calleeInput) ctx.calleeInputFor = () => calleeInput;
+          if (calleeInput) {
+            ctx.calleeInputFor =
+              typeof calleeInput === "function"
+                ? calleeInput
+                : () => calleeInput;
+          }
           ctx.ownInput = ownInput;
+          ctx.customTags = customTags;
           try {
             ir = lower(ctx, path.node.body);
           } catch (error) {
@@ -605,6 +617,127 @@ describe("one fixture per IR kind", () => {
       expect(component.content).toBeNull();
     });
 
+    it("keeps sibling content while extracting attribute-tag controls", () => {
+      const input = declaredInput({
+        h: attrTagDecl(),
+        item: attrTagDecl({ cardinality: "array" }),
+      });
+      const conditional = find(
+        lowerSource(
+          "<Panel><if=input.a><@h/></if><p>body</p></Panel>",
+          v2(),
+          input,
+        ).body,
+        "Component",
+      );
+      const loop = find(
+        lowerSource(
+          "<Panel><for|x| of=input.xs><@item/></for><p>body</p></Panel>",
+          v2(),
+          input,
+        ).body,
+        "Component",
+      );
+      expect(find(conditional.content?.children ?? [], "Element").name).toBe(
+        "p",
+      );
+      expect(find(loop.content?.children ?? [], "Element").name).toBe("p");
+    });
+
+    it.each([
+      [
+        "else content",
+        "<Panel><if=input.a><@h/></if><else><p>dropped</p></else></Panel>",
+      ],
+      [
+        "else-if content",
+        "<Panel><if=input.a><@h/></if><else-if=input.b>text</else-if></Panel>",
+      ],
+      [
+        "reverse branch order",
+        "<Panel><if=input.a><p>x</p></if><else><@h/></else></Panel>",
+      ],
+      [
+        "nested chain",
+        "<Panel><@tab><if=input.a><@h/></if><else><p>dropped</p></else></@tab></Panel>",
+      ],
+    ])(
+      "rejects attribute tags mixed with %s across an if chain",
+      (_case, source) => {
+        let error: unknown;
+        try {
+          lowerSource(source, v2());
+        } catch (caught) {
+          error = caught;
+        }
+        expect(error).toMatchObject({
+          message:
+            "Cannot have attribute tags and body content under a control flow tag.",
+          line: 1,
+          column: expect.any(Number),
+        });
+      },
+    );
+
+    it("leaves a second else after an unconditional else to the ordinary stray-else error", () => {
+      let error: unknown;
+      try {
+        lowerSource(
+          "<Panel><if=input.a><@h/></if><else><@h/></else><else><@h/></else></Panel>",
+          v2(),
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: "`<else>` without a preceding `<if>`",
+        line: 1,
+        column: 47,
+      });
+    });
+
+    it("uses the owner component's attributes for collisions through controls", () => {
+      expect(() =>
+        lowerSource(
+          '<Panel title="x"><if=input.a><@title/></if></Panel>',
+          v2(),
+        ),
+      ).toThrowError("attribute tag `@title` collides with attribute `title`");
+      expect(() =>
+        lowerSource("<Panel><if=input.a><@value/></if></Panel>", v2()),
+      ).not.toThrow();
+      expect(() =>
+        lowerSource(
+          "<Panel><for|x| of=input.xs by=x.id><@of/><@by/></for></Panel>",
+          v2(),
+        ),
+      ).not.toThrow();
+    });
+
+    it("keeps conditional fallback plans singular, including else-if chains", () => {
+      const one = find(
+        lowerSource("<Panel><if=input.a><@h/></if></Panel>", v2()).body,
+        "Component",
+      );
+      const chain = find(
+        lowerSource(
+          "<Panel><if=input.a><@h/></if><else-if=input.b><@h/></else-if><else><@h/></else></Panel>",
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(one.attrTagProps).toMatchObject([
+        { name: "h", cardinality: "single" },
+      ]);
+      expect(chain.attrTagProps).toMatchObject([
+        { name: "h", cardinality: "single" },
+      ]);
+      expect(chain.attributeTagTree[0]).toMatchObject({
+        kind: "AttributeTagIf",
+        branches: [{}, {}, {}],
+      });
+    });
+
     it("merges a static tag and a for tag in authored order", () => {
       const ir = lowerSource(
         // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
@@ -637,6 +770,12 @@ describe("one fixture per IR kind", () => {
         "<Panel><for|x| of=input.xs><@head>${x}</@head></for></Panel>",
         declaredInput({ head: attrTagDecl() }),
         "may not appear inside `<for>`",
+      ],
+      [
+        "params present when undeclared",
+        "<Panel><@row|value|/></Panel>",
+        declaredInput({ row: attrTagDecl() }),
+        "declares no params in `<Panel>`; remove `|…|`",
       ],
       [
         "missing required",
@@ -680,6 +819,7 @@ describe("one fixture per IR kind", () => {
         expect(error).toMatchObject({
           message: expect.stringContaining(message),
           line: 1,
+          column: expect.any(Number),
         });
       },
     );
@@ -743,6 +883,10 @@ describe("one fixture per IR kind", () => {
         "<Panel><if=input.ok><@head/></if></Panel>",
       ],
       ["nested attribute tags", "<Panel><@head><@icon/></@head></Panel>"],
+      [
+        "an attribute tag inside `<for>`",
+        "<Panel><for|x| of=input.xs><@head/></for></Panel>",
+      ],
     ])("gates %s for an unported host", (construct, source) => {
       expect(() =>
         lowerSource(
@@ -752,7 +896,65 @@ describe("one fixture per IR kind", () => {
             isComponent: (name) => name === "Panel",
           }),
         ),
-      ).toThrowError(`LegacyHost does not support ${construct}`);
+      ).toThrowError(`${construct} isn't supported by LegacyHost yet`);
+    });
+
+    it("gates a zero-occurrence declared array on a legacy host", () => {
+      expect(() =>
+        lowerSource(
+          "<Panel/>",
+          fakeDeclarations({
+            name: "@mxlang/legacy",
+            isComponent: (name) => name === "Panel",
+          }),
+          declaredInput({ items: attrTagDecl({ cardinality: "array" }) }),
+        ),
+      ).toThrowError(
+        "the declared shape of `<@items>` isn't supported by @mxlang/legacy yet",
+      );
+    });
+
+    it("gates control-flow attribute tags on a claimed dynamic HostTag", () => {
+      expect(() =>
+        lowerSource(
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+          "<${input.tag}><if=input.ok><@head/></if></>",
+          fakeDeclarations({
+            name: "@mxlang/legacy",
+            claimsTag: (name) => name === DYNAMIC_TAG,
+          }),
+        ),
+      ).toThrowError(
+        "an attribute tag inside `<if>` isn't supported by @mxlang/legacy yet",
+      );
+    });
+
+    it("validates nested cardinality and records nested fallback plans", () => {
+      const item = attrTagDecl({
+        as: "data",
+        nested: new Map([["icon", attrTagDecl()]]),
+      });
+      expect(() =>
+        lowerSource(
+          "<Panel><@item><@icon/><@icon/></@item></Panel>",
+          v2(),
+          declaredInput({ item }),
+        ),
+      ).toThrowError("`<@icon>` may appear at most once");
+
+      const component = find(
+        lowerSource(
+          "<Panel><@item><if=input.ok><@note/></if></@item></Panel>",
+          v2(),
+          declaredInput({
+            item: attrTagDecl({ as: "data", nestedOpen: true }),
+          }),
+        ).body,
+        "Component",
+      );
+      expect(component.attributeTags[0]?.attrTagProps).toMatchObject([
+        { name: "note", cardinality: "single" },
+      ]);
     });
 
     it("gates a declared data shape and diagnoses data rendering in the callee", () => {
@@ -787,6 +989,92 @@ describe("one fixture per IR kind", () => {
           v2(),
         ).needsAttrTagImport,
       ).toBe(false);
+    });
+
+    it.each([
+      [
+        "local declaration",
+        "static type AttrTag = unknown\nexport interface Input { head?: AttrTag }",
+        false,
+      ],
+      [
+        "HTML comment",
+        "<!-- import { AttrTag } from '@mxlang/core' -->\nexport interface Input { head?: AttrTag }",
+        true,
+      ],
+      [
+        "aliased import",
+        "import type { AttrTag as T } from '@mxlang/core'\nexport interface Input { one?: T; two?: AttrTag }",
+        true,
+      ],
+      ["prefixed name", "export interface Input { head?: MyAttrTag }", false],
+      ["qualified name", "export interface Input { head?: x.AttrTag }", false],
+    ])(
+      "derives AttrTag imports from parsed type references: %s",
+      (_case, source, expected) => {
+        expect(lowerSource(source, v2()).needsAttrTagImport).toBe(expected);
+      },
+    );
+
+    it("resolves discovered template-tag plans by resolved path", () => {
+      const filename = "/tmp/mx-core-test/tags/panel.mx";
+      let target: import("./ir.ts").ComponentTarget | undefined;
+      const input = declaredInput({ h: attrTagDecl() });
+      const templateTag: CustomTag = {
+        template: {
+          filename,
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+          source: "<${input.h}/>",
+        },
+      } as CustomTag;
+      const ir = lowerSource(
+        "<panel><if=input.ok><@h/></if></panel>",
+        v2(),
+        (resolvedTarget) => {
+          target = resolvedTarget;
+          return input;
+        },
+        undefined,
+        { panel: templateTag },
+      );
+      const component = find(ir.body, "Component");
+      expect(component.attributeTagTree[0]?.kind).toBe("AttributeTagIf");
+      expect(component.attrTagProps).toMatchObject([
+        { name: "h", cardinality: "single", as: "renderable" },
+      ]);
+      // The seam is invoked with the discovered unit's path, not only its
+      // generated import binding. Task 1a consumes this target shape.
+      expect(target).toEqual({
+        kind: "name",
+        name: "panel",
+        resolvedPath: filename,
+      });
+    });
+
+    it("uses template Input cardinality instead of custom-tag repeatability", () => {
+      const templateTag: CustomTag = {
+        attributeTags: { item: {} },
+        template: {
+          filename: "/tmp/mx-core-test/tags/list.mx",
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+          source: "<${input.item}/>",
+        },
+      } as CustomTag;
+      const component = find(
+        lowerSource(
+          "<list><@item/><@item/></list>",
+          v2(),
+          declaredInput({
+            item: attrTagDecl({ cardinality: "array" }),
+          }),
+          undefined,
+          { list: templateTag },
+        ).body,
+        "Component",
+      );
+      expect(component.attrTagProps).toMatchObject([
+        { name: "item", cardinality: "array" },
+      ]);
     });
   });
 
@@ -1004,6 +1292,11 @@ describe("errors keep their message and position", () => {
       "an attribute tag outside a component",
       "<div><@header>x</@header></div>\n",
       /attribute tag `@header`/,
+    ],
+    [
+      "an attribute tag under a top-level if",
+      "<if=input.ok><@h/></if>\n",
+      /attribute tag `@h` on `<if>`; attribute tags are props of components/,
     ],
     ["tag params on an element", "<div|a|>x</div>\n", /tag params/],
     ["a scriptlet", "$ const x = 1\n<p>y</p>\n", /scriptlets/],
