@@ -961,6 +961,66 @@ export default () => <div />;
       }
     });
 
+    it("invalidates a .solid.mx caller when a region dependency changes", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-solid-deps-"));
+      scratches.push(dir);
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"v","mx":{"host":"solid"}}',
+      );
+      const caller = join(dir, "caller.solid.mx");
+      const dependency = join(dir, "Card.tsx");
+      writeFileSync(caller, "export const view = <Card/>;\n");
+      writeFileSync(dependency, "export interface Input {}\n");
+
+      vi.resetModules();
+      vi.doMock("@mxlang/solid", () => ({
+        compileSolidMx: () => ({
+          code: "<Card />",
+          dependencies: [dependency],
+          hoistedImports: [],
+          returnVars: [],
+        }),
+      }));
+      try {
+        const fresh = await import("./index.ts");
+        const plugin = fresh.default();
+        await transformOf(plugin).call(
+          {},
+          "export const view = <Card/>;\n",
+          `${caller}${fresh.MX_SUFFIX}`,
+        );
+
+        const mod = { id: `${caller}${fresh.MX_SUFFIX}`, url: caller };
+        const invalidated: unknown[] = [];
+        const updated = (
+          plugin.handleHotUpdate as unknown as (
+            this: unknown,
+            ctx: unknown,
+          ) => unknown[] | undefined
+        ).call(
+          {},
+          {
+            file: dependency,
+            modules: [],
+            server: {
+              moduleGraph: {
+                getModuleById: (id: string) =>
+                  id === `${caller}${fresh.MX_SUFFIX}` ? mod : undefined,
+                invalidateModule: (target: unknown) => invalidated.push(target),
+              },
+            },
+          },
+        );
+
+        expect(invalidated).toEqual([mod]);
+        expect(updated).toEqual([mod]);
+      } finally {
+        vi.doUnmock("@mxlang/solid");
+        vi.resetModules();
+      }
+    });
+
     it("prunes compile dependencies a caller no longer reads", async () => {
       const { dir, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",

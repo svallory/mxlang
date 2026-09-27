@@ -5,8 +5,8 @@ interface User {
 }
 
 function Layout(props: {
-  header: unknown;
-  footer: (year: number) => unknown;
+  header: { content: () => unknown };
+  footer: { content: (year: number) => () => unknown };
   children: unknown;
 }) {
   // Each slot is wrapped in an element rather than sitting as a bare
@@ -16,9 +16,9 @@ function Layout(props: {
   // See `fixtures/README.md`, "Whitespace in a twin".
   return (
     <section>
-      <header>${props.header}</header>
+      <header>${props.header.content}</header>
       <main>${props.children}</main>
-      <footer>${props.footer(2026)}</footer>
+      <footer>${props.footer.content(2026)}</footer>
     </section>
   );
 }
@@ -27,17 +27,19 @@ export function RenderProps() {
   // Setters are unused: the fixture exercises lowering shapes, not behavior.
   const [items, _setItems] = createSignal<string[]>([]);
   const [user, _setUser] = createSignal<User | null>(null);
+  const errorFallback = (e: Error, _reset: () => void) => <p>${e.message}</p>;
+  const loadingFallback = <p>Loading…</p>;
 
   return (
     <div>
       <!-- params on Solid's own For -->
       <For|item, i| each=items()><li>${i()}: ${item()}</li></For>
       <!-- params on Show, with an attribute tag for its fallback -->
-      <Show|u| when=user()><b>${u().name}</b><@fallback>Anonymous</@fallback></Show>
+      <Show|u| when=user() fallback="Anonymous"><b>${u().name}</b></Show>
       <!-- attribute tag with params: Errored's fallback takes (e, reset) -->
-      <Errored><@fallback|e, reset|><p>${e.message}</p></@fallback><Risky/></Errored>
+      <Errored fallback=errorFallback><Risky/></Errored>
       <!-- attribute tag without params: Loading's fallback is a body -->
-      <Loading><@fallback><p>Loading…</p></@fallback><Slow/></Loading>
+      <Loading fallback=loadingFallback><Slow/></Loading>
       <!-- a user component taking two attribute tags plus ordinary children -->
       <Layout><@header><h1>Title</h1></@header><p>body</p><@footer|year|><small>${year}</small></@footer></Layout>
     </div>

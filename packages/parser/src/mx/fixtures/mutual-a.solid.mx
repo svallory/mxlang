@@ -1,0 +1,10 @@
+import MutualB from "./mutual-b.solid.mx";
+import type { AttrTag } from "@mxlang/solid";
+
+export interface Input {
+  a?: AttrTag<{ as: "renderable" }>;
+}
+
+export default function MutualA() {
+  return <MutualB><@b>B</@b></MutualB>;
+}

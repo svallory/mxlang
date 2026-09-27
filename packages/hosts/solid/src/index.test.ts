@@ -1,4 +1,13 @@
-import { readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type CustomTag, readCalleeInput } from "@mxlang/core";
@@ -117,7 +126,7 @@ describe("Solid IR lowering", () => {
       "component render props",
       `<Layout|input| id="x"><@head><h1>H</h1></@head><@foot|year|>\${year}</@foot><p>\${input}</p></Layout>`,
       [
-        `<Layout id="x" head={<h1>H</h1>} foot={(year) => year}>`,
+        `<Layout id="x" head={{ content: () => <h1>H</h1> }} foot={{ content: (year) => () => year }}>`,
         `{(input) => <p>{input}</p>}`,
       ],
     ],
@@ -210,12 +219,12 @@ describe("Solid IR lowering", () => {
     [
       "repeated attribute tag becomes an array",
       `<Layout><@item>1</@item><@item>2</@item></Layout>`,
-      ["item={[<>1</>, <>2</>]}"],
+      ["item={[{ content: () => <>1</> }, { content: () => <>2</> }]}"],
     ],
     [
       "single attribute tag stays a plain value",
       `<Layout><@item>1</@item></Layout>`,
-      ["item={<>1</>}"],
+      ["item={{ content: () => <>1</> }}"],
     ],
     // attribute-tag-silent-drops B2 (Solid's dynamic-tag path shares the same
     // call site as the named-component path): an attribute tag on a dynamic
@@ -637,6 +646,82 @@ describe("compileSolidUnit", () => {
     expect(code).toContain("export default function Panel(input)");
     // The body that reads `input.title` is still emitted.
     expect(code).toContain("input.title");
+  });
+
+  it("adds the host AttrTag type import when Input uses the ambient name", () => {
+    const code = compileSolidUnit(
+      "export interface Input { item: AttrTag }\n<div/>",
+      { filename: "/fixtures/typed.mx" },
+    ).code;
+    expect(code).toContain('import type { AttrTag } from "@mxlang/solid";');
+  });
+
+  it("strictly types params in an attribute-tag <for>", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "mx-solid-attr-tsc-"));
+    try {
+      symlinkSync(
+        join(HERE, "../../../..", "node_modules"),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      const callee = join(scratch, "Row.tsx");
+      writeFileSync(
+        callee,
+        [
+          'import type { AttrTag } from "@mxlang/solid";',
+          "export interface Input { item: AttrTag<{ attrs: { id: number }; params: [label: string] }>[] }",
+          "export default function Row(_input: Input) { return null; }",
+        ].join("\n"),
+      );
+      const caller = join(scratch, "caller.tsx");
+      const region = compileSolidMx(
+        `<Row><for|value| of=values><@item|label| id=value>\${label.toUpperCase()}:\${value.toFixed()}</@item></for></Row>`,
+        {
+          filename: join(scratch, "caller.solid.mx"),
+          importSpecifiers: new Map([["Row", "./Row.tsx"]]),
+        },
+      ).code;
+      writeFileSync(
+        caller,
+        `import Row from "./Row.tsx";\ndeclare const values: number[];\nexport const view = ${region};\n`,
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            noEmit: true,
+            jsx: "preserve",
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            allowImportingTsExtensions: true,
+            skipLibCheck: true,
+            ignoreDeprecations: "6.0",
+            baseUrl: scratch,
+            paths: {
+              "@mxlang/solid": [join(HERE, "index.ts")],
+              "@mxlang/core": [join(HERE, "../../../core/dist/index.d.ts")],
+              "@mxlang/parser": [join(HERE, "../../../parser/src/public.d.ts")],
+            },
+          },
+          include: ["*.tsx"],
+        }),
+      );
+      try {
+        execFileSync(
+          join(HERE, "../../../../node_modules/.bin/tsc"),
+          ["-p", scratch],
+          { cwd: scratch, stdio: "pipe" },
+        );
+      } catch (error) {
+        const failure = error as { stdout?: Buffer; stderr?: Buffer };
+        throw new Error(
+          `${failure.stdout?.toString() ?? ""}${failure.stderr?.toString() ?? ""}`,
+        );
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });
 

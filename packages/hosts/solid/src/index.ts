@@ -1,5 +1,7 @@
 import { parse as parseBabel } from "@babel/parser";
 import {
+  type AttrTagConfig,
+  type AttrTagOf,
   type CustomTag,
   type GeneratedMapping,
   lower,
@@ -13,6 +15,7 @@ import {
 } from "@mxlang/core";
 import { parse as parseMx } from "@mxlang/parser";
 import MagicString from "magic-string";
+import type { Element as SolidElement } from "solid-js";
 import {
   collectReturnVars,
   createEmitter,
@@ -23,6 +26,7 @@ import {
   solidDeclarations,
 } from "./emitter.ts";
 
+export type { AttrTagConfig, AttrTagOf } from "@mxlang/core";
 export {
   createEmitter,
   emitSolid,
@@ -32,10 +36,18 @@ export {
   solidDeclarations,
 };
 
+/** Attribute-tag value specialised to Solid's reusable accessor renderable. */
+export type AttrTag<
+  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  C extends AttrTagConfig = {},
+> = AttrTagOf<C, () => SolidElement>;
+
 function parseSolidCalleeProgram(source: string, path: string): Node[] {
   return parseMx(source, path, {
-    mxRegionCompile: ({ source: region, ...options }) =>
-      compileSolidMx(region, options),
+    // The reader only needs module declarations. Compiling region bodies here
+    // would resolve their imported callees, which recurses forever for two
+    // `.solid.mx` files that import one another.
+    mxRegionCompile: () => ({ code: "null" }),
   }).program.body as Node[];
 }
 
@@ -57,6 +69,8 @@ export interface CompileSolidMxOptions {
   baseColumn?: number;
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /** Surrounding `.solid.mx` module imports, local binding -> specifier. */
+  importSpecifiers?: ReadonlyMap<string, string>;
 }
 
 export interface RawSourceMap {
@@ -93,6 +107,8 @@ export interface CompileSolidMxResult {
    * over: the surrounding function. Empty for a region that binds none.
    */
   returnVars: string[];
+  /** Callee declarations read while resolving this region's attribute tags. */
+  dependencies: string[];
 }
 
 /** One synthesized import a region needs in its surrounding module. */
@@ -194,6 +210,10 @@ export function compileSolidMx(
     options.filename,
   );
   ctx.customTags = options.customTags;
+  if (options.importSpecifiers) {
+    ctx.importSpecifiers = new Map(options.importSpecifiers);
+    for (const name of options.importSpecifiers.keys()) ctx.imports.add(name);
+  }
   const ir = lower(ctx, body);
   // An import the *compiler* minted for a discovered tag is not a
   // module-level statement the author wrote, so it is not theirs to move:
@@ -262,6 +282,7 @@ export function compileSolidMx(
     mappings: emitted.mappings,
     hoistedImports,
     returnVars,
+    dependencies: [...(ctx.dependencies ?? [])],
   };
 }
 
@@ -314,6 +335,9 @@ export function compileSolidUnit(
   }
 
   const lines: string[] = [];
+  if (ir.needsAttrTagImport) {
+    lines.push('import type { AttrTag } from "@mxlang/solid";');
+  }
   for (const node of ir.imports) lines.push(node.code);
   for (const node of ir.hoisted) lines.push(node.code);
   // `export interface Input` is deliberately not emitted. Solid's own

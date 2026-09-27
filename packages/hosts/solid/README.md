@@ -125,7 +125,7 @@ other target can express.
 | `Text` / `Interpolation` (escaped) | Literal text / `{expr}` |
 | `Interpolation` (raw, `$!{...}`) | Must be the element or component's sole child; lowers to an `innerHTML={expr}` attribute, not to output text |
 | `Element` (HTML/SVG/MathML) | A JSX element; `void` elements self-close |
-| `Component` | A JSX element with attribute tags as render props (`name={body}` / `name={(...p) => body}`) and tag params as the child callback (`{(input) => ...}`) |
+| `Component` | A JSX element. Attribute tags follow the callee's `AttrTag` declaration: data values are `{ ...attrs, ...nested, content }`, arrays are real reactive arrays, and renderables/content are reusable accessors (`() => JSX`; with params, `(...p) => () => JSX`). Tag params remain the child callback (`{(input) => ...}`) |
 | `.cls` / `#id` shorthand | Folds into a plain `class="…"` / `id="…"` attribute; an object-valued `class={...}` alongside `.cls` merges to `class={["cls", {...}]}` |
 | `prop:` namespace | Kept as `prop:name={value}` |
 | `on:` / `oncapture:` / `attr:` / `bool:` / `use:` namespaces | Rejected, each with Solid 2's own replacement in the message (`on:x=fn` → `onX=fn`; `oncapture:` → a `ref` callback with `{ capture: true }`; `attr:`/`bool:` → the plain attribute; `use:foo=opts` → `ref=foo(opts)`) |

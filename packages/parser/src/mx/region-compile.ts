@@ -60,6 +60,8 @@ export interface MxRegionCompileInput {
    * stack it is computed from is only tracked when a host asked for it.
    */
   context?: MxRegionContext;
+  /** Imports declared by the surrounding module, local binding -> specifier. */
+  importSpecifiers: ReadonlyMap<string, string>;
 }
 
 /**
@@ -87,6 +89,8 @@ export interface MxRegionCompileResult {
    * a region has no statement position for the `let` a `/var` needs.
    */
   returnVars?: string[];
+  /** Files read while resolving callees used by this region. */
+  dependencies?: string[];
 }
 
 /**

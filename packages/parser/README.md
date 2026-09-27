@@ -82,9 +82,14 @@ the region's own start. Absent, nothing is tracked and parsing is unchanged
 `mxRegionCompile` parser option, on the same options-bag channel and for the
 same reason. Where `mxRegionPositionCheck` vetoes *where* a region may
 appear, this decides *who lowers it*: the bridge hands the hook the region's
-text, its filename, its `baseOffset`/`baseLine`/`baseColumn` and the
-registered `customTags`, and takes back `{ code, hoistedImports?, returnVars? }`,
-the three fields it consumes. The result type is deliberately narrower than
+text, its filename, its `baseOffset`/`baseLine`/`baseColumn`, the registered
+`customTags`, and an exact map from each surrounding imported local name to
+its module source as `importSpecifiers`. The parser collects that map in a
+declaration-only pre-pass, so imports after a region are visible without
+running the real host twice. It takes back
+`{ code, hoistedImports?, returnVars?, dependencies? }`; dependencies are
+attached only to accepted region roots and `print`/`printAst` return their
+deduplicated union. The result type is deliberately narrower than
 any one host's own: a host with a source map, expression mappings, warnings
 or a used-tag list keeps those on its richer return type and gives them to
 its caller directly, so this package never learns their shape.

@@ -121,7 +121,7 @@ export function mxParseElementAt(
   let node: unknown;
   try {
     const region = source.slice(start, end);
-    const { code, hoistedImports, returnVars } = regionCompile({
+    const { code, hoistedImports, returnVars, dependencies } = regionCompile({
       source: region,
       filename: parser.options?.sourceFilename ?? "input.mx",
       // The region's syntactic position, already computed for the veto
@@ -136,6 +136,8 @@ export function mxParseElementAt(
       // Registered custom tags reach a host only through here, for the same
       // reason the hook itself does.
       customTags: parser.options?.mxCustomTags,
+      importSpecifiers:
+        parser.options?.mxImportSpecifiers ?? new Map<string, string>(),
     });
     node = parseExpression(code, {
       ...mxSubParseOptions(parser.options),
@@ -145,7 +147,15 @@ export function mxParseElementAt(
       startColumn: startLoc.column,
     });
     remapExpressionLocations(node, root, code, source, start, end);
-    stampRoot(node, source, start, end, hoistedImports, returnVars);
+    stampRoot(
+      node,
+      source,
+      start,
+      end,
+      hoistedImports,
+      returnVars,
+      dependencies,
+    );
   } catch (err) {
     const error = err as {
       message?: string;
@@ -417,6 +427,7 @@ function stampRoot(
   end: number,
   hoistedImports: HoistedImport[] = [],
   returnVars: string[] = [],
+  dependencies: string[] = [],
 ): void {
   if (!node || typeof node !== "object") return;
   const root = node as Record<string, unknown>;
@@ -440,7 +451,7 @@ function stampRoot(
     // speculative-parse caveat: a `/var` inside a region binds a `let` the
     // region itself has no statement position for, so the surrounding module
     // declares it (design §2.4).
-    mx: { range: [start, end], hoistedImports, returnVars },
+    mx: { range: [start, end], hoistedImports, returnVars, dependencies },
   };
 }
 

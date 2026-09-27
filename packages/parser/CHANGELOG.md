@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added the surrounding module's import-specifier map to each region compile
+  input and optional dependencies to its result. `print` and `printAst` now
+  expose the deduplicated region dependency list.
+
 - **BREAKING:** `MxRegionContext.decoratorNames` no longer accumulates every
   enclosing decorator — it now reports only the innermost enclosing
   decorator's name (`[]` when none), scoped to match
