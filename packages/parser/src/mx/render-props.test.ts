@@ -35,7 +35,11 @@ function collectFirst(node: unknown, type: string): unknown {
   return null;
 }
 
-function expectSyntaxError(source: string, expected: string) {
+function expectSyntaxError(
+  source: string,
+  expected: string,
+  position?: { line: number; column: number },
+) {
   let error: unknown;
   try {
     parseMx(source);
@@ -44,6 +48,7 @@ function expectSyntaxError(source: string, expected: string) {
   }
   expect(error).toBeInstanceOf(SyntaxError);
   expect((error as Error).message).toContain(expected);
+  if (position) expect(error).toMatchObject({ loc: position });
 }
 
 /**
@@ -211,14 +216,16 @@ describe("attribute tag parse errors", () => {
   it("routes nested attribute tags to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><@header><@inner>x</@inner></@header></Layout>;`,
-      "nested attribute tags isn't supported by @mxlang/solid yet",
+      "`<@header>`: nested attribute tags aren't supported by @mxlang/solid yet",
+      { line: 1, column: 28 },
     );
   });
 
   it("routes attributes on an attribute tag to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><@header class="x">H</@header></Layout>;`,
-      "attributes on an attribute tag isn't supported by @mxlang/solid yet",
+      "`<@header>`: attributes on attribute tags aren't supported by @mxlang/solid yet",
+      { line: 1, column: 28 },
     );
   });
 
@@ -232,14 +239,16 @@ describe("attribute tag parse errors", () => {
   it("routes an attribute tag inside `<if>` to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><if=cond><@header>x</@header></if></Layout>;`,
-      "an attribute tag inside `<if>` isn't supported by @mxlang/solid yet",
+      "attribute tags inside `<if>` aren't supported by @mxlang/solid yet",
+      { line: 1, column: 19 },
     );
   });
 
   it("routes an attribute tag inside `<for>` to the host capability gate", () => {
     expectSyntaxError(
       `const el = <Layout><for|x| of=xs()><@header>y</@header></for></Layout>;`,
-      "an attribute tag inside `<for>` isn't supported by @mxlang/solid yet",
+      "attribute tags inside `<for>` aren't supported by @mxlang/solid yet",
+      { line: 1, column: 19 },
     );
   });
 
