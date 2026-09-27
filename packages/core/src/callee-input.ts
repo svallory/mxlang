@@ -195,9 +195,11 @@ export function readCalleeInput(
 
   let result: CalleeInputResult;
   let pending = false;
+  let parsedSources = new Map<string, string>([[resolved.path, source]]);
   try {
     const analyzed = readInputAt(resolved.path, source, mtimeMs, context);
     pending = analyzed.pending === true;
+    parsedSources = analyzed.parsedSources;
     result = { input: analyzed.input, dependencies: analyzed.dependencies };
   } catch (error) {
     const candidate = error as { message?: string; pos?: number };
@@ -231,7 +233,10 @@ export function readCalleeInput(
         mtimeMs,
         source,
         result,
-        dependencySnapshots: snapshotDependencies(result.dependencies),
+        dependencySnapshots: snapshotDependencies(
+          result.dependencies,
+          parsedSources,
+        ),
       },
       MAX_CACHED_CALLEES,
     );
@@ -251,6 +256,7 @@ function recordDependencies(
 
 function snapshotDependencies(
   dependencies: string[],
+  parsedSources: ReadonlyMap<string, string> = new Map(),
 ): Map<string, { mtimeMs: number | undefined; source: string }> {
   const snapshots = new Map<
     string,
@@ -260,7 +266,8 @@ function snapshotDependencies(
     try {
       snapshots.set(dependency, {
         mtimeMs: statSync(dependency).mtimeMs,
-        source: readFileSync(dependency, "utf8"),
+        source:
+          parsedSources.get(dependency) ?? readFileSync(dependency, "utf8"),
       });
     } catch {
       // A file that disappears after the read makes the next lookup miss.
@@ -397,7 +404,11 @@ function readInputAt(
   source: string,
   mtimeMs: number | undefined,
   context: ResolveContext,
-): CalleeInputResult & { pending?: boolean } {
+): CalleeInputResult & {
+  pending?: boolean;
+  parsedSources: Map<string, string>;
+} {
+  const parsedSources = new Map<string, string>([[path, source]]);
   if (path.endsWith(".mx")) {
     if (!context.ctx) {
       // A `.mx` callee's Input is read through the template-metadata cache,
@@ -414,7 +425,12 @@ function readInputAt(
     });
     const dependencies = [path];
     if (metadata.pending) {
-      return { input: { kind: "none", path }, dependencies, pending: true };
+      return {
+        input: { kind: "none", path },
+        dependencies,
+        pending: true,
+        parsedSources,
+      };
     }
     const input = readInputFromText(
       path,
@@ -424,8 +440,9 @@ function readInputAt(
       true,
       dependencies,
       context,
+      parsedSources,
     );
-    return { input, dependencies };
+    return { input, dependencies, parsedSources };
   }
 
   const dependencies = [path];
@@ -437,8 +454,9 @@ function readInputAt(
     false,
     dependencies,
     context,
+    parsedSources,
   );
-  return { input, dependencies };
+  return { input, dependencies, parsedSources };
 }
 
 /**
@@ -458,8 +476,15 @@ function readInputFromText(
   allowStaticInput: boolean,
   dependencies: string[],
   context: ResolveContext,
+  parsedSources = new Map<string, string>([[path, source]]),
 ): CalleeInput {
-  const analyzer = new InputAnalyzer(path, source, dependencies, context);
+  const analyzer = new InputAnalyzer(
+    path,
+    source,
+    dependencies,
+    context,
+    parsedSources,
+  );
   if (auxCode !== undefined) analyzer.addAux(auxCode);
   if (inputCode !== undefined) analyzer.addProgram(inputCode);
 
@@ -481,12 +506,18 @@ export function readOwnInput(
   ) {
     return { kind: "none", path: ctx.filename };
   }
-  const analyzer = new InputAnalyzer(ctx.filename, ctx.source, [], {
-    importer: ctx.filename,
-    resolveImport: ctx.resolveImport,
-    imports: ctx.importSpecifiers,
-    ctx,
-  });
+  const analyzer = new InputAnalyzer(
+    ctx.filename,
+    ctx.source,
+    [],
+    {
+      importer: ctx.filename,
+      resolveImport: ctx.resolveImport,
+      imports: ctx.importSpecifiers,
+      ctx,
+    },
+    new Map([[ctx.filename, ctx.source]]),
+  );
   for (const unit of (auxCode ?? "").split("\n")) {
     if (!unit.trim()) continue;
     try {
@@ -532,6 +563,7 @@ class InputAnalyzer {
     private readonly source: string,
     private readonly dependencies: string[],
     private readonly context: ResolveContext,
+    private readonly parsedSources: Map<string, string>,
   ) {}
 
   /** Parses one declaration source and merges its top-level nodes in. */
@@ -769,6 +801,7 @@ class InputAnalyzer {
     let source: string;
     try {
       source = readFileSync(resolved, "utf8");
+      this.parsedSources.set(resolved, source);
     } catch {
       return undefined;
     }
@@ -859,6 +892,7 @@ class InputAnalyzer {
         }
         if (!next) continue;
         const nextSource = readFileSync(next, "utf8");
+        this.parsedSources.set(next, nextSource);
         this.readFiles.add(next);
         if (!this.dependencies.includes(next)) this.dependencies.push(next);
         const found = this.importedDeclaration(next, nextSource, importedName);
@@ -877,6 +911,7 @@ class InputAnalyzer {
         }
         if (!next) continue;
         const nextSource = readFileSync(next, "utf8");
+        this.parsedSources.set(next, nextSource);
         this.readFiles.add(next);
         if (!this.dependencies.includes(next)) this.dependencies.push(next);
         const found = this.importedDeclaration(next, nextSource, imported);
