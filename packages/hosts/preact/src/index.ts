@@ -173,6 +173,17 @@ const MX_DYNAMIC = `function mxDynamic(target, props) {
     const { content, ...rest } = props;
     return <Tag {...rest}>{content ? content() : undefined}</Tag>;
   }
+  if (
+    target !== null &&
+    typeof target === "object" &&
+    (Object.getPrototypeOf(target) === Object.prototype ||
+      Object.getPrototypeOf(target) === null) &&
+    Object.prototype.hasOwnProperty.call(target, "content")
+  ) {
+    throw new Error(
+      "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>",
+    );
+  }
   return props.content ? props.content() : target;
 }`;
 
