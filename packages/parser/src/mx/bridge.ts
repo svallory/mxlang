@@ -30,6 +30,8 @@ export interface MxParserHost {
     endLoc: Position;
     // biome-ignore lint/suspicious/noExplicitAny: MxRegionParentFrame kept structural, to avoid a tokenizer-state dependency cycle
     mxRegionParents: any[];
+    /** Function parameters known before Babel registers them in its scope. */
+    mxFunctionParamNames: Array<Set<string>>;
   };
   // biome-ignore lint/suspicious/noExplicitAny: matches the vendored raise signature
   raise(toParseError: any, at: Position | any, details?: any): unknown;
@@ -38,6 +40,32 @@ export interface MxParserHost {
   options: any;
   // biome-ignore lint/suspicious/noExplicitAny: Babel's own node type is internal
   finishNode?: any;
+  /** Babel's active lexical scopes, used to hide shadowed module imports. */
+  scope?: {
+    scopeStack?: Array<{ names?: Map<string, unknown> }>;
+  };
+}
+
+function visibleImportSpecifiers(
+  parser: MxParserHost,
+): ReadonlyMap<string, string> {
+  const imports =
+    (parser.options?.mxImportSpecifiers as
+      | ReadonlyMap<string, string>
+      | undefined) ?? new Map<string, string>();
+  const localScopes = parser.scope?.scopeStack?.slice(1) ?? [];
+  if (localScopes.length === 0) return imports;
+
+  const visible = new Map(imports);
+  for (const name of imports.keys()) {
+    if (
+      localScopes.some((scope) => scope.names?.has(name)) ||
+      parser.state.mxFunctionParamNames.some((params) => params.has(name))
+    ) {
+      visible.delete(name);
+    }
+  }
+  return visible;
 }
 
 /**
@@ -136,8 +164,7 @@ export function mxParseElementAt(
       // Registered custom tags reach a host only through here, for the same
       // reason the hook itself does.
       customTags: parser.options?.mxCustomTags,
-      importSpecifiers:
-        parser.options?.mxImportSpecifiers ?? new Map<string, string>(),
+      importSpecifiers: visibleImportSpecifiers(parser),
     });
     node = parseExpression(code, {
       ...mxSubParseOptions(parser.options),

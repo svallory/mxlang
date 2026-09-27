@@ -175,6 +175,11 @@ export default class State {
   // `../../mx/region-context.ts`.
   mxRegionParents: MxRegionParentFrame[] = [];
 
+  // MX FORK: function parameters are registered in Babel's ordinary scope
+  // only after the body has parsed. Regions compile during that body parse,
+  // so keep the already-parsed parameter names visible to the MX bridge.
+  mxFunctionParamNames: Array<Set<string>> = [];
+
   // MX FORK: a transient handoff from `parseExprList`'s loop to
   // `parseExprListItem`'s boundary push — the index of the list item about
   // to be parsed, so a decorator's own argument list can record which
@@ -248,6 +253,9 @@ export default class State {
     state.lastTokStartLoc = this.lastTokStartLoc;
     state.context = this.context.slice();
     state.mxRegionParents = this.mxRegionParents.slice();
+    state.mxFunctionParamNames = this.mxFunctionParamNames.map(
+      names => new Set(names),
+    );
     state.firstInvalidTemplateEscapePos = this.firstInvalidTemplateEscapePos;
     state.strictErrors = this.strictErrors;
     state.tokensLength = this.tokensLength;
