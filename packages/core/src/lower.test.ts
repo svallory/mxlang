@@ -1429,6 +1429,36 @@ describe("one fixture per IR kind", () => {
       );
     });
 
+    it("rejects a declared parameterized tag used without arguments", () => {
+      const input = declaredInput({
+        data: attrTagDecl({ as: "data", hasParams: true }),
+        renderable: attrTagDecl({ as: "renderable", hasParams: true }),
+      });
+      expect(() =>
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        lowerSource("<${input.data.content}/>", v2(), undefined, input),
+      ).toThrowError(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
+        "`input.data.content` is a parameterized attribute tag; pass its arguments with `<${input.data.content(/* arguments */)}/>`",
+      );
+      expect(() =>
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        lowerSource("<${input.renderable}/>", v2(), undefined, input),
+      ).toThrowError(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
+        "`input.renderable` is a parameterized attribute tag; pass its arguments with `<${input.renderable(/* arguments */)}/>`",
+      );
+      expect(() =>
+        lowerSource(
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+          '<${input.data.content}("d")/><${input.renderable}("r")/>',
+          v2(),
+          undefined,
+          input,
+        ),
+      ).not.toThrow();
+    });
+
     it("marks an unimported AttrTag reference for a host type import", () => {
       expect(
         lowerSource("export interface Input { head?: AttrTag }\n<p>x</p>", v2())
