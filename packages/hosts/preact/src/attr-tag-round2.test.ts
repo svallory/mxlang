@@ -25,6 +25,12 @@ const repoNodeModules = join(
 let serial = 0;
 
 type Compiler = typeof compilePreactMx;
+type RegisteredTag =
+  | string
+  | {
+      filename: string;
+      transform: NonNullable<CustomTag["transform"]>;
+    };
 
 async function compilerFor(host: Host): Promise<Compiler> {
   if (host === "preact") return compilePreactMx;
@@ -42,7 +48,7 @@ async function renderFixture(
   host: Host,
   files: Record<string, string>,
   input: Record<string, unknown> = {},
-  registeredTags: Record<string, string> = {},
+  registeredTags: Record<string, RegisteredTag> = {},
 ): Promise<string> {
   const scratch = mkdtempSync(join(tmpdir(), `mx-${host}-attr-tags-r2-`));
   try {
@@ -61,15 +67,24 @@ async function renderFixture(
       );
     }
     const customTags = Object.fromEntries(
-      Object.entries(registeredTags).map(([name, filename]) => [
-        name,
-        {
-          template: {
-            filename: join(scratch, filename),
-            source: files[filename] as string,
-          },
-        } as CustomTag,
-      ]),
+      Object.entries(registeredTags).map(([name, registration]) => {
+        const filename =
+          typeof registration === "string"
+            ? registration
+            : registration.filename;
+        return [
+          name,
+          {
+            template: {
+              filename: join(scratch, filename),
+              source: files[filename] as string,
+            },
+            ...(typeof registration === "string"
+              ? {}
+              : { transform: registration.transform }),
+          } as CustomTag,
+        ];
+      }),
     );
     for (const [name, source] of Object.entries(files)) {
       if (!name.endsWith(".mx")) continue;
@@ -175,6 +190,80 @@ describe("attribute tags round-2 regressions (executed)", () => {
       });
       expect(html).toBe("<section>ready</section>");
     });
+
+    it(`${host}: unifies nested shape across conditional parent occurrences`, async () => {
+      const files = {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><if=input.pickBare><@tab><@icon>I</@icon></@tab></if><else><@tab><@icon k="K">J</@icon></@tab></else></Row>',
+        "row.mx":
+          '<p>${typeof input.tab.icon}:${input.tab.icon.k || "-"}:<${input.tab.icon.content}/></p>',
+      };
+      expect(await renderFixture(host, files, { pickBare: true })).toBe(
+        "<p>object:-:I</p>",
+      );
+      expect(await renderFixture(host, files, { pickBare: false })).toBe(
+        "<p>object:K:J</p>",
+      );
+    });
+
+    it(`${host}: unifies nested shape across repeated parent occurrences`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon k="K">J</@icon></@tab></Row>',
+        "row.mx":
+          '<for|tab| of=input.tab><p>${typeof tab.icon}:${tab.icon.k || "-"}:<${tab.icon.content}/></p></for>',
+      });
+      expect(html).toBe("<p>object:-:I</p><p>object:K:J</p>");
+    });
+
+    it(`${host}: unifies nested one-versus-array cardinality`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Row>',
+        "row.mx":
+          "<for|tab| of=input.tab><p>${String(Array.isArray(tab.icon))}:<for|icon| of=tab.icon><${icon}/></for></p></for>",
+      });
+      expect(html).toBe("<p>true:I</p><p>true:JK</p>");
+    });
+
+    it(`${host}: executes mixed fallback occurrences and parameterized bare tags`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          'import Row from "./row.tsx"\n<Row><@item>A</@item><@item k="K">B</@item><@action|suffix|>go${suffix}</@action></Row>',
+        "row.tsx": [
+          "/** @jsxImportSource HOSTJSX */",
+          "export default function Row(input: any) {",
+          '  return <><p>{typeof input.item[0]}:{input.item[0].k || "-"}:{input.item[0].content}</p><p>{typeof input.item[1]}:{input.item[1].k}:{input.item[1].content}</p><button>{input.action("!")}</button></>;',
+          "}",
+        ].join("\n"),
+      });
+      expect(html).toBe(
+        "<p>object:-:A</p><p>object:K:B</p><button>go!</button>",
+      );
+    });
+
+    it(`${host}: rebuilds fallback shape after a transform filters occurrences`, async () => {
+      const html = await renderFixture(
+        host,
+        {
+          "main.mx": '<filter><@item>A</@item><@item k="K">B</@item></filter>',
+          "filter.mx": "<section><${input.item}/></section>",
+        },
+        {},
+        {
+          filter: {
+            filename: "filter.mx",
+            transform(call, ctx) {
+              return ctx.build.template({
+                ...call,
+                attributeTags: call.attributeTags.slice(0, 1),
+              });
+            },
+          },
+        },
+      );
+      expect(html).toBe("<section>A</section>");
+    });
   }
 
   it("reports a positioned compile error for the old idiom on a declared data tag", () => {
@@ -229,6 +318,24 @@ describe("attribute tags round-2 regressions (executed)", () => {
         "item: AttrTag[]",
         "<p>${input.item.map((x) => x.content)}</p>",
       ),
+    });
+    expect(html).toBe("<p><b>a</b><b>b</b></p>");
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("react: keys an untyped renderable fallback array without warnings", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const html = await renderFixture("react", {
+      "main.mx":
+        'import Row from "./row.tsx"\n<Row><@slot><b>a</b></@slot><@slot><b>b</b></@slot></Row>',
+      "row.tsx": [
+        "/** @jsxImportSource react */",
+        "export default function Row(input: { slot: unknown }) {",
+        "  return <p>{input.slot as never}</p>;",
+        "}",
+      ].join("\n"),
     });
     expect(html).toBe("<p><b>a</b><b>b</b></p>");
     expect(error).not.toHaveBeenCalled();

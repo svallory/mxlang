@@ -10,7 +10,7 @@ import type { Ctx, MxWarning, Node } from "./core.ts";
 import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
 import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
-import type { Ir, IrNode } from "./ir.ts";
+import type { AttributeTag, Ir, IrNode } from "./ir.ts";
 import { exprOf, exprSpan, lower, paramSpansOf } from "./lower.ts";
 
 /**
@@ -1244,6 +1244,95 @@ describe("one fixture per IR kind", () => {
       expect(component.attributeTags[0]?.attrTagProps).toMatchObject([
         { name: "note", cardinality: "single" },
       ]);
+    });
+
+    it("unifies nested fallback shape across parent branches and repeats", () => {
+      const conditional = find(
+        lowerSource(
+          '<Panel><if=input.c><@tab><@icon>I</@icon>T</@tab></if><else><@tab><@icon k="1">J</@icon>U</@tab></else></Panel>',
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(
+        conditional.attributeTags.map((tab) => tab.attrTagProps),
+      ).toMatchObject([
+        [{ name: "icon", cardinality: "single", as: "data" }],
+        [{ name: "icon", cardinality: "single", as: "data" }],
+      ]);
+
+      const repeated = find(
+        lowerSource(
+          '<Panel><@tab><@icon>I</@icon></@tab><@tab><@icon k="1">J</@icon></@tab></Panel>',
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(
+        repeated.attributeTags.map((tab) => tab.attrTagProps),
+      ).toMatchObject([
+        [{ name: "icon", cardinality: "single", as: "data" }],
+        [{ name: "icon", cardinality: "single", as: "data" }],
+      ]);
+    });
+
+    it("unifies nested fallback cardinality across parent occurrences", () => {
+      const component = find(
+        lowerSource(
+          "<Panel><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Panel>",
+          v2(),
+        ).body,
+        "Component",
+      );
+      expect(
+        component.attributeTags.map((tab) => tab.attrTagProps),
+      ).toMatchObject([
+        [{ name: "icon", cardinality: "array", as: "renderable" }],
+        [{ name: "icon", cardinality: "array", as: "renderable" }],
+      ]);
+    });
+
+    it("unifies fallback shape recursively below the second level", () => {
+      const component = find(
+        lowerSource(
+          '<Panel><@tab><@group><@icon>I</@icon></@group></@tab><@tab><@group><@icon k="1">J</@icon></@group></@tab></Panel>',
+          v2(),
+        ).body,
+        "Component",
+      );
+      const groups = component.attributeTags.map(
+        (tab) => tab.attributeTags[0] as AttributeTag,
+      );
+      expect(groups.map((group) => group.attrTagProps)).toMatchObject([
+        [{ name: "icon", cardinality: "single", as: "data" }],
+        [{ name: "icon", cardinality: "single", as: "data" }],
+      ]);
+    });
+
+    it("keeps a declared nested plan authoritative across parent occurrences", () => {
+      const tab = attrTagDecl({
+        cardinality: "array",
+        as: "data",
+        nested: new Map([
+          ["icon", attrTagDecl({ cardinality: "array", as: "renderable" })],
+        ]),
+      });
+      const component = find(
+        lowerSource(
+          "<Panel><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Panel>",
+          v2(),
+          declaredInput({ tab }),
+        ).body,
+        "Component",
+      );
+      for (const occurrence of component.attributeTags) {
+        expect(occurrence.attrTagProps[0]).toMatchObject({
+          name: "icon",
+          cardinality: "array",
+          as: "renderable",
+          declared: true,
+        });
+      }
     });
 
     it("gates a declared data shape and diagnoses data rendering in the callee", () => {

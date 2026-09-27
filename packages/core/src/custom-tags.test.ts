@@ -6,7 +6,7 @@ import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
-import type { Attr, Ir, IrNode } from "./ir.ts";
+import type { Attr, AttributeTag, Ir, IrNode } from "./ir.ts";
 import { resetTemplateCache } from "./template-tag.ts";
 
 function fakeDeclarations(overrides: Partial<Policy> = {}): Policy {
@@ -268,6 +268,38 @@ describe("custom tag transforms", () => {
       );
       expect(find(ir.body, "Component").attrTagProps).toMatchObject([
         { name: "item", cardinality: "single", as: "renderable" },
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rebuilds unified nested shape and cardinality after filtering a parent occurrence", () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-transform-nested-"));
+    const filename = join(directory, "tag.mx");
+    const source = "<div/>\n";
+    writeFileSync(filename, source);
+    const tag: CustomTag = {
+      template: { filename, source },
+      transform(call, ctx) {
+        return ctx.build.template({
+          ...call,
+          attributeTags: call.attributeTags.slice(0, 1),
+        });
+      },
+    } as CustomTag;
+    try {
+      const ir = lowerWithTags(
+        '<tag><@tab><@icon>I</@icon></@tab><@tab><@icon k="1">J</@icon><@icon>K</@icon></@tab></tag>\n',
+        { tag },
+        {
+          ...fakeDeclarations(),
+          attrTags: 2,
+        },
+      );
+      const tab = find(ir.body, "Component").attributeTags[0] as AttributeTag;
+      expect(tab.attrTagProps).toMatchObject([
+        { name: "icon", cardinality: "single", as: "renderable" },
       ]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
