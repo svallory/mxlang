@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { compileReactMx } from "./index.ts";
+import { compileReactMx, reactDeclarations, reactTarget } from "./index.ts";
 
 function compile(source: string): string {
   return compileReactMx(source, "/fixtures/test.mx").code;
 }
+
+it("keeps framework diagnostics separate from host capability diagnostics", () => {
+  expect(reactTarget.name).toBe("React");
+  expect(reactDeclarations.name).toBe("@mxlang/react");
+});
 
 function markup(source: string): string {
   const match = compile(source).match(/return \(<>([\s\S]*)<\/>\);/);

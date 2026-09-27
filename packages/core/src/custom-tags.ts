@@ -633,23 +633,23 @@ export function validateCustomTagCall(
     }
   }
 
-  if (hasTemplate(definition)) return;
-
   const declaredTags = definition.attributeTags;
-  for (const tag of call.attributeTags) {
-    if (tag.attrs.length > 0) {
-      failAt(
-        call.name,
-        `attribute tag \`<@${tag.name}>\` does not support attributes`,
-        tag.attrs[0]?.loc ?? tag.loc,
-      );
-    }
-    if (tag.attributeTags.length > 0) {
-      failAt(
-        call.name,
-        `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
-        tag.attributeTags[0]?.loc ?? tag.loc,
-      );
+  if (!hasTemplate(definition)) {
+    for (const tag of call.attributeTags) {
+      if (tag.attrs.length > 0) {
+        failAt(
+          call.name,
+          `attribute tag \`<@${tag.name}>\` does not support attributes`,
+          tag.attrs[0]?.loc ?? tag.loc,
+        );
+      }
+      if (tag.attributeTags.length > 0) {
+        failAt(
+          call.name,
+          `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
+          tag.attributeTags[0]?.loc ?? tag.loc,
+        );
+      }
     }
   }
   if (!declaredTags) return;
@@ -1003,7 +1003,14 @@ export function transformCustomTag(
     Array.isArray(result.attrs)
   ) {
     routed = true;
-    nodes = routeTemplateCall(ctx, definition, result);
+    // A sidecar that replaces the occurrence list has invalidated the tree
+    // and property plan derived from the authored call. Rebuild both from
+    // the returned list rather than routing stale entries to the template.
+    const routedCall =
+      result.attributeTags === observed.call.attributeTags
+        ? result
+        : { ...result, attributeTagTree: undefined, attrTagProps: undefined };
+    nodes = routeTemplateCall(ctx, definition, routedCall);
   } else {
     failAt(
       call.name,

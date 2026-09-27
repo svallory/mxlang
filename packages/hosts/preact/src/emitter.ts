@@ -131,8 +131,16 @@ function isComponentName(name: string): boolean {
 
 /** Resolve-time questions for a Preact/React JSX target. */
 export function createJsxDeclarations(targetName: string): HostDeclarations {
+  const declarationName =
+    targetName === "Preact"
+      ? "@mxlang/preact"
+      : targetName === "React"
+        ? "@mxlang/react"
+        : targetName === "Hono"
+          ? "@mxlang/hono"
+          : targetName;
   return {
-    name: targetName,
+    name: declarationName,
     tags: statefulErrors(targetName),
     // Element-vs-component follows Marko's own rule — what the taglib lookup
     // and the template's own bindings resolve the name to — not JSX's casing

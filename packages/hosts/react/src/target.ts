@@ -145,7 +145,7 @@ export function buildReactEventPropNames(): Record<string, string> {
 
 /** React vocabulary for the shared Preact/React JSX emitter. */
 export const reactTarget: Target = {
-  name: "@mxlang/react",
+  name: "React",
   jsxImportSource: "react",
   classAttr: "className",
   forAttr: "htmlFor",

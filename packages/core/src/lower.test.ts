@@ -648,22 +648,26 @@ describe("one fixture per IR kind", () => {
       [
         "else content",
         "<Panel><if=input.a><@h/></if><else><p>dropped</p></else></Panel>",
+        35,
       ],
       [
         "else-if content",
         "<Panel><if=input.a><@h/></if><else-if=input.b>text</else-if></Panel>",
+        46,
       ],
       [
         "reverse branch order",
         "<Panel><if=input.a><p>x</p></if><else><@h/></else></Panel>",
+        19,
       ],
       [
         "nested chain",
         "<Panel><@tab><if=input.a><@h/></if><else><p>dropped</p></else></@tab></Panel>",
+        41,
       ],
     ])(
       "rejects attribute tags mixed with %s across an if chain",
-      (_case, source) => {
+      (_case, source, column) => {
         let error: unknown;
         try {
           lowerSource(source, v2());
@@ -674,7 +678,7 @@ describe("one fixture per IR kind", () => {
           message:
             "Cannot have attribute tags and body content under a control flow tag.",
           line: 1,
-          column: expect.any(Number),
+          column,
         });
       },
     );
@@ -763,6 +767,7 @@ describe("one fixture per IR kind", () => {
         "<Panel><@head>A</@head><@head>B</@head></Panel>",
         declaredInput({ head: attrTagDecl() }),
         "may appear at most once",
+        25,
       ],
       [
         "singular in for",
@@ -770,57 +775,63 @@ describe("one fixture per IR kind", () => {
         "<Panel><for|x| of=input.xs><@head>${x}</@head></for></Panel>",
         declaredInput({ head: attrTagDecl() }),
         "may not appear inside `<for>`",
+        7,
       ],
       [
         "params present when undeclared",
         "<Panel><@row|value|/></Panel>",
         declaredInput({ row: attrTagDecl() }),
         "declares no params in `<Panel>`; remove `|…|`",
+        8,
       ],
       [
         "missing required",
         "<Panel/>",
         declaredInput({ head: attrTagDecl({ cardinality: "required" }) }),
         "missing required attribute tag `<@head>`",
+        1,
       ],
       [
         "required conditional",
         "<Panel><if=input.ok><@head>A</@head></if></Panel>",
         declaredInput({ head: attrTagDecl({ cardinality: "required" }) }),
         "required but not provided on every `<if>` path",
+        7,
       ],
       [
         "closed Input",
         "<Panel><@other/></Panel>",
         declaredInput({}),
         "declares no attribute tag `other`",
+        8,
       ],
       [
         "plain prop",
         "<Panel><@head/></Panel>",
         declaredInput({}, ["head"]),
         "declared as a plain prop",
+        8,
       ],
       [
         "params missing",
         "<Panel><@row/></Panel>",
         declaredInput({ row: attrTagDecl({ hasParams: true }) }),
         "declares params in `<Panel>`; add `|…|`",
+        8,
       ],
     ])(
       "rejects %s with a positioned message",
-      (_case, source, input, message) => {
+      (_case, source, input, message, column) => {
         let error: unknown;
         try {
           lowerSource(source, v2(), input);
         } catch (caught) {
           error = caught;
         }
-        expect(error).toMatchObject({
-          message: expect.stringContaining(message),
-          line: 1,
-          column: expect.any(Number),
-        });
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain(message);
+        expect(error).toHaveProperty("line", 1);
+        expect(error).toHaveProperty("column", column);
       },
     );
 
@@ -877,14 +888,20 @@ describe("one fixture per IR kind", () => {
     });
 
     it.each([
-      ["attributes on an attribute tag", '<Panel><@head class="x"/></Panel>'],
       [
-        "an attribute tag inside `<if>`",
+        "`<@head>`: attributes on attribute tags aren't",
+        '<Panel><@head class="x"/></Panel>',
+      ],
+      [
+        "attribute tags inside `<if>` aren't",
         "<Panel><if=input.ok><@head/></if></Panel>",
       ],
-      ["nested attribute tags", "<Panel><@head><@icon/></@head></Panel>"],
       [
-        "an attribute tag inside `<for>`",
+        "`<@head>`: nested attribute tags aren't",
+        "<Panel><@head><@icon/></@head></Panel>",
+      ],
+      [
+        "attribute tags inside `<for>` aren't",
         "<Panel><for|x| of=input.xs><@head/></for></Panel>",
       ],
     ])("gates %s for an unported host", (construct, source) => {
@@ -896,11 +913,12 @@ describe("one fixture per IR kind", () => {
             isComponent: (name) => name === "Panel",
           }),
         ),
-      ).toThrowError(`${construct} isn't supported by LegacyHost yet`);
+      ).toThrowError(`${construct} supported by LegacyHost yet`);
     });
 
     it("gates a zero-occurrence declared array on a legacy host", () => {
-      expect(() =>
+      let error: unknown;
+      try {
         lowerSource(
           "<Panel/>",
           fakeDeclarations({
@@ -908,10 +926,16 @@ describe("one fixture per IR kind", () => {
             isComponent: (name) => name === "Panel",
           }),
           declaredInput({ items: attrTagDecl({ cardinality: "array" }) }),
-        ),
-      ).toThrowError(
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
         "the declared shape of `<@items>` isn't supported by @mxlang/legacy yet",
       );
+      expect(error).toHaveProperty("line", 1);
+      expect(error).toHaveProperty("column", 1);
     });
 
     it("gates control-flow attribute tags on a claimed dynamic HostTag", () => {
@@ -925,7 +949,7 @@ describe("one fixture per IR kind", () => {
           }),
         ),
       ).toThrowError(
-        "an attribute tag inside `<if>` isn't supported by @mxlang/legacy yet",
+        "attribute tags inside `<if>` aren't supported by @mxlang/legacy yet",
       );
     });
 
@@ -1007,8 +1031,39 @@ describe("one fixture per IR kind", () => {
         "import type { AttrTag as T } from '@mxlang/core'\nexport interface Input { one?: T; two?: AttrTag }",
         true,
       ],
+      [
+        "local imported binding",
+        "import type { Other as AttrTag } from './types'\nexport interface Input { head?: AttrTag }",
+        false,
+      ],
       ["prefixed name", "export interface Input { head?: MyAttrTag }", false],
       ["qualified name", "export interface Input { head?: x.AttrTag }", false],
+      [
+        "local class",
+        "static class AttrTag {}\nexport interface Input { head?: AttrTag }",
+        false,
+      ],
+      [
+        "local enum",
+        "static enum AttrTag { One }\nexport interface Input { head?: AttrTag }",
+        false,
+      ],
+      ["interface heritage", "export interface Input extends AttrTag {}", true],
+      [
+        "decorated static parse failure",
+        "static @dec class A {}\nexport interface Input { head?: AttrTag }",
+        true,
+      ],
+      [
+        "duplicate static const parse failure",
+        "static const x = 1\nstatic const x = 2\nexport interface Input { head?: AttrTag }",
+        true,
+      ],
+      [
+        "duplicate static declarations parse failure",
+        "static let y = 1\nstatic var y = 2\nexport interface Input { head?: AttrTag }",
+        true,
+      ],
     ])(
       "derives AttrTag imports from parsed type references: %s",
       (_case, source, expected) => {
@@ -1051,7 +1106,7 @@ describe("one fixture per IR kind", () => {
       });
     });
 
-    it("uses template Input cardinality instead of custom-tag repeatability", () => {
+    it("enforces template sidecar repeatability before Input cardinality", () => {
       const templateTag: CustomTag = {
         attributeTags: { item: {} },
         template: {
@@ -1060,7 +1115,7 @@ describe("one fixture per IR kind", () => {
           source: "<${input.item}/>",
         },
       } as CustomTag;
-      const component = find(
+      expect(() =>
         lowerSource(
           "<list><@item/><@item/></list>",
           v2(),
@@ -1069,12 +1124,8 @@ describe("one fixture per IR kind", () => {
           }),
           undefined,
           { list: templateTag },
-        ).body,
-        "Component",
-      );
-      expect(component.attrTagProps).toMatchObject([
-        { name: "item", cardinality: "array" },
-      ]);
+        ),
+      ).toThrowError("attribute tag `<@item>` may not be repeated");
     });
   });
 
