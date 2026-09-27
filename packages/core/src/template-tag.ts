@@ -12,6 +12,7 @@
  */
 
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx } from "./core.ts";
 import { markoBabel, TranslateError, warn } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
@@ -211,12 +212,21 @@ export function metadataForTemplate(
   } catch (error) {
     templateCache.delete(tag.filename);
     if (error instanceof TranslateError && error.file === undefined) {
-      throw new TranslateError(
+      const positioned = new TranslateError(
         error.message,
         error.line,
         error.column,
         tag.filename,
       );
+      const carried = (error as { [CALLEE_INPUT_ERROR]?: unknown })[
+        CALLEE_INPUT_ERROR
+      ];
+      if (carried !== undefined) {
+        Object.defineProperty(positioned, CALLEE_INPUT_ERROR, {
+          value: carried,
+        });
+      }
+      throw positioned;
     }
     throw error;
   }

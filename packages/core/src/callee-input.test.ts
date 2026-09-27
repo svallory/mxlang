@@ -33,6 +33,7 @@ import {
 } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
 import type { MxWarning } from "./core.ts";
+import type { CustomTag } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import { newCtx, printExpression } from "./index.ts";
 import type { ComponentTarget, Ir } from "./ir.ts";
@@ -1437,6 +1438,35 @@ describe("readCalleeInput", () => {
       ),
     ).toThrowError(
       `can't read \`<Card>\`'s Input (${fixture("parse-error.ts")}:2:23): Unexpected token`,
+    );
+  });
+
+  it("reports a discovered callee's own bad config once as a per-tag error", () => {
+    const path = fixture("bad-own-config.mx");
+    const source = fixtureSource("bad-own-config.mx");
+    expect(() =>
+      compileSource(
+        "<bad-cfg><@x/></bad-cfg>\n",
+        CALLER,
+        {
+          ...declarations(),
+          attrTags: 2,
+        },
+        {
+          emitIr: () => "",
+          customTags: {
+            "bad-cfg": {
+              template: {
+                filename: path,
+                source,
+                mtimeMs: statSync(path).mtimeMs,
+              },
+            } as CustomTag,
+          },
+        },
+      ),
+    ).toThrowError(
+      `can't read \`<bad-cfg>\`'s declaration of \`x\` (${path}:1); declare this attribute tag's config literally`,
     );
   });
 
