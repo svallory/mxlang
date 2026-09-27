@@ -337,6 +337,7 @@
         "@babel/parser": "7.29.8",
         "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",
+        "@mxlang/parser": "workspace:*",
         "magic-string": "0.30.21",
       },
       "devDependencies": {

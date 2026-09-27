@@ -1,0 +1,5 @@
+/*
+export interface Input { fake?: AttrTag<{ as: "renderable" }> }
+*/
+export function Card(props: Input) { return <div class={on: true}>hi</div>; }
+export interface Input { real?: AttrTag }

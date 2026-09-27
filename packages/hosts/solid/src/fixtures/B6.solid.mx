@@ -1,0 +1,3 @@
+import type { Cfg } from "./c-dep";
+export default (props: Input) => <div class={on: true}>{props.x}</div>;
+export interface Input { x?: AttrTag<Cfg> }
