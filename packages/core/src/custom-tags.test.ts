@@ -197,10 +197,14 @@ describe("custom tag transforms", () => {
     } as CustomTag;
     try {
       expect(() =>
-        lowerWithTags("<tag><@item/></tag>\n", { tag }, {
-          ...fakeDeclarations(),
-          attrTags: 2,
-        }),
+        lowerWithTags(
+          "<tag><@item/></tag>\n",
+          { tag },
+          {
+            ...fakeDeclarations(),
+            attrTags: 2,
+          },
+        ),
       ).toThrowError("`<@item>` may appear at most once");
     } finally {
       rmSync(directory, { recursive: true, force: true });
@@ -222,10 +226,14 @@ describe("custom tag transforms", () => {
       },
     } as CustomTag;
     try {
-      const ir = lowerWithTags("<tag><@item/><@item/></tag>\n", { tag }, {
-        ...fakeDeclarations(),
-        attrTags: 2,
-      });
+      const ir = lowerWithTags(
+        "<tag><@item/><@item/></tag>\n",
+        { tag },
+        {
+          ...fakeDeclarations(),
+          attrTags: 2,
+        },
+      );
       expect(find(ir.body, "Component").attrTagProps).toMatchObject([
         { name: "item", cardinality: "array" },
       ]);
