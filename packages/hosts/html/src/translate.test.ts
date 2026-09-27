@@ -544,6 +544,47 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("<h1>G</h1><p>A:I</p><p>B:J</p>");
   });
 
+  it("unifies nested shape across conditional parent occurrences", async () => {
+    const sources = {
+      "row.mx":
+        '<p>${typeof input.tab.icon}:${input.tab.icon.k || "-"}:<${input.tab.icon.content}/></p>',
+      "entry.mx":
+        'import Row from "./row.mx"\n<Row><if=input.pickBare><@tab><@icon>I</@icon></@tab></if><else><@tab><@icon k="K">J</@icon></@tab></else></Row>',
+    };
+    expect(await renderModules(sources, "entry.mx", { pickBare: true })).toBe(
+      "<p>object:-:I</p>",
+    );
+    expect(await renderModules(sources, "entry.mx", { pickBare: false })).toBe(
+      "<p>object:K:J</p>",
+    );
+  });
+
+  it("unifies nested shape across repeated parent occurrences", async () => {
+    const html = await renderModules(
+      {
+        "row.mx":
+          '<for|tab| of=input.tab><p>${typeof tab.icon}:${tab.icon.k || "-"}:<${tab.icon.content}/></p></for>',
+        "entry.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon k="K">J</@icon></@tab></Row>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<p>object:-:I</p><p>object:K:J</p>");
+  });
+
+  it("unifies nested one-versus-array cardinality", async () => {
+    const html = await renderModules(
+      {
+        "row.mx":
+          "<for|tab| of=input.tab><p>${Array.isArray(tab.icon)}:<for|icon| of=tab.icon><${icon}/></for></p></for>",
+        "entry.mx":
+          'import Row from "./row.mx"\n<Row><@tab><@icon>I</@icon></@tab><@tab><@icon>J</@icon><@icon>K</@icon></@tab></Row>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<p>true:I</p><p>true:JK</p>");
+  });
+
   it("uses the data fallback for an untyped dynamic callee", async () => {
     const html = await renderModules(
       {
