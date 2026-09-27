@@ -1,13 +1,13 @@
-import { createSignal } from "solid-js";
+import { createSignal, type JSX } from "solid-js";
 
 interface User {
   name: string;
 }
 
 function Layout(props: {
-  header: unknown;
-  footer: (year: number) => unknown;
-  children: unknown;
+  header: JSX.Element;
+  footer: (year: number) => JSX.Element;
+  children: JSX.Element;
 }) {
   // Each slot is wrapped in an element rather than sitting as a bare
   // placeholder run: MX drops the whitespace-only lines between siblings

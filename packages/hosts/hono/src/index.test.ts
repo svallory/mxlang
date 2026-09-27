@@ -1,3 +1,4 @@
+import { type Child, createElement, jsx } from "hono/jsx";
 import { describe, expect, it } from "vitest";
 import { compileHonoMx, honoDeclarations, honoTarget } from "./index.ts";
 
@@ -21,6 +22,59 @@ describe("Hono target", () => {
     const code = compile('<label class="field" for="name">Name</label>');
     expect(code).toContain("/** @jsxImportSource hono/jsx */");
     expect(code).toContain('<label class="field" for="name">Name</label>');
+  });
+
+  it("imports Hono's specialised AttrTag type", () => {
+    expect(
+      compile("export interface Input { head?: AttrTag }\n<p>x</p>"),
+    ).toContain('import type { AttrTag } from "@mxlang/hono";');
+  });
+
+  it("renders a data-shaped attribute tag through the shared dynamic path", async () => {
+    const { dirname, join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const scratch = mkdtempSync(join(tmpdir(), "mx-hono-attrtag-"));
+    try {
+      symlinkSync(
+        dirname(dirname(dirname(require.resolve("hono")))),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            jsx: "react-jsx",
+            jsxImportSource: "hono/jsx",
+          },
+        }),
+      );
+      const entry = join(scratch, "attrtag.tsx");
+      writeFileSync(
+        entry,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        compileHonoMx("<${input.tag}><@head>H</@head></>", entry).code,
+      );
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: {
+          tag: (props: { head: { content: Child } }) => Child;
+        }) => Child;
+      };
+      const output = await jsx(mod.default, {
+        tag: (props: { head: { content: Child } }) =>
+          createElement("section", null, props.head.content as never),
+      }).toString();
+      expect(output).toBe("<section>H</section>");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it("uses Hono's raw HTML prop", () => {

@@ -21,6 +21,13 @@ third knob, `mxClassModule`, lets `mxClass` import from this package's own
 `@mxlang/hono` dependency, through the same resolver used by Vite, the
 language server and the TypeScript plugin.
 
+Attribute tags share Preact's v2 `attrTagProps` emission (decisions 106–107):
+data values carry `{ ...attrs, ...nestedProps, content }`, renderable values
+are passed bare, arrays are real arrays, and control flow stays expression
+shaped. This package exports `AttrTag<C>` specialised to Hono's `Child`, and
+an ambient `AttrTag` reference in `.mx` emits a type-only import from
+`@mxlang/hono`.
+
 `@mxlang/hono/bun` registers a Bun plugin loading `.mx` as
 `loader: "tsx"` — the same shape as `@mxlang/html/bun`'s plugin, `"tsx"`
 instead of `"ts"` since this host's compiled output contains JSX. Bun honors
@@ -34,11 +41,10 @@ broke Hono's `ErrorBoundary` for a non-throwing child with an opaque
 a *throwing* child was also present in the tree. See `examples/hono-app`'s
 `dev`/`e2e` scripts, which run under the example's own `tsconfig.json`.
 
-`bun run oracle:hono` renders the stock 43 fixtures through `hono/jsx`
+`bun run oracle:hono` renders the stock 45 fixtures through `hono/jsx`
 (`String(jsx(Component, input))`, awaited when the tree contains a caught
-error — `ErrorBoundary` resolves asynchronously once its child throws): **30
-pass, 13 skipped(reason), 0 bugs**, identical to `oracle:preact`/
+error — `ErrorBoundary` resolves asynchronously once its child throws): **29
+pass, 16 skipped(reason), 0 bugs**, identical to `oracle:preact`/
 `oracle:react` since all three share the emitter and skip list. The live
 `<try>`/`<for>` behavior is covered by `examples/hono-app`'s Playwright e2e
 against a real Hono-on-Bun server.
-

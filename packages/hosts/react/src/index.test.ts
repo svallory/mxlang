@@ -1,3 +1,5 @@
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { compileReactMx, reactDeclarations, reactTarget } from "./index.ts";
 
@@ -23,6 +25,57 @@ describe("React target", () => {
     expect(code).toContain(
       '<label className="field" htmlFor="name">Name</label>',
     );
+  });
+
+  it("imports React's specialised AttrTag type", () => {
+    expect(
+      compile("export interface Input { head?: AttrTag }\n<p>x</p>"),
+    ).toContain('import type { AttrTag } from "@mxlang/react";');
+  });
+
+  it("renders a data-shaped attribute tag through the shared dynamic path", async () => {
+    const { dirname, join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const scratch = mkdtempSync(join(tmpdir(), "mx-react-attrtag-"));
+    try {
+      symlinkSync(
+        dirname(dirname(require.resolve("react/package.json"))),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "react" },
+        }),
+      );
+      const entry = join(scratch, "attrtag.tsx");
+      writeFileSync(
+        entry,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        compileReactMx("<${input.tag}><@head>H</@head></>", entry).code,
+      );
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: {
+          tag: (props: { head: { content: ReactNode } }) => ReactNode;
+        }) => ReactNode;
+      };
+      const html = renderToStaticMarkup(
+        createElement(mod.default, {
+          tag: (props) => createElement("section", null, props.head.content),
+        }),
+      );
+      expect(html).toBe("<section>H</section>");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it("uses React DOM's raw HTML prop", () => {
