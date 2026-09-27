@@ -1,4 +1,4 @@
-import { type ParserOptions, parse as parseBabel } from "@babel/parser";
+import { parse as parseBabel } from "@babel/parser";
 import {
   type CustomTag,
   type GeneratedMapping,
@@ -11,6 +11,7 @@ import {
   registerCalleeInputReader,
   TranslateError,
 } from "@mxlang/core";
+import { parse as parseMx } from "@mxlang/parser";
 import MagicString from "magic-string";
 import {
   collectReturnVars,
@@ -32,52 +33,10 @@ export {
 };
 
 function parseSolidCalleeProgram(source: string, path: string): Node[] {
-  const options: ParserOptions = {
-    sourceType: "module",
-    sourceFilename: path,
-    plugins: ["typescript", "jsx"],
-  };
-  try {
-    return parseBabel(source, options).program.body;
-  } catch {
-    // MX-only JSX forms such as `<for|item|>` and object-style attributes are
-    // not upstream TSX. Keep every declaration at its original offset while
-    // blanking the rest of the module, then let Babel parse the resulting
-    // ordinary TypeScript. Unlike slicing a module header, this also sees an
-    // Input written after the component implementation.
-    const declarations = source.replace(/[^\n\r]/g, " ").split("");
-    const starts = source.matchAll(
-      /^[ \t]*(?:(?:import|interface|type)\b|export\s+(?:interface|type|\{))/gm,
-    );
-    let copiedThrough = 0;
-    for (const match of starts) {
-      const start = match.index;
-      if (start < copiedThrough) continue;
-      for (let end = source.indexOf("\n", start); ; ) {
-        if (end === -1) end = source.length;
-        else end++;
-        const fragment = source.slice(start, end);
-        try {
-          if (parseBabel(fragment, options).program.body.length === 0) {
-            if (end === source.length) break;
-            end = source.indexOf("\n", end);
-            continue;
-          }
-          declarations.splice(start, end - start, ...fragment);
-          copiedThrough = end;
-          break;
-        } catch {
-          if (end === source.length) break;
-          end = source.indexOf("\n", end);
-        }
-      }
-    }
-    try {
-      return parseBabel(declarations.join(""), options).program.body;
-    } catch {
-      return [];
-    }
-  }
+  return parseMx(source, path, {
+    mxRegionCompile: ({ source: region, ...options }) =>
+      compileSolidMx(region, options),
+  }).program.body as Node[];
 }
 
 registerCalleeInputReader(".solid.mx", ({ path, source, analyze }) => {

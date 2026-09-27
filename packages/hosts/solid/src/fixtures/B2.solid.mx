@@ -1,0 +1,5 @@
+const docs = `
+export interface Input { fake?: AttrTag }
+`;
+export function Card(props: Input) { return <div class={on: true}>{docs}</div>; }
+export interface Input { real?: AttrTag }

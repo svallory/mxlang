@@ -1,0 +1,5 @@
+export function Card(props: Input) {
+  interface AttrTag { local: true }
+  return <div class={on: true}>hi</div>;
+}
+export interface Input { real?: AttrTag }

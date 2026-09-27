@@ -344,6 +344,71 @@ describe("Solid callee Input reader", () => {
       dependencies: [path],
     });
   });
+
+  it.each([
+    ["B1", "real", "data", [], "AttrTag"],
+    ["B2", "real", "data", [], "AttrTag"],
+    [
+      "B3",
+      "real",
+      "renderable",
+      ["label", "tpl"],
+      'AttrTag<{ as: "renderable" }>',
+    ],
+    ["B4", "real", "data", [], "AttrTag"],
+    ["B5", "real", "renderable", [], 'AttrTag<{\n  as: "renderable" }>'],
+    ["B6", "x", "renderable", [], "AttrTag<Cfg>"],
+  ] as const)(
+    "reads only the real top-level Input in reviewer probe %s",
+    (name, attrName, as, otherProps, typeText) => {
+      const path = join(HERE, "fixtures", `${name}.solid.mx`);
+      const source = readFileSync(path, "utf8");
+      const start = source.lastIndexOf(typeText);
+      const dependency = join(HERE, "fixtures", "c-dep");
+      expect(
+        readCalleeInput(
+          { kind: "name", name: "Card", resolvedPath: path },
+          { importer: join(HERE, "fixture.mx") },
+        ),
+      ).toEqual({
+        input: {
+          kind: "declared",
+          path,
+          attrTags: new Map([
+            [
+              attrName,
+              {
+                cardinality: "optional",
+                as,
+                hasAttrs: false,
+                hasParams: false,
+                nested: new Map(),
+                nestedOpen: false,
+                span: {
+                  file: path,
+                  sourceStart: start,
+                  sourceEnd: start + typeText.length,
+                },
+              },
+            ],
+          ]),
+          otherProps: new Set(otherProps),
+          open: false,
+        },
+        dependencies:
+          name === "B6"
+            ? [
+                path,
+                dependency,
+                `${dependency}.mx`,
+                `${dependency}.solid.mx`,
+                `${dependency}.tsx`,
+                `${dependency}.ts`,
+              ]
+            : [path],
+      });
+    },
+  );
 });
 
 describe("Solid host errors", () => {

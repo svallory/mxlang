@@ -1,0 +1,6 @@
+export interface Input {
+  label: "} export function x() {";
+  tpl: `a{${string}}b`;
+  real?: AttrTag<{ as: "renderable" }>;
+}
+export function Card(props: Input) { return <div class={on: true}>hi</div>; }
