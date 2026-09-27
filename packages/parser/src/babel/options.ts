@@ -133,6 +133,9 @@ export interface Options {
    */
   mxRegionCompile?: import("../mx/region-compile.ts").MxRegionCompile;
 
+  /** MX FORK: surrounding module imports pre-collected by `parse`. */
+  mxImportSpecifiers?: ReadonlyMap<string, string>;
+
   startIndex?: number;
 
   /**
@@ -208,7 +211,8 @@ type KeepOptionalKeys =
   | "strictMode"
   | "mxCustomTags"
   | "mxRegionPositionCheck"
-  | "mxRegionCompile";
+  | "mxRegionCompile"
+  | "mxImportSpecifiers";
 export type OptionsWithDefaults = Omit<Required<Options>, KeepOptionalKeys> &
   Pick<Options, KeepOptionalKeys>;
 
@@ -233,6 +237,8 @@ function createDefaultOptions(): OptionsWithDefaults {
     // MX FORK: same reasoning again — `undefined` here, not omitted, or
     // `getOptions` never copies a caller's hook across.
     mxRegionCompile: undefined,
+    // MX FORK: pre-collected surrounding module imports for region compiles.
+    mxImportSpecifiers: undefined,
     startIndex: 0,
     // Column (0-based) from which to start counting source. Useful for
     // integration with other tools.

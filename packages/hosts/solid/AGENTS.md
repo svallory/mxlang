@@ -55,8 +55,22 @@ Two facts worth knowing before touching it:
   `attrs.ts` (the pre-core-IR lowering) are deleted; that lowering now lives
   entirely in this package. See `packages/parser/README.md`.
 
+- **Attribute-tag values are accessors on Solid (decisions 106–107).** This
+  host declares `attrTags: 2` and emits only core's resolved `attrTagProps`.
+  Solid 2.0.0-rc.7 client measurements rule out an eager JSX value (one DOM
+  node moves when rendered twice) and a getter (fresh nodes, but the value
+  handed to `<Dynamic>` is not a component). The reusable renderable is
+  `() => SolidElement`: it stays live, renders more than once, works through
+  direct insertion and `<Dynamic>`, and composes inside reactive arrays.
+  Parameters add the outer render-prop function, `(p) => () => JSX`.
+- **A region receives its surrounding module imports and reports callee
+  dependencies.** `compileSolidMx` seeds `ctx.importSpecifiers` from the
+  parser bridge and returns `ctx.dependencies`, allowing imported callees to
+  resolve their `Input` and Vite to invalidate callers. The registered
+  `.solid.mx` callee reader replaces regions with `null`; declaration reading
+  needs no output, and compiling them there would recurse for mutual imports.
+
 Decision 72's subset rule removed four SolidMX constructs real Marko itself
 rejects (tag params on `<if>`, tag params and attribute tags on native
 elements, `<fragment>`) — see `divergences.md`'s "Deferred to MX 2" table for
 each construct, Marko's exact error, and the test that used to cover it.
-

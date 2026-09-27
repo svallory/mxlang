@@ -51,6 +51,12 @@ export function parse(
   filename: string,
   options: MxParseOptions = {},
 ): File {
+  const mx = options.mx ?? filename.endsWith(".solid.mx");
+  const importSpecifiers =
+    options.mxImportSpecifiers ??
+    (mx && /\bimport\b/.test(source)
+      ? collectModuleImportSpecifiers(source, filename, options)
+      : new Map<string, string>());
   const file = babelParse(source, {
     sourceType: "module",
     sourceFilename: filename,
@@ -63,10 +69,50 @@ export function parse(
     // whose regions this extension test would never match) can turn the
     // grammar on for itself. Left unset it is the `.solid.mx` test that has
     // always been here, so every existing caller is unaffected.
-    mx: options.mx ?? filename.endsWith(".solid.mx"),
+    mx,
+    mxImportSpecifiers: importSpecifiers,
   } as ParserOptions) as unknown as File;
   hoistRegionImports(file, filename);
   return file;
+}
+
+/**
+ * Reads the surrounding TypeScript module's imports before lowering any MX
+ * region. The real parse must lower a region immediately so Babel can keep
+ * parsing the expression, but a callee import may appear anywhere in the
+ * module. A declaration-only pre-pass replaces every region with `null`,
+ * avoiding host work and giving us Babel's exact import grammar rather than
+ * a regex approximation.
+ */
+function collectModuleImportSpecifiers(
+  source: string,
+  filename: string,
+  options: MxParseOptions,
+): Map<string, string> {
+  const file = babelParse(source, {
+    sourceType: "module",
+    sourceFilename: filename,
+    plugins: MX_DEFAULT_PLUGINS,
+    ...options,
+    mx: true,
+    mxRegionCompile: () => ({ code: "null" }),
+    mxImportSpecifiers: new Map<string, string>(),
+  } as ParserOptions) as unknown as File;
+  const imports = new Map<string, string>();
+  for (const statement of file.program.body as unknown as Array<{
+    type?: string;
+    source?: { value?: unknown };
+    specifiers?: Array<{ local?: { name?: unknown } }>;
+  }>) {
+    if (statement.type !== "ImportDeclaration") continue;
+    const specifier = statement.source?.value;
+    if (typeof specifier !== "string") continue;
+    for (const binding of statement.specifiers ?? []) {
+      const local = binding.local?.name;
+      if (typeof local === "string") imports.set(local, specifier);
+    }
+  }
+  return imports;
 }
 
 /**

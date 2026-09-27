@@ -71,6 +71,8 @@ declare module "@mxlang/parser" {
     /** Where this region appeared, the same context `mxRegionPositionCheck`
      *  was given. Undefined when no `mxRegionPositionCheck` is set. */
     context?: MxRegionContext;
+    /** Imports declared by the surrounding module, local binding -> specifier. */
+    importSpecifiers: ReadonlyMap<string, string>;
   }
 
   /** What the bridge needs back from a host. */
@@ -82,6 +84,8 @@ declare module "@mxlang/parser" {
     hoistedImports?: MxRegionHoistedImport[];
     /** `/var` names this region's call sites bind, for the caller to declare. */
     returnVars?: string[];
+    /** Files read while resolving callees used by this region. */
+    dependencies?: string[];
   }
 
   /** Lowers one MX region to text the surrounding grammar can parse. */
@@ -116,6 +120,8 @@ declare module "@mxlang/parser" {
      * `mxCustomTags` above.
      */
     mxRegionCompile?: MxRegionCompile;
+    /** Internal bridge input populated from the surrounding module. */
+    mxImportSpecifiers?: ReadonlyMap<string, string>;
     /**
      * Turns the MX grammar on explicitly, for a caller owning a file kind
      * whose extension `parse`'s own `.solid.mx` test would not match. Unset,
@@ -231,6 +237,7 @@ declare module "@mxlang/parser" {
   export interface PrintResult {
     code: string;
     map: RawSourceMap;
+    dependencies: string[];
   }
 
   export interface PrintOptions {

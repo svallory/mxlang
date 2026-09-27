@@ -16,7 +16,6 @@ import type { Plugin } from "vite";
 type SolidModule = typeof import("@mxlang/solid");
 
 let solidModule: Promise<SolidModule> | undefined;
-let solidRegionCompile: MxRegionCompile | undefined;
 
 function loadSolidModule(): Promise<SolidModule> {
   if (!solidModule) solidModule = import("@mxlang/solid");
@@ -33,12 +32,15 @@ async function registerSolidCalleeReader(): Promise<void> {
   }
 }
 
-async function loadSolidRegionCompile(): Promise<MxRegionCompile> {
-  if (!solidRegionCompile) {
-    const { compileSolidMx } = await loadSolidModule();
-    solidRegionCompile = ({ source, ...rest }) => compileSolidMx(source, rest);
-  }
-  return solidRegionCompile;
+async function loadSolidRegionCompile(
+  dependencies?: Set<string>,
+): Promise<MxRegionCompile> {
+  const { compileSolidMx } = await loadSolidModule();
+  return ({ source, ...rest }) => {
+    const result = compileSolidMx(source, rest);
+    for (const dependency of result.dependencies) dependencies?.add(dependency);
+    return result;
+  };
 }
 
 /**
@@ -687,10 +689,12 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // with it or a tag registered here is unknown inside a `.solid.mx`.
         // The parser no longer defaults to this host, so it is supplied
         // explicitly here, the same as every other `.solid.mx` caller.
+        const dependencies = new Set<string>();
         const { code: printed, map } = print(code, source, {
           customTags: tagsFor(source, warn),
-          mxRegionCompile: await loadSolidRegionCompile(),
+          mxRegionCompile: await loadSolidRegionCompile(dependencies),
         });
+        recordDependencies(source, [...dependencies]);
         return { code: printed, map };
       } catch (err) {
         if (!isSyntaxError(err) || !err.loc) throw err;

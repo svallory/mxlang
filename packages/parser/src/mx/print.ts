@@ -21,6 +21,7 @@ export interface RawSourceMap {
 export interface PrintResult {
   code: string;
   map: RawSourceMap;
+  dependencies: string[];
 }
 
 export interface PrintOptions {
@@ -85,7 +86,35 @@ export function printAst(ast: File, filename: string): PrintResult {
     throw new Error(`@babel/generator returned no source map for ${filename}`);
   }
 
-  return { code: result.code, map: result.map as RawSourceMap };
+  return {
+    code: result.code,
+    map: result.map as RawSourceMap,
+    dependencies: regionDependencies(ast),
+  };
+}
+
+function regionDependencies(ast: File): string[] {
+  const dependencies = new Set<string>();
+  const seen = new Set<unknown>();
+  const visit = (node: unknown): void => {
+    if (node === null || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    const mx = (
+      record.extra as { mx?: { dependencies?: string[] } } | undefined
+    )?.mx;
+    for (const dependency of mx?.dependencies ?? [])
+      dependencies.add(dependency);
+    for (const key of Object.keys(record)) {
+      if (key !== "loc") visit(record[key]);
+    }
+  };
+  visit(ast.program.body);
+  return [...dependencies];
 }
 
 /**

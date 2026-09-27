@@ -1,11 +1,14 @@
 import {
   type Attr,
   type AttributeTag,
+  type AttributeTagNode,
+  type AttrTagProp,
   concatMapped,
   destructuredNames,
   drive,
   type Emitter,
   type Expr,
+  type ForHead,
   type HostDeclarations,
   type Ir,
   type IrNode,
@@ -145,6 +148,7 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
 /** Resolve-time questions for Solid's JSX target. */
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/solid",
+  attrTags: 2,
   tags: STATEFUL_ERRORS,
   isElement: (name) => !/^[A-Z]/.test(name),
   isComponent: (name) => /^[A-Z]/.test(name),
@@ -450,51 +454,261 @@ function blockExpression(nodes: IrNode[]): MappedCode {
   return concatMapped("<>", renderWithNewEmitter(content), "</>");
 }
 
-function attributeTagValue(tag: AttributeTag): MappedCode {
-  const value = blockExpression(tag.block.children);
-  if (!tag.block.hasParams) return value;
-  return concatMapped(`(${tag.block.params.join(", ")}) => `, value);
+function attributeTagAttrValue(
+  attr: Exclude<Attr, { kind: "spread" }>,
+): string {
+  switch (attr.kind) {
+    case "boolean":
+      return "true";
+    case "static":
+      return JSON.stringify(attr.value);
+    case "bound":
+      return fail(
+        "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
+        attr,
+      );
+    case "event":
+    case "dynamic":
+      if (
+        attr.kind === "dynamic" &&
+        attr.name === "style" &&
+        attr.value.shape !== "object"
+      ) {
+        return fail("`style=` with a non-object value", attr);
+      }
+      return methodExpression(attr.value) ?? attr.value.code;
+  }
 }
 
 /**
- * A component's `<@name>` attribute tags, one JSX prop per distinct name.
+ * One attribute-tag body in Solid's reusable renderable shape.
  *
- * A name given more than once becomes an **array**, matching
- * `@mxlang/preact`. Emitting the prop twice (the shape this replaced) let
- * the last one win, so a callee's `<for|it| of=input.item>` iterated a
- * single node instead of every tag.
- *
- * This is MX's own shape, not Marko's (decision 104,
- * `attribute-tag-silent-drops`): attribute-tag value cardinality/shape is
- * being redesigned under decision 106 — the consumer's `Input` type will
- * declare what it expects per name — a deliberate divergence from Marko's
- * own `attrTag`/`attrTags` runtime record rather than an attempt to match
- * it.
+ * Measured on Solid 2.0.0-rc.7: an eager JSX value is a DOM node and moves
+ * when inserted twice; a getter creates fresh nodes but fails when handed to
+ * `<Dynamic component={...}>`; an accessor stays reactive, creates fresh
+ * nodes per insertion, and works through both direct insertion and Dynamic.
+ * Solid's host renderable is therefore an accessor. Parameters add the outer
+ * render-prop function declared by `AttrTagOf`, so `(p) => () => JSX` is the
+ * intentional two-function shape.
  */
-function attributeTags(tags: AttributeTag[]): MappedCode {
-  const byName = new Map<
-    string,
-    Array<{ tag: AttributeTag; value: MappedCode }>
-  >();
-  for (const tag of tags) {
-    const value = { tag, value: attributeTagValue(tag) };
-    const values = byName.get(tag.name);
-    if (values) values.push(value);
-    else byName.set(tag.name, [value]);
-  }
-  return concatMapped(
-    ...[...byName].map(([name, values]) => {
-      const nameCode = mapped(name, values[0]?.tag.nameSpan ?? null);
-      if (values.length === 1) {
-        return concatMapped(" ", nameCode, "={", values[0]?.value ?? "", "}");
-      }
-      const joined = values.flatMap(({ value }, index) =>
-        index === 0 ? [value] : [", ", value],
+function attributeTagRenderable(tag: AttributeTag): MappedCode {
+  if (!tag.hasBody) return concatMapped("undefined");
+  const body = blockExpression(tag.block.children);
+  if (!tag.block.hasParams) return concatMapped("() => ", body);
+  return concatMapped(`(${tag.block.params.join(", ")}) => () => `, body);
+}
+
+function attributeTagValue(
+  tag: AttributeTag,
+  as: AttrTagProp["as"],
+): MappedCode {
+  const content = attributeTagRenderable(tag);
+  if (as === "renderable") return content;
+
+  const parts: Array<string | MappedCode> = [];
+  for (const attr of tag.attrs) {
+    if (parts.length > 0) parts.push(", ");
+    if (attr.kind === "spread") parts.push(`...${attr.value.code}`);
+    else
+      parts.push(
+        `${JSON.stringify(attr.name)}: ${attributeTagAttrValue(attr)}`,
       );
-      // Only the first occurrence's name has a real position in the
-      // generated text; a repeated `<@name>` contributes another array
-      // entry with no name string of its own to map to.
-      return concatMapped(" ", nameCode, "={[", ...joined, "]}");
+  }
+  for (const prop of tag.attrTagProps) {
+    if (parts.length > 0) parts.push(", ");
+    parts.push(`${JSON.stringify(prop.name)}: `, attributeTagProp(prop));
+  }
+  if (parts.length > 0) parts.push(", ");
+  parts.push("content: ", content);
+  return concatMapped("{ ", ...parts, " }");
+}
+
+function firstAttributeTag(
+  nodes: AttributeTagNode[],
+): AttributeTag | undefined {
+  for (const node of nodes) {
+    if (node.kind === "AttributeTag") return node.tag;
+    if (node.kind === "AttributeTagFor") {
+      const found = firstAttributeTag(node.nodes);
+      if (found) return found;
+    } else {
+      for (const branch of node.branches) {
+        const found = firstAttributeTag(branch.nodes);
+        if (found) return found;
+      }
+    }
+  }
+  return undefined;
+}
+
+function attributeTagSingle(
+  nodes: AttributeTagNode[],
+  as: AttrTagProp["as"],
+): MappedCode {
+  if (nodes.length === 0) return concatMapped("undefined");
+  const node = nodes[0] as AttributeTagNode;
+  if (node.kind === "AttributeTag") return attributeTagValue(node.tag, as);
+  if (node.kind === "AttributeTagFor") {
+    return concatMapped(
+      "(",
+      attributeTagFor(node.loop, node.nodes, as),
+      ")[0]",
+    );
+  }
+  const parts: Array<string | MappedCode> = [];
+  for (const branch of node.branches) {
+    if (branch.test) {
+      parts.push(
+        branch.test.code,
+        " ? ",
+        attributeTagSingle(branch.nodes, as),
+        " : ",
+      );
+    } else parts.push(attributeTagSingle(branch.nodes, as));
+  }
+  if (node.branches.at(-1)?.test) parts.push("undefined");
+  return concatMapped(...parts);
+}
+
+function hygienicName(
+  preferred: string,
+  params: readonly string[],
+  body: string,
+): string {
+  const used = identifierNames(`${params.join(" ")} ${body}`);
+  if (!used.has(preferred)) return preferred;
+  let index = 2;
+  while (used.has(`${preferred}${index}`)) index++;
+  return `${preferred}${index}`;
+}
+
+function attributeTagArrayNode(
+  node: AttributeTagNode,
+  as: AttrTagProp["as"],
+  arrayType?: string,
+): MappedCode {
+  if (node.kind === "AttributeTag") {
+    return concatMapped("[", attributeTagValue(node.tag, as), "]");
+  }
+  if (node.kind === "AttributeTagFor") {
+    return attributeTagFor(node.loop, node.nodes, as, arrayType);
+  }
+  const parts: Array<string | MappedCode> = [];
+  for (const branch of node.branches) {
+    if (branch.test) {
+      parts.push(
+        branch.test.code,
+        " ? ",
+        attributeTagArray(branch.nodes, as, arrayType),
+        " : ",
+      );
+    } else parts.push(attributeTagArray(branch.nodes, as, arrayType));
+  }
+  if (node.branches.at(-1)?.test) parts.push("[]");
+  return concatMapped(...parts);
+}
+
+function attributeTagArray(
+  nodes: AttributeTagNode[],
+  as: AttrTagProp["as"],
+  arrayType?: string,
+): MappedCode {
+  if (nodes.length === 0) return concatMapped("[]");
+  return concatMapped(
+    "[",
+    ...nodes.flatMap((node, index) => {
+      const prefix = index === 0 ? "" : ", ";
+      return node.kind === "AttributeTag"
+        ? [prefix, attributeTagValue(node.tag, as)]
+        : [prefix, "...", attributeTagArrayNode(node, as, arrayType)];
+    }),
+    "]",
+  );
+}
+
+function attributeTagFor(
+  loop: ForHead,
+  nodes: AttributeTagNode[],
+  as: AttrTagProp["as"],
+  arrayType?: string,
+): MappedCode {
+  const bodyText = nodes.map((node) => JSON.stringify(node)).join(" ");
+  const [first = "item", second] = loop.params;
+  const source = loop.source;
+  const itemIndex =
+    source.kind === "of" && second
+      ? second
+      : hygienicName("mxAttrIndex", loop.params, bodyText);
+  const body = attributeTagArray(nodes, as, arrayType);
+  const result = (iterable: string, params: string): MappedCode => {
+    if (!arrayType) {
+      return concatMapped(`${iterable}.flatMap((${params}) => `, body, ")");
+    }
+    const accumulator = hygienicName(
+      "mxAttrTags",
+      [...loop.params, itemIndex],
+      body.code,
+    );
+    return concatMapped(
+      `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat((`,
+      body,
+      `) satisfies ${arrayType}), [])`,
+    );
+  };
+  if (source.kind === "of") {
+    return result(`[...${source.list.code}]`, `${first}, ${itemIndex}`);
+  }
+  if (source.kind === "in") {
+    const value =
+      second ??
+      hygienicName("value", loop.params, `${body.code} ${source.object.code}`);
+    return result(
+      `Object.entries(${source.object.code})`,
+      `[${first}, ${value}], ${itemIndex}`,
+    );
+  }
+
+  const from = source.from?.code ?? "0";
+  const bound = source.bound.code;
+  const step = source.step;
+  const counter = hygienicName("mxIndex", loop.params, body.code);
+  const span = step
+    ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
+    : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
+  const value = step
+    ? `(${from}) + ${counter} * (${step.code})`
+    : `(${from}) + ${counter}`;
+  return result(
+    `Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value})`,
+    `${first}, ${itemIndex}`,
+  );
+}
+
+function attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
+  if (prop.cardinality !== "array") {
+    return attributeTagSingle(prop.source, prop.as);
+  }
+  const arrayType =
+    owner && prop.declared
+      ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
+      : undefined;
+  const value = attributeTagArray(prop.source, prop.as, arrayType);
+  return arrayType
+    ? concatMapped("(", value, ` satisfies ${arrayType})`)
+    : value;
+}
+
+function attributeTagProps(props: AttrTagProp[], owner?: string): MappedCode {
+  return concatMapped(
+    ...props.map((prop) => {
+      const first = firstAttributeTag(prop.source);
+      return concatMapped(
+        " ",
+        mapped(prop.name, first?.nameSpan ?? null),
+        "={",
+        attributeTagProp(prop, owner),
+        "}",
+      );
     }),
   );
 }
@@ -735,7 +949,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const attrs = renderAttrs(node.attrs, true);
-    const tags = attributeTags(node.attributeTags);
+    const tags = attributeTagProps(node.attrTagProps, name);
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     // A `/var` on a returning unit rides along as a callback prop, and the
     // JSX stays JSX: this host calls components through JSX, so the value
@@ -817,7 +1031,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const attrs = renderAttrs(node.attrs, true);
-    const tags = attributeTags(node.attributeTags);
+    const tags = attributeTagProps(node.attrTagProps);
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     if (node.var && lazyScope) {
       fail(

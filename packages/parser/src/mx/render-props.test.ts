@@ -1,7 +1,13 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import generate from "@babel/generator";
 import type { Expression } from "@babel/types";
 import { describe, expect, it } from "vitest";
-import { parseSolid } from "./test-helpers.ts";
+import { print } from "../index.ts";
+import { parseSolid, solidRegionCompile } from "./test-helpers.ts";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const parseMx = (source: string) => parseSolid(source);
 
@@ -13,26 +19,6 @@ function printFirstExpression(source: string): string {
   };
   const init = stmt.declarations[0].init;
   return generate(init).code;
-}
-
-/** The first node of `type` in a tree, by depth-first walk. */
-function collectFirst(node: unknown, type: string): unknown {
-  if (node === null || typeof node !== "object") return null;
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const hit = collectFirst(item, type);
-      if (hit) return hit;
-    }
-    return null;
-  }
-  const record = node as Record<string, unknown>;
-  if (record.type === type) return record;
-  for (const key of Object.keys(record)) {
-    if (key === "loc" || key === "extra") continue;
-    const hit = collectFirst(record[key], type);
-    if (hit) return hit;
-  }
-  return null;
 }
 
 function expectSyntaxError(
@@ -108,18 +94,42 @@ describe("tag params make the children a function", () => {
  * that tag.
  */
 describe("attribute tags become props", () => {
+  it("uses an imported callee's Input from the surrounding module", () => {
+    const filename = join(HERE, "fixtures", "caller.solid.mx");
+    const source =
+      'import AttrCallee from "./attr-callee.tsx";\nconst el = <AttrCallee><@item>typed</@item></AttrCallee>;';
+    const result = print(source, filename, {
+      mxRegionCompile: solidRegionCompile,
+    });
+    expect(result.code.replace(/\s+/g, " ")).toContain(
+      "item={() => <>typed</>}",
+    );
+    expect(result.dependencies).toContain(
+      join(HERE, "fixtures", "attr-callee.tsx"),
+    );
+  });
+
+  it("does not recurse when two SolidMX callees import each other", () => {
+    const filename = join(HERE, "fixtures", "mutual-a.solid.mx");
+    const source = readFileSync(filename, "utf8");
+    expect(() => parseSolid(source, filename)).not.toThrow();
+  });
   it("turns an element body into a prop", () => {
     const code = printFirstExpression(
       `const el = <Layout><@header><h1>Title</h1></@header></Layout>;`,
     );
-    expect(code).toContain("header={<h1>Title</h1>}");
+    expect(code.replace(/\s+/g, " ")).toContain(
+      "header={{ content: () => <h1>Title</h1> }}",
+    );
   });
 
   it("turns params into a function prop", () => {
     const code = printFirstExpression(
       `const el = <Errored><@fallback|e, reset|><p>\${e.message}</p></@fallback></Errored>;`,
     );
-    expect(code).toContain("fallback={(e, reset) => <p>{e.message}</p>}");
+    expect(code.replace(/\s+/g, " ")).toContain(
+      "fallback={{ content: (e, reset) => () => <p>{e.message}</p> }}",
+    );
   });
 
   it("wraps a text-only body in a fragment", () => {
@@ -128,7 +138,9 @@ describe("attribute tags become props", () => {
     const code = printFirstExpression(
       `const el = <Layout><@header>Title</@header></Layout>;`,
     );
-    expect(code).toContain("header={<>Title</>}");
+    expect(code.replace(/\s+/g, " ")).toContain(
+      "header={{ content: () => <>Title</> }}",
+    );
   });
 
   it("emits own attrs first, then attribute tags in source order, and keeps ordinary children", () => {
@@ -141,7 +153,9 @@ describe("attribute tags become props", () => {
     expect(attrOrder[0]).toBeGreaterThan(-1);
     expect(attrOrder[0]).toBeLessThan(attrOrder[1] as number);
     expect(attrOrder[1]).toBeLessThan(attrOrder[2] as number);
-    expect(code).toContain("footer={year => ");
+    expect(code.replace(/\s+/g, " ")).toContain(
+      "footer={{ content: year => () => year }}",
+    );
     // The non-attribute-tag children stay children.
     expect(code).toContain("<p>body</p>");
   });
@@ -204,28 +218,35 @@ describe("consumed attribute tags", () => {
     const file = parseMx(
       `const el = <Show|u| when=user()><b>hi</b><@fallback>NOPE</@fallback></Show>;`,
     );
-    const arrow = collectFirst(file, "ArrowFunctionExpression") as Expression;
-    const text = generate(arrow).code;
-    expect(text).toContain("<b>hi</b>");
-    expect(text).not.toContain("NOPE");
+    const text = generate(
+      (
+        file.program.body[0] as unknown as {
+          declarations: [{ init: Expression }];
+        }
+      ).declarations[0].init,
+    ).code;
+    expect(text).toContain("u => <b>hi</b>");
+    expect(text).toContain("content: () => <>NOPE</>");
     expect(text).not.toContain("@fallback");
   });
 });
 
 describe("attribute tag parse errors", () => {
-  it("routes nested attribute tags to the host capability gate", () => {
-    expectSyntaxError(
+  it("emits nested attribute tags recursively", () => {
+    const code = printFirstExpression(
       `const el = <Layout><@header><@inner>x</@inner></@header></Layout>;`,
-      "`<@header>`: nested attribute tags aren't supported by @mxlang/solid yet",
-      { line: 1, column: 28 },
+    );
+    expect(code.replace(/\s+/g, " ")).toContain(
+      'header={{ "inner": { content: () => <>x</> }, content: undefined }}',
     );
   });
 
-  it("routes attributes on an attribute tag to the host capability gate", () => {
-    expectSyntaxError(
+  it("emits attributes on data-shaped attribute tags", () => {
+    const code = printFirstExpression(
       `const el = <Layout><@header class="x">H</@header></Layout>;`,
-      "`<@header>`: attributes on attribute tags aren't supported by @mxlang/solid yet",
-      { line: 1, column: 28 },
+    );
+    expect(code.replace(/\s+/g, " ")).toContain(
+      'header={{ "class": "x", content: () => <>H</> }}',
     );
   });
 
@@ -236,20 +257,20 @@ describe("attribute tag parse errors", () => {
     );
   });
 
-  it("routes an attribute tag inside `<if>` to the host capability gate", () => {
-    expectSyntaxError(
+  it("emits an attribute tag inside `<if>` as a conditional value", () => {
+    const code = printFirstExpression(
       `const el = <Layout><if=cond><@header>x</@header></if></Layout>;`,
-      "attribute tags inside `<if>` aren't supported by @mxlang/solid yet",
-      { line: 1, column: 19 },
+    );
+    expect(code.replace(/\s+/g, " ")).toContain(
+      "header={cond ? { content: () => <>x</> } : undefined}",
     );
   });
 
-  it("routes an attribute tag inside `<for>` to the host capability gate", () => {
-    expectSyntaxError(
-      `const el = <Layout><for|x| of=xs()><@header>y</@header></for></Layout>;`,
-      "attribute tags inside `<for>` aren't supported by @mxlang/solid yet",
-      { line: 1, column: 19 },
+  it("emits an attribute tag inside `<for>` as a real array", () => {
+    const code = printFirstExpression(
+      `const el = <Layout><for|x| of=xs()><@header>\${x}</@header></for></Layout>;`,
     );
+    expect(code).toContain("[...xs()].flatMap((x, mxAttrIndex) =>");
   });
 
   it("rejects an unknown attribute tag inside `<try>`", () => {

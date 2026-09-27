@@ -27,9 +27,15 @@ const packageRoot = new URL("..", import.meta.url).pathname;
  * `<for>` param when splicing the lowered JSX back into a surrounding
  * TypeScript module. See the report for solid-for-accessor.
  */
-function renderSolidMx(mxFragment: string, setup: string): string {
-  const { code: forCode } = compileSolidMx(mxFragment, {
+function renderSolidMx(
+  mxFragment: string,
+  setup: string,
+  options: Parameters<typeof compileSolidMx>[1] = {
     filename: "fixture.solid.mx",
+  },
+): string {
+  const { code: forCode } = compileSolidMx(mxFragment, {
+    ...options,
   });
   const jsxSource = `import { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;
 
@@ -54,8 +60,12 @@ function renderSolidMx(mxFragment: string, setup: string): string {
  * workspace's real dependency graph, which is also the graph a consumer's
  * own build would use.
  */
-function renderApp(mxFragment: string, setup: string): string {
-  const code = renderSolidMx(mxFragment, setup);
+function renderApp(
+  mxFragment: string,
+  setup: string,
+  options?: Parameters<typeof compileSolidMx>[1],
+): string {
+  const code = renderSolidMx(mxFragment, setup, options);
   const dir = mkdtempSync(join(packageRoot, ".ssr-render-tmp-"));
   const appPath = join(dir, "app.mjs");
   const runnerPath = join(dir, "run.mjs");
@@ -73,6 +83,51 @@ function renderApp(mxFragment: string, setup: string): string {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+function renderDeclaredAttrTags(
+  mxFragment: string,
+  inputDeclaration: string,
+  setup: string,
+): string {
+  const dir = mkdtempSync(join(packageRoot, ".attr-tag-types-"));
+  const caller = join(dir, "caller.solid.mx");
+  const callee = join(dir, "Row.tsx");
+  writeFileSync(
+    callee,
+    `import type { AttrTag } from "@mxlang/solid";\nexport interface Input ${inputDeclaration}\n`,
+  );
+  try {
+    return renderApp(mxFragment, setup, {
+      filename: caller,
+      importSpecifiers: new Map([["Row", "./Row.tsx"]]),
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("Solid SSR render: attribute-tag values", () => {
+  it("executes fallback data values, arrays, bodyless content and Dynamic", () => {
+    const html = renderApp(
+      `<Row><@head>H</@head><@item>0</@item><@item>2</@item><@empty/></Row>`,
+      `function Row(input) { return <section><Dynamic component={input.head.content}/><div>{input.head.content}{input.head.content}</div><For each={input.item}>{(item) => <i>{item.content}</i>}</For><u>{String(input.empty.content === undefined)}</u></section>; }`,
+    );
+    expect(html).toBe(
+      "<ul><section>H<div>HH</div><i>0</i><i>2</i><u>true</u></section></ul>",
+    );
+  });
+
+  it("executes declared shapes, params, control flow and nested tags", () => {
+    const html = renderDeclaredAttrTags(
+      `<Row><if=ok><@head tone="hot">A</@head></if><else><@head tone="cold">B</@head></else><@item id=0>S</@item><for|value| of=values><@item id=value>\${value}</@item></for><@slot>R</@slot><@render|label|><b>\${label}</b></@render><@tab title="T"><@icon label="star">I</@icon></@tab></Row>`,
+      `{ head: AttrTag<{ attrs: { tone: string } }>; item: AttrTag<{ attrs: { id: number } }>[]; slot: AttrTag<{ as: "renderable" }>; render: AttrTag<{ as: "renderable"; params: [label: string] }>; tab: AttrTag<{ attrs: { title: string; icon: AttrTag<{ attrs: { label: string } }> } }> }`,
+      `const ok = false; const values = [1, 2]; function Row(input) { return <article data-tone={input.head.tone}><Dynamic component={input.head.content}/><For each={input.item}>{(item) => <i data-id={item.id}>{item.content}</i>}</For><Dynamic component={input.slot}/><Dynamic component={input.render("P")}/><strong>{input.tab.title}:{input.tab.icon.label}:<Dynamic component={input.tab.icon.content}/></strong></article>; }`,
+    );
+    expect(html).toBe(
+      '<ul><article data-tone="cold">B<i data-id="0">S</i><i data-id="1">1</i><i data-id="2">2</i>R<b>P</b><strong>T:star:I</strong></article></ul>',
+    );
+  });
+});
 
 describe("Solid SSR render: <for>", () => {
   it("renders row properties for the unkeyed (no by=) form", () => {
