@@ -1,4 +1,4 @@
 {
   "marko": "divergence",
-  "reason": "intentional divergence (decision 106): a dynamic untyped callee receives the fallback data shape `{ content }`, while this Marko fixture consumes the value as a bare renderable"
+  "reason": "intentional divergence (decisions 65 and 106): MX data attribute tags are plain values (`{ ...attrs, content }`, or arrays of them); a declared callee gets a positioned compile error for `<${x}/>`, and an untyped callee gets `MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>`; Marko 6 exposes bare renderables through its attribute-tag record"
 }

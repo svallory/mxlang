@@ -1,4 +1,4 @@
 {
   "marko": "divergence",
-  "reason": "intentional divergence (decision 106): an untyped callee falls back to a data attribute-tag value `{ content }`, while Marko 6 passes a bare renderable read directly with `<${input.header}/>`"
+  "reason": "intentional divergence (decisions 65 and 106): MX data attribute tags are plain values (`{ ...attrs, content }`, or arrays of them); a declared callee gets a positioned compile error for `<${x}/>`, and an untyped callee gets `MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>`; Marko 6 exposes bare renderables through its attribute-tag record"
 }

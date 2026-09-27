@@ -1,7 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
@@ -28,6 +29,7 @@ async function renderModules(
   sources: Record<string, string>,
   entry: string,
   input: unknown = {},
+  strictTypecheck = false,
 ): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), "mx-html-render-"));
   try {
@@ -35,21 +37,57 @@ async function renderModules(
       writeFileSync(join(dir, name), src(source));
     }
     writeFileSync(
-      join(dir, "runtime.js"),
+      join(dir, "runtime.ts"),
       [
-        "export function escape(value) {",
-        '  if (value === null || value === undefined) return "";',
-        '  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\\"/g, "&quot;").replace(/\'/g, "&#39;");',
-        "}",
+        `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/index.ts", import.meta.url)))};`,
+        `export type { AttrTag } from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))};`,
       ].join("\n"),
     );
     for (const [name, source] of Object.entries(sources)) {
       if (!name.endsWith(".mx")) continue;
       const path = join(dir, name);
       const code = compile(src(source), path)
-        .code.replaceAll('from "@mxlang/html"', 'from "./runtime.js"')
+        .code.replaceAll('from "@mxlang/html"', 'from "./runtime.ts"')
         .replace(/(from\s+")(\.[^"]+)\.mx(")/g, "$1$2.ts$3");
       writeFileSync(path.replace(/\.mx$/, ".ts"), code);
+    }
+    if (strictTypecheck) {
+      try {
+        execFileSync(
+          fileURLToPath(
+            new URL("../../../../node_modules/.bin/tsc", import.meta.url),
+          ),
+          [
+            "--pretty",
+            "false",
+            "--noEmit",
+            "--strict",
+            "--skipLibCheck",
+            "--types",
+            "node",
+            "--typeRoots",
+            fileURLToPath(
+              new URL("../../../../node_modules/@types", import.meta.url),
+            ),
+            "--target",
+            "ES2022",
+            "--module",
+            "ESNext",
+            "--moduleResolution",
+            "Bundler",
+            "--allowImportingTsExtensions",
+            join(dir, entry.replace(/\.mx$/, ".ts")),
+          ],
+          { cwd: dir, stdio: "pipe" },
+        );
+      } catch (error) {
+        const failed = error as { stdout?: Buffer; stderr?: Buffer };
+        throw new Error(
+          [failed.stdout?.toString(), failed.stderr?.toString()]
+            .filter(Boolean)
+            .join("\n"),
+        );
+      }
     }
     const module = (await import(
       `${pathToFileURL(join(dir, entry.replace(/\.mx$/, ".ts"))).href}?t=${Date.now()}`
@@ -389,6 +427,79 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("<i>0:S</i><i>1:I</i><i>3:3</i><i>4:4</i>");
   });
 
+  it("executes else-if, for-in, inclusive to, and exclusive until plans", async () => {
+    const html = await renderModules(
+      {
+        "list.ts": [
+          "export interface Input { item: AttrTag<{ attrs: { id: string | number } }>[] }",
+          "export default function List(input: Input): string {",
+          '  return input.item.map((item) => `<i>${item.id}</i>`).join("");',
+          "}",
+        ].join("\n"),
+        "entry.mx": [
+          'import List from "./list.ts"',
+          "<List>",
+          '  <if=input.mode === 0><@item id="if"/></if>',
+          '  <else-if=input.mode === 1><@item id="else-if"/></else-if>',
+          '  <else><@item id="else"/></else>',
+          "  <for|key| in=input.entries><@item id=key/></for>",
+          "  <for|n| from=1 to=2><@item id=n/></for>",
+          "  <for|n| from=3 until=5><@item id=n/></for>",
+          "</List>",
+        ].join("\n"),
+      },
+      "entry.mx",
+      { mode: 1, entries: { a: 10, b: 20 } },
+    );
+    expect(html).toBe(
+      "<i>else-if</i><i>a</i><i>b</i><i>1</i><i>2</i><i>3</i><i>4</i>",
+    );
+  });
+
+  it("does not shadow an outer value binding in content or attribute-tag for-in loops", async () => {
+    const html = await renderModules(
+      {
+        "list.ts": [
+          'export interface Input { item: AttrTag<{ as: "renderable" }>[] }',
+          "export default function List(input: Input): string {",
+          '  return input.item.map((item) => item()).join("");',
+          "}",
+        ].join("\n"),
+        "entry.mx": [
+          'import List from "./list.ts"',
+          '<let/value="outer"/>',
+          "<for|key| in=input.entries><b>${value}:${key}</b></for>",
+          "<List><for|key| in=input.entries><@item>${value}:${key}</@item></for></List>",
+        ].join("\n"),
+      },
+      "entry.mx",
+      { entries: { a: 10, b: 20 } },
+    );
+    expect(html).toBe("<b>outer:a</b><b>outer:b</b>outer:aouter:b");
+  });
+
+  it("preserves declared param types through looped array emission under strict tsc", async () => {
+    const html = await renderModules(
+      {
+        "callee.mx": [
+          "export interface Input {",
+          "  row: AttrTag<{ attrs: { id: number }; params: [suffix: string] }>[];",
+          "}",
+          '<for|row| of=input.row><p>${row.id}:<${row.content}("!")/></p></for>',
+        ].join("\n"),
+        "entry.mx": [
+          'import Callee from "./callee.mx"',
+          "export interface Input { rows: number[]; show: boolean }",
+          "<Callee><if=input.show><@row|suffix| id=0>${suffix.toUpperCase()}</@row></if><for|n| of=input.rows><@row|suffix| id=n>${suffix.toUpperCase()}</@row></for></Callee>",
+        ].join("\n"),
+      },
+      "entry.mx",
+      { rows: [7], show: true },
+      true,
+    );
+    expect(html).toBe("<p>0:!</p><p>7:!</p>");
+  });
+
   it("passes an empty array when a declared repeated tag has no occurrences", async () => {
     const html = await renderModules(
       {
@@ -447,6 +558,52 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("F:fallback");
   });
 
+  it("uses the data fallback for an untyped static callee", async () => {
+    const html = await renderModules(
+      {
+        "panel.ts": [
+          "export default function Panel(input: any): string {",
+          "  return `${input.header.label}:${input.header.content?.()}`;",
+          "}",
+        ].join("\n"),
+        "entry.mx": [
+          'import Panel from "./panel.ts"',
+          '<Panel><@header label="S">static</@header></Panel>',
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("S:static");
+  });
+
+  it("explains the data attribute-tag body route for an untyped old-style callee", async () => {
+    await expect(
+      renderModules(
+        {
+          "panel.mx": "<div><${input.header}/></div>",
+          "entry.mx": [
+            'import Panel from "./panel.mx"',
+            "<Panel><@header>Hi</@header></Panel>",
+          ].join("\n"),
+        },
+        "entry.mx",
+      ),
+    ).rejects.toThrow(
+      "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>",
+    );
+  });
+
+  it("positions a declared data tag's direct-render error at compile time", () => {
+    expect(() =>
+      compile(
+        src("export interface Input { header?: AttrTag }\n<${input.header}/>"),
+        file,
+      ),
+    ).toThrow(
+      "`input.header` is a data attribute tag; render its body with `<${input.header.content}/>`",
+    );
+  });
+
   it("sets data content to undefined when the tag has no body", async () => {
     const html = await renderModules(
       {
@@ -483,6 +640,12 @@ describe("attribute-tag v2 values (executed)", () => {
 });
 
 describe("dynamic tags", () => {
+  it("rejects arguments combined with attributes using Marko's diagnostic", () => {
+    expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
+      "Tag does not support arguments when attributes or body present.",
+    );
+  });
+
   it("lowers `<${expr}/>` through the runtime dispatcher", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     const { code } = compile(src("<${input.tag}/>"), file);

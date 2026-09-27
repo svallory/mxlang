@@ -780,6 +780,61 @@ describe("one fixture per IR kind", () => {
       expect(component.content).toBeNull();
     });
 
+    it("discovers @-named children in an imported component's control body", () => {
+      const ir = lowerSource(
+        [
+          'import Panel from "./panel.ts"',
+          "<Panel><for|item| of=input.items><@row id=item/></for></Panel>",
+        ].join("\n"),
+        v2(),
+        declaredInput({
+          row: attrTagDecl({
+            cardinality: "array",
+            as: "data",
+            hasAttrs: true,
+          }),
+        }),
+      );
+      const component = find(ir.body, "Component");
+      expect(component.attributeTags.map((tag) => tag.name)).toEqual(["row"]);
+      expect(component.attributeTagTree).toMatchObject([
+        { kind: "AttributeTagFor", nodes: [{ kind: "AttributeTag" }] },
+      ]);
+      expect(component.content).toBeNull();
+    });
+
+    it("groups control flow stored among attributeTags through its siblings", () => {
+      const ir = lowerSource(
+        [
+          'import Panel from "./panel.ts"',
+          "<Panel>",
+          "  <if=input.a><@head>A</@head></if>",
+          "  <else-if=input.b><@head>B</@head></else-if>",
+          "  <else><@head>C</@head></else>",
+          "</Panel>",
+        ].join("\n"),
+        v2(),
+        declaredInput({ head: attrTagDecl() }),
+      );
+      const component = find(ir.body, "Component");
+      expect(component.attributeTags.map((tag) => tag.name)).toEqual([
+        "head",
+        "head",
+        "head",
+      ]);
+      expect(component.attributeTagTree).toMatchObject([
+        {
+          kind: "AttributeTagIf",
+          branches: [
+            { test: {}, nodes: [{}] },
+            { test: {}, nodes: [{}] },
+            { nodes: [{}] },
+          ],
+        },
+      ]);
+      expect(component.content).toBeNull();
+    });
+
     it("keeps sibling content while extracting attribute-tag controls", () => {
       const input = declaredInput({
         h: attrTagDecl(),
@@ -1372,6 +1427,45 @@ describe("one fixture per IR kind", () => {
  * `shape` argument is the only signal that lets a host tell them apart.
  */
 describe("a dynamic tag's bare shape", () => {
+  it.each([
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+    ["attributes", '<${input.fn}("A") foo="bar"/>'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+    ["attribute tags", '<${input.fn}("A")><@x>X</@x></>'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+    ["body", '<${input.fn}("A")>body</>'],
+  ])(
+    "rejects arguments combined with %s using Marko's positioned diagnostic",
+    (_case, source) => {
+      let error: unknown;
+      try {
+        lowerSource(source, fakeDeclarations({ attrTags: 2 }));
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        "Tag does not support arguments when attributes or body present.",
+      );
+      expect(error).toMatchObject({ line: 1, column: 3 });
+    },
+  );
+
+  it("retains arguments on a claimed dynamic HostTag", () => {
+    const ir = lowerSource(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+      '<${input.fn}("A", input.n)/>',
+      fakeDeclarations({
+        claimsTag: (name) => name === DYNAMIC_TAG,
+        resolveHostTag: () => ({ seen: true }),
+      }),
+    );
+    expect(find(ir.body, "HostTag").tag.args).toMatchObject([
+      { code: '"A"' },
+      { code: "input.n" },
+    ]);
+  });
+
   it("lowers to a dynamic Component when a host claims DYNAMIC_TAG only for the tagged shape", () => {
     const ir = lowerSource(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
