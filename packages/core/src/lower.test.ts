@@ -1459,6 +1459,30 @@ describe("one fixture per IR kind", () => {
       ).not.toThrow();
     });
 
+    it.each([
+      ["data content", "input.data.content"],
+      ["renderable", "input.renderable"],
+    ])(
+      "rejects a declared parameterized %s placeholder used without arguments",
+      (_shape, expression) => {
+        const input = declaredInput({
+          data: attrTagDecl({ as: "data", hasParams: true }),
+          renderable: attrTagDecl({ as: "renderable", hasParams: true }),
+        });
+        let error: unknown;
+        try {
+          lowerSource(`<div>\${${expression}}</div>`, v2(), undefined, input);
+        } catch (caught) {
+          error = caught;
+        }
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain(
+          `\`${expression}\` is a parameterized attribute tag; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
+        );
+        expect(error).toMatchObject({ line: 1, column: 7 });
+      },
+    );
+
     it("marks an unimported AttrTag reference for a host type import", () => {
       expect(
         lowerSource("export interface Input { head?: AttrTag }\n<p>x</p>", v2())

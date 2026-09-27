@@ -1931,6 +1931,43 @@ function referencesUnboundAttrTagType(typeUnits: string[]): boolean {
   return referenced && !declaredLocally;
 }
 
+function declaredAttributeTagRead(
+  ctx: Ctx,
+  expression: string,
+):
+  | {
+      declaration: AttrTagDecl;
+      name: string;
+      readsContent: boolean;
+    }
+  | undefined {
+  const member = /^input\.([A-Za-z_$][\w$]*)(?:\.(content))?$/.exec(expression);
+  if (!member || ctx.ownInput?.kind !== "declared") return;
+  const name = member[1] as string;
+  const declaration = ctx.ownInput.attrTags.get(name);
+  if (!declaration) return;
+  return { declaration, name, readsContent: member[2] === "content" };
+}
+
+function rejectUncalledParameterizedAttributeTag(
+  ctx: Ctx,
+  expression: string,
+  node: Node,
+  argumentCount = 0,
+): void {
+  const read = declaredAttributeTagRead(ctx, expression);
+  if (!read || argumentCount !== 0 || !read.declaration.hasParams) return;
+  const readsDeclaredRenderable =
+    read.declaration.as === "renderable" && !read.readsContent;
+  const readsDeclaredContent =
+    read.declaration.as === "data" && read.readsContent;
+  if (!readsDeclaredRenderable && !readsDeclaredContent) return;
+  fail(
+    `\`${expression}\` is a parameterized attribute tag; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
+    node,
+  );
+}
+
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
   // *name* is the expression — Marko's concise mode has no other shape for
@@ -1943,35 +1980,21 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
     const dynamicExpr = exprOf(ctx, node.name);
-    const member = /^input\.([A-Za-z_$][\w$]*)(?:\.(content))?$/.exec(
-      dynamicExpr.code,
-    );
-    if (member && ctx.ownInput?.kind === "declared") {
-      const declaration = ctx.ownInput.attrTags.get(member[1] as string);
-      const readsContent = member[2] === "content";
-      if (declaration?.as === "data" && !readsContent) {
+    const read = declaredAttributeTagRead(ctx, dynamicExpr.code);
+    if (read) {
+      if (read.declaration.as === "data" && !read.readsContent) {
         fail(
-          `\`input.${member[1]}\` is a data attribute tag; render its body with \`<\${input.${member[1]}.content}/>\``,
-          node.name,
-        );
-      }
-      const readsDeclaredRenderable =
-        declaration?.as === "renderable" && !readsContent;
-      const readsDeclaredContent = declaration?.as === "data" && readsContent;
-      if (
-        declaration?.hasParams &&
-        (readsDeclaredRenderable || readsDeclaredContent) &&
-        (node.arguments ?? []).length === 0
-      ) {
-        const expression = readsContent
-          ? `input.${member[1]}.content`
-          : `input.${member[1]}`;
-        fail(
-          `\`${expression}\` is a parameterized attribute tag; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
+          `\`input.${read.name}\` is a data attribute tag; render its body with \`<\${input.${read.name}.content}/>\``,
           node.name,
         );
       }
     }
+    rejectUncalledParameterizedAttributeTag(
+      ctx,
+      dynamicExpr.code,
+      node.name,
+      (node.arguments ?? []).length,
+    );
     const claimed = ctx.declarations.claimsTag?.(
       DYNAMIC_TAG,
       ctx,
@@ -2203,14 +2226,21 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
         // whitespace runs and collapsed the rest before we saw them.
         out.push({ kind: "Text", value: child.value, loc: posOf(child) });
         break;
-      case "MarkoPlaceholder":
+      case "MarkoPlaceholder": {
+        const interpolation = exprOf(ctx, child.value);
+        rejectUncalledParameterizedAttributeTag(
+          ctx,
+          interpolation.code,
+          child.value,
+        );
         out.push({
           kind: "Interpolation",
-          expr: exprOf(ctx, child.value),
+          expr: interpolation,
           escaped: child.escape,
           loc: posOf(child),
         });
         break;
+      }
       case "MarkoTag": {
         // A statement the host hoisted stays on `ctx.prelude` and is drained
         // by the enclosing *function* — `lowerDefine`, or `lower` for the
