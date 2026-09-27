@@ -32,6 +32,10 @@ export type { Disposition };
  * not exist yet.
  */
 export interface HostDeclarations {
+  /** Human-readable host name used by positioned capability diagnostics. */
+  name?: string;
+  /** Attribute-tag IR/emission contract implemented by this host. */
+  attrTags?: 2;
   /**
    * Per-tag-name dispositions: `inert` (accepted, no output, in a declared
    * shape) or `error` (this target cannot express it). Decision 65: never "my

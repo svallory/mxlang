@@ -34,6 +34,7 @@
  */
 
 import { createRequire } from "node:module";
+import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import type { Expr, IrNode, Position } from "./ir.ts";
@@ -212,6 +213,10 @@ export interface Ctx {
   generate: (node: Node) => string;
   /** What the host declares, as `lower()` consults it (decision 79). */
   declarations: HostDeclarations;
+  /** Test/integration seam until the callee Input resolver is installed. */
+  calleeInputFor?: (target: import("./ir.ts").ComponentTarget) => CalleeInput;
+  /** The current unit's resolved Input, for callee-side data-tag checks. */
+  ownInput?: CalleeInput;
   /** Set by a dialect that resolves tags through Marko's taglib lookup. */
   lookup?: { getTag(name: string): { taglibId?: string } | undefined };
   /** Custom tags already discovered and loaded by the calling integration. */

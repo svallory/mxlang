@@ -114,6 +114,7 @@ type HostTagData = { kind: "interpolation"; expr: Expr };
 
 /** Questions the Astro host answers while Marko nodes are still available. */
 const declarations: HostDeclarations = {
+  name: "Astro",
   tags: TAGS,
   isElement: (name) => !isComponentName(name),
   isComponent: (name) => isComponentName(name),

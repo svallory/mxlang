@@ -26,6 +26,11 @@
 import { freeIdentifiersIn } from "./accessor-reads.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
+  type AttrTagDecl,
+  type CalleeInput,
+  readCalleeInput,
+} from "./callee-input.ts";
+import {
   attrByName,
   bindingIdentifiers,
   type Ctx,
@@ -59,11 +64,14 @@ import { parseFragment } from "./fragment.ts";
 import type {
   Attr,
   AttributeTag,
+  AttributeTagNode,
+  AttrTagProp,
   Block,
   Branch,
   ComponentTarget,
   Expr,
   ExprShape,
+  ForHead,
   ForSource,
   Ir,
   IrNode,
@@ -501,12 +509,12 @@ function paramBindings(node: Node): string[] {
  * `<@footer|year|>`, `year` is the parameter, not any host binding of the same
  * name. Restored on the way out.
  */
-function lowerBlock(ctx: Ctx, node: Node): Block {
+function lowerBlock(ctx: Ctx, node: Node, body = node.body?.body ?? []): Block {
   // A block is its own JS scope: both the params it shadows *and* anything a
   // `<const>` inside it unregisters are confined to it.
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(node));
-  const children = lowerChildren(ctx, node.body?.body ?? []);
+  const children = lowerChildren(ctx, body);
   restore();
   unscope();
   return {
@@ -517,26 +525,57 @@ function lowerBlock(ctx: Ctx, node: Node): Block {
   };
 }
 
-/** `<@name>` children of a component call, in source order. */
-function lowerAttributeTags(ctx: Ctx, node: Node): AttributeTag[] {
-  const tags: AttributeTag[] = [];
-  for (const block of node.attributeTags ?? []) {
-    if (block.type !== "MarkoTag") continue;
-    tags.push({
-      name: String(block.name.value).replace(/^@/, ""),
-      nameSpan: (() => {
-        const span = nodeSpan(ctx, block.name);
-        return { sourceStart: span.sourceStart + 1, sourceEnd: span.sourceEnd };
-      })(),
-      block: lowerBlock(ctx, block),
-      loc: posOf(block),
-    });
-  }
-  return tags;
+interface AttrSchema {
+  declarations?: Map<string, AttrTagDecl>;
+  otherProps?: Set<string>;
+  open: boolean;
+  owner: string;
 }
 
-/** Validates the generic attribute-tag shape shared by components and tags. */
-function validateAttributeTagShape(node: Node): void {
+interface LoweredAttributeTags {
+  flat: AttributeTag[];
+  tree: AttributeTagNode[];
+  props: AttrTagProp[];
+  contentChildren: Node[];
+}
+
+function requireAttrTagsV2(ctx: Ctx, construct: string, node: Node): void {
+  if (ctx.declarations.attrTags === 2) return;
+  fail(
+    `${ctx.declarations.name ?? "the current host"} does not support ${construct}; its declarations must set \`attrTags: 2\``,
+    node,
+  );
+}
+
+function attrName(node: Node): string {
+  return String(node.name?.value ?? "").replace(/^@/, "");
+}
+
+function attributeTagNameSpan(ctx: Ctx, node: Node): SourceSpan {
+  const span = nodeSpan(ctx, node.name);
+  return { sourceStart: span.sourceStart + 1, sourceEnd: span.sourceEnd };
+}
+
+function isLayout(node: Node): boolean {
+  return (
+    node.type === "MarkoComment" ||
+    (node.type === "MarkoText" && node.value.trim() === "")
+  );
+}
+
+function isControl(node: Node): boolean {
+  const name = node?.name?.value;
+  return node?.type === "MarkoTag" && (name === "if" || name === "for");
+}
+
+function containsAttributeTags(node: Node): boolean {
+  if ((node.attributeTags ?? []).length > 0) return true;
+  return (node.body?.body ?? []).some(
+    (child: Node) => isControl(child) && containsAttributeTags(child),
+  );
+}
+
+function validateParentCollisions(node: Node): void {
   const parentAttrs = new Set(
     (node.attributes ?? [])
       .filter((attr: Node) => attr.type !== "MarkoSpreadAttribute")
@@ -556,18 +595,449 @@ function validateAttributeTagShape(node: Node): void {
         tag,
       );
     }
-    if ((tag.attributes ?? []).length > 0) {
-      fail("attribute tags take params or a body, not attributes (v1)", tag);
+  }
+}
+
+function schemaFor(input: CalleeInput, owner: string): AttrSchema {
+  if (input.kind === "declared") {
+    return {
+      declarations: input.attrTags,
+      otherProps: input.otherProps,
+      open: input.open,
+      owner,
+    };
+  }
+  return { open: true, owner };
+}
+
+function declarationFor(
+  schema: AttrSchema,
+  name: string,
+  node: Node,
+): AttrTagDecl | undefined {
+  const declaration = schema.declarations?.get(name);
+  if (declaration) return declaration;
+  if (schema.otherProps?.has(name)) {
+    fail(
+      `\`${name}\` is declared as a plain prop; declare it \`AttrTag\` to pass it as \`<@${name}>\``,
+      node.name ?? node,
+    );
+  }
+  if (schema.declarations && !schema.open) {
+    fail(
+      `\`<${schema.owner}>\` declares no attribute tag \`${name}\``,
+      node.name ?? node,
+    );
+  }
+  return undefined;
+}
+
+function filterAttributeTagNodes(
+  nodes: AttributeTagNode[],
+  name: string,
+): AttributeTagNode[] {
+  const filtered: AttributeTagNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === "AttributeTag") {
+      if (node.tag.name === name) filtered.push(node);
+      continue;
     }
-    if ((tag.attributeTags ?? []).length > 0) {
-      const inner = tag.attributeTags[0];
-      const innerName = String(inner.name?.value ?? "");
+    if (node.kind === "AttributeTagIf") {
+      const branches = node.branches.map((branch) => ({
+        ...branch,
+        nodes: filterAttributeTagNodes(branch.nodes, name),
+      }));
+      if (branches.some((branch) => branch.nodes.length > 0)) {
+        filtered.push({ ...node, branches });
+      }
+      continue;
+    }
+    const nested = filterAttributeTagNodes(node.nodes, name);
+    if (nested.length > 0) filtered.push({ ...node, nodes: nested });
+  }
+  return filtered;
+}
+
+function occurrenceRange(
+  nodes: AttributeTagNode[],
+  name: string,
+): { min: number; max: number; inFor: boolean; conditional: boolean } {
+  let min = 0;
+  let max = 0;
+  let inFor = false;
+  let conditional = false;
+  for (const node of nodes) {
+    if (node.kind === "AttributeTag") {
+      if (node.tag.name === name) {
+        min++;
+        max++;
+      }
+      continue;
+    }
+    if (node.kind === "AttributeTagFor") {
+      const inner = occurrenceRange(node.nodes, name);
+      if (inner.max > 0) {
+        inFor = true;
+        min += 0;
+        max = Number.POSITIVE_INFINITY;
+      }
+      continue;
+    }
+    const ranges = node.branches.map((branch) =>
+      occurrenceRange(branch.nodes, name),
+    );
+    const hasElse = node.branches.some((branch) => branch.test === undefined);
+    if (!hasElse)
+      ranges.push({ min: 0, max: 0, inFor: false, conditional: true });
+    min += Math.min(...ranges.map((range) => range.min));
+    max += Math.max(...ranges.map((range) => range.max));
+    inFor ||= ranges.some((range) => range.inFor);
+    conditional ||= ranges.some((range) => range.max > 0);
+  }
+  return { min, max, inFor, conditional };
+}
+
+function firstNodeOfKind(
+  nodes: AttributeTagNode[],
+  kind: "AttributeTagIf" | "AttributeTagFor",
+): AttributeTagNode | undefined {
+  for (const node of nodes) {
+    if (node.kind === kind) return node;
+    if (node.kind === "AttributeTagFor") {
+      const nested = firstNodeOfKind(node.nodes, kind);
+      if (nested) return nested;
+    } else if (node.kind === "AttributeTagIf") {
+      for (const branch of node.branches) {
+        const nested = firstNodeOfKind(branch.nodes, kind);
+        if (nested) return nested;
+      }
+    }
+  }
+  return undefined;
+}
+
+function planAttributeTags(
+  ctx: Ctx,
+  tree: AttributeTagNode[],
+  flat: AttributeTag[],
+  schema: AttrSchema,
+  ownerNode: Node,
+): AttrTagProp[] {
+  const names: string[] = [];
+  for (const tag of flat) if (!names.includes(tag.name)) names.push(tag.name);
+  for (const [name, declaration] of schema.declarations ?? []) {
+    if (declaration.cardinality === "array" && !names.includes(name))
+      names.push(name);
+    if (declaration.cardinality === "required" && !names.includes(name)) {
       fail(
-        `attribute tag \`<${innerName}>\` inside attribute tag \`<@${name}>\``,
-        inner,
+        `missing required attribute tag \`<@${name}>\``,
+        ownerNode.name ?? ownerNode,
       );
     }
   }
+
+  return names.map((name) => {
+    const declaration = schema.declarations?.get(name);
+    const range = occurrenceRange(tree, name);
+    if (declaration && declaration.cardinality !== "array") {
+      const occurrences = flat.filter((tag) => tag.name === name);
+      const first = occurrences[0];
+      if (range.inFor) {
+        const loop = firstNodeOfKind(
+          filterAttributeTagNodes(tree, name),
+          "AttributeTagFor",
+        );
+        fail(
+          `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          loop ? { loc: { start: loop.loc } } : ownerNode,
+        );
+      }
+      if (range.max > 1) {
+        const repeated = occurrences[1] ?? first;
+        fail(
+          `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          repeated ? { loc: { start: repeated.loc } } : ownerNode,
+        );
+      }
+      if (declaration.cardinality === "required" && range.min === 0) {
+        const conditional = firstNodeOfKind(
+          filterAttributeTagNodes(tree, name),
+          "AttributeTagIf",
+        );
+        fail(
+          `\`<@${name}>\` is required but not provided on every \`<if>\` path`,
+          conditional ? { loc: { start: conditional.loc } } : ownerNode,
+        );
+      }
+    }
+
+    const fallbackCardinality =
+      range.max === 1 && !range.conditional && !range.inFor
+        ? "single"
+        : "array";
+    const cardinality =
+      declaration?.cardinality === "array"
+        ? "array"
+        : declaration
+          ? "single"
+          : fallbackCardinality;
+    const as = declaration?.as ?? "data";
+    if (declaration && (as === "data" || cardinality !== fallbackCardinality)) {
+      requireAttrTagsV2(ctx, `the declared shape of \`<@${name}>\``, ownerNode);
+    }
+    return {
+      name,
+      cardinality,
+      as,
+      source: filterAttributeTagNodes(tree, name),
+    };
+  });
+}
+
+function lowerOneAttributeTag(
+  ctx: Ctx,
+  node: Node,
+  schema: AttrSchema,
+): AttributeTag {
+  const name = attrName(node);
+  const declaration = declarationFor(schema, name, node);
+  validateParentCollisions(node);
+  const attrs = node.attributes ?? [];
+  const contentAttr = attrs.find(
+    (attr: Node) =>
+      attr.type !== "MarkoSpreadAttribute" && attr.name === "content",
+  );
+  if (contentAttr) {
+    fail(
+      "`content` is reserved on an attribute tag; it names the body",
+      contentAttr,
+    );
+  }
+  if (attrs.length > 0) {
+    requireAttrTagsV2(ctx, "attributes on an attribute tag", attrs[0]);
+  }
+  if (declaration?.as === "renderable" && attrs.length > 0) {
+    fail(
+      `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes`,
+      node.name ?? node,
+    );
+  }
+  const hasParamsAtCall = hasParams(ctx, node);
+  if (declaration && declaration.hasParams !== hasParamsAtCall) {
+    fail(
+      declaration.hasParams
+        ? `\`<@${name}>\` declares params in \`<${schema.owner}>\`; add \`|…|\``
+        : `\`<@${name}>\` declares no params in \`<${schema.owner}>\`; remove \`|…|\``,
+      node.name ?? node,
+    );
+  }
+
+  const nestedSchema: AttrSchema = declaration
+    ? {
+        declarations: declaration.nested,
+        open: declaration.nestedOpen,
+        owner: `@${name}`,
+      }
+    : { open: true, owner: `@${name}` };
+
+  const unscope = scopeBindings(ctx);
+  const restore = shadowBindings(ctx, paramBindings(node));
+  const nested = lowerAttributeTags(ctx, node, nestedSchema);
+  const block: Block = {
+    hasParams: hasParamsAtCall,
+    params: paramsOf(ctx, node),
+    children: lowerChildren(ctx, nested.contentChildren),
+    loc: posOf(node),
+  };
+  restore();
+  unscope();
+
+  if (nested.flat.length > 0) {
+    requireAttrTagsV2(
+      ctx,
+      "nested attribute tags",
+      node.attributeTags?.[0] ?? node,
+    );
+    if (declaration?.as === "renderable") {
+      fail(
+        `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes or nested attribute tags`,
+        node.name ?? node,
+      );
+    }
+  }
+
+  return {
+    name,
+    nameSpan: attributeTagNameSpan(ctx, node),
+    attrs: lowerAttrs(ctx, node, name, "component"),
+    block,
+    hasBody: hasContent(nested.contentChildren),
+    attributeTags: nested.flat,
+    attributeTagTree: nested.tree,
+    attrTagProps: nested.props,
+    loc: posOf(node),
+  };
+}
+
+function lowerAttributeFor(
+  ctx: Ctx,
+  node: Node,
+  schema: AttrSchema,
+): AttributeTagNode {
+  requireAttrTagsV2(ctx, "an attribute tag inside `<for>`", node);
+  const loop = lowerForHead(ctx, node, true);
+  const unscope = scopeBindings(ctx);
+  const restore = shadowBindings(ctx, loop.bindings);
+  const lowered = lowerAttributeTags(ctx, node, schema, true, false);
+  restore();
+  unscope();
+  return {
+    kind: "AttributeTagFor",
+    loop,
+    nodes: lowered.tree,
+    loc: posOf(node),
+  };
+}
+
+function lowerAttributeIf(
+  ctx: Ctx,
+  siblings: Node[],
+  index: number,
+  schema: AttrSchema,
+): [AttributeTagNode, number] {
+  const first = siblings[index];
+  requireAttrTagsV2(ctx, "an attribute tag inside `<if>`", first);
+  const branches: Array<{
+    test?: Expr;
+    span: SourceSpan;
+    nodes: AttributeTagNode[];
+  }> = [];
+  let cursor = index;
+  while (cursor < siblings.length) {
+    const branch = siblings[cursor];
+    const name = branch.name?.value;
+    if (cursor > index && name !== "else" && name !== "else-if") break;
+    const conditionAttr =
+      name === "if"
+        ? (attrByName(branch, "value") ?? branch.attributes?.[0])
+        : name === "else-if"
+          ? (attrByName(branch, "value") ?? branch.attributes?.[0])
+          : attrByName(branch, "if");
+    const unscope = scopeBindings(ctx);
+    const lowered = lowerAttributeTags(ctx, branch, schema, true, false);
+    unscope();
+    branches.push({
+      ...(conditionAttr ? { test: exprOf(ctx, conditionAttr.value) } : {}),
+      span: nodeSpan(ctx, branch),
+      nodes: lowered.tree,
+    });
+    cursor++;
+    while (cursor < siblings.length && isLayout(siblings[cursor])) cursor++;
+    if (!conditionAttr) break;
+  }
+  return [{ kind: "AttributeTagIf", branches, loc: posOf(first) }, cursor];
+}
+
+/** Lowers direct and control-flow attribute tags, recursively. */
+function lowerAttributeTags(
+  ctx: Ctx,
+  node: Node,
+  schema: AttrSchema = { open: true, owner: "dynamic tag" },
+  inControl = false,
+  makePlan = true,
+): LoweredAttributeTags {
+  validateParentCollisions(node);
+  const candidates: Array<{
+    offset: number;
+    kind: "tag" | "control";
+    node: Node;
+    index?: number;
+  }> = [];
+  for (const tag of node.attributeTags ?? []) {
+    candidates.push({
+      offset: nodeSpan(ctx, tag).sourceStart,
+      kind: "tag",
+      node: tag,
+    });
+  }
+  const body = node.body?.body ?? [];
+  const consumed = new Set<number>();
+  for (let index = 0; index < body.length; index++) {
+    const child = body[index];
+    if (!isControl(child) || !containsAttributeTags(child)) continue;
+    candidates.push({
+      offset: nodeSpan(ctx, child).sourceStart,
+      kind: "control",
+      node: child,
+      index,
+    });
+    if (child.name?.value === "if") {
+      let cursor = index + 1;
+      while (cursor < body.length) {
+        if (isLayout(body[cursor])) {
+          consumed.add(cursor++);
+          continue;
+        }
+        const name = body[cursor]?.name?.value;
+        if (name !== "else" && name !== "else-if") break;
+        consumed.add(cursor++);
+      }
+    }
+  }
+  candidates.sort((a, b) => a.offset - b.offset);
+
+  const tree: AttributeTagNode[] = [];
+  for (const candidate of candidates) {
+    if (candidate.kind === "tag") {
+      const tag = lowerOneAttributeTag(ctx, candidate.node, schema);
+      tree.push({ kind: "AttributeTag", tag, loc: tag.loc });
+    } else if (candidate.node.name?.value === "for") {
+      tree.push(lowerAttributeFor(ctx, candidate.node, schema));
+    } else {
+      const [ifNode, next] = lowerAttributeIf(
+        ctx,
+        body,
+        candidate.index as number,
+        schema,
+      );
+      tree.push(ifNode);
+      for (let i = (candidate.index as number) + 1; i < next; i++)
+        consumed.add(i);
+    }
+  }
+
+  const controlStarts = new Set(
+    candidates
+      .filter((candidate) => candidate.kind === "control")
+      .map((candidate) => candidate.index),
+  );
+  const contentChildren = body.filter(
+    (_child: Node, index: number) =>
+      !controlStarts.has(index) && !consumed.has(index),
+  );
+  if (inControl && tree.length > 0) {
+    const offending = contentChildren.find((child: Node) => !isLayout(child));
+    if (offending) {
+      fail(
+        "Cannot have attribute tags and body content under a control flow tag.",
+        offending,
+      );
+    }
+  }
+
+  const flat: AttributeTag[] = [];
+  const collect = (nodes: AttributeTagNode[]) => {
+    for (const item of nodes) {
+      if (item.kind === "AttributeTag") flat.push(item.tag);
+      else if (item.kind === "AttributeTagFor") collect(item.nodes);
+      else for (const branch of item.branches) collect(branch.nodes);
+    }
+  };
+  collect(tree);
+  const props = makePlan
+    ? planAttributeTags(ctx, tree, flat, schema, node)
+    : [];
+  return { flat, tree, props, contentChildren };
 }
 
 /**
@@ -650,8 +1120,15 @@ function lowerIfChain(
  * 65). A reactive host (Solid) emits it as the `keyed` prop on `<For>`.
  * Carried in the IR so both paths work from the same tree.
  */
-function lowerFor(ctx: Ctx, node: Node): IrNode {
-  rejectUnsupportedFields(ctx, node, "`<for>`", { params: true });
+function lowerForHead(
+  ctx: Ctx,
+  node: Node,
+  allowAttributeTags = false,
+): ForHead {
+  rejectUnsupportedFields(ctx, node, "`<for>`", {
+    params: true,
+    attributeTags: allowAttributeTags,
+  });
 
   const params = paramsOf(ctx, node);
   // A `<for>` with no params names no loop variable. Defaulting it to `item`
@@ -722,21 +1199,28 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
   }
 
   const bindings = paramBindings(node);
-  // The loop body is a JS block, so a `<const>` inside it is confined to it.
-  const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, bindings);
-  const children = lowerChildren(ctx, node.body?.body ?? []);
-  restore();
-  unscope();
-
   return {
-    kind: "For",
     source,
     params,
     paramNodes: [...(node.body?.params ?? [])],
     bindings,
     paramSpans: paramSpansOf(ctx, node),
     key: by ? exprOf(ctx, by.value) : null,
+  };
+}
+
+function lowerFor(ctx: Ctx, node: Node): IrNode {
+  const head = lowerForHead(ctx, node);
+  // The loop body is a JS block, so a `<const>` inside it is confined to it.
+  const unscope = scopeBindings(ctx);
+  const restore = shadowBindings(ctx, head.bindings);
+  const children = lowerChildren(ctx, node.body?.body ?? []);
+  restore();
+  unscope();
+
+  return {
+    kind: "For",
+    ...head,
     children,
     loc: posOf(node),
   };
@@ -853,9 +1337,20 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 /** A tag this host claims, with every part lowered for its emitter. */
 function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
   const loc = posOf(node);
+  const target: ComponentTarget =
+    name === DYNAMIC_TAG
+      ? { kind: "dynamic", expr: exprOf(ctx, node.name) }
+      : { kind: "name", name };
+  const resolvedInput =
+    ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input;
+  const loweredTags = lowerAttributeTags(
+    ctx,
+    node,
+    schemaFor(resolvedInput, targetName(target)),
+  );
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(node));
-  const children = lowerChildren(ctx, node.body?.body ?? []);
+  const children = lowerChildren(ctx, loweredTags.contentChildren);
   restore();
   unscope();
 
@@ -865,7 +1360,9 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
       name,
       attrs: lowerAttrs(ctx, node, name),
       children,
-      attributeTags: lowerAttributeTags(ctx, node),
+      attributeTags: loweredTags.flat,
+      attributeTagTree: loweredTags.tree,
+      attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
       var: node.var ? declName(ctx, node.var) : null,
       data: ctx.declarations.resolveHostTag?.(name, node, ctx),
@@ -986,7 +1483,7 @@ function lowerCustomTag(
       node,
     );
   }
-  validateAttributeTagShape(node);
+  validateParentCollisions(node);
 
   const children = node.body?.body ?? [];
   const call: TagCall = {
@@ -994,7 +1491,7 @@ function lowerCustomTag(
     loc: posOf(node),
     attrs: lowerAttrs(ctx, node, name, "component"),
     content: isBuiltin || hasContent(children) ? lowerBlock(ctx, node) : null,
-    attributeTags: lowerAttributeTags(ctx, node),
+    attributeTags: lowerAttributeTags(ctx, node).flat,
     params: paramsOf(ctx, node),
     var: node.var ? declName(ctx, node.var) : null,
   };
@@ -1036,16 +1533,40 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     params: true,
   });
 
-  validateAttributeTagShape(node);
-
-  const children = node.body?.body ?? [];
+  const input =
+    ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input;
+  const owner = targetName(target);
+  if (input.kind === "unresolved" && containsAttributeTags(node)) {
+    const pos = posOf(node.name ?? node);
+    warn(ctx, {
+      message: `couldn't read \`<${owner}>\`'s Input (\`${input.specifier}\` not resolvable); attribute-tag shape inferred from this call`,
+      line: pos.line,
+      column: pos.column,
+      file: ctx.filename,
+    });
+  }
+  const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, owner));
+  if (input.kind === "invalid") {
+    for (const tag of loweredTags.flat) {
+      const invalid = input.errors.get(tag.name);
+      if (invalid) {
+        fail(
+          `can't read \`<${owner}>\`'s declaration of \`${tag.name}\` (${input.path}); declare its config literally`,
+          { loc: { start: tag.loc } },
+        );
+      }
+    }
+  }
+  const children = loweredTags.contentChildren;
   return {
     kind: "Component",
     target,
     nameSpan: target.kind === "dynamic" ? null : nodeSpan(ctx, node.name),
     attrs: lowerAttrs(ctx, node, targetName(target), "component"),
     content: hasContent(children) ? lowerBlock(ctx, node) : null,
-    attributeTags: lowerAttributeTags(ctx, node),
+    attributeTags: loweredTags.flat,
+    attributeTagTree: loweredTags.tree,
+    attrTagProps: loweredTags.props,
     args: (node.arguments ?? []).map((a: Node) => exprOf(ctx, a)),
     loc: posOf(node),
   };
@@ -1068,6 +1589,17 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (node.name && node.name.type !== "StringLiteral") {
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
+    const dynamicExpr = exprOf(ctx, node.name);
+    const member = /^input\.([A-Za-z_$][\w$]*)$/.exec(dynamicExpr.code);
+    if (member && ctx.ownInput?.kind === "declared") {
+      const declaration = ctx.ownInput.attrTags.get(member[1] as string);
+      if (declaration?.as === "data") {
+        fail(
+          `\`input.${member[1]}\` is a data attribute tag; render its body with \`<\${input.${member[1]}.content}/>\``,
+          node.name,
+        );
+      }
+    }
     const claimed = ctx.declarations.claimsTag?.(
       DYNAMIC_TAG,
       ctx,
@@ -1076,7 +1608,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     if (claimed) return lowerHostTag(ctx, node, DYNAMIC_TAG);
     return lowerComponent(ctx, node, {
       kind: "dynamic",
-      expr: exprOf(ctx, node.name),
+      expr: dynamicExpr,
     });
   }
 
@@ -1410,6 +1942,7 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
     imports: [],
     hoisted: [],
     inputInterface: null,
+    needsAttrTagImport: false,
     prelude: prelude.map(({ code, node }) => ({
       kind: "Hoisted",
       code,
@@ -1446,6 +1979,24 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
   }
 
   ir.imports.push(...(ctx.customTagImportNodes ?? []));
+
+  const typeText = [
+    ir.inputInterface?.code ?? "",
+    ...ir.hoisted
+      .filter(
+        (node): node is Extract<IrNode, { kind: "Static" }> =>
+          node.kind === "Static",
+      )
+      .map((node) => node.code),
+  ].join("\n");
+  const hasAuthoredAttrTagImport =
+    /\bimport\s+(?:type\s+)?(?:\{[^}]*\bAttrTag\b[^}]*\}|AttrTag\b)[\s\S]*?\bfrom\b/.test(
+      ctx.source,
+    );
+  ir.needsAttrTagImport =
+    /\bAttrTag\b/.test(typeText) &&
+    !ctx.imports.has("AttrTag") &&
+    !hasAuthoredAttrTagImport;
 
   if (isFileRoot && ctx.customTags) {
     // Prepended as one block, after the body is assembled: a `finalize` node

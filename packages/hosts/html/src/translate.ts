@@ -474,6 +474,7 @@ function resolveHostTag(name: string, node: Node, ctx: Ctx): HostTagData {
 }
 
 export const policy: Policy = {
+  name: "@mxlang/html",
   tags: TAGS,
   isElement,
   isComponent,

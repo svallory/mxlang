@@ -442,6 +442,24 @@ export function routeTemplateCall(
     );
   }
 
+  const attributeTagTree = call.attributeTags.map((attributeTag) => ({
+    kind: "AttributeTag" as const,
+    tag: attributeTag,
+    loc: attributeTag.loc,
+  }));
+  const attrTagProps = [
+    ...new Set(call.attributeTags.map((attributeTag) => attributeTag.name)),
+  ].map((name) => ({
+    name,
+    cardinality:
+      call.attributeTags.filter((attributeTag) => attributeTag.name === name)
+        .length > 1
+        ? ("array" as const)
+        : ("single" as const),
+    as: "data" as const,
+    source: attributeTagTree.filter((item) => item.tag.name === name),
+  }));
+
   return [
     {
       kind: "Component",
@@ -450,6 +468,8 @@ export function routeTemplateCall(
       attrs: call.attrs,
       content: call.content,
       attributeTags: call.attributeTags,
+      attributeTagTree,
+      attrTagProps,
       args: [],
       // Carried to the emitters because the `{ value, output }` shape is
       // invisible at the call site: a host cannot compile the callee to find
