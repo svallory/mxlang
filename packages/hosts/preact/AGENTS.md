@@ -29,9 +29,12 @@ Six facts worth knowing before editing it:
   taglib lookup and in-scope bindings (the same rule as `@mxlang/html`), and
   `componentAlias` renames such a component in the emitted JSX, binding
   `MxBadge` beside it.
-- **A repeated attribute tag is an array**, as Marko does it — which is what
-  lets the callee write `<for|it| of=input.item>`. Emitting the prop twice
-  let the last one win.
+- **Attribute tags emit from core's `attrTagProps` plan** (decisions 106–107),
+  never by regrouping the flat occurrence list. `data` values are
+  `{ ...attrs, ...nestedProps, content }`; `renderable` values are the body;
+  repeated values are real arrays; conditionals are ternaries and loops use
+  `.flatMap`. On Preact, `content` is `ComponentChildren` and is a render
+  function when params are declared.
 - **Every `<for>` row carries a `key`**, defaulting to the row's own identity
   when `by=` is absent (the item for `of`, the property name for `in`, the
   loop value for a range). Documented as this host's rule rather than left
@@ -51,8 +54,8 @@ Six facts worth knowing before editing it:
 
 `bun run oracle:preact` (`packages/oracle/src/report-preact.ts` +
 `preact-render.ts`) compiles every fixture in the stock `.marko` set — the
-same 43 `oracle:marko` uses — renders it with `preact-render-to-string`, and
-compares against `expected.html`: **30 pass, 13 skipped(reason), 0 bugs**. It
+same 45 `oracle:marko` uses — renders it with `preact-render-to-string`, and
+compares against `expected.html`: **29 pass, 16 skipped(reason), 0 bugs**. It
 passes `htmlEquals`'s new `attributeOrder: "ignore"` option, since Preact owns
 its serializer and emits props in its own order; `oracle:marko` keeps the
 strict default, where attribute order is real output. Like `oracle:marko` it
@@ -64,4 +67,3 @@ this one: a Preact component's body is JSX, and parsed as plain TS its
 no exports ("File '…/Counter.mx' is not a module"). TSX is a superset for the
 other hosts' JSX-free output, whose one narrowing (`<T>x` as a type assertion)
 none of them emits.
-

@@ -20,6 +20,8 @@ export interface Target {
   name: string;
   /** Value of the emitted `/** @jsxImportSource … *\/` pragma. */
   jsxImportSource: string;
+  /** Package that exports this target's specialised `AttrTag` type. */
+  attrTagModule: string;
   /**
    * How this target spells the class attribute in JSX.
    *
@@ -90,6 +92,7 @@ export interface Target {
 export const preactTarget: Target = {
   name: "Preact",
   jsxImportSource: "preact",
+  attrTagModule: "@mxlang/preact",
   classAttr: "class",
   forAttr: "for",
   rawHtmlProp: "dangerouslySetInnerHTML",

@@ -53,6 +53,8 @@
 
 import { readFileSync } from "node:fs";
 import {
+  type AttrTagConfig,
+  type AttrTagOf,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -69,6 +71,7 @@ import {
   type RawSourceMap,
   TranslateError,
 } from "@mxlang/core";
+import type { ComponentChildren } from "preact";
 import {
   componentAlias,
   createEmitter,
@@ -76,6 +79,7 @@ import {
 } from "./emitter.ts";
 import { preactTarget, type Target } from "./target.ts";
 
+export type { AttrTagConfig, AttrTagOf } from "@mxlang/core";
 // Re-exported for the hosts built on this emitter (`@mxlang/react`,
 // `@mxlang/hono`), which depend on this package rather than on the core
 // directly. Their Bun loaders need tag discovery, and a second dependency
@@ -91,6 +95,12 @@ export {
 export { MxErrorBoundary, MxPlaceholder, mxClass } from "./runtime.ts";
 export { preactTarget, type Target } from "./target.ts";
 export type { CompileResult, RawSourceMap };
+
+/** Attribute-tag value specialised to Preact's renderable child type. */
+export type AttrTag<
+  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  C extends AttrTagConfig = {},
+> = AttrTagOf<C, ComponentChildren>;
 
 const host = {
   /**
@@ -219,6 +229,9 @@ export function emitModuleWithMappings(
   }
 
   const lines: string[] = [`/** @jsxImportSource ${target.jsxImportSource} */`];
+  if (ir.needsAttrTagImport) {
+    lines.push(`import type { AttrTag } from "${target.attrTagModule}";`);
+  }
   const imports = importLines(emitter.runtimeImports, target);
   if (imports.length > 0) lines.push(...imports);
 

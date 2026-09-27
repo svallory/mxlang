@@ -4,6 +4,7 @@ import { createJsxDeclarations, type Target } from "@mxlang/preact";
 export const honoTarget: Target = {
   name: "Hono",
   jsxImportSource: "hono/jsx",
+  attrTagModule: "@mxlang/hono",
   classAttr: "class",
   forAttr: "for",
   rawHtmlProp: "dangerouslySetInnerHTML",

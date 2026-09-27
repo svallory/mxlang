@@ -147,6 +147,7 @@ export function buildReactEventPropNames(): Record<string, string> {
 export const reactTarget: Target = {
   name: "React",
   jsxImportSource: "react",
+  attrTagModule: "@mxlang/react",
   classAttr: "className",
   forAttr: "htmlFor",
   rawHtmlProp: "dangerouslySetInnerHTML",

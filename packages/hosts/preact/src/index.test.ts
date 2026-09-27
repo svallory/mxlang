@@ -10,7 +10,7 @@
  */
 
 import type { CustomTag } from "@mxlang/core";
-import { h } from "preact";
+import { type FunctionComponent, h } from "preact";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx, preactDeclarations, preactTarget } from "./index.ts";
 
@@ -80,6 +80,11 @@ describe("module shape", () => {
     const code = compile("<p>hi</p>");
     expect(code).not.toContain('from "preact"');
     expect(code).not.toContain("@mxlang/preact/runtime");
+  });
+
+  it("imports the host-specialised AttrTag type when core requests it", () => {
+    const code = compile("export interface Input { head?: AttrTag }\n<p>x</p>");
+    expect(code).toContain('import type { AttrTag } from "@mxlang/preact";');
   });
 });
 
@@ -306,24 +311,21 @@ describe("components", () => {
       markup(
         'import Card from "./card.mx"\n<Card><@footer>f</@footer><p>b</p></Card>',
       ),
-    ).toContain("footer={<>f</>}");
+    ).toContain("footer={{ content: <>f</> }}");
   });
 
-  it("collapses a repeated attribute tag into an array prop", () => {
-    // Marko's own rule, and what lets the callee write
-    // `<for|it| of=input.item><${it}/></for>`. Emitting the prop twice let
-    // the last one win, so the callee's loop iterated a single node.
+  it("emits repeated fallback attribute tags as an array of data values", () => {
     expect(
       markup(
         'import List from "./list.mx"\n<List><@item>a</@item><@item>b</@item></List>',
       ),
-    ).toContain("item={[<>a</>, <>b</>]}");
+    ).toContain("item={[{ content: <>a</> }, { content: <>b</> }]}");
   });
 
   it("maps only the first repeated attribute tag's name, never a fabricated position for the rest", () => {
     // A second (or later) `<@item>` contributes another array entry with no
-    // name string of its own in the generated text — `item={[<>a</>, <>b</>]}`
-    // has one `item` to map to, not two. A prior version of this code pushed
+    // name string of its own in the generated text — the data-value array has
+    // one `item` prop name to map, not two. A prior version pushed
     // a synthetic mapping for every repeat, hardcoded to the *first*
     // occurrence's generated position — silently misattributing any
     // diagnostic on the second tag's name to the first tag's source location.
@@ -351,12 +353,12 @@ describe("components", () => {
     expect(secondMapping).toBeUndefined();
   });
 
-  it("passes an attribute tag with params as a function prop", () => {
+  it("puts a parameterized fallback body on the data value's content", () => {
     expect(
       markup(
         'import Card from "./card.mx"\n<Card><@row|item|>${item}</@row></Card>',
       ),
-    ).toContain("row={(item) => item}");
+    ).toContain("row={{ content: (item) => item }}");
   });
 
   it("passes tag params as a render-prop child", () => {
@@ -452,9 +454,8 @@ describe("mxDynamic's three value kinds (rendered)", () => {
       );
       const entry = join(scratch, "dyn.tsx");
       writeFileSync(entry, code);
-      // biome-ignore lint/suspicious/noExplicitAny: bridges the compiled module's real props type into `h`'s untyped generic
       const mod = (await import(`${entry}?t=${Date.now()}`)) as {
-        default: any;
+        default: FunctionComponent<Record<string, unknown>>;
       };
       return render(h(mod.default, input as Record<string, unknown>));
     } finally {
@@ -463,7 +464,6 @@ describe("mxDynamic's three value kinds (rendered)", () => {
   }
 
   it("renders a string target as an element with that tag name", async () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     const html = await renderCompiled('<${input.tag} class="x"/>', {
       tag: "span",
     });
@@ -471,7 +471,6 @@ describe("mxDynamic's three value kinds (rendered)", () => {
   });
 
   it("renders a function target by calling it as a component", async () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     const html = await renderCompiled("<${input.tag} n=1/>", {
       tag: (props: { n: number }) => `<em>${props.n}</em>`,
     });
@@ -485,37 +484,34 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     // The `nested-layout` oracle fixture's real shape: a caller's ordinary
     // JSX children become `input.content`, and `<${input.content}/>` must
     // render that tree as-is, not treat it as a component or tag name.
-    const html = await renderCompiled(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
-      "<div><${input.content}/></div>",
-      { children: h("em", null) },
-    );
+    const html = await renderCompiled("<div><${input.content}/></div>", {
+      children: h("em", null),
+    });
     expect(html).toBe("<div><em></em></div>");
+  });
+
+  it("passes fallback data-shaped attribute tags through a dynamic call", async () => {
+    const html = await renderCompiled("<${input.tag}><@head>H</@head></>", {
+      tag: (props: { head: { content: unknown } }) => props.head.content,
+    });
+    expect(html).toBe("H");
   });
 });
 
 /**
- * Attribute-tag rendered shape (decision 104, `attribute-tag-silent-drops`)
- * — executed, not just emitted-JSX-text, assertions, since the whole point
- * is what a real prop read/iteration does.
- *
- * A single `<@name>` is a bare value; a repeated `<@name>` is an array, in
- * source order. This shape is expected to change under the upcoming
- * decision 106 (attribute-tag value cardinality declared by the consumer's
- * `Input` type); these tests pin today's behavior so that change has a
- * clear before/after.
+ * Attribute-tag rendered shape (decisions 106–107), executed through Preact
+ * rather than asserted only as emitted source text.
  */
 describe("attribute tag values (executed)", () => {
   /**
-   * `<define/Row|item|>` reports what it received back as JSON-ish markup so
-   * the assertion runs against the real value the callee saw at render time
-   * (not the emitted source text), without needing a real component file on
-   * disk the way `mxDynamic`'s own `renderCompiled` above does for a full
-   * JSX render.
+   * A temporary `row.mx` is written before its caller is compiled, so core's
+   * real callee-Input resolver sees declared shapes. Both generated modules
+   * are then rendered together through Preact.
    */
   async function renderCompiled(
     callerBody: string,
     rowBody: string,
+    input: Record<string, unknown> = {},
   ): Promise<string> {
     const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
       "node:fs"
@@ -525,11 +521,6 @@ describe("attribute tag values (executed)", () => {
     const { render } = (await import("preact-render-to-string")) as {
       render: (vnode: unknown) => string;
     };
-    const callerCode = compilePreactMx(
-      callerBody,
-      "/fixtures/attrtag.mx",
-    ).code.replace('from "./row.mx"', 'from "./row.tsx"');
-    const rowCode = compilePreactMx(rowBody, "/fixtures/row.mx").code;
     const scratch = mkdtempSync(join(tmpdir(), "mx-preact-attrtag-"));
     try {
       const repoNodeModules = dirname(
@@ -546,35 +537,76 @@ describe("attribute tag values (executed)", () => {
           compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
         }),
       );
+      const rowSource = join(scratch, "row.mx");
+      writeFileSync(rowSource, rowBody);
+      const rowCode = compilePreactMx(rowBody, rowSource).code;
+      const callerSource = join(scratch, "attrtag.mx");
+      const callerCode = compilePreactMx(callerBody, callerSource).code.replace(
+        'from "./row.mx"',
+        'from "./row.tsx"',
+      );
       writeFileSync(join(scratch, "row.tsx"), rowCode);
       const entry = join(scratch, "attrtag.tsx");
       writeFileSync(entry, callerCode);
-      // biome-ignore lint/suspicious/noExplicitAny: bridges the compiled module's real props type into `h`'s untyped generic
       const mod = (await import(`${entry}?t=${Date.now()}`)) as {
-        default: any;
+        default: FunctionComponent<Record<string, unknown>>;
       };
-      return render(h(mod.default, {}));
+      return render(h(mod.default, input));
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
   }
 
-  it("a single attribute tag is a bare, non-iterable value", async () => {
+  it("fallback single and array values use the data shape", async () => {
     const html = await renderCompiled(
-      'import Row from "./row.mx"\n<Row><@item>solo</@item></Row>',
-      '<div>isArray=${String(Array.isArray(input.item))} iterable=${String(typeof input.item[Symbol.iterator] === "function")}</div>',
+      'import Row from "./row.mx"\n<Row><@item>solo</@item><@many>a</@many><@many>b</@many></Row>',
+      '<div>single=${String(!Array.isArray(input.item) && "content" in input.item)} array=${String(Array.isArray(input.many))} entries=${String(input.many.every((item) => "content" in item))}</div>',
     );
-    expect(html).toContain("isArray=false");
-    expect(html).toContain("iterable=false");
+    expect(html).toContain("single=true");
+    expect(html).toContain("array=true");
+    expect(html).toContain("entries=true");
   });
 
-  it("a repeated attribute tag is an array", async () => {
+  it("emits declared data, array, renderable, params and bodyless shapes", async () => {
     const html = await renderCompiled(
-      'import Row from "./row.mx"\n<Row><@item>a</@item><@item>b</@item></Row>',
-      "<div>isArray=${String(Array.isArray(input.item))} length=${String(input.item.length)}</div>",
+      [
+        'import Row from "./row.mx"',
+        '<Row><@head tone="hot">H</@head><@item id=1>A</@item><@item id=2>B</@item><@slot>S</@slot><@render|label|><b>${label}</b></@render><@empty/></Row>',
+      ].join("\n"),
+      [
+        'export interface Input { head: AttrTag<{ attrs: { tone: string } }>; item: AttrTag<{ attrs: { id: number } }>[]; none: AttrTag[]; slot: AttrTag<{ as: "renderable" }>; render: AttrTag<{ as: "renderable"; params: [label: string] }>; empty: AttrTag }',
+        '<section data-tone=input.head.tone><${input.head.content}/><for|item| of=input.item><i data-id=item.id><${item.content}/></i></for><${input.slot}/><${input.render("P")}/><u>${input.none.length}:${String(input.empty.content === undefined)}</u></section>',
+      ].join("\n"),
     );
-    expect(html).toContain("isArray=true");
-    expect(html).toContain("length=2");
+    expect(html).toBe(
+      '<section data-tone="hot">H<i data-id="1">A</i><i data-id="2">B</i>S<b>P</b><u>0:true</u></section>',
+    );
+  });
+
+  it("emits if/else values and merges static plus for values in order", async () => {
+    const html = await renderCompiled(
+      [
+        'import Row from "./row.mx"',
+        "<Row><if=input.ok><@head>A</@head></if><else><@head>B</@head></else><@item>S</@item><for|value| of=input.values><@item>${value}</@item></for></Row>",
+      ].join("\n"),
+      [
+        "export interface Input { head: AttrTag; item: AttrTag[] }",
+        "<div><${input.head.content}/><for|item| of=input.item><i>${item.content}</i></for></div>",
+      ].join("\n"),
+      { ok: false, values: ["1", "2"] },
+    );
+    expect(html).toBe("<div>B<i>S</i><i>1</i><i>2</i></div>");
+  });
+
+  it("recursively emits nested data tags two levels deep", async () => {
+    const html = await renderCompiled(
+      'import Row from "./row.mx"\n<Row><@tab title="One"><@icon label="star">I</@icon>T</@tab></Row>',
+      [
+        "export interface Input { tab: AttrTag<{ attrs: { title: string; icon: AttrTag<{ attrs: { label: string } }> } }>[] }",
+        "<article><for|tab| of=input.tab><h2>${tab.title}</h2><b>${tab.icon.label}:<${tab.icon.content}/></b><${tab.content}/></for></article>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<article><h2>One</h2><b>star:I</b>T</article>");
   });
 });
 
