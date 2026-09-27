@@ -101,3 +101,14 @@ strip-only TypeScript loader rejects. `types` still points at
 `src/public.d.ts`, so typechecking never needs a build; `bun run verify`
 builds before it tests.
 
+The plugin records two kinds of compilation evidence in one dependency-to-
+caller map: custom-tag scan locations and `CompileResult.dependencies` from
+core's callee-`Input` resolver. `handleHotUpdate` invalidates each suffixed MX
+caller when either kind changes, because editing a callee's `Input` changes the
+caller's generated attribute-tag shape even though Vite already has an ESM
+edge to the callee module itself. Keep per-caller reverse sets for both sources
+and prune old edges on every transform or deletion; otherwise a long-lived dev
+server retains stale callers. Tests that need a non-empty compile dependency
+mock the dynamically imported host inside `vi.resetModules()` and dynamically
+import a fresh plugin instance. Rebuild `packages/core/dist` before running
+these tests, because this package resolves core through its built entry.
