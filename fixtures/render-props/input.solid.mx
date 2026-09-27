@@ -1,13 +1,12 @@
 import { createSignal } from "solid-js";
-import type { AttrTag } from "@mxlang/core";
 
 interface User {
   name: string;
 }
 
 function Layout(props: {
-  header: AttrTag<{ as: "renderable" }>;
-  footer: AttrTag<{ as: "renderable"; params: [year: number] }>;
+  header: unknown;
+  footer: (year: number) => unknown;
   children: unknown;
 }) {
   // Each slot is wrapped in an element rather than sitting as a bare

@@ -639,19 +639,43 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /** An attribute tag's body in this host's renderable shape. */
-  #attributeTagRenderable(tag: AttributeTag): MappedCode {
+  #attributeTagRenderable(tag: AttributeTag, key?: string): MappedCode {
     // `hasBody` distinguishes `<@x/>` from a body whose rendered expression
     // happens to be empty. Decision 106 makes the former `undefined`, not a
     // null JSX child or an empty fragment.
     if (!tag.hasBody) return concatMapped("undefined");
-    const value = this.#expression(tag.block.children, true);
+    const children = meaningful(tag.block.children);
+    // Attribute-tag bodies cross a component boundary as host renderables.
+    // In particular, a lone placeholder must not become a bare string: a
+    // callee following the `<${x.content}/>` fix-it would then reinterpret
+    // that string as a dynamic tag name. A JSX element is already a host
+    // renderable; every other body shape is protected by a fragment.
+    const only = children.length === 1 ? children[0] : undefined;
+    let value =
+      only?.kind === "Element" ||
+      only?.kind === "Component" ||
+      only?.kind === "HostTag"
+        ? this.#render(children, true)
+        : concatMapped("<>", this.#render(children, true), "</>");
+    // The renderable nested inside every array entry needs a key even when
+    // the outer entry is data-shaped: consumers commonly render
+    // `items.map((item) => item.content)`. Put the key inside parameterized
+    // callbacks too, so their returned nodes are safe to collect in an array.
+    if (key !== undefined) {
+      this.#runtimeImports.add("Fragment");
+      value = concatMapped("<Fragment key={", key, "}>", value, "</Fragment>");
+    }
     if (!tag.block.hasParams) return value;
     return concatMapped(`(${tag.block.params.join(", ")}) => `, value);
   }
 
   /** One occurrence, shaped from the callee's resolved declaration. */
-  #attributeTagValue(tag: AttributeTag, as: AttrTagProp["as"]): MappedCode {
-    const content = this.#attributeTagRenderable(tag);
+  #attributeTagValue(
+    tag: AttributeTag,
+    as: AttrTagProp["as"],
+    key?: string,
+  ): MappedCode {
+    const content = this.#attributeTagRenderable(tag, key);
     if (as === "renderable") return content;
 
     const parts: Array<string | MappedCode> = [];
@@ -692,7 +716,7 @@ export class PreactEmitter implements Emitter<string> {
     return undefined;
   }
 
-  /** A singular plan as one lazy JavaScript expression. */
+  /** A singular plan as one JavaScript expression evaluated during render. */
   #attributeTagSingle(
     nodes: AttributeTagNode[],
     as: AttrTagProp["as"],
@@ -734,12 +758,14 @@ export class PreactEmitter implements Emitter<string> {
   #attributeTagArrayNode(
     node: AttributeTagNode,
     as: AttrTagProp["as"],
+    arrayType?: string,
+    key = JSON.stringify("0"),
   ): MappedCode {
     if (node.kind === "AttributeTag") {
-      return concatMapped("[", this.#attributeTagValue(node.tag, as), "]");
+      return concatMapped("[", this.#attributeTagValue(node.tag, as, key), "]");
     }
     if (node.kind === "AttributeTagFor") {
-      return this.#attributeTagFor(node.loop, node.nodes, as);
+      return this.#attributeTagFor(node.loop, node.nodes, as, arrayType, key);
     }
 
     const parts: Array<string | MappedCode> = [];
@@ -748,11 +774,13 @@ export class PreactEmitter implements Emitter<string> {
         parts.push(
           branch.test.code,
           " ? ",
-          this.#attributeTagArray(branch.nodes, as),
+          this.#attributeTagArray(branch.nodes, as, arrayType, `${key} + ":"`),
           " : ",
         );
       } else {
-        parts.push(this.#attributeTagArray(branch.nodes, as));
+        parts.push(
+          this.#attributeTagArray(branch.nodes, as, arrayType, `${key} + ":"`),
+        );
       }
     }
     if (node.branches.at(-1)?.test) parts.push("[]");
@@ -763,15 +791,24 @@ export class PreactEmitter implements Emitter<string> {
   #attributeTagArray(
     nodes: AttributeTagNode[],
     as: AttrTagProp["as"],
+    arrayType?: string,
+    keyPrefix?: string,
   ): MappedCode {
     if (nodes.length === 0) return concatMapped("[]");
     return concatMapped(
       "[",
       ...nodes.flatMap((node, index) => {
         const prefix = index === 0 ? "" : ", ";
+        const key = keyPrefix
+          ? `${keyPrefix} + ${JSON.stringify(String(index))}`
+          : JSON.stringify(String(index));
         return node.kind === "AttributeTag"
-          ? [prefix, this.#attributeTagValue(node.tag, as)]
-          : [prefix, "...", this.#attributeTagArrayNode(node, as)];
+          ? [prefix, this.#attributeTagValue(node.tag, as, key)]
+          : [
+              prefix,
+              "...",
+              this.#attributeTagArrayNode(node, as, arrayType, key),
+            ];
       }),
       "]",
     );
@@ -782,24 +819,54 @@ export class PreactEmitter implements Emitter<string> {
     loop: ForHead,
     nodes: AttributeTagNode[],
     as: AttrTagProp["as"],
+    arrayType?: string,
+    key = JSON.stringify("0"),
   ): MappedCode {
-    const body = this.#attributeTagArray(nodes, as);
+    const bodyText = nodes.map((node) => JSON.stringify(node)).join(" ");
     const [first = "item", second] = loop.params;
     const source = loop.source;
-    if (source.kind === "of") {
-      const params = second ? `${first}, ${second}` : first;
-      return concatMapped(
-        `[...${source.list.code}].flatMap((${params}) => `,
-        body,
-        ")",
+    const itemIndex =
+      source.kind === "of" && second
+        ? second
+        : hygienicName("mxAttrIndex", loop.params, bodyText);
+    const body = this.#attributeTagArray(
+      nodes,
+      as,
+      arrayType,
+      `${key} + ":" + ${itemIndex} + ":"`,
+    );
+    const result = (iterable: string, params: string): MappedCode => {
+      if (!arrayType) {
+        return concatMapped(`${iterable}.flatMap((${params}) => `, body, ")");
+      }
+      const accumulator = hygienicName(
+        "mxAttrTags",
+        [...loop.params, itemIndex],
+        body.code,
       );
+      // The explicit accumulator type contextually types object literals in
+      // the body, including `(n) =>` content callbacks nested under a loop.
+      return concatMapped(
+        `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat((`,
+        body,
+        `) satisfies ${arrayType}), [])`,
+      );
+    };
+    if (source.kind === "of") {
+      const params = `${first}, ${itemIndex}`;
+      return result(`[...${source.list.code}]`, params);
     }
     if (source.kind === "in") {
-      const value = second ?? "value";
-      return concatMapped(
-        `Object.entries(${source.object.code}).flatMap(([${first}, ${value}]) => `,
-        body,
-        ")",
+      const value =
+        second ??
+        hygienicName(
+          "value",
+          loop.params,
+          `${body.code} ${source.object.code}`,
+        );
+      return result(
+        `Object.entries(${source.object.code})`,
+        `[${first}, ${value}], ${itemIndex}`,
       );
     }
 
@@ -813,22 +880,29 @@ export class PreactEmitter implements Emitter<string> {
     const value = step
       ? `(${from}) + ${counter} * (${step.code})`
       : `(${from}) + ${counter}`;
-    return concatMapped(
-      `Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value}).flatMap((${first}) => `,
-      body,
-      ")",
+    return result(
+      `Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value})`,
+      `${first}, ${itemIndex}`,
     );
   }
 
   /** The resolved value for one callee-declared attribute-tag prop. */
-  #attributeTagProp(prop: AttrTagProp): MappedCode {
-    return prop.cardinality === "array"
-      ? this.#attributeTagArray(prop.source, prop.as)
-      : this.#attributeTagSingle(prop.source, prop.as);
+  #attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
+    if (prop.cardinality !== "array") {
+      return this.#attributeTagSingle(prop.source, prop.as);
+    }
+    const arrayType =
+      owner && prop.declared
+        ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
+        : undefined;
+    const value = this.#attributeTagArray(prop.source, prop.as, arrayType);
+    return arrayType
+      ? concatMapped("(", value, ` satisfies ${arrayType})`)
+      : value;
   }
 
   /** A component's resolved attribute-tag plan in JSX attribute syntax. */
-  #attributeTagProps(props: AttrTagProp[]): MappedCode {
+  #attributeTagProps(props: AttrTagProp[], owner: string): MappedCode {
     return concatMapped(
       ...props.map((prop) => {
         const first = this.#firstAttributeTag(prop.source);
@@ -836,7 +910,7 @@ export class PreactEmitter implements Emitter<string> {
           " ",
           mapped(prop.name, first?.nameSpan ?? null),
           "={",
-          this.#attributeTagProp(prop),
+          this.#attributeTagProp(prop, owner),
           "}",
         );
       }),
@@ -860,6 +934,10 @@ export class PreactEmitter implements Emitter<string> {
    */
   #propsObject(node: Extract<IrNode, { kind: "Component" }>): string {
     const parts: string[] = [];
+    const owner =
+      node.target.kind === "dynamic"
+        ? undefined
+        : componentAlias(node.target.name);
     for (const attr of node.attrs) {
       if (attr.kind === "spread") {
         parts.push(`...${attr.value.code}`);
@@ -872,7 +950,7 @@ export class PreactEmitter implements Emitter<string> {
 
     for (const prop of node.attrTagProps) {
       parts.push(
-        `${JSON.stringify(prop.name)}: ${this.#attributeTagProp(prop).code}`,
+        `${JSON.stringify(prop.name)}: ${this.#attributeTagProp(prop, owner).code}`,
       );
     }
 
@@ -981,7 +1059,7 @@ export class PreactEmitter implements Emitter<string> {
     }
 
     const attrs = this.#attrs(node.attrs, true, true);
-    const tags = this.#attributeTagProps(node.attrTagProps);
+    const tags = this.#attributeTagProps(node.attrTagProps, name);
 
     // A unit that declares `<return>` hands back `{ value, output }`, so the
     // call is evaluated rather than described. With a `/var` it becomes two
