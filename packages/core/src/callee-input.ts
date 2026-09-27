@@ -26,6 +26,7 @@ import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import { parse } from "@babel/parser";
+import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
 import type { ComponentTarget } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
@@ -242,28 +243,39 @@ export function readCalleeInput(
     parsedSources = analyzed.parsedSources;
     result = { input: analyzed.input, dependencies: analyzed.dependencies };
   } catch (error) {
-    const candidate = error as { message?: string; pos?: number };
-    const position = candidate.pos ?? 0;
-    result = {
-      input: {
-        kind: "invalid",
-        path: resolved.path,
-        errors: new Map([
-          [
-            "<parse>",
-            {
-              message: candidate.message ?? String(error),
-              span: {
-                file: resolved.path,
-                sourceStart: position,
-                sourceEnd: position,
-              },
-            },
-          ],
-        ]),
-      },
-      dependencies: [resolved.path],
+    const candidate = error as {
+      message?: string;
+      pos?: number;
+      [CALLEE_INPUT_ERROR]?: CalleeInput;
     };
+    if (candidate[CALLEE_INPUT_ERROR]?.kind === "invalid") {
+      result = {
+        input: candidate[CALLEE_INPUT_ERROR],
+        dependencies: [resolved.path],
+      };
+    } else {
+      const position = candidate.pos ?? 0;
+      result = {
+        input: {
+          kind: "invalid",
+          path: resolved.path,
+          errors: new Map([
+            [
+              "<parse>",
+              {
+                message: candidate.message ?? String(error),
+                span: {
+                  file: resolved.path,
+                  sourceStart: position,
+                  sourceEnd: position,
+                },
+              },
+            ],
+          ]),
+        },
+        dependencies: [resolved.path],
+      };
+    }
   }
   if (!pending) {
     touchAndEvict(

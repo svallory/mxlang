@@ -32,6 +32,7 @@ import {
   readCalleeInput,
   readOwnInput,
 } from "./callee-input.ts";
+import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import {
   attrByName,
   bindingIdentifiers,
@@ -701,9 +702,16 @@ function raiseInvalidOwnInput(ctx: Ctx, input: CalleeInput): void {
     name === "<parse>"
       ? `can't read this component's Input (${position.file}:${position.line}:${position.column}): ${cleanParseMessage(error.message)}`
       : `can't read this component's declaration of \`${name}\` (${position.file}:${position.line}); ${error.message}`;
-  fail(message, {
-    loc: { start: positionAtOffset(ctx, error.span.sourceStart) },
-  });
+  try {
+    fail(message, {
+      loc: { start: positionAtOffset(ctx, error.span.sourceStart) },
+    });
+  } catch (cause) {
+    if (cause && typeof cause === "object") {
+      Object.defineProperty(cause, CALLEE_INPUT_ERROR, { value: input });
+    }
+    throw cause;
+  }
 }
 
 function declarationFor(
