@@ -1,0 +1,2 @@
+static type Input = { icon?: AttrTag<{ as: "renderable" }> };
+<i/>

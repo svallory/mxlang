@@ -16,19 +16,20 @@ export type { CompileResult, RawSourceMap };
 export function compileReactMx(
   source: string,
   filename: string,
-  options: Pick<CompilePreactOptions, "customTags"> = {},
+  options: Pick<CompilePreactOptions, "customTags" | "resolveImport"> = {},
 ): CompilePreactResult {
   return compilePreactMx(source, filename, {
     target: reactTarget,
     declarations: reactDeclarations,
     customTags: options.customTags,
+    resolveImport: options.resolveImport,
   });
 }
 
 /** `compileReactMx()` over a file on disk. */
 export function compileReactFile(
   filename: string,
-  options: Pick<CompilePreactOptions, "customTags"> = {},
+  options: Pick<CompilePreactOptions, "customTags" | "resolveImport"> = {},
 ): CompileResult {
   return compileReactMx(readFileSync(filename, "utf8"), filename, options);
 }

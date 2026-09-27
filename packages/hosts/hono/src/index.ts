@@ -16,19 +16,20 @@ export type { CompileResult, RawSourceMap };
 export function compileHonoMx(
   source: string,
   filename: string,
-  options: Pick<CompilePreactOptions, "customTags"> = {},
+  options: Pick<CompilePreactOptions, "customTags" | "resolveImport"> = {},
 ): CompilePreactResult {
   return compilePreactMx(source, filename, {
     target: honoTarget,
     declarations: honoDeclarations,
     customTags: options.customTags,
+    resolveImport: options.resolveImport,
   });
 }
 
 /** `compileHonoMx()` over a file on disk. */
 export function compileHonoFile(
   filename: string,
-  options: Pick<CompilePreactOptions, "customTags"> = {},
+  options: Pick<CompilePreactOptions, "customTags" | "resolveImport"> = {},
 ): CompileResult {
   return compileHonoMx(readFileSync(filename, "utf8"), filename, options);
 }

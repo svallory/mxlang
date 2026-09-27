@@ -59,8 +59,14 @@ Five facts worth knowing before editing it:
   imported callees, parses complete TS/TSX modules with `@babel/parser`'s
   `typescript` + `jsx` plugins, and reaches `.mx` declarations through the
   existing template-metadata compile/cache. It follows only bounded literal
-  aliases and `import type` edges, records every file read in
-  `CompileResult.dependencies`, and caches by path + mtime + source. Keep this
+  aliases, re-exports, and `import type` edges. Every followed file has its own
+  declaration/import/`AttrTag` scope; never merge names across files. Spans
+  carry the declaring file and use offsets into that file, including `.mx`
+  Input slices. The resolver records files and missing extension candidates in
+  `CompileResult.dependencies`, and caches by path plus snapshots of every
+  dependency; calls with a tool resolver skip the shared cache. `readOwnInput`
+  reads the current unit before its template metadata is complete, while a
+  pending cross-file metadata entry remains unknown and is not cached. Keep this
   path synchronous: Bun loaders, Volar, diagnostics, and `mx-tsc` cannot await
   it. Do not replace full TSX parsing with declaration text extraction, and do
   not add a `core -> @mxlang/parser` dependency: parser's Solid test path

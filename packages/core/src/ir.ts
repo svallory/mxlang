@@ -297,6 +297,8 @@ export interface AttrTagProp {
   cardinality: "single" | "array";
   as: "data" | "renderable";
   source: AttributeTagNode[];
+  /** Internal provenance retained when a custom-tag transform rebuilds it. */
+  declared?: boolean;
 }
 
 /**

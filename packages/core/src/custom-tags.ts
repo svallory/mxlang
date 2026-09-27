@@ -210,6 +210,7 @@ function filterAttributeTagTreeByName(
 }
 
 function rebuildAttributeTagPlan(
+  owner: string,
   originalTree: readonly AttributeTagNode[],
   originalProps: readonly AttrTagProp[],
   tags: readonly AttributeTag[],
@@ -235,15 +236,31 @@ function rebuildAttributeTagPlan(
   }
 
   const declarations = new Map(
-    originalProps.map(({ name, cardinality, as }) => [
-      name,
-      { cardinality, as },
-    ]),
+    originalProps
+      .filter(({ declared }) => declared)
+      .map(({ name, cardinality, as }) => [name, { cardinality, as }]),
   );
   const names = [...new Set(tags.map((tag) => tag.name))];
   const attrTagProps = names.map((name): AttrTagProp => {
     const declaration = declarations.get(name);
     const range = attributeTagOccurrenceRange(attributeTagTree, name);
+    if (declaration?.cardinality === "single") {
+      const occurrences = tags.filter((tag) => tag.name === name);
+      if (range.inFor) {
+        failAt(
+          owner,
+          `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          occurrences[0]?.loc ?? { line: 0, column: 0 },
+        );
+      }
+      if (range.max > 1) {
+        failAt(
+          owner,
+          `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          (occurrences[1] ?? occurrences[0])?.loc ?? { line: 0, column: 0 },
+        );
+      }
+    }
     return {
       name,
       cardinality:
@@ -1143,16 +1160,18 @@ export function transformCustomTag(
       directAttributeTagTree(withDefaults.attributeTags),
   );
   const originalAttrTagProps = (withDefaults.attrTagProps ?? []).map(
-    ({ name, cardinality, as, source }) => ({
+    ({ name, cardinality, as, source, declared }) => ({
       name,
       cardinality,
       as,
+      declared,
       source: cloneAttributeTagTree(source),
     }),
   );
   const normalizeTemplateCall = (routedCall: TagCall): TagCall => ({
     ...routedCall,
     ...rebuildAttributeTagPlan(
+      call.name,
       originalAttributeTagTree,
       originalAttrTagProps,
       routedCall.attributeTags,

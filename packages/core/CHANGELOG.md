@@ -23,6 +23,12 @@ and followed type-import file read during lowering. Integrations must use these
 edges to invalidate callers when a callee's `Input` changes; the array remains
 empty until lowering invokes the resolver.
 
+Lowering now supplies authored import specifiers and discovered resolved paths
+to the reader, reads the current unit's own `Input`, and uses declared callee
+cardinality in end-to-end attribute-tag plans. Resolver scopes are per file;
+file-qualified spans, re-exports, parse failures, missing resolution candidates,
+and dependency edits participate in diagnostics and cache invalidation.
+
 ### Breaking: an element's `on<Name>`/`on-<exact>` attribute lowers to a new `event` attr kind
 
 An attribute on an **element** matching `/^on[A-Z-]/` **whose value is an

@@ -22,7 +22,7 @@
  * when a callee's `Input` changes.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import { parse } from "@babel/parser";
@@ -49,7 +49,11 @@ export interface AttrTagDecl {
   /** The `attrs` config is not a closed literal: unknown nested names allowed. */
   nestedOpen: boolean;
   /** Position in the callee's `Input` text, for messages. */
-  span: SourceSpan;
+  span: FileSpan;
+}
+
+export interface FileSpan extends SourceSpan {
+  file?: string;
 }
 
 /**
@@ -82,7 +86,7 @@ export type CalleeInput =
   | {
       kind: "invalid";
       path: string;
-      errors: Map<string, { message: string; span: SourceSpan }>;
+      errors: Map<string, { message: string; span: FileSpan }>;
     };
 
 /**
@@ -144,8 +148,25 @@ export function resetCalleeInputCache(): void {
  */
 export function readCalleeInput(
   target: ComponentTarget,
-  context: ResolveContext,
+  value: ResolveContext | Ctx,
 ): CalleeInputResult {
+  const context: ResolveContext =
+    "filename" in value
+      ? {
+          importer: value.filename,
+          resolveImport: value.resolveImport,
+          imports: value.importSpecifiers,
+          ctx: value,
+        }
+      : value;
+  if (
+    "filename" in value &&
+    target.kind === "name" &&
+    target.name === value.exportName &&
+    value.ownInput
+  ) {
+    return { input: value.ownInput, dependencies: [] };
+  }
   const resolved = resolveTarget(target, context);
   if (resolved.kind !== "path")
     return { input: resolved.input, dependencies: [] };
@@ -159,7 +180,9 @@ export function readCalleeInput(
     return { input: { kind: "none", path: resolved.path }, dependencies: [] };
   }
 
-  const cached = calleeCache.get(resolved.path);
+  const cached = context.resolveImport
+    ? undefined
+    : calleeCache.get(resolved.path);
   if (
     cached &&
     cached.mtimeMs === mtimeMs &&
@@ -170,18 +193,49 @@ export function readCalleeInput(
     return cached.result;
   }
 
-  const result = readInputAt(resolved.path, source, mtimeMs, context);
-  touchAndEvict(
-    calleeCache,
-    resolved.path,
-    {
-      mtimeMs,
-      source,
-      result,
-      dependencySnapshots: snapshotDependencies(result.dependencies),
-    },
-    MAX_CACHED_CALLEES,
-  );
+  let result: CalleeInputResult;
+  let pending = false;
+  try {
+    const analyzed = readInputAt(resolved.path, source, mtimeMs, context);
+    pending = analyzed.pending === true;
+    result = { input: analyzed.input, dependencies: analyzed.dependencies };
+  } catch (error) {
+    const candidate = error as { message?: string; pos?: number };
+    const position = candidate.pos ?? 0;
+    result = {
+      input: {
+        kind: "invalid",
+        path: resolved.path,
+        errors: new Map([
+          [
+            "<parse>",
+            {
+              message: candidate.message ?? String(error),
+              span: {
+                file: resolved.path,
+                sourceStart: position,
+                sourceEnd: position,
+              },
+            },
+          ],
+        ]),
+      },
+      dependencies: [resolved.path],
+    };
+  }
+  if (!context.resolveImport && !pending) {
+    touchAndEvict(
+      calleeCache,
+      resolved.path,
+      {
+        mtimeMs,
+        source,
+        result,
+        dependencySnapshots: snapshotDependencies(result.dependencies),
+      },
+      MAX_CACHED_CALLEES,
+    );
+  }
   recordDependencies(context.ctx, result.dependencies);
   return result;
 }
@@ -231,7 +285,7 @@ function snapshotsMatch(
         return false;
       }
     } catch {
-      return false;
+      if (snapshot.mtimeMs !== undefined) return false;
     }
   }
   return true;
@@ -249,6 +303,8 @@ function resolveTarget(
   // read; both take the syntactic fallback like an untyped callee.
   if (target.kind !== "name") return { kind: "input", input: { kind: "none" } };
 
+  if (target.resolvedPath) return { kind: "path", path: target.resolvedPath };
+
   const discovered = context.discovered?.get(target.name);
   if (discovered) return { kind: "path", path: discovered };
 
@@ -265,12 +321,17 @@ function resolveTarget(
 /** Extension probes, in the order the brief pins (literal path first). */
 const EXTENSION_PROBES = [".mx", ".solid.mx", ".tsx", ".ts", ".jsx", ".js"];
 
-function probeFile(base: string): string | undefined {
+function probeFile(base: string, probes?: string[]): string | undefined {
   for (const candidate of [
     base,
     ...EXTENSION_PROBES.map((ext) => base + ext),
   ]) {
-    if (existsSync(candidate)) return candidate;
+    probes?.push(candidate);
+    try {
+      if (statSync(candidate).isFile()) return candidate;
+    } catch {
+      // Missing candidates are still dependencies so creating one invalidates.
+    }
   }
   return undefined;
 }
@@ -290,12 +351,14 @@ export function resolveSpecifier(
   specifier: string,
   context: ResolveContext,
   importer = context.importer,
+  probes?: string[],
 ): string | undefined {
   if (context.resolveImport) {
     const aliased = context.resolveImport(specifier, importer);
     if (typeof aliased === "string") {
       const probed = probeFile(
         isAbsolute(aliased) ? aliased : resolvePath(dirname(importer), aliased),
+        probes,
       );
       if (probed) return probed;
     }
@@ -305,10 +368,25 @@ export function resolveSpecifier(
     specifier.startsWith("/") ||
     isAbsolute(specifier)
   ) {
-    return probeFile(resolvePath(dirname(importer), specifier));
+    return probeFile(resolvePath(dirname(importer), specifier), probes);
   }
   try {
-    return require.resolve(specifier, { paths: [dirname(importer)] });
+    const resolved = require.resolve(specifier, { paths: [dirname(importer)] });
+    if (statSync(resolved).isFile()) return resolved;
+  } catch {
+    // Extension probing below handles package subpaths such as `.mx` files.
+  }
+  const parts = specifier.split("/");
+  const packageName = parts
+    .slice(0, specifier.startsWith("@") ? 2 : 1)
+    .join("/");
+  const subpath = parts.slice(specifier.startsWith("@") ? 2 : 1).join("/");
+  if (!subpath) return undefined;
+  try {
+    const packageJson = require.resolve(`${packageName}/package.json`, {
+      paths: [dirname(importer)],
+    });
+    return probeFile(resolvePath(dirname(packageJson), subpath), probes);
   } catch {
     return undefined;
   }
@@ -319,7 +397,7 @@ function readInputAt(
   source: string,
   mtimeMs: number | undefined,
   context: ResolveContext,
-): CalleeInputResult {
+): CalleeInputResult & { pending?: boolean } {
   if (path.endsWith(".mx")) {
     if (!context.ctx) {
       // A `.mx` callee's Input is read through the template-metadata cache,
@@ -335,8 +413,12 @@ function readInputAt(
       mtimeMs,
     });
     const dependencies = [path];
+    if (metadata.pending) {
+      return { input: { kind: "none", path }, dependencies, pending: true };
+    }
     const input = readInputFromText(
       path,
+      source,
       metadata.inputCode,
       metadata.inputAuxCode,
       true,
@@ -349,6 +431,7 @@ function readInputAt(
   const dependencies = [path];
   const input = readInputFromText(
     path,
+    source,
     source,
     undefined,
     false,
@@ -369,19 +452,55 @@ function readInputAt(
  */
 function readInputFromText(
   path: string,
+  source: string,
   inputCode: string | undefined,
   auxCode: string | undefined,
   allowStaticInput: boolean,
   dependencies: string[],
   context: ResolveContext,
 ): CalleeInput {
-  const analyzer = new InputAnalyzer(path, dependencies, context);
+  const analyzer = new InputAnalyzer(path, source, dependencies, context);
   if (auxCode !== undefined) analyzer.addAux(auxCode);
   if (inputCode !== undefined) analyzer.addProgram(inputCode);
 
   const inputDecl = analyzer.findInput(allowStaticInput);
   if (!inputDecl) return { kind: "none", path };
   return analyzer.analyzeInput(inputDecl);
+}
+
+/** Reads the current compilation unit without entering its pending template
+ * metadata entry. The lowerer supplies the already-sliced statement text. */
+export function readOwnInput(
+  ctx: Ctx,
+  inputCode: string | undefined,
+  auxCode: string | undefined,
+): CalleeInput {
+  if (
+    inputCode === undefined &&
+    !/(?:^|\n)\s*(?:interface|type)\s+Input\b/.test(auxCode ?? "")
+  ) {
+    return { kind: "none", path: ctx.filename };
+  }
+  const analyzer = new InputAnalyzer(ctx.filename, ctx.source, [], {
+    importer: ctx.filename,
+    resolveImport: ctx.resolveImport,
+    imports: ctx.importSpecifiers,
+    ctx,
+  });
+  for (const unit of (auxCode ?? "").split("\n")) {
+    if (!unit.trim()) continue;
+    try {
+      analyzer.addAux(unit);
+    } catch {
+      // The own-Input reader needs only declarations that parse independently;
+      // unrelated static syntax must not make a valid Input unusable.
+    }
+  }
+  if (inputCode) analyzer.addProgram(inputCode);
+  const declaration = analyzer.findInput(true);
+  return declaration
+    ? analyzer.analyzeInput(declaration)
+    : { kind: "none", path: ctx.filename };
 }
 
 /**
@@ -402,19 +521,24 @@ class InputAnalyzer {
   >();
   /** Files already read, so a type-import cycle terminates. */
   private readonly readFiles = new Set<string>();
+  private readonly reexportsSeen = new Set<string>();
   /** Non-mx `AttrTag` imports disqualify the identifier entirely. */
-  private attrTagDisallowed = false;
+  private readonly attrTagDisallowed = new Set<string>();
+  private readonly nodeFiles = new WeakMap<object, string>();
+  private readonly nodeOffsets = new WeakMap<object, number>();
 
   constructor(
     private readonly path: string,
+    private readonly source: string,
     private readonly dependencies: string[],
     private readonly context: ResolveContext,
   ) {}
 
   /** Parses one declaration source and merges its top-level nodes in. */
   addProgram(code: string): void {
-    for (const node of parseDeclarationModule(code) ?? []) {
-      this.addNode(node, this.path);
+    const offset = Math.max(0, this.source.indexOf(code));
+    for (const node of parseDeclarationModule(code, this.path)) {
+      this.addNode(node, this.path, offset);
     }
   }
 
@@ -427,7 +551,26 @@ class InputAnalyzer {
     this.addProgram(code);
   }
 
-  private addNode(node: Node, fromPath: string): void {
+  private symbolKey(fromPath: string, name: string): string {
+    return `${fromPath}::${name}`;
+  }
+
+  private annotate(node: unknown, fromPath: string, offset: number): void {
+    if (!node || typeof node !== "object") return;
+    this.nodeFiles.set(node, fromPath);
+    this.nodeOffsets.set(node, offset);
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "loc") continue;
+      if (Array.isArray(value)) {
+        for (const item of value) this.annotate(item, fromPath, offset);
+      } else {
+        this.annotate(value, fromPath, offset);
+      }
+    }
+  }
+
+  private addNode(node: Node, fromPath: string, offset = 0): void {
+    this.annotate(node, fromPath, offset);
     this.program.push({ node, fromPath });
     switch (node.type) {
       case "ExportNamedDeclaration": {
@@ -436,22 +579,40 @@ class InputAnalyzer {
           declaration?.type === "TSInterfaceDeclaration" ||
           declaration?.type === "TSTypeAliasDeclaration"
         ) {
-          this.declarations.set(declaration.id.name as string, {
-            node: declaration,
-            fromPath,
-          });
+          this.declarations.set(
+            this.symbolKey(fromPath, declaration.id.name as string),
+            {
+              node: declaration,
+              fromPath,
+            },
+          );
+          if (declaration.id.name === "AttrTag") {
+            this.localValues.add(this.symbolKey(fromPath, "AttrTag"));
+          }
         } else if (declaration?.type === "VariableDeclaration") {
           for (const item of declaration.declarations ?? []) {
-            this.localValues.add(item.id.name as string);
+            this.localValues.add(
+              this.symbolKey(fromPath, item.id.name as string),
+            );
           }
         } else if (declaration?.type === "FunctionDeclaration") {
-          if (declaration.id?.name) this.localValues.add(declaration.id.name);
+          if (declaration.id?.name)
+            this.localValues.add(this.symbolKey(fromPath, declaration.id.name));
         }
         break;
       }
       case "ImportDeclaration": {
         const specifier = node.source.value as string;
-        const mxAttrTagSource = /^@mxlang\//.test(specifier);
+        const mxAttrTagSource = new Set([
+          "@mxlang/core",
+          "@mxlang/html",
+          "@mxlang/preact",
+          "@mxlang/react",
+          "@mxlang/hono",
+          "@mxlang/solid",
+          "@mxlang/astro",
+          "@mxlang/angular",
+        ]).has(specifier);
         for (const specifierNode of node.specifiers ?? []) {
           const local = specifierNode.local.name as string;
           const imported =
@@ -459,36 +620,52 @@ class InputAnalyzer {
               ? "default"
               : (specifierNode.imported?.name ?? local);
           if (local === "AttrTag" && !mxAttrTagSource) {
-            this.attrTagDisallowed = true;
+            this.attrTagDisallowed.add(fromPath);
           }
           if (
             node.importKind === "type" ||
             specifierNode.importKind === "type"
           ) {
-            this.typeImports.set(local, { specifier, imported, fromPath });
+            this.typeImports.set(this.symbolKey(fromPath, local), {
+              specifier,
+              imported,
+              fromPath,
+            });
           } else if (local === "AttrTag") {
             // A runtime AttrTag import binds the name even from @mxlang — it
             // is recognised, just not as ambient.
-            this.localValues.add(local);
+            if (!mxAttrTagSource)
+              this.localValues.add(this.symbolKey(fromPath, local));
           }
         }
         break;
       }
       case "TSInterfaceDeclaration":
       case "TSTypeAliasDeclaration":
-        this.declarations.set(node.id.name as string, {
-          node,
-          fromPath,
-        });
+        this.declarations.set(
+          this.symbolKey(fromPath, node.id.name as string),
+          {
+            node,
+            fromPath,
+          },
+        );
+        if (node.id.name === "AttrTag") {
+          this.localValues.add(this.symbolKey(fromPath, "AttrTag"));
+        }
         break;
       case "VariableDeclaration":
         for (const declaration of node.declarations ?? []) {
-          this.localValues.add(declaration.id.name as string);
+          this.localValues.add(
+            this.symbolKey(fromPath, declaration.id.name as string),
+          );
         }
         break;
       case "FunctionDeclaration":
       case "TSModuleDeclaration":
-        if (node.id?.name) this.localValues.add(node.id.name as string);
+        if (node.id?.name)
+          this.localValues.add(
+            this.symbolKey(fromPath, node.id.name as string),
+          );
         break;
     }
   }
@@ -523,13 +700,17 @@ class InputAnalyzer {
   }
 
   /** Whether `AttrTag` may name an attribute-tag type in this callee. */
-  private attrTagRecognized(): boolean {
-    if (this.attrTagDisallowed) return false;
+  private attrTagRecognized(fromPath: string): boolean {
+    if (this.attrTagDisallowed.has(fromPath)) return false;
     // A local non-import declaration shadows the ambient type.
-    if (this.localValues.has("AttrTag") && !this.typeImports.has("AttrTag")) {
+    if (
+      this.localValues.has(this.symbolKey(fromPath, "AttrTag")) &&
+      !this.typeImports.has(this.symbolKey(fromPath, "AttrTag"))
+    ) {
       for (const entry of this.program) {
         const node = entry.node;
         if (
+          entry.fromPath !== fromPath ||
           node.type !== "ImportDeclaration" ||
           !node.specifiers?.some((s: Node) => s.local.name === "AttrTag")
         ) {
@@ -542,30 +723,45 @@ class InputAnalyzer {
     return true;
   }
 
+  private spanOf(node: Node): FileSpan {
+    const offset = this.nodeOffsets.get(node) ?? 0;
+    return {
+      file: this.nodeFiles.get(node) ?? this.path,
+      sourceStart: offset + (node.start ?? 0),
+      sourceEnd: offset + (node.end ?? 0),
+    };
+  }
+
   /**
    * Resolves a named type to its declaration across same-file declarations
    * and `import type`, depth ≤ 4 with a cycle guard (the brief's rules).
    */
   private resolveNamedType(
     name: string,
+    fromPath: string,
     seen: Set<string>,
     depth: number,
   ): { node: Node; fromPath: string } | undefined {
-    const key = `${this.path}::${name}`;
+    const key = `${fromPath}::${name}`;
     if (seen.has(key) || depth > MAX_ALIAS_DEPTH) return undefined;
     seen.add(key);
 
-    const local = this.declarations.get(name);
+    const local = this.declarations.get(this.symbolKey(fromPath, name));
     if (local) return local;
 
-    const typeImport = this.typeImports.get(name);
+    const typeImport = this.typeImports.get(this.symbolKey(fromPath, name));
     if (!typeImport) return undefined;
+    const probes: string[] = [];
     const resolved = resolveSpecifier(
       typeImport.specifier,
       this.context,
       typeImport.fromPath,
+      probes,
     );
-    if (!resolved || this.readFiles.has(resolved)) return undefined;
+    for (const probe of probes) {
+      if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
+    }
+    if (!resolved) return undefined;
     // The brief pins .ts and .mx targets for followed type imports; a
     // component's types never come from a runtime module.
     if (!/\.(?:tsx?|jsx?|mx)$/.test(resolved)) return undefined;
@@ -577,7 +773,7 @@ class InputAnalyzer {
       return undefined;
     }
     this.readFiles.add(resolved);
-    this.dependencies.push(resolved);
+    if (!this.dependencies.includes(resolved)) this.dependencies.push(resolved);
 
     const imported = this.importedDeclaration(
       resolved,
@@ -586,7 +782,8 @@ class InputAnalyzer {
     );
     if (!imported) return undefined;
     // Merge the file's own aliases so a chain (A -> B -> C) keeps resolving.
-    for (const node of imported.program) this.addNode(node, resolved);
+    for (const node of imported.program)
+      this.addNode(node, imported.declaration.fromPath);
     return imported.declaration;
   }
 
@@ -603,6 +800,9 @@ class InputAnalyzer {
   ):
     | { declaration: { node: Node; fromPath: string }; program: Node[] }
     | undefined {
+    const reexportKey = `${resolved}::${imported}`;
+    if (this.reexportsSeen.has(reexportKey)) return undefined;
+    this.reexportsSeen.add(reexportKey);
     let code = source;
     if (resolved.endsWith(".mx")) {
       if (!this.context.ctx) return undefined;
@@ -622,8 +822,7 @@ class InputAnalyzer {
         .join("\n");
     }
     if (code.trim() === "") return undefined;
-    const program = parseDeclarationModule(code);
-    if (!program) return undefined;
+    const program = parseDeclarationModule(code, resolved);
     for (const node of program) {
       const declaration =
         node.type === "ExportNamedDeclaration" ? node.declaration : node;
@@ -639,6 +838,51 @@ class InputAnalyzer {
         }
       }
     }
+    for (const node of program) {
+      if (node.type === "ExportNamedDeclaration" && node.source) {
+        const match = (node.specifiers ?? []).find(
+          (specifier: Node) =>
+            (specifier.exported?.name ?? specifier.exported?.value) ===
+            imported,
+        );
+        if (!match) continue;
+        const importedName = match.local?.name ?? match.local?.value;
+        const probes: string[] = [];
+        const next = resolveSpecifier(
+          node.source.value as string,
+          this.context,
+          resolved,
+          probes,
+        );
+        for (const probe of probes) {
+          if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
+        }
+        if (!next) continue;
+        const nextSource = readFileSync(next, "utf8");
+        this.readFiles.add(next);
+        if (!this.dependencies.includes(next)) this.dependencies.push(next);
+        const found = this.importedDeclaration(next, nextSource, importedName);
+        if (found) return found;
+      }
+      if (node.type === "ExportAllDeclaration") {
+        const probes: string[] = [];
+        const next = resolveSpecifier(
+          node.source.value as string,
+          this.context,
+          resolved,
+          probes,
+        );
+        for (const probe of probes) {
+          if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
+        }
+        if (!next) continue;
+        const nextSource = readFileSync(next, "utf8");
+        this.readFiles.add(next);
+        if (!this.dependencies.includes(next)) this.dependencies.push(next);
+        const found = this.importedDeclaration(next, nextSource, imported);
+        if (found) return found;
+      }
+    }
     return undefined;
   }
 
@@ -648,7 +892,7 @@ class InputAnalyzer {
    * `AttrTagDecl`, everything else an `otherProps` entry.
    */
   analyzeInput(inputDecl: { node: Node; fromPath: string }): CalleeInput {
-    const errors = new Map<string, { message: string; span: SourceSpan }>();
+    const errors = new Map<string, { message: string; span: FileSpan }>();
     const attrTags = new Map<string, AttrTagDecl>();
     const otherProps = new Set<string>();
     let open = false;
@@ -697,27 +941,27 @@ class InputAnalyzer {
     inputDecl: Node,
     seen: Set<string>,
     depth: number,
-    errors: Map<string, { message: string; span: SourceSpan }>,
+    errors: Map<string, { message: string; span: FileSpan }>,
     _path: string,
   ): Array<
     | {
         kind: "prop";
         name: string;
         type: Node;
-        span: SourceSpan;
+        span: FileSpan;
         optional: boolean;
       }
-    | { kind: "index"; span: SourceSpan }
+    | { kind: "index"; span: FileSpan }
   > {
     const result: Array<
       | {
           kind: "prop";
           name: string;
           type: Node;
-          span: SourceSpan;
+          span: FileSpan;
           optional: boolean;
         }
-      | { kind: "index"; span: SourceSpan }
+      | { kind: "index"; span: FileSpan }
     > = [];
     const declaration = inputDecl.node ?? inputDecl;
     const body =
@@ -730,7 +974,7 @@ class InputAnalyzer {
     if (body) {
       for (const member of body) {
         if (member.type === "TSIndexSignature") {
-          result.push({ kind: "index", span: spanOf(member) });
+          result.push({ kind: "index", span: this.spanOf(member) });
           continue;
         }
         if (member.type !== "TSPropertySignature") continue;
@@ -740,14 +984,51 @@ class InputAnalyzer {
           kind: "prop",
           name,
           type: member.typeAnnotation?.typeAnnotation,
-          span: spanOf(member),
+          span: this.spanOf(member),
           optional: member.optional === true,
         });
       }
     } else if (declaration.type === "TSTypeAliasDeclaration") {
-      // A type alias Input that is not an object literal (conditional,
-      // mapped, intersection, ...) has members this reader cannot see: the
-      // Input is open rather than wrong.
+      const alias = declaration.typeAnnotation;
+      const parts = alias.type === "TSIntersectionType" ? alias.types : [alias];
+      for (const part of parts) {
+        if (part.type === "TSTypeLiteral") {
+          result.push(
+            ...this.inputMembers(
+              { type: "TSTypeAliasDeclaration", typeAnnotation: part },
+              new Set(seen),
+              depth,
+              errors,
+              _path,
+            ),
+          );
+          continue;
+        }
+        if (
+          part.type === "TSTypeReference" &&
+          part.typeName.type === "Identifier"
+        ) {
+          const base = this.resolveNamedType(
+            part.typeName.name,
+            this.nodeFiles.get(part) ?? inputDecl.fromPath ?? this.path,
+            new Set(seen),
+            depth + 1,
+          );
+          if (base) {
+            result.push(
+              ...this.inputMembers(base, seen, depth + 1, errors, _path),
+            );
+            continue;
+          }
+        }
+        if (containsAttrTag(part)) {
+          errors.set("<input>", {
+            message: "declare this attribute tag's config literally",
+            span: this.spanOf(part),
+          });
+        }
+        result.push({ kind: "index", span: this.spanOf(part) });
+      }
       return result;
     }
 
@@ -763,10 +1044,18 @@ class InputAnalyzer {
             : heritage.id?.type === "Identifier"
               ? heritage.id.name
               : undefined;
-        if (!baseName) continue;
-        const base = this.resolveNamedType(baseName, seen, depth + 1);
+        if (!baseName) {
+          result.push({ kind: "index", span: this.spanOf(heritage) });
+          continue;
+        }
+        const base = this.resolveNamedType(
+          baseName,
+          this.nodeFiles.get(heritage) ?? inputDecl.fromPath ?? this.path,
+          seen,
+          depth + 1,
+        );
         if (!base) {
-          result.push({ kind: "index", span: spanOf(heritage) });
+          result.push({ kind: "index", span: this.spanOf(heritage) });
           continue;
         }
         result.push(...this.inputMembers(base, seen, depth + 1, errors, _path));
@@ -785,26 +1074,48 @@ class InputAnalyzer {
     type: Node,
     seen: Set<string>,
     depth: number,
-    errors: Map<string, { message: string; span: SourceSpan }>,
+    errors: Map<string, { message: string; span: FileSpan }>,
     propPath: string,
-  ): AttrTagDecl | { message: string; span: SourceSpan } | undefined {
+  ): AttrTagDecl | { message: string; span: FileSpan } | undefined {
     if (!type) return undefined;
     let node = type;
     let cardinality: "optional" | "required" | "array" = "required";
+    let optionalUnion = false;
 
     if (node.type === "TSOptionalType") node = node.typeAnnotation;
+    if (node.type === "TSUnionType") {
+      const concrete = node.types.filter(
+        (part: Node) => part.type !== "TSUndefinedKeyword",
+      );
+      if (concrete.length === 1 && concrete.length !== node.types.length) {
+        node = concrete[0];
+        optionalUnion = true;
+      } else if (containsAttrTag(node)) {
+        return {
+          message: "declare this attribute tag's config literally",
+          span: this.spanOf(node),
+        };
+      } else {
+        return undefined;
+      }
+    }
 
     const unwrap = (n: Node): { node: Node; array: boolean } => {
+      if (n.type === "TSParenthesizedType") return unwrap(n.typeAnnotation);
       if (n.type === "TSTypeOperator" && n.operator === "readonly") {
         return unwrap(n.typeAnnotation);
       }
-      if (n.type === "TSArrayType") return { node: n.elementType, array: true };
+      if (n.type === "TSArrayType") {
+        const inner = unwrap(n.elementType);
+        return { node: inner.node, array: true };
+      }
       if (
         n.type === "TSTypeReference" &&
         (n.typeName.name === "Array" || n.typeName.name === "ReadonlyArray") &&
         n.typeParameters?.params?.length === 1
       ) {
-        return { node: n.typeParameters.params[0], array: true };
+        const inner = unwrap(n.typeParameters.params[0]);
+        return { node: inner.node, array: true };
       }
       return { node: n, array: false };
     };
@@ -815,15 +1126,18 @@ class InputAnalyzer {
 
     // Alias chains: an identifier whose declaration resolves to an
     // attribute-tag form counts, same as the literal.
+    let propertyDepth = depth;
     while (
       node.type === "TSTypeReference" &&
       node.typeName.type === "Identifier" &&
       node.typeName.name !== "AttrTag"
     ) {
+      propertyDepth++;
       const resolved = this.resolveNamedType(
         node.typeName.name,
+        this.nodeFiles.get(node) ?? this.path,
         seen,
-        depth + 1,
+        propertyDepth,
       );
       if (!resolved) return undefined; // An unresolvable reference is an ordinary prop.
       const aliasDecl = resolved.node;
@@ -844,19 +1158,27 @@ class InputAnalyzer {
       node.typeName.type !== "Identifier" ||
       node.typeName.name !== "AttrTag"
     ) {
+      if (containsAttrTag(node)) {
+        return {
+          message: "declare this attribute tag's config literally",
+          span: this.spanOf(node),
+        };
+      }
       return undefined;
     }
-    if (!this.attrTagRecognized()) return undefined;
+    if (!this.attrTagRecognized(this.nodeFiles.get(node) ?? this.path))
+      return undefined;
 
     const config = node.typeParameters?.params?.[0];
     const decl: AttrTagDecl = {
-      cardinality,
+      cardinality:
+        optionalUnion && cardinality === "required" ? "optional" : cardinality,
       as: "data",
       hasAttrs: false,
       hasParams: false,
       nested: new Map(),
       nestedOpen: false,
-      span: spanOf(node),
+      span: this.spanOf(node),
     };
     if (!config) return decl;
 
@@ -868,6 +1190,7 @@ class InputAnalyzer {
     ) {
       const resolved = this.resolveNamedType(
         configLiteral.typeName.name,
+        this.nodeFiles.get(configLiteral) ?? this.path,
         seen,
         configDepth + 1,
       );
@@ -875,8 +1198,8 @@ class InputAnalyzer {
       const aliasType =
         aliasDecl?.type === "TSTypeAliasDeclaration"
           ? aliasDecl.typeAnnotation
-          : aliasDecl?.body?.type === "TSTypeLiteral"
-            ? aliasDecl.body
+          : aliasDecl?.type === "TSInterfaceDeclaration"
+            ? { type: "TSTypeLiteral", members: aliasDecl.body.body }
             : undefined;
       if (!aliasType) break;
       configLiteral = aliasType;
@@ -885,7 +1208,7 @@ class InputAnalyzer {
     if (configLiteral.type !== "TSTypeLiteral") {
       return {
         message: "declare this attribute tag's config literally",
-        span: spanOf(node),
+        span: this.spanOf(node),
       };
     }
 
@@ -910,7 +1233,7 @@ class InputAnalyzer {
           } else {
             return {
               message: "declare this attribute tag's config literally",
-              span: spanOf(node),
+              span: this.spanOf(node),
             };
           }
           break;
@@ -930,7 +1253,7 @@ class InputAnalyzer {
           if (paramsType?.type !== "TSTupleType") {
             return {
               message: "attribute tag params must be a tuple type",
-              span: spanOf(node),
+              span: this.spanOf(node),
             };
           }
           break;
@@ -944,7 +1267,7 @@ class InputAnalyzer {
       return {
         message:
           'renderable attribute tags can\'t take attributes; declare as: "data"',
-        span: spanOf(node),
+        span: this.spanOf(node),
       };
     }
     return decl;
@@ -960,16 +1283,17 @@ class InputAnalyzer {
     decl: AttrTagDecl,
     seen: Set<string>,
     depth: number,
-    errors: Map<string, { message: string; span: SourceSpan }>,
+    errors: Map<string, { message: string; span: FileSpan }>,
     propPath: string,
   ): void {
     let literal = attrsType;
-    if (
+    while (
       literal?.type === "TSTypeReference" &&
       literal.typeName.type === "Identifier"
     ) {
       const resolved = this.resolveNamedType(
         literal.typeName.name,
+        this.nodeFiles.get(literal) ?? this.path,
         seen,
         depth + 1,
       );
@@ -977,10 +1301,13 @@ class InputAnalyzer {
       const aliasType =
         aliasDecl?.type === "TSTypeAliasDeclaration"
           ? aliasDecl.typeAnnotation
-          : aliasDecl?.body?.type === "TSTypeLiteral"
-            ? aliasDecl.body
+          : aliasDecl?.type === "TSInterfaceDeclaration"
+            ? { type: "TSTypeLiteral", members: aliasDecl.body.body }
             : undefined;
-      if (aliasType) literal = aliasType;
+      if (!aliasType) break;
+      literal = aliasType;
+      depth++;
+      if (depth > MAX_ALIAS_DEPTH) break;
     }
     if (literal?.type !== "TSTypeLiteral") {
       // `attrs` is not a closed literal (a mapped type, an unresolvable
@@ -1022,11 +1349,6 @@ class InputAnalyzer {
   }
 }
 
-/** Babel's numeric offsets are the callee-relative span the messages use. */
-function spanOf(node: Node): SourceSpan {
-  return { sourceStart: node.start ?? 0, sourceEnd: node.end ?? 0 };
-}
-
 function propertyName(key: Node | undefined): string | undefined {
   if (!key) return undefined;
   if (key.type === "Identifier") return key.name as string;
@@ -1034,18 +1356,38 @@ function propertyName(key: Node | undefined): string | undefined {
   return undefined;
 }
 
+function containsAttrTag(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const node = value as Record<string, unknown>;
+  const typeName = node.typeName as
+    | { type?: string; name?: string }
+    | undefined;
+  if (
+    node.type === "TSTypeReference" &&
+    typeName?.type === "Identifier" &&
+    typeName.name === "AttrTag"
+  ) {
+    return true;
+  }
+  for (const [key, child] of Object.entries(node)) {
+    if (key === "loc" || key === "start" || key === "end") continue;
+    if (Array.isArray(child)) {
+      if (child.some(containsAttrTag)) return true;
+    } else if (containsAttrTag(child)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Parses source text into top-level module nodes with Babel's real TypeScript
  * and JSX parser. The complete module is always parsed: declarations are not
  * scraped out of TSX text, so offsets and syntax are the callee's real AST.
  */
-function parseDeclarationModule(code: string): Node[] | undefined {
-  try {
-    return parse(code, {
-      sourceType: "module",
-      plugins: ["typescript", "jsx"],
-    }).program.body as Node[];
-  } catch {
-    return undefined;
-  }
+function parseDeclarationModule(code: string, _file: string): Node[] {
+  return parse(code, {
+    sourceType: "module",
+    plugins: ["typescript", "jsx"],
+  }).program.body as Node[];
 }

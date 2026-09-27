@@ -9,7 +9,17 @@
  * after `lower.ts` has registered the metadata compiler.
  */
 
-import { readFileSync, statSync, utimesSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -20,9 +30,10 @@ import {
   resetCalleeInputCache,
 } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
+import type { MxWarning } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import { newCtx, printExpression } from "./index.ts";
-import type { ComponentTarget } from "./ir.ts";
+import type { ComponentTarget, Ir } from "./ir.ts";
 import "./lower.ts";
 import { resetTemplateCache } from "./template-tag.ts";
 
@@ -38,6 +49,14 @@ function fixture(name: string): string {
 
 function fixtureSource(name: string): string {
   return readFileSync(fixture(name), "utf8");
+}
+
+function probed(name: string, foundExtension: string): string[] {
+  const base = fixture(name);
+  const extensions = ["", ".mx", ".solid.mx", ".tsx", ".ts", ".jsx", ".js"];
+  return extensions
+    .slice(0, extensions.indexOf(foundExtension) + 1)
+    .map((extension) => base + extension);
 }
 
 function declarations(): Policy {
@@ -58,11 +77,19 @@ function refSpan(
   from: string,
   needle: string,
   offset = 0,
-): { sourceStart: number; sourceEnd: number } {
+): { file?: string; sourceStart: number; sourceEnd: number } {
   const start = from.indexOf(needle, offset);
   if (start === -1)
     throw new Error(`fixture text lacks ${JSON.stringify(needle)}`);
-  return { sourceStart: start, sourceEnd: start + needle.length };
+  const match = readdirSync(FIXTURES, { withFileTypes: true }).find(
+    (entry) =>
+      entry.isFile() && readFileSync(fixture(entry.name), "utf8") === from,
+  );
+  return {
+    ...(match ? { file: fixture(match.name) } : {}),
+    sourceStart: start,
+    sourceEnd: start + needle.length,
+  };
 }
 
 function namedTarget(name: string): { kind: "name"; name: string } {
@@ -216,12 +243,12 @@ describe("readCalleeInput", () => {
     );
     expect(dependencies).toEqual([
       fixture("uses-ts-import.ts"),
-      fixture("row-config.ts"),
+      ...probed("row-config", ".ts"),
     ]);
     // The read files are also recorded on the lowering Ctx, which is what
     // CompileResult.dependencies drains.
     expect([...(ctx.dependencies ?? [])].sort()).toEqual(
-      [fixture("uses-ts-import.ts"), fixture("row-config.ts")].sort(),
+      [fixture("uses-ts-import.ts"), ...probed("row-config", ".ts")].sort(),
     );
     expect(input).toEqual({
       kind: "declared",
@@ -246,11 +273,6 @@ describe("readCalleeInput", () => {
   });
 
   it("reads a .mx callee through the template metadata cache and follows an import type from it", () => {
-    const inputCode = [
-      "export interface Input {",
-      "  icon?: AttrTag<IconConfig>;",
-      "}",
-    ].join("\n");
     const ctx = newCtx(
       fixtureSource("uses-mx-import.mx"),
       printExpression,
@@ -279,9 +301,10 @@ describe("readCalleeInput", () => {
             hasParams: false,
             nested: new Map(),
             nestedOpen: false,
-            // Spans of a .mx callee are offsets into the sliced Input
-            // statement, not the template file.
-            span: refSpan(inputCode, "AttrTag<IconConfig>"),
+            span: refSpan(
+              fixtureSource("uses-mx-import.mx"),
+              "AttrTag<IconConfig>",
+            ),
           },
         ],
       ]),
@@ -367,6 +390,7 @@ describe("readCalleeInput", () => {
             nested: new Map([["icon", icon]]),
             nestedOpen: false,
             span: {
+              file: fixture("nested.ts"),
               sourceStart: source.indexOf("AttrTag<{"),
               sourceEnd: source.indexOf("}>[]") + 2,
             },
@@ -524,7 +548,8 @@ describe("readCalleeInput", () => {
     );
     expect(dependencies).toEqual([
       fixture("cycle-a.ts"),
-      fixture("cycle-b.ts"),
+      ...probed("cycle-b", ".ts"),
+      ...probed("cycle-a", ".ts").slice(0, -1),
     ]);
     const source = fixtureSource("cycle-a.ts");
     // The alias chain A -> B -> A never reaches a literal. Because it is the
@@ -567,29 +592,29 @@ describe("readCalleeInput", () => {
   });
 
   it("caches by path + mtime + source and misses after an mtime change", () => {
-    const target = namedTarget("Card");
-    const ctx = () => context({ imports: new Map([["Card", "./cache"]]) });
+    const directory = mkdtempSync(join(tmpdir(), "mx-callee-cache-"));
+    const path = join(directory, "cache.ts");
+    writeFileSync(path, fixtureSource("cache.ts"));
+    const target = { kind: "name", name: "Card", resolvedPath: path } as const;
+    const ctx = () => ({ importer: join(directory, "caller.mx") });
     const first = readCalleeInput(target, ctx());
     const loweringCtx = newCtx(
       "",
       printExpression,
       declarations(),
       undefined,
-      CALLER,
+      join(directory, "caller.mx"),
     );
     const hit = readCalleeInput(
       target,
       context({
-        imports: new Map([["Card", "./cache"]]),
+        discovered: new Map([["Card", path]]),
         ctx: loweringCtx,
       }),
     );
     expect(hit).toBe(first);
-    expect([...(loweringCtx.dependencies ?? [])]).toEqual([
-      fixture("cache.ts"),
-    ]);
+    expect([...(loweringCtx.dependencies ?? [])]).toEqual([path]);
 
-    const path = fixture("cache.ts");
     const later = new Date(statSync(path).mtimeMs + 2000);
     utimesSync(path, later, later);
     try {
@@ -597,11 +622,65 @@ describe("readCalleeInput", () => {
       expect(miss).not.toBe(first);
       expect(miss.input).toEqual(first.input);
     } finally {
-      // Leave the fixture's mtime where the checkout had it: the cache keys
-      // on content too, so any value works for other tests — but a restored
-      // mtime keeps the tree byte-stable.
-      const now = new Date();
-      utimesSync(path, now, now);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("invalidates a cached result when a followed dependency changes", () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-callee-dependency-"));
+    const main = join(directory, "main.ts");
+    const dependency = join(directory, "config.ts");
+    writeFileSync(
+      main,
+      'import type { Cfg } from "./config"; export interface Input { x?: AttrTag<Cfg> }',
+    );
+    writeFileSync(dependency, 'export type Cfg = { as: "data" };\n');
+    const target = { kind: "name", name: "Card", resolvedPath: main } as const;
+    const read = () =>
+      readCalleeInput(target, { importer: join(directory, "caller.mx") });
+    try {
+      const first = read();
+      writeFileSync(dependency, 'export type Cfg = { as: "renderable" };\n');
+      const later = new Date(statSync(dependency).mtimeMs + 2000);
+      utimesSync(dependency, later, later);
+      const second = read();
+      expect(second).not.toBe(first);
+      expect(second.input).toMatchObject({
+        kind: "declared",
+        attrTags: new Map([
+          ["x", expect.objectContaining({ as: "renderable" })],
+        ]),
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("invalidates when a previously probed dependency is created", () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-callee-created-"));
+    const main = join(directory, "main.ts");
+    const dependency = join(directory, "later.ts");
+    writeFileSync(
+      main,
+      'import type { Cfg } from "./later"; export interface Input { x?: AttrTag<Cfg> }',
+    );
+    const target = { kind: "name", name: "Card", resolvedPath: main } as const;
+    const read = () =>
+      readCalleeInput(target, { importer: join(directory, "caller.mx") });
+    try {
+      const first = read();
+      expect(first.dependencies).toContain(dependency);
+      writeFileSync(dependency, 'export type Cfg = { as: "renderable" };\n');
+      const second = read();
+      expect(second).not.toBe(first);
+      expect(second.input).toMatchObject({
+        kind: "declared",
+        attrTags: new Map([
+          ["x", expect.objectContaining({ as: "renderable" })],
+        ]),
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 
@@ -714,10 +793,496 @@ describe("readCalleeInput", () => {
     }
   });
 
-  it("compile results carry an empty dependency list until the resolver is wired in", () => {
+  it("keeps followed-file declarations and AttrTag bindings file-scoped", () => {
+    const collision = fixtureSource("collision.ts");
+    const dependency = fixtureSource("coll-dep.ts");
+    const result = readCalleeInput(
+      namedTarget("Card"),
+      context({ imports: new Map([["Card", "./collision"]]) }),
+    );
+    expect(result.input).toEqual({
+      kind: "declared",
+      path: fixture("collision.ts"),
+      attrTags: new Map([
+        [
+          "a",
+          {
+            cardinality: "optional",
+            as: "data",
+            hasAttrs: true,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(collision, "AttrTag<Cfg>"),
+          },
+        ],
+        [
+          "b",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(collision, "AttrTag<Local>"),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+    expect(dependency).toContain('as: "data"');
+
+    const leakSource = fixtureSource("leak.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./leak"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("leak.ts"),
+      attrTags: new Map([
+        [
+          "a",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(leakSource, "AttrTag<Cfg>"),
+          },
+        ],
+        [
+          "b",
+          {
+            cardinality: "optional",
+            as: "data",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(leakSource, "AttrTag", leakSource.indexOf("b?:")),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("flattens an alias-typed Input intersection", () => {
+    const source = fixtureSource("alias-input.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./alias-input"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("alias-input.ts"),
+      attrTags: new Map([
+        [
+          "x",
+          {
+            cardinality: "optional",
+            as: "data",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, "AttrTag"),
+          },
+        ],
+      ]),
+      otherProps: new Set(["title"]),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("treats a local AttrTag declaration as an ordinary property type", () => {
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./local-type"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("local-type.ts"),
+      attrTags: new Map(),
+      otherProps: new Set(["x"]),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("accepts AttrTag | undefined and rejects other AttrTag compounds", () => {
+    const source = fixtureSource("union.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./union"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "invalid",
+      path: fixture("union.ts"),
+      errors: new Map([
+        [
+          "b",
+          {
+            message: "declare this attribute tag's config literally",
+            span: refSpan(source, "AttrTag<{}> & { extra: 1 }"),
+          },
+        ],
+      ]),
+    } satisfies CalleeInput);
+  });
+
+  it("returns invalid with the callee file for a TypeScript parse error", () => {
+    const source = fixtureSource("parse-error.ts");
+    const position = source.indexOf(";");
+    const result = readCalleeInput(
+      namedTarget("Card"),
+      context({ imports: new Map([["Card", "./parse-error"]]) }),
+    );
+    expect(result.input.kind).toBe("invalid");
+    if (result.input.kind !== "invalid") return;
+    expect(result.input.path).toBe(fixture("parse-error.ts"));
+    expect([...result.input.errors]).toEqual([
+      [
+        "<parse>",
+        {
+          message: expect.stringContaining("Unexpected token"),
+          span: {
+            file: fixture("parse-error.ts"),
+            sourceStart: expect.any(Number),
+            sourceEnd: expect.any(Number),
+          },
+        },
+      ],
+    ]);
+    expect(position).toBeGreaterThan(0);
+  });
+
+  it("follows interfaces for configs and attrs", () => {
+    const configSource = fixtureSource("iface-config.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./iface-config"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("iface-config.ts"),
+      attrTags: new Map([
+        [
+          "x",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(configSource, "AttrTag<Cfg>"),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+
+    const attrsSource = fixtureSource("iface-attrs.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./iface-attrs"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("iface-attrs.ts"),
+      attrTags: new Map([
+        [
+          "x",
+          {
+            cardinality: "optional",
+            as: "data",
+            hasAttrs: true,
+            hasParams: false,
+            nested: new Map([
+              [
+                "icon",
+                {
+                  cardinality: "optional",
+                  as: "data",
+                  hasAttrs: false,
+                  hasParams: false,
+                  nested: new Map(),
+                  nestedOpen: false,
+                  span: refSpan(
+                    attrsSource,
+                    "AttrTag",
+                    attrsSource.indexOf("icon"),
+                  ),
+                },
+              ],
+            ]),
+            nestedOpen: false,
+            span: refSpan(attrsSource, "AttrTag<{ attrs: Attrs }>"),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("follows type re-exports and rejects AttrTag from an unrecognised mx package", () => {
+    const source = fixtureSource("reexport-input.ts");
+    const result = readCalleeInput(
+      namedTarget("Card"),
+      context({ imports: new Map([["Card", "./reexport-input"]]) }),
+    );
+    expect(result.input).toEqual({
+      kind: "declared",
+      path: fixture("reexport-input.ts"),
+      attrTags: new Map([
+        [
+          "a",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, "AttrTag<Cfg>"),
+          },
+        ],
+        [
+          "b",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(
+              fixtureSource("reexport-cfg.ts"),
+              'AttrTag<{ as: "renderable" }>',
+            ),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./mx-parser-import"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("mx-parser-import.ts"),
+      attrTags: new Map(),
+      otherProps: new Set(["x"]),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("reads a static Input from an mx file with file-relative spans", () => {
+    const source = fixtureSource("StaticInput.mx");
+    const ctx = newCtx(
+      source,
+      printExpression,
+      declarations(),
+      undefined,
+      CALLER,
+    );
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({
+          imports: new Map([["Card", "./StaticInput.mx"]]),
+          ctx,
+        }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("StaticInput.mx"),
+      attrTags: new Map([
+        [
+          "icon",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, 'AttrTag<{ as: "renderable" }>'),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("applies the property alias depth limit at four hops", () => {
+    const source = fixtureSource("prop-depth4.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./prop-depth4"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("prop-depth4.ts"),
+      attrTags: new Map([
+        [
+          "x",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, 'AttrTag<{as:"renderable"}>'),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./prop-depth5"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("prop-depth5.ts"),
+      attrTags: new Map(),
+      otherProps: new Set(["x"]),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("marks qualified and non-literal extends open", () => {
+    for (const name of ["qualified-extends", "extends-nonliteral"]) {
+      const source = fixtureSource(`${name}.ts`);
+      expect(
+        readCalleeInput(
+          namedTarget("Card"),
+          context({ imports: new Map([["Card", `./${name}`]]) }),
+        ).input,
+      ).toEqual({
+        kind: "declared",
+        path: fixture(`${name}.ts`),
+        attrTags: new Map([
+          [
+            "x",
+            {
+              cardinality: "optional",
+              as: "data",
+              hasAttrs: false,
+              hasParams: false,
+              nested: new Map(),
+              nestedOpen: false,
+              span: refSpan(source, "AttrTag"),
+            },
+          ],
+        ]),
+        otherProps: new Set(),
+        open: true,
+      } satisfies CalleeInput);
+    }
+  });
+
+  it("compile results carry an empty dependency list when no callee is read", () => {
     const result = compileSource("<div/>\n", CALLER, declarations(), {
       emitIr: () => "",
     });
     expect(result.dependencies).toEqual([]);
+  });
+
+  it("compile uses a declared array plan and records the callee dependency", () => {
+    let lowered: Ir | undefined;
+    const result = compileSource(
+      'import Card from "./compile-callee"\n<Card><@items/><@items/></Card>\n',
+      CALLER,
+      { ...declarations(), attrTags: 2 },
+      {
+        emitIr: (ir) => {
+          lowered = ir;
+          return "";
+        },
+      },
+    );
+    const component = lowered?.body.find((node) => node.kind === "Component");
+    expect(component).toMatchObject({
+      kind: "Component",
+      attrTagProps: [{ name: "items", cardinality: "array", as: "data" }],
+    });
+    expect(result.dependencies).toContain(fixture("compile-callee.ts"));
+  });
+
+  it("compile rejects a repeated declared singular tag", () => {
+    expect(() =>
+      compileSource(
+        'import Card from "./compile-callee"\n<Card><@header/><@header/></Card>\n',
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).toThrowError("`<@header>` may appear at most once");
+  });
+
+  it("compile reports a broken callee and warns for an unresolved one", () => {
+    expect(() =>
+      compileSource(
+        'import Card from "./parse-error"\n<Card><@x/></Card>\n',
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).toThrowError(fixture("parse-error.ts"));
+
+    const warnings: MxWarning[] = [];
+    compileSource(
+      'import Card from "./missing-callee"\n<Card><@x/></Card>\n',
+      CALLER,
+      { ...declarations(), attrTags: 2 },
+      { emitIr: () => "", warnings },
+    );
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining("not resolvable"),
+      }),
+    ]);
+  });
+
+  it("compile uses the current unit's own Input for data-tag rendering", () => {
+    expect(() =>
+      compileSource(
+        [
+          'export interface Input { x?: AttrTag<{ as: "data" }> }',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko syntax.
+          "<${input.x}/>",
+        ].join("\n"),
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).toThrowError(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko syntax.
+      "render its body with `<${input.x.content}/>`",
+    );
   });
 });
