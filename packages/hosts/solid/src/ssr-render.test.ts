@@ -110,7 +110,7 @@ function renderDeclaredAttrTags(
 describe("Solid SSR render: attribute-tag values", () => {
   it("executes fallback data values, arrays, bodyless content and Dynamic", () => {
     const html = renderApp(
-      `<Row><@head>H</@head><@item>0</@item><@item>2</@item><@empty/></Row>`,
+      `<Row><@head kind="heading">H</@head><@item id=0>0</@item><@item id=2>2</@item><@empty present/></Row>`,
       `function Row(input) { return <section><Dynamic component={input.head.content}/><div>{input.head.content}{input.head.content}</div><For each={input.item}>{(item) => <i>{item.content}</i>}</For><u>{String(input.empty.content === undefined)}</u></section>; }`,
     );
     expect(html).toBe(
