@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
@@ -175,6 +178,60 @@ describe("custom tag transforms", () => {
       "column",
     ]);
     expect(call?.content?.children.length).toBeGreaterThan(0);
+  });
+
+  it("revalidates a declared singular tag duplicated by a transform", () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-transform-singular-"));
+    const filename = join(directory, "tag.mx");
+    const source = "export interface Input { item?: AttrTag }\n<div/>\n";
+    writeFileSync(filename, source);
+    const tag: CustomTag = {
+      template: { filename, source },
+      transform(call, ctx) {
+        const item = call.attributeTags[0];
+        return ctx.build.template({
+          ...call,
+          attributeTags: item ? [item, item] : [],
+        });
+      },
+    } as CustomTag;
+    try {
+      expect(() =>
+        lowerWithTags("<tag><@item/></tag>\n", { tag }, {
+          ...fakeDeclarations(),
+          attrTags: 2,
+        }),
+      ).toThrowError("`<@item>` may appear at most once");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps declared array cardinality when a transform filters to one", () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-transform-array-"));
+    const filename = join(directory, "tag.mx");
+    const source = "export interface Input { item?: AttrTag[] }\n<div/>\n";
+    writeFileSync(filename, source);
+    const tag: CustomTag = {
+      template: { filename, source },
+      transform(call, ctx) {
+        return ctx.build.template({
+          ...call,
+          attributeTags: call.attributeTags.slice(0, 1),
+        });
+      },
+    } as CustomTag;
+    try {
+      const ir = lowerWithTags("<tag><@item/><@item/></tag>\n", { tag }, {
+        ...fakeDeclarations(),
+        attrTags: 2,
+      });
+      expect(find(ir.body, "Component").attrTagProps).toMatchObject([
+        { name: "item", cardinality: "array" },
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   // Both of these tags are *template-less*: a sidecar `transform`, with no
