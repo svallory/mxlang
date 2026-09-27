@@ -7,6 +7,9 @@
 import { readFileSync } from "node:fs";
 import {
   type Attr,
+  type AttributeTag,
+  type AttributeTagNode,
+  type AttrTagProp,
   type ComponentTarget,
   type Ctx,
   DYNAMIC_TAG,
@@ -123,6 +126,7 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
 /** Resolve-time questions for Angular's template target. */
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/angular",
+  attrTags: 2,
   tags: {
     ...STATEFUL_ERRORS,
     try: { kind: "error", reason: TRY_MESSAGE },
@@ -907,29 +911,93 @@ class AngularEmitter implements Emitter<string> {
       this.usedTags.set(target.name, node.loc);
     }
     this.out += `<${selector}${attrs}>`;
-    const seenAttributeTags = new Set<string>();
-    for (const tag of node.attributeTags) {
-      if (tag.block.hasParams) {
-        fail(
-          `\`<${target.name}><@${tag.name}|…|>\` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a \`<define>\` and pass it as an input the component renders with \`ngTemplateOutlet\`.`,
-          tag,
-        );
-      }
-      if (seenAttributeTags.has(tag.name)) {
-        fail(
-          "a repeated attribute tag cannot be emitted as Angular content projection, which matches each selector once. Take the items as an input array and render them with `<for>`.",
-          tag,
-        );
-      }
-      seenAttributeTags.add(tag.name);
-      this.out += `<ng-container ngProjectAs="[${tag.name}]">`;
-      for (const child of tag.block.children) this.emitNode(child);
-      this.out += "</ng-container>";
+    for (const prop of node.attrTagProps) {
+      this.validateAttributeTagProp(prop, node);
+      this.emitAttributeTagNodes(prop.source);
     }
     if (node.content) {
       for (const child of node.content.children) this.emitNode(child);
     }
     this.out += `</${selector}>`;
+  }
+
+  private validateAttributeTagProp(
+    prop: AttrTagProp,
+    owner: { loc: Position },
+  ): void {
+    if (prop.cardinality === "array") {
+      fail(
+        `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/angular: a projection is keyed by name`,
+        owner,
+      );
+    }
+    this.visitAttributeTags(prop.source, (tag) => {
+      if (tag.attrs.length > 0) {
+        fail(
+          `attributes on \`<@${tag.name}>\` aren't supported by @mxlang/angular: a projection carries nodes, not data`,
+          tag.attrs[0] as Attr,
+        );
+      }
+      if (tag.block.hasParams) {
+        fail(
+          `params on \`<@${tag.name}>\` aren't supported by @mxlang/angular: content projection cannot pass values back into projected nodes`,
+          tag,
+        );
+      }
+      if (tag.attrTagProps.length > 0) {
+        fail(
+          `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/angular: a projection has no nested data shape`,
+          tag.attributeTagTree[0] ?? tag,
+        );
+      }
+    });
+  }
+
+  private visitAttributeTags(
+    nodes: AttributeTagNode[],
+    visit: (tag: AttributeTag) => void,
+  ): void {
+    for (const node of nodes) {
+      if (node.kind === "AttributeTag") {
+        visit(node.tag);
+      } else if (node.kind === "AttributeTagFor") {
+        this.visitAttributeTags(node.nodes, visit);
+      } else {
+        for (const branch of node.branches) {
+          this.visitAttributeTags(branch.nodes, visit);
+        }
+      }
+    }
+  }
+
+  private emitAttributeTag(tag: AttributeTag): void {
+    this.out += `<ng-container ngProjectAs="[${tag.name}]">`;
+    for (const child of tag.block.children) this.emitNode(child);
+    this.out += "</ng-container>";
+  }
+
+  private emitAttributeTagNodes(nodes: AttributeTagNode[]): void {
+    for (const node of nodes) {
+      if (node.kind === "AttributeTag") {
+        this.emitAttributeTag(node.tag);
+        continue;
+      }
+      if (node.kind === "AttributeTagFor") {
+        fail(
+          "attribute tags inside `<for>` aren't supported by @mxlang/angular: repeated projections cannot share one name",
+          node,
+        );
+      }
+      node.branches.forEach((branch, index) => {
+        if (branch.test) {
+          this.out += `${index === 0 ? "@if" : " @else if"} (${branch.test.code}) { `;
+        } else {
+          this.out += " @else { ";
+        }
+        this.emitAttributeTagNodes(branch.nodes);
+        this.out += " }";
+      });
+    }
   }
 
   private emitDefineCall(
@@ -1164,7 +1232,7 @@ class AngularEmitter implements Emitter<string> {
       this.emitDynamicComponent(
         data.expr,
         tag.attrs,
-        tag.children.length > 0 || tag.attributeTags.length > 0,
+        tag.children.length > 0 || tag.attrTagProps.length > 0,
         node,
       );
       return;

@@ -179,3 +179,20 @@ watcher and resolves `onIdle` off the initial build alone (for CI and tests).
 The CLI's non-`--once` path resolves on `SIGINT`/`SIGTERM` (`Ctrl-C`, exit
 0).
 
+### Attribute tags (decisions 106–107)
+
+This host declares `attrTags: 2` and emits component projections only from
+core's resolved `attrTagProps` plan. A singular tag is an
+`<ng-container ngProjectAs="[name]">`; a singular plan under
+`<if>`/`<else if>`/`<else>` is wrapped in Angular `@if` blocks, preserving
+branch exclusivity. Arrays (including an absent declared `AttrTag[]`),
+attributes, params, and nested attribute tags are positioned errors naming
+`@mxlang/angular`, because projection is keyed by selector and carries nodes,
+not an object or callback.
+
+The callee receives no attribute-tag value: `<ng-content>` places the
+caller's nodes in the template. `@mxlang/angular` therefore exports
+`AttrTag<C>` as a `never` projection marker used by core's syntactic `Input`
+reader; tag-module generation excludes projected properties from `@Input()`
+fields and auto-imports the marker type when needed. `as: "data"` and
+`as: "renderable"` intentionally select the same projection on this host.

@@ -52,6 +52,15 @@ const { code, warnings } = compile(source, "app.component.mx");
 - `For` (`of`/`in`/`range`), `Define` and its call, `Component` (all three
   `ComponentTarget` kinds), attribute-tag content projection.
 
+Attribute tags use core's v2 plan. A singular `<@name>` emits
+`ngProjectAs="[name]"`; mutually exclusive conditional occurrences emit under
+Angular `@if`/`@else if`/`@else`. Arrays, attributes, params, and nested tags
+are positioned errors because a projection is keyed by selector and carries
+nodes only. `as: "data"` and `as: "renderable"` therefore project identically.
+The exported `AttrTag<C>` is a compile-time marker (`never`): the generated
+component gets `<ng-content>`, not an `@Input()` value, and projected
+properties are omitted from the generated class.
+
 ## `mx-angular` (task 1.5a: `build`/`map`; task 1.5b: `watch`)
 
 Reads `package.json#mx.angular` (`include`, `pageExtension`, `tagExtension`,

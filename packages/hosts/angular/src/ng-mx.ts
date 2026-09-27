@@ -250,6 +250,9 @@ function lowerRegion(
     moduleStatements.push(node.code);
   }
   for (const node of ir.hoisted) moduleStatements.push(node.code);
+  if (ir.needsAttrTagImport) {
+    moduleStatements.push('import type { AttrTag } from "@mxlang/angular";');
+  }
   if (ir.inputInterface) moduleStatements.push(ir.inputInterface.code);
 
   const template = emitTemplate(

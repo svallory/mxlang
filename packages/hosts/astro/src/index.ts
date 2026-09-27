@@ -16,10 +16,25 @@
  */
 
 import { createRequire } from "node:module";
-import type { CustomTag } from "@mxlang/core";
+import type {
+  AttrTagAttrs,
+  AttrTagConfig,
+  AttrTagParams,
+  CustomTag,
+} from "@mxlang/core";
 import mx from "@mxlang/vite-plugin";
 import { mxPages } from "./vite-pages.ts";
 import { mxTemplates } from "./vite-templates.ts";
+
+/** Attribute-tag slot received by an `@mxlang/astro` component. */
+export type AttrTag<
+  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  C extends AttrTagConfig = {},
+> = C["as"] extends "renderable"
+  ? (...args: AttrTagParams<C>) => string
+  : AttrTagAttrs<C> & {
+      content?: (...args: AttrTagParams<C>) => string;
+    };
 
 /**
  * Astro's integration surface, to the depth this file uses it.

@@ -669,7 +669,7 @@ function isIrNode(value: unknown): boolean {
  * - **A slot called with arguments** (`${input.header(1)}`). Projection takes
  *   no parameters — the arguments would be dropped in silence.
  */
-function projectSlots(body: IrNode[], ctx: Ctx): void {
+function projectSlots(body: IrNode[], ctx: Ctx): Set<string> {
   const slotLoc = new Map<string, Position>();
   const bareLoc = new Map<string, Position>();
 
@@ -787,6 +787,8 @@ function projectSlots(body: IrNode[], ctx: Ctx): void {
 
   visit(body);
   void ctx;
+  slotLoc.delete("content");
+  return new Set(slotLoc.keys());
 }
 
 /**
@@ -919,13 +921,17 @@ export function compileTagModule(
 
       if (ir.inputInterface) {
         inputProps = parseInputProps(ir.inputInterface);
+        if (ir.needsAttrTagImport) {
+          moduleLines.push('import type { AttrTag } from "@mxlang/angular";');
+        }
         moduleLines.push(ir.inputInterface.code);
       }
 
       // Order matters: slot reads are `input.content()` / `input.header()`
       // calls, so they must be recognised and replaced *before* `input.` is
       // stripped off every remaining read.
-      projectSlots(ir.body, ctx);
+      const projectedSlots = projectSlots(ir.body, ctx);
+      inputProps = inputProps.filter((prop) => !projectedSlots.has(prop.name));
       rewriteInputReads(ir.body, ctx);
       // The page emitter builds the template, so the two kinds of output can
       // never disagree about how a construct lowers. It is handed an IR with

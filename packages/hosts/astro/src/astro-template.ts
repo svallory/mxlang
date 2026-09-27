@@ -9,6 +9,9 @@
 
 import {
   type Attr,
+  type AttributeTag,
+  type AttributeTagNode,
+  type AttrTagProp,
   type CustomTag,
   DYNAMIC_TAG,
   drive,
@@ -115,6 +118,7 @@ type HostTagData = { kind: "interpolation"; expr: Expr };
 /** Questions the Astro host answers while Marko nodes are still available. */
 const declarations: HostDeclarations = {
   name: "@mxlang/astro",
+  attrTags: 2,
   tags: TAGS,
   isElement: (name) => !isComponentName(name),
   isComponent: (name) => isComponentName(name),
@@ -285,6 +289,89 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
     drive(emitter, nodes);
     write("</Fragment>");
   };
+  const validateAttributeTag = (tag: AttributeTag): void => {
+    if (tag.attrs.length > 0) {
+      fail(
+        `attributes on \`<@${tag.name}>\` aren't supported by @mxlang/astro: a slot carries markup, not data`,
+        tag.attrs[0] as Attr,
+      );
+    }
+    if (tag.block.hasParams) {
+      fail(
+        `params on \`<@${tag.name}>\` aren't supported by @mxlang/astro: a slot carries rendered markup, not a function`,
+        tag,
+      );
+    }
+    if (tag.attrTagProps.length > 0) {
+      fail(
+        `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/astro: a slot is keyed by one name and has no nested data shape`,
+        tag.attributeTagTree[0] ?? tag,
+      );
+    }
+  };
+  const visitAttributeTags = (
+    nodes: AttributeTagNode[],
+    visit: (tag: AttributeTag) => void,
+  ): void => {
+    for (const node of nodes) {
+      if (node.kind === "AttributeTag") {
+        visit(node.tag);
+      } else if (node.kind === "AttributeTagFor") {
+        visitAttributeTags(node.nodes, visit);
+      } else {
+        for (const branch of node.branches) {
+          visitAttributeTags(branch.nodes, visit);
+        }
+      }
+    }
+  };
+  const validateAttributeTagProp = (
+    prop: AttrTagProp,
+    owner: Positioned,
+  ): void => {
+    if (prop.cardinality === "array") {
+      fail(
+        `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/astro: a slot is keyed by name`,
+        owner,
+      );
+    }
+    visitAttributeTags(prop.source, validateAttributeTag);
+  };
+  const emitAttributeTag = (tag: AttributeTag): void => {
+    write(`<Fragment slot="${escapeAttr(tag.name)}">`);
+    drive(emitter, tag.block.children);
+    write("</Fragment>");
+  };
+  const emitAttributeTagNodes = (nodes: AttributeTagNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === "AttributeTag") {
+        emitAttributeTag(node.tag);
+        continue;
+      }
+      if (node.kind === "AttributeTagFor") {
+        fail(
+          "attribute tags inside `<for>` aren't supported by @mxlang/astro: repeated slots cannot share one name",
+          node,
+        );
+      }
+      write("{");
+      node.branches.forEach((branch, index) => {
+        if (index > 0) write(" : ");
+        if (branch.test) {
+          writeExpr(branch.test);
+          write(" ? (");
+          emitAttributeTagNodes(branch.nodes);
+          write(")");
+        } else {
+          write("(");
+          emitAttributeTagNodes(branch.nodes);
+          write(")");
+        }
+      });
+      if (node.branches.at(-1)?.test) write(" : null");
+      write("}");
+    }
+  };
 
   const emitter: Emitter<string> = {
     text(node) {
@@ -335,8 +422,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
           node,
         );
       }
-      const hasChildren =
-        Boolean(node.content) || node.attributeTags.length > 0;
+      const hasChildren = Boolean(node.content) || node.attrTagProps.length > 0;
       write(`<${name}`);
       emitAttrs(node.attrs, write, writeMapped);
       if (!hasChildren) {
@@ -346,31 +432,9 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
 
       write(">");
       if (node.content) drive(emitter, node.content.children);
-      // attribute-tag-silent-drops round 2: Astro's own slot mechanism is
-      // keyed by name, one value per name — a repeated `<@name>` compiled
-      // clean to two `<Fragment slot="name">` siblings, and Astro's renderer
-      // silently keeps only one (measured: the same class of drop as
-      // Angular's `ngComponentOutlet` content limit). Rejected here rather
-      // than reproducing Marko's `attrTag`/`attrTags` shape, since a named
-      // slot has no equivalent to "iterate every occurrence" at all.
-      const seenSlots = new Set<string>();
-      for (const tag of node.attributeTags) {
-        if (tag.block.params.length > 0) {
-          fail(
-            `\`<@${tag.name}>\` declares tag params, which lower to a render prop; Astro slots carry markup, not functions`,
-            tag,
-          );
-        }
-        if (seenSlots.has(tag.name)) {
-          fail(
-            `\`<@${tag.name}>\` is repeated, but an Astro slot is keyed by name — Astro's renderer would silently keep only one and drop the rest`,
-            tag,
-          );
-        }
-        seenSlots.add(tag.name);
-        write(`<Fragment slot="${escapeAttr(tag.name)}">`);
-        drive(emitter, tag.block.children);
-        write("</Fragment>");
+      for (const prop of node.attrTagProps) {
+        validateAttributeTagProp(prop, node);
+        emitAttributeTagNodes(prop.source);
       }
       write(`</${name}>`);
     },
@@ -560,8 +624,9 @@ function emitFence(
   source: string,
   fence: string,
   statements: HoistedStatement[],
+  needsAttrTagImport: boolean,
 ): { code: string; mappings: AstroTemplateMapping[] } {
-  if (statements.length === 0) {
+  if (statements.length === 0 && !needsAttrTagImport) {
     return {
       code: fence,
       mappings: fence
@@ -593,8 +658,12 @@ function emitFence(
     });
   }
 
-  for (const [index, statement] of statements.entries()) {
-    if (index > 0) code += newline;
+  if (needsAttrTagImport) {
+    code += 'import type { AttrTag } from "@mxlang/astro";';
+  }
+
+  for (const statement of statements) {
+    if (!code.endsWith(newline)) code += newline;
     const generatedStart = code.length;
     code += statement.code;
     mappings.push({
@@ -669,7 +738,12 @@ export function lowerAstroMx(
       ...(ir.inputInterface ? [ir.inputInterface] : []),
       ...ir.prelude,
     ];
-    const emittedFence = emitFence(source, originalFence, statements);
+    const emittedFence = emitFence(
+      source,
+      originalFence,
+      statements,
+      ir.needsAttrTagImport,
+    );
     const mappings = [...emittedFence.mappings];
     const templateEmitter = createEmitter((code, node, generatedStart) => {
       const range = rangeOfNode(source, node);

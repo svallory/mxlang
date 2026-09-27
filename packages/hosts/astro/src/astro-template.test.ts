@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
 
@@ -302,6 +305,16 @@ describe("components and slots", () => {
     );
   });
 
+  it("lowers mutually exclusive conditional tags to a conditional named slot", () => {
+    expect(
+      lower(
+        "<Card><if=primary><@header>A</@header></if><else if=secondary><@header>B</@header></else><else><@header>C</@header></else></Card>",
+      ),
+    ).toBe(
+      '<Card>{primary ? (<Fragment slot="header">A</Fragment>) : secondary ? (<Fragment slot="header">B</Fragment>) : (<Fragment slot="header">C</Fragment>)}</Card>',
+    );
+  });
+
   it("rejects an attribute tag on an HTML element, which has no slots", () => {
     expect(errorFor("<div><@header>x</@header></div>").message).toMatch(
       /only a component accepts/,
@@ -313,14 +326,72 @@ describe("components and slots", () => {
   // slot-by-name renderer would silently collapse to one — measured, a real
   // drop, not merely undocumented.
   it("rejects a repeated attribute tag, since an Astro slot is keyed by name", () => {
-    expect(
-      errorFor("<Card><@item>a</@item><@item>b</@item></Card>").message,
-    ).toMatch(/is repeated/);
+    const error = errorFor(
+      "<Card>\n  <@item>a</@item>\n  <@item>b</@item>\n</Card>",
+    );
+    expect(error.message).toBe(
+      "array attribute tag `<@item>` isn't supported by @mxlang/astro: a slot is keyed by name",
+    );
+    expect(error.line).toBe(4);
   });
 
   it("rejects tag params, which Astro has no render-prop form for", () => {
-    expect(errorFor("<Card|item|><p>x</p></Card>").message).toMatch(
-      /Astro passes markup through slots, not functions/,
+    const error = errorFor("<Card>\n<@header|item|>${item}</@header>\n</Card>");
+    expect(error.message).toContain("params on `<@header>` aren't supported");
+    expect(error.message).toContain("@mxlang/astro");
+    expect(error.line).toBe(5);
+  });
+
+  it("rejects attributes on an attribute tag with a positioned host error", () => {
+    const error = errorFor('<Card>\n<@header tone="loud">H</@header>\n</Card>');
+    expect(error.message).toContain(
+      "attributes on `<@header>` aren't supported by @mxlang/astro",
+    );
+    expect(error.line).toBe(5);
+  });
+
+  it("rejects nested attribute tags with a positioned host error", () => {
+    const error = errorFor(
+      "<Card>\n<@header><@icon>I</@icon></@header>\n</Card>",
+    );
+    expect(error.message).toContain(
+      "nested attribute tags inside `<@header>` aren't supported by @mxlang/astro",
+    );
+    expect(error.line).toBe(5);
+  });
+
+  it("rejects an attribute tag inside <for> as an array slot", () => {
+    expect(
+      errorFor("<Card><for|item| of=items><@row>${item}</@row></for></Card>")
+        .message,
+    ).toContain("@mxlang/astro");
+  });
+
+  it("rejects a declared AttrTag[] even when no occurrence is passed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-attr-tags-"));
+    const card = join(dir, "Card.mx");
+    const caller = join(dir, "Caller.amx");
+    writeFileSync(
+      card,
+      "export interface Input { item?: AttrTag[] }\n<section/>\n",
+    );
+    const source = 'import Card from "./Card.mx";\n<Card/>\n';
+
+    expect(() => lowerAstroMx(source, caller)).toThrow(
+      "array attribute tag `<@item>` isn't supported by @mxlang/astro",
+    );
+  });
+});
+
+describe("AttrTag type import", () => {
+  it("auto-imports the Astro-specialized type into the frontmatter fence", () => {
+    const result = lowerAstroMx(
+      "export interface Input { header?: AttrTag }\n<p>x</p>",
+      "Test.amx",
+    );
+
+    expect(result.code).toContain(
+      'import type { AttrTag } from "@mxlang/astro";',
     );
   });
 });

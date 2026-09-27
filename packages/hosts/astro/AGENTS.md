@@ -131,3 +131,19 @@ silently skipped. Command-line checks use `mx-tsc --astro --noEmit`.
 Both paths also type-check `.amx` itself through the composed AstroMX plugin;
 without Astro mode, `.amx` files are ignored.
 
+### Attribute tags (decisions 106–107)
+
+This host declares `attrTags: 2`; `.amx` emits only core's resolved
+`attrTagProps` plan. A singular tag is a `<Fragment slot="name">`, and a
+singular plan under `<if>`/`<else if>`/`<else>` becomes a conditional named
+slot so Astro receives only the taken branch. Arrays (including a declared
+`AttrTag[]` with no occurrences), attributes, params, and nested attribute
+tags are positioned errors naming `@mxlang/astro`: an Astro slot is keyed by
+one name and carries rendered markup only.
+
+Astro's renderer gives a named slot one observable payload, `() => string`.
+`renderToStaticMarkup` also installs that same thunk as its own `.content`
+property, so the default data declaration and `as: "renderable"` are two views
+of the same slot; no attribute data is invented. `@mxlang/astro` exports the
+matching `AttrTag<C>` and `.amx` inserts its type-only import when core sets
+`needsAttrTagImport`.
