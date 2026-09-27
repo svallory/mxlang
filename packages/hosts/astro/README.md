@@ -300,6 +300,8 @@ build error naming the construct, the reason, and the line in the `.amx` file.
 - **Array attribute tags, attributes on `<@name>`, nested attribute tags, and
   attribute-tag params** — a named slot is keyed by one name and carries only
   rendered markup. The host reports each as a positioned error.
+- **A bodiless `<@name/>`** — a named slot projects the tag's body, so an empty
+  self-closing tag has no observable content and is a positioned error.
 - **Attribute methods** (`onClick() { … }`) — an event handler needs a
   runtime.
 - **`:=`** — a two-way binding needs a reactive runtime.

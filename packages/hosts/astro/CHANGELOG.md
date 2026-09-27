@@ -13,4 +13,6 @@
 - Named slots now expose both the callable renderable view and the default
   data view's `.content` thunk to `.mx` components. Arrays, attributes,
   params, and nested attribute tags remain positioned host errors because an
-  Astro slot is keyed only by name.
+  Astro slot is keyed only by name. Nested conditionals and empty branches now
+  emit valid Astro expressions, and bodiless tags are rejected because they
+  have no markup to project.
