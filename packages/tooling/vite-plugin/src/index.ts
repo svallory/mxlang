@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
+import type { CompileResult } from "@mxlang/core";
 import { type CustomTag, resolveHostPolicy, scanCached } from "@mxlang/core";
 import type { MxRegionCompile } from "@mxlang/parser";
 import { print } from "@mxlang/parser";
@@ -52,7 +53,7 @@ async function compileMarko(
   filename: string,
   strict: boolean,
   customTags: Record<string, CustomTag> | undefined,
-): Promise<{ code: string }> {
+): Promise<Pick<CompileResult, "code"> & Partial<CompileResult>> {
   // Which host owns this file is the nearest `package.json`'s answer, the
   // same resolver the language server and `mx-tsc` use — so an editor, a
   // `tsc` run and a `vite build` cannot disagree about what a `.mx` file is.
@@ -328,24 +329,35 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       (ext) => file.endsWith(ext) && !extensions.includes(ext),
     );
   /**
-   * Which MX modules depend on which tag *locations*, so an edit to a tag can
-   * invalidate the callers that used it.
+   * Which MX modules depend on which compilation *inputs*, so an edit to one
+   * can invalidate the callers that used it.
    *
-   * A custom tag is an input to compilation that appears nowhere in the
-   * importing module's text, so Vite's own module graph has no edge to
-   * follow. This records the missing one as each file is transformed.
+   * Two kinds of input land here, both recorded per transform:
    *
-   * Keyed by **directory as well as file**. Keying by file alone only covers
-   * tags that already existed when the scan ran, so creating
-   * `tags/new.tag.ts` matched nothing — and `handleHotUpdate` then fell
-   * through to `matchExt`, which is undefined for `.tag.ts` — leaving callers
-   * serving stale output until a restart. A new file's *directory* is one the
-   * scan already recorded, which is what makes the creation observable.
+   * - Custom-tag *locations* from the tag scan (below). A custom tag is an
+   *   input to compilation that appears nowhere in the importing module's
+   *   text, so Vite's own module graph has no edge to follow. Keyed by
+   *   **directory as well as file**: keying by file alone only covers tags
+   *     that already existed when the scan ran, so creating
+   *   `tags/new.tag.ts` matched nothing — and `handleHotUpdate` then fell
+   *   through to `matchExt`, which is undefined for `.tag.ts` — leaving
+   *   callers serving stale output until a restart. A new file's *directory*
+   *   is one the scan already recorded, which is what makes the creation
+   *   observable.
+   * - The compile result's `dependencies` (decision 106): the callee files
+   *   whose `Input` the compiler read to resolve attribute-tag shapes — a
+   *   caller imports a component through ordinary ESM, so Vite's graph
+   *   *does* contain that edge, but only the compiled module's own HMR
+   *   update; the caller's compiled output also changes, and without this
+   *   edge it would keep serving the stale shape.
    */
-  const tagSources = new Map<string, Set<string>>();
+  const dependencySources = new Map<string, Set<string>>();
 
-  /** The locations one caller's last scan consulted, so they can be pruned. */
-  const scannedFor = new Map<string, Set<string>>();
+  /**
+   * The scan locations one caller's last transform consulted, so they can be
+   * pruned independently from the compile-result dependencies below.
+   */
+  const dependedOn = new Map<string, Set<string>>();
 
   /**
    * The tags callable from one MX file: everything discovered around it, with
@@ -387,22 +399,22 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       ...scan.packageFiles,
     ]);
 
-    // Drop this caller from locations its previous scan used and this one
+    // Drop this caller from inputs its previous transform used and this one
     // does not, so a long-lived dev server's map tracks the project rather
     // than every state the project has ever been in.
-    for (const stale of scannedFor.get(file) ?? []) {
+    for (const stale of dependedOn.get(file) ?? []) {
       if (locations.has(stale)) continue;
-      const dependents = tagSources.get(stale);
+      const dependents = dependencySources.get(stale);
       if (!dependents) continue;
       dependents.delete(file);
-      if (dependents.size === 0) tagSources.delete(stale);
+      if (dependents.size === 0) dependencySources.delete(stale);
     }
-    scannedFor.set(file, locations);
+    dependedOn.set(file, locations);
 
     for (const location of locations) {
-      const dependents = tagSources.get(location) ?? new Set<string>();
+      const dependents = dependencySources.get(location) ?? new Set<string>();
       dependents.add(file);
-      tagSources.set(location, dependents);
+      dependencySources.set(location, dependents);
     }
 
     const discovered = scan.customTags;
@@ -414,14 +426,57 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
   /** Forgets a caller entirely: it was deleted, or is no longer ours. */
   const forgetCaller = (file: string): void => {
-    for (const location of scannedFor.get(file) ?? []) {
-      const dependents = tagSources.get(location);
+    for (const location of dependedOn.get(file) ?? []) {
+      const dependents = dependencySources.get(location);
       if (!dependents) continue;
       dependents.delete(file);
-      if (dependents.size === 0) tagSources.delete(location);
+      if (dependents.size === 0) dependencySources.delete(location);
     }
-    scannedFor.delete(file);
+    dependedOn.delete(file);
+    for (const dependency of dependencyCallers.get(file) ?? []) {
+      const dependents = dependencySources.get(dependency);
+      if (!dependents) continue;
+      dependents.delete(file);
+      if (dependents.size === 0) dependencySources.delete(dependency);
+    }
+    dependencyCallers.delete(file);
   };
+
+  /**
+   * Records the callee files one caller's compile read (decision 106) as
+   * dependency edges, pruning edges the previous transform held but this one
+   * does not. Empty until the core resolver is wired into lowering, so this
+   * is a no-op on today's compiles — the map and its invalidation are in
+   * place ahead of the first dependency arriving.
+   */
+  const recordDependencies = (
+    caller: string,
+    dependencies: string[] | undefined,
+  ): void => {
+    const current = dependencies ?? [];
+    const previous = dependencyCallers.get(caller) ?? new Set<string>();
+    for (const stale of previous) {
+      if (current.includes(stale)) continue;
+      const dependents = dependencySources.get(stale);
+      if (!dependents) continue;
+      dependents.delete(caller);
+      if (dependents.size === 0) dependencySources.delete(stale);
+    }
+    dependencyCallers.set(caller, new Set(current));
+    for (const dependency of current) {
+      const dependents = dependencySources.get(dependency) ?? new Set<string>();
+      dependents.add(caller);
+      dependencySources.set(dependency, dependents);
+    }
+  };
+
+  /**
+   * The compile dependencies one caller's last transform held, so they can
+   * be pruned. Separate from `dependedOn` (the scan locations) only so the
+   * two sources stay distinguishable in one caller's entry; both prune the
+   * same `dependencySources` map.
+   */
+  const dependencyCallers = new Map<string, Set<string>>();
 
   const matchExt = (file: string): string | undefined =>
     isForeign(file) ? undefined : extensions.find((ext) => file.endsWith(ext));
@@ -504,8 +559,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       // `tags/new.tag.ts` was in no scan's file list, so only the directory
       // entry can connect it to the callers that scanned there.
       const dependents = new Set([
-        ...(tagSources.get(file) ?? []),
-        ...(tagSources.get(dirname(file)) ?? []),
+        ...(dependencySources.get(file) ?? []),
+        ...(dependencySources.get(dirname(file)) ?? []),
       ]);
       if (dependents.size > 0) {
         const stale = [...dependents]
@@ -554,12 +609,13 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           // `compile()`'s map is presently an identity placeholder (no AST
           // is printed on this path), so there is nothing real to hand Vite
           // — returning it would claim a mapping that does not exist.
-          const { code: compiled } = await compileMarko(
+          const { code: compiled, dependencies } = await compileMarko(
             code,
             source,
             options.strict ?? false,
             tagsFor(source, warn),
           );
+          recordDependencies(source, dependencies);
           return { code: compiled, map: null };
         }
 
