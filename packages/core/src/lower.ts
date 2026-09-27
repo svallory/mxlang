@@ -1943,12 +1943,31 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
     const dynamicExpr = exprOf(ctx, node.name);
-    const member = /^input\.([A-Za-z_$][\w$]*)$/.exec(dynamicExpr.code);
+    const member = /^input\.([A-Za-z_$][\w$]*)(?:\.(content))?$/.exec(
+      dynamicExpr.code,
+    );
     if (member && ctx.ownInput?.kind === "declared") {
       const declaration = ctx.ownInput.attrTags.get(member[1] as string);
-      if (declaration?.as === "data") {
+      const readsContent = member[2] === "content";
+      if (declaration?.as === "data" && !readsContent) {
         fail(
           `\`input.${member[1]}\` is a data attribute tag; render its body with \`<\${input.${member[1]}.content}/>\``,
+          node.name,
+        );
+      }
+      const readsDeclaredRenderable =
+        declaration?.as === "renderable" && !readsContent;
+      const readsDeclaredContent = declaration?.as === "data" && readsContent;
+      if (
+        declaration?.hasParams &&
+        (readsDeclaredRenderable || readsDeclaredContent) &&
+        (node.arguments ?? []).length === 0
+      ) {
+        const expression = readsContent
+          ? `input.${member[1]}.content`
+          : `input.${member[1]}`;
+        fail(
+          `\`${expression}\` is a parameterized attribute tag; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
           node.name,
         );
       }
