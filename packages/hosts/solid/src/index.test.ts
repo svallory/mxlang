@@ -794,6 +794,100 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     expect(defineNames).toHaveLength(2);
     expect(new Set(defineNames).size).toBe(2);
   });
+
+  it("renames a colliding define's declaration through the AST, not a text pattern, so a body containing the binding name in a string or comment is untouched", () => {
+    // Regression guard for the fix that replaced a `function <name>(`
+    // text/regex rename with an AST `id.name` assignment: a naive text
+    // rename keyed on the binding's spelling could mismatch inside a
+    // string literal or comment that happens to contain it. Region B's
+    // define body echoes its own about-to-collide binding name in a
+    // string and a comment; only the real `FunctionDeclaration.id` for
+    // the *renamed* copy may change — the string/comment text must not.
+    const source = [
+      "export function A() {",
+      "  return (<div><define/Row>a</define><Row/></div>);",
+      "}",
+      "export function B() {",
+      "  return (<div><define/Row>",
+      '    ${"function $mx_DefineRow1(" /* not a real function $mx_DefineRow1( */}',
+      "  </define><Row/></div>);",
+      "}",
+    ].join("\n");
+    const solidRegionCompile = (
+      input: Parameters<typeof compileSolidMx>[1] & { source: string },
+    ) => compileSolidMx(input.source, input);
+    const file = parseMxFile(source, "define-decoy-text.solid.mx", {
+      // biome-ignore lint/suspicious/noExplicitAny: MxRegionCompile shape, avoiding a parser<->solid type cycle in a test
+      mxRegionCompile: solidRegionCompile as any,
+    });
+    const program = file.program as unknown as {
+      body: Array<{ type?: string; id?: { name?: string } }>;
+    };
+    const declared = program.body.filter(
+      (node) => node.type === "FunctionDeclaration",
+    );
+    const defineNames = declared
+      .map((node) => node.id?.name)
+      .filter((name): name is string =>
+        Boolean(name?.startsWith("$mx_Define")),
+      );
+    // Both hoisted module-scope functions, under two distinct names — the
+    // second region's declaration was renamed, its decoy string/comment left
+    // exactly as authored.
+    expect(defineNames).toHaveLength(2);
+    expect(new Set(defineNames).size).toBe(2);
+    // The renamed declaration is `$mx_DefineRow1_2`; the decoy string
+    // literal inside its own body is still spelled `$mx_DefineRow1`,
+    // untouched by the rename that renamed only the declaration's `id`.
+    expect(defineNames).toContain("$mx_DefineRow1_2");
+    const printed = JSON.stringify(program.body);
+    expect(printed).toContain('"function $mx_DefineRow1("');
+  });
+
+  it("does not corrupt $mx_DefineRow1 when a fresh binding needs $mx_DefineRow10", () => {
+    // `freshDefineBinding` mints `<binding>_2`, `<binding>_3`, ... so this
+    // guards a different prefix hazard: a module already using a name whose
+    // *own* text contains another binding's name as a strict prefix
+    // (`$mx_DefineRow1` is a prefix of `$mx_DefineRow10`). Renaming via the
+    // AST's `id.name` assignment is exact regardless of prefix relationships
+    // between bindings — nothing here is spelled as a pattern match.
+    const source = [
+      "const $mx_DefineRow10 = 1;",
+      "export function A() {",
+      "  return (<div>{$mx_DefineRow10}<define/Row>a</define><Row/></div>);",
+      "}",
+      "export function B() {",
+      "  return (<div><define/Row>b</define><Row/></div>);",
+      "}",
+    ].join("\n");
+    const solidRegionCompile = (
+      input: Parameters<typeof compileSolidMx>[1] & { source: string },
+    ) => compileSolidMx(input.source, input);
+    const file = parseMxFile(source, "define-prefix-collision.solid.mx", {
+      // biome-ignore lint/suspicious/noExplicitAny: MxRegionCompile shape, avoiding a parser<->solid type cycle in a test
+      mxRegionCompile: solidRegionCompile as any,
+    });
+    const program = file.program as unknown as {
+      body: Array<{ type?: string; id?: { name?: string } }>;
+    };
+    const declared = program.body.filter(
+      (node) => node.type === "FunctionDeclaration",
+    );
+    const defineNames = declared
+      .map((node) => node.id?.name)
+      .filter((name): name is string =>
+        Boolean(name?.startsWith("$mx_Define")),
+      );
+    expect(defineNames).toHaveLength(2);
+    expect(new Set(defineNames).size).toBe(2);
+    // The pre-existing module-scope `const` is untouched.
+    const constDecl = program.body.find(
+      (node) => node.type === "VariableDeclaration",
+    ) as unknown as {
+      declarations: Array<{ id?: { name?: string } }>;
+    };
+    expect(constDecl?.declarations[0]?.id?.name).toBe("$mx_DefineRow10");
+  });
 });
 
 describe("compileSolidUnit", () => {
