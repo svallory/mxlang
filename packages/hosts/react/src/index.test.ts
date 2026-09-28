@@ -27,6 +27,15 @@ describe("React target", () => {
     );
   });
 
+  it("still emits a type-only import verbatim (decision 114 parity)", () => {
+    // Shares Preact's casing-only component routing, so there is no
+    // Marko-style unresolved-tag error to reproduce here — see the matching
+    // test in `packages/hosts/preact/src/index.test.ts` for why. What must
+    // not regress is core still emitting a type-only import verbatim.
+    const code = compile('import type Widget from "./widget.mx"\n<Widget/>');
+    expect(code).toContain('import type Widget from "./widget.mx"');
+  });
+
   it("imports React's specialised AttrTag type", () => {
     expect(
       compile("export interface Input { head?: AttrTag }\n<p>x</p>"),

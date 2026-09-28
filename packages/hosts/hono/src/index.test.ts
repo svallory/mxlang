@@ -24,6 +24,14 @@ describe("Hono target", () => {
     expect(code).toContain('<label class="field" for="name">Name</label>');
   });
 
+  it("still emits a type-only import verbatim (decision 114 parity)", () => {
+    // Shares Preact's casing-only component routing — no Marko-style
+    // unresolved-tag error here (see the matching Preact test). What must
+    // not regress is core still emitting a type-only import verbatim.
+    const code = compile('import type Widget from "./widget.mx"\n<Widget/>');
+    expect(code).toContain('import type Widget from "./widget.mx"');
+  });
+
   it("imports Hono's specialised AttrTag type", () => {
     expect(
       compile("export interface Input { head?: AttrTag }\n<p>x</p>"),

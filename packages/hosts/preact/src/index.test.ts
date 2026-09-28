@@ -76,6 +76,18 @@ describe("module shape", () => {
     expect(code.indexOf("const G = 1;")).toBeLessThan(componentAt);
   });
 
+  it("still emits a type-only import verbatim (decision 114 parity)", () => {
+    // JSX component-vs-element routing here is casing-only (`isComponentName`
+    // in `emitter.ts`), so a capitalized tag always emits as a JSX component
+    // reference regardless of import status — this host has no
+    // Marko-style unresolved-tag compile error to reproduce. What must not
+    // regress is core's `importBindings`/`lowerStatement` still emitting the
+    // type-only import verbatim (it types a call site elsewhere), not
+    // silently dropping it because it carries no runtime binding.
+    const code = compile('import type Widget from "./widget.mx"\n<Widget/>');
+    expect(code).toContain('import type Widget from "./widget.mx"');
+  });
+
   it("imports nothing when the template uses no helper", () => {
     const code = compile("<p>hi</p>");
     expect(code).not.toContain('from "preact"');
