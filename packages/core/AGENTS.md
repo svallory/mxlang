@@ -614,9 +614,12 @@ Five facts worth knowing before editing it:
   server publishes such a diagnostic against the template's **own URI** at its
   real position and leaves a pointer at the head of the open document (it
   clears the template's diagnostics when the caller stops reporting them, since
-  the template is not itself open); the TypeScript plugin **drops** a
-  foreign-file span, because a Volar `CodeMapping` addresses one source and a
-  plausible-but-wrong column is worse than none.
+  the template is not itself open); the TypeScript plugin and `mx-tsc`
+  (`@mxlang/typescript-plugin`'s `foreignTemplateError`, `src/language.ts`)
+  report such a `TranslateError` against the template file at its own
+  position too, plus a pointer diagnostic on the caller naming the template —
+  a plain `CodeMapping` still cannot address two source files, so this is a
+  second, file-keyed compile diagnostic rather than a mapped span.
 - **Silent-drop reports go through `ctx.warnings`, not `console.warn`.**
   `warn(ctx, …)` records a positioned `MxWarning` when a sink is collecting and
   falls back to printing when none is, so a plain build is as loud as before

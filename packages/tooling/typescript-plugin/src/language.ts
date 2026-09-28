@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
   getCustomTags,
   type MxWarning,
+  TranslateError,
   withCalleeInputSources,
 } from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
@@ -129,6 +131,20 @@ export function createSolidMxLanguagePlugin(
           attributeTagDiagnosticMappings(source, printed.code),
         );
       } catch (cause) {
+        const foreign = foreignTemplateError(
+          cause,
+          fileName,
+          source,
+          options.readSource,
+        );
+        if (foreign) {
+          syntaxErrors.delete(fileName);
+          compileDiagnostics.set(foreign.templateFileName, [
+            foreign.templateDiagnostic,
+          ]);
+          compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
+          return createVirtualCode(typescript, "", source, undefined);
+        }
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
@@ -201,6 +217,79 @@ export function warningDiagnostic(
     offset: Math.min(source.length, lineStart + Math.max(0, warning.column)),
     source,
     category: "warning",
+  };
+}
+
+/**
+ * A compile error raised while compiling a tag template, split into the
+ * diagnostic that belongs to the template file and the pointer diagnostic
+ * left on the caller (spec §2's third position rule, matching the language
+ * server's `diagnoseDocument`). `undefined` when `cause` is not a
+ * `TranslateError` naming a file other than `callerFileName`.
+ */
+export interface ForeignTemplateError {
+  templateFileName: string;
+  templateDiagnostic: MxCompileDiagnostic;
+  callerDiagnostic: MxCompileDiagnostic;
+}
+
+/**
+ * Reads a tag template's current source so its own diagnostic can be
+ * positioned against its own text, not the caller's. Tries the supplied
+ * reader first (an open editor buffer), then falls back to disk — the same
+ * order `readCalleeInput` uses for a callee's `Input`.
+ */
+function readTemplateSource(
+  templateFileName: string,
+  readSource?: (fileName: string) => string | undefined,
+): string {
+  return (
+    readSource?.(templateFileName) ??
+    (() => {
+      try {
+        return readFileSync(templateFileName, "utf8");
+      } catch {
+        return "";
+      }
+    })()
+  );
+}
+
+export function foreignTemplateError(
+  cause: unknown,
+  callerFileName: string,
+  callerSource: string,
+  readSource?: (fileName: string) => string | undefined,
+): ForeignTemplateError | undefined {
+  if (!(cause instanceof TranslateError)) return undefined;
+  if (!cause.file || cause.file === callerFileName) return undefined;
+
+  const templateFileName = cause.file;
+  const templateSource = readTemplateSource(templateFileName, readSource);
+  const lineStart =
+    lineOffsets(templateSource)[Math.max(0, cause.line - 1)] ??
+    templateSource.length;
+  const templateOffset = Math.min(
+    templateSource.length,
+    lineStart + Math.max(0, cause.column),
+  );
+
+  return {
+    templateFileName,
+    templateDiagnostic: {
+      fileName: templateFileName,
+      message: cause.message,
+      offset: templateOffset,
+      source: templateSource,
+      category: "error",
+    },
+    callerDiagnostic: {
+      fileName: callerFileName,
+      message: `${cause.message} (in ${templateFileName})`,
+      offset: 0,
+      source: callerSource,
+      category: "error",
+    },
   };
 }
 

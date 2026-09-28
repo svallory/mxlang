@@ -361,6 +361,33 @@ describe("MX language plugin", () => {
     expect(plugin.getSyntaxError(fileName)).toBeUndefined();
   });
 
+  it("reports a compile error raised inside a tag template against the template file, not the caller", () => {
+    const plugin = createMxLanguagePlugin(ts);
+    const fileName = `${here}/fixtures/html-tags-broken/page.mx`;
+    const templateFileName = `${here}/fixtures/html-tags-broken/tags/broken.mx`;
+    const source = '<div><broken name="star"/></div>\n';
+    plugin.createVirtualCode?.(
+      fileName,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+
+    // The template's own orphan `<else>` (line 3, 0-based line 2) must be
+    // reported against `tags/broken.mx`, matching the language server's
+    // spec §2 "third position rule" — not against the caller's `page.mx`.
+    const templateDiagnostics = plugin.getCompileDiagnostics(templateFileName);
+    expect(templateDiagnostics).toHaveLength(1);
+    expect(templateDiagnostics[0]?.fileName).toBe(templateFileName);
+    expect(templateDiagnostics[0]?.source).toContain("<else/>");
+
+    // The caller still gets a pointer diagnostic so a broken template isn't
+    // silently invisible when only the caller is open.
+    const callerDiagnostics = plugin.getCompileDiagnostics(fileName);
+    expect(callerDiagnostics).toHaveLength(1);
+    expect(callerDiagnostics[0]?.message).toContain(templateFileName);
+  });
+
   it("recognizes .mx and exposes a TypeScript service script", () => {
     const plugin = createMxLanguagePlugin(ts);
     const source = [
