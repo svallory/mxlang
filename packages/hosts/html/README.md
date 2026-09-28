@@ -97,6 +97,53 @@ bun run example                  # renders the `class-object` fixture
 bun run example nested-layout    # or any other fixture name
 ```
 
+### `mx(source)`/`loadMx(path)`: no bundler, no manual caching
+
+For a bundler-free consumer (Express, Hono, a plain Bun server) that wants
+Pug's `compile`/`renderFile` ergonomics rather than driving `compile`/
+`compileFile` and executing/caching the result by hand:
+
+```ts
+import { loadMx, mx } from "@mxlang/html";
+
+// From a file already on disk, cached by resolved path + every transitive
+// dependency's mtime:
+const page = loadMx<{ name: string }>("./views/page.mx");
+page({ name: "Ada" }); // -> "<p>Ada</p>"
+
+// From source text directly, cached by a hash of source + filename:
+const greet = mx<{ name: string }>("<p>${input.name}</p>");
+greet({ name: "Ada" });
+```
+
+Both compile once, resolve every import in the compiled output to a real
+absolute target, and evaluate the result **synchronously, in memory, with
+zero disk writes** — on Bun (a `require` of a `data:` URL) and on Node ≥22.15
+(`node:module`'s `registerHooks`, plus its `stripTypeScriptTypes` to erase
+the compiled output's own type annotations before Node's ESM loader sees
+it). A relative or bare import in `mx(source)`'s output needs an anchor to
+resolve against — pass `filename` (the real path the source *would* live at)
+whenever the template has a custom tag or any import of its own; `loadMx`
+never needs this, since its own `path` argument already is that anchor. A
+discovered custom tag's own `.mx` import is compiled recursively through the
+same cache and pointed at that nested module's in-memory form, so a page
+that calls a tag which itself imports another `.mx` file invalidates
+correctly when the deepest file changes, not only when the page's own direct
+import does. An import cycle across `.mx` files is a compile-time error
+naming the cycle.
+
+**Node-only caveat**: `stripTypeScriptTypes` is an experimental Node API and
+prints exactly one `ExperimentalWarning` to stderr per process (not per
+call) the first time either helper compiles anything on Node — harmless,
+and suppressible with Node's own `--disable-warning=ExperimentalWarning` if
+it's unwanted in a log stream. Also Node-only: each recompiled module gets a
+fresh internal URL (Node's own `require` cache is keyed by URL, so a
+recompiled module needs a new one to actually invalidate), and Node has no
+API to evict an already-`require`d ESM module — a long-lived dev process
+that edits templates over and over grows this internal cache without bound.
+An unchanged file is a cache hit and mints nothing new, so this only grows
+at the rate templates are actually edited.
+
 ## `.mx` is official, not a retired dialect (decision 72)
 
 Decision 68 retired the old `.mx` dialect (required explicit imports,

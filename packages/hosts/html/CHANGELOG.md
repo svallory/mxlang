@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: `mx(source)`/`loadMx(path)` — bundler-free compile, cache and execute (html-mx-helpers)
+
+`mx()`/`loadMx()` compile a template once, resolve every import in the compiled output to a real absolute target, and evaluate the result synchronously, in memory, with zero disk writes — on Bun (`require` of a `data:` URL) and on Node ≥22.15 (`node:module`'s `registerHooks`, plus its experimental `stripTypeScriptTypes`). Pug-style ergonomics (`compile`/`renderFile`) for an Express/Hono/plain-Bun consumer with no bundler step: `loadMx(path)` caches by resolved path and every transitive dependency's mtime, `mx(source, { filename? })` by a hash of source plus filename, both bounded LRU-256. A discovered custom tag's own `.mx` import is compiled recursively through the same cache, so a page whose tag itself imports another `.mx` file invalidates on the deepest file's change, not just the page's own. `mx(source)` needs `filename` (an anchor to resolve against) whenever the template has any import of its own; `loadMx`'s own path already is that anchor. An import cycle across `.mx` files is a compile-time error naming the cycle; a nested compile error is reported against the nested file's own path and position. See `README.md` for the full contract, including two Node-only caveats: one `ExperimentalWarning` per process from `stripTypeScriptTypes` (not per call), and unbounded `require`-cache growth under heavy template-edit churn in a long-lived process (bounded by how often templates are actually edited).
+
 ### Internal: uses core's shared `unresolvedCustomTagMessage` (source-bindings-silent-parse-failure)
 
 `rejectUnknownTag`'s Marko-wording message ("Unable to find entry point for custom tag `<Name>`.") now comes from `@mxlang/core`'s `unresolvedCustomTagMessage` instead of a hand-copied literal. No behavior change.

@@ -33,6 +33,7 @@ import {
 } from "./translate.ts";
 
 export { escape } from "@mxlang/core";
+export { loadMx, type MxOptions, type MxRenderer, mx } from "./helpers.ts";
 export { policy, strictPolicy, TranslateError } from "./translate.ts";
 export type { CompileResult, RawSourceMap };
 

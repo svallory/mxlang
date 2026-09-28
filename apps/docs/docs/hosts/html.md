@@ -86,6 +86,24 @@ import translator from "@mxlang/html";
 compileSync(source, filename, { translator, output: "html" });
 ```
 
+## `mx(source)`/`loadMx(path)`: no bundler, no manual caching
+
+For a bundler-free consumer (Express, Hono, a plain Bun server) wanting Pug's `compile`/`renderFile` ergonomics instead of driving `compile`/`compileFile` and executing/caching the result by hand:
+
+```typescript
+import { loadMx, mx } from "@mxlang/html";
+
+const page = loadMx<{ name: string }>("./views/page.mx");
+page({ name: "Ada" }); // -> "<p>Ada</p>"
+
+const greet = mx<{ name: string }>("<p>${input.name}</p>");
+greet({ name: "Ada" });
+```
+
+Both compile once, resolve every import in the compiled output to a real absolute target, and evaluate the result **synchronously, in memory, with zero disk writes** — on Bun (a `require` of a `data:` URL) and on Node ≥22.15 (`node:module`'s `registerHooks`, plus its `stripTypeScriptTypes` to erase the compiled output's own type annotations). `mx(source)` needs `filename` (the real path the source would live at) whenever its template has a custom tag or any import of its own, since that's the anchor a relative or bare import resolves against; `loadMx`'s own `path` is already that anchor. A discovered custom tag's `.mx` import is compiled recursively through the same cache, so a page whose tag itself imports another `.mx` file invalidates correctly when the deepest file changes. An import cycle across `.mx` files is a compile-time error naming the cycle.
+
+Node-only caveats: `stripTypeScriptTypes` prints one `ExperimentalWarning` per process (not per call), suppressible with `--disable-warning=ExperimentalWarning`; and each recompiled module needs a fresh internal `require`-cache URL (Node cannot evict an already-loaded ESM module), so a long-lived dev process editing templates repeatedly grows this cache without bound — an unchanged file is a cache hit and adds nothing.
+
 ## Loaders
 
 Two loaders make `import page from "./page.mx"` (or `"./page.marko"`) resolve, one per runtime.
