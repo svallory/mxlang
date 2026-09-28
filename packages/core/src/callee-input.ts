@@ -1240,9 +1240,11 @@ class InputAnalyzer {
           part.type === "TSTypeReference" &&
           part.typeName.type === "Identifier"
         ) {
+          const partFromPath =
+            this.nodeFiles.get(part) ?? inputDecl.fromPath ?? this.path;
           const base = this.resolveNamedType(
             part.typeName.name,
-            this.nodeFiles.get(part) ?? inputDecl.fromPath ?? this.path,
+            partFromPath,
             new Set(seen),
             depth + 1,
           );
@@ -1251,6 +1253,25 @@ class InputAnalyzer {
               ...this.inputMembers(base, seen, depth + 1, errors, _path),
             );
             continue;
+          }
+          // Resolution failed -- either the name genuinely does not exist
+          // (an ordinary open member, as before), or it does but the alias
+          // chain behind it is deeper than `MAX_ALIAS_DEPTH`. A deeper
+          // reader would have found `AttrTag` config members it silently
+          // dropped, so this reports the same "declare literally" error the
+          // property-alias path (`analyzeAttrTagType`) already gives that
+          // situation, instead of quietly leaving the member open.
+          if (
+            this.namedTypeEventuallyContainsAttrTag(
+              part.typeName.name,
+              partFromPath,
+              new Set(),
+            )
+          ) {
+            errors.set("<input>", {
+              message: "declare this attribute tag's config literally",
+              span: this.spanOf(part),
+            });
           }
         }
         if (containsAttrTag(part)) {
@@ -1265,9 +1286,12 @@ class InputAnalyzer {
     }
 
     // `interface Input extends Base` — resolvable bases are flattened in,
-    // unresolvable ones make the Input open. The flag travels through the
-    // shared `errors`-free return: encode it as an index member the caller
-    // treats as `open`.
+    // unresolvable ones make the Input open (unless the unreached chain
+    // behind an unresolvable-but-real base would have contained an
+    // `AttrTag`, in which case it is a positioned error instead -- same
+    // rule as the intersection-part branch above). The flag travels through
+    // the shared `errors`-free return: encode it as an index member the
+    // caller treats as `open`.
     if (declaration.extends) {
       for (const heritage of declaration.extends) {
         const baseName =
@@ -1280,13 +1304,27 @@ class InputAnalyzer {
           result.push({ kind: "index", span: this.spanOf(heritage) });
           continue;
         }
+        const heritageFromPath =
+          this.nodeFiles.get(heritage) ?? inputDecl.fromPath ?? this.path;
         const base = this.resolveNamedType(
           baseName,
-          this.nodeFiles.get(heritage) ?? inputDecl.fromPath ?? this.path,
+          heritageFromPath,
           seen,
           depth + 1,
         );
         if (!base) {
+          if (
+            this.namedTypeEventuallyContainsAttrTag(
+              baseName,
+              heritageFromPath,
+              new Set(),
+            )
+          ) {
+            errors.set("<input>", {
+              message: "declare this attribute tag's config literally",
+              span: this.spanOf(heritage),
+            });
+          }
           result.push({ kind: "index", span: this.spanOf(heritage) });
           continue;
         }
@@ -1516,7 +1554,17 @@ class InputAnalyzer {
     return decl;
   }
 
-  /** Detects an AttrTag hidden beyond the supported property-alias depth. */
+  /**
+   * Detects an AttrTag hidden beyond the supported alias/base-following
+   * depth (`MAX_ALIAS_DEPTH`), for a *named type* reference (a property's
+   * alias, an intersection part, or an `extends` base name) — unbounded by
+   * that depth cap on purpose: it exists only to tell a genuinely
+   * unresolvable name (no such type; stays a silent open member/prop, as
+   * before) apart from a real chain that a deeper reader would have found an
+   * `AttrTag` behind (now a positioned error, never a silent degrade). Both
+   * a type alias and an interface declaration are followed, since an
+   * `extends` base can be either.
+   */
   private namedTypeEventuallyContainsAttrTag(
     name: string,
     fromPath: string,
@@ -1529,21 +1577,55 @@ class InputAnalyzer {
       this.declarations.get(key) ??
       this.resolveNamedType(name, fromPath, new Set(), 0);
     const declaration = resolved?.node;
+    if (!declaration) return false;
+    const declFromPath = resolved?.fromPath ?? fromPath;
+
+    if (declaration.type === "TSInterfaceDeclaration") {
+      if (containsAttrTag(declaration.body)) return true;
+      return (declaration.extends ?? []).some((heritage: Node) => {
+        const baseName =
+          heritage.expression?.type === "Identifier"
+            ? heritage.expression.name
+            : heritage.id?.type === "Identifier"
+              ? heritage.id.name
+              : undefined;
+        return (
+          baseName !== undefined &&
+          this.namedTypeEventuallyContainsAttrTag(baseName, declFromPath, seen)
+        );
+      });
+    }
+
     const type =
-      declaration?.type === "TSTypeAliasDeclaration"
+      declaration.type === "TSTypeAliasDeclaration"
         ? declaration.typeAnnotation
         : undefined;
     if (!type) return false;
     if (containsAttrTag(type)) return true;
-    return (
+    if (
       type.type === "TSTypeReference" &&
-      type.typeName.type === "Identifier" &&
-      this.namedTypeEventuallyContainsAttrTag(
+      type.typeName.type === "Identifier"
+    ) {
+      return this.namedTypeEventuallyContainsAttrTag(
         type.typeName.name,
-        resolved?.fromPath ?? fromPath,
+        declFromPath,
         seen,
-      )
-    );
+      );
+    }
+    if (type.type === "TSIntersectionType") {
+      return type.types.some(
+        (part: Node) =>
+          containsAttrTag(part) ||
+          (part.type === "TSTypeReference" &&
+            part.typeName.type === "Identifier" &&
+            this.namedTypeEventuallyContainsAttrTag(
+              part.typeName.name,
+              declFromPath,
+              seen,
+            )),
+      );
+    }
+    return false;
   }
 
   /**

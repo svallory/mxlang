@@ -2,6 +2,14 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: an `Input`'s `extends` base or intersection alias hitting `MAX_ALIAS_DEPTH` no longer silently degrades (callee-input-alias-depth-silent)
+
+`InputAnalyzer.inputMembers` (`callee-input.ts`) reads an `Input` interface's `extends` base and a type alias's intersection parts by following named-type references through `resolveNamedType`, capped at `MAX_ALIAS_DEPTH` (4) like every other alias-following path in this file. When that cap was hit for these two paths specifically, the member silently became an open index signature — `AttrTag` typing behind the truncated hop was quietly dropped, with no diagnostic at all. The sibling property-alias path (`analyzeAttrTagType`, used for `tab?: AttrTag<Alias>`) already reported "declare this attribute tag's config literally" in the same situation, through `namedTypeEventuallyContainsAttrTag` — an unbounded (cycle-guarded, not depth-capped) lookahead that tells a genuinely unresolvable name (stays open, correctly, e.g. `interface Input extends MissingBase`) apart from a real chain that does contain an `AttrTag` behind a hop deeper than the cap reaches.
+
+Both silent paths now call the same check before falling back to an open member. `namedTypeEventuallyContainsAttrTag` itself was widened to follow `TSInterfaceDeclaration` (its body, and recursively its own `extends` bases) and `TSIntersectionType` (each part), since an `extends` base or an intersection part can be either kind — it previously only understood `TSTypeAliasDeclaration`. Both now raise the identical "declare this attribute tag's config literally" error (an `errors` map entry under `"<input>"`), surfaced through the same `raiseInvalidCalleeInput`/`raiseInvalidOwnInput` `fail(...)` path attribute-tag config errors already use — an error, not a warning, matching the existing sibling path.
+
+New tests: a 5-hop `extends` chain and a 5-hop intersection alias, each hiding an `AttrTag` behind the fifth hop, now report the positioned error instead of silently degrading; the matching 4-hop cases (within the cap) keep resolving and typing correctly, alongside the pre-existing 4-hop property-alias test.
+
 ### Fix: a type-only import no longer resolves a capitalized tag (decision 114/115)
 
 `importBindings(line)` (`core.ts`) previously returned every specifier of an

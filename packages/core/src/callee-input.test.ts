@@ -1331,6 +1331,117 @@ describe("readCalleeInput", () => {
     } satisfies CalleeInput);
   });
 
+  it("applies the extends-base alias depth limit at four hops", () => {
+    const source = fixtureSource("extends-depth4.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./extends-depth4"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("extends-depth4.ts"),
+      attrTags: new Map([
+        [
+          "x",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, 'AttrTag<{ as: "renderable" }>'),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("reports a positioned error, not a silent open, when a 5-hop extends chain hides an AttrTag beyond MAX_ALIAS_DEPTH", () => {
+    const source = fixtureSource("extends-depth5.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./extends-depth5"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "invalid",
+      path: fixture("extends-depth5.ts"),
+      errors: new Map([
+        [
+          "<input>",
+          {
+            message: "declare this attribute tag's config literally",
+            // The unresolvable hop is `B4 extends B5` -- the fifth
+            // `resolveNamedType` call, past `MAX_ALIAS_DEPTH` (4) -- not
+            // `Input extends B1` itself: `Input`'s own base (B1, hop 1)
+            // resolves fine, and so do B1->B2, B2->B3 and B3->B4.
+            span: refSpan(source, "B5", source.indexOf("interface B4")),
+          },
+        ],
+      ]),
+    } satisfies CalleeInput);
+  });
+
+  it("applies the intersection-alias depth limit at four hops", () => {
+    const source = fixtureSource("intersection-depth4.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./intersection-depth4"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("intersection-depth4.ts"),
+      attrTags: new Map([
+        [
+          "x",
+          {
+            cardinality: "optional",
+            as: "renderable",
+            hasAttrs: false,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: false,
+            span: refSpan(source, 'AttrTag<{ as: "renderable" }>'),
+          },
+        ],
+      ]),
+      otherProps: new Set(["y"]),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("reports a positioned error, not a silent open, when a 5-hop intersection alias hides an AttrTag beyond MAX_ALIAS_DEPTH", () => {
+    const source = fixtureSource("intersection-depth5.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./intersection-depth5"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "invalid",
+      path: fixture("intersection-depth5.ts"),
+      errors: new Map([
+        [
+          "<input>",
+          {
+            message: "declare this attribute tag's config literally",
+            // The unresolvable hop is `P4 = P5` -- the fifth
+            // `resolveNamedType` call, past `MAX_ALIAS_DEPTH` (4) -- not the
+            // top-level `& P1` intersection part itself: `Input`'s own P1
+            // part (hop 1) resolves fine, and so do P1->P2, P2->P3 and
+            // P3->P4.
+            span: refSpan(source, "P5", source.indexOf("type P4")),
+          },
+        ],
+      ]),
+    } satisfies CalleeInput);
+  });
+
   it("marks qualified and non-literal extends open", () => {
     for (const name of ["qualified-extends", "extends-nonliteral"]) {
       const source = fixtureSource(`${name}.ts`);
