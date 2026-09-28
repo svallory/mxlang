@@ -1026,6 +1026,52 @@ reference that failed only at Astro's own render time with an opaque
 case — a locally declared component) and a fence import are both entirely
 unaffected, and stay a direct call as before.
 
+**Fix: a host-recognized component object (React's `memo`/`forwardRef`/
+`lazy`) reaching the dynamic path is treated as a component, not a plain
+data object.** Firstmate's follow-up: React's own `memo(Foo)`/`forwardRef(...)`
+return plain *objects* (`{ $$typeof: Symbol(react.memo), ... }`), not
+functions — measured, and unlike `preact/compat`'s and `hono/jsx`'s own
+`memo`/`forwardRef` (both real functions) and Solid's `lazy` (also a real
+function). Before this fix, `mxDynamic` (the shared Preact/React/Hono JSX
+emitter's dynamic-tag helper) had no branch recognizing such an object: it
+fell through to the final `return props.content ? props.content() : target;`
+line and handed the bare object back as a JSX child, which React rejects
+("Objects are not valid as a React child"). Reachable both as a local
+(`static const Comp = memo(Foo)`, already "unknown" under this decision's own
+classification — a `CallExpression` is never statically function-like) and,
+since decision 116's own import routing (#155), as a value import
+(`import Card from "./Card.tsx"` where `Card` is `export default memo(Foo)`).
+
+Fixed by widening `mxDynamic`'s "is this component-like" check with a new
+`mxIsHostComponentObject(value)` helper — **allowlisted by the marker
+symbol's `description`** (`"react.memo"`/`"react.forward_ref"`/
+`"react.lazy"`), not merely "carries a `$$typeof` symbol": every React
+*element* (an ordinary already-rendered `<em/>`, not just a `memo`/
+`forwardRef` wrapper) also carries a `$$typeof` symbol
+(`Symbol(react.transitional.element)`/`Symbol(react.element)` depending on
+the React version) — a broader "any `$$typeof` symbol" check, tried first
+and caught by the executed suite before landing, misclassified an ordinary
+rendered element as a component and broke pre-existing dynamic-tag/
+attribute-tag tests (an already-rendered `<@head>H</@head>` body passed as
+`<${head}/>` is exactly such an element). React's `memo`/`forwardRef`/`lazy`
+markers are plain `Symbol()`s, not `Symbol.for(...)`, so identity cannot be
+compared across a second React copy — the description string is the only
+stable cross-copy signal. Checked *before* decision 106's `.content`-guard,
+so a recognized object never reaches that guard (a plain data object never
+carries `$$typeof` at all). **This fix is React-specific in practice**: measured directly, neither
+Preact's own renderer (`preact-render-to-string`'s dispatcher, `typeof type
+== "function"` only) nor `hono/jsx`'s own `jsx()` runtime has any
+object-based component dispatch at all — a bare `<Comp/>` where `Comp` is
+React's raw `memo` object fails identically on both hosts whether or not it
+passes through `mxDynamic`, with no MX layer involved (confirmed by
+hand-written JSX with no dynamic-tag routing at all). This is a genuine
+Preact/Hono-vs-React incompatibility, not something `mxDynamic` could ever
+paper over; the widened check is simply inert (never taken in a way that
+changes the outcome) on those two hosts, and is what makes React's own case
+work. Solid needed no change: its `<Dynamic component={...}>` dispatches on
+any callable component reference generically, with no `typeof` gate of its
+own to widen, and `lazy(...)` is a real function regardless.
+
 **Intentional divergence from literal Marko parity:** a plain function is
 still called and its return kept, matching MX's pre-116 behavior for that
 one case rather than Marko's, since an imported `.tsx` component on

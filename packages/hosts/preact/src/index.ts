@@ -203,10 +203,30 @@ function importLines(names: Set<string>, target: Target): string[] {
  * \`payload\` where this dispatch could not tell a real trailing argument from
  * the synthesized props object.
  */
-const MX_DYNAMIC = `function mxDynamic(target: any, payload: any, content?: any) {
+const MX_DYNAMIC = `function mxIsHostComponentObject(value: any): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const marker = value.$$typeof;
+  if (typeof marker !== "symbol") return false;
+  // Every React *element* also carries a $$typeof symbol
+  // (Symbol(react.transitional.element)/Symbol(react.element) depending on
+  // the React version) - that would make an ordinary rendered element (e.g.
+  // an already-rendered <em/>) misclassify as a component here too.
+  // Allowlisted rather than blocklisted: only the three component-wrapper
+  // markers this fix targets (memo, forwardRef, lazy) qualify, matched by
+  // the symbol's description since these are plain Symbol()s (not
+  // Symbol.for(...)), so identity cannot be compared across a second React
+  // copy.
+  const description = marker.description;
+  return (
+    description === "react.memo" ||
+    description === "react.forward_ref" ||
+    description === "react.lazy"
+  );
+}
+function mxDynamic(target: any, payload: any, content?: any) {
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
-    if (typeof target === "string") {
+    if (typeof target === "string" || mxIsHostComponentObject(target)) {
       const Tag: any = target;
       const attrs = payload[0] || {};
       return <Tag {...attrs}>{content ? content() : undefined}</Tag>;
@@ -214,7 +234,11 @@ const MX_DYNAMIC = `function mxDynamic(target: any, payload: any, content?: any)
     return target;
   }
   const props = payload;
-  if (typeof target === "string" || typeof target === "function") {
+  if (
+    typeof target === "string" ||
+    typeof target === "function" ||
+    mxIsHostComponentObject(target)
+  ) {
     const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
     return <Tag {...rest}>{bodyContent ? bodyContent() : undefined}</Tag>;

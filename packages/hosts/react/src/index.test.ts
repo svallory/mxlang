@@ -397,3 +397,111 @@ describe("local-value-as-tag-parity: non-import local used as a tag (react)", ()
     expect(html).toBe("<div></div>");
   });
 });
+
+/**
+ * Firstmate's follow-up on decision 116: React's own `memo`/`forwardRef`
+ * return plain OBJECTS (`{ $$typeof, ... }`), not functions — unlike
+ * preact/compat's and hono's own `memo`/`forwardRef`, both real functions
+ * (measured, see the sibling describe block below). A `memo(Foo)`/
+ * `forwardRef(...)` result is "unknown" under decision 116's own
+ * classification (a `CallExpression`, never statically function-like), so
+ * it always routes dynamic — through `mxDynamic`, which before this fix had
+ * no branch recognizing a `$$typeof`-carrying object as a component: it fell
+ * through to the final `return props.content ? props.content() : target;`
+ * line and handed the bare object back as a JSX child, which React rejects
+ * ("Objects are not valid as a React child"). Reachable both as a local
+ * (`static const Comp = memo(Foo)`) and, since #155, as a value import
+ * (`import Card from "./Card.tsx"` where `Card` is `export default
+ * memo(Foo)`).
+ */
+describe("local-value-as-tag-parity: React's memo()/forwardRef() objects on the dynamic path (react)", () => {
+  async function renderWithReact(
+    entrySource: string,
+    targetSource?: string,
+  ): Promise<string> {
+    const { dirname, join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const scratch = mkdtempSync(join(tmpdir(), "mx-react-memo116-"));
+    try {
+      symlinkSync(
+        dirname(dirname(require.resolve("react/package.json"))),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "react" },
+        }),
+      );
+      if (targetSource)
+        writeFileSync(join(scratch, "target.tsx"), targetSource);
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, compileReactMx(entrySource, entry).code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: Record<string, unknown>) => ReactNode;
+      };
+      return renderToStaticMarkup(createElement(mod.default, {}));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("a local static const bound to memo(Foo) renders the wrapped component", async () => {
+    // `static` is a plain-JS block (Marko's own grammar, not JSX), so the
+    // wrapped function is written with `createElement` rather than JSX
+    // syntax, which would collide with Marko's own tag grammar there.
+    const html = await renderWithReact(
+      [
+        'import { createElement, memo } from "react";',
+        'static function Foo(props: { n: number }) { return createElement("em", null, props.n); }',
+        "static const Comp = memo(Foo);",
+        "<Comp n=1/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<em>1</em>");
+  });
+
+  it("a local static const bound to forwardRef(...) renders the wrapped component", async () => {
+    const html = await renderWithReact(
+      [
+        'import { createElement, forwardRef } from "react";',
+        'static const Comp = forwardRef((props: { n: number }, _ref) => createElement("em", null, props.n));',
+        "<Comp n=1/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<em>1</em>");
+  });
+
+  it("a .tsx value import whose default export is memo(Foo) renders the wrapped component", async () => {
+    const html = await renderWithReact(
+      'import Comp from "./target.tsx"\n<Comp n=1/>',
+      [
+        'import { memo } from "react";',
+        "function Foo(props: { n: number }) {",
+        "  return <em>{props.n}</em>;",
+        "}",
+        "export default memo(Foo);",
+      ].join("\n"),
+    );
+    expect(html).toBe("<em>1</em>");
+  });
+
+  it("a .tsx value import whose default export is forwardRef(...) renders the wrapped component", async () => {
+    const html = await renderWithReact(
+      'import Comp from "./target.tsx"\n<Comp n=1/>',
+      [
+        'import { forwardRef } from "react";',
+        "export default forwardRef((props: { n: number }, _ref) => <em>{props.n}</em>);",
+      ].join("\n"),
+    );
+    expect(html).toBe("<em>1</em>");
+  });
+});

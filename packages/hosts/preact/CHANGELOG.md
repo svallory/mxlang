@@ -7,6 +7,26 @@
   `unresolvedCustomTagMessage` instead of a hand-copied literal. No behavior
   change; shared with `@mxlang/react`/`@mxlang/hono` through the common
   emitter.
+- **Fixed:** `mxDynamic` (the shared Preact/React/Hono JSX emitter's
+  dynamic-tag helper) now treats a host-recognized component object as a
+  component. React's own `memo(Foo)`/`forwardRef(...)` return plain objects
+  (`{ $$typeof: Symbol(react.memo), ... }`), not functions, and used to fall
+  through `mxDynamic` unrecognized, handing the bare object back as a JSX
+  child (React: "Objects are not valid as a React child"). New
+  `mxIsHostComponentObject(value)` helper, allowlisted by the marker
+  symbol's `description` (`"react.memo"`/`"react.forward_ref"`/
+  `"react.lazy"`) rather than merely "carries a `$$typeof` symbol" — every
+  React *element* (an ordinary already-rendered node, not just a `memo`/
+  `forwardRef` wrapper) also carries one, which misclassified plain rendered
+  content as a component. Checked before decision 106's `.content`-guard so
+  a recognized object never reaches it. Reachable both as a local
+  (`static const Comp = memo(Foo)`) and as a value import. Preact's own
+  `memo`/`forwardRef` (real functions, unlike React's) were already
+  unaffected; React's raw object form imported directly into a Preact app
+  remains unsupported regardless of this fix — measured, Preact's own
+  renderer has no object-based component dispatch at all, with or without
+  MX. See the spec's decision 116 section for the full detail.
+
 - **Fixed (behavior change, decision 114 parity, `unresolved-tag-jsx-astro-angular`):**
   `<TotallyUndefined/>` — a capitalized tag with no import, binding, or taglib
   entry — now fails to compile with Marko's own error ("Unable to find entry

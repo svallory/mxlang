@@ -699,5 +699,21 @@ describe("Solid SSR render: dynamic tag", () => {
       );
       expect(html).toMatch(/<div[^>]* name="1"[^>]*>body<\/div>/);
     });
+
+    // Firstmate's follow-up on decision 116: Solid's own `lazy(...)` returns
+    // a real FUNCTION (measured, `typeof lazy(...) === "function"`), unlike
+    // React's `memo`/`forwardRef` (see `@mxlang/react`'s sibling suite,
+    // which needed a fix for those). A `lazy(...)` call is a
+    // `CallExpression`, always classified "unknown" by `isFunctionLikeValue`,
+    // so it already routes through `<Dynamic>` — and Solid's own `<Dynamic
+    // component={...}>` accepts any callable component reference
+    // generically, with no `typeof` gate of its own the way
+    // `@mxlang/preact`'s `mxDynamic` needed widening. No fix required on
+    // this host. Not covered by an executed SSR test here: real
+    // `renderToString` of a `lazy(...)` component needs a `<Suspense>`
+    // boundary to resolve the async loader, which `renderApp`'s helper does
+    // not currently wire up — out of scope for this "if cheap" follow-up
+    // (confirmed cheap only for the `typeof` fact above, not for full
+    // Suspense-aware SSR test infra).
   });
 });

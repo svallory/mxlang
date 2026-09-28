@@ -2,6 +2,16 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fixed:** the shared `mxDynamic` helper (`@mxlang/preact`, this package's
+  own emitter) now recognizes a `$$typeof`-carrying host component object
+  (React's `memo`/`forwardRef`) as a component rather than a plain data
+  object. hono/jsx's own `memo`/`forwardRef` were already unaffected (real
+  functions, unlike React's); React's raw object form imported directly into
+  a Hono app remains unsupported regardless — measured, `hono/jsx`'s own
+  `jsx()` runtime has no object-based component dispatch at all, with or
+  without MX. See `@mxlang/preact`'s CHANGELOG and the spec's decision 116
+  section for the full detail.
+
 - **Fixed (behavior change, decision 114 parity, `unresolved-tag-jsx-astro-angular`):**
   `<TotallyUndefined/>` — a capitalized tag with no import, binding, or taglib
   entry — now fails to compile with Marko's own error ("Unable to find entry

@@ -487,4 +487,36 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
     );
     expect(html).toBe("<div></div>");
   });
+
+  /**
+   * Firstmate's follow-up on decision 116: hono/jsx's own `memo`/
+   * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see
+   * `@mxlang/react`'s sibling suite), so `mxDynamic`'s pre-existing
+   * `typeof target === "function"` branch already handled them, unaffected
+   * by `mxIsHostComponentObject`.
+   *
+   * React's raw `memo(Foo)`/`forwardRef(...)` object does NOT work on this
+   * host either, through `mxDynamic` or otherwise — measured directly:
+   * `hono/jsx`'s own `jsx()` runtime has no object-based component dispatch
+   * (only Preact's/hono's shared JSX-element machinery,
+   * `typeof === "function"`), so a bare `<Comp/>` with `Comp` = React's
+   * `memo` object renders a literal `<[object Object]>` tag whether or not
+   * it passes through `mxDynamic` — the identical Preact-vs-React
+   * incompatibility documented in `@mxlang/preact`'s suite, not a
+   * decision-116 routing gap. `mxIsHostComponentObject`'s widened check in
+   * the shared emitter is still correct: it is what makes React's own suite
+   * pass, and is simply inert (never taken) on hono/preact, since neither
+   * runtime can act on the result regardless.
+   */
+  it("hono/jsx's own memo(Foo) (a real function) already renders correctly", async () => {
+    const html = await renderLocalTag(
+      [
+        'import { memo } from "hono/jsx";',
+        "static function Foo(props: { n: number }) { return `<em>${props.n}</em>`; }",
+        "static const Comp = memo(Foo);",
+        "<Comp n=1/>",
+      ].join("\n"),
+    );
+    expect(html).toContain("1");
+  });
 });

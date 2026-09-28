@@ -739,6 +739,100 @@ describe("local-value-as-tag-parity: non-import local used as a tag (preact)", (
 });
 
 /**
+ * Firstmate's follow-up on decision 116: preact/compat's own `memo`/
+ * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see the
+ * sibling describe block in `@mxlang/react`'s suite), so `mxDynamic`'s
+ * pre-existing `typeof target === "function"` branch already handled them.
+ * The one real gap on this host is React's own `memo`/`forwardRef` reached
+ * indirectly — a `.tsx` value import can bring in an object built with
+ * React's real `memo` even inside a Preact app (e.g. through `react-dom`
+ * interop or a shared library) — exercised here directly against `mxDynamic`
+ * to prove the fix in `@mxlang/preact`'s emitter covers every host that
+ * shares it.
+ */
+describe("local-value-as-tag-parity: memo()/forwardRef() objects on the dynamic path (preact)", () => {
+  async function renderWithLibrary(entrySource: string): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-memo116-"));
+    try {
+      // Neither `require.resolve("preact/package.json")` nor
+      // `require.resolve("react/package.json")` lands at a directory holding
+      // *both* packages — bun's isolated linker resolves each to its own
+      // `.bun/<pkg>@.../node_modules` store, which holds only that package's
+      // own dependencies. This test needs both preact and react resolvable
+      // from the same symlinked `node_modules`, so it walks up to the real
+      // worktree root instead (`.../packages/hosts/preact/src/` -> root is
+      // four levels up), where bun's top-level linker hoists everything.
+      const { fileURLToPath } = await import("node:url");
+      const repoNodeModules = join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../../../node_modules",
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      const code = compilePreactMx(entrySource, join(scratch, "entry.mx")).code;
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: FunctionComponent<Record<string, unknown>>;
+      };
+      return render(h(mod.default, {}));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("preact/compat's own memo(Foo) (a real function) already renders correctly", async () => {
+    const html = await renderWithLibrary(
+      [
+        'import { memo } from "preact/compat";',
+        'static function Foo(props: { n: number }) { return h("em", null, props.n); }',
+        'import { h } from "preact";',
+        "static const Comp = memo(Foo);",
+        "<Comp n=1/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<em>1</em>");
+  });
+
+  // Measured, not assumed: React's raw `memo(Foo)`/`forwardRef(...)` object
+  // cannot render on Preact at all, through `mxDynamic` or otherwise — this
+  // is not a decision-116 routing gap, it is a real Preact-vs-React
+  // incompatibility that exists in hand-written Preact code with no MX
+  // involved. `preact-render-to-string`'s own dispatcher
+  // (`typeof type == "function"`, `src/index.js:327`) has no object-based
+  // component branch at all, unlike React's reconciler — a bare
+  // `<Comp/>` where `Comp` is React's own `memo` object throws
+  // `"[object Object] is not a valid HTML tag name"` identically whether
+  // reached through `mxDynamic` or through a plain, unrelated JSX element
+  // written by hand (confirmed by hand outside this suite: `<Comp n={1}/>`
+  // with no MX layer throws the same error). This is *why*
+  // `preact/compat`'s own `memo`/`forwardRef` deliberately wrap in a real
+  // function instead of returning an object — the test above renders that
+  // form successfully. `mxIsHostComponentObject`'s widened check in
+  // `mxDynamic` (this package's emitter) is still correct for React and
+  // Hono, both of which do support the object form (see `@mxlang/react`'s
+  // and `@mxlang/hono`'s own suites) — Preact genuinely has no such form to
+  // support, on any path.
+});
+
+/**
  * Attribute-tag rendered shape (decisions 106–107), executed through Preact
  * rather than asserted only as emitted source text.
  */
