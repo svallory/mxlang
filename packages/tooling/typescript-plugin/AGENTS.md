@@ -82,6 +82,23 @@ Four facts worth knowing before editing either:
   virtual contents to the source's own lines. `.solid.mx` keeps the flag,
   because its printed output does preserve source lines.
 
+**`.solid.mx`'s virtual TSX gets a synthetic, unmapped import for the Solid
+JSX built-ins the emitter prints as a bare tag** (`Show`/`For`/`Switch`/
+`Match`/`Repeat`/`Errored`/`Loading` from `solid-js`, `Dynamic` from
+`@solidjs/web`) — `language.ts`'s `appendSolidBuiltinImport`, called from
+`createSolidMxLanguagePlugin`. `@mxlang/solid`'s own emitter never imports
+these (see `packages/hosts/solid/AGENTS.md`): the real build pipeline gets
+them from `@solidjs/vite-plugin`'s compiler stage auto-importing every
+built-in it sees, a stage that runs *after* `createVirtualCode` and never
+inside this package, so without this the projection saw a free identifier
+and reported TS2304 on every `<if>`/`<for>`/`<try>` — hiding every real
+diagnostic inside that JSX (solid-virtual-code-hidden-errors). The import is
+appended after every mapping is computed from the unmodified generated text
+(source-map offsets, `attributeTagDiagnosticMappings`), so it cannot shift
+an existing line or offset; it is skipped for a name already bound by an
+`import`/`const`/`function`/`class` at the top level of the generated file,
+so an author's own same-named export is never shadowed.
+
 **No ambient `declare module "*.solid.mx"` shim, anywhere.** A shim asserts
 types rather than deriving them, so it hides both a file's real exports and
 every error inside it. Both examples' `src/mx.d.ts` are deleted; dropping

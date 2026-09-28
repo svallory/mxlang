@@ -1567,6 +1567,95 @@ describe("declared attribute-tag values in the emitted TypeScript", () => {
   );
 });
 
+describe("hidden type errors in the Solid virtual code (solid-virtual-code-hidden-errors)", () => {
+  const solidDirectory = `${here}/fixtures/solid-hidden-errors`;
+
+  it("does not report TS2304 for `Show`, emitted by `<if>` with no import", () => {
+    const files = {
+      [`${solidDirectory}/if.solid.mx`]: [
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.diagnostics).toEqual([]);
+  });
+
+  it("does not report TS2322/implicit-any for `onKeyDown`/`onDblClick` handlers", () => {
+    const files = {
+      [`${solidDirectory}/events.solid.mx`]: [
+        "export default function C() {",
+        "  return (",
+        "    <div",
+        "      onKeyDown=(e) => e.key",
+        "      onDblClick=(e) => e.detail",
+        "    >text</div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/events.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.diagnostics).toEqual([]);
+  });
+
+  it("still surfaces a real type error inside a `<Show>` child, mapped to source", () => {
+    const files = {
+      [`${solidDirectory}/if-error.solid.mx`]: [
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+        "      <div>${(1).toUpperCase()}</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-error.solid.mx`,
+      "solid",
+    );
+    expect(checked.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      2339,
+    ]);
+  });
+
+  it("still surfaces a real type error in a handler parameter, mapped to source", () => {
+    const files = {
+      [`${solidDirectory}/events-error.solid.mx`]: [
+        "export default function C() {",
+        "  return <div onKeyDown=(e: string) => e.length>text</div>;",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/events-error.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.diagnostics.length).toBeGreaterThan(0);
+  });
+});
+
 describe("Astro language plugin composition", () => {
   it("loads Astro's language plugin when astro is true", () => {
     const plugins = createConfiguredLanguagePlugins(ts, true);
