@@ -1672,7 +1672,18 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const attrs = renderAttrs(node.attrs, true);
-    const tags = attributeTagProps(node.attrTagProps);
+    // A decision-116-routed dynamic target (`valueImportBinding` set) still
+    // names a real, in-scope import — the emitted call is
+    // `mxDyn0 = AttrCallee; ... <Dynamic component={mxDyn0} .../>`, with
+    // `AttrCallee` imported verbatim — so typed attribute-tag checking can
+    // still reference it for `Parameters<typeof AttrCallee>[0][...]`,
+    // exactly as a `kind: "name"` target does. An author's own `<${expr}/>`
+    // (no `valueImportBinding`) has no such name and stays untyped.
+    const owner =
+      node.target.kind === "dynamic"
+        ? node.target.valueImportBinding
+        : undefined;
+    const tags = attributeTagProps(node.attrTagProps, owner);
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     if (node.var && lazyScope) {
       fail(
@@ -1707,8 +1718,16 @@ export class SolidEmitter implements Emitter<string> {
     // rather than trying to make one JSX attribute list conditional.
     const stringArgsAttrs =
       node.args.length > 0 ? ` {...(${node.args[0]?.code} || {})}` : "";
+    // decision 116, Marko parity (`runtime-tags/src/html/dynamic-tag.ts`'s
+    // `_dynamic_tag`, `normalizeDynamicRenderer`): a target that is neither
+    // a string nor a function has no renderer, so the tag itself renders
+    // nothing — but its own body content still renders, threaded
+    // independently of the target. `fallback` is the plain-JSX rendering of
+    // that body (or `null` for a self-closing/no-content call), used only in
+    // this else branch; the `<Dynamic>` branches above it are unaffected.
     const guard = (
       rendered: (tagsProps: MappedCode | string) => MappedCode | string,
+      fallback: MappedCode | string,
     ) =>
       concatMapped(
         `{(() => { const ${temp} = `,
@@ -1720,24 +1739,35 @@ export class SolidEmitter implements Emitter<string> {
               rendered(stringArgsAttrs),
               ` : typeof ${value} === "function" ? `,
               rendered(tags),
-              ` : ${value}; })()}`,
+              ` : `,
+              fallback,
+              `; })()}`,
             )
           : concatMapped(
               `return typeof ${value} === "string" || typeof ${value} === "function" ? `,
               rendered(tags),
-              ` : ${value}; })()}`,
+              ` : `,
+              fallback,
+              `; })()}`,
             ),
       );
     if (!node.content || raw) {
+      // No body content to fall back to (a self-closing tag, or content
+      // that is already-rendered raw HTML) — the else branch passes the
+      // resolved value through unchanged, exactly as before decision 116:
+      // a caller reading `input.content` and forwarding it as `<${input.content}/>`
+      // must still see a real Solid element pass through here, never `null`.
       this.#out.push(
-        guard((tagsProps) =>
-          concatMapped(
-            "<Dynamic",
-            component,
-            attrs,
-            tagsProps,
-            `${returnProp}${innerHtml} />`,
-          ),
+        guard(
+          (tagsProps) =>
+            concatMapped(
+              "<Dynamic",
+              component,
+              attrs,
+              tagsProps,
+              `${returnProp}${innerHtml} />`,
+            ),
+          value,
         ),
       );
       return;
@@ -1747,17 +1777,30 @@ export class SolidEmitter implements Emitter<string> {
     const children = node.content.hasParams
       ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
       : inLazyScope(() => renderWithNewEmitter(contentNodes));
+    // The fallback body must not itself declare tag params: those are
+    // meaningful only to the resolved component/renderer, which does not
+    // exist on this branch. Re-rendered plain, matching `renderWithNewEmitter`
+    // above for the no-params case; a parameterized body has no unparameterized
+    // form to fall back to, so it renders as an empty fragment instead —
+    // Marko itself cannot express this case either (a dynamic-tag body is a
+    // Marko-shaped renderer's own callback, never invoked when there is no
+    // renderer to invoke it).
+    const fallbackBody = node.content.hasParams
+      ? concatMapped("<></>")
+      : inLazyScope(() => renderWithNewEmitter(contentNodes));
     this.#out.push(
-      guard((tagsProps) =>
-        concatMapped(
-          "<Dynamic",
-          component,
-          attrs,
-          tagsProps,
-          `${returnProp}>`,
-          children,
-          "</Dynamic>",
-        ),
+      guard(
+        (tagsProps) =>
+          concatMapped(
+            "<Dynamic",
+            component,
+            attrs,
+            tagsProps,
+            `${returnProp}>`,
+            children,
+            "</Dynamic>",
+          ),
+        concatMapped("<>", fallbackBody, "</>"),
       ),
     );
   }

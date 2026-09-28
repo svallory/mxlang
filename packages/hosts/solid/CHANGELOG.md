@@ -4,6 +4,24 @@
 
 ### Fixed
 
+- A value import that is not a `.marko`/`.mx` default import now lowers as a
+  dynamic tag (decision 116), matching Marko's own `_dynamic_tag` runtime
+  dispatch — a string renders as an element, `undefined`/`null` render only
+  the tag's body content (previously the dynamic-tag guard discarded the
+  body outright for any falsy target — Marko renders it), and a plain
+  function is still called as a host component (an intentional divergence:
+  an imported `.tsx` component IS a plain function). Typed attribute-tag
+  checking on such a call still resolves the real callee's `Input` through
+  the target's new `valueImportBinding`, exactly as a direct call does.
+  `@mxlang/parser`'s module-scope scan (`collectModuleScope`) now also
+  tracks which import bindings are `.marko`/`.mx` defaults
+  (`mxImportDefaultFromMarkoOrMx`, threaded through `MxRegionCompile`) so a
+  real `.solid.mx` region resolves the same way a unit test does. A region
+  whose entire content is one dynamic tag used to fail to re-parse
+  ("Unexpected token") because the compiled JSX child-expression-container
+  braces (`{(() => {...})()}`) are not a standalone expression on their
+  own; the bridge now retries the parse with those braces stripped when the
+  first attempt fails.
 - A type-only import (`import type Widget from "./widget.mx"`, or
   `import { type Widget } from "..."`) no longer resolves `<Widget/>` as a
   component: it now reaches Marko's own unresolved-tag compile error, on

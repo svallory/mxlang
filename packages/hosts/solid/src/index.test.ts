@@ -249,6 +249,7 @@ describe("Solid IR lowering", () => {
         ? compileSolidMx(source, {
             filename: "fixture.solid.mx",
             importSpecifiers: new Map(imports.map((n) => [n, `./${n}.mx`])),
+            importDefaultFromMarkoOrMx: new Set(imports),
           })
         : compile(source);
       for (const text of expected) expect(result.code).toContain(text);
@@ -1116,9 +1117,20 @@ describe("compileSolidUnit", () => {
       const regionImports = compiled.hoistedImports
         .map((entry) => entry.code)
         .join("\n");
+      // decision 116: `Row` is a `.tsx` default import, so `compiled.code`
+      // is now a dynamic-tag call, emitted as a JSX child-expression
+      // container (`{...}`) — correct only *inside* JSX, not in a plain
+      // `const view = ...` assignment position, where a leading `{...}`
+      // parses as an object literal instead. Wrapped in a fragment either
+      // way: unwrap `compiled.code`'s own braces first when it has them, so
+      // the fragment adds exactly one JSX-container pair rather than
+      // nesting a second (invalid) `{{...}}`.
+      const bare = compiled.code.startsWith("{")
+        ? compiled.code.slice(1, -1)
+        : compiled.code;
       writeFileSync(
         caller,
-        `${regionImports}\nimport Row from "./Row.tsx";\ndeclare const values: number[];\nexport const view = ${compiled.code};\n`,
+        `import { Dynamic } from "@solidjs/web";\n${regionImports}\nimport Row from "./Row.tsx";\ndeclare const values: number[];\nexport const view = <>{${bare}}</>;\n`,
       );
       writeFileSync(
         join(scratch, "tsconfig.json"),
@@ -1260,5 +1272,53 @@ describe("event error positions", () => {
       error = caught;
     }
     expect(error).toMatchObject({ line: 1, column: 7 });
+  });
+});
+
+/**
+ * Decision 116: a capitalized tag bound to a value import that is not a
+ * `.marko`/`.mx` default import lowers as a dynamic tag on Solid too — the
+ * same `<Dynamic component=…>` shape an authored `<${expr}>` already
+ * produces, with `moduleBindings` supplying the import the way a real
+ * caller's surrounding TypeScript module does (decision 114).
+ */
+describe("decision 116: value import used as a tag (solid)", () => {
+  it("a .ts value import compiles to Dynamic, not a direct JSX call", () => {
+    // Decision 116 is scoped to *import* bindings — `moduleBindings` alone
+    // (a locally declared `const`/`function`/`class`, never an import) must
+    // NOT route dynamic; see the "still a direct call" tests below. This
+    // case needs a real `importSpecifiers` entry for a non-`.marko`/`.mx`
+    // source to exercise the routing at all.
+    const code = compileSolidMx('<Tag name="1">body</Tag>\n<Tag/>', {
+      filename: "fixture.solid.mx",
+      importSpecifiers: new Map([["Tag", "./tag.ts"]]),
+    }).code;
+    expect(code).toContain("<Dynamic");
+    expect(code).not.toContain("<Tag ");
+    expect(code).not.toContain("<Tag/>");
+  });
+
+  it("a .marko/.mx default import still compiles to a direct JSX call, not Dynamic", () => {
+    const code = compileSolidMx("<Comp/>", {
+      filename: "fixture.solid.mx",
+      moduleBindings: new Set(["Comp"]),
+      importSpecifiers: new Map([["Comp", "./comp.mx"]]),
+      importDefaultFromMarkoOrMx: new Set(["Comp"]),
+    }).code;
+    expect(code).toContain("<Comp");
+    expect(code).not.toContain("<Dynamic");
+  });
+
+  it("a module-scope local function (not an import) still compiles to a direct JSX call, not Dynamic", () => {
+    // Lead's correction: decision 116 covers value *imports* only. A
+    // locally declared `function`/`const`/`class` used as a tag — the most
+    // common Solid module-scope-component pattern — keeps today's direct
+    // lowering on every host, unaffected by this decision.
+    const code = compileSolidMx("<Layout/>", {
+      filename: "fixture.solid.mx",
+      moduleBindings: new Set(["Layout"]),
+    }).code;
+    expect(code).toContain("<Layout");
+    expect(code).not.toContain("<Dynamic");
   });
 });

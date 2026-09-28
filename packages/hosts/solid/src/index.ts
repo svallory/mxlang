@@ -82,6 +82,15 @@ export interface CompileSolidMxOptions {
    * may resolve through this scope as well as `importSpecifiers`.
    */
   moduleBindings?: ReadonlySet<string>;
+  /**
+   * The subset of `importSpecifiers`' bindings that are a *default* import
+   * from a `.marko`/`.mx` source — Marko's own statically-resolved
+   * component case (decision 116). A capitalized tag bound to a name in
+   * this set lowers as a direct component call, exactly as before decision
+   * 116; any other value import (named, namespace, or a default from any
+   * other extension) lowers as a dynamic tag instead.
+   */
+  importDefaultFromMarkoOrMx?: ReadonlySet<string>;
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
   warnings?: MxWarning[];
 }
@@ -267,6 +276,17 @@ export function compileSolidMx(
   // to a value", which is exactly what a module-scope binding is too.
   if (options.moduleBindings) {
     for (const name of options.moduleBindings) ctx.imports.add(name);
+  }
+  // decision 116: only a *default* import from a `.marko`/`.mx` source is
+  // Marko's own statically-resolved component case; every other value
+  // import lowers as a dynamic tag. `moduleBindings` folds every top-level
+  // value binding into `ctx.imports` with no source tracking (correct: a
+  // `const`/`function`/`class` has no specifier to check), so this set is
+  // populated from `importSpecifiers`' own default-import bindings only.
+  if (options.importDefaultFromMarkoOrMx) {
+    for (const name of options.importDefaultFromMarkoOrMx) {
+      ctx.importDefaultFromMarkoOrMx.add(name);
+    }
   }
   const ir = lower(ctx, body);
   // An import the *compiler* minted for a discovered tag is not a

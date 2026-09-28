@@ -81,6 +81,17 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
         importSpecifiers: new Map([["Row", "./Row.tsx"]]),
       },
     );
+    // decision 116: `Row` is a `.tsx` default import, so it lowers as a
+    // dynamic tag, emitted as a JSX child-expression container (`{...}`) —
+    // correct only *inside* JSX, not directly as `render(() => code)`,
+    // which is a plain arrow-body position. Wrapped in a fragment either
+    // way: unwrap `compiled.code`'s own braces first when it has them, so
+    // the fragment adds exactly one JSX-container pair rather than nesting
+    // a second (invalid) `{{...}}`.
+    const bare = compiled.code.startsWith("{")
+      ? compiled.code.slice(1, -1)
+      : compiled.code;
+    const dynamicCode = `<>{${bare}}</>`;
     const imports = compiled.hoistedImports
       .map((entry) => entry.code)
       .join("\n");
@@ -92,7 +103,7 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
       const [label, setLabel] = createSignal("A");
       function Row(input) { return <main><div>{input.item[0]?.content}{input.item[0]?.content}</div><div><Dynamic component={input.item[0]?.content}/></div><div><For each={input.item}>{item => <i>{item.content}</i>}</For></div></main>; }
       const root = document.createElement("root");
-      render(() => ${compiled.code}, root);
+      render(() => ${dynamicCode}, root);
       const before = root.textContent;
       setLabel("B"); setItems(["x", "y"]); flush();
       console.log(JSON.stringify({ before, after: root.textContent }));

@@ -89,6 +89,11 @@ function runFixture(fixture: Fixture, mode: "dom" | "ssr"): unknown {
   const dir = mkdtempSync(join(packageRoot, ".attr-round2-"));
   try {
     const importSpecifiers = new Map<string, string>();
+    // `Row` is a genuine `.mx` default import (decision 116), so it lowers
+    // as a direct component call exactly as before that decision — this
+    // set is what tells `compileSolidMx` that, since `importSpecifiers`
+    // alone no longer implies it.
+    const importDefaultFromMarkoOrMx = new Set<string>();
     let rowImport = "";
     if (fixture.callee !== undefined) {
       const calleePath = join(dir, "Row.mx");
@@ -101,11 +106,13 @@ function runFixture(fixture: Fixture, mode: "dom" | "ssr"): unknown {
         transform(`${prelude}${callee}`, "Row.tsx", mode),
       );
       importSpecifiers.set("Row", "./Row.mx");
+      importDefaultFromMarkoOrMx.add("Row");
       rowImport = 'import Row from "./Row.tsx";\n';
     }
     const compiled = compileSolidMx(fixture.region, {
       filename: join(dir, "caller.solid.mx"),
       importSpecifiers,
+      importDefaultFromMarkoOrMx,
       // The real pipeline compiles a region in the context of its whole
       // surrounding module (`@mxlang/parser`'s `parse()`); this test compiles
       // the region standalone and splices `fixture.setup` in only afterward,

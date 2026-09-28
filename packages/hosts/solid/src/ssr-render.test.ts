@@ -91,6 +91,70 @@ function renderApp(
   }
 }
 
+/**
+ * Same real-Solid-pipeline rendering as `renderApp`, but for a *real import*
+ * rather than a module-scope declaration — decision 116's routing is scoped
+ * to import bindings, so `renderApp`'s `setup`-string approach (always a
+ * local `const`/`function`, never an import) cannot exercise it at all.
+ * Writes `targetSource` to a real sibling `.tsx` file (may contain JSX) and
+ * imports it — a non-`.marko`/`.mx` extension either way, which is all
+ * decision 116's routing checks.
+ */
+function renderAppWithImport(
+  mxFragment: string,
+  targetName: string,
+  targetSource: string,
+): string {
+  const dir = mkdtempSync(join(packageRoot, ".ssr-render-import-tmp-"));
+  try {
+    // The imported target may itself contain JSX (the plain-function
+    // divergence case), so it needs the same Solid transform the fixture
+    // gets — writing `targetSource` verbatim as `.mjs` would leave real JSX
+    // unparsed by plain Node/Bun.
+    const targetSsr = transformSync(targetSource, {
+      filename: "target.tsx",
+      presets: [[typescriptPreset, {}]],
+      plugins: [[solidBabelPlugin, { generate: "ssr", hydratable: false }]],
+      babelrc: false,
+      configFile: false,
+    });
+    if (!targetSsr?.code)
+      throw new Error("Solid babel plugin produced no code for target.tsx");
+    writeFileSync(join(dir, "target.mjs"), targetSsr.code);
+    const { code: forCode, hoistedImports } = compileSolidMx(mxFragment, {
+      filename: join(dir, "fixture.solid.mx"),
+      importSpecifiers: new Map([[targetName, "./target.tsx"]]),
+    });
+    const imports = hoistedImports.map((entry) => entry.code).join("\n");
+    const jsxSource = `${imports}\nimport { ${targetName} } from "./target.tsx";\nexport function App() {\n  return <ul>${forCode}</ul>;\n}\n`;
+    const ssr = transformSync(jsxSource, {
+      filename: "fixture.tsx",
+      presets: [[typescriptPreset, {}]],
+      plugins: [[solidBabelPlugin, { generate: "ssr", hydratable: false }]],
+      babelrc: false,
+      configFile: false,
+    });
+    if (!ssr?.code)
+      throw new Error("Solid babel plugin produced no code for fixture.tsx");
+    const appPath = join(dir, "app.mjs");
+    const runnerPath = join(dir, "run.mjs");
+    writeFileSync(
+      appPath,
+      ssr.code.replace('"./target.tsx"', '"./target.mjs"'),
+    );
+    writeFileSync(
+      runnerPath,
+      `import { renderToString } from "@solidjs/web";\nimport { App } from "./app.mjs";\nprocess.stdout.write(renderToString(() => App()));\n`,
+    );
+    return execFileSync("bun", ["run", runnerPath], {
+      cwd: packageRoot,
+      encoding: "utf8",
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function renderDeclaredAttrTags(
   mxFragment: string,
   inputDeclaration: string,
@@ -521,6 +585,63 @@ describe("Solid SSR render: dynamic tag", () => {
         `const input = { render: (a: string, b: number) => () => <em>{a}-{b}</em> };`,
       );
       expect(html).toContain("x-2");
+    });
+  });
+
+  // Decision 116: a capitalized tag bound to a value import that is not a
+  // `.marko`/`.mx` default import lowers as a dynamic tag — the same
+  // `<Dynamic>` dispatch the authored `<${expr}>` tests above exercise,
+  // reached instead through an ordinary `import { X } from "./x.ts"` and
+  // an ordinary `<X>`/`<X/>` call. Executed through the same real Solid
+  // SSR pipeline (`renderApp` -> `@solidjs/babel-plugin` -> `@solidjs/web`
+  // `renderToString`), proving the routing dispatches the way `<Dynamic>`
+  // actually resolves a value at runtime.
+  describe("value import used as a tag (decision 116)", () => {
+    // Decision 116 is scoped to *import* bindings — a module-scope
+    // declaration (`const Tag = "div"`, a local `function`) is never an
+    // import, so every case here uses `renderAppWithImport`, a real
+    // sibling `.ts` file and a real `import`, not `renderApp`'s
+    // `setup`-string (module-scope) shape. See `index.test.ts`'s "a
+    // module-scope local function ... still compiles to a direct JSX
+    // call" for the unaffected case.
+    it("a string value import renders as a real element", () => {
+      const html = renderAppWithImport(
+        '<Tag name="1">body</Tag>\n<Tag/>',
+        "Tag",
+        'export const Tag = "div";',
+      );
+      // Solid's SSR output carries its own hydration-key attribute
+      // (`_hk=`), unrelated to this assertion — checked structurally
+      // rather than by exact string.
+      expect(html).toMatch(/<div[^>]* name="1"[^>]*>body<\/div>/);
+      expect(html).toMatch(/<div[^>]*><\/div>/);
+    });
+
+    it("a plain function value import is called as a host component (intentional Marko divergence)", () => {
+      const html = renderAppWithImport(
+        '<Comp name="1"/>',
+        "Comp",
+        "export function Comp(props: { name?: string }) { return <em>{props.name}</em>; }",
+      );
+      expect(html).toContain("<em>1</em>");
+    });
+
+    it("undefined renders only the tag's body content, matching Marko", () => {
+      const html = renderAppWithImport(
+        '<Missing name="1">body</Missing>',
+        "Missing",
+        "export const Missing = undefined;",
+      );
+      expect(html).toBe("<ul>body</ul>");
+    });
+
+    it("null renders only the tag's body content, matching Marko", () => {
+      const html = renderAppWithImport(
+        '<Nul name="1">body</Nul>',
+        "Nul",
+        "export const Nul = null;",
+      );
+      expect(html).toBe("<ul>body</ul>");
     });
   });
 });
