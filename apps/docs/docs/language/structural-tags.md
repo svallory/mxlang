@@ -23,7 +23,7 @@ MX's structural core is a small set of tags that render exactly the way Marko re
 </else>
 ```
 
-The HTML host lowers this to a plain JS `if`/`else if`/`else` chain around the corresponding output. SolidMX lowers the same tag to Solid's `<Show>`/ternary form, matching what a hand-written Solid component would use for a branch.
+The HTML host lowers this to a plain JS `if`/`else if`/`else` chain around the corresponding output. SolidMX lowers the same tag to Solid's `<Show>` for two or fewer conditioned branches, or `<Switch>`/`<Match>` for three or more, matching what a hand-written Solid component would use for a branch.
 
 ## `<for>`
 

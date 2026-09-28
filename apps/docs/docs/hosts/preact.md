@@ -119,6 +119,8 @@ control-flow components, so there is nothing else for them to become.
 | `<define/R\|p\|>` | a nested function component |
 | `<try>` | `MxErrorBoundary` / `MxPlaceholder` |
 | `import`, `static`, `export` | hoisted to module scope verbatim |
+| `<${expr}>` (dynamic tag) | `mxDynamic(expr, props)` — JSX's static tag position can't take the expression directly |
+| `<return>` | `{ value, output }`; a unit importing a hook is rejected instead |
 
 Element-versus-component follows **Marko's** rule, not JSX's: a tag resolves to
 a component when a binding or taglib entry says so, whatever its case. A
@@ -129,7 +131,7 @@ element; the host binds it under a generated name in the emitted JSX.
 
 Marko's stateful tags are compile errors naming the Preact equivalent: `<let>` points at `useState`, `<effect>` at `useEffect`, `<lifecycle>` and `<script>` at the hooks that replace them, `<id>` at `useId`, `:=` at passing a value plus an explicit handler. A `client` block is an error too — this host's output *is* the client.
 
-So is anything else this target cannot express — `<await>`, `<return>`, `<!doctype html>` (it belongs to the HTML shell that mounts the app), a dynamic tag name with a body (JSX requires a capitalized identifier in tag position), a raw `$!{…}` placeholder with siblings (the prop replaces the whole subtree), a non-object `style=`, and `class:active` (not Marko syntax — see [Errors](/language/errors/)). Nothing degrades silently.
+So is anything else this target cannot express — `<await>`, `<!doctype html>` (it belongs to the HTML shell that mounts the app), a raw `$!{…}` placeholder with siblings (the prop replaces the whole subtree), a non-object `style=`, and `class:active` (not Marko syntax — see [Errors](/language/errors/)). `<return>` and a dynamic tag with a body both compile — see the table above. Nothing else degrades silently.
 
 ## Verification
 

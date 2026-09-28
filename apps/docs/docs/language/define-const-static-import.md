@@ -12,10 +12,12 @@ These four constructs are part of the portable structural core — they work the
 Ordinary module imports, hoisted to the top of the compiled output:
 
 ```html
-import { formatDate } from "./util.mx"
+import { formatDate } from "./util.ts"
 
 <p>Published ${formatDate(post.date)}</p>
 ```
+
+A `.mx` file compiles to a template — a component, not a module exporting plain helpers like `formatDate` — so import shared helpers from a `.ts` module. Import a `.mx` file itself to call it as a tag, the way [`<define>`](#define) calls work.
 
 ## `static`
 
