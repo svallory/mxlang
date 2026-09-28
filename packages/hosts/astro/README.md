@@ -105,7 +105,9 @@ naming the construct. This host compiles MX under `@mxlang/html`'s
 `strictPolicy`: it renders once, at build time, with no reactive runtime
 anywhere, so a construct that only means something with a runtime is a build
 error rather than markup that silently renders once and never updates
-(decision 71 — stateful tags mean whatever the host says).
+(decision 71 — stateful tags mean whatever the host says). `<log>` and
+`<debug>` are the exception: `strictPolicy` inherits their inert disposition
+from the default policy unchanged, so they render no output but do not error.
 
 **`client:*` directives** on an MX component **fail the build**, naming the
 component:

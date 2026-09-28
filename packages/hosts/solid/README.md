@@ -141,6 +141,10 @@ other target can express.
 | Dynamic tag name (`<${expr}/>` or `<${expr}(args)/>`) | Inline runtime dispatch: tag-name strings and component functions go through `<Dynamic>`; already-rendered values pass through. Arguments invoke a function target before dispatch. Data-shaped attribute tags must use `.content` |
 | `<define>`, `<const>`, `Hoisted`, `DocumentType` inside a JSX expression | Errors: these must be declared in the surrounding TypeScript module, which is not this emitter's territory (a `.solid.mx` file is already a TS module — that's where they belong) |
 
+A repeated `<@name>` compiles from core's resolved `attrTagProps` array plan,
+the same as every other `attrTags: 2` host: each occurrence lands in the
+emitted array in source order (`item={[() => …, () => …]}`), not last-wins.
+
 An attribute-tag renderable is always an accessor. Render a data tag with
 `<${input.item.content}/>` and a renderable tag with `<${input.item}/>`.
 Parameterized tags must receive their arguments at that dynamic call site:

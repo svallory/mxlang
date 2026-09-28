@@ -151,6 +151,17 @@ text with no `mapped(...)` call anywhere); task 2.2b fills it through
 core's `Expr.span`, and a test asserts the empty array so that cannot
 change silently.
 
+## Stateful tags
+
+Marko's stateful tags — `<let>`, `<effect>`, `<lifecycle>`, `<script>`,
+`<log>`, `<debug>`, `client` and `server` blocks, `<id>`, and `<await>` —
+are each a compile error naming the tag and the Angular equivalent to write
+instead in the component class (`signal`/`WritableSignal`, `effect()`,
+`ngOnInit`, `@defer`, etc; spec §11, §13.3). Left undeclared, each of these
+names would fall through the emitter's bare-case test and render as a
+literal lowercase element instead — the same silent-wrong-render bug this
+error table closes.
+
 ## Not yet in this package
 
 - The tooling integration for `.ng.mx` (typescript-plugin, language-server,
