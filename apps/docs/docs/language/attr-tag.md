@@ -146,6 +146,26 @@ data-shaped. This keeps library patterns such as
 `<Suspense><@fallback>Loading…</@fallback>…</Suspense>` working. A declared
 `Input` remains authoritative and still defaults to data.
 
+## Tooling when a callee's `Input` changes
+
+A caller's attribute tags are checked against the callee's `Input`, so
+changing a component's `Input` changes what its callers must write. Each tool
+picks the change up differently:
+
+- **`mx-tsc`** compiles every file from disk on each run, so it always checks
+  against the current `Input`.
+- **The language server** (`@mxlang/language-server`) re-diagnoses every open
+  caller of a file that changed: on an edit to an open callee, on a save, and
+  on a change made outside the editor (another editor, a checkout, a
+  generator).
+- **The TypeScript plugin** (`@mxlang/typescript-plugin`) re-checks a caller
+  at once when the callee's *types* change, for example when an attribute
+  becomes required, and it reads an open callee's unsaved text. What the
+  caller was *compiled to* is refreshed only when the caller itself changes.
+  If a callee's change alters the shape MX emits for the call (a callee that
+  could not be read before now exists, or an inferred shape is now declared),
+  the caller keeps the earlier shape and its warnings until you edit it.
+
 ## Host values and limits
 
 | Host | `content` / renderable | Notes |
