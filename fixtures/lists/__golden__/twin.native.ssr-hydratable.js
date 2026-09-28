@@ -116,7 +116,7 @@ export function Lists() {
  }
  })), _v$9 = _$escape(_$For({
  get each() {
- return Object.entries(meta());
+ return Object.entries(meta() ?? {});
  },
  keyed: (e) => e[0],
  children: (mxEntry) => {
