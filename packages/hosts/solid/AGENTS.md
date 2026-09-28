@@ -180,10 +180,11 @@ Two facts worth knowing before touching it:
     region range each came from, via `defineRange`), renaming every
     binding but the first occurrence against a pool seeded with every
     name the module already uses (`moduleBindingNames`) — both the
-    declaration text (`replaceBindingInDeclaration`, a literal
-    `function <name>(` replacement, escaped for regex metacharacters:
-    every hoisted binding starts with `$`, which is otherwise an
-    end-of-string anchor and silently prevents the match) and the
+    declaration (an AST rename: each define is parsed up front, and a
+    collision assigns `FunctionDeclaration.id.name` directly, rather
+    than pattern-matching `entry.code` as text, which used to tie the
+    rename to `SolidEmitter.define`'s exact generated shape and once
+    broke silently because `$` is a regex metacharacter) and the
     reference inside that region (`renameRegionReferences`, the same
     function reused-import renaming already uses).
   - **The capture-check safe-list reads `defineBindings`' *values*, not
