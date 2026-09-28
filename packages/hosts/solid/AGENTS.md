@@ -92,6 +92,74 @@ Two facts worth knowing before touching it:
   resolve their `Input` and Vite to invalidate callers. The registered
   `.solid.mx` callee reader replaces regions with `null`; declaration reading
   needs no output, and compiling them there would recurse for mutual imports.
+- **A top-level `<define>` inside a region hoists to module scope, gensym'd
+  like a synthesized import (decision 110b).** A region is a JSX expression
+  spliced into someone else's module, so `const Row = (...) => ...;` has no
+  statement position to live in — the identical wall `hoistedImports`
+  already hits for a discovered tag's import. `SolidEmitter.define`
+  collects each top-level `Define` node it processes into a module-level
+  `function $mx_DefineN(params) { return <>...</>; }` (`hoistedDefines`,
+  collected the same one-emit-pass way `collectReturnVars` already gathers
+  `/var` names and the escape-import flag), gensyms its binding
+  (`generatedDefineBinding` — always fresh, never the author's own name,
+  since unlike an authored import there is nothing outside the region that
+  could already declare it), and records the author name -> gensym mapping
+  in `defineBindings` for the call site to look up. `compileSolidMx` returns
+  the collected list as `CompileSolidMxResult.hoistedDefines`, and the
+  parser bridge (`packages/parser/src/mx/hoist-imports.ts`'s
+  `HoistedDefine`) writes each one into the surrounding module after the
+  import block, the same channel and placement `hoistedImports` uses.
+  **Only a *direct top-level* child of the region hoists** — `define()`
+  checks the same `lazyScope` flag `/var` already uses (true once emission
+  has entered a `<for>`/`<if>`/attribute-tag body/another callback scope)
+  and fails with a positioned error naming the construct otherwise. Module
+  scope has no per-row or per-branch scope for a nested `<define>` to close
+  over, the identical §7.5-8 reasoning that already restricts `/var` to the
+  top level here.
+  **A hoisted `<define>` may not close over a value local to the region**
+  (a signal, a prop, anything from the surrounding TypeScript function the
+  region lives in) — only its own params, another top-level `<define>`'s
+  gensym'd name, and the module's own imports are safe once it becomes a
+  real module-scope function. Enforced by `freeJsxNames`, a hand-rolled
+  scope-aware AST walk over the rendered body (JSX + TS, so
+  `@mxlang/core`'s `freeIdentifiersIn` — TypeScript-only — cannot be
+  reused: it silently returns an empty set on a body that fails to parse
+  without the `jsx` plugin, which is exactly the undercount this check
+  exists to prevent). Free identifiers not in that allowed set are a
+  positioned error naming the captured identifier; the check errs toward
+  over-reporting (a false "capture" the author works around by passing a
+  param) over under-reporting (silently wrong code reading `undefined` at
+  the hoisted function's real, module scope) — the same tradeoff
+  `packages/parser/src/index.ts`'s `shadowedNames` already makes for an
+  adjacent problem. `KNOWN_GLOBALS` allowlists common JS globals (`Math`,
+  `console`, …, deliberately *not* DOM/browser globals, since SSR runs
+  under Node/Bun first); `$mxEscape` (the escape helper's own hoisted
+  import binding) is allowlisted separately, since a define body that
+  escapes an interpolation references it by name before it is known to
+  exist as an import.
+  **On Solid, a `<define>` call is a plain function-call expression, not a
+  JSX tag.** Every other `Component` target prints an ordinary `<Tag
+  .../>` element; JSX has no positional-call syntax, so
+  `SolidEmitter.#defineComponent` instead emits `{$mx_DefineRowN(...)}` —
+  the same call shape `@mxlang/html`'s `<define>` already uses (decision
+  109). Args fill the declared params positionally; any params beyond the
+  args are filled by name from attrs/attribute tags/`content`
+  (`undefined` where nothing supplies one), mirroring html's own
+  named-lookup scheme exactly, so all four of decision 109's call shapes
+  (no args; args; attribute tags; args plus content and attribute tags)
+  work identically. A spread is rejected the same way html rejects it — a
+  `<define>` is called positionally, so a spread's keys are only known at
+  run time. One difference from html's `content`/attribute-tag values is
+  load-bearing: **Solid's own attribute-tag convention (an accessor,
+  `() => JSX`) still applies to a `<define>` call's named-lookup values**,
+  since they are resolved through the same `attributeTagProp`/`content`
+  machinery every other Solid call uses — a `<define>` param filled that
+  way is a function the define's own body must call (`${head()}`, not
+  `${head}`), unlike html's plain-value convention. `/var` on a
+  `<define>` call binds the call's own return value directly (there is no
+  Solid-only callback-prop channel for a plain function call the way a
+  JSX component call has); it is otherwise still refused inside
+  `<for>`/`<if>` (§7.5-8), unchanged from every other `Component` target.
 
 Decision 72's subset rule removed four SolidMX constructs real Marko itself
 rejects (tag params on `<if>`, tag params and attribute tags on native

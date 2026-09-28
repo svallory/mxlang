@@ -1,8 +1,10 @@
+import { parse as parseBabel } from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
   type AttrTagProp,
+  type ComponentTarget,
   concatMapped,
   destructuredNames,
   drive,
@@ -106,6 +108,356 @@ let lazyScope = false;
  */
 const dynSerial = { n: 0 };
 
+/**
+ * `<define>`s hoisted to module scope during the current compile (decision
+ * 110b), and the gensym'd binding each author name resolves to.
+ *
+ * A `.solid.mx` **region** is an expression spliced into someone else's
+ * module — the same reason `compileSolidMx` hoists a discovered tag's
+ * import rather than declaring it in place (`packages/hosts/solid/AGENTS.md`,
+ * "A synthesized import..."). A `<define>` the region's own author writes
+ * hits the identical wall: `const Row = (item) => <li>...</li>;` has no
+ * statement position to live in mid-JSX-expression. It hoists the same way:
+ * a gensym'd module-scope function declaration, handed back on
+ * `CompileSolidMxResult.hoistedDefines` for the parser bridge to place,
+ * exactly like a synthesized import.
+ *
+ * Module-level for the same reason `returnVars`/`lazyScope` are: this host
+ * builds child emitters freely, with no shared instance state, so a
+ * `<define>` nested inside another construct's callback would otherwise
+ * report into an emitter the module assembly never sees. Collected by
+ * `collectReturnVars`, alongside `/var` and the escape-helper flag — one
+ * emit pass, not a second walk.
+ */
+let hoistedDefines: HoistedSolidDefine[] | null = null;
+
+/** One `<define>` hoisted during the current compile. */
+export interface HoistedSolidDefine {
+  /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+  code: string;
+  /** The gensym'd module-scope binding a `Component` call site now uses. */
+  binding: string;
+}
+
+/**
+ * Author `<define>` name -> its gensym'd module-scope binding, for the
+ * current compile. A `Component` node whose target is `{ kind: "define" }`
+ * still carries the *author's* name (core has no reason to know Solid
+ * hoists it), so `component()` looks the printed name up here.
+ */
+let defineBindings: Map<string, string> | null = null;
+
+/**
+ * Mints a fresh module-scope binding for a hoisted `<define>`.
+ *
+ * Always gensym'd, never the author's own name: unlike an authored import
+ * (which a `.solid.mx` module might already have, and which the parser
+ * bridge can therefore reuse), nothing outside the region could already
+ * declare this binding, so there is no "give it its natural name when safe"
+ * case to special-case, only "safe" (see `generatedBinding` in
+ * `packages/core/src/template-tag.ts`, the same scheme for a discovered
+ * tag's injected import binding). Checked only against names already
+ * minted for this compile — a fresh collision with an unrelated name in the
+ * surrounding module (outside the region, invisible here) is the same
+ * accepted, documented limitation `generatedBinding` already has for
+ * imports.
+ */
+function generatedDefineBinding(
+  name: string,
+  taken: ReadonlySet<string>,
+): string {
+  const safe = name.replace(/[^A-Za-z0-9_$]/g, "_");
+  const hint = /^[A-Za-z_$]/.test(safe) ? safe : `Tag_${safe}`;
+  let n = 0;
+  let binding: string;
+  do {
+    binding = `$mx_Define${hint}${++n}`;
+  } while (taken.has(binding));
+  return binding;
+}
+
+/**
+ * Well-known globals a hoisted `<define>` body may reference without that
+ * being a region-local closure. Deliberately conservative — the codebase's
+ * own rule for this exact tradeoff (`packages/parser/src/index.ts`'s
+ * `shadowedNames`): "over-reporting costs one extra positioned error a user
+ * can work around (pass it as a param); under-reporting is the silent bug"
+ * (wrong code that reads `undefined` at the hoisted function's real, module
+ * scope). Not the DOM/browser globals a Solid *client* build also has,
+ * since SSR runs under Node/Bun first and this check must hold there too.
+ */
+const KNOWN_GLOBALS = new Set([
+  "undefined",
+  "null",
+  "true",
+  "false",
+  "NaN",
+  "Infinity",
+  "globalThis",
+  "console",
+  "Math",
+  "JSON",
+  "Object",
+  "Array",
+  "String",
+  "Number",
+  "Boolean",
+  "Symbol",
+  "BigInt",
+  "Date",
+  "RegExp",
+  "Map",
+  "Set",
+  "WeakMap",
+  "WeakSet",
+  "Promise",
+  "Error",
+  "TypeError",
+  "RangeError",
+  "SyntaxError",
+  "Reflect",
+  "Proxy",
+  "Function",
+  "parseInt",
+  "parseFloat",
+  "isNaN",
+  "isFinite",
+  "encodeURIComponent",
+  "decodeURIComponent",
+  "structuredClone",
+]);
+
+/**
+ * The free identifiers a hoisted `<define>` body references — everything
+ * `blockExpression`'s output reads that is not bound inside that same text.
+ *
+ * A hand-rolled walk rather than `@mxlang/core`'s `freeIdentifiersIn`: that
+ * helper parses with the `typescript` plugin only, so a JSX-shaped
+ * `<define>` body (the common case — a `<define>` almost always renders
+ * markup) fails to parse there and its `catch` silently returns an empty
+ * set, which is exactly the silent-undercount this check exists to prevent.
+ * `@babel/parser` is already a direct dependency here; `@babel/traverse` is
+ * not, so this walks the tree itself rather than adding one, using the same
+ * "collect every binding position, then subtract" shape
+ * `packages/parser/src/index.ts`'s `shadowedNames`/`namesIn` already use for
+ * an adjacent problem (there: is a name shadowed; here: is a name free).
+ *
+ * Deliberately coarse, in the safe direction: it tracks *lexical* bindings
+ * (function/arrow params, `const`/`let`/`var`, a `catch` param, a `for`
+ * loop's own declarator) but does not model hoisting or TDZ order, so a
+ * name used before its `const` in the same block is (harmlessly) treated as
+ * bound rather than free. It does not resolve `this`/`arguments` (Solid
+ * JSX bodies do not use either meaningfully) or handle `var` function-scope
+ * hoisting past a block boundary — both push toward *fewer* false
+ * "captures" flagged only where they change nothing this check cares about,
+ * never toward silently accepting a real capture.
+ */
+function freeJsxNames(code: string): string[] {
+  let file: unknown;
+  try {
+    file = parseBabel(code, {
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
+      allowReturnOutsideFunction: true,
+    });
+  } catch {
+    // The emitter's own output failed to parse — a bug in this function or
+    // in `blockExpression`, not a user-facing capture. Reported as "no
+    // captures" here; the region's own re-parse a few lines up the call
+    // stack (`mxParseElementAt`) is what actually catches a malformed emit.
+    return [];
+  }
+
+  const free = new Set<string>();
+  const walk = (node: unknown, bound: ReadonlySet<string>): void => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, bound);
+      return;
+    }
+    const record = node as Record<string, unknown> & { type?: string };
+
+    if (
+      (record.type === "Identifier" || record.type === "JSXIdentifier") &&
+      typeof record.name === "string"
+    ) {
+      if (!bound.has(record.name)) free.add(record.name);
+      return;
+    }
+    // A member/attribute property (`o.x`, `<Foo x={1}/>`'s `x`) is not a
+    // reference to a binding named `x`.
+    if (
+      record.type === "MemberExpression" ||
+      record.type === "OptionalMemberExpression"
+    ) {
+      walk(record.object, bound);
+      if (record.computed) walk(record.property, bound);
+      return;
+    }
+    if (record.type === "JSXAttribute") {
+      walk(record.value, bound);
+      return;
+    }
+    // A JSX element's own tag name is not an identifier *reference*: a
+    // lowercase intrinsic (`<li>`) is never a binding at all, and even a
+    // capitalized component reference (`<Row>`) is read through its
+    // `openingElement.name`/`closingElement.name`, so walking those would
+    // double-report it — the attributes/children walk below already visits
+    // any real reference inside them.
+    if (record.type === "JSXElement") {
+      walk(
+        (record.openingElement as Record<string, unknown>)?.attributes,
+        bound,
+      );
+      walk(record.children, bound);
+      return;
+    }
+    if (record.type === "JSXFragment") {
+      walk(record.children, bound);
+      return;
+    }
+    if (record.type === "JSXExpressionContainer") {
+      walk(record.expression, bound);
+      return;
+    }
+    if (
+      (record.type === "ObjectProperty" || record.type === "ObjectMethod") &&
+      !record.computed
+    ) {
+      walk(record.value, bound);
+      walk(record.body, bound);
+      for (const param of (record.params as unknown[] | undefined) ?? []) {
+        // Handled by the function-scope branch below when this is a method;
+        // params/body are visited together there for a plain ObjectMethod.
+        void param;
+      }
+      return;
+    }
+
+    let next = bound;
+    const introduce = (names: Iterable<string>) => {
+      let widened: Set<string> | null = null;
+      for (const introduced of names) {
+        widened ??= new Set(next);
+        widened.add(introduced);
+      }
+      if (widened) next = widened;
+    };
+
+    switch (record.type) {
+      case "FunctionExpression":
+      case "FunctionDeclaration":
+      case "ArrowFunctionExpression":
+      case "ObjectMethod":
+      case "ClassMethod":
+        introduce(
+          bindingNamesOf((record.params as unknown[] | undefined) ?? []),
+        );
+        break;
+      case "Program":
+      case "BlockStatement": {
+        // A block's own statements share one scope, and a later statement
+        // sees an earlier `const`/`let`/`function` — the one case the
+        // generic array walk below gets wrong: it hands every array item
+        // the *same* `bound`, so `const $mxText0 = x; return $mxText0` was
+        // reporting `$mxText0` as free (measured: `escapedBlockValue`'s own
+        // generated IIFE body, `{ const $mxText0 = expr; ...; return ...; }`,
+        // tripped this before the fix). Statements are walked left to
+        // right, widening `scope` as each declaration is seen.
+        let scope = bound;
+        for (const statement of (record.body as unknown[]) ?? []) {
+          walk(statement, scope);
+          const s = statement as Record<string, unknown> & { type?: string };
+          if (s.type === "VariableDeclaration") {
+            scope = new Set([...scope, ...bindingNamesOf([s])]);
+          } else if (
+            s.type === "FunctionDeclaration" &&
+            (s.id as Record<string, unknown> | undefined)?.type === "Identifier"
+          ) {
+            scope = new Set([...scope, (s.id as { name: string }).name]);
+          }
+        }
+        return;
+      }
+      case "VariableDeclarator":
+        // The initializer is evaluated in the *outer* scope; the id's names
+        // become bound for whatever follows, which the caller's sibling
+        // walk (over the declarations array, left to right) already gives
+        // us via `next` carrying forward.
+        walk(record.init, bound);
+        introduce(bindingNamesOf([record.id]));
+        for (const key of Object.keys(record)) {
+          if (key === "loc" || key === "init" || key === "id") continue;
+          walk(record[key], next);
+        }
+        return;
+      case "CatchClause":
+        if (record.param) introduce(bindingNamesOf([record.param]));
+        break;
+      case "ForStatement":
+      case "ForInStatement":
+      case "ForOfStatement":
+        // `left`/`init` may declare a loop-local (`for (const x of xs)`);
+        // walked under `next` below like every other child.
+        break;
+    }
+
+    for (const key of Object.keys(record)) {
+      if (key === "loc") continue;
+      walk(record[key], next);
+    }
+  };
+
+  walk(file, new Set());
+  return [...free];
+}
+
+/** Every name a parameter/pattern node binds (params, destructuring). */
+function bindingNamesOf(nodes: unknown[]): string[] {
+  const out: string[] = [];
+  const visit = (node: unknown): void => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    const record = node as Record<string, unknown> & { type?: string };
+    switch (record.type) {
+      case "Identifier":
+        if (typeof record.name === "string") out.push(record.name);
+        return;
+      case "AssignmentPattern":
+        visit(record.left);
+        return;
+      case "RestElement":
+        visit(record.argument);
+        return;
+      case "ArrayPattern":
+        for (const element of (record.elements as unknown[]) ?? []) {
+          visit(element);
+        }
+        return;
+      case "ObjectPattern":
+        for (const prop of (record.properties as unknown[]) ?? []) {
+          const p = prop as Record<string, unknown> & { type?: string };
+          if (p.type === "RestElement") visit(p);
+          else visit(p.value);
+        }
+        return;
+      case "VariableDeclaration":
+        for (const decl of (record.declarations as unknown[]) ?? []) {
+          const d = decl as Record<string, unknown>;
+          visit(d.id);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  for (const node of nodes) visit(node);
+  return out;
+}
+
 /** Runs `emit` with `/var` refused, for a body that is lazy or per-row. */
 function inLazyScope<T>(emit: () => T): T {
   const outer = lazyScope;
@@ -117,27 +469,39 @@ function inLazyScope<T>(emit: () => T): T {
   }
 }
 
-/** Runs `emit` while collecting the `/var` names its call sites declare. */
+/**
+ * Runs `emit` while collecting the `/var` names its call sites declare, and
+ * the `<define>`s it hoists to module scope.
+ */
 export function collectReturnVars(emit: () => string): {
   code: string;
   vars: string[];
   needsEscapeImport: boolean;
+  hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
   const outerEscapeUse = escapeUse;
+  const outerHoistedDefines = hoistedDefines;
+  const outerDefineBindings = defineBindings;
   const collected = new Set<string>();
   const collectedEscapeUse = { used: false };
+  const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
   escapeUse = collectedEscapeUse;
+  hoistedDefines = collectedDefines;
+  defineBindings = new Map();
   try {
     return {
       code: emit(),
       vars: [...collected],
       needsEscapeImport: collectedEscapeUse.used,
+      hoistedDefines: collectedDefines,
     };
   } finally {
     returnVars = outer;
     escapeUse = outerEscapeUse;
+    hoistedDefines = outerHoistedDefines;
+    defineBindings = outerDefineBindings;
   }
 }
 
@@ -1028,6 +1392,10 @@ export class SolidEmitter implements Emitter<string> {
       this.#dynamicComponent(node, node.target.expr);
       return;
     }
+    if (node.target.kind === "define") {
+      this.#defineComponent(node, node.target);
+      return;
+    }
     const name = node.target.name;
     const contentNodes = node.content?.children ?? [];
     const raw = node.content ? rawChild(contentNodes) : null;
@@ -1087,6 +1455,100 @@ export class SolidEmitter implements Emitter<string> {
         `${returnProp}>`,
         children,
         `</${name}>`,
+      ),
+    );
+  }
+
+  /**
+   * A `<define>` call — `<Row(a)/>`, `<Row it=x/>`, `<Row><@head>H</@head></Row>`.
+   *
+   * JSX has no positional-call syntax, so unlike a `"name"`-target
+   * component (an ordinary `<Tag .../>` element), a hoisted `<define>` is
+   * called as a **plain function expression**, `{$mx_DefineRow1(...)}` —
+   * exactly `@mxlang/html`'s own `<define>` call shape (decision 109's
+   * named-param binding), because a hoisted `<define>` is, at the JS level,
+   * exactly what html's already is: an ordinary function, not a Solid
+   * component with props. Args fill the declared params positionally; any
+   * remaining params are filled by name from attrs/attribute
+   * tags/`content`, `undefined` where nothing supplies one. A spread has no
+   * meaning here (its keys are only known at run time, and a `<define>` is
+   * called positionally) and is rejected the same way html rejects it.
+   */
+  #defineComponent(
+    node: Extract<IrNode, { kind: "Component" }>,
+    target: Extract<ComponentTarget, { kind: "define" }>,
+  ): void {
+    const binding = defineBindings?.get(target.name) ?? target.name;
+    const contentNodes = node.content?.children ?? [];
+    const raw = node.content ? rawChild(contentNodes) : null;
+    rejectMixedRaw(contentNodes);
+    if (raw && hasNamedAttr(node.attrs, "innerHTML")) {
+      fail(
+        "`$!{...}` sole child combined with an explicit `innerHTML=` attribute",
+        raw,
+      );
+    }
+    if (node.var && lazyScope) {
+      fail(
+        `\`/var\` on \`<${node.authoredName ?? target.name}>\` inside \`<for>\`/\`<if>\` is not supported on Solid yet; bind it at the top level of the template`,
+        node,
+      );
+    }
+
+    const named = new Map<string, MappedCode>();
+    for (const attr of node.attrs) {
+      if (attr.kind === "spread") {
+        fail(
+          `spreading into \`<${target.name}>\` is not supported: a <define> is called positionally, and a spread's keys are only known at run time`,
+          attr,
+        );
+      }
+      named.set(attr.name, attributeTagAttrValue(attr));
+    }
+    for (const prop of node.attrTagProps) {
+      named.set(prop.name, attributeTagProp(prop));
+    }
+    if (node.content) {
+      const body = inLazyScope(() => blockExpression(contentNodes));
+      named.set(
+        "content",
+        node.content.hasParams
+          ? concatMapped(`(${node.content.params.join(", ")}) => `, body)
+          : body,
+      );
+    }
+
+    const positional = node.args.map((arg) => concatMapped(arg.code));
+    const named_ = target.params
+      .slice(positional.length)
+      .map((param) => named.get(param) ?? concatMapped("undefined"));
+    const args = [...positional, ...named_];
+
+    if (node.var) {
+      // `/var` on a plain function call has no callback prop to ride: the
+      // call itself already hands the value back as its return, so bind it
+      // directly rather than inventing a Solid-only prop channel a
+      // `<define>`'s hoisted function was never given.
+      if (returnVars) returnVars.add(node.var);
+      this.#out.push(
+        concatMapped(
+          "{(() => { const $mxV = ",
+          mapped(binding, node.nameSpan),
+          "(",
+          ...args.flatMap((a, i) => (i === 0 ? [a] : [", ", a])),
+          `); ${node.var} = $mxV; return $mxV; })()}`,
+        ),
+      );
+      return;
+    }
+
+    this.#out.push(
+      concatMapped(
+        "{",
+        mapped(binding, node.nameSpan),
+        "(",
+        ...args.flatMap((a, i) => (i === 0 ? [a] : [", ", a])),
+        ")}",
       ),
     );
   }
@@ -1350,10 +1812,54 @@ export class SolidEmitter implements Emitter<string> {
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
-    fail(
-      "`<define>` cannot declare a function inside a JSX expression; declare it in the surrounding TypeScript module",
-      node,
+    if (!hoistedDefines || !defineBindings) {
+      // Reached only from `compileSolidUnit` (a whole-file tag, never a
+      // region): that path has a real module scope of its own, so hoisting
+      // through this channel is unscoped work, not this construct's fix —
+      // see `packages/hosts/solid/AGENTS.md`'s `<define>`-in-regions note.
+      fail(
+        "`<define>` cannot declare a function inside a JSX expression; declare it in the surrounding TypeScript module",
+        node,
+      );
+    }
+    if (lazyScope) {
+      fail(
+        `\`<define>\` inside \`<for>\`/\`<if>\`/another construct's body is not hoisted to module scope; write \`<define/${node.name}>\` at the top level of the region`,
+        node,
+      );
+    }
+
+    const bodyCode = inLazyScope(() => blockExpression(node.children)).code;
+    const bound = new Set(node.params);
+    const captured = freeJsxNames(bodyCode).filter(
+      (freeName) =>
+        !bound.has(freeName) &&
+        !defineBindings?.has(freeName) &&
+        !KNOWN_GLOBALS.has(freeName) &&
+        // The escape helper's binding is itself hoisted to module scope
+        // (`hoistedImports`, seeded by `needsEscapeImport`) whenever a
+        // define body escapes an interpolation, so it is never actually a
+        // region-local — it just isn't known to this check by name until
+        // the escape flag fires, which already happened by the time this
+        // body was rendered (`escapedBlockValue` sets `escapeUse.used`).
+        freeName !== MX_ESCAPE_BINDING,
     );
+    if (captured.length > 0) {
+      fail(
+        `\`<define/${node.name}>\` is hoisted to module scope and cannot close over \`${captured[0]}\`, a value local to this region; pass it as a param instead`,
+        node,
+      );
+    }
+
+    const binding = generatedDefineBinding(
+      node.name,
+      new Set(defineBindings.values()),
+    );
+    defineBindings.set(node.name, binding);
+    hoistedDefines.push({
+      code: `function ${binding}(${node.params.join(", ")}) { return ${bodyCode}; }`,
+      binding,
+    });
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {

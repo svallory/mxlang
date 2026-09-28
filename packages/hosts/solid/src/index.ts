@@ -103,6 +103,17 @@ export interface CompileSolidMxResult {
    */
   hoistedImports: HoistedImport[];
   /**
+   * `<define>`s this region hoisted to module scope (decision 110b), as
+   * module-level statement text.
+   *
+   * A region is an expression, so it cannot hold a function declaration
+   * either — the same reason `hoistedImports` exists, for the author's own
+   * construct rather than a discovered tag's synthesized import. The
+   * caller (the parser bridge) writes these into the surrounding module.
+   * Empty for a region with no top-level `<define>`.
+   */
+  hoistedDefines: HoistedDefine[];
+  /**
    * `/var` names this region's call sites bind, for the caller to declare.
    *
    * A region is an *expression*, so it has no statement position for the
@@ -132,6 +143,14 @@ export interface HoistedImport {
    * ruling 3).
    */
   resolvedPath: string;
+}
+
+/** One `<define>` a region hoisted to module scope (decision 110b). */
+export interface HoistedDefine {
+  /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+  code: string;
+  /** The gensym'd module-scope binding the region calls. */
+  binding: string;
 }
 
 /**
@@ -280,7 +299,11 @@ export function compileSolidMx(
   // get them separately would also duplicate the mappings work, and any
   // divergence between the two passes would be silent.
   let emitted!: ReturnType<typeof emitSolidWithMappings>;
-  const { vars: returnVars, needsEscapeImport } = collectReturnVars(() => {
+  const {
+    vars: returnVars,
+    needsEscapeImport,
+    hoistedDefines,
+  } = collectReturnVars(() => {
     emitted = emitSolidWithMappings(ir);
     return emitted.code;
   });
@@ -306,6 +329,7 @@ export function compileSolidMx(
     map: map as RawSourceMap,
     mappings: emitted.mappings,
     hoistedImports,
+    hoistedDefines,
     returnVars,
     dependencies: [...(ctx.dependencies ?? [])],
   };

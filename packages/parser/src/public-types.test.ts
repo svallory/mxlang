@@ -3,11 +3,15 @@ import type {
   MxRegionCompileInput as PublicMxRegionCompileInput,
   MxRegionCompileResult as PublicMxRegionCompileResult,
   MxRegionContext as PublicMxRegionContext,
+  MxRegionHoistedDefine as PublicMxRegionHoistedDefine,
   MxRegionHoistedImport as PublicMxRegionHoistedImport,
   MxRegionPositionCheck as PublicMxRegionPositionCheck,
 } from "@mxlang/parser";
 import { expectTypeOf, it } from "vitest";
-import type { HoistedImport as RealHoistedImport } from "./mx/hoist-imports.ts";
+import type {
+  HoistedDefine as RealHoistedDefine,
+  HoistedImport as RealHoistedImport,
+} from "./mx/hoist-imports.ts";
 import type {
   MxRegionCompile as RealMxRegionCompile,
   MxRegionCompileInput as RealMxRegionCompileInput,
@@ -32,6 +36,7 @@ it("keeps public.d.ts's ambient MX region types assignable both ways with the re
   expectTypeOf<PublicMxRegionContext>().toEqualTypeOf<RealMxRegionContext>();
   expectTypeOf<PublicMxRegionPositionCheck>().toEqualTypeOf<RealMxRegionPositionCheck>();
   expectTypeOf<PublicMxRegionHoistedImport>().toEqualTypeOf<RealHoistedImport>();
+  expectTypeOf<PublicMxRegionHoistedDefine>().toEqualTypeOf<RealHoistedDefine>();
   expectTypeOf<PublicMxRegionCompileInput>().toEqualTypeOf<RealMxRegionCompileInput>();
   expectTypeOf<PublicMxRegionCompileResult>().toEqualTypeOf<RealMxRegionCompileResult>();
   expectTypeOf<PublicMxRegionCompile>().toEqualTypeOf<RealMxRegionCompile>();

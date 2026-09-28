@@ -53,6 +53,14 @@ declare module "@mxlang/parser" {
     resolvedPath: string;
   }
 
+  /** One `<define>` a region hoisted to module scope (decision 110b). */
+  export interface MxRegionHoistedDefine {
+    /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+    code: string;
+    /** The gensym'd module-scope binding the region calls. */
+    binding: string;
+  }
+
   /** The region text and its file-relative position, as the bridge found it. */
   export interface MxRegionCompileInput {
     /** The region's own source text, `source.slice(start, end)`. */
@@ -82,6 +90,8 @@ declare module "@mxlang/parser" {
     /** Imports the compiler minted for discovered tags called inside this
      *  region. */
     hoistedImports?: MxRegionHoistedImport[];
+    /** `<define>`s the region hoisted to module scope (decision 110b). */
+    hoistedDefines?: MxRegionHoistedDefine[];
     /** `/var` names this region's call sites bind, for the caller to declare. */
     returnVars?: string[];
     /** Files read while resolving callees used by this region. */

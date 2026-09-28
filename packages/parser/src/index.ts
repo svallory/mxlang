@@ -7,6 +7,7 @@ import {
 } from "./babel/index.ts";
 import {
   type AuthoredImport,
+  type HoistedDefine,
   type HoistedImport,
   planHoistedImports,
 } from "./mx/hoist-imports.ts";
@@ -141,6 +142,13 @@ function hoistRegionImports(file: File, filename: string): void {
   if (!Array.isArray(program?.body)) return;
 
   const hoisted: HoistedImport[] = [];
+  // A `<define>` inside a region hoists to module scope the same way
+  // (decision 110b): the emitter mints a gensym'd function declaration, this
+  // pass writes it into the module, and the region's own reference already
+  // uses that gensym'd name (the host renamed it before returning `code`),
+  // so no rename pass is needed here the way `renames` handles a reused
+  // import.
+  const hoistedDefineNodes: HoistedDefine[] = [];
   // A `/var` inside a region binds a value the region's own JSX has no
   // statement position for, so the module declares the `let` and the
   // region's callback prop assigns it (design §2.4). Same channel as the
@@ -163,6 +171,7 @@ function hoistRegionImports(file: File, filename: string): void {
         | {
             mx?: {
               hoistedImports?: HoistedImport[];
+              hoistedDefines?: HoistedDefine[];
               returnVars?: string[];
               range?: [number, number];
             };
@@ -171,6 +180,8 @@ function hoistRegionImports(file: File, filename: string): void {
     )?.mx;
     if (mx?.range) regions.push(mx.range);
     for (const entry of mx?.hoistedImports ?? []) hoisted.push(entry);
+    for (const entry of mx?.hoistedDefines ?? [])
+      hoistedDefineNodes.push(entry);
     for (const name of mx?.returnVars ?? []) returnVars.add(name);
     for (const key of Object.keys(record)) {
       if (key === "loc") continue;
@@ -195,39 +206,69 @@ function hoistRegionImports(file: File, filename: string): void {
     );
   }
 
-  if (hoisted.length === 0) return;
+  if (hoisted.length > 0) {
+    const { authored, lastImportIndex } = authoredImportsOf(program.body);
+    // An authored binding that some scope between the module and a region
+    // re-declares is not the import at that point — `function f(Icon) { <icon/> }`
+    // would resolve the renamed reference to the parameter. Reuse is only safe
+    // for a name nothing shadows, so a shadowed one is dropped from the pool and
+    // the import is injected under its generated name instead.
+    const shadowed = shadowedNames(
+      program.body,
+      new Set(authored.map((one) => one.local)),
+      regions,
+    );
+    const { statements, renames } = planHoistedImports(
+      hoisted,
+      authored.filter((one) => !shadowed.has(one.local)),
+      (spec) =>
+        spec.startsWith(".") ? resolve(dirname(filename), spec) : null,
+    );
 
-  const { authored, lastImportIndex } = authoredImportsOf(program.body);
-  // An authored binding that some scope between the module and a region
-  // re-declares is not the import at that point — `function f(Icon) { <icon/> }`
-  // would resolve the renamed reference to the parameter. Reuse is only safe
-  // for a name nothing shadows, so a shadowed one is dropped from the pool and
-  // the import is injected under its generated name instead.
-  const shadowed = shadowedNames(
+    if (renames.size > 0) {
+      renameRegionReferences(program.body, renames, regions);
+    }
+    if (statements.length > 0) {
+      const parsed = statements.map(
+        (code) =>
+          babelParse(code, {
+            sourceType: "module",
+            plugins: MX_DEFAULT_PLUGINS,
+          }) as unknown as {
+            program: { body: Array<Record<string, unknown>> };
+          },
+      );
+      program.body.splice(
+        lastImportIndex + 1,
+        0,
+        ...parsed.map((one) => one.program.body[0] as Record<string, unknown>),
+      );
+    }
+  }
+
+  if (hoistedDefineNodes.length === 0) return;
+
+  // Placed after the module's import block (including any import this pass
+  // just spliced in above, so a define calling a discovered tag closes over
+  // its binding correctly). No reuse/rename pass is needed here: unlike an
+  // import, nothing outside the region could already declare this binding —
+  // the gensym is fresh by construction (`generatedDefineBinding`).
+  const { lastImportIndex: defineInsertIndex } = authoredImportsOf(
     program.body,
-    new Set(authored.map((one) => one.local)),
-    regions,
   );
-  const { statements, renames } = planHoistedImports(
-    hoisted,
-    authored.filter((one) => !shadowed.has(one.local)),
-    (spec) => (spec.startsWith(".") ? resolve(dirname(filename), spec) : null),
-  );
-
-  if (renames.size > 0) renameRegionReferences(program.body, renames, regions);
-  if (statements.length === 0) return;
-
-  const parsed = statements.map(
-    (code) =>
-      babelParse(code, {
+  const parsedDefines = hoistedDefineNodes.map(
+    (entry) =>
+      babelParse(entry.code, {
         sourceType: "module",
         plugins: MX_DEFAULT_PLUGINS,
       }) as unknown as { program: { body: Array<Record<string, unknown>> } },
   );
   program.body.splice(
-    lastImportIndex + 1,
+    defineInsertIndex + 1,
     0,
-    ...parsed.map((one) => one.program.body[0] as Record<string, unknown>),
+    ...parsedDefines.map(
+      (one) => one.program.body[0] as Record<string, unknown>,
+    ),
   );
 }
 
