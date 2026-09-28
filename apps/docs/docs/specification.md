@@ -1623,7 +1623,29 @@ the call to the component body took it out of the scope it was written in (it
 read row bindings that did not exist there, and ran once for a body rendered N
 times), so the escape is rejected rather than silently relocated. **html** keeps
 supporting the nested case, where the temp lands inside the emitted `for`/`if`
-block. **Angular** and **`.amx`** reject `/var` entirely.
+block. **Angular** rejects `/var` entirely.
+
+**`.amx` rejects `/var` entirely too, and for a different, structural reason**
+(host-cannot, ruled 2026-09-28 on TODO `amx-tag-var`): Astro runs the `---`
+fence to completion *before* Astro's own compiler ever lowers or calls the
+template's tags, so by the time a returning tag is actually called there is no
+statement position left anywhere — not in the fence (already finished), and
+not in the template (markup, not statements) — to bind a value into. This is
+unlike the JSX-host/Solid restriction above, which is a real MX 2 gap
+(`tag-var-in-callback-scope`); `.amx`'s case cannot be lifted by giving a
+callback scope a statement position, because there is no callback scope here
+at all. The workaround is to call the unit directly from the fence's own
+TypeScript instead of from the template — an ordinary function call, since a
+`.mx` unit compiled for this host still exports the plain
+`{ value, output }` shape (see the table above):
+
+```astro
+---
+import Counter from "./tags/counter.mx";
+const { value } = Counter({ start: 1 });
+---
+<p>{value}</p>
+```
 
 Lifting the restriction means a statement position per callback scope — **MX 2,
 `tag-var-in-callback-scope`**.

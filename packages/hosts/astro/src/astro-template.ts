@@ -497,11 +497,17 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
 
       const name = node.target.name;
       if (node.var) {
-        // The unwrap below is an expression, and an `.amx` template has no
-        // statement position to bind a value in — the `---` fence is the
-        // author's, written before any of this. Refused rather than dropped.
+        // Structural, not a missing feature (decision 65-style host-cannot,
+        // ruled 2026-09-28 on TODO amx-tag-var): Astro runs the `---` fence
+        // to completion before this template's tags are ever lowered or
+        // called, so there is no statement position left, in either the
+        // fence or the template, to receive a value into. The unwrap this
+        // emitter does for a plain (no-`/var`) call happens later still,
+        // inside Astro's own render pass in `server.ts`, producing a markup
+        // string — not a place any binding could land. Refused rather than
+        // dropped.
         fail(
-          `\`/var\` on \`<${node.authoredName ?? name}>\` is not supported in \`.amx\` yet; call the tag without \`/var\`, or bind the value in the \`---\` fence`,
+          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.amx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; const { value } = ${name}({ ... });\`, and use \`value\` in the template.`,
           node,
         );
       }

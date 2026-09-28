@@ -671,8 +671,12 @@ describe("error positions", () => {
  * refused a `.amx` file that merely *called* a returning `.mx` tag — the
  * table is consulted while compiling whichever file holds the tag. The call
  * is legal: the unit is a separate module, and Astro's renderer unwraps the
- * `{ value, output }` pair (`server.ts`). Only `/var` is refused, because an
- * `.amx` template has no statement position to bind a value in.
+ * `{ value, output }` pair (`server.ts`). Only `/var` is refused: it is a
+ * structural host limit (ruled 2026-09-28, decision-65-style host-cannot),
+ * since Astro runs the `---` fence to completion before the template's tags
+ * are ever called, leaving no statement position, in either the fence or the
+ * template, to bind a value into. The message explains why and points at the
+ * one route that does work — calling the unit directly from the fence.
  */
 describe("a tag that returns a value", () => {
   const counter = {
@@ -717,7 +721,24 @@ describe("a tag that returns a value", () => {
         "/fixtures/page.amx",
         { customTags: { counter } },
       ),
-    ).toThrow(/`\/var` on `<counter>` is not supported in `\.amx` yet/);
+    ).toThrow(/`\/var` on `<counter>` can't bind in `\.amx`/);
+  });
+
+  it("explains why /var can't bind (fence-before-template ordering) and shows the fence-call workaround", () => {
+    // Ruling 2026-09-28 (TODO amx-tag-var): this is a structural host limit
+    // (decision-65-style host-cannot), not a missing feature, so the message
+    // says why rather than reading like a TODO — and points at the one route
+    // that already works: calling the unit directly from the `---` fence's
+    // own TypeScript, where it is an ordinary function call.
+    expect(() =>
+      lowerAstroMx(
+        "---\n---\n<div><counter/n start=1/></div>\n",
+        "/fixtures/page.amx",
+        { customTags: { counter } },
+      ),
+    ).toThrow(
+      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead/s,
+    );
   });
 });
 

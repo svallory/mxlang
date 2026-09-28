@@ -144,6 +144,22 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   as the attribute's *value* (measured against `@marko/compiler` 5.42.5).
   The resolver detects both shapes and lets Astro provide the target-specific
   diagnostic through `rejectAttributeMethod`.
+- **`/var` on a returning tag called from the template is a structural
+  host-cannot (ruled 2026-09-28, TODO `amx-tag-var`), not a missing feature.**
+  Astro runs the `---` fence to completion before the template's tags are
+  ever lowered or called (`component()` in `astro-template.ts`), so there is
+  no statement position left anywhere — the fence has already finished, and
+  the template is markup, not statements — to bind a value into. Calling the
+  same tag *without* `/var` already works today: `server.ts`'s
+  `renderToStaticMarkup` unwraps its `{ value, output }` pair itself, deep in
+  Astro's own render pass, long after the fence ran. This is not the same gap
+  as the JSX-host/Solid `/var`-in-callback-scope restriction (spec's `/var`
+  section, MX 2 `tag-var-in-callback-scope`) — that one is liftable by giving
+  a callback scope a statement position; `.amx` has no callback scope to give
+  one to. The error message explains the ordering and points at the
+  workaround: call the unit directly from the fence's own TypeScript, an
+  ordinary function call since a `.mx` unit compiled for this host still
+  exports the plain `{ value, output }` shape.
 
 The lowering table and the full error list live in
 `packages/hosts/astro/README.md` "AstroMX templates (`.amx`)". Nothing silently

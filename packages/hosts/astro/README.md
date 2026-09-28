@@ -289,6 +289,22 @@ build error naming the construct, the reason, and the line in the `.amx` file.
 - **`<await>`** — needs a suspense-capable renderer.
 - **`<return>`** — hands a value to a parent template; an Astro component has
   none.
+- **`/var` on a returning tag called from the template** — structural, not a
+  missing feature (ruled 2026-09-28, TODO `amx-tag-var`): Astro runs the
+  `---` fence to completion before the template's tags are ever lowered or
+  called, so there is no statement position left — in the fence (already
+  finished) or the template (markup, not statements) — to bind a value into.
+  Calling the same tag *without* `/var` already works: Astro's renderer
+  unwraps its `{ value, output }` pair itself (`server.ts`). To use the
+  bound value, call the unit directly from the fence's own TypeScript
+  instead, where it is an ordinary function call:
+  ```astro
+  ---
+  import Counter from "./tags/counter.mx";
+  const { value } = Counter({ start: 1 });
+  ---
+  <p>{value}</p>
+  ```
 - **`<const>`** — a template expression cannot introduce a binding. Declare it
   in the `---` fence, which is where an Astro component declares values.
 - **`<define>`** — Astro has no local component form. Extract it into its own
