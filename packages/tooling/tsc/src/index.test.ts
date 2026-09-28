@@ -279,6 +279,38 @@ describe("mx-tsc", () => {
     SPAWN_TIMEOUT_MS,
   );
 
+  it.each([
+    ["solid", "renderable-solid-passing"],
+    ["preact", "renderable-preact-passing"],
+  ])(
+    "accepts %s callers of a declared renderable attribute tag",
+    (_host, fixture) => {
+      const result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
+
+      expect(result.output).toBe("");
+      expect(result.status).toBe(0);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it.each([
+    ["solid", "renderable-solid-failing", "Page.solid.mx(6,"],
+    ["preact", "renderable-preact-failing", "Page.mx(3,36)"],
+  ])(
+    "rejects a %s caller that misuses a declared attribute-tag param",
+    (_host, fixture, position) => {
+      const result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.output).toContain(position);
+      expect(result.output).toContain(
+        "error TS2339: Property 'toUpperCase' does not exist on type 'number'.",
+      );
+      expect(result.output.match(/error TS/g)).toHaveLength(1);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
   it(
     "catches what plain tsc cannot even see",
     () => {
