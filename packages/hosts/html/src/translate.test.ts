@@ -229,25 +229,42 @@ describe("bindings may not shadow the input parameter", () => {
     expect(html).toBe("<div>aH</div>");
   });
 
-  it("rejects a `<define>` call mixing tag-argument form with an attribute tag", () => {
-    // `<Card('a')>` passes `title` positionally; adding `<@head>` on top
-    // silently dropped `head` before this guard existed (round-2 review
-    // finding). Marko itself allows this combination on a `<define>` call
-    // (it compiles through the lenient dynamic-tag visitor); MX rejects it
-    // as a documented divergence until `define-call-args-with-content` (TODO)
-    // implements the lenient shape.
+  it("accepts a `<define>` call mixing tag-argument form with an attribute tag (decision 109, Marko parity)", async () => {
+    // `<Card('a')>` passes `title` positionally; `<@head>` rides along as
+    // Marko's own "dynamic tag fallback content" — `assertAttributesOrArgs`
+    // rejects only a plain attribute alongside args, not a body/attribute
+    // tag. `title` is a define param bound positionally, so it does not
+    // also appear as a named prop; `head` is the trailing props object.
+    const html = await renderModules(
+      {
+        "entry.mx":
+          "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div>aH</div>");
+  });
+
+  it("accepts a `<define>` call mixing tag-argument form with a body (decision 109, Marko parity)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          "<define/Card|title, content|><div>${title}<${content}/></div></define>\n<Card('a')>body</Card>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div>abody</div>");
+  });
+
+  it("still rejects a `<define>` call mixing tag-argument form with a plain attribute", () => {
     expect(() =>
       compile(
         src(
-          "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+          '<define/Card|title|><div>${title}</div></define>\n<Card(\'a\') foo="bar"/>',
         ),
         file,
       ),
-    ).toThrow(
-      "`<Card>` is a `<define>`; MX does not yet support tag arguments " +
-        "together with attributes, attribute tags, or a body on a define " +
-        "call (Marko does); pass the values as attributes instead.",
-    );
+    ).toThrow("Tag does not support arguments when attributes present.");
   });
 });
 
@@ -836,9 +853,9 @@ describe("attribute-tag v2 values (executed)", () => {
 });
 
 describe("dynamic tags", () => {
-  it("rejects arguments combined with attributes using Marko's diagnostic", () => {
+  it("rejects arguments combined with a plain attribute using Marko's diagnostic", () => {
     expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
-      "Tag does not support arguments when attributes or body present.",
+      "Tag does not support arguments when attributes present.",
     );
   });
 
@@ -869,6 +886,44 @@ describe("dynamic tags", () => {
     );
     expect(code).toContain("renderDynamic(input.comp, { header:");
     expect(code).not.toContain("renderDynamic(input.comp, {  });");
+  });
+
+  it("accepts arguments combined with a body on a dynamic tag (decision 109, Marko parity)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { comp } from "./comp.ts"\n<${comp}("x", 2)>body</>',
+        "comp.ts": [
+          "export function comp(a: string, b: number, extra?: { content?: () => string }) {",
+          '  return `[${a}-${b}-${extra?.content?.() ?? "none"}]`;',
+          "}",
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("[x-2-body]");
+  });
+
+  it("accepts arguments combined with an attribute tag on a dynamic tag (decision 109, Marko parity)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { comp } from "./comp.ts"\n<${comp}("x", 2)><@head>H</@head></>',
+        "comp.ts": [
+          "export function comp(a: string, b: number, extra?: { head?: () => string }) {",
+          '  return `[${a}-${b}-${extra?.head?.() ?? "none"}]`;',
+          "}",
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("[x-2-H]");
+  });
+
+  it("still rejects arguments combined with a plain attribute", () => {
+    expect(() =>
+      compile(src('<${input.fn}("A") foo="bar"/>'), file),
+    ).toThrow("Tag does not support arguments when attributes present.");
   });
 });
 

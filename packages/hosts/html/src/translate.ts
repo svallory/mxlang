@@ -625,7 +625,8 @@ const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string
   if (typeof target === "object") {
     throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
   }
-  return args ? target(...args) : target(props);
+  if (args) return Object.keys(props).length > 0 ? target(...args, props) : target(...args);
+  return target(props);
 }`;
 
 /**
