@@ -427,4 +427,38 @@ describe("Solid SSR render: dynamic tag", () => {
     );
     expect(html).toContain("<div><em>already rendered</em></div>");
   });
+
+  // Decision 109, Marko parity: args now combine with a body/attribute tag
+  // (`assertAttributesOrArgs`; `rejectArgsWithProps`, core). Solid's own
+  // design already keeps args and attrs/tags/content orthogonal — args only
+  // resolve the value handed to `<Dynamic component=…>`, while attrs/tags/
+  // content render on that element regardless of args — so this needs no
+  // emitter change, only core's relaxed guard.
+  it("accepts arguments combined with a body (decision 109, Marko parity)", () => {
+    // Solid's `<Dynamic component={…}>body</Dynamic>` forwards a JSX body as
+    // the resolved component's ordinary `children` prop, not a `content`
+    // callback — unlike html/preact's `content: () => …` convention.
+    const html = renderApp(
+      `<\${input.render}("x", 2)>body</>`,
+      `const input = { render: (a: string, b: number) => (props: { children?: unknown }) => <em>{a}-{b}-{props.children}</em> };`,
+    );
+    expect(html).toContain("x-2-body");
+  });
+
+  it("accepts arguments combined with an attribute tag (decision 109, Marko parity)", () => {
+    const html = renderApp(
+      `<\${input.render}("x", 2)><@head>H</@head></>`,
+      `const input = { render: (a: string, b: number) => (extra?: { head?: unknown }) => <em>{a}-{b}-{extra?.head as never}</em> };`,
+    );
+    expect(html).toContain("x-2-H");
+  });
+
+  it("still rejects arguments combined with a plain attribute", () => {
+    expect(() =>
+      renderApp(
+        `<\${input.render}("x") foo="bar"/>`,
+        `const input = { render: (a: string) => () => <em>{a}</em> };`,
+      ),
+    ).toThrow();
+  });
 });
