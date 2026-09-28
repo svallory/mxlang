@@ -39,6 +39,24 @@ export interface HostPolicy {
   strict?: boolean;
 }
 
+/**
+ * Every real host name `HostPolicy["host"]` admits — exported so a second
+ * caller (`scan.ts`'s `hosts` validation) checks a string against the same
+ * runtime list this module already checks `mx.host` against, rather than
+ * hand-maintaining a second copy of these seven names. Deliberately excludes
+ * `"translator"`: that string is only a deprecated alias for `"html"` on
+ * `mx.host`, not a real host `mx.tags[].hosts` could ever filter to.
+ */
+export const HOST_NAMES: readonly HostPolicy["host"][] = [
+  "html",
+  "astro",
+  "solid",
+  "preact",
+  "react",
+  "hono",
+  "angular",
+];
+
 const HOST_PACKAGES: Record<string, HostPolicy["host"]> = {
   "@mxlang/html": "html",
   "@mxlang/astro": "astro",
