@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Breaking: `sourceBindings(source)` now returns `{ bindings, error? }`
+  instead of a bare `Set<string>`** (source-bindings-silent-parse-failure,
+  filed from the PR #156 review). A parse failure used to be caught and
+  silently treated as "binds nothing" — indistinguishable from source that
+  genuinely binds nothing — so every capitalized tag in a file with a real
+  syntax error (an Astro fence, or the text handed to
+  `@mxlang/typescript-plugin`'s `appendSolidBuiltinImport`) misreported
+  Marko's "Unable to find entry point for custom tag" instead of the actual
+  syntax error. `bindings` is always present (empty on failure, matching the
+  old fallback for a caller that ignores `error`); `error` is set only on a
+  parse failure, positioned from Babel's own `SyntaxError.loc`. Every
+  in-repo caller updated to read `.bindings`/`.error` explicitly.
+  `programBindings` (the already-parsed-`Program` variant) is unchanged.
+
 - **New dependency: `@mxlang/core`** (decision 116). `MxRegionCompileInput`
   gained `importDefaultFromMarkoOrMx: ReadonlySet<string>` — the subset of
   `importSpecifiers`' bindings that are a *default* import from a

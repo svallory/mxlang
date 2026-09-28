@@ -25,6 +25,13 @@ export const SOLID_BUILTIN_TAGS: ReadonlyArray<{
   { name: "Dynamic", from: "@solidjs/web" },
 ];
 
+/** A `sourceBindings` parse failure, positioned in the source it was given. */
+export interface SourceBindingsError {
+  message: string;
+  line: number;
+  column: number;
+}
+
 /**
  * The names of every value a piece of TypeScript/TSX source text binds at
  * its top level — every import's *local* name (so `import { Show as MyShow }`
@@ -36,22 +43,49 @@ export const SOLID_BUILTIN_TAGS: ReadonlyArray<{
  *
  * Shared between `@mxlang/typescript-plugin` (`appendSolidBuiltinImport`,
  * deciding whether to inject a synthetic import for a Solid built-in) and
- * `@mxlang/solid` (`isComponent`, deciding whether a capitalized tag used
- * inside a `.solid.mx` region resolves through the *surrounding* module's own
- * scope — decision 114). Parses with the same Babel used elsewhere in this
- * package rather than scanning lines, since a line-based probe cannot tell a
- * bound identifier from a substring (an alias clause, a multi-line import).
+ * `@mxlang/astro` (`lowerAstroMx`, deciding whether a capitalized tag
+ * resolves through the `---` fence's own scope — decision 114). Parses with
+ * the same Babel used elsewhere in this package rather than scanning lines,
+ * since a line-based probe cannot tell a bound identifier from a substring
+ * (an alias clause, a multi-line import).
+ *
+ * **A parse failure is reported, not swallowed** (`source-bindings-silent-
+ * parse-failure`, filed from the PR #156 review): before, a syntax error in
+ * an Astro fence or the text handed to `appendSolidBuiltinImport` made this
+ * function return an empty set indistinguishable from "genuinely binds
+ * nothing," so every capitalized tag in that file misreported as
+ * `rejectUnknownTag`'s "Unable to find entry point for custom tag" —
+ * plausible-sounding, and wrong: the real problem was the syntax error, never
+ * surfaced. `bindings` is always returned (empty on failure, exactly as
+ * before, so an existing caller that ignores `error` keeps today's
+ * behavior); `error` is set only on a parse failure, positioned from Babel's
+ * own `SyntaxError.loc` (1-based line, 0-based column, matching every other
+ * position this codebase reports), so a caller that cares can report the
+ * real problem instead of a misleading downstream symptom.
  */
-export function sourceBindings(source: string): Set<string> {
+export function sourceBindings(source: string): {
+  bindings: Set<string>;
+  error?: SourceBindingsError;
+} {
   try {
-    return programBindings(
-      babelParse(source, {
-        sourceType: "module",
-        plugins: ["typescript", "jsx"],
-      }).program,
-    );
-  } catch {
-    return new Set();
+    return {
+      bindings: programBindings(
+        babelParse(source, {
+          sourceType: "module",
+          plugins: ["typescript", "jsx"],
+        }).program,
+      ),
+    };
+  } catch (cause) {
+    const loc = (cause as { loc?: { line: number; column: number } }).loc;
+    return {
+      bindings: new Set(),
+      error: {
+        message: (cause as Error).message,
+        line: loc?.line ?? 1,
+        column: loc?.column ?? 0,
+      },
+    };
   }
 }
 

@@ -603,4 +603,33 @@ describe("decision 114: module-scope resolution through the real parse() pipelin
       "Unable to find entry point for custom tag `<TotallyUndefined>`",
     );
   });
+
+  it("surfaces the module's own syntax error, not a misleading unresolved-tag error, for a broken surrounding module (source-bindings-silent-parse-failure)", () => {
+    // `collectModuleScope` (index.ts) runs its own declaration-only
+    // babelParse over the whole file, uncaught, before compileSolidMx ever
+    // sees a region -- so a module-level syntax error next to a genuinely
+    // imported component already surfaces as the real parse error today,
+    // not `sourceBindings`'s own silent-empty-set fallback (that fallback
+    // is reachable only through sourceBindings' own direct callers --
+    // @mxlang/astro's fence and @mxlang/typescript-plugin's
+    // appendSolidBuiltinImport -- neither of which is this pipeline).
+    // Pinned here so it cannot regress silently if collectModuleScope's own
+    // babelParse call is ever wrapped in a catch.
+    const source = [
+      'import Card from "./Card.solid.mx";',
+      "const x = ;",
+      "const el = <Card/>;",
+    ].join("\n");
+    let error: unknown;
+    try {
+      parseMx(source);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(SyntaxError);
+    expect((error as Error).message).not.toContain(
+      "Unable to find entry point",
+    );
+    expect((error as Error).message).toMatch(/Unexpected token/);
+  });
 });

@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Internal: shared `unresolvedCustomTagMessage(name)` (source-bindings-silent-parse-failure)
+
+Marko's own "Unable to find entry point for custom tag `<Name>`." wording (decision 114) was hand-copied at four separate `rejectUnknownTag` call sites — `@mxlang/html`, `@mxlang/solid`, the shared preact/react/hono JSX emitter, and `@mxlang/astro`. Now exported once from `core.ts` (`unresolvedCustomTagMessage`) and called from all four; no wording change.
+
 ### Fix: an `Input`'s `extends` base or intersection alias hitting `MAX_ALIAS_DEPTH` no longer silently degrades (callee-input-alias-depth-silent)
 
 `InputAnalyzer.inputMembers` (`callee-input.ts`) reads an `Input` interface's `extends` base and a type alias's intersection parts by following named-type references through `resolveNamedType`, capped at `MAX_ALIAS_DEPTH` (4) like every other alias-following path in this file. When that cap was hit for these two paths specifically, the member silently became an open index signature — `AttrTag` typing behind the truncated hop was quietly dropped, with no diagnostic at all. The sibling property-alias path (`analyzeAttrTagType`, used for `tab?: AttrTag<Alias>`) already reported "declare this attribute tag's config literally" in the same situation, through `namedTypeEventuallyContainsAttrTag` — an unbounded (cycle-guarded, not depth-capped) lookahead that tells a genuinely unresolvable name (stays open, correctly, e.g. `interface Input extends MissingBase`) apart from a real chain that does contain an `AttrTag` behind a hop deeper than the cap reaches.

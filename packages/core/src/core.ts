@@ -443,6 +443,20 @@ export function fail(message: string, node: Node, file?: string): never {
   throw new TranslateError(message, loc.line ?? 0, loc.column ?? 0, file);
 }
 
+/**
+ * Marko's own failure for a tag name nothing resolves ("Unable to find
+ * entry point for custom tag `<Name>`.", verified against
+ * `@marko/compiler`/`marko` 5.42.5/6.3.51 — see decision 114). Every
+ * Marko-parity host (`@mxlang/html`, `@mxlang/solid`, the shared preact/
+ * react/hono emitter, `@mxlang/astro`) reports this exact wording through
+ * its own `rejectUnknownTag` hook; exported once here so the literal string
+ * lives in one place instead of being hand-copied at each call site
+ * (`source-bindings-silent-parse-failure`, filed from the PR #156 review).
+ */
+export function unresolvedCustomTagMessage(name: string): string {
+  return `Unable to find entry point for custom tag \`<${name}>\`.`;
+}
+
 export function quote(text: string): string {
   return JSON.stringify(text);
 }

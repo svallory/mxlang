@@ -67,6 +67,7 @@ export {
   rejectUnsupportedFields,
   sliceLoc,
   TranslateError,
+  unresolvedCustomTagMessage,
   VOID_TAGS,
   warn,
 } from "./core.ts";

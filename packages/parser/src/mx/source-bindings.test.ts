@@ -4,26 +4,26 @@ import { programBindings, sourceBindings } from "./source-bindings.ts";
 
 describe("sourceBindings", () => {
   it("collects a default import's local name", () => {
-    expect(sourceBindings('import Widget from "./widget.ts";')).toEqual(
-      new Set(["Widget"]),
-    );
+    expect(
+      sourceBindings('import Widget from "./widget.ts";').bindings,
+    ).toEqual(new Set(["Widget"]));
   });
 
   it("collects a named import's local name, aliased or not", () => {
     expect(
-      sourceBindings('import { Show, For as MyFor } from "solid-js";'),
+      sourceBindings('import { Show, For as MyFor } from "solid-js";').bindings,
     ).toEqual(new Set(["Show", "MyFor"]));
   });
 
   it("excludes a whole `import type` declaration", () => {
-    expect(sourceBindings('import type Widget from "./widget.ts";')).toEqual(
-      new Set(),
-    );
+    expect(
+      sourceBindings('import type Widget from "./widget.ts";').bindings,
+    ).toEqual(new Set());
   });
 
   it("excludes an inline `type` specifier but keeps its siblings", () => {
     expect(
-      sourceBindings('import { type Show, For } from "solid-js";'),
+      sourceBindings('import { type Show, For } from "solid-js";').bindings,
     ).toEqual(new Set(["For"]));
   });
 
@@ -31,21 +31,21 @@ describe("sourceBindings", () => {
     expect(
       sourceBindings(
         "const Widget = () => null; function Other() {} class Third {}",
-      ),
+      ).bindings,
     ).toEqual(new Set(["Widget", "Other", "Third"]));
   });
 
   it("collects destructured const bindings", () => {
-    expect(sourceBindings("const { Widget, other: Renamed } = mod;")).toEqual(
-      new Set(["Widget", "Renamed"]),
-    );
+    expect(
+      sourceBindings("const { Widget, other: Renamed } = mod;").bindings,
+    ).toEqual(new Set(["Widget", "Renamed"]));
   });
 
   it("collects an exported declaration", () => {
     expect(
       sourceBindings(
         "export const Widget = () => null; export function Other() {}",
-      ),
+      ).bindings,
     ).toEqual(new Set(["Widget", "Other"]));
   });
 
@@ -53,17 +53,39 @@ describe("sourceBindings", () => {
     expect(
       sourceBindings(
         "type Widget = { x: number }; interface Other { y: number }",
-      ),
+      ).bindings,
     ).toEqual(new Set());
   });
 
   it("sees a binding declared after the point of use (whole-program scan)", () => {
-    const bound = sourceBindings("const el = <Widget/>; function Widget() {}");
-    expect(bound.has("Widget")).toBe(true);
+    const { bindings } = sourceBindings(
+      "const el = <Widget/>; function Widget() {}",
+    );
+    expect(bindings.has("Widget")).toBe(true);
   });
 
-  it("returns an empty set for source it cannot parse", () => {
-    expect(sourceBindings("const x = ;;; garbage {{{")).toEqual(new Set());
+  it("returns an empty set, and no error, for source that parses cleanly with nothing bound", () => {
+    const result = sourceBindings("1 + 1;");
+    expect(result.bindings).toEqual(new Set());
+    expect(result.error).toBeUndefined();
+  });
+
+  it("returns an empty set and a positioned error for source it cannot parse", () => {
+    const result = sourceBindings("const x = ;;; garbage {{{");
+    expect(result.bindings).toEqual(new Set());
+    expect(result.error).toBeDefined();
+    expect(result.error?.line).toBeGreaterThanOrEqual(1);
+    expect(result.error?.message.length).toBeGreaterThan(0);
+  });
+
+  it("positions the error's line and column at the actual syntax error", () => {
+    // Two clean lines, then a broken third line -- the error must point at
+    // line 3, not line 1 (a caller reporting `error.line` as-is against its
+    // own source needs this to actually land on the bad line).
+    const result = sourceBindings(
+      ["const a = 1;", "const b = 2;", "const c = ;"].join("\n"),
+    );
+    expect(result.error?.line).toBe(3);
   });
 });
 
@@ -75,7 +97,7 @@ describe("programBindings", () => {
       sourceType: "module",
       plugins: ["typescript", "jsx"],
     }).program;
-    expect(programBindings(program)).toEqual(sourceBindings(source));
+    expect(programBindings(program)).toEqual(sourceBindings(source).bindings);
     expect(programBindings(program)).toEqual(new Set(["Show", "Widget"]));
   });
 

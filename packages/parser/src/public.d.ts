@@ -243,13 +243,25 @@ declare module "@mxlang/parser" {
     from: string;
   }>;
 
+  /** A `sourceBindings` parse failure, positioned in the source it was given. */
+  export interface SourceBindingsError {
+    message: string;
+    line: number;
+    column: number;
+  }
+
   /**
    * The names of every value a piece of TypeScript/TSX source text binds at
    * its top level (imports' local names, top-level `const`/`function`/
-   * `class`), excluding type-only bindings. See `source-bindings.ts` for the
-   * full contract.
+   * `class`), excluding type-only bindings. `error` is set only on a parse
+   * failure (`bindings` is then empty); a caller that cares can report the
+   * real syntax error instead of treating an unparseable file as binding
+   * nothing. See `source-bindings.ts` for the full contract.
    */
-  export function sourceBindings(source: string): Set<string>;
+  export function sourceBindings(source: string): {
+    bindings: Set<string>;
+    error?: SourceBindingsError;
+  };
 
   /**
    * Same as `sourceBindings`, over an already-parsed `Program` (a Babel
