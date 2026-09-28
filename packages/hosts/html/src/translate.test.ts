@@ -228,6 +228,24 @@ describe("bindings may not shadow the input parameter", () => {
     );
     expect(html).toBe("<div>aH</div>");
   });
+
+  it("rejects a `<define>` call mixing tag-argument form with an attribute tag", () => {
+    // `<Card('a')>` passes `title` positionally; adding `<@head>` on top
+    // silently dropped `head` before this guard existed (round-2 review
+    // finding). Marko's own call shapes are exclusive, so core rejects the
+    // combination the same way it rejects a dynamic tag's arguments mixed
+    // with attributes or content.
+    expect(() =>
+      compile(
+        src(
+          "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+        ),
+        file,
+      ),
+    ).toThrow(
+      "Tag does not support arguments when attributes or body present.",
+    );
+  });
 });
 
 describe("<html-comment> lowers placeholders", () => {

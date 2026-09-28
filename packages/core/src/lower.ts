@@ -611,8 +611,12 @@ function containsAttributeTags(node: Node): boolean {
   });
 }
 
-/** Marko forbids mixing a dynamic tag's positional args with prop-like input. */
-function rejectDynamicArgsWithProps(node: Node): void {
+/**
+ * Marko forbids mixing a tag's positional args with prop-like input, on any
+ * call shape a `<define>` can be invoked through (dynamic tag, named/`define`
+ * component) — not just the dynamic-tag path that originally called this.
+ */
+function rejectArgsWithProps(node: Node): void {
   if ((node.arguments ?? []).length === 0) return;
   if (
     (node.attributes ?? []).length === 0 &&
@@ -1828,6 +1832,13 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
   if (target.kind === "name") {
     ctx.declarations.rejectComponentTag?.(target.name, node, ctx);
   }
+  if (target.kind !== "dynamic") {
+    // The dynamic-tag path already ran this check before routing here; a
+    // named or `define` call reaches `lowerComponent` directly and needs its
+    // own pass so `<Card(1)><@head>…</@head></Card>` fails here instead of
+    // reaching a host emitter, which can only silently drop one side.
+    rejectArgsWithProps(node);
+  }
   rejectUnsupportedFields(ctx, node, `\`<${targetName(target)}>\``, {
     attributeTags: true,
     args: true,
@@ -1976,7 +1987,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // or "tagged", as before); otherwise core lowers a `Component` with a
   // dynamic target, resolved at run time like any other host.
   if (node.name && node.name.type !== "StringLiteral") {
-    rejectDynamicArgsWithProps(node);
+    rejectArgsWithProps(node);
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
     const dynamicExpr = exprOf(ctx, node.name);

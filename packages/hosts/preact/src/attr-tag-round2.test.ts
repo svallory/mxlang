@@ -583,4 +583,22 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
       expect(html).toBe("<div>aH</div>");
     },
   );
+
+  it.each(hosts)(
+    "%s: rejects a `<define>` call mixing tag-argument form with an attribute tag",
+    async (host) => {
+      // `<Card('a')>` passes `title` positionally; adding `<@head>` on top
+      // silently dropped `head` before this guard existed (round-2 review
+      // finding). Marko's call shapes are exclusive, so core rejects the
+      // combination rather than any host reaching it.
+      await expect(
+        renderFixture(host, {
+          "main.mx":
+            "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+        }),
+      ).rejects.toThrow(
+        "Tag does not support arguments when attributes or body present.",
+      );
+    },
+  );
 });
