@@ -22,6 +22,7 @@ import {
   type Ir,
   type IrNode,
   lower,
+  type MxWarning,
   type Node,
   newCtx,
   parseFragment,
@@ -612,6 +613,7 @@ export function emitTemplate(ir: Ir): string {
 export interface LowerResult {
   code: string;
   mappings: AstroTemplateMapping[];
+  dependencies: string[];
 }
 
 export interface AstroTemplateMapping {
@@ -719,6 +721,8 @@ export function lowerAstroMx(
   options: {
     /** Custom tags already discovered and loaded by the calling integration. */
     customTags?: Record<string, CustomTag>;
+    /** Positioned non-fatal diagnostics collected by editor/build tooling. */
+    warnings?: MxWarning[];
   } = {},
 ): LowerResult {
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---[^\S\r\n]*\r?\n?/);
@@ -744,6 +748,7 @@ export function lowerAstroMx(
       filename,
     );
     ctx.customTags = options.customTags;
+    ctx.warnings = options.warnings;
     // An `.amx` file is an Astro component module, so it has a declaration to
     // name and a tag may call itself without importing itself.
     ctx.emitsModule = true;
@@ -790,6 +795,7 @@ export function lowerAstroMx(
     return {
       code: `${emittedFence.code}${templateCode}`,
       mappings,
+      dependencies: [...(ctx.dependencies ?? [])],
     };
   } catch (error) {
     if (error instanceof AstroTemplateError) throw error;

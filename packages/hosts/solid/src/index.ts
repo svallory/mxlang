@@ -5,6 +5,7 @@ import {
   type CustomTag,
   type GeneratedMapping,
   lower,
+  type MxWarning,
   moduleExportName,
   type Node,
   newCtx,
@@ -73,6 +74,8 @@ export interface CompileSolidMxOptions {
   customTags?: Record<string, CustomTag>;
   /** Surrounding `.solid.mx` module imports, local binding -> specifier. */
   importSpecifiers?: ReadonlyMap<string, string>;
+  /** Positioned non-fatal diagnostics collected by editor/build tooling. */
+  warnings?: MxWarning[];
 }
 
 export interface RawSourceMap {
@@ -212,6 +215,7 @@ export function compileSolidMx(
     options.filename,
   );
   ctx.customTags = options.customTags;
+  ctx.warnings = options.warnings;
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
     for (const name of options.importSpecifiers.keys()) ctx.imports.add(name);

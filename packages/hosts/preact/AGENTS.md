@@ -37,6 +37,16 @@ Six facts worth knowing before editing it:
   function when params are declared.
   Untyped body-only props therefore arrive bare under decision 108; one
   attributed or nested occurrence makes the whole fallback property data.
+- **A declared attribute-tag value carries its type at the call site.** A
+  singular value is emitted as `(value satisfies
+  NonNullable<Parameters<typeof Callee>[0]["name"]>)`, as arrays already
+  were, so `mx-tsc` and the tsserver plugin check a wrong or missing
+  attribute against the callee's `AttrTag`. An undeclared property is emitted
+  bare. The object's `{` is mapped to the tag name and each key and value to
+  its authored span, which is what places those diagnostics.
+- **`warnings` collects non-fatal diagnostics.** `compilePreactMx` (and the
+  React and Hono wrappers over it) take an optional `warnings` array that
+  core fills; tooling reports it, a build may ignore it.
 - **Every `<for>` row carries a `key`**, defaulting to the row's own identity
   when `by=` is absent (the item for `of`, the property name for `in`, the
   loop value for a range). Documented as this host's rule rather than left

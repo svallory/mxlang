@@ -68,6 +68,15 @@ Two facts worth knowing before touching it:
   `<${input.item("Ada")}/>` for renderable). Escaped root interpolations use
   Solid's public server `escape` helper while retaining the original value in
   the browser, which preserves both SSR safety and reactive DOM insertion.
+- **A declared attribute-tag value carries its type at the call site.** A
+  singular value is emitted as `(value satisfies
+  NonNullable<Parameters<typeof Callee>[0]["name"]>)`, so `mx-tsc` and the
+  tsserver plugin check it against the callee's `AttrTag`; an undeclared
+  property is emitted bare. `compileSolidMx` also takes an optional
+  `warnings` array for core's non-fatal diagnostics. A wrong attribute type
+  is currently reported on the tag name rather than the attribute: see
+  `solid-attr-tag-attr-offset` in
+  `packages/tooling/typescript-plugin/AGENTS.md`.
 - **A region receives its surrounding module imports and reports callee
   dependencies.** `compileSolidMx` seeds `ctx.importSpecifiers` from the
   parser bridge and returns `ctx.dependencies`, allowing imported callees to

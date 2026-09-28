@@ -25,20 +25,27 @@ export type AttrTag<
 export function compileHonoMx(
   source: string,
   filename: string,
-  options: Pick<CompilePreactOptions, "customTags" | "resolveImport"> = {},
+  options: Pick<
+    CompilePreactOptions,
+    "customTags" | "resolveImport" | "warnings"
+  > = {},
 ): CompilePreactResult {
   return compilePreactMx(source, filename, {
     target: honoTarget,
     declarations: honoDeclarations,
     customTags: options.customTags,
     resolveImport: options.resolveImport,
+    warnings: options.warnings,
   });
 }
 
 /** `compileHonoMx()` over a file on disk. */
 export function compileHonoFile(
   filename: string,
-  options: Pick<CompilePreactOptions, "customTags" | "resolveImport"> = {},
+  options: Pick<
+    CompilePreactOptions,
+    "customTags" | "resolveImport" | "warnings"
+  > = {},
 ): CompileResult {
   return compileHonoMx(readFileSync(filename, "utf8"), filename, options);
 }
