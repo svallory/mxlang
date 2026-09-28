@@ -454,6 +454,21 @@ describe("one fixture per IR kind", () => {
     expect(find(define.children, "Element").name).toBe("li");
   });
 
+  it("rejects a define call mixing tag-argument form with an attribute tag", () => {
+    let error: unknown;
+    try {
+      lowerSource(
+        "<define/Card|title, head|><h1>${title}</h1>${head}</define>\n<Card('a')><@head>H</@head></Card>\n",
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(
+      "Tag does not support arguments when attributes or body present.",
+    );
+  });
+
   it("Const carries the declared name and its initializer", () => {
     const ir = lowerSource("<const/doubled=input.n * 2/>\n<p>x</p>\n");
     expect(find(ir.body, "Const")).toMatchObject({
