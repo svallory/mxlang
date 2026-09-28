@@ -170,26 +170,29 @@ function importLines(names: Set<string>, target: Target): string[] {
  * tag gets this helper inlined, the same way `@mxlang/html` inlines
  * `renderDynamic` — no runtime package, so nothing to import.
  *
- * `payload` is either the call's props object, or — for Marko's tag-argument
- * form (`<\${x}(a, b)/>`) — a plain array of argument values, told apart
- * with `Array.isArray`. mx's own \`rejectDynamicArgsWithProps\` (stricter
- * than Marko: Marko's own \`assertAttributesOrArgs\`,
- * \`@marko/compiler/babel-utils\`, only forbids args alongside *attributes*,
- * and \`dynamic-tag.ts\`'s translator still pushes a body's \`content\` prop as
- * a trailing argument — a body alongside args is legal Marko) makes args
- * and props mutually exclusive by the time a host ever sees them, so
- * \`payload\` is always exactly one of the two. A *function* target with
- * arguments is called plainly, matching \`@mxlang/html\`'s \`renderDynamic\`
- * and \`@mxlang/solid\`'s inline dispatch — a positional call is not an
- * element description. A *string* target with arguments still mounts as an
- * element (Marko's own html/dom runtimes treat a string renderer's first
- * argument as its input and still emit the tag — see
- * \`runtime-tags/src/html/dynamic-tag.ts\`'s \`_dynamic_tag\`, the
- * \`typeof renderer === "string"\` branch, which never falls through to
- * rendering the name as text); ignoring the arguments here (bare \`<Tag />\`
- * rather than replicating Marko's args[0]-as-input convention) matches
- * \`@mxlang/html\`'s own \`renderDynamic\`, which also renders a string target
- * with no attributes when called with args.
+ * `payload` is either the call's props object (no arguments), or — for
+ * Marko's tag-argument form (`<\${x}(a, b)/>`) — an array, told apart with
+ * `Array.isArray`. Decision 109 (Marko parity, \`assertAttributesOrArgs\`,
+ * \`@marko/compiler/babel-utils\`): args now combine with a body or attribute
+ * tag, so the array is not always bare arguments — when there is content or
+ * an attribute tag to carry, the emitter (\`component()\` in \`emitter.ts\`)
+ * appends a trailing props object as the array's last element, matching
+ * Marko's own \`renderer(...args, propsObject)\` shape (\`dynamic-tag.ts\`'s
+ * translator). The \`Array.isArray\` dispatch below stays unambiguous either
+ * way: a *function* target spreads the whole array as its call arguments
+ * (\`target(...payload)\`) whether or not the last element is that trailing
+ * object — the callee reads it as its own last positional parameter, the
+ * same convention \`#defineProps\`/\`#defineTrailingParams\` use for a
+ * \`<define>\` call. A positional call is not an element description, matching
+ * \`@mxlang/html\`'s \`renderDynamic\` and \`@mxlang/solid\`'s inline dispatch. A
+ * *string* target with arguments still mounts as an element (Marko's own
+ * html/dom runtimes treat a string renderer's first argument as its input
+ * and still emit the tag — see \`runtime-tags/src/html/dynamic-tag.ts\`'s
+ * \`_dynamic_tag\`, the \`typeof renderer === "string"\` branch, which never
+ * falls through to rendering the name as text); ignoring the arguments here
+ * (bare \`<Tag />\` rather than replicating Marko's args[0]-as-input
+ * convention) matches \`@mxlang/html\`'s own \`renderDynamic\`, which also
+ * renders a string target with no attributes when called with args.
  */
 const MX_DYNAMIC = `function mxDynamic(target, payload) {
   if (Array.isArray(payload)) {
