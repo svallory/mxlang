@@ -980,6 +980,27 @@ describe("MX language plugin", () => {
     expect(generated).toContain("1");
   });
 
+  it("resolves and imports another whole-file Solid .mx component (decision 115)", () => {
+    // Whole-file `.mx` resolved to Solid must go through `compileSolidUnit`
+    // in the editor too, not the region compiler — the production-path
+    // proof that motivated wiring `createMxLanguagePlugin`'s
+    // `host === "solid"` branch here.
+    const fileName = `${here}/fixtures/solid-policy/uses-widget.mx`;
+    const source = 'import Widget from "./widget.mx"\n<Widget/>\n';
+    const plugin = createMxLanguagePlugin(ts);
+    const virtual = plugin.createVirtualCode?.(
+      fileName,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    if (!virtual) throw new Error("Expected MX virtual code");
+    expect(plugin.getSyntaxError?.(fileName)).toBeUndefined();
+    const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    expect(generated).toContain('import Widget from "./widget.mx"');
+    expect(generated).toContain("<Widget />");
+  });
+
   it.each([
     ["html", "/project", ".mx"],
     ["preact", `${here}/fixtures/preact-policy`, ".mx"],

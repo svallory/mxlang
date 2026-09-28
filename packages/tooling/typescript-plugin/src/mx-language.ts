@@ -21,7 +21,7 @@ import { compileHonoMx, honoDeclarations } from "@mxlang/hono";
 import { compile, policy, strictPolicy, translator } from "@mxlang/html";
 import { compilePreactMx, preactDeclarations } from "@mxlang/preact";
 import { compileReactMx, reactDeclarations } from "@mxlang/react";
-import { compileSolidMx } from "@mxlang/solid";
+import { compileSolidUnit } from "@mxlang/solid";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
@@ -220,7 +220,7 @@ export function createMxLanguagePlugin(
     }
     const compiled =
       hostPolicy.host === "solid"
-        ? compileSolidMx(source, { filename: fileName, customTags, warnings })
+        ? compileSolidUnit(source, { filename: fileName, customTags, warnings })
         : hostPolicy.host === "preact"
           ? compilePreactMx(source, fileName, { customTags, warnings })
           : hostPolicy.host === "react"
