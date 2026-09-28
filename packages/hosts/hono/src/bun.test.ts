@@ -74,6 +74,46 @@ describe("@mxlang/hono/bun", () => {
     }
   });
 
+  test("a tag whose mx.tags entry excludes this host is not discovered", async () => {
+    Bun.plugin(honoPlugin);
+
+    // Through the real plugin's own `getCustomTags(path, { host: "hono" })`
+    // call: a `package.json#mx.tags` entry declaring `hosts: ["solid"]`
+    // must be invisible from the hono loader, which is decision 110(a). A
+    // nested package.json under the package root, so the upward walk stops
+    // there rather than reaching the package's own.
+    const base = join(import.meta.dirname, "..");
+    const pkgDir = join(base, "hosts-fixture");
+    const tagsDir = join(pkgDir, "widgets");
+    const page = join(pkgDir, "bun-hosts.mx");
+
+    mkdirSync(tagsDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({
+        name: "hono-hosts-fixture",
+        mx: { tags: [{ dir: "widgets", hosts: ["solid"] }] },
+      }),
+    );
+    writeFileSync(
+      join(tagsDir, "gizmo.tag.ts"),
+      "export default { transform: (_c, ctx) => [ctx.build.element('b', [], [ctx.build.text('nope')])] };\n",
+    );
+    writeFileSync(page, "<gizmo/>\n");
+    try {
+      // Unlike the html translator, an unresolved lowercase name doesn't
+      // fail to parse on a JSX host — it falls through to a literal DOM-ish
+      // element. So the discovery gap surfaces as the tag's own transform
+      // never running, not as a compile error: the excluded tag's
+      // "nope" output must not appear.
+      const mod = await import(page);
+      const render = mod.default as (input: unknown) => unknown;
+      expect(String(render({}))).not.toContain("nope");
+    } finally {
+      rmSync(pkgDir, { recursive: true, force: true });
+    }
+  });
+
   test("does not claim a .solid.mx path", async () => {
     Bun.plugin(honoPlugin);
 

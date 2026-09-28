@@ -720,6 +720,42 @@ export default () => <div />;
       expect(result?.code).toContain("found");
     });
 
+    it("does not resolve an mx.tags entry whose hosts excludes this host", async () => {
+      // `resolveHostPolicy(file).host` (`"html"`, from this fixture's
+      // package.json) is passed into `scanCached`; an entry restricted to
+      // `hosts: ["solid"]` must stay invisible to the html scan —
+      // decision 110(a).
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-hosts-"));
+      scratches.push(dir);
+      mkdirSync(join(dir, "widgets"), { recursive: true });
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "v",
+          mx: {
+            host: "html",
+            tags: [{ dir: "widgets", hosts: ["solid"] }],
+          },
+        }),
+      );
+      writeFileSync(
+        join(dir, "widgets", "marker.tag.ts"),
+        "export default { transform: (_c, ctx) => [ctx.build.text('found')] };\n",
+      );
+      const caller = join(dir, "caller.mx");
+      writeFileSync(caller, "<marker/>\n");
+
+      const result = await transformOf(mx()).call(
+        {},
+        "<marker/>\n",
+        `${caller}${MX_SUFFIX}`,
+      );
+
+      // The excluded tag's own transform must never run: no "found" text
+      // in the compiled output.
+      expect(result?.code).not.toContain("found");
+    });
+
     it("throws a Vite-shaped error pointing at a broken *template* tag, not the caller", async () => {
       // Round 2 fix: a `TranslateError` raised while compiling a discovered
       // *template* tag (`tags/broken.mx`, as opposed to a `.tag.ts` sidecar
