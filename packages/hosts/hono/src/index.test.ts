@@ -123,7 +123,9 @@ describe("Hono target", () => {
   it("renders a string dynamic-tag target as its element, even with arguments", async () => {
     // Marko's own html/dom runtimes never render a string renderer's name
     // as literal text, args or not — see `_dynamic_tag` in
-    // `runtime-tags/src/html/dynamic-tag.ts`.
+    // `runtime-tags/src/html/dynamic-tag.ts`. args[0] ("x") becomes the
+    // spread attributes source (decision 112): `for...in` over a string
+    // yields its numeric indices, matching Marko's own `_attrs`.
     const { dirname, join } = await import("node:path");
     const { tmpdir } = await import("node:os");
     const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
@@ -159,7 +161,7 @@ describe("Hono target", () => {
         default: (props: { tag: string }) => Child;
       };
       const output = await jsx(mod.default, { tag: "span" }).toString();
-      expect(output).toBe("<span></span>");
+      expect(output).toBe('<span 0="x"></span>');
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

@@ -943,6 +943,75 @@ describe("dynamic tags", () => {
       "Tag does not support arguments when attributes present.",
     );
   });
+
+  // decision 112: a string-target dynamic tag called with arguments uses
+  // `args[0]` as its input (attributes), matching Marko's own
+  // `runtime-tags/src/html/dynamic-tag.ts` `_dynamic_tag` (`typeof renderer
+  // === "string"` branch: `const input = (inputIsArgs ? args[0] : ...) ||
+  // {}`). Previously `renderDynamic` ignored `args` entirely for a string
+  // target and rendered the call-site attributes/attribute tags instead.
+  it("uses args[0] as attributes for a string-target dynamic tag called with arguments (decision 112)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { tagName } from "./comp.ts"\n<${tagName()}({ id: "x", class: "y" })/>',
+        "comp.ts": ["export function tagName() {", '  return "div";', "}"].join(
+          "\n",
+        ),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe('<div id="x" class="y"></div>');
+  });
+
+  it("ignores extra arguments beyond args[0] for a string-target dynamic tag (decision 112, Marko parity)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { tagName } from "./comp.ts"\n<${tagName()}({ id: "x" }, "unused", 123)/>',
+        "comp.ts": ["export function tagName() {", '  return "div";', "}"].join(
+          "\n",
+        ),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe('<div id="x"></div>');
+  });
+
+  it("treats a null/undefined args[0] as no attributes for a string-target dynamic tag (decision 112, Marko parity)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { tagName } from "./comp.ts"\n<${tagName()}(input.missing)/>',
+        "comp.ts": ["export function tagName() {", '  return "div";', "}"].join(
+          "\n",
+        ),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div></div>");
+  });
+
+  // Marko's translator appends attribute tags/content as a trailing props
+  // object AFTER the positional args (`renderer(...args, { content, ... })`),
+  // so for a string target it lands at `args[N]`, N > 0 — never `args[0]` —
+  // and `_dynamic_tag`'s string branch reads only `args[0]`. The trailing
+  // object's attribute-tag values are therefore dropped from the rendered
+  // attributes; content still renders through the separate `content` param
+  // `_dynamic_tag` always threads independently of `input`.
+  it("does not fold decision 109's trailing attribute-tag props object into args[0] for a string target, but content still renders (Marko parity)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { tagName } from "./comp.ts"\n<${tagName()}({ id: "x" })><@head>H</@head>body</>',
+        "comp.ts": ["export function tagName() {", '  return "div";', "}"].join(
+          "\n",
+        ),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe('<div id="x">body</div>');
+  });
 });
 
 describe("comments", () => {

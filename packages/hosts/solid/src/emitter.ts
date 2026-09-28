@@ -1633,6 +1633,24 @@ export class SolidEmitter implements Emitter<string> {
         ? ` const ${value} = typeof ${temp} === "function" ? ${temp}(${node.args.map((arg) => arg.code).join(", ")}) : ${temp};`
         : "";
     const component = ` component={${value}}`;
+    // TODO(dynamic-string-tag-args-input, NEEDS-USER): decision 112 says a
+    // *string* target called with arguments uses args[0] as its element
+    // attributes on every host, matching Marko's own `args[0] || {}`
+    // (`runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`). Applying
+    // that literally on Solid means args[0] must *replace* this call's
+    // attribute-tag props for that combination, contradicting this
+    // package's own measured, shipped design (see this file's/AGENTS.md's
+    // `#dynamicComponent` doc and decision 109's implementation note):
+    // attrs/attribute-tags/content are deliberately orthogonal from args on
+    // Solid — args only resolve which value `<Dynamic component=…>` gets,
+    // and attribute tags render on the element regardless. Suppressing
+    // attribute-tag props for a string+args target would regress that
+    // shipped, tested behavior (decision 109's own attrs/tags/content
+    // orthogonality tests) to gain literal Marko parity for a shape MX's
+    // own design note never measured against Solid. Left unresolved,
+    // pending an operator ruling on which one wins for Solid. `tags` keeps
+    // applying unconditionally, as before this decision; args[0] is not yet
+    // additionally spread as attrs here.
     const guard = (rendered: MappedCode | string) =>
       concatMapped(
         `{(() => { const ${temp} = `,
