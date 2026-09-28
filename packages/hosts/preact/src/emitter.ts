@@ -155,11 +155,24 @@ export function createJsxDeclarations(targetName: string): HostDeclarations {
       if (taglibId !== undefined) return ELEMENT_TAGLIBS.has(taglibId);
       return !isComponentName(name);
     },
+    // Resolves a capitalized tag only when it genuinely resolves (decision
+    // 114): a scope binding (checked here for a direct caller of this
+    // function; `lower.ts`'s own `fileLocalBinding` already covers the
+    // whole-file `.mx` precedence path before `isComponent` is ever asked)
+    // or a taglib entry. A name matching neither used to fall through to a
+    // bare `isComponentName` (casing-only) check, so `<TotallyUndefined/>`
+    // — no import, binding, or taglib entry — silently emitted a JSX
+    // reference to nothing: a runtime `ReferenceError` on this target
+    // rather than the Marko-parity compile error `rejectUnknownTag` (below)
+    // now reports through `lower.ts`'s unresolved-tag guard.
     isComponent: (name, ctx) => {
       if (ctx.defines?.has(name) || ctx.imports?.has(name)) return true;
       const taglibId = ctx.lookup?.getTag(name)?.taglibId;
       if (taglibId !== undefined) return !ELEMENT_TAGLIBS.has(taglibId);
-      return isComponentName(name);
+      return false;
+    },
+    rejectUnknownTag(name, node) {
+      rawFail(`Unable to find entry point for custom tag \`<${name}>\`.`, node);
     },
     claimsTag: (name) => name === "try",
     // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):

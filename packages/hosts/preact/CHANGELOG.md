@@ -2,6 +2,21 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fixed (behavior change, decision 114 parity, `unresolved-tag-jsx-astro-angular`):**
+  `<TotallyUndefined/>` — a capitalized tag with no import, binding, or taglib
+  entry — now fails to compile with Marko's own error ("Unable to find entry
+  point for custom tag `<TotallyUndefined>`."), matching `@mxlang/html` and
+  `@mxlang/solid` (decision 114). `isComponent` (`emitter.ts`, shared by
+  `@mxlang/react` and `@mxlang/hono`) used to fall back to a bare
+  `isComponentName` (`/^[A-Z]/`) casing test whenever the taglib lookup found
+  nothing, so an unresolved capitalized tag silently emitted a JSX component
+  reference to nothing — a runtime `ReferenceError`, not a compile error. The
+  fallback is now `false`, and `rejectUnknownTag` reports Marko's wording
+  through the existing `lower.ts` hook. A type-only import already did not
+  resolve a tag (decision 114/115); unaffected by this change. A decision-116
+  dynamic-tag-routed value import (below) is a distinct, in-scope binding and
+  is unaffected — its `valueImportBinding` reaches `isComponent` through
+  `ctx.imports` the same as any other import.
 - **fix (decision 116):** a value import that is not a `.marko`/`.mx` default
   import now lowers through `mxDynamic` instead of a direct call — matching
   Marko's own `_dynamic_tag` dispatch for a string, `undefined`, `null`, or a

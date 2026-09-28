@@ -76,17 +76,27 @@ describe("module shape", () => {
     expect(code.indexOf("const G = 1;")).toBeLessThan(componentAt);
   });
 
-  it("still emits a type-only import verbatim (decision 114 parity)", () => {
-    // JSX component-vs-element routing here is casing-only (`isComponentName`
-    // in `emitter.ts`), so a capitalized tag always emits as a JSX component
-    // reference regardless of import status — this host has no
-    // Marko-style unresolved-tag compile error to reproduce. What must not
-    // regress is core's `importBindings`/`lowerStatement` still emitting the
-    // type-only import verbatim (it types a call site elsewhere), not
-    // silently dropping it because it carries no runtime binding.
-    const code = compile('import type Widget from "./widget.mx"\n<Widget/>');
-    expect(code).toContain('import type Widget from "./widget.mx"');
+  it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
+    // A type-only import binds no runtime value, so `<Widget/>` has nothing
+    // to call -- the same rule `@mxlang/html`/`@mxlang/solid` already
+    // enforce (`import type` excluded from `ctx.imports`).
+    expect(
+      errorOf('import type Widget from "./widget.mx"\n<Widget/>'),
+    ).toContain("Unable to find entry point for custom tag `<Widget>`.");
   });
+
+  it.each([
+    ["self-closing", "<TotallyUndefined/>"],
+    ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
+    ["with an attribute", "<TotallyUndefined a=1/>"],
+  ])(
+    "rejects a capitalized tag with no import, binding, or taglib entry, %s (decision 114 parity)",
+    (_label, source) => {
+      expect(errorOf(source)).toContain(
+        "Unable to find entry point for custom tag `<TotallyUndefined>`.",
+      );
+    },
+  );
 
   it("imports nothing when the template uses no helper", () => {
     const code = compile("<p>hi</p>");

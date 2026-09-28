@@ -17,6 +17,16 @@ function markup(source: string): string {
   return match[1] as string;
 }
 
+/** The message of the error a template throws, for an error-row assertion. */
+function errorOf(source: string): string {
+  try {
+    compile(source);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error("expected a compile error, but the template compiled");
+}
+
 describe("Hono target", () => {
   it("uses Hono's JSX source and native DOM prop names", () => {
     const code = compile('<label class="field" for="name">Name</label>');
@@ -24,13 +34,27 @@ describe("Hono target", () => {
     expect(code).toContain('<label class="field" for="name">Name</label>');
   });
 
-  it("still emits a type-only import verbatim (decision 114 parity)", () => {
-    // Shares Preact's casing-only component routing — no Marko-style
-    // unresolved-tag error here (see the matching Preact test). What must
-    // not regress is core still emitting a type-only import verbatim.
-    const code = compile('import type Widget from "./widget.mx"\n<Widget/>');
-    expect(code).toContain('import type Widget from "./widget.mx"');
+  it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
+    // A type-only import binds no runtime value, so `<Widget/>` has nothing
+    // to call -- the same rule `@mxlang/html`/`@mxlang/solid` already
+    // enforce (`import type` excluded from `ctx.imports`).
+    expect(
+      errorOf('import type Widget from "./widget.mx"\n<Widget/>'),
+    ).toContain("Unable to find entry point for custom tag `<Widget>`.");
   });
+
+  it.each([
+    ["self-closing", "<TotallyUndefined/>"],
+    ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
+    ["with an attribute", "<TotallyUndefined a=1/>"],
+  ])(
+    "rejects a capitalized tag with no import, binding, or taglib entry, %s (decision 114 parity)",
+    (_label, source) => {
+      expect(errorOf(source)).toContain(
+        "Unable to find entry point for custom tag `<TotallyUndefined>`.",
+      );
+    },
+  );
 
   it("imports Hono's specialised AttrTag type", () => {
     expect(

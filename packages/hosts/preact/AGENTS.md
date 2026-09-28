@@ -29,6 +29,16 @@ Six facts worth knowing before editing it:
   taglib lookup and in-scope bindings (the same rule as `@mxlang/html`), and
   `componentAlias` renames such a component in the emitted JSX, binding
   `MxBadge` beside it.
+  **A capitalized tag resolves only when it genuinely resolves** (decision
+  114 parity, `unresolved-tag-jsx-astro-angular`): `isComponent`
+  (`emitter.ts`) used to fall back to a bare `isComponentName` (`/^[A-Z]/`)
+  test whenever the taglib lookup found nothing, so `<TotallyUndefined/>` —
+  no import, binding, or taglib entry — silently emitted a JSX reference to
+  nothing (a runtime `ReferenceError`, not a compile error). The fallback is
+  now `false`, and `rejectUnknownTag` reports Marko's own wording
+  ("Unable to find entry point for custom tag `<Name>`.") through the same
+  `lower.ts` hook `@mxlang/html`/`@mxlang/solid` already use. `@mxlang/react`
+  and `@mxlang/hono` share this fix through `createJsxDeclarations`.
 - **Attribute tags emit from core's `attrTagProps` plan** (decisions 106–108),
   never by regrouping the flat occurrence list. `data` values are
   `{ ...attrs, ...nestedProps, content }`; `renderable` values are the body;
