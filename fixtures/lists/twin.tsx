@@ -61,7 +61,7 @@ export function Lists() {
         `@solidjs/web`'s `renderToString`). The entry is read through the
         accessor instead, which is what MX now emits.
       */}
-      <For each={Object.entries(meta())} keyed={(e) => e[0]}>
+      <For each={Object.entries(meta() ?? {})} keyed={(e) => e[0]}>
         {(mxEntry) => (
           <p>
             {mxEntry()[0]}={mxEntry()[1]}

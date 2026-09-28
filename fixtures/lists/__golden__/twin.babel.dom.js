@@ -98,7 +98,7 @@ export function Lists() {
  }), _el$8);
  _$insert(_el$, _$createComponent(_$For, {
  get each() {
- return Object.entries(meta());
+ return Object.entries(meta() ?? {});
  },
  keyed: e => e[0],
  children: mxEntry => (() => {
