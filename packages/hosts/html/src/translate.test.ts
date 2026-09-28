@@ -394,6 +394,43 @@ describe("error constructs: the target genuinely cannot express them", () => {
   });
 });
 
+describe("a type-only import does not resolve a tag (decision 114 parity)", () => {
+  // `import type Widget from "./widget.mx"` binds no runtime value, so
+  // `<Widget/>` must be Marko's own unresolved-tag error — matching
+  // `@mxlang/parser`'s `programBindings`, which already excludes type-only
+  // bindings for the `.solid.mx` region path (see
+  // `packages/hosts/solid/src/index.test.ts`, "still rejects a capitalized
+  // tag bound only by a type-only import"). Before this fix, core's own
+  // `importBindings` (whole-file `.mx`, every host) never checked
+  // `importKind`, so a whole `import type` bound `Widget` the same as a
+  // value import and `<Widget/>` silently compiled as a component call to a
+  // name erased before the module runs (a runtime `ReferenceError`).
+  it("errors on a whole `import type` used as a tag", () => {
+    const body = `import type Widget from "./widget.mx"\n<Widget/>`;
+    expect(() => compile(src(body), file)).toThrow(
+      /Unable to find entry point for.*custom tag.*<Widget>/s,
+    );
+  });
+
+  it("errors on an inline `{ type X }` specifier used as a tag", () => {
+    const body = `import { type Widget } from "./widget.mx"\n<Widget/>`;
+    expect(() => compile(src(body), file)).toThrow(
+      /Unable to find entry point for.*custom tag.*<Widget>/s,
+    );
+  });
+
+  it("still resolves an ordinary value import as a tag", async () => {
+    const html = await renderModules(
+      {
+        "widget.mx": `<p>widget</p>`,
+        "page.mx": `import Widget from "./widget.mx"\n<Widget/>`,
+      },
+      "page.mx",
+    );
+    expect(html).toBe("<p>widget</p>");
+  });
+});
+
 describe("<try> without a placeholder is a plain try/catch", () => {
   it("lowers the body and its <@catch>", () => {
     const body = "<try><p>b</p><@catch|e|><p>err</p></@catch></try>";
