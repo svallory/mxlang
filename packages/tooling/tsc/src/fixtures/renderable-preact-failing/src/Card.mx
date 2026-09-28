@@ -1,0 +1,6 @@
+export interface Input {
+  b?: AttrTag<{ as: "renderable" }>;
+  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;
+}
+
+<div/>

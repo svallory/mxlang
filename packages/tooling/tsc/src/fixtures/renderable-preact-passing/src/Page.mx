@@ -1,0 +1,7 @@
+import Card from "./Card.mx"
+export interface Input { show: boolean }
+
+<Card><@b>B</@b></Card>
+<Card><@b><strong>B</strong></@b></Card>
+<Card><@row|count|><strong>${count.toFixed(1)}</strong></@row></Card>
+<Card><if=input.show><@b><strong>B</strong></@b></if></Card>

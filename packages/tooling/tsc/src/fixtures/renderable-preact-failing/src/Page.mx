@@ -1,0 +1,3 @@
+import Card from "./Card.mx"
+
+<Card><@row|count|><strong>${count.toUpperCase()}</strong></@row></Card>

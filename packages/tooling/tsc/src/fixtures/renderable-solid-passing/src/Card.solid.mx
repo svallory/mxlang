@@ -1,0 +1,10 @@
+import type { AttrTag } from "@mxlang/solid";
+
+export interface Input {
+  b?: AttrTag<{ as: "renderable" }>;
+  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;
+}
+
+export default function Card(_input: Input) {
+  return null;
+}
