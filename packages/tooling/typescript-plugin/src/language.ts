@@ -129,15 +129,20 @@ export function createSolidMxLanguagePlugin(
         const { warnings, ...printed } = compiled;
         dependencies.set(fileName, printed.dependencies);
         syntaxErrors.delete(fileName);
+        const { code: generated, warning: builtinImportWarning } =
+          appendSolidBuiltinImport(printed.code);
+        const allWarnings = builtinImportWarning
+          ? [...warnings, builtinImportWarning]
+          : warnings;
         compileDiagnostics.set(
           fileName,
-          warnings.map((warning) =>
+          allWarnings.map((warning) =>
             warningDiagnostic(fileName, source, warning),
           ),
         );
         return createVirtualCode(
           typescript,
-          appendSolidBuiltinImport(printed.code),
+          generated,
           source,
           printed.map,
           attributeTagDiagnosticMappings(source, printed.code),
@@ -508,14 +513,44 @@ function createVirtualCode(
  * Appended at the end of the file, after every mapping is computed from the
  * unmodified generated text, so no existing line or offset shifts: an
  * appended, unmapped import cannot mis-position an earlier diagnostic.
+ *
+ * **`generated` failing to parse would mean the printer itself emitted
+ * invalid TSX** — a bug in this package, not an author mistake, since
+ * `generated` is our own emitted output rather than authored source (see
+ * `source-bindings-silent-parse-failure`). On that failure every built-in is
+ * appended unconditionally rather than silently treating it as "nothing
+ * bound" — over-importing risks at worst a redundant import TypeScript
+ * already tolerates; under-importing (the old behavior, if `sourceBindings`
+ * happened to swallow a real binding) risks hiding every real diagnostic
+ * inside the JSX behind TS2304 noise, which is exactly the failure class
+ * this function exists to prevent. The failure is reported through the same
+ * `warning` channel every other non-fatal diagnostic in this file uses
+ * (`compile-deps-cap-warning`'s cap warning is the precedent: positioned at
+ * the file's own start, line 1 column 1, since there is no more specific
+ * author-facing position for a printer-internal failure) rather than only a
+ * `console.warn`, which an editor user would never see.
  */
-export function appendSolidBuiltinImport(generated: string): string {
-  const bound = sourceBindings(generated);
+export function appendSolidBuiltinImport(generated: string): {
+  code: string;
+  warning?: MxWarning;
+} {
+  const { bindings: bound, error } = sourceBindings(generated);
+  const warning: MxWarning | undefined = error
+    ? {
+        message:
+          "the printed .solid.mx module could not be parsed while checking " +
+          "Solid built-in imports, so they were added conservatively " +
+          `(${error.message})`,
+        line: 1,
+        column: 0,
+      }
+    : undefined;
   const needed = SOLID_BUILTIN_TAGS.filter(
     ({ name }) =>
-      new RegExp(`<${name}[\\s/>]`).test(generated) && !bound.has(name),
+      new RegExp(`<${name}[\\s/>]`).test(generated) &&
+      (error || !bound.has(name)),
   );
-  if (needed.length === 0) return generated;
+  if (needed.length === 0) return { code: generated, warning };
 
   const byModule = new Map<string, string[]>();
   for (const { name, from } of needed) {
@@ -526,7 +561,7 @@ export function appendSolidBuiltinImport(generated: string): string {
   const imports = [...byModule.entries()]
     .map(([from, names]) => `import { ${names.join(", ")} } from "${from}";`)
     .join("\n");
-  return `${generated}\n${imports}\n`;
+  return { code: `${generated}\n${imports}\n`, warning };
 }
 
 /**

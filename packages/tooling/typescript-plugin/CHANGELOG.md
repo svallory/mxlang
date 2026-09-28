@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `appendSolidBuiltinImport` no longer silently under-imports on a printer parse failure (source-bindings-silent-parse-failure)
+
+`appendSolidBuiltinImport` decides which Solid JSX built-ins (`Show`/`For`/…) need a synthetic import by checking `@mxlang/parser`'s `sourceBindings` against the *generated* TSX text — never author-facing source. `sourceBindings` used to catch a parse failure silently and return an empty binding set indistinguishable from "genuinely binds nothing," so a printer bug that ever emitted invalid TSX would make this function under-import: exactly the failure class it exists to prevent (a free `Show`/`For` reference hiding every real diagnostic behind TS2304). `sourceBindings` now reports `{ bindings, error? }`; on `error`, `appendSolidBuiltinImport` appends every referenced built-in unconditionally (safe over-inclusion) and returns a positioned `MxWarning` (line 1, column 0) instead of guessing from an empty set. Its caller (`createSolidMxLanguagePlugin`) merges that warning into the same `compileDiagnostics` array the cap warning already uses, so it reaches the editor as a real diagnostic instead of only a `console.warn`.
+
 ### Fix: `compileWithDependencies` warns when it hits the pass cap without settling (compile-deps-cap-warning)
 
 `compileWithDependencies` (`src/language.ts`) reaching `MAX_COMPILE_PASSES` (8) without a dependency set/source fixed point used to return its last result silently — a caller's virtual code was typed against whatever the final pass happened to see, with no signal that the loop gave up rather than converged. It now pushes an `MxWarning` onto `result.warnings` (when the generic result type carries one) naming every dependency discovered across the unsettled chain, positioned at the file's own start (line 1, column 1). `mx-language.ts`, `amx-language.ts`, and `language.ts`'s own `createSolidMxLanguagePlugin` already destructure `warnings` from every `compileWithDependencies` result unconditionally, so the warning reaches `getCompileDiagnostics` — and the editor/`mx-tsc` — through the existing warning path with no caller-side change.

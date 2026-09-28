@@ -30,6 +30,7 @@ import {
 import { createAstroLanguagePlugin } from "./astro-language.ts";
 import pluginFactory, { createConfiguredLanguagePlugins } from "./index.ts";
 import {
+  appendSolidBuiltinImport,
   compileWithDependencies,
   createSolidMxLanguagePlugin,
   decodeMappings,
@@ -2478,6 +2479,46 @@ describe("declared attribute-tag values in the emitted TypeScript", () => {
       ).toEqual(codes);
     },
   );
+});
+
+describe("appendSolidBuiltinImport parse-failure fallback (source-bindings-silent-parse-failure)", () => {
+  it("appends the built-in normally when the generated text parses cleanly", () => {
+    const generated = "function C() { return <Show>x</Show>; }";
+    const { code, warning } = appendSolidBuiltinImport(generated);
+    expect(code).toContain('import { Show } from "solid-js";');
+    expect(warning).toBeUndefined();
+  });
+
+  it("skips a built-in already bound by the generated text's own import", () => {
+    const generated =
+      'import { Show } from "solid-js";\nfunction C() { return <Show>x</Show>; }';
+    const { code, warning } = appendSolidBuiltinImport(generated);
+    expect(code).toBe(generated);
+    expect(warning).toBeUndefined();
+  });
+
+  it("appends every referenced built-in unconditionally, and returns a positioned warning, when the generated text fails to parse", () => {
+    // Only reachable if the printer itself ever emitted invalid TSX (a bug
+    // in this package, not an author mistake -- see the function's own doc
+    // comment). Over-importing here is the safe failure mode: it risks a
+    // redundant import TypeScript tolerates, never a missing one that would
+    // hide every real diagnostic inside the JSX behind TS2304 noise.
+    const generated = "const x = ; function C() { return <Show>x</Show>; }";
+    const { code, warning } = appendSolidBuiltinImport(generated);
+    expect(code).toContain('import { Show } from "solid-js";');
+    expect(warning).toBeDefined();
+    expect(warning?.line).toBe(1);
+    expect(warning?.column).toBe(0);
+    expect(warning?.message).toContain("could not be parsed");
+    expect(warning?.message).toContain("added conservatively");
+  });
+
+  // The positive case -- this warning reaching a real caller's
+  // getCompileDiagnostics, not just this function's own return value -- is
+  // covered in the dedicated `solid-builtin-import-warning.test.ts` (its
+  // own file so its `vi.mock("@mxlang/parser", ...)` cannot leak into this
+  // suite, the same isolation `compile-deps-cap-warning.test.ts` uses for
+  // an analogous mock).
 });
 
 describe("hidden type errors in the Solid virtual code (solid-virtual-code-hidden-errors)", () => {
