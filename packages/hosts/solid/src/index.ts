@@ -74,6 +74,13 @@ export interface CompileSolidMxOptions {
   customTags?: Record<string, CustomTag>;
   /** Surrounding `.solid.mx` module imports, local binding -> specifier. */
   importSpecifiers?: ReadonlyMap<string, string>;
+  /**
+   * Every value the surrounding `.solid.mx` module binds at its top level —
+   * import locals plus top-level `const`/`function`/`class` names, type-only
+   * bindings excluded (decision 114). A capitalized tag a region references
+   * may resolve through this scope as well as `importSpecifiers`.
+   */
+  moduleBindings?: ReadonlySet<string>;
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
   warnings?: MxWarning[];
 }
@@ -249,6 +256,16 @@ export function compileSolidMx(
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
     for (const name of options.importSpecifiers.keys()) ctx.imports.add(name);
+  }
+  // A capitalized tag also resolves through the surrounding TypeScript
+  // module's own top-level value bindings (decision 114) — not just its
+  // imports, since a region has no module scope of its own for a
+  // function/class/const the author wrote right there in the same file to
+  // live in. Folded into `ctx.imports` rather than a new `Ctx` field: core's
+  // precedence order already treats that set as "the file resolves this name
+  // to a value", which is exactly what a module-scope binding is too.
+  if (options.moduleBindings) {
+    for (const name of options.moduleBindings) ctx.imports.add(name);
   }
   const ir = lower(ctx, body);
   // An import the *compiler* minted for a discovered tag is not a

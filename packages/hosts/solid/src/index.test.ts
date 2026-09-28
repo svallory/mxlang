@@ -525,6 +525,49 @@ describe("Solid host errors", () => {
       compile(`<for|Item| of=components><Item/></for>`),
     ).not.toThrow();
   });
+
+  it("resolves a Solid JSX built-in with no import (decision 114)", () => {
+    // `<Show>` is a real MX tag reference here, not a claimed host tag
+    // (`claimsTag` only claims `try`) — `isComponent` must recognize it by
+    // name.
+    expect(() => compile(`<Show when=cond>x</Show>`)).not.toThrow();
+  });
+
+  it("resolves a capitalized tag bound by the surrounding module (decision 114)", () => {
+    // A `.solid.mx` region has no module scope of its own; a real caller's
+    // surrounding TypeScript module supplies this through
+    // `moduleBindings`, computed by `@mxlang/parser`'s `programBindings`
+    // from the whole file (imports plus top-level const/function/class).
+    expect(() =>
+      compileSolidMx("<Widget/>", {
+        filename: "fixture.solid.mx",
+        moduleBindings: new Set(["Widget"]),
+      }),
+    ).not.toThrow();
+  });
+
+  it("still rejects a capitalized tag bound only by a type-only import (decision 114)", () => {
+    // `import type Widget from "./widget.mx"` binds no runtime value, so it
+    // must not resolve `<Widget/>` — matching `@mxlang/parser`'s
+    // `programBindings`, which excludes type-only bindings by design (see
+    // `source-bindings.ts`). Passed explicitly here as `moduleBindings`
+    // would already exclude it were it computed live; this asserts the
+    // *effect* (still unresolved) rather than re-testing `programBindings`
+    // itself, which has its own coverage in `@mxlang/parser`.
+    let error: unknown;
+    try {
+      compileSolidMx("<Widget/>", {
+        filename: "fixture.solid.mx",
+        moduleBindings: new Set(),
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(
+      "Unable to find entry point for custom tag `<Widget>`",
+    );
+  });
 });
 
 describe("event attributes (decision 101, phase B of dom-events)", () => {
@@ -762,35 +805,25 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     expect(a?.code).toContain(`{${b?.binding}()}`);
   });
 
-  it("a self-recursive <define> is not this fix's own bug — it's a pre-existing, unrelated Solid gap", () => {
+  it("a self-recursive <define> now errors with Marko's own wording (decision 114, was a silent gap)", () => {
     // `ctx.defines.set(name, params)` (core, `lowerDefine`) runs only
     // *after* lowering a define's own body, so `A` isn't registered as a
-    // define while `A`'s own body is being lowered. On `@mxlang/html`
-    // that reaches the generic capitalized-tag guard and errors ("no
-    // matching import or `<define>` in scope"). On Solid it does not: this
-    // host's `isComponent` (`solidDeclarations.isComponent`) is a bare
-    // `/^[A-Z]/` test with no resolvability check, so *any* unresolvable
-    // capitalized tag — self-recursive define or not — silently lowers as
-    // a `Component` with a plain `"name"` target and prints a JSX tag
-    // referencing a binding nothing declares (`<A />`, args dropped).
-    // Confirmed pre-existing and unrelated to this change: the identical
-    // silent pass-through reproduces on a plain, non-define capitalized
-    // tag with no `<define>` involved at all (`<TotallyUndefined/>`).
-    // Filed as its own follow-up rather than folded into decision 110b's
-    // scope — fixing it means giving Solid's `isComponent` (or a
-    // `rejectComponentTag` hook) the same resolvability check html's has,
-    // a broader change than hoisting `<define>`.
-    const result = compileSolidMx(
-      `<define/A|n|><if=(n > 0)><A(n - 1)/></if></define><A(3)/>`,
-      { filename: "/fixtures/page.solid.mx" },
-    );
-    // The top-level `<A(3)/>` call, outside the define, resolves fine —
-    // `A` is registered in `ctx.defines` by the time *that* call site is
-    // lowered. It's the *inner* self-reference, inside the define's own
-    // body (where `A` is not yet registered), that silently becomes an
-    // unresolved literal JSX tag with its args dropped.
-    expect(result.code).toContain(`{${result.hoistedDefines[0]?.binding}(3)}`);
-    expect(result.hoistedDefines[0]?.code).toContain("<A />");
+    // define while `A`'s own body is being lowered — on `@mxlang/html` this
+    // already reached the generic capitalized-tag guard and errored ("no
+    // matching import or `<define>` in scope"). On Solid it used to be a
+    // silent pass-through: `isComponent` was a bare `/^[A-Z]/` test with no
+    // resolvability check, so the inner self-reference lowered as a
+    // `Component` with a plain `"name"` target and printed a JSX tag
+    // referencing a binding nothing declares (`<A />`, args dropped) — the
+    // identical bug decision 114's `TotallyUndefined` case fixes elsewhere
+    // in this file. Tightening `isComponent` closes this gap too, as a
+    // side effect rather than a separate fix.
+    expect(() =>
+      compileSolidMx(
+        `<define/A|n|><if=(n > 0)><A(n - 1)/></if></define><A(3)/>`,
+        { filename: "/fixtures/page.solid.mx" },
+      ),
+    ).toThrow("Unable to find entry point for custom tag `<A>`.");
   });
 
   it("gensyms distinct bindings for two regions in one file that each declare the same <define> name", () => {

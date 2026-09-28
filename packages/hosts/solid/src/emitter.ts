@@ -21,6 +21,7 @@ import {
   rewriteAccessorReads,
   TranslateError,
 } from "@mxlang/core";
+import { SOLID_BUILTIN_TAGS } from "@mxlang/parser";
 import { solidEventPropName } from "./event-names.ts";
 
 const STATEFUL_ERRORS: HostDeclarations["tags"] = {
@@ -539,22 +540,46 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
   throw new TranslateError(message, line, column);
 }
 
+const SOLID_BUILTIN_TAG_NAMES = new Set(
+  SOLID_BUILTIN_TAGS.map(({ name }) => name),
+);
+
 /**
- * Marko's own failure for an unresolved tag name, in either case
- * (decision 114).
+ * Whether a capitalized tag resolves, per decision 114's ruling (operator,
+ * approved): Marko's own rule (a scope binding first, then taglib lookup,
+ * else unresolved) applied to `.solid.mx`'s larger scope.
  *
  * By the time core asks `isComponent`, a capitalized name has already failed
- * every real route: core structural tags, `<try>` (`claimsTag`), an
- * `import`/`<define>`/`<const>`/tag-param binding, and a registered custom
- * tag (`packages/core/src/lower.ts`'s precedence order runs all of those
- * before `isComponent`). Solid also has no taglib-backed `tags/` discovery
- * channel the way `@mxlang/html`/`@mxlang/preact` do (`ctx.lookup` is never
- * set here — a `.solid.mx` region is a fragment compile, not a whole Marko
- * file), so nothing is ever left for `isComponent` to say yes to: any name
- * reaching this function is unresolved, and always `false`. Core's own
- * `rejectUnknownTag` hook (below) reports Marko's wording once the name
- * falls through to core's generic unresolved-tag guard, positioned on the
- * real node.
+ * every *MX-level* route: core structural tags, `<try>` (`claimsTag`), an
+ * `import`/`<define>`/`<const>`/tag-param binding local to the region, and a
+ * registered custom tag (`packages/core/src/lower.ts`'s precedence order
+ * runs all of those first). Two routes remain, neither of them Marko
+ * concepts (Marko has no host-native-JSX-passthrough and no
+ * spliced-into-someone-else's-module concept), both approved by the
+ * operator:
+ *
+ * - **The surrounding TypeScript module binds the name as a value** — an
+ *   import or a top-level `const`/`function`/`class` in the module the
+ *   region is embedded in (decision 113's shadowing already applies before
+ *   this: `ctx.imports` only contains what is *visible* at this point,
+ *   `packages/parser/src/mx/bridge.ts`'s `visibleModuleBindings`). Folded
+ *   into `ctx.imports` at the call site (`compileSolidMx`, `index.ts`)
+ *   rather than a new `Ctx` field, since core's precedence order already
+ *   treats that set as "the file resolves this name to a value" before
+ *   `isComponent` is ever asked.
+ * - **It is one of Solid's own JSX built-ins** (`SOLID_BUILTIN_TAGS`,
+ *   `@mxlang/parser`) — `<Show>`, `<For>`, … — which `@mxlang/solid`'s
+ *   emitter prints as a bare tag with no import of its own because the real
+ *   Solid build pipeline (`@solidjs/vite-plugin`'s compiler stage)
+ *   auto-imports every one it sees, a stage that runs after this compiler
+ *   and never inside it.
+ *
+ * Anything else reaching here is genuinely unresolved: Solid has no
+ * taglib-backed `tags/`-discovery channel the way `@mxlang/html`/
+ * `@mxlang/preact` do (`ctx.lookup` is never set here — a `.solid.mx` region
+ * is a fragment compile, not a whole-Marko-file parse). Core's own
+ * `rejectUnknownTag` hook (below) then reports Marko's wording, positioned
+ * on the real node.
  *
  * Verified against `@marko/compiler` 5.42.5 / `marko@6.3.51`: an unresolved
  * `<TotallyUndefined/>` (no import, binding, or taglib entry) is a
@@ -564,8 +589,8 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
  * body, and a tag with an attribute (`tag-name-type.ts:95-97`,
  * `custom-tag.ts:398-429`).
  */
-function isComponent(): boolean {
-  return false;
+function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
+  return (ctx.imports?.has(name) ?? false) || SOLID_BUILTIN_TAG_NAMES.has(name);
 }
 
 function rejectUnknownTag(name: string, node: { loc: Position }): void {

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
+import { sourceBindings } from "@mxlang/parser";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
@@ -36,6 +37,11 @@ function renderSolidMx(
 ): string {
   const { code: forCode, hoistedImports } = compileSolidMx(mxFragment, {
     ...options,
+    // `setup` is spliced into the compiled runtime module at render time,
+    // below, but never seen by `compileSolidMx` itself — so a name it
+    // declares (e.g. a local `function Row(input) {...}`) must be supplied
+    // here the same way a real caller's surrounding module would be.
+    moduleBindings: sourceBindings(setup),
   });
   const imports = hoistedImports.map((entry) => entry.code).join("\n");
   const jsxSource = `${imports}\nimport { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;

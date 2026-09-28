@@ -41,6 +41,31 @@
   a hand-written twin's natural names, verified semantically identical
   otherwise).
 
+- An unresolved capitalized tag is now a compile error, matching Marko
+  (decision 114). `isComponent` (`emitter.ts`) was a bare `/^[A-Z]/` test
+  with no resolvability check — any unresolvable capitalized tag
+  (`<TotallyUndefined/>`, or a self-recursive `<define>` before its own
+  name is registered) silently lowered as an ordinary component call and
+  printed a bare JSX reference to a binding nothing declares, a runtime
+  `ReferenceError` rather than a positioned MX error. It now returns `true`
+  only when the name genuinely resolves: through the surrounding
+  TypeScript module's own top-level value bindings (an import or a
+  top-level `const`/`function`/`class`, type-only bindings excluded), or
+  one of Solid's own JSX built-ins (`Show`, `For`, `Switch`, `Match`,
+  `Repeat`, `Errored`, `Loading`, `Dynamic`). Everything else reaches
+  Marko's own positioned error (`` Unable to find entry point for custom
+  tag `<Name>`. ``, verified against `@marko/compiler` 5.42.5 /
+  `marko@6.3.51`) through a new `rejectUnknownTag` declaration.
+
+  **Behavior change**: a `.solid.mx` template (or whole-file `.mx`
+  resolved to the Solid host) that previously compiled to a dangling JSX
+  reference for an unresolvable capitalized tag now fails to compile
+  instead, naming the tag. A whole-file `.mx` compiled to Solid still
+  cannot use an authored `import` for such a name (a separate,
+  pre-existing limitation — `compileSolidMx` rejects any module-level
+  statement outside a real `.solid.mx` region); a registered custom tag is
+  the resolution route available there.
+
 ### Breaking
 
 - Attribute tags now follow the callee-declared `AttrTag` cardinality and
