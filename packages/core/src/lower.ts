@@ -615,35 +615,33 @@ function containsAttributeTags(node: Node): boolean {
 /**
  * Marko forbids mixing a named custom tag's positional args with prop-like
  * input (`assertAttributesOrSingleArg`, `data/marko/packages/compiler/src/
- * babel-utils/assert.js:89-107`) — not just the dynamic-tag path that
- * originally called this.
+ * babel-utils/assert.js:89-107`) — strict for a named custom tag only.
  *
- * A `<define>` call is different: in real Marko it compiles through the
- * *dynamic-tag* visitor (`dynamic-tag.ts:132-137`'s `defineBodySection`
- * check), whose own rule (`assertAttributesOrArgs`, `assert.js:74-82`) is
- * lenient — it allows args plus a body/attribute tag (Marko's "dynamic tag
- * fallback content"), and only rejects args plus a plain *attribute*. MX does
- * not yet implement that lenient shape (see TODO
- * `define-call-args-with-content`), so this still rejects the combination for
- * `define` too, but the message says so honestly instead of claiming it is
- * Marko's own rule.
+ * A dynamic `<${expr}>` tag and a `<define>` call are different: both compile
+ * through the *dynamic-tag* visitor (`dynamic-tag.ts:132-137`'s
+ * `defineBodySection` check routes a `<define>` call there too), whose own
+ * rule (`assertAttributesOrArgs`, `assert.js:74-82`) is lenient — it allows
+ * args plus a body/attribute tag (Marko's "dynamic tag fallback content"),
+ * and only rejects args plus a plain *attribute*. `target` absent, or
+ * `"dynamic"`/`"define"`, takes this lenient rule; `"name"` stays strict.
  */
 function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
   if ((node.arguments ?? []).length === 0) return;
+  const lenient =
+    !target || target.kind === "dynamic" || target.kind === "define";
+  if (lenient) {
+    if ((node.attributes ?? []).length === 0) return;
+    fail(
+      "Tag does not support arguments when attributes present.",
+      node.name ?? node,
+    );
+  }
   if (
     (node.attributes ?? []).length === 0 &&
     !containsAttributeTags(node) &&
     !hasContent(node.body?.body ?? [])
   ) {
     return;
-  }
-  if (target?.kind === "define") {
-    fail(
-      `\`<${target.name}>\` is a \`<define>\`; MX does not yet support tag ` +
-        "arguments together with attributes, attribute tags, or a body on a " +
-        "define call (Marko does); pass the values as attributes instead.",
-      node.name ?? node,
-    );
   }
   fail(
     "Tag does not support arguments when attributes or body present.",

@@ -2,6 +2,17 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: a dynamic tag or `<define>` call now accepts arguments plus content (decision 109)
+
+`rejectArgsWithProps` now takes Marko's own lenient rule for a dynamic
+`<${expr}>` tag or a `<define>` call: the tag-argument form may combine with a
+body or attribute tags (Marko's "dynamic tag fallback content"), and only a
+plain attribute alongside arguments is still rejected. A named custom tag is
+unaffected — Marko's own stricter rule (`assertAttributesOrSingleArg`)
+continues to reject arguments combined with attributes, attribute tags, or a
+body there. This closes the "MX 1 divergence to close" spec §15 note and TODO
+`define-call-args-with-content`.
+
 ### Fix: callee-`Input` dependency tracking missed an unread or failed callee
 
 `readCalleeInput` now reports a dependency for a callee it could not read

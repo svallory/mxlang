@@ -1658,11 +1658,15 @@ deferred (decision 85).
    unresolved, and dynamic callees use decision 108's body-only renderable
    fallback; attributed or nested occurrences use data. Conditional and looped
    attribute tags and recursive nested tags are part of MX 1.
----
-
-### MX 1 divergence to close: arguments with content on dynamic and `<define>` calls
-
-A dynamic `<${expr}>` tag or a `<define>` call that combines the tag-argument form with attribute tags or a body is rejected by MX. Marko allows it: both compile through its dynamic-tag visitor, whose `assertAttributesOrArgs` rejects only arguments plus a plain attribute. Marko's strict `assertAttributesOrSingleArg` applies to named custom tags only. Until TODO `define-call-args-with-content` (MX 1) lands, this is a documented stricter-than-Marko divergence.
+9. **Arguments plus content on dynamic and `<define>` calls — closed by
+   decision 109.** A dynamic `<${expr}>` tag or a `<define>` call now accepts
+   the tag-argument form combined with a body or attribute tags, matching
+   Marko's own lenient `assertAttributesOrArgs` (which rejects only arguments
+   plus a plain attribute); Marko's strict `assertAttributesOrSingleArg`
+   remains named-custom-tag-only and untouched. html, preact/react/hono and
+   Solid emit the trailing content/attribute-tag props alongside the
+   arguments; Angular and Astro keep a positioned error naming their own
+   constraint (`ngComponentOutlet`/no local component form), not MX's.
 
 ## 16. Docs to fix
 
