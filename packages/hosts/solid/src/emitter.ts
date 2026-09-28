@@ -569,6 +569,21 @@ function satisfying(
     : value;
 }
 
+/**
+ * Same check for a data value, an object literal that needs no inner
+ * parenthesization guard: `{ ... } satisfies T` has no arrow function or
+ * ternary to disambiguate, so one wrapping pair is enough (matching
+ * `@mxlang/html`'s `attrTagValue`).
+ */
+function satisfyingData(
+  value: MappedCode,
+  valueType: string | undefined,
+): MappedCode {
+  return valueType
+    ? concatMapped("(", value, ` satisfies ${valueType})`)
+    : value;
+}
+
 function attributeTagValue(
   tag: AttributeTag,
   as: AttrTagProp["as"],
@@ -598,7 +613,7 @@ function attributeTagValue(
   }
   if (parts.length > 0) parts.push(", ");
   parts.push("content: ", content);
-  return satisfying(
+  return satisfyingData(
     concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }"),
     valueType,
   );
