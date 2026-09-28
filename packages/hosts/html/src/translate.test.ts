@@ -232,9 +232,10 @@ describe("bindings may not shadow the input parameter", () => {
   it("rejects a `<define>` call mixing tag-argument form with an attribute tag", () => {
     // `<Card('a')>` passes `title` positionally; adding `<@head>` on top
     // silently dropped `head` before this guard existed (round-2 review
-    // finding). Marko's own call shapes are exclusive, so core rejects the
-    // combination the same way it rejects a dynamic tag's arguments mixed
-    // with attributes or content.
+    // finding). Marko itself allows this combination on a `<define>` call
+    // (it compiles through the lenient dynamic-tag visitor); MX rejects it
+    // as a documented divergence until `define-call-args-with-content` (TODO)
+    // implements the lenient shape.
     expect(() =>
       compile(
         src(
@@ -243,7 +244,9 @@ describe("bindings may not shadow the input parameter", () => {
         file,
       ),
     ).toThrow(
-      "Tag does not support arguments when attributes or body present.",
+      "`<Card>` is a `<define>`; MX does not yet support tag arguments " +
+        "together with attributes, attribute tags, or a body on a define " +
+        "call (Marko does); pass the values as attributes instead.",
     );
   });
 });

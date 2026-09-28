@@ -1621,6 +1621,7 @@ own `strict` value, because that host has no other mode.
 | Attribute tags on native elements | Marko rejects them | `divergences.md` |
 | `<fragment>` | Marko rejects it; multiple root nodes need no wrapper | `divergences.md` |
 | Unknown custom elements | Letting `<my-widget>` through as a literal element | `divergences.md` |
+| `define-call-args-with-content` | A `<define>` call combining tag-argument form with attribute tags or a body; Marko allows it (its dynamic-tag visitor's lenient `assertAttributesOrArgs`), MX rejects it as stricter-than-Marko until implemented | `divergences.md` |
 | L3 raw hooks | Blocked on a vendored fork registering `Mx*` node types | 89c |
 | A non-JS parser | — | 74 |
 | An async `<try>`/`<await>` | "a later product" | 65 |

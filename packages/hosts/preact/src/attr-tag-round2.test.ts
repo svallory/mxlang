@@ -589,15 +589,19 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
     async (host) => {
       // `<Card('a')>` passes `title` positionally; adding `<@head>` on top
       // silently dropped `head` before this guard existed (round-2 review
-      // finding). Marko's call shapes are exclusive, so core rejects the
-      // combination rather than any host reaching it.
+      // finding). Marko itself allows this combination on a `<define>` call
+      // (it compiles through the lenient dynamic-tag visitor); MX rejects it
+      // as a documented divergence until `define-call-args-with-content`
+      // (TODO) implements the lenient shape.
       await expect(
         renderFixture(host, {
           "main.mx":
             "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
         }),
       ).rejects.toThrow(
-        "Tag does not support arguments when attributes or body present.",
+        "`<Card>` is a `<define>`; MX does not yet support tag arguments " +
+          "together with attributes, attribute tags, or a body on a define " +
+          "call (Marko does); pass the values as attributes instead.",
       );
     },
   );

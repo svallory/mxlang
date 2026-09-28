@@ -454,7 +454,7 @@ describe("one fixture per IR kind", () => {
     expect(find(define.children, "Element").name).toBe("li");
   });
 
-  it("rejects a define call mixing tag-argument form with an attribute tag", () => {
+  it("rejects a define call mixing tag-argument form with an attribute tag, with an honest MX-divergence message", () => {
     let error: unknown;
     try {
       lowerSource(
@@ -465,7 +465,9 @@ describe("one fixture per IR kind", () => {
     }
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe(
-      "Tag does not support arguments when attributes or body present.",
+      "`<Card>` is a `<define>`; MX does not yet support tag arguments " +
+        "together with attributes, attribute tags, or a body on a define " +
+        "call (Marko does); pass the values as attributes instead.",
     );
   });
 

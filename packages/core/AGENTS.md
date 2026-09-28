@@ -44,11 +44,21 @@ Five facts worth knowing before editing it:
   Cardinality is still derived independently from paths and loops. A declared
   `Input` remains authoritative and defaults to `data` (decision 108).
   A claimed dynamic `HostTag` also retains its tag arguments in `args`; an
-  emitter must forward them when it reconstructs a `Component` call. Marko's
-  call shapes remain exclusive: a dynamic tag with arguments cannot also have
-  attributes, attribute tags, or body content. Core rejects those combinations
-  with Marko's positioned diagnostic before a host could silently discard the
-  property/body side of the call.
+  emitter must forward them when it reconstructs a `Component` call. For a
+  named custom tag, Marko's own call shapes are exclusive: arguments cannot
+  also come with attributes, attribute tags, or body content
+  (`assertAttributesOrSingleArg`), and core rejects that combination with
+  Marko's positioned diagnostic before a host could silently discard the
+  property/body side of the call. A dynamic `<${expr}>` tag and a `<define>`
+  call are different in real Marko: both compile through the lenient
+  dynamic-tag visitor (`assertAttributesOrArgs`), which allows arguments
+  together with a body or attribute tag (Marko's "dynamic tag fallback
+  content") and only rejects arguments plus a plain attribute. MX matches
+  Marko's stricter rule for a dynamic tag, but for a `<define>` call MX is
+  **stricter than Marko** — it rejects arguments combined with attributes,
+  attribute tags, *or* a body, with a message that says so explicitly rather
+  than claiming Marko's own diagnostic. Full parity is tracked as TODO
+  `define-call-args-with-content`.
 
 - **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
   `core.ts` used to parse
