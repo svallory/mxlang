@@ -411,11 +411,15 @@ export function compileSolidUnit(
   // `/var` names are collected while emitting, because only the emitter
   // knows which call sites declared one — a call inside an `<if>` branch or
   // a `<for>` body reaches a child emitter, not this scope.
+  // `allowHoist: false` — a tag unit is a whole file, not a spliced region,
+  // so nothing here reads `hoistedDefines`; a `<define>` still gets the
+  // positioned "cannot declare a function inside a JSX expression" error
+  // rather than hoisting into a list this function never consumes.
   const {
     code: rendered,
     vars,
     needsEscapeImport,
-  } = collectReturnVars(() => emitSolid(ir));
+  } = collectReturnVars(() => emitSolid(ir), false);
   if (needsEscapeImport) {
     lines.unshift(
       `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";`,
