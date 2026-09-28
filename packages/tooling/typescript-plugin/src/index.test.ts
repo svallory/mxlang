@@ -900,16 +900,13 @@ describe("MX language plugin", () => {
   });
 
   it.each([
-    ["html", "/src/component.mx", true],
-    ["preact", `${here}/fixtures/preact-policy/component.mx`, true],
-    ["solid", `${here}/fixtures/solid-policy/component.mx`, false],
-  ])(
+    ["html", "/src/component.mx"],
+    ["preact", `${here}/fixtures/preact-policy/component.mx`],
+  ] as const)(
     "maps component tag, attribute, and attribute-tag names for the %s host",
-    (_host, fileName, needsImport) => {
+    (_host, fileName) => {
       const markup = "<Card title=1><@footer>ok</@footer></Card>";
-      const source = needsImport
-        ? `import Card from "./Card.mx"\n${markup}`
-        : markup;
+      const source = `import Card from "./Card.mx"\n${markup}`;
       const plugin = createMxLanguagePlugin(ts);
       const virtual = plugin.createVirtualCode?.(
         fileName,
@@ -943,6 +940,43 @@ describe("MX language plugin", () => {
       }
     },
   );
+
+  it("compiles a resolved capitalized tag with no throw for the solid host (decision 114)", () => {
+    // Distinct from the html/preact row above rather than folded into its
+    // `it.each`, and a smoke test rather than a mapping test: Solid's
+    // whole-file `.mx` compile (`compileSolidMx`) rejects an authored
+    // `import` as a module-level statement even outside a real `.solid.mx`
+    // region (a separate, pre-existing limitation — see
+    // `packages/hosts/solid/AGENTS.md`), so there is no way to give `Card`
+    // a real import here the way html/preact's row does; a registered
+    // custom tag is the only other resolution route. But a custom tag's
+    // `transform` builds entirely fresh IR with no source position tied to
+    // anything in the original call — not the tag name, not its attrs, not
+    // its attribute tags — so none of the mapping assertions the html/preact
+    // row makes can be reproduced for it. This asserts only what actually
+    // holds: decision 114's tightened `isComponent` does not regress a
+    // custom-tag-resolved capitalized tag into an unresolved-tag error.
+    const fileName = `${here}/fixtures/solid-policy/component.mx`;
+    const source = "<Card title=1><@footer>ok</@footer></Card>";
+    const plugin = createMxLanguagePlugin(ts, {
+      customTags: {
+        Card: {
+          transform: (call, ctx) => [ctx.build.element("div", call.attrs)],
+        },
+      },
+    });
+    const virtual = plugin.createVirtualCode?.(
+      fileName,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    if (!virtual) throw new Error("Expected MX virtual code");
+    expect(plugin.getSyntaxError?.(fileName)).toBeUndefined();
+    const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    expect(generated).toContain("<div");
+    expect(generated).toContain("1");
+  });
 
   it.each([
     ["html", "/project", ".mx"],
