@@ -1168,6 +1168,81 @@ describe("import precedence over registered custom tags", () => {
   });
 });
 
+// Ref custom-tags-local-bindings (decision 113): a file-local *scope*
+// binding — `<const/Panel=…/>`, a `<for|Panel|>` param, a
+// `<define/Box|Panel|>` param — shadows a registered custom tag of the same
+// name too, scoped to where the binding is in effect. IR-level coverage
+// lives in `packages/core/src/custom-tags.test.ts`; these are the executed
+// renders the brief required, against the real `compile()` entry point and a
+// real registered custom tag.
+describe("local scope bindings shadow a registered custom tag (executed)", () => {
+  const panel: CustomTag = {
+    transform: (_call, ctx) => [ctx.build.element("mx-marker", [], [])],
+  };
+
+  async function renderWithCustomTag(body: string): Promise<string> {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-local-binding-"));
+    try {
+      writeFileSync(
+        join(dir, "local-panel.ts"),
+        'export default function LocalPanel(): string { return "<span>local-panel</span>"; }\n',
+      );
+      const path = join(dir, "entry.mx");
+      const code = compile(src(body), path, {
+        customTags: { Panel: panel },
+      }).code.replaceAll(
+        'from "@mxlang/html"',
+        `from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))}`,
+      );
+      writeFileSync(path.replace(/\.mx$/, ".ts"), code);
+      const module = (await import(
+        `${pathToFileURL(path.replace(/\.mx$/, ".ts")).href}?t=${Date.now()}`
+      )) as { default: (value: unknown) => string };
+      return module.default({});
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("a `<const/Panel=…/>` binding renders the local component, not the registered custom tag", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<const/Panel=LocalPanel/>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span>");
+  });
+
+  it("a `<for|Panel|>` param renders the loop's own binding inside the loop, and the registered custom tag immediately outside it", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<for|Panel| of=[LocalPanel]>",
+        "<Panel/>",
+        "</for>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
+  });
+
+  it("a `<define/Box|Panel|>` param renders the define's own binding inside the body, and the registered custom tag immediately outside it", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<define/Box|Panel|>",
+        "<Panel/>",
+        "</define>",
+        "<Box(LocalPanel)/>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
+  });
+});
+
 /**
  * A tag template is a compilation unit (decision 95), so these compile the
  * *unit itself* through this host rather than only its caller — the half a
