@@ -737,14 +737,16 @@ lowers to an ordinary `try`/`catch`.
 
 ### Resolution precedence
 
-The **normative** order, as shipped (decision 93):
+The **normative** order, as shipped (decisions 93, 113):
 
 1. Host tag disposition (`declarations.tags[name]` — error or inert)
 2. Core structural tags: `import`, `static`, `export`, `for`, `const`,
    `define`, `return`, `else`, `else-if` — **never shadowable**
 3. `@`-prefixed names → attribute-tag error
 4. **Built-in custom tags (`try`)** — wins unconditionally
-5. **A file-local binding** (`<define>` or `import`), **gated on PascalCase**
+5. **A file-local binding**, **gated on PascalCase**: an `import`, a
+   `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag param —
+   each in effect only within its own lexical scope
 6. A registered custom tag
 7. A host claim (`claimsTag`)
 8. `declarations.isComponent`
@@ -758,11 +760,22 @@ component reference. An earlier fix checked local bindings with no casing gate
 and regressed every lowercase custom tag or host claim (e.g. `<style>`) that
 shared a name with an unrelated lowercase import in the same file.
 
-**Known gap, pre-existing:** only `import` and `<define>` populate the
-file-local sets. A component name bound by `<const/Panel=…/>`, or as a `<for>`
-tag param, is **not** in either set and still loses to a registered custom tag of
-the same name — measured. Extending the check to those binders is unscoped
-follow-up.
+**Decision 113: a `<const>` binding and a `<for>`/`<define>` tag param also
+shadow a registered custom tag of the same name, scoped exactly to where the
+binding is in effect** (decision 113, `custom-tags-local-bindings`). Measured
+against Marko 6.3.51's own translator (`normalizeTag`,
+`@marko/runtime-tags/dist/translator/index.js:5852-5860`): Marko rewrites a
+capitalized tag name to a local-variable reference whenever
+`tag.scope.getBinding(tagName)` finds a binding in scope — a single,
+unconditional check that treats `const`, `for`-params, and `define`-params
+identically, run before any taglib/custom-tag lookup, and gated on the same
+`TAG_NAME_IDENTIFIER_REG` (capitalized) rule. MX matches this: the check now
+also consults `ctx.tagVarShadowed`, the scope-tracking set already maintained
+by `shadowBindings`/`scopeBindings` around every `<const>`, `<for|p|>`, and
+`<define|p|>` body, so scoping is correct by construction — a name shadowed
+inside an `<if>` branch or a `<for>` body reverts to the registered custom tag
+immediately outside it. This closes the gap `custom-tags-import-precedence`
+(decision 93) left open.
 
 The HTML host's rule is stated by case only in the sense above: a tag matching an
 import, a `<define>`, or a taglib/`tags/` discovery is a component call; anything
