@@ -19,6 +19,7 @@ import {
   rewriteAccessorReads,
   TranslateError,
 } from "@mxlang/core";
+import { solidEventPropName } from "./event-names.ts";
 
 const STATEFUL_ERRORS: HostDeclarations["tags"] = {
   let: {
@@ -279,14 +280,19 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
         attr,
       );
     // Phase B of `dom-events` (decision 101): recompose Solid's prop from the
-    // DOM event name core resolved — `on` + the capitalized name
-    // (`click` → `onClick`, `dblclick` → `onDblclick`) — never the authored
-    // spelling, so `onDblClick` and `on-dblclick` emit byte-identically.
-    // Solid has no custom-event prop (its own types only declare the DOM
-    // names), so a name JSX cannot spell as one identifier — a custom DOM
-    // event such as `my-event` from `on-my-event` — is a positioned error
-    // naming the `ref` route, the same escape hatch Solid's own docs give
-    // for listener options.
+    // DOM event name core resolved, never the authored spelling, so
+    // `onDblClick` and `on-dblclick` emit byte-identically. `solidEventPropName`
+    // looks up `@solidjs/web`'s own declared spelling (`onDblClick`,
+    // `onKeyDown`, vendored in `event-names.ts`) rather than capitalizing
+    // just the first letter: Solid's runtime lowercases whatever follows
+    // `on` regardless of casing, so both spellings bind the same DOM event,
+    // but only the declared one satisfies `jsx.d.ts`'s exact prop-name keys
+    // (else TS2322, since e.g. `onDblclick` is not a key `HTMLAttributes`
+    // declares). Solid has no custom-event prop (its own types only declare
+    // the DOM names), so a name JSX cannot spell as one identifier — a
+    // custom DOM event such as `my-event` from `on-my-event` — is a
+    // positioned error naming the `ref` route, the same escape hatch Solid's
+    // own docs give for listener options.
     case "event": {
       if (!/^[A-Za-z0-9]+$/.test(attr.event)) {
         return fail(
@@ -294,7 +300,7 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
           attr,
         );
       }
-      const prop = `on${attr.event.charAt(0).toUpperCase()}${attr.event.slice(1)}`;
+      const prop = solidEventPropName(attr.event);
       return concatMapped(
         " ",
         mapped(prop, null),

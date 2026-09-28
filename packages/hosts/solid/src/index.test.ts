@@ -501,7 +501,11 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
   it("collapses onDblClick and on-dblclick byte-identically", () => {
     const a = compile(`<button onDblClick=f>x</button>`).code;
     const b = compile(`<button on-dblclick=f>x</button>`).code;
-    expect(a).toContain("onDblclick={f}");
+    // `@solidjs/web`'s own `jsx.d.ts` declares `onDblClick`, not
+    // `onDblclick` — Solid's runtime lowercases either spelling identically
+    // (`prop.slice(2).toLowerCase()`), but only the declared spelling
+    // satisfies the JSX types (see `event-names.ts`).
+    expect(a).toContain("onDblClick={f}");
     expect(a).toBe(b);
   });
 
