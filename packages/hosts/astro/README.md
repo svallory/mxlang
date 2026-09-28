@@ -100,14 +100,14 @@ rather than to MX:
 `import` — props, slots, and one MX component calling another.
 
 **Not supported, by design**: the stateful tags. `<let>`, `<effect>`,
-`<lifecycle>`, `<script>`, `client` blocks and `<id>` are **compile errors**
-naming the construct. This host compiles MX under `@mxlang/html`'s
-`strictPolicy`: it renders once, at build time, with no reactive runtime
-anywhere, so a construct that only means something with a runtime is a build
-error rather than markup that silently renders once and never updates
-(decision 71 — stateful tags mean whatever the host says). `<log>` and
-`<debug>` are the exception: `strictPolicy` inherits their inert disposition
-from the default policy unchanged, so they render no output but do not error.
+`<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>` and `<debug>` are
+**compile errors** naming the construct. This host compiles MX under
+`@mxlang/html`'s `strictPolicy`: it renders once, at build time, with no
+reactive runtime anywhere, so a construct that only means something with a
+runtime is a build error rather than markup that silently renders once and
+never updates (decision 71 — stateful tags mean whatever the host says;
+decision 111 adds `<log>`/`<debug>` as debug-only tooling rejected the same
+way, rather than the default policy's inert disposition).
 
 **`client:*` directives** on an MX component **fail the build**, naming the
 component:
