@@ -10,6 +10,8 @@ Both silent paths now call the same check before falling back to an open member.
 
 New tests: a 5-hop `extends` chain and a 5-hop intersection alias, each hiding an `AttrTag` behind the fifth hop, now report the positioned error instead of silently degrading; the matching 4-hop cases (within the cap) keep resolving and typing correctly, alongside the pre-existing 4-hop property-alias test.
 
+**Round 2 (found by review): `scanAttrs`'s nested `attrs:` config alias-following loop had the identical shape** — closing the class of bug together. `scanAttrs` follows an attribute tag's `attrs: Alias` config through the same `resolveNamedType`, also capped at `MAX_ALIAS_DEPTH`, and set `decl.nestedOpen = true` with no `namedTypeEventuallyContainsAttrTag` check when the chain could not resolve — including past the cap — so a nested `AttrTag` hidden inside a deep `attrs` alias degraded silently too. Fixed the same way: the resolution-failed branch now checks `namedTypeEventuallyContainsAttrTag` and reports the error (keyed by the attribute tag's own `propPath`, since the loop breaks before any individual nested member is reached) instead of silently opening. A genuinely missing alias (no such type at all) is unaffected and still opens with no error. New tests: a 5-hop `attrs:` alias hiding a nested `AttrTag` behind the fifth hop now errors; a matching 4-hop case keeps resolving; a genuinely-missing alias stays open with no error (new coverage — no prior test asserted `nestedOpen: true` at all).
+
 ### Fix: a type-only import no longer resolves a capitalized tag (decision 114/115)
 
 `importBindings(line)` (`core.ts`) previously returned every specifier of an

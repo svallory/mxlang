@@ -1646,9 +1646,10 @@ class InputAnalyzer {
       literal?.type === "TSTypeReference" &&
       literal.typeName.type === "Identifier"
     ) {
+      const literalFromPath = this.nodeFiles.get(literal) ?? this.path;
       const resolved = this.resolveNamedType(
         literal.typeName.name,
-        this.nodeFiles.get(literal) ?? this.path,
+        literalFromPath,
         seen,
         depth + 1,
       );
@@ -1659,10 +1660,30 @@ class InputAnalyzer {
           : aliasDecl?.type === "TSInterfaceDeclaration"
             ? { type: "TSTypeLiteral", members: aliasDecl.body.body }
             : undefined;
-      if (!aliasType) break;
+      if (!aliasType) {
+        // Resolution failed outright -- either the name genuinely does not
+        // exist (an ordinary open `attrs` config, as before), or a real
+        // chain behind it is deeper than `MAX_ALIAS_DEPTH` and hides a
+        // nested `AttrTag` a deeper reader would have found. Same rule as
+        // the property-alias and extends/intersection paths above: report
+        // it rather than silently opening the config.
+        if (
+          this.namedTypeEventuallyContainsAttrTag(
+            literal.typeName.name,
+            literalFromPath,
+            new Set(),
+          )
+        ) {
+          errors.set(propPath, {
+            message: "declare this attribute tag's config literally",
+            span: this.spanOf(literal),
+          });
+        }
+        decl.nestedOpen = true;
+        return;
+      }
       literal = aliasType;
       depth++;
-      if (depth > MAX_ALIAS_DEPTH) break;
     }
     if (literal?.type !== "TSTypeLiteral") {
       // `attrs` is not a closed literal (a mapped type, an unresolvable

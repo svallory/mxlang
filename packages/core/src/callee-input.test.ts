@@ -1442,6 +1442,99 @@ describe("readCalleeInput", () => {
     } satisfies CalleeInput);
   });
 
+  it("applies the attrs-config alias depth limit at four hops", () => {
+    const source = fixtureSource("attrs-alias-depth4.ts");
+    const badge: AttrTagDecl = {
+      cardinality: "optional",
+      as: "renderable",
+      hasAttrs: false,
+      hasParams: false,
+      nested: new Map(),
+      nestedOpen: false,
+      span: refSpan(source, 'AttrTag<{ as: "renderable" }>'),
+    };
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./attrs-alias-depth4"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("attrs-alias-depth4.ts"),
+      attrTags: new Map([
+        [
+          "tab",
+          {
+            cardinality: "optional",
+            as: "data",
+            hasAttrs: true,
+            hasParams: false,
+            nested: new Map([["badge", badge]]),
+            nestedOpen: false,
+            span: refSpan(source, "AttrTag<{ attrs: A1 }>"),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
+  it("reports a positioned error, not a silent open, when a 5-hop attrs-config alias hides a nested AttrTag beyond MAX_ALIAS_DEPTH", () => {
+    const source = fixtureSource("attrs-alias-depth5.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./attrs-alias-depth5"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "invalid",
+      path: fixture("attrs-alias-depth5.ts"),
+      errors: new Map([
+        [
+          "tab",
+          {
+            message: "declare this attribute tag's config literally",
+            // The unresolvable hop is `A4 = A5` -- the fifth
+            // `resolveNamedType` call inside `scanAttrs`, past
+            // `MAX_ALIAS_DEPTH` (4) -- not the `attrs: A1` reference itself:
+            // A1 (hop 1) resolves fine, and so do A1->A2, A2->A3, A3->A4.
+            span: refSpan(source, "A5", source.indexOf("type A4")),
+          },
+        ],
+      ]),
+    } satisfies CalleeInput);
+  });
+
+  it("marks an attrs config open, with no error, for a genuinely missing alias", () => {
+    const source = fixtureSource("attrs-alias-missing.ts");
+    expect(
+      readCalleeInput(
+        namedTarget("Card"),
+        context({ imports: new Map([["Card", "./attrs-alias-missing"]]) }),
+      ).input,
+    ).toEqual({
+      kind: "declared",
+      path: fixture("attrs-alias-missing.ts"),
+      attrTags: new Map([
+        [
+          "tab",
+          {
+            cardinality: "optional",
+            as: "data",
+            hasAttrs: true,
+            hasParams: false,
+            nested: new Map(),
+            nestedOpen: true,
+            span: refSpan(source, "AttrTag<{ attrs: MissingAttrs }>"),
+          },
+        ],
+      ]),
+      otherProps: new Set(),
+      open: false,
+    } satisfies CalleeInput);
+  });
+
   it("marks qualified and non-literal extends open", () => {
     for (const name of ["qualified-extends", "extends-nonliteral"]) {
       const source = fixtureSource(`${name}.ts`);
