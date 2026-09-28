@@ -160,6 +160,59 @@ Two facts worth knowing before touching it:
   Solid-only callback-prop channel for a plain function call the way a
   JSX component call has); it is otherwise still refused inside
   `<for>`/`<if>` (§7.5-8), unchanged from every other `Component` target.
+  **Three round-2 review fixes, worth knowing before touching any of this:**
+  - **`compileSolidUnit` must never see `hoistedDefines`/`defineBindings`
+    populated.** `collectReturnVars` takes an `allowHoist` parameter
+    (default `true`); `compileSolidUnit`'s own call passes `false`, which
+    keeps both `null` so `SolidEmitter.define`'s `fail()` branch still
+    fires. A tag *unit* is a whole file, not a region — nothing there
+    reads `hoistedDefines`, so without this gate a `<define>` compiled
+    clean but silently emitted a call to a function nothing declares (a
+    runtime `ReferenceError`, decision 110b's "positioned error, not
+    wrong code" violated silently). Sharing the module-scope collector
+    variables between both callers, with no per-caller gate, was the bug.
+  - **A gensym is unique only *within its own region*.** Two regions in
+    one file each declaring `<define/Row>` independently mint the
+    identical `$mx_DefineRow1` — a host compiling one region has no
+    visibility of another's choices. `packages/parser/src/index.ts`'s
+    `hoistRegionImports` now runs a collision pass across every region's
+    `HoistedDefine` entries after collecting them (paired with the
+    region range each came from, via `defineRange`), renaming every
+    binding but the first occurrence against a pool seeded with every
+    name the module already uses (`moduleBindingNames`) — both the
+    declaration text (`replaceBindingInDeclaration`, a literal
+    `function <name>(` replacement, escaped for regex metacharacters:
+    every hoisted binding starts with `$`, which is otherwise an
+    end-of-string anchor and silently prevents the match) and the
+    reference inside that region (`renameRegionReferences`, the same
+    function reused-import renaming already uses).
+  - **The capture-check safe-list reads `defineBindings`' *values*, not
+    its keys.** A call to a sibling define reaches `freeJsxNames` as the
+    *gensym'd* binding, not the author's name — `blockExpression` already
+    drove that reference through `#defineComponent`, which resolved it.
+    Checking `defineBindings.has(freeName)` against the author-name keys
+    therefore never matched, misreporting every such call as closing over
+    a region-local value; the check reads `new
+    Set(defineBindings.values())` instead.
+  - **A self-recursive `<define>`, or a define referencing a sibling not
+    yet declared, is not reachable through this fix's own machinery at
+    all — it's a separate, pre-existing, unrelated gap.** Core's
+    `lowerDefine` (`ctx.defines.set(name, params)`) registers a define's
+    name only *after* lowering its own body, so `<A>` referencing itself
+    or a later `<B>` never resolves as a `"define"`-kind `Component`
+    target in the first place. On `@mxlang/html` that reaches the
+    generic capitalized-tag guard and errors ("no matching import or
+    `<define>` in scope"); on Solid it does not, because
+    `solidDeclarations.isComponent` is a bare `/^[A-Z]/` test with no
+    resolvability check, so it silently lowers as a plain `"name"`-kind
+    `Component` and prints a JSX tag referencing a binding nothing
+    declares (args dropped). Confirmed pre-existing and unrelated to
+    `<define>`: the identical silent pass-through reproduces for *any*
+    unresolvable capitalized tag, define or not (`<TotallyUndefined/>`
+    alone). Fixing it needs a resolvability check in Solid's
+    `isComponent`/`rejectComponentTag`, a broader change than hoisting
+    `<define>` — filed as its own follow-up, not folded into decision
+    110b.
 
 Decision 72's subset rule removed four SolidMX constructs real Marko itself
 rejects (tag params on `<if>`, tag params and attribute tags on native

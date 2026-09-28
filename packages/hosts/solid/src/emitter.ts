@@ -472,8 +472,22 @@ function inLazyScope<T>(emit: () => T): T {
 /**
  * Runs `emit` while collecting the `/var` names its call sites declare, and
  * the `<define>`s it hoists to module scope.
+ *
+ * `allowHoist` (default `true`) gates the latter: a **region** compile
+ * (`compileSolidMx`) has a surrounding module for the parser bridge to
+ * place a hoisted `<define>` in, but a whole-file **unit** compile
+ * (`compileSolidUnit`) has no caller that reads `hoistedDefines` at all —
+ * passing `false` there keeps `hoistedDefines`/`defineBindings` `null`, so
+ * `SolidEmitter.define`'s existing guard still rejects `<define>` with a
+ * positioned error instead of hoisting into a list nothing consumes (which
+ * emitted a call to an undeclared function — a runtime `ReferenceError`,
+ * not a compile error; decision 110b's "positioned error, not wrong code"
+ * violated silently before this flag existed).
  */
-export function collectReturnVars(emit: () => string): {
+export function collectReturnVars(
+  emit: () => string,
+  allowHoist = true,
+): {
   code: string;
   vars: string[];
   needsEscapeImport: boolean;
@@ -488,8 +502,8 @@ export function collectReturnVars(emit: () => string): {
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
   escapeUse = collectedEscapeUse;
-  hoistedDefines = collectedDefines;
-  defineBindings = new Map();
+  hoistedDefines = allowHoist ? collectedDefines : null;
+  defineBindings = allowHoist ? new Map() : null;
   try {
     return {
       code: emit(),
@@ -1846,10 +1860,18 @@ export class SolidEmitter implements Emitter<string> {
 
     const bodyCode = inLazyScope(() => blockExpression(node.children)).code;
     const bound = new Set(node.params);
+    // A call to a sibling define reaches this text as the *gensym'd*
+    // binding, not the author's name: `blockExpression` drove the child
+    // `<B/>` reference through `#defineComponent`, which already resolved
+    // it via `defineBindings`. So the safe-names check here reads
+    // `defineBindings`'s *values*, not its keys.
+    const hoistedNames = defineBindings
+      ? new Set(defineBindings.values())
+      : null;
     const captured = freeJsxNames(bodyCode).filter(
       (freeName) =>
         !bound.has(freeName) &&
-        !defineBindings?.has(freeName) &&
+        !hoistedNames?.has(freeName) &&
         !KNOWN_GLOBALS.has(freeName) &&
         // The escape helper's binding is itself hoisted to module scope
         // (`hoistedImports`, seeded by `needsEscapeImport`) whenever a
@@ -1866,6 +1888,15 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
 
+    // A define can never reference a sibling declared later, or itself
+    // (`ctx.defines.set` in core's `lowerDefine` runs only *after* lowering
+    // the define's own body — verified against `@mxlang/html`, which
+    // rejects the identical source with the same "no matching import or
+    // `<define>` in scope" error at lowering time, before any host-specific
+    // code runs). So every name `freeJsxNames` can find bound in
+    // `defineBindings` above was necessarily minted by an *earlier* call to
+    // this method in the same region, and minting this one fresh now can
+    // never collide with one still to come.
     const binding = generatedDefineBinding(
       node.name,
       new Set(defineBindings.values()),

@@ -143,12 +143,15 @@ function hoistRegionImports(file: File, filename: string): void {
 
   const hoisted: HoistedImport[] = [];
   // A `<define>` inside a region hoists to module scope the same way
-  // (decision 110b): the emitter mints a gensym'd function declaration, this
-  // pass writes it into the module, and the region's own reference already
-  // uses that gensym'd name (the host renamed it before returning `code`),
-  // so no rename pass is needed here the way `renames` handles a reused
-  // import.
+  // (decision 110b): the emitter mints a gensym'd function declaration. That
+  // gensym is only unique *within its own region* — a host has no
+  // visibility of another region's choices — so two regions in one file
+  // each declaring `<define/Row>` can independently mint the identical
+  // binding. `defineRange` pairs each entry with the region it came from,
+  // so the collision pass below can rename both the declaration and its
+  // in-region reference together.
   const hoistedDefineNodes: HoistedDefine[] = [];
+  const defineRange = new Map<HoistedDefine, [number, number]>();
   // A `/var` inside a region binds a value the region's own JSX has no
   // statement position for, so the module declares the `let` and the
   // region's callback prop assigns it (design §2.4). Same channel as the
@@ -180,8 +183,10 @@ function hoistRegionImports(file: File, filename: string): void {
     )?.mx;
     if (mx?.range) regions.push(mx.range);
     for (const entry of mx?.hoistedImports ?? []) hoisted.push(entry);
-    for (const entry of mx?.hoistedDefines ?? [])
+    for (const entry of mx?.hoistedDefines ?? []) {
       hoistedDefineNodes.push(entry);
+      if (mx?.range) defineRange.set(entry, mx.range);
+    }
     for (const name of mx?.returnVars ?? []) returnVars.add(name);
     for (const key of Object.keys(record)) {
       if (key === "loc") continue;
@@ -248,11 +253,40 @@ function hoistRegionImports(file: File, filename: string): void {
 
   if (hoistedDefineNodes.length === 0) return;
 
+  // A hoisted define's gensym is only unique *within its own region* — a
+  // host has no visibility of another region's choices — so two regions in
+  // one file each declaring `<define/Row>` can independently mint the
+  // identical binding (`$mx_DefineRow1`), which would otherwise splice two
+  // functions of the same name into one module scope (a `SyntaxError`,
+  // duplicate lexical/function binding). Rename every collision but the
+  // first occurrence, against a pool seeded with every binding this module
+  // already uses (so a renamed define also can't collide with an authored
+  // name or an already-placed hoisted import).
+  const takenBindings = new Set<string>();
+  for (const entry of hoisted) takenBindings.add(entry.binding);
+  for (const name of moduleBindingNames(program.body)) {
+    takenBindings.add(name);
+  }
+  for (const entry of hoistedDefineNodes) {
+    if (!takenBindings.has(entry.binding)) {
+      takenBindings.add(entry.binding);
+      continue;
+    }
+    const range = defineRange.get(entry);
+    const fresh = freshDefineBinding(entry.binding, takenBindings);
+    takenBindings.add(fresh);
+    entry.code = replaceBindingInDeclaration(entry.code, entry.binding, fresh);
+    if (range) {
+      renameRegionReferences(program.body, new Map([[entry.binding, fresh]]), [
+        range,
+      ]);
+    }
+    entry.binding = fresh;
+  }
+
   // Placed after the module's import block (including any import this pass
   // just spliced in above, so a define calling a discovered tag closes over
-  // its binding correctly). No reuse/rename pass is needed here: unlike an
-  // import, nothing outside the region could already declare this binding —
-  // the gensym is fresh by construction (`generatedDefineBinding`).
+  // its binding correctly).
   const { lastImportIndex: defineInsertIndex } = authoredImportsOf(
     program.body,
   );
@@ -395,6 +429,29 @@ function namesIn(node: unknown, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * Every name the module's own top-level statements bind — imports,
+ * `const`/`let`/`var`, `function`/`class` declarations — used as the
+ * collision pool for renaming a duplicate hoisted `<define>` binding.
+ *
+ * Deliberately over-collects: it walks each top-level statement with
+ * `namesIn` (which also picks up expression-position identifiers wherever a
+ * binding-key subtree contains one), not only true declaration positions.
+ * That is the same "over-reporting costs a wasted gensym slot, never a
+ * silent collision" tradeoff `shadowedNames` already makes for an adjacent
+ * problem in this file.
+ */
+function moduleBindingNames(body: Array<Record<string, unknown>>): string[] {
+  const names: string[] = [];
+  for (const statement of body) {
+    for (const key of Object.keys(statement)) {
+      if (key === "loc" || !BINDING_KEYS.has(key)) continue;
+      namesIn(statement[key], names);
+    }
+  }
+  return names;
+}
+
 /** Node keys whose `Identifier` child is a name being *introduced*, not read. */
 const BINDING_KEYS = new Set([
   "id",
@@ -427,6 +484,47 @@ const BINDING_KEYS = new Set([
  * its tag reference (`<$mx_Icon1 …/>`) is the former, and that is the shape
  * this rename exists for.
  */
+/** Mints `<binding>_2`, `<binding>_3`, ... until one is not in `taken`. */
+function freshDefineBinding(
+  binding: string,
+  taken: ReadonlySet<string>,
+): string {
+  let n = 2;
+  let candidate = `${binding}_${n}`;
+  while (taken.has(candidate)) candidate = `${binding}_${++n}`;
+  return candidate;
+}
+
+/**
+ * Renames a hoisted `<define>`'s own function-declaration text.
+ *
+ * The binding appears exactly once in `code` — `function <name>(...) {
+ * ... }`, the shape every `HoistedDefine.code` is generated with
+ * (`@mxlang/solid`'s `SolidEmitter.define`) — so a literal, whole-word
+ * replacement is exact rather than a heuristic: the function body can only
+ * reference *other* names (its own params, another define's binding,
+ * module imports), never its own, since nothing in JS syntax lets a
+ * function body use its own not-yet-bound declaration name as anything but
+ * a self-recursive call, which is spelled identically either way.
+ */
+function replaceBindingInDeclaration(
+  code: string,
+  binding: string,
+  replacement: string,
+): string {
+  // Every hoisted binding is `$mx_...` — `$` is a regex metacharacter
+  // (end-of-string anchor) and would otherwise silently prevent the match
+  // from ever firing, leaving the declaration's own name untouched while
+  // its call-site reference was renamed (measured: two colliding
+  // `$mx_DefineRow1` declarations stayed identically named, only the
+  // second region's reference moved to `$mx_DefineRow1_2`).
+  const escaped = binding.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return code.replace(
+    new RegExp(`\\bfunction ${escaped}\\(`),
+    `function ${replacement}(`,
+  );
+}
+
 function renameRegionReferences(
   root: unknown,
   renames: Map<string, string>,

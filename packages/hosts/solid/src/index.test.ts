@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type CustomTag, readCalleeInput } from "@mxlang/core";
+import { parse as parseMxFile } from "@mxlang/parser";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
@@ -709,6 +710,90 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     // rather than silently emitting a reference to an undeclared name.
     expectError(`<define/Row>\${someRegionLocal}</define><Row/>`, "close over");
   });
+
+  it("supports a <define> calling another top-level <define> declared earlier in source", () => {
+    // `ctx.defines` (core, `lowerDefine`) registers a define's name only
+    // *after* lowering its own body, so a reference to a sibling define is
+    // only ever resolvable when that sibling was declared **earlier** in
+    // source — confirmed against `@mxlang/html`: a forward reference is a
+    // pre-existing, core-wide "has no matching import or `<define>` in
+    // scope" error on every host, unrelated to this fix, so this test
+    // covers the reachable case only. What it pins for Solid specifically
+    // is that the reference resolves to the gensym'd binding at the
+    // hoisted call site, not the raw author name.
+    const result = compile(`<define/B>b</define><define/A><B/></define><A/>`);
+    expect(result.hoistedDefines).toHaveLength(2);
+    const [b, a] = result.hoistedDefines;
+    expect(a?.code).toContain(`{${b?.binding}()}`);
+  });
+
+  it("a self-recursive <define> is not this fix's own bug — it's a pre-existing, unrelated Solid gap", () => {
+    // `ctx.defines.set(name, params)` (core, `lowerDefine`) runs only
+    // *after* lowering a define's own body, so `A` isn't registered as a
+    // define while `A`'s own body is being lowered. On `@mxlang/html`
+    // that reaches the generic capitalized-tag guard and errors ("no
+    // matching import or `<define>` in scope"). On Solid it does not: this
+    // host's `isComponent` (`solidDeclarations.isComponent`) is a bare
+    // `/^[A-Z]/` test with no resolvability check, so *any* unresolvable
+    // capitalized tag — self-recursive define or not — silently lowers as
+    // a `Component` with a plain `"name"` target and prints a JSX tag
+    // referencing a binding nothing declares (`<A />`, args dropped).
+    // Confirmed pre-existing and unrelated to this change: the identical
+    // silent pass-through reproduces on a plain, non-define capitalized
+    // tag with no `<define>` involved at all (`<TotallyUndefined/>`).
+    // Filed as its own follow-up rather than folded into decision 110b's
+    // scope — fixing it means giving Solid's `isComponent` (or a
+    // `rejectComponentTag` hook) the same resolvability check html's has,
+    // a broader change than hoisting `<define>`.
+    const result = compileSolidMx(
+      `<define/A|n|><if=(n > 0)><A(n - 1)/></if></define><A(3)/>`,
+      { filename: "/fixtures/page.solid.mx" },
+    );
+    // The top-level `<A(3)/>` call, outside the define, resolves fine —
+    // `A` is registered in `ctx.defines` by the time *that* call site is
+    // lowered. It's the *inner* self-reference, inside the define's own
+    // body (where `A` is not yet registered), that silently becomes an
+    // unresolved literal JSX tag with its args dropped.
+    expect(result.code).toContain(`{${result.hoistedDefines[0]?.binding}(3)}`);
+    expect(result.hoistedDefines[0]?.code).toContain("<A />");
+  });
+
+  it("gensyms distinct bindings for two regions in one file that each declare the same <define> name", () => {
+    // Regression: `generatedDefineBinding`'s uniqueness check is scoped to
+    // one region's own `defineBindings`, freshly created per
+    // `compileSolidMx` call — two independent regions each declaring
+    // `<define/Row>` used to mint the identical `$mx_DefineRow1`, spliced
+    // as two functions of the same name into one module (a SyntaxError).
+    // Exercised through the real `parse()` pipeline, since the collision
+    // is only visible once both regions' hoisted defines reach the same
+    // module (the parser bridge, not `compileSolidMx` in isolation).
+    const source = [
+      "export function A() {",
+      "  return (<div><define/Row>a</define><Row/></div>);",
+      "}",
+      "export function B() {",
+      "  return (<div><define/Row>b</define><Row/></div>);",
+      "}",
+    ].join("\n");
+    const solidRegionCompile = (
+      input: Parameters<typeof compileSolidMx>[1] & { source: string },
+    ) => compileSolidMx(input.source, input);
+    const file = parseMxFile(source, "two-regions.solid.mx", {
+      // biome-ignore lint/suspicious/noExplicitAny: MxRegionCompile shape, avoiding a parser<->solid type cycle in a test
+      mxRegionCompile: solidRegionCompile as any,
+    });
+    const program = file.program as unknown as {
+      body: Array<{ type?: string }>;
+    };
+    const declared = program.body.filter(
+      (node) => node.type === "FunctionDeclaration",
+    ) as Array<{ id?: { name?: string } }>;
+    const names = declared.map((node) => node.id?.name).filter(Boolean);
+    // Two `$mx_DefineRowN` module-scope functions, under two distinct names.
+    const defineNames = names.filter((name) => name?.startsWith("$mx_Define"));
+    expect(defineNames).toHaveLength(2);
+    expect(new Set(defineNames).size).toBe(2);
+  });
 });
 
 describe("compileSolidUnit", () => {
@@ -745,6 +830,28 @@ describe("compileSolidUnit", () => {
       { filename: "/fixtures/typed.mx" },
     ).code;
     expect(code).not.toContain('import type { AttrTag } from "@mxlang/solid";');
+  });
+
+  it("still rejects <define> with a positioned error, not a silent hoist to nowhere", () => {
+    // A tag unit is a whole file, not a region spliced into someone else's
+    // module — `hoistedDefines` has no caller here to place it, and
+    // `compileSolidUnit` never reads it. Regression: hoisting used to be
+    // gated on the shared `hoistedDefines`/`defineBindings` module state
+    // alone, which `collectReturnVars` set for every caller including this
+    // one — so a `<define>` here compiled clean but emitted a call to a
+    // function nothing declares (a runtime ReferenceError, decision 110b's
+    // own "positioned error, not wrong code" violated silently).
+    let error: unknown;
+    try {
+      compileSolidUnit(`<define/Row>x</define><Row/>`, {
+        filename: "/fixtures/unit.mx",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect((error as Error | undefined)?.message).toContain(
+      "cannot declare a function inside a JSX expression",
+    );
   });
 
   it("strictly types params in an attribute-tag <for>", () => {
