@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { type CustomTag, clearScanCache } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import mx, { MX_SUFFIX } from "./index";
+import mx, { MX_SUFFIX, readTemplateSource } from "./index";
 
 const COUNTER = `import { createSignal } from "solid-js";
 
@@ -317,6 +317,32 @@ describe("mx()", () => {
       const load = loadOf(mx());
 
       expect(load.call({}, real)).toBeNull();
+    });
+  });
+
+  describe("readTemplateSource", () => {
+    it("returns the file's text via the default reader", () => {
+      const path = writeMx("Card.mx", "hi\n");
+      expect(readTemplateSource(path)).toBe("hi\n");
+    });
+
+    it("returns undefined, not a thrown error, when the injected reader fails", () => {
+      // The template a `TranslateError.file` names may have been deleted
+      // or become unreadable between the original compile's own read and
+      // this one — that failure must cost only the Vite overlay's frame,
+      // never replace the diagnostic with a raw ENOENT. Inject a reader
+      // instead of touching the real filesystem or the module's default
+      // `readFileSync`, since forcing an actual read failure at exactly
+      // this call site (and not the compile's own earlier read of the same
+      // file) can't be done through real files without racing a delete.
+      const throwingReader = () => {
+        throw Object.assign(new Error("ENOENT: no such file"), {
+          code: "ENOENT",
+        });
+      };
+      expect(
+        readTemplateSource("/nonexistent.mx", throwingReader),
+      ).toBeUndefined();
     });
   });
 

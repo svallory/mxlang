@@ -135,3 +135,24 @@ file's source (disk — no editor-buffer reader exists on this path, unlike the
 TS plugin's `readSource`) and builds `.id`/`.loc`/`.frame` from it instead of
 from the caller's `code`, so the dev-server overlay and a `vite build` failure
 point at the template, not at wherever the call happened to sit in the caller.
+
+**`readTemplateSource(file, read?)` guards that read (round 3/4).** The
+named file may no longer exist, or be unreadable, between the compile's own
+read and this one — a failure here must not replace the real diagnostic
+with a raw ENOENT, so the read is wrapped and returns `undefined` on
+failure (costing only `.frame`, never the message/`.id`/`.loc`). It takes
+an injectable `read` (default `readFileSync`) specifically so a test can
+exercise that failure path by passing a reader that throws, rather than
+racing a real file deletion against the compile's own earlier read of the
+same file — an early version tried to distinguish the two reads through
+`Error().stack` (`"at compileMarko "` as the anchor frame), which is
+V8-stack-format-specific and breaks under a different engine's stack
+grammar or a rename; see `bun-jsc-error-line-column` in the space's memory
+for the same class of engine-format fragility. `@mxlang/astro`'s
+`vite-templates.ts` mirrors this helper rather than importing it (the same
+pattern it already uses for `codeFrame`), even though it could import
+`@mxlang/vite-plugin` (it already depends on that package for its `mx()`
+integration) — kept as a mirror since the two call sites' surrounding error
+shapes (`TranslateError` vs. `AstroTemplateError`) differ enough that
+sharing would need a third parameter or a generic, for one four-line
+function.

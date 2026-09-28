@@ -112,6 +112,35 @@ export function codeFrame(
 }
 
 /**
+ * Reads a tag template's current source so an `AstroTemplateError` raised
+ * inside it (spec §2's third position rule) can build its Vite overlay
+ * frame from the *template's* own text, not the `.amx` caller's.
+ *
+ * The named file may no longer exist, or be unreadable, between the
+ * original compile's own read and this one — a failure here must not
+ * replace the real diagnostic with a raw ENOENT, so it only ever costs the
+ * frame, never the message, `id` or position: `undefined` on failure, never
+ * a thrown error.
+ *
+ * `read` is injected (defaults to `node:fs`'s `readFileSync`) so a test can
+ * exercise the failure path directly, without reaching for stack
+ * introspection or a real filesystem race. Mirrors
+ * `@mxlang/vite-plugin`'s copy (`src/index.ts`) rather than importing it,
+ * the same way this file already mirrors that package's `codeFrame` above.
+ */
+export function readTemplateSource(
+  file: string,
+  read: (path: string, encoding: "utf8") => string = (path, encoding) =>
+    readFileSync(path, encoding),
+): string | undefined {
+  try {
+    return read(file, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Lowers `.amx` files to Astro template syntax, ahead of Astro's own
  * plugin.
  *
@@ -215,20 +244,9 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
         // would be measured against `source` (the `.amx` text) while
         // actually pointing somewhere in the template.
         const errorFile = error.file ?? real;
-        // The named file may no longer exist or be unreadable (round 3) —
-        // a read failure here must not replace the real diagnostic with a
-        // raw ENOENT, so it only ever costs the frame, never the message,
-        // `id` or position.
-        let errorSource: string | undefined;
-        if (error.file) {
-          try {
-            errorSource = readFileSync(error.file, "utf8");
-          } catch {
-            errorSource = undefined;
-          }
-        } else {
-          errorSource = source;
-        }
+        const errorSource = error.file
+          ? readTemplateSource(error.file)
+          : source;
         const wrapped = error as AstroTemplateError & {
           id?: string;
           frame?: string;
