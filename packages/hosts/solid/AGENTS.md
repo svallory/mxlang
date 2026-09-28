@@ -18,8 +18,40 @@ text instead of a string or Astro template. `packages/hosts/solid/README.md`
 carries the full lowering table (IR kind to Solid JSX), the error list, and
 the `.solid.mx` bridge paragraph; the summary here is the package-map entry.
 
-Two facts worth knowing before touching it:
+Three facts worth knowing before touching it:
 
+- **An unresolved capitalized tag is Marko's own compile error (decision
+  114), and `isComponent` is where that's decided.** `solidDeclarations`
+  (`emitter.ts`) declares `isComponent(name, ctx) => (ctx.imports?.has(name)
+  ?? false) || SOLID_BUILTIN_TAG_NAMES.has(name)` — genuine resolvability,
+  not the bare `/^[A-Z]/` test it used to be. Everything else capitalized
+  reaches core's own unresolved-tag guard, which calls the new
+  `rejectUnknownTag` hook here for Marko's exact wording (`` Unable to find
+  entry point for custom tag `<Name>`. ``, verified against `@marko/compiler`
+  5.42.5 / `marko@6.3.51`). Two routes feed `ctx.imports` beyond the file-local
+  bindings core's own precedence order already checks first (imports,
+  `<define>`, `<const>`, tag params — none of those ever reach `isComponent`
+  at all): `compileSolidMx`'s `moduleBindings` option (every value the
+  *surrounding* TypeScript module binds at its top level — an import or a
+  top-level `const`/`function`/`class`, type-only excluded — computed by
+  `@mxlang/parser`'s `programBindings`/`sourceBindings` from a
+  declaration-only pre-parse with regions nulled, and passed unfiltered by
+  local shadowing, since Marko's own rule is that *any* in-scope binding
+  resolves a capitalized tag as a reference to it, shadowed or not); and
+  `SOLID_BUILTIN_TAGS` (`@mxlang/parser`, shared with
+  `@mxlang/typescript-plugin`'s `appendSolidBuiltinImport`) — `Show`, `For`,
+  `Switch`, `Match`, `Repeat`, `Errored`, `Loading`, `Dynamic`, which
+  `@solidjs/vite-plugin`'s own compiler stage auto-imports and this compiler
+  never runs through. Neither concept has a Marko equivalent to measure
+  against (Marko has no host-native-JSX-passthrough and no
+  spliced-into-someone-else's-module construct); both came from an operator
+  ruling (2026-09-28) rather than a Marko fact. **Whole-file `.mx` resolved to
+  Solid (`compileSolidMx` called directly, not through a `.solid.mx`
+  region) gets no `moduleBindings` at all and cannot use an authored
+  `import`** — `compileSolidMx` rejects any module-level statement, region or
+  not, as "module-level MX statements cannot appear inside a `.solid.mx`
+  expression"; a registered custom tag is the only resolution route
+  available there for an otherwise-unresolvable name.
 - **It is an `Emitter<string>`, same shape as `@mxlang/astro`'s
   `.amx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or
@@ -211,24 +243,23 @@ Two facts worth knowing before touching it:
     a region-local value; the check reads `new
     Set(defineBindings.values())` instead.
   - **A self-recursive `<define>`, or a define referencing a sibling not
-    yet declared, is not reachable through this fix's own machinery at
-    all — it's a separate, pre-existing, unrelated gap.** Core's
-    `lowerDefine` (`ctx.defines.set(name, params)`) registers a define's
-    name only *after* lowering its own body, so `<A>` referencing itself
-    or a later `<B>` never resolves as a `"define"`-kind `Component`
-    target in the first place. On `@mxlang/html` that reaches the
-    generic capitalized-tag guard and errors ("no matching import or
-    `<define>` in scope"); on Solid it does not, because
-    `solidDeclarations.isComponent` is a bare `/^[A-Z]/` test with no
-    resolvability check, so it silently lowers as a plain `"name"`-kind
-    `Component` and prints a JSX tag referencing a binding nothing
-    declares (args dropped). Confirmed pre-existing and unrelated to
-    `<define>`: the identical silent pass-through reproduces for *any*
-    unresolvable capitalized tag, define or not (`<TotallyUndefined/>`
-    alone). Fixing it needs a resolvability check in Solid's
-    `isComponent`/`rejectComponentTag`, a broader change than hoisting
-    `<define>` — filed as its own follow-up, not folded into decision
-    110b.
+    yet declared, was a separate, pre-existing gap — now fixed by decision
+    114, not by this fix.** Core's `lowerDefine` (`ctx.defines.set(name,
+    params)`) registers a define's name only *after* lowering its own body,
+    so `<A>` referencing itself or a later `<B>` never resolves as a
+    `"define"`-kind `Component` target in the first place. On
+    `@mxlang/html` that already reached the generic capitalized-tag guard
+    and errored ("no matching import or `<define>` in scope"); on Solid it
+    used to silently lower as a plain `"name"`-kind `Component` and print a
+    JSX tag referencing a binding nothing declares (args dropped), because
+    `solidDeclarations.isComponent` was a bare `/^[A-Z]/` test with no
+    resolvability check — the identical silent pass-through reproduced for
+    *any* unresolvable capitalized tag, define or not. Decision 114
+    tightened `isComponent` to genuine resolvability (an in-scope module
+    value, a Solid JSX built-in, or nothing) as its own, separate fix; this
+    self-recursive case now reaches Marko's own error
+    (`` Unable to find entry point for custom tag `<A>`. ``) as a side
+    effect, not something `<define>` hoisting itself changed.
 
 Decision 72's subset rule removed four SolidMX constructs real Marko itself
 rejects (tag params on `<if>`, tag params and attribute tags on native
