@@ -707,9 +707,13 @@ export function sliceLoc(ctx: Ctx, loc: Node): string {
  * namespace, and every named import, aliased or not. Includes a type-only
  * binding (a whole `import type` or an inline `{ type X }`): a caller
  * deciding "is this exact name already imported at all, value or type"
- * (`needsAttrTagImport`'s `ctx.imports.has("AttrTag")`) needs that, and
- * `importTypeOnlyBindings` below exists precisely to let a caller that
- * instead needs *only the value bindings* (tag-name resolution) subtract it.
+ * (`needsAttrTagImport`'s `ctx.importedNames.has("AttrTag")`,
+ * `exportNameFor`'s collision check) needs that. `importTypeOnlyBindings`
+ * below identifies the type-only subset of these same names;
+ * `lowerStatement` adds every one of `importBindings`'s names to
+ * `ctx.importedNames` but only the non-type-only ones to `ctx.imports`,
+ * which is what every host's own `isComponent` (and this file's own
+ * file-local-binding check) consults for tag-name resolution.
  *
  * Parsed rather than regex-scraped: a tag name is only a component call when it
  * names one of these bindings, so an incomplete extraction here silently
@@ -737,12 +741,13 @@ export function importBindings(line: string): string[] {
  * A tag name resolves to a component only through a *value* binding
  * (decision 114/115) — Marko's own rule, since a type is erased before the
  * module runs and a tag referencing one would be a `ReferenceError` at
- * render time, not a component call. `lowerStatement` still adds every name
- * `importBindings` returns to `ctx.imports` (unchanged, since other readers
- * of that set — `needsAttrTagImport`'s "is `AttrTag` already imported"
- * check chief among them — correctly want type-only counted as imported);
- * tag-resolution's own two `ctx.imports.has(name)` checks additionally
- * exclude this set. Mirrors `@mxlang/parser`'s `programBindings`, which
+ * render time, not a component call. `lowerStatement` uses this to split
+ * `importBindings`'s names between `ctx.importedNames` (every name,
+ * unfiltered — what `needsAttrTagImport`'s "is `AttrTag` already imported"
+ * check and `exportNameFor`'s collision check correctly want) and
+ * `ctx.imports` (value bindings only — what every host's own `isComponent`,
+ * and this file's own file-local-binding check, correctly want for
+ * tag-name resolution). Mirrors `@mxlang/parser`'s `programBindings`, which
  * excludes the same two shapes outright for `.solid.mx` region resolution
  * (a region has no `needsAttrTagImport`-style second consumer to preserve);
  * duplicated rather than shared because core may not depend on
