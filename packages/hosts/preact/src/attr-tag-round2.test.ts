@@ -569,4 +569,18 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
       expect(html).toBe("<p>L:H:<b>B</b></p>");
     },
   );
+
+  it.each(hosts)(
+    "%s: a `<define>` call carries its attribute tag through instead of dropping it",
+    async (host) => {
+      // `<define>` has no declared `Input`, so decision 108's untyped-callee
+      // fallback applies: `<@head>` carries no attributes, so `head` arrives
+      // renderable (the body itself), read directly with `<${head}/>`.
+      const html = await renderFixture(host, {
+        "main.mx":
+          '<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card title="a"><@head>H</@head></Card>',
+      });
+      expect(html).toBe("<div>aH</div>");
+    },
+  );
 });

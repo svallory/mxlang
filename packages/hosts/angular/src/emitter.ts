@@ -1032,6 +1032,12 @@ class AngularEmitter implements Emitter<string> {
     node: Extract<IrNode, { kind: "Component" }>,
     target: Extract<ComponentTarget, { kind: "define" }>,
   ): void {
+    if (node.attrTagProps.length > 0) {
+      fail(
+        `attribute tags on \`<${target.name}>\` aren't supported by @mxlang/angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${target.name}(...)/>\` instead`,
+        node,
+      );
+    }
     if (node.args.length !== target.params.length) {
       fail(
         `\`<${target.name}>\` expects ${target.params.length} argument(s), got ${node.args.length}`,

@@ -55,4 +55,17 @@ describe("Define", () => {
     );
     assertAngularParses(out);
   });
+
+  it("rejects an attribute tag on a `<define>` call instead of silently dropping it", () => {
+    // `ngTemplateOutletContext` is a positional argument object, not content
+    // projection, so an attribute tag has nowhere to go — a positioned error
+    // instead of the S8 silent-drop class.
+    expect(() =>
+      emit(
+        '<define/Card|title, head|>${title}</define><Card title="a"><@head>H</@head></Card>',
+      ),
+    ).toThrow(
+      /attribute tags on `<Card>` aren't supported by @mxlang\/angular/,
+    );
+  });
 });

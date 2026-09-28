@@ -1211,6 +1211,12 @@ export class PreactEmitter implements Emitter<string> {
             : attr.value.code,
       );
     }
+    // A `<define>` has no exported binding to type an attribute tag's value
+    // against (`owner` stays `undefined`, same as a dynamic target); its
+    // params are ordinary local shadows, not a declared `Input`.
+    for (const prop of node.attrTagProps) {
+      named.set(prop.name, this.#attributeTagProp(prop).code);
+    }
     return node.target.params
       .map((param) => named.get(param) ?? "undefined")
       .join(", ");
