@@ -284,3 +284,83 @@ describe("event name plain-recomposition spellings", () => {
     );
   });
 });
+
+/**
+ * Decision 116: a capitalized tag bound to a value import that is not a
+ * `.marko`/`.mx` default import lowers as a dynamic tag — the routing
+ * itself, exercised with an ordinary `import { X } from "./target.ts"` and
+ * an ordinary `<X>`/`<X/>` call, compiled and rendered for real through
+ * `hono/jsx`.
+ */
+describe("decision 116: value import used as a tag (hono)", () => {
+  async function renderImportedTag(
+    entrySource: string,
+    targetSource: string,
+  ): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname, basename } = await import("node:path");
+    const scratch = mkdtempSync(join(tmpdir(), "mx-hono-decision116-"));
+    try {
+      // `hono/package.json` is not in the package's `exports` map, and Node
+      // (unlike Bun) enforces that for `require.resolve` — resolve the bare
+      // `hono` specifier instead and walk up from its entry file to the
+      // `node_modules` directory that contains the `hono` package dir.
+      let dir = dirname(require.resolve("hono"));
+      while (basename(dir) !== "hono") dir = dirname(dir);
+      const repoNodeModules = dirname(dir);
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "hono/jsx" },
+        }),
+      );
+      writeFileSync(join(scratch, "target.ts"), targetSource);
+      const entryPath = join(scratch, "entry.mx");
+      writeFileSync(entryPath, entrySource);
+      const { compileHonoFile } = await import("./index.ts");
+      const code = compileHonoFile(entryPath).code;
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: Record<string, unknown>) => unknown;
+      };
+      const element = jsx(mod.default, {});
+      const html = element.toString();
+      return typeof html === "string" ? html : await html;
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("a string value import renders as a real element", async () => {
+    const html = await renderImportedTag(
+      'import { Tag } from "./target.ts"\n<Tag name="1">body</Tag>\n<Tag/>',
+      'export const Tag = "div";',
+    );
+    expect(html).toBe('<div name="1">body</div><div></div>');
+  });
+
+  it("undefined renders only the tag's body content (Marko parity)", async () => {
+    const html = await renderImportedTag(
+      'import { Missing } from "./target.ts"\n<Missing name="1">body</Missing>',
+      "export const Missing = undefined;",
+    );
+    expect(html).toBe("body");
+  });
+
+  it("null renders only the tag's body content (Marko parity)", async () => {
+    const html = await renderImportedTag(
+      'import { Nul } from "./target.ts"\n<Nul name="1">body</Nul>',
+      "export const Nul = null;",
+    );
+    expect(html).toBe("body");
+  });
+});
