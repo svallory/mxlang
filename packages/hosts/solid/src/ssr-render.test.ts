@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
-import { sourceBindings } from "@mxlang/parser";
+import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
@@ -42,6 +42,10 @@ function renderSolidMx(
     // declares (e.g. a local `function Row(input) {...}`) must be supplied
     // here the same way a real caller's surrounding module would be.
     moduleBindings: sourceBindings(setup).bindings,
+    // Local extension of decision 116: classified the same way a real
+    // `.solid.mx` compile classifies its surrounding module, through
+    // `@mxlang/parser`'s `unknownSourceBindings`.
+    unknownModuleBindings: unknownSourceBindings(setup),
   });
   const imports = hoistedImports.map((entry) => entry.code).join("\n");
   const jsxSource = `${imports}\nimport { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;
@@ -642,6 +646,58 @@ describe("Solid SSR render: dynamic tag", () => {
         "export const Nul = null;",
       );
       expect(html).toBe("<ul>body</ul>");
+    });
+  });
+
+  // Firstmate's extension of decision 116 (`notes/decisions-2026-09-10.md`):
+  // a non-import local (a module-scope `const`/`function`/`class`, or a tag
+  // param) whose value core cannot statically prove is a function/arrow/
+  // class also lowers through `<Dynamic>`. `renderApp`'s `setup` string is
+  // always module-scope, never an import, so it is the right vehicle for
+  // this — unlike decision 116's own import-scoped tests above, which need
+  // `renderAppWithImport`.
+  describe("local-value-as-tag-parity: non-import local used as a tag", () => {
+    it("a module-scope const string is unknown and renders as a real element", () => {
+      const html = renderApp('<Tag name="1">body</Tag>', 'const Tag = "div";');
+      expect(html).toMatch(/<div[^>]* name="1"[^>]*>body<\/div>/);
+    });
+
+    it("a module-scope arrow-function const stays a direct component call", () => {
+      const html = renderApp(
+        "<Comp n=1/>",
+        "const Comp = (props: { n: number }) => <em>{props.n}</em>;",
+      );
+      expect(html).toContain("<em");
+      expect(html).toContain("1");
+    });
+
+    it("a conditional string-or-component local is unknown and routes through Dynamic", () => {
+      const html = renderApp(
+        "<Tag/>",
+        [
+          "function A() { return <span>a</span>; }",
+          "function B() { return <span>b</span>; }",
+          "const useA = true;",
+          "const Tag = useA ? A : B;",
+        ].join("\n"),
+      );
+      expect(html).toContain("<span");
+      expect(html).toContain(">a<");
+    });
+
+    it("a module-scope const bound to a call result (unknown) routes through Dynamic", () => {
+      // A Solid *region* rejects `<const>` unconditionally — it is a JSX
+      // expression with no statement position, so `<const>` can never be
+      // emitted there regardless of decision 116 (a pre-existing,
+      // Solid-only limitation; see `SolidEmitter.constant`). The
+      // module-scope form exercises the identical classification: `Tag`'s
+      // value is a call result, "unknown" whichever binding site declares
+      // it.
+      const html = renderApp(
+        '<Tag name="1">body</Tag>',
+        'function make() { return "div"; }\nconst Tag = make();',
+      );
+      expect(html).toMatch(/<div[^>]* name="1"[^>]*>body<\/div>/);
     });
   });
 });

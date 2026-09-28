@@ -1322,3 +1322,32 @@ describe("decision 116: value import used as a tag (solid)", () => {
     expect(code).not.toContain("<Dynamic");
   });
 });
+
+describe("local-value-as-tag-parity: non-import local used as a tag (solid)", () => {
+  // Firstmate's extension of decision 116 (`notes/decisions-2026-09-10.md`):
+  // a non-import module-scope binding whose value is not statically a
+  // function/arrow/class is "unknown" and routes through `<Dynamic>` too.
+  // `unknownModuleBindings` is the classified subset `@mxlang/parser`'s
+  // `unknownProgramBindings`/`unknownSourceBindings` compute; these tests
+  // exercise the host-side wiring directly, the same way the decision-116
+  // tests above exercise `importDefaultFromMarkoOrMx`.
+  it("a module-scope binding classified unknown routes through Dynamic", () => {
+    const code = compileSolidMx("<Tag/>", {
+      filename: "fixture.solid.mx",
+      moduleBindings: new Set(["Tag"]),
+      unknownModuleBindings: new Set(["Tag"]),
+    }).code;
+    expect(code).toContain("<Dynamic");
+    expect(code).not.toContain("<Tag");
+  });
+
+  it("a module-scope binding absent from unknownModuleBindings stays a direct call", () => {
+    const code = compileSolidMx("<Layout/>", {
+      filename: "fixture.solid.mx",
+      moduleBindings: new Set(["Layout"]),
+      unknownModuleBindings: new Set(),
+    }).code;
+    expect(code).toContain("<Layout");
+    expect(code).not.toContain("<Dynamic");
+  });
+});

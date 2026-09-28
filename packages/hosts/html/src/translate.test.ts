@@ -1174,6 +1174,96 @@ describe("decision 116: value import used as a tag", () => {
   });
 });
 
+// The local extension of decision 116 (firstmate's ruling under decision 116
+// in `notes/decisions-2026-09-10.md`): a non-import PascalCase local
+// (`static`, module-scope declarations, `<const>`, a tag param) whose value
+// core cannot statically prove is a function/arrow/class also lowers as a
+// dynamic tag; a plain `function Foo(){}`/`class Foo{}`/arrow-valued
+// `static const`/`<const>` stays a direct call, unchanged.
+describe("local-value-as-tag-parity: non-import local used as a tag", () => {
+  it("a static const string is unknown and renders as a real element", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": 'static const Tag = "div";\n<Tag name="1">body</Tag>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe('<div name="1">body</div>');
+  });
+
+  it("a static arrow-function const stays a direct component call", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'static const Comp = (input: { name?: string }) => `<span>comp:${input.name ?? ""}</span>`;\n<Comp name="1">body</Comp>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<span>comp:1</span>");
+  });
+
+  it("a static function declaration stays a direct component call", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": [
+          "static function Comp(input: { name?: string }) {",
+          '  return `<span>comp:${input.name ?? ""}</span>`;',
+          "}",
+          '<Comp name="1">body</Comp>',
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<span>comp:1</span>");
+  });
+
+  it("a conditional string-or-component local is unknown and lowers as a dynamic tag", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": [
+          'static function A(input: { name?: string }) { return `<span>a:${input.name ?? ""}</span>`; }',
+          'static function B(input: { name?: string }) { return `<span>b:${input.name ?? ""}</span>`; }',
+          "static const useA = true;",
+          "static const Tag = useA ? A : B;",
+          '<Tag name="1">body</Tag>',
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<span>a:1</span>");
+  });
+
+  it("a <const> bound to a call result (unknown) lowers as a dynamic tag", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": [
+          'static function make() { return "div"; }',
+          "<const/Tag=make()/>",
+          '<Tag name="1">body</Tag>',
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe('<div name="1">body</div>');
+  });
+
+  it("a tag param is always unknown and lowers as a dynamic tag", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": [
+          'static const Tag = "div";',
+          "<define/Wrapper|Row|>",
+          "  <Row/>",
+          "</define>",
+          "<Wrapper(Tag)/>",
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div></div>");
+  });
+});
+
 describe("comments", () => {
   it("emits <html-comment> and strips a plain comment, as Marko does", () => {
     const body = "<html-comment>keep</html-comment>\n<!-- drop -->\n<p>x</p>";

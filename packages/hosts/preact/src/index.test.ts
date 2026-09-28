@@ -635,6 +635,110 @@ describe("decision 116: value import used as a tag (preact)", () => {
 });
 
 /**
+ * The local extension of decision 116 (firstmate's ruling under decision 116
+ * in `notes/decisions-2026-09-10.md`): a non-import PascalCase local
+ * (`static`, a `<const>`, a tag param) whose value core cannot statically
+ * prove is a function/arrow/class also lowers as a dynamic tag; a plain
+ * `function Foo(){}`/arrow-valued `static const`/`<const>` stays a direct
+ * call, unchanged.
+ */
+describe("local-value-as-tag-parity: non-import local used as a tag (preact)", () => {
+  async function renderLocalTag(entrySource: string): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-local116-"));
+    try {
+      const repoNodeModules = dirname(
+        dirname(require.resolve("preact/package.json")),
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      const code = compilePreactMx(entrySource, join(scratch, "entry.mx")).code;
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: FunctionComponent<Record<string, unknown>>;
+      };
+      return render(h(mod.default, {}));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("a static const string is unknown and renders as a real element", async () => {
+    const html = await renderLocalTag(
+      'static const Tag = "div";\n<Tag name="1">body</Tag>',
+    );
+    expect(html).toBe('<div name="1">body</div>');
+  });
+
+  it("a static arrow-function const stays a direct component call", async () => {
+    const html = await renderLocalTag(
+      "static const Comp = (props: { n: number }) => `<em>${props.n}</em>`;\n<Comp n=1/>",
+    );
+    expect(html).toContain("1");
+  });
+
+  it("a conditional string-or-component local is unknown and lowers as a dynamic tag", async () => {
+    // The chosen function is called and its return value used, matching the
+    // plain-function divergence measured for decision 116's own import case
+    // above — but a JSX host renders a returned *string* as escaped text
+    // (there is no raw-HTML-from-string channel without
+    // `dangerouslySetInnerHTML`), so the markup comes back escaped rather
+    // than parsed, unlike html's target.
+    const html = await renderLocalTag(
+      [
+        'static function A() { return "<span>a</span>"; }',
+        'static function B() { return "<span>b</span>"; }',
+        "static const useA = true;",
+        "static const Tag = useA ? A : B;",
+        "<Tag/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("&lt;span>a&lt;/span>");
+  });
+
+  it("a <const> bound to a call result (unknown) lowers as a dynamic tag", async () => {
+    const html = await renderLocalTag(
+      [
+        'static function make() { return "div"; }',
+        "<const/Tag=make()/>",
+        '<Tag name="1">body</Tag>',
+      ].join("\n"),
+    );
+    expect(html).toBe('<div name="1">body</div>');
+  });
+
+  it("a tag param is always unknown and lowers as a dynamic tag", async () => {
+    const html = await renderLocalTag(
+      [
+        'static const Tag = "div";',
+        "<define/Wrapper|Row|>",
+        "  <Row/>",
+        "</define>",
+        "<Wrapper(Tag)/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<div></div>");
+  });
+});
+
+/**
  * Attribute-tag rendered shape (decisions 106–107), executed through Preact
  * rather than asserted only as emitted source text.
  */

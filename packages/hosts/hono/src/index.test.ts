@@ -388,3 +388,103 @@ describe("decision 116: value import used as a tag (hono)", () => {
     expect(html).toBe("body");
   });
 });
+
+/**
+ * The local extension of decision 116 (firstmate's ruling under decision 116
+ * in `notes/decisions-2026-09-10.md`): a non-import PascalCase local
+ * (`static`, a `<const>`, a tag param) whose value core cannot statically
+ * prove is a function/arrow/class also lowers as a dynamic tag; a plain
+ * `function Foo(){}`/arrow-valued `static const`/`<const>` stays a direct
+ * call, unchanged.
+ */
+describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () => {
+  async function renderLocalTag(entrySource: string): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname, basename } = await import("node:path");
+    const scratch = mkdtempSync(join(tmpdir(), "mx-hono-local116-"));
+    try {
+      let dir = dirname(require.resolve("hono"));
+      while (basename(dir) !== "hono") dir = dirname(dir);
+      const repoNodeModules = dirname(dir);
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "hono/jsx" },
+        }),
+      );
+      const entryPath = join(scratch, "entry.mx");
+      writeFileSync(entryPath, entrySource);
+      const { compileHonoFile } = await import("./index.ts");
+      const code = compileHonoFile(entryPath).code;
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: Record<string, unknown>) => unknown;
+      };
+      const element = jsx(mod.default, {});
+      const html = element.toString();
+      return typeof html === "string" ? html : await html;
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("a static const string is unknown and renders as a real element", async () => {
+    const html = await renderLocalTag(
+      'static const Tag = "div";\n<Tag name="1">body</Tag>',
+    );
+    expect(html).toBe('<div name="1">body</div>');
+  });
+
+  it("a static arrow-function const stays a direct component call", async () => {
+    const html = await renderLocalTag(
+      "static const Comp = (props: { n: number }) => `<em>${props.n}</em>`;\n<Comp n=1/>",
+    );
+    expect(html).toContain("1");
+  });
+
+  it("a conditional string-or-component local is unknown and lowers as a dynamic tag", async () => {
+    const html = await renderLocalTag(
+      [
+        'static function A() { return "<span>a</span>"; }',
+        'static function B() { return "<span>b</span>"; }',
+        "static const useA = true;",
+        "static const Tag = useA ? A : B;",
+        "<Tag/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("&lt;span&gt;a&lt;/span&gt;");
+  });
+
+  it("a <const> bound to a call result (unknown) lowers as a dynamic tag", async () => {
+    const html = await renderLocalTag(
+      [
+        'static function make() { return "div"; }',
+        "<const/Tag=make()/>",
+        '<Tag name="1">body</Tag>',
+      ].join("\n"),
+    );
+    expect(html).toBe('<div name="1">body</div>');
+  });
+
+  it("a tag param is always unknown and lowers as a dynamic tag", async () => {
+    const html = await renderLocalTag(
+      [
+        'static const Tag = "div";',
+        "<define/Wrapper|Row|>",
+        "  <Row/>",
+        "</define>",
+        "<Wrapper(Tag)/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<div></div>");
+  });
+});
