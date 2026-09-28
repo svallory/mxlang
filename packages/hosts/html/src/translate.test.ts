@@ -462,6 +462,31 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("<i>0:S</i><i>1:I</i><i>3:3</i><i>4:4</i>");
   });
 
+  it("renders nothing for a nullish of=/in=, matching Marko, in content and attribute-tag loops", async () => {
+    const html = await renderModules(
+      {
+        "list.ts": [
+          "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
+          "export default function List(input: Input): string {",
+          '  return input.item.map((item) => `<i>${item.id}:${item.content?.()}</i>`).join("");',
+          "}",
+        ].join("\n"),
+        "entry.mx": [
+          'import List from "./list.ts"',
+          "<for|x| of=input.list><b>${x}</b></for>",
+          "<for|k, v| in=input.obj><b>${k}:${v}</b></for>",
+          "<List>",
+          "  <for|n| of=input.list><@item id=n>${n}</@item></for>",
+          "  <for|k| in=input.obj><@item id=k/></for>",
+          "</List>",
+        ].join("\n"),
+      },
+      "entry.mx",
+      { list: undefined, obj: null },
+    );
+    expect(html).toBe("");
+  });
+
   it("executes else-if, for-in, inclusive to, and exclusive until plans", async () => {
     const html = await renderModules(
       {

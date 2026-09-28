@@ -210,19 +210,19 @@ describe("<if>", () => {
 describe("<for>", () => {
   it("lowers `of=` to .map()", () => {
     expect(lower("<for|item| of=items><li>${item}</li></for>")).toBe(
-      "{[...items].map((item) => (<Fragment><li>{item}</li></Fragment>))}",
+      "{[...(items ?? [])].map((item) => (<Fragment><li>{item}</li></Fragment>))}",
     );
   });
 
   it("passes the index as the second param", () => {
     expect(lower("<for|item, i| of=items><li>${i}</li></for>")).toBe(
-      "{[...items].map((item, i) => (<Fragment><li>{i}</li></Fragment>))}",
+      "{[...(items ?? [])].map((item, i) => (<Fragment><li>{i}</li></Fragment>))}",
     );
   });
 
   it("lowers `in=` through Object.entries", () => {
     expect(lower("<for|k, v| in=obj><li>${k}</li></for>")).toBe(
-      "{Object.entries(obj).map(([k, v]) => (<Fragment><li>{k}</li></Fragment>))}",
+      "{Object.entries(obj ?? {}).map(([k, v]) => (<Fragment><li>{k}</li></Fragment>))}",
     );
   });
 

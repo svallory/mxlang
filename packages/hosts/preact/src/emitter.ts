@@ -895,7 +895,7 @@ export class PreactEmitter implements Emitter<string> {
     };
     if (source.kind === "of") {
       const params = `${first}, ${itemIndex}`;
-      return result(`[...${source.list.code}]`, params);
+      return result(`[...(${source.list.code} ?? [])]`, params);
     }
     if (source.kind === "in") {
       const value =
@@ -906,7 +906,7 @@ export class PreactEmitter implements Emitter<string> {
           `${body.code} ${source.object.code}`,
         );
       return result(
-        `Object.entries(${source.object.code})`,
+        `Object.entries(${source.object.code} ?? {})`,
         `[${first}, ${value}], ${itemIndex}`,
       );
     }
@@ -1288,7 +1288,7 @@ export class PreactEmitter implements Emitter<string> {
       const key = keyFrom(first);
       this.#out.push(
         concatMapped(
-          `{[...${source.list.code}].map((${params}) => <Fragment key={${key}}>`,
+          `{[...(${source.list.code} ?? [])].map((${params}) => <Fragment key={${key}}>`,
           body,
           "</Fragment>)}",
         ),
@@ -1308,7 +1308,7 @@ export class PreactEmitter implements Emitter<string> {
       const key = keyFrom(first);
       this.#out.push(
         concatMapped(
-          `{Object.entries(${source.object.code}).map(([${first}, ${value}]) => <Fragment key={${key}}>`,
+          `{Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <Fragment key={${key}}>`,
           body,
           "</Fragment>)}",
         ),

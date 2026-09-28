@@ -172,7 +172,7 @@ describe("Solid IR lowering", () => {
       "object loop",
       `<for|key, value| in=record><p>\${key}</p></for>`,
       [
-        "each={Object.entries(record)}",
+        "each={Object.entries(record ?? {})}",
         "keyed={e => e[0]}",
         // `keyed={fn}` means Solid hands the whole entry as one accessor, so
         // the pair cannot be destructured in the parameter list; each name
