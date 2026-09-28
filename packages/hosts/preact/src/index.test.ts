@@ -214,7 +214,7 @@ describe("<if> chains", () => {
 describe("<for> loops", () => {
   it("keys an `of` loop by the row itself when `by=` is absent", () => {
     expect(markup("<for|x| of=input.items><li>${x}</li></for>")).toBe(
-      "{[...input.items].map((x) => <Fragment key={x}><li>{x}</li></Fragment>)}",
+      "{[...(input.items ?? [])].map((x) => <Fragment key={x}><li>{x}</li></Fragment>)}",
     );
   });
 
@@ -252,7 +252,7 @@ describe("<for> loops", () => {
 
   it("keys an `in` loop by the property name", () => {
     expect(markup("<for|k, v| in=input.obj><p>${k}</p></for>")).toBe(
-      "{Object.entries(input.obj).map(([k, v]) => <Fragment key={k}><p>{k}</p></Fragment>)}",
+      "{Object.entries(input.obj ?? {}).map(([k, v]) => <Fragment key={k}><p>{k}</p></Fragment>)}",
     );
   });
 

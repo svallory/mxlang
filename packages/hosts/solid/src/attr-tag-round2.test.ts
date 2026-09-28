@@ -254,6 +254,26 @@ renderParamMixed: AttrTag<{ as: "renderable"; params: [value: string] }>;
     expect(runFixture(fixture, "dom")).toEqual([`${malicious}|${malicious}`]);
   });
 
+  it("renders nothing for a nullish of=/in=, matching Marko, in content and attribute-tag loops", () => {
+    const fixture: Fixture = {
+      callee: `export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }
+<div><for|it| of=input.item>[<\${it.content}/>]</for></div>`,
+      region:
+        "<Row><for|x| of=list><@item id=x>x</@item></for><for|k| in=obj><@item id=1>k</@item></for></Row>",
+      setup: "const list = undefined; const obj = null;",
+    };
+    expect(runFixture(fixture, "ssr")).toBe("<div></div>");
+    expect(
+      runFixture(
+        {
+          region:
+            "<div><for|x| of=undefined><b>x</b></for><for|k, v| in=null><b>kv</b></for></div>",
+        },
+        "ssr",
+      ),
+    ).toBe("<div></div>");
+  });
+
   it("applies dynamic tag arguments to parameterized content", () => {
     const fixture: Fixture = {
       callee: `export interface Input { value: AttrTag<{ params: [label: string] }> }

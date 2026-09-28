@@ -81,6 +81,34 @@ ${template}`;
   return container.renderToString(component);
 }
 
+async function renderPlain(name: string, template: string): Promise<string> {
+  const amxFile = join(dir, `${name}.amx`);
+  const lowered = lowerAstroMx(`---\n---\n${template}`, amxFile).code;
+  const result = await compiler.transform(lowered, {
+    filename: join(dir, `${name}.astro`),
+  });
+  expect(result.diagnostics ?? []).toEqual([]);
+
+  const moduleFile = join(dir, `${name}.mjs`);
+  writeFileSync(moduleFile, containerModule(result.code));
+  const component = (
+    (await import(
+      /* @vite-ignore */ `${pathToFileURL(moduleFile).href}?case=${name}`
+    )) as { default: Parameters<AstroContainer["renderToString"]>[0] }
+  ).default;
+  return container.renderToString(component);
+}
+
+describe("<for> with a nullish of=/in=", () => {
+  it("renders nothing, matching Marko, rather than throwing", async () => {
+    const html = await renderPlain(
+      "for-nullish",
+      "<for|x| of=undefined><b>${x}</b></for><for|k, v| in=null><b>${k}</b></for>",
+    );
+    expect(html).not.toContain("<b>");
+  });
+});
+
 describe("conditional Astro named slots", () => {
   it("renders only the taken simple branch", async () => {
     const html = await renderConditional(

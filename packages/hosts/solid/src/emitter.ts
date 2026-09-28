@@ -733,14 +733,14 @@ function attributeTagFor(
     );
   };
   if (source.kind === "of") {
-    return result(`[...${source.list.code}]`, `${first}, ${itemIndex}`);
+    return result(`[...(${source.list.code} ?? [])]`, `${first}, ${itemIndex}`);
   }
   if (source.kind === "in") {
     const value =
       second ??
       hygienicName("value", loop.params, `${body.code} ${source.object.code}`);
     return result(
-      `Object.entries(${source.object.code})`,
+      `Object.entries(${source.object.code} ?? {})`,
       `[${first}, ${value}], ${itemIndex}`,
     );
   }
@@ -1276,7 +1276,7 @@ export class SolidEmitter implements Emitter<string> {
       );
       this.#out.push(
         concatMapped(
-          `<For each={Object.entries(${node.source.object.code})} keyed={e => e[0]}>{(${entry}) => `,
+          `<For each={Object.entries(${node.source.object.code} ?? {})} keyed={e => e[0]}>{(${entry}) => `,
           inLazyScope(() => blockExpression(node.children)),
           "}</For>",
         ),

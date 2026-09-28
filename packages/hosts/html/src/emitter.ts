@@ -359,7 +359,7 @@ export function createEmitter(): StringEmitter {
         ? `for (const [${second}, ${first}] of [...${sourceName}].entries())`
         : `for (const ${first} of ${sourceName})`;
       return concatMapped(
-        `(() => { const ${result} = []; const ${sourceName} = ${source.list.code}; ${head} { ${result}.push(...(`,
+        `(() => { const ${result} = []; const ${sourceName} = ${source.list.code} ?? []; ${head} { ${result}.push(...(`,
         body,
         `)); } return ${result}; })()`,
       );
@@ -368,7 +368,7 @@ export function createEmitter(): StringEmitter {
     if (source.kind === "in") {
       const entry = second ? `[${first}, ${second}]` : `[${first}]`;
       return concatMapped(
-        `(() => { const ${result} = []; const ${sourceName} = ${source.object.code}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
+        `(() => { const ${result} = []; const ${sourceName} = ${source.object.code} ?? {}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
         body,
         `)); } return ${result}; })()`,
       );
@@ -798,14 +798,14 @@ export function createEmitter(): StringEmitter {
       const source = node.source;
 
       if (source.kind === "of") {
-        const list = bind(source.list.code);
+        const list = bind(`${source.list.code} ?? []`);
         if (second) {
           push(`for (const [${second}, ${first}] of [...${list}].entries()) {`);
         } else {
           push(`for (const ${first} of ${list}) {`);
         }
       } else if (source.kind === "in") {
-        const object = bind(source.object.code);
+        const object = bind(`${source.object.code} ?? {}`);
         const entry = second ? `[${first}, ${second}]` : `[${first}]`;
         push(`for (const ${entry} of Object.entries(${object})) {`);
       } else {
