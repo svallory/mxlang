@@ -149,3 +149,22 @@ property, so the default data declaration and `as: "renderable"` are two views
 of the same slot; no attribute data is invented. `@mxlang/astro` exports the
 matching `AttrTag<C>` and `.amx` inserts its type-only import when core sets
 `needsAttrTagImport`.
+
+**Fixed: `custom-tags-template-error-positions` (round 2).** A `TranslateError`
+raised while compiling a tag template (`tags/x.mx`) called from an `.amx`
+file carries `.file`, the template's own path (spec §2's third position
+rule) — and both conversion sites here dropped it. `lowerAstroMx`'s catch
+(`astro-template.ts`) converted every `TranslateError` to
+`new AstroTemplateError(message, line, column)` with no `file` field at
+all, so the information was lost one layer before it could reach Vite.
+`AstroTemplateError` now carries an optional `file`, filled from
+`error.file` at that same conversion. `vite-templates.ts`'s `load` catch
+then built its `.frame` from the **`.amx` file's own source** unconditionally
+— so a compile error raised inside a tag template was reported at build
+time against the `.amx` file's text at the template's line/column: a
+line/column that means something in a different file, read against the
+wrong one (the same "coincidence, not a mapping" failure class the
+TS-plugin/language-server fix was built to close, see
+`packages/tooling/typescript-plugin/AGENTS.md`). It now reads the named
+`.file`'s own source (disk) to build `.id`/`.loc`/`.frame` when one is set,
+falling back to the `.amx` source exactly as before when it is not.

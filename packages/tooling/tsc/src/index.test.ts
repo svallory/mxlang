@@ -228,12 +228,12 @@ describe("mx-tsc", () => {
       expect(result.output).toContain(
         "`<else>` without a preceding `<if>`\nfixtures/template-error-failing/src/page.mx(1,1)",
       );
-      // `page.mx` still gets a pointer diagnostic naming the template, so a
-      // broken template is not silently invisible when only the caller is
-      // open.
+      // `page.mx` still gets a pointer diagnostic naming the template *and*
+      // its exact position, so a broken template a build's overlay never
+      // opened is still findable from the caller's own diagnostic alone.
       expect(result.output).toMatch(/page\.mx\(1,1\): error TS80001/);
       expect(result.output).toContain("(in ");
-      expect(result.output).toContain("broken.mx)");
+      expect(result.output).toContain("tags/broken.mx:3:1)");
     },
     SPAWN_TIMEOUT_MS,
   );

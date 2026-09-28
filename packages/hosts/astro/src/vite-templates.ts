@@ -208,18 +208,28 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
         // position is the `.amx` source line rather than a position
         // inside text the author never wrote. `parseFragment` has already
         // shifted the position past the fence, so the line is the real one.
+        //
+        // `error.file` names a tag template (spec §2's third position rule)
+        // when the failure was raised inside one, not in this `.amx` file —
+        // build the frame from *that* file's own source, or the position
+        // would be measured against `source` (the `.amx` text) while
+        // actually pointing somewhere in the template.
+        const errorFile = error.file ?? real;
+        const errorSource = error.file
+          ? readFileSync(error.file, "utf8")
+          : source;
         const wrapped = error as AstroTemplateError & {
           id?: string;
           frame?: string;
           loc?: { file: string; line: number; column: number };
         };
-        wrapped.id = real;
+        wrapped.id = errorFile;
         wrapped.loc = {
-          file: real,
+          file: errorFile,
           line: error.line,
           column: error.column,
         };
-        wrapped.frame = codeFrame(source, error.line, error.column);
+        wrapped.frame = codeFrame(errorSource, error.line, error.column);
         throw wrapped;
       }
     },

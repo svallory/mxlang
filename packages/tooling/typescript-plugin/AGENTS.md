@@ -226,4 +226,27 @@ diagnostic; use it for anything about the generated code's types.
   their own `toSyntaxError`. `mx-tsc` needed no separate wiring: it already
   aggregates every language plugin's `getCompileDiagnostics()` with no
   filename filter, so a diagnostic keyed under the template's path is
-  reported under that path automatically.
+  reported under that path automatically. The same shape (a `TranslateError`
+  carrying `.file`) is separately handled in `@mxlang/vite-plugin`'s
+  `transform` catch and `@mxlang/astro`'s `AstroTemplateError`/
+  `vite-templates.ts` (that package's own `AGENTS.md`), for the dev-server
+  and build path rather than the editor.
+  **Known limitation: tsserver's pull model, not this package's diagnostic
+  routing.** `templateDiagnostic` is only ever *returned* from
+  `getCompileDiagnostics(templateFileName)` — it is up to tsserver to call
+  that with the template's own filename, which in practice only happens for
+  a file the editor has open (or explicitly queries), because
+  `getSyntacticDiagnostics` (`index.ts`'s `withSyntaxDiagnostics`) is a pull,
+  not a push. The language server does not have this gap: it *pushes*
+  diagnostics for the template's own URI unconditionally over LSP
+  (`connection.sendDiagnostics`, `packages/tooling/language-server/src/server.ts`),
+  regardless of whether that document is open. So in an editor using only
+  this plugin (no language server alongside it), a broken template that is
+  not itself open in a tab shows nothing directly on the template — only the
+  caller's pointer diagnostic, which is why that diagnostic's message names
+  both the template's file *and* its exact `line:column` (`foreignTemplateError`
+  in `language.ts`) rather than just the filename: it has to be enough to find
+  the error without ever opening the template. There is no tsserver-side fix
+  for the underlying gap; running `@mxlang/language-server` alongside this
+  plugin (both are supported together, see that package's `AGENTS.md`)
+  closes it.

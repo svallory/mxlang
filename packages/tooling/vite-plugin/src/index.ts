@@ -1,7 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { CompileResult } from "@mxlang/core";
-import { type CustomTag, resolveHostPolicy, scanCached } from "@mxlang/core";
+import {
+  type CustomTag,
+  resolveHostPolicy,
+  scanCached,
+  TranslateError,
+} from "@mxlang/core";
 import type { MxRegionCompile } from "@mxlang/parser";
 import { print } from "@mxlang/parser";
 import type { Plugin } from "vite";
@@ -697,6 +702,34 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         recordDependencies(source, [...dependencies]);
         return { code: printed, map };
       } catch (err) {
+        // A `TranslateError` raised while compiling a tag template
+        // (`tags/x.mx`) carries `.file`, the template's own path (spec §2's
+        // third position rule), never a `.loc` — so `isSyntaxError` is
+        // always false for it and it used to be rethrown raw, with no
+        // position Vite's overlay could show at all. Build the wrapped
+        // error from the *template's* source when `.file` names one, the
+        // same fallback order `foreignTemplateError`
+        // (`@mxlang/typescript-plugin`) uses for the editor side: `.file` is
+        // absent for an error about the file being compiled, in which case
+        // this still reports against `source`/`code` as before.
+        if (err instanceof TranslateError) {
+          const errorFile = err.file ?? source;
+          const errorSource = err.file ? readFileSync(err.file, "utf8") : code;
+          const wrapped = err as TranslateError & {
+            id?: string;
+            frame?: string;
+            loc?: { file: string; line: number; column: number };
+          };
+          wrapped.id = errorFile;
+          wrapped.loc = {
+            file: errorFile,
+            line: err.line,
+            column: err.column,
+          };
+          wrapped.frame = codeFrame(errorSource, err.line, err.column);
+          throw wrapped;
+        }
+
         if (!isSyntaxError(err) || !err.loc) throw err;
 
         // Re-raise with the shape Vite's overlay reads, so the reported

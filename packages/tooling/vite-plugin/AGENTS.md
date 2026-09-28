@@ -120,3 +120,18 @@ callee reader sees the same aliases as Vite. `.solid.mx` uses a fresh
 result's dependencies and records their union in the same reverse map as
 whole-file `.mx` compiles. A global closure would mix callers' dependency
 sets and make pruning stale edges impossible.
+
+**Fixed: `custom-tags-template-error-positions` (round 2).** `transform`'s
+catch only reshaped an error into Vite's overlay shape (`.id`/`.loc`/`.frame`)
+when `isSyntaxError(err)` — `err instanceof Error && "loc" in err`, true only
+for the vendored Babel parser's own errors. A `TranslateError` raised while
+compiling a tag template (`tags/x.mx`) has `.line`/`.column`/`.file` but never
+`.loc`, so it fell through that check and was rethrown raw: no `.id`, no
+`.loc`, no `.frame` — Vite's overlay had nothing to show at all, and
+`.file` (the template's own path, spec §2's third position rule) was never
+read. `transform`'s catch now handles `TranslateError` explicitly, before the
+`isSyntaxError` branch: when `.file` names another file, it reads *that*
+file's source (disk — no editor-buffer reader exists on this path, unlike the
+TS plugin's `readSource`) and builds `.id`/`.loc`/`.frame` from it instead of
+from the caller's `code`, so the dev-server overlay and a `vite build` failure
+point at the template, not at wherever the call happened to sit in the caller.

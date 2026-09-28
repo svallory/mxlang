@@ -285,7 +285,16 @@ export function foreignTemplateError(
     },
     callerDiagnostic: {
       fileName: callerFileName,
-      message: `${cause.message} (in ${templateFileName})`,
+      // Names both the template file and its exact position: tsserver's pull
+      // model only surfaces `templateDiagnostic` when something actually
+      // asks for `templateFileName`'s diagnostics — typically an editor
+      // querying a file the author has open. When the template itself is
+      // not open, this caller-side message is the only place the position
+      // is visible at all, so it must be enough to find the error without
+      // opening the template blind (unlike the language server, which
+      // *pushes* `templateDiagnostic` unconditionally over LSP regardless of
+      // whether the template is open — see `packages/tooling/typescript-plugin/AGENTS.md`).
+      message: `${cause.message} (in ${templateFileName}:${cause.line}:${cause.column + 1})`,
       offset: 0,
       source: callerSource,
       category: "error",
