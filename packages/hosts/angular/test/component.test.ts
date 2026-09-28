@@ -214,6 +214,16 @@ describe("Component dynamic target (via HostTag routing)", () => {
     );
   });
 
+  it("rejects tag arguments on a dynamic component: ngComponentOutlet has no positional-argument channel", () => {
+    // `<${Cmp}("x", 2)/>`: `ngComponentOutlet` only binds a component's
+    // `@Input()`s through `ngComponentOutletInputs`, never positional
+    // constructor arguments — genuinely inexpressible here, so this must be
+    // a positioned compile error naming the construct, not a silent drop.
+    expect(() => emit('<${Cmp}("x", 2)/>')).toThrow(
+      /tag arguments aren't supported by @mxlang\/angular: `ngComponentOutlet`/,
+    );
+  });
+
   it("escapes a quote in a static input without corrupting the outlet binding", () => {
     // A plain `"${attr.value}"` (no JS-layer escaping) let an unescaped `"`
     // in the attribute value close the JS object literal early, corrupting

@@ -359,6 +359,12 @@ describe("components", () => {
     expect(callee).toContain("(props as { children?: unknown }).children");
   });
 
+  it("forwards tag arguments to the inlined mxDynamic helper", () => {
+    expect(markup('<${input.render}("x", 2)/>')).toBe(
+      '{mxDynamic(input.render, ["x", 2])}',
+    );
+  });
+
   it("emits a dynamic tag name (with a body) through the inlined mxDynamic helper", () => {
     // JSX's tag position is static and Marko's dynamic tag is polymorphic at
     // run time (a tag-name string, a render function, or already-rendered
@@ -471,6 +477,16 @@ describe("mxDynamic's three value kinds (rendered)", () => {
       tag: (props: { head: unknown }) => props.head,
     });
     expect(html).toBe("H");
+  });
+
+  it("forwards tag arguments to a dynamic tag call, positionally", async () => {
+    // `<${input.render}("x", 2)/>`: Marko's tag-argument form is exclusive
+    // with props/content (`rejectDynamicArgsWithProps`), so the target is
+    // called with the arguments directly rather than as a JSX component.
+    const html = await renderCompiled('<${input.render}("x", 2)/>', {
+      render: (a: string, b: number) => h("b", null, `${a}-${b}`),
+    });
+    expect(html).toBe("<b>x-2</b>");
   });
 });
 

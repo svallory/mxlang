@@ -1065,9 +1065,28 @@ export class PreactEmitter implements Emitter<string> {
       // small `mxDynamic` helper into the module (mirroring `@mxlang/html`'s
       // `renderDynamic`) instead of writing the expression there directly.
       this.#runtimeImports.add("mxDynamic");
-      const props = this.#propsObject(node);
+      // Marko forbids mixing tag arguments with attributes/content
+      // (`rejectDynamicArgsWithProps`, core), so `node.args` and `#propsObject`
+      // are mutually exclusive here.
+      const payload =
+        node.args.length > 0
+          ? concatMapped(
+              "[",
+              ...node.args.flatMap((arg, index) => [
+                index === 0 ? "" : ", ",
+                arg.code,
+              ]),
+              "]",
+            )
+          : this.#propsObject(node);
       this.#out.push(
-        concatMapped("{mxDynamic(", node.target.expr.code, ", ", props, ")}"),
+        concatMapped(
+          "{mxDynamic(",
+          node.target.expr.code,
+          ", ",
+          payload,
+          ")}",
+        ),
       );
       return;
     }
