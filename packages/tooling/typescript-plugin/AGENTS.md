@@ -169,9 +169,31 @@ diagnostic; use it for anything about the generated code's types.
   passes a reader over `info.project.getScriptInfo(...)`, which returns an
   open callee's unsaved buffer; `mx-tsc` passes none and compiles once,
   because a one-shot run has only the files on disk and core reads those
-  itself. With a reader, the first pass uses the sources of the previously
-  reported dependencies, and a changed dependency set triggers one more pass
-  unless the host holds nothing new for it.
+  itself. With a reader, each pass uses the accumulated sources every
+  previous pass has read, and a changed dependency set triggers another pass
+  unless the host holds nothing new for it — iterating to a fixed point
+  rather than stopping after one retry, capped at `MAX_COMPILE_PASSES` (8) so
+  a dependency cycle or a pathological chain still terminates (fix for
+  `compile-with-dependencies-nesting-limit`, filed from PR #149). **A real
+  chain reaches this**: a callee's `AttrTag<Alias>` — the whole type
+  argument, not a nested field reference like `AttrTag<{ attrs: Alias }>` —
+  can itself alias a type `import type`-ed from a further file, which
+  `readCalleeInput`'s own `resolveNamedType`
+  (`packages/core/src/callee-input.ts`) follows across files up to
+  `MAX_ALIAS_DEPTH` (4), independently of this loop's own pass count. Before
+  the fix, a chain three hops deep (caller → callee → alias file → a further
+  aliased file) could have its deepest hop discovered only by the single
+  retry's own compile, with no further pass to read it fresh — pinned by
+  `compileWithDependencies against a real readCalleeInput compile` in
+  `src/index.test.ts`, driven through the real `readCalleeInput`, not a
+  synthetic callback. **The nested-field-reference shape
+  (`AttrTag<{ attrs: Alias }>`) is not subject to this at all**: measured by
+  instrumenting `compileWithDependencies` directly, a type referenced only
+  that way never enters `ctx.dependencies` in the first place — it is
+  resolved entirely through the emitted `satisfies
+  NonNullable<Parameters<typeof Callee>[0]["tag"]>` reference, which
+  TypeScript's own live module graph re-checks on every edit regardless of
+  this function (decision 107, option A, next bullet).
 - **What follows a callee change in tsserver (decision 107, option A).** A
   change to the callee's *types* re-checks the caller at once, through
   TypeScript's own module graph (tests: `a callee's Input changing under an

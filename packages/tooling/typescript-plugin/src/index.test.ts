@@ -14,6 +14,8 @@ import { decode } from "@jridgewell/sourcemap-codec";
 import {
   type CustomTag,
   clearScanCache,
+  readCalleeInput,
+  resetCalleeInputCache,
   type TemplateBackedTag,
 } from "@mxlang/core";
 import { print } from "@mxlang/parser";
@@ -1427,6 +1429,97 @@ describe("MX language plugin", () => {
     });
   });
 
+  describe("compileWithDependencies against a real readCalleeInput compile", () => {
+    // B declares `AttrTag<Alias>` where `Alias` is the *whole* type
+    // argument, imported from C -- the shape `resolveNamedType` actually
+    // follows across files (confirmed at
+    // packages/core/src/callee-input.test.ts:234; a *nested* field
+    // reference, `AttrTag<{ attrs: Alias }>`, is not followed the same way
+    // and is covered by TypeScript's own live module graph through the
+    // emitted `satisfies` clause instead -- see this package's AGENTS.md).
+    const dir = mkdtempSync(join(tmpdir(), "mx-compile-deps-nesting-"));
+    afterEach(() => {
+      resetCalleeInputCache();
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("converges a B -> C -> D -> E alias chain (fails on the single-retry cap)", () => {
+      const bPath = join(dir, "B.ts");
+      const cPath = join(dir, "C.ts");
+      const dPath = join(dir, "D.ts");
+      const ePath = join(dir, "E.ts");
+      // On disk, only B -> C -> D is wired; D declares the shape directly.
+      // Only the caller's *unsaved* text of D re-points it at E -- so E is
+      // discoverable only once D itself is read fresh, which (with a single
+      // retry) can happen on pass 2 at the earliest. E's own unsaved text
+      // then needs a *further* pass to be read fresh, which the single-retry
+      // cap never runs.
+      writeFileSync(
+        bPath,
+        [
+          'import type { CAlias } from "./C.ts";',
+          "export interface Input { tag?: AttrTag<CAlias> }",
+        ].join("\n"),
+      );
+      writeFileSync(
+        cPath,
+        'export type CAlias = DAlias;\nimport type { DAlias } from "./D.ts";\n',
+      );
+      writeFileSync(
+        dPath,
+        'export type DAlias = { as: "data"; attrs: { title?: string } };\n',
+      );
+      writeFileSync(
+        ePath,
+        'export type DAlias = { as: "data"; attrs: { title: string } };\n',
+      );
+
+      const unsavedText = new Map<string, string>([
+        [
+          dPath,
+          'export type DAlias = EAlias;\nimport type { EAlias } from "./E.ts";\n',
+        ],
+        [
+          ePath,
+          'export type EAlias = { as: "data"; attrs: { title: string } };\n',
+        ],
+      ]);
+      const readSource = (fileName: string) => unsavedText.get(fileName);
+
+      let compiles = 0;
+      const compile = () => {
+        compiles++;
+        return readCalleeInput(
+          { kind: "name", name: "Card" },
+          {
+            importer: join(dir, "caller.mx"),
+            imports: new Map([["Card", "./B.ts"]]),
+          },
+        );
+      };
+
+      // previousDependencies already includes B and C from an earlier
+      // compile -- the persisted-map steady state `createVirtualCode`'s
+      // `dependencies.get(fileName)` produces once the caller has compiled
+      // this chain before -- but NOT D yet. Pass 1 therefore reads D from
+      // *disk* (stale: no import of E at all) and merely discovers D as a
+      // new dependency; the single retry then reads D *fresh* (now
+      // importing E), which is what first reveals E -- one pass too late
+      // for the single-retry cap to also read E fresh in the same call.
+      const result = compileWithDependencies(
+        readSource,
+        [bPath, cPath],
+        compile,
+      );
+
+      expect(result.dependencies).toContain(ePath);
+      // The bug: current code converges in exactly 2 passes and stops,
+      // never re-reading E once it is newly discovered by the retry's own
+      // compile -- one hop short of the E's fresh, tightened shape.
+      expect(compiles).toBeGreaterThan(2);
+    });
+  });
+
   describe("compileWithDependencies", () => {
     it("compiles once when no host reader is supplied", () => {
       let compiles = 0;
@@ -1513,13 +1606,13 @@ describe("MX language plugin", () => {
       expect(compiles).toBe(1);
     });
 
-    it("stops after one retry even when the retry's own compile discovers a third-level dependency (single-retry limit, current behavior)", () => {
-      // A -> B -> C, where B is only known once its fresh source is read on
-      // the retry pass, and C is only known once B's fresh source is
-      // compiled. The single retry reads B's fresh text and recompiles, but
-      // that recompile's own newly reported dependency (C) never gets a
-      // further pass, so the result is typed against C's *previous* (here,
-      // absent) source.
+    it("resolves a three-level dependency chain (A -> B -> C), each hop revealed only by the previous one's fresh text", () => {
+      // B is only known once its fresh source is read (pass 2), and C is
+      // only known once B's fresh source is itself compiled (also surfaced
+      // on pass 2's own result) -- so a further pass (pass 3) is needed to
+      // read C's fresh text. Before the fixed-point fix this stopped after
+      // one retry (pass 2) with C read from disk/absent; now it keeps going
+      // until C's fresh text is actually incorporated.
       const read: string[] = [];
       let compiles = 0;
       const result = compileWithDependencies(
@@ -1535,6 +1628,7 @@ describe("MX language plugin", () => {
           // Pass 1 (no deps yet read): discovers B only.
           // Pass 2 (B's fresh text read): discovers B and C, since B's
           // fresh source is what reveals the import of C.
+          // Pass 3 (B and C's fresh text read): the set is stable.
           return compiles === 1
             ? { dependencies: ["/project/B.mx"], pass: compiles }
             : {
@@ -1544,12 +1638,60 @@ describe("MX language plugin", () => {
         },
       );
 
-      expect(compiles).toBe(2);
-      // C's fresh text was never read: the retry limit is one pass, so a
-      // dependency discovered only by that retry's own compile is missed.
-      expect(read).toEqual(["/project/B.mx"]);
-      expect(result.pass).toBe(2);
+      expect(compiles).toBe(3);
+      expect(read).toEqual(["/project/B.mx", "/project/B.mx", "/project/C.mx"]);
+      expect(result.pass).toBe(3);
       expect(result.dependencies).toEqual(["/project/B.mx", "/project/C.mx"]);
+    });
+
+    it("terminates a dependency cycle (A -> B -> A) within the pass cap", () => {
+      const read: string[] = [];
+      let compiles = 0;
+      const result = compileWithDependencies(
+        (fileName) => {
+          read.push(fileName);
+          return `fresh-${fileName}`;
+        },
+        [],
+        () => {
+          compiles++;
+          // A and B always report each other: the dependency set never
+          // grows, but it also never stabilizes source-for-source on the
+          // very first pass (there is no `previousDependencies` yet), so at
+          // least one retry runs before `sameDependencies` (an unchanging
+          // set) stops the loop.
+          return {
+            dependencies: ["/project/A.mx", "/project/B.mx"],
+            pass: compiles,
+          };
+        },
+      );
+
+      expect(compiles).toBeLessThanOrEqual(8);
+      expect(result.dependencies).toEqual(["/project/A.mx", "/project/B.mx"]);
+    });
+
+    it("caps at 8 passes for a chain that keeps discovering a new dependency every pass", () => {
+      const result = compileWithDependencies(
+        (fileName) => `fresh-${fileName}`,
+        [],
+        (() => {
+          let compiles = 0;
+          return () => {
+            compiles++;
+            // Every pass reports one more dependency than the last, so the
+            // set is never stable and the loop only stops at the cap.
+            const dependencies = Array.from(
+              { length: compiles },
+              (_, index) => `/project/Dep${index}.mx`,
+            );
+            return { dependencies, compiles };
+          };
+        })(),
+      );
+
+      expect(result.compiles).toBe(8);
+      expect(result.dependencies).toHaveLength(8);
     });
   });
 
