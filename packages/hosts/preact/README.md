@@ -103,6 +103,8 @@ so a template using no `<try>` and no structured `class` imports nothing.
 | `<define/R|p|>…</define>` (top level) | `const R = (p) => (<>…</>);` |
 | `<try>` + `<@catch>`/`<@placeholder>` | `<MxErrorBoundary>` / `<MxPlaceholder>` (see below) |
 | `import`, `static`, `export` | hoisted verbatim to module scope |
+| `<${expr}>` (dynamic tag) | `mxDynamic(expr, props)` — JSX's tag position is static, so the target can't be written there directly |
+| `<return>` + `/var` | `{ value, output }`; `/var` at the top level only; a unit importing a hook is rejected |
 
 ### The `key` rule
 
@@ -203,12 +205,10 @@ cannot", never "not implemented".
 | `<id>` | `useId` |
 | `client` block | a Preact component already being client code |
 | `<await>` | `<try>` with a `<@placeholder>` |
-| `<return>` | a Preact component returning its own markup |
 | `:=` | passing the value plus an explicit `onInput` handler |
 | `class:active` | Preact's own spelling, `class={{ active: cond }}` |
 | `style=` non-object | the object-literal form |
 | `$!{…}` with siblings | the raw-HTML prop replacing the whole subtree |
-| `<${expr}>` with a body | binding the component to a capitalized name |
 | `<!doctype html>` | the HTML shell that mounts the app |
 | `<const>`/`<define>` nested in markup | the top level of the template |
 

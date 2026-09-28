@@ -305,6 +305,7 @@ byte-identical with and without the construct.
 | `attr:=expr` | The initial value renders; there is no write-back path. |
 | `<define>`, `static`, `import`, `export interface Input` | Bound / hoisted to module scope. |
 | a `server` block | **Runs.** This *is* the server render, so its statements execute and its bindings are readable from the template — verified against Marko, where `server const S = 41 + 1` then `${S}` renders `42`. Hoisted exactly as `static` is. (Its counterpart, a `client` block, is inert.) |
+| `<return>` | **Not** an error. Under the unit model a tag compiles to its own module and its caller invokes it, so a returning unit's export is `{ value, output }`, unwrapped at the call site. `/var` is supported in any scope. |
 
 ### Lowered — everything with output bytes
 
@@ -323,7 +324,6 @@ Plain `<!-- -->` comments are **stripped**, because Marko strips them.
 | `<await>` | Suspends on a promise. This target is a synchronous `(input) => string`. Marko itself refuses to render one to a string: *"Cannot consume asynchronous render with 'toString'"*. |
 | `<try>` with `<@placeholder>` | Needs a second render pass over suspended content, with nowhere to schedule it. A `<try>` **without** a placeholder lowers to a plain `try`/`catch`, with `<@catch>` as the catch block. |
 | `<let/input=…>`, `<const/input=…>` | Declares `input` at render scope, where the emitted `function (input: Input)` already binds it — the template's own input would become unreachable. Marko rejects the same thing: *"Duplicate declaration of `input`"*. A tag *param* (`<for|input|>`) is a nested scope and is fine; see below. |
-| `<return>` | Provides a value to the **parent** template that rendered this one. A module compiled to `(input) => string` has no parent to return to — its only output is the string. Marko emits no markup for it either, so accepting it silently would read as support for something that cannot work here. |
 | A lowercase tag naming a local binding (`import layout from "./layout.marko"` then `<layout>`) | Marko itself refuses this: *"Local variables must be in a dynamic tag unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`."* — a lowercase name is only ever resolved through taglib/`tags/` discovery, never a local variable, so the ambiguity is real and Marko's own answer is to reject it. `<${layout}/>` (dynamic tag) and `<Layout/>` (PascalCase) both still work — see fixtures `dynamic-tag-lowercase-import` and `nested-layout`. |
 | An unresolved hyphenated tag (`<my-widget>` with no taglib entry) | Marko's own failed custom-element lookup: *"Unable to find entry point for custom tag `<my-widget>`."* An unresolved hyphenated name is not literal HTML — matching Marko means erroring, not rendering it as-is. A candidate for a later, deliberate MX 2 divergence; see `divergences.md`. |
 

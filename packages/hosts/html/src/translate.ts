@@ -521,9 +521,11 @@ export const escapeFrom = "@mxlang/html";
  * what Marko's own server render emits (decision 65). A `strict` author may
  * instead want a construct that only makes sense with a reactive runtime to
  * be a compile error, naming the construct, rather than silently accepted.
- * `<await>`/`<try>`-with-placeholder/`<return>` are errors in both policies
- * already — the target genuinely cannot express them — so only the
- * inert/initial-value rows change here.
+ * `<await>`/`<try>`-with-placeholder are errors in both policies already —
+ * the target genuinely cannot express them — so only the inert/initial-value
+ * rows change here. `<return>` has no row: it is not this target's business,
+ * since a returning tag is its own compiled module (see the `<return>`
+ * comment above).
  */
 const STRICT_TAGS: Record<string, Disposition> = {
   ...TAGS,
