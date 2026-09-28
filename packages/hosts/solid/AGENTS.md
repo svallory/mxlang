@@ -57,19 +57,21 @@ Two facts worth knowing before touching it:
   `attrs.ts` (the pre-core-IR lowering) are deleted; that lowering now lives
   entirely in this package. See `packages/parser/README.md`.
 
-- **Decision 112's `args[0]`-as-input rule is not applied here, pending an
-  operator ruling (TODO `dynamic-string-tag-args-input`, filed 2026-09-28).**
-  Every other host (html, preact/react/hono) now spreads a string-target
-  dynamic tag's `args[0]` as its element attributes when called with
-  arguments, matching Marko's own `_dynamic_tag`. Applying that literally on
-  Solid would mean `args[0]` *replaces* this call's attribute-tag props at
-  run time for that one combination, contradicting the very orthogonality
-  the next bullet documents — decision 109's own implementation note,
-  measured against Solid 2.0.0-rc.7, established that attrs/attribute-tags/
-  content stay independent of args here by design, not by omission. `tags`
-  (`attributeTagProps`) still applies unconditionally regardless of args in
-  `#dynamicComponent`, unchanged. See spec §15 item 11 for the full
-  reasoning and the open question for the operator.
+- **Decisions 109 and 112 are disjoint, not in conflict (lead ruling,
+  2026-09-28): 109 governs a function/component target with arguments; 112
+  governs only a string (native-element) target.** For a string target
+  called with arguments, `args[0]` (Marko's own `args[0] || {}`,
+  `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`) becomes the
+  element's attributes *instead of* this call's attribute-tag props,
+  matching html's `renderDynamic` and the shared JSX `mxDynamic` — content
+  still renders regardless, since Marko threads it independently of the
+  input. A function/component target is unaffected: the next bullet's
+  orthogonality (decision 109's own implementation note, measured against
+  Solid 2.0.0-rc.7) still holds there, and `tags` (`attributeTagProps`)
+  still applies unconditionally for that branch. Which rule applies is a
+  run-time fact (the resolved target's type), so `#dynamicComponent` emits
+  two `<Dynamic>` branches behind its existing `typeof` guard rather than
+  one conditional attribute list. See spec §15 item 11 for the full detail.
 - **Attribute-tag values are accessors on Solid (decisions 106–107).** This
   host declares `attrTags: 2` and emits only core's resolved `attrTagProps`.
   Solid 2.0.0-rc.7 client measurements rule out an eager JSX value (one DOM

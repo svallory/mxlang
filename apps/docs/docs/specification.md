@@ -842,8 +842,10 @@ row in §13.1's dynamic-tag entry.
 > any further arguments are ignored; decision 109's trailing content/
 > attribute-tag props object (appended *after* the positional args) is not
 > `args[0]` either, so it is not read as input — content still renders,
-> since Marko threads it independently. See §15 item 11 for the full detail
-> and Solid's open exception.
+> since Marko threads it independently. Applies on every host, including
+> Solid (decisions 109 and 112 are disjoint — 109 governs a function/
+> component target, 112 only a string target). See §15 item 11 for the
+> full detail.
 
 **Decisions:** 47/S11 (superseded by 65, swept by 68), 51, 79, 93, 94c, 112.
 
@@ -1794,18 +1796,18 @@ deferred (decision 85).
    third `content` argument for the same reason, so the runtime dispatcher
    never has to guess whether a trailing array element is a genuine
    argument or the synthesized props object.
-   **Solid is an open exception, not yet resolved.** Its dynamic-tag
-   dispatch (`packages/hosts/solid/src/emitter.ts`'s `#dynamicComponent`)
-   keeps attrs/attribute-tags/content orthogonal from args by design
-   (decision 109's own implementation note, measured against Solid
-   2.0.0-rc.7) — applying this decision literally there means `args[0]`
-   must *replace* attribute-tag props at runtime for a string target with
-   args, which would regress that shipped, tested orthogonality for a
-   combination this decision never measured against Solid specifically.
-   Pending an operator ruling on whether decision 112 overrides decision
-   109's Solid exception for this one combination, or whether Solid is an
-   intentional exception the way Angular/Astro already are elsewhere in
-   this decision family.
+   **Decisions 109 and 112 are disjoint, not in conflict (lead ruling,
+   2026-09-28): 109 governs a function/component target called with
+   arguments; 112 governs only a string (native-element) target.** Solid's
+   `#dynamicComponent` applies both: for a function/component target,
+   attrs/attribute-tags/content stay orthogonal from args exactly as
+   decision 109 left them (unchanged, still tested); for a *string* target
+   called with arguments, `args[0]` becomes the element's attributes
+   *instead of* the call's attribute-tag props, matching html/preact/
+   react/hono — content still renders regardless, threaded independently.
+   Which rule applies is a run-time fact (the resolved target's type), so
+   the emitter produces two `<Dynamic>` branches behind its existing
+   `typeof` guard rather than one conditional attribute list.
 
 ## 16. Docs to fix
 

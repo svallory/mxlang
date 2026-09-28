@@ -1633,40 +1633,50 @@ export class SolidEmitter implements Emitter<string> {
         ? ` const ${value} = typeof ${temp} === "function" ? ${temp}(${node.args.map((arg) => arg.code).join(", ")}) : ${temp};`
         : "";
     const component = ` component={${value}}`;
-    // TODO(dynamic-string-tag-args-input, NEEDS-USER): decision 112 says a
-    // *string* target called with arguments uses args[0] as its element
-    // attributes on every host, matching Marko's own `args[0] || {}`
-    // (`runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`). Applying
-    // that literally on Solid means args[0] must *replace* this call's
-    // attribute-tag props for that combination, contradicting this
-    // package's own measured, shipped design (see this file's/AGENTS.md's
-    // `#dynamicComponent` doc and decision 109's implementation note):
-    // attrs/attribute-tags/content are deliberately orthogonal from args on
-    // Solid — args only resolve which value `<Dynamic component=…>` gets,
-    // and attribute tags render on the element regardless. Suppressing
-    // attribute-tag props for a string+args target would regress that
-    // shipped, tested behavior (decision 109's own attrs/tags/content
-    // orthogonality tests) to gain literal Marko parity for a shape MX's
-    // own design note never measured against Solid. Left unresolved,
-    // pending an operator ruling on which one wins for Solid. `tags` keeps
-    // applying unconditionally, as before this decision; args[0] is not yet
-    // additionally spread as attrs here.
-    const guard = (rendered: MappedCode | string) =>
+    // decision 112 (lead ruling 2026-09-28): 109 governs a function/
+    // component target called with arguments (`renderer(...args, props)`);
+    // 112 governs only a *string* (native-element) target — the two are
+    // disjoint, not in conflict. For a string target with arguments, args[0]
+    // (Marko's own `args[0] || {}`, `runtime-tags/src/html/dynamic-tag.ts`'s
+    // `_dynamic_tag`) becomes the element's attributes *instead of* this
+    // call's attribute-tag props, matching html's `renderDynamic` and the
+    // shared JSX `mxDynamic`; content still renders regardless, since Marko
+    // threads it independently of the input. A function/component target
+    // is unaffected: `tags` keeps applying exactly as decision 109 left it.
+    // Which branch applies is a run-time fact (`value`'s resolved type), so
+    // this emits two `<Dynamic>` elements behind the existing type-switch
+    // rather than trying to make one JSX attribute list conditional.
+    const stringArgsAttrs =
+      node.args.length > 0 ? ` {...(${node.args[0]?.code} || {})}` : "";
+    const guard = (
+      rendered: (tagsProps: MappedCode | string) => MappedCode | string,
+    ) =>
       concatMapped(
         `{(() => { const ${temp} = `,
         expr.code,
-        `;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); return typeof ${value} === "string" || typeof ${value} === "function" ? `,
-        rendered,
-        ` : ${value}; })()}`,
+        `;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); `,
+        node.args.length > 0
+          ? concatMapped(
+              `return typeof ${value} === "string" ? `,
+              rendered(stringArgsAttrs),
+              ` : typeof ${value} === "function" ? `,
+              rendered(tags),
+              ` : ${value}; })()}`,
+            )
+          : concatMapped(
+              `return typeof ${value} === "string" || typeof ${value} === "function" ? `,
+              rendered(tags),
+              ` : ${value}; })()}`,
+            ),
       );
     if (!node.content || raw) {
       this.#out.push(
-        guard(
+        guard((tagsProps) =>
           concatMapped(
             "<Dynamic",
             component,
             attrs,
-            tags,
+            tagsProps,
             `${returnProp}${innerHtml} />`,
           ),
         ),
@@ -1679,12 +1689,12 @@ export class SolidEmitter implements Emitter<string> {
       ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
       : inLazyScope(() => renderWithNewEmitter(contentNodes));
     this.#out.push(
-      guard(
+      guard((tagsProps) =>
         concatMapped(
           "<Dynamic",
           component,
           attrs,
-          tags,
+          tagsProps,
           `${returnProp}>`,
           children,
           "</Dynamic>",

@@ -461,4 +461,60 @@ describe("Solid SSR render: dynamic tag", () => {
       ),
     ).toThrow();
   });
+
+  // Decision 112 (lead ruling 2026-09-28): disjoint from decision 109, which
+  // governs only a function/component target. A *string* target called with
+  // arguments uses args[0] as its element attributes, matching Marko's own
+  // `_dynamic_tag` (`runtime-tags/src/html/dynamic-tag.ts`) and the fix
+  // already applied to html's `renderDynamic` and the shared JSX `mxDynamic`.
+  describe("string target with arguments (decision 112, Marko parity)", () => {
+    it("uses args[0] as the element's attributes", () => {
+      const html = renderApp(
+        `<\${input.tag}({ id: "x", class: "y" })/>`,
+        `const input = { tag: "span" };`,
+      );
+      expect(html).toContain('id="x"');
+      expect(html).toContain('class="y"');
+      expect(html).toContain("<span");
+    });
+
+    it("ignores extra arguments beyond args[0]", () => {
+      const html = renderApp(
+        `<\${input.tag}({ id: "x" }, "unused", 123)/>`,
+        `const input = { tag: "span" };`,
+      );
+      expect(html).toContain('id="x"');
+      expect(html).not.toContain("unused");
+    });
+
+    it("treats a null/undefined args[0] as no attributes", () => {
+      const html = renderApp(
+        `<\${input.tag}(input.missing)/>`,
+        `const input = { tag: "span", missing: undefined };`,
+      );
+      expect(html).toMatch(/<span[^>]*><\/span>/);
+      expect(html).not.toContain('id="');
+    });
+
+    it("does not fold decision 109's attribute-tag props into args[0], but content still renders", () => {
+      // Attribute tags are dropped as attributes (Marko never reads them as
+      // args[0] here — see spec §15 item 11), but content renders regardless,
+      // since Marko threads it independently of the input.
+      const html = renderApp(
+        `<\${input.tag}({ id: "x" })><@head>H</@head>body</>`,
+        `const input = { tag: "span" };`,
+      );
+      expect(html).toContain('id="x"');
+      expect(html).toContain(">body</span>");
+      expect(html).not.toContain("H");
+    });
+
+    it("still calls a function target positionally, unaffected by the string-target rule", () => {
+      const html = renderApp(
+        `<\${input.render}("x", 2)/>`,
+        `const input = { render: (a: string, b: number) => () => <em>{a}-{b}</em> };`,
+      );
+      expect(html).toContain("x-2");
+    });
+  });
 });
