@@ -1499,7 +1499,7 @@ differences noted), **Astro `.amx`**, **Angular**.
 | spread | merged into attrs | `{...o}` | `{...o}` | same | same | `{...o}` | **error** — Angular binds statically named inputs only |
 | `:=` | **initial value only, silently one-way** | **error** | **error** | error | error | **error** | `[(value)]` — **genuinely two-way** |
 | `class:foo` | **error**, quoting Marko | error | **error** | error | error | **error** | error, naming the replacement — fixed 2026-09-17; was **accepted** → `[class.active]` (bug 7) |
-| dynamic tag | `renderDynamic()` | **error** | error | error | error | **error** | `[ngComponentOutlet]` + warning |
+| dynamic tag | `renderDynamic()` | `<Dynamic component>` | `mxDynamic()` | same | same | **error** | `[ngComponentOutlet]` + warning |
 | component resolution | Marko's rule (binding + case) | **case only** | Marko's rule, with `componentAlias` | same | same | **case only** | **case only** |
 | repeated `<@item>` | declared real array; fallback array | declared real array; fallback array | declared real array; fallback array | same | same | **error** — a slot is keyed by name | **error** — a projection is keyed by name |
 | tag params | body block | child callback | render-prop child | same | same | **error** — Astro has no render-prop form | `let-x` |
@@ -1666,29 +1666,24 @@ A dynamic `<${expr}>` tag or a `<define>` call that combines the tag-argument fo
 
 ## 16. Docs to fix
 
-Drift between `apps/docs/docs/` and the code. **The code wins**; these are
-reported, not edited (per this task's brief).
+Fixed 2026-09-28 (docs-drift-2026-09-17): the `<return>`-on-html claim, the
+"future SolidMX or React host" line, the Solid `<if>`-lowering description,
+the html tag-params-on-component-call claim, the `define-const-static-import.md`
+`.mx` import example, the `input`-shadowing strict-only omission on
+`errors.md`, this section's own §13.2 dynamic-tag row (Solid/Preact/React/Hono
+render dynamic tags via `<Dynamic>`/`mxDynamic`, not error), and every stale
+README line below. `packages/hosts/preact/README.md`'s non-object-`style=`
+claim was measured **still correct** (it errors) — this section's prior claim
+that it compiles was itself wrong.
 
-| Page | Claim | Reality |
-|---|---|---|
-| `language/stateful-tags.md` | `<return>` is an **Error** on the HTML host — "hands a value to a parent template, and a compiled module has no parent" | **Wrong since the unit model.** `<return>` ships in MX 1 (decisions 95, 97e, 98); the html host emits `{ value, output }` and supports `/var` in **any** scope. Decision 67d, which the page states, is superseded. |
-| `language/stateful-tags.md` | "A reactive host (**a future SolidMX or React host**)" | Solid, Preact, React, Hono, Astro and Angular hosts all exist. |
-| `language/structural-tags.md` | "SolidMX lowers the same tag to Solid's `<Show>`/**ternary** form" | The Solid host uses `<Show>` for ≤2 conditioned branches and `<Switch>`/`<Match>` for 3+. |
-| `language/attribute-tags-and-params.md` | "A string-emitting host like the HTML host does **not currently support tag params on a component call** — only on the native control tags" | **Measured false.** `<Card\|x\|>${x}</Card>` against an imported component and `<Row\|x\|>${x}</Row>` against a `<define>` both compile on the html host. |
-| `language/define-const-static-import.md` | Shows `import { formatDate } from "./util.mx"` | A `.mx` file is a template compiling to a component, not a module exporting `formatDate`. The example should import from a `.ts` file. |
-| `language/errors.md`, `stateful-tags.md` | Both describe the strict policy as covering "the same six constructs" | Correct, but neither page states that the `input`-shadowing check is **not** strict-only. `define-const-static-import.md` does say it. |
-| — | No docs page covers `<return>`, `/var`, custom tag units, discovery, or sidecars | Partly closed 2026-09-18: the custom tags build spec is on the site at `/design-notes/custom-tags/`; dedicated language pages for `<return>`, `/var`, discovery and sidecars are still missing. |
-
-### Stale in the repo's own docs (READMEs and comments, not the docs site)
-
-| File | Claim | Reality |
-|---|---|---|
-| `packages/hosts/html/README.md`, `packages/hosts/preact/README.md` | `<return>` listed under "Error — the target genuinely cannot" | Both hosts emit `{ value, output }`; decision 95 reversed this and the code comments say so explicitly. |
-| `packages/hosts/html/src/translate.ts:511` | "`<await>`/`<try>`-with-placeholder/`<return>` are errors in both policies already" | `<return>` is not among them; the html host has no `return` disposition at all. |
-| `packages/hosts/astro/README.md` (Astro `.mx` host) | All stateful tags are build errors | `<log>`/`<debug>` stay inert under `strictPolicy` — bug 5. |
-| `packages/hosts/preact/README.md` | A non-object `style=` is an error | It compiles. |
-| `packages/hosts/angular/README.md` | Never mentions stateful tags | They emit literal elements — bug 1. |
-| `packages/hosts/solid/README.md` | Does not cover repeated attribute tags | They emit duplicate props, last-wins — bug 4. |
+Closed 2026-09-28: `<return>`, `/var`, custom-tag units, discovery, and
+sidecars are **already documented**, at `/custom-tags/templates/#returning-a-value`
+(`<return>`/`/var`, including the per-host `/var`-scoping table and the
+JSX-hooks restriction), `/custom-tags/index/` and `/custom-tags/templates/`
+(the "compilation unit" model), `/custom-tags/discovery/`, and
+`/custom-tags/sidecars/` — none needed writing. The actual gap was that
+`language/stateful-tags.md`'s `<return>` row didn't link to it; fixed. The
+custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 
 ---
 
