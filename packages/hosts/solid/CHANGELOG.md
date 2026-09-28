@@ -83,6 +83,16 @@
 
 ### Added
 
+- `compileSolidUnit` now returns the same full result shape as
+  `compileSolidMx`: `map`, `mappings`, `dependencies` and a `warnings` sink
+  option, driven by the same `emitSolidWithMappings` mapping story (decision
+  115). Previously it returned only `{ code }`, which was enough to compile
+  a whole-file `.mx` to a Solid component but left every consumer needing
+  correct diagnostic positions or dependency-based HMR invalidation with
+  nothing to read. `hoistedImports`, `hoistedDefines` and `returnVars` are
+  always empty here — those exist only for a `.solid.mx` *region*, spliced
+  into someone else's module; a tag unit is a whole file with its own
+  module scope.
 - Export `AttrTag<C>`, specialised to Solid's accessor renderable.
 - Resolve imported callees inside `.solid.mx` regions and report their files
   as compile dependencies for Vite invalidation.

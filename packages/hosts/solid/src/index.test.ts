@@ -972,6 +972,35 @@ describe("compileSolidUnit", () => {
     expect(code).toContain("icon");
   });
 
+  it("returns the same full result shape as compileSolidMx (map/mappings/dependencies)", () => {
+    // Prerequisite for wiring this into the TS plugin, the language server
+    // and the vite-plugin (decision 115): those all consume `map`/`mappings`
+    // for diagnostic positions and `dependencies` for HMR invalidation,
+    // exactly as they already do for `compileSolidMx`. One Solid mapping
+    // story, not two. Attribute-tag names are one of the few constructs
+    // `emitSolidWithMappings` actually records a fine-grained mapping for
+    // (a bare interpolation records none, on this compiler as on
+    // `compileSolidMx` — see that function's own equivalent behavior). The
+    // import is authored, not `moduleBindings` (a `.solid.mx` *region*-only
+    // concept — a whole-file unit has no separate surrounding module).
+    const result = compileSolidUnit(
+      'import Widget from "./widget.mx"\n<Widget><@head>H</@head></Widget>',
+      { filename: "/fixtures/greeting.mx" },
+    );
+    expect(result.map).toBeDefined();
+    expect(result.mappings.length).toBeGreaterThan(0);
+    // The callee reader probed candidate paths for an import it could not
+    // resolve on disk in this fixture — the same dependency-reporting
+    // behavior `compileSolidMx` has (`packages/core/AGENTS.md`'s "an
+    // unresolved callee still reports a dependency" bullet).
+    expect(result.dependencies.length).toBeGreaterThan(0);
+    // A whole file is never spliced into someone else's module, so these
+    // three region-only fields are always empty here.
+    expect(result.hoistedImports).toEqual([]);
+    expect(result.hoistedDefines).toEqual([]);
+    expect(result.returnVars).toEqual([]);
+  });
+
   it("drops `export interface Input` rather than emitting it", () => {
     // Pinned, not incidental: Solid's compiler takes source text and has no
     // TypeScript frontend, so a type declaration in the emitted unit is a
