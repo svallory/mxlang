@@ -88,6 +88,7 @@ import type {
 import type { SourceSpan } from "./mapping.ts";
 import {
   hasTemplate,
+  inputMember,
   metadataOfIr,
   registerAuthoredTemplateImport,
   registerTemplateMetadataCompiler,
@@ -1941,12 +1942,11 @@ function declaredAttributeTagRead(
       readsContent: boolean;
     }
   | undefined {
-  const member = /^input\.([A-Za-z_$][\w$]*)(?:\.(content))?$/.exec(expression);
+  const member = inputMember(expression);
   if (!member || ctx.ownInput?.kind !== "declared") return;
-  const name = member[1] as string;
-  const declaration = ctx.ownInput.attrTags.get(name);
+  const declaration = ctx.ownInput.attrTags.get(member.name);
   if (!declaration) return;
-  return { declaration, name, readsContent: member[2] === "content" };
+  return { declaration, name: member.name, readsContent: member.content };
 }
 
 function rejectUncalledParameterizedAttributeTag(

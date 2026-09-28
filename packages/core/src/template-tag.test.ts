@@ -335,6 +335,99 @@ describe("template custom tags as compilation units", () => {
     expect(templateCompileCount()).toBe(1);
   });
 
+  it.each([
+    ["optional member: input?.head", "<${input?.head}/>"],
+    [
+      "optional member on content: input.head?.content",
+      "<if=input.head?.content><${input.head?.content}/></if>",
+    ],
+    ['bracket access: input["head"]', '<${input["head"]}/>'],
+    ['optional bracket access: input?.["head"]', '<${input?.["head"]}/>'],
+  ])("recognizes an attribute-tag read via %s", (_case, expr) => {
+    resetTemplateCache();
+    const panel = template(
+      "/tmp/mx-template-test/tags/panel-read.mx",
+      `<section>${expr}</section>`,
+      { attributeTags: { head: {} } },
+    );
+    const warnings: MxWarning[] = [];
+    lowerWithTags(
+      "<panel><@head>H</@head></panel>\n",
+      { panel },
+      CALLER,
+      warnings,
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it("recognizes an attribute-tag read via destructuring: const { head } = input", () => {
+    resetTemplateCache();
+    const panel = template(
+      "/tmp/mx-template-test/tags/panel-destructure.mx",
+      "<const/{ head }=input/><section><${head}/></section>",
+      { attributeTags: { head: {} } },
+    );
+    const warnings: MxWarning[] = [];
+    lowerWithTags(
+      "<panel><@head>H</@head></panel>\n",
+      { panel },
+      CALLER,
+      warnings,
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it("recognizes a body read via optional chaining: input?.content", () => {
+    resetTemplateCache();
+    const panel = template(
+      "/tmp/mx-template-test/tags/panel-content-optional.mx",
+      "<section><${input?.content}/></section>",
+    );
+    const warnings: MxWarning[] = [];
+    lowerWithTags("<panel>body</panel>\n", { panel }, CALLER, warnings);
+    expect(warnings).toEqual([]);
+  });
+
+  it("recognizes a spread of input as reading everything", () => {
+    resetTemplateCache();
+    const panel = template(
+      "/tmp/mx-template-test/tags/panel-spread.mx",
+      "static const props = {...input}\n<section>${JSON.stringify(props)}</section>",
+      { attributeTags: { head: {} } },
+    );
+    const warnings: MxWarning[] = [];
+    lowerWithTags(
+      "<panel><@head>H</@head>body</panel>\n",
+      { panel },
+      CALLER,
+      warnings,
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it("still warns when a tag truly does not read the attribute tag", () => {
+    resetTemplateCache();
+    const panel = template(
+      "/tmp/mx-template-test/tags/panel-unread.mx",
+      "<section>static</section>",
+      { attributeTags: { head: {} } },
+    );
+    const warnings: MxWarning[] = [];
+    lowerWithTags(
+      "<panel><@head>H</@head></panel>\n",
+      { panel },
+      CALLER,
+      warnings,
+    );
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "`<@head>` was dropped; /tmp/mx-template-test/tags/panel-unread.mx does not read `input.head`",
+        ),
+      }),
+    ]);
+  });
+
   it("rebuilds a template plan when its sidecar replaces attribute tags", () => {
     const panel = template(
       "/tmp/mx-template-test/tags/filter-panel.mx",
