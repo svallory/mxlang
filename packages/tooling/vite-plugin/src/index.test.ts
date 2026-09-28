@@ -694,6 +694,59 @@ export default () => <div />;
       expect(result?.code).toContain("found");
     });
 
+    it("throws a Vite-shaped error pointing at a broken *template* tag, not the caller", async () => {
+      // Round 2 fix: a `TranslateError` raised while compiling a discovered
+      // *template* tag (`tags/broken.mx`, as opposed to a `.tag.ts` sidecar
+      // above) carries `.file` naming the template, never `.loc` — so it
+      // used to fall through `isSyntaxError` entirely and reach Vite raw,
+      // with no position at all.
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-tags-"));
+      scratches.push(dir);
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"v","mx":{"host":"html"}}',
+      );
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      const templateFile = join(dir, "tags", "broken.mx");
+      writeFileSync(
+        templateFile,
+        [
+          "export interface Input { name: string }",
+          '<span class="icon">${input.name}</span>',
+          "<else/>",
+          "",
+        ].join("\n"),
+      );
+      const caller = join(dir, "caller.mx");
+      writeFileSync(caller, '<broken name="star"/>\n');
+
+      let caught: unknown;
+      try {
+        await transformOf(mx()).call(
+          {},
+          '<broken name="star"/>\n',
+          `${caller}${MX_SUFFIX}`,
+        );
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      const error = caught as Error & {
+        id?: string;
+        loc?: { file: string; line: number; column: number };
+        frame?: string;
+      };
+
+      // The overlay must point at the template, not the caller.
+      expect(error.id).toBe(templateFile);
+      expect(error.loc?.file).toBe(templateFile);
+      // The orphan `<else>` is on line 3 of `tags/broken.mx`.
+      expect(error.loc?.line).toBe(3);
+      expect(error.frame).toContain("<else/>");
+      expect(error.message).toMatch(/`<else>`/);
+    });
+
     it("hoists a discovered tag's import into a .solid.mx module", async () => {
       // The integration layer for B1: a `.solid.mx` region calls a tag it
       // never imported, and the module this plugin hands Vite must carry the

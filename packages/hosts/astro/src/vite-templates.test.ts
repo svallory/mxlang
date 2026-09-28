@@ -330,5 +330,50 @@ describe("mxTemplates()", () => {
 
       expect(lowered).toContain("stamped");
     });
+
+    it("raises a Vite-shaped error pointing at a broken *template* tag, not the .amx caller", () => {
+      // Round 2 fix: a TranslateError raised inside a discovered *template*
+      // tag (tags/broken.mx) carried no `.file` through `AstroTemplateError`,
+      // and the frame was built from the .amx caller's own source — so the
+      // error used to be reported at the template's line/column measured
+      // against the wrong file's text.
+      const dir = mkdtempSync(join(tmpdir(), "mx-amx-tags-"));
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"a","mx":{"host":"astro"}}',
+      );
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      const templateFile = join(dir, "tags", "broken.mx");
+      writeFileSync(
+        templateFile,
+        [
+          "export interface Input { name: string }",
+          '<span class="icon">${input.name}</span>',
+          "<else/>",
+          "",
+        ].join("\n"),
+      );
+      const amx = join(dir, `page${ASTRO_MX_EXT}`);
+      writeFileSync(amx, '---\n---\n<broken name="star"/>\n');
+
+      const load = loadOf(mxTemplates());
+
+      try {
+        load.call({}, amx + ASTRO_SUFFIX);
+        throw new Error("expected the load hook to throw");
+      } catch (error) {
+        const wrapped = error as {
+          message: string;
+          id?: string;
+          loc?: { file: string; line: number; column: number };
+          frame?: string;
+        };
+        expect(wrapped.message).toMatch(/`<else>`/);
+        expect(wrapped.id).toBe(templateFile);
+        expect(wrapped.loc?.file).toBe(templateFile);
+        expect(wrapped.loc?.line).toBe(3);
+        expect(wrapped.frame).toContain("<else/>");
+      }
+    });
   });
 });

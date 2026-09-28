@@ -29,16 +29,22 @@ import {
   TranslateError,
 } from "@mxlang/core";
 
-/** A lowering failure positioned in the enclosing `.amx` file. */
+/**
+ * A lowering failure positioned in the enclosing `.amx` file, or — when
+ * `file` is set — in a tag template it called (spec §2's third position
+ * rule, carried through from a `TranslateError`).
+ */
 export class AstroTemplateError extends Error {
   line: number;
   column: number;
+  file?: string;
 
-  constructor(message: string, line: number, column: number) {
+  constructor(message: string, line: number, column: number, file?: string) {
     super(message);
     this.name = "AstroTemplateError";
     this.line = line;
     this.column = column;
+    this.file = file;
   }
 }
 
@@ -800,7 +806,12 @@ export function lowerAstroMx(
   } catch (error) {
     if (error instanceof AstroTemplateError) throw error;
     if (error instanceof TranslateError) {
-      throw new AstroTemplateError(error.message, error.line, error.column);
+      throw new AstroTemplateError(
+        error.message,
+        error.line,
+        error.column,
+        error.file,
+      );
     }
     throw error;
   }
