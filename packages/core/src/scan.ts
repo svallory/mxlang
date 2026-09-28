@@ -230,6 +230,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * The host names a `hosts` restriction may legally name — kept in sync with
+ * `HostPolicy["host"]` in `host-policy.ts` by hand, since that file's union
+ * is a type (erased at runtime) and this is the one place a string needs
+ * checking against it.
+ */
+const KNOWN_HOSTS = new Set([
+  "html",
+  "astro",
+  "solid",
+  "preact",
+  "react",
+  "hono",
+  "angular",
+]);
+
+/**
  * Validates and normalizes `package.json#mx.tags`.
  *
  * A string is shorthand for one directory with no defaults. Anything that is
@@ -905,6 +921,22 @@ function indexMxTagsEntries(
         column: 0,
       });
       continue;
+    }
+    if (entry.hosts) {
+      for (const host of entry.hosts) {
+        if (!KNOWN_HOSTS.has(host)) {
+          // Recorded, not thrown: an unknown host name should not silently
+          // drop the tag from every host's discovery (see `applyHostFilter`)
+          // with nothing said — the entry still indexes, just under a host
+          // name nothing will ever match.
+          diagnostics.push({
+            file: packageJson,
+            message: `\`mx.tags\` names an unknown host in \`hosts\`: ${host}`,
+            line: 1,
+            column: 0,
+          });
+        }
+      }
     }
     indexDirectory(entry.dir, tags, files, diagnostics, {
       prefix: entry.prefix,

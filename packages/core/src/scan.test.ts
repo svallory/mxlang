@@ -449,6 +449,29 @@ describe("host-filtered discovery", () => {
     expect(result.tags.get("badge")?.hosts).toBeUndefined();
     expect(result.tags.has("badge")).toBe(true);
   });
+
+  it("warns, rather than silently dropping, on an unknown host name in mx.tags[].hosts", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "widgets"), { recursive: true });
+    writeFileSync(join(dir, "widgets", "gadget.mx"), "<div/>\n");
+    const packageJson = join(dir, "package.json");
+    writeFileSync(
+      packageJson,
+      JSON.stringify({
+        name: "unknown-host",
+        mx: { tags: [{ dir: "widgets", hosts: ["solid", "bogus"] }] },
+      }),
+    );
+
+    const result = scanCustomTags(join(dir, "caller.mx"), { host: "solid" });
+
+    expect(result.tags.has("gadget")).toBe(true);
+    expect(
+      result.diagnostics.some(
+        (d) => d.file === packageJson && /bogus/.test(d.message),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("discoverProjectTags", () => {
