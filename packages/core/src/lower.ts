@@ -2089,18 +2089,32 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     return lowerCustomTag(ctx, node, name, builtinTag, true);
   }
 
-  // A name the file itself binds — an `import`, or a `<define>` — wins over
-  // a registered custom tag of the same name (spec §4: explicit import >
-  // local `tags/` > `mx.tags`). This is a core rule, checked directly on
-  // `ctx.imports`/`ctx.defines` rather than by calling a host's own
-  // `isComponent` (which also matches taglib-discovered names with no
-  // file-local binding, and which Solid's and Astro's implementations never
-  // consult at all — both decide purely by case), so a shadowed name routes
-  // to the component it names instead of the custom tag before
-  // `ctx.customTags` is ever consulted.
+  // A name the file itself binds — an `import`, a `<define>`, a `<const>`, or
+  // a `<for>`/`<define>` tag param — wins over a registered custom tag of the
+  // same name (spec §4: explicit import > local `tags/` > `mx.tags`; measured
+  // against Marko 6.3.51's own translator, `normalizeTag` in
+  // `@marko/runtime-tags/dist/translator/index.js`, which rewrites a
+  // capitalized tag name to a dynamic-tag reference whenever
+  // `tag.scope.getBinding(tagName)` finds a binding in scope, unconditionally
+  // and before any taglib/custom-tag lookup runs). This is a core rule,
+  // checked directly on `ctx.imports`/`ctx.defines`/`ctx.tagVarShadowed`
+  // rather than by calling a host's own `isComponent` (which also matches
+  // taglib-discovered names with no file-local binding, and which Solid's and
+  // Astro's implementations never consult at all — both decide purely by
+  // case), so a shadowed name routes to the component it names instead of the
+  // custom tag before `ctx.customTags` is ever consulted.
+  //
+  // `ctx.tagVarShadowed` is MX's own scope-tracking set — the exact analog of
+  // Babel's `scope.getBinding`, maintained by `shadowBindings`/`scopeBindings`
+  // around every `<const>`, `<for|p|>`, and `<define|p|>` body — so it already
+  // gives correct lexical scoping for free: a name bound inside an `<if>`
+  // branch or a `<for>` body is shadowed only there, and reverts to the
+  // registered custom tag immediately outside it, exactly as Marko's own
+  // `getBinding` reverts outside the declaring scope.
   //
   // Gated on PascalCase: Marko's own rule (matched by every host's own
-  // `isComponent`, e.g. html `translate.ts`, preact `emitter.ts`) is that a
+  // `isComponent`, e.g. html `translate.ts`, preact `emitter.ts`, and by
+  // Marko's own `TAG_NAME_IDENTIFIER_REG = /^[A-Z][a-zA-Z0-9_$]*/`) is that a
   // *lowercase* local variable is never resolved as a component tag — only
   // taglib/`tags/` discovery or a built-in element can claim a lowercase
   // name. An ungated check regressed `import panel from "./p.mx"` +
@@ -2109,7 +2123,10 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // component call, so it must not shadow the custom tag or the host claim
   // either.
   const fileLocalBinding =
-    /^[A-Z]/.test(name) && (ctx.defines.has(name) || ctx.imports.has(name));
+    /^[A-Z]/.test(name) &&
+    (ctx.defines.has(name) ||
+      ctx.imports.has(name) ||
+      (ctx.tagVarShadowed?.has(name) ?? false));
 
   // Registered custom tags take precedence over host claims so a shared tag
   // may be expressed in terms of `ctx.build.hostTag(...)`. Structural tags
@@ -2125,7 +2142,13 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     return lowerHostTag(ctx, node, name);
   }
 
-  if (ctx.declarations.isComponent(name, ctx)) {
+  // `fileLocalBinding` alone is sufficient here for a `<const>`/`<for>`-param/
+  // `<define>`-param binding: a host's own `isComponent` only ever consults
+  // `ctx.imports`/`ctx.defines` (matching Marko's own local-variable-as-
+  // component rule), so it does not recognize a `ctx.tagVarShadowed` name —
+  // but `fileLocalBinding` already proved it is a capitalized, in-scope local
+  // binding, which is exactly what a component call needs to route on.
+  if (fileLocalBinding || ctx.declarations.isComponent(name, ctx)) {
     const params = ctx.defines.get(name);
     return lowerComponent(
       ctx,

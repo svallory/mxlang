@@ -1478,3 +1478,72 @@ describe("import precedence over registered custom tags (IR-level)", () => {
     });
   });
 });
+
+// Ref custom-tags-local-bindings (decision 113): a *file-local scope*
+// binding — `<const/Panel=…/>`, a `<for|Panel|>` param, or a
+// `<define/Box|Panel|>` param — wins over a registered custom tag of the
+// same name too, exactly like an `import`/`<define>` name (spec §4,
+// extended). Measured against Marko 6.3.51's own translator
+// (`normalizeTag`, `@marko/runtime-tags/dist/translator/index.js:5852-5860`):
+// `tag.scope.getBinding(tagName)` — Babel's scope-binding lookup, covering
+// `const`, `for`-params, and `define`-params uniformly — is checked before
+// any custom-tag/taglib resolution, unconditionally, gated only by
+// `TAG_NAME_IDENTIFIER_REG` (a capitalized name). MX's `ctx.tagVarShadowed`
+// is the same scope-tracking set for the same three binding forms.
+describe("local scope bindings shadow a registered custom tag (IR-level)", () => {
+  const componentPolicy: Policy = {
+    ...fakeDeclarations(),
+    isComponent: (name, ctx) => ctx.defines.has(name) || ctx.imports.has(name),
+  };
+
+  const panel: CustomTag = {
+    transform: (_call, ctx) => [ctx.build.element("mx-marker", [], [])],
+  };
+
+  it("a `<const/Panel=…/>` binding wins over a registered `Panel` custom tag", () => {
+    const ir = lowerWithTags(
+      '<const/Panel=() => "x"/>\n<Panel/>\n',
+      { Panel: panel },
+      componentPolicy,
+    );
+    expect(find(ir.body, "Component").target).toMatchObject({
+      kind: "name",
+      name: "Panel",
+    });
+  });
+
+  it("a `<for|Panel|>` param wins over a registered `Panel` custom tag, only inside the loop body", () => {
+    const ir = lowerWithTags(
+      "<for|Panel| of=[1]>\n  <Panel/>\n</for>\n<Panel/>\n",
+      { Panel: panel },
+      componentPolicy,
+    );
+    const forNode = find(ir.body, "For");
+    expect(find(forNode.children, "Component").target).toMatchObject({
+      kind: "name",
+      name: "Panel",
+    });
+    // Outside the loop, the name is unbound again: the registered custom tag
+    // expands, not a component call.
+    const rest = ir.body.slice(ir.body.indexOf(forNode) + 1);
+    expect(find(rest, "Element").name).toBe("mx-marker");
+  });
+
+  it("a `<define/Box|Panel|>` param wins over a registered `Panel` custom tag, only inside the define body", () => {
+    const ir = lowerWithTags(
+      "<define/Box|Panel|>\n  <Panel/>\n</define>\n<Box/>\n<Panel/>\n",
+      { Panel: panel },
+      componentPolicy,
+    );
+    const define = find(ir.body, "Define");
+    expect(find(define.children, "Component").target).toMatchObject({
+      kind: "name",
+      name: "Panel",
+    });
+    const rest = ir.body.slice(ir.body.indexOf(define) + 1);
+    // `<Box/>` itself is an ordinary component call (a `<define>` name), not
+    // the shadowing under test; only the *trailing* bare `<Panel/>` proves
+    // the scope reverted outside `<define>`.
+    expect(find(rest, "Element").name).toBe("mx-marker");
+  });
+});

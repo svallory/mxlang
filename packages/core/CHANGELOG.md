@@ -2,6 +2,25 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: a `<const>` binding and a `<for>`/`<define>` tag param now shadow a registered custom tag too (decision 113)
+
+`custom-tags-local-bindings`: a file-local *scope* binding — `<const/Panel=…/>`,
+a `<for|Panel|>` param, or a `<define/Box|Panel|>` param — now wins over a
+registered custom tag of the same name, scoped exactly to where the binding is
+in effect (outside that scope, the registered tag resolves again). Previously
+only `import` and `<define>` names shadowed a custom tag
+(`custom-tags-import-precedence`, decision 93); `<const>` and tag-param
+bindings fell through to the custom tag unconditionally. Matches Marko
+6.3.51's own rule (`normalizeTag`,
+`@marko/runtime-tags/dist/translator/index.js`): a capitalized tag name backed
+by a Babel scope binding is rewritten to a dynamic-tag reference before any
+custom-tag/taglib lookup runs, for `const`, `for`-params, and `define`-params
+alike. `lower.ts`'s `fileLocalBinding` check now also consults
+`ctx.tagVarShadowed`, the existing scope-tracking set `shadowBindings`
+maintains around every `<const>`/`<for>`/`<define>` body — so the fix reuses
+the same mechanism the codebase already had for binding-aware identifier
+rewriting, rather than adding a new one.
+
 ### Fix: an unknown host name in `mx.tags[].hosts` is now a diagnostic, not silent (decision 110a)
 
 `indexMxTagsEntries` (`scan.ts`) now checks each `hosts` entry against the
