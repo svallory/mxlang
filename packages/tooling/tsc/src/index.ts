@@ -5,6 +5,8 @@ import {
   createCompoundExtensionResolver,
   createMxLanguagePlugin,
   createSolidMxLanguagePlugin,
+  type MxCompileDiagnostic,
+  type MxDiagnosticLanguagePlugin,
 } from "@mxlang/typescript-plugin";
 import type { LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
@@ -48,23 +50,82 @@ export function resolveTscPath(): string {
  */
 export function runMxTsc(): void {
   const astro = consumeAstroFlag(process.argv);
-  runTsc(
-    resolveTscPath(),
-    astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
-    (typescript) => {
-      const plugins: LanguagePlugin<string>[] = [
-        createSolidMxLanguagePlugin(typescript),
-        createMxLanguagePlugin(typescript),
-      ];
-      if (astro) {
-        plugins.push(createAmxLanguagePlugin(typescript));
-        plugins.push(createAstroLanguagePlugin());
-      }
-      plugins.push(createCompoundExtensionResolver(typescript));
-      return plugins;
-    },
-    TYPESCRIPT_OBJECT,
+  const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
+  let tscExitCode = 0;
+  const exit = process.exit;
+  const stopped = Symbol("mx-tsc-exit");
+  process.exit = ((code?: number) => {
+    tscExitCode = code ?? 0;
+    throw stopped;
+  }) as typeof process.exit;
+  try {
+    runTsc(
+      resolveTscPath(),
+      astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
+      (typescript) => {
+        const solidMx = createSolidMxLanguagePlugin(typescript);
+        const mx = createMxLanguagePlugin(typescript);
+        diagnosticPlugins.push(solidMx, mx);
+        const plugins: LanguagePlugin<string>[] = [solidMx, mx];
+        if (astro) {
+          const amx = createAmxLanguagePlugin(typescript);
+          diagnosticPlugins.push(amx);
+          plugins.push(amx, createAstroLanguagePlugin());
+        }
+        plugins.push(createCompoundExtensionResolver(typescript));
+        return plugins;
+      },
+      TYPESCRIPT_OBJECT,
+    );
+  } catch (cause) {
+    if (cause !== stopped) throw cause;
+  } finally {
+    process.exit = exit;
+  }
+
+  const diagnostics = diagnosticPlugins.flatMap((plugin) =>
+    plugin.getCompileDiagnostics(),
   );
+  reportCompileDiagnostics(diagnostics);
+  const hasCompileError = diagnostics.some(
+    (diagnostic) => diagnostic.category === "error",
+  );
+  process.exitCode = hasCompileError ? 1 : tscExitCode;
+}
+
+/** Prints the compiler failures Volar's empty virtual files cannot expose. */
+export function reportCompileDiagnostics(
+  diagnostics: readonly MxCompileDiagnostic[],
+): void {
+  if (diagnostics.length === 0) return;
+  const require = createRequire(import.meta.url);
+  const typescript = require("typescript") as typeof import("typescript");
+  const formatted = typescript.formatDiagnostics(
+    diagnostics.map((diagnostic) => ({
+      file: typescript.createSourceFile(
+        diagnostic.fileName,
+        diagnostic.source,
+        typescript.ScriptTarget.Latest,
+        false,
+        typescript.ScriptKind.TSX,
+      ),
+      start: diagnostic.offset,
+      length: Math.min(1, diagnostic.source.length - diagnostic.offset),
+      category:
+        diagnostic.category === "error"
+          ? typescript.DiagnosticCategory.Error
+          : typescript.DiagnosticCategory.Warning,
+      code: diagnostic.category === "error" ? 80001 : 80002,
+      source: "mxlang",
+      messageText: diagnostic.message,
+    })),
+    {
+      getCanonicalFileName: (fileName) => fileName,
+      getCurrentDirectory: () => process.cwd(),
+      getNewLine: () => "\n",
+    },
+  );
+  process.stderr.write(formatted);
 }
 
 /** Removes mx-tsc's own flag before TypeScript parses its command line. */

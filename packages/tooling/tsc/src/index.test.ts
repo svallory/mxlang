@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { consumeAstroFlag, resolveTscPath } from "./index.ts";
 
 /**
@@ -68,7 +68,39 @@ function run(entry: string, args: string[]): Run {
   }
 }
 
+interface RunSplit {
+  status: number;
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * `mx-tsc` writes its stored-diagnostic report to stderr (`src/index.ts`'s
+ * `process.stderr.write`), independent of exit code. `execFileSync`'s return
+ * value only ever carries stdout on a zero exit, so a warning-only run (exit
+ * 0, diagnostics on stderr) is invisible to `run()` above — `spawnSync`
+ * captures both streams regardless of exit code.
+ */
+function runSplit(entry: string, args: string[]): RunSplit {
+  const result = spawnSync(process.execPath, [entry, ...args], {
+    cwd: here,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return {
+    status: result.status ?? 1,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
+}
+
 describe("mx-tsc", () => {
+  // Every spawn below blocks this worker's thread, and consecutive
+  // synchronous tests never return to the event loop. Past a minute of that
+  // vitest's own worker RPC times out (`Timeout calling "onTaskUpdate"`) and
+  // fails a run whose tests all passed, so each test hands the loop back.
+  afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
+
   it("has a built entry point to exercise", () => {
     expect(existsSync(mxTsc)).toBe(true);
   });
@@ -156,6 +188,93 @@ describe("mx-tsc", () => {
       expect(result.output).toContain(
         "Property 'title' is missing in type '{}' but required in type 'Input'",
       );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "reports stored MX compile failures and exits non-zero",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "compile-error-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.output).toContain("Broken.mx(3,1): error TS80001");
+      expect(result.output).toContain('Missing ending "div" tag');
+      expect(result.output).toContain("Repeated.mx(3,28): error TS80001");
+      expect(result.output).toContain("may appear at most once");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "reports stored compile warnings without making the run fail",
+    () => {
+      const result = runSplit(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "compile-warning"),
+      ]);
+
+      expect(result.status).toBe(0);
+      expect(result.stderr).toContain("Page.mx(3,2): warning TS80002");
+      expect(result.stderr).toContain("attribute-tag shape inferred");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it.each([
+    ["html", "attr-tag-html-failing", "(3,9)"],
+    ["preact", "attr-tag-preact-failing", "(3,9)"],
+    ["solid", "attr-tag-solid-failing", "(3,29)"],
+  ])(
+    "checks %s attribute-tag values against the callee Input",
+    (_host, fixture, tagPosition) => {
+      const result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.output).toContain(
+        `Missing${fixture.includes("solid") ? ".solid" : ""}.mx${tagPosition}`,
+      );
+      expect(result.output).toContain("Property 'title' is missing");
+      expect(result.output).toContain(
+        `Wrong${fixture.includes("solid") ? ".solid" : ""}.mx${tagPosition}`,
+      );
+      expect(result.output).toContain(
+        "Type 'number' is not assignable to type 'string'",
+      );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it.each([
+    ["html", "callee-diagnostic-html-failing", "Card.mx(2,14)", "Page.mx"],
+    // Line only: `mx-tsc` turns a `.solid.mx` source offset into a column
+    // against the printed text, whose earlier lines the printer reformats.
+    [
+      "solid",
+      "callee-diagnostic-solid-failing",
+      "Card.solid.mx(4,",
+      "Page.solid.mx",
+    ],
+  ])(
+    "reports a %s callee's own type error in the callee, not in the caller that read its Input",
+    (_host, fixture, calleePosition, caller) => {
+      const result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.output).toMatch(
+        new RegExp(
+          `${calleePosition.replace(/[.()]/g, "\\$&")}\\d*\\)?: error TS2322`,
+        ),
+      );
+      expect(result.output).toContain(
+        "Type 'string' is not assignable to type 'number'",
+      );
+      expect(result.output).not.toContain(`${caller}(`);
     },
     SPAWN_TIMEOUT_MS,
   );

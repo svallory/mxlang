@@ -1,0 +1,3 @@
+export interface Input { tab?: AttrTag<{ attrs: { title: string } }> }
+
+<div/>

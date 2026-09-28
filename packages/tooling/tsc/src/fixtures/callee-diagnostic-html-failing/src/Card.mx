@@ -1,0 +1,4 @@
+export interface Input { tab: AttrTag<{ attrs: { title: string } }> }
+static const broken: number = "text";
+
+<div/>

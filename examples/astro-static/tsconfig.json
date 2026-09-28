@@ -13,5 +13,6 @@
       }
     ]
   },
-  "include": ["src", "e2e", "astro.config.mjs"]
+  "include": ["src", "e2e", "astro.config.mjs"],
+  "exclude": ["src/components/stateful.mx"]
 }
