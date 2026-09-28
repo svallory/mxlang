@@ -288,6 +288,16 @@ interface ExpressionMapping {
  *    reproduces the region's shape; overwriting them would lose spans the
  *    parser's own tests depend on.
  *
+ * One kind of node is handled before those three: the type of a `satisfies`
+ * or `as` the host generated (one that is not inside a matched expression,
+ * so the author did not write it). It has no source text at all, and its
+ * location is removed rather than repaired. The emitted region is one line
+ * and the authored one may not be, so such a type's generated offsets can
+ * name several source lines. The printer retains lines, and between a type's
+ * name and its type arguments it may not break one, so it parenthesized the
+ * arguments to get there: `NonNullable(\n<Parameters<...>>)`, which is not
+ * TypeScript. A node without a location is printed where the text already is.
+ *
  * The generated text is untouched; only locations are repaired.
  */
 function remapExpressionLocations(
@@ -314,6 +324,19 @@ function remapExpressionLocations(
     record.end = end;
     record.loc = { start: locAt(source, start), end: locAt(source, end) };
     if (Array.isArray(record.range)) record.range = [start, end];
+  };
+
+  const detach = (value: unknown) => {
+    if (value === null || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) detach(item);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    delete record.loc;
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "extra") detach(child);
+    }
   };
 
   const visit = (value: unknown) => {
@@ -348,6 +371,16 @@ function remapExpressionLocations(
         ) {
           best = candidate;
         }
+      }
+
+      if (
+        !best &&
+        (record.type === "TSSatisfiesExpression" ||
+          record.type === "TSAsExpression")
+      ) {
+        detach(record.typeAnnotation);
+        visit(record.expression);
+        return;
       }
 
       if (best) {

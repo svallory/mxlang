@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import generate from "@babel/generator";
 import type { Expression } from "@babel/types";
 import { describe, expect, it } from "vitest";
-import { print } from "../index.ts";
+import { parseBabel, print } from "../index.ts";
 import { parseSolid, solidRegionCompile } from "./test-helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -111,6 +111,36 @@ describe("attribute tags become props", () => {
     expect(result.dependencies).toContain(
       join(HERE, "fixtures", "attr-callee.tsx"),
     );
+  });
+
+  it("prints a generated `satisfies` type intact when the region spans lines", () => {
+    // The emitted region is one line and the authored one is not, so a
+    // generated node's offset can name a later source line. A type reference
+    // whose name and type arguments land on different lines was printed as
+    // `NonNullable(\n<Parameters<...>>)`, which is not TypeScript.
+    const filename = join(HERE, "fixtures", "caller.solid.mx");
+    const source = [
+      'import AttrCallee from "./attr-callee.tsx";',
+      "const el = (",
+      "  <AttrCallee>",
+      "    <@item>",
+      "      <strong>typed</strong>",
+      "    </@item>",
+      "  </AttrCallee>",
+      ");",
+    ].join("\n");
+    const result = print(source, filename, {
+      mxRegionCompile: solidRegionCompile,
+    });
+    expect(result.code.replace(/\s+/g, " ")).toContain(
+      '(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>',
+    );
+    expect(() =>
+      parseBabel(result.code, {
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
+      }),
+    ).not.toThrow();
   });
 
   it("does not recurse when two SolidMX callees import each other", () => {
