@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `MxRegionCompileResult` gained an optional `hoistedDefines` field
+  (`MxRegionHoistedDefine[]`), the `<define>` counterpart to
+  `hoistedImports`: a region hosted by Solid can now hoist a `<define>` to
+  module scope (decision 110b), and the bridge writes those declarations
+  into the surrounding module alongside any hoisted imports, after the
+  module's own import block. Every other `mxRegionCompile` caller is
+  unaffected — the field defaults to empty.
+
 - Added the surrounding module's import-specifier map to each region compile
   input and optional dependencies to its result. `print` and `printAst` now
   expose the deduplicated region dependency list.

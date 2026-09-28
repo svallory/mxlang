@@ -1,17 +1,21 @@
 /**
- * Placing a region's synthesized tag imports in the surrounding module.
+ * Placing a region's synthesized tag imports and hoisted `<define>`s in the
+ * surrounding module.
  *
  * An MX region inside a `.solid.mx` file is an *expression*, so an import the
  * compiler minted for a discovered tag has no module scope of its own to land
  * in: the surrounding TypeScript module is the only place it can go (design
- * §3.2, decision 95 ruling 3).
+ * §3.2, decision 95 ruling 3). The same is true of a `<define>` written
+ * inside a region: `@mxlang/solid` can't emit `const Row = (...) => ...;`
+ * mid-expression, so it hoists the declaration out to module scope, gensym'd
+ * like a synthesized import (decision 110b).
  *
  * Two consumers need exactly this, which is why the decision lives here rather
  * than inside either of them: `parse` (the product path, for a whole
  * `.solid.mx` file) and `@mxlang/typescript-plugin` (the editor path, which
- * compiles regions itself and must project the same imports into its virtual
- * file, or the tag's binding is unresolved in the editor while the build is
- * fine).
+ * compiles regions itself and must project the same declarations into its
+ * virtual file, or the reference is unresolved in the editor while the build
+ * is fine).
  */
 
 /** One synthesized import a region needs written into its module. */
@@ -30,6 +34,23 @@ export interface HoistedImport {
    * must collapse to one import.
    */
   resolvedPath: string;
+}
+
+/**
+ * One `<define>` a region hoisted to module scope (decision 110b).
+ *
+ * Unlike a `HoistedImport`, there is nothing to reuse or dedupe against: the
+ * declaration exists nowhere until the region mints it, so the binding is
+ * always a fresh gensym (`@mxlang/solid`'s `generatedDefineBinding`), never
+ * the author's own `<define>` name — the same reason a discovered tag's
+ * import is always gensym'd rather than guessing it is safe to call the
+ * local binding `icon`.
+ */
+export interface HoistedDefine {
+  /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+  code: string;
+  /** The gensym'd module-scope binding the region calls. */
+  binding: string;
 }
 
 /** What placing a set of hoisted imports decided. */

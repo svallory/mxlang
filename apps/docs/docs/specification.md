@@ -648,6 +648,28 @@ define's own head, not the enclosing render function's.
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
 
+**On Solid, a `<define>` inside a `.solid.mx` region is hoisted to module
+scope (decision 110b).** A region is a JSX expression spliced into someone
+else's module, so it has no statement position for `const Row = (...) =>
+...;` the way html/preact's in-place `const` does — the same wall
+`hoistedImports` already hits for a discovered tag's synthesized import. The
+compiler resolves it the same way: `@mxlang/solid`'s emitter mints a
+gensym'd module-scope function (`$mx_DefineRowN`, never the author's own
+name — see `packages/hosts/solid/AGENTS.md`), and `@mxlang/parser`'s bridge
+writes it into the surrounding module alongside any hoisted imports.
+A hoisted `<define>` must be a **direct top-level child of its region**
+(not nested inside `<if>`/`<for>`/an attribute tag/another `<define>`) and
+may not read a value the region itself introduced — its own params, another
+top-level `<define>`'s name, and the surrounding module's own imports are
+fine; anything else free in its body is a positioned error naming the
+captured identifier, not silently wrong code. Both are hard limits, not
+`<define>`'s own rule: real module scope has no closure over the region's
+enclosing render function, and no per-row/per-branch scope for a nested one
+to close over either. On Solid, a `<define>` call is a plain function-call
+expression (`{$mx_DefineRowN(...)}`), not a JSX tag — JSX has no
+positional-call syntax — using the identical named-param binding closed item
+9 below describes for html/preact.
+
 ### 5.5 `<let>`
 
 **Not core-owned.** There is no `let` case in the lowerer; it routes entirely
@@ -1695,10 +1717,13 @@ deferred (decision 85).
    or a `<define>` call's arguments; Solid's dynamic-tag design already kept
    attrs/attribute-tags/content orthogonal from arguments (args only resolve
    the value handed to `<Dynamic component=…>`), so it needed no emitter
-   change for the dynamic case. A `<define>` call cannot be authored inside
-   a `.solid.mx` region at all today (`<define>` unconditionally errors
-   there, independent of this decision), so a `<define>`-bound call target
-   is unreachable on Solid and out of this decision's scope. Angular and
+   change for the dynamic case. At the time this decision closed, a
+   `<define>` call could not be authored inside a `.solid.mx` region at all
+   (`<define>` unconditionally errored there), so a `<define>`-bound call
+   target was unreachable on Solid and out of this decision's scope —
+   **superseded by decision 110b below**, which makes `<define>` itself work
+   in a region and gives Solid its own named-param call shape (a plain
+   function call, not JSX — §5.4). Angular and
    Astro keep a positioned error naming their own constraint
    (`ngComponentOutlet`/no local component form), not MX's.
    **A `<define>` call does not emit Marko's own trailing-object shape.**
@@ -1719,6 +1744,18 @@ deferred (decision 85).
    filled from that same named lookup — attributes, attribute-tag exports,
    and a bare body under the reserved `content` key — one value per
    remaining param, rather than one trailing object.
+10. **`<define>` is supported in `.solid.mx` regions — closed by decision
+   110b.** Previously a compile error ("cannot declare a function inside a
+   JSX expression"). A top-level `<define>` in a region hoists to a
+   gensym'd module-scope function, the same way a discovered tag's import
+   already does (see §5.4). After hoisting, item 9's `<define>` call shapes
+   apply on Solid too, through a plain function-call expression rather than
+   a JSX tag (JSX has no positional-call syntax). A `<define>` nested inside
+   `<if>`/`<for>`/another construct, or one that closes over a value local
+   to the region (not its own params, another top-level `<define>`, or a
+   module import), is a positioned error rather than silently wrong code —
+   real module scope has no closure over the region's enclosing function or
+   a nested callback's own scope.
 
 ## 16. Docs to fix
 

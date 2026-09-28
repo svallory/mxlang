@@ -16,7 +16,7 @@
  * `packages/parser` what a `Component` or a `template` is.
  */
 
-import type { HoistedImport } from "./hoist-imports.ts";
+import type { HoistedDefine, HoistedImport } from "./hoist-imports.ts";
 import type { MxRegionContext } from "./region-context.ts";
 
 /**
@@ -26,7 +26,16 @@ import type { MxRegionContext } from "./region-context.ts";
  * re-exported rather than re-declared, so the three cannot drift into three
  * subtly different contracts for one object.
  */
-export type { HoistedImport as MxRegionHoistedImport } from "./hoist-imports.ts";
+/**
+ * One `<define>` a region hoisted to module scope (decision 110b).
+ *
+ * Re-exported for the same reason `MxRegionHoistedImport` is: one contract
+ * shared by `hoist-imports.ts`, this module, and `@mxlang/solid`.
+ */
+export type {
+  HoistedDefine as MxRegionHoistedDefine,
+  HoistedImport as MxRegionHoistedImport,
+} from "./hoist-imports.ts";
 
 /** The region text and its file-relative position, as the bridge found it. */
 export interface MxRegionCompileInput {
@@ -68,8 +77,8 @@ export interface MxRegionCompileInput {
  * What the bridge needs back from a host.
  *
  * Deliberately narrower than any one host's own result type: this is exactly
- * the three fields `mxParseElementAt` consumes (`code` to re-parse,
- * `hoistedImports` and `returnVars` to stamp onto the region root). A host
+ * the fields `mxParseElementAt` consumes (`code` to re-parse, `hoistedImports`,
+ * `hoistedDefines` and `returnVars` to stamp onto the region root). A host
  * returning more — a source map, expression mappings, warnings, the tags a
  * template used — keeps those on its own richer return type and hands its
  * caller the extra fields directly; the parser has no use for them and must
@@ -84,6 +93,13 @@ export interface MxRegionCompileResult {
    * the surrounding module is the only place these can go.
    */
   hoistedImports?: HoistedImport[];
+  /**
+   * `<define>`s the region hoisted to module scope (decision 110b). A region
+   * is an expression, so it cannot hold a function declaration either — same
+   * reason `hoistedImports` exists, for an author's own construct instead of
+   * a discovered tag's synthesized import.
+   */
+  hoistedDefines?: HoistedDefine[];
   /**
    * `/var` names this region's call sites bind, for the caller to declare —
    * a region has no statement position for the `let` a `/var` needs.

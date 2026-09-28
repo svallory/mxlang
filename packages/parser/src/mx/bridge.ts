@@ -2,7 +2,7 @@ import { parseExpression } from "../babel/index.ts";
 import { types as tc } from "../babel/tokenizer/context.ts";
 import { Position } from "../babel/util/location.ts";
 import { MxErrors } from "./errors.ts";
-import type { HoistedImport } from "./hoist-imports.ts";
+import type { HoistedDefine, HoistedImport } from "./hoist-imports.ts";
 import type { MxRegionCompile } from "./region-compile.ts";
 import {
   computeMxRegionContext,
@@ -149,23 +149,24 @@ export function mxParseElementAt(
   let node: unknown;
   try {
     const region = source.slice(start, end);
-    const { code, hoistedImports, returnVars, dependencies } = regionCompile({
-      source: region,
-      filename: parser.options?.sourceFilename ?? "input.mx",
-      // The region's syntactic position, already computed for the veto
-      // above. Handed over so a host that needs it downstream — to shape
-      // its emit, not merely to accept or reject — needs no side channel
-      // back into the parser. Undefined when no position check ran, since
-      // the stack is only tracked then.
-      context: regionContext,
-      baseOffset: start,
-      baseLine: startLoc.line - 1,
-      baseColumn: startLoc.column,
-      // Registered custom tags reach a host only through here, for the same
-      // reason the hook itself does.
-      customTags: parser.options?.mxCustomTags,
-      importSpecifiers: visibleImportSpecifiers(parser),
-    });
+    const { code, hoistedImports, hoistedDefines, returnVars, dependencies } =
+      regionCompile({
+        source: region,
+        filename: parser.options?.sourceFilename ?? "input.mx",
+        // The region's syntactic position, already computed for the veto
+        // above. Handed over so a host that needs it downstream — to shape
+        // its emit, not merely to accept or reject — needs no side channel
+        // back into the parser. Undefined when no position check ran, since
+        // the stack is only tracked then.
+        context: regionContext,
+        baseOffset: start,
+        baseLine: startLoc.line - 1,
+        baseColumn: startLoc.column,
+        // Registered custom tags reach a host only through here, for the same
+        // reason the hook itself does.
+        customTags: parser.options?.mxCustomTags,
+        importSpecifiers: visibleImportSpecifiers(parser),
+      });
     node = parseExpression(code, {
       ...mxSubParseOptions(parser.options),
       mx: false,
@@ -180,6 +181,7 @@ export function mxParseElementAt(
       start,
       end,
       hoistedImports,
+      hoistedDefines,
       returnVars,
       dependencies,
     );
@@ -486,6 +488,7 @@ function stampRoot(
   start: number,
   end: number,
   hoistedImports: HoistedImport[] = [],
+  hoistedDefines: HoistedDefine[] = [],
   returnVars: string[] = [],
   dependencies: string[] = [],
 ): void {
@@ -511,7 +514,13 @@ function stampRoot(
     // speculative-parse caveat: a `/var` inside a region binds a `let` the
     // region itself has no statement position for, so the surrounding module
     // declares it (design §2.4).
-    mx: { range: [start, end], hoistedImports, returnVars, dependencies },
+    mx: {
+      range: [start, end],
+      hoistedImports,
+      hoistedDefines,
+      returnVars,
+      dependencies,
+    },
   };
 }
 

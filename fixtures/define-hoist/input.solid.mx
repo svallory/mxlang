@@ -1,0 +1,19 @@
+export function DefineHoist() {
+  return (
+    <div>
+      <define/Empty>no args</define>
+      <Empty/>
+      <define/Row|item, i|>
+        <li>${item}-${i}</li>
+      </define>
+      <Row(1, 0)/>
+      <define/Card|title, head|>
+        <section>
+          <h1>${title}</h1>
+          ${head()}
+        </section>
+      </define>
+      <Card("Hi")><@head>tagged</@head></Card>
+    </div>
+  );
+}

@@ -626,6 +626,91 @@ describe("discovered tag imports inside a region", () => {
   });
 });
 
+describe("<define> hoisted to module scope (decision 110b)", () => {
+  it("used to be a compile error inside a region", () => {
+    // The bug this whole feature fixes, pinned so a regression is obvious:
+    // before decision 110b, any `<define>` inside a `.solid.mx` region
+    // failed with this message, unconditionally.
+    expect(() => compile(`<define/Row>x</define><Row/>`)).not.toThrow();
+  });
+
+  it("hoists a no-args <define> to a module-scope function", () => {
+    const result = compile(`<define/Row>x</define><Row/>`);
+    expect(result.hoistedDefines).toHaveLength(1);
+    const [hoisted] = result.hoistedDefines;
+    expect(hoisted?.code).toMatch(
+      /^function \$mx_DefineRow1\(\) \{ return .*x.*; \}$/,
+    );
+    // JSX has no positional-call syntax, so a <define> call is a plain
+    // function-call expression, not a JSX tag — the same call shape
+    // `@mxlang/html` already uses (decision 109's named-param binding).
+    expect(result.code).toContain(`{${hoisted?.binding}()}`);
+    expect(result.code).not.toContain("<Row");
+  });
+
+  it("passes params through the hoisted function's own signature", () => {
+    const result = compile(
+      `<define/Row|item, i|><li>\${item}-\${i}</li></define><Row(input.name, 0)/>`,
+    );
+    const [hoisted] = result.hoistedDefines;
+    expect(hoisted?.code).toContain("function $mx_DefineRow1(item, i)");
+    expect(result.code).toContain(`{${hoisted?.binding}(input.name, 0)}`);
+  });
+
+  it("supports an attribute-tag call to a hoisted <define>", () => {
+    const result = compile(
+      `<define/Row|head|>\${head}</define><Row><@head>H</@head></Row>`,
+    );
+    expect(result.hoistedDefines).toHaveLength(1);
+    // `head` is not a positional arg, so it is filled by name from the
+    // attribute tag, matching decision 109's html/preact named-lookup.
+    expect(result.code).toContain("H");
+  });
+
+  it("supports args, content and attribute tags together (decision 109)", () => {
+    // `item` is consumed positionally by the arg; `head`/`content` are
+    // params beyond it, filled by name from the attribute tag/body — the
+    // same named-lookup scheme `@mxlang/html`'s `<define>` call already
+    // uses for this exact shape.
+    const result = compile(
+      `<define/Row|item, head, content|>\${item}\${head}\${content}</define><Row(input.name)><@head>H</@head>body</Row>`,
+    );
+    const [hoisted] = result.hoistedDefines;
+    expect(result.code).toContain(`{${hoisted?.binding}(input.name`);
+    expect(result.code).toContain("H");
+    expect(result.code).toContain("body");
+  });
+
+  it("gensyms a fresh binding per <define>, never the author's own name", () => {
+    const result = compile(
+      `<define/Row>a</define><define/Card>b</define><Row/><Card/>`,
+    );
+    expect(result.hoistedDefines).toHaveLength(2);
+    const bindings = result.hoistedDefines.map((d) => d.binding);
+    expect(new Set(bindings).size).toBe(2);
+    for (const binding of bindings) expect(binding).toMatch(/^\$mx_Define/);
+  });
+
+  it("rejects a <define> nested inside <for>/<if> with a positioned error", () => {
+    // Not hoisted to module scope: acceptance criterion from the brief is
+    // "decide and document" what happens when a `<define>` can't be safely
+    // hoisted. Nesting inside a per-row/per-branch callback is the case this
+    // host cannot support (§7.5-8's escape-rejection precedent).
+    expectError(
+      `<for|x| of=[1]><define/Row>\${x}</define><Row/></for>`,
+      "top level",
+    );
+  });
+
+  it("rejects a <define> that closes over a region-local value", () => {
+    // A hoisted <define> becomes a real module-scope function; it can no
+    // longer read a binding from the surrounding TypeScript function the
+    // region itself lives in (e.g. a signal from `createSignal`). Rejected
+    // rather than silently emitting a reference to an undeclared name.
+    expectError(`<define/Row>\${someRegionLocal}</define><Row/>`, "close over");
+  });
+});
+
 describe("compileSolidUnit", () => {
   const unitOf = (name: string) =>
     compileSolidUnit(readFileSync(join(TAGS, name), "utf8"), {
