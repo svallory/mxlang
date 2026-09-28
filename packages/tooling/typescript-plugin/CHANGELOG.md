@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: whole-file Solid `.mx` now routes through `compileSolidUnit`, not the region compiler (decision 115)
+
+`createMxLanguagePlugin`'s `compileMxVirtual` (`src/mx-language.ts`) called `compileSolidMx` — the `.solid.mx` *region* compiler, which unconditionally rejects any module-level statement — for `host === "solid"` regardless of whether the file was a whole-file `.mx` or a `.solid.mx` region, even though `compileSolidMx` was never meant for the whole-file path. A whole-file `.mx` resolved to Solid with an authored `import` therefore failed to compile in the editor with "module-level MX statements cannot appear inside a `.solid.mx` expression" — the actual bug behind TODO `solid-whole-file-mx-import` (filed from PR #149). Now calls `compileSolidUnit`, the whole-file entry point, which places an authored `import`/`static`/`export` in the generated module instead of rejecting it. `.solid.mx` regions (`createSolidMxLanguagePlugin` in `src/language.ts`) are unaffected — that path correctly used `compileSolidMx` already and still does.
+
 ### Fix: `compileWithDependencies` iterates to a fixed point instead of stopping after one retry (compile-with-dependencies-nesting-limit)
 
 `compileWithDependencies` (`src/language.ts`) used to run at most one retry: the first pass used the sources of the previously reported dependencies, and a changed dependency set triggered exactly one more pass. A dependency chain deeper than that — a callee's `AttrTag<Alias>` (the whole type argument) itself aliasing a type `import type`-ed from a further file, which `readCalleeInput`'s own `resolveNamedType` follows across files independently of this loop — could have its deepest hop discovered only by the retry's own compile, with no further pass to read it fresh. The caller then stayed typed against that file's stale or absent text.
