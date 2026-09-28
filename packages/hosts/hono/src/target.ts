@@ -22,6 +22,7 @@ export const honoTarget: Target = {
   errorBoundaryFallbackAlwaysFunction: true,
   suspenseName: "Suspense",
   fragmentModule: "hono/jsx",
+  hookModules: ["hono/jsx"],
 };
 
 /** Resolve-time policy shared structurally with Preact/React, Hono diagnostics. */

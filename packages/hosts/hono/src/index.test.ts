@@ -520,3 +520,19 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
     expect(html).toContain("1");
   });
 });
+
+describe("hook-guard-module-list: each host's Target declares its own hookModules", () => {
+  it("rejects a hook imported from hono/jsx in a unit that declares <return>", () => {
+    // Hono declares only `["hono/jsx"]` on its own Target.hookModules.
+    expect(() =>
+      compileHonoMx(
+        [
+          'import { useState } from "hono/jsx"',
+          "<p>x</p>",
+          "<return value=1/>",
+        ].join("\n"),
+        "/fixtures/tags/hooky.mx",
+      ),
+    ).toThrow(/`useState` cannot be used in a tag that declares `<return>`/);
+  });
+});

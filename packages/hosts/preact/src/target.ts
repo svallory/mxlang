@@ -86,6 +86,27 @@ export interface Target {
    * recomposition (`dblclick` → `onDblclick`).
    */
   eventPropNames?: Record<string, string>;
+  /**
+   * Module specifiers whose hook imports (`use*`) are refused inside a
+   * returning unit (`rejectHooksInReturningUnit`, `index.ts`). A returning
+   * unit is invoked as a plain function on every JSX target, so a hook
+   * dispatcher would bind to the *calling* component instead — the same
+   * failure mode regardless of which of these three targets compiled the
+   * file. A list of module specifiers rather than a name test alone: a
+   * local helper called `useTotal` is ordinary code, while `useState`
+   * imported from one of these is the thing that breaks.
+   *
+   * **Not the same list for every target.** Each host only needs to guard
+   * the modules it can actually resolve a hook import from: Preact's own
+   * `preact/hooks` and `preact/compat`, *plus* `react` — `preact/compat`'s
+   * whole purpose is making `import { useState } from "react"` resolve
+   * under Preact, so a Preact-compiled returning unit can reach a real hook
+   * dispatcher through that specifier too. React and Hono have no such
+   * alias for each other's or Preact's modules, so their lists stay
+   * narrower — `["react"]` and `["hono/jsx"]` respectively, not the same
+   * four-item list this field used to be everywhere.
+   */
+  hookModules: readonly string[];
 }
 
 /** The Preact target. */
@@ -101,4 +122,5 @@ export const preactTarget: Target = {
   errorBoundaryName: "MxErrorBoundary",
   suspenseName: "MxPlaceholder",
   fragmentModule: "preact",
+  hookModules: ["preact/hooks", "preact/compat", "react"],
 };

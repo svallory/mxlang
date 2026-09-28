@@ -161,6 +161,7 @@ export const reactTarget: Target = {
   // map falls back to the shared emitter's `on` + capitalized-DOM-name
   // recomposition, which React tolerates for the names it does not know.
   eventPropNames: buildReactEventPropNames(),
+  hookModules: ["react"],
 };
 
 /** Resolve-time policy shared structurally with Preact, with React diagnostics. */

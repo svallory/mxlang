@@ -380,7 +380,7 @@ export function emitModuleWithMappings(
   // with `/var` and still render the output. `output` is the element, not a
   // string: on this target that is what "the rendered thing" is.
   if (ir.returnValue) {
-    rejectHooksInReturningUnit(ir);
+    rejectHooksInReturningUnit(ir, target.hookModules);
     return concatMapped(
       prefix,
       statementCode,
@@ -400,22 +400,6 @@ export function emitModuleWithMappings(
 }
 
 /**
- * The hook modules a returning unit may not import from.
- *
- * Deliberately a list of module specifiers rather than a name test alone: a
- * local helper called `useTotal` is ordinary code, while `useState` imported
- * from `preact/hooks` is the thing that breaks.
- */
-const HOOK_MODULES = [
-  "preact/hooks",
-  "preact/compat",
-  "react",
-  "hono/jsx",
-] as const;
-
-type HookModule = (typeof HOOK_MODULES)[number];
-
-/**
  * Refuses a returning unit that imports a hook (round 1, finding 2).
  *
  * A returning unit is **invoked as a plain function**, not mounted as a
@@ -431,8 +415,16 @@ type HookModule = (typeof HOOK_MODULES)[number];
  * compile error here. A unit that needs hooks should not return a value;
  * Solid is unaffected, because its callback prop keeps the component a
  * component.
+ *
+ * `hookModules` is target vocabulary (`Target.hookModules`, `target.ts`),
+ * not a shared constant: each of Preact, React and Hono declares its own
+ * hook-import module(s), so this guard checks only the modules relevant to
+ * whichever target actually compiled the file.
  */
-function rejectHooksInReturningUnit(ir: Ir): void {
+function rejectHooksInReturningUnit(
+  ir: Ir,
+  hookModules: readonly string[],
+): void {
   for (const node of ir.imports) {
     // Parsed, not matched against the printed statement. A substring test
     // over `node.code` was wrong three ways at once, all measured: it missed
@@ -440,7 +432,7 @@ function rejectHooksInReturningUnit(ir: Ir): void {
     // holds *local* names — it missed `import * as h from "preact/hooks"`
     // and `import { useState as us }`, since neither local is `use`-prefixed.
     const parsed = importedNames(node.code);
-    if (!parsed || !HOOK_MODULES.includes(parsed.source as HookModule)) {
+    if (!parsed || !hookModules.includes(parsed.source)) {
       continue;
     }
 

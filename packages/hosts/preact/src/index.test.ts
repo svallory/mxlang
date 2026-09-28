@@ -1410,6 +1410,32 @@ describe("a unit that returns a value", () => {
     ).toThrow(/`useState` \(imported as `us`\)/);
   });
 
+  it("rejects a hook imported from preact/compat", () => {
+    expect(() =>
+      compilePreactMx(
+        [
+          'import { useState } from "preact/compat"',
+          "<p>x</p>",
+          "<return value=1/>",
+        ].join("\n"),
+        "/fixtures/tags/hooky.mx",
+      ),
+    ).toThrow(/`useState` cannot be used in a tag that declares `<return>`/);
+  });
+
+  it("rejects a hook imported from react (hook-guard-module-list round 2): preact/compat aliases react's hook exports, so a Preact-compiled unit can reach a real dispatcher through either specifier", () => {
+    expect(() =>
+      compilePreactMx(
+        [
+          'import { useState } from "react"',
+          "<p>x</p>",
+          "<return value=1/>",
+        ].join("\n"),
+        "/fixtures/tags/hooky.mx",
+      ),
+    ).toThrow(/`useState` cannot be used in a tag that declares `<return>`/);
+  });
+
   it("leaves a non-hook export of a hook module alone", () => {
     // The module is on the list, but `createContext` is not a hook: the test
     // is the imported *name*, not where it came from.

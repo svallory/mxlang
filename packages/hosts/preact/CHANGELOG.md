@@ -2,6 +2,24 @@
 
 ## 0.1.0 (unreleased)
 
+- **Internal (hook-guard-module-list), round 2:** `HOOK_MODULES` (the closed
+  list of hook-import specifiers `rejectHooksInReturningUnit` refuses inside
+  a returning unit) moved off a single literal tuple hardcoded in this
+  package's `index.ts` and onto `Target.hookModules` — Preact, React and
+  Hono each declare their own list on their own `target.ts`, the same
+  target-vocabulary pattern `jsxImportSource`/`classAttr`/etc. already use.
+  **This narrows the guard for React (`["react"]`) and Hono (`["hono/jsx"]`)
+  — each now rejects only the modules it can actually resolve a hook import
+  from, since neither has an alias for the other two hosts' modules.**
+  Preact keeps a three-item list, `["preact/hooks", "preact/compat",
+  "react"]`: `preact/compat`'s whole purpose is making `import { useState }
+  from "react"` resolve under Preact, so a Preact-compiled returning unit
+  reaching a real hook dispatcher through the `react` specifier is a real
+  case, not a hypothetical one — round 1 of this change dropped it, which
+  was a real regression (caught in review before merge, no user ever hit
+  it). Round 2 restores it and adds a test per host for each specifier it
+  declares, including Preact rejecting `"react"` specifically, which had no
+  test before and is how the regression slipped through undetected.
 - **Internal (source-bindings-silent-parse-failure):** `rejectUnknownTag`'s
   Marko-wording message now comes from `@mxlang/core`'s
   `unresolvedCustomTagMessage` instead of a hand-copied literal. No behavior

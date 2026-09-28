@@ -505,3 +505,20 @@ describe("local-value-as-tag-parity: React's memo()/forwardRef() objects on the 
     expect(html).toBe("<em>1</em>");
   });
 });
+
+describe("hook-guard-module-list: each host's Target declares its own hookModules", () => {
+  it("rejects a hook imported from react in a unit that declares <return>", () => {
+    // React declares only `["react"]` on its own Target.hookModules — unlike
+    // Preact, which also guards `react` because `preact/compat` aliases it.
+    expect(() =>
+      compileReactMx(
+        [
+          'import { useState } from "react"',
+          "<p>x</p>",
+          "<return value=1/>",
+        ].join("\n"),
+        "/fixtures/tags/hooky.mx",
+      ),
+    ).toThrow(/`useState` cannot be used in a tag that declares `<return>`/);
+  });
+});
