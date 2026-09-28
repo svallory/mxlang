@@ -1003,6 +1003,29 @@ classification at the parser boundary (over the surrounding module's own
 exactly as decision 116's import case does, so typed attribute-tag checking
 and diagnostics are unaffected.
 
+**Astro host-cannot divergence: an "unknown" fence binding cannot render as a
+dynamic tag at all (decision 65's "target cannot" class, unrelated to this
+decision's own classification).** `@mxlang/astro`'s `---` fence resolves a
+capitalized tag through its own top-level value bindings the same way
+`.solid.mx`'s `moduleBindings` does (decision 114's astro extension), and now
+classifies them the same way too — but Astro's emitter (`component()`)
+unconditionally rejects every non-`"name"` `Component` target, because Astro
+resolves component names statically and has no dynamic-tag construct at all,
+unlike every other host. An "unknown" fence binding therefore cannot fall
+back to a working `<Dynamic>`-style render the way it does on html/preact/
+react/hono/solid: it fails at MX compile time instead, with its own message
+naming the tag (`` `<Tag>` is bound in the frontmatter to a value MX can't
+prove is a component, and @mxlang/astro can't render a tag name decided at
+runtime. Bind it to a component (an import, function or class), or use a
+lowercase element. ``) — distinct from the generic `<${expr}>` dynamic-tag
+message, since the author wrote an ordinary tag name, not a dynamic-tag
+expression. This is a strict improvement over the pre-existing behavior,
+which silently compiled `const Tag = "div"; <Tag/>` to a literal `<Tag>` JSX
+reference that failed only at Astro's own render time with an opaque
+`NoMatchingRenderer`-class error. A function-like fence binding (the common
+case — a locally declared component) and a fence import are both entirely
+unaffected, and stay a direct call as before.
+
 **Intentional divergence from literal Marko parity:** a plain function is
 still called and its return kept, matching MX's pre-116 behavior for that
 one case rather than Marko's, since an imported `.tsx` component on

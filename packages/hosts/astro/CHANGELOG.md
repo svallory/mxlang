@@ -28,6 +28,21 @@
 
 ### Changed
 
+- **Behavior change (local extension of decision 116, firstmate's ruling):**
+  a `---` fence binding used as a tag now classifies the same way `.solid.mx`
+  does — `@mxlang/parser`'s new `unknownSourceBindings` marks a non-import
+  `const`/`function`/`class` whose value isn't statically a function/arrow/
+  class as "unknown". A function-like fence binding (the common case) is
+  entirely unaffected. Astro has no dynamic-tag construct at all (unlike
+  every other host, `component()`'s own pre-existing guard rejects any
+  non-`"name"` target unconditionally), so an unknown binding now fails at
+  MX compile time with its own named error — `` `<Tag>` is bound in the
+  frontmatter to a value MX can't prove is a component, and @mxlang/astro
+  can't render a tag name decided at runtime. `` — instead of the
+  pre-existing silent misroute (a literal `<Tag>` JSX reference that failed
+  only at Astro's own render time with an opaque `NoMatchingRenderer`-class
+  error).
+
 - Named slots now expose both the callable renderable view and the default
   data view's `.content` thunk to `.mx` components. Arrays, attributes,
   params, and nested attribute tags remain positioned host errors because an

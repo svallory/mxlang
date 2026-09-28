@@ -153,3 +153,111 @@ describe("conditional Astro named slots", () => {
     expect(html).not.toContain("else-not-taken");
   });
 });
+
+// The local extension of decision 116 (firstmate's ruling under decision 116
+// in `notes/decisions-2026-09-10.md`): a fence-declared `const`/`function`/
+// `class` used as a tag classifies by whether its value is statically a
+// function/arrow/class. A fence import already routes through decision 116
+// proper (`isComponent`/`ctx.imports`); this covers the non-import fence
+// binding decision 114's own fix (`unresolved-tag-jsx-astro-angular`)
+// introduced but never classified.
+describe("local-value-as-tag-parity: non-import fence binding used as a tag", () => {
+  // Astro's own emitter rejects every non-"name" Component target
+  // unconditionally (`component()`'s own `if (node.target.kind !== "name")`
+  // guard, pre-existing, unrelated to this task): Astro resolves component
+  // names statically and has no dynamic-tag construct at all, unlike the
+  // other five hosts. So an "unknown" fence binding cannot render the way it
+  // does on html/preact/react/hono/solid — it fails at MX compile time
+  // instead, with its own wording naming the tag (lead's ruling: distinct
+  // from the generic `<${expr}>` message, since the author wrote `<Tag/>`,
+  // not a dynamic-tag expression). This is strictly better than the
+  // pre-existing behavior, which silently compiled to a literal `<Tag>` JSX
+  // reference that failed at Astro's own render time with an opaque
+  // `NoMatchingRenderer`-class error instead.
+  it("a fence const string is unknown and fails with a named compile error, not a silent misroute", () => {
+    expect(() =>
+      lowerAstroMx(
+        '---\nconst Tag = "section";\n---\n<Tag data-x="1">body</Tag>',
+        "Test.amx",
+      ),
+    ).toThrow(
+      "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.",
+    );
+  });
+
+  it("a conditional string-or-component fence binding is unknown and fails the same named error", () => {
+    expect(() =>
+      lowerAstroMx(
+        [
+          "---",
+          'function A() { return "<span>a</span>"; }',
+          'function B() { return "<span>b</span>"; }',
+          "const useA = true;",
+          "const Tag = useA ? A : B;",
+          "---",
+          "<Tag/>",
+        ].join("\n"),
+        "Test.amx",
+      ),
+    ).toThrow(
+      "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component",
+    );
+  });
+
+  it("a fence const bound to a call result (unknown) fails the same named error", () => {
+    expect(() =>
+      lowerAstroMx(
+        [
+          "---",
+          'function make() { return "section"; }',
+          "const Tag = make();",
+          "---",
+          '<Tag data-x="1">body</Tag>',
+        ].join("\n"),
+        "Test.amx",
+      ),
+    ).toThrow(
+      "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component",
+    );
+  });
+
+  it("a fence const string with no name it can bind still names the tag it was called as", () => {
+    // Same case as above, different tag name, proving the error is derived
+    // from the actual authored tag rather than hardcoded.
+    expect(() =>
+      lowerAstroMx('---\nconst Widget = "div";\n---\n<Widget/>', "Test.amx"),
+    ).toThrow("`<Widget>` is bound in the frontmatter");
+  });
+
+  it("a fence arrow-function const stays a direct component call, unaffected", () => {
+    const { code } = lowerAstroMx(
+      "---\nconst Comp = (props: { n: number }) => `<em>${props.n}</em>`;\n---\n<Comp n=1/>",
+      "Test.amx",
+    );
+    expect(code).toContain("<Comp n={1} />");
+    expect(code).not.toContain("bound in the frontmatter");
+  });
+
+  it("a fence function declaration stays a direct component call, unaffected", () => {
+    const { code } = lowerAstroMx(
+      [
+        "---",
+        "function Comp(props: { n: number }) {",
+        "  return `<em>${props.n}</em>`;",
+        "}",
+        "---",
+        "<Comp n=1/>",
+      ].join("\n"),
+      "Test.amx",
+    );
+    expect(code).toContain("<Comp n={1} />");
+  });
+
+  it("a fence import stays a direct component call, unaffected (decision 116 proper, not the local extension)", () => {
+    const { code } = lowerAstroMx(
+      '---\nimport Card from "./Card.astro";\n---\n<Card title="t"/>',
+      "Test.amx",
+    );
+    expect(code).toContain('<Card title="t" />');
+  });
+});

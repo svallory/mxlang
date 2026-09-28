@@ -29,7 +29,7 @@ import {
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
-import { sourceBindings } from "@mxlang/parser";
+import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
 
 /**
  * A lowering failure positioned in the enclosing `.amx` file, or — when
@@ -471,10 +471,26 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
 
     component(node) {
       if (node.target.kind !== "name") {
+        if (node.target.kind === "define") {
+          fail(
+            "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.amx` file and import it",
+            node,
+          );
+        }
+        // `valueImportBinding` is set only by decision 116's own classified
+        // routing (an import, or the local extension's fence-binding
+        // classification) — never by an authored `<${expr}/>`, which has no
+        // tag name to name in the error. Give this case its own wording
+        // (lead's ruling): the author wrote `<Tag/>`, not `<${expr}>`, and
+        // the generic dynamic-tag message would misdescribe what they wrote.
+        if (node.target.valueImportBinding) {
+          fail(
+            `\`<${node.target.valueImportBinding}>\` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.`,
+            node,
+          );
+        }
         fail(
-          node.target.kind === "define"
-            ? "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.amx` file and import it"
-            : "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/astro: Astro resolves component names statically",
+          "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/astro: Astro resolves component names statically",
           node,
         );
       }
@@ -831,6 +847,18 @@ export function lowerAstroMx(
       );
     }
     for (const name of fenceBindings.bindings) ctx.imports.add(name);
+    // Local extension of decision 116 (firstmate's ruling): a fence
+    // binding's own non-import value — a top-level `const`/`function`/
+    // `class` the `---` fence declares — is classified the same way
+    // `.solid.mx`'s `moduleBindings` is (`unknownModuleBindings`), so
+    // `const Tag = "div"` used as `<Tag/>` routes dynamic instead of a
+    // direct call that throws `"Tag is not a function"` at build time.
+    // Skipped when the fence itself already failed to parse above —
+    // `unknownSourceBindings` would only re-derive the identical failure
+    // through its own independent parse.
+    for (const name of unknownSourceBindings(match?.[1] ?? "")) {
+      ctx.unknownLocalValue.add(name);
+    }
     const ir = lower(ctx, body);
     // The `.amx` emitter has nowhere to put a returned value — an Astro
     // component's output is its markup, and the `---` fence is the author's,
