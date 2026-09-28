@@ -219,8 +219,24 @@ export interface Ctx {
   bindings: BindingRegistry;
   /** `<define>`s bound so far, name -> declared parameter names in order. */
   defines: Map<string, string[]>;
-  /** Local bindings introduced by the template's `import` statements. */
+  /**
+   * Local *value* bindings introduced by the template's `import` statements
+   * — never a type-only one (a whole `import type` or an inline
+   * `{ type X }` specifier), since neither introduces a value a capitalized
+   * tag could resolve to (decision 114/115). Every host's own `isComponent`
+   * consults this set directly, so keeping it value-only here is what makes
+   * every host correct with no per-host change.
+   */
   imports: Set<string>;
+  /**
+   * Every name `imports` would have held with no type-only exclusion — used
+   * only where "is this exact name already imported at all, value or type"
+   * is the real question (`needsAttrTagImport`'s "is `AttrTag` already
+   * imported" check, `exportNameFor`'s collision check): a type-only import
+   * of a name still occupies it in the module, so a self-export mint or an
+   * unbound-type warning must still see it.
+   */
+  importedNames: Set<string>;
   /** Authored import binding -> module specifier, for callee Input lookup. */
   importSpecifiers: Map<string, string>;
   generate: (node: Node) => string;
@@ -688,7 +704,12 @@ export function sliceLoc(ctx: Ctx, loc: Node): string {
 
 /**
  * The local binding names an `import` statement introduces — default,
- * namespace, and every named import, aliased or not.
+ * namespace, and every named import, aliased or not. Includes a type-only
+ * binding (a whole `import type` or an inline `{ type X }`): a caller
+ * deciding "is this exact name already imported at all, value or type"
+ * (`needsAttrTagImport`'s `ctx.imports.has("AttrTag")`) needs that, and
+ * `importTypeOnlyBindings` below exists precisely to let a caller that
+ * instead needs *only the value bindings* (tag-name resolution) subtract it.
  *
  * Parsed rather than regex-scraped: a tag name is only a component call when it
  * names one of these bindings, so an incomplete extraction here silently
@@ -705,6 +726,49 @@ export function importBindings(line: string): string[] {
     return declaration.specifiers.map((s: Node) => s.local.name);
   } catch {
     return [];
+  }
+}
+
+/**
+ * The subset of `importBindings(line)` that is type-only: bound by a whole
+ * `import type { X }` or an inline `{ type X }` specifier, introducing no
+ * runtime value.
+ *
+ * A tag name resolves to a component only through a *value* binding
+ * (decision 114/115) — Marko's own rule, since a type is erased before the
+ * module runs and a tag referencing one would be a `ReferenceError` at
+ * render time, not a component call. `lowerStatement` still adds every name
+ * `importBindings` returns to `ctx.imports` (unchanged, since other readers
+ * of that set — `needsAttrTagImport`'s "is `AttrTag` already imported"
+ * check chief among them — correctly want type-only counted as imported);
+ * tag-resolution's own two `ctx.imports.has(name)` checks additionally
+ * exclude this set. Mirrors `@mxlang/parser`'s `programBindings`, which
+ * excludes the same two shapes outright for `.solid.mx` region resolution
+ * (a region has no `needsAttrTagImport`-style second consumer to preserve);
+ * duplicated rather than shared because core may not depend on
+ * `@mxlang/parser` (see `packages/core/AGENTS.md`).
+ */
+export function importTypeOnlyBindings(line: string): Set<string> {
+  const typeOnly = new Set<string>();
+  try {
+    const file = markoBabel().parse(line, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
+    const declaration = file.program.body[0] as Node;
+    if (declaration?.type !== "ImportDeclaration") return typeOnly;
+    if (declaration.importKind === "type") {
+      for (const s of declaration.specifiers as Node[]) {
+        typeOnly.add(s.local.name);
+      }
+      return typeOnly;
+    }
+    for (const s of declaration.specifiers as Node[]) {
+      if (s.importKind === "type") typeOnly.add(s.local.name);
+    }
+    return typeOnly;
+  } catch {
+    return typeOnly;
   }
 }
 
@@ -996,6 +1060,7 @@ export function newCtx(
     },
     defines: new Map(),
     imports: new Set(),
+    importedNames: new Set(),
     importSpecifiers: new Map(),
     generate,
     declarations,
