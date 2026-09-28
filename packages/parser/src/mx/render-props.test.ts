@@ -105,9 +105,15 @@ describe("attribute tags become props", () => {
     });
     // The accessor is parenthesized: `satisfies` binds tighter than an
     // arrow function and would otherwise check the returned fragment.
-    expect(result.code.replace(/\s+/g, " ")).toContain(
-      'item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>}',
+    expect(result.code.replace(/\s+/g, " ")).toBe(
+      'import AttrCallee from "./attr-callee.tsx"; const el = <AttrCallee item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} />;',
     );
+    expect(() =>
+      parseBabel(result.code, {
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
+      }),
+    ).not.toThrow();
     expect(result.dependencies).toContain(
       join(HERE, "fixtures", "attr-callee.tsx"),
     );
@@ -132,8 +138,8 @@ describe("attribute tags become props", () => {
     const result = print(source, filename, {
       mxRegionCompile: solidRegionCompile,
     });
-    expect(result.code.replace(/\s+/g, " ")).toContain(
-      '(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>',
+    expect(result.code.replace(/\s+/g, " ")).toBe(
+      'import AttrCallee from "./attr-callee.tsx"; const el = <AttrCallee item= {(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]> } />;',
     );
     expect(() =>
       parseBabel(result.code, {
