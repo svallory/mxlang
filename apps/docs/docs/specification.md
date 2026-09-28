@@ -1621,7 +1621,6 @@ own `strict` value, because that host has no other mode.
 | Attribute tags on native elements | Marko rejects them | `divergences.md` |
 | `<fragment>` | Marko rejects it; multiple root nodes need no wrapper | `divergences.md` |
 | Unknown custom elements | Letting `<my-widget>` through as a literal element | `divergences.md` |
-| `define-call-args-with-content` | A `<define>` call combining tag-argument form with attribute tags or a body; Marko allows it (its dynamic-tag visitor's lenient `assertAttributesOrArgs`), MX rejects it as stricter-than-Marko until implemented | `divergences.md` |
 | L3 raw hooks | Blocked on a vendored fork registering `Mx*` node types | 89c |
 | A non-JS parser | — | 74 |
 | An async `<try>`/`<await>` | "a later product" | 65 |
@@ -1660,6 +1659,10 @@ deferred (decision 85).
    fallback; attributed or nested occurrences use data. Conditional and looped
    attribute tags and recursive nested tags are part of MX 1.
 ---
+
+### MX 1 divergence to close: arguments with content on dynamic and `<define>` calls
+
+A dynamic `<${expr}>` tag or a `<define>` call that combines the tag-argument form with attribute tags or a body is rejected by MX. Marko allows it: both compile through its dynamic-tag visitor, whose `assertAttributesOrArgs` rejects only arguments plus a plain attribute. Marko's strict `assertAttributesOrSingleArg` applies to named custom tags only. Until TODO `define-call-args-with-content` (MX 1) lands, this is a documented stricter-than-Marko divergence.
 
 ## 16. Docs to fix
 

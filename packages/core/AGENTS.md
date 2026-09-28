@@ -53,11 +53,12 @@ Five facts worth knowing before editing it:
   call are different in real Marko: both compile through the lenient
   dynamic-tag visitor (`assertAttributesOrArgs`), which allows arguments
   together with a body or attribute tag (Marko's "dynamic tag fallback
-  content") and only rejects arguments plus a plain attribute. MX matches
-  Marko's stricter rule for a dynamic tag, but for a `<define>` call MX is
-  **stricter than Marko** — it rejects arguments combined with attributes,
-  attribute tags, *or* a body, with a message that says so explicitly rather
-  than claiming Marko's own diagnostic. Full parity is tracked as TODO
+  content") and only rejects arguments plus a plain attribute. MX is
+  **stricter than Marko for both**: it rejects arguments combined with
+  attributes, attribute tags, *or* a body on a dynamic tag and on a `<define>`
+  call alike. Marko's strict rule belongs to named custom tags only. For a
+  `<define>` call the message says so explicitly rather than claiming Marko's
+  own diagnostic. Full parity for both is tracked as TODO
   `define-call-args-with-content`.
 
 - **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
