@@ -231,33 +231,46 @@ describe("mx-tsc", () => {
   );
 
   it(
-    "PINNED (solid-whole-file-prop-typing): a whole-file Solid .mx component's ordinary props are not yet type-checked",
+    "type-checks a whole-file Solid .mx component's ordinary props at the caller (solid-whole-file-prop-typing)",
     () => {
-      // `compileSolidUnit` deliberately drops `export interface Input` from
-      // its emitted module — Solid's own compiler has no TypeScript
-      // frontend, so a type declaration there is a downstream syntax error
-      // (see `packages/hosts/solid/AGENTS.md`). The emitted
-      // `function Card(input)` therefore carries no type annotation at
-      // all, so TypeScript resolves `input` as implicit `any` and every
-      // ordinary prop — right or wrong — type-checks. `<Card title=1/>`
-      // against a declared `title: string` should be TS2322 and is not.
-      //
-      // Contrast: the identical construct on a `.solid.mx` *region*
-      // (`attr-tag-solid-failing`'s `Wrong.solid.mx`) DOES report TS2322,
-      // because a region's virtual code is a Volar projection that keeps
-      // the real `Input` type — it never goes through `compileSolidUnit`.
-      // AttrTag props are unaffected either way: those are checked through
-      // `satisfies` at the call site, independent of the callee's own
-      // function signature (decisions 106-108).
-      //
-      // This is a known, filed gap (TODO solid-whole-file-prop-typing), not
-      // a regression from decision 115's wiring. Named PINNED and asserting
-      // today's (wrong) behavior so the fix flips this test — when it does,
-      // update this test rather than deleting it.
+      // `compileSolidUnit` emits `export interface Input` and annotates
+      // `function Card(input: Input)`, the same shape `@mxlang/preact` and
+      // `@mxlang/html` have, so a caller's props are a JSX props check.
+      // Before this, the emitted `function Card(input)` was implicitly `any`
+      // and `<Card title=1/>` against `title: string` had zero diagnostics.
       const result = run(mxTsc, [
         "--noEmit",
         "-p",
-        join(fixtures, "whole-file-solid-untyped-props"),
+        join(fixtures, "whole-file-solid-typed-props-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      // `<Card title=1/>`: the attribute name is the diagnostic position.
+      expect(result.output).toContain("WrongProp.mx(5,7): error TS2322");
+      expect(result.output).toContain(
+        "Type 'number' is not assignable to type 'string'",
+      );
+      // `<Card/>`: the required prop is missing (reported on the tag).
+      expect(result.output).toContain("MissingRequired.mx(5,");
+      expect(result.output).toContain("error TS2741");
+      // An optional prop is still type-checked when given.
+      expect(result.output).toContain("WrongOptional.mx(5,");
+      expect(result.output).toContain(
+        "Type 'string' is not assignable to type 'number'",
+      );
+      // AttrTag props keep their `satisfies` check.
+      expect(result.output).toContain("WrongAttrTag.mx(5,");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "accepts correct calls to a whole-file Solid .mx component (required, optional, AttrTag, no Input)",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "whole-file-solid-typed-props-passing"),
       ]);
 
       expect(result.output).toBe("");

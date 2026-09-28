@@ -1,0 +1,10 @@
+import Card from "./Card.mx"
+import Tabs from "./Tabs.mx"
+import Plain from "./NoInput.mx"
+
+export interface Input { }
+
+<Card title="a"/>
+<Card title="b" count=2/>
+<Tabs><@tab title="t"/></Tabs>
+<Plain/>

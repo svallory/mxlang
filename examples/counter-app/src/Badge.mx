@@ -1,0 +1,2 @@
+export interface Input { label: string; count?: number }
+<span class="badge">${input.label}:${input.count ?? 0}</span>

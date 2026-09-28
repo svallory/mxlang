@@ -1,0 +1,5 @@
+import Tabs from "./Tabs.mx"
+
+export interface Input { }
+
+<Tabs><@tab title=1/></Tabs>

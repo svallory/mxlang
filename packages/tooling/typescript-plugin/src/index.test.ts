@@ -1003,6 +1003,63 @@ describe("MX language plugin", () => {
     expect(generated).toContain("<Widget />");
   });
 
+  it("type-checks a whole-file Solid .mx component's ordinary props at the caller (solid-whole-file-prop-typing)", () => {
+    // `compileSolidUnit` keeps `export interface Input` and annotates
+    // `function Card(input: Input)`, so the caller's props are a JSX props
+    // check, as on preact/html. Before, `input` was implicit `any`.
+    const directory = `${here}/fixtures/solid-policy`;
+    const wrongSource = 'import Card from "./Card.mx"\n<Card title=1/>';
+    const files: Record<string, string> = {
+      [`${directory}/Card.mx`]:
+        "export interface Input { title: string; count?: number }\n<div>${input.title}${input.count ?? 0}</div>",
+      [`${directory}/Tabs.mx`]:
+        "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }\n<div/>",
+      [`${directory}/Plain.mx`]: "<div>plain</div>",
+      [`${directory}/Wrong.mx`]: wrongSource,
+      [`${directory}/WrongOptional.mx`]:
+        'import Card from "./Card.mx"\n<Card title="a" count="many"/>',
+      [`${directory}/Missing.mx`]: 'import Card from "./Card.mx"\n<Card/>',
+      [`${directory}/WrongTab.mx`]:
+        'import Tabs from "./Tabs.mx"\n<Tabs><@tab title=1/></Tabs>',
+      [`${directory}/Good.mx`]: [
+        'import Card from "./Card.mx"',
+        'import Tabs from "./Tabs.mx"',
+        'import Plain from "./Plain.mx"',
+        '<Card title="a"/>',
+        '<Card title="b" count=2/>',
+        '<Tabs><@tab title="t"/></Tabs>',
+        "<Plain/>",
+      ].join("\n"),
+    };
+    const consumer = `${directory}/index.ts`;
+    files[consumer] = ["Wrong", "WrongOptional", "Missing", "WrongTab", "Good"]
+      .map((name) => `import "./${name}.mx";`)
+      .join("\n");
+    const service = createPluginService(files, [consumer]);
+    service.getSemanticDiagnostics(consumer);
+    const codes = (name: string) =>
+      service
+        .getSemanticDiagnostics(`${directory}/${name}.mx`)
+        .map((diagnostic) => diagnostic.code);
+
+    // The wrong prop is reported on the attribute itself.
+    expect(
+      service
+        .getSemanticDiagnostics(`${directory}/Wrong.mx`)
+        .some(
+          (diagnostic) =>
+            diagnostic.code === 2322 &&
+            diagnostic.start === wrongSource.indexOf("title"),
+        ),
+    ).toBe(true);
+    expect(codes("WrongOptional")).toContain(2322);
+    expect(codes("Missing")).toContain(2741);
+    expect(codes("WrongTab")).toContain(2322);
+    // Correct calls stay clean: required, optional, AttrTag, and a component
+    // with no `Input`.
+    expect(codes("Good")).toEqual([]);
+  });
+
   it.each([
     ["html", "/project", ".mx"],
     ["preact", `${here}/fixtures/preact-policy`, ".mx"],

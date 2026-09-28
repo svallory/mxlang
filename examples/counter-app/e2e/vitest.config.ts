@@ -9,7 +9,11 @@ export default defineConfig({
     // `resolve.spec.ts` is excluded on purpose: its assertions pass but its
     // teardown hangs (see that file's header), so it is run on demand rather
     // than stalling `bun run e2e` for two minutes.
-    include: ["e2e/counter.spec.ts", "e2e/hmr.spec.ts"],
+    include: [
+      "e2e/counter.spec.ts",
+      "e2e/hmr.spec.ts",
+      "e2e/whole-file.spec.ts",
+    ],
     // Dev server start, browser launch, build and preview all happen inside
     // these tests; the default 5s timeout is far too short.
     testTimeout: 120_000,

@@ -60,6 +60,17 @@ describe("diagnoseDocument", () => {
     expect(diagnostics[0]?.range.start.character).toBe(0);
   });
 
+  it("reports no compile diagnostic for a whole-file Solid .mx that declares a typed Input", () => {
+    // Prop type errors come from the virtual-code type-check (the TypeScript
+    // plugin), not from this compile-time path; this only pins that the
+    // typed `Input` the unit now emits does not itself raise one.
+    const source =
+      "export interface Input { title: string; count?: number }\n<div>${input.title}${input.count ?? 0}</div>\n";
+    expect(
+      diagnoseDocument(source, "file:///project/Card.mx", { host: "solid" }),
+    ).toEqual([]);
+  });
+
   it("reports nothing for a valid file", () => {
     const source = "<p>hello</p>\n";
     const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
