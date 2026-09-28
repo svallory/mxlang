@@ -18,7 +18,13 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
-import { type Ctx, type MxWarning, type Node, newCtx } from "./core.ts";
+import {
+  type Ctx,
+  type MxWarning,
+  type Node,
+  newCtx,
+  TranslateError,
+} from "./core.ts";
 import {
   type CustomTag,
   customTagTaglib,
@@ -174,9 +180,22 @@ export function createTranslator(host: TranslatorOptions = {}) {
           // default export, so the file has a declaration to name and a tag
           // may call itself without importing itself.
           ctx.emitsModule = true;
-          const code = state.emitIr(lower(ctx, path.node.body), ctx);
+          let code: string;
+          try {
+            code = state.emitIr(lower(ctx, path.node.body), ctx);
+          } finally {
+            // Every callee `readCalleeInput` resolved before a later error
+            // (e.g. a missing required attribute tag, thrown well after
+            // resolving the callee whose declaration made it required) is a
+            // real dependency of this compile, and the caller must keep
+            // seeing it even though the compile itself failed — an LSP
+            // integration's re-diagnosis graph would otherwise lose this
+            // caller's edge to that callee on exactly the compile that made
+            // the edge matter, and never re-check it when the callee changes
+            // again.
+            state.dependencies = [...(ctx.dependencies ?? [])];
+          }
           state.code = state.postEmit ? state.postEmit(code) : code;
-          state.dependencies = [...(ctx.dependencies ?? [])];
           path.node.body = [];
         },
       },
@@ -230,6 +249,10 @@ export function compileSource(
       output: "html",
       writeVersionComment: false,
     });
+  } catch (error) {
+    if (error instanceof TranslateError)
+      error.dependencies = state.dependencies;
+    throw error;
   } finally {
     current = previous;
   }

@@ -86,6 +86,17 @@ export class TranslateError extends Error {
    * that can address a second file need read it.
    */
   readonly file?: string;
+  /**
+   * Every callee file the failed compile's `readCalleeInput` had already
+   * resolved before the error was raised (decision 106/107). Set only by
+   * `compileSource`'s catch, from the same-shaped `Ctx.dependencies` a
+   * successful compile drains into `CompileResult.dependencies` — a
+   * dependent-re-diagnosis integration (the language server) needs this on a
+   * *failing* compile too, since a caller reporting "missing required
+   * attribute tag" is exactly the caller that must be re-checked once the
+   * callee's declaration changes again.
+   */
+  dependencies?: string[];
 
   constructor(message: string, line: number, column: number, file?: string) {
     super(message);

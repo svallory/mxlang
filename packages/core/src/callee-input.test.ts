@@ -493,12 +493,18 @@ describe("readCalleeInput", () => {
     } satisfies CalleeInput);
   });
 
-  it("returns unresolved for an import that cannot be resolved", () => {
+  it("returns unresolved for an import that cannot be resolved, but still reports every probed candidate as a dependency", () => {
+    // Every extension/index candidate `resolveSpecifier` tried is recorded,
+    // not just the literal specifier: creating any one of them (or an editor
+    // opening an unsaved buffer at that exact path — see the
+    // `withCalleeInputSources` retry tests below) must invalidate this
+    // caller, and none of those candidate paths is known until probing runs.
     const { input, dependencies } = readCalleeInput(
       namedTarget("Missing"),
       context({ imports: new Map([["Missing", "./does-not-exist"]]) }),
     );
-    expect(dependencies).toEqual([]);
+    expect(dependencies.length).toBeGreaterThan(0);
+    expect(dependencies).toContain(fixture("does-not-exist"));
     expect(input).toEqual({
       kind: "unresolved",
       specifier: "./does-not-exist",
