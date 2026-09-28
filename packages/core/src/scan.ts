@@ -49,6 +49,7 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import { TranslateError } from "./core.ts";
 import type { CustomTag, CustomTagParseOptions } from "./custom-tags.ts";
+import { HOST_NAMES } from "./host-policy.ts";
 import type { TemplateTag } from "./template-tag.ts";
 
 const require = createRequire(import.meta.url);
@@ -229,21 +230,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/**
- * The host names a `hosts` restriction may legally name — kept in sync with
- * `HostPolicy["host"]` in `host-policy.ts` by hand, since that file's union
- * is a type (erased at runtime) and this is the one place a string needs
- * checking against it.
- */
-const KNOWN_HOSTS = new Set([
-  "html",
-  "astro",
-  "solid",
-  "preact",
-  "react",
-  "hono",
-  "angular",
-]);
+/** The host names a `hosts` restriction may legally name. */
+const KNOWN_HOSTS = new Set<string>(HOST_NAMES);
 
 /**
  * Validates and normalizes `package.json#mx.tags`.
