@@ -1663,10 +1663,35 @@ deferred (decision 85).
    the tag-argument form combined with a body or attribute tags, matching
    Marko's own lenient `assertAttributesOrArgs` (which rejects only arguments
    plus a plain attribute); Marko's strict `assertAttributesOrSingleArg`
-   remains named-custom-tag-only and untouched. html, preact/react/hono and
-   Solid emit the trailing content/attribute-tag props alongside the
-   arguments; Angular and Astro keep a positioned error naming their own
-   constraint (`ngComponentOutlet`/no local component form), not MX's.
+   remains named-custom-tag-only and untouched. html and preact/react/hono
+   emit the trailing content/attribute-tag props alongside a dynamic tag's
+   or a `<define>` call's arguments; Solid's dynamic-tag design already kept
+   attrs/attribute-tags/content orthogonal from arguments (args only resolve
+   the value handed to `<Dynamic component=…>`), so it needed no emitter
+   change for the dynamic case. A `<define>` call cannot be authored inside
+   a `.solid.mx` region at all today (`<define>` unconditionally errors
+   there, independent of this decision), so a `<define>`-bound call target
+   is unreachable on Solid and out of this decision's scope. Angular and
+   Astro keep a positioned error naming their own constraint
+   (`ngComponentOutlet`/no local component form), not MX's.
+   **A `<define>` call does not emit Marko's own trailing-object shape.**
+   Marko's own codegen for `renderer(...args, propsObject)` works because a
+   named custom tag's callee has a declared `Input` to destructure that
+   object against; a `<define>` has none — its params are ordinary
+   positional identifiers. Measured against real Marko 6.3.51: its own
+   codegen for `<Card('a')><@head>H</@head></Card>` against
+   `<define/Card|title, head|>` binds the *whole* trailing props object to
+   whichever param follows the args (`head` here), not the attribute tag's
+   value, silently dropping the content (`<div>a</div>`, or
+   `<div>[object Object]</div>` with no args at all) — Marko itself gets
+   this shape wrong for a construct with no `Input` to destructure against.
+   MX's `<define>` emitters (html, the shared preact/react/hono emitter)
+   instead extend their own pre-existing positional named-lookup scheme
+   (already used for the no-args call shape, where `<Row it=x/>` looks up
+   `it` by param name): params beyond the consumed positional args are
+   filled from that same named lookup — attributes, attribute-tag exports,
+   and a bare body under the reserved `content` key — one value per
+   remaining param, rather than one trailing object.
 
 ## 16. Docs to fix
 

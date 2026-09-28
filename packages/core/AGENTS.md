@@ -71,10 +71,17 @@ Five facts worth knowing before editing it:
   react/hono emitter) instead extend their own pre-existing positional
   named-lookup scheme (used for the no-args call shape): params beyond the
   consumed args are filled from the same named lookup, one value per param.
-  Solid needed no emitter change at all — its dynamic-tag design already
-  keeps attrs/attribute-tags/content orthogonal from args (args only resolve
-  the value handed to `<Dynamic component=…>`; attrs/tags/content render on
-  that element regardless), so core's relaxed guard alone was sufficient.
+  Solid needed no emitter change for the dynamic-tag case — its design
+  already keeps attrs/attribute-tags/content orthogonal from args (args only
+  resolve the value handed to `<Dynamic component=…>`; attrs/tags/content
+  render on that element regardless), so core's relaxed guard alone was
+  sufficient. A `<define>`-bound call target is a separate, pre-existing gap
+  on Solid, unrelated to this decision: `<define>` itself unconditionally
+  errors inside a `.solid.mx` region ("cannot declare a function inside a
+  JSX expression"), so `ctx.defines` is never populated there and
+  `target.kind === "define"` is unreachable on Solid regardless of args —
+  not something this decision's scope changes or could fix without first
+  making `<define>` itself work on this host.
   Angular (`ngComponentOutlet` binds `@Input()`s only, not positional
   constructor arguments) and Astro (no local component form at all) keep
   their own positioned errors, unrelated to and unaffected by this change.
