@@ -3,6 +3,7 @@ import {
   type AttrTagConfig,
   type AttrTagOf,
   type CustomTag,
+  concatMapped,
   type GeneratedMapping,
   lower,
   type MxWarning,
@@ -367,7 +368,7 @@ export function compileSolidMx(
 export function compileSolidUnit(
   source: string,
   options: CompileSolidMxOptions,
-): { code: string } {
+): CompileSolidMxResult {
   const { body } = parseFragment(source, {
     filename: options.filename,
     customTags: options.customTags,
@@ -381,6 +382,7 @@ export function compileSolidUnit(
     options.filename,
   );
   ctx.customTags = options.customTags;
+  ctx.warnings = options.warnings;
   // A tag unit is a whole file compiling to a module, unlike the region path
   // above: it has a `export default function <Name>` to name, so a tag that
   // calls itself resolves to that declaration rather than importing itself.
@@ -400,9 +402,9 @@ export function compileSolidUnit(
     );
   }
 
-  const lines: string[] = [];
-  for (const node of ir.imports) lines.push(node.code);
-  for (const node of ir.hoisted) lines.push(node.code);
+  const parts: Array<string | ReturnType<typeof emitSolidWithMappings>> = [];
+  for (const node of ir.imports) parts.push(`${node.code}\n`);
+  for (const node of ir.hoisted) parts.push(`${node.code}\n`);
   // `export interface Input` is deliberately not emitted. Solid's own
   // compiler takes source text and has no TypeScript frontend — the caller
   // is stripped before it ever sees it — so a type declaration here is a
@@ -432,26 +434,47 @@ export function compileSolidUnit(
   // so nothing here reads `hoistedDefines`; a `<define>` still gets the
   // positioned "cannot declare a function inside a JSX expression" error
   // rather than hoisting into a list this function never consumes.
-  const {
-    code: rendered,
-    vars,
-    needsEscapeImport,
-  } = collectReturnVars(() => emitSolid(ir), false);
+  // One emit, with the `/var` names and mappings collected together, the
+  // same reasoning `compileSolidMx` gives for its own single emit above.
+  let emittedBody!: ReturnType<typeof emitSolidWithMappings>;
+  const { vars, needsEscapeImport } = collectReturnVars(() => {
+    emittedBody = emitSolidWithMappings(ir);
+    return emittedBody.code;
+  }, false);
   if (needsEscapeImport) {
-    lines.unshift(
-      `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";`,
+    parts.unshift(
+      `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
     );
   }
   // Declared above the JSX that fills them: the callback prop assigns during
   // the child's synchronous setup, which happens as the JSX is evaluated.
   const varDecls = vars.length > 0 ? `let ${vars.join(", ")}; ` : "";
   const name = moduleExportName(ir, "@mxlang/solid");
-  lines.push(
+  parts.push(
     ir.returnValue
       ? `export default function ${name}(input) { ${varDecls}input[${JSON.stringify(
           MX_RETURN_PROP,
-        )}]?.(${ir.returnValue.code}); return <>${rendered}</>; }`
-      : `export default function ${name}(input) { ${varDecls}return <>${rendered}</>; }`,
+        )}]?.(${ir.returnValue.code}); return <>`
+      : `export default function ${name}(input) { ${varDecls}return <>`,
+    emittedBody,
+    "</>; }",
   );
-  return { code: lines.join("\n") };
+  const { code, mappings } = concatMapped(...parts);
+  const rewritten = new MagicString(source);
+  rewritten.overwrite(0, source.length, code);
+  const map = rewritten.generateMap({
+    file: options.filename,
+    source: options.filename,
+    includeContent: true,
+    hires: true,
+  });
+  return {
+    code,
+    map: map as RawSourceMap,
+    mappings,
+    hoistedImports: [],
+    hoistedDefines: [],
+    returnVars: [],
+    dependencies: [...(ctx.dependencies ?? [])],
+  };
 }
