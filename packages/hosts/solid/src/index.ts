@@ -91,6 +91,18 @@ export interface CompileSolidMxOptions {
    * other extension) lowers as a dynamic tag instead.
    */
   importDefaultFromMarkoOrMx?: ReadonlySet<string>;
+  /**
+   * The subset of `moduleBindings`' *non-import* names (a top-level
+   * `const`/`function`/`class` the surrounding module declares) whose value
+   * `@mxlang/parser`'s `programBindings` could not statically prove is a
+   * function/arrow/class — the local extension of decision 116 (firstmate's
+   * ruling under decision 116 in `notes/decisions-2026-09-10.md`). A
+   * capitalized tag bound to a name in this set lowers as a dynamic tag
+   * instead of the direct call `moduleBindings` alone would give it; a plain
+   * `function Foo(){}`/`class Foo{}`/`const Foo = () => {}` is absent from
+   * this set and keeps its existing direct call.
+   */
+  unknownModuleBindings?: ReadonlySet<string>;
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
   warnings?: MxWarning[];
 }
@@ -276,6 +288,11 @@ export function compileSolidMx(
   // to a value", which is exactly what a module-scope binding is too.
   if (options.moduleBindings) {
     for (const name of options.moduleBindings) ctx.imports.add(name);
+  }
+  if (options.unknownModuleBindings) {
+    for (const name of options.unknownModuleBindings) {
+      ctx.unknownLocalValue.add(name);
+    }
   }
   // decision 116: only a *default* import from a `.marko`/`.mx` source is
   // Marko's own statically-resolved component case; every other value
