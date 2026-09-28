@@ -107,6 +107,19 @@ describe("<for> with a nullish of=/in=", () => {
     );
     expect(html).not.toContain("<b>");
   });
+
+  it("renders nothing for a falsy (non-nullish) of=, matching Marko", async () => {
+    const html = await renderPlain(
+      "for-falsy",
+      [
+        "<for|x| of=0><b>${x}</b></for>",
+        "<for|x| of=false><b>${x}</b></for>",
+        "<for|x| of=NaN><b>${x}</b></for>",
+        '<for|x| of=""><b>${x}</b></for>',
+      ].join("\n"),
+    );
+    expect(html).not.toContain("<b>");
+  });
 });
 
 describe("conditional Astro named slots", () => {

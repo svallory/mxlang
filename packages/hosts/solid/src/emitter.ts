@@ -733,7 +733,11 @@ function attributeTagFor(
     );
   };
   if (source.kind === "of") {
-    return result(`[...(${source.list.code} ?? [])]`, `${first}, ${itemIndex}`);
+    const listVar = hygienicName("mxList", loop.params, source.list.code);
+    return result(
+      `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code})`,
+      `${first}, ${itemIndex}`,
+    );
   }
   if (source.kind === "in") {
     const value =

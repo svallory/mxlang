@@ -511,9 +511,9 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
         write(")");
       };
       if (node.source.kind === "of") {
-        write("{[...(");
+        write("{((mxList) => mxList ? [...mxList] : [])(");
         writeExpr(node.source.list);
-        write(" ?? [])].map((");
+        write(").map((");
         writeParam(0);
         if (second) {
           write(", ");
