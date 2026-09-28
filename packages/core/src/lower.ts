@@ -1943,7 +1943,9 @@ function declaredAttributeTagRead(
     }
   | undefined {
   const member = inputMember(expression);
-  if (!member || ctx.ownInput?.kind !== "declared") return;
+  if (!member || member === "dynamic" || ctx.ownInput?.kind !== "declared") {
+    return;
+  }
   const declaration = ctx.ownInput.attrTags.get(member.name);
   if (!declaration) return;
   return { declaration, name: member.name, readsContent: member.content };

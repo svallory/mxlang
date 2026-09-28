@@ -388,6 +388,69 @@ describe("template custom tags as compilation units", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("recognizes a rest destructure of input as reading everything: const { head, ...rest } = input", () => {
+    resetTemplateCache();
+    const panel = template(
+      "/tmp/mx-template-test/tags/panel-rest.mx",
+      "<const/{ head, ...rest }=input/><section>${JSON.stringify(rest)}</section>",
+      { attributeTags: { head: {} } },
+    );
+    const warnings: MxWarning[] = [];
+    lowerWithTags(
+      "<panel><@head>H</@head>body</panel>\n",
+      { panel },
+      CALLER,
+      warnings,
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it("recognizes input[dynamicKey] as reading everything", () => {
+    resetTemplateCache();
+    const panel = template(
+      "/tmp/mx-template-test/tags/panel-dynamic-key.mx",
+      "static const key = 'head'\n<section><${input[key]}/></section>",
+      { attributeTags: { head: {} } },
+    );
+    const warnings: MxWarning[] = [];
+    lowerWithTags(
+      "<panel><@head>H</@head></panel>\n",
+      { panel },
+      CALLER,
+      warnings,
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it.each([
+    ["arrow parameter", "[1].map(input => input.head)"],
+    ["function parameter", "(function (input) { return input.head; })()"],
+  ])(
+    "does not count a shadowed local named input as a read: %s",
+    (_case, expr) => {
+      resetTemplateCache();
+      const panel = template(
+        "/tmp/mx-template-test/tags/panel-shadowed.mx",
+        `<section>\${JSON.stringify(${expr})}</section>`,
+        { attributeTags: { head: {} } },
+      );
+      const warnings: MxWarning[] = [];
+      lowerWithTags(
+        "<panel><@head>H</@head></panel>\n",
+        { panel },
+        CALLER,
+        warnings,
+      );
+      expect(warnings).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining(
+            "`<@head>` was dropped; /tmp/mx-template-test/tags/panel-shadowed.mx does not read `input.head`",
+          ),
+        }),
+      ]);
+    },
+  );
+
   it("recognizes a spread of input as reading everything", () => {
     resetTemplateCache();
     const panel = template(

@@ -255,35 +255,100 @@ export function metadataForTemplate(
  * AST-based rather than the regex this replaced, because a regex has to grow
  * one branch per spelling and a caller only ever wrote one more of them.
  */
+/**
+ * Whether an `Identifier` node named `input` refers to the template's own
+ * `input` parameter rather than a local binding that shadows it — a callback
+ * parameter, a nested function's parameter, or a tag param, all spelled
+ * `input`. `path.scope.getBinding("input")` resolves to whichever binding is
+ * actually in scope at that reference; the template's own `input` is never a
+ * real binding in this parsed-in-isolation AST (it is a compile-time
+ * synthetic, not a JS declaration the parser sees), so "no binding found"
+ * is exactly the case that means "this is the real one".
+ */
+function isRealInput(path: Node): boolean {
+  return (
+    path.node.name === "input" && path.scope.getBinding("input") === undefined
+  );
+}
+
+const propertyNameOf = (
+  node: Node,
+): { name: string | null; dynamic: boolean } => {
+  if (!node.computed) {
+    return {
+      name: node.property.type === "Identifier" ? node.property.name : null,
+      dynamic: false,
+    };
+  }
+  if (node.property.type === "StringLiteral") {
+    return { name: node.property.value, dynamic: false };
+  }
+  return { name: null, dynamic: true };
+};
+
+const isMemberOf = (node: Node): boolean =>
+  node.type === "MemberExpression" || node.type === "OptionalMemberExpression";
+
+/**
+ * One member read off `input`, however it was spelled — or `"dynamic"` when
+ * the read exists but its key cannot be determined statically
+ * (`input[someVariable]`), which must be treated the same as a spread: it
+ * may read anything, so it can never be the source of a false "was dropped"
+ * warning.
+ *
+ * Matches a `MemberExpression`/`OptionalMemberExpression` chain rooted at the
+ * identifier `input`: dot or bracket access, with or without `?.`, optionally
+ * followed by a `.content`/`?.content` read of that member (`input.head`,
+ * `input?.head`, `input["head"]`, `input?.["head"]`, `input.head?.content`).
+ * Scope-aware: a local binding named `input` (a callback parameter, a tag
+ * param) does not count — see `isRealInput`. AST-based rather than the regex
+ * this replaced, because a regex has to grow one branch per spelling and a
+ * caller only ever wrote one more of them.
+ */
 export function inputMember(
   code: string,
-): { name: string; content: boolean } | null {
+): { name: string; content: boolean } | "dynamic" | null {
   let expr: Node;
   try {
     expr = markoBabel().parseExpression(code.trim());
   } catch {
     return null;
   }
-  const propertyName = (node: Node): string | null => {
-    if (!node.computed) {
-      return node.property.type === "Identifier" ? node.property.name : null;
-    }
-    return node.property.type === "StringLiteral" ? node.property.value : null;
-  };
-  const isMemberOf = (node: Node): boolean =>
-    node.type === "MemberExpression" ||
-    node.type === "OptionalMemberExpression";
 
   let content = false;
   let target = expr;
-  if (isMemberOf(target) && propertyName(target) === "content") {
+  if (isMemberOf(target) && propertyNameOf(target).name === "content") {
     content = true;
     target = target.object;
   }
   if (!isMemberOf(target)) return null;
-  const name = propertyName(target);
-  if (!name || target.object.type !== "Identifier") return null;
-  if (target.object.name !== "input") return null;
+  if (target.object.type !== "Identifier" || target.object.name !== "input") {
+    return null;
+  }
+
+  // A bare parsed expression carries no scope info of its own; wrap it in a
+  // Program and traverse so `path.scope` resolves bindings (e.g. an
+  // enclosing arrow's `input` parameter) the same way `scanCodeForInputMembers`
+  // does.
+  let real = true;
+  try {
+    const { traverse, types: t } = markoBabel();
+    const program = t.program([t.expressionStatement(expr)]);
+    traverse(program, {
+      Identifier(path: Node) {
+        if (path.node === target.object) {
+          real = isRealInput(path);
+        }
+      },
+    });
+  } catch {
+    // Fall through: if traversal fails, trust the syntactic match.
+  }
+  if (!real) return null;
+
+  const { name, dynamic } = propertyNameOf(target);
+  if (dynamic) return "dynamic";
+  if (!name) return null;
   return { name, content };
 }
 
@@ -319,6 +384,12 @@ function spreadsInput(code: string): boolean {
  * `input.content ? a : b`, wraps a read in `<if=input.head?.content>`, or
  * hands `input.head` to a function still read that member.
  *
+ * Scope-aware, same as `inputMember`: a reference to a local binding named
+ * `input` (a callback parameter shadowing the template's own `input`) is
+ * skipped, not recorded. `dynamic` comes back `true` when a computed member
+ * with a non-literal key is found (`input[someVariable]`) — it may read
+ * anything, so the caller must treat it the same as a spread.
+ *
  * The fallback for any node whose `.code` isn't one of the specific sites
  * `inputMember` checks against exactly (a `<static>` block, an `<if>`
  * condition, a `<const>` initializer used in a larger expression, an
@@ -326,39 +397,34 @@ function spreadsInput(code: string): boolean {
  * `MemberExpression`/`OptionalMemberExpression` shapes `inputMember`
  * matches, so `input?.head` is caught the same way `input.head` is.
  */
-function scanCodeForInputMembers(
-  code: string,
-): Array<{ name: string; content: boolean }> {
-  const found: Array<{ name: string; content: boolean }> = [];
+function scanCodeForInputMembers(code: string): {
+  members: Array<{ name: string; content: boolean }>;
+  dynamic: boolean;
+} {
+  const members: Array<{ name: string; content: boolean }> = [];
+  let dynamic = false;
   try {
     const { traverse } = markoBabel();
     const expr = markoBabel().parse(code, { allowReturnOutsideFunction: true });
     traverse(expr, {
       "MemberExpression|OptionalMemberExpression"(path: Node) {
         const node = path.node;
-        const propertyName = !node.computed
-          ? node.property.type === "Identifier"
-            ? node.property.name
-            : null
-          : node.property.type === "StringLiteral"
-            ? node.property.value
-            : null;
-        if (
-          propertyName &&
-          node.object.type === "Identifier" &&
-          node.object.name === "input"
-        ) {
-          found.push({
-            name: propertyName,
-            content: propertyName === "content",
-          });
+        if (node.object.type !== "Identifier" || node.object.name !== "input") {
+          return;
+        }
+        if (!isRealInput({ node: node.object, scope: path.scope })) return;
+        const { name, dynamic: computed } = propertyNameOf(node);
+        if (computed) {
+          dynamic = true;
+        } else if (name) {
+          members.push({ name, content: name === "content" });
         }
       },
     });
   } catch {
-    return [];
+    return { members: [], dynamic: false };
   }
-  return found;
+  return { members, dynamic };
 }
 
 /**
@@ -368,31 +434,50 @@ function scanCodeForInputMembers(
  * pattern (`Const.name`); `initCode` is its initializer.
  *
  * Only a plain, non-computed, non-renamed shorthand or `x: y` property is
- * recognized — a nested pattern or a rest element inside it is treated as
- * "not a simple member list" and ignored, which is conservative: it can miss
- * a read, never fabricate one that would suppress a real warning.
+ * recognized as a named member — a nested pattern inside a property is
+ * treated as "not a simple member list" and the whole destructure is
+ * ignored, which is conservative: it can miss a read, never fabricate one
+ * that would suppress a real warning.
+ *
+ * A rest element (`const { head, ...rest } = input`) is different: `rest`
+ * itself is a copy of every *other* property of `input`, so it reads
+ * everything the same way a bare `...input` spread does. `dynamic` comes
+ * back `true` in that case — the caller treats it exactly like
+ * `scanCodeForInputMembers`'s dynamic flag — while the named properties
+ * before the rest are still returned in `names`.
  */
 function destructuredInputMembers(
   patternCode: string,
   initCode: string,
-): string[] {
-  if (initCode.trim() !== "input") return [];
+): { names: string[]; dynamic: boolean } {
+  if (initCode.trim() !== "input") return { names: [], dynamic: false };
   let pattern: Node;
   try {
     pattern = markoBabel().parseExpression(`(${patternCode.trim()} = 0)`);
   } catch {
-    return [];
+    return { names: [], dynamic: false };
   }
-  if (pattern.type !== "AssignmentExpression") return [];
+  if (pattern.type !== "AssignmentExpression") {
+    return { names: [], dynamic: false };
+  }
   const left = pattern.left;
-  if (!left || left.type !== "ObjectPattern") return [];
+  if (!left || left.type !== "ObjectPattern") {
+    return { names: [], dynamic: false };
+  }
   const names: string[] = [];
+  let dynamic = false;
   for (const prop of left.properties) {
-    if (prop.type !== "ObjectProperty" || prop.computed) return [];
-    if (prop.key.type !== "Identifier") return [];
+    if (prop.type === "RestElement") {
+      dynamic = true;
+      continue;
+    }
+    if (prop.type !== "ObjectProperty" || prop.computed) {
+      return { names: [], dynamic: false };
+    }
+    if (prop.key.type !== "Identifier") return { names: [], dynamic: false };
     names.push(prop.key.name);
   }
-  return names;
+  return { names, dynamic };
 }
 
 /** Computes the public metadata of one already-lowered tag unit. */
@@ -405,8 +490,14 @@ export function metadataOfIr(
   const attributeTags = new Set<string>();
   const seen = new Set<object>();
 
-  const record = (member: { name: string; content: boolean } | null): void => {
+  const record = (
+    member: { name: string; content: boolean } | "dynamic" | null,
+  ): void => {
     if (!member) return;
+    if (member === "dynamic") {
+      readsAllInput = true;
+      return;
+    }
     if (member.content) readsContent = true;
     else attributeTags.add(member.name);
   };
@@ -444,13 +535,15 @@ export function metadataOfIr(
     }
     if (node.kind === "Const") {
       const decl = node as Extract<IrNode, { kind: "Const" }>;
-      for (const name of destructuredInputMembers(decl.name, decl.init.code)) {
-        attributeTags.add(name);
-      }
+      const destructured = destructuredInputMembers(decl.name, decl.init.code);
+      for (const name of destructured.names) attributeTags.add(name);
+      if (destructured.dynamic) readsAllInput = true;
       if (spreadsInput(decl.init.code)) readsAllInput = true;
     }
     if (typeof node.code === "string") {
-      for (const member of scanCodeForInputMembers(node.code)) record(member);
+      const scanned = scanCodeForInputMembers(node.code);
+      for (const member of scanned.members) record(member);
+      if (scanned.dynamic) readsAllInput = true;
       if (spreadsInput(node.code)) readsAllInput = true;
     }
     for (const [key, child] of Object.entries(node)) {
