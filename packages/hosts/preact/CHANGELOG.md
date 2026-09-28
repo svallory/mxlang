@@ -12,6 +12,17 @@
   same named lookup used for the no-args call shape. Arguments plus a plain
   attribute are still rejected. `@mxlang/react` and `@mxlang/hono` share this
   fix through the common emitter.
+- **fix (behavior change, decision 112):** a **string-target** dynamic tag
+  called with arguments now uses `args[0]` as its input (attributes),
+  matching Marko's own `_dynamic_tag`. Previously `mxDynamic` rendered a bare
+  `<Tag />` for a string target with arguments, ignoring them entirely. A
+  null/undefined `args[0]` is treated as `{}`; extra arguments beyond
+  `args[0]` are ignored; decision 109's trailing props object is appended
+  *after* the positional args, so it is never `args[0]` and its
+  attribute-tag values are not read as input — `mxDynamic` gained a third
+  `content` parameter so content still renders regardless, matching Marko's
+  independent content channel. `@mxlang/react` and `@mxlang/hono` share this
+  fix through the common emitter and runtime helper.
 - **breaking:** attribute tags now follow the callee-declared decision-106
   shape. Data tags receive `{ ...attrs, ...nestedProps, content }`, renderable
   tags receive the body, arrays are real arrays, and conditional/loop tag

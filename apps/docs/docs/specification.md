@@ -835,7 +835,17 @@ row in §13.1's dynamic-tag entry.
 > positioned error — silence is the one option the capability test (§11)
 > forbids. Filed in §13.6.
 
-**Decisions:** 47/S11 (superseded by 65, swept by 68), 51, 79, 93, 94c.
+> **A string-target dynamic tag called with arguments uses `args[0]` as its
+> input, not the call's own attributes (decision 112).** `<${expr}(a, b)/>`
+> where `expr` resolves to a tag-name string at run time renders with `a`
+> (`args[0]`, or `{}` if it is null/undefined) spread as attributes; `b` and
+> any further arguments are ignored; decision 109's trailing content/
+> attribute-tag props object (appended *after* the positional args) is not
+> `args[0]` either, so it is not read as input — content still renders,
+> since Marko threads it independently. See §15 item 11 for the full detail
+> and Solid's open exception.
+
+**Decisions:** 47/S11 (superseded by 65, swept by 68), 51, 79, 93, 94c, 112.
 
 ---
 
@@ -1756,6 +1766,46 @@ deferred (decision 85).
    module import), is a positioned error rather than silently wrong code —
    real module scope has no closure over the region's enclosing function or
    a nested callback's own scope.
+11. **A string-target dynamic tag called with arguments uses `args[0]` as
+   its input — closed by decision 112.** Previously html's `renderDynamic`
+   and the shared preact/react/hono `mxDynamic` helper ignored `args`
+   entirely for a string target, rendering the call's own (empty, per
+   `rejectArgsWithProps`) attributes or its attribute-tag props instead.
+   Measured against real Marko 6.3.51 (`runtime-tags/src/html/
+   dynamic-tag.ts`'s `_dynamic_tag`, `typeof renderer === "string"` branch,
+   and the identical dom `_dynamic_tag` in `dom/control-flow.ts`): `const
+   input = (inputIsArgs ? args[0] : ...) || {}` — `args[0]`, not the call
+   site's attributes, becomes the element's input; extra arguments
+   (`args[1]` onward) are ignored; a null/undefined `args[0]` is treated as
+   `{}`. A non-object truthy `args[0]` (e.g. a string) is spread as-is,
+   matching Marko's own `_attrs`'s `for (const name in data)` over a
+   non-object value (yields its numeric indices) — not special-cased.
+   **Decision 109's trailing props object does not combine with `args[0]`
+   here.** Marko's translator appends that object *after* every positional
+   argument (`renderer(...args, { content, <attribute tags> })`), so for a
+   string target it lands at `args[N]`, N > 0 — never `args[0]` — and is
+   therefore not read as input. Content still renders regardless: Marko
+   threads it as `_dynamic_tag`'s own separate `content` parameter,
+   independent of `input`, filled at the call site whether or not the
+   trailing object also happens to carry a `content:` key. html and the
+   shared JSX emitter (preact/react/hono) both keep this exact split —
+   `renderDynamic` already receives content through its own `props`
+   parameter regardless of `args`; the JSX `mxDynamic` helper gained a
+   third `content` argument for the same reason, so the runtime dispatcher
+   never has to guess whether a trailing array element is a genuine
+   argument or the synthesized props object.
+   **Solid is an open exception, not yet resolved.** Its dynamic-tag
+   dispatch (`packages/hosts/solid/src/emitter.ts`'s `#dynamicComponent`)
+   keeps attrs/attribute-tags/content orthogonal from args by design
+   (decision 109's own implementation note, measured against Solid
+   2.0.0-rc.7) — applying this decision literally there means `args[0]`
+   must *replace* attribute-tag props at runtime for a string target with
+   args, which would regress that shipped, tested orthogonality for a
+   combination this decision never measured against Solid specifically.
+   Pending an operator ruling on whether decision 112 overrides decision
+   109's Solid exception for this one combination, or whether Solid is an
+   intentional exception the way Angular/Astro already are elsewhere in
+   this decision family.
 
 ## 16. Docs to fix
 

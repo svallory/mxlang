@@ -22,6 +22,18 @@ and the always-quoted form is safer and more readable.
   scheme (used for the no-args call shape): params beyond the consumed args
   are filled from the same named lookup. Arguments plus a plain attribute are
   still rejected.
+- **fix (behavior change, decision 112):** a **string-target** dynamic tag
+  called with arguments now uses `args[0]` as its input (attributes),
+  matching Marko's own `_dynamic_tag` (`runtime-tags/src/html/dynamic-tag.ts`
+  and the dom equivalent). Previously `renderDynamic` ignored `args`
+  entirely for a string target and rendered the call site's own
+  attributes/attribute tags instead — always empty, per the args/plain-attr
+  exclusivity rule, so the element rendered with no attributes regardless of
+  what was passed. A null/undefined `args[0]` is treated as `{}`; extra
+  arguments beyond `args[0]` are ignored; decision 109's trailing props
+  object is appended *after* the positional args, so it is never `args[0]`
+  and its attribute-tag values are not read as input — content still
+  renders, since Marko threads it independently of the input.
 - **fix:** a lowercase tag naming a local binding (`import layout from
   "./layout.marko"` then `<layout>`) now errors with Marko's own message
   ("Local variables must be in a dynamic tag unless they are PascalCase...")
