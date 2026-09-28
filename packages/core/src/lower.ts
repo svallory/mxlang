@@ -612,11 +612,22 @@ function containsAttributeTags(node: Node): boolean {
 }
 
 /**
- * Marko forbids mixing a tag's positional args with prop-like input, on any
- * call shape a `<define>` can be invoked through (dynamic tag, named/`define`
- * component) — not just the dynamic-tag path that originally called this.
+ * Marko forbids mixing a named custom tag's positional args with prop-like
+ * input (`assertAttributesOrSingleArg`, `data/marko/packages/compiler/src/
+ * babel-utils/assert.js:89-107`) — not just the dynamic-tag path that
+ * originally called this.
+ *
+ * A `<define>` call is different: in real Marko it compiles through the
+ * *dynamic-tag* visitor (`dynamic-tag.ts:132-137`'s `defineBodySection`
+ * check), whose own rule (`assertAttributesOrArgs`, `assert.js:74-82`) is
+ * lenient — it allows args plus a body/attribute tag (Marko's "dynamic tag
+ * fallback content"), and only rejects args plus a plain *attribute*. MX does
+ * not yet implement that lenient shape (see TODO
+ * `define-call-args-with-content`), so this still rejects the combination for
+ * `define` too, but the message says so honestly instead of claiming it is
+ * Marko's own rule.
  */
-function rejectArgsWithProps(node: Node): void {
+function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
   if ((node.arguments ?? []).length === 0) return;
   if (
     (node.attributes ?? []).length === 0 &&
@@ -624,6 +635,14 @@ function rejectArgsWithProps(node: Node): void {
     !hasContent(node.body?.body ?? [])
   ) {
     return;
+  }
+  if (target?.kind === "define") {
+    fail(
+      `\`<${target.name}>\` is a \`<define>\`; MX does not yet support tag ` +
+        "arguments together with attributes, attribute tags, or a body on a " +
+        "define call (Marko does); pass the values as attributes instead.",
+      node.name ?? node,
+    );
   }
   fail(
     "Tag does not support arguments when attributes or body present.",
@@ -1837,7 +1856,7 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     // named or `define` call reaches `lowerComponent` directly and needs its
     // own pass so `<Card(1)><@head>…</@head></Card>` fails here instead of
     // reaching a host emitter, which can only silently drop one side.
-    rejectArgsWithProps(node);
+    rejectArgsWithProps(node, target);
   }
   rejectUnsupportedFields(ctx, node, `\`<${targetName(target)}>\``, {
     attributeTags: true,
