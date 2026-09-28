@@ -454,20 +454,38 @@ describe("one fixture per IR kind", () => {
     expect(find(define.children, "Element").name).toBe("li");
   });
 
-  it("rejects a define call mixing tag-argument form with an attribute tag, with an honest MX-divergence message", () => {
+  it("allows a define call mixing tag-argument form with an attribute tag, matching Marko's lenient dynamic-tag rule", () => {
+    const ir = lowerSource(
+      "<define/Card|title, head|><h1>${title}</h1>${head}</define>\n<Card('a')><@head>H</@head></Card>\n",
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "define", name: "Card" });
+    expect(component.args).toMatchObject([{ code: "'a'" }]);
+    expect(component.attributeTags).toHaveLength(1);
+  });
+
+  it("allows a define call mixing tag-argument form with a body, matching Marko's lenient dynamic-tag rule", () => {
+    const ir = lowerSource(
+      "<define/Card|title|><h1>${title}</h1>${input.content}</define>\n<Card('a')>body</Card>\n",
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "define", name: "Card" });
+    expect(component.args).toMatchObject([{ code: "'a'" }]);
+    expect(component.content).not.toBeNull();
+  });
+
+  it("still rejects a define call mixing tag-argument form with a plain attribute", () => {
     let error: unknown;
     try {
       lowerSource(
-        "<define/Card|title, head|><h1>${title}</h1>${head}</define>\n<Card('a')><@head>H</@head></Card>\n",
+        "<define/Card|title|><h1>${title}</h1></define>\n<Card('a') foo=\"bar\"/>\n",
       );
     } catch (caught) {
       error = caught;
     }
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe(
-      "`<Card>` is a `<define>`; MX does not yet support tag arguments " +
-        "together with attributes, attribute tags, or a body on a define " +
-        "call (Marko does); pass the values as attributes instead.",
+      "Tag does not support arguments when attributes present.",
     );
   });
 
@@ -1707,27 +1725,36 @@ describe("one fixture per IR kind", () => {
  * `shape` argument is the only signal that lets a host tell them apart.
  */
 describe("a dynamic tag's bare shape", () => {
+  it("rejects arguments combined with a plain attribute using Marko's positioned diagnostic", () => {
+    let error: unknown;
+    try {
+      lowerSource(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        '<${input.fn}("A") foo="bar"/>',
+        fakeDeclarations({ attrTags: 2 }),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(
+      "Tag does not support arguments when attributes present.",
+    );
+    expect(error).toMatchObject({ line: 1, column: 3 });
+  });
+
   it.each([
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
-    ["attributes", '<${input.fn}("A") foo="bar"/>'],
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     ["attribute tags", '<${input.fn}("A")><@x>X</@x></>'],
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     ["body", '<${input.fn}("A")>body</>'],
   ])(
-    "rejects arguments combined with %s using Marko's positioned diagnostic",
+    "allows arguments combined with %s, matching Marko's lenient dynamic-tag rule",
     (_case, source) => {
-      let error: unknown;
-      try {
-        lowerSource(source, fakeDeclarations({ attrTags: 2 }));
-      } catch (caught) {
-        error = caught;
-      }
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toBe(
-        "Tag does not support arguments when attributes or body present.",
-      );
-      expect(error).toMatchObject({ line: 1, column: 3 });
+      const ir = lowerSource(source, fakeDeclarations({ attrTags: 2 }));
+      const component = find(ir.body, "Component");
+      expect(component.target).toMatchObject({ kind: "dynamic" });
+      expect(component.args).toMatchObject([{ code: '"A"' }]);
     },
   );
 

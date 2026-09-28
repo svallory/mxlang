@@ -50,16 +50,34 @@ Five facts worth knowing before editing it:
   (`assertAttributesOrSingleArg`), and core rejects that combination with
   Marko's positioned diagnostic before a host could silently discard the
   property/body side of the call. A dynamic `<${expr}>` tag and a `<define>`
-  call are different in real Marko: both compile through the lenient
-  dynamic-tag visitor (`assertAttributesOrArgs`), which allows arguments
-  together with a body or attribute tag (Marko's "dynamic tag fallback
-  content") and only rejects arguments plus a plain attribute. MX is
-  **stricter than Marko for both**: it rejects arguments combined with
-  attributes, attribute tags, *or* a body on a dynamic tag and on a `<define>`
-  call alike. Marko's strict rule belongs to named custom tags only. For a
-  `<define>` call the message says so explicitly rather than claiming Marko's
-  own diagnostic. Full parity for both is tracked as TODO
-  `define-call-args-with-content`.
+  call are different in real Marko, and MX now matches it (decision 109): both
+  compile through the lenient dynamic-tag visitor (`assertAttributesOrArgs`),
+  which allows arguments together with a body or attribute tag (Marko's
+  "dynamic tag fallback content") and only rejects arguments plus a plain
+  attribute. `rejectArgsWithProps` takes this lenient rule for `target.kind`
+  `"dynamic"`/`"define"` (or no target — the dynamic-tag call site before a
+  `HostTag`/`Component` split) and the strict rule only for `"name"`. The
+  trailing shape a host emits is `callee(...args, { content, <attribute
+  tags> })` — Marko's own, confirmed against `@marko/compiler`/`marko`
+  6.3.51's translator and runtime: the props object is appended once,
+  after every positional arg, only when there is content or an attribute
+  tag to carry. **A `<define>` call is not literally Marko's shape**: Marko
+  itself has no declared `Input` to destructure that single trailing object
+  against for a `<define>`, and measured against real Marko 6.3.51 its own
+  codegen for `<Card('a')><@head>H</@head></Card>` binds the *whole* trailing
+  object to whichever param follows the positional args, not the attribute
+  tag's value — silently dropping the content Marko's own comment calls
+  "fallback content". MX's `<define>` emitters (html, the shared preact/
+  react/hono emitter) instead extend their own pre-existing positional
+  named-lookup scheme (used for the no-args call shape): params beyond the
+  consumed args are filled from the same named lookup, one value per param.
+  Solid needed no emitter change at all — its dynamic-tag design already
+  keeps attrs/attribute-tags/content orthogonal from args (args only resolve
+  the value handed to `<Dynamic component=…>`; attrs/tags/content render on
+  that element regardless), so core's relaxed guard alone was sufficient.
+  Angular (`ngComponentOutlet` binds `@Input()`s only, not positional
+  constructor arguments) and Astro (no local component form at all) keep
+  their own positioned errors, unrelated to and unaffected by this change.
 
 - **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
   `core.ts` used to parse
