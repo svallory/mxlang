@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `renderDynamic` no longer drops body content for a falsy dynamic-tag target (decision 116)
+
+`renderDynamic(target, props, args)` returned `""` for `null`/`undefined` `target`, discarding the tag's own body content entirely. Marko's own `_dynamic_tag`/`normalizeDynamicRenderer` treat a falsy target as "no renderer" and render only the body, independent of the target — `renderDynamic` now does the same, returning `props.content?.() ?? ""` instead of `""` outright. Surfaced by decision 116's routing, which sends every non-`.marko`/`.mx` value import through this path far more often than the authored `<${expr}/>` syntax alone did.
+
 Policy (decision 65, 67): the target renders what Marko's own server render
 would emit, minus resume markers — `<let>`/`<const>`/`:=` evaluate their
 initial value, `<effect>`/`<lifecycle>`/`<script>`/`client`/`<id>` are inert,

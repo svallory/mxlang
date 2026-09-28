@@ -1051,6 +1051,129 @@ describe("dynamic tags", () => {
   });
 });
 
+// Decision 116: a capitalized tag bound to a value import that is not a
+// `.marko`/`.mx` default import lowers as a dynamic tag, matching Marko's
+// own `_dynamic_tag` runtime dispatch for the six measured value kinds
+// (`scratch/reports/value-import-as-tag-parity.md`). Each case here uses an
+// ordinary `import X from "./target.ts"` (or `{ X }`) and an ordinary
+// `<X>`/`<X/>` call — the routing itself, not the `<${expr}>` syntax already
+// covered above.
+describe("decision 116: value import used as a tag", () => {
+  it("a string value import renders as a real element", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { Tag } from "./target.ts"\n<Tag name="1">body</Tag>\n<Tag/>',
+        "target.ts": 'export const Tag = "div";',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe('<div name="1">body</div><div></div>');
+  });
+
+  it("a custom-element-named string value import renders as that element (Marko parity)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": 'import { Tag } from "./target.ts"\n<Tag/>',
+        "target.ts": 'export const Tag = "my-el";',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<my-el></my-el>");
+  });
+
+  it("a plain function value import is called as a host component (decision 116, intentional Marko divergence)", async () => {
+    // Marko's own `_dynamic_tag` discards a plain function's return value
+    // (only a real Marko-template-shaped renderer is invoked as a
+    // component); MX calls it and keeps the output — an imported `.tsx`
+    // component on react/preact/hono, and an MX component on html, IS a
+    // plain function, so matching Marko byte-for-byte here would break
+    // ordinary host interop. Recorded in the spec and divergences.md.
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { Comp } from "./target.ts"\n<Comp name="1">body</Comp>',
+        "target.ts": [
+          "export function Comp(input: { name?: string }) {",
+          '  return `<span>comp:${input.name ?? ""}</span>`;',
+          "}",
+        ].join("\n"),
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<span>comp:1</span>");
+  });
+
+  it("an object with a content property throws decision 106's data-attribute-tag guard", async () => {
+    // Not a new divergence: `renderDynamic`'s object branch is the same
+    // guard a `<${x}>` data attribute tag already hits (decision 106).
+    // Marko itself would unwrap `.content` and find no real renderer there
+    // either, silently rendering nothing — but MX's guard is deliberately
+    // loud for this shape everywhere it's reachable, dynamic-tag or not.
+    await expect(
+      renderModules(
+        {
+          "entry.mx": 'import { Obj } from "./target.ts"\n<Obj/>',
+          "target.ts": [
+            "export const Obj = {",
+            '  content: () => "x",',
+            "};",
+          ].join("\n"),
+        },
+        "entry.mx",
+      ),
+    ).rejects.toThrow(
+      "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with",
+    );
+  });
+
+  it("undefined renders only the tag's body content, matching Marko (fixed: html used to drop the body entirely)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { Missing } from "./target.ts"\n<Missing name="1">body</Missing>',
+        "target.ts": "export const Missing = undefined;",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("body");
+  });
+
+  it("undefined with no body renders nothing", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": 'import { Missing } from "./target.ts"\n<Missing/>',
+        "target.ts": "export const Missing = undefined;",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("");
+  });
+
+  it("null renders only the tag's body content, matching Marko (fixed: html used to drop the body entirely)", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          'import { Nul } from "./target.ts"\n<Nul name="1">body</Nul>',
+        "target.ts": "export const Nul = null;",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("body");
+  });
+
+  it("a .marko/.mx default import is unaffected: still a direct component call, no dynamic-tag guard", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx": 'import Comp from "./comp.mx"\n<Comp name="1"/>',
+        "comp.mx": "<span>mxcomp:${input.name}</span>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<span>mxcomp:1</span>");
+  });
+});
+
 describe("comments", () => {
   it("emits <html-comment> and strips a plain comment, as Marko does", () => {
     const body = "<html-comment>keep</html-comment>\n<!-- drop -->\n<p>x</p>";

@@ -624,7 +624,15 @@ const ESCAPE_COMMENT = `function escapeComment(value) {
 }`;
 
 const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string, any>, args?: any[]) {
-  if (target === null || target === undefined) return "";
+  if (target === null || target === undefined) {
+    // decision 116, Marko parity (\`runtime-tags/src/html/dynamic-tag.ts\`'s
+    // \`_dynamic_tag\`, \`normalizeDynamicRenderer\`): a falsy target has no
+    // renderer, so the tag itself renders nothing — but its own body content
+    // still renders, threaded independently of the target, exactly as the
+    // string branch below already does. Args carry no content of their own
+    // (only \`props\` does), so args are irrelevant here.
+    return props.content ? props.content() : "";
+  }
   if (typeof target === "string") {
     // decision 112, Marko parity (\`runtime-tags/src/html/dynamic-tag.ts\`'s
     // \`_dynamic_tag\`, \`typeof renderer === "string"\` branch): a call with
