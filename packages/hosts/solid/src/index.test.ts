@@ -994,6 +994,49 @@ describe("compileSolidUnit", () => {
     expect(code).not.toContain('import type { AttrTag } from "@mxlang/solid";');
   });
 
+  it("errors on a whole `import type` used as a tag (decision 114 parity)", () => {
+    // Mirrors `@mxlang/html`'s equivalent coverage: a whole `import type`
+    // binds no runtime value, so `<Widget/>` must still be Marko's own
+    // unresolved-tag error on Solid's whole-file entry too, not a silently
+    // routed component call. Before the core fix, `lowerStatement`'s
+    // `importBindings` never checked `importKind`, so this compiled clean.
+    let error: unknown;
+    try {
+      compileSolidUnit(`import type Widget from "./widget.mx"\n<Widget/>`, {
+        filename: "/fixtures/type-only.mx",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(
+      "Unable to find entry point for custom tag `<Widget>`",
+    );
+  });
+
+  it("errors on an inline `{ type X }` specifier used as a tag (decision 114 parity)", () => {
+    let error: unknown;
+    try {
+      compileSolidUnit(`import { type Widget } from "./widget.mx"\n<Widget/>`, {
+        filename: "/fixtures/type-only-specifier.mx",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(
+      "Unable to find entry point for custom tag `<Widget>`",
+    );
+  });
+
+  it("still resolves an ordinary value import as a tag", () => {
+    const code = compileSolidUnit(
+      `import Widget from "./widget.mx"\n<Widget/>`,
+      { filename: "/fixtures/value-import.mx" },
+    ).code;
+    expect(code).toContain("<Widget />");
+  });
+
   it("still rejects <define> with a positioned error, not a silent hoist to nowhere", () => {
     // A tag unit is a whole file, not a region spliced into someone else's
     // module — `hoistedDefines` has no caller here to place it, and
