@@ -127,6 +127,25 @@ async function compileMarko(
     };
     return compileHonoMx(source, filename, { customTags, resolveImport });
   }
+  if (host === "solid") {
+    // A whole-file `.mx` document routed to the Solid host goes through
+    // `compileSolidUnit`, not `compileSolidMx` — a whole-file unit is a
+    // module of its own, unlike a `.solid.mx` region spliced into someone
+    // else's module (decision 115). Before this branch existed, `host ===
+    // "solid"` fell through to the `@mxlang/html` branch below: a real
+    // `vite build` compiled a page template meant for Solid through the
+    // vanilla string emitter instead — silently wrong output, no error.
+    const { compileSolidUnit } = (await import("@mxlang/solid")) as {
+      compileSolidUnit: (
+        source: string,
+        options: {
+          filename: string;
+          customTags?: Record<string, CustomTag>;
+        },
+      ) => Pick<CompileResult, "code" | "dependencies">;
+    };
+    return compileSolidUnit(source, { filename, customTags });
+  }
   if (host === "angular") {
     // `@mxlang/angular` exists (phase 1) but is not wired into this plugin
     // yet — falling through to the html branch below would silently compile

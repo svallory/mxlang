@@ -1136,6 +1136,70 @@ export default () => <div />;
       }
     });
 
+    it("invalidates a whole-file Solid .mx caller when an imported callee's Input changes (decision 115)", async () => {
+      // The vite-plugin's own `host === "solid"` branch (decision 115) must
+      // route through `compileSolidUnit`, and must union its
+      // `dependencies` into the reverse map the same way
+      // `loadSolidRegionCompile` already does for `.solid.mx` regions —
+      // otherwise an imported `.mx` component's `Input` changing would
+      // never invalidate a whole-file Solid page that calls it.
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-solid-whole-file-deps-"));
+      scratches.push(dir);
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"v","mx":{"host":"solid"}}',
+      );
+      const caller = join(dir, "caller.mx");
+      const dependency = join(dir, "Card.mx");
+      writeFileSync(caller, 'import Card from "./Card.mx"\n<Card/>\n');
+      writeFileSync(dependency, "export interface Input {}\n<div/>\n");
+
+      vi.resetModules();
+      vi.doMock("@mxlang/solid", () => ({
+        compileSolidUnit: () => ({
+          code: "export default function Caller(input) { return <><Card /></>; }",
+          dependencies: [dependency],
+        }),
+      }));
+      try {
+        const fresh = await import("./index.ts");
+        const plugin = fresh.default();
+        await transformOf(plugin).call(
+          {},
+          'import Card from "./Card.mx"\n<Card/>\n',
+          `${caller}${fresh.MX_SUFFIX}`,
+        );
+
+        const mod = { id: `${caller}${fresh.MX_SUFFIX}`, url: caller };
+        const invalidated: unknown[] = [];
+        const updated = (
+          plugin.handleHotUpdate as unknown as (
+            this: unknown,
+            ctx: unknown,
+          ) => unknown[] | undefined
+        ).call(
+          {},
+          {
+            file: dependency,
+            modules: [],
+            server: {
+              moduleGraph: {
+                getModuleById: (id: string) =>
+                  id === `${caller}${fresh.MX_SUFFIX}` ? mod : undefined,
+                invalidateModule: (target: unknown) => invalidated.push(target),
+              },
+            },
+          },
+        );
+
+        expect(invalidated).toEqual([mod]);
+        expect(updated).toEqual([mod]);
+      } finally {
+        vi.doUnmock("@mxlang/solid");
+        vi.resetModules();
+      }
+    });
+
     it("records a real compileSolidMx dependency for a .solid.mx caller", async () => {
       const dir = mkdtempSync(join(tmpdir(), "mx-vite-solid-real-deps-"));
       scratches.push(dir);
@@ -1182,6 +1246,42 @@ export default () => <div />;
 
       expect(invalidated).toEqual([mod]);
       expect(updated).toEqual([mod]);
+      vi.resetModules();
+    });
+
+    it("compiles a whole-file Solid .mx through the real Solid host, not the html string emitter (decision 115)", async () => {
+      // Before decision 115's wiring, `compileMarko`'s `host === "solid"`
+      // check had no branch at all and fell through to the `@mxlang/html`
+      // branch: a real `vite build` of a page meant for Solid silently
+      // compiled it to the vanilla string emitter instead — plausible
+      // output, wrong host, no error. Asserting real Solid JSX output
+      // (rather than mocking the host, the way the other tests above do)
+      // is what actually catches that regression.
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-solid-real-compile-"));
+      scratches.push(dir);
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"v","mx":{"host":"solid"}}',
+      );
+      const source = 'export interface Input { }\n<p class="x">${input}</p>\n';
+      const caller = join(dir, "page.mx");
+      writeFileSync(caller, source);
+
+      vi.resetModules();
+      const fresh = await import("./index.ts");
+      const plugin = fresh.default();
+      const result = await transformOf(plugin).call(
+        {},
+        source,
+        `${caller}${fresh.MX_SUFFIX}`,
+      );
+
+      // The html string emitter would produce `out += ...` concatenation
+      // and an `escape` import; the Solid host emits JSX text and a `<p>`
+      // element with no such helper.
+      expect(result?.code).toContain('<p class="x">');
+      expect(result?.code).not.toContain("out +=");
+      expect(result?.code).not.toContain('from "@mxlang/html"');
       vi.resetModules();
     });
 
