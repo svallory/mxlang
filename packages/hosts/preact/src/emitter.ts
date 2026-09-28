@@ -689,6 +689,21 @@ export class PreactEmitter implements Emitter<string> {
       : value;
   }
 
+  /**
+   * Same check for a data value, an object literal that needs no inner
+   * parenthesization guard: `{ ... } satisfies T` has no arrow function or
+   * ternary to disambiguate, so one wrapping pair is enough (matching
+   * `@mxlang/html`'s `attrTagValue`).
+   */
+  #satisfyingData(
+    value: MappedCode,
+    valueType: string | undefined,
+  ): MappedCode {
+    return valueType
+      ? concatMapped("(", value, ` satisfies ${valueType})`)
+      : value;
+  }
+
   /** One occurrence, shaped from the callee's resolved declaration. */
   #attributeTagValue(
     tag: AttributeTag,
@@ -730,7 +745,7 @@ export class PreactEmitter implements Emitter<string> {
     }
     if (parts.length > 0) parts.push(", ");
     parts.push("content: ", content);
-    return this.#satisfying(
+    return this.#satisfyingData(
       concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }"),
       valueType,
     );
