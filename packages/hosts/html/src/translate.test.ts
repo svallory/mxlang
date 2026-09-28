@@ -850,10 +850,28 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(code).toContain("content: (");
     expect(code).not.toContain("children:");
   });
+
+  // Decision 109 relaxed only the dynamic-tag/`<define>` rule; a named
+  // custom tag (an imported component reference) stays on Marko's strict
+  // rule and must still reject args combined with a body or attribute tag.
+  it.each([
+    [
+      "an attribute tag",
+      'import Panel from "./panel.marko"\n<Panel("a")><@header>H</@header></Panel>',
+    ],
+    ["a body", 'import Panel from "./panel.marko"\n<Panel("a")>body</Panel>'],
+  ])(
+    "still rejects a named custom tag mixing tag-argument form with %s",
+    (_case, body) => {
+      expect(() => compile(src(body), file)).toThrow(
+        "Tag does not support arguments when attributes or body present.",
+      );
+    },
+  );
 });
 
 describe("dynamic tags", () => {
-  it("rejects arguments combined with a plain attribute using Marko's diagnostic", () => {
+  it("rejects arguments combined with a plain attribute (Marko's own rule, MX's own wording)", () => {
     expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
       "Tag does not support arguments when attributes present.",
     );

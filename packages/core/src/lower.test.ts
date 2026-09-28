@@ -593,6 +593,37 @@ describe("one fixture per IR kind", () => {
     expect(component.attributeTags[1]?.block.params).toEqual(["year"]);
   });
 
+  // Decision 109 relaxed the dynamic-tag/`<define>` rule; a named custom
+  // tag (`target.kind === "name"`) stays on Marko's strict
+  // `assertAttributesOrSingleArg`-equivalent rule, unaffected. Regression
+  // coverage for that boundary: before this test, every existing assertion
+  // of "Tag does not support arguments..." exercised the dynamic-tag path
+  // only, so nothing pinned the named-tag branch staying strict.
+  it.each([
+    [
+      "an attribute tag",
+      'import Panel from "./panel.marko"\n<Panel("a")>\n  <@header>H</@header>\n</Panel>\n',
+    ],
+    ["a body", 'import Panel from "./panel.marko"\n<Panel("a")>body</Panel>\n'],
+  ])(
+    "still rejects a named custom tag mixing tag-argument form with %s",
+    (_case, source) => {
+      let error: unknown;
+      try {
+        lowerSource(
+          source,
+          fakeDeclarations({ isComponent: (name) => name === "Panel" }),
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        "Tag does not support arguments when attributes or body present.",
+      );
+    },
+  );
+
   // attribute-tag-silent-drops B1/B2: the IR itself already carries every
   // repeated `<@name>` (a flat array, never last-wins) and forwards
   // `attributeTags` on a `HostTag` too — the bugs found by the spec backfill
@@ -1725,7 +1756,7 @@ describe("one fixture per IR kind", () => {
  * `shape` argument is the only signal that lets a host tell them apart.
  */
 describe("a dynamic tag's bare shape", () => {
-  it("rejects arguments combined with a plain attribute using Marko's positioned diagnostic", () => {
+  it("rejects arguments combined with a plain attribute with a positioned diagnostic (Marko's own rule, MX's own wording)", () => {
     let error: unknown;
     try {
       lowerSource(
