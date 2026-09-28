@@ -895,7 +895,11 @@ export class PreactEmitter implements Emitter<string> {
     };
     if (source.kind === "of") {
       const params = `${first}, ${itemIndex}`;
-      return result(`[...(${source.list.code} ?? [])]`, params);
+      const listVar = hygienicName("mxList", loop.params, source.list.code);
+      return result(
+        `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code})`,
+        params,
+      );
     }
     if (source.kind === "in") {
       const value =
@@ -1286,9 +1290,10 @@ export class PreactEmitter implements Emitter<string> {
       // unused binding in the callback.
       const params = second ? `${first}, ${second}` : first;
       const key = keyFrom(first);
+      const listVar = hygienicName("mxList", node.params, source.list.code);
       this.#out.push(
         concatMapped(
-          `{[...(${source.list.code} ?? [])].map((${params}) => <Fragment key={${key}}>`,
+          `{((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <Fragment key={${key}}>`,
           body,
           "</Fragment>)}",
         ),

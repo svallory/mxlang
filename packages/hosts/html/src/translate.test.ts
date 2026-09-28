@@ -487,6 +487,31 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(html).toBe("");
   });
 
+  it("renders nothing for a falsy (non-nullish) of=, matching Marko, in content and attribute-tag loops", async () => {
+    for (const list of [0, false, Number.NaN, ""]) {
+      const html = await renderModules(
+        {
+          "list.ts": [
+            "export interface Input { item: AttrTag<{ attrs: { id: number } }>[] }",
+            "export default function List(input: Input): string {",
+            '  return input.item.map((item) => `<i>${item.id}:${item.content?.()}</i>`).join("");',
+            "}",
+          ].join("\n"),
+          "entry.mx": [
+            'import List from "./list.ts"',
+            "<for|x| of=input.list><b>${x}</b></for>",
+            "<List>",
+            "  <for|n| of=input.list><@item id=n>${n}</@item></for>",
+            "</List>",
+          ].join("\n"),
+        },
+        "entry.mx",
+        { list },
+      );
+      expect(html).toBe("");
+    }
+  });
+
   it("executes else-if, for-in, inclusive to, and exclusive until plans", async () => {
     const html = await renderModules(
       {

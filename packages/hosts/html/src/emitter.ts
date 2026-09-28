@@ -359,7 +359,7 @@ export function createEmitter(): StringEmitter {
         ? `for (const [${second}, ${first}] of [...${sourceName}].entries())`
         : `for (const ${first} of ${sourceName})`;
       return concatMapped(
-        `(() => { const ${result} = []; const ${sourceName} = ${source.list.code} ?? []; ${head} { ${result}.push(...(`,
+        `(() => { const ${result} = []; const ${sourceName}Raw = ${source.list.code}; const ${sourceName} = ${sourceName}Raw ? ${sourceName}Raw : []; ${head} { ${result}.push(...(`,
         body,
         `)); } return ${result}; })()`,
       );
@@ -798,7 +798,8 @@ export function createEmitter(): StringEmitter {
       const source = node.source;
 
       if (source.kind === "of") {
-        const list = bind(`${source.list.code} ?? []`);
+        const raw = bind(source.list.code);
+        const list = bind(`${raw} ? ${raw} : []`);
         if (second) {
           push(`for (const [${second}, ${first}] of [...${list}].entries()) {`);
         } else {

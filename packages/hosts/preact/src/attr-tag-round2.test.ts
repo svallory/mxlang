@@ -418,6 +418,21 @@ describe("attribute tags round-2 regressions (executed)", () => {
       expect(html).toBe("<p></p>");
     });
 
+    it(`${host}: renders nothing for a falsy (non-nullish) of= attribute tag, matching Marko`, async () => {
+      const files = {
+        "main.mx":
+          'import Row from "./row.mx"\n<Row><for|x| of=input.list><@item>${x}</@item></for></Row>',
+        "row.mx": dataRow(
+          "item: AttrTag[]",
+          "<p><for|x| of=input.item>[<${x.content}/>]</for></p>",
+        ),
+      };
+      for (const list of [0, false, Number.NaN, ""]) {
+        const html = await renderFixture(host, files, { list });
+        expect(html).toBe("<p></p>");
+      }
+    });
+
     it(`${host}: keeps an outer value binding in a content for-in`, async () => {
       const html = await renderFixture(
         host,

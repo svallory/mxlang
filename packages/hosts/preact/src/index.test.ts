@@ -214,7 +214,7 @@ describe("<if> chains", () => {
 describe("<for> loops", () => {
   it("keys an `of` loop by the row itself when `by=` is absent", () => {
     expect(markup("<for|x| of=input.items><li>${x}</li></for>")).toBe(
-      "{[...(input.items ?? [])].map((x) => <Fragment key={x}><li>{x}</li></Fragment>)}",
+      "{((mxList) => mxList ? [...mxList] : [])(input.items).map((x) => <Fragment key={x}><li>{x}</li></Fragment>)}",
     );
   });
 
