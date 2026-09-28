@@ -673,14 +673,35 @@ export class PreactEmitter implements Emitter<string> {
     return concatMapped(`(${tag.block.params.join(", ")}) => `, value);
   }
 
+  /**
+   * One concrete attribute-tag value checked against the callee's declared
+   * type.
+   *
+   * The value is parenthesized before `satisfies` is applied, because
+   * `satisfies` binds tighter than an arrow function: `(p) => x satisfies T`
+   * checks the returned `x`, not the render function. It is applied to each
+   * concrete occurrence rather than to a whole singular plan for the same
+   * reason, since `test ? a : undefined satisfies T` checks only `undefined`.
+   */
+  #satisfying(value: MappedCode, valueType: string | undefined): MappedCode {
+    return valueType
+      ? concatMapped("((", value, `) satisfies ${valueType})`)
+      : value;
+  }
+
   /** One occurrence, shaped from the callee's resolved declaration. */
   #attributeTagValue(
     tag: AttributeTag,
     as: AttrTagProp["as"],
     key?: string,
+    valueType?: string,
   ): MappedCode {
     const content = this.#attributeTagRenderable(tag, key);
-    if (as === "renderable") return content;
+    // A bodiless renderable is `undefined`, which is the absence of a value
+    // rather than a value of the declared type.
+    if (as === "renderable") {
+      return tag.hasBody ? this.#satisfying(content, valueType) : content;
+    }
 
     const parts: Array<string | MappedCode> = [];
     for (const attr of tag.attrs) {
@@ -709,7 +730,10 @@ export class PreactEmitter implements Emitter<string> {
     }
     if (parts.length > 0) parts.push(", ");
     parts.push("content: ", content);
-    return concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }");
+    return this.#satisfying(
+      concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }"),
+      valueType,
+    );
   }
 
   /** First concrete occurrence, used only to map the emitted prop name. */
@@ -733,20 +757,24 @@ export class PreactEmitter implements Emitter<string> {
   #attributeTagSingle(
     nodes: AttributeTagNode[],
     as: AttrTagProp["as"],
+    valueType?: string,
   ): MappedCode {
     if (nodes.length === 0) return concatMapped("undefined");
     const node = nodes[0] as AttributeTagNode;
     if (node.kind === "AttributeTag") {
-      return this.#attributeTagValue(node.tag, as);
+      return this.#attributeTagValue(node.tag, as, undefined, valueType);
     }
     if (node.kind === "AttributeTagFor") {
       // Core rejects declared singular tags in a loop and promotes fallback
       // loop shapes to arrays. Keep this total for transformed IR without
       // inventing a second loop semantics.
-      return concatMapped(
-        "(",
-        this.#attributeTagFor(node.loop, node.nodes, as),
-        ")[0]",
+      return this.#satisfying(
+        concatMapped(
+          "(",
+          this.#attributeTagFor(node.loop, node.nodes, as),
+          ")[0]",
+        ),
+        valueType,
       );
     }
 
@@ -756,11 +784,11 @@ export class PreactEmitter implements Emitter<string> {
         parts.push(
           branch.test.code,
           " ? ",
-          this.#attributeTagSingle(branch.nodes, as),
+          this.#attributeTagSingle(branch.nodes, as, valueType),
           " : ",
         );
       } else {
-        parts.push(this.#attributeTagSingle(branch.nodes, as));
+        parts.push(this.#attributeTagSingle(branch.nodes, as, valueType));
       }
     }
     if (node.branches.at(-1)?.test) parts.push("undefined");
@@ -902,14 +930,11 @@ export class PreactEmitter implements Emitter<string> {
   /** The resolved value for one callee-declared attribute-tag prop. */
   #attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
     if (prop.cardinality !== "array") {
-      const value = this.#attributeTagSingle(prop.source, prop.as);
       const valueType =
         owner && prop.declared
           ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
           : undefined;
-      return valueType
-        ? concatMapped("(", value, ` satisfies ${valueType})`)
-        : value;
+      return this.#attributeTagSingle(prop.source, prop.as, valueType);
     }
     const arrayType =
       owner && prop.declared

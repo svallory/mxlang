@@ -544,12 +544,36 @@ function attributeTagRenderable(tag: AttributeTag): MappedCode {
   return concatMapped(`(${tag.block.params.join(", ")}) => () => `, body);
 }
 
+/**
+ * One concrete attribute-tag value checked against the callee's declared
+ * type.
+ *
+ * The value is parenthesized before `satisfies` is applied, because
+ * `satisfies` binds tighter than an arrow function: `() => x satisfies T`
+ * checks the returned `x`, not the accessor. It is applied to each concrete
+ * occurrence rather than to a whole singular plan for the same reason, since
+ * `test ? a : undefined satisfies T` checks only `undefined`.
+ */
+function satisfying(
+  value: MappedCode,
+  valueType: string | undefined,
+): MappedCode {
+  return valueType
+    ? concatMapped("((", value, `) satisfies ${valueType})`)
+    : value;
+}
+
 function attributeTagValue(
   tag: AttributeTag,
   as: AttrTagProp["as"],
+  valueType?: string,
 ): MappedCode {
   const content = attributeTagRenderable(tag);
-  if (as === "renderable") return content;
+  // A bodiless renderable is `undefined`, which is the absence of a value
+  // rather than a value of the declared type.
+  if (as === "renderable") {
+    return tag.hasBody ? satisfying(content, valueType) : content;
+  }
 
   const parts: Array<string | MappedCode> = [];
   for (const attr of tag.attrs) {
@@ -568,7 +592,10 @@ function attributeTagValue(
   }
   if (parts.length > 0) parts.push(", ");
   parts.push("content: ", content);
-  return concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }");
+  return satisfying(
+    concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }"),
+    valueType,
+  );
 }
 
 function firstAttributeTag(
@@ -592,15 +619,17 @@ function firstAttributeTag(
 function attributeTagSingle(
   nodes: AttributeTagNode[],
   as: AttrTagProp["as"],
+  valueType?: string,
 ): MappedCode {
   if (nodes.length === 0) return concatMapped("undefined");
   const node = nodes[0] as AttributeTagNode;
-  if (node.kind === "AttributeTag") return attributeTagValue(node.tag, as);
+  if (node.kind === "AttributeTag") {
+    return attributeTagValue(node.tag, as, valueType);
+  }
   if (node.kind === "AttributeTagFor") {
-    return concatMapped(
-      "(",
-      attributeTagFor(node.loop, node.nodes, as),
-      ")[0]",
+    return satisfying(
+      concatMapped("(", attributeTagFor(node.loop, node.nodes, as), ")[0]"),
+      valueType,
     );
   }
   const parts: Array<string | MappedCode> = [];
@@ -609,10 +638,10 @@ function attributeTagSingle(
       parts.push(
         branch.test.code,
         " ? ",
-        attributeTagSingle(branch.nodes, as),
+        attributeTagSingle(branch.nodes, as, valueType),
         " : ",
       );
-    } else parts.push(attributeTagSingle(branch.nodes, as));
+    } else parts.push(attributeTagSingle(branch.nodes, as, valueType));
   }
   if (node.branches.at(-1)?.test) parts.push("undefined");
   return concatMapped(...parts);
@@ -734,14 +763,11 @@ function attributeTagFor(
 
 function attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
   if (prop.cardinality !== "array") {
-    const value = attributeTagSingle(prop.source, prop.as);
     const valueType =
       owner && prop.declared
         ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
         : undefined;
-    return valueType
-      ? concatMapped("(", value, ` satisfies ${valueType})`)
-      : value;
+    return attributeTagSingle(prop.source, prop.as, valueType);
   }
   const arrayType =
     owner && prop.declared

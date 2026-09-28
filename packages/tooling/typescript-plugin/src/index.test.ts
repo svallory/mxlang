@@ -1384,6 +1384,189 @@ describe("MX language plugin", () => {
   });
 });
 
+describe("declared attribute-tag values in the emitted TypeScript", () => {
+  const solidDirectory = `${here}/fixtures/solid-policy`;
+  const preactDirectory = `${here}/fixtures/preact-policy`;
+  const solidCard = [
+    'import type { AttrTag } from "@mxlang/solid";',
+    "export interface Input {",
+    '  b?: AttrTag<{ as: "renderable" }>;',
+    '  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;',
+    "  tab?: AttrTag<{ attrs: { title: string } }>;",
+    "}",
+    "export default function RenderCard(_input: Input) { return null; }",
+  ].join("\n");
+  const preactCard = [
+    "export interface Input {",
+    '  b?: AttrTag<{ as: "renderable" }>;',
+    '  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;',
+    "  tab?: AttrTag<{ attrs: { title: string } }>;",
+    "}",
+    "<div/>",
+  ].join("\n");
+
+  function solidCaller(...views: string[]): Record<string, string> {
+    return {
+      [`${solidDirectory}/RenderCard.solid.mx`]: solidCard,
+      [`${solidDirectory}/RenderCaller.solid.mx`]: [
+        'import RenderCard from "./RenderCard.solid.mx";',
+        ...views.map(
+          (view, index) =>
+            `export const view${index} = (show: boolean) => (\n${view}\n);`,
+        ),
+      ].join("\n"),
+    };
+  }
+
+  function preactCaller(...views: string[]): Record<string, string> {
+    return {
+      [`${preactDirectory}/RenderCard.mx`]: preactCard,
+      [`${preactDirectory}/RenderCaller.mx`]: [
+        'import RenderCard from "./RenderCard.mx"',
+        "export interface Input { show: boolean }",
+        ...views,
+      ].join("\n"),
+    };
+  }
+
+  const valid = {
+    text: "<RenderCard>\n<@b>\nB\n</@b>\n</RenderCard>",
+    element: "<RenderCard>\n<@b>\n<strong>B</strong>\n</@b>\n</RenderCard>",
+    params:
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+      "<RenderCard>\n<@row|count|>\n<strong>${count.toFixed(1)}</strong>\n</@row>\n</RenderCard>",
+    data: '<RenderCard>\n<@tab title="a"/>\n</RenderCard>',
+  };
+
+  it.each([
+    [
+      "solid",
+      solidCaller(
+        valid.text,
+        valid.element,
+        valid.params,
+        valid.data,
+        "<RenderCard>\n<if=show>\n<@b>\n<strong>B</strong>\n</@b>\n</if>\n</RenderCard>",
+      ),
+      `${solidDirectory}/RenderCaller.solid.mx`,
+    ],
+    [
+      "preact",
+      preactCaller(
+        valid.text,
+        valid.element,
+        valid.params,
+        valid.data,
+        "<RenderCard>\n<if=input.show>\n<@b>\n<strong>B</strong>\n</@b>\n</if>\n</RenderCard>",
+      ),
+      `${preactDirectory}/RenderCaller.mx`,
+    ],
+  ])(
+    "accepts every valid %s caller of a declared renderable, params and data tag",
+    (host, files, caller) => {
+      const checked = emittedDiagnostics(files, caller, host);
+
+      // Every value carries the check, so an empty list is not vacuous.
+      expect(checked.code.match(/\bsatisfies\b/g)).toHaveLength(5);
+      expect(checked.diagnostics).toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      "solid",
+      solidCaller(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+        "<RenderCard>\n<@row|count|>\n<strong>${count.toUpperCase()}</strong>\n</@row>\n</RenderCard>",
+      ),
+      `${solidDirectory}/RenderCaller.solid.mx`,
+    ],
+    [
+      "preact",
+      preactCaller(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+        "<RenderCard>\n<@row|count|>\n<strong>${count.toUpperCase()}</strong>\n</@row>\n</RenderCard>",
+      ),
+      `${preactDirectory}/RenderCaller.mx`,
+    ],
+  ])(
+    "rejects a %s caller that misuses a declared param",
+    (host, files, caller) => {
+      const checked = emittedDiagnostics(files, caller, host);
+
+      expect(checked.diagnostics).toEqual([
+        {
+          code: 2339,
+          text: "Property 'toUpperCase' does not exist on type 'number'.",
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    ["solid", solidCaller("<RenderCard>\n<@tab title=1/>\n</RenderCard>")],
+    ["preact", preactCaller("<RenderCard>\n<@tab title=1/>\n</RenderCard>")],
+  ])("rejects a %s caller with a wrong attribute type", (host, files) => {
+    const caller = Object.keys(files)[1] as string;
+    const checked = emittedDiagnostics(files, caller, host);
+
+    // One mistake, two reports: `satisfies` rejects the value at the
+    // attribute, and the JSX prop then rejects the value it was given.
+    expect(checked.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      2322, 2322,
+    ]);
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.text).join("\n"),
+    ).toContain("Type 'number' is not assignable to type 'string'.");
+  });
+
+  it.each([
+    [
+      "an accessor",
+      "export const value = () => 1 satisfies () => number;",
+      [1360],
+    ],
+    [
+      "a parenthesized accessor",
+      "export const value = (() => 1) satisfies () => number;",
+      [],
+    ],
+    [
+      "a conditional",
+      "declare const show: boolean;\nexport const value = show ? () => 1 : undefined satisfies () => number;",
+      [1360],
+    ],
+  ])(
+    "documents that `satisfies` binds tighter than %s",
+    (_shape, source, codes) => {
+      const fileName = `${solidDirectory}/precedence.ts`;
+      const options: ts.CompilerOptions = {
+        strict: true,
+        noEmit: true,
+        target: ts.ScriptTarget.ES2022,
+        types: [],
+      };
+      const host = ts.createCompilerHost(options);
+      const getSourceFile = host.getSourceFile.bind(host);
+      host.getSourceFile = (name, languageVersion, ...rest) =>
+        name === fileName
+          ? ts.createSourceFile(name, source, languageVersion, true)
+          : getSourceFile(name, languageVersion, ...rest);
+      const program = ts.createProgram({
+        rootNames: [fileName],
+        options,
+        host,
+      });
+
+      expect(
+        program
+          .getSemanticDiagnostics(program.getSourceFile(fileName))
+          .map((diagnostic) => diagnostic.code),
+      ).toEqual(codes);
+    },
+  );
+});
+
 describe("Astro language plugin composition", () => {
   it("loads Astro's language plugin when astro is true", () => {
     const plugins = createConfiguredLanguagePlugins(ts, true);
@@ -1599,6 +1782,134 @@ describe("Astro type surface", () => {
     expect(codes).toContain(2353);
   });
 });
+
+/**
+ * Type-checks the TypeScript one MX file compiles to and returns every
+ * diagnostic TypeScript raises in it.
+ *
+ * `createPluginService` cannot stand in for this. It reports through Volar,
+ * which drops a diagnostic whose position has no mapping, and most of an
+ * attribute-tag value is generated code: a check applied to the wrong
+ * expression fails there without anyone seeing it.
+ */
+function emittedDiagnostics(
+  files: Record<string, string>,
+  caller: string,
+  host: string,
+): { code: string; diagnostics: Array<{ code: number; text: string }> } {
+  const readSource = (fileName: string) => files[fileName];
+  const solidMx = createSolidMxLanguagePlugin(ts, { readSource });
+  const mx = createMxLanguagePlugin(ts, { readSource });
+  const emitted = new Map<string, string>();
+  for (const [fileName, source] of Object.entries(files)) {
+    const snapshot = ts.ScriptSnapshot.fromString(source);
+    const context = { getAssociatedScript: () => undefined };
+    const virtual = fileName.endsWith(".solid.mx")
+      ? solidMx.createVirtualCode?.(
+          fileName,
+          SOLID_MX_LANGUAGE_ID,
+          snapshot,
+          context,
+        )
+      : mx.createVirtualCode?.(fileName, MX_LANGUAGE_ID, snapshot, context);
+    if (!virtual) throw new Error(`Expected virtual code for ${fileName}`);
+    const compileErrors = [
+      ...solidMx.getCompileDiagnostics(fileName),
+      ...mx.getCompileDiagnostics(fileName),
+    ].filter((diagnostic) => diagnostic.category === "error");
+    if (compileErrors.length > 0) {
+      throw new Error(
+        `${fileName} did not compile: ${compileErrors[0]?.message}`,
+      );
+    }
+    emitted.set(
+      `${fileName}.tsx`,
+      virtual.snapshot.getText(0, virtual.snapshot.getLength()),
+    );
+  }
+
+  const repoRoot = join(here, "..", "..", "..", "..");
+  const options: ts.CompilerOptions = {
+    strict: true,
+    noEmit: true,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    target: ts.ScriptTarget.ES2022,
+    jsx: ts.JsxEmit.Preserve,
+    jsxImportSource: host === "solid" ? "@solidjs/web" : "preact",
+    allowImportingTsExtensions: true,
+    skipLibCheck: true,
+    types: [],
+    baseUrl: repoRoot,
+    paths: {
+      "@mxlang/core": [join(repoRoot, "packages/core/src/index.ts")],
+      "@mxlang/preact": [join(repoRoot, "packages/hosts/preact/src/index.ts")],
+      "@mxlang/solid": [join(repoRoot, "packages/hosts/solid/src/index.ts")],
+      "@mxlang/parser": [join(repoRoot, "packages/parser/src/public.d.ts")],
+    },
+    ignoreDeprecations: "6.0",
+  };
+  const compilerHost = ts.createCompilerHost(options);
+  const fileExists = compilerHost.fileExists.bind(compilerHost);
+  const readFile = compilerHost.readFile.bind(compilerHost);
+  const getSourceFile = compilerHost.getSourceFile.bind(compilerHost);
+  compilerHost.fileExists = (fileName) =>
+    emitted.has(fileName) || fileExists(fileName);
+  compilerHost.readFile = (fileName) =>
+    emitted.get(fileName) ?? readFile(fileName);
+  compilerHost.getSourceFile = (fileName, languageVersion, ...rest) => {
+    const text = emitted.get(fileName);
+    return text === undefined
+      ? getSourceFile(fileName, languageVersion, ...rest)
+      : ts.createSourceFile(
+          fileName,
+          text,
+          languageVersion,
+          true,
+          ts.ScriptKind.TSX,
+        );
+  };
+  compilerHost.resolveModuleNameLiterals = (literals, containingFile) =>
+    literals.map((literal) => {
+      const resolved = `${join(dirname(containingFile), literal.text)}.tsx`;
+      if (literal.text.endsWith(".mx") && emitted.has(resolved)) {
+        return {
+          resolvedModule: {
+            resolvedFileName: resolved,
+            extension: ts.Extension.Tsx,
+            isExternalLibraryImport: false,
+          },
+        };
+      }
+      return {
+        resolvedModule: ts.resolveModuleName(
+          literal.text,
+          containingFile,
+          options,
+          compilerHost,
+        ).resolvedModule,
+      };
+    });
+
+  const rootName = `${caller}.tsx`;
+  const program = ts.createProgram({
+    rootNames: [rootName],
+    options,
+    host: compilerHost,
+  });
+  const file = program.getSourceFile(rootName);
+  if (!file) throw new Error(`Expected a source file for ${rootName}`);
+  return {
+    code: emitted.get(rootName) ?? "",
+    diagnostics: [
+      ...program.getSyntacticDiagnostics(file),
+      ...program.getSemanticDiagnostics(file),
+    ].map((diagnostic) => ({
+      code: diagnostic.code,
+      text: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    })),
+  };
+}
 
 function createPluginService(
   files: Record<string, string>,
