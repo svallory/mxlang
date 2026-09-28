@@ -11,10 +11,16 @@ import {
   type HoistedImport,
   planHoistedImports,
 } from "./mx/hoist-imports.ts";
+import { programBindings } from "./mx/source-bindings.ts";
 
 export type { ParseError, ParseResult, ParserOptions } from "./babel/index.ts";
 export type { PrintOptions, PrintResult, RawSourceMap } from "./mx/print.ts";
 export { print, printAst } from "./mx/print.ts";
+export {
+  programBindings,
+  SOLID_BUILTIN_TAGS,
+  sourceBindings,
+} from "./mx/source-bindings.ts";
 export type {
   MxAttr,
   MxChild,
@@ -53,11 +59,19 @@ export function parse(
   options: MxParseOptions = {},
 ): File {
   const mx = options.mx ?? filename.endsWith(".solid.mx");
+  const needsModuleScan =
+    options.mxImportSpecifiers === undefined ||
+    options.mxModuleBindings === undefined;
+  const moduleScan =
+    needsModuleScan &&
+    mx &&
+    /\bimport\b|\bconst\b|\bfunction\b|\bclass\b/.test(source)
+      ? collectModuleScope(source, filename, options)
+      : undefined;
   const importSpecifiers =
-    options.mxImportSpecifiers ??
-    (mx && /\bimport\b/.test(source)
-      ? collectModuleImportSpecifiers(source, filename, options)
-      : new Map<string, string>());
+    options.mxImportSpecifiers ?? moduleScan?.importSpecifiers ?? new Map();
+  const moduleBindings =
+    options.mxModuleBindings ?? moduleScan?.moduleBindings ?? new Set();
   const file = babelParse(source, {
     sourceType: "module",
     sourceFilename: filename,
@@ -72,24 +86,28 @@ export function parse(
     // always been here, so every existing caller is unaffected.
     mx,
     mxImportSpecifiers: importSpecifiers,
+    mxModuleBindings: moduleBindings,
   } as ParserOptions) as unknown as File;
   hoistRegionImports(file, filename);
   return file;
 }
 
 /**
- * Reads the surrounding TypeScript module's imports before lowering any MX
- * region. The real parse must lower a region immediately so Babel can keep
- * parsing the expression, but a callee import may appear anywhere in the
- * module. A declaration-only pre-pass replaces every region with `null`,
- * avoiding host work and giving us Babel's exact import grammar rather than
- * a regex approximation.
+ * Reads the surrounding TypeScript module's scope before lowering any MX
+ * region: every import specifier (local binding -> module) and, since
+ * decision 114, every value that scope binds at its top level
+ * (`programBindings`) — a capitalized tag a region references may resolve
+ * through either. The real parse must lower a region immediately so Babel
+ * can keep parsing the expression, but a callee import or a value binding a
+ * region depends on may appear anywhere in the module. A declaration-only
+ * pre-pass replaces every region with `null`, avoiding host work and giving
+ * us Babel's exact grammar rather than a regex approximation.
  */
-function collectModuleImportSpecifiers(
+function collectModuleScope(
   source: string,
   filename: string,
   options: MxParseOptions,
-): Map<string, string> {
+): { importSpecifiers: Map<string, string>; moduleBindings: Set<string> } {
   const file = babelParse(source, {
     sourceType: "module",
     sourceFilename: filename,
@@ -98,22 +116,35 @@ function collectModuleImportSpecifiers(
     mx: true,
     mxRegionCompile: () => ({ code: "null" }),
     mxImportSpecifiers: new Map<string, string>(),
+    mxModuleBindings: new Set<string>(),
   } as ParserOptions) as unknown as File;
   const imports = new Map<string, string>();
   for (const statement of file.program.body as unknown as Array<{
     type?: string;
+    importKind?: string;
     source?: { value?: unknown };
-    specifiers?: Array<{ local?: { name?: unknown } }>;
+    specifiers?: Array<{
+      local?: { name?: unknown };
+      importKind?: string;
+    }>;
   }>) {
     if (statement.type !== "ImportDeclaration") continue;
+    // A type-only import binds no runtime value, so it must not resolve a
+    // capitalized tag reference (decision 114) — the same exclusion
+    // `programBindings` already applies for `moduleBindings`. Both the whole
+    // declaration's own kind (`import type Widget from "..."`) and a single
+    // specifier's (`import { type Widget } from "..."`) count.
+    if (statement.importKind === "type") continue;
     const specifier = statement.source?.value;
     if (typeof specifier !== "string") continue;
     for (const binding of statement.specifiers ?? []) {
+      if (binding.importKind === "type") continue;
       const local = binding.local?.name;
       if (typeof local === "string") imports.set(local, specifier);
     }
   }
-  return imports;
+  const moduleBindings = programBindings(file.program);
+  return { importSpecifiers: imports, moduleBindings };
 }
 
 /**

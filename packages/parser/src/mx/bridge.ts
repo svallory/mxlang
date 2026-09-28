@@ -58,14 +58,42 @@ function visibleImportSpecifiers(
 
   const visible = new Map(imports);
   for (const name of imports.keys()) {
-    if (
-      localScopes.some((scope) => scope.names?.has(name)) ||
-      parser.state.mxFunctionParamNames.some((params) => params.has(name))
-    ) {
-      visible.delete(name);
-    }
+    if (isShadowedLocally(parser, localScopes, name)) visible.delete(name);
   }
   return visible;
+}
+
+/**
+ * Every value the surrounding module binds at its top level (decision 114).
+ *
+ * Deliberately **not** shadow-filtered the way `visibleImportSpecifiers`
+ * filters imports for dependency resolution: Marko's own rule
+ * (`tag.scope.hasBinding(tagName)`, `tag-name-type.ts:95-97`) is that *any*
+ * in-scope binding — including one a nearer lexical scope shadows — makes a
+ * capitalized tag resolved, as a dynamic tag reference to whichever binding
+ * is actually in scope at that point. Shadowing changes *what it prints as*
+ * (a separate, pre-existing concern this bridge's import-shadowing logic
+ * already handles for `importSpecifiers`), never *whether* the name is
+ * resolvable at all — filtering it here would make a shadowed name
+ * unresolved instead of a reference to the shadowing local, which is not
+ * what Marko does.
+ */
+function moduleBindings(parser: MxParserHost): ReadonlySet<string> {
+  return (
+    (parser.options?.mxModuleBindings as ReadonlySet<string> | undefined) ??
+    new Set<string>()
+  );
+}
+
+function isShadowedLocally(
+  parser: MxParserHost,
+  localScopes: Array<{ names?: Map<string, unknown> }>,
+  name: string,
+): boolean {
+  return (
+    localScopes.some((scope) => scope.names?.has(name)) ||
+    parser.state.mxFunctionParamNames.some((params) => params.has(name))
+  );
 }
 
 /**
@@ -166,6 +194,7 @@ export function mxParseElementAt(
         // reason the hook itself does.
         customTags: parser.options?.mxCustomTags,
         importSpecifiers: visibleImportSpecifiers(parser),
+        moduleBindings: moduleBindings(parser),
       });
     node = parseExpression(code, {
       ...mxSubParseOptions(parser.options),

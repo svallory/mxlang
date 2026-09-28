@@ -136,6 +136,12 @@ export interface Options {
   /** MX FORK: surrounding module imports pre-collected by `parse`. */
   mxImportSpecifiers?: ReadonlyMap<string, string>;
 
+  /**
+   * MX FORK: every value the surrounding module binds at its top level,
+   * pre-collected by `parse` (decision 114). See `MxRegionCompileInput.moduleBindings`.
+   */
+  mxModuleBindings?: ReadonlySet<string>;
+
   startIndex?: number;
 
   /**
@@ -212,7 +218,8 @@ type KeepOptionalKeys =
   | "mxCustomTags"
   | "mxRegionPositionCheck"
   | "mxRegionCompile"
-  | "mxImportSpecifiers";
+  | "mxImportSpecifiers"
+  | "mxModuleBindings";
 export type OptionsWithDefaults = Omit<Required<Options>, KeepOptionalKeys> &
   Pick<Options, KeepOptionalKeys>;
 
@@ -239,6 +246,9 @@ function createDefaultOptions(): OptionsWithDefaults {
     mxRegionCompile: undefined,
     // MX FORK: pre-collected surrounding module imports for region compiles.
     mxImportSpecifiers: undefined,
+    // MX FORK: same "must default to undefined, not be left out" reasoning
+    // as mxImportSpecifiers above — decision 114's module-scope bindings.
+    mxModuleBindings: undefined,
     startIndex: 0,
     // Column (0-based) from which to start counting source. Useful for
     // integration with other tools.

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **New exports** (decision 114): `sourceBindings(source)` and
+  `programBindings(program)` — the names a piece of TypeScript/TSX source
+  binds at its top level (import locals plus top-level `const`/`function`/
+  `class`, type-only bindings excluded) — and `SOLID_BUILTIN_TAGS`, the Solid
+  JSX built-ins (`Show`, `For`, `Switch`, `Match`, `Repeat`, `Errored`,
+  `Loading`, `Dynamic`) that resolve on Solid with no import. Both moved here
+  from `@mxlang/typescript-plugin`'s `language.ts` (`sourceBindings`,
+  `SOLID_BUILTIN_IMPORTS`), shared now by that package's
+  `appendSolidBuiltinImport` and `@mxlang/solid`'s `isComponent`, rather than
+  duplicated.
+- `MxRegionCompileInput` gained `moduleBindings: ReadonlySet<string>` —
+  every value the surrounding module binds at its top level, computed the
+  same way `importSpecifiers` already was (a declaration-only pre-parse with
+  regions replaced by `null`) and passed to every `mxRegionCompile` call.
+  Unlike `importSpecifiers`, it is **not** filtered by local shadowing:
+  Marko's own rule (`tag.scope.hasBinding(tagName)`) is that any in-scope
+  binding, shadowed or not, resolves a capitalized tag reference. A new
+  `mxModuleBindings` parser option carries it; both new options default to
+  computed values when omitted, so every existing `mxRegionCompile` caller
+  is unaffected.
 - `MxRegionCompileResult` gained an optional `hoistedDefines` field
   (`MxRegionHoistedDefine[]`), the `<define>` counterpart to
   `hoistedImports`: a region hosted by Solid can now hoist a `<define>` to

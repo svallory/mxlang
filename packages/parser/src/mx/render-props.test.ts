@@ -9,7 +9,23 @@ import { parseSolid, solidRegionCompile } from "./test-helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const parseMx = (source: string) => parseSolid(source);
+/**
+ * These shape/lowering fixtures use bare capitalized tags with no import —
+ * they exercise how a component call lowers, not tag resolution. Since
+ * decision 114 makes an unresolved capitalized tag a compile error, every
+ * capitalized identifier the fixture source uses is declared bound (as
+ * `mxModuleBindings` would be for a real caller's surrounding module),
+ * matching Marko's own rule (`tag.scope.hasBinding(tagName)`) that any
+ * in-scope binding — real or not — is what actually decides resolvability.
+ */
+function moduleBindingsFor(source: string): Set<string> {
+  return new Set(source.match(/(?<=<)[A-Z][A-Za-z0-9]*/g) ?? []);
+}
+
+const parseMx = (source: string) =>
+  parseSolid(source, undefined, {
+    mxModuleBindings: moduleBindingsFor(source),
+  });
 
 /** Prints the sole top-level statement's expression for a `const el = <...>;` source. */
 function printFirstExpression(source: string): string {
