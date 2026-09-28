@@ -108,15 +108,58 @@ describe("Hono target", () => {
         compileHonoMx('<${input.render}("x", 2)/>', entry).code,
       );
       const mod = (await import(`${entry}?t=${Date.now()}`)) as {
-        default: (props: {
-          render: (a: string, b: number) => Child;
-        }) => Child;
+        default: (props: { render: (a: string, b: number) => Child }) => Child;
       };
       const output = await jsx(mod.default, {
         render: (a: string, b: number) =>
           createElement("b", null, `${a}-${b}` as never),
       }).toString();
       expect(output).toBe("<b>x-2</b>");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("renders a string dynamic-tag target as its element, even with arguments", async () => {
+    // Marko's own html/dom runtimes never render a string renderer's name
+    // as literal text, args or not — see `_dynamic_tag` in
+    // `runtime-tags/src/html/dynamic-tag.ts`.
+    const { dirname, join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const scratch = mkdtempSync(join(tmpdir(), "mx-hono-dyn-args-str-"));
+    try {
+      symlinkSync(
+        dirname(dirname(dirname(require.resolve("hono")))),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            jsx: "react-jsx",
+            jsxImportSource: "hono/jsx",
+          },
+        }),
+      );
+      const entry = join(scratch, "dyn-args-str.tsx");
+      writeFileSync(
+        entry,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        compileHonoMx('<${input.tag}("x", 2)/>', entry).code,
+      );
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: { tag: string }) => Child;
+      };
+      const output = await jsx(mod.default, { tag: "span" }).toString();
+      expect(output).toBe("<span></span>");
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

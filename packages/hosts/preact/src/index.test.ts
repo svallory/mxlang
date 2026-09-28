@@ -488,6 +488,18 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     });
     expect(html).toBe("<b>x-2</b>");
   });
+
+  it("renders a string target as its element, even with arguments", async () => {
+    // Marko's own html/dom runtimes treat a string renderer as a tag name
+    // to emit whatever arguments it was called with (the first argument
+    // becomes the element's input) — it never renders the tag name as
+    // literal text. `mxDynamic` must not fall through to returning the bare
+    // string here.
+    const html = await renderCompiled('<${input.tag}("x", 2)/>', {
+      tag: "span",
+    });
+    expect(html).toBe("<span></span>");
+  });
 });
 
 /**
