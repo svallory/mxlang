@@ -1654,6 +1654,122 @@ describe("hidden type errors in the Solid virtual code (solid-virtual-code-hidde
 
     expect(checked.diagnostics.length).toBeGreaterThan(0);
   });
+
+  it("does not append a duplicate `Show` import for a multi-line user import", () => {
+    const files = {
+      [`${solidDirectory}/if-multiline-import.solid.mx`]: [
+        "import {",
+        "  Show,",
+        '} from "solid-js";',
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-multiline-import.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.diagnostics).toEqual([]);
+    expect(checked.code.match(/"solid-js"/g)?.length).toBe(1);
+  });
+
+  it("still imports `Show` when the user's own import aliases it away", () => {
+    const files = {
+      [`${solidDirectory}/if-aliased-import.solid.mx`]: [
+        'import { Show as MyShow } from "./local-show.ts";',
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-aliased-import.solid.mx`,
+      "solid",
+    );
+
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+    expect(checked.code).toContain('import { Show } from "solid-js"');
+  });
+
+  it("does not append `Show` when the file binds it with a local `const`", () => {
+    const files = {
+      [`${solidDirectory}/if-local-const.solid.mx`]: [
+        "const Show = (props: { when: unknown; children: unknown }) =>",
+        "  props.when ? props.children : null;",
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-local-const.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.code.match(/from "solid-js"/g)).toBeNull();
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+  });
+
+  it("handles a mix of multi-line, aliased and locally-bound names in one file", () => {
+    const files = {
+      [`${solidDirectory}/mixed-bindings.solid.mx`]: [
+        "import {",
+        "  For,",
+        '} from "solid-js";',
+        'import { Show as MyShow } from "./local-show.ts";',
+        "export interface Input { items: string[]; show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <div>",
+        "      <for|item| of=input.items>",
+        "        <div>item</div>",
+        "      </for>",
+        "      <if=input.show>",
+        "        <div>shown</div>",
+        "      </if>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/mixed-bindings.solid.mx`,
+      "solid",
+    );
+
+    // `For` is already bound (multi-line import) plus the appended `Show`.
+    expect(checked.code.match(/"solid-js"/g)?.length).toBe(2);
+    // `Show` is needed (the user's `Show` binds to a different local name).
+    expect(checked.code).toContain('import { Show } from "solid-js"');
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+  });
 });
 
 describe("Astro language plugin composition", () => {
