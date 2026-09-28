@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Feat: `compileSolidUnit` types a whole-file component's props (solid-whole-file-prop-typing)
+
+`compileSolidUnit` now emits the author's `export interface Input` and annotates the component parameter (`export default function Card(input: Input)`), the same shape as `@mxlang/html` and `@mxlang/preact`, so a caller's `<Card title=1/>` against `title: string` is TS2322 through the TypeScript plugin, `mx-tsc` and the editor. A unit with no `Input` gets `export interface Input {}`; a unit declaring `<return>` widens the parameter with the `$mxReturn` callback prop; an `AttrTag` in `Input` gets `import type { AttrTag } from "@mxlang/solid"`. **The output is now TSX carrying types, so it needs a TypeScript-aware step**: the vite path already has one (`@mxlang/vite-plugin` gives whole-file units a `.tsx` id, `@solidjs/compiler` parses TypeScript and passes the types through, vite strips them). The old "Solid's compiler has no TypeScript frontend" premise was wrong. The custom-tags oracle harness now loads compiled Solid units as `.tsx`.
+
 ### Internal
 
 - `rejectUnknownTag`'s Marko-wording message (`source-bindings-silent-parse-failure`)

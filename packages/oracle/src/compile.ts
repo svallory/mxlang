@@ -78,8 +78,8 @@ function isMxPath(filename: string): boolean {
  *
  * `printAst` rather than `print` because `print` parses its own source, which
  * would skip the TypeScript erasure above — the fixtures use interfaces and
- * annotations, and the native compiler's JSX frontend has no TypeScript to
- * strip them.
+ * annotations, and the native compiler's JSX frontend parses TypeScript but
+ * does not strip it, so the types would survive into the compared output.
  */
 function toJsxSource(
   source: string,

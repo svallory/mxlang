@@ -969,7 +969,7 @@ describe("compileSolidUnit", () => {
     const code = unitOf("icon.mx");
 
     // Named after the file (`icon.mx` -> `Icon`), never anonymous.
-    expect(code).toContain("export default function Icon(input)");
+    expect(code).toContain("export default function Icon(input: Input)");
     expect(code).toContain("icon");
   });
 
@@ -1002,26 +1002,33 @@ describe("compileSolidUnit", () => {
     expect(result.returnVars).toEqual([]);
   });
 
-  it("drops `export interface Input` rather than emitting it", () => {
-    // Pinned, not incidental: Solid's compiler takes source text and has no
-    // TypeScript frontend, so a type declaration in the emitted unit is a
-    // syntax error downstream. Typing a unit's props is phase 3's job. If
-    // this ever starts emitting, that decision has changed and the CHANGELOG
-    // note about it is stale.
+  it("emits `export interface Input` and annotates the parameter with it", () => {
+    // Same shape as `@mxlang/preact`/`@mxlang/html`: the emitted module is
+    // TSX carrying types, so a caller's ordinary props are type-checked
+    // against `Input`. The vite path strips the types (`.tsx` id).
     const code = unitOf("panel.mx");
 
-    expect(code).not.toContain("interface Input");
-    expect(code).toContain("export default function Panel(input)");
+    expect(code).toMatch(/export interface Input \{[^}]*\}/);
+    expect(code).toContain("export default function Panel(input: Input)");
     // The body that reads `input.title` is still emitted.
     expect(code).toContain("input.title");
   });
 
-  it("does not emit the erased Input declaration's AttrTag type import", () => {
+  it("emits an empty Input for a unit that declares none", () => {
+    const code = compileSolidUnit("<div/>", {
+      filename: "/fixtures/plain.mx",
+    }).code;
+    expect(code).toContain("export interface Input {}");
+    expect(code).toContain("export default function Plain(input: Input)");
+  });
+
+  it("imports the AttrTag type the Input declaration uses", () => {
     const code = compileSolidUnit(
       "export interface Input { item: AttrTag }\n<div/>",
       { filename: "/fixtures/typed.mx" },
     ).code;
-    expect(code).not.toContain('import type { AttrTag } from "@mxlang/solid";');
+    expect(code).toContain('import type { AttrTag } from "@mxlang/solid";');
+    expect(code).toContain("export interface Input { item: AttrTag }");
   });
 
   it("errors on a whole `import type` used as a tag (decision 114 parity)", () => {

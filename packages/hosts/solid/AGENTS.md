@@ -60,22 +60,24 @@ Three facts worth knowing before touching it:
   resolved to Solid through `compileSolidMx` regardless, so an authored import
   was rejected there too, contrary to what this file used to say — this was
   the actual bug behind TODO `solid-whole-file-mx-import`, filed from PR #149.
-  **`compileSolidUnit` deliberately drops `export interface Input` from its
-  emitted module** (Solid's own compiler takes source text and has no
-  TypeScript frontend, so a type declaration there is a downstream syntax
-  error), and the emitted `function Card(input)` therefore carries no type
-  annotation at all — TypeScript resolves `input` as implicit `any`.
-  **Consequence: an ordinary prop on a whole-file Solid `.mx` component is not
-  yet type-checked, right or wrong** — `<Card title=1/>` against a declared
-  `title: string` produces zero diagnostics today (TODO
-  `solid-whole-file-prop-typing`, pinned by a test in
-  `packages/tooling/tsc/src/index.test.ts`,
-  `fixtures/whole-file-solid-untyped-props`). Two things are unaffected by
-  this gap: **AttrTag props are still checked**, since those go through a
-  `satisfies` assertion at the *call site* (decisions 106-108), independent of
-  the callee's own function signature; and **a `.solid.mx` *region* stays
-  fully typed**, since its virtual code is a Volar projection that keeps the
-  real `Input` interface — it never goes through `compileSolidUnit` at all.
+  **`compileSolidUnit` emits the author's `export interface Input` and annotates
+  the component parameter with it** (`function Card(input: Input)`), the same
+  shape `@mxlang/html` and `@mxlang/preact` have, so a caller's ordinary props
+  are a JSX props check: `<Card title=1/>` against `title: string` is TS2322
+  through the TypeScript plugin, `mx-tsc` and an editor (TODO
+  `solid-whole-file-prop-typing`; tests in `packages/tooling/tsc/src/index.test.ts`
+  and `packages/tooling/typescript-plugin/src/index.test.ts`). A component with
+  no `Input` gets an empty one; a unit that declares `<return>` widens the
+  parameter with the `$mxReturn` callback prop so a caller's `/var` type-checks;
+  an `AttrTag` in `Input` gets its `import type { AttrTag } from "@mxlang/solid"`.
+  **The output is therefore TSX carrying types, so every runtime consumer needs
+  a TypeScript-aware step.** The vite path has it: `@mxlang/vite-plugin` gives a
+  whole-file unit a `.tsx` id, `@solidjs/compiler` *parses* TypeScript and passes
+  the types through (it does not strip them), and vite's own transform erases
+  them (`examples/counter-app/e2e/whole-file.spec.ts` builds and renders one).
+  An earlier version dropped `Input` on the belief that Solid's compiler has no
+  TypeScript frontend; that was wrong. AttrTag props are additionally checked
+  through a `satisfies` assertion at the call site (decisions 106-108).
 - **It is an `Emitter<string>`, same shape as `@mxlang/astro`'s
   `.amx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or

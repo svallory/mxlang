@@ -442,12 +442,19 @@ export function compileSolidUnit(
   const parts: Array<string | ReturnType<typeof emitSolidWithMappings>> = [];
   for (const node of ir.imports) parts.push(`${node.code}\n`);
   for (const node of ir.hoisted) parts.push(`${node.code}\n`);
-  // `export interface Input` is deliberately not emitted. Solid's own
-  // compiler takes source text and has no TypeScript frontend — the caller
-  // is stripped before it ever sees it — so a type declaration here is a
-  // syntax error downstream, not a contract the emitted module can carry.
-  // Typing a tag unit's props is phase 3's job, through the same virtual-file
-  // projection the TypeScript plugin already does for `.solid.mx`.
+  // The author's `export interface Input` is emitted and the component
+  // parameter is annotated with it, exactly as `@mxlang/preact` and
+  // `@mxlang/html` do, so a caller's `<Card title=1/>` is a JSX props check
+  // against `Input` (TS2322). The output is therefore TSX carrying types, and
+  // every runtime consumer must run a TypeScript-aware step over it. The vite
+  // plugin already hands a whole-file unit to `@solidjs/vite-plugin` under a
+  // `.tsx` id, and Solid's native compiler parses TS and passes the types
+  // through for vite's own transform to strip. A component with no `Input`
+  // gets an empty one, again as on the other hosts.
+  parts.push(`${ir.inputInterface?.code ?? "export interface Input {}"}\n`);
+  if (ir.needsAttrTagImport) {
+    parts.unshift(`import type { AttrTag } from "@mxlang/solid";\n`);
+  }
   // Named after the file, never anonymous: a tag whose template calls its own
   // name resolves to this declaration, so self-recursion needs no self-import
   // (design invariant §7.5-7).
@@ -487,12 +494,18 @@ export function compileSolidUnit(
   // the child's synchronous setup, which happens as the JSX is evaluated.
   const varDecls = vars.length > 0 ? `let ${vars.join(", ")}; ` : "";
   const name = moduleExportName(ir, "@mxlang/solid");
+  // The return callback is not part of the author's `Input`, so a unit that
+  // declares `<return>` widens its parameter with it; the caller's generated
+  // `$mxReturn={...}` then type-checks against exactly the units that return.
+  const inputType = ir.returnValue
+    ? `Input & { ${JSON.stringify(MX_RETURN_PROP)}?: (value: unknown) => void }`
+    : "Input";
   parts.push(
     ir.returnValue
-      ? `export default function ${name}(input) { ${varDecls}input[${JSON.stringify(
+      ? `export default function ${name}(input: ${inputType}) { ${varDecls}input[${JSON.stringify(
           MX_RETURN_PROP,
         )}]?.(${ir.returnValue.code}); return <>`
-      : `export default function ${name}(input) { ${varDecls}return <>`,
+      : `export default function ${name}(input: ${inputType}) { ${varDecls}return <>`,
     emittedBody,
     "</>; }",
   );

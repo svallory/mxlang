@@ -770,9 +770,7 @@ Five facts worth knowing before editing it:
 - **`compileSolidUnit` is the Solid host's whole-file entry point**, beside the
   region entry point `compileSolidMx`. A tag unit is a *file*, so its
   module-level statements are **placed** rather than rejected — which is the
-  one thing the region compiler cannot do. It deliberately does **not** emit
-  `export interface Input`: Solid's compiler takes source text and has no
-  TypeScript frontend (the caller is stripped before it ever sees it), so a
-  type declaration there is a downstream syntax error. Typing a unit's props
-  is phase 3, through the same virtual-file projection the TypeScript plugin
-  already does for `.solid.mx`.
+  one thing the region compiler cannot do. It **does** emit
+  `export interface Input` and annotates `function Card(input: Input)`, as the
+  other JSX hosts do; the output is TSX carrying types and runs through a
+  TS-aware step (vite, `.tsx` id) at build time.

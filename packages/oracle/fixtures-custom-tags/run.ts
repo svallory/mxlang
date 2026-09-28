@@ -488,7 +488,10 @@ async function runSolid(fixture: Fixture): Promise<string> {
 
   const mod = await loadModule(
     resolveSolidRuntime(compiled.code),
-    "jsx",
+    // `tsx`, not `jsx`: a tag unit is TSX carrying its `Input` types, and
+    // Solid's compiler passes the types through, so the loader must strip them
+    // (the vite path does, under a `.tsx` id).
+    "tsx",
     undefined,
     units,
   );

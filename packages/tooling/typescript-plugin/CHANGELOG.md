@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: whole-file Solid `.mx` component props are type-checked (solid-whole-file-prop-typing)
+
+The virtual code for a whole-file Solid `.mx` is `compileSolidUnit`'s output, which now keeps `export interface Input` and annotates `function Card(input: Input)`. A wrong ordinary prop at the caller is TS2322 at the attribute, a missing required prop TS2741; correct calls, optional props, AttrTag props and a component with no `Input` stay clean. No plugin code changed.
+
 ### Fix: `appendSolidBuiltinImport` no longer silently under-imports on a printer parse failure (source-bindings-silent-parse-failure)
 
 `appendSolidBuiltinImport` decides which Solid JSX built-ins (`Show`/`For`/…) need a synthetic import by checking `@mxlang/parser`'s `sourceBindings` against the *generated* TSX text — never author-facing source. `sourceBindings` used to catch a parse failure silently and return an empty binding set indistinguishable from "genuinely binds nothing," so a printer bug that ever emitted invalid TSX would make this function under-import: exactly the failure class it exists to prevent (a free `Show`/`For` reference hiding every real diagnostic behind TS2304). `sourceBindings` now reports `{ bindings, error? }`; on `error`, `appendSolidBuiltinImport` appends every referenced built-in unconditionally (safe over-inclusion) and returns a positioned `MxWarning` (line 1, column 0) instead of guessing from an empty set. Its caller (`createSolidMxLanguagePlugin`) merges that warning into the same `compileDiagnostics` array the cap warning already uses, so it reaches the editor as a real diagnostic instead of only a `console.warn`.

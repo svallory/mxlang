@@ -68,7 +68,8 @@ const generator = (
  * generics), and the vendored parser accepts that syntax without erasing it,
  * so the AST has to go through `@babel/preset-typescript` before printing.
  * Printing the source directly instead would hand `interface Todo { ... }` to
- * `@solidjs/compiler`, whose JSX frontend has no TypeScript to strip it.
+ * `@solidjs/compiler`, which parses it but does not strip it, so the types
+ * would reach the compiled output.
  *
  * Both entry points share the generator options below so the two can never
  * drift: whatever `print` emits for a file, `printAst` emits for that file's

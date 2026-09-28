@@ -63,14 +63,12 @@ its module-level statements are placed rather than rejected (an authored
 `import` resolves a capitalized tag exactly as it does on `@mxlang/html`),
 and its default export is a named declaration after the file (`icon.mx`
 exports `Icon`) — which is what lets a tag call itself with no self-import.
-It deliberately drops `export interface Input`: Solid's compiler takes source
-text and has no TypeScript frontend, so a type declaration in the emitted
-unit is a syntax error downstream. **Consequence: an ordinary prop on a
-whole-file Solid `.mx` component is not yet type-checked, right or wrong**
-(TODO `solid-whole-file-prop-typing`, pinned by a test in
-`packages/tooling/tsc/src/index.test.ts`). AttrTag props are unaffected
-(`satisfies`-checked at the call site); a `.solid.mx` region stays fully
-typed (its virtual code is a Volar projection that keeps the real `Input`).
+It emits the author's `export interface Input` and annotates the component
+parameter with it (`function Icon(input: Input)`), like `@mxlang/html` and
+`@mxlang/preact`, so a caller's ordinary props are type-checked (`<Card
+title=1/>` against `title: string` is TS2322). The output is TSX carrying
+types: the vite plugin gives it a `.tsx` id and vite strips the types after
+Solid's compiler, which parses TypeScript but does not erase it.
 
 ## `<for>` bodies read the row as a value, on every form
 
