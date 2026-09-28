@@ -480,9 +480,8 @@ describe("mxDynamic's three value kinds (rendered)", () => {
   });
 
   it("forwards tag arguments to a dynamic tag call, positionally", async () => {
-    // `<${input.render}("x", 2)/>`: Marko's tag-argument form is exclusive
-    // with props/content (`rejectDynamicArgsWithProps`), so the target is
-    // called with the arguments directly rather than as a JSX component.
+    // `<${input.render}("x", 2)/>`, no content/attribute tags: no trailing
+    // props object, so the target is called with the arguments alone.
     const html = await renderCompiled('<${input.render}("x", 2)/>', {
       render: (a: string, b: number) => h("b", null, `${a}-${b}`),
     });
@@ -499,6 +498,25 @@ describe("mxDynamic's three value kinds (rendered)", () => {
       tag: "span",
     });
     expect(html).toBe("<span></span>");
+  });
+
+  it("appends a trailing props object when arguments combine with a body (decision 109, Marko parity)", async () => {
+    const html = await renderCompiled('<${input.render}("x", 2)>body</>', {
+      render: (a: string, b: number, extra?: { content?: () => unknown }) =>
+        h("b", null, `${a}-${b}-`, extra?.content?.() as never),
+    });
+    expect(html).toBe("<b>x-2-body</b>");
+  });
+
+  it("appends a trailing props object when arguments combine with an attribute tag (decision 109, Marko parity)", async () => {
+    const html = await renderCompiled(
+      '<${input.render}("x", 2)><@head>H</@head></>',
+      {
+        render: (a: string, b: number, extra?: { head?: unknown }) =>
+          h("b", null, `${a}-${b}-`, extra?.head as never),
+      },
+    );
+    expect(html).toBe("<b>x-2-H</b>");
   });
 });
 
@@ -655,6 +673,47 @@ describe("<define> and <const>", () => {
     );
     expect(code).toContain("const Row = (label) => (<><li>{label}</li></>);");
     expect(code).toContain("{Row('a')}");
+  });
+
+  it("accepts a `<define>` call mixing tag-argument form with an attribute tag (decision 109, Marko parity)", async () => {
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const code = compilePreactMx(
+      "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+      "/fixtures/card.mx",
+    ).code;
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-define-args-"));
+    try {
+      const repoNodeModules = dirname(
+        dirname(require.resolve("preact/package.json")),
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      const entry = join(scratch, "card.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: FunctionComponent<Record<string, unknown>>;
+      };
+      const html = render(h(mod.default, {}));
+      expect(html).toBe("<div>aH</div>");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it("rejects a `<const>` nested inside markup", () => {

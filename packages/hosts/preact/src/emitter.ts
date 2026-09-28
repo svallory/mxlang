@@ -1069,13 +1069,16 @@ export class PreactEmitter implements Emitter<string> {
       // small `mxDynamic` helper into the module (mirroring `@mxlang/html`'s
       // `renderDynamic`) instead of writing the expression there directly.
       this.#runtimeImports.add("mxDynamic");
-      // mx's own `rejectDynamicArgsWithProps` (core) forbids mixing tag
-      // arguments with attributes/content — stricter than Marko itself,
-      // which only forbids args alongside *attributes*
-      // (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) and still
-      // allows a body alongside args (pushed as a trailing `content` prop
-      // argument, `dynamic-tag.ts`). mx's stricter rule is what makes
-      // `node.args` and `#propsObject` mutually exclusive here.
+      // Decision 109, Marko parity: args now combine with a body/attribute
+      // tag (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only
+      // a plain attribute alongside args is still rejected
+      // (`rejectArgsWithProps`, core), so `node.attrs` here holds no named
+      // attribute when args are present. With content/attribute tags to
+      // carry, the trailing props object rides alongside the args array,
+      // matching `renderer(...args, { content, <attribute tags> })`.
+      const hasTrailingProps =
+        node.attrTagProps.length > 0 ||
+        (node.content?.children.length ?? 0) > 0;
       const payload =
         node.args.length > 0
           ? concatMapped(
@@ -1084,6 +1087,9 @@ export class PreactEmitter implements Emitter<string> {
                 index === 0 ? "" : ", ",
                 arg.code,
               ]),
+              hasTrailingProps
+                ? concatMapped(", ", this.#propsObject(node))
+                : "",
               "]",
             )
           : this.#propsObject(node);
@@ -1095,9 +1101,22 @@ export class PreactEmitter implements Emitter<string> {
     if (node.target.kind === "define") {
       // A `<define>` is a local block; this host lowers one to a local
       // function (see `define` below), so calling it is an ordinary call.
+      //
+      // Decision 109, Marko parity: args now combine with a body/attribute
+      // tag. A `<define>` has no declared `Input` to destructure a single
+      // trailing props object against — measured against real Marko 6.3.51:
+      // its own codegen for this shape binds the object itself to whichever
+      // param follows the args, not the attribute tag's value, and silently
+      // drops the content. MX instead extends its own existing positional
+      // named-lookup scheme (`#defineProps`, unaffected below for the
+      // no-args case): params beyond the args are filled from the same named
+      // lookup, one value per param.
       const args =
         node.args.length > 0
-          ? node.args.map((arg: Expr) => arg.code).join(", ")
+          ? [
+              ...node.args.map((arg: Expr) => arg.code),
+              ...this.#defineTrailingParams(node),
+            ].join(", ")
           : this.#defineProps(node);
       this.#out.push(
         concatMapped(
@@ -1200,9 +1219,16 @@ export class PreactEmitter implements Emitter<string> {
     );
   }
 
-  /** The props object for a `<define>` called by name rather than positionally. */
-  #defineProps(node: Extract<IrNode, { kind: "Component" }>): string {
-    if (node.target.kind !== "define") return "";
+  /**
+   * The named values a `<define>` call supplies, keyed by name — attributes,
+   * attribute tags and (when the body has content) `content`, matching the
+   * prop name Marko's own `<${input.content}/>` reads. Shared by
+   * `#defineProps` (the no-args call shape) and `#defineTrailingParams` (the
+   * args-plus-content/attribute-tag shape, decision 109).
+   */
+  #defineNamed(
+    node: Extract<IrNode, { kind: "Component" }>,
+  ): Map<string, string> {
     const named = new Map<string, string>();
     for (const attr of node.attrs) {
       if (attr.kind === "spread") continue;
@@ -1221,9 +1247,37 @@ export class PreactEmitter implements Emitter<string> {
     for (const prop of node.attrTagProps) {
       named.set(prop.name, this.#attributeTagProp(prop).code);
     }
+    const content = node.content?.children ?? [];
+    if (content.length > 0) {
+      const rendered = this.#expression(content);
+      named.set("content", `() => <>${rendered.code}</>`);
+    }
+    return named;
+  }
+
+  /** The props object for a `<define>` called by name rather than positionally. */
+  #defineProps(node: Extract<IrNode, { kind: "Component" }>): string {
+    if (node.target.kind !== "define") return "";
+    const named = this.#defineNamed(node);
     return node.target.params
       .map((param) => named.get(param) ?? "undefined")
       .join(", ");
+  }
+
+  /**
+   * The positional values for the `<define>` params beyond the tag args
+   * (decision 109): a body or attribute tag rides alongside args as
+   * additional positional values, one per remaining param, by the same
+   * named lookup `#defineProps` uses for the no-args shape.
+   */
+  #defineTrailingParams(
+    node: Extract<IrNode, { kind: "Component" }>,
+  ): string[] {
+    if (node.target.kind !== "define") return [];
+    const named = this.#defineNamed(node);
+    return node.target.params
+      .slice(node.args.length)
+      .map((param) => named.get(param) ?? "undefined");
   }
 
   /**
