@@ -220,6 +220,125 @@ describe("stdio server (e2e)", () => {
     }
   }, 15000);
 
+  it("clears a closed document's own diagnostics", async () => {
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    conn.sendNotification("initialized", {});
+
+    // Same fixture (host: "astro", strict: true) as the strict-policy test
+    // above: `<let>` is a compile error under that policy, so opening it
+    // publishes one diagnostic.
+    const uri = `file://${join(import.meta.dirname, "fixtures/explicit-field/nested/CloseMe.mx")}`;
+    const invalid = nextDiagnostics(
+      conn,
+      (params) => params.uri === uri && params.diagnostics.length > 0,
+    );
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri,
+        languageId: "mx",
+        version: 1,
+        text: "<let/count=1/>\n",
+      },
+    });
+    expect((await invalid).diagnostics).toHaveLength(1);
+
+    const cleared = nextDiagnostics(
+      conn,
+      (params) => params.uri === uri && params.diagnostics.length === 0,
+    );
+    conn.sendNotification("textDocument/didClose", {
+      textDocument: { uri },
+    });
+    expect((await cleared).diagnostics).toEqual([]);
+  }, 15000);
+
+  it("stops re-diagnosing a caller once it is closed, even when its open callee changes again", async () => {
+    // Reuses the dependency-rediagnosis fixture and flow (§ above), but
+    // closes the caller after the first round-trip, then changes the callee
+    // again the same way the first test does. `onDidClose` deletes the
+    // caller's `callerDependencies` edge, so `scheduleDependents` finds
+    // nothing to re-diagnose for it and no further publish for the caller's
+    // URI ever arrives.
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    conn.sendNotification("initialized", {});
+
+    const directory = join(
+      import.meta.dirname,
+      "fixtures/dependency-rediagnosis",
+    );
+    const calleeUri = `file://${join(directory, "CloseCard.mx")}`;
+    const callerUri = `file://${join(directory, "CloseCaller.mx")}`;
+    const optional =
+      "export interface Input { tab?: AttrTag<{ attrs: { title?: string } }> }\n\n<div/>\n";
+    const required =
+      "export interface Input { tab: AttrTag<{ attrs: { title?: string } }> }\n\n<div/>\n";
+    const caller = 'import Card from "./CloseCard.mx"\n\n<Card/>\n';
+
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: calleeUri,
+        languageId: "mx",
+        version: 1,
+        text: optional,
+      },
+    });
+    const initialCaller = nextDiagnostics(
+      conn,
+      (params) => params.uri === callerUri,
+    );
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: callerUri,
+        languageId: "mx",
+        version: 1,
+        text: caller,
+      },
+    });
+    expect((await initialCaller).diagnostics).toEqual([]);
+
+    // Close the caller: `onDidClose` clears its diagnostics and deletes its
+    // `callerDependencies` edge.
+    const closedCaller = nextDiagnostics(
+      conn,
+      (params) => params.uri === callerUri && params.diagnostics.length === 0,
+    );
+    conn.sendNotification("textDocument/didClose", {
+      textDocument: { uri: callerUri },
+    });
+    await closedCaller;
+
+    // Changing the still-open callee would, before the close, have
+    // re-diagnosed the caller with a "tab" error (proven by the earlier
+    // test). With the caller closed, no publish for its URI should follow.
+    // `conn.onNotification` replaces rather than chains handlers for the
+    // same notification type, so every publish (caller or callee) is
+    // observed through one shared listener rather than two concurrent
+    // `nextDiagnostics` calls racing to register their own.
+    const seenUris: string[] = [];
+    const calleeRediagnosed = new Promise<void>((resolve) => {
+      conn.onNotification(PublishDiagnosticsNotification, (params) => {
+        seenUris.push(params.uri);
+        if (params.uri === calleeUri) resolve();
+      });
+    });
+    conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: calleeUri, version: 2 },
+      contentChanges: [{ text: required }],
+    });
+    await calleeRediagnosed;
+    expect(seenUris).not.toContain(callerUri);
+  }, 15000);
+
   it("publishes a diagnostic for a strict-policy document opened over stdio", async () => {
     const conn = startClient();
 
