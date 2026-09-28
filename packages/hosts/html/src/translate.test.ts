@@ -260,7 +260,7 @@ describe("bindings may not shadow the input parameter", () => {
     expect(() =>
       compile(
         src(
-          '<define/Card|title|><div>${title}</div></define>\n<Card(\'a\') foo="bar"/>',
+          "<define/Card|title|><div>${title}</div></define>\n<Card('a') foo=\"bar\"/>",
         ),
         file,
       ),
@@ -921,9 +921,9 @@ describe("dynamic tags", () => {
   });
 
   it("still rejects arguments combined with a plain attribute", () => {
-    expect(() =>
-      compile(src('<${input.fn}("A") foo="bar"/>'), file),
-    ).toThrow("Tag does not support arguments when attributes present.");
+    expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
+      "Tag does not support arguments when attributes present.",
+    );
   });
 });
 
