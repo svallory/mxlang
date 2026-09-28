@@ -97,7 +97,15 @@ appended after every mapping is computed from the unmodified generated text
 (source-map offsets, `attributeTagDiagnosticMappings`), so it cannot shift
 an existing line or offset; it is skipped for a name already bound by an
 `import`/`const`/`function`/`class` at the top level of the generated file,
-so an author's own same-named export is never shadowed.
+so an author's own same-named export is never shadowed. Shadow detection
+(`sourceBindings`) parses the generated text with `@mxlang/parser`'s
+`parseBabel` and reads each top-level declaration's actual bound name — an
+import's *local* name (so `import { Show as MyShow }` binds `MyShow`, never
+`Show`), and destructured `const`/`function`/`class` names — rather than
+scanning lines for the built-in's name as text: a line-based probe cannot
+tell a multi-line `import {\n  Show,\n} from "solid-js"` from an unrelated
+line, and cannot tell a bound identifier from a substring inside an alias
+clause.
 
 **No ambient `declare module "*.solid.mx"` shim, anywhere.** A shim asserts
 types rather than deriving them, so it hides both a file's real exports and

@@ -5,7 +5,7 @@ import {
   withCalleeInputSources,
 } from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
-import { print } from "@mxlang/parser";
+import { parseBabel, print } from "@mxlang/parser";
 import { compileSolidMx } from "@mxlang/solid";
 import type {
   CodeInformation,
@@ -320,10 +320,10 @@ const SOLID_BUILTIN_IMPORTS: ReadonlyArray<{
  * earlier diagnostic.
  */
 export function appendSolidBuiltinImport(generated: string): string {
+  const bound = sourceBindings(generated);
   const needed = SOLID_BUILTIN_IMPORTS.filter(
     ({ name }) =>
-      new RegExp(`<${name}[\\s/>]`).test(generated) &&
-      !new RegExp(`\\b${name}\\b`).test(sourceBindingsProbe(generated)),
+      new RegExp(`<${name}[\\s/>]`).test(generated) && !bound.has(name),
   );
   if (needed.length === 0) return generated;
 
@@ -340,21 +340,106 @@ export function appendSolidBuiltinImport(generated: string): string {
 }
 
 /**
- * The generated file's own top-level `import`/`const`/`function`/`class`
- * declarations, so `appendSolidBuiltinImport` never shadows a name the
- * author already bound. Cheap and line-based on purpose: it only needs to
- * rule out an identifier existing anywhere at module scope, not resolve
- * real bindings.
+ * The generated file's actual top-level bound identifiers — every import's
+ * *local* name (so `import { Show as MyShow }` binds `MyShow`, not `Show`)
+ * plus every top-level `const`/`function`/`class` declaration — so
+ * `appendSolidBuiltinImport` never shadows a name the author already bound
+ * and never skips one because an unrelated line merely contains the text of
+ * its name (an alias clause, a multi-line import). Parses the generated text
+ * with the same Babel used to print it rather than scanning lines, since a
+ * line-based probe cannot tell a bound identifier from a substring: it must
+ * resolve what each declaration actually binds.
  */
-function sourceBindingsProbe(generated: string): string {
-  return generated
-    .split("\n")
-    .filter((line) =>
-      /^\s*(import\b|export\s+(default\s+)?(const|function|class)\b|const\b|function\b|class\b)/.test(
-        line,
-      ),
-    )
-    .join("\n");
+function sourceBindings(generated: string): Set<string> {
+  const bound = new Set<string>();
+  let program: ReturnType<typeof parseBabel>["program"];
+  try {
+    const file = parseBabel(generated, {
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
+    });
+    program = file.program;
+  } catch {
+    return bound;
+  }
+  for (const statement of program.body) {
+    switch (statement.type) {
+      case "ImportDeclaration":
+        for (const specifier of statement.specifiers) {
+          bound.add(specifier.local.name);
+        }
+        break;
+      case "VariableDeclaration":
+        for (const declarator of statement.declarations) {
+          collectPatternNames(declarator.id, bound);
+        }
+        break;
+      case "FunctionDeclaration":
+      case "ClassDeclaration":
+        if (statement.id) bound.add(statement.id.name);
+        break;
+      case "ExportNamedDeclaration":
+      case "ExportDefaultDeclaration":
+        if (
+          statement.declaration &&
+          (statement.declaration.type === "VariableDeclaration" ||
+            statement.declaration.type === "FunctionDeclaration" ||
+            statement.declaration.type === "ClassDeclaration")
+        ) {
+          if (statement.declaration.type === "VariableDeclaration") {
+            for (const declarator of statement.declaration.declarations) {
+              collectPatternNames(declarator.id, bound);
+            }
+          } else if (statement.declaration.id) {
+            bound.add(statement.declaration.id.name);
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return bound;
+}
+
+/**
+ * Collects every identifier a binding pattern introduces — a bare name, or
+ * the names inside a destructured object/array — so a top-level
+ * `const { Show } = ...` is recognized as binding `Show` the same as a plain
+ * `const Show = ...` would. Untyped on purpose: the pattern shapes are a
+ * small, stable subset of Babel's AST and pulling in `@babel/types` just for
+ * this helper's signature is not worth a new dependency.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: small stable subset of Babel's pattern node shapes
+function collectPatternNames(pattern: any, bound: Set<string>): void {
+  if (!pattern) return;
+  switch (pattern.type) {
+    case "Identifier":
+      bound.add(pattern.name);
+      break;
+    case "ObjectPattern":
+      for (const property of pattern.properties) {
+        if (property.type === "ObjectProperty") {
+          collectPatternNames(property.value, bound);
+        } else if (property.type === "RestElement") {
+          collectPatternNames(property.argument, bound);
+        }
+      }
+      break;
+    case "ArrayPattern":
+      for (const element of pattern.elements) {
+        collectPatternNames(element, bound);
+      }
+      break;
+    case "AssignmentPattern":
+      collectPatternNames(pattern.left, bound);
+      break;
+    case "RestElement":
+      collectPatternNames(pattern.argument, bound);
+      break;
+    default:
+      break;
+  }
 }
 
 /**
