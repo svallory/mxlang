@@ -1432,8 +1432,13 @@ compile, re-thrown with the tag's filename.
   the open document — LSP cannot publish against a file it was not asked about,
   and the template is not itself open. It clears the template's diagnostics when
   the caller stops reporting them.
-- The **TypeScript plugin** *drops* a foreign-file span: a Volar `CodeMapping`
-  addresses one source, and a plausible-but-wrong column is worse than none.
+- The **TypeScript plugin** and **`mx-tsc`** report a `TranslateError` whose
+  `file` names another file (a compile error raised inside a tag template)
+  against that template file at its own position, and leave a pointer
+  diagnostic on the caller naming the template — matching the language
+  server. A Volar `CodeMapping` still addresses one source only, so this is a
+  second, file-keyed compile diagnostic, not a mapped span: a plausible-but-
+  wrong column inside one file's mappings is still worse than none.
 - **Every integration that scans must surface `ScanResult.diagnostics`** (§9.2).
 
 ### A host is not done without its diagnostics

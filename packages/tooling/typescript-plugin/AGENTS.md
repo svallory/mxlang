@@ -208,3 +208,22 @@ diagnostic; use it for anything about the generated code's types.
   offset, or the wider one silently wins regardless of which is "more
   specific". html and preact apply `MappedCode` offsets directly and were
   never affected.
+- **Fixed: `custom-tags-template-error-positions`.** A `TranslateError`
+  raised while compiling a tag template (`tags/x.mx`) was always reported
+  against the *caller's* file and text at the call's own offset — the three
+  `toSyntaxError` functions (`mx-language.ts`, `amx-language.ts`,
+  `language.ts`) read only `error.line`/`error.column` and ignored
+  `error.file`, the field `template-tag.ts` stamps with the template's path
+  when a unit's metadata compile fails (spec §2's third position rule; see
+  `packages/core/AGENTS.md`). `foreignTemplateError` (`language.ts`) now
+  detects a `TranslateError` whose `file` names another file, reads that
+  file's current text (the supplied `readSource`, else disk — the same
+  fallback order `readCalleeInput` uses), and returns two diagnostics: the
+  real one, keyed under the template's own filename in the plugin's
+  `compileDiagnostics` map, and a pointer diagnostic on the caller naming the
+  template — matching `diagnoseDocument`'s `related`/pointer split exactly.
+  All three `createVirtualCode` catch blocks call it before falling back to
+  their own `toSyntaxError`. `mx-tsc` needed no separate wiring: it already
+  aggregates every language plugin's `getCompileDiagnostics()` with no
+  filename filter, so a diagnostic keyed under the template's path is
+  reported under that path automatically.

@@ -211,6 +211,34 @@ describe("mx-tsc", () => {
   );
 
   it(
+    "reports a compile error raised inside a tag template against the template file, not the caller",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "template-error-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      // `tags/broken.mx`'s own orphan `<else>` (line 3, column 1) is reported
+      // against the template file itself — spec §2's third position rule,
+      // matching the language server's behavior — not against `page.mx`,
+      // which only calls it.
+      expect(result.output).toContain("broken.mx(3,1): error TS80001");
+      expect(result.output).toContain(
+        "`<else>` without a preceding `<if>`\nfixtures/template-error-failing/src/page.mx(1,1)",
+      );
+      // `page.mx` still gets a pointer diagnostic naming the template, so a
+      // broken template is not silently invisible when only the caller is
+      // open.
+      expect(result.output).toMatch(/page\.mx\(1,1\): error TS80001/);
+      expect(result.output).toContain("(in ");
+      expect(result.output).toContain("broken.mx)");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
     "reports stored compile warnings without making the run fail",
     () => {
       const result = runSplit(mxTsc, [

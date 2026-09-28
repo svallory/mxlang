@@ -14,6 +14,7 @@ import {
   type DependencyLanguagePluginOptions,
   decodeMappings,
   diagnosticsFrom,
+  foreignTemplateError,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
   mergeMappings,
@@ -87,6 +88,20 @@ export function createAmxLanguagePlugin(
         );
         return createVirtualCode(typescript, converted.code, mappings);
       } catch (cause) {
+        const foreign = foreignTemplateError(
+          cause,
+          fileName,
+          source,
+          options.readSource,
+        );
+        if (foreign) {
+          syntaxErrors.delete(fileName);
+          compileDiagnostics.set(foreign.templateFileName, [
+            foreign.templateDiagnostic,
+          ]);
+          compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
+          return createVirtualCode(typescript, "", []);
+        }
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
