@@ -9,7 +9,7 @@ MX prefers a compile error over silently dropping or misinterpreting a construct
 
 ## A stateful tag under `strict`
 
-If the project (or a `<let>`/`<effect>`/etc. author) opted into the `strict` policy, using `<let>`, `<effect>`, `<lifecycle>`, `<script>`, a `client` block, or `<id>` on a host with no reactive target is a compile error naming the construct. See [Stateful tags](/language/stateful-tags/).
+If the project (or a `<let>`/`<effect>`/etc. author) opted into the `strict` policy, using `<let>`, `<effect>`, `<lifecycle>`, `<script>`, a `client` block, or `<id>` on a host with no reactive target is a compile error naming the construct. The `input`-shadowing check below is not one of these six — it applies regardless of `strict`. See [Stateful tags](/language/stateful-tags/).
 
 ## `<await>` on the HTML host
 

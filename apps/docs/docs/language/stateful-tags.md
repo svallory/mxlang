@@ -21,7 +21,7 @@ The HTML host has no reactive runtime — it compiles a template to a plain `(in
 | `<await>` | Error — the host genuinely can't render a pending value to a string |
 | `<try>` with `<@placeholder>` | Error — needs a second render pass the host doesn't have |
 | `<try>` with only `<@catch>` | Lowers to an ordinary `try`/`catch` |
-| `<return>` | Error — hands a value to a parent template, and a compiled module has no parent |
+| `<return>` | Not an error — a tag is its own compiled module under the unit model, so its caller invokes it; the module's export becomes `{ value, output }` and the call site unwraps it. `/var` is supported in any scope. See [Returning a value](/custom-tags/templates/#returning-a-value) for the full grammar, `/var` scoping per host, and the JSX-hooks restriction. |
 
 "Inert" is a shape, not a license to silently drop content: an inert tag's own attributes and body are validated against what Marko's own tag definition allows, and anything unexpected is a compile error naming the tag — not silently discarded.
 
@@ -33,6 +33,6 @@ The one check that applies regardless of `strict` is the `input`-shadowing guard
 
 ## How other hosts differ
 
-A reactive host (a future SolidMX or React host) implements the same six constructs against its own framework's primitives instead of treating them as inert — `<let>` becomes real state, `<effect>` becomes a real side effect. Parity with Marko's server render doesn't apply here, because there is no server render to match: the host is tested against its own framework's behavior.
+A reactive host — Solid, Preact, React, Hono, Astro, or Angular — implements the same six constructs against its own framework's primitives instead of treating them as inert — `<let>` becomes real state, `<effect>` becomes a real side effect. Parity with Marko's server render doesn't apply here, because there is no server render to match: the host is tested against its own framework's behavior.
 
 Mechanically, a host reaches this behavior through three hooks the core exposes: a handler for the stateful tag itself, a way to hoist a statement to the enclosing function's head, and a registry for rewriting identifier references (so, for example, a getter-based state primitive can emit `count()` everywhere `${count}` appears). See [Policy and hooks](/architecture/policy-and-hooks/) for how these fit together.
