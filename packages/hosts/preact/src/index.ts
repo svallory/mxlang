@@ -171,15 +171,34 @@ function importLines(names: Set<string>, target: Target): string[] {
  * `renderDynamic` — no runtime package, so nothing to import.
  *
  * `payload` is either the call's props object, or — for Marko's tag-argument
- * form (`<\${x}(a, b)/>`, exclusive with props/content) — a plain array of
- * argument values, told apart with `Array.isArray`. Tag arguments call the
- * target as a plain function, matching `@mxlang/html`'s `renderDynamic`,
- * rather than mounting it as a JSX component: a positional call is not an
- * element description.
+ * form (`<\${x}(a, b)/>`) — a plain array of argument values, told apart
+ * with `Array.isArray`. mx's own \`rejectDynamicArgsWithProps\` (stricter
+ * than Marko: Marko's own \`assertAttributesOrArgs\`,
+ * \`@marko/compiler/babel-utils\`, only forbids args alongside *attributes*,
+ * and \`dynamic-tag.ts\`'s translator still pushes a body's \`content\` prop as
+ * a trailing argument — a body alongside args is legal Marko) makes args
+ * and props mutually exclusive by the time a host ever sees them, so
+ * \`payload\` is always exactly one of the two. A *function* target with
+ * arguments is called plainly, matching \`@mxlang/html\`'s \`renderDynamic\`
+ * and \`@mxlang/solid\`'s inline dispatch — a positional call is not an
+ * element description. A *string* target with arguments still mounts as an
+ * element (Marko's own html/dom runtimes treat a string renderer's first
+ * argument as its input and still emit the tag — see
+ * \`runtime-tags/src/html/dynamic-tag.ts\`'s \`_dynamic_tag\`, the
+ * \`typeof renderer === "string"\` branch, which never falls through to
+ * rendering the name as text); ignoring the arguments here (bare \`<Tag />\`
+ * rather than replicating Marko's args[0]-as-input convention) matches
+ * \`@mxlang/html\`'s own \`renderDynamic\`, which also renders a string target
+ * with no attributes when called with args.
  */
 const MX_DYNAMIC = `function mxDynamic(target, payload) {
   if (Array.isArray(payload)) {
-    return typeof target === "function" ? target(...payload) : target;
+    if (typeof target === "function") return target(...payload);
+    if (typeof target === "string") {
+      const Tag = target;
+      return <Tag />;
+    }
+    return target;
   }
   const props = payload;
   if (typeof target === "string" || typeof target === "function") {

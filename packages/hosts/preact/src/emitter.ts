@@ -1065,9 +1065,13 @@ export class PreactEmitter implements Emitter<string> {
       // small `mxDynamic` helper into the module (mirroring `@mxlang/html`'s
       // `renderDynamic`) instead of writing the expression there directly.
       this.#runtimeImports.add("mxDynamic");
-      // Marko forbids mixing tag arguments with attributes/content
-      // (`rejectDynamicArgsWithProps`, core), so `node.args` and `#propsObject`
-      // are mutually exclusive here.
+      // mx's own `rejectDynamicArgsWithProps` (core) forbids mixing tag
+      // arguments with attributes/content — stricter than Marko itself,
+      // which only forbids args alongside *attributes*
+      // (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) and still
+      // allows a body alongside args (pushed as a trailing `content` prop
+      // argument, `dynamic-tag.ts`). mx's stricter rule is what makes
+      // `node.args` and `#propsObject` mutually exclusive here.
       const payload =
         node.args.length > 0
           ? concatMapped(
@@ -1080,13 +1084,7 @@ export class PreactEmitter implements Emitter<string> {
             )
           : this.#propsObject(node);
       this.#out.push(
-        concatMapped(
-          "{mxDynamic(",
-          node.target.expr.code,
-          ", ",
-          payload,
-          ")}",
-        ),
+        concatMapped("{mxDynamic(", node.target.expr.code, ", ", payload, ")}"),
       );
       return;
     }
