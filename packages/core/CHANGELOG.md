@@ -21,6 +21,18 @@ maintains around every `<const>`/`<for>`/`<define>` body — so the fix reuses
 the same mechanism the codebase already had for binding-aware identifier
 rewriting, rather than adding a new one.
 
+**Round 2 fix (review found a leak):** `scopeBindings` (`core.ts`) snapshotted
+only `ctx.bindings`, not `ctx.tagVarShadowed`, so a `<const>` inside an
+`<if>`/`<else>` branch — which never calls its own `shadowBindings` restore,
+by design — permanently replaced `ctx.tagVarShadowed`, leaking the shadow
+past the branch for the rest of the file. `lowerDefine` had the same bug
+independently (no `scopeBindings` wrapper at all around its body). Both fixed
+structurally: `scopeBindings` now snapshots/restores `ctx.tagVarShadowed`
+too, closing the leak for every scope that already calls it (`<if>`/`<else>`
+branches, `<for>`, `<define>` — now wrapped like the others, attribute-tag
+`<if>` blocks, `<try>` via `lowerBlock`); no per-construct special case
+needed.
+
 ### Fix: an unknown host name in `mx.tags[].hosts` is now a diagnostic, not silent (decision 110a)
 
 `indexMxTagsEntries` (`scan.ts`) now checks each `hosts` entry against the

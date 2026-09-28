@@ -937,6 +937,25 @@ describe("local scope bindings shadow a registered custom tag (executed)", () =>
     );
     expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
   });
+
+  // Round 2 (lead review): the leak this closes is a `<const>` inside an
+  // `<if>`/`<else>` branch permanently replacing `ctx.tagVarShadowed` because
+  // `scopeBindings` (core.ts) didn't snapshot it — `<const>` never restores
+  // its own shadow (by design), so leak prevention has to come entirely from
+  // the branch's own `scopeBindings` wrapper. This host cannot express that
+  // scenario at all: every structural kind here lowers to a JSX expression
+  // with no statement position, so a `<const>` (or `<define>`) *nested*
+  // inside `<if>`/`<for>` markup is a compile error on this host regardless
+  // of the fix (`PreactEmitter`'s `constant`/`define`: "must appear at the
+  // top level of the template" — pre-existing, unrelated to this decision).
+  // A `<for|Panel|>` tag param nested the same way is legitimate here, but
+  // does not exercise the fixed code path: `<for>`'s own `shadowBindings`
+  // restore already reverts `tagVarShadowed` on its own, independent of the
+  // enclosing `<if>`'s `scopeBindings` — so there is nothing to leak. The
+  // round-2 regression and its fix are executed-render tested on html
+  // (`packages/hosts/html/src/translate.test.ts`), the host that can
+  // actually compile the repro; IR-level coverage for `<if>`/`<else>`/nested
+  // `<for>` is in `packages/core/src/custom-tags.test.ts`.
 });
 
 /**

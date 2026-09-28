@@ -1511,11 +1511,20 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
   // The params shadow the host's bindings inside the body only, and a
   // statement hoisted from inside belongs to *this* function's head — it may
   // read the define's own params.
+  //
+  // `<define>`'s body is its own JS block, so a `<const>` written inside it
+  // must not leak past it either (decision 113 round 2 — the same leak
+  // `scopeBindings` closes for `<if>`/`<for>`): `shadowBindings` alone only
+  // undoes the *params*, since a `<const>` never calls its own restore by
+  // design (it shadows for the rest of *its* enclosing scope, which here is
+  // the define body, not the caller's).
+  const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(node));
   const [children, prelude] = withPrelude(ctx, () =>
     lowerChildren(ctx, node.body?.body ?? []),
   );
   restore();
+  unscope();
 
   ctx.defines.set(name, params);
 

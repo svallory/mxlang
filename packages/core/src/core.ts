@@ -506,10 +506,24 @@ export function declName(ctx: Ctx, node: Node): string {
  * escapes the branch it was written in. Emitted JS scoping is per block, so
  * the registry has to be too: a name shadowed inside one branch is the host's
  * binding again after it.
+ *
+ * Also snapshots `ctx.tagVarShadowed` for the same reason (decision 113 round
+ * 2): a `<const>` inside an `<if>` branch permanently *replaces*
+ * `ctx.tagVarShadowed` (it never calls its own `shadowBindings` restore, by
+ * design — a `<const>` shadows for the rest of the render), so without this a
+ * `<const/Panel=…/>` written inside one `<if>` branch would shadow a
+ * registered `Panel` custom tag for the rest of the file, past the branch it
+ * was declared in. Every scope wrapper that calls `scopeBindings` (`<if>`
+ * branches, `<for>`, `<define>`, attribute-tag blocks, `<try>`) gets this for
+ * free, so the revert is structural rather than a per-construct fix.
  */
 export function scopeBindings(ctx: Ctx): () => void {
   const saved = ctx.bindings.snapshot();
-  return () => ctx.bindings.restore(saved);
+  const savedShadowed = ctx.tagVarShadowed;
+  return () => {
+    ctx.bindings.restore(saved);
+    ctx.tagVarShadowed = savedShadowed;
+  };
 }
 
 export function shadowBindings(ctx: Ctx, names: string[]): () => void {
