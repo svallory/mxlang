@@ -226,17 +226,59 @@ describe("<for>", () => {
     );
   });
 
-  it("lowers the inclusive `to=` range", () => {
-    expect(lower("<for|n| from=1 to=3><li>${n}</li></for>")).toContain(
-      "(3) - (1) + 1",
+  it("lowers the inclusive `to=` range to valid, balanced JavaScript", () => {
+    const code = lower("<for|n| from=1 to=3><li>${n}</li></for>");
+    expect(code).toBe(
+      "{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (_, $i) => (1) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
     );
   });
 
-  it("lowers the exclusive `until=` range", () => {
-    expect(lower("<for|n| from=1 until=3><li>${n}</li></for>")).toContain(
-      "(3) - (1)",
+  it("lowers the exclusive `until=` range to valid, balanced JavaScript", () => {
+    const code = lower("<for|n| from=1 until=3><li>${n}</li></for>");
+    expect(code).toBe(
+      "{Array.from({ length: Math.max(0, (3) - (1)) }, (_, $i) => (1) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
     );
   });
+
+  it("lowers a range with no `from=` (defaults to 0)", () => {
+    const code = lower("<for|n| to=3><li>${n}</li></for>");
+    expect(code).toBe(
+      "{Array.from({ length: Math.max(0, (3) - (0) + 1) }, (_, $i) => (0) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+    );
+  });
+
+  it("lowers a descending (from > to) range without throwing invalid JS", () => {
+    const code = lower("<for|n| from=5 to=1><li>${n}</li></for>");
+    expect(code).toBe(
+      "{Array.from({ length: Math.max(0, (1) - (5) + 1) }, (_, $i) => (5) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+    );
+  });
+
+  it("lowers expression bounds", () => {
+    const code = lower("<for|n| from=start() to=count - 1><li>${n}</li></for>");
+    expect(code).toBe(
+      "{Array.from({ length: Math.max(0, (count - 1) - (start()) + 1) }, (_, $i) => (start()) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+    );
+  });
+
+  it.each([
+    ["from/to", "<for|n| from=1 to=3><li>${n}</li></for>"],
+    ["from/until", "<for|n| from=1 until=3><li>${n}</li></for>"],
+    ["no from", "<for|n| to=3><li>${n}</li></for>"],
+    ["descending", "<for|n| from=5 to=1><li>${n}</li></for>"],
+    [
+      "expression bounds",
+      "<for|n| from=start() to=count - 1><li>${n}</li></for>",
+    ],
+  ])(
+    "emits JavaScript the real Astro compiler accepts (%s)",
+    async (_name, template) => {
+      const source = `---\nconst x = 1;\n---\n${template}`;
+      const { code } = lowerAstroMx(source, "Test.amx");
+      const diagnostics = await astroDiagnostics(code);
+      expect(diagnostics).toEqual([]);
+    },
+  );
 
   it("rejects `step=`, as the core does", () => {
     expect(

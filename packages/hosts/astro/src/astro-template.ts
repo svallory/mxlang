@@ -548,7 +548,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
       writeExpr(node.source.bound);
       write(") - (");
       writeStart();
-      write(node.source.inclusive ? ") + 1" : ")");
+      write(node.source.inclusive ? ") + 1)" : "))");
       write(" }, (_, $i) => (");
       writeStart();
       write(") + $i).map((");
