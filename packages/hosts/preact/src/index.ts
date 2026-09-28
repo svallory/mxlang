@@ -169,8 +169,19 @@ function importLines(names: Set<string>, target: Target): string[] {
  * called again). JSX's tag position is static, so a module using a dynamic
  * tag gets this helper inlined, the same way `@mxlang/html` inlines
  * `renderDynamic` — no runtime package, so nothing to import.
+ *
+ * `payload` is either the call's props object, or — for Marko's tag-argument
+ * form (`<\${x}(a, b)/>`, exclusive with props/content) — a plain array of
+ * argument values, told apart with `Array.isArray`. Tag arguments call the
+ * target as a plain function, matching `@mxlang/html`'s `renderDynamic`,
+ * rather than mounting it as a JSX component: a positional call is not an
+ * element description.
  */
-const MX_DYNAMIC = `function mxDynamic(target, props) {
+const MX_DYNAMIC = `function mxDynamic(target, payload) {
+  if (Array.isArray(payload)) {
+    return typeof target === "function" ? target(...payload) : target;
+  }
+  const props = payload;
   if (typeof target === "string" || typeof target === "function") {
     const Tag = target;
     const { content, ...rest } = props;

@@ -1055,11 +1055,18 @@ class AngularEmitter implements Emitter<string> {
     exprCode: string,
     attrs: Attr[],
     hasContent: boolean,
+    args: Expr[],
     node: { loc: Position },
   ): void {
     if (hasContent) {
       fail(
         "`<${…}>` with content isn't supported by @mxlang/angular: `ngComponentOutlet` projects content only through `ngComponentOutletContent`, which takes prepared nodes rather than a template body. Use a static component tag, or render the content into a `<define>` and pass it as an input.",
+        node,
+      );
+    }
+    if (args.length > 0) {
+      fail(
+        "`<${…}(…)>` tag arguments aren't supported by @mxlang/angular: `ngComponentOutlet` binds a component's `@Input()`s, not positional constructor arguments. Pass the values as attributes instead.",
         node,
       );
     }
@@ -1261,6 +1268,7 @@ class AngularEmitter implements Emitter<string> {
         data.expr.code,
         tag.attrs,
         tag.children.length > 0 || tag.attrTagProps.length > 0,
+        tag.args ?? [],
         node,
       );
       return;

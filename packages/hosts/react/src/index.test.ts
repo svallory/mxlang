@@ -78,6 +78,52 @@ describe("React target", () => {
     }
   });
 
+  it("renders a dynamic tag call with arguments, without crashing", async () => {
+    const { dirname, join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const scratch = mkdtempSync(join(tmpdir(), "mx-react-dyn-args-"));
+    try {
+      symlinkSync(
+        dirname(dirname(require.resolve("react/package.json"))),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "react" },
+        }),
+      );
+      const entry = join(scratch, "dyn-args.tsx");
+      writeFileSync(
+        entry,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        compileReactMx('<${input.render}("x", 2)/>', entry).code,
+      );
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: {
+          render: (a: string, b: number) => ReactNode;
+        }) => ReactNode;
+      };
+      const html = renderToStaticMarkup(
+        createElement(mod.default, {
+          render: (a: string, b: number) =>
+            createElement("b", null, `${a}-${b}`),
+        }),
+      );
+      expect(html).toBe("<b>x-2</b>");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   it("uses React DOM's raw HTML prop", () => {
     expect(markup("<div>$!{input.html}</div>")).toBe(
       "<div dangerouslySetInnerHTML={{ __html: input.html }} />",

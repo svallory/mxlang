@@ -75,6 +75,53 @@ describe("Hono target", () => {
     }
   });
 
+  it("renders a dynamic tag call with arguments, without crashing", async () => {
+    const { dirname, join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const scratch = mkdtempSync(join(tmpdir(), "mx-hono-dyn-args-"));
+    try {
+      symlinkSync(
+        dirname(dirname(dirname(require.resolve("hono")))),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            jsx: "react-jsx",
+            jsxImportSource: "hono/jsx",
+          },
+        }),
+      );
+      const entry = join(scratch, "dyn-args.tsx");
+      writeFileSync(
+        entry,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+        compileHonoMx('<${input.render}("x", 2)/>', entry).code,
+      );
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: {
+          render: (a: string, b: number) => Child;
+        }) => Child;
+      };
+      const output = await jsx(mod.default, {
+        render: (a: string, b: number) =>
+          createElement("b", null, `${a}-${b}` as never),
+      }).toString();
+      expect(output).toBe("<b>x-2</b>");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   it("uses Hono's raw HTML prop", () => {
     expect(markup("<div>$!{input.html}</div>")).toBe(
       "<div dangerouslySetInnerHTML={{ __html: input.html }} />",
