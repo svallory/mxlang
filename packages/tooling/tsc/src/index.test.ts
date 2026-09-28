@@ -211,6 +211,62 @@ describe("mx-tsc", () => {
   );
 
   it(
+    "reports a whole-file Solid .mx compile error at its own line and column (decision 115)",
+    () => {
+      // Proves compileSolidUnit's map/mappings are wired correctly through
+      // the TS plugin's virtual code (the same route `mx-tsc` uses):
+      // before decision 115's wiring, this host wasn't reachable for a
+      // whole-file `.mx` at all through the real entry point.
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "whole-file-solid-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.output).toContain("Unclosed.mx(3,1): error TS80001");
+      expect(result.output).toContain('Missing ending "div" tag');
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "PINNED (solid-whole-file-prop-typing): a whole-file Solid .mx component's ordinary props are not yet type-checked",
+    () => {
+      // `compileSolidUnit` deliberately drops `export interface Input` from
+      // its emitted module — Solid's own compiler has no TypeScript
+      // frontend, so a type declaration there is a downstream syntax error
+      // (see `packages/hosts/solid/AGENTS.md`). The emitted
+      // `function Card(input)` therefore carries no type annotation at
+      // all, so TypeScript resolves `input` as implicit `any` and every
+      // ordinary prop — right or wrong — type-checks. `<Card title=1/>`
+      // against a declared `title: string` should be TS2322 and is not.
+      //
+      // Contrast: the identical construct on a `.solid.mx` *region*
+      // (`attr-tag-solid-failing`'s `Wrong.solid.mx`) DOES report TS2322,
+      // because a region's virtual code is a Volar projection that keeps
+      // the real `Input` type — it never goes through `compileSolidUnit`.
+      // AttrTag props are unaffected either way: those are checked through
+      // `satisfies` at the call site, independent of the callee's own
+      // function signature (decisions 106-108).
+      //
+      // This is a known, filed gap (TODO solid-whole-file-prop-typing), not
+      // a regression from decision 115's wiring. Named PINNED and asserting
+      // today's (wrong) behavior so the fix flips this test — when it does,
+      // update this test rather than deleting it.
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "whole-file-solid-untyped-props"),
+      ]);
+
+      expect(result.output).toBe("");
+      expect(result.status).toBe(0);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
     "reports a compile error raised inside a tag template against the template file, not the caller",
     () => {
       const result = run(mxTsc, [
