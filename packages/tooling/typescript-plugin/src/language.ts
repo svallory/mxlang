@@ -139,6 +139,8 @@ export function createSolidMxLanguagePlugin(
         );
         if (foreign) {
           syntaxErrors.delete(fileName);
+          // See `ForeignTemplateError`'s doc comment above for the
+          // map-clobber caveat this write is subject to.
           compileDiagnostics.set(foreign.templateFileName, [
             foreign.templateDiagnostic,
           ]);
@@ -226,6 +228,15 @@ export function warningDiagnostic(
  * left on the caller (spec §2's third position rule, matching the language
  * server's `diagnoseDocument`). `undefined` when `cause` is not a
  * `TranslateError` naming a file other than `callerFileName`.
+ *
+ * Every caller stores `templateDiagnostic` in its own `compileDiagnostics`
+ * map under `templateFileName` — a key belonging to a *different* file's
+ * `createVirtualCode` call. That map is one entry per file, so this can race
+ * with the template's own independent compile if it is itself open: the
+ * last write wins, and the template's own directly-detected diagnostics and
+ * this caller-attributed one clobber each other rather than merging.
+ * Pre-existing map shape; this is simply the first thing that writes into
+ * another file's entry.
  */
 export interface ForeignTemplateError {
   templateFileName: string;

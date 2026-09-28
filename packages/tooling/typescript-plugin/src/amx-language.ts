@@ -96,6 +96,8 @@ export function createAmxLanguagePlugin(
         );
         if (foreign) {
           syntaxErrors.delete(fileName);
+          // See `ForeignTemplateError`'s doc comment (`language.ts`) for the
+          // map-clobber caveat this write is subject to.
           compileDiagnostics.set(foreign.templateFileName, [
             foreign.templateDiagnostic,
           ]);

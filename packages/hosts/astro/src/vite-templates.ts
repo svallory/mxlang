@@ -215,9 +215,20 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
         // would be measured against `source` (the `.amx` text) while
         // actually pointing somewhere in the template.
         const errorFile = error.file ?? real;
-        const errorSource = error.file
-          ? readFileSync(error.file, "utf8")
-          : source;
+        // The named file may no longer exist or be unreadable (round 3) —
+        // a read failure here must not replace the real diagnostic with a
+        // raw ENOENT, so it only ever costs the frame, never the message,
+        // `id` or position.
+        let errorSource: string | undefined;
+        if (error.file) {
+          try {
+            errorSource = readFileSync(error.file, "utf8");
+          } catch {
+            errorSource = undefined;
+          }
+        } else {
+          errorSource = source;
+        }
         const wrapped = error as AstroTemplateError & {
           id?: string;
           frame?: string;
@@ -229,7 +240,9 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
           line: error.line,
           column: error.column,
         };
-        wrapped.frame = codeFrame(errorSource, error.line, error.column);
+        if (errorSource !== undefined) {
+          wrapped.frame = codeFrame(errorSource, error.line, error.column);
+        }
         throw wrapped;
       }
     },
