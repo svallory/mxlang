@@ -18,8 +18,7 @@ import {
 } from "@mxlang/core";
 import { compileHonoMx } from "@mxlang/hono";
 import { compile } from "@mxlang/html";
-import type { MxRegionCompile } from "@mxlang/parser";
-import { parse } from "@mxlang/parser";
+import { print } from "@mxlang/parser";
 import { compilePreactMx } from "@mxlang/preact";
 import { compileReactMx } from "@mxlang/react";
 import { compileSolidMx } from "@mxlang/solid";
@@ -29,14 +28,6 @@ import {
 } from "vscode-languageserver/node";
 
 export type { HostPolicy };
-
-/**
- * Adapts `compileSolidMx`'s own `(source, options)` signature to the
- * `MxRegionCompile` shape `parse` calls — the parser no longer defaults to
- * this host, so every `.solid.mx` caller supplies it explicitly.
- */
-const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
-  compileSolidMx(source, rest);
 
 export const SOLID_MX_LANGUAGE_IDS = new Set(["solidmx", "SolidMX"]);
 
@@ -185,6 +176,8 @@ export function diagnoseDocument(
    * publishes whatever lands in it.
    */
   related?: RelatedDiagnostics[],
+  /** Receives every callee/type file read while compiling this document. */
+  dependencies?: Set<string>,
 ): Diagnostic[] {
   // Configuration problems the scan found. They are not fatal — a typo'd
   // `mx.tags` leaves the local `tags/` directories perfectly usable — so they
@@ -224,25 +217,40 @@ export function diagnoseDocument(
       // untitled/mis-suffixed buffer, so give that case the suffix that turns
       // the parser's opt-in MX bridge on.
       const filename = uri.endsWith(".solid.mx") ? uri : `${uri}.solid.mx`;
-      parse(text, filename, {
-        mxCustomTags: customTags,
-        mxRegionCompile: solidRegionCompile,
+      const result = print(text, filename, {
+        customTags,
+        mxRegionCompile: (input) =>
+          compileSolidMx(input.source, { ...input, warnings }),
       });
+      for (const dependency of result.dependencies)
+        dependencies?.add(dependency);
     } else if (hostPolicy.host === "solid") {
       // A whole-file `.mx` document routed to the Solid host uses the same
       // fixed Solid profile as an embedded region. Its declarations reject
       // stateful Marko tags; there is no looser Solid policy to select.
-      compileSolidMx(text, { filename: uri, customTags });
+      const result = compileSolidMx(text, {
+        filename: uri,
+        customTags,
+        warnings,
+      });
+      for (const dependency of result.dependencies)
+        dependencies?.add(dependency);
     } else if (hostPolicy.host === "preact") {
       // A whole-file `.mx` document routed to the Preact host. Its
       // declarations reject Marko's stateful tags outright, so like Solid's
       // there is no looser policy to select — the `strict` flag has no
       // meaning for this host and is not consulted.
-      compilePreactMx(text, uri, { customTags });
+      const result = compilePreactMx(text, uri, { customTags, warnings });
+      for (const dependency of result.dependencies)
+        dependencies?.add(dependency);
     } else if (hostPolicy.host === "react") {
-      compileReactMx(text, uri, { customTags });
+      const result = compileReactMx(text, uri, { customTags, warnings });
+      for (const dependency of result.dependencies)
+        dependencies?.add(dependency);
     } else if (hostPolicy.host === "hono") {
-      compileHonoMx(text, uri, { customTags });
+      const result = compileHonoMx(text, uri, { customTags, warnings });
+      for (const dependency of result.dependencies)
+        dependencies?.add(dependency);
     } else if (hostPolicy.host === "angular") {
       // `@mxlang/angular` exists (phase 1) but is not wired into this
       // server yet — falling through to the `else` branch below would
@@ -257,11 +265,13 @@ export function diagnoseDocument(
     } else {
       // Through `@mxlang/html`'s own front door, not `compileSource`
       // directly: this registers the host taglib and compiles via the IR.
-      compile(text, uri, {
+      const result = compile(text, uri, {
         strict: resolveStrict(hostPolicy),
         customTags,
         warnings,
       });
+      for (const dependency of result.dependencies)
+        dependencies?.add(dependency);
     }
     // A compile that succeeded may still have dropped something the author
     // wrote. Those are Warnings rather than Errors, and they are the reason
@@ -269,6 +279,15 @@ export function diagnoseDocument(
     // where an author is looking.
     return [...scanWarnings, ...warningDiagnostics(warnings, uri, related)];
   } catch (error) {
+    // A failing compile can still have resolved real callees before the
+    // error was raised (e.g. "missing required attribute tag" is only
+    // reachable after reading the callee's declaration) — those are still
+    // this document's dependencies, and the re-diagnosis graph must keep the
+    // edge even though this compile produced no `CompileResult`.
+    if (error instanceof TranslateError) {
+      for (const dependency of error.dependencies ?? [])
+        dependencies?.add(dependency);
+    }
     const position = errorPosition(error);
     if (position) {
       // Babel/core lines are 1-based and columns are 0-based. LSP positions

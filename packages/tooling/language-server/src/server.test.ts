@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -54,7 +55,171 @@ function startClient(): MessageConnection {
   return connection;
 }
 
+function nextDiagnostics(
+  conn: MessageConnection,
+  predicate: (params: {
+    uri: string;
+    diagnostics: Array<{ message: string; source?: string }>;
+  }) => boolean,
+): Promise<{
+  uri: string;
+  diagnostics: Array<{ message: string; source?: string }>;
+}> {
+  return new Promise((resolve) => {
+    const disposable = conn.onNotification(
+      PublishDiagnosticsNotification,
+      (params) => {
+        if (!predicate(params)) return;
+        disposable.dispose();
+        resolve(params);
+      },
+    );
+  });
+}
+
 describe("stdio server (e2e)", () => {
+  it("re-diagnoses an open caller from an open callee's unsaved Input changes", async () => {
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    conn.sendNotification("initialized", {});
+
+    const directory = join(
+      import.meta.dirname,
+      "fixtures/dependency-rediagnosis",
+    );
+    const calleeUri = `file://${join(directory, "Card.mx")}`;
+    const callerUri = `file://${join(directory, "Caller.mx")}`;
+    const optional =
+      "export interface Input { tab?: AttrTag<{ attrs: { title?: string } }> }\n\n<div/>\n";
+    const required =
+      "export interface Input { tab: AttrTag<{ attrs: { title?: string } }> }\n\n<div/>\n";
+    const caller = 'import Card from "./Card.mx"\n\n<Card/>\n';
+
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: calleeUri,
+        languageId: "mx",
+        version: 1,
+        text: optional,
+      },
+    });
+    const initialCaller = nextDiagnostics(
+      conn,
+      (params) => params.uri === callerUri,
+    );
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: callerUri,
+        languageId: "mx",
+        version: 1,
+        text: caller,
+      },
+    });
+    expect((await initialCaller).diagnostics).toEqual([]);
+
+    const newlyInvalid = nextDiagnostics(
+      conn,
+      (params) => params.uri === callerUri && params.diagnostics.length > 0,
+    );
+    conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: calleeUri, version: 2 },
+      contentChanges: [{ text: required }],
+    });
+    expect((await newlyInvalid).diagnostics[0]?.message).toContain("tab");
+
+    const validAgain = nextDiagnostics(
+      conn,
+      (params) => params.uri === callerUri && params.diagnostics.length === 0,
+    );
+    conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: calleeUri, version: 3 },
+      contentChanges: [{ text: optional }],
+    });
+    expect((await validAgain).diagnostics).toEqual([]);
+  }, 15000);
+
+  it("re-diagnoses an open caller from an on-disk callee change reported by watched-file events", async () => {
+    // The callee here is never opened in the editor — only a `didChangeWatchedFiles`
+    // notification tells the server it changed on disk (a save from another
+    // editor, a checkout, a codegen step). This is the dependent path
+    // `didOpen`/`didChange` on the *open* callee already covers; the watcher
+    // path is untested until now.
+    // No `workspace.didChangeWatchedFiles.dynamicRegistration` capability:
+    // `onDidChangeWatchedFiles` runs on an incoming notification regardless
+    // of how the client came to send it, and declaring that capability would
+    // need this client to also answer the server's `client/registerCapability`
+    // request, which is unrelated to what this test covers.
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    conn.sendNotification("initialized", {});
+
+    const directory = join(
+      import.meta.dirname,
+      "fixtures/dependency-rediagnosis-watched",
+    );
+    const calleePath = join(directory, "Card.mx");
+    const calleeUri = `file://${calleePath}`;
+    const callerUri = `file://${join(directory, "Caller.mx")}`;
+    const optional =
+      "export interface Input { tab?: AttrTag<{ attrs: { title?: string } }> }\n\n<div/>\n";
+    const required =
+      "export interface Input { tab: AttrTag<{ attrs: { title?: string } }> }\n\n<div/>\n";
+    const caller = 'import Card from "./Card.mx"\n\n<Card/>\n';
+
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      join(directory, "package.json"),
+      '{ "mx": { "host": "html" } }\n',
+    );
+    writeFileSync(calleePath, optional);
+
+    try {
+      const initialCaller = nextDiagnostics(
+        conn,
+        (params) => params.uri === callerUri,
+      );
+      conn.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: callerUri,
+          languageId: "mx",
+          version: 1,
+          text: caller,
+        },
+      });
+      expect((await initialCaller).diagnostics).toEqual([]);
+
+      const newlyInvalid = nextDiagnostics(
+        conn,
+        (params) => params.uri === callerUri && params.diagnostics.length > 0,
+      );
+      writeFileSync(calleePath, required);
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: calleeUri, type: 2 /* Changed */ }],
+      });
+      expect((await newlyInvalid).diagnostics[0]?.message).toContain("tab");
+
+      const validAgain = nextDiagnostics(
+        conn,
+        (params) => params.uri === callerUri && params.diagnostics.length === 0,
+      );
+      writeFileSync(calleePath, optional);
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: calleeUri, type: 2 /* Changed */ }],
+      });
+      expect((await validAgain).diagnostics).toEqual([]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 15000);
+
   it("publishes a diagnostic for a strict-policy document opened over stdio", async () => {
     const conn = startClient();
 

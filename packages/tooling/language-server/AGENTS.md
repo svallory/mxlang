@@ -102,3 +102,33 @@ fresh-worktree caveat as `@mxlang/parser`'s `dist/index.js` (see "Build
 before downstream tests" in the root `AGENTS.md`): `bun run verify` builds before it tests,
 so this only bites a standalone `vitest run` of this package.
 
+**Dependent re-diagnosis** (phase 4 tooling, decision 106/107's LS half).
+`server.ts` keeps `callerDependencies`/`dependencyCallers`, a bidirectional
+edge map between a document URI and the filesystem paths its last compile's
+`dependencies` named. `scheduleDependents(changedUri)` walks
+`dependencyCallers` and re-schedules every *open* document depending on the
+changed path — called from `onDidChangeContent`, `onDidSave`, and
+`onDidChangeWatchedFiles` alike, so an unsaved edit to an open callee, a save,
+and an on-disk change reported only through the watcher (another editor, a
+checkout, codegen) all reach the same path. `openSources()` feeds
+`withCalleeInputSources` on every diagnose, so a dependency that is itself an
+*open* document is read from its live buffer rather than disk. Dynamic
+watcher registration (`onInitialized`, gated on the client's
+`workspace.didChangeWatchedFiles.dynamicRegistration` capability) only
+affects whether the server *asks* the client to send `didChangeWatchedFiles`
+in the first place — `onDidChangeWatchedFiles` itself runs on any incoming
+notification regardless, which is why `server.test.ts`'s watcher test omits
+that capability and sends the notification directly (no
+`client/registerCapability` handler needed in the test's minimal JSON-RPC
+client).
+**`recordDependencies` must run even when a compile fails**, or the edge a
+previous *successful* diagnosis recorded is silently dropped the next time
+that same document fails to compile — measured as the exact bug behind the
+"invalidates and regenerates" cycle test hanging on its final revert: the
+"required" round's diagnosis (which itself reports "missing required
+attribute tag", a compile error) recorded zero dependencies, wiping the edge
+the earlier successful "optional" round had recorded, so the *next* callee
+edit found no caller left to re-diagnose. Fixed in `@mxlang/core`
+(`TranslateError.dependencies`, see `packages/core/AGENTS.md`) and forwarded
+here in `diagnoseDocument`'s `catch` block before building the diagnostic.
+

@@ -12,10 +12,11 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { resolveHostPolicy } from "@mxlang/core";
+import { resolveHostPolicy, withCalleeInputSources } from "@mxlang/core";
 import {
   createConnection,
   type Diagnostic,
+  DidChangeWatchedFilesNotification,
   ProposedFeatures,
   TextDocumentSyncKind,
   TextDocuments,
@@ -67,6 +68,41 @@ export function startServer(
   // its diagnostics.
   const templateDiagnostics = new Map<string, Set<string>>();
 
+  // Compile-result edges in both directions. Paths are filesystem paths,
+  // while callers stay document URIs so their current in-memory text can be
+  // fetched from `TextDocuments` when a dependency changes.
+  const callerDependencies = new Map<string, Set<string>>();
+  const dependencyCallers = new Map<string, Set<string>>();
+
+  const pathOf = (uri: string): string => {
+    try {
+      return fileURLToPath(uri);
+    } catch {
+      return uri;
+    }
+  };
+
+  const openSources = (): Map<string, string> =>
+    new Map(
+      documents
+        .all()
+        .map((document) => [pathOf(document.uri), document.getText()]),
+    );
+
+  function recordDependencies(uri: string, current: Set<string>): void {
+    for (const dependency of callerDependencies.get(uri) ?? []) {
+      const callers = dependencyCallers.get(dependency);
+      callers?.delete(uri);
+      if (callers?.size === 0) dependencyCallers.delete(dependency);
+    }
+    callerDependencies.set(uri, current);
+    for (const dependency of current) {
+      const callers = dependencyCallers.get(dependency) ?? new Set<string>();
+      callers.add(uri);
+      dependencyCallers.set(dependency, callers);
+    }
+  }
+
   function scheduleDiagnostics(uri: string, languageId: string, text: string) {
     if (!isMxDocument(uri, languageId)) return;
 
@@ -102,18 +138,25 @@ export function startServer(
       // raw URI made the scan find no tags for any real document while every
       // test that called `diagnoseDocument` with a plain path passed. The URI
       // is still what diagnostics are published against, below.
-      const diagnostics: Diagnostic[] = diagnoseDocument(
-        text,
-        filePath,
-        hostPolicy,
-        (error) =>
-          connection.console.error(
-            `@mxlang/language-server: unexpected error compiling ${uri}: ${String(error)}`,
+      const dependencies = new Set<string>();
+      const diagnostics: Diagnostic[] = withCalleeInputSources(
+        openSources(),
+        () =>
+          diagnoseDocument(
+            text,
+            filePath,
+            hostPolicy,
+            (error) =>
+              connection.console.error(
+                `@mxlang/language-server: unexpected error compiling ${uri}: ${String(error)}`,
+              ),
+            languageId,
+            undefined,
+            related,
+            dependencies,
           ),
-        languageId,
-        undefined,
-        related,
       );
+      recordDependencies(uri, dependencies);
       connection.sendDiagnostics({ uri, diagnostics });
 
       // Clear whatever this document published against a template last time
@@ -139,11 +182,37 @@ export function startServer(
     pending.set(uri, timer);
   }
 
-  connection.onInitialize(() => ({
-    capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
-    },
-  }));
+  let watchedFilesDynamicRegistration = false;
+  connection.onInitialize((params) => {
+    watchedFilesDynamicRegistration =
+      params.capabilities.workspace?.didChangeWatchedFiles
+        ?.dynamicRegistration === true;
+    return {
+      capabilities: { textDocumentSync: TextDocumentSyncKind.Incremental },
+    };
+  });
+
+  connection.onInitialized(() => {
+    if (!watchedFilesDynamicRegistration) return;
+    void connection.client.register(DidChangeWatchedFilesNotification.type, {
+      watchers: [
+        { globPattern: "**/*.mx" },
+        { globPattern: "**/*.amx" },
+        { globPattern: "**/*.ts" },
+        { globPattern: "**/*.tsx" },
+      ],
+    });
+  });
+
+  function scheduleDependents(changedUri: string): void {
+    const changedPath = pathOf(changedUri);
+    for (const callerUri of dependencyCallers.get(changedPath) ?? []) {
+      if (callerUri === changedUri) continue;
+      const caller = documents.get(callerUri);
+      if (!caller) continue;
+      scheduleDiagnostics(caller.uri, caller.languageId, caller.getText());
+    }
+  }
 
   documents.onDidOpen((event) => {
     scheduleDiagnostics(
@@ -159,6 +228,7 @@ export function startServer(
       event.document.languageId,
       event.document.getText(),
     );
+    scheduleDependents(event.document.uri);
   });
 
   documents.onDidSave((event) => {
@@ -167,6 +237,21 @@ export function startServer(
       event.document.languageId,
       event.document.getText(),
     );
+    scheduleDependents(event.document.uri);
+  });
+
+  connection.onDidChangeWatchedFiles((params) => {
+    for (const change of params.changes) {
+      const document = documents.get(change.uri);
+      if (document) {
+        scheduleDiagnostics(
+          document.uri,
+          document.languageId,
+          document.getText(),
+        );
+      }
+      scheduleDependents(change.uri);
+    }
   });
 
   documents.onDidClose((event) => {
@@ -181,6 +266,8 @@ export function startServer(
       connection.sendDiagnostics({ uri: templateUri, diagnostics: [] });
     }
     templateDiagnostics.delete(event.document.uri);
+    recordDependencies(event.document.uri, new Set());
+    callerDependencies.delete(event.document.uri);
   });
 
   documents.listen(connection);
