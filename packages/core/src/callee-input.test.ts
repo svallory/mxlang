@@ -1663,6 +1663,72 @@ describe("readCalleeInput", () => {
     );
   });
 
+  it("decision 116: a value import routed to a dynamic tag still resolves its declared Input", () => {
+    // "./compile-callee" is a bare, extensionless specifier — not a
+    // `.marko`/`.mx` default import — so `lower.ts`'s decision-116 routing
+    // lowers `<Card>` as a dynamic tag (`ComponentTarget.kind: "dynamic"`),
+    // not a direct `kind: "name"` call. `valueImportBinding` on that target
+    // is what still lets `readCalleeInput` resolve `Card`'s real `Input`
+    // for typed attribute-tag checking — the positive case (a declared
+    // singular tag, given once, is accepted).
+    expect(() =>
+      compileSource(
+        'import Card from "./compile-callee"\n<Card><@header/></Card>\n',
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).not.toThrow();
+  });
+
+  it("decision 116: a value import routed to a dynamic tag still reports a wrong-attribute diagnostic, naming the real tag", () => {
+    // Same routing as above; `<@header>` given twice violates the callee's
+    // declared singular cardinality. The diagnostic must still name `Card`
+    // (via `targetName`'s `valueImportBinding` fallback), not "dynamic tag" —
+    // an author reading this error wrote `<Card>`, never `<${...}>`.
+    expect(() =>
+      compileSource(
+        'import Card from "./compile-callee"\n<Card><@header/><@header/></Card>\n',
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        { emitIr: () => "" },
+      ),
+    ).toThrowError("`<@header>` may appear at most once");
+  });
+
+  it("decision 116: an authored dynamic tag stays untyped (no valueImportBinding to resolve)", () => {
+    // An author's own `<${Card}/>` is `kind: "dynamic"` with no
+    // `valueImportBinding` — decision 116 only sets that provenance flag for
+    // its own synthesized routing, never for hand-written dynamic-tag
+    // syntax. `readCalleeInput` must fall back to `{ kind: "none" }`
+    // (untyped) exactly as before, so an over-repeated declared singular
+    // tag is *not* rejected here — there is no way to know `Card`'s Input
+    // for an arbitrary expression.
+    let lowered: Ir | undefined;
+    expect(() =>
+      compileSource(
+        [
+          'import Card from "./compile-callee"',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko syntax.
+          "<${Card}><@header/><@header/></${Card}>",
+        ].join("\n"),
+        CALLER,
+        { ...declarations(), attrTags: 2 },
+        {
+          emitIr: (ir) => {
+            lowered = ir;
+            return "";
+          },
+        },
+      ),
+    ).not.toThrow();
+    const component = lowered?.body.find((node) => node.kind === "Component");
+    expect(component).toMatchObject({
+      kind: "Component",
+      target: { kind: "dynamic" },
+    });
+  });
+
   it("reports a discovered callee's own bad config once as a per-tag error", () => {
     const path = fixture("bad-own-config.mx");
     const source = fixtureSource("bad-own-config.mx");

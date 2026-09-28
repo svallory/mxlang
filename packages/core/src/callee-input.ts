@@ -405,16 +405,27 @@ function resolveTarget(
   target: ComponentTarget,
   context: ResolveContext,
 ): ResolvedTarget {
-  // A dynamic `<${expr}>` target and a local `<define>` have no file to
-  // read; both take the syntactic fallback like an untyped callee.
-  if (target.kind !== "name") return { kind: "input", input: { kind: "none" } };
+  // A `kind: "name"` target resolves by its own name. A dynamic target
+  // resolves the same way only when `valueImportBinding` names the value
+  // import decision 116 routed through this target — never for an author's
+  // own `<${expr}/>`, which has no single known binding to resolve. A local
+  // `<define>` has no file to read either way.
+  const name =
+    target.kind === "name"
+      ? target.name
+      : target.kind === "dynamic"
+        ? target.valueImportBinding
+        : undefined;
+  if (!name) return { kind: "input", input: { kind: "none" } };
 
-  if (target.resolvedPath) return { kind: "path", path: target.resolvedPath };
+  if (target.kind === "name" && target.resolvedPath) {
+    return { kind: "path", path: target.resolvedPath };
+  }
 
-  const discovered = context.discovered?.get(target.name);
+  const discovered = context.discovered?.get(name);
   if (discovered) return { kind: "path", path: discovered };
 
-  const specifier = context.imports?.get(target.name);
+  const specifier = context.imports?.get(name);
   if (!specifier) {
     // An unbound name is not a callee file this reader can open.
     return { kind: "input", input: { kind: "none" } };

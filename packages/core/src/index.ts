@@ -58,6 +58,7 @@ export {
   type ImportedName,
   importBindings,
   importedNames,
+  isMarkoOrMxSpecifier,
   type MxWarning,
   type Node,
   newCtx,

@@ -239,6 +239,16 @@ export interface Ctx {
   importedNames: Set<string>;
   /** Authored import binding -> module specifier, for callee Input lookup. */
   importSpecifiers: Map<string, string>;
+  /**
+   * Every binding that is a *default* import whose specifier ends in
+   * `.marko` or `.mx` — Marko's own statically-resolved component case
+   * (`@marko/compiler` `tag-name-type.ts:174-196`; decision 116). A
+   * capitalized tag bound to any other value import (a named import of any
+   * source, or a default import of a `.ts`/`.js` module) lowers as a dynamic
+   * tag instead of a direct call, matching Marko's own `_dynamic_tag`
+   * runtime dispatch for everything that isn't this one static case.
+   */
+  importDefaultFromMarkoOrMx: Set<string>;
   generate: (node: Node) => string;
   /** What the host declares, as `lower()` consults it (decision 79). */
   declarations: HostDeclarations;
@@ -834,6 +844,23 @@ export function importedNames(
   }
 }
 
+/**
+ * Whether a module specifier names a `.marko`/`.mx` template file.
+ *
+ * The one fact decision 116's routing turns on: a *default* import from a
+ * `.marko`/`.mx` source is Marko's own statically-resolved component case
+ * (`@marko/compiler` `tag-name-type.ts:174-196`); every other value import —
+ * named, namespace, or a default from a `.ts`/`.js`/anything-else module —
+ * lowers as a dynamic tag instead of a direct call, matching Marko's own
+ * `_dynamic_tag` runtime dispatch. Exported so every consumer checking "is
+ * this specifier a template file" (`lower.ts`'s own `import` handling, and
+ * `@mxlang/parser`'s module-scope scan for `.solid.mx`) shares one rule
+ * rather than duplicating the extension test.
+ */
+export function isMarkoOrMxSpecifier(specifier: string): boolean {
+  return /\.(?:marko|mx)$/.test(specifier);
+}
+
 /** True when a child list holds anything that renders. */
 export function hasContent(children: Node[]): boolean {
   return children.some((child: Node) => {
@@ -1067,6 +1094,7 @@ export function newCtx(
     imports: new Set(),
     importedNames: new Set(),
     importSpecifiers: new Map(),
+    importDefaultFromMarkoOrMx: new Set(),
     generate,
     declarations,
     lookup,

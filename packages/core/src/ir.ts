@@ -315,8 +315,19 @@ export type ComponentTarget =
   | { kind: "name"; name: string; resolvedPath?: string }
   /** A `<define>` in scope, with the parameter names it declared. */
   | { kind: "define"; name: string; params: string[] }
-  /** `<${expr}/>`, resolved at run time by the host. */
-  | { kind: "dynamic"; expr: Expr };
+  /**
+   * `<${expr}/>`, resolved at run time by the host.
+   *
+   * `valueImportBinding` is set only when this target was synthesized by
+   * decision 116's routing — a capitalized tag bound to a value import that
+   * isn't a `.marko`/`.mx` default import — never for an author's own
+   * `<${expr}/>`. It names the local binding so `readCalleeInput` can still
+   * resolve the callee's declared `Input` for typed attribute-tag checking,
+   * exactly as it does for `kind: "name"`, even though the tag now lowers
+   * dynamically at runtime. An authored dynamic tag stays unresolved, since
+   * its expression is not in general a single known binding.
+   */
+  | { kind: "dynamic"; expr: Expr; valueImportBinding?: string };
 
 export type IrNode =
   /** A literal run of text. Already normalized by Marko's own `onText`. */

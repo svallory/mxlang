@@ -571,6 +571,63 @@ describe("one fixture per IR kind", () => {
     expect(component.content).not.toBeNull();
   });
 
+  it("decision 116: a .ts default import routes to a dynamic Component target, not a name call", () => {
+    // Only a `.marko`/`.mx` default import is Marko's own statically
+    // resolved component case; a `.ts`/`.js` value import lowers as a
+    // dynamic tag (matching Marko's `_dynamic_tag` runtime dispatch), with
+    // `valueImportBinding` carrying the binding name for typed
+    // attribute-tag resolution (`readCalleeInput`) and diagnostics
+    // (`targetName`).
+    const ir = lowerSource(
+      'import Comp from "./comp.ts"\n<Comp name="1">body</Comp>\n',
+      fakeDeclarations({ isComponent: (name) => name === "Comp" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({
+      kind: "dynamic",
+      expr: { code: "Comp" },
+      valueImportBinding: "Comp",
+    });
+    expect(component.attrs).toMatchObject([
+      { kind: "static", name: "name", value: "1" },
+    ]);
+    expect(component.content).not.toBeNull();
+  });
+
+  it("decision 116: a .marko default import still routes to a name Component target", () => {
+    const ir = lowerSource(
+      'import Panel from "./panel.marko"\n<Panel/>\n',
+      fakeDeclarations({ isComponent: (name) => name === "Panel" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "name", name: "Panel" });
+  });
+
+  it("decision 116: a .mx default import still routes to a name Component target", () => {
+    const ir = lowerSource(
+      'import Panel from "./panel.mx"\n<Panel/>\n',
+      fakeDeclarations({ isComponent: (name) => name === "Panel" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "name", name: "Panel" });
+  });
+
+  it("decision 116: a named (non-default) .marko import still routes as a dynamic tag", () => {
+    // `Panel` here is a *named* import, not `.marko`'s statically-resolved
+    // default-import case — Marko itself only special-cases the default
+    // export of a `.marko` file, so a named import of the same file is
+    // still routed dynamically.
+    const ir = lowerSource(
+      'import { Panel } from "./panel.marko"\n<Panel/>\n',
+      fakeDeclarations({ isComponent: (name) => name === "Panel" }),
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({
+      kind: "dynamic",
+      valueImportBinding: "Panel",
+    });
+  });
+
   it("Component collects attribute tags as props, in source order", () => {
     const ir = lowerSource(
       [

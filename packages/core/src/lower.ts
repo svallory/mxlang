@@ -47,7 +47,9 @@ import {
   fail,
   hasContent,
   importBindings,
+  importedNames,
   importTypeOnlyBindings,
+  isMarkoOrMxSpecifier,
   markoBabel,
   type Node,
   newCtx,
@@ -1563,6 +1565,11 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     const bindings = importBindings(line);
     const typeOnly = importTypeOnlyBindings(line);
     const authoredSpecifier = line.match(/\bfrom\s+["']([^"']+)["']/)?.[1];
+    // `default`/`*`/named, per binding — only a `default` import from a
+    // `.marko`/`.mx` source is Marko's own statically-resolved component
+    // case (decision 116); everything else lowers as a dynamic tag.
+    const parsedNames = importedNames(line)?.names ?? [];
+    const importedAs = new Map(parsedNames.map((n) => [n.local, n.imported]));
     // Recorded *now*, not in `lower`'s post-pass: a component call later in
     // the body asks `isComponent`, which consults `ctx.imports`, so a binding
     // registered only after the whole body resolved would make every
@@ -1574,8 +1581,15 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       // (`imports` — decision 114/115): neither `import type { X }` nor
       // `{ type X }` introduces a runtime value.
       if (!typeOnly.has(binding)) ctx.imports.add(binding);
-      if (authoredSpecifier)
+      if (authoredSpecifier) {
         ctx.importSpecifiers.set(binding, authoredSpecifier);
+        if (
+          importedAs.get(binding) === "default" &&
+          isMarkoOrMxSpecifier(authoredSpecifier)
+        ) {
+          ctx.importDefaultFromMarkoOrMx.add(binding);
+        }
+      }
     }
     registerAuthoredTemplateImport(ctx, line);
     return { kind: "Import", code: line, bindings, loc, end };
@@ -1909,10 +1923,16 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
 }
 
 function targetName(target: ComponentTarget): string {
-  // A dynamic target has no name to report, so the diagnostic names the
-  // construct instead. Spelled without a `$`-brace so it is not mistaken for
-  // an unintended template placeholder in this file's own source.
-  return target.kind === "dynamic" ? "dynamic tag" : target.name;
+  // An authored dynamic target has no name to report, so the diagnostic
+  // names the construct instead. Spelled without a `$`-brace so it is not
+  // mistaken for an unintended template placeholder in this file's own
+  // source. A decision-116-routed dynamic target carries the real binding
+  // name in `valueImportBinding` and reports that instead — its diagnostics
+  // (an unresolved/invalid callee Input) should still name the tag the
+  // author wrote, not the runtime lowering it now compiles to.
+  if (target.kind === "dynamic")
+    return target.valueImportBinding ?? "dynamic tag";
+  return target.name;
 }
 
 function referencesUnboundAttrTagType(typeUnits: string[]): boolean {
@@ -2166,11 +2186,36 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // binding, which is exactly what a component call needs to route on.
   if (fileLocalBinding || ctx.declarations.isComponent(name, ctx)) {
     const params = ctx.defines.get(name);
-    return lowerComponent(
-      ctx,
-      node,
-      params ? { kind: "define", name, params } : { kind: "name", name },
-    );
+    if (params) {
+      return lowerComponent(ctx, node, { kind: "define", name, params });
+    }
+    // decision 116: a capitalized tag bound to a value **import** that is
+    // not a `.marko`/`.mx` default import lowers as a dynamic tag, matching
+    // Marko's own `_dynamic_tag` runtime dispatch — only a `.marko`/`.mx`
+    // default import is Marko's statically-resolved component case. Gated
+    // on `ctx.importSpecifiers`, not `ctx.imports`: the latter also holds
+    // every other file-local value binding (a module-scope `const`/
+    // `function`/`class`, a `<const>`, a tag param — on Solid, folded in via
+    // `moduleBindings`), and decision 116 is scoped to import bindings
+    // only. A locally declared component keeps today's direct call on every
+    // host, unchanged — routing it through `<Dynamic>` too would silently
+    // change the most common Solid authoring pattern (a module-scope
+    // function used as a tag) well beyond what decision 116 covers.
+    // `valueImportBinding` carries the binding's own name (provenance,
+    // never present on an authored `<${expr}/>`) so `readCalleeInput` can
+    // still resolve the callee's declared `Input` for typed attribute-tag
+    // checking, even though the call now lowers dynamically.
+    if (
+      ctx.importSpecifiers.has(name) &&
+      !ctx.importDefaultFromMarkoOrMx.has(name)
+    ) {
+      return lowerComponent(ctx, node, {
+        kind: "dynamic",
+        expr: { code: name, shape: "other", node: null as unknown as Node },
+        valueImportBinding: name,
+      });
+    }
+    return lowerComponent(ctx, node, { kind: "name", name });
   }
 
   // No HTML element is ever capitalized, so an unbound PascalCase tag is a
