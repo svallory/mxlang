@@ -87,6 +87,10 @@ declare module "@mxlang/parser" {
      *  from a `.marko`/`.mx` source — Marko's own statically-resolved
      *  component case (decision 116). */
     importDefaultFromMarkoOrMx: ReadonlySet<string>;
+    /** The subset of `moduleBindings`' non-import names whose value is not
+     *  statically a function/arrow/class — the local extension of decision
+     *  116. */
+    unknownModuleBindings: ReadonlySet<string>;
   }
 
   /** What the bridge needs back from a host. */
@@ -270,6 +274,20 @@ declare module "@mxlang/parser" {
    * with plain `typescript`/`jsx` plugins.
    */
   export function programBindings(program: File["program"]): Set<string>;
+
+  /**
+   * The subset of `sourceBindings`' non-import names whose value is not
+   * statically a function/arrow/class — the local extension of decision 116.
+   * See `source-bindings.ts`'s `unknownProgramBindings` for the full
+   * contract.
+   */
+  export function unknownSourceBindings(source: string): Set<string>;
+
+  /**
+   * Same as `unknownSourceBindings`, over an already-parsed `Program` rather
+   * than raw source text.
+   */
+  export function unknownProgramBindings(program: File["program"]): Set<string>;
 
   /** The vendored `@babel/parser` entry points, for plain `.ts`/`.tsx`. */
   export function parseBabel(input: string, options?: MxParseOptions): File;

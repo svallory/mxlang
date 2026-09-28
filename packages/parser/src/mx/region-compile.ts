@@ -91,6 +91,16 @@ export interface MxRegionCompileInput {
    * every name here is already a member of `importSpecifiers`.
    */
   importDefaultFromMarkoOrMx: ReadonlySet<string>;
+  /**
+   * The subset of `moduleBindings`' *non-import* names (a top-level
+   * `const`/`function`/`class`) whose value is not statically a
+   * function/arrow/class — the local extension of decision 116 (firstmate's
+   * ruling under decision 116 in `notes/decisions-2026-09-10.md`;
+   * `@mxlang/parser`'s `unknownProgramBindings`). A host lowers a
+   * capitalized tag bound to a name in this set as a dynamic tag instead of
+   * the direct call `moduleBindings` alone would give it.
+   */
+  unknownModuleBindings: ReadonlySet<string>;
 }
 
 /**

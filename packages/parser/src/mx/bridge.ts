@@ -86,6 +86,22 @@ function moduleBindings(parser: MxParserHost): ReadonlySet<string> {
 }
 
 /**
+ * The subset of `moduleBindings`' non-import names whose value is not
+ * statically a function/arrow/class (local extension of decision 116).
+ * Unfiltered by local shadowing for the same reason `moduleBindings` itself
+ * is: this set only classifies names `moduleBindings` already resolves, so
+ * it inherits that set's own (deliberate) lack of shadow-filtering rather
+ * than needing its own.
+ */
+function unknownModuleBindings(parser: MxParserHost): ReadonlySet<string> {
+  return (
+    (parser.options?.mxUnknownModuleBindings as
+      | ReadonlySet<string>
+      | undefined) ?? new Set<string>()
+  );
+}
+
+/**
  * Which of `importSpecifiers`' bindings is a *default* import from a
  * `.marko`/`.mx` source — Marko's own statically-resolved component case
  * (decision 116; `@mxlang/core`'s `isMarkoOrMxSpecifier`, shared rather than
@@ -222,6 +238,7 @@ export function mxParseElementAt(
         importSpecifiers: visibleImportSpecifiers(parser),
         moduleBindings: moduleBindings(parser),
         importDefaultFromMarkoOrMx: visibleImportDefaultFromMarkoOrMx(parser),
+        unknownModuleBindings: unknownModuleBindings(parser),
       });
     const parsedCode = parseRegionCode(code, {
       ...mxSubParseOptions(parser.options),

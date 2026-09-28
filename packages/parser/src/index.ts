@@ -12,7 +12,10 @@ import {
   type HoistedImport,
   planHoistedImports,
 } from "./mx/hoist-imports.ts";
-import { programBindings } from "./mx/source-bindings.ts";
+import {
+  programBindings,
+  unknownProgramBindings,
+} from "./mx/source-bindings.ts";
 
 export type { ParseError, ParseResult, ParserOptions } from "./babel/index.ts";
 export type { PrintOptions, PrintResult, RawSourceMap } from "./mx/print.ts";
@@ -21,6 +24,8 @@ export {
   programBindings,
   SOLID_BUILTIN_TAGS,
   sourceBindings,
+  unknownProgramBindings,
+  unknownSourceBindings,
 } from "./mx/source-bindings.ts";
 export type {
   MxAttr,
@@ -77,6 +82,10 @@ export function parse(
     options.mxImportDefaultFromMarkoOrMx ??
     moduleScan?.importDefaultFromMarkoOrMx ??
     new Set();
+  const unknownModuleBindings =
+    options.mxUnknownModuleBindings ??
+    moduleScan?.unknownModuleBindings ??
+    new Set();
   const file = babelParse(source, {
     sourceType: "module",
     sourceFilename: filename,
@@ -93,6 +102,7 @@ export function parse(
     mxImportSpecifiers: importSpecifiers,
     mxModuleBindings: moduleBindings,
     mxImportDefaultFromMarkoOrMx: importDefaultFromMarkoOrMx,
+    mxUnknownModuleBindings: unknownModuleBindings,
   } as ParserOptions) as unknown as File;
   hoistRegionImports(file, filename);
   return file;
@@ -117,6 +127,7 @@ function collectModuleScope(
   importSpecifiers: Map<string, string>;
   moduleBindings: Set<string>;
   importDefaultFromMarkoOrMx: Set<string>;
+  unknownModuleBindings: Set<string>;
 } {
   const file = babelParse(source, {
     sourceType: "module",
@@ -167,10 +178,12 @@ function collectModuleScope(
     }
   }
   const moduleBindings = programBindings(file.program);
+  const unknownModuleBindings = unknownProgramBindings(file.program);
   return {
     importSpecifiers: imports,
     moduleBindings,
     importDefaultFromMarkoOrMx,
+    unknownModuleBindings,
   };
 }
 

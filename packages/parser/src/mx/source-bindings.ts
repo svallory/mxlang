@@ -1,4 +1,5 @@
 import type { File } from "@babel/types";
+import { isFunctionLikeValue } from "@mxlang/core";
 import { parse as babelParse } from "../babel/index.ts";
 
 /**
@@ -145,6 +146,58 @@ export function programBindings(program: File["program"]): Set<string> {
     }
   }
   return bound;
+}
+
+/**
+ * The subset of `programBindings`' *non-import* names (a top-level
+ * `const`/`function`/`class`) whose value is not statically a function/
+ * arrow/class — the local extension of decision 116 (firstmate's ruling
+ * under decision 116 in `notes/decisions-2026-09-10.md`). An import
+ * binding is never included here regardless of what it resolves to: decision
+ * 116's own import-scoped classification (`ctx.importDefaultFromMarkoOrMx`)
+ * already governs those, on a separate channel this function does not
+ * duplicate.
+ *
+ * `function Foo(){}`/`class Foo{}`/`const Foo = () => {}` are the "known"
+ * cases and are left out of the returned set; `const Foo = lazy(...)`, a
+ * conditional, a string, or anything else opaque is "unknown" and included.
+ * Destructured declarators (`const { Foo } = ...`) bind no single value
+ * expression to classify and are left out entirely, matching
+ * `@mxlang/core`'s own `<const>` handling.
+ */
+export function unknownProgramBindings(program: File["program"]): Set<string> {
+  const unknown = new Set<string>();
+  for (const statement of program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration"
+        ? statement.declaration
+        : statement;
+    if (!declaration || declaration.type !== "VariableDeclaration") continue;
+    for (const declarator of declaration.declarations) {
+      if (declarator.id?.type !== "Identifier") continue;
+      if (isFunctionLikeValue(declarator.init)) continue;
+      unknown.add(declarator.id.name);
+    }
+  }
+  return unknown;
+}
+
+/**
+ * Same contract as `unknownProgramBindings`, over raw source text — the
+ * `sourceBindings` counterpart.
+ */
+export function unknownSourceBindings(source: string): Set<string> {
+  try {
+    return unknownProgramBindings(
+      babelParse(source, {
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
+      }).program,
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 /**
