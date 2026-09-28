@@ -253,6 +253,23 @@ function hoistRegionImports(file: File, filename: string): void {
 
   if (hoistedDefineNodes.length === 0) return;
 
+  // Parsed up front, before any collision rename, so a rename can flip the
+  // declaration's `id.name` directly on the AST rather than pattern-matching
+  // `entry.code` as text — the latter ties this pass to the exact string
+  // `SolidEmitter.define` happens to generate today (`function <name>(`),
+  // which already broke once (`$` is a regex metacharacter that silently
+  // never matched, decision 110b round 2) and would break again for any
+  // future generator shape (an arrow function, a multi-line signature) that
+  // still satisfies `HoistedDefine.code`'s contract without matching that
+  // one pattern.
+  const parsedDefines = hoistedDefineNodes.map(
+    (entry) =>
+      babelParse(entry.code, {
+        sourceType: "module",
+        plugins: MX_DEFAULT_PLUGINS,
+      }) as unknown as { program: { body: Array<Record<string, unknown>> } },
+  );
+
   // A hoisted define's gensym is only unique *within its own region* — a
   // host has no visibility of another region's choices — so two regions in
   // one file each declaring `<define/Row>` can independently mint the
@@ -267,35 +284,31 @@ function hoistRegionImports(file: File, filename: string): void {
   for (const name of moduleBindingNames(program.body)) {
     takenBindings.add(name);
   }
-  for (const entry of hoistedDefineNodes) {
+  hoistedDefineNodes.forEach((entry, index) => {
     if (!takenBindings.has(entry.binding)) {
       takenBindings.add(entry.binding);
-      continue;
+      return;
     }
     const range = defineRange.get(entry);
     const fresh = freshDefineBinding(entry.binding, takenBindings);
     takenBindings.add(fresh);
-    entry.code = replaceBindingInDeclaration(entry.code, entry.binding, fresh);
+    const fn = parsedDefines[index]?.program.body[0] as
+      | { id?: { name?: string } }
+      | undefined;
+    if (fn?.id) fn.id.name = fresh;
     if (range) {
       renameRegionReferences(program.body, new Map([[entry.binding, fresh]]), [
         range,
       ]);
     }
     entry.binding = fresh;
-  }
+  });
 
   // Placed after the module's import block (including any import this pass
   // just spliced in above, so a define calling a discovered tag closes over
   // its binding correctly).
   const { lastImportIndex: defineInsertIndex } = authoredImportsOf(
     program.body,
-  );
-  const parsedDefines = hoistedDefineNodes.map(
-    (entry) =>
-      babelParse(entry.code, {
-        sourceType: "module",
-        plugins: MX_DEFAULT_PLUGINS,
-      }) as unknown as { program: { body: Array<Record<string, unknown>> } },
   );
   program.body.splice(
     defineInsertIndex + 1,
@@ -493,36 +506,6 @@ function freshDefineBinding(
   let candidate = `${binding}_${n}`;
   while (taken.has(candidate)) candidate = `${binding}_${++n}`;
   return candidate;
-}
-
-/**
- * Renames a hoisted `<define>`'s own function-declaration text.
- *
- * The binding appears exactly once in `code` — `function <name>(...) {
- * ... }`, the shape every `HoistedDefine.code` is generated with
- * (`@mxlang/solid`'s `SolidEmitter.define`) — so a literal, whole-word
- * replacement is exact rather than a heuristic: the function body can only
- * reference *other* names (its own params, another define's binding,
- * module imports), never its own, since nothing in JS syntax lets a
- * function body use its own not-yet-bound declaration name as anything but
- * a self-recursive call, which is spelled identically either way.
- */
-function replaceBindingInDeclaration(
-  code: string,
-  binding: string,
-  replacement: string,
-): string {
-  // Every hoisted binding is `$mx_...` — `$` is a regex metacharacter
-  // (end-of-string anchor) and would otherwise silently prevent the match
-  // from ever firing, leaving the declaration's own name untouched while
-  // its call-site reference was renamed (measured: two colliding
-  // `$mx_DefineRow1` declarations stayed identically named, only the
-  // second region's reference moved to `$mx_DefineRow1_2`).
-  const escaped = binding.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return code.replace(
-    new RegExp(`\\bfunction ${escaped}\\(`),
-    `function ${replacement}(`,
-  );
 }
 
 function renameRegionReferences(
