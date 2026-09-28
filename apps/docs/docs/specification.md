@@ -1040,6 +1040,28 @@ is silent everywhere — which is worse than either a throw or an error.
 | `` `mx.tags[${index}].prefix` must be a string `` |
 | `` `mx.tags[${index}].hosts` must be an array of strings `` |
 
+An unknown host *name* inside an otherwise well-shaped `hosts` array is not a
+shape error — it does not throw — but is still worth a diagnostic, recorded
+against the `package.json`:
+
+| Message | When |
+|---|---|
+| *(diagnostic, recorded)* `` `mx.tags` names an unknown host in `hosts`: ${host} `` | An entry's `hosts` array names a host outside the known set (`html`, `astro`, `solid`, `preact`, `react`, `hono`, `angular`). The entry still indexes under that name — nothing is dropped — but no scan will ever match it, so this is worth a warning rather than nothing (decision 110a). |
+
+**`hosts` restricts a `mx.tags` entry to the host names it lists** (decision
+110a). Every integration passes its own host name into the scan —
+`getCustomTags`/`scanCustomTags`/`scanCached`/`discoverProjectTags` all take
+an optional `host` option — and a tag whose entry declared `hosts` excluding
+that name is left out of the scan's result entirely, not merely hidden from
+the compiled `customTags` map: a name a different host owns must stay
+resolvable from *that* host's own scan of the same file. No `hosts` on the
+entry (and every local `tags/` directory, which has no `mx.tags` entry to
+carry one) means visible to every host, `host` unset included. The Bun
+loaders, the Vite plugin, the Astro `.amx` plugin, the TypeScript plugin
+(whole-file `.mx`, `.solid.mx`, and `.amx`), the language server, and
+`mx-tsc` (through the same TypeScript-plugin language plugin) all pass their
+own host name.
+
 ### 9.3 Sidecars and `parseOptions`
 
 `parseOptions` is read **without executing the sidecar**, because it must reach

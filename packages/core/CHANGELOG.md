@@ -2,6 +2,18 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: an unknown host name in `mx.tags[].hosts` is now a diagnostic, not silent (decision 110a)
+
+`indexMxTagsEntries` (`scan.ts`) now checks each `hosts` entry against the
+known host set (`html`, `astro`, `solid`, `preact`, `react`, `hono`,
+`angular`) and records a diagnostic naming the offending host and the
+`package.json`. The entry still indexes and the field still filters as
+before; only the silent-typo case changes — `hosts: ["solidd"]` used to look
+exactly like `hosts: ["solid"]` excluding every host, with nothing said.
+`hosts` filtering itself (`applyHostFilter`, every scan call site passing its
+own `host`) was already shipped; only the unknown-name diagnostic was
+missing.
+
 ### Fix: a dynamic tag or `<define>` call now accepts arguments plus content (decision 109)
 
 `rejectArgsWithProps` now takes Marko's own lenient rule for a dynamic
