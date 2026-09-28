@@ -2,6 +2,28 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: a type-only import no longer resolves a capitalized tag (decision 114/115)
+
+`importBindings(line)` (`core.ts`) previously returned every specifier of an
+`import` statement with no check of `importKind`, so `import type Widget from
+"./widget.mx"` (and `import { type Widget } from "..."`) bound `Widget` in
+`ctx.imports` the same as an ordinary value import — `<Widget/>` then silently
+lowered to a component call referencing a name erased before the module runs
+(a runtime `ReferenceError`), instead of Marko's own "Unable to find entry
+point for custom tag" compile error, on **every host**, in whole-file `.mx`.
+A new `importTypeOnlyBindings(line)` identifies the type-only subset; `Ctx`
+gained `imports` (now value-bindings only — every host's own `isComponent`
+reads this directly, so this alone makes `@mxlang/html` and `@mxlang/solid`
+correct with no host-side change) and `importedNames` (every binding
+regardless of `importKind`, for the two readers that genuinely want that:
+`needsAttrTagImport`'s "is `AttrTag` already imported" check, and
+`exportNameFor`'s self-export collision check). A type-only import is still
+emitted verbatim (`Import.code` is the statement's source text regardless of
+`bindings`), so nothing an author wrote is dropped. Mirrors
+`@mxlang/parser`'s `programBindings`, which already excluded the same two
+shapes for `.solid.mx` region resolution; duplicated rather than shared,
+since core may not depend on `@mxlang/parser`.
+
 ### Fix: a host's own wording for an unresolved *capitalized* tag, not just lowercase (decision 114)
 
 `lower.ts`'s capitalized-tag guard now calls `ctx.declarations.rejectUnknownTag?.(name, node, ctx)` before its own fallback message (`` `<${name}>` has no matching import or `<define>` in scope; a capitalized tag is always a component call ``), the same way the lowercase-unresolved-element guard a few lines below it already did. A Marko-parity host (e.g. `@mxlang/solid`) can now report Marko's exact wording (`` Unable to find entry point for custom tag `<Name>`. ``, verified against `@marko/compiler` 5.42.5 / `marko@6.3.51`) for either case from one hook. A host supplying no `rejectUnknownTag` keeps the identical fallback message as before — not a behavior change for those hosts.

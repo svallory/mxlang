@@ -47,6 +47,7 @@ import {
   fail,
   hasContent,
   importBindings,
+  importTypeOnlyBindings,
   markoBabel,
   type Node,
   newCtx,
@@ -1560,13 +1561,19 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 
   if (name === "import") {
     const bindings = importBindings(line);
+    const typeOnly = importTypeOnlyBindings(line);
     const authoredSpecifier = line.match(/\bfrom\s+["']([^"']+)["']/)?.[1];
     // Recorded *now*, not in `lower`'s post-pass: a component call later in
     // the body asks `isComponent`, which consults `ctx.imports`, so a binding
     // registered only after the whole body resolved would make every
     // imported component an unbound capitalized tag.
     for (const binding of bindings) {
-      ctx.imports.add(binding);
+      ctx.importedNames.add(binding);
+      // A type-only binding still occupies the name in the module
+      // (`importedNames`), but is not a value a tag could resolve to
+      // (`imports` — decision 114/115): neither `import type { X }` nor
+      // `{ type X }` introduces a runtime value.
+      if (!typeOnly.has(binding)) ctx.imports.add(binding);
       if (authoredSpecifier)
         ctx.importSpecifiers.set(binding, authoredSpecifier);
     }
@@ -2417,7 +2424,7 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
     ? exportNameFor(
         ctx.filename,
         (name) =>
-          ctx.imports.has(name) ||
+          ctx.importedNames.has(name) ||
           ctx.defines.has(name) ||
           new RegExp(`(^|[^\\w$])${name}([^\\w$]|$)`).test(ctx.source),
       )
@@ -2488,7 +2495,8 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
       .map((node) => node.code),
   ];
   ir.needsAttrTagImport =
-    referencesUnboundAttrTagType(typeUnits) && !ctx.imports.has("AttrTag");
+    referencesUnboundAttrTagType(typeUnits) &&
+    !ctx.importedNames.has("AttrTag");
 
   if (isFileRoot && ctx.customTags) {
     // Prepended as one block, after the body is assembled: a `finalize` node
