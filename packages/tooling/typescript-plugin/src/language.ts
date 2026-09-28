@@ -123,7 +123,7 @@ export function createSolidMxLanguagePlugin(
         );
         return createVirtualCode(
           typescript,
-          printed.code,
+          appendSolidBuiltinImport(printed.code),
           source,
           printed.map,
           attributeTagDiagnosticMappings(source, printed.code),
@@ -279,6 +279,82 @@ function createVirtualCode(
     ),
     embeddedCodes: [],
   };
+}
+
+/**
+ * Solid JSX built-ins `@mxlang/solid`'s emitter can print as a bare tag with
+ * no import of its own (`<Show>`, `<For>`, …): the *runtime* build pipeline
+ * gets these for free because `@solidjs/vite-plugin`'s compiler stage
+ * (native or Babel) auto-imports every built-in it sees, per
+ * `@mxlang/solid`'s own `AGENTS.md`. That compiler stage never runs inside
+ * the type-check projection — `createVirtualCode` here only prints JSX text
+ * and hands it straight to `tsc`/tsserver — so without this, every `<Show>`
+ * (from `<if>`/`<if|u|>`), `<For>`/`<Repeat>` (from `<for>`), `<Switch>`/
+ * `<Match>` (from a 3+-branch `<if>`), `<Errored>`/`<Loading>` (from
+ * `<try>`) and `<Dynamic>` (from a dynamic tag) is an unresolved identifier
+ * (TS2304), which drowns every real diagnostic inside that JSX in noise the
+ * negative test below guards against staying hidden.
+ */
+const SOLID_BUILTIN_IMPORTS: ReadonlyArray<{
+  name: string;
+  from: string;
+}> = [
+  { name: "Show", from: "solid-js" },
+  { name: "For", from: "solid-js" },
+  { name: "Switch", from: "solid-js" },
+  { name: "Match", from: "solid-js" },
+  { name: "Repeat", from: "solid-js" },
+  { name: "Errored", from: "solid-js" },
+  { name: "Loading", from: "solid-js" },
+  { name: "Dynamic", from: "@solidjs/web" },
+];
+
+/**
+ * Appends an import for every Solid JSX built-in the generated text uses as
+ * a bare tag and the source does not already bind (an import, or any other
+ * top-level declaration of the same name) — so a caller who genuinely wrote
+ * `import { Show } from "./my-show.ts"` is left alone rather than getting a
+ * colliding second `Show`. Appended at the end of the file, after every
+ * mapping is computed from the unmodified generated text, so no existing
+ * line or offset shifts: an appended, unmapped import cannot mis-position an
+ * earlier diagnostic.
+ */
+export function appendSolidBuiltinImport(generated: string): string {
+  const needed = SOLID_BUILTIN_IMPORTS.filter(
+    ({ name }) =>
+      new RegExp(`<${name}[\\s/>]`).test(generated) &&
+      !new RegExp(`\\b${name}\\b`).test(sourceBindingsProbe(generated)),
+  );
+  if (needed.length === 0) return generated;
+
+  const byModule = new Map<string, string[]>();
+  for (const { name, from } of needed) {
+    const names = byModule.get(from) ?? [];
+    names.push(name);
+    byModule.set(from, names);
+  }
+  const imports = [...byModule.entries()]
+    .map(([from, names]) => `import { ${names.join(", ")} } from "${from}";`)
+    .join("\n");
+  return `${generated}\n${imports}\n`;
+}
+
+/**
+ * The generated file's own top-level `import`/`const`/`function`/`class`
+ * declarations, so `appendSolidBuiltinImport` never shadows a name the
+ * author already bound. Cheap and line-based on purpose: it only needs to
+ * rule out an identifier existing anywhere at module scope, not resolve
+ * real bindings.
+ */
+function sourceBindingsProbe(generated: string): string {
+  return generated
+    .split("\n")
+    .filter((line) =>
+      /^\s*(import\b|export\s+(default\s+)?(const|function|class)\b|const\b|function\b|class\b)/.test(
+        line,
+      ),
+    )
+    .join("\n");
 }
 
 /**
