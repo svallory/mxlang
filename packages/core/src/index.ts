@@ -32,6 +32,7 @@ export {
   registerCalleeInputReader,
   resetCalleeInputCache,
   resolveSpecifier,
+  withCalleeInputSources,
 } from "./callee-input.ts";
 export {
   type CompileResult,

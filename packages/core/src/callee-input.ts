@@ -153,6 +153,42 @@ const calleeCache = new Map<
   }
 >();
 
+/**
+ * Source snapshots supplied by an editor while one synchronous compile runs.
+ *
+ * Callee `Input` resolution is intentionally synchronous, but an open editor
+ * buffer can be newer than the file on disk. Tooling wraps compilation with
+ * this helper so the syntactic reader observes the same text the user sees.
+ * The previous map is restored in `finally`, which keeps nested compiles and
+ * unrelated callers isolated.
+ */
+let activeSourceOverrides: ReadonlyMap<string, string> | undefined;
+
+export function withCalleeInputSources<T>(
+  sources: ReadonlyMap<string, string>,
+  compile: () => T,
+): T {
+  const previous = activeSourceOverrides;
+  activeSourceOverrides = sources;
+  try {
+    return compile();
+  } finally {
+    activeSourceOverrides = previous;
+  }
+}
+
+function sourceSnapshot(path: string): {
+  source: string;
+  mtimeMs: number | undefined;
+} {
+  const source = activeSourceOverrides?.get(path);
+  if (source !== undefined) return { source, mtimeMs: undefined };
+  return {
+    source: readFileSync(path, "utf8"),
+    mtimeMs: statSync(path).mtimeMs,
+  };
+}
+
 /** Clears the callee-input cache. Test-only: production reads are mtime-keyed. */
 export function resetCalleeInputCache(): void {
   calleeCache.clear();
@@ -210,16 +246,26 @@ export function readCalleeInput(
     return { input: value.ownInput, dependencies: [] };
   }
   const resolved = resolveTarget(target, context);
-  if (resolved.kind !== "path")
-    return { input: resolved.input, dependencies: [] };
+  if (resolved.kind !== "path") {
+    const dependencies = resolved.candidates ?? [];
+    recordDependencies(context.ctx, dependencies);
+    return { input: resolved.input, dependencies };
+  }
 
   let mtimeMs: number | undefined;
   let source: string;
   try {
-    mtimeMs = statSync(resolved.path).mtimeMs;
-    source = readFileSync(resolved.path, "utf8");
+    ({ mtimeMs, source } = sourceSnapshot(resolved.path));
   } catch {
-    return { input: { kind: "none", path: resolved.path }, dependencies: [] };
+    // Recorded as a dependency even though unread: an editor snapshot for
+    // this exact path can arrive on a later compile (the caller retries with
+    // `withCalleeInputSources` once it learns about the dependency), and a
+    // watched-file event for it must still invalidate this caller.
+    recordDependencies(context.ctx, [resolved.path]);
+    return {
+      input: { kind: "none", path: resolved.path },
+      dependencies: [resolved.path],
+    };
   }
 
   const key = cacheKey(resolved.path, context.resolveImport);
@@ -316,10 +362,10 @@ function snapshotDependencies(
   >();
   for (const dependency of dependencies) {
     try {
+      const snapshot = sourceSnapshot(dependency);
       snapshots.set(dependency, {
-        mtimeMs: statSync(dependency).mtimeMs,
-        source:
-          parsedSources.get(dependency) ?? readFileSync(dependency, "utf8"),
+        mtimeMs: snapshot.mtimeMs,
+        source: parsedSources.get(dependency) ?? snapshot.source,
       });
     } catch {
       // A file that disappears after the read makes the next lookup miss.
@@ -337,9 +383,10 @@ function snapshotsMatch(
 ): boolean {
   for (const [path, snapshot] of snapshots) {
     try {
+      const current = sourceSnapshot(path);
       if (
-        statSync(path).mtimeMs !== snapshot.mtimeMs ||
-        readFileSync(path, "utf8") !== snapshot.source
+        current.mtimeMs !== snapshot.mtimeMs ||
+        current.source !== snapshot.source
       ) {
         return false;
       }
@@ -352,7 +399,7 @@ function snapshotsMatch(
 
 type ResolvedTarget =
   | { kind: "path"; path: string }
-  | { kind: "input"; input: CalleeInput };
+  | { kind: "input"; input: CalleeInput; candidates?: string[] };
 
 function resolveTarget(
   target: ComponentTarget,
@@ -372,9 +419,28 @@ function resolveTarget(
     // An unbound name is not a callee file this reader can open.
     return { kind: "input", input: { kind: "none" } };
   }
-  const path = resolveSpecifier(specifier, context);
-  if (!path) return { kind: "input", input: { kind: "unresolved", specifier } };
-  return { kind: "path", path };
+  const probes: string[] = [];
+  const path = resolveSpecifier(specifier, context, context.importer, probes);
+  if (path) return { kind: "path", path };
+  // An unsaved editor buffer for this exact specifier resolves even though
+  // nothing was written to disk yet: `resolveSpecifier`'s own probing
+  // (`statSync`) cannot see it, but the candidate path it tried is still the
+  // callee an open caller means, and recording it as `path` (not
+  // `unresolved`) is what lets a later retry with the editor's snapshot see
+  // the real declared shape instead of the untyped fallback.
+  const openCandidate = probes.find((candidate) =>
+    activeSourceOverrides?.has(candidate),
+  );
+  if (openCandidate) return { kind: "path", path: openCandidate };
+  // Every probed candidate is recorded as a dependency (not just the
+  // specifier text) so a compile retried once the editor snapshot map is
+  // populated for one of them resolves through the branch above instead of
+  // repeating this same "unresolved" result forever.
+  return {
+    kind: "input",
+    input: { kind: "unresolved", specifier },
+    candidates: probes,
+  };
 }
 
 /** Extension probes, in the order the brief pins (literal path first). */
@@ -397,6 +463,10 @@ function probeFile(base: string, probes?: string[]): string | undefined {
     ...["", ...EXTENSION_PROBES].map((ext) => resolvePath(base, `index${ext}`)),
   ]) {
     probes?.push(candidate);
+    // An editor snapshot can be the only place an unsaved callee exists (a
+    // brand-new file not yet flushed to disk), so a candidate the override
+    // map knows about counts as found even when `statSync` cannot see it.
+    if (activeSourceOverrides?.has(candidate)) return candidate;
     try {
       if (statSync(candidate).isFile()) return candidate;
     } catch {
@@ -927,7 +997,7 @@ class InputAnalyzer {
 
     let source: string;
     try {
-      source = readFileSync(resolved, "utf8");
+      source = sourceSnapshot(resolved).source;
       this.parsedSources.set(resolved, source);
     } catch {
       return undefined;
@@ -968,7 +1038,7 @@ class InputAnalyzer {
       if (!this.context.ctx) return undefined;
       let mtimeMs: number | undefined;
       try {
-        mtimeMs = statSync(resolved).mtimeMs;
+        mtimeMs = sourceSnapshot(resolved).mtimeMs;
       } catch {
         return undefined;
       }
@@ -1018,7 +1088,7 @@ class InputAnalyzer {
           if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
         }
         if (!next) continue;
-        const nextSource = readFileSync(next, "utf8");
+        const nextSource = sourceSnapshot(next).source;
         this.parsedSources.set(next, nextSource);
         this.readFiles.add(next);
         if (!this.dependencies.includes(next)) this.dependencies.push(next);
@@ -1037,7 +1107,7 @@ class InputAnalyzer {
           if (!this.dependencies.includes(probe)) this.dependencies.push(probe);
         }
         if (!next) continue;
-        const nextSource = readFileSync(next, "utf8");
+        const nextSource = sourceSnapshot(next).source;
         this.parsedSources.set(next, nextSource);
         this.readFiles.add(next);
         if (!this.dependencies.includes(next)) this.dependencies.push(next);

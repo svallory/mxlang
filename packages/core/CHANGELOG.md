@@ -2,6 +2,23 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: callee-`Input` dependency tracking missed an unread or failed callee
+
+`readCalleeInput` now reports a dependency for a callee it could not read
+(the file does not exist yet, or exists only as an unsaved editor buffer) and
+for every probed candidate path an unresolved specifier tried — an editor
+retrying the same compile with `withCalleeInputSources` can now resolve
+through those exact candidates instead of repeating the untyped fallback
+forever. `probeFile` also checks the active source-override map, so an
+unsaved buffer for a brand-new `.mx` file resolves like a saved one.
+
+`TranslateError` gained an optional `dependencies` field: `compileSource`
+now attaches every callee it resolved before a compile error was raised, so
+a failing compile (e.g. "missing required attribute tag") still reports its
+dependencies instead of none — previously a failed compile silently wiped a
+dependency edge a prior *successful* compile of the same document had
+recorded, breaking the next re-diagnosis.
+
 ### Breaking: body-only fallbacks are renderable (decision 108)
 
 An attribute-tag property on an untyped, unresolved, or dynamic callee now

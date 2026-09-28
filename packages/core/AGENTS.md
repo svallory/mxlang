@@ -82,6 +82,34 @@ Five facts worth knowing before editing it:
   it. Do not replace full TSX parsing with declaration text extraction, and do
   not add a `core -> @mxlang/parser` dependency: parser's Solid test path
   reaches `@mxlang/solid`, which already depends on core.
+  **An editor-only callee (not yet on disk) still resolves and still reports a
+  dependency (phase 4 tooling fix).** `probeFile` now also checks the active
+  `withCalleeInputSources` override map for each candidate path, so an unsaved
+  buffer for a brand-new `.mx` file resolves like a saved one; and
+  `resolveTarget`'s `"unresolved"` result now carries every probed candidate
+  path, which `readCalleeInput` records as a dependency even though nothing
+  was read. Without this, a caller whose callee could not be read on the
+  *first* compile (the callee is open but unsaved, or does not exist on disk
+  yet) never got a dependency edge at all, so a later compile — even one
+  handed the editor's snapshot through `withCalleeInputSources` — kept
+  re-deriving the same untyped fallback shape forever, because nothing ever
+  told it to retry with an override in scope. Measured through the
+  typescript-plugin's source reader on a callee held only by the editor: the
+  first pass reports the probed candidates, and the second pass resolves the
+  callee through the override and emits the typed `satisfies` value.
+  **A failed compile must still report every callee it resolved before the
+  error was raised.** `compile.ts`'s `Program.exit` now saves `ctx.dependencies`
+  in a `finally` around `lower()`, and `compileSource` decorates a thrown
+  `TranslateError` with those dependencies before rethrowing (a new
+  `TranslateError.dependencies` field). Before this, a document that failed to
+  compile (e.g. "missing required attribute tag") reported **no** dependencies
+  at all, because `compileSource` threw before ever returning
+  `CompileResult.dependencies` — an LSP integration recording dependencies
+  from a *failed* diagnosis (`readCalleeInput`'s exact case) would wipe out an
+  edge a *previous, successful* diagnosis had recorded, so the next callee
+  change found no caller to re-diagnose. See
+  `packages/tooling/language-server/AGENTS.md`'s dependent-re-diagnosis entry
+  for the integration side of this.
 - **Every host implements `Emitter<Out>`**, one method per IR kind, and the
   core's `drive`/`emit` owns the walk. A host that cannot express a kind throws;
   no optional callback may silently drop it.
