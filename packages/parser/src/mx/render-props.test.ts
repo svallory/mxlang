@@ -103,8 +103,10 @@ describe("attribute tags become props", () => {
     const result = print(source, filename, {
       mxRegionCompile: solidRegionCompile,
     });
+    // The accessor is parenthesized: `satisfies` binds tighter than an
+    // arrow function and would otherwise check the returned fragment.
     expect(result.code.replace(/\s+/g, " ")).toContain(
-      "item={() => <>typed</>}",
+      'item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>}',
     );
     expect(result.dependencies).toContain(
       join(HERE, "fixtures", "attr-callee.tsx"),
@@ -118,7 +120,7 @@ describe("attribute tags become props", () => {
       mxRegionCompile: solidRegionCompile,
     });
     expect(result.code.replace(/\s+/g, " ")).toContain(
-      "<MutualB b={() => <>B</>} />",
+      '<MutualB b={(() => <>B</>) satisfies NonNullable<Parameters<typeof MutualB>[0]["b"]>} />',
     );
     expect(result.dependencies).toEqual([
       join(HERE, "fixtures", "mutual-b.solid.mx"),

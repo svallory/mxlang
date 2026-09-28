@@ -102,6 +102,15 @@ against the callee's declared `AttrTag` type. The emitted *shape* comes from
 core reading the callee's `Input`; the *types* come from TypeScript resolving
 the callee module.
 
+**A test that reports through Volar cannot prove what the emitted
+TypeScript checks.** Volar drops a diagnostic whose position has no mapping,
+and most of an attribute-tag value is generated code. The Solid and Preact
+emitters once applied `satisfies` to the wrong expression (`() => x
+satisfies T`), every valid caller's virtual code carried a TS1360, and
+`mx-tsc` and the plugin service both stayed clean. `emittedDiagnostics`
+(`src/index.test.ts`) type-checks the emitted text itself and returns every
+diagnostic; use it for anything about the generated code's types.
+
 - **Never register a callee through `CodegenContext.getAssociatedScript`.**
   A Volar associated script is a file whose content is embedded in its
   target's virtual code, and `@volar/typescript`'s `getServiceScript`

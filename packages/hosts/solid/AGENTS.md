@@ -68,11 +68,17 @@ Two facts worth knowing before touching it:
   `<${input.item("Ada")}/>` for renderable). Escaped root interpolations use
   Solid's public server `escape` helper while retaining the original value in
   the browser, which preserves both SSR safety and reactive DOM insertion.
-- **A declared attribute-tag value carries its type at the call site.** A
-  singular value is emitted as `(value satisfies
+- **A declared attribute-tag value carries its type at the call site.** Each
+  concrete singular occurrence is emitted as `((value) satisfies
   NonNullable<Parameters<typeof Callee>[0]["name"]>)`, so `mx-tsc` and the
   tsserver plugin check it against the callee's `AttrTag`; an undeclared
-  property is emitted bare. `compileSolidMx` also takes an optional
+  property is emitted bare. The inner parentheses are load-bearing: every
+  Solid renderable is an accessor, and `satisfies` binds tighter than an
+  arrow function, so `() => <>B</> satisfies T` checks the returned fragment
+  against a function type and fails (TS1360). The same rule puts the check
+  on each occurrence inside a conditional plan rather than around it, since
+  `test ? a : undefined satisfies T` checks only `undefined`; a bodiless
+  renderable carries none. `compileSolidMx` also takes an optional
   `warnings` array for core's non-fatal diagnostics. A wrong attribute type
   is currently reported on the tag name rather than the attribute: see
   `solid-attr-tag-attr-offset` in
