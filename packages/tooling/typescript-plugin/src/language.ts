@@ -158,7 +158,21 @@ export function createSolidMxLanguagePlugin(
           code: root,
           extension: ".tsx",
           scriptKind: typescript.ScriptKind.TSX,
-          preventLeadingOffset: true,
+          // Deliberately no `preventLeadingOffset`, same reasoning as
+          // whole-file `.mx` (see `mx-language.ts`). `print`'s output
+          // preserves the region's *line count* but not every line's exact
+          // text: an earlier line the printer reformats (e.g. an `Input`
+          // interface losing whitespace) shifts every later column while
+          // leaving the line number unchanged. With the flag set, Volar's
+          // `runTsc` parses its `SourceFile` from the generated text alone,
+          // so `tsc` converts a correctly mapped source *offset* into a
+          // column against the *generated* line's start instead of the
+          // *source* line's start — the two disagree whenever a prior line's
+          // length changed (measured: `export const broken` on line 4
+          // reported column 17 against a source column of 14, because the
+          // printed `Input` interface on line 3 is three characters
+          // shorter). Unset, Volar pads the virtual contents with the
+          // source's own lines and the offsets agree.
         };
       },
     },
@@ -451,12 +465,20 @@ function collectPatternNames(pattern: any, bound: Set<string>): void {
 
 /**
  * Maps each synthetic attribute-tag value object back to its authored tag
- * name. The SolidMX printer can map expressions such as `title=1` exactly,
- * but the surrounding `{ ...attrs, content }` object has no literal source
- * text. TypeScript puts a missing-property diagnostic on that object, so this
- * verification-only whole-object mapping gives the diagnostic an honest
- * fallback span (`<@tab>`'s `tab`) without offering navigation on generated
- * punctuation.
+ * name, and each of that tag's own attributes back to its authored
+ * `name=value` span. The SolidMX printer can map an attribute's *value*
+ * (`title=1`'s `1`) exactly, because it is copied verbatim into the
+ * generated object literal, but not its *key*: the printer re-quotes it
+ * (`title` becomes `"title"`), so `decodeMappings`'s text-equality walk
+ * never finds a matching span for it. TypeScript can position a property
+ * type-mismatch diagnostic anywhere from the quoted key to the value
+ * (`solid-attr-tag-attr-offset`), and a range diagnostic only resolves
+ * through Volar's `toSourceRange` when the *same* mapping covers both ends
+ * (`findMatchingStartEnd` translates the range's end through whichever
+ * mapping matched its start) — so each property gets **one** mapping
+ * spanning its whole `"key": value` text, covering every position TS might
+ * pick, rather than separate key/value spans that leave gaps a range
+ * diagnostic can straddle.
  */
 export function attributeTagDiagnosticMappings(
   source: string,
@@ -479,15 +501,135 @@ export function attributeTagDiagnosticMappings(
     if (generatedEndMarker < 0) continue;
     const generatedEnd = generatedEndMarker + 1;
     generatedCursors.set(name, generatedEnd);
+    const propertyMappings = attributePropertyMappings(
+      source,
+      sourceStart,
+      generated,
+      generatedStart,
+      generatedEnd,
+    );
+    // The whole-object fallback and each property mapping above must not
+    // share a generated offset: `@volar/source-map`'s lookup yields every
+    // mapping containing an offset in *array* order, so an overlapping
+    // wider span, if it sorted first, would always win over a narrower one
+    // sorted after it by `createVirtualCode`'s `generatedOffsets[0]`
+    // ascending sort. Punching each property's own range out of the
+    // fallback (rather than relying on sort order alone) keeps every
+    // generated offset covered by exactly one candidate mapping.
+    let cursor = generatedStart;
+    for (const property of propertyMappings) {
+      const propertyStart = property.generatedOffsets[0] ?? 0;
+      if (propertyStart > cursor) {
+        mappings.push(
+          fallbackSpan(sourceStart, cursor, propertyStart - cursor),
+        );
+      }
+      mappings.push(property);
+      cursor =
+        propertyStart +
+        (property.generatedLengths?.[0] ?? property.lengths[0] ?? 0);
+    }
+    if (cursor < generatedEnd) {
+      mappings.push(fallbackSpan(sourceStart, cursor, generatedEnd - cursor));
+    }
+  }
+  return mappings;
+}
+
+function fallbackSpan(
+  sourceStart: number,
+  generatedStart: number,
+  generatedLength: number,
+): CodeMapping {
+  return {
+    sourceOffsets: [sourceStart],
+    generatedOffsets: [generatedStart],
+    lengths: [0],
+    generatedLengths: [generatedLength],
+    data: { verification: true },
+  };
+}
+
+/**
+ * One tag's own attributes (`<@tab title=1 other="x">`'s `title` and
+ * `other`), each mapped as a single span from its re-quoted key
+ * (`"title":`) through its value's end in the generated object literal,
+ * back to its authored `title=1` span in source. Scanned within
+ * `[sourceStart, tag's own end)` and `[generatedStart, generatedEnd)` so an
+ * attribute name repeated on a sibling attribute tag never cross-maps. A
+ * value's generated end is found by bracket-depth-aware scanning for the
+ * next top-level `,` or the object's own closing `}` (`generatedEnd - 1`),
+ * since the value itself may contain commas or braces (an object literal,
+ * a call).
+ */
+function attributePropertyMappings(
+  source: string,
+  sourceStart: number,
+  generated: string,
+  generatedStart: number,
+  generatedEnd: number,
+): CodeMapping[] {
+  const tagCloseMatch = /[/?]?>/.exec(source.slice(sourceStart));
+  const sourceTagEnd =
+    tagCloseMatch?.index === undefined
+      ? source.length
+      : sourceStart + tagCloseMatch.index;
+  const mappings: CodeMapping[] = [];
+  const attrRe = /([A-Za-z_$][\w$]*)=/g;
+  attrRe.lastIndex = sourceStart;
+  let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: bounded regex scan, mirrors the tag-name loop above
+  while ((match = attrRe.exec(source)) !== null) {
+    if (match.index >= sourceTagEnd) break;
+    const key = match[1];
+    if (!key) continue;
+    const keySourceStart = match.index;
+    const probe = `"${key}":`;
+    const probeStart = generated.indexOf(probe, generatedStart);
+    if (probeStart < 0 || probeStart >= generatedEnd) continue;
+    const valueStart = probeStart + probe.length;
+    const propertyGeneratedEnd = topLevelCommaOrEnd(
+      generated,
+      valueStart,
+      generatedEnd - 1,
+    );
+    // The authored value's own source length: same offset-and-length walk
+    // `decodeMappings.equalLength` uses, bounded by how much of the
+    // generated value text matches the source starting at the `=`.
+    const sourceValueStart = keySourceStart + key.length + 1;
+    const propertySourceEnd =
+      sourceValueStart +
+      equalLength(
+        generated,
+        valueStart,
+        source,
+        sourceValueStart,
+        propertyGeneratedEnd - valueStart,
+      );
     mappings.push({
-      sourceOffsets: [sourceStart],
-      generatedOffsets: [generatedStart],
-      lengths: [name.length],
-      generatedLengths: [generatedEnd - generatedStart],
+      sourceOffsets: [keySourceStart],
+      generatedOffsets: [probeStart],
+      lengths: [propertySourceEnd - keySourceStart],
+      generatedLengths: [propertyGeneratedEnd - probeStart],
       data: { verification: true },
     });
   }
-  return mappings;
+  return mappings.sort(
+    (left, right) =>
+      (left.generatedOffsets[0] ?? 0) - (right.generatedOffsets[0] ?? 0),
+  );
+}
+
+/** The first top-level (bracket-depth-0) `,` at or after `from`, else `end`. */
+function topLevelCommaOrEnd(text: string, from: number, end: number): number {
+  let depth = 0;
+  for (let i = from; i < end; i++) {
+    const char = text[i];
+    if (char === "(" || char === "[" || char === "{") depth++;
+    else if (char === ")" || char === "]" || char === "}") depth--;
+    else if (char === "," && depth === 0) return i;
+  }
+  return end;
 }
 
 export function decodeMappings(
@@ -601,9 +743,11 @@ function equalLength(
   generatedOffset: number,
   source: string,
   sourceOffset: number,
+  maxLength = Number.POSITIVE_INFINITY,
 ): number {
   let length = 0;
   while (
+    length < maxLength &&
     generatedOffset + length < generated.length &&
     sourceOffset + length < source.length &&
     generated.charCodeAt(generatedOffset + length) ===
