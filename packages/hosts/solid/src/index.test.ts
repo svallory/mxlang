@@ -63,7 +63,7 @@ function expectError(source: string, expected: string): void {
 }
 
 describe("Solid IR lowering", () => {
-  const rows: Array<[string, string, string[]]> = [
+  const rows: Array<[string, string, string[], string[]?]> = [
     [
       "text and interpolation",
       `<p>Hello \${name}</p>`,
@@ -132,6 +132,7 @@ describe("Solid IR lowering", () => {
         `}</>}>`,
         `{(input) => <p>{input}</p>}`,
       ],
+      ["Layout"],
     ],
     ["if", `<if=ready>yes</if>`, ["<Show when={ready}><>yes</></Show>"]],
     [
@@ -204,6 +205,7 @@ describe("Solid IR lowering", () => {
         "<Errored fallback={(error, reset) => <p>{error.message}</p>}>",
         "<Loading fallback={<>wait</>}><Risky /></Loading>",
       ],
+      ["Risky"],
     ],
     // Round 1 item 1 regression: `<try>`'s body must reach the host
     // unchanged, matching `lowerHostTag`'s old unconditional lowering,
@@ -223,11 +225,13 @@ describe("Solid IR lowering", () => {
       "repeated attribute tag becomes an array",
       `<Layout><@item>1</@item><@item>2</@item></Layout>`,
       ["item={[() => <>1</>, () => <>2</>]}"],
+      ["Layout"],
     ],
     [
       "single attribute tag stays a plain value",
       `<Layout><@item>1</@item></Layout>`,
       ["item={() => <>1</>}"],
+      ["Layout"],
     ],
     // attribute-tag-silent-drops B2 (Solid's dynamic-tag path shares the same
     // call site as the named-component path): an attribute tag on a dynamic
@@ -239,9 +243,14 @@ describe("Solid IR lowering", () => {
     ],
   ];
 
-  for (const [name, source, expected] of rows) {
+  for (const [name, source, expected, imports] of rows) {
     it(name, () => {
-      const result = compile(source);
+      const result = imports
+        ? compileSolidMx(source, {
+            filename: "fixture.solid.mx",
+            importSpecifiers: new Map(imports.map((n) => [n, `./${n}.mx`])),
+          })
+        : compile(source);
       for (const text of expected) expect(result.code).toContain(text);
       expect(result.map.sources).toEqual(["fixture.solid.mx"]);
       expect(result.map.sourcesContent).toEqual([source]);
@@ -455,6 +464,21 @@ describe("Solid host errors", () => {
       `<try><@placeholder|value|>wait</@placeholder></try>`,
       "on `<@placeholder>`",
     ],
+    [
+      "unresolved capitalized tag (decision 114)",
+      `<TotallyUndefined/>`,
+      "Unable to find entry point for custom tag `<TotallyUndefined>`",
+    ],
+    [
+      "unresolved capitalized tag with body (decision 114)",
+      `<TotallyUndefined>body</TotallyUndefined>`,
+      "Unable to find entry point for custom tag `<TotallyUndefined>`",
+    ],
+    [
+      "unresolved capitalized tag with attribute (decision 114)",
+      `<TotallyUndefined attr=1/>`,
+      "Unable to find entry point for custom tag `<TotallyUndefined>`",
+    ],
   ];
 
   for (const [name, source, expected] of errors) {
@@ -489,6 +513,17 @@ describe("Solid host errors", () => {
       error = caught;
     }
     expect(error).toMatchObject({ line: 8, column: 20 });
+  });
+
+  it("does not reject a <for>-param capitalized local as unresolved (decision 113)", () => {
+    // A local binding resolves before core ever asks the host's
+    // `isComponent`, so tightening it to reject unresolved tags must not
+    // regress this case. (`<const>` cannot be used for the same check here:
+    // it is unconditionally rejected inside a `.solid.mx` region, unrelated
+    // to this fix — see `packages/hosts/solid/AGENTS.md`.)
+    expect(() =>
+      compile(`<for|Item| of=components><Item/></for>`),
+    ).not.toThrow();
   });
 });
 

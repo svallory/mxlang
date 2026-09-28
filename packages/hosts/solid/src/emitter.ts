@@ -539,13 +539,47 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
   throw new TranslateError(message, line, column);
 }
 
+/**
+ * Marko's own failure for an unresolved tag name, in either case
+ * (decision 114).
+ *
+ * By the time core asks `isComponent`, a capitalized name has already failed
+ * every real route: core structural tags, `<try>` (`claimsTag`), an
+ * `import`/`<define>`/`<const>`/tag-param binding, and a registered custom
+ * tag (`packages/core/src/lower.ts`'s precedence order runs all of those
+ * before `isComponent`). Solid also has no taglib-backed `tags/` discovery
+ * channel the way `@mxlang/html`/`@mxlang/preact` do (`ctx.lookup` is never
+ * set here — a `.solid.mx` region is a fragment compile, not a whole Marko
+ * file), so nothing is ever left for `isComponent` to say yes to: any name
+ * reaching this function is unresolved, and always `false`. Core's own
+ * `rejectUnknownTag` hook (below) reports Marko's wording once the name
+ * falls through to core's generic unresolved-tag guard, positioned on the
+ * real node.
+ *
+ * Verified against `@marko/compiler` 5.42.5 / `marko@6.3.51`: an unresolved
+ * `<TotallyUndefined/>` (no import, binding, or taglib entry) is a
+ * compile-time error, "Unable to find entry point for [custom
+ * tag](https://markojs.com/docs/reference/custom-tag#relative-custom-tags)
+ * `<TotallyUndefined>`." — identical for a self-closing tag, a tag with a
+ * body, and a tag with an attribute (`tag-name-type.ts:95-97`,
+ * `custom-tag.ts:398-429`).
+ */
+function isComponent(): boolean {
+  return false;
+}
+
+function rejectUnknownTag(name: string, node: { loc: Position }): void {
+  fail(`Unable to find entry point for custom tag \`<${name}>\`.`, node);
+}
+
 /** Resolve-time questions for Solid's JSX target. */
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/solid",
   attrTags: 2,
   tags: STATEFUL_ERRORS,
   isElement: (name) => !/^[A-Z]/.test(name),
-  isComponent: (name) => /^[A-Z]/.test(name),
+  isComponent,
+  rejectUnknownTag,
   claimsTag: (name) => name === "try",
   // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):
   // the shape checks that used to live here — no params, no `/var`, one
