@@ -6,7 +6,7 @@
       "timeout": 30
     },
     {
-      "command": "sh -c 'for d in packages/*/ packages/*/*/ examples/*/; do if [ -f \"$d/tsconfig.json\" ]; then if [ -f \"$d/package.json\" ] && grep -q \"\\\"typecheck\\\"\" \"$d/package.json\"; then if grep -q \"packages/tooling/tsc/dist/bin.cjs\" \"$d/package.json\" && [ ! -f packages/tooling/tsc/dist/bin.cjs ]; then ./node_modules/.bin/tsc --noEmit -p \"$d\" || true; else (cd \"$d\" && bun run typecheck) || exit 1; fi; else ./node_modules/.bin/tsc --noEmit -p \"$d\" || exit 1; fi; fi; done'",
+      "command": "sh -c 'resolve() { f=\"$1\"; d=$(dirname \"$f\"); while [ \"$d\" != \".\" ] && [ \"$d\" != \"/\" ]; do case \"$d\" in packages/*/*/*|examples/*/*/*) : ;; packages/*/*|examples/*/*|packages/*|examples/*) [ -f \"$d/tsconfig.json\" ] && { echo \"$d\"; return; } ;; esac; d=$(dirname \"$d\"); done; }; files=$({ git diff --name-only HEAD -- packages examples; git ls-files --others --exclude-standard -- packages examples; } 2>/dev/null); dirs=$(for f in $files; do resolve \"$f\"; done | sort -u); status=0; for d in $dirs; do if [ -f \"$d/package.json\" ] && grep -q \"\\\"typecheck\\\"\" \"$d/package.json\"; then if grep -q \"packages/tooling/tsc/dist/bin.cjs\" \"$d/package.json\" && [ ! -f packages/tooling/tsc/dist/bin.cjs ]; then ./node_modules/.bin/tsc --noEmit -p \"$d\" || true; else (cd \"$d\" && bun run typecheck) || status=1; fi; else ./node_modules/.bin/tsc --noEmit -p \"$d\" || status=1; fi; done; exit $status'",
       "extensions": [".ts", ".tsx"],
       "timeout": 60
     }

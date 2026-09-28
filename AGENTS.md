@@ -44,7 +44,7 @@ Exception packages (no unit test wiring required; verified elsewhere; keyed by w
 
 ## Edit check hook
 
-`.claude/hyper.json` runs Biome formatting checks, then per-package TypeScript type checking via `tsc --noEmit` after every agent edit. Both commands use `./node_modules/.bin` paths directly so they work without shell shims (proto/bun/nvm wrappers).
+`.claude/hyper.json` runs Biome formatting checks, then TypeScript type checking after every agent edit. The hyper hook gives its check commands no signal about which file was edited (no placeholder, env var, or stdin — only the repo root as cwd), so the typecheck command discovers the changed dirs itself from `git diff --name-only HEAD` plus untracked files under `packages/` and `examples/`, resolves each to its nearest enclosing dir among `packages/*/`, `packages/*/*/`, `examples/*/` that has a `tsconfig.json`, and typechecks only that set of dirs — the package's own `typecheck` script when it has one, the `mx-tsc` not-built fallback, otherwise `tsc --noEmit -p`. A file outside any such dir (root, `scripts/`, `apps/*` — none of which has a `tsconfig.json`) runs no typecheck. Both commands use `./node_modules/.bin` paths directly so they work without shell shims (proto/bun/nvm wrappers).
 
 ## Scoped lint exceptions
 
