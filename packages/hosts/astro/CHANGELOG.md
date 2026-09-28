@@ -8,6 +8,24 @@
   exclusive `<if>`/`<else if>`/`<else>` branches, the Astro-specialized
   `AttrTag<C>` type, and its automatic `.amx` type import.
 
+### Fixed
+
+- **`source-bindings-silent-parse-failure` (filed from the PR #156 review):**
+  a syntax error in the `---` fence used to be silently swallowed by
+  `sourceBindings`, treating the fence as binding nothing — so every
+  capitalized tag in that file, including a genuinely imported one,
+  misreported "Unable to find entry point for custom tag" instead of the
+  real syntax error. `lowerAstroMx` now surfaces the fence's own parse
+  error (`AstroTemplateError`, positioned at the actual broken line/column
+  in the file) when `sourceBindings` reports one, instead of silently
+  falling through to component resolution with no bindings. No downstream
+  layer had reported it yet at that point — `lowerAstroMx` never runs
+  Astro's own compiler itself, so there is no risk of a duplicate
+  diagnostic for the same error.
+- `rejectUnknownTag`'s Marko-wording message now comes from `@mxlang/core`'s
+  `unresolvedCustomTagMessage` instead of a hand-copied literal. No
+  behavior change.
+
 ### Changed
 
 - Named slots now expose both the callable renderable view and the default

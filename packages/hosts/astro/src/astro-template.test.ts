@@ -434,6 +434,32 @@ describe("unresolved components (decision 114 parity)", () => {
       );
     }
   });
+
+  it("surfaces the fence's own syntax error, not a misleading unresolved-tag error (source-bindings-silent-parse-failure)", () => {
+    // Before the fix, a fence sourceBindings could not parse silently
+    // treated the fence as binding nothing, so Card -- genuinely imported
+    // one line above the broken statement -- misreported as
+    // "Unable to find entry point for custom tag `<Card>`." instead of the
+    // real problem.
+    const source = [
+      "---",
+      'import Card from "./Card.astro";',
+      "const x = ;",
+      "---",
+      "<Card/>",
+    ].join("\n");
+    try {
+      lowerAstroMx(source, "Test.amx");
+      throw new Error("expected the template to fail lowering");
+    } catch (error) {
+      if (!(error instanceof AstroTemplateError)) throw error;
+      expect(error.message).not.toContain("Unable to find entry point");
+      expect(error.message).toContain("syntax error in the `---` fence");
+      // Line 3 of the file: line 1 is `---`, line 2 the import, line 3 the
+      // broken `const x = ;`.
+      expect(error.line).toBe(3);
+    }
+  });
 });
 
 describe("components and slots", () => {

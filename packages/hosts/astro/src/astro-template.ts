@@ -27,6 +27,7 @@ import {
   newCtx,
   parseFragment,
   TranslateError,
+  unresolvedCustomTagMessage,
 } from "@mxlang/core";
 import { sourceBindings } from "@mxlang/parser";
 
@@ -158,7 +159,7 @@ function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
 }
 
 function rejectUnknownTag(name: string, node: Node): void {
-  fail(`Unable to find entry point for custom tag \`<${name}>\`.`, node);
+  fail(unresolvedCustomTagMessage(name), node);
 }
 
 type HostTagData = { kind: "interpolation"; expr: Expr };
@@ -808,7 +809,28 @@ export function lowerAstroMx(
     // measure against). Fed into `ctx.imports` before lowering, the same set
     // `isComponent` (below) and the file-local-binding check in `lower.ts`
     // already consult for an ordinary MX-level `import`.
-    for (const name of sourceBindings(match?.[1] ?? "")) ctx.imports.add(name);
+    //
+    // A fence that fails to parse reports its own real syntax error here,
+    // rather than silently treating the fence as binding nothing (which used
+    // to make every capitalized tag misreport `rejectUnknownTag`'s "Unable
+    // to find entry point" instead of the actual problem,
+    // `source-bindings-silent-parse-failure`). No downstream layer has
+    // reported it yet at this point: `lowerAstroMx` never runs Astro's own
+    // compiler itself — that happens later, in Vite (`vite-templates.ts`) or
+    // the TypeScript plugin — so there is no risk of a duplicate diagnostic
+    // for the exact same syntax error from this call.
+    const fenceBindings = sourceBindings(match?.[1] ?? "");
+    if (fenceBindings.error) {
+      // The fence's own text starts on the file's second line (the first is
+      // the opening `---`), so its 1-based `line` needs +1 to land on the
+      // right line of `source`.
+      throw new AstroTemplateError(
+        `syntax error in the \`---\` fence: ${fenceBindings.error.message}`,
+        fenceBindings.error.line + 1,
+        fenceBindings.error.column,
+      );
+    }
+    for (const name of fenceBindings.bindings) ctx.imports.add(name);
     const ir = lower(ctx, body);
     // The `.amx` emitter has nowhere to put a returned value — an Astro
     // component's output is its markup, and the `---` fence is the author's,
