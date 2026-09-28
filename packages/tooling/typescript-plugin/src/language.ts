@@ -365,8 +365,19 @@ const MAX_COMPILE_PASSES = 8;
  * them in the caller's file (measured on `examples/todomvc`: the
  * `TodoItem.solid.mx` and `Footer.solid.mx` diagnostics, normally unmapped
  * and dropped, surfaced in `App.solid.mx` at unrelated lines).
+ *
+ * **Reaching the cap without a fixed point is not silent.** When the loop
+ * falls through `MAX_COMPILE_PASSES` passes still finding a new dependency
+ * set or new source text each time, a warning naming the chain discovered
+ * across the last passes is pushed onto `result.warnings` (when `T` carries
+ * one) — types for those callees may be stale, and a caller with no way to
+ * see the cap was reached would otherwise report clean when it is not
+ * (`compile-deps-cap-warning`, fix-forward for PR #150's
+ * `compile-with-dependencies-nesting-limit`).
  */
-export function compileWithDependencies<T extends { dependencies: string[] }>(
+export function compileWithDependencies<
+  T extends { dependencies: string[]; warnings?: MxWarning[] },
+>(
   readSource: DependencySourceReader | undefined,
   previousDependencies: readonly string[],
   compile: () => T,
@@ -389,7 +400,34 @@ export function compileWithDependencies<T extends { dependencies: string[] }>(
     sources = nextSources;
     result = withCalleeInputSources(sources, compile);
   }
+  // The loop above only checks a pass's result against the *previous* pass
+  // before running the *next* one, so the cap's own final compile (produced
+  // inside the last iteration, right before the loop condition fails) is
+  // never checked -- without this, a chain that genuinely settles on exactly
+  // its 8th compile still fell through to the warning below.
+  if (sameDependencies(dependencies, result.dependencies)) return result;
+  const finalSources = dependencySources(
+    readSource,
+    result.dependencies,
+    sources,
+  );
+  if (sameSources(sources, finalSources)) return result;
+  result.warnings?.push(unsettledDependenciesWarning(result.dependencies));
   return result;
+}
+
+/** The cap-exhaustion warning, positioned at the file's own start (line 1, column 1) since no single call site owns an unsettled chain spanning the whole compile. */
+function unsettledDependenciesWarning(
+  dependencies: readonly string[],
+): MxWarning {
+  return {
+    message:
+      `MX stopped resolving callee inputs after ${MAX_COMPILE_PASSES} passes; ` +
+      `the dependency chain did not settle: ${dependencies.join(" → ")}. ` +
+      "Types for these callees may be stale.",
+    line: 1,
+    column: 0,
+  };
 }
 
 function sameDependencies(

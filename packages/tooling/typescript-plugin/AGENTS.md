@@ -194,6 +194,52 @@ diagnostic; use it for anything about the generated code's types.
   NonNullable<Parameters<typeof Callee>[0]["tag"]>` reference, which
   TypeScript's own live module graph re-checks on every edit regardless of
   this function (decision 107, option A, next bullet).
+  **Reaching the cap without settling is not silent (compile-deps-cap-warning,
+  fix-forward for PR #150).** When the loop falls through all
+  `MAX_COMPILE_PASSES` passes still finding a new dependency set or new
+  source text each time, `compileWithDependencies` pushes an `MxWarning` onto
+  `result.warnings` (when the generic result type carries one) naming every
+  dependency discovered across the unsettled chain, positioned at the file's
+  own start (line 1, column 1) — there is no single call site that owns an
+  unsettled chain spanning the whole compile. Every caller
+  (`mx-language.ts`, `amx-language.ts`, and this file's own
+  `createSolidMxLanguagePlugin`) already destructures `warnings`
+  unconditionally from the result and maps it through `warningDiagnostic`
+  into `compileDiagnostics`, so the warning reaches `getCompileDiagnostics`
+  with no caller-side change.
+  **The cap's own final (8th) compile must be checked for settling too,
+  not just passes 1–7 (round-2 fix, same TODO).** The loop's fixed-point
+  check (`sameDependencies`/`sameSources`) runs at the *top* of each
+  iteration, against the *previous* pass's result — so it validates compiles
+  #1 through #7 but never the compile produced *inside* the 7th iteration
+  (the one that runs right before the loop condition fails at `pass ===
+  MAX_COMPILE_PASSES`). A chain that discovers a new dependency every pass
+  through pass 7 and then genuinely settles on pass 8 used to still get a
+  false-positive warning, because nothing re-ran the settle check against
+  that last result before falling through to the push. Fixed by repeating
+  the same `sameDependencies`/`sameSources` check once more after the loop,
+  against the final `result` — pinned by `produces no warning when the chain
+  genuinely settles on its 8th (final) compile` in `src/index.test.ts`.
+  **Measured: a real attribute-tag alias chain cannot organically drive this
+  loop to the cap.** `readCalleeInput`'s own `resolveNamedType` bounds
+  alias-following to `MAX_ALIAS_DEPTH` (4) within a single compile,
+  independent of this loop's pass count — a chain of 5+ aliased hops fails
+  `attrTagConfig`'s "declare this attribute tag's config literally" check on
+  the very first pass that needs the 5th hop, before `compileWithDependencies`
+  ever gets a chance to retry. The cap therefore exists for a dependency set
+  that keeps changing for reasons other than alias depth (a pathological
+  chain elsewhere, or a future dependency producer); the unit tests in
+  `src/index.test.ts`'s `compileWithDependencies` describe block cover the
+  cap with a synthetic `compile` callback for this reason, not a real
+  `readCalleeInput`-driven chain. **The real-caller plumbing is still proven
+  end to end**, in `src/compile-deps-cap-warning.test.ts` (a dedicated file
+  so its `vi.mock("@mxlang/preact", …)` cannot leak into any other suite):
+  it mocks only `compilePreactMx` — the one host compile function
+  `mx-language.ts` calls for the "preact" host policy — to report one more
+  dependency every pass, and drives everything else for real
+  (`createMxLanguagePlugin`, the genuine `compileWithDependencies` loop, and
+  `getCompileDiagnostics`), asserting the cap warning lands as a single
+  diagnostic with the chain text at the caller's own file.
 - **What follows a callee change in tsserver (decision 107, option A).** A
   change to the callee's *types* re-checks the caller at once, through
   TypeScript's own module graph (tests: `a callee's Input changing under an

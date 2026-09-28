@@ -14,6 +14,7 @@ import { decode } from "@jridgewell/sourcemap-codec";
 import {
   type CustomTag,
   clearScanCache,
+  type MxWarning,
   readCalleeInput,
   resetCalleeInputCache,
   type TemplateBackedTag,
@@ -1713,6 +1714,169 @@ describe("MX language plugin", () => {
 
       expect(result.compiles).toBe(8);
       expect(result.dependencies).toHaveLength(8);
+    });
+
+    it("warns exactly once, naming the unsettled chain, when the cap is reached", () => {
+      const result = compileWithDependencies(
+        (fileName) => `fresh-${fileName}`,
+        [],
+        (() => {
+          let compiles = 0;
+          return () => {
+            compiles++;
+            const dependencies = Array.from(
+              { length: compiles },
+              (_, index) => `/project/Dep${index}.mx`,
+            );
+            return { dependencies, warnings: [] as MxWarning[] };
+          };
+        })(),
+      );
+
+      expect(result.warnings).toHaveLength(1);
+      const warning = result.warnings?.[0];
+      if (!warning) throw new Error("expected a warning");
+      expect(warning.message).toContain("8 passes");
+      expect(warning.message).toContain("/project/Dep0.mx");
+      expect(warning.message).toContain("/project/Dep7.mx");
+      expect(warning.line).toBe(1);
+      expect(warning.column).toBe(0);
+    });
+
+    it("produces no warning when the chain genuinely settles on its 8th (final) compile", () => {
+      // Reproduces the exact off-by-one the loop's fixed-point check misses:
+      // the check runs at the *top* of each iteration against the previous
+      // pass's result, so it validates compiles #1 through #7 but never the
+      // 8th, cap-exhausting compile. A chain that keeps discovering a new
+      // dependency through pass 7 and then genuinely settles on pass 8 must
+      // not warn -- it converged, it just took every available pass to do
+      // so.
+      const read: string[] = [];
+      const result = compileWithDependencies(
+        (fileName) => {
+          read.push(fileName);
+          return `fresh-${fileName}`;
+        },
+        [],
+        (() => {
+          let compiles = 0;
+          return () => {
+            compiles++;
+            // Passes 1-7 each discover one more dependency than the last
+            // (same growth shape as the never-settling test above); pass 8
+            // reports the exact same 7-dependency set pass 7 did, so the
+            // loop's *final* compile is the one that settles.
+            const length = Math.min(compiles, 7);
+            const dependencies = Array.from(
+              { length },
+              (_, index) => `/project/Dep${index}.mx`,
+            );
+            return { dependencies, compiles, warnings: [] as MxWarning[] };
+          };
+        })(),
+      );
+
+      expect(result.compiles).toBe(8);
+      expect(result.dependencies).toHaveLength(7);
+      expect(result.warnings).toEqual([]);
+    });
+
+    it("produces no warning when the dependency set reaches a fixed point", () => {
+      const result = compileWithDependencies(
+        (fileName) => `fresh-${fileName}`,
+        [],
+        () => ({
+          dependencies: ["/project/Card.mx"],
+          warnings: [] as MxWarning[],
+        }),
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
+    it("produces no warning when a dependency cycle settles source-for-source", () => {
+      const result = compileWithDependencies(
+        (fileName) => `fresh-${fileName}`,
+        [],
+        () => ({
+          dependencies: ["/project/A.mx", "/project/B.mx"],
+          warnings: [] as MxWarning[],
+        }),
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
+    it("threads compileWithDependencies's warnings through a real caller's compile diagnostics with no false positive (mx-language.ts)", () => {
+      // A real multi-pass caller: Card's Input declares `AttrTag<A0>`, and
+      // A0 -> A1 -> A2 is only revealed hop-by-hop as each alias file's
+      // *unsaved* (host-held) text is read fresh on a later pass -- the
+      // same shape as the `readCalleeInput` chain test above, driven this
+      // time through `createMxLanguagePlugin`'s real `createVirtualCode`
+      // and `getCompileDiagnostics`, not a synthetic `compile` callback.
+      // Bounded to 3 hops (well under `readCalleeInput`'s own
+      // `MAX_ALIAS_DEPTH`, 4, which a single pass's alias-following cannot
+      // exceed independent of `MAX_COMPILE_PASSES`), so this caller
+      // converges to a fixed point within the cap -- proving the real
+      // wiring (`mx-language.ts`'s `warnings.map(...)` into
+      // `compileDiagnostics`) carries an empty `warnings` array through as
+      // no diagnostic, not a false-positive cap warning, for an ordinary
+      // multi-pass compile.
+      const dir = `${here}/fixtures/preact-policy/multi-pass-caller`;
+      mkdirSync(dir, { recursive: true });
+      try {
+        const aliasPath = (index: number) => join(dir, `Alias${index}.ts`);
+        const cardPath = join(dir, "Card.mx");
+        const callerPath = join(dir, "caller.mx");
+        const hopCount = 3;
+
+        writeFileSync(
+          cardPath,
+          [
+            'import type { A0 } from "./Alias0.ts";',
+            "export interface Input { tab: AttrTag<A0> }",
+            "<div/>",
+          ].join("\n"),
+        );
+        for (let index = 0; index < hopCount; index++) {
+          writeFileSync(
+            aliasPath(index),
+            `export type A${index} = { attrs: { title: string } };\n`,
+          );
+        }
+        const unsavedText = new Map<string, string>();
+        for (let index = 0; index < hopCount - 1; index++) {
+          unsavedText.set(
+            aliasPath(index),
+            [
+              `export type A${index} = A${index + 1};`,
+              `import type { A${index + 1} } from "./Alias${index + 1}.ts";`,
+            ].join("\n"),
+          );
+        }
+        const readSource = (fileName: string) => unsavedText.get(fileName);
+
+        const callerSource =
+          'import Card from "./Card.mx"\n<Card><@tab title="x"/></Card>\n';
+        writeFileSync(callerPath, callerSource);
+
+        const plugin = createMxLanguagePlugin(ts, { readSource });
+        const virtual = plugin.createVirtualCode?.(
+          callerPath,
+          MX_LANGUAGE_ID,
+          ts.ScriptSnapshot.fromString(callerSource),
+          { getAssociatedScript: () => undefined },
+        );
+        if (!virtual) throw new Error("Expected MX virtual code");
+        expect(plugin.getSyntaxError?.(callerPath)).toBeUndefined();
+
+        const diagnostics = plugin.getCompileDiagnostics(callerPath);
+        expect(diagnostics.some((d) => d.category === "error")).toBe(false);
+        expect(diagnostics.some((d) => d.category === "warning")).toBe(false);
+      } finally {
+        resetCalleeInputCache();
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 
