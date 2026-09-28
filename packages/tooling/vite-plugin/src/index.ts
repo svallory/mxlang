@@ -714,7 +714,21 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // this still reports against `source`/`code` as before.
         if (err instanceof TranslateError) {
           const errorFile = err.file ?? source;
-          const errorSource = err.file ? readFileSync(err.file, "utf8") : code;
+          // The template file named by `.file` may no longer exist, or be
+          // unreadable (deleted mid-compile, a permissions issue) — a read
+          // failure here must not replace the real diagnostic with a raw
+          // ENOENT, so it only ever costs the frame, never the message,
+          // `id` or position.
+          let errorSource: string | undefined;
+          if (err.file) {
+            try {
+              errorSource = readFileSync(err.file, "utf8");
+            } catch {
+              errorSource = undefined;
+            }
+          } else {
+            errorSource = code;
+          }
           const wrapped = err as TranslateError & {
             id?: string;
             frame?: string;
@@ -726,7 +740,9 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             line: err.line,
             column: err.column,
           };
-          wrapped.frame = codeFrame(errorSource, err.line, err.column);
+          if (errorSource !== undefined) {
+            wrapped.frame = codeFrame(errorSource, err.line, err.column);
+          }
           throw wrapped;
         }
 

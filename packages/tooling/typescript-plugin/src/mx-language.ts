@@ -145,14 +145,8 @@ export function createMxLanguagePlugin(
         );
         if (foreign) {
           syntaxErrors.delete(fileName);
-          // `compileDiagnostics` is one entry per file, so this write can
-          // race with the template file's own `createVirtualCode` call if
-          // the template is itself open and compiled independently: the
-          // last write wins and the two views (the template's own
-          // diagnostics vs. this caller-attributed one) clobber each other
-          // rather than merging. Pre-existing map shape, not introduced
-          // here — this is simply the first path that writes into another
-          // file's entry.
+          // See `ForeignTemplateError`'s doc comment (`language.ts`) for the
+          // map-clobber caveat this write is subject to.
           compileDiagnostics.set(foreign.templateFileName, [
             foreign.templateDiagnostic,
           ]);
