@@ -94,4 +94,57 @@ one expression. The suite also runs the Astro example's paired
 reports TS2322. The failing fixtures stay outside their packages' normal
 typecheck inputs.
 
+## Attribute-tag call sites and callee dependencies (phase 4a)
 
+A caller's attribute-tag value is emitted with `satisfies
+NonNullable<Parameters<typeof Callee>[0]["tag"]>`, so TypeScript checks it
+against the callee's declared `AttrTag` type. The emitted *shape* comes from
+core reading the callee's `Input`; the *types* come from TypeScript resolving
+the callee module.
+
+- **Never register a callee through `CodegenContext.getAssociatedScript`.**
+  A Volar associated script is a file whose content is embedded in its
+  target's virtual code, and `@volar/typescript`'s `getServiceScript`
+  (`lib/node/utils.js`) answers for any script with `targetIds` using the
+  *target's* service script. A callee is a program file with virtual code of
+  its own, so associating it maps the callee's diagnostics through the
+  caller's mappings and reports them in the caller's file. Measured on
+  `examples/todomvc`: `TodoItem.solid.mx` and `Footer.solid.mx` diagnostics
+  sitting in unmapped generated code (normally dropped) surfaced as seven
+  errors in `App.solid.mx` at unrelated lines, and `mx-tsc` exited 2. The
+  same routing is used by every proxied tsserver method, so an editor was
+  affected too. Regression tests: `reports a %s callee's own type error
+  against the callee` (`src/index.test.ts`) and the `callee-diagnostic-*`
+  fixtures in `packages/tooling/tsc`.
+- **`compileWithDependencies` reads dependency text through `readSource`**
+  (`DependencyLanguagePluginOptions`, `src/language.ts`). The tsserver plugin
+  passes a reader over `info.project.getScriptInfo(...)`, which returns an
+  open callee's unsaved buffer; `mx-tsc` passes none and compiles once,
+  because a one-shot run has only the files on disk and core reads those
+  itself. With a reader, the first pass uses the sources of the previously
+  reported dependencies, and a changed dependency set triggers one more pass
+  unless the host holds nothing new for it.
+- **What follows a callee change in tsserver (decision 107, option A).** A
+  change to the callee's *types* re-checks the caller at once, through
+  TypeScript's own module graph (tests: `a callee's Input changing under an
+  unchanged caller`). What the caller *compiled to* (the emitted shape and
+  its stored compile warnings) is replaced only when the caller itself is
+  compiled again; Volar gives a language plugin no way to invalidate another
+  file's virtual code. The language server re-diagnoses every open dependent
+  and covers that case. Documented for authors in
+  `apps/docs/docs/language/attr-tag.md`.
+- **The mapping pass does not report warnings.** `createHtmlMappings` lowers
+  the source a second time; handing it the compile's own `warnings` array
+  reported every warning twice.
+- **Open: `solid-attr-tag-attr-offset`.** On the Solid host a wrong attribute
+  type inside `<@tab title=1/>` is reported on the tag name (`tab`), not on
+  `title`; a missing attribute is reported on the tag name by design.
+  Measured on `<Card><@tab title=1/></Card>`: the region compile's mappings
+  carry the key's name span as `13..18` (region-relative, one past the
+  authored `12..17`) while the value's span is the file-absolute `53..54`,
+  and the printed source map places the key two columns late (generated
+  column 13 to source column 14). `decodeMappings` keeps only the one
+  character that happens to match, so the tag-name fallback from
+  `attributeTagDiagnosticMappings` is what covers the diagnostic. The two
+  span bases disagreeing is the lead; html and preact apply `MappedCode`
+  offsets directly and are unaffected.

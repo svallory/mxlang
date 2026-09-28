@@ -1,5 +1,9 @@
 import { decode } from "@jridgewell/sourcemap-codec";
-import { getCustomTags } from "@mxlang/core";
+import {
+  getCustomTags,
+  type MxWarning,
+  withCalleeInputSources,
+} from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
 import { print } from "@mxlang/parser";
 import { compileSolidMx } from "@mxlang/solid";
@@ -37,14 +41,43 @@ export interface SolidMxSyntaxError {
   source: string;
 }
 
-export interface SolidMxLanguagePlugin extends LanguagePlugin<string> {
+export interface MxCompileDiagnostic extends SolidMxSyntaxError {
+  category: "error" | "warning";
+}
+
+export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
+  getCompileDiagnostics(fileName?: string): MxCompileDiagnostic[];
+}
+
+export interface SolidMxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): SolidMxSyntaxError | undefined;
+}
+
+/**
+ * Reads a file's current text from the editor host: an unsaved buffer when
+ * the file is open, `undefined` when the host does not hold it (core then
+ * reads the file from disk itself).
+ */
+export type DependencySourceReader = (fileName: string) => string | undefined;
+
+export interface DependencyLanguagePluginOptions {
+  /**
+   * How a compile reads the callee files whose `Input` it depends on.
+   *
+   * Supplied by the tsserver plugin so a caller type-checks against an open
+   * callee's unsaved text. `mx-tsc` supplies none: a one-shot run has only
+   * the files on disk, which core reads by itself.
+   */
+  readSource?: DependencySourceReader;
 }
 
 export function createSolidMxLanguagePlugin(
   typescript: typeof ts,
+  options: DependencyLanguagePluginOptions = {},
 ): SolidMxLanguagePlugin {
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
+  const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
+  const dependencies = new Map<string, string[]>();
 
   return {
     getLanguageId(fileName) {
@@ -64,22 +97,51 @@ export function createSolidMxLanguagePlugin(
         // `vite build` of the same file compiled it fine — the gap the P1
         // review recorded against this path.
         const discovered = getCustomTags(fileName, { host: "solid" });
-        const printed = print(source, fileName, {
-          mxRegionCompile: solidRegionCompile,
-          ...(Object.keys(discovered).length > 0
-            ? { customTags: discovered }
-            : undefined),
-        });
+        const compiled = compileWithDependencies(
+          options.readSource,
+          dependencies.get(fileName) ?? [],
+          () => {
+            const warnings: MxWarning[] = [];
+            const printed = print(source, fileName, {
+              mxRegionCompile: (input) =>
+                compileSolidMx(input.source, { ...input, warnings }),
+              ...(Object.keys(discovered).length > 0
+                ? { customTags: discovered }
+                : undefined),
+            });
+            return { ...printed, warnings };
+          },
+        );
+        const { warnings, ...printed } = compiled;
+        dependencies.set(fileName, printed.dependencies);
         syntaxErrors.delete(fileName);
-        return createVirtualCode(typescript, printed.code, source, printed.map);
+        compileDiagnostics.set(
+          fileName,
+          warnings.map((warning) =>
+            warningDiagnostic(fileName, source, warning),
+          ),
+        );
+        return createVirtualCode(
+          typescript,
+          printed.code,
+          source,
+          printed.map,
+          attributeTagDiagnosticMappings(source, printed.code),
+        );
       } catch (cause) {
-        syntaxErrors.set(fileName, toSyntaxError(fileName, source, cause));
+        const error = toSyntaxError(fileName, source, cause);
+        syntaxErrors.set(fileName, error);
+        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
         return createVirtualCode(typescript, "", source, undefined);
       }
     },
 
     getSyntaxError(fileName) {
       return syntaxErrors.get(fileName);
+    },
+
+    getCompileDiagnostics(fileName) {
+      return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
     typescript: {
@@ -103,19 +165,161 @@ export function createSolidMxLanguagePlugin(
   };
 }
 
+export function diagnosticsFrom(
+  diagnostics: ReadonlyMap<string, MxCompileDiagnostic[]>,
+  fileName?: string,
+): MxCompileDiagnostic[] {
+  return fileName === undefined
+    ? [...diagnostics.values()].flat()
+    : (diagnostics.get(fileName) ?? []);
+}
+
+export function warningDiagnostic(
+  fileName: string,
+  source: string,
+  warning: MxWarning,
+): MxCompileDiagnostic {
+  const lineStart =
+    lineOffsets(source)[Math.max(0, warning.line - 1)] ?? source.length;
+  return {
+    fileName,
+    message: warning.message,
+    offset: Math.min(source.length, lineStart + Math.max(0, warning.column)),
+    source,
+    category: "warning",
+  };
+}
+
+/**
+ * Compiles a caller against the current text of the callee files it depends
+ * on, so an open callee's unsaved `Input` is what the caller is typed
+ * against.
+ *
+ * The first pass runs with the sources of the dependencies the previous
+ * compile reported. A compile that reports a different set is repeated once
+ * with the sources of the new set, unless the host holds nothing different
+ * for it: the first pass then already read everything the second would.
+ *
+ * Dependencies are deliberately **not** registered through Volar's
+ * `CodegenContext.getAssociatedScript`. An associated script is a file whose
+ * content is embedded in its target's virtual code: `@volar/typescript`'s
+ * `getServiceScript` answers for it with the *target's* service script. A
+ * callee is a program file with virtual code of its own, so associating it
+ * mapped the callee's diagnostics through its caller's mappings and reported
+ * them in the caller's file (measured on `examples/todomvc`: the
+ * `TodoItem.solid.mx` and `Footer.solid.mx` diagnostics, normally unmapped
+ * and dropped, surfaced in `App.solid.mx` at unrelated lines).
+ */
+export function compileWithDependencies<T extends { dependencies: string[] }>(
+  readSource: DependencySourceReader | undefined,
+  previousDependencies: readonly string[],
+  compile: () => T,
+): T {
+  if (!readSource) return compile();
+  const previousSources = dependencySources(readSource, previousDependencies);
+  const result = withCalleeInputSources(previousSources, compile);
+  if (sameDependencies(previousDependencies, result.dependencies)) {
+    return result;
+  }
+  const nextSources = dependencySources(readSource, result.dependencies);
+  if (sameSources(previousSources, nextSources)) return result;
+  return withCalleeInputSources(nextSources, compile);
+}
+
+function sameDependencies(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((dependency) => right.includes(dependency))
+  );
+}
+
+function sameSources(
+  left: ReadonlyMap<string, string>,
+  right: ReadonlyMap<string, string>,
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const [fileName, source] of left) {
+    if (right.get(fileName) !== source) return false;
+  }
+  return true;
+}
+
+function dependencySources(
+  readSource: DependencySourceReader,
+  dependencies: readonly string[],
+): Map<string, string> {
+  const sources = new Map<string, string>();
+  for (const dependency of dependencies) {
+    const source = readSource(dependency);
+    if (source !== undefined) sources.set(dependency, source);
+  }
+  return sources;
+}
+
 function createVirtualCode(
   typescript: typeof ts,
   generated: string,
   source: string,
   map: RawSourceMap | undefined,
+  supplementalMappings: CodeMapping[] = [],
 ): VirtualCode {
   return {
     id: "root",
     languageId: "typescriptreact",
     snapshot: typescript.ScriptSnapshot.fromString(generated),
-    mappings: map ? decodeMappings(map, generated, source) : [],
+    mappings: [
+      ...(map ? decodeMappings(map, generated, source) : []),
+      ...supplementalMappings,
+    ].sort(
+      (left, right) =>
+        (left.generatedOffsets[0] ?? 0) - (right.generatedOffsets[0] ?? 0),
+    ),
     embeddedCodes: [],
   };
+}
+
+/**
+ * Maps each synthetic attribute-tag value object back to its authored tag
+ * name. The SolidMX printer can map expressions such as `title=1` exactly,
+ * but the surrounding `{ ...attrs, content }` object has no literal source
+ * text. TypeScript puts a missing-property diagnostic on that object, so this
+ * verification-only whole-object mapping gives the diagnostic an honest
+ * fallback span (`<@tab>`'s `tab`) without offering navigation on generated
+ * punctuation.
+ */
+export function attributeTagDiagnosticMappings(
+  source: string,
+  generated: string,
+): CodeMapping[] {
+  const mappings: CodeMapping[] = [];
+  const generatedCursors = new Map<string, number>();
+  for (const match of source.matchAll(/@([A-Za-z_$][\w$]*)/g)) {
+    const name = match[1];
+    if (!name || match.index === undefined) continue;
+    const sourceStart = match.index + 1;
+    const probe = `${name}={{`;
+    const probeStart = generated.indexOf(
+      probe,
+      generatedCursors.get(name) ?? 0,
+    );
+    if (probeStart < 0) continue;
+    const generatedStart = probeStart;
+    const generatedEndMarker = generated.indexOf("} satisfies ", probeStart);
+    if (generatedEndMarker < 0) continue;
+    const generatedEnd = generatedEndMarker + 1;
+    generatedCursors.set(name, generatedEnd);
+    mappings.push({
+      sourceOffsets: [sourceStart],
+      generatedOffsets: [generatedStart],
+      lengths: [name.length],
+      generatedLengths: [generatedEnd - generatedStart],
+      data: { verification: true },
+    });
+  }
+  return mappings;
 }
 
 export function decodeMappings(

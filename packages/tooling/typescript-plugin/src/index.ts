@@ -12,6 +12,7 @@ import {
 import {
   createCompoundExtensionResolver,
   createSolidMxLanguagePlugin,
+  type DependencySourceReader,
   type SolidMxLanguagePlugin,
 } from "./language.ts";
 import {
@@ -24,11 +25,14 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
     | Array<SolidMxLanguagePlugin | MxLanguagePlugin | AmxLanguagePlugin>
     | undefined;
   const volarFactory = createLanguageServicePlugin((typescript, info) => {
-    const solidMxPlugin = createSolidMxLanguagePlugin(typescript);
-    const mxPlugin = createMxLanguagePlugin(typescript);
+    const readSource = createProjectSourceReader(info);
+    const solidMxPlugin = createSolidMxLanguagePlugin(typescript, {
+      readSource,
+    });
+    const mxPlugin = createMxLanguagePlugin(typescript, { readSource });
     languagePlugins = [solidMxPlugin, mxPlugin];
     if (info.config?.astro === true) {
-      languagePlugins.push(createAmxLanguagePlugin(typescript));
+      languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
     }
     return {
       languagePlugins: createConfiguredLanguagePlugins(
@@ -64,6 +68,32 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
     },
   };
 };
+
+/**
+ * Reads a callee's text as the project holds it, so a caller compiles
+ * against an open callee's unsaved buffer.
+ *
+ * It asks the project for the script it already has rather than the language
+ * service host for a snapshot: Volar decorates the host's
+ * `getScriptSnapshot` to return an MX file's *virtual* code, and asking the
+ * host would also attach a file the project does not hold yet. A file the
+ * project does not hold has no unsaved text, so core reading it from disk is
+ * already right.
+ */
+function createProjectSourceReader(
+  info: ts.server.PluginCreateInfo,
+): DependencySourceReader {
+  return (fileName) => {
+    try {
+      const snapshot = info.project.getScriptInfo(fileName)?.getSnapshot();
+      return snapshot?.getText(0, snapshot.getLength());
+    } catch {
+      // `getSnapshot` throws on a file too large for the language service;
+      // such a file is read from disk like any other the project lacks.
+      return undefined;
+    }
+  };
+}
 
 export function createConfiguredLanguagePlugins(
   typescript: typeof ts,
@@ -104,33 +134,36 @@ function withSyntaxDiagnostics(
 
       return (fileName: string) => {
         const diagnostics = target.getSyntacticDiagnostics(fileName);
-        const error = getLanguagePlugins()
-          ?.map((plugin) => plugin.getSyntaxError(fileName))
-          .find((candidate) => candidate !== undefined);
-        if (!error) return diagnostics;
+        const compileDiagnostics =
+          getLanguagePlugins()?.flatMap((plugin) =>
+            plugin.getCompileDiagnostics(fileName),
+          ) ?? [];
+        if (compileDiagnostics.length === 0) return diagnostics;
 
-        const file = typescript.createSourceFile(
-          fileName,
-          error.source,
-          typescript.ScriptTarget.Latest,
-          false,
-          typescript.ScriptKind.TSX,
-        );
         return [
           ...diagnostics,
-          {
-            file,
-            start: error.offset,
-            length: Math.min(1, error.source.length - error.offset),
-            category: typescript.DiagnosticCategory.Error,
-            code: 80001,
+          ...compileDiagnostics.map((diagnostic) => ({
+            file: typescript.createSourceFile(
+              fileName,
+              diagnostic.source,
+              typescript.ScriptTarget.Latest,
+              false,
+              typescript.ScriptKind.TSX,
+            ),
+            start: diagnostic.offset,
+            length: Math.min(1, diagnostic.source.length - diagnostic.offset),
+            category:
+              diagnostic.category === "error"
+                ? typescript.DiagnosticCategory.Error
+                : typescript.DiagnosticCategory.Warning,
+            code: diagnostic.category === "error" ? 80001 : 80002,
             source: fileName.endsWith(".solid.mx")
               ? "solidmx"
               : fileName.endsWith(".amx")
                 ? "amx"
                 : "mx",
-            messageText: error.message,
-          },
+            messageText: diagnostic.message,
+          })),
         ];
       };
     },
@@ -142,6 +175,10 @@ export {
   createAmxLanguagePlugin,
 } from "./amx-language.ts";
 export { createAstroLanguagePlugin } from "./astro-language.ts";
+export type {
+  MxCompileDiagnostic,
+  MxDiagnosticLanguagePlugin,
+} from "./language.ts";
 export {
   createCompoundExtensionResolver,
   createSolidMxLanguagePlugin,

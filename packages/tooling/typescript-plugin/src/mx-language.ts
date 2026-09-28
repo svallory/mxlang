@@ -10,6 +10,7 @@ import {
   type IrNode,
   type Lookup,
   lower,
+  type MxWarning,
   newCtx,
   parseFragment,
   printExpression,
@@ -21,14 +22,20 @@ import { compile, policy, strictPolicy, translator } from "@mxlang/html";
 import { compilePreactMx, preactDeclarations } from "@mxlang/preact";
 import { compileReactMx, reactDeclarations } from "@mxlang/react";
 import { compileSolidMx } from "@mxlang/solid";
-import type {
-  CodeMapping,
-  LanguagePlugin,
-  VirtualCode,
-} from "@volar/language-core";
+import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
-import { codeInformation, decodeMappings, mergeMappings } from "./language.ts";
+import {
+  codeInformation,
+  compileWithDependencies,
+  type DependencyLanguagePluginOptions,
+  decodeMappings,
+  diagnosticsFrom,
+  type MxCompileDiagnostic,
+  type MxDiagnosticLanguagePlugin,
+  mergeMappings,
+  warningDiagnostic,
+} from "./language.ts";
 
 export const MX_LANGUAGE_ID = "mx";
 export const MX_EXTENSIONS = ["mx"] as const;
@@ -40,11 +47,12 @@ export interface MxSyntaxError {
   source: string;
 }
 
-export interface MxLanguagePlugin extends LanguagePlugin<string> {
+export interface MxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): MxSyntaxError | undefined;
 }
 
-export interface MxLanguagePluginOptions {
+export interface MxLanguagePluginOptions
+  extends DependencyLanguagePluginOptions {
   /**
    * Custom tags supplied directly, merged over whatever the scan discovers
    * for each file.
@@ -63,6 +71,8 @@ export function createMxLanguagePlugin(
   options: MxLanguagePluginOptions = {},
 ): MxLanguagePlugin {
   const syntaxErrors = new Map<string, MxSyntaxError>();
+  const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
+  const dependencies = new Map<string, string[]>();
 
   /**
    * The tags callable from one file: everything discovered around it, with an
@@ -110,88 +120,35 @@ export function createMxLanguagePlugin(
 
       const source = snapshot.getText(0, snapshot.getLength());
       try {
-        const hostPolicy = resolveHostPolicy(fileName);
-        // Resolved once and threaded through both the compile and the second
-        // lowering below: P1's same-map rule, now fed by discovery.
-        const customTags = tagsFor(fileName);
-        const strict =
-          hostPolicy.host === "astro" || hostPolicy.strict === true;
-        if (hostPolicy.host === "angular") {
-          // `@mxlang/angular` exists (phase 1) but is not wired into this
-          // plugin yet — falling through to the vanilla `compile()` below
-          // would silently type-check an Angular page template against the
-          // html host's generated TypeScript instead, which is wrong, not
-          // merely incomplete.
-          throw new Error(
-            "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-          );
-        }
-        const compiled =
-          hostPolicy.host === "solid"
-            ? compileSolidMx(source, {
-                filename: fileName,
-                customTags,
-              })
-            : hostPolicy.host === "preact"
-              ? compilePreactMx(source, fileName, {
-                  customTags,
-                })
-              : hostPolicy.host === "react"
-                ? compileReactMx(source, fileName, {
-                    customTags,
-                  })
-                : hostPolicy.host === "hono"
-                  ? compileHonoMx(source, fileName, {
-                      customTags,
-                    })
-                  : compile(source, fileName, {
-                      strict,
-                      customTags,
-                    });
-        const generated =
-          hostPolicy.host === "astro"
-            ? createAstroTypeSurface(compiled.code)
-            : compiled.code;
-        const mappings =
-          hostPolicy.host === "solid"
-            ? mergeMappings(
-                [
-                  ...decodeMappings(compiled.map, generated, source),
-                  ...recordedMappings(compiled.mappings),
-                ].sort(
-                  (left, right) =>
-                    (left.generatedOffsets[0] ?? 0) -
-                    (right.generatedOffsets[0] ?? 0),
-                ),
-              )
-            : createHtmlMappings(
-                source,
-                fileName,
-                generated,
-                strict,
-                // Resolve under the host that produced `generated`: a
-                // construct one host accepts another rejects, and resolving
-                // under the wrong policy throws instead of mapping.
-                hostPolicy.host === "preact"
-                  ? preactDeclarations
-                  : hostPolicy.host === "react"
-                    ? reactDeclarations
-                    : hostPolicy.host === "hono"
-                      ? honoDeclarations
-                      : undefined,
-                compiled.mappings,
-                customTags,
-              );
+        const result = compileWithDependencies(
+          options.readSource,
+          dependencies.get(fileName) ?? [],
+          () => compileMxVirtual(fileName, source, tagsFor(fileName)),
+        );
+        const { generated, mappings, warnings } = result;
+        dependencies.set(fileName, result.dependencies);
         syntaxErrors.delete(fileName);
+        compileDiagnostics.set(
+          fileName,
+          warnings.map((warning) =>
+            warningDiagnostic(fileName, source, warning),
+          ),
+        );
         return createVirtualCode(typescript, generated, mappings);
       } catch (cause) {
-        syntaxErrors.set(fileName, toSyntaxError(fileName, source, cause));
+        const error = toSyntaxError(fileName, source, cause);
+        syntaxErrors.set(fileName, error);
+        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
         return createVirtualCode(typescript, "", []);
       }
     },
 
     getSyntaxError(fileName) {
       return syntaxErrors.get(fileName);
+    },
+
+    getCompileDiagnostics(fileName) {
+      return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
     typescript: {
@@ -225,6 +182,77 @@ export function createMxLanguagePlugin(
       },
     },
   };
+
+  function compileMxVirtual(
+    fileName: string,
+    source: string,
+    customTags: Record<string, CustomTag> | undefined,
+  ): {
+    generated: string;
+    mappings: CodeMapping[];
+    dependencies: string[];
+    warnings: MxWarning[];
+  } {
+    const hostPolicy = resolveHostPolicy(fileName);
+    const strict = hostPolicy.host === "astro" || hostPolicy.strict === true;
+    const warnings: MxWarning[] = [];
+    if (hostPolicy.host === "angular") {
+      throw new Error(
+        "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
+      );
+    }
+    const compiled =
+      hostPolicy.host === "solid"
+        ? compileSolidMx(source, { filename: fileName, customTags, warnings })
+        : hostPolicy.host === "preact"
+          ? compilePreactMx(source, fileName, { customTags, warnings })
+          : hostPolicy.host === "react"
+            ? compileReactMx(source, fileName, { customTags, warnings })
+            : hostPolicy.host === "hono"
+              ? compileHonoMx(source, fileName, { customTags, warnings })
+              : compile(source, fileName, { strict, customTags, warnings });
+    const generated =
+      hostPolicy.host === "astro"
+        ? createAstroTypeSurface(compiled.code)
+        : compiled.code;
+    const mappings =
+      hostPolicy.host === "solid"
+        ? mergeMappings(
+            [
+              ...decodeMappings(compiled.map, generated, source),
+              ...recordedMappings(compiled.mappings),
+            ].sort(
+              (left, right) =>
+                (left.generatedOffsets[0] ?? 0) -
+                (right.generatedOffsets[0] ?? 0),
+            ),
+          )
+        : createHtmlMappings(
+            source,
+            fileName,
+            generated,
+            strict,
+            hostPolicy.host === "preact"
+              ? preactDeclarations
+              : hostPolicy.host === "react"
+                ? reactDeclarations
+                : hostPolicy.host === "hono"
+                  ? honoDeclarations
+                  : undefined,
+            compiled.mappings,
+            customTags,
+            // The mapping pass lowers the same source a second time. It
+            // needs somewhere to put its warnings, but they are the ones the
+            // compile already reported, so they are not reported again.
+            [],
+          );
+    return {
+      generated,
+      mappings,
+      dependencies: compiled.dependencies,
+      warnings,
+    };
+  }
 }
 
 /**
@@ -296,6 +324,7 @@ export function createHtmlMappings(
   declarations?: HostDeclarations,
   emittedMappings: GeneratedMapping[] = [],
   customTags?: Record<string, CustomTag>,
+  warnings?: MxWarning[],
 ): CodeMapping[] {
   const require = createRequire(import.meta.url);
   const compiler = require("@marko/compiler") as {
@@ -317,6 +346,7 @@ export function createHtmlMappings(
   // This is the second lowering of the same source. It must see the same tag
   // map as compilation or a custom tag can make the entire mapping pass fail.
   ctx.customTags = customTags;
+  ctx.warnings = warnings;
   const ir = lower(ctx, body);
   const mappedCode = collectMappedCode(ir);
   const sourceLines = lineOffsets(source);

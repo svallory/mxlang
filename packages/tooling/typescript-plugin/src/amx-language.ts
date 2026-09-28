@@ -3,30 +3,39 @@ import {
   type AstroTemplateMapping,
   lowerAstroMx,
 } from "@mxlang/astro/template";
-import { getCustomTags } from "@mxlang/core";
+import { getCustomTags, type MxWarning } from "@mxlang/core";
 import type { RawSourceMap } from "@mxlang/parser";
-import type {
-  CodeMapping,
-  LanguagePlugin,
-  VirtualCode,
-} from "@volar/language-core";
+import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
-import { codeInformation, decodeMappings, mergeMappings } from "./language.ts";
+import {
+  codeInformation,
+  compileWithDependencies,
+  type DependencyLanguagePluginOptions,
+  decodeMappings,
+  diagnosticsFrom,
+  type MxCompileDiagnostic,
+  type MxDiagnosticLanguagePlugin,
+  mergeMappings,
+  warningDiagnostic,
+} from "./language.ts";
 import type { MxSyntaxError } from "./mx-language.ts";
 
 export const AMX_EXTENSION = "amx";
 export const AMX_LANGUAGE_ID = "astromx";
 
-export interface AmxLanguagePlugin extends LanguagePlugin<string> {
+export interface AmxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): MxSyntaxError | undefined;
 }
 
 /** Lowers an AstroMX document and composes its two source-map stages. */
 export function createAmxLanguagePlugin(
   typescript: typeof ts,
+  options: DependencyLanguagePluginOptions = {},
 ): AmxLanguagePlugin {
   const syntaxErrors = new Map<string, MxSyntaxError>();
+  const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
+  const dependencies = new Map<string, string[]>();
 
   return {
     getLanguageId(fileName) {
@@ -43,13 +52,22 @@ export function createAmxLanguagePlugin(
         // unknown tag in the editor and under `mx-tsc --astro` — the
         // asymmetry already closed for `.solid.mx`.
         const discovered = getCustomTags(fileName, { host: "astro" });
-        const lowered = lowerAstroMx(
-          source,
-          fileName,
-          Object.keys(discovered).length > 0
-            ? { customTags: discovered }
-            : undefined,
+        const result = compileWithDependencies(
+          options.readSource,
+          dependencies.get(fileName) ?? [],
+          () => {
+            const warnings: MxWarning[] = [];
+            const lowered = lowerAstroMx(source, fileName, {
+              ...(Object.keys(discovered).length > 0
+                ? { customTags: discovered }
+                : undefined),
+              warnings,
+            });
+            return { ...lowered, warnings };
+          },
         );
+        const { warnings, ...lowered } = result;
+        dependencies.set(fileName, lowered.dependencies);
         const converted = convertToTSX(lowered.code, {
           filename: fileName,
           sourcemap: "external",
@@ -61,15 +79,27 @@ export function createAmxLanguagePlugin(
           lowered.code,
         );
         syntaxErrors.delete(fileName);
+        compileDiagnostics.set(
+          fileName,
+          warnings.map((warning) =>
+            warningDiagnostic(fileName, source, warning),
+          ),
+        );
         return createVirtualCode(typescript, converted.code, mappings);
       } catch (cause) {
-        syntaxErrors.set(fileName, toSyntaxError(fileName, source, cause));
+        const error = toSyntaxError(fileName, source, cause);
+        syntaxErrors.set(fileName, error);
+        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
         return createVirtualCode(typescript, "", []);
       }
     },
 
     getSyntaxError(fileName) {
       return syntaxErrors.get(fileName);
+    },
+
+    getCompileDiagnostics(fileName) {
+      return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
     typescript: {
