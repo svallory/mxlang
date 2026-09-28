@@ -55,13 +55,22 @@ own authored default import of the same file where there is one. An
 `import`/`static`/`export` the *author* wrote inside a region is still the
 same error, because they have a real module to put it in.
 
-`compileSolidUnit` is the whole-file entry point beside it. A tag file **is**
-a module, so its module-level statements are placed rather than rejected, and
-its default export is a named declaration after the file (`icon.mx` exports
-`Icon`) — which is what lets a tag call itself with no self-import. It
-deliberately drops `export interface Input`: Solid's compiler takes source
+`compileSolidUnit` is the whole-file entry point beside it — a page's own
+`.mx`, not only a tag unit, since decision 115 routes every whole-file `.mx`
+resolved to Solid through this function in the TypeScript plugin, the
+language server, `mx-tsc` and the vite-plugin. A tag file **is** a module, so
+its module-level statements are placed rather than rejected (an authored
+`import` resolves a capitalized tag exactly as it does on `@mxlang/html`),
+and its default export is a named declaration after the file (`icon.mx`
+exports `Icon`) — which is what lets a tag call itself with no self-import.
+It deliberately drops `export interface Input`: Solid's compiler takes source
 text and has no TypeScript frontend, so a type declaration in the emitted
-unit is a syntax error downstream. Typing a unit's props is phase 3.
+unit is a syntax error downstream. **Consequence: an ordinary prop on a
+whole-file Solid `.mx` component is not yet type-checked, right or wrong**
+(TODO `solid-whole-file-prop-typing`, pinned by a test in
+`packages/tooling/tsc/src/index.test.ts`). AttrTag props are unaffected
+(`satisfies`-checked at the call site); a `.solid.mx` region stays fully
+typed (its virtual code is a Volar projection that keeps the real `Input`).
 
 ## `<for>` bodies read the row as a value, on every form
 

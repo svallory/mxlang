@@ -45,13 +45,37 @@ Three facts worth knowing before touching it:
   never runs through. Neither concept has a Marko equivalent to measure
   against (Marko has no host-native-JSX-passthrough and no
   spliced-into-someone-else's-module construct); both came from an operator
-  ruling (2026-09-28) rather than a Marko fact. **Whole-file `.mx` resolved to
-  Solid (`compileSolidMx` called directly, not through a `.solid.mx`
-  region) gets no `moduleBindings` at all and cannot use an authored
-  `import`** — `compileSolidMx` rejects any module-level statement, region or
-  not, as "module-level MX statements cannot appear inside a `.solid.mx`
-  expression"; a registered custom tag is the only resolution route
-  available there for an otherwise-unresolvable name.
+  ruling (2026-09-28) rather than a Marko fact.
+  **Whole-file `.mx` resolved to Solid goes through `compileSolidUnit`, not
+  `compileSolidMx` (decision 115).** `compileSolidMx` (the *region* compiler)
+  still rejects every module-level statement unconditionally — a `.solid.mx`
+  region is an expression spliced into someone else's module and has nowhere
+  to put one — but a whole file has its own module scope, so `compileSolidUnit`
+  places an authored `import` there like every other host does, and it
+  resolves a capitalized tag the same way an import resolves one on
+  `@mxlang/html`/`@mxlang/preact`. Before decision 115, every production entry
+  point (the TypeScript plugin, the language server, `mx-tsc`, and the
+  vite-plugin, which had no `host === "solid"` branch at all and silently fell
+  through to `@mxlang/html`'s string emitter) routed a whole-file `.mx`
+  resolved to Solid through `compileSolidMx` regardless, so an authored import
+  was rejected there too, contrary to what this file used to say — this was
+  the actual bug behind TODO `solid-whole-file-mx-import`, filed from PR #149.
+  **`compileSolidUnit` deliberately drops `export interface Input` from its
+  emitted module** (Solid's own compiler takes source text and has no
+  TypeScript frontend, so a type declaration there is a downstream syntax
+  error), and the emitted `function Card(input)` therefore carries no type
+  annotation at all — TypeScript resolves `input` as implicit `any`.
+  **Consequence: an ordinary prop on a whole-file Solid `.mx` component is not
+  yet type-checked, right or wrong** — `<Card title=1/>` against a declared
+  `title: string` produces zero diagnostics today (TODO
+  `solid-whole-file-prop-typing`, pinned by a test in
+  `packages/tooling/tsc/src/index.test.ts`,
+  `fixtures/whole-file-solid-untyped-props`). Two things are unaffected by
+  this gap: **AttrTag props are still checked**, since those go through a
+  `satisfies` assertion at the *call site* (decisions 106-108), independent of
+  the callee's own function signature; and **a `.solid.mx` *region* stays
+  fully typed**, since its virtual code is a Volar projection that keeps the
+  real `Input` interface — it never goes through `compileSolidUnit` at all.
 - **It is an `Emitter<string>`, same shape as `@mxlang/astro`'s
   `.amx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or
