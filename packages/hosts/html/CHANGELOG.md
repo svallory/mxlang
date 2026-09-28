@@ -13,6 +13,15 @@ byte-matching Marko's quote-minimizer — the oracle compares parsed, decoded
 attributes, not source bytes, so the two are already semantically identical
 and the always-quoted form is safer and more readable.
 
+- **fix:** a dynamic tag or `<define>` call now accepts arguments plus content
+  (decision 109). `renderDynamic`'s runtime forwards the trailing props object
+  alongside a dynamic tag's arguments when there is content or an attribute
+  tag to carry, matching Marko's `renderer(...args, { content, <attribute
+  tags> })` shape. A `<define>` call combines the tag-argument form with a
+  body or attribute tags by extending its existing positional named-lookup
+  scheme (used for the no-args call shape): params beyond the consumed args
+  are filled from the same named lookup. Arguments plus a plain attribute are
+  still rejected.
 - **fix:** a lowercase tag naming a local binding (`import layout from
   "./layout.marko"` then `<layout>`) now errors with Marko's own message
   ("Local variables must be in a dynamic tag unless they are PascalCase...")

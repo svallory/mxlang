@@ -679,9 +679,32 @@ export function createEmitter(): StringEmitter {
         // `<Row(input.a)/>` — Marko's tag-argument form, and the ordinary way
         // to call a `<define>` that declares params. Falling back to the
         // named-prop lookup keeps `<Row it=x/>` working for the same define.
+        //
+        // Decision 109: args now combine with a body/attribute tag (Marko's
+        // own lenient dynamic-tag rule, `rejectArgsWithProps`; core has
+        // already rejected a plain attribute alongside args, so `named` here
+        // only ever holds `content`/attribute-tag values). A `<define>` has no
+        // declared `Input` to destructure a single trailing props object
+        // against — measured against real Marko 6.3.51: its own codegen for
+        // this exact shape (`Card('a')><@head>H</@head></Card>` against
+        // `<define/Card|title, head|>`) binds `head` to the whole
+        // `{ head: attrTagValue }` object rather than the attribute tag's
+        // value, and renders `<div>a</div>`/`<div>[object Object]</div>`
+        // silently dropping the content Marko's own comment calls "fallback
+        // content" — so literal parity here would regress MX's already-working
+        // no-args `<define>` attribute-tag binding (the test right above this
+        // one) for no benefit. MX instead extends that same positional
+        // named-lookup scheme args already partially consume: params beyond
+        // the args are filled from `named`, one value per param, exactly as
+        // the no-args path below already does.
         const args =
           node.args.length > 0
-            ? node.args.map((a: Expr) => a.code)
+            ? [
+                ...node.args.map((a: Expr) => a.code),
+                ...target.params
+                  .slice(node.args.length)
+                  .map((param) => named.get(param) ?? "undefined"),
+              ]
             : target.params.map((param) => named.get(param) ?? "undefined");
         push(
           concatMapped(
