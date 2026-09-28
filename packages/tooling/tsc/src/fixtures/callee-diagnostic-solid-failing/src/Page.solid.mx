@@ -1,0 +1,3 @@
+import Card from "./Card.solid.mx";
+
+export const view = <Card><@tab title="a"/></Card>;

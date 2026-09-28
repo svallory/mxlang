@@ -105,6 +105,11 @@ component (the renderer's own error, since Astro raises none — see
 every other test depends on. `vitest.config.ts` sets `fileParallelism: false`,
 since each spec runs a real `astro build`.
 
+`src/components/stateful.mx` is the component the strict-policy error page
+imports, so it cannot compile by design. `tsconfig.json` excludes it:
+`mx-tsc` reports a stored compile error as a diagnostic (TS80001), and the
+example's typecheck would otherwise fail on the file that exists to fail.
+
 **`.mx` pages** (decision 76b, `packages/hosts/astro/src/index.ts` +
 `packages/hosts/astro/src/vite-pages.ts`): the integration calls Astro's
 `addPageExtension(".mx")` — `.marko` is not a registered extension for this

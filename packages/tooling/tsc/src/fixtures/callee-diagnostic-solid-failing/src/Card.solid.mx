@@ -1,0 +1,7 @@
+import type { AttrTag } from "@mxlang/solid";
+
+export interface Input { tab: AttrTag<{ attrs: { title: string } }> }
+export const broken: number = "text";
+export default function Card(_input: Input): JSX.Element {
+  return <div/>;
+}
