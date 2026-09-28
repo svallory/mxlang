@@ -1654,7 +1654,7 @@ describe("AstroMX language plugin", () => {
     if (!virtual) throw new Error("Expected AstroMX virtual code");
     expect(virtual.languageId).toBe("typescriptreact");
     expect(virtual.snapshot.getText(0, virtual.snapshot.getLength())).toContain(
-      "[...items].map((item) =>",
+      "? [...mxList] : [])(items).map((item) =>",
     );
     expect(virtual.mappings.length).toBeGreaterThan(0);
     expect(plugin.typescript?.extraFileExtensions).toEqual([

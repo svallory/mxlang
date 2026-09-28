@@ -322,7 +322,8 @@ describe("attribute tag parse errors", () => {
     const code = printFirstExpression(
       `const el = <Layout><for|x| of=xs()><@header>\${x}</@header></for></Layout>;`,
     );
-    expect(code).toContain("[...xs()].flatMap((x, mxAttrIndex) =>");
+    expect(code).toContain("? [...mxList] : [])(xs())");
+    expect(code).toContain(".flatMap((x, mxAttrIndex) =>");
   });
 
   it("rejects an unknown attribute tag inside `<try>`", () => {
