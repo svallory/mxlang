@@ -196,17 +196,28 @@ export function compileSolidMx(
   // `import`/`static`/`export`, whose nodes carry no `start`/`end`) and
   // `expr()`'s index slice (`node.start`/`node.end`, file-absolute after
   // `parseFragment`'s `baseOffset` shift — see packages/core's fragment.ts).
-  // A `baseLine` newlines + `baseColumn` spaces prefix satisfies the first but
-  // is far shorter than `baseOffset`, so an absolute-index slice against it
-  // silently returns "" (measured: `value=count()` printed as `value={}` for
-  // any region after the file's first line). Padding out to `baseOffset`
-  // exactly satisfies both: `baseLine` newlines fix the line count, and the
-  // remaining fill is spaces on the line before `source`, which still leaves
-  // `sliceLoc`'s `.slice(start.column, end.column)` correct (it reads only
-  // from `start.column` onward, so extra padding before that column is inert).
+  // `parseFragment`'s own contract (`FragmentBase.baseColumn`) shifts a
+  // *first-line* column by exactly `baseColumn`, because "a later line
+  // starts at its own column 0 in both the fragment and the file" — so
+  // `sliceLoc`'s `ctx.lines[line]` must have *exactly* `baseColumn` filler
+  // characters before `source` starts, not more. A prior version padded
+  // that same line out to `baseOffset - baseLine` instead, to make an
+  // absolute-index slice land correctly for a region after the file's first
+  // line — but when anything (e.g. an import statement) precedes the
+  // region's own line, `baseOffset - baseLine` overshoots `baseColumn`, and
+  // the extra spaces land *before* the sliced column on that very line,
+  // silently eating the first few characters of a param/import slice
+  // (measured: `<For|item|>` after a leading `import` printed `item` as
+  // nothing, `{() => ...}` instead of `{(item) => ...}`).
+  // The fix keeps both contracts: put the extra filler *before* the
+  // newlines (inert to both `sliceLoc`, which only reads lines at or after
+  // `baseLine`, and to `expr()`, which only cares about total length), then
+  // exactly `baseLine` newlines, then exactly `baseColumn` spaces on the
+  // region's own line.
   const baseLine = options.baseLine ?? 0;
   const baseColumn = options.baseColumn ?? 0;
-  const positionedSource = `${"\n".repeat(baseLine)}${" ".repeat(Math.max(baseOffset - baseLine, baseColumn))}${source}`;
+  const leadingFill = Math.max(baseOffset - baseLine - baseColumn, 0);
+  const positionedSource = `${" ".repeat(leadingFill)}${"\n".repeat(baseLine)}${" ".repeat(baseColumn)}${source}`;
   const ctx = newCtx(
     positionedSource,
     printExpression,
