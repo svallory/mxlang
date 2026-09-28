@@ -65,6 +65,48 @@ describe("SolidMX language plugin", () => {
     expect(code).toContain(`<${binding}`);
   });
 
+  it("does not inject an import for an mx.tags entry whose hosts excludes solid", () => {
+    // Same shape as the test above, but through an `mx.tags` entry
+    // restricted to a different host: `createSolidMxLanguagePlugin`'s scan
+    // must honor `hosts` (decision 110(a)), so no import is minted and the
+    // region's `<gizmo>` reference stays unresolved.
+    const dir = mkdtempSync(join(tmpdir(), "mx-solid-hosts-"));
+    try {
+      mkdirSync(join(dir, "widgets"), { recursive: true });
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "t",
+          mx: {
+            host: "solid",
+            tags: [{ dir: "widgets", hosts: ["html"] }],
+          },
+        }),
+      );
+      writeFileSync(
+        join(dir, "widgets", "gizmo.mx"),
+        '<span class="icon">${input.name}</span>\n',
+      );
+
+      const plugin = createSolidMxLanguagePlugin(ts);
+      const fileName = join(dir, "page.solid.mx");
+      const source = `const a = <div><gizmo name="star"/></div>;\n`;
+      const virtual = plugin.createVirtualCode?.(
+        fileName,
+        SOLID_MX_LANGUAGE_ID,
+        ts.ScriptSnapshot.fromString(source),
+        { getAssociatedScript: () => undefined },
+      );
+
+      if (!virtual) throw new Error("Expected SolidMX virtual code");
+      const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+      expect(code).not.toMatch(/import \$mx_Gizmo\d+/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      clearScanCache();
+    }
+  });
+
   it("recognizes .solid.mx and exposes a TSX service script", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const source = "export const answer: number = 42;\n";
@@ -630,6 +672,43 @@ describe("MX language plugin", () => {
       expect(plugin.getSyntaxError(caller)?.message).toContain("thing.tag.ts");
     });
 
+    it("does not resolve an mx.tags entry whose hosts excludes this host (whole-file .mx, html)", () => {
+      // `createMxLanguagePlugin` resolves its host through
+      // `resolveHostPolicy`, which reads this fixture's `package.json` as
+      // `"html"` — an entry restricted to `hosts: ["solid"]` must stay
+      // invisible here, decision 110(a).
+      const dir = mkdtempSync(join(tmpdir(), "mx-tsplugin-hosts-"));
+      scratches.push(dir);
+      mkdirSync(join(dir, "widgets"), { recursive: true });
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "t",
+          mx: {
+            host: "html",
+            tags: [{ dir: "widgets", hosts: ["solid"] }],
+          },
+        }),
+      );
+      writeFileSync(
+        join(dir, "widgets", "gizmo.tag.ts"),
+        "export default { transform: (_c, ctx) => [ctx.build.element('span', [], [ctx.build.text('ok')])] };\n",
+      );
+      const caller = join(dir, "caller.mx");
+      const plugin = createMxLanguagePlugin(ts);
+
+      plugin.createVirtualCode?.(
+        caller,
+        MX_LANGUAGE_ID,
+        ts.ScriptSnapshot.fromString("<gizmo/>\n"),
+        { getAssociatedScript: () => undefined },
+      );
+
+      // An unresolved lowercase tag is a Marko parse-time error, the same
+      // observable failure as an entirely undiscovered tag.
+      expect(plugin.getSyntaxError(caller)?.message).toBeDefined();
+    });
+
     it("resolves a discovered tag in an .amx page too", () => {
       // `createAmxLanguagePlugin` lowered with no options while
       // `@mxlang/astro`'s Vite plugin passed `{ customTags }`, so a tag that
@@ -663,6 +742,46 @@ describe("MX language plugin", () => {
       expect(
         virtual.snapshot.getText(0, virtual.snapshot.getLength()),
       ).toContain("stamped");
+    });
+
+    it("does not resolve an mx.tags entry whose hosts excludes astro (.amx)", () => {
+      // Same fixture shape as the "resolves a discovered tag in an .amx
+      // page too" test above, but the entry restricts `hosts` to a
+      // different host: `createAmxLanguagePlugin`'s scan must honor it
+      // (decision 110(a)), rather than resolving `<stamp>` as it does with
+      // no restriction.
+      const dir = mkdtempSync(join(tmpdir(), "mx-amx-hosts-"));
+      scratches.push(dir);
+      mkdirSync(join(dir, "widgets"), { recursive: true });
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "a",
+          mx: {
+            host: "astro",
+            tags: [{ dir: "widgets", hosts: ["solid"] }],
+          },
+        }),
+      );
+      writeFileSync(
+        join(dir, "widgets", "stamp.tag.ts"),
+        "export default { transform: (_c, ctx) => [ctx.build.text('stamped')] };\n",
+      );
+
+      const amx = join(dir, "page.amx");
+      const source = "---\n---\n<stamp/>\n";
+      const plugin = createAmxLanguagePlugin(ts);
+      const virtual = plugin.createVirtualCode?.(
+        amx,
+        AMX_LANGUAGE_ID,
+        ts.ScriptSnapshot.fromString(source),
+        { getAssociatedScript: () => undefined },
+      );
+      if (!virtual) throw new Error("Expected AMX virtual code");
+
+      expect(
+        virtual.snapshot.getText(0, virtual.snapshot.getLength()),
+      ).not.toContain("stamped");
     });
 
     it("gives the second lowering the discovered tags too", () => {

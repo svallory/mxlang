@@ -154,6 +154,41 @@ describe("@mxlang/html/bun", () => {
     }
   });
 
+  test("a tag whose mx.tags entry excludes this host is not discovered", async () => {
+    Bun.plugin(markoPlugin);
+
+    // Through the real plugin's own `getCustomTags(path, { host: "html" })`
+    // call: a `package.json#mx.tags` entry declaring `hosts: ["solid"]`
+    // must be invisible from the html loader, which is decision 110(a).
+    const base = join(import.meta.dirname, "..", "fixtures-marko");
+    const pkgDir = join(base, "hosts-fixture");
+    const tagsDir = join(pkgDir, "widgets");
+    const page = join(pkgDir, "bun-hosts.mx");
+
+    mkdirSync(tagsDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({
+        name: "bun-hosts-fixture",
+        mx: { tags: [{ dir: "widgets", hosts: ["solid"] }] },
+      }),
+    );
+    writeFileSync(
+      join(tagsDir, "gizmo.tag.ts"),
+      "export default { transform: (_c, ctx) => [ctx.build.element('b', [], [ctx.build.text('nope')])] };\n",
+    );
+    writeFileSync(page, "<gizmo/>\n");
+    try {
+      // Marko rejects an unresolvable lowercase custom tag as a syntax
+      // error, so the discovery gap surfaces as a compile failure rather
+      // than a silently rendered tag — exactly the observable symptom the
+      // field's absence produces at the call site.
+      await expect(import(page)).rejects.toThrow();
+    } finally {
+      rmSync(pkgDir, { recursive: true, force: true });
+    }
+  });
+
   // A8, and the half a compile-only test cannot reach: a tag whose template
   // calls its own discovered name becomes a module that imports itself. That
   // is legal ESM (hoisted `function render` + live bindings), but "it compiles"
