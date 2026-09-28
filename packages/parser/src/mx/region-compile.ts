@@ -71,6 +71,14 @@ export interface MxRegionCompileInput {
   context?: MxRegionContext;
   /** Imports declared by the surrounding module, local binding -> specifier. */
   importSpecifiers: ReadonlyMap<string, string>;
+  /**
+   * Every value the surrounding module binds at its top level — import
+   * locals plus top-level `const`/`function`/`class` names, type-only
+   * bindings excluded (`@mxlang/parser`'s `programBindings`). A capitalized
+   * tag a region references may resolve through this scope rather than
+   * anything the region itself imports or declares (decision 114).
+   */
+  moduleBindings: ReadonlySet<string>;
 }
 
 /**

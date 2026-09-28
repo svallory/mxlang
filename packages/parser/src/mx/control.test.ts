@@ -6,7 +6,22 @@ import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
 import { parseSolid } from "./test-helpers.ts";
 
-const parseMx = (source: string) => parseSolid(source);
+/**
+ * These lowering fixtures use bare capitalized tags with no import — they
+ * exercise how a construct lowers, not tag resolution. Since decision 114
+ * makes an unresolved capitalized tag a compile error, every capitalized
+ * identifier the fixture source uses is declared bound, matching Marko's own
+ * rule that any in-scope binding — real or not — is what decides
+ * resolvability, not whether one is actually wired up.
+ */
+function moduleBindingsFor(source: string): Set<string> {
+  return new Set(source.match(/(?<=<)[A-Z][A-Za-z0-9]*/g) ?? []);
+}
+
+const parseMx = (source: string) =>
+  parseSolid(source, undefined, {
+    mxModuleBindings: moduleBindingsFor(source),
+  });
 
 /** Prints the sole top-level statement's expression for a `const el = <...>;` source. */
 function printFirstExpression(source: string): string {

@@ -503,3 +503,88 @@ describe("collectMxRegions", () => {
     expect(regions).toEqual([{ start: 12, end: 20 }]);
   });
 });
+
+/**
+ * Decision 114's end-to-end wiring: the real `parse()` entry point runs its
+ * own declaration-only pre-parse (`collectModuleScope`, `index.ts`) over the
+ * *whole* source before lowering any region, and feeds the result to
+ * `compileSolidMx` as `moduleBindings` — this is what a real `.solid.mx`
+ * file goes through, as opposed to a unit test that hands `compileSolidMx`
+ * a hand-built `moduleBindings` set directly. These tests exercise that full
+ * path, not just `programBindings`/`compileSolidMx` in isolation.
+ */
+describe("decision 114: module-scope resolution through the real parse() pipeline", () => {
+  it("resolves a capitalized tag against a top-level component declared in the same file", () => {
+    const source = [
+      "function Widget() { return null; }",
+      "const el = <Widget/>;",
+    ].join("\n");
+    expect(() => parseMx(source)).not.toThrow();
+  });
+
+  it("resolves a capitalized tag against a component declared after the region that calls it", () => {
+    // `programBindings` scans the whole program, so declaration order must
+    // not matter — Marko's own `tag.scope.hasBinding` isn't order-sensitive
+    // either.
+    const source = [
+      "const el = <Widget/>;",
+      "function Widget() { return null; }",
+    ].join("\n");
+    expect(() => parseMx(source)).not.toThrow();
+  });
+
+  it("resolves a capitalized tag against a default import", () => {
+    const source = [
+      'import Widget from "./widget.mx";',
+      "const el = <Widget/>;",
+    ].join("\n");
+    expect(() => parseMx(source)).not.toThrow();
+  });
+
+  it("still rejects a capitalized tag bound only by a whole `import type` declaration", () => {
+    const source = [
+      'import type Widget from "./widget.mx";',
+      "const el = <Widget/>;",
+    ].join("\n");
+    let error: unknown;
+    try {
+      parseMx(source);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(SyntaxError);
+    expect((error as Error).message).toContain(
+      "Unable to find entry point for custom tag `<Widget>`",
+    );
+  });
+
+  it("still rejects a capitalized tag bound only by an inline `type` import specifier", () => {
+    const source = [
+      'import { type Widget } from "./widget.mx";',
+      "const el = <Widget/>;",
+    ].join("\n");
+    let error: unknown;
+    try {
+      parseMx(source);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(SyntaxError);
+    expect((error as Error).message).toContain(
+      "Unable to find entry point for custom tag `<Widget>`",
+    );
+  });
+
+  it("still rejects a genuinely unresolved capitalized tag with no module-scope binding at all", () => {
+    let error: unknown;
+    try {
+      parseMx("const el = <TotallyUndefined/>;");
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(SyntaxError);
+    expect((error as Error).message).toContain(
+      "Unable to find entry point for custom tag `<TotallyUndefined>`",
+    );
+  });
+});

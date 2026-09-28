@@ -81,6 +81,8 @@ declare module "@mxlang/parser" {
     context?: MxRegionContext;
     /** Imports declared by the surrounding module, local binding -> specifier. */
     importSpecifiers: ReadonlyMap<string, string>;
+    /** Every value the surrounding module binds at its top level (decision 114). */
+    moduleBindings: ReadonlySet<string>;
   }
 
   /** What the bridge needs back from a host. */
@@ -225,6 +227,33 @@ declare module "@mxlang/parser" {
 
   /** True for an HTML void element, which takes no closing tag. */
   export function isVoidTag(name: string | null): boolean;
+
+  /**
+   * Solid JSX built-ins that resolve with no import of their own (decision
+   * 114): the real Solid build pipeline auto-imports these, a compiler stage
+   * the type-check projection and MX's own resolvability check never run
+   * through. Shared by `@mxlang/typescript-plugin` and `@mxlang/solid`.
+   */
+  export const SOLID_BUILTIN_TAGS: ReadonlyArray<{
+    name: string;
+    from: string;
+  }>;
+
+  /**
+   * The names of every value a piece of TypeScript/TSX source text binds at
+   * its top level (imports' local names, top-level `const`/`function`/
+   * `class`), excluding type-only bindings. See `source-bindings.ts` for the
+   * full contract.
+   */
+  export function sourceBindings(source: string): Set<string>;
+
+  /**
+   * Same as `sourceBindings`, over an already-parsed `Program` (a Babel
+   * `File`'s `.program`) rather than raw source text — for a caller (like a
+   * `.solid.mx` region-nulled pre-pass) that cannot re-parse the raw text
+   * with plain `typescript`/`jsx` plugins.
+   */
+  export function programBindings(program: File["program"]): Set<string>;
 
   /** The vendored `@babel/parser` entry points, for plain `.ts`/`.tsx`. */
   export function parseBabel(input: string, options?: MxParseOptions): File;
