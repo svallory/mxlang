@@ -998,9 +998,17 @@ export class PreactEmitter implements Emitter<string> {
    */
   #propsObject(node: Extract<IrNode, { kind: "Component" }>): string {
     const parts: string[] = [];
+    // A decision-116-routed dynamic target (`valueImportBinding` set) still
+    // names a real, in-scope import — the emitted call is
+    // `mxDynamic(Row, ...)`, with `Row` imported verbatim — so `owner` can
+    // still reference it for `Parameters<typeof Row>[0][...]` typing,
+    // exactly as a `kind: "name"` target does. An author's own `<${expr}/>`
+    // (no `valueImportBinding`) has no such name and stays untyped.
     const owner =
       node.target.kind === "dynamic"
-        ? undefined
+        ? node.target.valueImportBinding
+          ? componentAlias(node.target.valueImportBinding)
+          : undefined
         : componentAlias(node.target.name);
     for (const attr of node.attrs) {
       if (attr.kind === "spread") {

@@ -203,11 +203,11 @@ function importLines(names: Set<string>, target: Target): string[] {
  * \`payload\` where this dispatch could not tell a real trailing argument from
  * the synthesized props object.
  */
-const MX_DYNAMIC = `function mxDynamic(target, payload, content) {
+const MX_DYNAMIC = `function mxDynamic(target: any, payload: any, content?: any) {
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
     if (typeof target === "string") {
-      const Tag = target;
+      const Tag: any = target;
       const attrs = payload[0] || {};
       return <Tag {...attrs}>{content ? content() : undefined}</Tag>;
     }
@@ -215,7 +215,7 @@ const MX_DYNAMIC = `function mxDynamic(target, payload, content) {
   }
   const props = payload;
   if (typeof target === "string" || typeof target === "function") {
-    const Tag = target;
+    const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
     return <Tag {...rest}>{bodyContent ? bodyContent() : undefined}</Tag>;
   }

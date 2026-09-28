@@ -2,6 +2,21 @@
 
 ## 0.1.0 (unreleased)
 
+- **fix (decision 116):** a value import that is not a `.marko`/`.mx` default
+  import now lowers through `mxDynamic` instead of a direct call — matching
+  Marko's own `_dynamic_tag` dispatch for a string, `undefined`, `null`, or a
+  plain object; an intentional divergence for a plain function, still called
+  and its return kept, since an imported `.tsx` component (or an MX
+  component on html) IS a plain function. Two host-side fixes needed for
+  this to reach parity: `#propsObject`'s `owner` was unconditionally
+  `undefined` for a `kind: "dynamic"` target, silently dropping typed
+  attribute-tag checking for every such call — it now reads the target's
+  `valueImportBinding` (core's new provenance field) the same way a
+  `kind: "name"` target's own binding name is used. `mxDynamic`'s own
+  parameters were implicitly `any` under `strict` TypeScript, which surfaced
+  only once decision 116 started routing real imports through it far more
+  often; both are now explicitly typed. `@mxlang/react` shares this through
+  the common emitter.
 - **fix:** a dynamic tag or `<define>` call now accepts arguments plus content
   (decision 109). `mxDynamic`'s payload array carries a trailing props object
   after the arguments when there is content or an attribute tag to forward,

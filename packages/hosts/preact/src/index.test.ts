@@ -543,6 +543,88 @@ describe("mxDynamic's three value kinds (rendered)", () => {
 });
 
 /**
+ * Decision 116: a capitalized tag bound to a value import that is not a
+ * `.marko`/`.mx` default import lowers as a dynamic tag — the routing
+ * itself, exercised with an ordinary `import { X } from "./target.ts"` and
+ * an ordinary `<X>`/`<X/>` call, not `<${expr}>` syntax.
+ */
+describe("decision 116: value import used as a tag (preact)", () => {
+  async function renderImportedTag(
+    entrySource: string,
+    targetSource: string,
+    input: unknown = {},
+  ): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-decision116-"));
+    try {
+      const repoNodeModules = dirname(
+        dirname(require.resolve("preact/package.json")),
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      writeFileSync(join(scratch, "target.ts"), targetSource);
+      const code = compilePreactMx(entrySource, join(scratch, "entry.mx")).code;
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: FunctionComponent<Record<string, unknown>>;
+      };
+      return render(h(mod.default, input as Record<string, unknown>));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("a string value import renders as a real element", async () => {
+    const html = await renderImportedTag(
+      'import { Tag } from "./target.ts"\n<Tag name="1">body</Tag>\n<Tag/>',
+      'export const Tag = "div";',
+    );
+    expect(html).toBe('<div name="1">body</div><div></div>');
+  });
+
+  it("a plain function value import is called as a host component (decision 116, intentional Marko divergence)", async () => {
+    const html = await renderImportedTag(
+      'import { Comp } from "./target.ts"\n<Comp n=1/>',
+      "export function Comp(props: { n: number }) {\n  return `<em>${props.n}</em>`;\n}",
+    );
+    expect(html).toContain("1");
+  });
+
+  it("undefined renders only the tag's body content (Marko parity)", async () => {
+    const html = await renderImportedTag(
+      'import { Missing } from "./target.ts"\n<Missing name="1">body</Missing>',
+      "export const Missing = undefined;",
+    );
+    expect(html).toBe("body");
+  });
+
+  it("null renders only the tag's body content (Marko parity)", async () => {
+    const html = await renderImportedTag(
+      'import { Nul } from "./target.ts"\n<Nul name="1">body</Nul>',
+      "export const Nul = null;",
+    );
+    expect(html).toBe("body");
+  });
+});
+
+/**
  * Attribute-tag rendered shape (decisions 106–107), executed through Preact
  * rather than asserted only as emitted source text.
  */
