@@ -688,7 +688,16 @@ export class PreactEmitter implements Emitter<string> {
       if (attr.kind === "spread") {
         parts.push(`...${attr.value.code}`);
       } else {
-        parts.push(`${JSON.stringify(attr.name)}: ${this.#attrValue(attr)}`);
+        parts.push(
+          mapped(JSON.stringify(attr.name), attr.nameSpan),
+          ": ",
+          mapped(
+            this.#attrValue(attr),
+            "value" in attr && typeof attr.value === "object"
+              ? (attr.value.span ?? attr.nameSpan)
+              : attr.nameSpan,
+          ),
+        );
       }
     }
     for (const prop of tag.attrTagProps) {
@@ -700,7 +709,7 @@ export class PreactEmitter implements Emitter<string> {
     }
     if (parts.length > 0) parts.push(", ");
     parts.push("content: ", content);
-    return concatMapped("{ ", ...parts, " }");
+    return concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }");
   }
 
   /** First concrete occurrence, used only to map the emitted prop name. */
@@ -893,7 +902,14 @@ export class PreactEmitter implements Emitter<string> {
   /** The resolved value for one callee-declared attribute-tag prop. */
   #attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
     if (prop.cardinality !== "array") {
-      return this.#attributeTagSingle(prop.source, prop.as);
+      const value = this.#attributeTagSingle(prop.source, prop.as);
+      const valueType =
+        owner && prop.declared
+          ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
+          : undefined;
+      return valueType
+        ? concatMapped("(", value, ` satisfies ${valueType})`)
+        : value;
     }
     const arrayType =
       owner && prop.declared

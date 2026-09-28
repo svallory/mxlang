@@ -67,6 +67,7 @@ import {
   type IrNode,
   importedNames,
   type MappedCode,
+  type MxWarning,
   moduleExportName,
   type RawSourceMap,
   TranslateError,
@@ -128,6 +129,8 @@ export interface CompilePreactOptions {
   /** Resolve-time declarations paired with a custom JSX target. */
   declarations?: HostDeclarations;
   resolveImport?: (specifier: string, importer: string) => string | undefined;
+  /** Positioned non-fatal diagnostics collected by editor/build tooling. */
+  warnings?: MxWarning[];
 }
 
 /**
@@ -451,6 +454,7 @@ export function compilePreactMx(
       ...host,
       customTags: options.customTags,
       resolveImport: options.resolveImport,
+      warnings: options.warnings,
       emitIr: (ir) => {
         const emitted = emitModuleWithMappings(ir, target);
         mappings = emitted.mappings;

@@ -499,12 +499,12 @@ function blockExpression(nodes: IrNode[]): MappedCode {
 
 function attributeTagAttrValue(
   attr: Exclude<Attr, { kind: "spread" }>,
-): string {
+): MappedCode {
   switch (attr.kind) {
     case "boolean":
-      return "true";
+      return mapped("true", attr.nameSpan);
     case "static":
-      return JSON.stringify(attr.value);
+      return mapped(JSON.stringify(attr.value), attr.nameSpan);
     case "bound":
       return fail(
         "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
@@ -519,7 +519,10 @@ function attributeTagAttrValue(
       ) {
         return fail("`style=` with a non-object value", attr);
       }
-      return methodExpression(attr.value) ?? attr.value.code;
+      return mapped(
+        methodExpression(attr.value) ?? attr.value.code,
+        attr.value.span ?? attr.nameSpan,
+      );
   }
 }
 
@@ -554,7 +557,9 @@ function attributeTagValue(
     if (attr.kind === "spread") parts.push(`...${attr.value.code}`);
     else
       parts.push(
-        `${JSON.stringify(attr.name)}: ${attributeTagAttrValue(attr)}`,
+        mapped(JSON.stringify(attr.name), attr.nameSpan),
+        ": ",
+        attributeTagAttrValue(attr),
       );
   }
   for (const prop of tag.attrTagProps) {
@@ -563,7 +568,7 @@ function attributeTagValue(
   }
   if (parts.length > 0) parts.push(", ");
   parts.push("content: ", content);
-  return concatMapped("{ ", ...parts, " }");
+  return concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }");
 }
 
 function firstAttributeTag(
@@ -729,7 +734,14 @@ function attributeTagFor(
 
 function attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
   if (prop.cardinality !== "array") {
-    return attributeTagSingle(prop.source, prop.as);
+    const value = attributeTagSingle(prop.source, prop.as);
+    const valueType =
+      owner && prop.declared
+        ? `NonNullable<Parameters<typeof ${owner}>[0][${JSON.stringify(prop.name)}]>`
+        : undefined;
+    return valueType
+      ? concatMapped("(", value, ` satisfies ${valueType})`)
+      : value;
   }
   const arrayType =
     owner && prop.declared
