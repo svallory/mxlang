@@ -197,7 +197,7 @@ export function startWatch(
    * serves stale output).
    */
   function recordDeps(pagePath: string, usedTagNames: string[]): void {
-    const scan = scanCached(pagePath);
+    const scan = scanCached(pagePath, { host: "angular" });
     const tagPaths = new Set<string>();
     const visited = new Set<string>();
 
