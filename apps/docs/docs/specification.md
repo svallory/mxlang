@@ -807,13 +807,63 @@ path.
 
 | Message | When |
 |---|---|
-| `` `<${name}>` has no matching import or `<define>` in scope; a capitalized tag is always a component call `` | PascalCase, nothing matched. |
-| `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope` | Lowercase, and the host's `isElement` rejected it. |
+| `` `<${name}>` has no matching import or `<define>` in scope; a capitalized tag is always a component call `` | PascalCase, nothing matched, and the host supplies no `rejectUnknownTag` (the fallback wording). |
+| `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope` | Lowercase, the host's `isElement` rejected it, and the host supplies no `rejectUnknownTag`. |
 
 An unresolved **hyphenated** tag refuses to compile, matching Marko
 (`Unable to find entry point for custom tag <my-widget>`, measured against
 5.42.5). `divergences.md` lists letting it through as a literal custom element
 as an MX 2 candidate.
+
+**Decision 114: an unresolved PascalCase tag is Marko's own compile error too,
+on every host, including Solid.** Verified against `@marko/compiler` 5.42.5 /
+`marko@6.3.51`, by source (`tag-name-type.ts`'s `analyzeTagNameType`: a
+PascalCase name with no scope binding and no resolvable child file sets
+`tagNameUnresolved = true`; `dynamic-tag.ts:135` throws `tagNotFoundError`,
+`custom-tag.ts:398-429`'s positioned `` Unable to find entry point for custom
+tag `<Name>`. ``) and by live compile — identical wording for a self-closing
+tag, a tag with a body, and a tag with an attribute. `lower.ts`'s step 5/9
+guards (above) now call `ctx.declarations.rejectUnknownTag?.(name, node, ctx)`
+before their own fallback message, for **both** the PascalCase (step 9) and
+the lowercase-unresolved-element (existing) case — one hook, reported before
+either fallback, so a Marko-parity host gets Marko's exact wording either way
+and a host with none keeps the messages in the table above unchanged.
+
+Before this, `@mxlang/solid`'s `isComponent` was a bare `/^[A-Z]/` test with
+no resolvability check (`solid-attr-tag-resolvability` — filed from a code
+review, TODO `solid-unresolved-component-tag`): an unresolvable PascalCase tag
+silently lowered as an ordinary component call and printed a bare JSX
+reference to a binding nothing declares — a runtime `ReferenceError` on
+Solid's target, not a compile error. `@mxlang/solid`'s `isComponent` now
+returns `true` only when the name resolves, and the operator's ruling
+(2026-09-28) extends what "resolves" means for a `.solid.mx` region beyond
+what Marko itself has a concept for, since Marko has neither a host-native-
+JSX-passthrough construct nor a "spliced into someone else's module"
+construct:
+
+- A capitalized tag bound in the **surrounding TypeScript module** as a value
+  — an import or a top-level `const`/`function`/`class`, type-only bindings
+  excluded — resolves, even though the region itself has no module scope of
+  its own to hold such a binding. `@mxlang/parser`'s `programBindings`/
+  `sourceBindings` (shared with `@mxlang/typescript-plugin`'s
+  `appendSolidBuiltinImport`) reads this from a declaration-only pre-parse of
+  the whole file, region bodies replaced with `null`; the parser bridge
+  passes it to the region compiler as `moduleBindings`, unfiltered by local
+  shadowing (unlike `importSpecifiers`) — Marko's own rule
+  (`tag.scope.hasBinding(tagName)`) is that any in-scope binding, shadowing
+  included, resolves a capitalized tag as a *reference to whichever binding
+  is actually in scope*, never as unresolved.
+- One of Solid's own JSX built-ins (`Show`, `For`, `Switch`, `Match`,
+  `Repeat`, `Errored`, `Loading`, `Dynamic` — `SOLID_BUILTIN_TAGS`,
+  `@mxlang/parser`) resolves unconditionally: `@mxlang/solid`'s emitter
+  prints these as a bare tag with no import of its own, because the real
+  Solid build pipeline (`@solidjs/vite-plugin`'s compiler stage) auto-imports
+  every one it sees — a stage this compiler never runs through.
+
+Everything else reaches Marko's own error. Solid has no taglib-backed
+`tags/`-discovery channel the way `@mxlang/html`/`@mxlang/preact` do (a
+`.solid.mx` region is a fragment compile, not a whole-Marko-file parse), so
+that route never applies here.
 
 ### Dynamic tags
 
