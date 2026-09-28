@@ -27,7 +27,7 @@ The HTML host has no reactive runtime — it compiles a template to a plain `(in
 
 ### Opting into `strict`
 
-Pass `{ strict: true }` to reject the same six constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored.
+Pass `{ strict: true }` to reject eight constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>`, `<debug>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored. `<log>`/`<debug>` are debug-only tooling rather than reactive constructs, but get the same named-construct-error treatment under `strict` (decision 111).
 
 The one check that applies regardless of `strict` is the `input`-shadowing guard: a `<let>` or `<const>` binding named `input` is always rejected, since it would silently break the template's own input parameter either way.
 
