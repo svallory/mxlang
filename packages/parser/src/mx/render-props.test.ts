@@ -355,3 +355,83 @@ describe("`<try>` on the generic attribute-tag path", () => {
     );
   });
 });
+
+describe("solidmx-import-drops-single-line-params repro", () => {
+  it("keeps a single-line <For> param when the file has a leading import", () => {
+    const source = [
+      'import { x } from "./x";',
+      "const el = <For|item| each=items()><li>${item()}</li></For>;",
+    ].join("\n");
+    const code = printFirstExpression(source);
+    expect(code).toContain("{item => <li>{item()}</li>}");
+    expect(() =>
+      parseBabel(code, {
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
+      }),
+    ).not.toThrow();
+  });
+
+  it("keeps multiple single-line <For>/<Show> params after a leading import", () => {
+    const source = [
+      'import { x } from "./x";',
+      "const el = <For|item, i| each=items()><li>${item()}-${i()}</li></For>;",
+    ].join("\n");
+    const code = printFirstExpression(source);
+    expect(code).toContain("{(item, i) => <li>{item()}-{i()}</li>}");
+  });
+});
+
+/**
+ * `solidmx-multiline-region`: the same base-position mismatch this bridge
+ * relies on for `import`/`satisfies` also corrupted a parenthesized/
+ * multi-line region's own `<for>` params and attribute values, since both
+ * bugs share one root cause in `compileSolidMx`'s `positionedSource`
+ * padding — see `packages/hosts/solid/src/index.ts`.
+ */
+describe("solidmx-multiline-region repro", () => {
+  it("keeps a single-param <for> across a parenthesized multi-line region", () => {
+    const source = [
+      "const el = (",
+      "  <for|p| of=xs()>",
+      "    <li>${p.name}</li>",
+      "  </for>",
+      ");",
+    ].join("\n");
+    const code = printFirstExpression(source);
+    expect(code).toContain("p => <li>{p.name}</li>");
+  });
+
+  it("parses a two-param multi-line <for> (used to be a hard parse error)", () => {
+    const source = [
+      "const el = (",
+      "  <for|p, i| of=xs()>",
+      "    <li>${p.name}-${i}</li>",
+      "  </for>",
+      ");",
+    ].join("\n");
+    const code = printFirstExpression(source);
+    expect(code).toContain("(p, i) =>");
+    expect(code).toContain("p.name");
+    expect(code).toContain("i()");
+  });
+
+  it("parses a multi-line `step=` attribute on <for>", () => {
+    const source = [
+      "const el = (",
+      "  <for|i| from=0 to=10",
+      "    step=2>",
+      "    <li>${i}</li>",
+      "  </for>",
+      ");",
+    ].join("\n");
+    const code = printFirstExpression(source);
+    expect(() =>
+      parseBabel(code, {
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
+      }),
+    ).not.toThrow();
+    expect(code).toContain("0 + mxIndex * 2");
+  });
+});
