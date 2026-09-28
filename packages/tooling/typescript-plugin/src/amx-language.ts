@@ -3,7 +3,11 @@ import {
   type AstroTemplateMapping,
   lowerAstroMx,
 } from "@mxlang/astro/template";
-import { getCustomTags, type MxWarning } from "@mxlang/core";
+import {
+  type MxWarning,
+  reportScanDiagnostics,
+  scanCached,
+} from "@mxlang/core";
 import type { RawSourceMap } from "@mxlang/parser";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
@@ -37,6 +41,7 @@ export function createAmxLanguagePlugin(
   const syntaxErrors = new Map<string, MxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
+  const reportedScanDiagnostics = new Set<string>();
 
   return {
     getLanguageId(fileName) {
@@ -52,7 +57,15 @@ export function createAmxLanguagePlugin(
         // file. Without them a tag that compiles under `astro build` is an
         // unknown tag in the editor and under `mx-tsc --astro` — the
         // asymmetry already closed for `.solid.mx`.
-        const discovered = getCustomTags(fileName, { host: "astro" });
+        //
+        // A scan diagnostic names a different file (the `package.json`), so
+        // it cannot become a positioned `MxCompileDiagnostic` here — logged
+        // the same way `mx-language.ts`/`language.ts` already do.
+        const scan = scanCached(fileName, { host: "astro" });
+        reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+          console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
+        );
+        const discovered = scan.customTags;
         const result = compileWithDependencies(
           options.readSource,
           dependencies.get(fileName) ?? [],

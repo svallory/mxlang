@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,6 +110,46 @@ describe("@mxlang/hono/bun", () => {
       const render = mod.default as (input: unknown) => unknown;
       expect(String(render({}))).not.toContain("nope");
     } finally {
+      rmSync(pkgDir, { recursive: true, force: true });
+    }
+  });
+
+  test("an unknown host name in mx.tags[].hosts is a console warning, not silently dropped", async () => {
+    Bun.plugin(honoPlugin);
+
+    // Round 2 finding 2: the scan diagnostic core records for a typo'd
+    // host name (decision 110a) is computed but was dropped at every
+    // `getCustomTags` call site, this loader included, because
+    // `getCustomTags` returns only `.customTags`. This loader now uses
+    // `scanCached` directly and reports `.diagnostics` through
+    // `console.warn`.
+    const base = join(import.meta.dirname, "..");
+    const pkgDir = join(base, "hosts-warning-fixture");
+    const tagsDir = join(pkgDir, "widgets");
+    const page = join(pkgDir, "bun-hosts-warning.mx");
+
+    mkdirSync(tagsDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({
+        name: "hono-hosts-warning-fixture",
+        mx: { tags: [{ dir: "widgets", hosts: ["bogus"] }] },
+      }),
+    );
+    writeFileSync(
+      join(tagsDir, "gizmo.tag.ts"),
+      "export default { transform: (_c, ctx) => [ctx.build.element('b', [], [ctx.build.text('nope')])] };\n",
+    );
+    writeFileSync(page, "<div>no call</div>\n");
+
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await import(page);
+      expect(
+        warn.mock.calls.some((call) => String(call[0]).includes("bogus")),
+      ).toBe(true);
+    } finally {
+      warn.mockRestore();
       rmSync(pkgDir, { recursive: true, force: true });
     }
   });

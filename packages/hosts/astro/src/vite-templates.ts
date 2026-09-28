@@ -45,7 +45,11 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { type CustomTag, getCustomTags } from "@mxlang/core";
+import {
+  type CustomTag,
+  reportScanDiagnostics,
+  scanCached,
+} from "@mxlang/core";
 import type { Plugin } from "vite";
 import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
 
@@ -159,8 +163,14 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
    * `@mxlang/vite-plugin`; doing it here keeps the two file kinds consistent
    * rather than leaving `.amx` the one place a `tags/` directory is invisible.
    */
+  const reportedScanDiagnostics = new Set<string>();
+
   const tagsFor = (file: string): Record<string, CustomTag> | undefined => {
-    const discovered = getCustomTags(file, { host: "astro" });
+    const scan = scanCached(file, { host: "astro" });
+    reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+      console.warn(`@mxlang/astro: ${d.file}: ${d.message}`),
+    );
+    const discovered = scan.customTags;
     const merged = customTags ? { ...discovered, ...customTags } : discovered;
     return Object.keys(merged).length > 0 ? merged : undefined;
   };

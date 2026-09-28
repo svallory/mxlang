@@ -33,7 +33,12 @@ import { readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import type { CustomTag } from "./custom-tags.ts";
-import { type ScanOptions, type ScanResult, scanCustomTags } from "./scan.ts";
+import {
+  type ScanDiagnostic,
+  type ScanOptions,
+  type ScanResult,
+  scanCustomTags,
+} from "./scan.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -173,6 +178,35 @@ export function getCustomTags(
   options: ScanOptions = {},
 ): Record<string, CustomTag> {
   return scanCached(filePath, options).customTags;
+}
+
+/**
+ * Reports each of `diagnostics` through `sink` at most once per distinct
+ * `file`+`message` pair recorded in `reported` — the same de-dup key
+ * `@mxlang/vite-plugin` and `@mxlang/typescript-plugin` already used inline
+ * (independently, before this was pulled out): a scan is re-run on every
+ * compile of every file in a package, so without de-dup one misconfigured
+ * `package.json` would print (or re-diagnose) its warning once per compiled
+ * file rather than once.
+ *
+ * A caller owns its own `reported` set — its lifetime is the caller's
+ * (per language-plugin instance, per dev-server process, for the lifetime of
+ * a one-shot CLI run) — and its own `sink`, since "surface a warning" means
+ * something different per integration: `console.warn` for a loader or CLI, a
+ * pushed diagnostic for a language plugin, an LSP publish for the language
+ * server.
+ */
+export function reportScanDiagnostics(
+  diagnostics: readonly ScanDiagnostic[],
+  reported: Set<string>,
+  sink: (diagnostic: ScanDiagnostic) => void,
+): void {
+  for (const diagnostic of diagnostics) {
+    const key = `${diagnostic.file}\u0000${diagnostic.message}`;
+    if (reported.has(key)) continue;
+    reported.add(key);
+    sink(diagnostic);
+  }
 }
 
 /**

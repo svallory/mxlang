@@ -261,6 +261,34 @@ describe("build: tag routing", () => {
     expect(existsSync(join(projectDir, "widgets/gadget.html"))).toBe(false);
   });
 
+  it("warns about an unknown host name in mx.tags[].hosts (decision 110a; round 2 finding 2)", () => {
+    // The scan diagnostic core records for a typo'd host name was computed
+    // but dropped at every `getCustomTags` call site in this package
+    // (`compileTagFile`/`compileNgMxFile`/`compilePageFile`, all three),
+    // because `getCustomTags` returns only `.customTags`. `build.ts` now
+    // routes it through `customTagsFor`'s `scanCached` + `reportScanDiagnostics`
+    // into the same `warnings` array a compile warning already uses.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: {
+          host: "angular",
+          angular: { include: ["src/**/*.mx"] },
+          tags: [{ dir: "widgets", hosts: ["bogus"] }],
+        },
+      }),
+      "src/page.mx": "<div>no call</div>",
+      "widgets/gadget.mx": "<span>gadget</span>",
+    });
+
+    const result = build(projectDir);
+
+    expect(
+      result.warnings.some(
+        (w) => /bogus/.test(w.message) && /package\.json$/.test(w.file),
+      ),
+    ).toBe(true);
+  });
+
   it("claims an mx.tags entry scoped to angular, or with no hosts restriction at all", () => {
     writeProject({
       "package.json": JSON.stringify({

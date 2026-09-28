@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { getCustomTags } from "@mxlang/preact";
+import { reportScanDiagnostics, scanCached } from "@mxlang/preact";
 import type { BunPlugin } from "bun";
 import { compileHonoMx } from "./index.ts";
 
@@ -25,13 +25,20 @@ import { compileHonoMx } from "./index.ts";
  */
 const MX_FILTER = /(?<!\.solid)\.mx$/;
 
+/** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
+const reportedScanDiagnostics = new Set<string>();
+
 const honoPlugin: BunPlugin = {
   name: "mxlang-hono",
   setup(build) {
     build.onLoad({ filter: MX_FILTER }, ({ path }) => {
       const source = readFileSync(path, "utf8");
+      const scan = scanCached(path, { host: "hono" });
+      reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+        console.warn(`@mxlang/hono: ${d.file}: ${d.message}`),
+      );
       const { code } = compileHonoMx(source, path, {
-        customTags: getCustomTags(path, { host: "hono" }),
+        customTags: scan.customTags,
       });
       return { contents: code, loader: "tsx" };
     });

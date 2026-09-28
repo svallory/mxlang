@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
@@ -185,6 +185,46 @@ describe("@mxlang/html/bun", () => {
       // field's absence produces at the call site.
       await expect(import(page)).rejects.toThrow();
     } finally {
+      rmSync(pkgDir, { recursive: true, force: true });
+    }
+  });
+
+  test("an unknown host name in mx.tags[].hosts is a console warning, not silently dropped", async () => {
+    Bun.plugin(markoPlugin);
+
+    // Round 2 finding 2: the scan diagnostic core now records for a
+    // typo'd host name (decision 110a) is computed but was dropped at
+    // every `getCustomTags` call site, this loader included, because
+    // `getCustomTags` returns only `.customTags`. This loader now uses
+    // `scanCached` directly and reports `.diagnostics` through
+    // `console.warn`.
+    const base = join(import.meta.dirname, "..", "fixtures-marko");
+    const pkgDir = join(base, "hosts-warning-fixture");
+    const tagsDir = join(pkgDir, "widgets");
+    const page = join(pkgDir, "bun-hosts-warning.mx");
+
+    mkdirSync(tagsDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({
+        name: "bun-hosts-warning-fixture",
+        mx: { tags: [{ dir: "widgets", hosts: ["bogus"] }] },
+      }),
+    );
+    writeFileSync(
+      join(tagsDir, "gizmo.tag.ts"),
+      "export default { transform: (_c, ctx) => [ctx.build.element('b', [], [ctx.build.text('nope')])] };\n",
+    );
+    writeFileSync(page, "<div>no call</div>\n");
+
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await import(page);
+      expect(
+        warn.mock.calls.some((call) => String(call[0]).includes("bogus")),
+      ).toBe(true);
+    } finally {
+      warn.mockRestore();
       rmSync(pkgDir, { recursive: true, force: true });
     }
   });

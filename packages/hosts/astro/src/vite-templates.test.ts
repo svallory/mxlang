@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { clearScanCache } from "@mxlang/core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ASTRO_MX_EXT,
   ASTRO_SUFFIX,
@@ -360,6 +360,39 @@ describe("mxTemplates()", () => {
       const lowered = load.call({}, amx + ASTRO_SUFFIX);
 
       expect(lowered).toContain("stamped");
+    });
+
+    it("warns about an unknown host name in mx.tags[].hosts (decision 110a; round 2 finding 2)", () => {
+      // The scan diagnostic core records for a typo'd host name was
+      // computed but dropped here, because `tagsFor` used `getCustomTags`,
+      // which returns only `.customTags`. It now uses `scanCached` and
+      // reports `.diagnostics` through `console.warn`.
+      const dir = mkdtempSync(join(tmpdir(), "mx-amx-hosts-warning-"));
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "a",
+          mx: {
+            host: "astro",
+            tags: [{ dir: "widgets", hosts: ["bogus"] }],
+          },
+        }),
+      );
+      mkdirSync(join(dir, "widgets"), { recursive: true });
+      writeFileSync(join(dir, "widgets", "gizmo.mx"), "<span>gizmo</span>\n");
+      const amx = join(dir, `page${ASTRO_MX_EXT}`);
+      writeFileSync(amx, "---\n---\n<div>no call</div>\n");
+
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const load = loadOf(mxTemplates());
+        load.call({}, amx + ASTRO_SUFFIX);
+        expect(
+          warn.mock.calls.some((call) => String(call[0]).includes("bogus")),
+        ).toBe(true);
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it("raises a Vite-shaped error pointing at a broken *template* tag, not the .amx caller", () => {

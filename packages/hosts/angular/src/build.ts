@@ -17,7 +17,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { getCustomTags, type MxWarning, TranslateError } from "@mxlang/core";
+import {
+  type MxWarning,
+  reportScanDiagnostics,
+  scanCached,
+  TranslateError,
+} from "@mxlang/core";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { discoverFiles, isInside } from "./discover.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
@@ -227,6 +232,27 @@ function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
   }));
 }
 
+/** De-dup key per distinct scan diagnostic, shared across every file one `build()`/`watch` process compiles, so a misconfigured `mx.tags` warns once per problem, not once per compiled file. */
+const reportedScanDiagnostics = new Set<string>();
+
+/** The custom tags callable from `mxPath`, surfacing any scan diagnostic (e.g. an unknown `hosts` name) as an ordinary build warning, same channel as a compile warning. */
+function customTagsFor(mxPath: string): {
+  customTags: ReturnType<typeof scanCached>["customTags"];
+  scanWarnings: PositionedMessage[];
+} {
+  const scan = scanCached(mxPath, { host: "angular" });
+  const scanWarnings: PositionedMessage[] = [];
+  reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+    scanWarnings.push({
+      file: d.file,
+      line: d.line,
+      column: d.column,
+      message: d.message,
+    }),
+  );
+  return { customTags: scan.customTags, scanWarnings };
+}
+
 export interface CompileOneResult {
   ok: boolean;
   /** One line per write/skip/error, in `file:line:col message` shape where positioned. */
@@ -273,7 +299,7 @@ function compileTagFile(
   const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
 
   try {
-    const customTags = getCustomTags(mxPath, { host: "angular" });
+    const { customTags, scanWarnings } = customTagsFor(mxPath);
     const result = compileTagModuleFile(mxPath, {
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
@@ -302,7 +328,7 @@ function compileTagFile(
     const wrote = before !== content;
 
     const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
-    const warnings = warningsFor(mxPath, result.warnings);
+    const warnings = [...scanWarnings, ...warningsFor(mxPath, result.warnings)];
     for (const w of warnings) {
       const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
       lines.push(`${w.file}${position} warning: ${w.message}`);
@@ -381,7 +407,7 @@ function compileNgMxFile(
   const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
 
   try {
-    const customTags = getCustomTags(mxPath, { host: "angular" });
+    const { customTags, scanWarnings } = customTagsFor(mxPath);
     const result = compileNgMx(readFileSync(mxPath, "utf8"), mxPath, {
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
@@ -424,7 +450,7 @@ function compileNgMxFile(
     const wrote = before !== content;
 
     const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
-    const warnings = warningsFor(mxPath, result.warnings);
+    const warnings = [...scanWarnings, ...warningsFor(mxPath, result.warnings)];
     for (const w of warnings) {
       const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
       lines.push(`${w.file}${position} warning: ${w.message}`);
@@ -503,7 +529,7 @@ export function compileOne(
   const outputs = [outputPath, mapPath];
 
   try {
-    const customTags = getCustomTags(mxPath, { host: "angular" });
+    const { customTags, scanWarnings } = customTagsFor(mxPath);
     const result = compileFile(mxPath, {
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
@@ -549,7 +575,7 @@ export function compileOne(
     knownOutputs.add(mapPath);
 
     const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
-    const warnings = warningsFor(mxPath, result.warnings);
+    const warnings = [...scanWarnings, ...warningsFor(mxPath, result.warnings)];
     for (const w of warnings) {
       const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
       lines.push(`${w.file}${position} warning: ${w.message}`);

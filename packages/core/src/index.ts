@@ -137,6 +137,7 @@ export {
   evictTaglibCaches,
   getCustomTags,
   liveTagMapCount,
+  reportScanDiagnostics,
   scanCached,
 } from "./scan-cache.ts";
 export {
