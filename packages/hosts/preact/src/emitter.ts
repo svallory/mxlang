@@ -1091,9 +1091,8 @@ export class PreactEmitter implements Emitter<string> {
       // attribute when args are present. With content/attribute tags to
       // carry, the trailing props object rides alongside the args array,
       // matching `renderer(...args, { content, <attribute tags> })`.
-      const hasTrailingProps =
-        node.attrTagProps.length > 0 ||
-        (node.content?.children.length ?? 0) > 0;
+      const hasContent = (node.content?.children.length ?? 0) > 0;
+      const hasTrailingProps = node.attrTagProps.length > 0 || hasContent;
       const payload =
         node.args.length > 0
           ? concatMapped(
@@ -1108,8 +1107,34 @@ export class PreactEmitter implements Emitter<string> {
               "]",
             )
           : this.#propsObject(node);
+      // decision 112, Marko parity: for a string target with arguments,
+      // args[0] (not the trailing props object) becomes the input, matching
+      // `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`. Content
+      // still renders, since Marko threads it independently of `input` — the
+      // same reason `@mxlang/html`'s `renderDynamic` takes it as a separate
+      // parameter rather than reading it off the (possibly dropped) trailing
+      // props object.
+      // Only the args-array payload form is ambiguous about a trailing
+      // props object being real content: the no-args form's plain props
+      // object already carries `content` under that key, read inside
+      // `mxDynamic` itself.
+      const content =
+        node.args.length > 0 && hasContent
+          ? concatMapped(
+              ", () => <>",
+              this.#expression(node.content!.children),
+              "</>",
+            )
+          : "";
       this.#out.push(
-        concatMapped("{mxDynamic(", node.target.expr.code, ", ", payload, ")}"),
+        concatMapped(
+          "{mxDynamic(",
+          node.target.expr.code,
+          ", ",
+          payload,
+          content,
+          ")}",
+        ),
       );
       return;
     }

@@ -127,7 +127,12 @@ describe("React target", () => {
   it("renders a string dynamic-tag target as its element, even with arguments", async () => {
     // Marko's own html/dom runtimes never render a string renderer's name
     // as literal text, args or not — see `_dynamic_tag` in
-    // `runtime-tags/src/html/dynamic-tag.ts`.
+    // `runtime-tags/src/html/dynamic-tag.ts`. args[0] ("x") becomes the
+    // spread attributes source (decision 112): `for...in` over a string
+    // yields its numeric indices, matching Marko's own `_attrs`. React's own
+    // renderer (unlike Preact/Hono) rejects a numeric attribute name
+    // ("Invalid attribute name: `0`") and drops it, so no attribute renders
+    // here — a React runtime quirk this host has no reason to work around.
     const { dirname, join } = await import("node:path");
     const { tmpdir } = await import("node:os");
     const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(

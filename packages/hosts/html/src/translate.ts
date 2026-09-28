@@ -612,8 +612,16 @@ const ESCAPE_COMMENT = `function escapeComment(value) {
 const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string, any>, args?: any[]) {
   if (target === null || target === undefined) return "";
   if (typeof target === "string") {
+    // decision 112, Marko parity (\`runtime-tags/src/html/dynamic-tag.ts\`'s
+    // \`_dynamic_tag\`, \`typeof renderer === "string"\` branch): a call with
+    // arguments uses args[0] as the element's attributes, not the call
+    // site's own attributes/attribute tags — those are only reachable here
+    // as decision 109's trailing props object, which Marko itself appends
+    // at args[N] (N > 0), never args[0], so it is not read as attrs either.
+    // Content still renders: Marko threads it independently of the input.
+    const attrs = args ? args[0] || {} : props;
     let out = "<" + target;
-    for (const [key, value] of Object.entries(props)) {
+    for (const [key, value] of Object.entries(attrs)) {
       if (key === "content") continue;
       if (value === false || value === null || value === undefined) continue;
       out += value === true ? " " + key : " " + key + "=\\"" + escape(value) + "\\"";

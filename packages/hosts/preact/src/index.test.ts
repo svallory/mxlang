@@ -490,14 +490,24 @@ describe("mxDynamic's three value kinds (rendered)", () => {
 
   it("renders a string target as its element, even with arguments", async () => {
     // Marko's own html/dom runtimes treat a string renderer as a tag name
-    // to emit whatever arguments it was called with (the first argument
-    // becomes the element's input) — it never renders the tag name as
-    // literal text. `mxDynamic` must not fall through to returning the bare
-    // string here.
+    // to emit whatever arguments it was called with — it never renders the
+    // tag name as literal text. `mxDynamic` must not fall through to
+    // returning the bare string here. args[0] ("x", a non-object) becomes
+    // the spread attributes source (decision 112): `for...in` over a string
+    // yields its numeric indices, matching Marko's own `_attrs`'s `for
+    // (const name in data)` over the same non-object value.
     const html = await renderCompiled('<${input.tag}("x", 2)/>', {
       tag: "span",
     });
-    expect(html).toBe("<span></span>");
+    expect(html).toBe('<span 0="x"></span>');
+  });
+
+  it("uses args[0] as the string target's attributes (decision 112, Marko parity)", async () => {
+    const html = await renderCompiled(
+      '<${input.tag}({ id: "x", class: "y" })/>',
+      { tag: "span" },
+    );
+    expect(html).toBe('<span id="x" class="y"></span>');
   });
 
   it("appends a trailing props object when arguments combine with a body (decision 109, Marko parity)", async () => {

@@ -189,30 +189,35 @@ function importLines(names: Set<string>, target: Target): string[] {
  * object — the callee reads it as its own last positional parameter, the
  * same convention \`#defineProps\`/\`#defineTrailingParams\` use for a
  * \`<define>\` call. A positional call is not an element description, matching
- * \`@mxlang/html\`'s \`renderDynamic\` and \`@mxlang/solid\`'s inline dispatch. A
- * *string* target with arguments still mounts as an element (Marko's own
- * html/dom runtimes treat a string renderer's first argument as its input
- * and still emit the tag — see \`runtime-tags/src/html/dynamic-tag.ts\`'s
- * \`_dynamic_tag\`, the \`typeof renderer === "string"\` branch, which never
- * falls through to rendering the name as text); ignoring the arguments here
- * (bare \`<Tag />\` rather than replicating Marko's args[0]-as-input
- * convention) matches \`@mxlang/html\`'s own \`renderDynamic\`, which also
- * renders a string target with no attributes when called with args.
+ * \`@mxlang/html\`'s \`renderDynamic\` and \`@mxlang/solid\`'s inline dispatch.
+ *
+ * decision 112, Marko parity: a *string* target called with arguments uses
+ * \`payload[0]\` (Marko's \`args[0]\`) as its element attributes, not the
+ * trailing props object's attribute tags — Marko's translator appends that
+ * object *after* the positional args (\`renderer(...args, { content, ... })\`),
+ * so it never lands at \`args[0]\` and \`_dynamic_tag\`'s string branch
+ * (\`runtime-tags/src/html/dynamic-tag.ts\`) never reads it. Content still
+ * renders regardless: Marko threads it as its own parameter to
+ * \`_dynamic_tag\`, independent of the input, so the emitter (\`component()\`)
+ * passes it here as \`content\`, a third argument, rather than folding it into
+ * \`payload\` where this dispatch could not tell a real trailing argument from
+ * the synthesized props object.
  */
-const MX_DYNAMIC = `function mxDynamic(target, payload) {
+const MX_DYNAMIC = `function mxDynamic(target, payload, content) {
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
     if (typeof target === "string") {
       const Tag = target;
-      return <Tag />;
+      const attrs = payload[0] || {};
+      return <Tag {...attrs}>{content ? content() : undefined}</Tag>;
     }
     return target;
   }
   const props = payload;
   if (typeof target === "string" || typeof target === "function") {
     const Tag = target;
-    const { content, ...rest } = props;
-    return <Tag {...rest}>{content ? content() : undefined}</Tag>;
+    const { content: bodyContent, ...rest } = props;
+    return <Tag {...rest}>{bodyContent ? bodyContent() : undefined}</Tag>;
   }
   if (
     target !== null &&
