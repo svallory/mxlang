@@ -15,7 +15,7 @@ the structural core, no longer a contract in itself.
 
 | Divergence | Since | Reason | Test |
 |---|---|---|---|
-| _(none yet — MX 1.0 has no deliberate divergences)_ | | | |
+| A dynamic tag whose resolved value is a **plain function** is called and its return value kept. Marko's own `_dynamic_tag` discards a plain function's return value (only a value carrying Marko's internal template marker is invoked as a component); every other value kind (string, `undefined`, `null`, a plain object) matches Marko byte-for-byte. | decision 116 | An imported `.tsx` component on react/preact/hono, or an MX component on html, *is* a plain function — matching Marko here would silently drop the render of every ordinary imported component, breaking the host-interop case decision 116 exists to support in the first place. | `packages/hosts/html/src/translate.test.ts` ("a plain function value import is called as a host component"); `packages/hosts/preact/src/index.test.ts` (same, executed); `packages/hosts/solid/src/ssr-render.test.ts` (same, executed) |
 
 ## Fixed: undocumented divergence in the bare `${expr}` line
 

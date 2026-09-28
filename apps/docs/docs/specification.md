@@ -902,6 +902,72 @@ row in §13.1's dynamic-tag entry.
 > import form `<${layout}/>` is Marko's own prescribed workaround for the
 > PascalCase rule.
 
+**Decision 116: a capitalized value import that isn't a `.marko`/`.mx`
+default import lowers as a dynamic tag, not a direct call.** Measured (TODO
+`value-import-as-tag-parity`): Marko 6.3.51 compiles *every* capitalized
+local-import tag to `_dynamic_tag`, regardless of source. At runtime, a
+string renders as an element and a real Marko-template value is invoked as a
+component; anything else — a plain function, a plain object, `undefined`,
+`null` — renders only the tag's own body content. MX previously routed
+*every* capitalized value import straight to a direct call (§7's step 5, a
+`Component` with `kind: "name"`), so a string, `undefined`, `null`, or a
+plain object threw `"X is not a function"` on every host instead.
+
+The routing in step 5 is refined, and scoped to **import bindings only**:
+only a *default* import whose specifier ends in `.marko`/`.mx` — Marko's own
+statically-resolved component case (`tag-name-type.ts:174-196`) — still
+routes to a direct `kind: "name"` call. Every other capitalized value
+*import* (named, namespace, or a default from any other extension) now
+routes to `kind: "dynamic"` instead — the identical lowering an authored
+`<${expr}/>` already produces above, so every host's existing dynamic-tag
+emitter handles it with no host-side routing change (decision 79). Gated
+specifically on `ctx.importSpecifiers` (populated only by an authored
+`import` statement or, on Solid, the `importSpecifiers` a real
+`.solid.mx` caller's surrounding module supplies), not on `ctx.imports` —
+the broader set step 5 already used, which also holds a module-scope
+`const`/`function`/`class`, a `<const>` binding, and a `<for>`/`<define>` tag
+param. **None of those route dynamic**: a locally declared component — the
+most common Solid authoring pattern — keeps its pre-existing direct call on
+every host, unchanged by this decision. The resolved target carries
+`valueImportBinding`, the binding's own name, so `readCalleeInput` can still
+resolve the callee's declared `Input` for typed attribute-tag checking even
+though the call now lowers dynamically, and a diagnostic on the call still
+names the tag the author wrote rather than "dynamic tag".
+
+**Known, unfixed gap (separate TODO, not addressed by decision 116):** a
+PascalCase *local* value — `static const X = "div"` (html) or a module-scope
+`const X = "div"` — still routes to a direct call today (`X({...})`), which
+throws at runtime for a non-callable value; measured against Marko 6.3.51,
+which routes a local `const`/`static const` through `_dynamic_tag` exactly
+like any other capitalized binding, so this remains a real MX/Marko
+divergence for that one case. Decision 116 is deliberately scoped to import
+bindings only and does not touch it.
+
+**Intentional divergence from literal Marko parity:** a plain function is
+still called and its return kept, matching MX's pre-116 behavior for that
+one case rather than Marko's, since an imported `.tsx` component on
+react/preact/hono, or an MX component on html, *is* a plain function —
+matching Marko byte-for-byte here (discarding the function's return value)
+would break ordinary host interop. Decision 106's data-attribute-tag guard
+(a plain object with an own `content` property throws, naming the
+`<${x.content}/>` route) is unaffected and still fires for a value import
+reaching it this way — consistent with, not a new divergence from, decision
+106, since Marko itself would silently unwrap `.content` and then find no
+real renderer there either.
+
+Two per-host consequences, both fixed in the same task: html's
+`renderDynamic` returned `""` outright for a falsy target, discarding the
+tag's body content — now returns `props.content?.() ?? ""`, matching Marko.
+Solid's `#dynamicComponent` had the identical bug in its own falsy-target
+branch, additionally exposed a pre-existing gap where a region whose entire
+content is one dynamic tag failed to re-parse (its compiled JSX
+child-expression-container braces are not a standalone expression on their
+own) — the parser bridge now retries with those braces stripped on a parse
+failure. `@mxlang/parser`'s module-scope scan gained a parallel
+`importDefaultFromMarkoOrMx` set (§7's precedence text above), threaded the
+same way `moduleBindings`/`importSpecifiers` already are, so a real
+`.solid.mx` file's routing matches a unit test's.
+
 > **Bug, measured 2026-09-17 — an attribute tag on a dynamic tag is silently
 > dropped.** On the HTML host (which claims `DYNAMIC_TAG`),
 > `<${T}><@head>x</@head>y</${T}>` compiles clean and emits
