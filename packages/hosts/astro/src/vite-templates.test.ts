@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { clearScanCache } from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
-import { ASTRO_MX_EXT, ASTRO_SUFFIX, mxTemplates } from "./vite-templates.ts";
+import {
+  ASTRO_MX_EXT,
+  ASTRO_SUFFIX,
+  mxTemplates,
+  readTemplateSource,
+} from "./vite-templates.ts";
 
 const COMPONENT = `---
 const title = "hi";
@@ -112,6 +117,32 @@ function writeAmx(name: string, source: string): string {
   writeFileSync(path, source);
   return path;
 }
+
+describe("readTemplateSource", () => {
+  it("returns the file's text via the default reader", () => {
+    const path = writeAmx("Card.amx", "---\n---\n<p>hi</p>\n");
+    expect(readTemplateSource(path)).toBe("---\n---\n<p>hi</p>\n");
+  });
+
+  it("returns undefined, not a thrown error, when the injected reader fails", () => {
+    // The template an `AstroTemplateError.file` names may have been deleted
+    // or become unreadable between the original compile's own read and
+    // this one — that failure must cost only the Vite overlay's frame,
+    // never replace the diagnostic with a raw ENOENT. Inject a reader
+    // instead of touching the real filesystem or the module's default
+    // `readFileSync`, since forcing an actual read failure at exactly this
+    // call site (and not the compile's own earlier read of the same file)
+    // can't be done through real files without racing a delete.
+    const throwingReader = () => {
+      throw Object.assign(new Error("ENOENT: no such file"), {
+        code: "ENOENT",
+      });
+    };
+    expect(
+      readTemplateSource("/nonexistent.amx", throwingReader),
+    ).toBeUndefined();
+  });
+});
 
 describe("mxTemplates()", () => {
   it("is a pre-enforced plugin", () => {

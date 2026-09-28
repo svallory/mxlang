@@ -283,6 +283,33 @@ export function codeFrame(
 }
 
 /**
+ * Reads a tag template's current source so a `TranslateError` raised inside
+ * it (spec §2's third position rule) can build its Vite overlay frame from
+ * the *template's* own text, not the caller's.
+ *
+ * The named file may no longer exist, or be unreadable (deleted mid-compile,
+ * a permissions issue), between the original compile's own read and this
+ * one — a failure here must not replace the real diagnostic with a raw
+ * ENOENT, so it only ever costs the frame, never the message, `id` or
+ * position: `undefined` on failure, never a thrown error.
+ *
+ * `read` is injected (defaults to `node:fs`'s `readFileSync`) so a test can
+ * exercise the failure path directly, without reaching for stack
+ * introspection or a real filesystem race.
+ */
+export function readTemplateSource(
+  file: string,
+  read: (path: string, encoding: "utf8") => string = (path, encoding) =>
+    readFileSync(path, encoding),
+): string | undefined {
+  try {
+    return read(file, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Compiles `.solid.mx` and `.mx` ahead of the rest of the pipeline.
  *
  * `.solid.mx` prints to JSX source text (`print()`, from `@mxlang/parser`)
@@ -714,21 +741,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // this still reports against `source`/`code` as before.
         if (err instanceof TranslateError) {
           const errorFile = err.file ?? source;
-          // The template file named by `.file` may no longer exist, or be
-          // unreadable (deleted mid-compile, a permissions issue) — a read
-          // failure here must not replace the real diagnostic with a raw
-          // ENOENT, so it only ever costs the frame, never the message,
-          // `id` or position.
-          let errorSource: string | undefined;
-          if (err.file) {
-            try {
-              errorSource = readFileSync(err.file, "utf8");
-            } catch {
-              errorSource = undefined;
-            }
-          } else {
-            errorSource = code;
-          }
+          const errorSource = err.file ? readTemplateSource(err.file) : code;
           const wrapped = err as TranslateError & {
             id?: string;
             frame?: string;

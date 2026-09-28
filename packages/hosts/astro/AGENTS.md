@@ -166,5 +166,12 @@ line/column that means something in a different file, read against the
 wrong one (the same "coincidence, not a mapping" failure class the
 TS-plugin/language-server fix was built to close, see
 `packages/tooling/typescript-plugin/AGENTS.md`). It now reads the named
-`.file`'s own source (disk) to build `.id`/`.loc`/`.frame` when one is set,
-falling back to the `.amx` source exactly as before when it is not.
+`.file`'s own source through `readTemplateSource` (`vite-templates.ts`,
+round 3/4) to build `.id`/`.loc`/`.frame` when one is set, falling back to
+the `.amx` source exactly as before when it is not. That helper guards its
+own read (the named file may have vanished since the compile's own earlier
+read) and takes an injectable reader for exactly that reason — see
+`@mxlang/vite-plugin`'s `AGENTS.md` for the full rationale and the
+engine-stack-format pitfall an earlier version of this test hit. This file
+mirrors that package's copy rather than importing it, the same as its
+existing `codeFrame` mirror above.
