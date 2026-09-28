@@ -16,6 +16,19 @@
   in-repo caller updated to read `.bindings`/`.error` explicitly.
   `programBindings` (the already-parsed-`Program` variant) is unchanged.
 
+- **New exports: `unknownProgramBindings`/`unknownSourceBindings`** (local
+  extension of decision 116). The subset of `programBindings`'/
+  `sourceBindings`' non-import names whose value is not statically a
+  function/arrow/class, computed over the same declaration-only pre-parse.
+  `unknownSourceBindings` returns a bare `Set<string>` (unaffected by the
+  `sourceBindings` shape change above — it has no parse-failure-vs-empty
+  ambiguity of its own to report, since it is only ever consulted after
+  `sourceBindings`'s own bindings already resolved). `MxRegionCompileInput`
+  gained `unknownModuleBindings: ReadonlySet<string>`, threaded through
+  `parse`'s `mxUnknownModuleBindings` option the same way `mxModuleBindings`
+  already is, so a `.solid.mx` region's surrounding module-scope locals
+  classify identically to a whole-file `.mx`'s.
+
 - **New dependency: `@mxlang/core`** (decision 116). `MxRegionCompileInput`
   gained `importDefaultFromMarkoOrMx: ReadonlySet<string>` — the subset of
   `importSpecifiers`' bindings that are a *default* import from a

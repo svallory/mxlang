@@ -15,6 +15,17 @@
 
 ### Fixed
 
+- A non-import module-scope local used as a tag whose value is not statically
+  a function/arrow/class now lowers as a dynamic tag too (local extension of
+  decision 116, firstmate's ruling). `CompileSolidMxOptions` gained
+  `unknownModuleBindings?: ReadonlySet<string>`, folded into
+  `ctx.unknownLocalValue` alongside the existing `moduleBindings` fold; a
+  plain `function Foo(){}`/arrow-valued `const` keeps its pre-existing direct
+  JSX call, unchanged. A `<const>` region binding is classified the same way
+  from its own value expression, and a `<for>`/`<define>` tag param is always
+  classified unknown, since its runtime value can never be inspected at
+  lowering time.
+
 - A value import that is not a `.marko`/`.mx` default import now lowers as a
   dynamic tag (decision 116), matching Marko's own `_dynamic_tag` runtime
   dispatch — a string renders as an element, `undefined`/`null` render only

@@ -969,14 +969,39 @@ resolve the callee's declared `Input` for typed attribute-tag checking even
 though the call now lowers dynamically, and a diagnostic on the call still
 names the tag the author wrote rather than "dynamic tag".
 
-**Known, unfixed gap (separate TODO, not addressed by decision 116):** a
-PascalCase *local* value — `static const X = "div"` (html) or a module-scope
-`const X = "div"` — still routes to a direct call today (`X({...})`), which
-throws at runtime for a non-callable value; measured against Marko 6.3.51,
-which routes a local `const`/`static const` through `_dynamic_tag` exactly
-like any other capitalized binding, so this remains a real MX/Marko
-divergence for that one case. Decision 116 is deliberately scoped to import
-bindings only and does not touch it.
+**Local extension of decision 116 (firstmate's ruling, recorded under this
+same decision number in `notes/decisions-2026-09-10.md`; TODO
+`local-value-as-tag-parity`):** the gap above is closed for every
+*non-import* PascalCase local too — a `static`/module-scope declaration, a
+`<const>` binding, a `<for>`/`<define>` tag param. Rather than mirror
+decision 116's own import-only rule (routing *every* local dynamic would
+change the most common Solid module-scope-component pattern), core instead
+classifies each local's value:
+
+- **Statically provable function/arrow/class** — a plain `function Foo(){}`,
+  `class Foo{}`, or a `const`/`static const` bound directly to a function
+  expression, arrow function, or class expression — stays a direct
+  `kind: "name"` call, unchanged.
+- **Everything else is "unknown"** and routes `kind: "dynamic"` the same way
+  an import routes under decision 116 proper: a string literal
+  (`static const Tag = "div"`), a conditional (`const Tag = cond ? A : B`),
+  or any other expression core cannot inspect at lowering time — including a
+  call result (`const Tag = lazy(...)`/`createComponent(...)`), since core
+  never evaluates an expression, only recognizes a small closed set of AST
+  shapes. A tag param (`<for|Row|>`, `<define/Wrapper|Row|>`) is *always*
+  "unknown": its runtime value can never be inspected at lowering time,
+  whatever it turns out to hold when the template actually renders.
+
+`ctx.unknownLocalValue` (`@mxlang/core`) carries the classified set;
+`isFunctionLikeValue` (also exported) is the shared AST-shape check. On
+Solid, where a `.solid.mx` region's module scope arrives as a pre-computed
+name set rather than real AST nodes, `@mxlang/parser`'s
+`unknownProgramBindings`/`unknownSourceBindings` perform the identical
+classification at the parser boundary (over the surrounding module's own
+`programBindings` pre-parse) and thread it through as
+`unknownModuleBindings`. A routed-dynamic local carries `valueImportBinding`
+exactly as decision 116's import case does, so typed attribute-tag checking
+and diagnostics are unaffected.
 
 **Intentional divergence from literal Marko parity:** a plain function is
 still called and its return kept, matching MX's pre-116 behavior for that
