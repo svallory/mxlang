@@ -897,6 +897,60 @@ describe("MX language plugin", () => {
     ).toBe(false);
   });
 
+  it("maps a same-named attribute tag independently across two different callees", () => {
+    // `<Card>` and `<Modal>` are two distinct components that each declare
+    // their own `<@tab>` attribute tag. `generatedCursors` is keyed only by
+    // tag *name*, not by which callee owns the occurrence, so this proves a
+    // second callee's `tab` is not cross-mapped through the first callee's
+    // cursor position.
+    const cardCallee = "/project/Card.solid.mx";
+    const modalCallee = "/project/Modal.solid.mx";
+    const caller = "/project/Wrong.solid.mx";
+    const consumer = "/project/index.ts";
+    const card = [
+      'import type { AttrTag } from "@mxlang/solid";',
+      "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+      "export default function Card(_input: Input) { return null; }",
+    ].join("\n");
+    const modal = [
+      'import type { AttrTag } from "@mxlang/solid";',
+      "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+      "export default function Modal(_input: Input) { return null; }",
+    ].join("\n");
+    const callerSource = [
+      'import Card from "./Card.solid.mx"',
+      'import Modal from "./Modal.solid.mx"',
+      'export const a = <Card><@tab title="a"/></Card>;',
+      "export const b = <Modal><@tab title=2/></Modal>;",
+    ].join("\n");
+    const service = createPluginService(
+      {
+        [cardCallee]: card,
+        [modalCallee]: modal,
+        [caller]: callerSource,
+        [consumer]: 'import "./Wrong.solid.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const diagnostics = service.getSemanticDiagnostics(caller);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(
+      true,
+    );
+    // The wrong occurrence is `<Modal>`'s `title`, not `<Card>`'s.
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.lastIndexOf("title"),
+      ),
+    ).toBe(true);
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.indexOf("title"),
+      ),
+    ).toBe(false);
+  });
+
   it("maps a wrong attribute on a nested component's own attribute tag (solid-attr-tag-attr-offset)", () => {
     const outerCallee = "/project/Card.solid.mx";
     const innerCallee = "/project/Inner.solid.mx";
@@ -1189,6 +1243,45 @@ describe("MX language plugin", () => {
       );
 
       expect(compiles).toBe(1);
+    });
+
+    it("stops after one retry even when the retry's own compile discovers a third-level dependency (single-retry limit, current behavior)", () => {
+      // A -> B -> C, where B is only known once its fresh source is read on
+      // the retry pass, and C is only known once B's fresh source is
+      // compiled. The single retry reads B's fresh text and recompiles, but
+      // that recompile's own newly reported dependency (C) never gets a
+      // further pass, so the result is typed against C's *previous* (here,
+      // absent) source.
+      const read: string[] = [];
+      let compiles = 0;
+      const result = compileWithDependencies(
+        (fileName) => {
+          read.push(fileName);
+          if (fileName === "/project/B.mx") return "fresh-b";
+          if (fileName === "/project/C.mx") return "fresh-c";
+          return undefined;
+        },
+        [],
+        () => {
+          compiles++;
+          // Pass 1 (no deps yet read): discovers B only.
+          // Pass 2 (B's fresh text read): discovers B and C, since B's
+          // fresh source is what reveals the import of C.
+          return compiles === 1
+            ? { dependencies: ["/project/B.mx"], pass: compiles }
+            : {
+                dependencies: ["/project/B.mx", "/project/C.mx"],
+                pass: compiles,
+              };
+        },
+      );
+
+      expect(compiles).toBe(2);
+      // C's fresh text was never read: the retry limit is one pass, so a
+      // dependency discovered only by that retry's own compile is missed.
+      expect(read).toEqual(["/project/B.mx"]);
+      expect(result.pass).toBe(2);
+      expect(result.dependencies).toEqual(["/project/B.mx", "/project/C.mx"]);
     });
   });
 
@@ -1950,6 +2043,91 @@ describe("hidden type errors in the Solid virtual code (solid-virtual-code-hidde
     const checked = emittedDiagnostics(
       files,
       `${solidDirectory}/if-local-const.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.code.match(/from "solid-js"/g)).toBeNull();
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+  });
+
+  it("still imports `Show` when the file only declares `type Show = ...`, a type-only name", () => {
+    // A `type` alias introduces no value, so `<Show>` in the emitted JSX
+    // still needs the built-in import — this must not be treated the same
+    // as a local `const Show` (the previous test).
+    const files = {
+      [`${solidDirectory}/if-type-alias.solid.mx`]: [
+        "type Show = { when: unknown; children: unknown };",
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-type-alias.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.code).toContain('import { Show } from "solid-js"');
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+  });
+
+  it("still imports `Show` when the file only declares `interface Show { ... }`, a type-only name", () => {
+    const files = {
+      [`${solidDirectory}/if-interface.solid.mx`]: [
+        "interface Show { when: unknown; children: unknown }",
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-interface.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.code).toContain('import { Show } from "solid-js"');
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+  });
+
+  it("does not append `Show` when the file binds it with `declare const Show`, a value binding", () => {
+    // `declare const` introduces a real value binding (Babel parses it as an
+    // ordinary `VariableDeclaration` with a `declare` flag), unlike `type`/
+    // `interface` above, so it suppresses the built-in import the same way
+    // an ordinary `const Show = ...` does.
+    const files = {
+      [`${solidDirectory}/if-declare-const.solid.mx`]: [
+        "declare const Show: (props: { when: unknown; children: unknown }) => unknown;",
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-declare-const.solid.mx`,
       "solid",
     );
 
