@@ -1519,9 +1519,13 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
       componentPolicy,
     );
     const forNode = find(ir.body, "For");
+    // A tag param's runtime value can never be inspected at lowering time,
+    // so it is always "unknown" (local extension of decision 116) and
+    // routes dynamic — it still wins over the registered custom tag
+    // (proving the shadowing itself), just not as a direct `"name"` call.
     expect(find(forNode.children, "Component").target).toMatchObject({
-      kind: "name",
-      name: "Panel",
+      kind: "dynamic",
+      valueImportBinding: "Panel",
     });
     // Outside the loop, the name is unbound again: the registered custom tag
     // expands, not a component call.
@@ -1536,9 +1540,11 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
       componentPolicy,
     );
     const define = find(ir.body, "Define");
+    // Same reasoning as the `<for|Panel|>` case above: a tag param is always
+    // "unknown" and routes dynamic.
     expect(find(define.children, "Component").target).toMatchObject({
-      kind: "name",
-      name: "Panel",
+      kind: "dynamic",
+      valueImportBinding: "Panel",
     });
     const rest = ir.body.slice(ir.body.indexOf(define) + 1);
     // `<Box/>` itself is an ordinary component call (a `<define>` name), not
