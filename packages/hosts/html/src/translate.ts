@@ -44,6 +44,7 @@ import {
   rejectUnsupportedFields,
   replaceMapped,
   sliceLoc,
+  unresolvedCustomTagMessage,
 } from "@mxlang/core";
 
 export { TranslateError } from "@mxlang/core";
@@ -331,7 +332,7 @@ function rejectComponentTag(name: string, node: Node, ctx: Ctx): void {
  * into a parity target.
  */
 function rejectUnknownTag(name: string, node: Node): void {
-  fail(`Unable to find entry point for custom tag \`<${name}>\`.`, node);
+  fail(unresolvedCustomTagMessage(name), node);
 }
 
 /**

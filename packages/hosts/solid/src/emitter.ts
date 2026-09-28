@@ -20,6 +20,7 @@ import {
   type ReadRewrite,
   rewriteAccessorReads,
   TranslateError,
+  unresolvedCustomTagMessage,
 } from "@mxlang/core";
 import { SOLID_BUILTIN_TAGS } from "@mxlang/parser";
 import { solidEventPropName } from "./event-names.ts";
@@ -594,7 +595,7 @@ function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
 }
 
 function rejectUnknownTag(name: string, node: { loc: Position }): void {
-  fail(`Unable to find entry point for custom tag \`<${name}>\`.`, node);
+  fail(unresolvedCustomTagMessage(name), node);
 }
 
 /** Resolve-time questions for Solid's JSX target. */

@@ -37,6 +37,7 @@ import {
   mapped,
   type Position,
   TranslateError,
+  unresolvedCustomTagMessage,
 } from "@mxlang/core";
 import { preactTarget, type Target } from "./target.ts";
 
@@ -172,7 +173,7 @@ export function createJsxDeclarations(targetName: string): HostDeclarations {
       return false;
     },
     rejectUnknownTag(name, node) {
-      rawFail(`Unable to find entry point for custom tag \`<${name}>\`.`, node);
+      rawFail(unresolvedCustomTagMessage(name), node);
     },
     claimsTag: (name) => name === "try",
     // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Internal
+
+- `rejectUnknownTag`'s Marko-wording message (`source-bindings-silent-parse-failure`)
+  now comes from `@mxlang/core`'s `unresolvedCustomTagMessage` instead of a
+  hand-copied literal. No behavior change. Confirmed separately: a
+  module-level syntax error in the surrounding `.solid.mx` module (next to
+  a genuinely imported component) already surfaces as the real syntax
+  error through the real `parse()` pipeline (`collectModuleScope`'s own
+  uncaught `babelParse`), never the misleading "Unable to find entry point"
+  fallback — pinned by a new test in `@mxlang/parser`'s `mx.test.ts`.
+
 ### Fixed
 
 - A value import that is not a `.marko`/`.mx` default import now lowers as a

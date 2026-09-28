@@ -41,7 +41,7 @@ function renderSolidMx(
     // below, but never seen by `compileSolidMx` itself — so a name it
     // declares (e.g. a local `function Row(input) {...}`) must be supplied
     // here the same way a real caller's surrounding module would be.
-    moduleBindings: sourceBindings(setup),
+    moduleBindings: sourceBindings(setup).bindings,
   });
   const imports = hoistedImports.map((entry) => entry.code).join("\n");
   const jsxSource = `${imports}\nimport { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;

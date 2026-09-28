@@ -117,7 +117,7 @@ function runFixture(fixture: Fixture, mode: "dom" | "ssr"): unknown {
       // surrounding module (`@mxlang/parser`'s `parse()`); this test compiles
       // the region standalone and splices `fixture.setup` in only afterward,
       // at runtime, so the two steps must agree on what that setup binds.
-      moduleBindings: sourceBindings(fixture.setup ?? ""),
+      moduleBindings: sourceBindings(fixture.setup ?? "").bindings,
     });
     const imports = compiled.hoistedImports
       .map((entry) => entry.code)

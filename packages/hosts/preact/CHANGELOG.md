@@ -2,6 +2,11 @@
 
 ## 0.1.0 (unreleased)
 
+- **Internal (source-bindings-silent-parse-failure):** `rejectUnknownTag`'s
+  Marko-wording message now comes from `@mxlang/core`'s
+  `unresolvedCustomTagMessage` instead of a hand-copied literal. No behavior
+  change; shared with `@mxlang/react`/`@mxlang/hono` through the common
+  emitter.
 - **Fixed (behavior change, decision 114 parity, `unresolved-tag-jsx-astro-angular`):**
   `<TotallyUndefined/>` — a capitalized tag with no import, binding, or taglib
   entry — now fails to compile with Marko's own error ("Unable to find entry

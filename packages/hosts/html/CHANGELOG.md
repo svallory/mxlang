@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Internal: uses core's shared `unresolvedCustomTagMessage` (source-bindings-silent-parse-failure)
+
+`rejectUnknownTag`'s Marko-wording message ("Unable to find entry point for custom tag `<Name>`.") now comes from `@mxlang/core`'s `unresolvedCustomTagMessage` instead of a hand-copied literal. No behavior change.
+
 ### Fix: `renderDynamic` no longer drops body content for a falsy dynamic-tag target (decision 116)
 
 `renderDynamic(target, props, args)` returned `""` for `null`/`undefined` `target`, discarding the tag's own body content entirely. Marko's own `_dynamic_tag`/`normalizeDynamicRenderer` treat a falsy target as "no renderer" and render only the body, independent of the target — `renderDynamic` now does the same, returning `props.content?.() ?? ""` instead of `""` outright. Surfaced by decision 116's routing, which sends every non-`.marko`/`.mx` value import through this path far more often than the authored `<${expr}/>` syntax alone did.
