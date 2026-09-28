@@ -1,5 +1,6 @@
 import { dirname, resolve } from "node:path";
 import type { File } from "@babel/types";
+import { isMarkoOrMxSpecifier } from "@mxlang/core";
 import {
   parse as babelParse,
   parseExpression as babelParseExpression,
@@ -72,6 +73,10 @@ export function parse(
     options.mxImportSpecifiers ?? moduleScan?.importSpecifiers ?? new Map();
   const moduleBindings =
     options.mxModuleBindings ?? moduleScan?.moduleBindings ?? new Set();
+  const importDefaultFromMarkoOrMx =
+    options.mxImportDefaultFromMarkoOrMx ??
+    moduleScan?.importDefaultFromMarkoOrMx ??
+    new Set();
   const file = babelParse(source, {
     sourceType: "module",
     sourceFilename: filename,
@@ -87,6 +92,7 @@ export function parse(
     mx,
     mxImportSpecifiers: importSpecifiers,
     mxModuleBindings: moduleBindings,
+    mxImportDefaultFromMarkoOrMx: importDefaultFromMarkoOrMx,
   } as ParserOptions) as unknown as File;
   hoistRegionImports(file, filename);
   return file;
@@ -107,7 +113,11 @@ function collectModuleScope(
   source: string,
   filename: string,
   options: MxParseOptions,
-): { importSpecifiers: Map<string, string>; moduleBindings: Set<string> } {
+): {
+  importSpecifiers: Map<string, string>;
+  moduleBindings: Set<string>;
+  importDefaultFromMarkoOrMx: Set<string>;
+} {
   const file = babelParse(source, {
     sourceType: "module",
     sourceFilename: filename,
@@ -119,11 +129,17 @@ function collectModuleScope(
     mxModuleBindings: new Set<string>(),
   } as ParserOptions) as unknown as File;
   const imports = new Map<string, string>();
+  // decision 116: only a *default* import from a `.marko`/`.mx` source is
+  // Marko's own statically-resolved component case; every other value
+  // import (named, namespace, or a default from any other extension) lowers
+  // as a dynamic tag on the host side.
+  const importDefaultFromMarkoOrMx = new Set<string>();
   for (const statement of file.program.body as unknown as Array<{
     type?: string;
     importKind?: string;
     source?: { value?: unknown };
     specifiers?: Array<{
+      type?: string;
       local?: { name?: unknown };
       importKind?: string;
     }>;
@@ -140,11 +156,22 @@ function collectModuleScope(
     for (const binding of statement.specifiers ?? []) {
       if (binding.importKind === "type") continue;
       const local = binding.local?.name;
-      if (typeof local === "string") imports.set(local, specifier);
+      if (typeof local !== "string") continue;
+      imports.set(local, specifier);
+      if (
+        binding.type === "ImportDefaultSpecifier" &&
+        isMarkoOrMxSpecifier(specifier)
+      ) {
+        importDefaultFromMarkoOrMx.add(local);
+      }
     }
   }
   const moduleBindings = programBindings(file.program);
-  return { importSpecifiers: imports, moduleBindings };
+  return {
+    importSpecifiers: imports,
+    moduleBindings,
+    importDefaultFromMarkoOrMx,
+  };
 }
 
 /**

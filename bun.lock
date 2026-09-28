@@ -379,6 +379,9 @@
     "packages/parser": {
       "name": "@mxlang/parser",
       "version": "0.0.0",
+      "dependencies": {
+        "@mxlang/core": "workspace:*",
+      },
       "devDependencies": {
         "@mxlang/solid": "workspace:*",
         "@types/bun": "1.4.2",

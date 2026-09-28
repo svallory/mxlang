@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { collectMxRegions } from "../index.ts";
-import { parseSolid } from "./test-helpers.ts";
+import { collectMxRegions, print } from "../index.ts";
+import { parseSolid, solidRegionCompile } from "./test-helpers.ts";
 
 /** Walks the AST collecting every node of a given type. */
 function collect(node: unknown, type: string, out: unknown[] = []): unknown[] {
@@ -539,6 +539,22 @@ describe("decision 114: module-scope resolution through the real parse() pipelin
       "const el = <Widget/>;",
     ].join("\n");
     expect(() => parseMx(source)).not.toThrow();
+  });
+
+  it("decision 116: resolves a .tsx value import against a real caller's module scope, routed dynamic", () => {
+    // The real `parse()` pipeline (`collectModuleScope`), not a unit test's
+    // hand-built options — proving `importDefaultFromMarkoOrMx` reaches the
+    // host correctly through the module-scope scan and the bridge, not just
+    // when supplied directly to `compileSolidMx`.
+    const source = [
+      'import Widget from "./widget.tsx";',
+      "const el = <Widget/>;",
+    ].join("\n");
+    const printed = print(source, "test.solid.mx", {
+      mxRegionCompile: solidRegionCompile,
+    }).code;
+    expect(printed).toContain("Dynamic");
+    expect(printed).not.toContain("<Widget");
   });
 
   it("still rejects a capitalized tag bound only by a whole `import type` declaration", () => {

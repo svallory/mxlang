@@ -13,15 +13,28 @@ import { parseSolid } from "./test-helpers.ts";
  * identifier the fixture source uses is declared bound, matching Marko's own
  * rule that any in-scope binding — real or not — is what decides
  * resolvability, not whether one is actually wired up.
+ *
+ * Also declared as if each were a `.mx` default import (decision 116): this
+ * file tests control-flow lowering shapes (`<if>`/`<else>` becoming
+ * `<Show>`, a fragment, etc.), not the value-import-as-tag routing decision,
+ * so every fixture keeps its pre-116 direct-call shape (`<Login />`) rather
+ * than incidentally exercising the dynamic-tag path these bare names would
+ * otherwise fall into with no real specifier to check.
  */
 function moduleBindingsFor(source: string): Set<string> {
   return new Set(source.match(/(?<=<)[A-Z][A-Za-z0-9]*/g) ?? []);
 }
 
-const parseMx = (source: string) =>
-  parseSolid(source, undefined, {
-    mxModuleBindings: moduleBindingsFor(source),
+const parseMx = (source: string) => {
+  const bindings = moduleBindingsFor(source);
+  return parseSolid(source, undefined, {
+    mxModuleBindings: bindings,
+    mxImportSpecifiers: new Map(
+      [...bindings].map((name) => [name, `./${name}.mx`]),
+    ),
+    mxImportDefaultFromMarkoOrMx: bindings,
   });
+};
 
 /** Prints the sole top-level statement's expression for a `const el = <...>;` source. */
 function printFirstExpression(source: string): string {

@@ -83,6 +83,10 @@ declare module "@mxlang/parser" {
     importSpecifiers: ReadonlyMap<string, string>;
     /** Every value the surrounding module binds at its top level (decision 114). */
     moduleBindings: ReadonlySet<string>;
+    /** The subset of `importSpecifiers`' bindings that are a default import
+     *  from a `.marko`/`.mx` source — Marko's own statically-resolved
+     *  component case (decision 116). */
+    importDefaultFromMarkoOrMx: ReadonlySet<string>;
   }
 
   /** What the bridge needs back from a host. */

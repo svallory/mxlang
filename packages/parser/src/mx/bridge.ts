@@ -85,6 +85,32 @@ function moduleBindings(parser: MxParserHost): ReadonlySet<string> {
   );
 }
 
+/**
+ * Which of `importSpecifiers`' bindings is a *default* import from a
+ * `.marko`/`.mx` source — Marko's own statically-resolved component case
+ * (decision 116; `@mxlang/core`'s `isMarkoOrMxSpecifier`, shared rather than
+ * duplicated). Shadow-filtered the same way `visibleImportSpecifiers` is,
+ * and for the identical reason: a binding a nearer scope shadows is not the
+ * module's own import any more, so it cannot carry the module import's
+ * provenance either.
+ */
+function visibleImportDefaultFromMarkoOrMx(
+  parser: MxParserHost,
+): ReadonlySet<string> {
+  const names =
+    (parser.options?.mxImportDefaultFromMarkoOrMx as
+      | ReadonlySet<string>
+      | undefined) ?? new Set<string>();
+  const localScopes = parser.scope?.scopeStack?.slice(1) ?? [];
+  if (localScopes.length === 0) return names;
+
+  const visible = new Set(names);
+  for (const name of names) {
+    if (isShadowedLocally(parser, localScopes, name)) visible.delete(name);
+  }
+  return visible;
+}
+
 function isShadowedLocally(
   parser: MxParserHost,
   localScopes: Array<{ names?: Map<string, unknown> }>,
@@ -195,15 +221,17 @@ export function mxParseElementAt(
         customTags: parser.options?.mxCustomTags,
         importSpecifiers: visibleImportSpecifiers(parser),
         moduleBindings: moduleBindings(parser),
+        importDefaultFromMarkoOrMx: visibleImportDefaultFromMarkoOrMx(parser),
       });
-    node = parseExpression(code, {
+    const parsedCode = parseRegionCode(code, {
       ...mxSubParseOptions(parser.options),
       mx: false,
       startIndex: start,
       startLine: startLoc.line,
       startColumn: startLoc.column,
     });
-    remapExpressionLocations(node, root, code, source, start, end);
+    node = parsedCode.node;
+    remapExpressionLocations(node, root, parsedCode.code, source, start, end);
     stampRoot(
       node,
       source,
@@ -690,4 +718,50 @@ function mxSubParseOptions(options: any): any {
     sourceType: options?.sourceType ?? "module",
     errorRecovery: false,
   };
+}
+
+/**
+ * Parses a host's compiled `code` as a standalone expression, retrying with
+ * its outer braces stripped when the first attempt fails and `code` is
+ * wrapped in exactly one JSX child-expression-container pair.
+ *
+ * A host emits `code` for two different consumers with different shape
+ * requirements, and both are legitimate, existing contracts a host cannot
+ * satisfy simultaneously with one shape: this bridge always re-parses the
+ * *whole region* as one standalone expression (`<Widget/>` -> `<Widget />`,
+ * not `{<Widget />}`), while a caller that splices a host's `code` directly
+ * into a surrounding element's JSX children (`<ul>${code}</ul>`) needs the
+ * JSX child-expression-container braces a dynamic-tag dispatch emits
+ * (`@mxlang/solid`'s `#dynamicComponent`: `{(() => {...})()}`, correct only
+ * as a JSX child, not as a standalone expression on its own). A region
+ * whose entire content is one dynamic tag is exactly this shape — Solid's
+ * lowering has no way to know, at emit time, which of the two contracts its
+ * caller wants.
+ *
+ * Retried only on a parse failure, so `code` that already parses (every
+ * other emitted shape, and every other host) never takes the second
+ * attempt — no behavior changes for any case that worked before. The
+ * retried parse is what both the returned `node` and its `code` refer to,
+ * so caller-side remapping (`remapExpressionLocations`) stays consistent
+ * with whichever text actually got parsed.
+ */
+function parseRegionCode(
+  code: string,
+  // biome-ignore lint/suspicious/noExplicitAny: the vendored options bag
+  options: any,
+): { node: unknown; code: string } {
+  try {
+    return { node: parseExpression(code, options), code };
+  } catch (firstError) {
+    if (code.startsWith("{") && code.endsWith("}")) {
+      const unwrapped = code.slice(1, -1);
+      try {
+        return { node: parseExpression(unwrapped, options), code: unwrapped };
+      } catch {
+        // Fall through to the original error: unwrapping did not help, so
+        // the original failure is the more useful one to report.
+      }
+    }
+    throw firstError;
+  }
 }

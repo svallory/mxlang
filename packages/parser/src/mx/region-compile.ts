@@ -79,6 +79,18 @@ export interface MxRegionCompileInput {
    * anything the region itself imports or declares (decision 114).
    */
   moduleBindings: ReadonlySet<string>;
+  /**
+   * The subset of `importSpecifiers`' bindings that are a *default* import
+   * from a `.marko`/`.mx` source — Marko's own statically-resolved
+   * component case (decision 116; `@mxlang/core`'s `isMarkoOrMxSpecifier`).
+   * A host lowers a capitalized tag bound to a name in this set as a direct
+   * component call, exactly as before decision 116; any other value import
+   * (named, namespace, or a default from any other extension) lowers as a
+   * dynamic tag instead, matching Marko's own `_dynamic_tag` runtime
+   * dispatch. Not itself filtered by anything `importSpecifiers` isn't —
+   * every name here is already a member of `importSpecifiers`.
+   */
+  importDefaultFromMarkoOrMx: ReadonlySet<string>;
 }
 
 /**

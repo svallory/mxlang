@@ -142,6 +142,13 @@ export interface Options {
    */
   mxModuleBindings?: ReadonlySet<string>;
 
+  /**
+   * MX FORK: the subset of `mxImportSpecifiers`' bindings that are a
+   * default import from a `.marko`/`.mx` source, pre-collected by `parse`
+   * (decision 116). See `MxRegionCompileInput.importDefaultFromMarkoOrMx`.
+   */
+  mxImportDefaultFromMarkoOrMx?: ReadonlySet<string>;
+
   startIndex?: number;
 
   /**
@@ -219,7 +226,8 @@ type KeepOptionalKeys =
   | "mxRegionPositionCheck"
   | "mxRegionCompile"
   | "mxImportSpecifiers"
-  | "mxModuleBindings";
+  | "mxModuleBindings"
+  | "mxImportDefaultFromMarkoOrMx";
 export type OptionsWithDefaults = Omit<Required<Options>, KeepOptionalKeys> &
   Pick<Options, KeepOptionalKeys>;
 
@@ -249,6 +257,9 @@ function createDefaultOptions(): OptionsWithDefaults {
     // MX FORK: same "must default to undefined, not be left out" reasoning
     // as mxImportSpecifiers above — decision 114's module-scope bindings.
     mxModuleBindings: undefined,
+    // MX FORK: same "must default to undefined, not be left out" reasoning
+    // as the two above — decision 116's default-import-from-template set.
+    mxImportDefaultFromMarkoOrMx: undefined,
     startIndex: 0,
     // Column (0-based) from which to start counting source. Useful for
     // integration with other tools.

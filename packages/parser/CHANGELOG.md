@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **New dependency: `@mxlang/core`** (decision 116). `MxRegionCompileInput`
+  gained `importDefaultFromMarkoOrMx: ReadonlySet<string>` — the subset of
+  `importSpecifiers`' bindings that are a *default* import from a
+  `.marko`/`.mx` source, computed by `collectModuleScope`'s same
+  declaration-only pre-parse (reusing `@mxlang/core`'s
+  `isMarkoOrMxSpecifier` rather than duplicating the extension test) and
+  threaded through the bridge the same way `moduleBindings`/`importSpecifiers`
+  already are, shadow-filtered like `importSpecifiers` (a name a nearer
+  scope shadows is not the module's own import any more, so it cannot carry
+  the import's provenance either). A host uses it to tell a `.marko`/`.mx`
+  default import (Marko's own statically-resolved component case) apart
+  from every other value import, which now lowers as a dynamic tag
+  (`@mxlang/core`'s decision-116 routing).
 - **New exports** (decision 114): `sourceBindings(source)` and
   `programBindings(program)` — the names a piece of TypeScript/TSX source
   binds at its top level (import locals plus top-level `const`/`function`/

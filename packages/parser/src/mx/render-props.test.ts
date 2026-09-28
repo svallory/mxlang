@@ -17,15 +17,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * `mxModuleBindings` would be for a real caller's surrounding module),
  * matching Marko's own rule (`tag.scope.hasBinding(tagName)`) that any
  * in-scope binding — real or not — is what actually decides resolvability.
+ *
+ * Also declared as if each were a `.mx` default import (decision 116): these
+ * fixtures test render-prop/attribute-tag lowering shapes, not the
+ * value-import-as-tag routing decision, so every bare name keeps its
+ * pre-116 direct-call shape (`<For .../>`) rather than incidentally
+ * exercising the dynamic-tag path with no real specifier to check.
  */
 function moduleBindingsFor(source: string): Set<string> {
   return new Set(source.match(/(?<=<)[A-Z][A-Za-z0-9]*/g) ?? []);
 }
 
-const parseMx = (source: string) =>
-  parseSolid(source, undefined, {
-    mxModuleBindings: moduleBindingsFor(source),
+const parseMx = (source: string) => {
+  const bindings = moduleBindingsFor(source);
+  return parseSolid(source, undefined, {
+    mxModuleBindings: bindings,
+    mxImportSpecifiers: new Map(
+      [...bindings].map((name) => [name, `./${name}.mx`]),
+    ),
+    mxImportDefaultFromMarkoOrMx: bindings,
   });
+};
 
 /** Prints the sole top-level statement's expression for a `const el = <...>;` source. */
 function printFirstExpression(source: string): string {
@@ -113,6 +125,11 @@ describe("tag params make the children a function", () => {
  */
 describe("attribute tags become props", () => {
   it("uses an imported callee's Input from the surrounding module", () => {
+    // decision 116: `AttrCallee` is a `.tsx` default import (a plain
+    // function, the "host component" case), not `.marko`/`.mx`, so it
+    // lowers as a dynamic tag rather than a direct `<AttrCallee .../>`
+    // call — `valueImportBinding` still lets the typed attribute-tag check
+    // reference `AttrCallee` for `Parameters<typeof AttrCallee>[0][...]`.
     const filename = join(HERE, "fixtures", "caller.solid.mx");
     const source =
       'import AttrCallee from "./attr-callee.tsx";\nconst el = <AttrCallee><@item>typed</@item></AttrCallee>;';
@@ -121,8 +138,12 @@ describe("attribute tags become props", () => {
     });
     // The accessor is parenthesized: `satisfies` binds tighter than an
     // arrow function and would otherwise check the returned fragment.
-    expect(result.code.replace(/\s+/g, " ")).toBe(
-      'import AttrCallee from "./attr-callee.tsx"; const el = <AttrCallee item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} />;',
+    // `$mxDynN`'s serial is a process-wide counter, not per-test, so it is
+    // normalized before comparing — the exact number is not the assertion.
+    expect(
+      result.code.replace(/\s+/g, " ").replace(/\$mxDyn\d+/g, "$mxDyn"),
+    ).toBe(
+      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const $mxDyn = AttrCallee;if ($mxDyn !== null && typeof $mxDyn === "object" && (Object.getPrototypeOf($mxDyn) === Object.prototype || Object.getPrototypeOf($mxDyn) === null) && Object.prototype.hasOwnProperty.call($mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof $mxDyn === "string" || typeof $mxDyn === "function" ? <Dynamic component={$mxDyn} item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : $mxDyn;})();',
     );
     expect(() =>
       parseBabel(result.code, {
@@ -140,6 +161,10 @@ describe("attribute tags become props", () => {
     // generated node's offset can name a later source line. A type reference
     // whose name and type arguments land on different lines was printed as
     // `NonNullable(\n<Parameters<...>>)`, which is not TypeScript.
+    //
+    // decision 116: `AttrCallee` is a `.tsx` default import, so it lowers
+    // as a dynamic tag (see the test above) — the assertion here is on the
+    // generated `satisfies` type staying intact, unaffected by that change.
     const filename = join(HERE, "fixtures", "caller.solid.mx");
     const source = [
       'import AttrCallee from "./attr-callee.tsx";',
@@ -154,8 +179,12 @@ describe("attribute tags become props", () => {
     const result = print(source, filename, {
       mxRegionCompile: solidRegionCompile,
     });
-    expect(result.code.replace(/\s+/g, " ")).toBe(
-      'import AttrCallee from "./attr-callee.tsx"; const el = <AttrCallee item= {(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]> } />;',
+    // `$mxDynN`'s serial is a process-wide counter, not per-test, so it is
+    // normalized before comparing — the exact number is not the assertion.
+    expect(
+      result.code.replace(/\s+/g, " ").replace(/\$mxDyn\d+/g, "$mxDyn"),
+    ).toBe(
+      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const $mxDyn = AttrCallee; if ($mxDyn !== null && typeof $mxDyn === "object" && (Object.getPrototypeOf($mxDyn) === Object.prototype || Object.getPrototypeOf($mxDyn) === null) && Object.prototype.hasOwnProperty.call($mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof $mxDyn === "string" || typeof $mxDyn === "function" ? <Dynamic component={$mxDyn} item={(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : $mxDyn;})();',
     );
     expect(() =>
       parseBabel(result.code, {
