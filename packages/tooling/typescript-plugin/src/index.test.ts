@@ -765,6 +765,180 @@ describe("MX language plugin", () => {
     },
   );
 
+  it("maps the wrong attribute in the middle of several on one attribute tag (solid-attr-tag-attr-offset)", () => {
+    const callee = "/project/Card.solid.mx";
+    const caller = "/project/Wrong.solid.mx";
+    const consumer = "/project/index.ts";
+    const card = [
+      'import type { AttrTag } from "@mxlang/solid";',
+      "export interface Input { tab: AttrTag<{ attrs: { first: string; title: string; last: string } }> }",
+      "export default function Card(_input: Input) { return null; }",
+    ].join("\n");
+    const callerSource =
+      'import Card from "./Card.solid.mx"\n<Card><@tab first="a" title=1 last="b"/></Card>';
+    const service = createPluginService(
+      {
+        [callee]: card,
+        [caller]: callerSource,
+        [consumer]: 'import "./Wrong.solid.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const diagnostics = service.getSemanticDiagnostics(caller);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(
+      true,
+    );
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.indexOf("title"),
+      ),
+    ).toBe(true);
+    // Neither sibling attribute's own span is mistaken for the wrong one's.
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.indexOf("first"),
+      ),
+    ).toBe(false);
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.lastIndexOf("last"),
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    ["a comma", "a, b"],
+    ["a closing paren", "a)b"],
+    ["a closing brace", "a}b"],
+    ["a closing bracket", "a]b"],
+  ])(
+    "keeps the attribute span correct when a string value contains %s (solid-attr-tag-attr-offset)",
+    (_label, titleValue) => {
+      const callee = "/project/Card.solid.mx";
+      const caller = "/project/Wrong.solid.mx";
+      const consumer = "/project/index.ts";
+      const card = [
+        'import type { AttrTag } from "@mxlang/solid";',
+        "export interface Input { tab: AttrTag<{ attrs: { title: string; after: string } }> }",
+        "export default function Card(_input: Input) { return null; }",
+      ].join("\n");
+      // `after=1` (a number literal against a declared `string`) is
+      // deliberately wrong, so the test proves the *following* property's
+      // own span was not corrupted by scanning past an unbalanced bracket
+      // character inside `title`'s own string value.
+      const callerSource = `import Card from "./Card.solid.mx"\n<Card><@tab title="${titleValue}" after=1/></Card>`;
+      const service = createPluginService(
+        {
+          [callee]: card,
+          [caller]: callerSource,
+          [consumer]: 'import "./Wrong.solid.mx";\n',
+        },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+
+      const diagnostics = service.getSemanticDiagnostics(caller);
+      expect(diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(
+        true,
+      );
+      expect(
+        diagnostics.some(
+          (diagnostic) => diagnostic.start === callerSource.indexOf("after"),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it("maps each occurrence of a same-named attribute tag on separate calls independently (solid-attr-tag-attr-offset)", () => {
+    // Two separate `<Card>` calls, each with its own single `<@tab>` — the
+    // same attribute-tag *name* appears twice in one file's generated text,
+    // which is what `attributeTagDiagnosticMappings`'s per-name
+    // `generatedCursors` exists to keep from cross-mapping.
+    const callee = "/project/Card.solid.mx";
+    const caller = "/project/Wrong.solid.mx";
+    const consumer = "/project/index.ts";
+    const card = [
+      'import type { AttrTag } from "@mxlang/solid";',
+      "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+      "export default function Card(_input: Input) { return null; }",
+    ].join("\n");
+    const callerSource = [
+      'import Card from "./Card.solid.mx"',
+      'export const a = <Card><@tab title="a"/></Card>;',
+      "export const b = <Card><@tab title=2/></Card>;",
+    ].join("\n");
+    const service = createPluginService(
+      {
+        [callee]: card,
+        [caller]: callerSource,
+        [consumer]: 'import "./Wrong.solid.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const diagnostics = service.getSemanticDiagnostics(caller);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(
+      true,
+    );
+    // The wrong occurrence's own `title` (the second `<Card>`'s), not the
+    // first, correctly-typed one.
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.lastIndexOf("title"),
+      ),
+    ).toBe(true);
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.indexOf("title"),
+      ),
+    ).toBe(false);
+  });
+
+  it("maps a wrong attribute on a nested component's own attribute tag (solid-attr-tag-attr-offset)", () => {
+    const outerCallee = "/project/Card.solid.mx";
+    const innerCallee = "/project/Inner.solid.mx";
+    const caller = "/project/Wrong.solid.mx";
+    const consumer = "/project/index.ts";
+    const inner = [
+      'import type { AttrTag } from "@mxlang/solid";',
+      "export interface Input { sub: AttrTag<{ attrs: { title: string } }> }",
+      "export default function Inner(_input: Input) { return null; }",
+    ].join("\n");
+    const outer = [
+      'import type { AttrTag } from "@mxlang/solid";',
+      "export interface Input { tab: AttrTag<{}> }",
+      "export default function Card(_input: Input) { return null; }",
+    ].join("\n");
+    const callerSource = [
+      'import Card from "./Card.solid.mx"',
+      'import Inner from "./Inner.solid.mx"',
+      "<Card><@tab><Inner><@sub title=1/></Inner></@tab></Card>",
+    ].join("\n");
+    const service = createPluginService(
+      {
+        [outerCallee]: outer,
+        [innerCallee]: inner,
+        [caller]: callerSource,
+        [consumer]: 'import "./Wrong.solid.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const diagnostics = service.getSemanticDiagnostics(caller);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 2322)).toBe(
+      true,
+    );
+    expect(
+      diagnostics.some(
+        (diagnostic) => diagnostic.start === callerSource.indexOf("title"),
+      ),
+    ).toBe(true);
+  });
+
   it.each([
     ["html", "/project", ".mx"],
     ["preact", `${here}/fixtures/preact-policy`, ".mx"],
