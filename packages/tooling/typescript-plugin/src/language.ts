@@ -484,8 +484,13 @@ export function attributeTagDiagnosticMappings(
   source: string,
   generated: string,
 ): CodeMapping[] {
-  const mappings: CodeMapping[] = [];
   const generatedCursors = new Map<string, number>();
+  const tags: Array<{
+    sourceStart: number;
+    generatedStart: number;
+    generatedEnd: number;
+    properties: CodeMapping[];
+  }> = [];
   for (const match of source.matchAll(/@([A-Za-z_$][\w$]*)/g)) {
     const name = match[1];
     if (!name || match.index === undefined) continue;
@@ -497,43 +502,125 @@ export function attributeTagDiagnosticMappings(
     );
     if (probeStart < 0) continue;
     const generatedStart = probeStart;
-    const generatedEndMarker = generated.indexOf("} satisfies ", probeStart);
+    // This tag's *own* closing `} satisfies `, not the first one in the
+    // text: a component nested inside this tag's body can itself take an
+    // attribute tag, which prints its own `{ ... } satisfies ...}` before
+    // this tag's closes (`<Card><@tab><Inner><@sub .../></Inner></@tab>`
+    // nests `sub`'s wrapper inside `tab`'s). A naive `indexOf` finds the
+    // *inner* tag's marker first, truncating this tag's span. Scanning by
+    // brace depth from the object literal's own opening `{` (`probeStart +
+    // name.length + 2`, right after `={`) finds the marker at depth 0 —
+    // this object's own close — regardless of what is nested inside it.
+    const generatedEndMarker = matchingSatisfiesMarker(
+      generated,
+      probeStart + probe.length - 1,
+    );
     if (generatedEndMarker < 0) continue;
     const generatedEnd = generatedEndMarker + 1;
     generatedCursors.set(name, generatedEnd);
-    const propertyMappings = attributePropertyMappings(
-      source,
+    tags.push({
       sourceStart,
-      generated,
       generatedStart,
       generatedEnd,
+      properties: attributePropertyMappings(
+        source,
+        sourceStart,
+        generated,
+        generatedStart,
+        generatedEnd,
+      ),
+    });
+  }
+
+  // Every property mapping across every tag, owner-tagged and sorted once:
+  // a nested tag's own object literal (and its properties) sits *inside*
+  // its parent's generated span
+  // (`<Card><@tab><Inner><@sub .../></Inner></@tab>`'s `sub` properties fall
+  // inside `tab`'s own range), so a *global* punch is required — punching
+  // only a tag's own direct attributes out of its own fallback (as an
+  // earlier version of this function did) still leaves the fallback
+  // overlapping every nested tag's properties, and the wider, earlier-
+  // sorted fallback silently wins per the array-order rule in the loop
+  // below.
+  const allProperties = tags
+    .flatMap((tag) => tag.properties.map((property) => ({ tag, property })))
+    .sort(
+      (left, right) =>
+        (left.property.generatedOffsets[0] ?? 0) -
+        (right.property.generatedOffsets[0] ?? 0),
     );
-    // The whole-object fallback and each property mapping above must not
-    // share a generated offset: `@volar/source-map`'s lookup yields every
-    // mapping containing an offset in *array* order, so an overlapping
-    // wider span, if it sorted first, would always win over a narrower one
-    // sorted after it by `createVirtualCode`'s `generatedOffsets[0]`
-    // ascending sort. Punching each property's own range out of the
-    // fallback (rather than relying on sort order alone) keeps every
-    // generated offset covered by exactly one candidate mapping.
-    let cursor = generatedStart;
-    for (const property of propertyMappings) {
+
+  const mappings: CodeMapping[] = [];
+  for (const tag of tags) {
+    // The whole-object fallback and every property mapping (this tag's own,
+    // and any nested tag's) must not share a generated offset:
+    // `@volar/source-map`'s lookup yields every mapping containing an
+    // offset in *array* order, so an overlapping wider span, if it sorted
+    // first, would always win over a narrower one sorted after it by
+    // `createVirtualCode`'s `generatedOffsets[0]` ascending sort. Punching
+    // every property's own range out of the fallback (rather than relying
+    // on sort order alone) keeps every generated offset covered by exactly
+    // one candidate mapping.
+    let cursor = tag.generatedStart;
+    for (const { tag: owner, property } of allProperties) {
       const propertyStart = property.generatedOffsets[0] ?? 0;
+      const propertyLength =
+        property.generatedLengths?.[0] ?? property.lengths[0] ?? 0;
+      if (propertyStart >= tag.generatedEnd) break;
+      // Defensive: a malformed or overlapping property span (this
+      // function's own bug, or a future one) must never regress `cursor`
+      // or be pushed itself — no mapping is emitted rather than a wrong
+      // one, same rule as `attributePropertyMappings`'s own guard.
+      if (propertyStart < cursor || propertyLength <= 0) continue;
       if (propertyStart > cursor) {
         mappings.push(
-          fallbackSpan(sourceStart, cursor, propertyStart - cursor),
+          fallbackSpan(tag.sourceStart, cursor, propertyStart - cursor),
         );
       }
-      mappings.push(property);
-      cursor =
-        propertyStart +
-        (property.generatedLengths?.[0] ?? property.lengths[0] ?? 0);
+      // A nested tag's own property is punched out of every ancestor's
+      // fallback above, but pushed into the result only once, from its
+      // owning tag's own turn through this loop.
+      if (owner === tag) mappings.push(property);
+      cursor = propertyStart + propertyLength;
     }
-    if (cursor < generatedEnd) {
-      mappings.push(fallbackSpan(sourceStart, cursor, generatedEnd - cursor));
+    if (cursor < tag.generatedEnd) {
+      mappings.push(
+        fallbackSpan(tag.sourceStart, cursor, tag.generatedEnd - cursor),
+      );
     }
   }
   return mappings;
+}
+
+/**
+ * The index of the `}` that closes the object literal opened at
+ * `objectOpen` (the `{` right after an attribute tag's `name={`), found by
+ * bracket-depth scanning rather than the first `} satisfies ` in the text —
+ * a component nested inside this tag's body can itself take an attribute
+ * tag, whose own `{ ... } satisfies ...}` prints *inside* this one and
+ * would otherwise be mistaken for this tag's own close. Quote-aware for the
+ * same reason `topLevelCommaOrEnd` is. Returns `-1` if the depth never
+ * returns to 0 before the text ends (malformed input, defensively refused
+ * rather than guessed at).
+ */
+function matchingSatisfiesMarker(text: string, objectOpen: number): number {
+  let depth = 0;
+  let quote: string | undefined;
+  for (let i = objectOpen; i < text.length; i++) {
+    const char = text[i];
+    if (quote) {
+      if (char === "\\") i++;
+      else if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "{" || char === "(" || char === "[") depth++;
+    else if (char === "}" || char === ")" || char === "]") {
+      depth--;
+      if (depth === 0 && char === "}") return i;
+    }
+  }
+  return -1;
 }
 
 function fallbackSpan(
@@ -584,7 +671,11 @@ function attributePropertyMappings(
     const key = match[1];
     if (!key) continue;
     const keySourceStart = match.index;
-    const probe = `"${key}":`;
+    // The emitter always prints a property as `"key": value` (colon, one
+    // space, value — `attributeTagValue`'s `mapped(...), ": ",
+    // attributeTagAttrValue(attr)`), so the value text itself starts one
+    // character after the probe, not immediately after the colon.
+    const probe = `"${key}": `;
     const probeStart = generated.indexOf(probe, generatedStart);
     if (probeStart < 0 || probeStart >= generatedEnd) continue;
     const valueStart = probeStart + probe.length;
@@ -606,11 +697,17 @@ function attributePropertyMappings(
         sourceValueStart,
         propertyGeneratedEnd - valueStart,
       );
+    const sourceLength = propertySourceEnd - keySourceStart;
+    const generatedLength = propertyGeneratedEnd - probeStart;
+    // No mapping is emitted rather than a wrong one: a malformed scan (an
+    // unbalanced bracket the quote-skip above did not anticipate) must
+    // never produce a negative or zero-length span downstream.
+    if (sourceLength <= 0 || generatedLength <= 0) continue;
     mappings.push({
       sourceOffsets: [keySourceStart],
       generatedOffsets: [probeStart],
-      lengths: [propertySourceEnd - keySourceStart],
-      generatedLengths: [propertyGeneratedEnd - probeStart],
+      lengths: [sourceLength],
+      generatedLengths: [generatedLength],
       data: { verification: true },
     });
   }
@@ -620,12 +717,24 @@ function attributePropertyMappings(
   );
 }
 
-/** The first top-level (bracket-depth-0) `,` at or after `from`, else `end`. */
+/**
+ * The first top-level (bracket-depth-0) `,` at or after `from`, else `end`.
+ * Skips the contents of a `"`/`'`/`` ` `` string or template literal
+ * (honoring `\`-escapes) so a value like `"a, b"` or `"a)b"` cannot be
+ * mistaken for the property's own boundary or drive `depth` negative.
+ */
 function topLevelCommaOrEnd(text: string, from: number, end: number): number {
   let depth = 0;
+  let quote: string | undefined;
   for (let i = from; i < end; i++) {
     const char = text[i];
-    if (char === "(" || char === "[" || char === "{") depth++;
+    if (quote) {
+      if (char === "\\") i++;
+      else if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "(" || char === "[" || char === "{") depth++;
     else if (char === ")" || char === "]" || char === "}") depth--;
     else if (char === "," && depth === 0) return i;
   }
