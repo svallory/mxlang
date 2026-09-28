@@ -325,15 +325,36 @@ export function foreignTemplateError(
   };
 }
 
+/** Hard cap on `compileWithDependencies`'s passes, so a dependency cycle (A -> B -> A) or a pathological chain still terminates. */
+const MAX_COMPILE_PASSES = 8;
+
 /**
  * Compiles a caller against the current text of the callee files it depends
  * on, so an open callee's unsaved `Input` is what the caller is typed
  * against.
  *
- * The first pass runs with the sources of the dependencies the previous
- * compile reported. A compile that reports a different set is repeated once
- * with the sources of the new set, unless the host holds nothing different
- * for it: the first pass then already read everything the second would.
+ * Each pass runs with the accumulated sources every previous pass has read
+ * from the host, plus whatever the most recent pass's own dependency list
+ * added. Passes stop once a pass reports the same dependency set as the one
+ * before it, or once a newly reported dependency has no host text different
+ * from what a previous pass already read for it — either means the next pass
+ * would see exactly what this one saw. `MAX_COMPILE_PASSES` bounds the loop
+ * for a cycle (A depends on B depends on A) or a chain deeper than that,
+ * neither of which the fixed-point conditions above would otherwise stop.
+ * Sources accumulate across passes (never reset), so a dependency discovered
+ * on pass N stays in scope on pass N+2 even if a later pass's own list
+ * happens not to re-report it.
+ *
+ * A chain longer than one hop is real: a callee's `AttrTag<Alias>` (the
+ * whole type argument, not a nested field reference) can itself alias a type
+ * imported from a further file, which `readCalleeInput`'s own
+ * `resolveNamedType` follows across files independent of this loop. Before
+ * this fix, a single retry could discover a second-hop dependency but never
+ * re-read a third-hop one the retry's own compile newly reported (pinned by
+ * `packages/tooling/typescript-plugin/src/index.test.ts`'s
+ * `compileWithDependencies against a real readCalleeInput compile` describe
+ * block, driven through the real `readCalleeInput`, not a synthetic
+ * callback).
  *
  * Dependencies are deliberately **not** registered through Volar's
  * `CodegenContext.getAssociatedScript`. An associated script is a file whose
@@ -351,14 +372,24 @@ export function compileWithDependencies<T extends { dependencies: string[] }>(
   compile: () => T,
 ): T {
   if (!readSource) return compile();
-  const previousSources = dependencySources(readSource, previousDependencies);
-  const result = withCalleeInputSources(previousSources, compile);
-  if (sameDependencies(previousDependencies, result.dependencies)) {
-    return result;
+
+  let dependencies = previousDependencies;
+  let sources = dependencySources(readSource, dependencies, new Map());
+  let result = withCalleeInputSources(sources, compile);
+
+  for (let pass = 1; pass < MAX_COMPILE_PASSES; pass++) {
+    if (sameDependencies(dependencies, result.dependencies)) return result;
+    const nextSources = dependencySources(
+      readSource,
+      result.dependencies,
+      sources,
+    );
+    if (sameSources(sources, nextSources)) return result;
+    dependencies = result.dependencies;
+    sources = nextSources;
+    result = withCalleeInputSources(sources, compile);
   }
-  const nextSources = dependencySources(readSource, result.dependencies);
-  if (sameSources(previousSources, nextSources)) return result;
-  return withCalleeInputSources(nextSources, compile);
+  return result;
 }
 
 function sameDependencies(
@@ -382,11 +413,13 @@ function sameSources(
   return true;
 }
 
+/** Builds the accumulated source-override map for one pass: every previous pass's sources, plus a fresh read for each of `dependencies`. */
 function dependencySources(
   readSource: DependencySourceReader,
   dependencies: readonly string[],
+  previous: ReadonlyMap<string, string>,
 ): Map<string, string> {
-  const sources = new Map<string, string>();
+  const sources = new Map(previous);
   for (const dependency of dependencies) {
     const source = readSource(dependency);
     if (source !== undefined) sources.set(dependency, source);
