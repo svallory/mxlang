@@ -81,9 +81,10 @@ Two facts worth knowing before touching it:
   on each occurrence inside a conditional plan rather than around it, since
   `test ? a : undefined satisfies T` checks only `undefined`; a bodiless
   renderable carries none. `compileSolidMx` also takes an optional
-  `warnings` array for core's non-fatal diagnostics. A wrong attribute type
-  is currently reported on the tag name rather than the attribute: see
-  `solid-attr-tag-attr-offset` in
+  `warnings` array for core's non-fatal diagnostics. A wrong attribute
+  type is reported on the attribute itself, not the tag name (a
+  *missing* attribute still reports on the tag name, since there is no
+  attribute text to point at) — see `solid-attr-tag-attr-offset` in
   `packages/tooling/typescript-plugin/AGENTS.md`.
 - **A region receives its surrounding module imports and reports callee
   dependencies.** `compileSolidMx` seeds `ctx.importSpecifiers` from the

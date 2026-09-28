@@ -250,14 +250,37 @@ describe("mx-tsc", () => {
     SPAWN_TIMEOUT_MS,
   );
 
+  it(
+    // `<Card><@tab title=1/></Card>`: the wrong attribute type is reported
+    // on `title` (its own authored column), not on `tab` (the fallback
+    // used only when there is no attribute of its own to blame) —
+    // `solid-attr-tag-attr-offset`.
+    "reports a solid attribute-tag's wrong value type on the attribute itself, not the tag name",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "attr-tag-solid-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.output).toContain("Wrong.solid.mx(3,33): error TS2322");
+      expect(result.output).toContain(
+        "Type 'number' is not assignable to type 'string'",
+      );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
   it.each([
     ["html", "callee-diagnostic-html-failing", "Card.mx(2,14)", "Page.mx"],
-    // Line only: `mx-tsc` turns a `.solid.mx` source offset into a column
-    // against the printed text, whose earlier lines the printer reformats.
+    // The `Input` interface line above `broken` gains three characters when
+    // printed; the exact column proves the diagnostic is placed against the
+    // authored source, not the printed text (solid-mx-tsc-column-against-printed-text).
     [
       "solid",
       "callee-diagnostic-solid-failing",
-      "Card.solid.mx(4,",
+      "Card.solid.mx(4,14)",
       "Page.solid.mx",
     ],
   ])(
@@ -266,11 +289,7 @@ describe("mx-tsc", () => {
       const result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
 
       expect(result.status).not.toBe(0);
-      expect(result.output).toMatch(
-        new RegExp(
-          `${calleePosition.replace(/[.()]/g, "\\$&")}\\d*\\)?: error TS2322`,
-        ),
-      );
+      expect(result.output).toContain(`${calleePosition}: error TS2322`);
       expect(result.output).toContain(
         "Type 'string' is not assignable to type 'number'",
       );

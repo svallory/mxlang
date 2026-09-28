@@ -72,15 +72,24 @@ Four facts worth knowing before editing either:
   lookup fails nothing is emitted, since a plausible-but-wrong column is worse
   than none. A diagnostic outside every mapping is not surfaced against the
   `.mx` file.
-- **`preventLeadingOffset` must stay unset for whole-file `.mx`.** A compiled
-  `.mx` module does not preserve the source's line structure, and with that
-  flag set Volar's `runTsc` parses its `SourceFile` from the generated text
-  alone — so `tsc` converts a correctly mapped source *offset* into line and
-  column against the *generated* file's line table, putting every `.mx`
-  diagnostic on the wrong line (measured: a two-error fixture reported
-  (3,15)/(4,22) for errors on source lines 2 and 3). Unset, Volar pads the
-  virtual contents to the source's own lines. `.solid.mx` keeps the flag,
-  because its printed output does preserve source lines.
+- **`preventLeadingOffset` must stay unset for both whole-file `.mx` and
+  `.solid.mx`.** With that flag set, Volar's `runTsc` parses its
+  `SourceFile` from the generated text alone, so `tsc` converts a correctly
+  mapped source *offset* into line and column against the *generated*
+  file's line table instead of the source's — wrong whenever the two line
+  tables disagree. Unset, Volar pads the virtual contents with the source's
+  own lines (each line replaced by matching-length spaces, in
+  `proxyCreateProgram.js`) so the offset lands on the same line/column in
+  both. Whole-file `.mx` needed this from the start, because its compiled
+  module drops the source's line structure entirely (measured: a two-error
+  fixture reported (3,15)/(4,22) for errors on source lines 2 and 3).
+  `.solid.mx` used to keep the flag set, reasoning that its printed output
+  preserves the region's line *count* — true, but irrelevant: a line the
+  printer reformats (e.g. an `Input` interface losing whitespace) still
+  shifts every later column while the line number stays put, which is
+  `preventLeadingOffset`'s exact failure mode
+  (`solid-mx-tsc-column-against-printed-text`; measured: `export const
+  broken` on line 4 reported column 17 against an authored column of 14).
 
 **`.solid.mx`'s virtual TSX gets a synthetic, unmapped import for the Solid
 JSX built-ins the emitter prints as a bare tag** (`Show`/`For`/`Switch`/
@@ -175,15 +184,27 @@ diagnostic; use it for anything about the generated code's types.
 - **The mapping pass does not report warnings.** `createHtmlMappings` lowers
   the source a second time; handing it the compile's own `warnings` array
   reported every warning twice.
-- **Open: `solid-attr-tag-attr-offset`.** On the Solid host a wrong attribute
-  type inside `<@tab title=1/>` is reported on the tag name (`tab`), not on
-  `title`; a missing attribute is reported on the tag name by design.
-  Measured on `<Card><@tab title=1/></Card>`: the region compile's mappings
-  carry the key's name span as `13..18` (region-relative, one past the
-  authored `12..17`) while the value's span is the file-absolute `53..54`,
-  and the printed source map places the key two columns late (generated
-  column 13 to source column 14). `decodeMappings` keeps only the one
-  character that happens to match, so the tag-name fallback from
-  `attributeTagDiagnosticMappings` is what covers the diagnostic. The two
-  span bases disagreeing is the lead; html and preact apply `MappedCode`
-  offsets directly and are unaffected.
+- **Fixed: `solid-attr-tag-attr-offset`.** On the Solid host, a wrong
+  attribute type inside `<@tab title=1/>` used to be reported on the tag
+  name (`tab`), not on `title`; a missing attribute is still reported on
+  the tag name by design (there is no attribute text to point at).
+  `decodeMappings`'s text-equality walk can map an attribute's *value*
+  exactly (it is copied verbatim into the generated object literal, e.g.
+  `title=1`'s `1`), but never its *key*: the printer re-quotes it (`title`
+  becomes `"title"`), so no generated/source text ever matches. TypeScript
+  can position a property type-mismatch diagnostic anywhere from the quoted
+  key through the value, and a *range* diagnostic only resolves through
+  Volar's `toSourceRange` when the same mapping covers both ends
+  (`findMatchingStartEnd` translates the range's end through whichever
+  mapping matched its start) — so `attributeTagDiagnosticMappings` now adds
+  one supplemental mapping per attribute, spanning its whole `"key": value`
+  generated text back to its authored `key=value` source span, with the
+  surrounding whole-object fallback mapping punched to exclude that range.
+  The punch is required, not cosmetic: `@volar/source-map`'s lookup yields
+  every mapping containing a generated offset in *array* order, so an
+  overlapping wider span, if it sorted first, always won over a narrower
+  one sorted after it by `createVirtualCode`'s ascending
+  `generatedOffsets[0]` sort — two mappings must never share a generated
+  offset, or the wider one silently wins regardless of which is "more
+  specific". html and preact apply `MappedCode` offsets directly and were
+  never affected.

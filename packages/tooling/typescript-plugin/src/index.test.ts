@@ -90,12 +90,17 @@ describe("SolidMX language plugin", () => {
         scriptKind: ts.ScriptKind.TSX,
       },
     ]);
-    expect(plugin.typescript?.getServiceScript(virtual)).toMatchObject({
+    const serviceScript = plugin.typescript?.getServiceScript(virtual);
+    expect(serviceScript).toMatchObject({
       code: virtual,
       extension: ".tsx",
       scriptKind: ts.ScriptKind.TSX,
-      preventLeadingOffset: true,
     });
+    // `preventLeadingOffset` must stay unset: `mx-tsc` turns a correctly
+    // mapped source offset into line/column against the generated file's
+    // line table when it is set, reporting the wrong column whenever the
+    // printer reformats an earlier line (solid-mx-tsc-column-against-printed-text).
+    expect(serviceScript?.preventLeadingOffset).toBeUndefined();
   });
 
   it("decodes the printer source map into feature-enabled mappings", () => {
@@ -245,6 +250,56 @@ describe("SolidMX language plugin", () => {
     expect(diagnostic?.start).toBe(source.indexOf(expression));
     expect(diagnostic?.length).toBe(expression.length);
   });
+
+  it.each([
+    [
+      "single-line region",
+      [
+        "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+        'export const el = <button title="a">x</button>;',
+        'export const broken: number = "text";',
+      ],
+    ],
+    [
+      "multi-line region",
+      [
+        "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
+        "export const el = (",
+        '  <button title="a">',
+        "    x",
+        "  </button>",
+        ");",
+        'export const broken: number = "text";',
+      ],
+    ],
+  ])(
+    "keeps a plain TypeScript diagnostic's column correct after a reformatted %s (solid-mx-tsc-column-against-printed-text)",
+    (_label, lines) => {
+      const component = "/project/AfterRegion.solid.mx";
+      const consumer = "/project/index.ts";
+      const source = [
+        'import type { AttrTag } from "@mxlang/solid";',
+        "",
+        ...lines,
+      ].join("\n");
+      const service = createPluginService(
+        {
+          [component]: source,
+          [consumer]: 'import "./AfterRegion.solid.mx";\n',
+        },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+
+      const diagnostics = service.getSemanticDiagnostics(component);
+      const diagnostic = diagnostics.find(
+        (candidate) => candidate.code === 2322,
+      );
+
+      expect(diagnostic?.start).toBe(source.indexOf("broken"));
+    },
+  );
+
   it("keeps type arguments when rewriting bound identifiers", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const source =
@@ -691,16 +746,12 @@ describe("MX language plugin", () => {
       expect(
         wrongDiagnostics.some((diagnostic) => diagnostic.code === 2322),
       ).toBe(true);
-      // TODO(solid-attr-tag-attr-offset): the Solid host reports a wrong
-      // attribute type on the `<@tab>` name instead of the attribute. The
-      // region compile maps the object key through a name span the printed
-      // source map places two columns late, so only the tag-name fallback
-      // mapping covers the diagnostic.
+      // A wrong attribute type is reported on the attribute itself
+      // (`solid-attr-tag-attr-offset`) — every host, `title`, not the tag
+      // name it sits on.
       expect(
         wrongDiagnostics.some(
-          (diagnostic) =>
-            diagnostic.start ===
-            wrongSource.indexOf(host === "solid" ? "tab" : "title"),
+          (diagnostic) => diagnostic.start === wrongSource.indexOf("title"),
         ),
       ).toBe(true);
       expect(
