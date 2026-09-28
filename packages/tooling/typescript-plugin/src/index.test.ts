@@ -1121,12 +1121,92 @@ describe("MX language plugin", () => {
       const no = diagnose(bad);
       expect(no.compile).toHaveLength(1);
       expect(no.compile[0]?.message).toContain("does not return a value");
-      // KNOWN LIMIT, not asserted as desired: the bound variable is
-      // `let n;` assigned in a callback, so it is implicitly `any`, not the
-      // `<return>` expression's type (`n.toUpperCase()` on a number does not
-      // error). The callback prop is `(value: unknown) => void`.
+      // KNOWN LIMIT, not asserted as desired (firstmate's ruling on
+      // tag-var-type-from-return: option C): the bound variable is
+      // `let n: any;` assigned in a callback, so it is explicitly `any`
+      // (never the `<return>` expression's own type), not the `<return>`
+      // expression's type (`n.toUpperCase()` on a number does not error).
+      // The callback prop is `(value: unknown) => void`.
       const wrong = diagnose(wrongType);
       expect(wrong.compile).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // TODO tag-var-type-from-return (S159 round 2; firstmate's ruling: option
+  // C, `any`, documented — real inference is impossible without changing
+  // the emitted runtime JS, since TypeScript's `typeof` only accepts an
+  // identifier, never an arbitrary expression, and the `<return>` value can
+  // depend on the unit's own body locals, so no type-only declaration beside
+  // the component can name it either). This is the `.solid.mx` *region*
+  // counterpart of the whole-file test above: a `/var` bound from a
+  // discovered `<counter/n .../>` inside a region is `let n;`, untyped, the
+  // surrounding TypeScript module declares it (`@mxlang/parser`'s
+  // `hoistRegionImports`), and the region's `$mxReturn={...}` callback prop
+  // assigns it — same shape and same limitation as the whole-file case.
+  it("types a .solid.mx region's <return> unit /var as any (KNOWN LIMIT, tag-var-type-from-return)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-solid-region-return-"));
+    try {
+      mkdirSync(join(dir, "tags"));
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ name: "t", mx: { host: "solid" } }),
+      );
+      writeFileSync(
+        join(dir, "tags", "counter.mx"),
+        "export interface Input { start: number }\n<span>${input.start}</span>\n<return value=input.start + 1/>\n",
+      );
+      const good = join(dir, "good.solid.mx");
+      const wrongType = join(dir, "wrong-type.solid.mx");
+      const consumer = join(dir, "index.ts");
+      const files: Record<string, string> = {
+        // `n` is a number, so `n.toFixed(1)` is fine; that is the type check.
+        [good]:
+          "export function App() {\n  return <div><counter/n start=1/><p>${n.toFixed(1)}</p></div>;\n}\n",
+        // `n` is a number, not a string: `.toUpperCase` must not exist —
+        // this is the KNOWN LIMIT: it does not error today.
+        [wrongType]:
+          "export function App() {\n  return <div><counter/n start=1/><p>${n.toUpperCase()}</p></div>;\n}\n",
+        [consumer]:
+          'import "./good.solid.mx";\nimport "./wrong-type.solid.mx";',
+      };
+      const service = createPluginService(files, [consumer]);
+      service.getSemanticDiagnostics(consumer);
+      const diagnose = (fileName: string) => {
+        const plugin = createSolidMxLanguagePlugin(ts);
+        plugin.createVirtualCode?.(
+          fileName,
+          SOLID_MX_LANGUAGE_ID,
+          ts.ScriptSnapshot.fromString(files[fileName] as string),
+          { getAssociatedScript: () => undefined },
+        );
+        return {
+          compile: plugin.getCompileDiagnostics(fileName),
+          semantic: service.getSemanticDiagnostics(fileName),
+        };
+      };
+
+      // This harness has no `solid-js` JSX-namespace types wired up, so a
+      // bare `<div>`/`<p>` element itself reports TS7026 ("JSX element
+      // implicitly has type 'any'") regardless of this fix — irrelevant
+      // noise, filtered out the same way the sibling `.solid.mx` import
+      // test above ignores it. `n.toFixed`/`n.toUpperCase` are unaffected by
+      // that noise: a real `n: any` never reports anything there, and a
+      // real `n: number` reports TS2339 on `.toUpperCase()` specifically.
+      const realTypeErrors = (diagnostics: readonly ts.Diagnostic[]) =>
+        diagnostics.filter((d) => d.code !== 7026 && d.code !== 2875);
+
+      const ok = diagnose(good);
+      expect(ok.compile).toEqual([]);
+      expect(realTypeErrors(ok.semantic)).toEqual([]);
+      // KNOWN LIMIT, not asserted as desired: `let n;` is untyped, assigned
+      // in the region's `$mxReturn={...}` callback, so `n.toUpperCase()` on
+      // a number does not error. A future fix for tag-var-type-from-return
+      // flips this to a real TS2339.
+      const wrong = diagnose(wrongType);
+      expect(wrong.compile).toEqual([]);
+      expect(realTypeErrors(wrong.semantic)).toEqual([]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

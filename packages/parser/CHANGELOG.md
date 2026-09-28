@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **`hoistRegionImports` now declares a `.solid.mx` region's `/var` binding
+  as `let n: any;`, not a bare `let n;`** (TODO `tag-var-type-from-return`,
+  filed from PR #159 round 2; firstmate's ruling: option C — the real
+  `<return>` type cannot be inferred without changing the emitted runtime
+  JS). A bare `let n;` reported its own `noImplicitAny` TS7005 at every
+  read; an explicit `: any` silences that unrelated noise. The bound
+  variable's type is still `any`, not the `<return>` expression's real
+  type — a known Solid-only limitation, documented in the spec's `/var`
+  section and `@mxlang/solid`'s AGENTS.md, pinned by a regression test.
+
 - **Breaking: `sourceBindings(source)` now returns `{ bindings, error? }`
   instead of a bare `Set<string>`** (source-bindings-silent-parse-failure,
   filed from the PR #156 review). A parse failure used to be caught and

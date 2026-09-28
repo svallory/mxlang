@@ -68,7 +68,9 @@ Three facts worth knowing before touching it:
   `solid-whole-file-prop-typing`; tests in `packages/tooling/tsc/src/index.test.ts`
   and `packages/tooling/typescript-plugin/src/index.test.ts`). A component with
   no `Input` gets an empty one; a unit that declares `<return>` widens the
-  parameter with the `$mxReturn` callback prop so a caller's `/var` type-checks;
+  parameter with the `$mxReturn` callback prop so a caller's `/var` type-checks
+  as a declared prop — but only as `any` (TODO `tag-var-type-from-return`; see
+  the bullet below), not the `<return>` expression's real type;
   an `AttrTag` in `Input` gets its `import type { AttrTag } from "@mxlang/solid"`.
   **The output is therefore TSX carrying types, so every runtime consumer needs
   a TypeScript-aware step.** The vite path has it: `@mxlang/vite-plugin` gives a
@@ -78,6 +80,29 @@ Three facts worth knowing before touching it:
   An earlier version dropped `Input` on the belief that Solid's compiler has no
   TypeScript frontend; that was wrong. AttrTag props are additionally checked
   through a `satisfies` assertion at the call site (decisions 106-108).
+- **`/var` binds `any` on this host, unlike html/preact/react/hono** (TODO
+  `tag-var-type-from-return`, filed from PR #159 round 2; firstmate's ruling
+  2026-09-28: option C). Every JSX host but this one binds `/var` with
+  `const n = temp.value;`, so TypeScript infers `n`'s real type from the
+  callee's own return signature for free. Solid's `/var` is assigned inside
+  a `$mxReturn={($mxV) => { n = $mxV; }}` callback prop instead (§2.4's
+  design; the callback is what lets a Solid component's return value stay
+  its view rather than a destructured pair) — TypeScript's control-flow
+  analysis has nothing to narrow `n`'s declaration from, since the
+  assignment happens inside a callback invoked at some later,
+  statically-unprovable point, not directly at the declaration. Measured:
+  inferring the real type without changing the emitted runtime JS is not
+  possible — `typeof` only accepts an identifier, never an arbitrary
+  expression, and the `<return>` expression can depend on the unit's own
+  body locals, so no type-only declaration beside the component can name it
+  either. Both emission sites (`@mxlang/parser`'s `hoistRegionImports` for a
+  `.solid.mx` region, `compileSolidUnit` above for a whole-file unit)
+  therefore declare the binding `let n: any;` explicitly — not a bare
+  `let n;`, which would additionally report `noImplicitAny`'s own TS7005 on
+  every read. A misuse of the bound value type-checks clean today; pinned by
+  a regression test on each path (`packages/parser/src/mx/hoist-imports.test.ts`,
+  `packages/tooling/typescript-plugin/src/index.test.ts`), named so a future
+  fix flips the assertion.
 - **It is an `Emitter<string>`, same shape as `@mxlang/astro`'s
   `.amx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or

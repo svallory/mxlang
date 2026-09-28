@@ -271,10 +271,26 @@ function hoistRegionImports(file: File, filename: string): void {
     // region that could fill one: a `let` declared *after* the region that
     // references it would be a temporal-dead-zone error at run time, and a
     // region can appear in any statement of the module.
-    const declaration = babelParse(`let ${[...returnVars].join(", ")};`, {
-      sourceType: "module",
-      plugins: MX_DEFAULT_PLUGINS,
-    }) as unknown as { program: { body: Array<Record<string, unknown>> } };
+    //
+    // Explicitly `: any`, not a bare `let` (TODO tag-var-type-from-return):
+    // the value is assigned inside the region's `$mxReturn={...}` callback,
+    // so TypeScript's control-flow analysis cannot narrow it from the
+    // declaration alone — a bare `let n;` reports `noImplicitAny`'s own
+    // TS7005 ("Variable 'n' implicitly has an 'any' type") at every read,
+    // which is real noise a user would see and is unrelated to whatever the
+    // `<return>` value's actual type is. The `<return>` expression's real
+    // type cannot be inferred here without changing the emitted runtime JS
+    // (firstmate's ruling, tag-var-type-from-return): TypeScript's `typeof`
+    // only accepts an identifier, never an arbitrary expression, and the
+    // expression can depend on the unit's own body locals, so no type-only
+    // declaration beside the component can name it either.
+    const declaration = babelParse(
+      `let ${[...returnVars].map((name) => `${name}: any`).join(", ")};`,
+      {
+        sourceType: "module",
+        plugins: MX_DEFAULT_PLUGINS,
+      },
+    ) as unknown as { program: { body: Array<Record<string, unknown>> } };
     program.body.splice(
       authoredImportsOf(program.body).lastImportIndex + 1,
       0,

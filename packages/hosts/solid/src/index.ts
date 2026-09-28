@@ -492,7 +492,21 @@ export function compileSolidUnit(
   }
   // Declared above the JSX that fills them: the callback prop assigns during
   // the child's synchronous setup, which happens as the JSX is evaluated.
-  const varDecls = vars.length > 0 ? `let ${vars.join(", ")}; ` : "";
+  //
+  // Explicitly `: any`, not a bare `let` (TODO tag-var-type-from-return):
+  // the value is assigned inside the `$mxReturn={...}` callback, so
+  // TypeScript's control-flow analysis cannot narrow it from the
+  // declaration alone — a bare `let n;` reports `noImplicitAny`'s own
+  // TS7005 at every read, unrelated noise regardless of the `<return>`
+  // value's real type. That real type cannot be inferred here without
+  // changing the emitted runtime JS (firstmate's ruling): TypeScript's
+  // `typeof` only accepts an identifier, never an arbitrary expression, and
+  // the expression can depend on the unit's own body locals, so no
+  // type-only declaration beside the component can name it either.
+  const varDecls =
+    vars.length > 0
+      ? `let ${vars.map((name) => `${name}: any`).join(", ")}; `
+      : "";
   const name = moduleExportName(ir, "@mxlang/solid");
   // The return callback is not part of the author's `Input`, so a unit that
   // declares `<return>` widens its parameter with it; the caller's generated

@@ -1652,6 +1652,34 @@ Mechanics that are normative:
 - **Scope is a path of block ids, not a depth** — a read in a sibling block sits
   at the same depth as the binding yet is not in scope.
 
+**Solid-only divergence: `/var`'s bound type is `any`, not the `<return>`
+expression's real type (TODO `tag-var-type-from-return`, filed from PR #159
+round 2).** On html, preact, react and hono, the caller binds `/var` with
+`const n = temp.value;`, and TypeScript infers `n`'s real type from the
+callee's own return signature for free. Solid cannot do this: its `/var` is
+assigned inside the region's or unit's `$mxReturn={($mxV) => { n = $mxV; }}`
+callback prop (§9's return-value table), so TypeScript's control-flow
+analysis has no directly-assigned value to narrow `n`'s declaration from —
+only a callback invoked at some later, statically-unprovable point. Firstmate
+ruled (2026-09-28) that inferring the real type here is not possible without
+changing the emitted runtime JS: TypeScript's `typeof` operator only accepts
+an identifier, never an arbitrary expression, and the `<return>` expression
+can itself depend on the unit's own body locals (`<let>`, `<const>`, a
+derived signal), so no type-only declaration placed beside the component can
+name it either — every route tried requires either duplicating the
+expression's evaluation at runtime or making the callee generic over a type
+parameter no caller can supply (JSX call sites take no type arguments).
+Solid explicitly declares the binding `let n: any;` (not a bare `let n;`,
+which would additionally report `noImplicitAny`'s own TS7005 on every read,
+unrelated to this gap) on both the `.solid.mx` region path
+(`@mxlang/parser`'s `hoistRegionImports`) and the whole-file `.mx` path
+(`@mxlang/solid`'s `compileSolidUnit`). A misuse of the bound value (e.g.
+calling a string method on a `<return>`'d number) type-checks clean today —
+pinned by a regression test on each path, named so a future fix (MX 2's
+per-callback-scope statement position, `tag-var-in-callback-scope`, would
+also let Solid's `/var` bind synchronously instead of through a callback)
+flips the assertion.
+
 **Decisions:** 67d (superseded), 95, 97e, 97f, 97g, 97h, 98.
 
 ---

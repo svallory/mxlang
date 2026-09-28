@@ -231,20 +231,28 @@ describe("hoisting a region's `/var` bindings", () => {
       "const a = <div><counter/n start=1/><p>${n}</p></div>;",
     );
 
-    expect(code).toContain("let n;");
+    // Explicitly `: any` (TODO tag-var-type-from-return, firstmate's ruling:
+    // option C), not a bare `let n;` — the value is assigned inside the
+    // region's `$mxReturn={...}` callback, so TypeScript cannot narrow it
+    // from the declaration alone, and a bare `let n;` reports its own
+    // `noImplicitAny` TS7005 noise at every read regardless of the
+    // `<return>` value's real type.
+    expect(code).toContain("let n: any;");
     expect(code).toContain("$mxReturn=");
     // After the import and before the region that fills it: a `let`
     // declared below its reader would be a temporal-dead-zone error.
-    expect(code.indexOf("let n;")).toBeGreaterThan(
+    expect(code.indexOf("let n: any;")).toBeGreaterThan(
       code.indexOf('from "./tags/counter.mx"'),
     );
-    expect(code.indexOf("let n;")).toBeLessThan(code.indexOf("$mxReturn="));
+    expect(code.indexOf("let n: any;")).toBeLessThan(
+      code.indexOf("$mxReturn="),
+    );
   });
 
   it("declares nothing for a region that binds no /var", () => {
     const code = withCounter("const a = <div><counter start=1/></div>;");
 
-    expect(code).not.toContain("let n;");
+    expect(code).not.toContain("let n: any;");
     expect(code).not.toContain("$mxReturn=");
   });
 });

@@ -1217,7 +1217,10 @@ describe("a unit that returns a value", () => {
 
     // `let`, not `const`: the callback assigns it during the child's
     // synchronous setup, which happens as the JSX is evaluated.
-    expect(code).toContain("let n;");
+    // Explicitly `: any` (TODO tag-var-type-from-return, firstmate's ruling:
+    // option C) rather than a bare `let n;`, which would report its own
+    // `noImplicitAny` TS7005 noise at every read.
+    expect(code).toContain("let n: any;");
     expect(code).toContain("$mxReturn={($mxV) => { n = $mxV; }}");
     // One-shot, not reactive (risk 4): a plain binding read, with no
     // accessor call wrapped around it. A tag wanting reactivity returns an
