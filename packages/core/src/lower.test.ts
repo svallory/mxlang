@@ -628,6 +628,79 @@ describe("one fixture per IR kind", () => {
     });
   });
 
+  it("local-value-as-tag: a static function declaration stays a direct call", () => {
+    const ir = lowerSource(
+      'static function Foo() {\n  return "x";\n}\n<Foo/>\n',
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "name", name: "Foo" });
+  });
+
+  it("local-value-as-tag: a static class declaration stays a direct call", () => {
+    const ir = lowerSource("static class Foo {}\n<Foo/>\n");
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "name", name: "Foo" });
+  });
+
+  it("local-value-as-tag: a static arrow-function const stays a direct call", () => {
+    const ir = lowerSource('static const Foo = () => "x";\n<Foo/>\n');
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "name", name: "Foo" });
+  });
+
+  it("local-value-as-tag: a static const string is unknown and lowers dynamic", () => {
+    const ir = lowerSource('static const Foo = "hello";\n<Foo/>\n');
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({
+      kind: "dynamic",
+      expr: { code: "Foo" },
+      valueImportBinding: "Foo",
+    });
+  });
+
+  it("local-value-as-tag: a static const call result (lazy/createComponent-style) is unknown and lowers dynamic", () => {
+    const ir = lowerSource(
+      'static const Foo = lazy(() => import("./x"));\n<Foo/>\n',
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({
+      kind: "dynamic",
+      valueImportBinding: "Foo",
+    });
+  });
+
+  it("local-value-as-tag: a <const> bound to an arrow-function component stays a direct call", () => {
+    const ir = lowerSource('<const/Foo=() => "x"/>\n<Foo/>\n');
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({ kind: "name", name: "Foo" });
+  });
+
+  it("local-value-as-tag: a <const> bound to a conditional string-or-component is unknown and lowers dynamic", () => {
+    const ir = lowerSource(
+      'static function A() { return "a"; }\nstatic function B() { return "b"; }\n<const/Foo=cond ? A : B/>\n<Foo/>\n',
+    );
+    const component = find(ir.body, "Component");
+    expect(component.target).toMatchObject({
+      kind: "dynamic",
+      valueImportBinding: "Foo",
+    });
+  });
+
+  it("local-value-as-tag: a tag param is always unknown and lowers dynamic", () => {
+    const ir = lowerSource(
+      "<define/Wrapper|Row|>\n  <Row/>\n</define>\n",
+      fakeDeclarations({
+        isComponent: (name, ctx) => ctx.defines.has(name),
+      }),
+    );
+    const wrapper = find(ir.body, "Define");
+    const component = find(wrapper.children, "Component");
+    expect(component.target).toMatchObject({
+      kind: "dynamic",
+      valueImportBinding: "Row",
+    });
+  });
+
   it("Component collects attribute tags as props, in source order", () => {
     const ir = lowerSource(
       [

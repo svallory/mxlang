@@ -249,6 +249,21 @@ export interface Ctx {
    * runtime dispatch for everything that isn't this one static case.
    */
   importDefaultFromMarkoOrMx: Set<string>;
+  /**
+   * A file-local, non-import PascalCase binding (a `static`/module-scope
+   * `const`, a `<const>`) whose value core could not statically prove is a
+   * function, arrow function, or class — the local extension of decision 116
+   * (firstmate's ruling under decision 116 in
+   * `notes/decisions-2026-09-10.md`). A tag param is always a member of this
+   * set too (its runtime value can never be inspected at lowering time); see
+   * `lowerFor`/`lowerDefine`, which add every param name here alongside
+   * `tagVarShadowed` rather than trying to prove them one way or the other.
+   * Checked only for a `fileLocalBinding` that is neither `ctx.defines` (a
+   * `<define>` call, inherently function-like) nor `ctx.importSpecifiers` (an
+   * import, decision 116's own gate) — a name absent from this set kept its
+   * pre-existing direct call.
+   */
+  unknownLocalValue: Set<string>;
   generate: (node: Node) => string;
   /** What the host declares, as `lower()` consults it (decision 79). */
   declarations: HostDeclarations;
@@ -875,6 +890,30 @@ export function isMarkoOrMxSpecifier(specifier: string): boolean {
   return /\.(?:marko|mx)$/.test(specifier);
 }
 
+/**
+ * Whether an expression node is one core can prove, at lowering time, always
+ * evaluates to a function/class value — the local extension of decision 116
+ * (firstmate's ruling: `function Foo(){}`/`class Foo{}` stay a direct call;
+ * `const Foo = lazy(...)` or any other opaque expression is "unknown" and
+ * lowers dynamic). Deliberately narrow: no alias-chasing through another
+ * identifier, no evaluating a call's return shape — those are exactly the
+ * "unknown" cases the ruling calls out. `node` is a Babel expression/
+ * declaration node (from `markoBabel()`'s parse of a `static` line, or a
+ * `<const>`'s raw value node before `exprOf`), not core's own `Expr`.
+ */
+export function isFunctionLikeValue(node: Node | null | undefined): boolean {
+  switch (node?.type) {
+    case "FunctionExpression":
+    case "ArrowFunctionExpression":
+    case "ClassExpression":
+    case "FunctionDeclaration":
+    case "ClassDeclaration":
+      return true;
+    default:
+      return false;
+  }
+}
+
 /** True when a child list holds anything that renders. */
 export function hasContent(children: Node[]): boolean {
   return children.some((child: Node) => {
@@ -1109,6 +1148,7 @@ export function newCtx(
     importedNames: new Set(),
     importSpecifiers: new Map(),
     importDefaultFromMarkoOrMx: new Set(),
+    unknownLocalValue: new Set(),
     generate,
     declarations,
     lookup,

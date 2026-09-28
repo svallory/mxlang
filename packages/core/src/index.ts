@@ -58,6 +58,7 @@ export {
   type ImportedName,
   importBindings,
   importedNames,
+  isFunctionLikeValue,
   isMarkoOrMxSpecifier,
   type MxWarning,
   type Node,

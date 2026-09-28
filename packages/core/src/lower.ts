@@ -49,6 +49,7 @@ import {
   importBindings,
   importedNames,
   importTypeOnlyBindings,
+  isFunctionLikeValue,
   isMarkoOrMxSpecifier,
   markoBabel,
   type Node,
@@ -528,9 +529,22 @@ function hasParams(ctx: Ctx, node: Node): boolean {
   return (openEnd < 0 ? source : source.slice(0, openEnd)).includes("||");
 }
 
-/** Every name a tag's params bind, for shadowing. */
-function paramBindings(node: Node): string[] {
-  return (node.body?.params ?? []).flatMap((p: Node) => bindingIdentifiers(p));
+/**
+ * Every name a tag's params bind, for shadowing.
+ *
+ * Also registers each into `ctx.unknownLocalValue`: a tag param's runtime
+ * value can never be inspected at lowering time (local extension of decision
+ * 116), so it is unconditionally "unknown" whenever used as a tag — unlike
+ * `unknownLocalValue`'s other entries, a param name never needs removing on
+ * unshadow, since outside its scope it is no longer `ctx.tagVarShadowed`
+ * either and so never reaches `fileLocalBinding` at all.
+ */
+function paramBindings(ctx: Ctx, node: Node): string[] {
+  const names = (node.body?.params ?? []).flatMap((p: Node) =>
+    bindingIdentifiers(p),
+  );
+  for (const name of names) ctx.unknownLocalValue.add(name);
+  return names;
 }
 
 /**
@@ -544,7 +558,7 @@ function lowerBlock(ctx: Ctx, node: Node, body = node.body?.body ?? []): Block {
   // A block is its own JS scope: both the params it shadows *and* anything a
   // `<const>` inside it unregisters are confined to it.
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(node));
+  const restore = shadowBindings(ctx, paramBindings(ctx, node));
   const children = lowerChildren(ctx, body);
   restore();
   unscope();
@@ -1012,7 +1026,7 @@ function lowerOneAttributeTag(
     : { open: true, owner: `@${name}` };
 
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(node));
+  const restore = shadowBindings(ctx, paramBindings(ctx, node));
   const nested = lowerAttributeTags(ctx, node, nestedSchema);
   const block: Block = {
     hasParams: hasParamsAtCall,
@@ -1446,7 +1460,7 @@ function lowerForHead(
     fail("`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`", node);
   }
 
-  const bindings = paramBindings(node);
+  const bindings = paramBindings(ctx, node);
   return {
     source,
     params,
@@ -1496,6 +1510,14 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // resolves to `const count = count() + 1`. Shadowing takes effect only
   // afterwards, for the rest of the render scope.
   const init = exprOf(ctx, value.value);
+  // Local extension of decision 116: a `<const>` bound to a plain identifier
+  // whose value isn't statically a function/arrow/class is "unknown" and
+  // routes dynamic when later used as a tag — a destructuring pattern
+  // (`<const/{a,b}=...>`) never names a single PascalCase tag binding, so it
+  // is left out of this check entirely rather than guessed at.
+  if (node.var?.type === "Identifier" && !isFunctionLikeValue(value.value)) {
+    ctx.unknownLocalValue.add(name);
+  }
   shadowBindings(ctx, bindingIdentifiers(node.var));
 
   return { kind: "Const", name, init, loc: posOf(node) };
@@ -1522,7 +1544,7 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
   // design (it shadows for the rest of *its* enclosing scope, which here is
   // the define body, not the caller's).
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(node));
+  const restore = shadowBindings(ctx, paramBindings(ctx, node));
   const [children, prelude] = withPrelude(ctx, () =>
     lowerChildren(ctx, node.body?.body ?? []),
   );
@@ -1547,6 +1569,57 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
     children: [...hoisted, ...children],
     loc,
   };
+}
+
+/**
+ * Registers every PascalCase name a `static` block's own top-level
+ * declarations bind, classifying each by whether its value is statically
+ * provable function/arrow/class (local extension of decision 116). Mirrors
+ * `lowerStatement`'s `import` branch, which does the equivalent for an
+ * `import` line, except `static` may declare several statements
+ * (`static { const A = 1; function B(){} }`-style bodies are not MX's
+ * `static` grammar, but `static const A = 1, B = () => {}` and a bare
+ * `static function Foo(){}` both are), so every top-level statement in the
+ * parsed block is walked rather than assuming one declaration.
+ *
+ * Only a capitalized binding is registered: a lowercase `static const x = 1`
+ * is never resolved as a component tag (decision 116's own casing gate,
+ * `fileLocalBinding`'s `/^[A-Z]/` test), so classifying it would be dead
+ * weight no caller reads.
+ */
+function registerStaticBindings(ctx: Ctx, code: string): void {
+  let file: { program: { body: Node[] } };
+  try {
+    file = markoBabel().parse(code, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
+  } catch {
+    return;
+  }
+  for (const statement of file.program.body) {
+    if (statement.type === "FunctionDeclaration" && statement.id) {
+      const bound = statement.id.name as string;
+      if (/^[A-Z]/.test(bound)) ctx.imports.add(bound);
+      continue;
+    }
+    if (statement.type === "ClassDeclaration" && statement.id) {
+      const bound = statement.id.name as string;
+      if (/^[A-Z]/.test(bound)) ctx.imports.add(bound);
+      continue;
+    }
+    if (statement.type === "VariableDeclaration") {
+      for (const declarator of statement.declarations as Node[]) {
+        if (declarator.id?.type !== "Identifier") continue;
+        const bound = declarator.id.name as string;
+        if (!/^[A-Z]/.test(bound)) continue;
+        ctx.imports.add(bound);
+        if (!isFunctionLikeValue(declarator.init)) {
+          ctx.unknownLocalValue.add(bound);
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -1595,9 +1668,11 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     return { kind: "Import", code: line, bindings, loc, end };
   }
   if (name === "static") {
+    const code = line.replace(/^static\s+/, "");
+    registerStaticBindings(ctx, code);
     return {
       kind: "Static",
-      code: line.replace(/^static\s+/, ""),
+      code,
       loc,
       end,
     };
@@ -1635,7 +1710,7 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
     loweredTags.flat,
   );
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(node));
+  const restore = shadowBindings(ctx, paramBindings(ctx, node));
   const children = lowerChildren(ctx, loweredTags.contentChildren);
   restore();
   unscope();
@@ -2209,6 +2284,24 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx.importSpecifiers.has(name) &&
       !ctx.importDefaultFromMarkoOrMx.has(name)
     ) {
+      return lowerComponent(ctx, node, {
+        kind: "dynamic",
+        expr: { code: name, shape: "other", node: null as unknown as Node },
+        valueImportBinding: name,
+      });
+    }
+    // Local extension of decision 116 (firstmate's ruling under decision 116
+    // in `notes/decisions-2026-09-10.md`): a non-import local (a
+    // `static`/module-scope declaration, a `<const>`, a `<for>`/`<define>`
+    // tag param) whose value core could not statically prove is a
+    // function/arrow/class also lowers dynamic — a plain `function Foo(){}`/
+    // `class Foo{}`/`const Foo = () => {}` stays the direct call above,
+    // matching every host's pre-existing, most common authoring pattern;
+    // `const Foo = lazy(...)`, a conditional, a string, or a tag param (whose
+    // runtime value can never be inspected here) is "unknown" and routes
+    // here instead. Same `valueImportBinding` provenance channel decision
+    // 116 already built, so typed attribute-tag checking is unaffected.
+    if (ctx.unknownLocalValue.has(name)) {
       return lowerComponent(ctx, node, {
         kind: "dynamic",
         expr: { code: name, shape: "other", node: null as unknown as Node },
