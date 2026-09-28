@@ -1241,6 +1241,60 @@ describe("local scope bindings shadow a registered custom tag (executed)", () =>
     );
     expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
   });
+
+  // Round 2 (lead review): a `<const>` never restores its own shadow (by
+  // design), so leak prevention comes entirely from the `<if>` branch's own
+  // scope wrapper. Executed proof that the round-2 fix to `scopeBindings`
+  // (core.ts) reverts `ctx.tagVarShadowed` too, not only `ctx.bindings`.
+  it("a `<const/Panel=…/>` binding inside an `<if>` branch renders the registered custom tag immediately outside the branch", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<if=true>",
+        "<const/Panel=LocalPanel/>",
+        "<Panel/>",
+        "</if>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
+  });
+
+  it("a `<const/Panel=…/>` binding inside an `<else>` branch renders the registered custom tag immediately outside the chain", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<if=false>",
+        "<p>a</p>",
+        "</if>",
+        "<else>",
+        "<const/Panel=LocalPanel/>",
+        "<Panel/>",
+        "</else>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
+  });
+
+  it("a `<const/Panel=…/>` binding inside an `<if>` nested in a `<for>` body renders the registered custom tag immediately outside both scopes", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<for|x| of=[1]>",
+        "<if=true>",
+        "<const/Panel=LocalPanel/>",
+        "<Panel/>",
+        "</if>",
+        "<Panel/>",
+        "</for>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe(
+      "<span>local-panel</span><mx-marker></mx-marker><mx-marker></mx-marker>",
+    );
+  });
 });
 
 /**

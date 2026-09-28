@@ -431,6 +431,32 @@ Five facts worth knowing before editing it:
   `isComponent` alone — a `<const>`/tag-param binding proves it is a
   component call on its own, independent of what any host's `isComponent`
   can see.
+  **Round 2 (found by review): the "reverts outside the branch" claim above
+  was false until `scopeBindings` itself was fixed.** `scopeBindings`
+  (`core.ts`) snapshotted only `ctx.bindings`, never `ctx.tagVarShadowed` — so
+  a `<const>` written inside an `<if>`/`<else>` branch (which never calls its
+  own `shadowBindings` restore, by design: it shadows for the rest of *its
+  enclosing scope*) permanently replaced `ctx.tagVarShadowed`, leaking the
+  shadow past the branch for the rest of the file. `<for>`- and
+  `<define>`-param bindings were unaffected (their own `shadowBindings`
+  restore reverts `tagVarShadowed` regardless of the enclosing
+  `scopeBindings`), but `lowerDefine` itself had the identical class of bug
+  independently: it called `shadowBindings` (params only) with no
+  `scopeBindings` wrapper at all, so a `<const>` written *inside* a
+  `<define>` body leaked past the `<define>` too. Both are now fixed at the
+  root: `scopeBindings` snapshots and restores `ctx.tagVarShadowed` alongside
+  `ctx.bindings`, and `lowerDefine` now wraps its body walk in `scopeBindings`
+  like every other block (`lowerBlock`, `lowerFor`, the `<if>`/attribute-`<if>`
+  branch handlers) already did. `<try>` needed no change — its content
+  already routes through `lowerBlock`. Executed-render regression tests
+  (`<const>` inside `<if>`, inside `<else>`, inside an `<if>` nested in a
+  `<for>`) are in `packages/hosts/html/src/translate.test.ts`; IR-level
+  coverage for the same three cases is in `custom-tags.test.ts`. Preact
+  cannot express a `<const>`/`<define>` nested inside `<if>`/`<for>` markup at
+  all (every structural kind there lowers to an expression with no statement
+  position — a pre-existing, unrelated host limitation), so it has no
+  matching test; see the comment in `packages/hosts/preact/src/index.test.ts`
+  for why.
 - **The scan is synchronous, and that is load-bearing.** Bun's `onLoad`,
   Volar's `createVirtualCode`, `diagnoseDocument` and `mx-tsc` all call from
   positions that cannot await; only the Vite plugin could. One synchronous

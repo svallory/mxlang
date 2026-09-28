@@ -1546,4 +1546,69 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
     // the scope reverted outside `<define>`.
     expect(find(rest, "Element").name).toBe("mx-marker");
   });
+
+  // Round 2 (lead review): `<const>` never calls its own `shadowBindings`
+  // restore (by design — it shadows for the rest of *its enclosing scope*),
+  // so the leak-prevention has to come entirely from the *branch's own*
+  // `scopeBindings` wrapper. Before the round-2 fix, `scopeBindings`
+  // snapshotted `ctx.bindings` but not `ctx.tagVarShadowed`, so a `<const>`
+  // written inside an `<if>` branch permanently replaced
+  // `ctx.tagVarShadowed` — leaking the shadow past the branch for the rest
+  // of the file. Matches the Marko measurement in the brief: Marko reverts
+  // to the registered tag immediately outside the `<if>`.
+  it("a `<const/Panel=…/>` binding inside an `<if>` branch does not leak past the branch", () => {
+    const ir = lowerWithTags(
+      '<if=true>\n<const/Panel=() => "x"/>\n<Panel/>\n</if>\n<Panel/>\n',
+      { Panel: panel },
+      componentPolicy,
+    );
+    const ifChain = find(ir.body, "IfChain");
+    expect(
+      find(ifChain.branches[0]?.children ?? [], "Component").target,
+    ).toMatchObject({
+      kind: "name",
+      name: "Panel",
+    });
+    const rest = ir.body.slice(ir.body.indexOf(ifChain) + 1);
+    expect(find(rest, "Element").name).toBe("mx-marker");
+  });
+
+  it("a `<const/Panel=…/>` binding inside an `<else>` branch does not leak past the chain", () => {
+    const ir = lowerWithTags(
+      '<if=false>\n<p>a</p>\n</if>\n<else>\n<const/Panel=() => "x"/>\n<Panel/>\n</else>\n<Panel/>\n',
+      { Panel: panel },
+      componentPolicy,
+    );
+    const ifChain = find(ir.body, "IfChain");
+    expect(
+      find(ifChain.branches[1]?.children ?? [], "Component").target,
+    ).toMatchObject({ kind: "name", name: "Panel" });
+    const rest = ir.body.slice(ir.body.indexOf(ifChain) + 1);
+    expect(find(rest, "Element").name).toBe("mx-marker");
+  });
+
+  it("a `<const/Panel=…/>` binding inside an `<if>` nested in a `<for>` body does not leak past either scope", () => {
+    const ir = lowerWithTags(
+      '<for|x| of=[1]>\n<if=true>\n<const/Panel=() => "x"/>\n<Panel/>\n</if>\n<Panel/>\n</for>\n<Panel/>\n',
+      { Panel: panel },
+      componentPolicy,
+    );
+    const forNode = find(ir.body, "For");
+    const ifChain = find(forNode.children, "IfChain");
+    expect(
+      find(ifChain.branches[0]?.children ?? [], "Component").target,
+    ).toMatchObject({
+      kind: "name",
+      name: "Panel",
+    });
+    // Outside the `<if>` but still inside the `<for>` body: the const's
+    // shadow must not have escaped the `<if>` branch either.
+    const afterIf = forNode.children.slice(
+      forNode.children.indexOf(ifChain) + 1,
+    );
+    expect(find(afterIf, "Element").name).toBe("mx-marker");
+    // Outside the `<for>` entirely.
+    const rest = ir.body.slice(ir.body.indexOf(forNode) + 1);
+    expect(find(rest, "Element").name).toBe("mx-marker");
+  });
 });
