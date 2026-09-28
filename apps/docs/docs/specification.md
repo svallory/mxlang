@@ -865,6 +865,21 @@ Everything else reaches Marko's own error. Solid has no taglib-backed
 `.solid.mx` region is a fragment compile, not a whole-Marko-file parse), so
 that route never applies here.
 
+**A type-only import never resolves a tag, in a whole-file `.mx` on any
+host either** (decision 114/115). `@mxlang/core`'s `importBindings` used to
+return every specifier of an `import` statement with no check of
+`importKind`, so `import type Widget from "./widget.mx"` bound `Widget` the
+same as a value import and `<Widget/>` silently lowered to a component call
+— a runtime `ReferenceError`, not Marko's compile error, on every host. Fixed
+at the shared root: `Ctx.imports` (what every host's `isComponent` and
+core's own file-local-binding check consult) now holds value bindings only;
+a new `Ctx.importedNames` (every binding, type or value) serves the two
+readers that need the older, unfiltered meaning — `needsAttrTagImport`'s "is
+`AttrTag` already imported" check and the self-export collision check. The
+import statement is still emitted verbatim either way. Mirrors
+`@mxlang/parser`'s `programBindings` above, which already excluded the same
+two shapes for the `.solid.mx` *region* path.
+
 ### Dynamic tags
 
 `<${expr}>` — with or without attributes or a body — is a dynamic tag, and so

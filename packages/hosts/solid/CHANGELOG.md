@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- A type-only import (`import type Widget from "./widget.mx"`, or
+  `import { type Widget } from "..."`) no longer resolves `<Widget/>` as a
+  component: it now reaches Marko's own unresolved-tag compile error, on
+  every whole-file `.mx` entry point (`compileSolidUnit`) as well as every
+  other host, since the fix is in `@mxlang/core`'s shared import-binding
+  resolution (decision 114/115). A type-only import is still emitted
+  verbatim.
 - `<define>` is supported inside a `.solid.mx` region (decision 110b).
   Previously a compile error: `` `<define>` cannot declare a function
   inside a JSX expression; declare it in the surrounding TypeScript module
