@@ -1770,6 +1770,113 @@ describe("hidden type errors in the Solid virtual code (solid-virtual-code-hidde
       checked.diagnostics.map((diagnostic) => diagnostic.code),
     ).not.toContain(2304);
   });
+
+  it("still imports `Show` when the user has only a type-only import of it", () => {
+    const files = {
+      [`${solidDirectory}/if-type-only-import.solid.mx`]: [
+        'import type { Show } from "some-types-only-module";',
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-type-only-import.solid.mx`,
+      "solid",
+    );
+
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+    expect(checked.code).toContain('import { Show } from "solid-js"');
+  });
+
+  it("still imports `Show` when only an inline `type` specifier names it", () => {
+    const files = {
+      [`${solidDirectory}/if-inline-type-specifier.solid.mx`]: [
+        'import { type Show, For } from "some-types-only-module";',
+        "export interface Input { show: boolean; items: string[]; }",
+        "export default function C(input: Input) {",
+        "  return (",
+        "    <div>",
+        "      <for|item| of=input.items>",
+        "        <div>item</div>",
+        "      </for>",
+        "      <if=input.show>",
+        "        <div>shown</div>",
+        "      </if>",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-inline-type-specifier.solid.mx`,
+      "solid",
+    );
+
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+    // `For` is a real value binding from the user's import — not re-imported.
+    expect(checked.code.match(/"solid-js"/g)?.length).toBe(1);
+    expect(checked.code).toContain('import { Show } from "solid-js"');
+  });
+
+  it("does not append `Show` when a namespace import merely shadows it indirectly", () => {
+    const files = {
+      [`${solidDirectory}/if-namespace-import.solid.mx`]: [
+        'import * as SolidJs from "solid-js";',
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  SolidJs;",
+        "  return (",
+        "    <if=input.show>",
+        "      <div>shown</div>",
+        "    </if>",
+        "  );",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-namespace-import.solid.mx`,
+      "solid",
+    );
+
+    // The namespace import binds only `SolidJs`, never `Show` — the built-in
+    // import is still needed and appended.
+    expect(
+      checked.diagnostics.map((diagnostic) => diagnostic.code),
+    ).not.toContain(2304);
+    expect(checked.code).toContain('import { Show } from "solid-js"');
+  });
+
+  it("does not append `Show` when the file has its own default-imported `Show`", () => {
+    const files = {
+      [`${solidDirectory}/if-default-import.solid.mx`]: [
+        'import Show from "./my-own-show.ts";',
+        "export interface Input { show: boolean; }",
+        "export default function C(input: Input) {",
+        "  return <Show when=input.show><div>shown</div></Show>;",
+        "}",
+      ].join("\n"),
+    };
+    const checked = emittedDiagnostics(
+      files,
+      `${solidDirectory}/if-default-import.solid.mx`,
+      "solid",
+    );
+
+    expect(checked.code.match(/"solid-js"/g)).toBeNull();
+  });
 });
 
 describe("Astro language plugin composition", () => {

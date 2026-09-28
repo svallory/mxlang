@@ -105,7 +105,12 @@ import's *local* name (so `import { Show as MyShow }` binds `MyShow`, never
 scanning lines for the built-in's name as text: a line-based probe cannot
 tell a multi-line `import {\n  Show,\n} from "solid-js"` from an unrelated
 line, and cannot tell a bound identifier from a substring inside an alias
-clause.
+clause. **A type-only import never counts as a binding.** Both
+`import type { Show } from "x"` (the whole declaration's `importKind`) and
+`import { type Show, For } from "x"` (one specifier's own `importKind`) are
+excluded, since neither introduces a value named `Show` the emitted `<Show>`
+tag could actually resolve to — only `declare const`/`function`/`class` and
+an ordinary value import do that.
 
 **No ambient `declare module "*.solid.mx"` shim, anywhere.** A shim asserts
 types rather than deriving them, so it hides both a file's real exports and

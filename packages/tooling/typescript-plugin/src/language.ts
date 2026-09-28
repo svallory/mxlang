@@ -365,7 +365,14 @@ function sourceBindings(generated: string): Set<string> {
   for (const statement of program.body) {
     switch (statement.type) {
       case "ImportDeclaration":
+        if (statement.importKind === "type") break;
         for (const specifier of statement.specifiers) {
+          if (
+            specifier.type === "ImportSpecifier" &&
+            specifier.importKind === "type"
+          ) {
+            continue;
+          }
           bound.add(specifier.local.name);
         }
         break;
