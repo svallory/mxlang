@@ -59,11 +59,26 @@ this by walking upward from the file, looking for the nearest `package.json`:
 
 `@mxlang/astro` always compiles under its strict policy (it ships no stateful
 tags), whatever `strict` says. The Solid host also has a fixed profile:
-`host: "solid"` routes whole-file `.mx` templates through
-`compileSolidMx`, so stateful Marko tags are rejected. A `.solid.mx` suffix or
-`solidmx`/`SolidMX` language id takes precedence over package policy because
-that suffix identifies a different file format: TypeScript/TSX with MX
-regions.
+`host: "solid"` routes a whole-file `.mx` template through
+`compileSolidUnit` (decision 115; the *region* compiler, `compileSolidMx`,
+is reserved for `.solid.mx`'s embedded MX regions — a whole file has its own
+module scope to place an authored `import` in, which a region spliced into
+someone else's module does not), so stateful Marko tags are rejected the
+same way. A `.solid.mx` suffix or `solidmx`/`SolidMX` language id takes
+precedence over package policy because that suffix identifies a different
+file format: TypeScript/TSX with MX regions.
+
+**A whole-file Solid `.mx` component's ordinary props are not yet
+type-checked** (TODO `solid-whole-file-prop-typing`): `compileSolidUnit`
+drops `export interface Input` from its emitted module (Solid's compiler has
+no TypeScript frontend), so the emitted `function Card(input)` carries no
+type annotation and `input` resolves as implicit `any` wherever this server's
+diagnostics ultimately come from a virtual-code type-check (the TypeScript
+plugin, not this server's own `TranslateError`-based diagnostics, which are
+unaffected — a compile-time error like an unresolved tag still reports
+correctly here). AttrTag props are unaffected (checked via `satisfies` at the
+call site); a `.solid.mx` region stays fully typed (its virtual code keeps
+the real `Input`).
 
 The resolver lives in `@mxlang/core` (`src/host-policy.ts`), shared with
 `@mxlang/typescript-plugin`; see `src/host-policy.test.ts` there for every

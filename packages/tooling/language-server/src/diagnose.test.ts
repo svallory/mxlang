@@ -43,6 +43,23 @@ describe("diagnoseDocument", () => {
     expect(diagnostics[0]?.range.start.line).toBe(0);
   });
 
+  it("reports a whole-file Solid .mx compile error at its own line and column (decision 115)", () => {
+    // Whole-file `.mx` resolved to Solid must go through `compileSolidUnit`,
+    // not the region compiler `compileSolidMx` — before decision 115's
+    // wiring this host was unreachable for a whole-file `.mx` at all here.
+    const source = "export interface Input { }\n\n<div>\n";
+    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
+      host: "solid",
+    });
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(1); // DiagnosticSeverity.Error
+    expect(diagnostics[0]?.message).toMatch(/Missing ending "div" tag/);
+    // 1-based Marko line 3 -> 0-based LSP line 2.
+    expect(diagnostics[0]?.range.start.line).toBe(2);
+    expect(diagnostics[0]?.range.start.character).toBe(0);
+  });
+
   it("reports nothing for a valid file", () => {
     const source = "<p>hello</p>\n";
     const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
