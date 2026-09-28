@@ -21,7 +21,7 @@ import { compile } from "@mxlang/html";
 import { print } from "@mxlang/parser";
 import { compilePreactMx } from "@mxlang/preact";
 import { compileReactMx } from "@mxlang/react";
-import { compileSolidMx } from "@mxlang/solid";
+import { compileSolidMx, compileSolidUnit } from "@mxlang/solid";
 import {
   type Diagnostic,
   DiagnosticSeverity,
@@ -225,10 +225,14 @@ export function diagnoseDocument(
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else if (hostPolicy.host === "solid") {
-      // A whole-file `.mx` document routed to the Solid host uses the same
-      // fixed Solid profile as an embedded region. Its declarations reject
-      // stateful Marko tags; there is no looser Solid policy to select.
-      const result = compileSolidMx(text, {
+      // A whole-file `.mx` document routed to the Solid host. Unlike an
+      // embedded `.solid.mx` region — a fragment spliced into someone
+      // else's module — a whole-file unit is a module of its own, so it
+      // goes through `compileSolidUnit`, not the region compiler
+      // (decision 115); its declarations reject stateful Marko tags the
+      // same way either compiler does, so there is no looser Solid policy
+      // to select.
+      const result = compileSolidUnit(text, {
         filename: uri,
         customTags,
         warnings,
