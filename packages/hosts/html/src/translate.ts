@@ -512,8 +512,8 @@ export const policy: Policy = {
 export const escapeFrom = "@mxlang/html";
 
 /**
- * Reactive constructs, rejected by name instead of rendering their initial
- * value or being treated as inert.
+ * Reactive and debug-only constructs, rejected by name instead of rendering
+ * their initial value or being treated as inert.
  *
  * Kept from `.mx`'s dialect (decision 68's policy fold) as an opt-in stance,
  * not the default: `policy.tags` renders `<let>`'s initial value and treats
@@ -521,6 +521,10 @@ export const escapeFrom = "@mxlang/html";
  * what Marko's own server render emits (decision 65). A `strict` author may
  * instead want a construct that only makes sense with a reactive runtime to
  * be a compile error, naming the construct, rather than silently accepted.
+ * `<log>`/`<debug>` join this set for the same reason (decision 111): both
+ * are debug-only tooling with no place in output a strict author expects to
+ * be exhaustively accounted for, so they are rejected by name rather than
+ * compiled away as inert.
  * `<await>`/`<try>`-with-placeholder are errors in both policies already —
  * the target genuinely cannot express them — so only the inert/initial-value
  * rows change here. `<return>` has no row: it is not this target's business,
@@ -558,6 +562,16 @@ const STRICT_TAGS: Record<string, Disposition> = {
     kind: "error",
     reason:
       "`<id>` allocates an identifier for the reactive runtime; this strict policy has no reactive target",
+  },
+  log: {
+    kind: "error",
+    reason:
+      "`<log>` writes to the console; this strict policy rejects debug-only constructs by name rather than silently compiling them away",
+  },
+  debug: {
+    kind: "error",
+    reason:
+      "`<debug>` is a debugger hook; this strict policy rejects debug-only constructs by name rather than silently compiling them away",
   },
 };
 

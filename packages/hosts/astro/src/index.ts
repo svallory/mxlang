@@ -113,11 +113,13 @@ const DEFAULT_EXTENSIONS = [".mx"];
  *
  * `strict: true` on the Vite plugin selects `@mxlang/html`'s
  * `strictPolicy`: `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
- * blocks and `<id>` become compile errors naming the construct instead of
- * rendering their initial value or compiling away as inert. Decision 71 —
- * stateful tags mean whatever the host says, and this host has no reactive
- * target at all, so "this needs a runtime" is a build error rather than
- * markup that silently renders once and never updates.
+ * blocks, `<id>`, `<log>` and `<debug>` become compile errors naming the
+ * construct instead of rendering their initial value or compiling away as
+ * inert. Decision 71 — stateful tags mean whatever the host says, and this
+ * host has no reactive target at all, so "this needs a runtime" is a build
+ * error rather than markup that silently renders once and never updates.
+ * `<log>`/`<debug>` join the same set under decision 111, rejected as
+ * debug-only tooling rather than inert.
  */
 export default function mxAstro(
   options: MxIntegrationOptions = {},

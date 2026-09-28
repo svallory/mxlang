@@ -40,9 +40,11 @@ Four facts worth knowing before editing it:
   inserted verbatim, so a template must use `$!{input.content()}`, never
   `${...}`, or the markup Astro rendered comes out escaped.
 - **The host compiles under `strictPolicy`**, so `<let>`, `<effect>`,
-  `<lifecycle>`, `<script>`, `client` blocks and `<id>` are compile errors
-  naming the construct (decision 71: stateful tags mean whatever the host
-  says, and this host has no reactive target at all). That required the one
+  `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>` and `<debug>`
+  are compile errors naming the construct (decision 71: stateful tags mean
+  whatever the host says, and this host has no reactive target at all;
+  decision 111 adds `<log>`/`<debug>` as debug-only tooling rejected the
+  same way). That required the one
   change to `@mxlang/vite-plugin` this package needed: a `strict?: boolean`
   option on `MxPluginOptions`, passed straight through to `compile()`. It is a
   passthrough, not a policy of the plugin's own; `.solid.mx` never goes
