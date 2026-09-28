@@ -1477,7 +1477,7 @@ differences noted), **Astro `.amx`**, **Angular**.
 | `for of` | `for (const p of …)` | same | `<For each>` (no `keyed`) | `.map`, key = item identity | `.map`, **no key** | `@for (… track $index)` + warning |
 | `for of` + `by="id"` | **ignored** | ignored | `keyed={x=>x.id}` | `key={p.id}` | **ignored** | `track p.id` |
 | `for in` | `Object.entries` loop | same | `<For each={Object.entries(o)} keyed={e=>e[0]}>`, reads via `mxEntry()` | `.map(([k,v])=>…)`, `key={k}` | `.map(([k,v])=>…)` | `\| keyvalue: null` + warning |
-| `for` range | `for (let i=a; i<=b; i++)` | same | `<Repeat count from>` | `Array.from({length}).map` | **emits invalid JS — bug 3** | folded literal array |
+| `for` range | `for (let i=a; i<=b; i++)` | same | `<Repeat count from>` | `Array.from({length}).map` | `Array.from({length}).map` | folded literal array |
 | `for` range + `step=` | **error** | error | `<Repeat>` with `i = from + k*step` | `Array.from` with computed length | error | folded literal array |
 | `define` | local render function | same | **error** — no local component form in a JSX expression | `const R = (p) => (<>…</>)` hoisted | **error** — extract to its own `.amx` | `<ng-template #R let-p>` |
 | `const` | `const x = …` | same | **error** in a region | `const` at component-body top | **error** — declare it in the fence | `@let x = …;` |
@@ -1579,7 +1579,7 @@ does something else, silently.
 |---|---|---|
 | 1 | Angular | **FIXED 2026-09-17** (task `angular-spec-gaps`). Was: no stateful-tag policy at all — the emitter declared only `try`. `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `client`/`server` all emitted **literal elements** (`<effect [value]="…">`); `<let>`/`<id>`/`<await>` failed only incidentally, via the generic field guard, so `<let x=1/>` with no `/var` also emitted a literal element. Now every one of these is its own positioned error (`STATEFUL_ERRORS`, `packages/hosts/angular/src/emitter.ts`), same wording family as `@mxlang/preact`'s `statefulErrors`. |
 | 2 | html, Preact | **`<return>` is documented as a compile error and is not.** Both READMEs list it under "Errors"; the code reverses this under decision 95 and both hosts emit `{ value, output }`. |
-| 3 | Astro `.amx` | **Every range `<for>` emits invalid JavaScript.** `Math.max(0, (` opens two parens and only one closes: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserts only a substring (`toContain("(3) - (1) + 1")`), which passes regardless. |
+| 3 | Astro `.amx` | **FIXED 2026-09-28.** Every range `<for>` emitted invalid JavaScript: `Math.max(0, (` opened two parens and only one closed: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserted only a substring (`toContain("(3) - (1) + 1")`), which passed regardless; now the tests assert the exact emitted code and that the real Astro compiler (`@astrojs/compiler-rs`) reports zero diagnostics for `from`/`to`, `until`, no-`from`, descending, and expression-bound ranges. |
 | 4 | Solid | **FIXED 2026-09-27**, decision 106. Repeated attribute tags now emit real arrays. |
 | 5 | html-strict | **`<log>`/`<debug>` survive `strict`.** `STRICT_TAGS` overrides six names but not these two, so they stay inert under strict — and therefore under the Astro `.mx` host, whose README claims all stateful tags are build errors. |
 | 6 | Preact | README claims a non-object `style=` is an error; `<div style="color:red"/>` compiles. |
@@ -1681,7 +1681,6 @@ reported, not edited (per this task's brief).
 |---|---|---|
 | `packages/hosts/html/README.md`, `packages/hosts/preact/README.md` | `<return>` listed under "Error — the target genuinely cannot" | Both hosts emit `{ value, output }`; decision 95 reversed this and the code comments say so explicitly. |
 | `packages/hosts/html/src/translate.ts:511` | "`<await>`/`<try>`-with-placeholder/`<return>` are errors in both policies already" | `<return>` is not among them; the html host has no `return` disposition at all. |
-| `packages/hosts/astro/README.md` | The `.amx` lowering table shows the range `<for>` row working | It emits unparseable JavaScript — bug 3. |
 | `packages/hosts/astro/README.md` (Astro `.mx` host) | All stateful tags are build errors | `<log>`/`<debug>` stay inert under `strictPolicy` — bug 5. |
 | `packages/hosts/preact/README.md` | A non-object `style=` is an error | It compiles. |
 | `packages/hosts/angular/README.md` | Never mentions stateful tags | They emit literal elements — bug 1. |
