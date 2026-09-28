@@ -49,6 +49,33 @@ Four facts worth knowing before editing it:
   option on `MxPluginOptions`, passed straight through to `compile()`. It is a
   passthrough, not a policy of the plugin's own; `.solid.mx` never goes
   through the translator and is unaffected.
+- **A capitalized tag resolves through the `---` fence's own value bindings**
+  (decision 114 parity, `unresolved-tag-jsx-astro-angular`), not by bare
+  casing. `lowerAstroMx` parses the fence's own top-level imports and
+  `const`/`function`/`class` declarations with `@mxlang/parser`'s
+  `sourceBindings` (type-only bindings excluded, same rule as everywhere
+  else decision 114/115 applies) and feeds them into `ctx.imports` before
+  lowering — the same operator-ruling extension `.solid.mx`'s
+  `moduleBindings` already gave decision 114, since Astro's local-component
+  form *is* a fence import and a `.amx` template body has no MX-level
+  `import`/`<define>`/`<const>` of its own. `isComponent` used to be a bare
+  `/^[A-Z]/` test, so `<TotallyUndefined/>` (no fence import) silently
+  emitted a JSX reference to nothing; `rejectUnknownTag` now reports Marko's
+  own wording for that case, through the same `lower.ts` hook every other
+  host uses. A discovered/registered custom tag is unaffected — checked
+  earlier in `lower.ts`'s precedence order, before `isComponent` is ever
+  asked.
+  **`Fragment` is the one Astro built-in that resolves with no fence
+  import.** Measured against `@astrojs/compiler-rs` (astro@7.3.2): the
+  compiler auto-injects `import { Fragment, ... } from
+  "astro/runtime/server/index.js"` for any `<Fragment>` reference, the
+  *only* capitalized name it does this for — every other candidate tried
+  (`Markdown`, `Debug`, `Prism`, `Code`, an arbitrary unbound name) compiles
+  to a bare reference with **no** import and **no** diagnostic (the Astro
+  compiler runs no resolvability check of its own at all), a silent runtime
+  `ReferenceError` for anything MX cannot otherwise resolve. `isComponent`
+  checks `ASTRO_BUILTIN_TAG_NAMES` (today, just `Fragment`) after
+  `ctx.imports`, the same shape as Solid's `SOLID_BUILTIN_TAG_NAMES`.
 - **No `clientEntrypoint`, and the host raises the `client:*` error itself.**
   `AstroRenderer` declares the field optional, so a hydration-free renderer is
   a first-class shape. The research note (and this file, before it was

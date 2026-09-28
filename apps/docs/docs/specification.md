@@ -865,6 +865,41 @@ Everything else reaches Marko's own error. Solid has no taglib-backed
 `.solid.mx` region is a fragment compile, not a whole-Marko-file parse), so
 that route never applies here.
 
+**Extended to Preact, React, Hono and Astro (`unresolved-tag-jsx-astro-angular`,
+firstmate scope: preact/react/hono/astro, Angular out).** Before this, the
+shared JSX emitter's (`@mxlang/preact`, reused by `@mxlang/react`/
+`@mxlang/hono`) `isComponent` fell back to a bare `isComponentName`
+(`/^[A-Z]/`) test whenever the taglib lookup found nothing, and `@mxlang/astro`'s
+`isComponent` was that bare test outright — so `<TotallyUndefined/>` (no
+import, binding, or taglib entry) silently emitted a JSX component reference
+to nothing on all four hosts, a runtime error rather than Marko's compile
+error. Both now resolve a capitalized tag only when it genuinely resolves,
+each supplying `rejectUnknownTag` (Marko's own wording) for the fallthrough:
+
+- **Preact/React/Hono** (whole-file `.mx`, real MX-level `import`/`<define>`/
+  `<const>` statements): `ctx.imports`/`ctx.defines` — already populated by
+  `lower.ts`'s own `lowerStatement`/`fileLocalBinding` for an MX-level
+  binding — or a taglib entry. No new binding source; the fallback simply
+  changed from `isComponentName(name)` to `false`.
+- **Astro** (`.amx`): a `.amx` template body has no MX-level
+  `import`/`<define>`/`<const>` of its own — Astro's local-component form
+  *is* a `---` fence import — so `lowerAstroMx` now parses the fence's own
+  top-level value bindings (`@mxlang/parser`'s `sourceBindings`, the same
+  reader `.solid.mx`'s `moduleBindings` extension above uses) and feeds them
+  into `ctx.imports` before lowering, the operator-ruling extension pattern
+  decision 114 already established for `.solid.mx`'s larger scope. A `.amx`
+  file previously had no way to resolve a component at all through core's
+  precedence order (no taglib, no MX-level binding), so every capitalized tag
+  used to resolve purely by casing; a discovered/registered custom tag is
+  unaffected (checked earlier in `lower.ts`'s precedence order, before
+  `isComponent` is ever asked).
+
+Type-only fence imports are excluded the same way `sourceBindings`/
+`importBindings` already exclude a type-only value import everywhere else
+(decision 114/115, above): `import type Widget from "./widget.mx"` binds no
+runtime value, so `<Widget/>` on any of these four hosts is Marko's unresolved-
+tag error, not a silent reference.
+
 **A type-only import never resolves a tag, in a whole-file `.mx` on any
 host either** (decision 114/115). `@mxlang/core`'s `importBindings` used to
 return every specifier of an `import` statement with no check of

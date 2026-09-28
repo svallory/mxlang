@@ -23,13 +23,13 @@ async function astroDiagnostics(source: string): Promise<unknown[]> {
   return result.diagnostics ?? [];
 }
 
-/** Lowers a template with an empty fence, returning just the template half. */
+const FIXTURE_FENCE =
+  '---\nimport Card from "./Card.astro";\nconst x = 1;\n---\n';
+
+/** Lowers a template with a fixture fence, returning just the template half. */
 function lower(template: string): string {
-  const source = `---\nconst x = 1;\n---\n${template}`;
-  return lowerAstroMx(source, "Test.amx").code.replace(
-    "---\nconst x = 1;\n---\n",
-    "",
-  );
+  const source = `${FIXTURE_FENCE}${template}`;
+  return lowerAstroMx(source, "Test.amx").code.replace(FIXTURE_FENCE, "");
 }
 
 /** The error a template raises, for the error-path tests. */
@@ -142,7 +142,7 @@ describe("source mappings", () => {
   });
 
   it("maps an attribute name where TypeScript anchors prop diagnostics", () => {
-    const source = "<Card title=1/>";
+    const source = `${FIXTURE_FENCE}<Card title=1/>`;
     const result = lowerAstroMx(source, "Test.amx");
     const sourceStart = source.indexOf("title");
     const mapping = result.mappings.find(
@@ -351,6 +351,91 @@ describe("attributes", () => {
   });
 });
 
+describe("unresolved components (decision 114 parity)", () => {
+  it.each([
+    ["self-closing", "<TotallyUndefined/>"],
+    ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
+    ["with an attribute", "<TotallyUndefined a=1/>"],
+  ])(
+    "rejects a capitalized tag with no fence import, binding, or taglib entry, %s",
+    (_label, template) => {
+      expect(errorFor(template).message).toContain(
+        "Unable to find entry point for custom tag `<TotallyUndefined>`.",
+      );
+    },
+  );
+
+  it("a type-only fence import does not resolve a capitalized tag (#151)", () => {
+    const source = `---\nimport type Widget from "./widget.mx";\n---\n<Widget/>`;
+    try {
+      lowerAstroMx(source, "Test.amx");
+      throw new Error("expected the template to fail lowering");
+    } catch (error) {
+      if (!(error instanceof AstroTemplateError)) throw error;
+      expect(error.message).toContain(
+        "Unable to find entry point for custom tag `<Widget>`.",
+      );
+    }
+  });
+
+  it("resolves an authored <Fragment> with no fence import (Astro's own built-in)", async () => {
+    // Measured against @astrojs/compiler-rs (astro@7.3.2): the compiler
+    // auto-imports `Fragment` from "astro/runtime/server/index.js" for any
+    // <Fragment> reference, whether or not the author imported it -- the
+    // only capitalized name it does this for. This is a real MX-level
+    // component call, distinct from the emitter's own internal
+    // `<Fragment set:html=...>` for `$!{expr}` (a text-emission detail,
+    // never a lowered Component -- see `interpolation` in this file).
+    const { code } = lowerAstroMx(
+      "---\n---\n<Fragment><p>x</p></Fragment>",
+      "Test.amx",
+    );
+    expect(code).toBe("<Fragment><p>x</p></Fragment>");
+    expect(await astroDiagnostics(code)).toEqual([]);
+  });
+
+  it("resolves a fence import beside Astro.props destructuring and export interface Props", () => {
+    // A real .amx component's fence shape (see examples/astro-static's
+    // Panel.amx/Roster.amx): `sourceBindings` must not choke on
+    // `export interface Props` (a type, correctly not collected -- only
+    // VariableDeclaration/FunctionDeclaration/ClassDeclaration are) or a
+    // destructured `const { ... } = Astro.props as Props` (an
+    // ObjectPattern, collected by `collectPatternNames`), and `Card`'s own
+    // import must still resolve alongside them.
+    const source = [
+      "---",
+      'import Card from "./Card.astro";',
+      "export interface Props {",
+      "  title: string;",
+      "}",
+      "const { title } = Astro.props as Props;",
+      "---",
+      "<Card title=title/>",
+    ].join("\n");
+    const { code } = lowerAstroMx(source, "Test.amx");
+    expect(code).toContain("<Card title={title} />");
+  });
+
+  it("a type-only fence import beside a value one does not resolve its own tag (#151)", () => {
+    const source = [
+      "---",
+      'import Card from "./Card.astro";',
+      'import type Widget from "./widget.mx";',
+      "---",
+      "<Card><Widget/></Card>",
+    ].join("\n");
+    try {
+      lowerAstroMx(source, "Test.amx");
+      throw new Error("expected the template to fail lowering");
+    } catch (error) {
+      if (!(error instanceof AstroTemplateError)) throw error;
+      expect(error.message).toContain(
+        "Unable to find entry point for custom tag `<Widget>`.",
+      );
+    }
+  });
+});
+
 describe("components and slots", () => {
   it("self-closes a childless component", () => {
     expect(lower("<Card title=t/>")).toBe("<Card title={t} />");
@@ -418,14 +503,14 @@ describe("components and slots", () => {
     expect(error.message).toBe(
       "array attribute tag `<@item>` isn't supported by @mxlang/astro: a slot is keyed by name",
     );
-    expect(error.line).toBe(6);
+    expect(error.line).toBe(7);
   });
 
   it("rejects tag params, which Astro has no render-prop form for", () => {
     const error = errorFor("<Card>\n<@header|item|>${item}</@header>\n</Card>");
     expect(error.message).toContain("params on `<@header>` aren't supported");
     expect(error.message).toContain("@mxlang/astro");
-    expect(error.line).toBe(5);
+    expect(error.line).toBe(6);
   });
 
   it("rejects attributes on an attribute tag with a positioned host error", () => {
@@ -433,7 +518,7 @@ describe("components and slots", () => {
     expect(error.message).toContain(
       "attributes on `<@header>` aren't supported by @mxlang/astro",
     );
-    expect(error.line).toBe(5);
+    expect(error.line).toBe(6);
   });
 
   it("rejects nested attribute tags with a positioned host error", () => {
@@ -443,7 +528,7 @@ describe("components and slots", () => {
     expect(error.message).toContain(
       "nested attribute tags inside `<@header>` aren't supported by @mxlang/astro",
     );
-    expect(error.line).toBe(5);
+    expect(error.line).toBe(6);
   });
 
   it("rejects an attribute tag inside <for> as an array slot", () => {
@@ -451,7 +536,7 @@ describe("components and slots", () => {
       "<Card>\n<for|item| of=items>\n<@row>${item}</@row>\n</for>\n</Card>",
     );
     expect(error.message).toContain("@mxlang/astro");
-    expect(error.line).toBe(6);
+    expect(error.line).toBe(7);
   });
 
   it("rejects a bodiless attribute tag", () => {
@@ -459,7 +544,7 @@ describe("components and slots", () => {
     expect(error.message).toBe(
       "<@header/> has no body; @mxlang/astro projects attribute-tag bodies by name",
     );
-    expect(error.line).toBe(5);
+    expect(error.line).toBe(6);
   });
 
   it("rejects a declared AttrTag[] even when no occurrence is passed", () => {
@@ -640,9 +725,9 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
 
 describe("event error positions", () => {
   it("positions the event error at the attribute name", () => {
-    // The helper lowers under a three-line fence, so the template{2019}s
-    // first line is source line 4; the column is still the name{2019}s.
+    // The helper lowers under a four-line fence, so the template's
+    // first line is source line 5; the column is still the name's.
     const error = errorFor("<div   onClick=fn>x</div>");
-    expect(error).toMatchObject({ line: 4, column: 7 });
+    expect(error).toMatchObject({ line: 5, column: 7 });
   });
 });

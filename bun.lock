@@ -272,6 +272,7 @@
       "dependencies": {
         "@mxlang/core": "workspace:*",
         "@mxlang/html": "workspace:*",
+        "@mxlang/parser": "workspace:*",
         "@mxlang/vite-plugin": "workspace:*",
       },
       "devDependencies": {

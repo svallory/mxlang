@@ -28,6 +28,7 @@ import {
   parseFragment,
   TranslateError,
 } from "@mxlang/core";
+import { sourceBindings } from "@mxlang/parser";
 
 /**
  * A lowering failure positioned in the enclosing `.amx` file, or — when
@@ -120,6 +121,46 @@ function isComponentName(name: string): boolean {
   return /^[A-Z]/.test(name);
 }
 
+/**
+ * Astro's own built-in capitalized components: resolve with no author
+ * import, because Astro's compiler itself injects one.
+ *
+ * Measured against `@astrojs/compiler-rs` (astro@7.3.2): `<Fragment/>`
+ * compiles to `import { Fragment, ... } from "astro/runtime/server/index.js"`
+ * prepended automatically — the *only* capitalized name the compiler
+ * auto-imports. Every other candidate tried (`Markdown`, `Debug`, `Prism`,
+ * `Code` — Astro v1's old built-ins, since removed — and an arbitrary
+ * unbound name) compiles to a **bare reference with no import at all**: the
+ * Astro compiler runs no resolvability check of its own (0 diagnostics for
+ * every one of them), so an unbound name there is a silent `ReferenceError`
+ * at runtime, not a compile error — exactly the failure class this file's
+ * `rejectUnknownTag` exists to catch at the MX level instead.
+ */
+const ASTRO_BUILTIN_TAG_NAMES = new Set(["Fragment"]);
+
+/**
+ * Whether a capitalized tag resolves (decision 114, extended to `.amx`'s
+ * larger scope like `.solid.mx`'s own extension): the `---` fence's own
+ * value bindings (`ctx.imports`, fed from `sourceBindings` in
+ * `lowerAstroMx`), or one of Astro's own built-ins (above). There is no
+ * MX-level `import`/`<define>`/`<const>` inside an `.amx` template body the
+ * way there is for a whole-file `.mx` — Astro's local-component form *is* a
+ * fence import. A name reaching this function has already failed every
+ * MX-level route `lower.ts`'s precedence order checks first (structural
+ * tags, `<try>`, `ctx.tagVarShadowed`, a registered custom tag), so anything
+ * still unresolved here is genuinely unbound: `isComponentName`'s bare
+ * casing test alone used to make `<TotallyUndefined/>` a silent component
+ * reference to nothing — `rejectUnknownTag` below now reports Marko's own
+ * wording instead.
+ */
+function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
+  return (ctx.imports?.has(name) ?? false) || ASTRO_BUILTIN_TAG_NAMES.has(name);
+}
+
+function rejectUnknownTag(name: string, node: Node): void {
+  fail(`Unable to find entry point for custom tag \`<${name}>\`.`, node);
+}
+
 type HostTagData = { kind: "interpolation"; expr: Expr };
 
 /** Questions the Astro host answers while Marko nodes are still available. */
@@ -128,7 +169,8 @@ const declarations: HostDeclarations = {
   attrTags: 2,
   tags: TAGS,
   isElement: (name) => !isComponentName(name),
-  isComponent: (name) => isComponentName(name),
+  isComponent,
+  rejectUnknownTag,
   keepComments: true,
   orderAttrs: (name, attrs) => {
     if (name !== "input") return attrs;
@@ -758,6 +800,15 @@ export function lowerAstroMx(
     // An `.amx` file is an Astro component module, so it has a declaration to
     // name and a tag may call itself without importing itself.
     ctx.emitsModule = true;
+    // The `---` fence is the author's own TypeScript module scope: a
+    // capitalized tag routes to a component only when the fence actually
+    // binds it as a value (an import, or a top-level const/function/class —
+    // the same operator-ruling extension decision 114 already gave
+    // `.solid.mx`'s surrounding module, since Marko has no `.amx` concept to
+    // measure against). Fed into `ctx.imports` before lowering, the same set
+    // `isComponent` (below) and the file-local-binding check in `lower.ts`
+    // already consult for an ordinary MX-level `import`.
+    for (const name of sourceBindings(match?.[1] ?? "")) ctx.imports.add(name);
     const ir = lower(ctx, body);
     // The `.amx` emitter has nowhere to put a returned value — an Astro
     // component's output is its markup, and the `---` fence is the author's,
