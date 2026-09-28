@@ -30,6 +30,13 @@ and the always-quoted form is safer and more readable.
 - **fix:** an unresolved hyphenated tag (`<my-widget>` with no taglib entry)
   now errors with Marko's own message ("Unable to find entry point for
   custom tag...") instead of rendering as literal HTML.
+- **fix:** `<log>` and `<debug>` are now rejected by name under the `strict`
+  policy (decision 111), matching the other reactive/debug-only tags
+  (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`, `<id>`).
+  Previously `STRICT_TAGS` did not override these two rows, so they stayed
+  inert under `{ strict: true }` — and therefore under the Astro `.mx` host
+  too, which always compiles under `strictPolicy`. Non-strict behavior is
+  unchanged: `<log>`/`<debug>` are still inert there.
 - **breaking:** an expression-valued event attribute on an element
   (`onClick=fn`, `on-my-event=fn`) is now a compile error naming the
   attribute — an event handler requires a runtime, and this host renders

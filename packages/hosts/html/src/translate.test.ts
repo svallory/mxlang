@@ -1059,6 +1059,8 @@ describe("the strict policy (decision 68's fold): reactive tags error by name", 
     ],
     ["client block", "client\n  const x = 1", /`client` block is client-only/],
     ["<id>", "<id/x/>", /`<id>` allocates an identifier/],
+    ["<log>", "<log=1/>", /`<log>` writes to the console/],
+    ["<debug>", "<debug/>", /`<debug>` is a debugger hook/],
   ])("rejects %s under { strict: true }", (_name, body, message) => {
     expect(() => compile(src(body), file, { strict: true })).toThrow(message);
   });

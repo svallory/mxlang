@@ -1438,6 +1438,10 @@ the same six constructs — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `cli
 blocks, `<id>` — become errors naming the construct, for an author who wants
 "this template needs a reactive runtime" enforced at compile time.
 
+Decision 111 adds `<log>` and `<debug>` to the same `strict` error set:
+debug-only tooling, not reactive constructs, but a `strict` author gets the
+same named-construct error instead of the default policy's inert row.
+
 The `input`-shadowing check (§5.6) is **not** `strict`-only.
 
 Dropped rather than folded in, being conventions of the retired dialect rather
@@ -1576,7 +1580,7 @@ differences noted), **Astro `.amx`**, **Angular**.
 | `<lifecycle>` | inert | error | error | error | error | error — fixed, was **literal element** |
 | `<script>` | inert (body `text`) | error | error | error | error | error — fixed, was **literal element** |
 | `<id>` | inert | error | field-guard error | error | error | error — fixed, was field-guard-only |
-| `<log>` / `<debug>` | inert | **inert** — bug 5 | **literal element** | **literal element** | **literal element** | error — fixed, was **literal element** |
+| `<log>` / `<debug>` | inert | error — fixed 2026-09-28 (decision 111), was **inert** (bug 5) | **literal element** | **literal element** | **literal element** | error — fixed, was **literal element** |
 | `client` block | inert | error | **literal element** | error | error | error — fixed, was **literal element** |
 | `server` block | **runs**, hoists like `static` | **runs** | **literal element**, binding undefined | **literal element** | **literal element** | error — fixed, was **literal element** |
 | `<await>` | error | error | field-guard error | error | error | error — fixed, was field-guard-only |
@@ -1643,7 +1647,7 @@ does something else, silently.
 | 2 | html, Preact | **`<return>` is documented as a compile error and is not.** Both READMEs list it under "Errors"; the code reverses this under decision 95 and both hosts emit `{ value, output }`. |
 | 3 | Astro `.amx` | **FIXED 2026-09-28.** Every range `<for>` emitted invalid JavaScript: `Math.max(0, (` opened two parens and only one closed: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserted only a substring (`toContain("(3) - (1) + 1")`), which passed regardless; now the tests assert the exact emitted code and that the real Astro compiler (`@astrojs/compiler-rs`) reports zero diagnostics for `from`/`to`, `until`, no-`from`, descending, and expression-bound ranges. |
 | 4 | Solid | **FIXED 2026-09-27**, decision 106. Repeated attribute tags now emit real arrays. |
-| 5 | html-strict | **`<log>`/`<debug>` survive `strict`.** `STRICT_TAGS` overrides six names but not these two, so they stay inert under strict — and therefore under the Astro `.mx` host, whose README claims all stateful tags are build errors. |
+| 5 | html-strict | **FIXED 2026-09-28** (decision 111, task `strict-policy-log-debug`). Was: `<log>`/`<debug>` survived `strict` — `STRICT_TAGS` overrode six names but not these two, so they stayed inert under strict, and therefore under the Astro `.mx` host too, whose README claimed all stateful tags were build errors. Both are now `STRICT_TAGS` error rows, same as the other six. |
 | 6 | Preact | README claims a non-object `style=` is an error; `<div style="color:red"/>` compiles. |
 | 7 | Angular | **FIXED 2026-09-17**, decision 86. Was: silently accepted `class:`/`style:`/`attr:` modifiers, lowering `class:active=c` to `[class.active]="c"`. Every other host errors, on the grounds that this is **not Marko syntax at all** (§4). Now rejected the same way, naming the replacement (an object/array `class=`/`style=` value, or a plain dynamic attribute — the emitter itself decides `[attr.x]` vs `[x]` for a dynamic `data-*`/`aria-*` attribute). |
 | 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.amx` does. |

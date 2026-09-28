@@ -130,7 +130,13 @@ emit for those (inert, or `<let>`'s initial value) — decision 65's table.
 `strictPolicy` (`translate.ts`) keeps `.mx`'s stance as an *opt-in*: the same
 six constructs become errors naming the construct, for an author who wants
 "this needs a reactive runtime" to be a compile error. `compile`/`compileFile`/
-`build` take `{ strict: true }` to select it. The `input`-shadowing check
+`build` take `{ strict: true }` to select it.
+
+Decision 111 extends `strictPolicy` to also reject `<log>` and `<debug>` by
+name, as errors rather than the default policy's inert rows: both are
+debug-only tooling, not reactive constructs, but a strict author wants the
+same "name the construct, don't silently compile it away" treatment for them.
+The `input`-shadowing check
 (`checkBinding`) is **not** `strict`-only — it was already the default in
 both the old `.mx` policy and this one, since a `<let>`/`<const>` binding
 named `input` silently breaking the template's own input is a bug either way,
