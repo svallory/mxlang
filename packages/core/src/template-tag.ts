@@ -13,7 +13,7 @@
 
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
-import type { Ctx } from "./core.ts";
+import type { Ctx, Node } from "./core.ts";
 import { markoBabel, TranslateError, warn } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Ir, IrNode } from "./ir.ts";
@@ -27,6 +27,19 @@ export interface TemplateTag {
 export interface TemplateMetadata {
   readsContent: boolean;
   attributeTags: string[];
+  /**
+   * The unit spreads `input` wholesale (`...input`), so it reads every
+   * attribute tag and the body alike, whatever `attributeTags` happens to
+   * list from the member reads that were also matched individually.
+   *
+   * The dropped-attribute-tag and dropped-body warnings both suppress on this
+   * flag rather than trying to enumerate the spread's effect into
+   * `attributeTags`/`readsContent`: this unit's own copy of `input` may or may
+   * not touch every property, but the warning is about whether the *call
+   * site's* content reaches the unit, and a wholesale copy always carries it
+   * there.
+   */
+  readsAllInput?: boolean;
   /**
    * This unit declares `<return>`, so its default export returns
    * `{ value, output }` rather than the output alone (design §3.3).
@@ -232,9 +245,154 @@ export function metadataForTemplate(
   }
 }
 
-function inputMember(code: string): string | null {
-  const match = code.trim().match(/^input\.([A-Za-z_$][\w$]*)(?:\.content)?$/);
-  return match?.[1] ?? null;
+/**
+ * One member read off `input`, however it was spelled.
+ *
+ * Matches a `MemberExpression`/`OptionalMemberExpression` chain rooted at the
+ * identifier `input`: dot or bracket access, with or without `?.`, optionally
+ * followed by a `.content`/`?.content` read of that member (`input.head`,
+ * `input?.head`, `input["head"]`, `input?.["head"]`, `input.head?.content`).
+ * AST-based rather than the regex this replaced, because a regex has to grow
+ * one branch per spelling and a caller only ever wrote one more of them.
+ */
+export function inputMember(
+  code: string,
+): { name: string; content: boolean } | null {
+  let expr: Node;
+  try {
+    expr = markoBabel().parseExpression(code.trim());
+  } catch {
+    return null;
+  }
+  const propertyName = (node: Node): string | null => {
+    if (!node.computed) {
+      return node.property.type === "Identifier" ? node.property.name : null;
+    }
+    return node.property.type === "StringLiteral" ? node.property.value : null;
+  };
+  const isMemberOf = (node: Node): boolean =>
+    node.type === "MemberExpression" ||
+    node.type === "OptionalMemberExpression";
+
+  let content = false;
+  let target = expr;
+  if (isMemberOf(target) && propertyName(target) === "content") {
+    content = true;
+    target = target.object;
+  }
+  if (!isMemberOf(target)) return null;
+  const name = propertyName(target);
+  if (!name || target.object.type !== "Identifier") return null;
+  if (target.object.name !== "input") return null;
+  return { name, content };
+}
+
+/**
+ * Whether `code` spreads `input` wholesale (`...input`), which reads every
+ * property — `<@x>` and `input.content` alike — no matter what a caller
+ * later does with the copy.
+ */
+function spreadsInput(code: string): boolean {
+  let found = false;
+  try {
+    const { traverse } = markoBabel();
+    const expr = markoBabel().parse(code, { allowReturnOutsideFunction: true });
+    traverse(expr, {
+      SpreadElement(path: Node) {
+        if (
+          path.node.argument.type === "Identifier" &&
+          path.node.argument.name === "input"
+        ) {
+          found = true;
+        }
+      },
+    });
+  } catch {
+    return false;
+  }
+  return found;
+}
+
+/**
+ * Every member read off `input` found anywhere inside `code`, not only as
+ * the expression's whole value — a template that writes
+ * `input.content ? a : b`, wraps a read in `<if=input.head?.content>`, or
+ * hands `input.head` to a function still read that member.
+ *
+ * The fallback for any node whose `.code` isn't one of the specific sites
+ * `inputMember` checks against exactly (a `<static>` block, an `<if>`
+ * condition, a `<const>` initializer used in a larger expression, an
+ * attribute value). AST-based over the same
+ * `MemberExpression`/`OptionalMemberExpression` shapes `inputMember`
+ * matches, so `input?.head` is caught the same way `input.head` is.
+ */
+function scanCodeForInputMembers(
+  code: string,
+): Array<{ name: string; content: boolean }> {
+  const found: Array<{ name: string; content: boolean }> = [];
+  try {
+    const { traverse } = markoBabel();
+    const expr = markoBabel().parse(code, { allowReturnOutsideFunction: true });
+    traverse(expr, {
+      "MemberExpression|OptionalMemberExpression"(path: Node) {
+        const node = path.node;
+        const propertyName = !node.computed
+          ? node.property.type === "Identifier"
+            ? node.property.name
+            : null
+          : node.property.type === "StringLiteral"
+            ? node.property.value
+            : null;
+        if (
+          propertyName &&
+          node.object.type === "Identifier" &&
+          node.object.name === "input"
+        ) {
+          found.push({
+            name: propertyName,
+            content: propertyName === "content",
+          });
+        }
+      },
+    });
+  } catch {
+    return [];
+  }
+  return found;
+}
+
+/**
+ * The property names a binding pattern's source text destructures, when that
+ * pattern is bound directly to `input` — `<const/{ head }=input/>` or
+ * `const { head } = input`. `patternCode` is the declaration site's printed
+ * pattern (`Const.name`); `initCode` is its initializer.
+ *
+ * Only a plain, non-computed, non-renamed shorthand or `x: y` property is
+ * recognized — a nested pattern or a rest element inside it is treated as
+ * "not a simple member list" and ignored, which is conservative: it can miss
+ * a read, never fabricate one that would suppress a real warning.
+ */
+function destructuredInputMembers(
+  patternCode: string,
+  initCode: string,
+): string[] {
+  if (initCode.trim() !== "input") return [];
+  let pattern: Node;
+  try {
+    pattern = markoBabel().parseExpression(`(${patternCode.trim()} = 0)`);
+  } catch {
+    return [];
+  }
+  if (pattern.type !== "AssignmentExpression") return [];
+  const left = pattern.left;
+  if (!left || left.type !== "ObjectPattern") return [];
+  const names: string[] = [];
+  for (const prop of left.properties) {
+    if (prop.type !== "ObjectProperty" || prop.computed) return [];
+    if (prop.key.type !== "Identifier") return [];
+    names.push(prop.key.name);
+  }
+  return names;
 }
 
 /** Computes the public metadata of one already-lowered tag unit. */
@@ -243,8 +401,15 @@ export function metadataOfIr(
     Partial<Pick<Ir, "returnValue" | "inputInterface" | "hoisted" | "imports">>,
 ): TemplateMetadata {
   let readsContent = false;
+  let readsAllInput = false;
   const attributeTags = new Set<string>();
   const seen = new Set<object>();
+
+  const record = (member: { name: string; content: boolean } | null): void => {
+    if (!member) return;
+    if (member.content) readsContent = true;
+    else attributeTags.add(member.name);
+  };
 
   const visit = (value: unknown): void => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
@@ -258,37 +423,35 @@ export function metadataOfIr(
     if (node.kind === "Component") {
       const component = node as Extract<IrNode, { kind: "Component" }>;
       if (component.target.kind === "dynamic") {
-        const member = inputMember(component.target.expr.code);
-        if (member === "content") readsContent = true;
-        else if (member) attributeTags.add(member);
+        record(inputMember(component.target.expr.code));
       }
     }
     if (node.kind === "Interpolation") {
       const interpolation = node as Extract<IrNode, { kind: "Interpolation" }>;
-      const member = inputMember(interpolation.expr.code);
-      if (member === "content") readsContent = true;
-      else if (member) attributeTags.add(member);
+      record(inputMember(interpolation.expr.code));
     }
     if (node.kind === "HostTag") {
       const data = (node as Extract<IrNode, { kind: "HostTag" }>).tag.data as
         | { kind?: string; expr?: { code?: string } }
         | undefined;
       if (data?.kind === "dynamic" && typeof data.expr?.code === "string") {
-        const member = inputMember(data.expr.code);
-        if (member === "content") readsContent = true;
-        else if (member) attributeTags.add(member);
+        record(inputMember(data.expr.code));
       }
     }
     if ((value as { kind?: string }).kind === "dynamic") {
       const expr = (value as { expr?: { code?: string } }).expr;
-      if (typeof expr?.code === "string") {
-        const member = inputMember(expr.code);
-        if (member === "content") readsContent = true;
-        else if (member) attributeTags.add(member);
+      if (typeof expr?.code === "string") record(inputMember(expr.code));
+    }
+    if (node.kind === "Const") {
+      const decl = node as Extract<IrNode, { kind: "Const" }>;
+      for (const name of destructuredInputMembers(decl.name, decl.init.code)) {
+        attributeTags.add(name);
       }
+      if (spreadsInput(decl.init.code)) readsAllInput = true;
     }
     if (typeof node.code === "string") {
-      if (/\binput\.content\b/.test(node.code)) readsContent = true;
+      for (const member of scanCodeForInputMembers(node.code)) record(member);
+      if (spreadsInput(node.code)) readsAllInput = true;
     }
     for (const [key, child] of Object.entries(node)) {
       if (key !== "node") visit(child);
@@ -296,9 +459,16 @@ export function metadataOfIr(
   };
 
   visit(ir.body);
+  // A `static` block lives in `ir.hoisted`, not `ir.body` — a spread or
+  // member read written there (`static const props = {...input}`) is a real
+  // read of the tag's own `input`, so it must feed the same scan the body
+  // gets rather than being invisible to it.
+  visit(ir.hoisted);
+  if (readsAllInput) readsContent = true;
   const metadata: TemplateMetadata = {
     readsContent,
     attributeTags: [...attributeTags],
+    ...(readsAllInput ? { readsAllInput: true } : {}),
   };
   // Only when there is one: the field's absence is what every existing
   // caller (and every cached entry written before `<return>` shipped) reads
@@ -461,7 +631,7 @@ export function routeTemplateCall(
     });
   }
   for (const attributeTag of call.attributeTags) {
-    if (metadata.pending) break;
+    if (metadata.pending || metadata.readsAllInput) break;
     if (metadata.attributeTags.includes(attributeTag.name)) continue;
     warn(ctx, {
       message: `\`<${call.name}>\`: \`<@${attributeTag.name}>\` was dropped; ${tag.filename} does not read \`input.${attributeTag.name}\``,
