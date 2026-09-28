@@ -846,6 +846,99 @@ describe("import precedence over registered custom tags", () => {
   });
 });
 
+// Ref custom-tags-local-bindings (decision 113): a file-local *scope*
+// binding — `<const/Panel=…/>`, a `<for|Panel|>` param, a
+// `<define/Box|Panel|>` param — shadows a registered custom tag of the same
+// name too, scoped to where the binding is in effect. IR-level coverage
+// lives in `packages/core/src/custom-tags.test.ts`; this is the executed
+// render the brief required on a second real JSX host.
+describe("local scope bindings shadow a registered custom tag (executed)", () => {
+  const panel: CustomTag = {
+    transform: (_call, ctx) => [ctx.build.element("mx-marker", [], [])],
+  };
+
+  async function renderWithCustomTag(body: string): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const code = compilePreactMx(body, "/fixtures/local-binding.mx", {
+      customTags: { Panel: panel },
+    }).code.replace('from "./local-panel.ts"', 'from "./local-panel"');
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-local-binding-"));
+    try {
+      const repoNodeModules = dirname(
+        dirname(require.resolve("preact/package.json")),
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      writeFileSync(
+        join(scratch, "local-panel.tsx"),
+        "export default function LocalPanel() { return <span>local-panel</span>; }\n",
+      );
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: FunctionComponent<Record<string, unknown>>;
+      };
+      return render(h(mod.default, {}));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("a `<const/Panel=…/>` binding renders the local component, not the registered custom tag", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<const/Panel=LocalPanel/>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span>");
+  });
+
+  it("a `<for|Panel|>` param renders the loop's own binding inside the loop, and the registered custom tag immediately outside it", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<for|Panel| of=[LocalPanel]>",
+        "<Panel/>",
+        "</for>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
+  });
+
+  it("a `<define/Box|Panel|>` param renders the define's own binding inside the body, and the registered custom tag immediately outside it", async () => {
+    const html = await renderWithCustomTag(
+      [
+        'import LocalPanel from "./local-panel.ts"',
+        "<define/Box|Panel|>",
+        "<Panel/>",
+        "</define>",
+        "<Box(LocalPanel)/>",
+        "<Panel/>",
+      ].join("\n"),
+    );
+    expect(html).toBe("<span>local-panel</span><mx-marker></mx-marker>");
+  });
+});
+
 /**
  * `<return>` and `/var` on the JSX hosts (acceptance C3).
  *
