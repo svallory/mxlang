@@ -8,7 +8,7 @@ import {
   withCalleeInputSources,
 } from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
-import { parseBabel, print } from "@mxlang/parser";
+import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
 import { compileSolidMx } from "@mxlang/solid";
 import type {
   CodeInformation,
@@ -417,46 +417,30 @@ function createVirtualCode(
 }
 
 /**
- * Solid JSX built-ins `@mxlang/solid`'s emitter can print as a bare tag with
- * no import of its own (`<Show>`, `<For>`, …): the *runtime* build pipeline
- * gets these for free because `@solidjs/vite-plugin`'s compiler stage
- * (native or Babel) auto-imports every built-in it sees, per
- * `@mxlang/solid`'s own `AGENTS.md`. That compiler stage never runs inside
- * the type-check projection — `createVirtualCode` here only prints JSX text
- * and hands it straight to `tsc`/tsserver — so without this, every `<Show>`
- * (from `<if>`/`<if|u|>`), `<For>`/`<Repeat>` (from `<for>`), `<Switch>`/
- * `<Match>` (from a 3+-branch `<if>`), `<Errored>`/`<Loading>` (from
- * `<try>`) and `<Dynamic>` (from a dynamic tag) is an unresolved identifier
- * (TS2304), which drowns every real diagnostic inside that JSX in noise the
- * negative test below guards against staying hidden.
- */
-const SOLID_BUILTIN_IMPORTS: ReadonlyArray<{
-  name: string;
-  from: string;
-}> = [
-  { name: "Show", from: "solid-js" },
-  { name: "For", from: "solid-js" },
-  { name: "Switch", from: "solid-js" },
-  { name: "Match", from: "solid-js" },
-  { name: "Repeat", from: "solid-js" },
-  { name: "Errored", from: "solid-js" },
-  { name: "Loading", from: "solid-js" },
-  { name: "Dynamic", from: "@solidjs/web" },
-];
-
-/**
- * Appends an import for every Solid JSX built-in the generated text uses as
- * a bare tag and the source does not already bind (an import, or any other
- * top-level declaration of the same name) — so a caller who genuinely wrote
- * `import { Show } from "./my-show.ts"` is left alone rather than getting a
- * colliding second `Show`. Appended at the end of the file, after every
- * mapping is computed from the unmodified generated text, so no existing
- * line or offset shifts: an appended, unmapped import cannot mis-position an
- * earlier diagnostic.
+ * Appends an import for every Solid JSX built-in (`SOLID_BUILTIN_TAGS`,
+ * `@mxlang/parser`) the generated text uses as a bare tag and the source
+ * does not already bind (`sourceBindings`, same package) — so a caller who
+ * genuinely wrote `import { Show } from "./my-show.ts"` is left alone rather
+ * than getting a colliding second `Show`. `@mxlang/solid`'s emitter prints
+ * these built-ins (`<Show>`, `<For>`, …) as bare tags because the *runtime*
+ * build pipeline gets them for free — `@solidjs/vite-plugin`'s compiler
+ * stage (native or Babel) auto-imports every built-in it sees, per
+ * `@mxlang/solid`'s own `AGENTS.md` — and that compiler stage never runs
+ * inside the type-check projection: `createVirtualCode` here only prints JSX
+ * text and hands it straight to `tsc`/tsserver, so without this, every
+ * `<Show>` (from `<if>`/`<if|u|>`), `<For>`/`<Repeat>` (from `<for>`),
+ * `<Switch>`/`<Match>` (from a 3+-branch `<if>`), `<Errored>`/`<Loading>`
+ * (from `<try>`) and `<Dynamic>` (from a dynamic tag) is an unresolved
+ * identifier (TS2304), which drowns every real diagnostic inside that JSX in
+ * noise the negative test below guards against staying hidden.
+ *
+ * Appended at the end of the file, after every mapping is computed from the
+ * unmodified generated text, so no existing line or offset shifts: an
+ * appended, unmapped import cannot mis-position an earlier diagnostic.
  */
 export function appendSolidBuiltinImport(generated: string): string {
   const bound = sourceBindings(generated);
-  const needed = SOLID_BUILTIN_IMPORTS.filter(
+  const needed = SOLID_BUILTIN_TAGS.filter(
     ({ name }) =>
       new RegExp(`<${name}[\\s/>]`).test(generated) && !bound.has(name),
   );
@@ -472,116 +456,6 @@ export function appendSolidBuiltinImport(generated: string): string {
     .map(([from, names]) => `import { ${names.join(", ")} } from "${from}";`)
     .join("\n");
   return `${generated}\n${imports}\n`;
-}
-
-/**
- * The generated file's actual top-level bound identifiers — every import's
- * *local* name (so `import { Show as MyShow }` binds `MyShow`, not `Show`)
- * plus every top-level `const`/`function`/`class` declaration — so
- * `appendSolidBuiltinImport` never shadows a name the author already bound
- * and never skips one because an unrelated line merely contains the text of
- * its name (an alias clause, a multi-line import). Parses the generated text
- * with the same Babel used to print it rather than scanning lines, since a
- * line-based probe cannot tell a bound identifier from a substring: it must
- * resolve what each declaration actually binds.
- */
-function sourceBindings(generated: string): Set<string> {
-  const bound = new Set<string>();
-  let program: ReturnType<typeof parseBabel>["program"];
-  try {
-    const file = parseBabel(generated, {
-      sourceType: "module",
-      plugins: ["typescript", "jsx"],
-    });
-    program = file.program;
-  } catch {
-    return bound;
-  }
-  for (const statement of program.body) {
-    switch (statement.type) {
-      case "ImportDeclaration":
-        if (statement.importKind === "type") break;
-        for (const specifier of statement.specifiers) {
-          if (
-            specifier.type === "ImportSpecifier" &&
-            specifier.importKind === "type"
-          ) {
-            continue;
-          }
-          bound.add(specifier.local.name);
-        }
-        break;
-      case "VariableDeclaration":
-        for (const declarator of statement.declarations) {
-          collectPatternNames(declarator.id, bound);
-        }
-        break;
-      case "FunctionDeclaration":
-      case "ClassDeclaration":
-        if (statement.id) bound.add(statement.id.name);
-        break;
-      case "ExportNamedDeclaration":
-      case "ExportDefaultDeclaration":
-        if (
-          statement.declaration &&
-          (statement.declaration.type === "VariableDeclaration" ||
-            statement.declaration.type === "FunctionDeclaration" ||
-            statement.declaration.type === "ClassDeclaration")
-        ) {
-          if (statement.declaration.type === "VariableDeclaration") {
-            for (const declarator of statement.declaration.declarations) {
-              collectPatternNames(declarator.id, bound);
-            }
-          } else if (statement.declaration.id) {
-            bound.add(statement.declaration.id.name);
-          }
-        }
-        break;
-      default:
-        break;
-    }
-  }
-  return bound;
-}
-
-/**
- * Collects every identifier a binding pattern introduces — a bare name, or
- * the names inside a destructured object/array — so a top-level
- * `const { Show } = ...` is recognized as binding `Show` the same as a plain
- * `const Show = ...` would. Untyped on purpose: the pattern shapes are a
- * small, stable subset of Babel's AST and pulling in `@babel/types` just for
- * this helper's signature is not worth a new dependency.
- */
-// biome-ignore lint/suspicious/noExplicitAny: small stable subset of Babel's pattern node shapes
-function collectPatternNames(pattern: any, bound: Set<string>): void {
-  if (!pattern) return;
-  switch (pattern.type) {
-    case "Identifier":
-      bound.add(pattern.name);
-      break;
-    case "ObjectPattern":
-      for (const property of pattern.properties) {
-        if (property.type === "ObjectProperty") {
-          collectPatternNames(property.value, bound);
-        } else if (property.type === "RestElement") {
-          collectPatternNames(property.argument, bound);
-        }
-      }
-      break;
-    case "ArrayPattern":
-      for (const element of pattern.elements) {
-        collectPatternNames(element, bound);
-      }
-      break;
-    case "AssignmentPattern":
-      collectPatternNames(pattern.left, bound);
-      break;
-    case "RestElement":
-      collectPatternNames(pattern.argument, bound);
-      break;
-    default:
-      break;
-  }
 }
 
 /**
