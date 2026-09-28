@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: a host's own wording for an unresolved *capitalized* tag, not just lowercase (decision 114)
+
+`lower.ts`'s capitalized-tag guard now calls `ctx.declarations.rejectUnknownTag?.(name, node, ctx)` before its own fallback message (`` `<${name}>` has no matching import or `<define>` in scope; a capitalized tag is always a component call ``), the same way the lowercase-unresolved-element guard a few lines below it already did. A Marko-parity host (e.g. `@mxlang/solid`) can now report Marko's exact wording (`` Unable to find entry point for custom tag `<Name>`. ``, verified against `@marko/compiler` 5.42.5 / `marko@6.3.51`) for either case from one hook. A host supplying no `rejectUnknownTag` keeps the identical fallback message as before — not a behavior change for those hosts.
+
 ### Fix: a `<const>` binding and a `<for>`/`<define>` tag param now shadow a registered custom tag too (decision 113)
 
 `custom-tags-local-bindings`: a file-local *scope* binding — `<const/Panel=…/>`,

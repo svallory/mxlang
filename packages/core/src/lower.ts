@@ -2170,6 +2170,12 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // missing or misspelled binding, not an element that happens to be
   // capitalized. Emitting it literally would be a silent misroute.
   if (/^[A-Z]/.test(name)) {
+    // The host's own wording first (decision 114): a Marko-parity target
+    // reports Marko's own failure for an unresolved custom tag ("Unable to
+    // find entry point for custom tag `<Name>`"), which is what its users
+    // see and what its fixtures assert. The message below is the fallback
+    // for a host that supplies none.
+    ctx.declarations.rejectUnknownTag?.(name, node, ctx);
     fail(
       `\`<${name}>\` has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
       node,
