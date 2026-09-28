@@ -1060,6 +1060,78 @@ describe("MX language plugin", () => {
     expect(codes("Good")).toEqual([]);
   });
 
+  it("types a whole-file Solid .mx <return> unit's /var, and reports /var on a unit with no <return>", () => {
+    // A unit declaring `<return>` widens its parameter with the `$mxReturn`
+    // callback prop, so the caller's generated `$mxReturn={...}` type-checks.
+    // `/var` needs a discovered tag, so the callees live in a real `tags/`
+    // directory of a scratch Solid package.
+    const dir = mkdtempSync(join(tmpdir(), "mx-solid-return-"));
+    try {
+      mkdirSync(join(dir, "tags"));
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ name: "t", mx: { host: "solid" } }),
+      );
+      writeFileSync(
+        join(dir, "tags", "counter.mx"),
+        "export interface Input { start: number }\n<span>${input.start}</span>\n<return value=input.start + 1/>\n",
+      );
+      writeFileSync(
+        join(dir, "tags", "plain.mx"),
+        "export interface Input { start: number }\n<span>${input.start}</span>\n",
+      );
+      const good = join(dir, "good.mx");
+      const bad = join(dir, "bad.mx");
+      const wrongType = join(dir, "wrong-type.mx");
+      const consumer = join(dir, "index.ts");
+      const files: Record<string, string> = {
+        // `n` is a number, so `n.toFixed(1)` is fine; that is the type check.
+        [good]: "<counter/n start=1/>\n<p>${n.toFixed(1)}</p>\n",
+        [bad]: "<plain/n start=1/>\n<p>${n}</p>\n",
+        // `n` is a number, not a string: `.toUpperCase` must not exist.
+        [wrongType]: "<counter/n start=1/>\n<p>${n.toUpperCase()}</p>\n",
+        [consumer]:
+          'import "./good.mx";\nimport "./bad.mx";\nimport "./wrong-type.mx";',
+      };
+      const service = createPluginService(files, [consumer]);
+      service.getSemanticDiagnostics(consumer);
+      const diagnose = (fileName: string) => {
+        const plugin = createMxLanguagePlugin(ts);
+        plugin.createVirtualCode?.(
+          fileName,
+          MX_LANGUAGE_ID,
+          ts.ScriptSnapshot.fromString(files[fileName] as string),
+          { getAssociatedScript: () => undefined },
+        );
+        return {
+          compile: plugin.getCompileDiagnostics(fileName),
+          semantic: service.getSemanticDiagnostics(fileName),
+        };
+      };
+
+      // A `<return>` unit called with `/var` type-checks clean: the caller's
+      // generated `$mxReturn={...}` is a declared prop of the widened
+      // parameter, not an excess property.
+      const ok = diagnose(good);
+      expect(ok.compile).toEqual([]);
+      expect(ok.semantic).toEqual([]);
+      // `/var` on a unit with no `<return>` is rejected, by core's own
+      // compile diagnostic (it fires before TypeScript would see the excess
+      // `$mxReturn` prop).
+      const no = diagnose(bad);
+      expect(no.compile).toHaveLength(1);
+      expect(no.compile[0]?.message).toContain("does not return a value");
+      // KNOWN LIMIT, not asserted as desired: the bound variable is
+      // `let n;` assigned in a callback, so it is implicitly `any`, not the
+      // `<return>` expression's type (`n.toUpperCase()` on a number does not
+      // error). The callback prop is `(value: unknown) => void`.
+      const wrong = diagnose(wrongType);
+      expect(wrong.compile).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     ["html", "/project", ".mx"],
     ["preact", `${here}/fixtures/preact-policy`, ".mx"],
