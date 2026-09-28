@@ -616,23 +616,30 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
   );
 
   it.each(hosts)(
-    "%s: rejects a `<define>` call mixing tag-argument form with an attribute tag",
+    "%s: accepts a `<define>` call mixing tag-argument form with an attribute tag (decision 109, Marko parity)",
     async (host) => {
-      // `<Card('a')>` passes `title` positionally; adding `<@head>` on top
-      // silently dropped `head` before this guard existed (round-2 review
-      // finding). Marko itself allows this combination on a `<define>` call
-      // (it compiles through the lenient dynamic-tag visitor); MX rejects it
-      // as a documented divergence until `define-call-args-with-content`
-      // (TODO) implements the lenient shape.
+      // `<Card('a')>` passes `title` positionally; `<@head>` rides along as
+      // Marko's own "dynamic tag fallback content" — `assertAttributesOrArgs`
+      // rejects only a plain attribute alongside args, not a body/attribute
+      // tag (round-2 review finding, then decision 109 closed the gap).
+      const html = await renderFixture(host, {
+        "main.mx":
+          "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+      });
+      expect(html).toBe("<div>aH</div>");
+    },
+  );
+
+  it.each(hosts)(
+    "%s: still rejects a `<define>` call mixing tag-argument form with a plain attribute",
+    async (host) => {
       await expect(
         renderFixture(host, {
           "main.mx":
-            "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+            "<define/Card|title|><div>${title}</div></define>\n<Card('a') foo=\"bar\"/>",
         }),
       ).rejects.toThrow(
-        "`<Card>` is a `<define>`; MX does not yet support tag arguments " +
-          "together with attributes, attribute tags, or a body on a define " +
-          "call (Marko does); pass the values as attributes instead.",
+        "Tag does not support arguments when attributes present.",
       );
     },
   );
