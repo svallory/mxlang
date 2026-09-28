@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { getCustomTags } from "@mxlang/core";
+import { reportScanDiagnostics, scanCached } from "@mxlang/core";
 import type { BunPlugin } from "bun";
 import { compile } from "./index.ts";
 
@@ -31,13 +31,20 @@ import { compile } from "./index.ts";
  */
 const MX_FILTER = /(?<!\.solid)\.mx$/;
 
+/** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
+const reportedScanDiagnostics = new Set<string>();
+
 const markoPlugin: BunPlugin = {
   name: "mxlang-translator",
   setup(build) {
     build.onLoad({ filter: MX_FILTER }, ({ path }) => {
       const source = readFileSync(path, "utf8");
+      const scan = scanCached(path, { host: "html" });
+      reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+        console.warn(`@mxlang/html: ${d.file}: ${d.message}`),
+      );
       const { code } = compile(source, path, {
-        customTags: getCustomTags(path, { host: "html" }),
+        customTags: scan.customTags,
       });
       return { contents: code, loader: "ts" };
     });

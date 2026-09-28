@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
-  getCustomTags,
   type MxWarning,
+  reportScanDiagnostics,
+  scanCached,
   TranslateError,
   withCalleeInputSources,
 } from "@mxlang/core";
@@ -80,6 +81,7 @@ export function createSolidMxLanguagePlugin(
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
+  const reportedScanDiagnostics = new Set<string>();
 
   return {
     getLanguageId(fileName) {
@@ -98,7 +100,17 @@ export function createSolidMxLanguagePlugin(
         // nothing of a registered tag inside a `.solid.mx` region while a
         // `vite build` of the same file compiled it fine — the gap the P1
         // review recorded against this path.
-        const discovered = getCustomTags(fileName, { host: "solid" });
+        //
+        // A scan diagnostic (e.g. an unknown `hosts` name) names a
+        // *different* file — the `package.json` that declared it — so it
+        // cannot become a `MxCompileDiagnostic` positioned in this file;
+        // logged the same way `mx-language.ts` already does for this exact
+        // case (tsserver's own log in an editor, stderr under `mx-tsc`).
+        const scan = scanCached(fileName, { host: "solid" });
+        reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+          console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
+        );
+        const discovered = scan.customTags;
         const compiled = compileWithDependencies(
           options.readSource,
           dependencies.get(fileName) ?? [],

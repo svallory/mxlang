@@ -18,7 +18,7 @@ import {
 } from "@mxlang/core";
 import { print } from "@mxlang/parser";
 import ts from "typescript";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AMX_LANGUAGE_ID,
   composeAmxMappings,
@@ -102,6 +102,51 @@ describe("SolidMX language plugin", () => {
       const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
       expect(code).not.toMatch(/import \$mx_Gizmo\d+/);
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+      clearScanCache();
+    }
+  });
+
+  it("warns about an unknown host name in mx.tags[].hosts (decision 110a; round 2 finding 2)", () => {
+    // The scan diagnostic core records for a typo'd host name was computed
+    // but dropped here: `createVirtualCode` used `getCustomTags`, which
+    // returns only `.customTags`. It now uses `scanCached` and reports
+    // `.diagnostics` through `console.warn`, the same channel
+    // `mx-language.ts` already used for this exact case.
+    const dir = mkdtempSync(join(tmpdir(), "mx-solid-hosts-warning-"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      mkdirSync(join(dir, "widgets"), { recursive: true });
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "t",
+          mx: {
+            host: "solid",
+            tags: [{ dir: "widgets", hosts: ["bogus"] }],
+          },
+        }),
+      );
+      writeFileSync(
+        join(dir, "widgets", "gizmo.mx"),
+        '<span class="icon">${input.name}</span>\n',
+      );
+
+      const plugin = createSolidMxLanguagePlugin(ts);
+      const fileName = join(dir, "page.solid.mx");
+      const source = "const a = <div>no call</div>;\n";
+      plugin.createVirtualCode?.(
+        fileName,
+        SOLID_MX_LANGUAGE_ID,
+        ts.ScriptSnapshot.fromString(source),
+        { getAssociatedScript: () => undefined },
+      );
+
+      expect(
+        warn.mock.calls.some((call) => String(call[0]).includes("bogus")),
+      ).toBe(true);
+    } finally {
+      warn.mockRestore();
       rmSync(dir, { recursive: true, force: true });
       clearScanCache();
     }
@@ -782,6 +827,49 @@ describe("MX language plugin", () => {
       expect(
         virtual.snapshot.getText(0, virtual.snapshot.getLength()),
       ).not.toContain("stamped");
+    });
+
+    it("warns about an unknown host name in mx.tags[].hosts (.amx; decision 110a; round 2 finding 2)", () => {
+      // The scan diagnostic core records for a typo'd host name was
+      // computed but dropped here: `createVirtualCode` used
+      // `getCustomTags`, which returns only `.customTags`. It now uses
+      // `scanCached` and reports `.diagnostics` through `console.warn`.
+      const dir = mkdtempSync(join(tmpdir(), "mx-amx-hosts-warning-"));
+      scratches.push(dir);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        mkdirSync(join(dir, "widgets"), { recursive: true });
+        writeFileSync(
+          join(dir, "package.json"),
+          JSON.stringify({
+            name: "a",
+            mx: {
+              host: "astro",
+              tags: [{ dir: "widgets", hosts: ["bogus"] }],
+            },
+          }),
+        );
+        writeFileSync(
+          join(dir, "widgets", "stamp.tag.ts"),
+          "export default { transform: (_c, ctx) => [ctx.build.text('stamped')] };\n",
+        );
+
+        const amx = join(dir, "page.amx");
+        const source = "---\n---\n<div>no call</div>\n";
+        const plugin = createAmxLanguagePlugin(ts);
+        plugin.createVirtualCode?.(
+          amx,
+          AMX_LANGUAGE_ID,
+          ts.ScriptSnapshot.fromString(source),
+          { getAssociatedScript: () => undefined },
+        );
+
+        expect(
+          warn.mock.calls.some((call) => String(call[0]).includes("bogus")),
+        ).toBe(true);
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it("gives the second lowering the discovered tags too", () => {

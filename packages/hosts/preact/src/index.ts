@@ -85,7 +85,12 @@ export type { AttrTagConfig, AttrTagOf } from "@mxlang/core";
 // `@mxlang/hono`), which depend on this package rather than on the core
 // directly. Their Bun loaders need tag discovery, and a second dependency
 // edge only to reach one function would contradict that arrangement.
-export { getCustomTags, TranslateError } from "@mxlang/core";
+export {
+  getCustomTags,
+  reportScanDiagnostics,
+  scanCached,
+  TranslateError,
+} from "@mxlang/core";
 export {
   createEmitter,
   createJsxDeclarations,
