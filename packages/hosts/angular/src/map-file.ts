@@ -31,9 +31,11 @@ import { lookupMapping } from "./mapping.ts";
  * encodes one `;` per generated line, so the shift is exactly that many
  * leading semicolons, no re-encoding needed.
  *
- * The `.ng.mx` path in `build.ts` applies this same shift to its own map
- * before calling here, and passes no `headerLines`, so the offset is never
- * applied twice.
+ * The `.ng.mx` path in `build.ts` never calls here: it applies the same
+ * `;`-per-header-line shift inline (`shiftedMap`) and writes the map
+ * itself, because it also swaps MagicString's hires map for the per-region
+ * expression mappings before shifting. Only the page path shifts through
+ * this function, so the offset is never applied twice.
  */
 export function buildMap(
   sourceFile: string,
