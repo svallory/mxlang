@@ -276,8 +276,13 @@ function unescapeGenerated(text: string): string {
  * Every derivation the emitter performs is listed. A mapping whose two sides
  * differ for any other reason is misaligned, which is what the oracle's
  * third assertion exists to catch.
+ *
+ * Exported for `test/angular.test.ts`, which pins the boundary of each
+ * derivation directly — a branch here that ignores `generated` (or accepts a
+ * run merely *contained* in the source outside the one context that is real)
+ * lets a misaligned mapping pass.
  */
-function isDerivedFrom(generated: string, source: string): boolean {
+export function isDerivedFrom(generated: string, source: string): boolean {
   // A component selector: `UserCard`/`user-card` -> `mx-user-card`.
   const kebab = source
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
@@ -289,12 +294,32 @@ function isDerivedFrom(generated: string, source: string): boolean {
   ) {
     return true;
   }
-  // A DOM event name: `onClick` -> `click`, `onDoubleClick` -> `dblclick`.
-  if (/^on[A-Z]/.test(source)) return true;
-  // A `track` expression derived from `by=`: `"id"` -> `<row>.id`, or the
-  // unwrapped body of an arrow. Both end in text the source mentions.
+  // A DOM event name, checked against the actual derivation — never waved
+  // through on the source's shape alone. `onClick` -> `click`: lowercased
+  // exactly as written, with NO aliases (decision 101 (c): `onDoubleClick`
+  // is `(doubleclick)`, never `dblclick`). `on-my-event` -> `my-event`
+  // verbatim. A native element's lowercase `onclick=fn` -> `click`.
+  if (/^on[A-Z]/.test(source)) {
+    return generated === source.slice(2).toLowerCase();
+  }
+  if (/^on-/.test(source)) return generated === source.slice(3);
+  if (/^on[a-z]+$/.test(source)) return generated === source.slice(2);
+  // A `track` expression derived from `by=`: `"id"` -> `<row>.id`.
   const bare = source.replace(/^['"`]|['"`]$/g, "");
-  if (generated.endsWith(`.${bare}`) || source.includes(generated)) return true;
+  if (generated.endsWith(`.${bare}`)) return true;
+  // The arrow form of `by=` — `by=(p => p.id)` — tracks the arrow's body,
+  // sliced out of the source text. This is the ONLY context where the
+  // generated run is contained in the source rather than equal to it: the
+  // body is what follows the `=>`, minus the wrapping parens when the whole
+  // arrow was parenthesized. Anywhere else, containment proves nothing.
+  const arrow = source.indexOf("=>");
+  if (arrow >= 0) {
+    let body = source.slice(arrow + 2).trim();
+    if (source.trimStart().startsWith("(") && body.endsWith(")")) {
+      body = body.slice(0, -1).trimEnd();
+    }
+    return generated === body;
+  }
   // `by=identity` tracks the row itself, so the emitted `track` expression
   // is the loop variable — a name that appears nowhere in the `by=` text.
   if (source.trim() === "identity") return true;

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { runAngularTable } from "../src/report-angular";
+import { isDerivedFrom, runAngularTable } from "../src/report-angular";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const goldenDir = join(here, "..", "fixtures", "angular", "__golden__");
@@ -44,5 +44,35 @@ describe("oracle:angular fixtures", () => {
     expect(golden).toContain("Empty");
     const parsed = JSON.parse(golden);
     expect(parsed[0]?.references?.[0]?.name).toBe("Empty");
+  });
+});
+
+describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
+  it("checks the DOM event name, not only the source's shape", () => {
+    // The derivation is real: `onClick` -> `click`, lowercased exactly as
+    // written — no aliases (decision 101 (c)), so `dblclick` is NOT it.
+    expect(isDerivedFrom("click", "onClick")).toBe(true);
+    expect(isDerivedFrom("doubleclick", "onDoubleClick")).toBe(true);
+    expect(isDerivedFrom("dblclick", "onDoubleClick")).toBe(false);
+    // The hole this closes: any generated text used to pass beside an
+    // `onX` source, so a misaligned event mapping could not fail.
+    expect(isDerivedFrom("banana", "onClick")).toBe(false);
+  });
+
+  it("derives `on-<exact>` and a native element's lowercase `onclick`", () => {
+    expect(isDerivedFrom("my-event", "on-my-event")).toBe(true);
+    expect(isDerivedFrom("click", "onclick")).toBe(true);
+    expect(isDerivedFrom("onclick", "onclick")).toBe(false);
+  });
+
+  it("scopes the containment hatch to a `by=` arrow's body", () => {
+    // The one place a contained-but-not-equal run is real: `by=(p => p.id)`
+    // tracks the arrow's body, sliced out of the source.
+    expect(isDerivedFrom("p.id", "(p => p.id)")).toBe(true);
+    expect(isDerivedFrom("p.id", "p => p.id")).toBe(true);
+    // Anywhere else containment proves nothing: `name` appearing inside
+    // `user.name` does not make one a derivation of the other.
+    expect(isDerivedFrom("name", "user.name")).toBe(false);
+    expect(isDerivedFrom("id", "(p => p.id)")).toBe(false);
   });
 });
