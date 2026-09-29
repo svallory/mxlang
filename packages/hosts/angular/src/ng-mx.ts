@@ -296,9 +296,11 @@ function lowerRegion(
     // The +1 skips the opening backtick, and the escaping is the template
     // literal's own (`\``, `\${`, `\\`): a run containing any of those
     // occupies more bytes escaped than raw, so it is dropped rather than
-    // mapped to bytes it does not cover.
-    mappings: rebaseThroughEscaping(template, templateMappings, 1, (char) =>
-      escapeTemplateLiteral(char),
+    // mapped to bytes it does not cover. The `\${` case is a 2-char escape —
+    // `$` gains its backslash only when `{` follows — so the escaper is
+    // given the lookahead rather than `escapeTemplateLiteral` per character.
+    mappings: rebaseThroughEscaping(template, templateMappings, 1, (char, next) =>
+      char === "$" && next === "{" ? "\\$" : escapeTemplateLiteral(char),
     ),
     warnings,
     hoistedImports,

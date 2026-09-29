@@ -298,24 +298,28 @@ export function encodeMappings(
  */
 /**
  * Rebases template-relative mappings onto text that embeds the template
- * under a per-character escaping function, starting at `embeddedStart`.
+ * under an escaping function, starting at `embeddedStart`.
  *
  * The general form of `templateMappingsToModule`: `escapeChar` gives the
- * escaped form of one character, and a run whose escaped form differs from
- * its raw form is **dropped** rather than mapped to bytes it does not
- * cover. The escaped length of every prefix is accumulated in one pass, so
- * this is linear in the template's length.
+ * escaped form of one character, with `next` — the character that follows
+ * it — so a multi-character escape can be seen: the template literal's
+ * `\${` is `$` escaped *only when* `{` follows, and counting the two
+ * characters independently shifts every later offset by one. A run whose
+ * escaped form differs from its raw form is **dropped** rather than mapped
+ * to bytes it does not cover. The escaped length of every prefix is
+ * accumulated in one pass, so this is linear in the template's length.
  */
 export function rebaseThroughEscaping(
   template: string,
   mappings: readonly GeneratedMapping[],
   embeddedStart: number,
-  escapeChar: (char: string) => string,
+  escapeChar: (char: string, next: string | undefined) => string,
 ): GeneratedMapping[] {
   const escapedUpTo = new Int32Array(template.length + 1);
   for (let i = 0; i < template.length; i += 1) {
     escapedUpTo[i + 1] =
-      (escapedUpTo[i] as number) + escapeChar(template[i] as string).length;
+      (escapedUpTo[i] as number) +
+      escapeChar(template[i] as string, template[i + 1]).length;
   }
 
   const out: GeneratedMapping[] = [];
@@ -345,12 +349,18 @@ export function templateMappingsToModule(
   quotedStart: number,
 ): GeneratedMapping[] {
   // Quoted length per character, prefix-summed: `quotedUpTo[i]` is how many
-  // bytes `template.slice(0, i)` occupies inside the quoted string.
+  // bytes `template.slice(0, i)` occupies inside the quoted string. The walk
+  // is by **code point**, not UTF-16 unit: a lone surrogate stringifies to
+  // its `\udXXX` escape (6 bytes), so an astral character counted per unit
+  // would cost 12 bytes where the real quoted text keeps the pair intact at
+  // 2 — skewing every offset after an emoji.
   const quotedUpTo = new Int32Array(template.length + 1);
-  for (let i = 0; i < template.length; i += 1) {
-    const char = template[i] as string;
-    quotedUpTo[i + 1] =
-      (quotedUpTo[i] as number) + JSON.stringify(char).length - 2;
+  let cursor = 0;
+  for (const char of template) {
+    const next = cursor + char.length;
+    quotedUpTo[next] =
+      (quotedUpTo[cursor] as number) + JSON.stringify(char).length - 2;
+    cursor = next;
   }
 
   const out: GeneratedMapping[] = [];

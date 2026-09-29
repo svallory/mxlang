@@ -17,9 +17,12 @@ import { compile, compileTagModule } from "../src/index.ts";
 import {
   lineColumnAt,
   offsetAt,
+  rebaseThroughEscaping,
   resolveLineColumn,
   sourceOffsetFor,
+  templateMappingsToModule,
 } from "../src/mapping.ts";
+import { compileNgMx } from "../src/ng-mx.ts";
 
 /**
  * Compiles `source` and returns the pairs each mapping slices to.
@@ -308,5 +311,143 @@ describe("compile(): the map itself", () => {
     // a mapping covering literal text.
     const result = compile("hello", "x.mx");
     expect(result.mappings).toEqual([]);
+  });
+});
+
+describe("rebaseThroughEscaping", () => {
+  // The template-literal escaper exactly as `ng-mx.ts` hands it over: a
+  // backslash or backtick doubles, and `$` *followed by* `{` gains a
+  // backslash — a two-character escape a per-character walker can only see
+  // with a lookahead.
+  const escapeChar = (char: string, next?: string): string =>
+    char === "$" && next === "{"
+      ? "\\$"
+      : char === "\\" || char === "`"
+        ? `\\${char}`
+        : char;
+
+  it("does not shift a mapping after a literal `${` (a 2-char escape)", () => {
+    //             raw: a ${{ v }}
+    //         escaped: a \${{ v }}
+    // embedded (` + 1): `a \${{ v }}
+    const template = "a ${{ v }}";
+    const start = template.indexOf("v");
+    const rebased = rebaseThroughEscaping(
+      template,
+      [
+        {
+          sourceStart: 0,
+          sourceEnd: 1,
+          generatedStart: start,
+          generatedEnd: start + 1,
+        },
+      ],
+      1,
+      escapeChar,
+    );
+    expect(rebased).toHaveLength(1);
+    const mapping = rebased[0]!;
+    const embedded = "`a \\${{ v }}";
+    expect(embedded.slice(mapping.generatedStart, mapping.generatedEnd)).toBe(
+      "v",
+    );
+  });
+
+  it("drops a run containing a 2-char escape, like any other escaped run", () => {
+    const template = "a ${{ v }}";
+    // The ` ${{` run: it contains the 2-char escape, so the embedded bytes
+    // differ from the raw text the mapping claims and the run must drop.
+    const rebased = rebaseThroughEscaping(
+      template,
+      [
+        {
+          sourceStart: 0,
+          sourceEnd: 4,
+          generatedStart: 1,
+          generatedEnd: 5,
+        },
+      ],
+      1,
+      escapeChar,
+    );
+    expect(rebased).toEqual([]);
+  });
+});
+
+describe("templateMappingsToModule", () => {
+  it("does not shift a mapping after an astral character (a surrogate pair)", () => {
+    // JSON quoting does not escape an emoji, so the run after it must stay
+    // mapped — counted as one character occupying two UTF-16 units, never as
+    // two lone surrogates JSON would escape.
+    const template = "\u{1F600}x";
+    const quoted = JSON.stringify(template);
+    const rebased = templateMappingsToModule(
+      template,
+      [
+        {
+          sourceStart: 0,
+          sourceEnd: 1,
+          generatedStart: 2,
+          generatedEnd: 3,
+        },
+      ],
+      0,
+    );
+    expect(rebased).toHaveLength(1);
+    const mapping = rebased[0]!;
+    expect(quoted.slice(mapping.generatedStart, mapping.generatedEnd)).toBe(
+      "x",
+    );
+  });
+
+  it("keeps a run covering an astral character, which JSON quoting passes through", () => {
+    const template = "\u{1F600}";
+    const rebased = templateMappingsToModule(
+      template,
+      [
+        {
+          sourceStart: 0,
+          sourceEnd: 1,
+          generatedStart: 0,
+          generatedEnd: 2,
+        },
+      ],
+      0,
+    );
+    expect(rebased).toHaveLength(1);
+    const mapping = rebased[0]!;
+    expect(
+      JSON.stringify(template).slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
+      ),
+    ).toBe(template);
+  });
+});
+
+describe("compileNgMx(): mappings through template-literal escaping", () => {
+  it("keeps a mapping after a 2-char escape anchored to its expression", () => {
+    // The first interpolation's string literal contains `${`, which the
+    // backtick literal must escape — two source characters becoming three
+    // embedded bytes. A per-character rebase shifted every later mapping
+    // down by one, slicing a byte too early.
+    const source = [
+      'import { Component } from "@angular/core";',
+      "",
+      "@Component({",
+      '  selector: "app-x",',
+      '  template: <p>${"${"}${name}</p>,',
+      "})",
+      "export class XComponent {}",
+    ].join("\n");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    const pairs = result.mappings.map((mapping) => ({
+      generated: result.code.slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
+      ),
+      source: source.slice(mapping.sourceStart, mapping.sourceEnd),
+    }));
+    expect(pairs).toContainEqual({ generated: "name", source: "name" });
   });
 });
