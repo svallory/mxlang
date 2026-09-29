@@ -26,6 +26,7 @@ import {
   type Position,
   type SourceSpan,
   TranslateError,
+  unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";
 import { TemplateWriter } from "./mapping.ts";
@@ -148,7 +149,28 @@ export const angularDeclarations: HostDeclarations = {
     try: { kind: "error", reason: TRY_MESSAGE },
   },
   isElement: (name) => !/^[A-Z]/.test(name),
-  isComponent: (name) => /^[A-Z]/.test(name),
+  // Decision 114: routing by PascalCase alone made `<TotallyUndefined/>` —
+  // no import, binding, or taglib entry — a "component" that emitted
+  // `<mx-totally-undefined>` plus a step-1 import warning, where Marko
+  // 6.3.51 fails at compile time. A name is a component here only when
+  // something resolves it: a file-local binding (an import, a `<define>`),
+  // or a taglib entry — and no HTML element is ever capitalized, so any
+  // taglib hit for a capitalized name is a component, not an element.
+  // Anything else falls past this to the core's unresolved-tag guard and
+  // `rejectUnknownTag` below.
+  isComponent: (name, ctx) => {
+    if (ctx.defines?.has(name) || ctx.imports?.has(name)) return true;
+    const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+    if (taglibId === undefined) return false;
+    return !ELEMENT_TAGLIBS.has(taglibId);
+  },
+  // Marko's own compile error for a tag nothing resolves (decision 114),
+  // reported through the core's unresolved-tag guard rather than this
+  // host's old casing-only fallback. The message is core's own constant,
+  // shared verbatim with every other Marko-parity host.
+  rejectUnknownTag(name, node) {
+    rawFail(unresolvedCustomTagMessage(name), node);
+  },
   claimsTag: (name) =>
     name === "try" || name === "html-comment" || name === DYNAMIC_TAG,
   resolveHostTag(
@@ -271,6 +293,11 @@ const LOWERCASE_EVENT = /^on[a-z]+$/;
 // `once=`/`onto=` are ordinary words, not events — spec §4 names `once`, and
 // the element tests pin both as plain property bindings.
 const NOT_EVENTS = new Set(["once", "onto"]);
+
+// Marko's own element taglibs: `marko-html`, `marko-svg`, `marko-math` — a
+// capitalized name found in any *other* taglib resolved to a component.
+// Same set `@mxlang/preact`'s emitter declares, for the same lookup.
+const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
 
 // A dynamic `data-*`/`aria-*` attribute has no Angular DOM property to bind,
 // so it emits `[attr.name]`; every other dynamic attribute stays `[name]`
@@ -935,15 +962,26 @@ class AngularEmitter implements Emitter<string> {
         this.emitDefineCall(node, node.target);
         return;
       case "dynamic":
-        // Dead per the core's actual lowering: `lower.ts`'s `lowerTag`
-        // routes every `<${expr}/>` to `HostTag` (the `DYNAMIC_TAG`
-        // sentinel), never to `Component.target.kind === "dynamic"` — see
-        // `hostTag()`'s `dynamic-component` branch for the real path.
-        // Kept for IR exhaustiveness only.
-        fail(
-          "`<${…}>` cannot reach `Component`'s dynamic-target path; the core's own lowering routes it through `HostTag` instead — this indicates a lowering change upstream.",
+        // Decision 116's routing lands here: a capitalized tag bound to a
+        // value import that is not a `.mx` default import, or to a local
+        // whose value the core could not statically prove (a `<for>` tag
+        // param, a `lazy(...)` const). The callee is a runtime value, so
+        // the call emits the same `ngComponentOutlet` an authored
+        // `<${expr}/>` does — `valueImportBinding` has no use on this
+        // host, which has no type surface to spend it on. An authored
+        // `<${expr}/>` itself still arrives through `HostTag` (the
+        // `DYNAMIC_TAG` sentinel), never through this branch.
+        this.emitDynamicComponent(
+          node.target.expr.code,
+          // The synthesized `Expr` carries no span (its `node` is null), so
+          // the emitted expression maps to the tag name the author wrote.
+          node.target.expr.span ?? node.nameSpan,
+          node.attrs,
+          node.content !== null || node.attrTagProps.length > 0,
+          node.args,
           node,
         );
+        return;
     }
   }
 
@@ -952,14 +990,20 @@ class AngularEmitter implements Emitter<string> {
     target: Extract<ComponentTarget, { kind: "name" }>,
   ): void {
     if (node.content?.hasParams) {
+      // `authoredName`: a discovered tag's `target.name` is the gensym'd
+      // binding (`$mx_Card1`), which appears nowhere the author wrote —
+      // the message names the tag they typed.
       fail(
-        `\`<${target.name}|…|>\` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a \`<define>\` and pass it as an input the component renders with \`ngTemplateOutlet\`.`,
+        `\`<${node.authoredName ?? target.name}|…|>\` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a \`<define>\` and pass it as an input the component renders with \`ngTemplateOutlet\`.`,
         node,
       );
     }
     // A tag bound by an import (discovered or explicit) resolves to the file
-    // it came from; anything else is a name the author wrote with no module
-    // behind it, and the bare-name rule is all this host can apply.
+    // it came from; anything else reaching here is a *bound* local with no
+    // tag module behind it (a `<const>`/param the core proved callable),
+    // and the bare-name rule is all this host can apply. An *unbound*
+    // capitalized name never reaches this method at all: decision 114's
+    // core guard rejects it first.
     const tagModule = this.tagModules.get(target.name);
     const selector =
       tagModule?.selector ?? `${this.selectorPrefix}${kebabCase(target.name)}`;

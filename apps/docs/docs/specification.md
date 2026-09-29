@@ -900,6 +900,30 @@ Type-only fence imports are excluded the same way `sourceBindings`/
 runtime value, so `<Widget/>` on any of these four hosts is Marko's unresolved-
 tag error, not a silent reference.
 
+**Extended to Angular** (the `angular-host` follow-up decision 114 always
+named, PR #113's branch). `@mxlang/angular`'s `isComponent` was a bare
+`/^[A-Z]/` test too, but its fallthrough was softer than a bare reference:
+an unresolved capitalized tag emitted `<mx-totally-undefined>` plus the
+step-1 "add this import yourself" warning, which told the author a tag
+nothing resolves was one import away from working. It now resolves a
+capitalized tag only through `ctx.imports`/`ctx.defines` or a non-element
+taglib entry, and supplies `rejectUnknownTag` with Marko's wording, so
+`<TotallyUndefined/>` is the same positioned compile error as on every
+other host, in a page `.mx` and in a `.ng.mx` region alike. Two consequences
+worth recording:
+
+- Decision 116's routing landed while this host's component dispatch still
+  called `Component.target.kind === "dynamic"` unreachable. A capitalized
+  tag bound to a value import that is not a `.mx` default import, or to a
+  local whose value core cannot statically prove (a `<for>` tag param), now
+  lowers there on Angular too, and emits `ngComponentOutlet` — the same
+  lowering an authored `<${expr}/>` already had. The `valueImportBinding`
+  provenance other hosts spend on typing has no consumer on this one.
+- The step-1 used-tag import warning is unchanged in kind: it only ever
+  applies to a *resolved* tag (a `.mx` import, a discovered `tags/` unit),
+  telling the author which Angular-side `import`/`imports:` entry that tag's
+  emitted module needs.
+
 **A type-only import never resolves a tag, in a whole-file `.mx` on any
 host either** (decision 114/115). `@mxlang/core`'s `importBindings` used to
 return every specifier of an `import` statement with no check of

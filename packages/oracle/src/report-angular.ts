@@ -708,11 +708,27 @@ export function runAngularTable(update: boolean): {
       "utf8",
     ).trim();
 
+    // An error fixture may carry its own `tags/` directory, exactly like a
+    // pass fixture: a rejection that only fires on a *resolved* call (an
+    // unresolved capitalized tag is decision 114's own error, checked
+    // first) needs the tag to exist somewhere discoverable.
+    const hasTagsDir = existsSync(join(dir, "tags"));
+    const compilePath = hasTagsDir
+      ? stageWithTags(dir, input)
+      : FIXTURE_FILENAME;
+
     let thrown: string | null = null;
     try {
-      compile(input, FIXTURE_FILENAME);
+      compile(input, compilePath, {
+        customTags: hasTagsDir
+          ? (getCustomTags(compilePath, { host: "angular" }) as never)
+          : undefined,
+      });
     } catch (err) {
       thrown = stripPathPrefix((err as Error).message);
+      // A staged fixture's temp path can also survive *inside* a message
+      // (a tag file named by it); the golden stays machine-independent.
+      if (hasTagsDir) thrown = stripStagedDir(thrown, compilePath);
     }
 
     if (thrown === null) {

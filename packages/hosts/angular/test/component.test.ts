@@ -1,55 +1,65 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   angularAstSnapshot,
   assertAngularParses,
   compileMx,
+  compileWithTags,
   emit,
+  emitWithTags,
 } from "./helpers.ts";
 
 describe("Component name target", () => {
   it("emits mx- + kebab-cased selector, with a step-1 import warning", () => {
-    const { code, warnings } = compileMx("<UserCard name=n/>");
+    const { code, warnings, dir } = compileWithTags("<UserCard name=n/>", [
+      "UserCard",
+    ]);
     expect(code).toBe('<mx-user-card [name]="n"></mx-user-card>');
     assertAngularParses(code);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toBe(
-      'this template calls 1 MX tag(s): `UserCard`. In step 1, MX cannot edit your component\'s TypeScript. Add to x.ts: `import UserCard from "./tags/user-card";` and `imports: [UserCard]`.',
+      `this template calls 1 MX tag(s): \`UserCard\`. In step 1, MX cannot edit your component's TypeScript. Add to ${join(dir, "x.ts")}: \`import UserCard from "./tags/UserCard";\` and \`imports: [UserCard]\`.`,
     );
     expect(angularAstSnapshot(code)).toMatchObject([{ name: "mx-user-card" }]);
   });
 
   it("names the compiled file's own .ts sibling, derived from the actual filename", () => {
-    const { warnings } = compileMx(
+    const { warnings, dir } = compileWithTags(
       "<UserCard name=n/>",
+      ["UserCard"],
       "src/foo.component.mx",
     );
-    expect(warnings[0]?.message).toContain("Add to src/foo.component.ts:");
+    expect(warnings[0]?.message).toContain(
+      `Add to ${join(dir, "src/foo.component.ts")}:`,
+    );
   });
 
   it("rejects /var on a component call (core's own message, not host code)", () => {
     // R-a: the "no syntax for this" claim in round 0 was wrong — core parses
-    // and rejects it itself (packages/core/src/lower.ts, the tag-variable
-    // guard), before this emitter ever sees the node. Nothing to implement
-    // here; this pins the observed behavior.
-    expect(() => emit("<UserCard/x name=n/>")).toThrow(
-      "tag variable `/x` on `<UserCard>` is not supported in a standalone template",
+    // and rejects it itself (packages/core/src/lower.ts), before this
+    // emitter ever sees the node. Nothing to implement here; this pins the
+    // observed behavior. The tag resolves through a discovered unit, so
+    // core's current wording is the `<return>` one: a unit that declares no
+    // `<return>` has no value for `/var` to bind.
+    expect(() => emitWithTags("<UserCard/x name=n/>", ["UserCard"])).toThrow(
+      "`<UserCard>` does not return a value; add `<return value=…/>`",
     );
   });
 
   it("passes content through as element children", () => {
-    const out = emit("<Card>body</Card>");
+    const out = emitWithTags("<Card>body</Card>", ["Card"]);
     expect(out).toBe("<mx-card>body</mx-card>");
     assertAngularParses(out);
   });
 
   it("rejects content with tag params, naming the real tag rather than a literal {Tag} placeholder", () => {
-    expect(() => emit("<Card|row|>${row}</Card>")).toThrow(
+    expect(() => emitWithTags("<Card|row|>${row}</Card>", ["Card"])).toThrow(
       "`<Card|…|>` passes parameters to its content, which Angular's content projection cannot express. Declare the block as a `<define>` and pass it as an input the component renders with `ngTemplateOutlet`.",
     );
   });
 
   it("emits an attribute tag as ngProjectAs content projection", () => {
-    const out = emit("<Card><@header>H</@header></Card>");
+    const out = emitWithTags("<Card><@header>H</@header></Card>", ["Card"]);
     expect(out).toBe(
       '<mx-card><ng-container ngProjectAs="[header]">H</ng-container></mx-card>',
     );
@@ -57,8 +67,9 @@ describe("Component name target", () => {
   });
 
   it("emits mutually exclusive conditional tags as conditional projections", () => {
-    const out = emit(
+    const out = emitWithTags(
       "<Card><if=primary><@header>A</@header></if><else if=secondary><@header>B</@header></else><else><@header>C</@header></else></Card>",
+      ["Card"],
     );
     expect(out).toBe(
       '<mx-card>@if (primary) { <ng-container ngProjectAs="[header]">A</ng-container> } @else if (secondary) { <ng-container ngProjectAs="[header]">B</ng-container> } @else { <ng-container ngProjectAs="[header]">C</ng-container> }</mx-card>',
@@ -68,7 +79,7 @@ describe("Component name target", () => {
 
   it("rejects an attribute tag with params, naming the component and the attribute tag", () => {
     try {
-      emit("<Card>\n<@header|x|>${x}</@header>\n</Card>");
+      emitWithTags("<Card>\n<@header|x|>${x}</@header>\n</Card>", ["Card"]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -80,7 +91,7 @@ describe("Component name target", () => {
 
   it("rejects attributes on a projection with a positioned host error", () => {
     try {
-      emit('<Card>\n<@header tone="loud">H</@header>\n</Card>');
+      emitWithTags('<Card>\n<@header tone="loud">H</@header>\n</Card>', ["Card"]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -92,7 +103,7 @@ describe("Component name target", () => {
 
   it("rejects nested projections with a positioned host error", () => {
     try {
-      emit("<Card>\n<@header><@icon>I</@icon></@header>\n</Card>");
+      emitWithTags("<Card>\n<@header><@icon>I</@icon></@header>\n</Card>", ["Card"]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -104,7 +115,7 @@ describe("Component name target", () => {
 
   it("rejects repeated and looped tags as array projections", () => {
     try {
-      emit("<Card>\n<@item>A</@item>\n<@item>B</@item>\n</Card>");
+      emitWithTags("<Card>\n<@item>A</@item>\n<@item>B</@item>\n</Card>", ["Card"]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -113,8 +124,9 @@ describe("Component name target", () => {
       expect((error as { line?: number }).line).toBe(3);
     }
     try {
-      emit(
+      emitWithTags(
         "<Card>\n<for|item| of=items>\n<@row>${item}</@row>\n</for>\n</Card>",
+        ["Card"],
       );
       throw new Error("expected compile to fail");
     } catch (error) {
@@ -127,7 +139,7 @@ describe("Component name target", () => {
 
   it("rejects a bodiless projection", () => {
     try {
-      emit("<Card>\n<@header/>\n</Card>");
+      emitWithTags("<Card>\n<@header/>\n</Card>", ["Card"]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -138,13 +150,19 @@ describe("Component name target", () => {
   });
 
   it("warns once per file listing every tag, not once per call", () => {
-    const { warnings } = compileMx("<UserCard name=a/><UserCard name=b/>");
+    const { warnings } = compileWithTags(
+      "<UserCard name=a/><UserCard name=b/>",
+      ["UserCard"],
+    );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toContain("calls 1 MX tag(s): `UserCard`");
   });
 
   it("lists two different tags in the same single warning", () => {
-    const { warnings } = compileMx("<UserCard name=a/><Badge label=b/>");
+    const { warnings } = compileWithTags(
+      "<UserCard name=a/><Badge label=b/>",
+      ["UserCard", "Badge"],
+    );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toContain(
       "calls 2 MX tag(s): `UserCard`, `Badge`",

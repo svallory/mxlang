@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAngularChecker } from "../../../tooling/angular-checker/src/index.ts";
-import { assertAngularParses, emit } from "./helpers.ts";
+import { assertAngularParses, emitWithTags } from "./helpers.ts";
 
 const checkerProject = resolve(
   import.meta.dirname,
@@ -10,8 +10,9 @@ const checkerProject = resolve(
 
 describe("conditional attribute-tag projection", () => {
   it("passes Angular's parser and ngtsc checker", () => {
-    const template = emit(
+    const template = emitWithTags(
       "<Card><if=primary><@header>A</@header></if><else if=secondary><@header>B</@header></else><else><@header>C</@header></else></Card>",
+      ["Card"],
     );
     assertAngularParses(template);
 

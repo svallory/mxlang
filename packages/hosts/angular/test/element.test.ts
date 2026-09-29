@@ -4,6 +4,7 @@ import {
   assertAngularParses,
   compileMx,
   emit,
+  emitWithTags,
 } from "./helpers.ts";
 
 describe("Element", () => {
@@ -219,7 +220,7 @@ describe("lowercase onclick mapping is native-element-only", () => {
     // lowercase mapping must not rewire a component's input into an output
     // binding (components have props; elements have events — the PR
     // body's claim, pinned).
-    const out = emit("<UserCard onclick=handler/>");
+    const out = emitWithTags("<UserCard onclick=handler/>", ["UserCard"]);
     expect(out).toBe('<mx-user-card [onclick]="handler"></mx-user-card>');
     assertAngularParses(out);
   });
