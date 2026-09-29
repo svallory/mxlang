@@ -81,7 +81,10 @@ describe("resolvable tags still compile (decision 114)", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-ng-unresolved-"));
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "f" }));
     mkdirSync(join(dir, "tags"));
-    writeFileSync(join(dir, "tags", "badge.mx"), '<span class="badge">x</span>\n');
+    writeFileSync(
+      join(dir, "tags", "badge.mx"),
+      '<span class="badge">x</span>\n',
+    );
     const filePath = join(dir, "page.mx");
     const result = compile("<div><badge/></div>", filePath, {
       customTags: getCustomTags(filePath, { host: "angular" }),

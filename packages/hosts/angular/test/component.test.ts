@@ -91,7 +91,9 @@ describe("Component name target", () => {
 
   it("rejects attributes on a projection with a positioned host error", () => {
     try {
-      emitWithTags('<Card>\n<@header tone="loud">H</@header>\n</Card>', ["Card"]);
+      emitWithTags('<Card>\n<@header tone="loud">H</@header>\n</Card>', [
+        "Card",
+      ]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -103,7 +105,9 @@ describe("Component name target", () => {
 
   it("rejects nested projections with a positioned host error", () => {
     try {
-      emitWithTags("<Card>\n<@header><@icon>I</@icon></@header>\n</Card>", ["Card"]);
+      emitWithTags("<Card>\n<@header><@icon>I</@icon></@header>\n</Card>", [
+        "Card",
+      ]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -115,7 +119,9 @@ describe("Component name target", () => {
 
   it("rejects repeated and looped tags as array projections", () => {
     try {
-      emitWithTags("<Card>\n<@item>A</@item>\n<@item>B</@item>\n</Card>", ["Card"]);
+      emitWithTags("<Card>\n<@item>A</@item>\n<@item>B</@item>\n</Card>", [
+        "Card",
+      ]);
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
@@ -159,10 +165,10 @@ describe("Component name target", () => {
   });
 
   it("lists two different tags in the same single warning", () => {
-    const { warnings } = compileWithTags(
-      "<UserCard name=a/><Badge label=b/>",
-      ["UserCard", "Badge"],
-    );
+    const { warnings } = compileWithTags("<UserCard name=a/><Badge label=b/>", [
+      "UserCard",
+      "Badge",
+    ]);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toContain(
       "calls 2 MX tag(s): `UserCard`, `Badge`",
