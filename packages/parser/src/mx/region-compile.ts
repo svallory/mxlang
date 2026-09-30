@@ -46,6 +46,15 @@ export interface MxRegionCompileInput {
    * diagnostics and for resolving a discovered tag's relative specifier.
    */
   filename: string;
+  /**
+   * True for a fragment region (`<>…</>`, `mxRegionFragment`). Then `source`
+   * is the fragment's children only, `baseOffset`/`baseColumn` locate the
+   * first of them, and the region the bridge replaces spans `source` plus the
+   * two characters of `<>` before it and the three of `</>` after it — so a
+   * host that splices text back into the file by offset must widen its span.
+   * Absent or false for every ordinary region.
+   */
+  fragment?: boolean;
   /** The region's absolute start offset in the file. */
   baseOffset: number;
   /** The region's 0-based start line in the file. */

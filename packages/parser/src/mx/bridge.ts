@@ -164,7 +164,27 @@ export function mxParseElementAt(
   // back to the entry depth minus that one push is enough.
   const contextDepth = parser.state.context.length - 1;
 
-  const { root, end, errors } = walkMxRegion(source, start);
+  // A fragment region (`<>…</>`) is only claimed when the host opted in; the
+  // jsx plugin routes `<>` here under the same condition.
+  const fragment =
+    parser.options?.mxRegionFragment === true &&
+    source.charCodeAt(start + 1) === 62; /* > */
+  const { root, end, errors } = walkMxRegion(source, start, { fragment });
+
+  if (fragment && errors.length > 0) {
+    // htmljs-parser reports a `<>` inside an element child as a mismatched
+    // close far from the cause. If a `<>` precedes the first error, that is
+    // the mistake to name.
+    const nested = source.indexOf("<>", start + 2);
+    if (nested !== -1 && nested < (errors[0]?.end ?? 0)) {
+      throw raiseAndThrow(
+        parser,
+        MxErrors.NestedFragment,
+        positionAt(source, nested, parser.state.startIndex),
+        undefined,
+      );
+    }
+  }
 
   if (errors.length > 0 || root === null) {
     const first = errors[0];
@@ -189,10 +209,10 @@ export function mxParseElementAt(
   // channel the parser does not offer.
   let regionContext: MxRegionContext | undefined;
   if (positionCheck) {
-    const context = computeMxRegionContext(
-      parser.state.mxRegionParents,
-      startLoc.index,
-    );
+    const context = {
+      ...computeMxRegionContext(parser.state.mxRegionParents, startLoc.index),
+      ...(fragment ? { fragment: true } : {}),
+    };
     regionContext = context;
     const result = positionCheck(context);
     if (!result.ok) {
@@ -216,9 +236,28 @@ export function mxParseElementAt(
     });
   }
 
+  if (fragment) {
+    const nested = nestedFragmentAt(root, source);
+    if (nested !== null) {
+      throw raiseAndThrow(
+        parser,
+        MxErrors.NestedFragment,
+        positionAt(source, nested, parser.state.startIndex),
+        undefined,
+      );
+    }
+  }
+
+  // What the host lowers. A fragment region hands over its children only: the
+  // host's template lowering already takes several roots, and `<>`/`</>` are
+  // this bridge's syntax, not the host's.
+  const inner = fragment
+    ? { start: start + 2, end: root.closeRange?.start ?? end }
+    : { start, end };
+
   let node: unknown;
   try {
-    const region = source.slice(start, end);
+    const region = source.slice(inner.start, inner.end);
     const { code, hoistedImports, hoistedDefines, returnVars, dependencies } =
       regionCompile({
         source: region,
@@ -229,9 +268,10 @@ export function mxParseElementAt(
         // back into the parser. Undefined when no position check ran, since
         // the stack is only tracked then.
         context: regionContext,
-        baseOffset: start,
+        fragment,
+        baseOffset: inner.start,
         baseLine: startLoc.line - 1,
-        baseColumn: startLoc.column,
+        baseColumn: startLoc.column + (fragment ? 2 : 0),
         // Registered custom tags reach a host only through here, for the same
         // reason the hook itself does.
         customTags: parser.options?.mxCustomTags,
@@ -325,8 +365,61 @@ export function mxParseElementAt(
     });
   }
 
+  noteSiblingRoot(parser, source, end);
   repositionTokenizer(parser, source, start, end, contextDepth);
   return node;
+}
+
+/**
+ * The offset of a `<>` inside a fragment's children, or null. htmljs-parser
+ * reads a nested `<>` as plain text, which would lower to a literal `<>` in
+ * the output; a fragment has no meaning inside a fragment, so it is refused.
+ */
+function nestedFragmentAt(root: MxElement, source: string): number | null {
+  const stack: MxElement[] = [root];
+  for (let el = stack.pop(); el; el = stack.pop()) {
+    for (const child of el.children) {
+      if (child.kind === "element") stack.push(child.element);
+      else if (child.kind === "text") {
+        const at = source.indexOf("<>", child.range.start);
+        if (at !== -1 && at < child.range.end) return at;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Records that a second, well-formed root follows a region directly
+ * (`<a/><b/>`), so a parse failure it causes can be reported as the rule it
+ * breaks. Purely a hint: it changes nothing about what parses.
+ *
+ * The tokenizer resumes at `end` and reads `<b/>` as a relational operator
+ * followed by garbage, so the failure is a Babel error about a regular
+ * expression or an unexpected token that names no MX rule. `parse` rewrites
+ * that failure — and only a failure — using these hints. Input that parses
+ * today (`<b/> < c`, `<b/> <c`) never reaches the rewrite, so it is not
+ * rejected here.
+ */
+function noteSiblingRoot(
+  parser: MxParserHost,
+  source: string,
+  end: number,
+): void {
+  const hints = parser.options?.mxSiblingHints as
+    | Array<{ start: number; end: number }>
+    | undefined;
+  if (!hints) return;
+  let at = end;
+  while (at < source.length && /\s/.test(source.charAt(at))) at++;
+  if (source.charCodeAt(at) !== 60 /* < */) return;
+  const next = source.charAt(at + 1);
+  const fragment = next === ">" && parser.options?.mxRegionFragment === true;
+  // `< c` (a space) is a comparison, never a root; so is `<=` and `<<`.
+  if (!fragment && !/[A-Za-z_$@:]/.test(next)) return;
+  const sibling = walkMxRegion(source, at, { fragment });
+  if (sibling.errors.length > 0 || sibling.root === null) return;
+  hints.push({ start: at, end: sibling.end });
 }
 
 interface ExpressionMapping {

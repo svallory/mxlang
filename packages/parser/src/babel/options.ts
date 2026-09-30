@@ -122,6 +122,22 @@ export interface Options {
   mxRegionPositionCheck?: import("../mx/region-context.ts").MxRegionPositionCheck;
 
   /**
+   * MX FORK: when true, `<>…</>` in expression position is an MX **fragment
+   * region** — its children are lowered by the host as sibling nodes — instead
+   * of a TSX fragment. Default off, so `.solid.mx` (whose output is JSX, and
+   * for which `<>` is real TSX) is unchanged. The `.ng.mx` host turns it on,
+   * because an Angular template has no TSX to fall back to.
+   */
+  mxRegionFragment?: boolean;
+
+  /**
+   * MX FORK, internal: regions that were immediately followed by a second
+   * well-formed root. Filled by the bridge, read by `parse` to replace a
+   * failure caused by that sibling with the `MultipleRoots` error.
+   */
+  mxSiblingHints?: Array<{ start: number; end: number }>;
+
+  /**
    * MX FORK: lowers each MX region the bridge finds, carried on the options
    * bag for the same reason as the two above. Absent means the Solid host
    * (`compileSolidMx`), which is what every `.solid.mx` parse has always
@@ -232,6 +248,8 @@ type KeepOptionalKeys =
   | "strictMode"
   | "mxCustomTags"
   | "mxRegionPositionCheck"
+  | "mxRegionFragment"
+  | "mxSiblingHints"
   | "mxRegionCompile"
   | "mxImportSpecifiers"
   | "mxModuleBindings"
@@ -258,6 +276,9 @@ function createDefaultOptions(): OptionsWithDefaults {
     // MX FORK: same "must default to undefined, not be left out" reasoning
     // as mxCustomTags above.
     mxRegionPositionCheck: undefined,
+    // MX FORK: same "must default to undefined" reasoning, twice more.
+    mxRegionFragment: undefined,
+    mxSiblingHints: undefined,
     // MX FORK: same reasoning again — `undefined` here, not omitted, or
     // `getOptions` never copies a caller's hook across.
     mxRegionCompile: undefined,

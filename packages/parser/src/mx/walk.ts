@@ -111,8 +111,30 @@ export function isVoidTag(name: string | null): boolean {
   return name !== null && VOID_TAGS.has(name);
 }
 
+/**
+ * htmljs-parser's own wording for a fragment's synthetic root names a tag the
+ * author never wrote (`"${_}"`); say what they did write instead.
+ */
+function fragmentMessage(message: string): string {
+  if (message.startsWith("Missing ending")) {
+    return "Unterminated fragment: expected a closing `</>`.";
+  }
+  return message.replaceAll(`"\${_}"`, '"<>"');
+}
+
 /** Thrown from a handler to stop htmljs-parser once the root tag closes. */
 class StopWalk extends Error {}
+
+/**
+ * What stands in for a fragment's `<>` while it is walked. htmljs-parser has
+ * no nameless open tag, and a static root would ignore the fragment's
+ * nameless `</>` (see `onCloseTagEnd`), so the walk sees a dynamic-named root
+ * whose close may be nameless — the only shape htmljs-parser accepts `</>`
+ * for. Its offsets are corrected back to the real source, so it is invisible
+ * to every consumer except as the synthetic root the region's children hang
+ * off.
+ */
+const FRAGMENT_OPEN = "<${_}>";
 
 /**
  * Runs htmljs-parser over `source` starting at `start` and builds the raw MX
@@ -130,13 +152,24 @@ class StopWalk extends Error {}
  *    htmljs-parser scans the entire rest of the file as if it were markup —
  *    measurably (~44x more events on a 3000-line file).
  */
-export function walkMxRegion(source: string, start: number): MxWalkResult {
-  const data = source.slice(start);
+export function walkMxRegion(
+  source: string,
+  start: number,
+  options: { fragment?: boolean } = {},
+): MxWalkResult {
+  const fragment = options.fragment === true;
+  // A fragment region starts at its `<>`. The walk is handed a synthetic open
+  // tag in its place, so every offset htmljs-parser reports is shifted by the
+  // difference in length: `base` is the source offset of data index 0.
+  const base = fragment ? start + 2 - FRAGMENT_OPEN.length : start;
+  const data = fragment
+    ? FRAGMENT_OPEN + source.slice(start + 2)
+    : source.slice(start);
   const errors: MxWalkError[] = [];
 
   const rel = (r: { start: number; end: number }): MxRange => ({
-    start: r.start + start,
-    end: r.end + start,
+    start: r.start + base,
+    end: r.end + base,
   });
 
   let root: MxElement | null = null as MxElement | null;
@@ -170,7 +203,7 @@ export function walkMxRegion(source: string, start: number): MxWalkResult {
 
   const finish = (endOffset: number) => {
     done = true;
-    end = endOffset + start;
+    end = endOffset + base;
     throw new StopWalk();
   };
 
@@ -293,7 +326,7 @@ export function walkMxRegion(source: string, start: number): MxWalkResult {
       pending = null;
       const closesItself = range.selfClosed || isVoidTag(el.staticName);
       el.selfClosing = closesItself;
-      el.range = { start: el.range.start, end: range.end + start };
+      el.range = { start: el.range.start, end: range.end + base };
 
       if (root === null) root = el;
       else addChild({ kind: "element", element: el });
@@ -333,7 +366,7 @@ export function walkMxRegion(source: string, start: number): MxWalkResult {
 
     onCloseTagName(range) {
       if (done) return;
-      closeName = source.slice(start + range.start, start + range.end);
+      closeName = source.slice(base + range.start, base + range.end);
     },
 
     onCloseTagEnd(range) {
@@ -350,13 +383,13 @@ export function walkMxRegion(source: string, start: number): MxWalkResult {
 
       const el = stack.pop();
       if (el) {
-        el.range = { start: el.range.start, end: range.end + start };
+        el.range = { start: el.range.start, end: range.end + base };
         // `onCloseTagStart` fires at the `</`; together with this range's end
         // that is the full `</name>` span, which is what the lowered
         // JSXClosingElement needs so source maps point at the closing tag.
         el.closeRange = {
-          start: (closeStart ?? range.start) + start,
-          end: range.end + start,
+          start: (closeStart ?? range.start) + base,
+          end: range.end + base,
         };
       }
       closeStart = null;
@@ -365,10 +398,12 @@ export function walkMxRegion(source: string, start: number): MxWalkResult {
 
     onError(range) {
       if (done) return;
+      // An error that lands on the synthetic open tag is about the
+      // fragment's own `<>`.
       errors.push({
-        message: range.message,
-        start: range.start + start,
-        end: range.end + start,
+        message: fragment ? fragmentMessage(range.message) : range.message,
+        start: Math.max(range.start + base, start),
+        end: Math.max(range.end + base, start),
       });
     },
   });
@@ -418,6 +453,13 @@ export function walkMxRegion(source: string, start: number): MxWalkResult {
         end: closeAt + closeTag.length,
       });
     }
+  }
+
+  // The synthetic open tag's own range lies in the shifted prefix; the
+  // fragment root really starts at its `<>`.
+  if (fragment && root !== null) {
+    root.range = { start, end: root.range.end };
+    root.name = { start, end: start, quasis: [], expressions: [] };
   }
 
   return { root, end, errors };

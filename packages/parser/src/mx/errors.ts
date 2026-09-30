@@ -14,6 +14,10 @@ export const MxErrors = ParseErrorEnum`mx`({
   InterpolationOutsideRegion: () =>
     // biome-ignore lint/suspicious/noTemplateCurlyInString: error message text
     "MX interpolation `${...}` is only valid inside an MX region. In a TSX fragment, use `{...}` instead.",
+  MultipleRoots: () =>
+    "An MX region has exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.",
+  NestedFragment: () =>
+    "A fragment `<>…</>` cannot contain another fragment. Its children are already siblings.",
   PositionRejected: ({ message }: { message: string }) => message,
   MissingRegionCompile: ({ filename }: { filename: string }) =>
     `An MX region needs \`mxRegionCompile\` to lower it, but none was given for "${filename}". ` +

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **`mxRegionFragment` parser option, and the `MultipleRoots` error** (TODO
+  `angular-ngmx-multi-root`, decision 120). Default off: `<>` stays a TSX
+  fragment, so `.solid.mx` is unchanged. On (`@mxlang/angular` sets it for
+  `.ng.mx`), `<>…</>` in expression position is a *fragment region*: the host's
+  `mxRegionCompile` receives the fragment's children as `source` with the new
+  `fragment: true` flag on `MxRegionCompileInput` (the replaced span also
+  covers the `<>` and `</>`). Independent of the option, a second well-formed
+  root directly after a region (`<a/><b/>`) now fails with `An MX region has
+  exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.`
+  positioned at the second root, instead of `Unexpected token` or
+  `Unterminated regular expression`. It only replaces a failure; input that
+  parsed before (`<b/> < c`, `<b/> <c`, JSX siblings) parses and prints
+  identically.
+- **`MxRegionContext.fragment?`** (additive). Set by the bridge to `true` on the
+  context handed to `mxRegionPositionCheck` and to `mxRegionCompile` when the
+  region is a fragment (`mxRegionFragment`); absent otherwise. `@mxlang/angular`
+  reads it to word its position error for a fragment outside `template:`.
 - **The packed tarball is now `dist/` + `README.md`, and `types` points inside
   it** (TODO `parser-package-types`, LiUNA gap G8). `package.json` gains
   `"files": ["dist", "README.md"]` and `"types": "dist/index.d.ts"` (was

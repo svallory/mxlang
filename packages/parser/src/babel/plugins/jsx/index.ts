@@ -472,7 +472,12 @@ export default (superClass: typeof Parser) =>
     // is preserved verbatim as `jsxParseElementAtOriginal` below and is still
     // reachable for plain-TSX parses (see src/index.ts `parse`/`parseExpression`).
     jsxParseElementAt(startLoc: Position): N.JSXElement | N.JSXFragment {
-      if (this.mxEnabled() && !this.match(tt.jsxTagEnd)) {
+      if (
+        this.mxEnabled() &&
+        (!this.match(tt.jsxTagEnd) ||
+          (this.options as { mxRegionFragment?: boolean }).mxRegionFragment ===
+            true)
+      ) {
         return mxParseElementAt(
           this as unknown as Parameters<typeof mxParseElementAt>[0],
           startLoc,

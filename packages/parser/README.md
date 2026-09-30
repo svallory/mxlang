@@ -35,6 +35,14 @@ lowering itself.
 
   **Note on fragments:** TSX fragments (`<>...</>`) are supported in `.solid.mx` files, but their text children are parsed by Babel as standard TSX text, not MX text. MX parsing rules (like Marko's whitespace collapsing) only apply inside an explicit MX element. Because `${x}` would silently parse as literal text `$` followed by a JSX expression `{x}` in TSX, the parser detects and throws an error for `${` in fragment text. Use standard `{x}` for expressions outside of an MX element.
 
+**A host can turn `<>…</>` into a region** with the `mxRegionFragment` option
+(default off, so the note above still holds for `.solid.mx`). Then the host's
+`mxRegionCompile` receives the fragment's children as `source`, with
+`fragment: true`, and lowers them as siblings; `@mxlang/angular` enables it for
+`.ng.mx`. Whatever the option, a second root directly after a region
+(`<a/><b/>`) fails with the `MultipleRoots` error naming the one-root rule, in
+place of the tokenizer's `Unexpected token` — only ever replacing a failure.
+
 **A host can veto a region's syntactic position** through the
 `mxRegionPositionCheck` parser option, carried on the options bag beside
 `mxCustomTags` for the same reason (the bridge runs inside the tokenizer and

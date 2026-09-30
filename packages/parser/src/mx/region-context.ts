@@ -8,6 +8,14 @@
 
 /** Where a region appeared, described without host-specific knowledge. */
 export interface MxRegionContext {
+  /** True when the region is a fragment (`<>…</>`) claimed through
+   *  `mxRegionFragment`. Absent (not `false`) for an ordinary region, and for
+   *  every region when the option is off. Set by the bridge after the
+   *  position is computed, so a position check can accept a region root and
+   *  still reject a fragment there or word the two differently:
+   *  `@mxlang/angular`'s check uses it to say a fragment is only allowed as the
+   *  root of a `template:` region. */
+  fragment?: boolean;
   /** Innermost enclosing object-property key, if any: `template` in
    *  `@Component({ template: <div/> })`, and in `{ x: { template: <region/> } }`
    *  too (innermost, not `x`). Null in any other position, or when the region

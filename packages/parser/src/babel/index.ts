@@ -14,6 +14,8 @@ export type {
 } from "./typings.ts";
 import Parser, { type PluginsMap } from "./parser/index.ts";
 import type { ParseError as ParseErrorGeneric } from "./parse-error.ts";
+import { MxErrors } from "../mx/errors.ts";
+import { Position } from "./util/location.ts";
 
 import type { ExportedTokenType } from "./tokenizer/types.ts";
 import {
@@ -39,8 +41,54 @@ export type ParseResult<Result extends File | Expression = File> = Result & {
 
 /**
  * Parse the provided code as an entire ECMAScript program.
+ *
+ * With the MX grammar on, a failure caused by a region's second root
+ * (`<a/><b/>`) is reported as the rule it breaks instead of as the Babel
+ * error the tokenizer happens to hit. Only failures are touched.
  */
 export function parse(
+  input: string,
+  options?: ParserOptions,
+): ParseResult<File> {
+  if (options?.mx !== true) return parseProgram(input, options);
+  const siblingHints: Array<{ start: number; end: number }> = [];
+  try {
+    return parseProgram(input, { ...options, mxSiblingHints: siblingHints });
+  } catch (error) {
+    throw withMultipleRootsError(error, siblingHints, input);
+  }
+}
+
+/**
+ * Replaces `error` with `MxErrors.MultipleRoots`, at the second root, when the
+ * error is Babel's own (not one MX raised) and its position falls inside a
+ * sibling root the bridge saw directly after a region. Anything else is
+ * returned unchanged.
+ */
+function withMultipleRootsError(
+  error: unknown,
+  hints: ReadonlyArray<{ start: number; end: number }>,
+  input: string,
+): unknown {
+  const { pos, syntaxPlugin } = (error ?? {}) as {
+    pos?: unknown;
+    syntaxPlugin?: unknown;
+  };
+  if (typeof pos !== "number") return error;
+  // An error MX itself raised (a host's, a walk's) is already the better
+  // message. It can share a position with a hint left by a speculative
+  // re-parse — `<div><p/><else/></div>` is retried by TypeScript's generic-
+  // arrow disambiguation, whose second attempt reads `<p/>` as a region.
+  if (syntaxPlugin === "mx") return error;
+  const hint = hints.find((h) => pos >= h.start && pos <= h.end);
+  if (!hint) return error;
+  const before = input.slice(0, hint.start);
+  const line = before.split("\n").length;
+  const column = hint.start - (before.lastIndexOf("\n") + 1);
+  return MxErrors.MultipleRoots(new Position(line, column, hint.start), undefined);
+}
+
+function parseProgram(
   input: string,
   options?: ParserOptions,
 ): ParseResult<File> {

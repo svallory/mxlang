@@ -21,6 +21,15 @@ declare module "@mxlang/parser" {
 
   /** Where a region appeared, described without host-specific knowledge. */
   export interface MxRegionContext {
+    /**
+     * True when the region is a fragment (`<>…</>`) claimed through
+     * `mxRegionFragment`. Absent (not `false`) for an ordinary region and
+     * whenever the option is off. Set by the bridge after the position is
+     * computed, so a position check can word a fragment differently:
+     * `@mxlang/angular` uses it to say a fragment is only allowed as the root
+     * of a `template:` region.
+     */
+    fragment?: boolean;
     /** Innermost enclosing object-property key, or null. */
     propertyKey: string | null;
     /** The innermost enclosing decorator's own name, as a single-element
@@ -67,6 +76,12 @@ declare module "@mxlang/parser" {
     source: string;
     /** The file being parsed, from `sourceFilename`. */
     filename: string;
+    /**
+     * True for a fragment region (`<>…</>`, `mxRegionFragment`): `source` is the
+     * fragment's children only, and the span the bridge replaces also covers the
+     * `<>` before them (2 characters) and the `</>` after (3).
+     */
+    fragment?: boolean;
     /** The region's absolute start offset in the file. */
     baseOffset: number;
     /** The region's 0-based start line in the file. */
@@ -132,6 +147,19 @@ declare module "@mxlang/parser" {
      * Declared explicitly for the same reason as `mxCustomTags` above.
      */
     mxRegionPositionCheck?: MxRegionPositionCheck;
+    /**
+     * Makes `<>…</>` in expression position an MX **fragment region**: the
+     * host receives the fragment's *children* as `MxRegionCompileInput.source`
+     * (the `<>`/`</>` themselves are not part of it) and lowers them as sibling
+     * nodes, exactly as it lowers a whole-file template with several roots.
+     * A fragment with no MX child (`<></>`, `<>text</>`) is a region too.
+     *
+     * Default `false`: `<>` stays a TSX `JSXFragment`, which is what
+     * `.solid.mx` wants, since its output is JSX. `@mxlang/angular` enables it
+     * for `.ng.mx`, where an Angular template has no TSX to fall back to.
+     * Declared explicitly for the same reason as `mxCustomTags` above.
+     */
+    mxRegionFragment?: boolean;
     /**
      * Lowers each MX region the bridge finds. The parser has no host of its
      * own: with the grammar on, an absent hook is a compile error at the
@@ -325,6 +353,13 @@ declare module "@mxlang/parser" {
      * is on. For `.solid.mx`, pass `compileSolidMx` from `@mxlang/solid`.
      */
     mxRegionCompile?: MxRegionCompile;
+    /**
+     * Makes `<>…</>` in expression position an MX fragment region whose
+     * children the host lowers as siblings. Default `false` (`<>` stays a TSX
+     * fragment, which `.solid.mx` wants). `@mxlang/angular` enables it for
+     * `.ng.mx`. See `ParserOptions.mxRegionFragment`.
+     */
+    mxRegionFragment?: boolean;
     /** Turns the MX grammar on explicitly, forwarded to `parse` unchanged. */
     mx?: boolean;
   }
