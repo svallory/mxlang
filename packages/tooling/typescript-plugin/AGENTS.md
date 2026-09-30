@@ -85,8 +85,10 @@ entry.
   every closed `.ng.mx` too, and `getSemanticDiagnostics` calls
   `service.request(file)` to schedule a file compiled before it was opened and
   to release files that have since closed. The plugin never loads compiler-cli in the
-  tsserver thread. `ng-editor-path.test.ts` drives the whole path with the real
-  worker; `ng-worker-bundle.test.ts` checks the built bundle.
+  tsserver thread. the `index.test.ts` "real plugin wiring" tests drive the whole path
+  (`pluginFactory.create`, the Proxy, refresh, `project.close`) with the real
+  worker; `ng-editor-path.test.ts` is the language-plugin-level guard;
+  `ng-worker-bundle.test.ts` checks the built bundle.
   **Known limitations (2.3b-2b):** a
   config error stays until the `.ng.mx` is next edited, and the plugin tracks no
   `dependencies` for `.ng.mx`, so an edit to `package.json` or to a called tag

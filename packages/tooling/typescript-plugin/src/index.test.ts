@@ -3489,6 +3489,8 @@ function createMutablePluginService(
     log?: (m: string) => void;
     /** No tsconfig on disk: the real worker then checks under defaults. */
     inferredProject?: boolean;
+    /** Per-file `isScriptOpen` (test-only); every file is open by default. */
+    isOpen?: (fileName: string) => boolean;
   } = {},
 ): {
   service: ts.LanguageService;
@@ -3577,7 +3579,10 @@ function createMutablePluginService(
     getScriptInfo: (fileName: string) => {
       const snapshot = snapshots.get(fileName);
       return snapshot
-        ? { getSnapshot: () => snapshot, isScriptOpen: () => true }
+        ? {
+            getSnapshot: () => snapshot,
+            isScriptOpen: () => hooks.isOpen?.(fileName) ?? true,
+          }
         : undefined;
     },
     readFile: host.readFile,
@@ -3770,6 +3775,42 @@ describe(".ng.mx language plugin", () => {
         expect(found.length).toBeGreaterThanOrEqual(1);
         expect(found[0]?.code).toBe(2339);
         expect(found[0]?.start).toBe(bad.indexOf("user.nmae"));
+      } finally {
+        project.close();
+      }
+    }, 90_000);
+
+    it("checks a .ng.mx that was compiled while closed once the editor asks about it", async () => {
+      const file = `${ngDir}/x.component.ng.mx`;
+      const consumer = `${ngDir}/consumer.ts`;
+      let open = false;
+      let refreshed = 0;
+      const before = workerPids().length;
+      const { service, project } = createMutablePluginService(
+        { [file]: bad, [consumer]: 'import "./x.component.ng.mx";\n' },
+        [consumer],
+        {
+          refreshDiagnostics: () => {
+            refreshed += 1;
+          },
+          inferredProject: true,
+          isOpen: (f) => open && f === file,
+        },
+      );
+      try {
+        // Compiled while closed (the program holds every .ng.mx): no check.
+        service.getSemanticDiagnostics(file);
+        await new Promise((r) => setTimeout(r, 2_000));
+        expect(refreshed).toBe(0);
+        expect(workerPids().length).toBe(before);
+        // The file opens; no recompile happens, only the editor's request.
+        open = true;
+        service.getSemanticDiagnostics(file);
+        await until(() => refreshed > 0);
+        const found = service
+          .getSemanticDiagnostics(file)
+          .filter((d) => d.source === "angular");
+        expect(found[0]?.code).toBe(2339);
       } finally {
         project.close();
       }
