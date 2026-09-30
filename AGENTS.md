@@ -134,6 +134,7 @@ Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md`
 | `packages/hosts/angular/AGENTS.md` | `@mxlang/angular` (in progress) |
 | `packages/tooling/vite-plugin/AGENTS.md` | `@mxlang/vite-plugin` |
 | `packages/tooling/typescript-plugin/AGENTS.md` | `@mxlang/typescript-plugin` and `@mxlang/tsc` |
+| `packages/editors/vscode/AGENTS.md` | VS Code extension; how the VSIX ships `@mxlang/typescript-plugin`, `check-vsix` |
 | `packages/tooling/language-server/AGENTS.md` | `@mxlang/language-server` |
 | `packages/tooling/angular-checker/AGENTS.md` | `@mxlang/angular-checker` |
 | `packages/oracle/AGENTS.md` | `@mxlang/oracle` harness detail |

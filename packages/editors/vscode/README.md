@@ -26,3 +26,7 @@ Until the VSIX ships the TS plugin (TODO `vscode-vsix-ships-ts-plugin`, a separa
 ## Commands
 
 - `MX: Restart Language Server`: Restarts the language server process.
+
+## How the TS plugin is shipped
+
+The VSIX carries a self-contained `node_modules/@mxlang/typescript-plugin` (bundled, plus `@marko/compiler` and `@astrojs/compiler`), because VS Code's TypeScript server resolves `typescriptServerPlugins` from the extension's own `node_modules`. `@angular/compiler-cli` is never shipped; it resolves from your project. Build it with `bun run package` and verify it with `bun run check-vsix`; see `AGENTS.md` for the details.

@@ -35,3 +35,7 @@ apps/docs/site/
 .env
 .env.*
 !.env.example
+
+# VSIX staging output (packages/editors/vscode/scripts/stage-vsix.ts)
+packages/editors/vscode/.vsix-stage/
+packages/editors/vscode/mxlang.vsix

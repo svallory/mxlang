@@ -1,0 +1,2 @@
+# Everything staged by scripts/stage-vsix.ts is meant to ship, node_modules included.
+!node_modules/**

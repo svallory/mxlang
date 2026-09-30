@@ -13,7 +13,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --root ../../.. --project @mxlang/vscode",
-    "build": "bun build src/extension.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external vscode"
+    "build": "bun build src/extension.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external vscode",
+    "package": "bun run build && bun run scripts/stage-vsix.ts"
   },
   "dependencies": {
     "vscode-languageclient": "10.1.1"
