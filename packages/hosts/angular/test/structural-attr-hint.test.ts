@@ -23,6 +23,28 @@ interface Positioned extends Error {
   column: number;
 }
 
+/**
+ * Babel colorizes Marko's code frame when it believes colors are wanted (CI,
+ * FORCE_COLOR, a TTY), so a test must not hardcode a frame. Strip the escapes
+ * before matching text, and compare a byte-for-byte case against core's own
+ * message computed in the same environment.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matches ANSI escapes
+const ANSI = /\u001b\[[0-9;]*m/g;
+function stripAnsi(text: string): string {
+  return text.replace(ANSI, "");
+}
+
+/** The message core raises for `source` with no hint in the way. */
+function unhinted(source: string, filename: string): string {
+  try {
+    compileSource(source, filename, {} as never, {} as never);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error("expected core to throw");
+}
+
 /** Runs `fn` and returns what it threw; fails the test if it did not throw. */
 function thrown(fn: () => unknown): Positioned {
   try {
@@ -280,14 +302,16 @@ describe("what must not change", () => {
     // `+b=2` is the same Marko failure without the `*` — not ours to explain.
     const error = thrown(() => compile("<div a=1 +b=2>x</div>", "t.mx"));
     expect(error.constructor.name).toBe("CompileError");
-    expect(error.message).toBe(
+    expect(error.message).toBe(unhinted("<div a=1 +b=2>x</div>", "t.mx"));
+    expect(stripAnsi(error.message)).toBe(
       "\n    at t.mx:1:8\n    > 1 | <div a=1 +b=2>x</div>\n        |        ^ Invalid left-hand side in assignment expression.",
     );
   });
 
   it("leaves an unrelated parse error byte-for-byte", () => {
     const error = thrown(() => compile("<div>x", "t.mx"));
-    expect(error.message).toBe(
+    expect(error.message).toBe(unhinted("<div>x", "t.mx"));
+    expect(stripAnsi(error.message)).toBe(
       '\n    at t.mx:1:1\n    > 1 | <div>x\n        | ^^^^^ Missing ending "div" tag',
     );
   });
@@ -334,10 +358,12 @@ describe("non-first structural attribute: tag module", () => {
       compileTagModule("<div a=1 +b=2>x</div>", "/p/tags/badge.mx"),
     );
     expect(error.constructor.name).toBe("CompileError");
-    expect(error.message).toContain(
+    expect(error.message).toBe(
+      unhinted("<div a=1 +b=2>x</div>", "/p/tags/badge.mx"),
+    );
+    expect(stripAnsi(error.message)).toContain(
       "^ Invalid left-hand side in assignment expression.",
     );
-    expect(error.message).not.toContain("cannot follow");
   });
 });
 
@@ -398,7 +424,7 @@ describe("a file with several failures", () => {
     // The aggregate's own message carries both hints.
     expect(error.message).toContain("`*ngIf` cannot follow");
     expect(error.message).toContain("`*ngFor` cannot follow");
-    expect(unrelated?.message).toContain(
+    expect(stripAnsi(unrelated?.message ?? "")).toContain(
       "^ Invalid left-hand side in assignment expression.",
     );
   });
@@ -493,7 +519,7 @@ describe("the stack carries the message that is thrown", () => {
     expect(error.name).toBe("CompileErrors");
     if (typeof error.stack === "string") {
       expect(error.stack).toContain("`*ngIf` cannot follow");
-      expect(error.stack).toContain("^ Invalid left-hand side");
+      expect(stripAnsi(error.stack)).toContain("^ Invalid left-hand side");
     }
   });
 });
@@ -557,7 +583,7 @@ describe("the stack survives replacement patterns in the source", () => {
     expect(error.name).toBe("CompileErrors");
     if (typeof error.stack === "string") {
       expect(error.stack).toContain(error.message);
-      expect(error.stack).toContain("<b>$&");
+      expect(stripAnsi(error.stack)).toContain("<b>$&");
     }
   });
 });

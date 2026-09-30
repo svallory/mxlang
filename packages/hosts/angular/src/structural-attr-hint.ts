@@ -214,6 +214,9 @@ export function structuralAttrMessage(attr: StructuralAttr): string {
   );
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matches ANSI escapes
+const ANSI = /\u001b\[[0-9;]*m/g;
+
 /** Babel's reason for an assignment to a non-assignable target. */
 const INVALID_LHS = "Invalid left-hand side in assignment expression.";
 
@@ -222,6 +225,7 @@ interface ParseFailure {
   name?: unknown;
   message?: unknown;
   stack?: unknown;
+  label?: unknown;
   file?: unknown;
   line?: unknown;
   column?: unknown;
@@ -263,7 +267,14 @@ function failurePosition(
 function memberHint(error: unknown, text: string): TranslateError | undefined {
   const failure = (error ?? {}) as ParseFailure;
   if (typeof failure.message !== "string") return undefined;
-  if (!failure.message.includes(INVALID_LHS)) return undefined;
+  // The reason, read without the code frame: Babel colorizes the frame (and
+  // the message inside it) when CI or FORCE_COLOR is set, so match the
+  // error's own `label` when it has one, else the message minus its escapes.
+  const reason =
+    typeof failure.label === "string"
+      ? failure.label
+      : failure.message.replace(ANSI, "");
+  if (!reason.includes(INVALID_LHS)) return undefined;
   if (failure.file !== undefined) return undefined;
   const start = failurePosition(failure);
   if (!start) return undefined;
