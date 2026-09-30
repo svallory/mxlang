@@ -6,6 +6,9 @@
     "bun": ">=1.3"
   },
   "private": true,
+  "mx": {
+    "host": "html"
+  },
   "type": "module",
   "main": "dist/index.cjs",
   "types": "src/index.ts",
@@ -13,11 +16,13 @@
     "mx-tsc": "dist/bin.cjs"
   },
   "scripts": {
-    "build": "bun build src/index.ts src/bin.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external @mxlang/parser --external @mxlang/typescript-plugin --external @volar/language-core --external @volar/typescript --external typescript",
+    "build": "bun build src/index.ts src/bin.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external @mxlang/angular --external @mxlang/angular-checker --external @mxlang/parser --external @mxlang/typescript-plugin --external @volar/language-core --external @volar/typescript --external typescript",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@mxlang/angular": "workspace:*",
+    "@mxlang/angular-checker": "workspace:*",
     "@mxlang/typescript-plugin": "workspace:*",
     "@volar/language-core": "2.4.28",
     "@volar/typescript": "2.4.28"
@@ -26,6 +31,8 @@
     "typescript": ">=5.9.0 <7"
   },
   "devDependencies": {
+    "@angular/compiler-cli": "22.1.7",
+    "@angular/core": "22.1.7",
     "typescript": "6.0.3"
   }
 }

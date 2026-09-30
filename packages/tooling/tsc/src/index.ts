@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import {
+  type CompiledNgMx,
   createAmxLanguagePlugin,
   createAstroLanguagePlugin,
   createCompoundExtensionResolver,
@@ -11,6 +12,7 @@ import {
 } from "@mxlang/typescript-plugin";
 import type { LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
+import { checkNgMxFiles, type NgDiagnosticsResult } from "./ng-diagnostics.ts";
 
 /**
  * The compound extensions `.solid.mx` and `.ng.mx` as `runTsc` wants them: no
@@ -52,6 +54,7 @@ export function resolveTscPath(): string {
 export function runMxTsc(): void {
   const astro = consumeAstroFlag(process.argv);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
+  let compiledNgMx: () => CompiledNgMx[] = () => [];
   let tscExitCode = 0;
   const exit = process.exit;
   const stopped = Symbol("mx-tsc-exit");
@@ -65,7 +68,12 @@ export function runMxTsc(): void {
       astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
       (typescript) => {
         const solidMx = createSolidMxLanguagePlugin(typescript);
-        const ngMx = createNgMxLanguagePlugin(typescript);
+        // `retainCompiled`: Angular template diagnostics below run over the
+        // very compiles the type-check used, not a second pass of them.
+        const ngMx = createNgMxLanguagePlugin(typescript, {
+          retainCompiled: true,
+        });
+        compiledNgMx = () => ngMx.getCompiledNgMx();
         const mx = createMxLanguagePlugin(typescript);
         diagnosticPlugins.push(solidMx, ngMx, mx);
         const plugins: LanguagePlugin<string>[] = [solidMx, ngMx, mx];
@@ -92,7 +100,67 @@ export function runMxTsc(): void {
   const hasCompileError = diagnostics.some(
     (diagnostic) => diagnostic.category === "error",
   );
-  process.exitCode = hasCompileError ? 1 : tscExitCode;
+
+  // Angular template diagnostics (`mx.angular.diagnostics`, default on). Runs
+  // only over `.ng.mx` files that compiled, and never loads compiler-cli when
+  // there are none. A template error, or a project whose templates could not
+  // be checked at all, fails the run.
+  const angular = checkNgMxFiles(compiledNgMx());
+  reportNgDiagnostics(angular);
+  const hasAngularError =
+    angular.errors.length > 0 ||
+    angular.reports.some((report) =>
+      report.diagnostics.some((d) => d.category === "error"),
+    );
+
+  process.exitCode = hasCompileError || hasAngularError ? 1 : tscExitCode;
+}
+
+/**
+ * Prints Angular template diagnostics in the same `file(line,col): error TSnnnn`
+ * shape as the rest of `mx-tsc`'s output, positioned in the `.ng.mx`, then any
+ * condition that kept a project's templates from being checked.
+ */
+export function reportNgDiagnostics(result: NgDiagnosticsResult): void {
+  if (result.reports.length > 0) {
+    const require = createRequire(import.meta.url);
+    const typescript = require("typescript") as typeof import("typescript");
+    const categories = {
+      error: typescript.DiagnosticCategory.Error,
+      warning: typescript.DiagnosticCategory.Warning,
+      suggestion: typescript.DiagnosticCategory.Suggestion,
+      message: typescript.DiagnosticCategory.Message,
+    } as const;
+    const formatted = typescript.formatDiagnostics(
+      result.reports.flatMap((report) => {
+        const file = typescript.createSourceFile(
+          report.fileName,
+          report.source,
+          typescript.ScriptTarget.Latest,
+          false,
+          typescript.ScriptKind.TS,
+        );
+        return report.diagnostics.map((d) => ({
+          file,
+          start: d.start,
+          length: Math.min(d.length, report.source.length - d.start),
+          category: categories[d.category],
+          code: d.code,
+          source: d.source,
+          messageText: d.message,
+        }));
+      }),
+      {
+        getCanonicalFileName: (fileName) => fileName,
+        getCurrentDirectory: () => process.cwd(),
+        getNewLine: () => "\n",
+      },
+    );
+    process.stderr.write(formatted);
+  }
+  for (const error of result.errors) {
+    process.stderr.write(`error mxlang: ${error}\n`);
+  }
 }
 
 /** Prints the compiler failures Volar's empty virtual files cannot expose. */

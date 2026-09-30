@@ -451,11 +451,15 @@
         "mx-tsc": "dist/bin.cjs",
       },
       "dependencies": {
+        "@mxlang/angular": "workspace:*",
+        "@mxlang/angular-checker": "workspace:*",
         "@mxlang/typescript-plugin": "workspace:*",
         "@volar/language-core": "2.4.28",
         "@volar/typescript": "2.4.28",
       },
       "devDependencies": {
+        "@angular/compiler-cli": "22.1.7",
+        "@angular/core": "22.1.7",
         "typescript": "6.0.3",
       },
       "peerDependencies": {

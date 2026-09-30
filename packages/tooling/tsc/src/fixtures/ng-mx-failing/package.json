@@ -2,5 +2,10 @@
   "name": "ng-mx-failing",
   "dependencies": {
     "@mxlang/angular": "workspace:*"
+  },
+  "mx": {
+    "angular": {
+      "diagnostics": "off"
+    }
   }
 }
