@@ -6,9 +6,11 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
+import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
@@ -49,6 +51,52 @@ function ngMx(
   ]
     .filter((line) => line !== "")
     .join("\n");
+}
+
+const requireHere = createRequire(import.meta.url);
+
+/**
+ * Type-checks emitted module `code` in a real TypeScript program with
+ * `noUnusedLocals` (TS6133 is a hard error in common tsconfigs) and returns
+ * every diagnostic as text. `./tags/*` resolve to stubs beside the file, and
+ * `@angular/core` to the copy this package tests against.
+ */
+function typeCheck(dir: string, code: string): string[] {
+  const file = join(dir, "x.component.ts");
+  writeFileSync(file, code);
+  writeFileSync(
+    join(dir, "tags", "badge.ts"),
+    "export class Badge {}\nexport class Other {}\n",
+  );
+  const program = ts.createProgram([file], {
+    noEmit: true,
+    strict: true,
+    noUnusedLocals: true,
+    noUnusedParameters: true,
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    experimentalDecorators: true,
+    skipLibCheck: true,
+    types: [],
+    baseUrl: dir,
+    paths: {
+      "@angular/core": [
+        join(
+          requireHere.resolve("@angular/core/package.json"),
+          "..",
+          "types",
+          "core.d.ts",
+        ),
+      ],
+    },
+  });
+  return ts
+    .getPreEmitDiagnostics(program)
+    .map(
+      (d) =>
+        `TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, "\n")}`,
+    );
 }
 
 function run(dir: string, source: string) {
@@ -241,6 +289,138 @@ describe("authored .mx import in a .ng.mx region", () => {
     expect(result.code).toContain(
       "<div><mx-badge></mx-badge><mx-badge></mx-badge></div>",
     );
+  });
+
+  it("type-checks under noUnusedLocals for a single alias", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(['import Chip from "./tags/badge.mx";'], "<div><Chip/></div>"),
+    );
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("keeps every alias of one callee referenced (two aliases, one class)", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).toContain("imports: [Chip]");
+    expect(count(result.code, "./tags/badge")).toBe(1);
+    expect(result.code).not.toContain("Pill");
+    expect(result.code).toContain(
+      "<div><mx-badge></mx-badge><mx-badge></mx-badge></div>",
+    );
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("keeps a second alias the author's own TypeScript still reads", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export const same = Pill;",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).toContain(
+      'import { Badge as Pill } from "./tags/badge";',
+    );
+    expect(result.code).toContain("imports: [Chip]");
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("dedupes a discovered <badge/> that comes first, then two authored aliases", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        ['import Chip from "./tags/badge.mx";'],
+        "<div><badge/><Chip/></div>",
+      ),
+    );
+    expect(result.code).toContain("imports: [Chip]");
+    expect(count(result.code, "./tags/badge")).toBe(1);
+    expect(result.code).not.toContain("import { Badge }");
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("dedupes discovered-first with two aliases in one component", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+        ],
+        "<div><badge/><Pill/><Chip/></div>",
+      ),
+    );
+    expect(count(result.code, "./tags/badge")).toBe(1);
+    expect(count(result.code, "imports: [")).toBe(1);
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("references each alias in its own component when two components split them", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const source = [
+      'import { Component } from "@angular/core";',
+      'import Chip from "./tags/badge.mx";',
+      'import Pill from "./tags/badge.mx";',
+      "",
+      "@Component({",
+      '  selector: "app-a",',
+      "  template: <div><Chip/></div>,",
+      "})",
+      "export class AComponent {}",
+      "",
+      "@Component({",
+      '  selector: "app-b",',
+      "  template: <div><Pill/></div>,",
+      "})",
+      "export class BComponent {}",
+    ].join("\n");
+    const result = run(dir, source);
+    expect(result.code).toContain("imports: [Chip]");
+    expect(result.code).toContain("imports: [Pill]");
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("drops the redundant alias in every component that uses the same callee", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const source = [
+      'import { Component } from "@angular/core";',
+      'import Chip from "./tags/badge.mx";',
+      'import Pill from "./tags/badge.mx";',
+      "",
+      "@Component({",
+      '  selector: "app-a",',
+      "  template: <div><Chip/><Pill/></div>,",
+      "})",
+      "export class AComponent {}",
+      "",
+      "@Component({",
+      '  selector: "app-b",',
+      "  template: <div><Chip/></div>,",
+      "})",
+      "export class BComponent {}",
+    ].join("\n");
+    const result = run(dir, source);
+    expect(count(result.code, "imports: [Chip]")).toBe(2);
+    expect(count(result.code, "./tags/badge")).toBe(1);
+    expect(typeCheck(dir, result.code)).toEqual([]);
   });
 
   it("is byte-identical to the discovered spelling except the import line", () => {

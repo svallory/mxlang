@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Two aliases of one authored `.mx` tag import no longer leave an unused
+  import in `.ng.mx`.** With `import Chip from "./tags/badge.mx"` and
+  `import Pill from "./tags/badge.mx"` both used as tags, the class is listed
+  once in `imports:` (`[Chip]`) and the second alias's import is dropped, since
+  nothing references it (TS6133 under `noUnusedLocals`). An alias the author's
+  own TypeScript still reads, or that another component in the file lists, is
+  kept. The emitted module is checked with a real TypeScript program under
+  `noUnusedLocals`, for the single- and two-alias cases.
 - **Round 2 of the authored `.mx` import in `.ng.mx`.** An aliased import now
   emits one import (`import { Badge as Chip } from "./tags/badge"`) and lists the
   author's local in `imports:` (`imports: [Chip]`), deduped against a discovered

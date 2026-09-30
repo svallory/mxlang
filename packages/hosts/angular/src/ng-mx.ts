@@ -572,6 +572,7 @@ function rewriteAuthoredTagImports(
   source: string,
   filename: string,
   regions: readonly LoweredRegion[],
+  listedLocals: ReadonlySet<string>,
 ): void {
   const called = new Map<string, UsedTag>();
   for (const region of regions) {
@@ -594,6 +595,15 @@ function rewriteAuthoredTagImports(
       throw importError(source, filename, node.start, MIXED_IMPORT_MESSAGE);
     }
     const local = defaultSpecifier?.local?.name as string;
+    // A second alias of a class another alias already lists is named in no
+    // `imports:` array, so its import would be unused (TS6133 under
+    // `noUnusedLocals`). It is dropped — unless the author's own TypeScript
+    // still reads the name, in which case the aliased import stays.
+    if (!listedLocals.has(local) && !isReferencedElsewhere(file, local)) {
+      const end = source[node.end] === "\n" ? node.end + 1 : node.end;
+      rewritten.remove(node.start, end);
+      return;
+    }
     const binding =
       local === tag.className ? local : `${tag.className} as ${local}`;
     rewritten.overwrite(
@@ -602,6 +612,15 @@ function rewriteAuthoredTagImports(
       `import { ${binding} } from "${tag.specifier}";`,
     );
   });
+}
+
+/** Whether `name` is an identifier anywhere besides its own default import. */
+function isReferencedElsewhere(file: unknown, name: string): boolean {
+  let count = 0;
+  walk(file, (node) => {
+    if (node.type === "Identifier" && node.name === name) count++;
+  });
+  return count > 1;
 }
 
 /** A `TranslateError` at the start of the import declaration at `offset`. */
@@ -1094,7 +1113,6 @@ export function compileNgMx(
   }
 
   const usedTags = dedupeTags(lowered.flatMap((region) => region.usedTags));
-  rewriteAuthoredTagImports(rewritten, file, source, filename, lowered);
 
   // `imports:` is edited **per component**, from the regions that decorator
   // actually encloses — not from the file-wide union. A file with two
@@ -1106,6 +1124,17 @@ export function compileNgMx(
   const decorators = findComponentDecorators(file);
   const nonStandalone = new Set<ComponentDecorator>();
   const moduleWarnings: MxWarning[] = [];
+  // Which authored aliases end up named in some `imports:` array. Dedupe by
+  // class keeps one alias per component, so a second alias of the same class
+  // is otherwise an import nothing references. A non-standalone component's
+  // tags, and a region no component encloses, have no `imports:` here and
+  // keep their alias untouched.
+  const listedLocals = new Set<string>();
+  for (const region of lowered) {
+    if (decoratorForRegion(decorators, region.start)) continue;
+    for (const tag of region.usedTags)
+      if (tag.local) listedLocals.add(tag.local);
+  }
   for (const decorator of decorators) {
     const mine = lowered.filter(
       (region) => decoratorForRegion(decorators, region.start) === decorator,
@@ -1128,6 +1157,7 @@ export function compileNgMx(
     }
     if (standalone.kind === "false") {
       nonStandalone.add(decorator);
+      for (const tag of tags) if (tag.local) listedLocals.add(tag.local);
       const symbols = [
         ...dirs.map((name) => ({ name, from: "@angular/common" })),
         ...tags.map((tag) => ({ name: symbolOf(tag), from: tag.specifier })),
@@ -1144,12 +1174,10 @@ export function compileNgMx(
       }
       continue;
     }
-    applyComponentImports(
-      rewritten,
-      decorator.argument,
-      dedupeTags(mine.flatMap((region) => region.usedTags)),
-      [...new Set(mine.flatMap((region) => region.directives))],
-    );
+    for (const tag of tags) if (tag.local) listedLocals.add(tag.local);
+    applyComponentImports(rewritten, decorator.argument, tags, [
+      ...new Set(mine.flatMap((region) => region.directives)),
+    ]);
     // The template calls the event invoker on the component instance, so the
     // class must carry it. The author's own class body, so this is the one
     // place MX edits it beyond `imports:`. Each member is judged on its own,
@@ -1172,6 +1200,14 @@ export function compileNgMx(
       }
     }
   }
+  rewriteAuthoredTagImports(
+    rewritten,
+    file,
+    source,
+    filename,
+    lowered,
+    listedLocals,
+  );
   // A non-standalone component's directives and tags are not imported: it
   // has no `imports:` to name them in, and the NgModule imports them itself.
   const standaloneRegions = lowered.filter((region) => {
