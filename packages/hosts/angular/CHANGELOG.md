@@ -4,6 +4,18 @@
 
 ### Added
 
+- **A `standalone: false` `.ng.mx` component no longer gets an injected
+  `imports:`.** Angular rejects `imports` on a non-standalone component, so
+  `compileNgMx` now leaves such a decorator alone (and skips the matching
+  `@angular/common` / tag `import` statements) and instead emits a positioned
+  warning naming each symbol, with its module, that the declaring NgModule
+  must provide (`NgClass` from `@angular/common`, a called MX tag component
+  from its emitted module). `standalone: true` or an absent flag behaves as
+  before. The warning names the component class and literal selector; a
+  quoted key and `as const` / `satisfies` / `!` around the literal are
+  recognised, and any other non-literal `standalone` value keeps the
+  standalone behaviour but warns (positioned) that it cannot be determined.
+
 - Attribute-tag IR v2 support for singular `ngProjectAs` projections,
   including mutually exclusive `<if>`/`<else if>`/`<else>` branches and the
   Angular `AttrTag<C>` projection marker with automatic type imports.

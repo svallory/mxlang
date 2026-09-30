@@ -341,6 +341,7 @@ interface NgMxNode {
   decorators?: NgMxNode[];
   declaration?: NgMxNode;
   local?: NgMxNode;
+  id?: NgMxNode | null;
   body?: NgMxNode[] | NgMxNode;
   program?: { body?: NgMxNode[] };
   source?: { value?: string };
@@ -436,6 +437,90 @@ function applyComponentImports(
   rewritten.appendLeft(first.end, `,\n  imports: [${symbols.join(", ")}]`);
 }
 
+/** The property of a decorator object literal named `name` (bare or quoted key). */
+function decoratorProperty(
+  decoratorArg: NgMxNode,
+  name: string,
+): NgMxNode | undefined {
+  return (decoratorArg.properties ?? []).find((property) => {
+    if (property.type !== "ObjectProperty" || property.computed) return false;
+    const key = property.key as { name?: string; value?: unknown } | undefined;
+    return key?.name === name || key?.value === name;
+  });
+}
+
+/**
+ * What a decorator's `standalone` value says: `false` (literal, possibly
+ * wrapped in `as`/`satisfies`/`!`), `standalone` (literal true or absent), or
+ * `unknown` (anything else: a variable, a negation, a call). `unknown` keeps
+ * the standalone behaviour but must never be silent — see `compileNgMx`.
+ */
+function standaloneKind(
+  decoratorArg: NgMxNode,
+): { kind: "false" | "standalone" } | { kind: "unknown"; at: NgMxNode } {
+  const value = decoratorProperty(decoratorArg, "standalone")?.value;
+  if (!value) return { kind: "standalone" };
+  let node: NgMxNode | undefined = value;
+  while (
+    node &&
+    (node.type === "TSAsExpression" ||
+      node.type === "TSSatisfiesExpression" ||
+      node.type === "TSNonNullExpression" ||
+      node.type === "ParenthesizedExpression")
+  ) {
+    node = node.expression;
+  }
+  if (node?.type === "BooleanLiteral") {
+    return {
+      kind:
+        (node as { value?: unknown }).value === false ? "false" : "standalone",
+    };
+  }
+  return { kind: "unknown", at: value };
+}
+
+/** `XComponent (selector "app-x")`, for a warning. */
+function describeComponent(decorator: ComponentDecorator): string {
+  const selector = decoratorProperty(decorator.argument, "selector")?.value as
+    | { type?: string; value?: unknown }
+    | undefined;
+  const literal =
+    selector?.type === "StringLiteral" && typeof selector.value === "string"
+      ? ` (selector "${selector.value}")`
+      : "";
+  return `${decorator.className ?? "anonymous default-exported component"}${literal}`;
+}
+
+/** 1-based line, 0-based column of a source offset (Babel's `loc` convention). */
+function positionAt(
+  source: string,
+  offset: number,
+): { line: number; column: number } {
+  const before = source.slice(0, offset);
+  return {
+    line: before.split("\n").length,
+    column: offset - (before.lastIndexOf("\n") + 1),
+  };
+}
+
+/**
+ * The warning a `standalone: false` component gets instead of an `imports:`
+ * edit: Angular rejects `imports` on it, so the declaring NgModule has to
+ * provide what the template uses. Positioned at the region.
+ */
+function ngModuleWarning(
+  source: string,
+  regionStart: number,
+  component: string,
+  symbols: { name: string; from: string }[],
+): MxWarning {
+  const needs = symbols.map((s) => `${s.name} (from ${s.from})`).join(", ");
+  return {
+    message: `${component} is \`standalone: false\`, so MX does not add \`imports:\`; its declaring NgModule must provide ${needs}`,
+    ...positionAt(source, regionStart),
+  };
+}
+
 /** The object literal of the file's `@Component(...)` decorator, if any. */
 /** One `@Component({ … })` in the file, with the span of its decorator. */
 interface ComponentDecorator {
@@ -444,6 +529,8 @@ interface ComponentDecorator {
   end: number;
   /** The object literal `imports:` is read from and written to. */
   argument: NgMxNode;
+  /** The decorated class's name, from the AST; absent for an anonymous class. */
+  className?: string;
 }
 
 /**
@@ -457,6 +544,18 @@ interface ComponentDecorator {
  */
 function findComponentDecorators(file: unknown): ComponentDecorator[] {
   const found: ComponentDecorator[] = [];
+  // The decorated class, by the decorator's start. Read from the AST rather
+  // than the source text after the decorator: a second decorator, a comment
+  // or `extends` can sit between the two.
+  const classOf = new Map<number, NgMxNode>();
+  walk(file, (node) => {
+    if (node.type !== "ClassDeclaration" && node.type !== "ClassExpression") {
+      return;
+    }
+    for (const decorator of node.decorators ?? []) {
+      if (decorator.start !== undefined) classOf.set(decorator.start, node);
+    }
+  });
   walk(file, (node) => {
     if (node.type !== "Decorator") return;
     const call = node.expression;
@@ -470,7 +569,8 @@ function findComponentDecorators(file: unknown): ComponentDecorator[] {
     const [argument] = call.arguments ?? [];
     if (argument?.type !== "ObjectExpression") return;
     if (node.start === undefined || node.end === undefined) return;
-    found.push({ start: node.start, end: node.end, argument });
+    const className = classOf.get(node.start)?.id?.name;
+    found.push({ start: node.start, end: node.end, argument, className });
   });
   return found.sort((a, b) => a.start - b.start);
 }
@@ -671,9 +771,6 @@ export function compileNgMx(
   }
 
   const usedTags = dedupeTags(lowered.flatMap((region) => region.usedTags));
-  const directives = [
-    ...new Set(lowered.flatMap((region) => region.directives)),
-  ];
 
   // `imports:` is edited **per component**, from the regions that decorator
   // actually encloses — not from the file-wide union. A file with two
@@ -683,11 +780,46 @@ export function compileNgMx(
   // The module-level imports below stay file-wide, because that is what
   // module scope is: one `import` serves every component in the file.
   const decorators = findComponentDecorators(file);
+  const nonStandalone = new Set<ComponentDecorator>();
+  const moduleWarnings: MxWarning[] = [];
   for (const decorator of decorators) {
     const mine = lowered.filter(
       (region) => decoratorForRegion(decorators, region.start) === decorator,
     );
     if (mine.length === 0) continue;
+    const standalone = standaloneKind(decorator.argument);
+    const tags = dedupeTags(mine.flatMap((region) => region.usedTags));
+    const dirs = [...new Set(mine.flatMap((region) => region.directives))];
+    // Only when MX is about to inject something: with nothing to add the
+    // warning would claim an edit that was never made.
+    if (
+      standalone.kind === "unknown" &&
+      standalone.at.start !== undefined &&
+      tags.length + dirs.length > 0
+    ) {
+      moduleWarnings.push({
+        message: `cannot determine whether ${describeComponent(decorator)} is standalone; assuming standalone, so MX adds any missing directives and tags to \`imports:\`. If it is \`standalone: false\`, drop \`imports:\` and provide the symbols in the declaring NgModule`,
+        ...positionAt(source, standalone.at.start),
+      });
+    }
+    if (standalone.kind === "false") {
+      nonStandalone.add(decorator);
+      const symbols = [
+        ...dirs.map((name) => ({ name, from: "@angular/common" })),
+        ...tags.map((tag) => ({ name: tag.className, from: tag.specifier })),
+      ];
+      if (symbols.length > 0) {
+        moduleWarnings.push(
+          ngModuleWarning(
+            source,
+            Math.min(...mine.map((region) => region.start)),
+            describeComponent(decorator),
+            symbols,
+          ),
+        );
+      }
+      continue;
+    }
     applyComponentImports(
       rewritten,
       decorator.argument,
@@ -695,12 +827,18 @@ export function compileNgMx(
       [...new Set(mine.flatMap((region) => region.directives))],
     );
   }
+  // A non-standalone component's directives and tags are not imported: it
+  // has no `imports:` to name them in, and the NgModule imports them itself.
+  const standaloneRegions = lowered.filter((region) => {
+    const owner = decoratorForRegion(decorators, region.start);
+    return !owner || !nonStandalone.has(owner);
+  });
   hoistModuleStatements(
     rewritten,
     file,
     lowered.flatMap((region) => region.moduleStatements),
-    usedTags,
-    directives,
+    dedupeTags(standaloneRegions.flatMap((region) => region.usedTags)),
+    [...new Set(standaloneRegions.flatMap((region) => region.directives))],
   );
 
   // Every "add X to the component's imports" warning is dropped here, and
@@ -716,6 +854,7 @@ export function compileNgMx(
     .filter(
       (warning) => (warning as { code?: string }).code !== IMPORTS_ADVICE_CODE,
     );
+  warnings.push(...moduleWarnings);
   if (options.warnings) options.warnings.push(...warnings);
 
   const code = rewritten.toString();

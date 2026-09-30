@@ -547,3 +547,333 @@ describe("rebaseRegionMappings", () => {
     expect(out[0]?.derive).toBe("selector");
   });
 });
+
+describe("compileNgMx: standalone: false", () => {
+  /** A component whose decorator opts out of standalone. */
+  function ngModuleFile(template: string): string {
+    return [
+      'import { Component } from "@angular/core";',
+      "",
+      "@Component({",
+      '  selector: "app-x",',
+      "  standalone: false,",
+      `  template: ${template},`,
+      "})",
+      "export class XComponent {}",
+    ].join("\n");
+  }
+
+  it("does not inject imports: into a non-standalone component", () => {
+    const result = compileNgMx(
+      ngModuleFile("<div class={active: isOn}>x</div>"),
+      "/p/x.component.ng.mx",
+    );
+
+    // Angular rejects `imports` on a non-standalone component.
+    expect(result.code).not.toMatch(/imports:/);
+    expect(result.code).not.toContain("NgClass");
+    expect(result.code).toContain("standalone: false");
+  });
+
+  it("warns, positioned, naming what the NgModule must provide", () => {
+    const result = compileNgMx(
+      ngModuleFile("<div class={active: isOn}>x</div>"),
+      "/p/x.component.ng.mx",
+    );
+
+    const warning = result.warnings.find((w) => /NgModule/.test(w.message));
+    expect(warning).toBeDefined();
+    expect(warning?.message).toContain("NgClass");
+    expect(warning?.message).toContain("@angular/common");
+    expect(warning?.message).not.toMatch(/to the component's imports/);
+    // The template region starts on line 6 (1-based), after `template: `.
+    expect(warning?.line).toBe(6);
+    expect(warning?.column).toBeGreaterThan(0);
+  });
+
+  it("is silent when the template needs nothing", () => {
+    const result = compileNgMx(
+      ngModuleFile("<div>x</div>"),
+      "/p/x.component.ng.mx",
+    );
+    expect(result.warnings.filter((w) => /NgModule/.test(w.message))).toEqual(
+      [],
+    );
+  });
+
+  it("leaves standalone: true and an absent flag injecting imports:", () => {
+    for (const flag of ["standalone: true,", ""]) {
+      const source = ngModuleFile("<div class={active: isOn}>x</div>").replace(
+        "standalone: false,",
+        flag,
+      );
+      const result = compileNgMx(source, "/p/x.component.ng.mx");
+      expect(result.code).toMatch(/imports: \[NgClass\]/);
+      expect(result.warnings.filter((w) => /NgModule/.test(w.message))).toEqual(
+        [],
+      );
+    }
+  });
+
+  it("names a discovered tag component the NgModule must provide", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ngmx-standalone-"));
+    try {
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "f" }));
+      mkdirSync(join(dir, "tags"));
+      writeFileSync(
+        join(dir, "tags", "badge.mx"),
+        '<span class="badge">x</span>\n',
+      );
+      const filePath = join(dir, "x.component.ng.mx");
+      const source = ngModuleFile("<div><badge/></div>");
+      writeFileSync(filePath, source);
+      const result = compileNgMx(source, filePath, {
+        customTags: getCustomTags(filePath, { host: "angular" }),
+      });
+      expect(result.code).not.toMatch(/imports:/);
+      const warning = result.warnings.find((w) => /NgModule/.test(w.message));
+      expect(warning?.message).toContain("Badge");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("compileNgMx: standalone: false, round 2", () => {
+  function withStandalone(
+    entry: string,
+    template = "<div class={active: isOn}>x</div>",
+    pre = "",
+  ): string {
+    return [
+      'import { Component } from "@angular/core";',
+      pre,
+      "@Component({",
+      '  selector: "app-x",',
+      `  ${entry},`,
+      `  template: ${template},`,
+      "})",
+      "export class XComponent {}",
+    ].join("\n");
+  }
+  const ngModuleWarnings = (code: string) =>
+    compileNgMx(code, "/p/x.component.ng.mx").warnings.filter((w) =>
+      /standalone/.test(w.message),
+    );
+
+  it("pins the exact line and column of the NgModule warning", () => {
+    const [warning] = ngModuleWarnings(withStandalone("standalone: false"));
+    // line 1 import, 2 blank, 3 @Component, 4 selector, 5 standalone, 6 template
+    expect([warning?.line, warning?.column]).toEqual([6, 12]);
+  });
+
+  it("names the component class and its literal selector", () => {
+    const [warning] = ngModuleWarnings(withStandalone("standalone: false"));
+    expect(warning?.message).toContain("XComponent");
+    expect(warning?.message).toContain('"app-x"');
+  });
+
+  it.each([
+    ["quoted key", '"standalone": false'],
+    ["as const", "standalone: false as const"],
+    ["parenthesized", "standalone: (false)"],
+    ["satisfies", "standalone: false satisfies boolean"],
+    ["non-null", "standalone: false!"],
+  ])("treats %s as standalone: false", (_name, entry) => {
+    const result = compileNgMx(withStandalone(entry), "/p/x.component.ng.mx");
+    expect(result.code).not.toMatch(/imports:/);
+    expect(
+      result.warnings.some((w) =>
+        /declaring NgModule must provide/.test(w.message),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["a variable", "standalone: FLAG", "const FLAG = false;"],
+    ["a negation", "standalone: !true", ""],
+    ["a call", "standalone: isStandalone()", ""],
+  ])(
+    "warns, positioned, and keeps standalone behaviour for %s",
+    (_n, entry, pre) => {
+      const result = compileNgMx(
+        withStandalone(entry, undefined, pre),
+        "/p/x.component.ng.mx",
+      );
+      expect(result.code).toMatch(/imports: \[NgClass\]/);
+      const warning = result.warnings.find((w) =>
+        /cannot determine/.test(w.message),
+      );
+      expect(warning?.message).toContain("XComponent");
+      expect(warning?.message).toContain("assuming standalone");
+      // The value of `standalone:` on the line before `template:`.
+      const lines = withStandalone(entry, undefined, pre).split("\n");
+      const at = lines.findIndex((l) => l.startsWith("  standalone"));
+      expect(warning?.line).toBe(at + 1);
+      expect(warning?.column).toBe((lines[at]?.indexOf(": ") as number) + 2);
+    },
+  );
+
+  it("stays silent for literal true and an absent flag", () => {
+    for (const entry of ["standalone: true", '"standalone": true']) {
+      expect(ngModuleWarnings(withStandalone(entry))).toEqual([]);
+    }
+  });
+
+  it("leaves a user-written imports: byte-untouched on a non-standalone component", () => {
+    const source = [
+      'import { Component } from "@angular/core";',
+      "@Component({",
+      '  selector: "app-x",',
+      "  standalone: false,",
+      "  imports: [Foo],",
+      "  template: <div class={active: isOn}>x</div>,",
+      "})",
+      "export class XComponent {}",
+    ].join("\n");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    expect(result.code).toContain("  imports: [Foo],");
+    expect(result.code).not.toContain("NgClass");
+    expect(result.code).not.toContain("@angular/common");
+  });
+
+  it("handles a false and a standalone component in one file", () => {
+    const source = [
+      'import { Component } from "@angular/core";',
+      "@Component({",
+      '  selector: "app-a",',
+      "  standalone: false,",
+      "  template: <div class={a: b}>x</div>,",
+      "})",
+      "export class AComponent {}",
+      "@Component({",
+      '  selector: "app-b",',
+      "  template: <div class={c: d}>x</div>,",
+      "})",
+      "export class BComponent {}",
+    ].join("\n");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    expect(result.code.match(/imports: \[NgClass\]/g)).toHaveLength(1);
+    expect(result.code.match(/from "@angular\/common"/g)).toHaveLength(1);
+    const own = result.warnings.filter((w) =>
+      /declaring NgModule/.test(w.message),
+    );
+    expect(own).toHaveLength(1);
+    expect(own[0]?.message).toContain("AComponent");
+    expect(own[0]?.line).toBe(5);
+  });
+});
+
+describe("compileNgMx: standalone warnings, round 3", () => {
+  const tpl = "<div class={active: isOn}>x</div>";
+  function file(
+    head: string,
+    decorators: string,
+    klass: string,
+    template = tpl,
+  ): string {
+    return [
+      'import { Component } from "@angular/core";',
+      head,
+      "@Component({",
+      '  selector: "app-x",',
+      "  standalone: false,",
+      `  template: ${template},`,
+      "})",
+      decorators,
+      klass,
+    ].join("\n");
+  }
+  const messages = (source: string) =>
+    compileNgMx(source, "/p/x.component.ng.mx").warnings.map((w) => w.message);
+
+  it("names an anonymous default-exported class, not `extends`", () => {
+    const [message] = messages(
+      file("", "", "export default class extends Base {}"),
+    );
+    expect(message).toContain("anonymous default-exported component");
+    expect(message).not.toMatch(/^extends/);
+  });
+
+  it("names a named default-exported class", () => {
+    const [message] = messages(
+      file("", "", "export default class Named extends Base {}"),
+    );
+    expect(message).toMatch(/^Named /);
+  });
+
+  it("names the class past a second decorator", () => {
+    const [message] = messages(file("", "@Other()", "export class Later {}"));
+    expect(message).toMatch(/^Later /);
+  });
+
+  it("names the class past a comment before `class`", () => {
+    const [message] = messages(
+      file("", "/* note */ // more", "export class Commented {}"),
+    );
+    expect(message).toMatch(/^Commented /);
+  });
+
+  it("names an abstract or non-exported class", () => {
+    expect(messages(file("", "", "abstract class Abs {}"))[0]).toMatch(/^Abs /);
+    expect(messages(file("", "", "class Plain {}"))[0]).toMatch(/^Plain /);
+  });
+
+  it("does not warn `cannot determine` when nothing would be injected", () => {
+    const source = file(
+      "const FLAG = false;",
+      "",
+      "export class XComponent {}",
+      "<div>x</div>",
+    ).replace("standalone: false", "standalone: FLAG");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    expect(
+      result.warnings.filter((w) => /cannot determine/.test(w.message)),
+    ).toEqual([]);
+    expect(result.code).not.toMatch(/imports:/);
+  });
+
+  it("still warns `cannot determine` when imports are injected", () => {
+    const source = file(
+      "const FLAG = false;",
+      "",
+      "export class XComponent {}",
+    ).replace("standalone: false", "standalone: FLAG");
+    expect(
+      messages(source).some((m) =>
+        /cannot determine whether XComponent/.test(m),
+      ),
+    ).toBe(true);
+  });
+
+  it("words the warning accurately whether or not MX adds anything to imports:", () => {
+    const base = file(
+      "const FLAG = false;",
+      "",
+      "export class XComponent {}",
+    ).replace("standalone: false,", "standalone: FLAG,");
+    const added = messages(base);
+    const listed = messages(
+      base.replace(
+        "standalone: FLAG,",
+        "standalone: FLAG,\n  imports: [NgClass],",
+      ),
+    );
+    for (const [message] of [added, listed]) {
+      expect(message).toContain("cannot determine whether XComponent");
+      expect(message).toContain("MX adds any missing");
+      // Never claims an edit that may not have happened.
+      expect(message).not.toContain("MX added");
+    }
+    // The author's own `imports:` already lists it, so nothing is added.
+    const code = compileNgMx(
+      base.replace(
+        "standalone: FLAG,",
+        "standalone: FLAG,\n  imports: [NgClass],",
+      ),
+      "/p/x.component.ng.mx",
+    ).code;
+    expect(code.match(/NgClass/g)?.length).toBeGreaterThanOrEqual(1);
+    expect(code).toContain("imports: [NgClass]");
+  });
+});

@@ -395,6 +395,13 @@ given its `import` statement. A symbol you already listed is left alone. On
 a page template you do this by hand and MX warns; here the warning is gone
 because the edit is made.
 
+The exception is a component declared `standalone: false`. Angular rejects
+`imports:` on it, so MX leaves the decorator alone and does not add the
+`import` statements either. It warns instead, at the template, naming each
+symbol the declaring NgModule must provide (for example `NgClass` from
+`@angular/common`, or a called MX tag component from its emitted module).
+`standalone: true`, or no `standalone` flag, behaves as described above.
+
 ### Where a region may appear
 
 Exactly one place: the **direct value of `template:`** in an

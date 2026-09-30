@@ -134,6 +134,9 @@ Four things are worth knowing before editing `src/ng-mx.ts`:
   divergence 5). The emitter's "add X to the component's imports" warnings
   are filtered out on this path, since repeating them would tell an author
   to redo an edit MX just made.
+  A `standalone: false` component is the exception: Angular rejects
+  `imports:` on it, so no `imports:` or `import` is written and a positioned
+  warning names what the declaring NgModule must provide instead.
 - **Authored `import`/`static`/`export` go in the module, not the region.**
   A region is TypeScript *expression* position, where those are statement
   syntax, so the vendored Babel rejects them before MX sees the file — a
