@@ -221,6 +221,14 @@ only), run via `bun run test:bun` in that package. `packages/hosts/html`'s
 own `vitest.config.ts` excludes it from the vitest project so the root
 `bun run test` does not try to load `bun:test` under Node/Vite.
 
+`mx()`/`loadMx()` (`src/helpers.ts`) evaluate on Bun as `Bun.plugin`
+virtual modules under the `mx-virtual:` scheme, never `data:` URLs: Bun 1.3.14
+(the CI pin in `.prototools`) fails `require("data:…")` with `NameTooLong` past
+~1.5 KB, and nested tags embed base64 in base64. Bun 1.4.x has no such limit,
+so `test:bun` passes there even if a `data:` path comes back. Run `test:bun`
+under the pinned Bun (`PATH=~/.proto/tools/bun/1.3.14:$PATH`); a shell whose
+`bun` is newer than `.prototools` hides this class of bug.
+
 ## `.mx` import typing
 
 `packages/hosts/html/types/marko.d.ts` declares `declare module "*.mx"`,

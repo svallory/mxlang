@@ -26,7 +26,7 @@ Per-package vitest runs need the root config:
 bunx vitest run --root ../.. --project @mxlang/<name>
 ```
 
-A bare `bunx vitest run` inside a package directory fails with "No projects were found", because `projects: ["packages/*"]` is resolved relative to the root. Filter to one test with `-t "<test name>"`, e.g. `bunx vitest run --root ../.. --project @mxlang/core -t "parseFragment"`.
+`--root` is the path from the package dir to the repo root, so a nested package (`packages/hosts/*`, `packages/tooling/*`) needs `--root ../../..`; `../..` fails with "references a non-existing file or a directory: …/packages/scripts". A bare `bunx vitest run` inside a package directory fails with "No projects were found", because `projects: ["packages/*"]` is resolved relative to the root. Filter to one test with `-t "<test name>"`, e.g. `bunx vitest run --root ../.. --project @mxlang/core -t "parseFragment"`.
 
 ## Build before downstream tests
 
