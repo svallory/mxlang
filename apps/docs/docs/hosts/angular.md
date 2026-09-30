@@ -7,9 +7,9 @@ description: "The Angular host — a .mx page template compiles to a plain Angul
 
 **Preview.** This host is not yet a complete "Angular host" by the same bar
 every other host meets: `.ng.mx` has TypeScript semantics in the editor and
-in `mx-tsc`, and `mx-tsc` now checks the expressions inside `template:` with
-Angular's own compiler, but the editor does not show those template
-diagnostics yet and the language server does not handle `.ng.mx`, and a
+in `mx-tsc`, and both `mx-tsc` and the editor's TypeScript plugin check the
+expressions inside `template:` with Angular's own compiler, but the language
+server does not handle `.ng.mx`, and a
 `.mx` page still gets no TypeScript plugin support, so a page's MX tag imports
 must be hand-maintained in the caller's `.ts` file. What's here — page
 compilation, the `mx-angular` CLI's `build`/`watch`/`map` — is real and
@@ -312,9 +312,9 @@ neither Solid- nor Angular-specific); VS Code's `ngmx` language falls back to
 `source.tsx` highlighting, the same fallback `solidmx` uses. See
 [VS Code](/editors/vscode/) and [Zed](/editors/zed/) for setup. TypeScript
 semantics for `.ng.mx` come from `@mxlang/typescript-plugin` and `mx-tsc`
-(see [`.ng.mx`](#ngmx)); Angular template diagnostics run in `mx-tsc` today and
-reach the editor in a later step; language-server diagnostics are not covered by
-this editor registration.
+(see [`.ng.mx`](#ngmx)); Angular template diagnostics run in `mx-tsc` and in the
+editor through the same plugin (see [Template diagnostics](#ngmx-diagnostics));
+language-server diagnostics are not covered by this editor registration.
 
 ## Custom tags (preview)
 
@@ -571,7 +571,9 @@ TypeScript. Angular's own compiler checks those: see
 [Template diagnostics](#ngmx-diagnostics). The language server does not handle
 `.ng.mx` yet.
 
-**Known limitations.** Edits to `package.json` (including `mx.angular`) or to a
+**Known limitations.** Angular template diagnostics do not follow edits to
+`package.json` or to a called tag until the `.ng.mx` is next edited, and the
+"save" trigger is a write to the file on disk. Edits to `package.json` (including `mx.angular`) or to a
 called tag file take effect in the editor when the `.ng.mx` is next edited or
 reopened, not immediately: a config error also stays reported until then.
 
@@ -617,11 +619,30 @@ Configure it with `package.json#mx.angular.diagnostics`:
 
 | Value | Meaning |
 |---|---|
-| `"idle"` (default) | On. In an editor, checks after a pause (editor support comes later). `mx-tsc` treats it as on. |
-| `"save"` | On. In an editor, checks on save (editor support comes later). `mx-tsc` treats it as on. |
+| `"idle"` (default) | On. In an editor, checks 1 second after your last edit. `mx-tsc` treats it as on. |
+| `"save"` | On. In an editor, checks when the file is saved. `mx-tsc` treats it as on. |
 | `"off"` | No Angular template diagnostics anywhere, and compiler-cli is never looked for. |
 
 Any other value is a positioned error naming `package.json`.
+
+**In the editor.** The check runs in a separate worker process, one per Angular
+project (the nearest `package.json`), never in the TypeScript server, so typing
+is never blocked. It never runs per keystroke, and the result appears when the
+check finishes: Angular errors for a file are shown only while the file still has
+the text they were computed for, so they disappear while you type and return
+after the next check (in `"save"` mode, after the next save). If an edit arrives
+while a check is still running, the old result is discarded; a run that is still
+going five seconds after it went stale is killed and the worker restarted. The
+worker exits with the editor.
+
+If `@angular/compiler-cli` is missing, out of range or fails to load, the editor
+shows one message (on the first `.ng.mx` of the project, not on every file, and
+not repeated) saying how to fix it or turn the check off; nothing else breaks.
+Compiler option errors and warnings (for example `extendedDiagnostics` with
+`strictTemplates: false`) are shown once per project the same way, prefixed with
+the tsconfig they come from; warnings never fail anything. An error in the
+element or attribute itself (NG8001, NG8002) is marked "(approximate location)",
+as in `mx-tsc`.
 
 ## Errors
 

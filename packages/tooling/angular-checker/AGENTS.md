@@ -75,7 +75,14 @@ reports them once per project and fails on errors. It is a separate method
 (not a `check` record or a creation-time `TsconfigError`) because option
 diagnostics have no file position. It builds a throwaway program on demand when
 nothing has been checked, so `[]` always means "no option errors".
-**Editor wiring (2.3b-2):** `check()` never returns these, so an editor path
+**Editor wiring (2.3b-2a, done):** the TS plugin runs the checker in a forked
+worker (`src/worker.ts` protocol loop, `worker-main.ts` entry, `worker-client.ts`
+client: `createCheckerWorker`). Fork, not `worker_threads`: a run stuck in
+synchronous ngtsc can only be stopped by killing a process. The client keeps one
+request in flight, supersedes per file, and kills+restarts a worker still busy
+`graceMs` (5 s, `DEFAULT_GRACE_MS`) after its run went stale; an unusable
+compiler-cli/tsconfig is a sticky `unavailable` outcome. `mapNgMxDiagnostics`
+maps worker records like `diagnoseNgMx`. Still true for any caller: `check()` never returns these, so an editor path
 must call `configDiagnostics()` once per project (not per file or per
 keystroke) and show the `"ngtsc"` records against the tsconfig; drop the `"ts"`
 ones, which the TypeScript pass already reports. Warnings are shown, never failing.

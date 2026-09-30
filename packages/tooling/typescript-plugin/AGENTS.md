@@ -57,7 +57,31 @@ entry.
   `retainCompiled` (off by default) keeps each file's latest successful compile
   for `getCompiledNgMx()`: `mx-tsc` uses it to run Angular template diagnostics
   over the compiles its type-check used; an editor must not hold them all.
-  **Known limitations (fixed with the Angular template diagnostics work):** a
+  **Editor Angular template diagnostics (`src/ng-diagnostics.ts`).** The
+  `onCompiled` option of `createNgMxLanguagePlugin` hands each successful
+  compile to an `NgDiagnosticsService` (one per tsserver project, created in
+  `create()`), which schedules a check per `mx.angular.diagnostics` (`idle`:
+  1 s after the last compile, `save`: a `serverHost.watchFile` write, `off`:
+  nothing, not even a worker) and keeps the answer only while the file's text
+  equals the text it was computed for. The check runs in a **forked worker
+  process** (`@mxlang/angular-checker`'s `createCheckerWorker`; one per nearest
+  `package.json`; superseded runs are never delivered, and a stale run still
+  going after 5 s is SIGKILLed and restarted; the worker ends when tsserver's
+  IPC channel closes). The build emits `dist/ng-worker.cjs` beside
+  `dist/index.cjs` (`src/ng-worker.ts`, resolved via `__dirname`) and keeps
+  `@angular/compiler-cli` external: the worker resolves it from the user's
+  project. Delivery hook: the `getSemanticDiagnostics` branch of the same Proxy
+  that injects compile diagnostics into `getSyntacticDiagnostics`
+  (`index.ts`, `angularDiagnostics`); the async refresh is
+  `Project.refreshDiagnostics()` (public in TS 6.0, emits
+  `projectsUpdatedInBackground`, which makes the client re-run `geterr`). A
+  missing compiler-cli / bad tsconfig and the compiler *option* diagnostics are
+  per-project **notices**, shown on the first `.ng.mx` that hit them (tsserver
+  can only attach a diagnostic to the file it was asked about, so they are not
+  attached to the tsconfig). The plugin never loads compiler-cli in the
+  tsserver thread. `ng-editor-path.test.ts` drives the whole path with the real
+  worker; `ng-worker-bundle.test.ts` checks the built bundle.
+  **Known limitations (2.3b-2b):** a
   config error stays until the `.ng.mx` is next edited, and the plugin tracks no
   `dependencies` for `.ng.mx`, so an edit to `package.json` or to a called tag
   file takes effect when the `.ng.mx` is next edited or reopened.

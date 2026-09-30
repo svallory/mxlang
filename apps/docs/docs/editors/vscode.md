@@ -20,7 +20,7 @@ The extension provides:
 - **MX (`.mx`, `.marko`)**: Full highlighting powered by the official Marko TextMate grammar.
 - **AstroMX (`.amx`)**: Highlighting for the Astro frontmatter and delegates the body to the Marko grammar.
 - **SolidMX (`.solid.mx`)**: Highlighting as `source.tsx`. *Note: True grammar injection for MX regions within SolidMX is not feasible via regex alone, so `.solid.mx` falls back to standard TSX highlighting for now.*
-- **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as SolidMX — an ordinary TypeScript module whose `@Component` template is MX. The TypeScript plugin compiles it as its own file kind, so TypeScript semantics work: errors in the component class and module are reported at their `.ng.mx` position. Angular template diagnostics (checking the expressions inside `template:`) land in a later release, and the language server does not handle `.ng.mx` yet.
+- **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as SolidMX — an ordinary TypeScript module whose `@Component` template is MX. The TypeScript plugin compiles it as its own file kind, so TypeScript semantics work: errors in the component class and module are reported at their `.ng.mx` position. Angular template diagnostics (checking the expressions inside `template:`) also appear in the editor: Angular's compiler runs in a background process, 1 second after you stop typing (or on save, or never, per `package.json#mx.angular.diagnostics`), and needs `@angular/compiler-cli` `>=22 <23` in your project. The language server does not handle `.ng.mx` yet.
 
 ## Formatting
 
