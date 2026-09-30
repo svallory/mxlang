@@ -9,7 +9,7 @@
 
 MX parsing is opt-in through the `mx` parser option, which `parse` sets. Without it the vendored parser is byte-equivalent to npm `@babel/parser` — `src/vendored.test.ts` pins that, so keep those tests on `parseBabel` rather than `parse`. `packages/parser/UPSTREAM.md` "Local modifications" records exactly what the fork changed.
 
-Consumers typecheck against `src/public.d.ts`, not `src/index.ts`: the vendored tree needs tsconfig relaxations that must not leak into packages that merely call `parse`.
+Consumers typecheck against `src/public.d.ts`, not `src/index.ts`: the vendored tree needs tsconfig relaxations that must not leak into packages that merely call `parse`. The package's published `types` is `dist/index.d.ts`, which `scripts/emit-declarations.ts` generates from `src/public.d.ts` (the `declare module` wrapper unwrapped, statements unchanged) as part of `bun run build`; `files` is `dist` + `README.md`, and `src/pack-contents.test.ts` pins the tarball contents and that the two export lists match. Edit `src/public.d.ts`, never `dist/`.
 
 A host can reject an MX region's syntactic position (e.g. Angular's `.ng.mx` only allowing one as `@Component({ template: … })`'s value) through the `mxRegionPositionCheck` parser option — see `packages/parser/README.md` and `src/mx/region-context.ts`.
 
