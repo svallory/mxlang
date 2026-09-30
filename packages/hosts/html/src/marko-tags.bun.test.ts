@@ -147,6 +147,16 @@ describe("a .mx page calling a tags/*.marko tag", () => {
     expect(await render(page)).toBe(`<i>mx q</i>`);
   });
 
+  test("a FAR tags/*.mx tag beats a NEAR tags/*.marko tag of the same name", async () => {
+    // "Regardless of distance": the .mx tag is in an ancestor's tags/, the
+    // .marko one in the page's own directory, and the .mx tag still wins.
+    const dir = "far-mx";
+    write(`${dir}/tags/dup.mx`, `<i>far mx \${input.label}</i>`);
+    write(`${dir}/sub/tags/dup.marko`, `<i>near marko \${input.label}</i>`);
+    const page = write(`${dir}/sub/page.mx`, `<dup label="q"/>`);
+    expect(await render(page)).toBe(`<i>far mx q</i>`);
+  });
+
   test("an explicit import of the same name is not shadowed by discovery", async () => {
     const dir = "explicit";
     write(`${dir}/tags/Badge.marko`, `<i>tags</i>`);

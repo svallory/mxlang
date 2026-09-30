@@ -4,7 +4,7 @@
 
 ### Add: `HostDeclarations.resolveDiscoveredTagModule` and `binding` on a named `Component` target (html-tags-marko-import)
 
-Both optional. A host that answers the hook with a taglib-discovered tag's template path gets `import _name from "<relative path>"` added to the module (Marko's own form: default import, extension kept, `_` plus the camelCased name, numeric suffix on a collision, once per module) and `binding` set on the `Component` target, so its emitter can call the imported identifier while `name` stays the authored spelling. Absent, or `undefined`, changes nothing. Only `@mxlang/html` implements it; every other host's output is byte-identical.
+Both optional. A host that answers the hook with a taglib-discovered tag's template path gets `import _name from "<relative path>"` added to the module (Marko's own form: default import, extension kept, `_` plus the camelCased name, numeric suffix on a collision, once per module) and `binding` set on the `Component` target, so its emitter can call the imported identifier while `name` stays the authored spelling. Absent, or `undefined`, changes nothing. `Ctx.lookup.getTag`'s return type also gains an optional `template?: string`, the absolute template path `@marko/compiler` already puts on the tag definition it returns (a type-only widening; nothing in MX sets it). Only `@mxlang/html` implements the hook; every other host's output is byte-identical.
 
 ### Fix: the tarball ships only `dist/` and the README (pkg-types-g10)
 

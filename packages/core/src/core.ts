@@ -273,6 +273,16 @@ export interface Ctx {
   ownInput?: CalleeInput;
   /** Set by a dialect that resolves tags through Marko's taglib lookup. */
   lookup?: {
+    /**
+     * Marko's tag definition for `name`, or `undefined` when nothing resolves it.
+     *
+     * `template` is the absolute path of the tag's template file, which
+     * Marko's own `getTagTemplate` reads from the same definition. It is set
+     * by `@marko/compiler` (not by MX) for a tag found through `tags/` or a
+     * `marko.json`, and is read only by a host's `resolveDiscoveredTagModule`.
+     * `undefined` means the tag has no template file (an element, a host
+     * taglib tag, a Marko 5 `renderer` tag).
+     */
     getTag(name: string): { taglibId?: string; template?: string } | undefined;
   };
   /** Custom tags already discovered and loaded by the calling integration. */
