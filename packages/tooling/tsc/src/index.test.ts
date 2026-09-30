@@ -822,6 +822,41 @@ describe("mx-tsc", () => {
         SPAWN_TIMEOUT_MS,
       );
 
+      it(
+        "checks templates under the tsconfig mx-tsc was given with -p, not tsconfig.json",
+        () => {
+          const dir = join(fixtures, "ng-diag-tsconfig");
+          // tsconfig.json is strict (`name` is possibly undefined: an error);
+          // tsconfig.app.json is not (clean). Only the one named decides.
+          const strict = run(mxTsc, [
+            "--noEmit",
+            "-p",
+            join(dir, "tsconfig.json"),
+          ]);
+          expect(strict.status).not.toBe(0);
+          expect(strict.output).toContain(
+            "x.component.ng.mx(5,18): error TS2532",
+          );
+
+          const loose = run(mxTsc, [
+            "--noEmit",
+            "-p",
+            join(dir, "tsconfig.app.json"),
+          ]);
+          expect(loose.output).toBe("");
+          expect(loose.status).toBe(0);
+
+          // `--project` and a directory argument resolve the same way.
+          const longForm = run(mxTsc, [
+            "--noEmit",
+            "--project",
+            join(dir, "tsconfig.app.json"),
+          ]);
+          expect(longForm.status).toBe(0);
+        },
+        SPAWN_TIMEOUT_MS,
+      );
+
       describe("without a usable @angular/compiler-cli", () => {
         const created: string[] = [];
         afterEach(() => {

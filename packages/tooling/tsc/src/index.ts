@@ -12,7 +12,11 @@ import {
 } from "@mxlang/typescript-plugin";
 import type { LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
-import { checkNgMxFiles, type NgDiagnosticsResult } from "./ng-diagnostics.ts";
+import {
+  checkNgMxFiles,
+  type NgDiagnosticsResult,
+  resolveProjectTsconfig,
+} from "./ng-diagnostics.ts";
 
 /**
  * The compound extensions `.solid.mx` and `.ng.mx` as `runTsc` wants them: no
@@ -105,7 +109,9 @@ export function runMxTsc(): void {
   // only over `.ng.mx` files that compiled, and never loads compiler-cli when
   // there are none. A template error, or a project whose templates could not
   // be checked at all, fails the run.
-  const angular = checkNgMxFiles(compiledNgMx());
+  const angular = checkNgMxFiles(compiledNgMx(), undefined, {
+    tsconfigPath: resolveProjectTsconfig(process.argv.slice(2), process.cwd()),
+  });
   reportNgDiagnostics(angular);
   const hasAngularError =
     angular.errors.length > 0 ||

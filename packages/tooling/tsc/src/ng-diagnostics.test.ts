@@ -11,7 +11,11 @@ import { compileNgMx } from "@mxlang/angular";
 import type { AngularChecker, Diagnostic } from "@mxlang/angular-checker";
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
 import { afterEach, describe, expect, it } from "vitest";
-import { checkNgMxFiles, type NgDiagnosticsDeps } from "./ng-diagnostics.ts";
+import {
+  checkNgMxFiles,
+  type NgDiagnosticsDeps,
+  resolveProjectTsconfig,
+} from "./ng-diagnostics.ts";
 
 const created: string[] = [];
 afterEach(() => {
@@ -225,5 +229,60 @@ describe("checkNgMxFiles", () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toContain("mx.angular.diagnostics");
     expect(spy.resolved).toEqual([]);
+  });
+});
+
+describe("checkNgMxFiles tsconfig", () => {
+  it("hands the given tsconfigPath to the checker, not <projectDir>/tsconfig.json", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    const seen: Array<string | undefined> = [];
+    const d = deps(spyOf());
+    checkNgMxFiles(
+      [compiled(dir)],
+      {
+        ...d,
+        createChecker: (options) => {
+          seen.push(options.tsconfigPath);
+          return (d.createChecker as NonNullable<typeof d.createChecker>)(
+            options,
+          );
+        },
+      },
+      { tsconfigPath: join(dir, "tsconfig.app.json") },
+    );
+    expect(seen).toEqual([join(dir, "tsconfig.app.json")]);
+  });
+});
+
+describe("resolveProjectTsconfig", () => {
+  it("follows -p, --project and --project=, file or directory", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    writeFileSync(join(dir, "tsconfig.app.json"), "{}");
+    const app = join(dir, "tsconfig.app.json");
+    expect(resolveProjectTsconfig(["-p", app], "/")).toBe(app);
+    expect(resolveProjectTsconfig(["--project", app], "/")).toBe(app);
+    expect(resolveProjectTsconfig([`--project=${app}`], "/")).toBe(app);
+    expect(resolveProjectTsconfig(["-p", dir], "/")).toBe(
+      join(dir, "tsconfig.json"),
+    );
+    expect(
+      resolveProjectTsconfig(["--noEmit", "-p", "tsconfig.app.json"], dir),
+    ).toBe(app);
+  });
+
+  it("without -p, finds the nearest tsconfig.json at or above cwd, like tsc", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    expect(resolveProjectTsconfig(["--noEmit"], join(dir, "src"))).toBe(
+      join(dir, "tsconfig.json"),
+    );
+  });
+
+  it("is undefined when -p names nothing that exists", () => {
+    expect(
+      resolveProjectTsconfig(["-p", "/nonexistent/tsconfig.json"], "/"),
+    ).toBeUndefined();
   });
 });

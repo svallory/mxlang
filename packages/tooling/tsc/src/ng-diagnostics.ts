@@ -7,8 +7,8 @@
  * `.ng.mx` positions.
  */
 
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { readAngularConfig } from "@mxlang/angular";
 import {
   type AngularChecker,
@@ -24,6 +24,15 @@ import type { CompiledNgMx } from "@mxlang/typescript-plugin";
 export interface NgDiagnosticsDeps {
   resolveCompilerCli?: typeof resolveCompilerCli;
   createChecker?: (options: AngularCheckerOptions) => AngularChecker;
+}
+
+export interface NgDiagnosticsOptions {
+  /**
+   * The tsconfig the TypeScript pass ran under (see
+   * {@link resolveProjectTsconfig}); templates are checked under the same
+   * options as the code.
+   */
+  tsconfigPath?: string | undefined;
 }
 
 export interface NgMxReport {
@@ -55,6 +64,37 @@ function nearestPackageDir(fileName: string): string {
   }
 }
 
+/**
+ * The tsconfig `tsc` itself uses for `argv`: the value of `-p` / `--project`
+ * (a file, or a directory holding `tsconfig.json`), else the nearest
+ * `tsconfig.json` at or above `cwd`. `undefined` when there is none (for
+ * example `tsc file.ts`, which uses no tsconfig).
+ */
+export function resolveProjectTsconfig(
+  argv: readonly string[],
+  cwd: string,
+): string | undefined {
+  let project: string | undefined;
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i] as string;
+    if (arg === "-p" || arg === "--project") project = argv[i + 1];
+    else if (arg.startsWith("--project=")) project = arg.slice(10);
+  }
+  if (project !== undefined) {
+    const path = resolve(cwd, project);
+    if (!existsSync(path)) return undefined;
+    return statSync(path).isDirectory() ? join(path, "tsconfig.json") : path;
+  }
+  let dir = cwd;
+  for (;;) {
+    const candidate = join(dir, "tsconfig.json");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
 function plural(count: number): string {
   return `${count} .ng.mx file${count === 1 ? "" : "s"}`;
 }
@@ -75,6 +115,7 @@ function message(cause: unknown): string {
 export function checkNgMxFiles(
   entries: readonly CompiledNgMx[],
   deps: NgDiagnosticsDeps = {},
+  options: NgDiagnosticsOptions = {},
 ): NgDiagnosticsResult {
   const resolve = deps.resolveCompilerCli ?? resolveCompilerCli;
   const createChecker = deps.createChecker ?? createAngularChecker;
@@ -110,10 +151,9 @@ export function checkNgMxFiles(
       continue;
     }
 
-    const tsconfigPath = join(projectDir, "tsconfig.json");
     const checker = createChecker({
       projectDir,
-      ...(existsSync(tsconfigPath) ? { tsconfigPath } : {}),
+      ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
     });
     try {
       for (const entry of files) {

@@ -1,0 +1,6 @@
+{
+  "name": "ng-diag-tsconfig",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}
