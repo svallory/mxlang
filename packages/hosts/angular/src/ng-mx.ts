@@ -8,7 +8,6 @@
  * see the divergence list in `packages/hosts/angular/README.md`.
  */
 
-import traverseModule from "@babel/traverse";
 import {
   type CustomTag,
   type Ir,
@@ -614,50 +613,256 @@ function rewriteAuthoredTagImports(
   });
 }
 
-// `@babel/traverse` is CommonJS: under ESM interop its default export is
-// sometimes the module namespace, with the function one level down.
-const traverse = (
-  "default" in traverseModule
-    ? (traverseModule as unknown as { default: typeof traverseModule }).default
-    : traverseModule
-) as typeof traverseModule;
+/** A Babel node as this file's scope walk reads it: any field by name. */
+type ScopeNode = Record<string, unknown> & { type: string };
+
+const FUNCTION_TYPES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "ObjectMethod",
+  "ClassMethod",
+  "ClassPrivateMethod",
+  "TSDeclareFunction",
+  "TSDeclareMethod",
+]);
+
+const isNode = (value: unknown): value is ScopeNode =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { type?: unknown }).type === "string";
+
+/** Every identifier a binding pattern (`a`, `{ a, b: [c] }`, `a = 1`, `...r`) declares. */
+function patternNames(pattern: unknown, out: string[] = []): string[] {
+  if (!isNode(pattern)) return out;
+  switch (pattern.type) {
+    case "Identifier":
+      out.push(pattern.name as string);
+      break;
+    case "ObjectPattern":
+      for (const property of pattern.properties as unknown[]) {
+        patternNames(
+          isNode(property) && property.type === "ObjectProperty"
+            ? property.value
+            : property,
+          out,
+        );
+      }
+      break;
+    case "ArrayPattern":
+      for (const element of pattern.elements as unknown[]) {
+        patternNames(element, out);
+      }
+      break;
+    case "AssignmentPattern":
+      patternNames(pattern.left, out);
+      break;
+    case "RestElement":
+      patternNames(pattern.argument, out);
+      break;
+    case "TSParameterProperty":
+      patternNames(pattern.parameter, out);
+      break;
+  }
+  return out;
+}
+
+/** Names a statement list declares in its own lexical scope. */
+function lexicalNames(statements: unknown): string[] {
+  const out: string[] = [];
+  for (const statement of Array.isArray(statements) ? statements : []) {
+    if (!isNode(statement)) continue;
+    const declaration =
+      (statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportDefaultDeclaration") &&
+      isNode(statement.declaration)
+        ? statement.declaration
+        : statement;
+    if (
+      declaration.type === "VariableDeclaration" &&
+      declaration.kind !== "var"
+    ) {
+      for (const d of declaration.declarations as ScopeNode[]) {
+        patternNames(d.id, out);
+      }
+    } else if (
+      declaration.type === "ClassDeclaration" ||
+      declaration.type === "FunctionDeclaration" ||
+      declaration.type === "TSEnumDeclaration"
+    ) {
+      patternNames(declaration.id, out);
+    }
+  }
+  return out;
+}
+
+/** Names `var` declares anywhere in a function body, not crossing into nested functions. */
+function varNames(node: unknown, out: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const item of node) varNames(item, out);
+    return out;
+  }
+  if (!isNode(node) || FUNCTION_TYPES.has(node.type)) return out;
+  if (node.type === "VariableDeclaration" && node.kind === "var") {
+    for (const d of node.declarations as ScopeNode[]) patternNames(d.id, out);
+  }
+  for (const [key, child] of Object.entries(node)) {
+    if (key !== "loc" && key !== "extra") varNames(child, out);
+  }
+  return out;
+}
+
+/** Whether `node` opens a scope in which `name` is declared afresh. */
+function scopeDeclares(node: ScopeNode, name: string): boolean {
+  if (FUNCTION_TYPES.has(node.type)) {
+    const names: string[] = [];
+    for (const param of (node.params as unknown[]) ?? []) {
+      patternNames(param, names);
+    }
+    if (node.type === "FunctionExpression") patternNames(node.id, names);
+    const body = node.body;
+    if (isNode(body) && body.type === "BlockStatement") {
+      varNames(body.body, names);
+    }
+    return names.includes(name);
+  }
+  switch (node.type) {
+    case "BlockStatement":
+    case "StaticBlock":
+      return lexicalNames(node.body).includes(name);
+    case "SwitchStatement":
+      return (node.cases as ScopeNode[]).some((c) =>
+        lexicalNames(c.consequent).includes(name),
+      );
+    case "CatchClause":
+      return patternNames(node.param).includes(name);
+    case "ClassExpression":
+      return patternNames(node.id).includes(name);
+    case "ForStatement":
+      return lexicalNames([node.init]).includes(name);
+    case "ForInStatement":
+    case "ForOfStatement":
+      return lexicalNames([node.left]).includes(name);
+    default:
+      return false;
+  }
+}
+
+const COMPUTABLE_KEY_PARENTS = new Set([
+  "ObjectProperty",
+  "ObjectMethod",
+  "ClassProperty",
+  "ClassMethod",
+  "ClassPrivateProperty",
+  "ClassPrivateMethod",
+  "ClassAccessorProperty",
+  "TSPropertySignature",
+  "TSMethodSignature",
+]);
+
+/** Whether an identifier at `parent[key]` is a read of a binding (not a name). */
+function isReadPosition(parent: ScopeNode | undefined, key: string): boolean {
+  if (!parent) return true;
+  switch (parent.type) {
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return key !== "property" || parent.computed === true;
+    case "LabeledStatement":
+    case "BreakStatement":
+    case "ContinueStatement":
+    case "MetaProperty":
+    case "TSEnumMember":
+    case "TSNamedTupleMember":
+    case "TSTypePredicate":
+    case "TSImportEqualsDeclaration":
+    case "TSDeclareFunction":
+      return false;
+    case "ExportSpecifier":
+      return key === "local";
+    case "TSQualifiedName":
+      return key !== "right";
+  }
+  if (COMPUTABLE_KEY_PARENTS.has(parent.type) && key === "key") {
+    return parent.computed === true;
+  }
+  return true;
+}
+
+/** Whether `parent[key]` holds a binding pattern, whose identifiers declare rather than read. */
+function isPatternSlot(parent: ScopeNode, key: string): boolean {
+  if (FUNCTION_TYPES.has(parent.type)) return key === "params" || key === "id";
+  switch (parent.type) {
+    case "VariableDeclarator":
+      return key === "id";
+    case "CatchClause":
+      return key === "param";
+    case "ClassDeclaration":
+    case "ClassExpression":
+      return key === "id";
+    case "AssignmentExpression":
+      return key === "left";
+    default:
+      return false;
+  }
+}
 
 /**
- * Whether the module-scope binding `name` is read anywhere. Scope-aware: a
- * property key (`{ name: 1 }`), a member name (`o.name`) and a shadowing
- * local in a nested scope are not references to the import.
+ * Whether the module-scope binding `name` is read anywhere: a scope-aware
+ * walk of the Babel AST. A property key (`{ name: 1 }`), a member name
+ * (`o.name`), an object-pattern key, and a shadowing binding in a nested
+ * scope (a parameter, a `let`/`const`/`var`/`class`/`function`, a `catch`
+ * parameter) are not reads of the import. A type-position use
+ * (`typeof name`, `x: name`) is one, since the import still serves it.
+ *
+ * Hand-rolled rather than `@babel/traverse`, which this public package does
+ * not depend on and its build would bundle into `dist/` — the same choice
+ * `packages/hosts/solid/src/emitter.ts`'s `freeJsxNames` (line 257) makes.
+ * Coarse in the safe direction: anything it cannot classify counts as a
+ * read, which keeps an import rather than dropping one the module uses.
  */
 function isReferencedElsewhere(file: unknown, name: string): boolean {
-  let referenced = false;
-  traverse(file as Parameters<typeof traverse>[0], {
-    Program(path) {
-      const binding = path.scope.getBinding(name);
-      if (!binding) return path.stop();
-      referenced = binding.referenced;
-      // Babel does not register type-position uses (`typeof Pill`,
-      // `x: Pill`) as references; an import read only there is still used.
-      if (!referenced) {
-        path.traverse({
-          Identifier(id) {
-            if (id.node.name !== name) return;
-            if (id.scope.getBinding(name) !== binding) return;
-            const parent = id.parent;
-            if (
-              (parent.type === "TSTypeQuery" && parent.exprName === id.node) ||
-              (parent.type === "TSTypeReference" &&
-                parent.typeName === id.node) ||
-              (parent.type === "TSQualifiedName" && parent.left === id.node)
-            ) {
-              referenced = true;
-              id.stop();
-            }
-          },
-        });
+  let found = false;
+  const visit = (
+    node: unknown,
+    parent: ScopeNode | undefined,
+    key: string,
+    shadowed: boolean,
+    pattern: boolean,
+  ): void => {
+    if (found) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, parent, key, shadowed, pattern);
+      return;
+    }
+    if (!isNode(node) || node.type === "ImportDeclaration") return;
+    if (node.type === "Identifier") {
+      if (
+        !shadowed &&
+        !pattern &&
+        node.name === name &&
+        isReadPosition(parent, key)
+      ) {
+        found = true;
       }
-      path.stop();
-    },
-  });
-  return referenced;
+      // A binding identifier carries its own type annotation
+      // (`const t: typeof Pill`), which is a use like any other.
+      visit(node.typeAnnotation, node, "typeAnnotation", shadowed, false);
+      return;
+    }
+    const inner = shadowed || scopeDeclares(node, name);
+    for (const [childKey, child] of Object.entries(node)) {
+      if (childKey === "loc" || childKey === "extra") continue;
+      const computedKey = childKey === "key" && node.computed === true;
+      const childPattern =
+        !computedKey &&
+        ((pattern &&
+          !(node.type === "AssignmentPattern" && childKey === "right")) ||
+          isPatternSlot(node, childKey));
+      visit(child, node, childKey, inner, childPattern);
+    }
+  };
+  visit((file as { program?: unknown }).program, undefined, "", false, false);
+  return found;
 }
 
 /**

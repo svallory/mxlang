@@ -476,6 +476,86 @@ describe("authored .mx import in a .ng.mx region", () => {
     expect(typeCheck(dir, result.code)).toEqual([]);
   });
 
+  it("drops the second alias when every other Pill is a shadowing binding or member name", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export function a() { try { return 1; } catch (Pill) { return Pill; } }",
+          "export function b() { { const Pill = 2; return Pill; } }",
+          "export function c() { var Pill = 3; return Pill; }",
+          "export const d = ({ x: Pill }: { x: number }) => Pill;",
+          "export const e = ([Pill]: number[]) => Pill;",
+          "export class K { Pill = 1; m() { return this.Pill; } }",
+          "export const f = function Pill() { return 1; };",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).not.toContain("Badge as Pill");
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("keeps the second alias when Pill is read as an array element", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export const g = [Pill];",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).toContain(
+      'import { Badge as Pill } from "./tags/badge";',
+    );
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("keeps the second alias when Pill is read as an object shorthand", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export const h = { Pill };",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).toContain(
+      'import { Badge as Pill } from "./tags/badge";',
+    );
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("keeps the second alias when Pill is read as a default parameter value", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export const i = (x = Pill) => x;",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).toContain(
+      'import { Badge as Pill } from "./tags/badge";',
+    );
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
   it("removes a dropped import's whole line and never joins the next statement onto it", () => {
     const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
     const own = run(
