@@ -97,6 +97,18 @@ describe("createCheckerWorker", () => {
     await waitFor(() => !isProcessAlive(firstPid));
   });
 
+  it("survives a send to a worker that just died (no uncaught 'error')", async () => {
+    const w = make();
+    await w.check("/proj/warm.ts", "warm");
+    process.kill(w.pid() as number, "SIGKILL");
+    // Sent before the 'exit' event is processed: the channel is closing.
+    const racing = await w.check("/proj/a.ts", "racing");
+    expect(["ok", "failed"]).toContain(racing.kind);
+    // The worker is replaced, not wedged.
+    const after = await w.check("/proj/a.ts", "after");
+    expect(after.kind).toBe("ok");
+  });
+
   it("does not kill a stale run that finishes inside the grace period", async () => {
     const w = make({ graceMs: 3_000 });
     await w.check("/proj/warm.ts", "warm");

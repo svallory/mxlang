@@ -119,6 +119,8 @@ export function createCheckerWorker(
     if (dying) {
       dying.removeAllListeners("exit");
       dying.removeAllListeners("message");
+      // Late 'error' events (a send racing the kill) must not go uncaught.
+      dying.on("error", () => {});
       // A worker in a synchronous run cannot read a `dispose` message.
       dying.kill("SIGKILL");
     }
@@ -130,17 +132,37 @@ export function createCheckerWorker(
       execArgv: [],
     });
     child = proc;
-    let stderrTail = "";
     proc.stderr?.on("data", (chunk) => {
-      stderrTail = (stderrTail + String(chunk)).slice(-2_000);
+      stderrTails.set(
+        proc,
+        ((stderrTails.get(proc) ?? "") + String(chunk)).slice(-2_000),
+      );
     });
     proc.on("message", (message: WorkerResponse) => onMessage(message));
-    proc.on("exit", (code, signal) => {
-      if (child !== proc) return;
+    // A failed spawn or a send on a closed channel arrives as 'error', not a
+    // throw; unhandled, it would crash the host (tsserver). Treat it as the
+    // worker being gone.
+    proc.on("error", (error) => gone(proc, `failed (${error.message})`));
+    proc.on("exit", (code, signal) =>
+      gone(proc, `exited (${signal ?? `code ${code}`})`),
+    );
+    send(proc, {
+      type: "init",
+      projectDir: options.projectDir,
+      ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
+    });
+  }
+
+  function gone(proc: ChildProcess, what: string): void {
+    if (child !== proc) return;
+    {
       child = undefined;
+      proc.removeAllListeners("message");
+      proc.kill("SIGKILL");
       const wasReady = ready;
       ready = false;
-      const reason = `the Angular checker worker exited (${signal ?? `code ${code}`})`;
+      const reason = `the Angular checker worker ${what}`;
+      const stderrTail = stderrTails.get(proc) ?? "";
       if (!wasReady) {
         // Died before it could answer `init`: restarting would loop.
         unavailable = {
@@ -159,16 +181,21 @@ export function createCheckerWorker(
         clearGrace();
       }
       pump();
-    });
-    send(proc, {
-      type: "init",
-      projectDir: options.projectDir,
-      ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
-    });
+    }
   }
 
+  const stderrTails = new WeakMap<ChildProcess, string>();
+
   function send(target: ChildProcess, message: WorkerRequest): void {
-    target.send(message);
+    // Callback form: a closed channel reports through the callback instead of
+    // an uncaught 'error' event.
+    if (!target.connected) {
+      gone(target, "is not connected");
+      return;
+    }
+    target.send(message, (error) => {
+      if (error) gone(target, `failed (${error.message})`);
+    });
   }
 
   function onMessage(message: WorkerResponse): void {
@@ -287,7 +314,7 @@ export function createCheckerWorker(
       const live = child;
       if (live) {
         try {
-          live.send({ type: "dispose" } satisfies WorkerRequest);
+          live.send({ type: "dispose" } satisfies WorkerRequest, () => {});
         } catch {
           // Channel already closed: the worker is going anyway.
         }
