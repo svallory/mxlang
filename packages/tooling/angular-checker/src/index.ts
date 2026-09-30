@@ -7,6 +7,14 @@
  */
 
 import { createAngularChecker, typescriptVersion } from "./checker.ts";
+import {
+  type CompilerCliModule,
+  type CompilerCliResolution,
+  CompilerCliUnavailableError,
+  resolveCompilerCli,
+  SUPPORTED_COMPILER_CLI_RANGE,
+} from "./compiler-cli.ts";
+import { diagnoseNgMx, type NgMxDiagnostic } from "./diagnose.ts";
 
 export type {
   AngularChecker,
@@ -15,4 +23,14 @@ export type {
   Diagnostic,
   DiagnosticCategory,
 } from "./types.ts";
-export { createAngularChecker, typescriptVersion };
+export {
+  type CompilerCliModule,
+  type CompilerCliResolution,
+  CompilerCliUnavailableError,
+  createAngularChecker,
+  diagnoseNgMx,
+  type NgMxDiagnostic,
+  resolveCompilerCli,
+  SUPPORTED_COMPILER_CLI_RANGE,
+  typescriptVersion,
+};

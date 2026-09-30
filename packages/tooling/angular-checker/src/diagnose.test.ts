@@ -1,0 +1,170 @@
+import path from "node:path";
+import { compileNgMx } from "@mxlang/angular";
+import { describe, expect, it } from "vitest";
+import { createAngularChecker, diagnoseNgMx } from "./index.ts";
+import type { AngularChecker, Diagnostic } from "./types.ts";
+
+const PROJECT_DIR = path.resolve(import.meta.dirname, "..");
+const VIRTUAL = path.join(PROJECT_DIR, "x.component.ts");
+
+/** A `.ng.mx` module around one region, as an author would write it. */
+function ngMx(template: string, klass = "user = { name: 'a' };"): string {
+  return [
+    'import { Component } from "@angular/core";',
+    "",
+    "@Component({",
+    '  selector: "app-x",',
+    "  standalone: true,",
+    `  template: ${template},`,
+    "})",
+    `export class XComponent { ${klass} }`,
+  ].join("\n");
+}
+
+/** A checker stub that returns canned records, for the mapping rules alone. */
+function stubChecker(records: Diagnostic[]): AngularChecker {
+  return {
+    check: () => records,
+    update: () => {},
+    dispose: () => {},
+  };
+}
+
+function record(over: Partial<Diagnostic>): Diagnostic {
+  return {
+    file: VIRTUAL,
+    start: 0,
+    length: 1,
+    code: 2339,
+    message: "m",
+    category: "error",
+    source: "ngtsc",
+    ...over,
+  };
+}
+
+describe("diagnoseNgMx (real ngtsc)", () => {
+  it("reports a bad property at the expression start in the .ng.mx", () => {
+    const source = ngMx("<p>${user.nmae}</p>");
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    const diagnostics = diagnoseNgMx(compiled, checker, VIRTUAL);
+    checker.dispose();
+
+    // The silent-zero guard: a broken template MUST yield a diagnostic, or a
+    // broken @angular/core resolution would read as a clean file.
+    expect(diagnostics.length).toBeGreaterThanOrEqual(1);
+    const [d] = diagnostics;
+    expect(d?.source).toBe("angular");
+    expect(d?.code).toBe(2339);
+    expect(d?.category).toBe("error");
+    expect(d?.message).toMatch(/nmae/);
+    expect(d?.start).toBe(source.indexOf("user.nmae"));
+    expect(source.slice(d?.start, (d?.start ?? 0) + (d?.length ?? 0))).toBe(
+      "user.nmae",
+    );
+  });
+
+  it("reports nothing for a clean file", () => {
+    const compiled = compileNgMx(
+      ngMx("<p>${user.name}</p>"),
+      "/p/x.component.ng.mx",
+    );
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    expect(diagnoseNgMx(compiled, checker, VIRTUAL)).toEqual([]);
+    checker.dispose();
+  });
+
+  it("drops ts-source records: a class-body error is not reported here", () => {
+    // Volar/tsc already report the module's own TypeScript errors; repeating
+    // them here would print each one twice.
+    const source = ngMx(
+      "<p>${user.name}</p>",
+      "user = { name: 'a' }; bad: number = 'str';",
+    );
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    const raw = checker.check(VIRTUAL, compiled.code);
+    expect(raw.some((r) => r.source === "ts")).toBe(true);
+    expect(diagnoseNgMx(compiled, checker, VIRTUAL)).toEqual([]);
+    checker.dispose();
+  });
+});
+
+describe("diagnoseNgMx (mapping rules)", () => {
+  const source = ngMx("<p>${user.name}</p>");
+  const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+  const region = compiled.regions[0];
+  const mapping = compiled.mappings.find(
+    (m) => source.slice(m.sourceStart, m.sourceEnd) === "user.name",
+  );
+
+  it("fixtures are what the tests assume", () => {
+    expect(region).toBeDefined();
+    expect(mapping).toBeDefined();
+  });
+
+  it("drops ts records and keeps ngtsc ones, tagging them angular", () => {
+    const start = mapping?.generatedStart ?? -1;
+    const out = diagnoseNgMx(
+      compiled,
+      stubChecker([
+        record({ start, source: "ts", message: "ts one" }),
+        record({ start, source: "ngtsc", message: "ng one" }),
+      ]),
+      VIRTUAL,
+    );
+    expect(out.map((d) => [d.source, d.message])).toEqual([
+      ["angular", "ng one"],
+    ]);
+  });
+
+  it("maps an offset inside an expression to the expression start", () => {
+    const inside = (mapping?.generatedStart ?? 0) + 3;
+    const [d] = diagnoseNgMx(
+      compiled,
+      stubChecker([record({ start: inside })]),
+      VIRTUAL,
+    );
+    expect(d?.start).toBe(mapping?.sourceStart);
+    expect(d?.length).toBe(
+      (mapping?.sourceEnd ?? 0) - (mapping?.sourceStart ?? 0),
+    );
+  });
+
+  it("falls back to the enclosing region start on generated punctuation", () => {
+    // The opening backtick of the template literal belongs to no mapping.
+    const [d] = diagnoseNgMx(
+      compiled,
+      stubChecker([record({ start: region?.generatedStart ?? -1, length: 1 })]),
+      VIRTUAL,
+    );
+    expect(d).toBeDefined();
+    expect(d?.start).toBe(region?.start);
+  });
+
+  it("never drops a diagnostic outside every region", () => {
+    // Offset 0 is the `import` line: no mapping, no region. It is located
+    // through the module source map instead of being discarded.
+    const out = diagnoseNgMx(
+      compiled,
+      stubChecker([record({ start: 0, length: 6 })]),
+      VIRTUAL,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]?.start).toBe(0);
+    expect(out[0]?.source).toBe("angular");
+  });
+
+  it("maps an authored-TypeScript offset after a region through the source map", () => {
+    // The class body sits after the region, so its module offset is shifted
+    // relative to the .ng.mx; the source map undoes the shift.
+    const at = compiled.code.indexOf("user = ");
+    const out = diagnoseNgMx(
+      compiled,
+      stubChecker([record({ start: at, length: 4 })]),
+      VIRTUAL,
+    );
+    expect(out[0]?.start).toBe(source.indexOf("user = "));
+  });
+});

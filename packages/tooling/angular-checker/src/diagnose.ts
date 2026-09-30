@@ -1,0 +1,109 @@
+/**
+ * Angular template diagnostics for a compiled `.ng.mx`, positioned in the
+ * `.ng.mx` source.
+ *
+ * `@mxlang/angular-checker` checks a TypeScript *module* and reports offsets
+ * into it. A `.ng.mx` author never sees that module, so every diagnostic is
+ * mapped back before it leaves this package.
+ */
+
+import {
+  type CompileNgMxResult,
+  lineColumnAt,
+  lookupMapping,
+  offsetAt,
+  sourceOffsetFor,
+} from "@mxlang/angular";
+import type { AngularChecker, DiagnosticCategory } from "./types.ts";
+
+/** One Angular template diagnostic, positioned in the `.ng.mx` source. */
+export interface NgMxDiagnostic {
+  /** Offset into the `.ng.mx` source, in UTF-16 code units. */
+  start: number;
+  /**
+   * Length of the flagged source span. For a diagnostic inside a mapped
+   * expression this is the whole expression (whole-to-whole: escaping means
+   * sub-expression offsets do not advance in step), otherwise `0`.
+   */
+  length: number;
+  /** Angular's diagnostic code; negative for template parse errors. */
+  code: number;
+  /** Angular's message, unchanged. */
+  message: string;
+  category: DiagnosticCategory;
+  source: "angular";
+}
+
+/**
+ * Resolve an offset in the emitted module to a `.ng.mx` position, never
+ * failing: a mapped expression, else the enclosing region's start, else the
+ * module source map, else the top of the file. A diagnostic must not vanish
+ * because its position is awkward, or a broken file would read as clean.
+ */
+function locate(
+  compiled: CompileNgMxResult,
+  generatedOffset: number,
+): { start: number; length: number } {
+  const start = sourceOffsetFor(compiled.mappings, generatedOffset);
+  if (start !== null) {
+    let length = 0;
+    let best = Number.POSITIVE_INFINITY;
+    for (const m of compiled.mappings) {
+      const generatedSpan = m.generatedEnd - m.generatedStart;
+      if (
+        m.sourceStart === start &&
+        generatedOffset >= m.generatedStart &&
+        generatedOffset < m.generatedEnd &&
+        generatedSpan < best
+      ) {
+        best = generatedSpan;
+        length = m.sourceEnd - m.sourceStart;
+      }
+    }
+    return { start, length };
+  }
+
+  const region = compiled.regions.find(
+    (r) =>
+      generatedOffset >= r.generatedStart && generatedOffset < r.generatedEnd,
+  );
+  if (region) return { start: region.start, length: 0 };
+
+  const source = compiled.map.sourcesContent?.[0];
+  if (typeof source === "string") {
+    const original = lookupMapping(
+      compiled.map.mappings,
+      lineColumnAt(compiled.code, generatedOffset),
+    );
+    if (original) return { start: offsetAt(source, original), length: 0 };
+  }
+  return { start: 0, length: 0 };
+}
+
+/**
+ * Check a compiled `.ng.mx` and return its Angular template diagnostics,
+ * positioned in the `.ng.mx`.
+ *
+ * Only `source: "ngtsc"` records are kept. The `"ts"` records (errors in the
+ * module's own TypeScript) are dropped: Volar and `tsc` already report those,
+ * and repeating them would print each twice.
+ *
+ * `virtualPath` is where the module is presented to the checker; it must sit
+ * in the project so `@angular/core` resolves (see the README).
+ */
+export function diagnoseNgMx(
+  compiled: CompileNgMxResult,
+  checker: AngularChecker,
+  virtualPath: string,
+): NgMxDiagnostic[] {
+  return checker
+    .check(virtualPath, compiled.code)
+    .filter((d) => d.source === "ngtsc")
+    .map((d) => ({
+      ...locate(compiled, d.start),
+      code: d.code,
+      message: d.message,
+      category: d.category,
+      source: "angular" as const,
+    }));
+}

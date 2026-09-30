@@ -399,12 +399,19 @@
       "name": "@mxlang/angular-checker",
       "version": "0.1.0",
       "dependencies": {
-        "@angular/compiler-cli": "22.1.7",
+        "@mxlang/angular": "workspace:*",
       },
       "devDependencies": {
+        "@angular/compiler-cli": "22.1.7",
         "@angular/core": "22.1.7",
         "typescript": "6.0.3",
       },
+      "peerDependencies": {
+        "@angular/compiler-cli": ">=22.0.0 <23.0.0",
+      },
+      "optionalPeers": [
+        "@angular/compiler-cli",
+      ],
     },
     "packages/tooling/babel-plugin": {
       "name": "@mxlang/babel-plugin",

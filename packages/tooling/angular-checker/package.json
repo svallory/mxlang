@@ -34,14 +34,23 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @angular/compiler-cli --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @angular/compiler-cli --external @mxlang/angular --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@angular/compiler-cli": "22.1.7"
+    "@mxlang/angular": "workspace:*"
+  },
+  "peerDependencies": {
+    "@angular/compiler-cli": ">=22.0.0 <23.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@angular/compiler-cli": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@angular/compiler-cli": "22.1.7",
     "@angular/core": "22.1.7",
     "typescript": "6.0.3"
   }

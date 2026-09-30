@@ -15,8 +15,12 @@
  * a process or cache boundary.
  */
 
-import { NgtscProgram } from "@angular/compiler-cli";
+import type { NgtscProgram } from "@angular/compiler-cli";
 import ts from "typescript";
+import {
+  CompilerCliUnavailableError,
+  resolveCompilerCli,
+} from "./compiler-cli.ts";
 import type {
   AngularChecker,
   AngularCheckerOptions,
@@ -167,6 +171,15 @@ function buildHost(
 export function createAngularChecker(
   options: AngularCheckerOptions,
 ): AngularChecker {
+  // Resolved from the project, never bundled. Failing here, at creation,
+  // means a missing or unsupported compiler-cli can never yield an empty
+  // diagnostic list that reads as success.
+  const resolution = resolveCompilerCli(options.projectDir);
+  if (resolution.status !== "ok") {
+    throw new CompilerCliUnavailableError(resolution);
+  }
+  const { NgtscProgram: Program } = resolution.module;
+
   const files = new Map<string, string>();
   let program: NgtscProgram | undefined;
   let disposed = false;
@@ -200,12 +213,7 @@ export function createAngularChecker(
       const host = buildHost(files, options.projectDir, compilerOptions);
 
       const reusedOldProgram = program !== undefined;
-      const next = new NgtscProgram(
-        [virtualPath],
-        compilerOptions,
-        host,
-        program,
-      );
+      const next = new Program([virtualPath], compilerOptions, host, program);
       if (reusedOldProgram) programReuseCount += 1;
       // Retain the program even on a cancelled run -- it is still a valid base
       // for the next `oldProgram`, and dropping it would make the run after a
