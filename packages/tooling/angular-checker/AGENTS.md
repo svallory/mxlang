@@ -36,7 +36,14 @@ length is the whole mapped expression), else the enclosing region's start
 (`NgMxRegion.generatedStart/End`), else the module source map, else offset 0 —
 a diagnostic is never dropped. Output is `source: "angular"`. `virtualPath` must
 sit in the project so `@angular/core` resolves; `mx-tsc` uses
-`<file>.ng.mx.ts`.
+`<file>.ng.mx.ts`. Each result carries `mapped` (`exact` / `region` /
+`sourcemap` / `none`): element- and attribute-level ngtsc diagnostics (NG8001,
+NG8002) have no expression mapping and land on the region start (`region`),
+which mx-tsc marks "(approximate location)"; mapping them to the tag is
+2.3b-2 work. `tsconfigPath` is parsed against the tsconfig's own directory and
+a read/parse error throws `TsconfigError` — never a silent fallback to
+defaults. `getNgStructuralDiagnostics` is not collected: decorator errors
+already arrive via the semantic phase (see README, Known gaps).
 
 It uses the **workspace TypeScript** (6.0.3) like every other package here.
 *History, one sentence:* it originally carried its own `typescript@6` behind

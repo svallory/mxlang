@@ -100,6 +100,25 @@ type-checked as dependencies, but their own diagnostics are not returned).
 it to `false`: it is the checker's reason to exist, and honouring `false` would
 silently turn template checking off while still returning an empty list.
 
+## Known gaps
+
+- **Element and attribute diagnostics land on the region start.** ngtsc reports
+  an unknown element (NG8001) or unknown property (NG8002) at the tag or
+  attribute, which no expression mapping covers, so `diagnoseNgMx` falls back
+  to the start of the `template:` region (`mapped: "region"`, or
+  `"sourcemap"`); on a multi-line template the reported line is the region's
+  first line, not the tag. Mapping these to the tag is later work (2.3b-2).
+  Expression-level errors (`${user.nmae}`) are exact.
+- **`getNgStructuralDiagnostics` is not collected.** Decorator-analysis errors
+  (`imports: [123]`, a missing template, two incompatible decorators) already
+  arrive through `getNgSemanticDiagnostics`, each exactly once; the structural
+  list was probed on those cases and added nothing, so it is left out rather
+  than deduplicated.
+- **Two TypeScript instances.** The checker builds compiler options and the
+  host with its own `typescript`, while `@angular/compiler-cli` loads the
+  project's. Compiler-cli 22 requires TypeScript `>=6.0 <6.1`, which keeps them
+  the same copy in practice; there is no test for a divergent one.
+
 ## Diagnostic offsets
 
 Templates are emitted as **backtick literals** (ruling c), so a diagnostic

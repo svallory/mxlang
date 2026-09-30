@@ -243,3 +243,22 @@ describe("diagnoseNgMx `mapped` flag (how exact the position is)", () => {
     expect(mappedOf(0, noContent)).toBe("none");
   });
 });
+
+describe("decorator-analysis diagnostics", () => {
+  it("reports a misused @Component decorator exactly once, via the semantic phase", () => {
+    // getNgStructuralDiagnostics is deliberately not collected: probed on
+    // `imports: [123]`, a missing template, and two incompatible decorators,
+    // it added nothing the semantic phase had not already reported.
+    const source = [
+      'import { Component } from "@angular/core";',
+      '@Component({ selector: "a", standalone: true, imports: [123], template: "<p></p>" })',
+      "export class X {}",
+    ].join("\n");
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    const records = checker.check(VIRTUAL, source);
+    checker.dispose();
+    const ngtsc = records.filter((r) => r.source === "ngtsc");
+    expect(ngtsc).toHaveLength(1);
+    expect(ngtsc[0]?.code).toBe(-991010);
+  });
+});

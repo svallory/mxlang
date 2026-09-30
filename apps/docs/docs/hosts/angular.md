@@ -585,7 +585,10 @@ TypeScript pass, and prints each finding at its position in the `.ng.mx`:
 src/x.component.ng.mx(5,18): error TS2339: Property 'nmae' does not exist on type '{ name: string; }'.
 ```
 
-A template error makes `mx-tsc` exit non-zero. A position inside an expression
+A template error makes `mx-tsc` exit non-zero. Templates are checked under the
+same tsconfig as the code (the one named with `-p`/`--project`, else the nearest
+`tsconfig.json`); an unreadable or malformed one fails the run with its path
+instead of falling back to defaults. A position inside an expression
 resolves to the start of that whole expression. Only Angular's template
 diagnostics are added here; TypeScript's own errors in the module are the
 ones `mx-tsc` already reported.
@@ -596,6 +599,11 @@ supports `>=22.0.0 <23.0.0`. With `.ng.mx` files present and diagnostics on, a
 missing, unsupported or unloadable compiler-cli **fails `mx-tsc`** with a message
 saying how to fix it (otherwise CI would pass with the templates unchecked). A
 run with no `.ng.mx` files never looks for it.
+
+**Positions.** A problem inside an expression is reported at that expression. An
+unknown element (NG8001) or unknown property (NG8002) is reported at the start of
+the `template:` region, not at the tag, and `mx-tsc` marks it "(approximate
+location)"; pointing these at the tag comes with the editor support.
 
 Template checking needs the modules a template's tags import to exist, so run
 `mx-angular build` first if the template calls discovered MX tags.
