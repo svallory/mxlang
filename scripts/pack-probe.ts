@@ -251,6 +251,16 @@ function makeConsumer(opts: ConsumerOptions): string {
             "export const rendered: string = page({});",
           ]
         : []),
+      // The plugin's CJS entry is a factory function (tsserver needs that), so
+      // prove the packed declarations still present a default export and named
+      // exports to an ESM consumer.
+      ...(opts.root === "@mxlang/typescript-plugin"
+        ? [
+            'import plugin, { createMxLanguagePlugin } from "@mxlang/typescript-plugin";',
+            "export const factory: typeof plugin = plugin;",
+            "export const named: typeof createMxLanguagePlugin = createMxLanguagePlugin;",
+          ]
+        : []),
       `export type { ${modules.map((_, i) => `m${i}`).join(", ")} };`,
       "",
     ].join("\n"),
