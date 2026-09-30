@@ -36,6 +36,7 @@ export type AttrTag<
 
 export {
   type AngularConfig,
+  type AngularDiagnosticsMode,
   type OnError,
   readAngularConfig,
 } from "./config.ts";

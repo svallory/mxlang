@@ -47,6 +47,7 @@ describe("readAngularConfig", () => {
       ngExtension: ".ts",
       tagSelectorPrefix: "mx-",
       onError: "keep-last",
+      diagnostics: "idle",
     });
   });
 
@@ -62,6 +63,7 @@ describe("readAngularConfig", () => {
             tagExtension: ".tag.ts",
             tagSelectorPrefix: "app-",
             onError: "delete",
+            diagnostics: "save",
           },
         },
       }),
@@ -74,7 +76,36 @@ describe("readAngularConfig", () => {
       ngExtension: ".ts",
       tagSelectorPrefix: "app-",
       onError: "delete",
+      diagnostics: "save",
     });
+  });
+
+  it.each(["idle", "save", "off"] as const)(
+    "accepts mx.angular.diagnostics = %s",
+    (mode) => {
+      writeProject({
+        "package.json": JSON.stringify({
+          mx: { angular: { diagnostics: mode } },
+        }),
+      });
+      expect(readAngularConfig(projectDir).diagnostics).toBe(mode);
+    },
+  );
+
+  it.each([
+    ["an unknown mode", "sometimes"],
+    ["a boolean", false],
+    ["a number", 1],
+    ["null", null],
+  ])("rejects mx.angular.diagnostics set to %s", (_label, value) => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { angular: { diagnostics: value } },
+      }),
+    });
+    expect(() => readAngularConfig(projectDir)).toThrow(
+      /`mx\.angular\.diagnostics` must be one of "idle", "save" or "off"/,
+    );
   });
 
   it("rejects an invalid onError value", () => {
@@ -499,6 +530,7 @@ describe("build: tag routing", () => {
       ngExtension: ".ts",
       tagSelectorPrefix: "mx-",
       onError: "keep-last",
+      diagnostics: "idle",
     };
     const { diagnostics } = discoverFiles(projectDir, config);
 

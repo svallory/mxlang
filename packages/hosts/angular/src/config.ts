@@ -8,6 +8,15 @@ import { TranslateError } from "@mxlang/core";
 
 export type OnError = "keep-last" | "error-template" | "delete";
 
+/**
+ * When Angular template diagnostics run for `.ng.mx` files.
+ *
+ * `"off"` disables them everywhere (`mx-tsc` and editors). `"idle"` and
+ * `"save"` are editor scheduling modes (after 1 s idle / on save); `mx-tsc`
+ * has no editing session and treats both as on.
+ */
+export type AngularDiagnosticsMode = "idle" | "save" | "off";
+
 export interface AngularConfig {
   include: string[];
   pageExtension: string;
@@ -24,6 +33,8 @@ export interface AngularConfig {
   ngExtension: string;
   tagSelectorPrefix: string;
   onError: OnError;
+  /** See {@link AngularDiagnosticsMode}. Default `"idle"`. */
+  diagnostics: AngularDiagnosticsMode;
 }
 
 interface AngularConfigShape {
@@ -33,6 +44,7 @@ interface AngularConfigShape {
   ngExtension?: unknown;
   tagSelectorPrefix?: unknown;
   onError?: unknown;
+  diagnostics?: unknown;
 }
 
 interface PackageJsonShape {
@@ -46,6 +58,7 @@ const DEFAULTS: AngularConfig = {
   ngExtension: ".ts",
   tagSelectorPrefix: "mx-",
   onError: "keep-last",
+  diagnostics: "idle",
 };
 
 /** A config error, positioned against `package.json` itself (no finer position exists for a JSON value read this way). */
@@ -85,6 +98,19 @@ function readOnError(packageFile: string, value: unknown): OnError {
   return value;
 }
 
+function readDiagnostics(
+  packageFile: string,
+  value: unknown,
+): AngularDiagnosticsMode {
+  if (value !== "idle" && value !== "save" && value !== "off") {
+    fail(
+      packageFile,
+      '`mx.angular.diagnostics` must be one of "idle", "save" or "off"',
+    );
+  }
+  return value;
+}
+
 /**
  * Reads and validates `package.json#mx.angular` in `projectDir`, applying A3's
  * defaults.
@@ -97,7 +123,9 @@ function readOnError(packageFile: string, value: unknown): OnError {
  * Throws a positioned `TranslateError` (line 1 of `<projectDir>/package.json`)
  * when `package.json` cannot be read, when a value has the wrong type, and for
  * an unknown key: `` `mx.angular.<key>` is not a recognized key; expected one
- * of ... ``. It never falls back to defaults on invalid input, so a caller must
+ * of ... ``, and for a `diagnostics` value other than `"idle"`, `"save"` or
+ * `"off"` (`"off"` turns Angular template diagnostics off everywhere; the
+ * other two are editor scheduling modes that `mx-tsc` treats as on). It never falls back to defaults on invalid input, so a caller must
  * catch and report the error rather than ignore it.
  */
 export function readAngularConfig(projectDir: string): AngularConfig {
@@ -120,6 +148,7 @@ export function readAngularConfig(projectDir: string): AngularConfig {
     "ngExtension",
     "tagSelectorPrefix",
     "onError",
+    "diagnostics",
   ]);
   for (const key of Object.keys(raw)) {
     if (!allowed.has(key)) {
@@ -169,6 +198,10 @@ export function readAngularConfig(projectDir: string): AngularConfig {
   }
   if (raw.onError !== undefined) {
     config.onError = readOnError(packageFile, raw.onError);
+  }
+
+  if (raw.diagnostics !== undefined) {
+    config.diagnostics = readDiagnostics(packageFile, raw.diagnostics);
   }
 
   return config;
