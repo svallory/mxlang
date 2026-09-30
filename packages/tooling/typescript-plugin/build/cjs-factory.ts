@@ -20,10 +20,11 @@ if (typeof module.exports.default === "function")
 `;
 
 const code = readFileSync(ENTRY, "utf8");
-if (!code.includes("module.exports")) {
-  throw new Error(`${ENTRY} has no CJS module.exports to wrap`);
-}
-if (code.endsWith(FOOTER)) {
-  throw new Error(`${ENTRY} already carries the factory footer`);
+// The footer reads `module.exports.default`, so it is only right on the shape
+// `bun build --format cjs` emits today; fail the build if that changes.
+if (!/^module\.exports = __toCommonJS\(/m.test(code)) {
+  throw new Error(
+    `${ENTRY} has no \`module.exports = __toCommonJS(...)\`: bun's CJS output changed shape, revisit build/cjs-factory.ts`,
+  );
 }
 appendFileSync(ENTRY, FOOTER);

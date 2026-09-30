@@ -12,13 +12,42 @@ const TSSERVER = createRequire(import.meta.url).resolve(
   "typescript/lib/tsserver.js",
 );
 
-/** Speaks the tsserver protocol over stdio; every request resolves on its response. */
-function startTsserver(args: string[], cwd: string) {
+const REQUEST_TIMEOUT_MS = 20_000;
+
+/**
+ * Speaks the tsserver protocol over stdio; every request resolves on its
+ * response. A request rejects, with tsserver's stderr and the tail of its log
+ * in the message, when tsserver exits first or answers nothing in
+ * {@link REQUEST_TIMEOUT_MS}; a hung tsserver is killed, never left running.
+ */
+function startTsserver(args: string[], cwd: string, logFile: string) {
   const child: ChildProcess = spawn(process.execPath, [TSSERVER, ...args], {
     cwd,
-    stdio: ["pipe", "pipe", "ignore"],
+    stdio: ["pipe", "pipe", "pipe"],
   });
-  const waiting = new Map<number, (body: unknown) => void>();
+  let stderr = "";
+  child.stderr?.on("data", (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
+  const waiting = new Map<
+    number,
+    { resolve: (body: unknown) => void; reject: (error: Error) => void }
+  >();
+  const failAll = (reason: string) => {
+    const logTail = existsSync(logFile)
+      ? readFileSync(logFile, "utf8").split("\n").slice(-30).join("\n")
+      : "(no log file)";
+    const error = new Error(
+      `${reason}\n--- tsserver stderr ---\n${stderr || "(empty)"}\n--- tsserver log tail ---\n${logTail}`,
+    );
+    for (const { reject } of waiting.values()) reject(error);
+    waiting.clear();
+  };
+  child.on("exit", (code, signal) => {
+    failAll(
+      `tsserver exited (code ${code}, signal ${signal}) before answering`,
+    );
+  });
   let buffer = "";
   child.stdout?.on("data", (chunk: Buffer) => {
     buffer += chunk.toString();
@@ -34,7 +63,7 @@ function startTsserver(args: string[], cwd: string) {
         body?: unknown;
       };
       if (message.type === "response" && message.request_seq !== undefined) {
-        waiting.get(message.request_seq)?.(message.body);
+        waiting.get(message.request_seq)?.resolve(message.body);
         waiting.delete(message.request_seq);
       }
     }
@@ -43,8 +72,23 @@ function startTsserver(args: string[], cwd: string) {
   return {
     request(command: string, args: object): Promise<unknown> {
       const id = ++seq;
-      return new Promise((resolve) => {
-        waiting.set(id, resolve);
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          failAll(
+            `tsserver gave no response to "${command}" in ${REQUEST_TIMEOUT_MS} ms`,
+          );
+          child.kill("SIGKILL");
+        }, REQUEST_TIMEOUT_MS);
+        waiting.set(id, {
+          resolve: (body) => {
+            clearTimeout(timer);
+            resolve(body);
+          },
+          reject: (error) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        });
         child.stdin?.write(
           `${JSON.stringify({ seq: id, type: "request", command, arguments: args })}\n`,
         );
@@ -100,6 +144,7 @@ describe.skipIf(!built)("tsserver loads the built plugin", () => {
         "--disableAutomaticTypingAcquisition",
       ],
       root,
+      logFile,
     );
     try {
       // What an editor sends so the project can hold `.mx` files at all.
