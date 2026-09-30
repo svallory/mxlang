@@ -8,25 +8,29 @@
 // `node_modules` at all, so the plugin was missing from the VSIX.
 //
 // The stage holds a self-contained plugin: `@mxlang/*`, volar and the other
-// pure-JS dependencies are bundled into `dist/index.cjs`; only the packages that
+// pure-JS dependencies are bundled into `dist/*.cjs`; only the packages that
 // cannot be bundled (`@marko/compiler`, loaded through `createRequire`, and
-// `@astrojs/compiler`, which reads a wasm file next to itself) are installed
-// with `bun install --production`. `typescript` is type-only in the plugin
-// (tsserver hands it the `ts` object); `@angular/compiler-cli` resolves from the
-// user's project; `@astrojs/language-server` is an optional peer.
+// `@astrojs/compiler`, which reads a wasm file next to itself) are copied in,
+// with their dependency closure, from the workspace install: no registry access
+// and exactly the versions `bun.lock` pins. `typescript` and
+// `@angular/compiler-cli` resolve from the user's project (the checker worker
+// uses `createRequire(projectDir)`; tsserver hands the plugin its own `ts`);
+// `@astrojs/language-server` is an optional peer.
 
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pluginEntries } from "./plugin-entries.ts";
 
 const extensionDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(extensionDir, "../../..");
@@ -46,9 +50,73 @@ const EXTERNAL_UNSHIPPED = [
 const run = (cmd: string, args: string[], cwd: string) =>
   execFileSync(cmd, args, { cwd, stdio: "inherit" });
 
-const pluginManifest = JSON.parse(
-  readFileSync(join(pluginDir, "package.json"), "utf8"),
-) as { version: string; dependencies: Record<string, string> };
+interface Manifest {
+  name: string;
+  version: string;
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+}
+const readManifest = (dir: string) =>
+  JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as Manifest;
+
+/** The directory of `name` as installed for a package living in `fromDir`. */
+function findPackage(name: string, fromDir: string): string | undefined {
+  for (let dir = fromDir; ; dir = dirname(dir)) {
+    const candidate = join(dir, "node_modules", name);
+    if (existsSync(join(candidate, "package.json"))) {
+      return realpathSync(candidate);
+    }
+    if (dirname(dir) === dir) return undefined;
+  }
+}
+
+/**
+ * Copy `realDir` (an installed package) and its dependency closure into the
+ * stage, hoisting each name once; a second version of a name nests under its
+ * dependent so Node resolution still finds it.
+ */
+function place(realDir: string, into: string): void {
+  const manifest = readManifest(realDir);
+  const target = join(into, manifest.name);
+  if (existsSync(target)) {
+    if (readManifest(target).version === manifest.version) return;
+    throw new Error(`unexpected version clash placing ${manifest.name}`);
+  }
+  cpSync(realDir, target, {
+    recursive: true,
+    dereference: true,
+    // A package's own node_modules would be a second, unpinned copy.
+    filter: (src) => basename(src) !== "node_modules",
+  });
+  const deps = { ...manifest.dependencies, ...manifest.optionalDependencies };
+  for (const dep of Object.keys(deps)) {
+    const depDir = findPackage(dep, realDir);
+    if (!depDir) {
+      // An optional dependency that is not installed for this platform.
+      if (manifest.optionalDependencies?.[dep]) continue;
+      throw new Error(
+        `${manifest.name} needs ${dep}, not found from ${realDir}`,
+      );
+    }
+    const hoisted = join(into, dep);
+    if (
+      existsSync(hoisted) &&
+      readManifest(hoisted).version !== readManifest(depDir).version
+    ) {
+      place(depDir, join(target, "node_modules"));
+    } else {
+      place(depDir, into);
+    }
+  }
+}
+
+const pluginManifest = readManifest(pluginDir);
+const entries = pluginEntries(pluginDir);
+if (!existsSync(join(pluginDir, "dist"))) {
+  throw new Error(
+    `${pluginDir}/dist is missing: run \`bun run build\` first. The check compares the VSIX against the plugin's own build, so a stage without it is not checkable.`,
+  );
+}
 
 rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(pluginStage, { recursive: true });
@@ -65,29 +133,14 @@ for (const path of [
   cpSync(join(extensionDir, path), join(stageDir, path), { recursive: true });
 }
 
-// 2. The plugin, bundled. Externals must match INSTALLED/EXTERNAL_UNSHIPPED.
-// Entries: `src/index.ts`, plus `src/<name>.ts` for every extra `dist/<name>.cjs`
-// the plugin's own build emits (e.g. the Angular diagnostics worker), so a new
-// worker entry ships without touching this script.
-const builtDist = join(pluginDir, "dist");
-const extraEntries = existsSync(builtDist)
-  ? readdirSync(builtDist)
-      .filter((file) => file.endsWith(".cjs") && file !== "index.cjs")
-      .map((file) => file.replace(/\.cjs$/, ""))
-  : [];
-for (const name of extraEntries) {
-  if (!existsSync(join(pluginDir, "src", `${name}.ts`))) {
-    throw new Error(
-      `plugin dist/${name}.cjs has no src/${name}.ts entry to bundle into the VSIX`,
-    );
-  }
-}
+// 2. The plugin, bundled. Entries come from the plugin's own `build` script
+// (e.g. `index` and the Angular `ng-worker`), so a new entry ships without
+// touching this script. Externals must match INSTALLED/EXTERNAL_UNSHIPPED.
 run(
   "bun",
   [
     "build",
-    join(pluginDir, "src/index.ts"),
-    ...extraEntries.map((name) => join(pluginDir, "src", `${name}.ts`)),
+    ...entries.map((name) => join(pluginDir, "src", `${name}.ts`)),
     "--outdir",
     join(pluginStage, "dist"),
     "--target",
@@ -103,6 +156,7 @@ run(
   ],
   repoRoot,
 );
+const nodeModules = join(stageDir, "node_modules");
 writeFileSync(
   join(pluginStage, "package.json"),
   `${JSON.stringify(
@@ -110,44 +164,19 @@ writeFileSync(
       name: "@mxlang/typescript-plugin",
       version: pluginManifest.version,
       main: "dist/index.cjs",
-      dependencies: Object.fromEntries(
-        INSTALLED.map((name) => [name, pluginManifest.dependencies[name]]),
-      ),
     },
     null,
     2,
   )}\n`,
 );
 
-// 3. Install the un-bundleable dependencies next to the plugin (hoisted into
-// the stage's top-level node_modules, where Node resolution finds them).
-writeFileSync(
-  join(stageDir, "install.package.json"),
-  `${JSON.stringify(
-    {
-      name: "mxlang-vsix-stage",
-      private: true,
-      dependencies: Object.fromEntries(
-        INSTALLED.map((name) => [name, pluginManifest.dependencies[name]]),
-      ),
-    },
-    null,
-    2,
-  )}\n`,
-);
-const installDir = join(stageDir, ".install");
-mkdirSync(installDir);
-cpSync(
-  join(stageDir, "install.package.json"),
-  join(installDir, "package.json"),
-);
-run("bun", ["install", "--production", "--no-save"], installDir);
-cpSync(join(installDir, "node_modules"), join(stageDir, "node_modules"), {
-  recursive: true,
-  dereference: true,
-});
-rmSync(installDir, { recursive: true, force: true });
-rmSync(join(stageDir, "install.package.json"));
+// 3. The un-bundleable dependencies and their closure, copied from the
+// workspace install so the shipped versions are the ones bun.lock pins.
+const fromPlugin = createRequire(join(pluginDir, "package.json"));
+for (const name of INSTALLED) {
+  const pkgJson = fromPlugin.resolve(`${name}/package.json`);
+  place(dirname(realpathSync(pkgJson)), nodeModules);
+}
 
 // 4. Pack. `--no-dependencies` would drop the stage's node_modules (vsce globs
 // with `ignore: node_modules/**`), so vsce walks dependencies itself via
@@ -159,7 +188,10 @@ const stagedManifest = JSON.parse(
 stagedManifest.dependencies = {
   "@mxlang/typescript-plugin": pluginManifest.version,
   ...Object.fromEntries(
-    INSTALLED.map((name) => [name, pluginManifest.dependencies[name]]),
+    INSTALLED.map((name) => [
+      name,
+      readManifest(join(nodeModules, name)).version,
+    ]),
   ),
 };
 writeFileSync(
