@@ -80,8 +80,8 @@ describe("compileNgMx mapping invariant", () => {
     "for loop":
       '<ul><for|i| of=items by=(i => i)><li class="row">${i}</li></for></ul>',
     "multi-line region": [
-      "<section",
-      '  class="wrap"',
+      '<section class="top"',
+      '  class2="wrap"',
       '  id="main"',
       ">",
       '  <p class="inner">${x}</p>',

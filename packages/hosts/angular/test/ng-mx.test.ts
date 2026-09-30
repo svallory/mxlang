@@ -1316,4 +1316,29 @@ describe("compileNgMx: region padding follows parseFragment's contract", () => {
       expect(pairs.get(name)).toBe(name);
     }
   });
+
+  it("slices attribute names of a single-root region and of a second sibling element", () => {
+    // Before the padding fix every first-line attribute name of every region
+    // resolved into unrelated text, single-root included.
+    const cases: Array<[string, string[]]> = [
+      ['<a class="x" title="t">${x}</a>', ["class", "title"]],
+      ['<a class="x"/><b id="y"/>', ["class", "id"]],
+    ];
+    for (const [region, names] of cases) {
+      // A sibling pair is not a single expression, so wrap it the way an author
+      // must: the region is one root, siblings sit inside it.
+      const template = region.startsWith('<a class="x"/>')
+        ? `<div>${region}</div>`
+        : region;
+      const source = `${PREAMBLE}${template},\n})\nexport class XComponent { x = 1; }\n`;
+      const result = compileNgMx(source, "/p/x.component.ng.mx");
+      const pairs = new Map(
+        result.mappings.map((m) => [
+          result.code.slice(m.generatedStart, m.generatedEnd),
+          source.slice(m.sourceStart, m.sourceEnd),
+        ]),
+      );
+      for (const name of names) expect(pairs.get(name)).toBe(name);
+    }
+  });
 });
