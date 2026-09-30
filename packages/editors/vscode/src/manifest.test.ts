@@ -68,6 +68,7 @@ describe("Manifest", () => {
     expect(tsPlugin.name).toBe("@mxlang/typescript-plugin");
     expect(tsPlugin.languages).toContain("mx");
     expect(tsPlugin.languages).toContain("solidmx");
+    expect(tsPlugin.languages).toContain("ngmx");
     expect(tsPlugin.languages).toContain("astromx");
   });
 });

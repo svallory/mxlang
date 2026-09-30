@@ -14,7 +14,7 @@ code --install-extension mxlang.vsix
 
 - **Highlighting**: Accurate syntax highlighting for `.mx` and `.amx` files powered by the Marko TextMate grammar. (Note: `.solid.mx` and `.ng.mx` currently fall back to `source.tsx` highlighting due to regex grammar limitations).
 - **Diagnostics**: Automatically launches `@mxlang/language-server` to provide template validation and type checking in the editor for `.mx` and `.solid.mx`. (`.ng.mx` and `.amx` are not handled by the language server yet.)
-- **TypeScript**: Automatically registers `@mxlang/typescript-plugin` with VS Code's TypeScript language server for `.mx`, `.solid.mx`, and `.amx`. (Not `.ng.mx`: the plugin cannot project it yet.)
+- **TypeScript**: Automatically registers `@mxlang/typescript-plugin` with VS Code's TypeScript language server for `.mx`, `.solid.mx`, `.ng.mx`, and `.amx`. For `.ng.mx` this gives TypeScript semantics for the component class and module (errors are reported at their `.ng.mx` position); Angular template diagnostics land in a later release.
 
 ## Settings
 

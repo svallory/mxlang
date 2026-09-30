@@ -34,8 +34,10 @@ export function activate(context: ExtensionContext) {
           { scheme: "file", language: "solidmx" },
           { scheme: "untitled", language: "solidmx" },
           // astromx and ngmx are intentionally excluded as the LS does not
-          // handle .amx or .ng.mx yet (`.ng.mx` is highlighting-only until
-          // the Angular diagnostics wiring lands)
+          // handle .amx or .ng.mx yet. `.ng.mx` gets TypeScript semantics
+          // through the TS server plugin (see `typescriptServerPlugins` in
+          // package.json); the LS handling and Angular template diagnostics
+          // land later.
         ],
         // biome-ignore lint/suspicious/noExplicitAny: reason
         outputChannel: outputChannel as any,
