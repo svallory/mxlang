@@ -596,4 +596,68 @@ describe("custom tag template positions", () => {
       ),
     ).toEqual([]);
   });
+
+  it("returns host-policy diagnostics as warnings naming the package.json, ahead of the compile's", () => {
+    const diagnostics = diagnoseDocument(
+      "<div>ok</div>\n",
+      "file:///app/page.mx",
+      { host: "html" },
+      undefined,
+      "",
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          file: "/app/package.json",
+          message: 'unknown mx.host "htmll"',
+          line: 4,
+          column: 12,
+        },
+      ],
+    );
+
+    expect(diagnostics).toHaveLength(1);
+    const [diagnostic] = diagnostics as [(typeof diagnostics)[number]];
+    expect(diagnostic.severity).toBe(2); // DiagnosticSeverity.Warning
+    expect(diagnostic.source).toBe("mxlang");
+    expect(diagnostic.message).toBe(
+      '/app/package.json: unknown mx.host "htmll"',
+    );
+    expect(diagnostic.range.start).toEqual({ line: 3, character: 12 });
+  });
+
+  it("keeps host-policy warnings when the compile itself fails", () => {
+    const diagnostics = diagnoseDocument(
+      "<let/count=1/>\n",
+      "file:///app/page.mx",
+      { host: "html", strict: true },
+      undefined,
+      "",
+      undefined,
+      undefined,
+      undefined,
+      [{ file: "/app/package.json", message: "m", line: 1, column: 0 }],
+    );
+
+    expect(diagnostics.map((d) => d.severity)).toEqual([2, 1]);
+  });
+
+  it("returns exactly the same diagnostics whether hostPolicyDiagnostics is omitted or empty", () => {
+    const call = (extra: unknown[]) =>
+      (diagnoseDocument as unknown as (...args: unknown[]) => unknown)(
+        "<let/count=1/>\n",
+        "file:///app/page.mx",
+        { host: "html", strict: true },
+        undefined,
+        "",
+        undefined,
+        undefined,
+        undefined,
+        ...extra,
+      );
+
+    expect(call([[]])).toEqual(call([]));
+    expect(call([undefined])).toEqual(call([]));
+  });
 });

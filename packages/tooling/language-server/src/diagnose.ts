@@ -178,12 +178,24 @@ export function diagnoseDocument(
   related?: RelatedDiagnostics[],
   /** Receives every callee/type file read while compiling this document. */
   dependencies?: Set<string>,
+  /**
+   * What resolving `hostPolicy` had to say — the `diagnostics` of
+   * `resolveHostPolicyDetailed` (`@mxlang/core`): a malformed `package.json`,
+   * an unknown `mx.host`. Each becomes a Warning on this document, worded
+   * `<package.json>: <message>` like the scan's, and is returned ahead of the
+   * scan's and the compile's diagnostics (including when the compile itself
+   * fails). Optional: omitting it (or passing `[]`) returns exactly what this
+   * function returned before the parameter existed. `startServer` passes it.
+   */
+  hostPolicyDiagnostics?: readonly ScanDiagnostic[],
 ): Diagnostic[] {
   // Configuration problems the scan found. They are not fatal — a typo'd
   // `mx.tags` leaves the local `tags/` directories perfectly usable — so they
   // are collected here and returned alongside whatever the compile produces,
   // rather than replacing it.
-  let scanWarnings: Diagnostic[] = [];
+  let scanWarnings: Diagnostic[] = (hostPolicyDiagnostics ?? []).map(
+    scanDiagnosticToLsp,
+  );
   // Positioned warnings the *compile* raised: content a tag template never
   // placed, an attribute tag a transform never read. A different source from
   // the scan's configuration warnings above, and routed per file below, since
@@ -200,7 +212,10 @@ export function diagnoseDocument(
     // empty map, which is correct.
     const path = documentPath(uri);
     const scan = scanCached(path, { host: hostPolicy.host });
-    scanWarnings = scan.diagnostics.map(scanDiagnosticToLsp);
+    scanWarnings = [
+      ...scanWarnings,
+      ...scan.diagnostics.map(scanDiagnosticToLsp),
+    ];
     // Tags the caller supplied win over the scan's. Normally nothing is
     // supplied and discovery is the whole story; a caller that does pass a map
     // (a test, or an integration that scanned once for a batch of documents)

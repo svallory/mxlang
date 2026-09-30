@@ -932,6 +932,64 @@ export default () => <div />;
       expect(warnings).toHaveLength(1);
     });
 
+    it("warns once about a malformed package.json and unknown mx.host, and still compiles", async () => {
+      const broken = mkdtempSync(join(tmpdir(), "mx-vite-hostpolicy-"));
+      scratches.push(broken);
+      writeFileSync(join(broken, "package.json"), "{ not json");
+      const typo = mkdtempSync(join(tmpdir(), "mx-vite-hostpolicy-"));
+      scratches.push(typo);
+      writeFileSync(
+        join(typo, "package.json"),
+        '{"name":"t","mx":{"host":"htmll"}}',
+      );
+
+      const warnings: string[] = [];
+      const plugin = mx();
+      const transform = plugin.transform as unknown as (
+        this: unknown,
+        code: string,
+        id: string,
+      ) => Promise<{ code: string } | null>;
+      const context = { warn: (message: string) => warnings.push(message) };
+
+      for (const dir of [broken, typo]) {
+        const caller = join(dir, "caller.mx");
+        writeFileSync(caller, "<p>hi</p>\n");
+        const compile = () =>
+          transform.call(context, "<p>hi</p>\n", `${caller}${MX_SUFFIX}`);
+        if (dir === broken) {
+          // The html host's Babel pass reads the same package.json for its own
+          // config and throws on it independently of this resolver, so the
+          // compile fails here; the warning must have been issued first.
+          await expect(compile()).rejects.toThrow(/parsing JSON/);
+          await expect(compile()).rejects.toThrow(/parsing JSON/);
+        } else {
+          // A warning, never a failure: the file compiles under the fallback.
+          expect((await compile())?.code).toContain("hi");
+          // Once per problem, not once per compiled file.
+          await compile();
+        }
+      }
+
+      // (The scan reports the same broken file in its own words; only the
+      // host-policy message says which host the files fell back to.)
+      expect(warnings.filter((w) => w.includes("using the default"))).toEqual([
+        expect.stringContaining(join(broken, "package.json")),
+      ]);
+      expect(
+        warnings.filter((w) => w.includes('unknown mx.host "htmll"')),
+      ).toEqual([expect.stringContaining('Did you mean "html"?')]);
+      // Positioned at the package.json: `<file>:<line>:<column>: message`.
+      expect(
+        warnings
+          .filter(
+            (w) =>
+              w.includes("using the default") || w.includes("unknown mx.host"),
+          )
+          .every((w) => /package\.json:\d+:\d+: /.test(w)),
+      ).toBe(true);
+    });
+
     it("invalidates callers when a tag file is newly created", async () => {
       const { dir, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",

@@ -12,7 +12,10 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { resolveHostPolicy, withCalleeInputSources } from "@mxlang/core";
+import {
+  resolveHostPolicyDetailed,
+  withCalleeInputSources,
+} from "@mxlang/core";
 import {
   createConnection,
   type Diagnostic,
@@ -127,7 +130,8 @@ export function startServer(
         // find nothing and fall back to the default.
       }
 
-      const hostPolicy = resolveHostPolicy(filePath);
+      const { policy: hostPolicy, diagnostics: hostPolicyDiagnostics } =
+        resolveHostPolicyDetailed(filePath);
       // Diagnostics raised inside a tag template belong to that file, not to
       // this one, and are published against its own URI below.
       const related: RelatedDiagnostics[] = [];
@@ -154,6 +158,7 @@ export function startServer(
             undefined,
             related,
             dependencies,
+            hostPolicyDiagnostics,
           ),
       );
       recordDependencies(uri, dependencies);

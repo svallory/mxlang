@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import type { CompileResult } from "@mxlang/core";
 import {
   type CustomTag,
-  resolveHostPolicy,
+  resolveHostPolicyDetailed,
   scanCached,
   TranslateError,
 } from "@mxlang/core";
@@ -482,8 +482,22 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     file: string,
     warn: (message: string) => void,
   ): Record<string, CustomTag> | undefined => {
-    const host = resolveHostPolicy(file).host;
+    const resolution = resolveHostPolicyDetailed(file);
+    const host = resolution.policy.host;
     const scan = scanCached(file, { host });
+
+    // A malformed `package.json` or an unknown `mx.host` never fails the
+    // build — the file still compiles under the policy the resolver fell back
+    // to — but silently compiling under the wrong host is worse than a
+    // warning. Positioned at the `package.json`, deduped like the scan's.
+    for (const diagnostic of resolution.diagnostics) {
+      const key = `${diagnostic.file}\u0000${diagnostic.message}`;
+      if (reported.has(key)) continue;
+      reported.add(key);
+      warn(
+        `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.message}`,
+      );
+    }
 
     // A misconfigured `mx.tags` is not fatal — the local `tags/` directories
     // still work — but it is silent without this, which is worse: an author
