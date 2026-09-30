@@ -79,13 +79,33 @@ const TEMPLATE_SUFFIX = ".mx";
  * A segment is the file-extension spelling (`"ng"`), not the `HostPolicy`
  * name (`"angular"`) — the two happen to coincide for `"solid"` but not for
  * `"ng"`.
+ *
+ * Part of the documented host-authoring API of `@mxlang/core`: a host's
+ * discovery code reads this list (or, more usually, {@link hostModuleSegment})
+ * instead of hard-coding `.ng.mx`/`.solid.mx` suffix checks, so it follows
+ * core's rule when a segment is added.
  */
 export const HOST_MODULE_SEGMENTS = [
   "solid",
   "ng",
 ] as const satisfies readonly string[];
 
-/** The host segment `<name>.mx` under `tags/` carries, if any. */
+/**
+ * The host segment a `.mx` file name carries — the `ng` in `card.ng.mx`, the
+ * `solid` in `card.solid.mx` — or `undefined` when the name carries none.
+ *
+ * `entry` is a file name (a basename), not a path. It returns `undefined`
+ * for anything that is not a host module file: a name without the `.mx`
+ * suffix, a plain `.mx` template (`card.mx`), and a dotted tag name whose
+ * second segment is not in {@link HOST_MODULE_SEGMENTS} (`my.icon.mx` is the
+ * ordinary tag `<my.icon>`).
+ *
+ * Part of the documented host-authoring API of `@mxlang/core`. A host uses it
+ * to route a host module file to its own module compiler (`=== "ng"` for the
+ * Angular host) and to reject or exclude every other host's module file from
+ * page and tag compilation with a positioned diagnostic, rather than
+ * silently skipping it.
+ */
 export function hostModuleSegment(entry: string): string | undefined {
   if (!entry.endsWith(TEMPLATE_SUFFIX)) return undefined;
   const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);

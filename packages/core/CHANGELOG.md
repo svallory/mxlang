@@ -6,6 +6,10 @@
 
 An optional `string[]` on `TemplateMetadata`: the verbatim source of each top-level `export` statement a template hoists (not `export interface Input`), in source order, set only when there is at least one. It lets a host read a callee's own `export const` facts from the same parsed statements its module emission uses, instead of re-scanning the callee's text — the Angular host reads a tag's exported `selector` this way. Additive, following `inputAuxCode`.
 
+### Feature: `hostModuleSegment` and `HOST_MODULE_SEGMENTS` are exported (angular-discover-core-ext)
+
+`@mxlang/core` now exports `hostModuleSegment(name)` and `HOST_MODULE_SEGMENTS` (previously module-private in `scan.ts`) as documented host-authoring API. `hostModuleSegment` returns the host segment of a `.mx` file name (`"ng"` for `card.ng.mx`, `"solid"` for `card.solid.mx`) or `undefined` for any other name, so a host can route its own host module files and reject or exclude another host's with core's rule instead of hard-coding suffix checks. Additive; no behaviour change.
+
 ### Internal: shared `unresolvedCustomTagMessage(name)` (source-bindings-silent-parse-failure)
 
 Marko's own "Unable to find entry point for custom tag `<Name>`." wording (decision 114) was hand-copied at four separate `rejectUnknownTag` call sites — `@mxlang/html`, `@mxlang/solid`, the shared preact/react/hono JSX emitter, and `@mxlang/astro`. Now exported once from `core.ts` (`unresolvedCustomTagMessage`) and called from all four; no wording change.
