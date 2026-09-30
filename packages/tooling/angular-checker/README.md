@@ -104,14 +104,14 @@ type-checked as dependencies, but their own diagnostics are not returned).
 **`strictTemplates` follows the project**, it is not forced. Whatever
 `angularCompilerOptions` the project's tsconfig sets, through its `extends`
 chain (`strictTemplates`, `strictInputTypes`, `strictNullInputTypes`, ...),
-reaches ngtsc unchanged, so the checker reports what `ng build` reports. Unset,
-`@angular/compiler-cli`'s own default applies, which is **on** in 22.x
+reaches ngtsc unchanged, so the checker reports what `ng build` reports. When
+the tsconfig does not set `strictTemplates`, `@angular/compiler-cli`'s own
+default applies, which is **on** in 22.x
 (`get strictTemplates() { return this.options.strictTemplates !== false; }`,
-`chunk-M25TUZDV.js:4950` in 22.1.7; `examples/angular-app`'s CLI-style tsconfig does
-not set it either, so real apps usually hit this default). With `strictTemplates: false` ngtsc still type-checks templates
-in *basic* mode (an unknown property such as `{{ nope }}` is an error), so the
-checker is never silently off; only the strict-only checks (a `string | null`
-bound to a `string` input, for example) stop being reported.
+`chunk-M25TUZDV.js:4950` in 22.1.7). With `strictTemplates: false` ngtsc still
+type-checks templates in *basic* mode (an unknown property such as `{{ nope }}`
+is an error), so the checker is never silently off; only the strict-only checks
+(a `string | null` bound to a `string` input, for example) stop being reported.
 
 *History:* earlier versions forced it on (PR #104), so a project that builds with
 `strictTemplates: false` would fail `mx-tsc` on errors `ng build` accepts, once CI
