@@ -6,9 +6,10 @@ description: "The Angular host — a .mx page template compiles to a plain Angul
 # Angular
 
 **Preview.** This host is not yet a complete "Angular host" by the same bar
-every other host meets: `.ng.mx` now has TypeScript semantics in the editor
-and in `mx-tsc`, but Angular template diagnostics (checking the expressions
-inside `template:`) and the language server do not handle it yet, and a
+every other host meets: `.ng.mx` has TypeScript semantics in the editor and
+in `mx-tsc`, and `mx-tsc` now checks the expressions inside `template:` with
+Angular's own compiler, but the editor does not show those template
+diagnostics yet and the language server does not handle `.ng.mx`, and a
 `.mx` page still gets no TypeScript plugin support, so a page's MX tag imports
 must be hand-maintained in the caller's `.ts` file. What's here — page
 compilation, the `mx-angular` CLI's `build`/`watch`/`map` — is real and
@@ -311,8 +312,9 @@ neither Solid- nor Angular-specific); VS Code's `ngmx` language falls back to
 `source.tsx` highlighting, the same fallback `solidmx` uses. See
 [VS Code](/editors/vscode/) and [Zed](/editors/zed/) for setup. TypeScript
 semantics for `.ng.mx` come from `@mxlang/typescript-plugin` and `mx-tsc`
-(see [`.ng.mx`](#ngmx)); language-server diagnostics are not covered by this
-editor registration.
+(see [`.ng.mx`](#ngmx)); Angular template diagnostics run in `mx-tsc` today and
+reach the editor in a later step; language-server diagnostics are not covered by
+this editor registration.
 
 ## Custom tags (preview)
 
@@ -565,13 +567,48 @@ error at the start of the file rather than silently falling back to defaults.
 
 TypeScript sees a `template:` region as an opaque template literal, so an
 error in a template *expression* (`${user.nmae}`) is not reported by
-TypeScript. Checking those needs Angular's own compiler and lands separately
-as Angular template diagnostics. The language server does not handle
+TypeScript. Angular's own compiler checks those: see
+[Template diagnostics](#ngmx-diagnostics). The language server does not handle
 `.ng.mx` yet.
 
 **Known limitations.** Edits to `package.json` (including `mx.angular`) or to a
 called tag file take effect in the editor when the `.ng.mx` is next edited or
 reopened, not immediately: a config error also stays reported until then.
+
+### Template diagnostics {#ngmx-diagnostics}
+
+`mx-tsc` checks the expressions inside every `.ng.mx` `template:` with Angular's
+own compiler (`@angular/compiler-cli`, under `strictTemplates`), after the
+TypeScript pass, and prints each finding at its position in the `.ng.mx`:
+
+```
+src/x.component.ng.mx(5,18): error TS2339: Property 'nmae' does not exist on type '{ name: string; }'.
+```
+
+A template error makes `mx-tsc` exit non-zero. A position inside an expression
+resolves to the start of that whole expression. Only Angular's template
+diagnostics are added here; TypeScript's own errors in the module are the
+ones `mx-tsc` already reported.
+
+**`@angular/compiler-cli` comes from your project.** MX never bundles it: it
+resolves `@angular/compiler-cli` from the project that holds the `.ng.mx`, and
+supports `>=22.0.0 <23.0.0`. With `.ng.mx` files present and diagnostics on, a
+missing, unsupported or unloadable compiler-cli **fails `mx-tsc`** with a message
+saying how to fix it (otherwise CI would pass with the templates unchecked). A
+run with no `.ng.mx` files never looks for it.
+
+Template checking needs the modules a template's tags import to exist, so run
+`mx-angular build` first if the template calls discovered MX tags.
+
+Configure it with `package.json#mx.angular.diagnostics`:
+
+| Value | Meaning |
+|---|---|
+| `"idle"` (default) | On. In an editor, checks after a pause (editor support comes later). `mx-tsc` treats it as on. |
+| `"save"` | On. In an editor, checks on save (editor support comes later). `mx-tsc` treats it as on. |
+| `"off"` | No Angular template diagnostics anywhere, and compiler-cli is never looked for. |
+
+Any other value is a positioned error naming `package.json`.
 
 ## Errors
 

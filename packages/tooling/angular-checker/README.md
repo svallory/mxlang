@@ -23,9 +23,35 @@ checker.dispose();
 
 `@mxlang/angular` (the emitter) ships **no Angular runtime dependency**
 (decision 79). The Q1 diagnostics path needs `@angular/compiler-cli` at
-check time, so it lives here instead, as a tooling package, and
-`@angular/compiler-cli` plus `typescript@6` are ordinary dependencies of *this*
-package only.
+check time, so it lives here instead, as a tooling package.
+
+`@angular/compiler-cli` is an **optional peer dependency**
+(`>=22.0.0 <23.0.0`), resolved **from the user's project at runtime** and never
+bundled: this package runs inside the VS Code extension's TypeScript plugin and
+`mx-tsc`, neither of which may carry Angular's compiler.
+`resolveCompilerCli(projectDir)` reports `ok`, `missing`, `out-of-range` or
+`load-failed` (each with a message telling the user what to install, or to set
+`mx.angular.diagnostics` to `"off"`), and `createAngularChecker` throws
+`CompilerCliUnavailableError` rather than returning a list that reads as clean.
+The version is checked before the module is loaded.
+
+## `.ng.mx`
+
+```ts
+import { compileNgMx } from "@mxlang/angular";
+import { createAngularChecker, diagnoseNgMx } from "@mxlang/angular-checker";
+
+const compiled = compileNgMx(source, "/app/x.component.ng.mx");
+const checker = createAngularChecker({ projectDir: "/app" });
+diagnoseNgMx(compiled, checker, "/app/x.component.ng.mx.ts");
+//   [{ start, length, code, message, category, source: "angular" }]   (offsets in the .ng.mx)
+```
+
+Only `"ngtsc"` records are kept (`"ts"` ones are dropped: Volar/`tsc` report
+those). Each offset maps back through `sourceOffsetFor` (whole-to-whole: a
+position inside an expression resolves to the expression's start, `length` being
+the whole expression), else the enclosing region's start, else the module source
+map, else offset 0: a diagnostic is never dropped.
 
 ## TypeScript
 
@@ -66,8 +92,9 @@ but no `core`, `{{ u().nmae }}` yields 0 ngtsc diagnostics instead of 1.
 against real types, and `checker.test.ts` asserts the resolution directly.
 
 **Not reported**: anything outside the checked module (imported files are
-type-checked as dependencies, but their own diagnostics are not returned), and
-mapping back to a `.ng.mx` source — offsets are in the `.ts` text handed in.
+type-checked as dependencies, but their own diagnostics are not returned).
+`check` itself does not map back to a `.ng.mx` source — its offsets are in the
+`.ts` text handed in; `diagnoseNgMx` (above) does.
 
 **`strictTemplates` is forced on**, even if the project's `tsconfig.json` sets
 it to `false`: it is the checker's reason to exist, and honouring `false` would

@@ -52,10 +52,36 @@ entry.
   `readAngularConfig`, which throws on a bad config: the plugin reports that as
   an error diagnostic at offset 0 and emits empty virtual code, never defaults.
   The host-policy "angular not wired" guard still covers Angular `.mx` pages.
+  `retainCompiled` (off by default) keeps each file's latest successful compile
+  for `getCompiledNgMx()`: `mx-tsc` uses it to run Angular template diagnostics
+  over the compiles its type-check used; an editor must not hold them all.
   **Known limitations (fixed with the Angular template diagnostics work):** a
   config error stays until the `.ng.mx` is next edited, and the plugin tracks no
   `dependencies` for `.ng.mx`, so an edit to `package.json` or to a called tag
   file takes effect when the `.ng.mx` is next edited or reopened.
+
+- **`mx-tsc` also runs Angular template diagnostics** (`packages/tooling/tsc/src/ng-diagnostics.ts`).
+  It creates the `.ng.mx` plugin with `retainCompiled`, and after `runTsc`
+  hands the retained compiles to `@mxlang/angular-checker`'s `diagnoseNgMx`,
+  one checker per project (nearest `package.json`), disposed at the end. The
+  module is presented to the checker as `<file>.ng.mx.ts` so its imports and
+  `@angular/core` resolve from the project. `mx.angular.diagnostics` `"off"`
+  skips a project before `@angular/compiler-cli` is touched; so does a run with
+  no `.ng.mx` files. With `.ng.mx` files and diagnostics on, a missing,
+  out-of-range or unloadable compiler-cli, an invalid config, or a check that
+  throws **fails the run** with an explicit message (a silent pass would leave
+  templates unchecked in CI); template errors fail it too. Fixtures under
+  `packages/tooling/tsc/src/fixtures` find compiler-cli by walking up to
+  `packages/tooling/tsc/node_modules`, so tests for a *missing* or
+  *out-of-range* compiler-cli build their project under the OS temp dir. The
+  stub-`Component` fixtures (`ng-mx-passing`/`failing`) set diagnostics `"off"`
+  because they test TypeScript semantics; `ng-diag-*` use real `@angular/core`.
+
+`packages/tooling/tsc/package.json` pins `"mx": { "host": "html" }` on purpose:
+  it now depends on `@mxlang/angular`, and the many fixtures without their own
+  `package.json` resolve their host from the nearest one above them, where a
+  single host dependency would otherwise make every one of them an angular
+  project (`the angular host is not wired ...`).
 
 Four facts worth knowing before editing either:
 

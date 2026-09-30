@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: `retainCompiled` for `.ng.mx`
+
+`createNgMxLanguagePlugin` takes `{ retainCompiled: true }` and exposes `getCompiledNgMx()`, the latest successful compile of each `.ng.mx` file (a file whose latest compile failed is absent). Off by default, so an editor session does not hold every compile; `mx-tsc` turns it on to run Angular template diagnostics over the compiles its type-check used. No change to the editor path.
+
 ### Added: `.ng.mx` is its own file kind (`createNgMxLanguagePlugin`)
 
 A `.ng.mx` file is no longer compiled as a whole-file `.mx` page. `createNgMxLanguagePlugin` (language id `ngmx`) compiles it with `compileNgMx` from `@mxlang/angular` and hands Volar the emitted TypeScript module, so TypeScript semantics (class, imports, decorators) are reported at the right `.ng.mx` line and column. Text outside the `template:` regions maps through the module's source map; each template expression maps through `result.mappings`. TypeScript sees a region as an opaque template literal, so template-expression checking is not part of this (it needs Angular's compiler). `isMx` excludes `.ng.mx` by core's `hostModuleSegment`; the host-policy guard for Angular `.mx` pages is unchanged. An invalid `package.json#mx.angular` is reported as an error positioned at the start of the `.ng.mx` file instead of throwing or defaulting.

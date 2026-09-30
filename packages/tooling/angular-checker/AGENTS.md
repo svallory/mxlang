@@ -12,9 +12,31 @@ records** — `{ file, start, length, code, message, category, source }`.
 cancellation token (callers own the debounce — ruling e).
 
 It is a **separate package from `@mxlang/angular`** so the emitter keeps zero
-Angular runtime deps (decision 79); `@angular/compiler-cli` is an ordinary
-dependency of this package alone, and `@angular/core` is a devDependency so the
-tests check against real Angular types.
+Angular runtime deps (decision 79); `@angular/core` is a devDependency so the
+tests check against real Angular types. `@angular/compiler-cli` is an
+**optional peer dependency** (`>=22.0.0 <23.0.0`, plus a devDependency for the
+tests), never bundled: `resolveCompilerCli(projectDir)` (`src/compiler-cli.ts`)
+loads it with `createRequire(<projectDir>/package.json)`, checks its version
+*before* loading it, and answers `ok` / `missing` / `out-of-range` /
+`load-failed`, each non-ok one with a message saying how to fix it or turn the
+diagnostics off. `createAngularChecker` resolves it at creation and throws
+`CompilerCliUnavailableError`, so an unusable compiler-cli can never return an
+empty list that reads as success. This package ships inside the VS Code
+extension's TS plugin and `mx-tsc`, neither of which may carry Angular's
+compiler, hence runtime resolution from the user's project. Consumers decide
+what a failure means: `mx-tsc` fails the run, an editor shows the message once.
+The package depends on `@mxlang/angular` (for `compileNgMx`'s result type and
+`sourceOffsetFor`).
+
+**`diagnoseNgMx(compiled, checker, virtualPath)`** (`src/diagnose.ts`) is the
+`.ng.mx` entry: it checks `compiled.code`, keeps `source: "ngtsc"` records and
+**drops `"ts"`** ones (Volar/`tsc` already report those), and maps each
+module-absolute offset to the `.ng.mx`: `sourceOffsetFor` (whole-to-whole, the
+length is the whole mapped expression), else the enclosing region's start
+(`NgMxRegion.generatedStart/End`), else the module source map, else offset 0 —
+a diagnostic is never dropped. Output is `source: "angular"`. `virtualPath` must
+sit in the project so `@angular/core` resolves; `mx-tsc` uses
+`<file>.ng.mx.ts`.
 
 It uses the **workspace TypeScript** (6.0.3) like every other package here.
 *History, one sentence:* it originally carried its own `typescript@6` behind

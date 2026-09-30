@@ -38,6 +38,18 @@ command line. It lazily loads the same optional
 `@astrojs/language-server@2.16.16` peer as the tsserver plugin. `.amx` is an
 Astro-only format and is intentionally ignored unless this flag is present.
 
+## Angular template diagnostics (`.ng.mx`)
+
+After the type-check, `mx-tsc` runs Angular's own template checker over every
+`.ng.mx` that compiled (`mx.angular.diagnostics`, default on; `"off"` skips) and
+prints each finding at its `.ng.mx` line and column. A template error fails the
+run. `@angular/compiler-cli` is resolved from the project that holds the
+`.ng.mx` (`>=22.0.0 <23.0.0`); with `.ng.mx` files present, diagnostics on, and
+compiler-cli missing or out of range, `mx-tsc` fails with a message saying how
+to install a supported version or turn the diagnostics off. A run with no
+`.ng.mx` files never looks for it. See
+[Angular → Template diagnostics](../../../apps/docs/docs/hosts/angular.md).
+
 ## What it proves
 
 From `src/fixtures/`, two projects differing only in one expression:
