@@ -60,7 +60,7 @@ map, else offset 0: a diagnostic is never dropped.
 
 ## TypeScript
 
-At run time the checker uses the **project's** `typescript`, resolved from `projectDir` exactly like `@angular/compiler-cli` (`resolveTypescript`), never a copy of its own: the forked worker is handed no `ts` by tsserver, and the VSIX ships none. A project without `typescript` gets the same one-notice "unavailable" outcome as a missing compiler-cli, and the message names `typescript`. In this repo that resolves to the workspace TypeScript (6.0.3).
+At run time the checker uses the **project's** `typescript`, resolved by `resolveTypescript`, never a copy of its own: from the resolved compiler-cli's own location first (the instance compiler-cli itself loads), falling back to `projectDir`: the forked worker is handed no `ts` by tsserver, and the VSIX ships none. A project without `typescript` gets the same one-notice "unavailable" outcome as a missing compiler-cli, and the message names `typescript`. In this repo that resolves to the workspace TypeScript (6.0.3).
 
 *History:* this package originally carried its own `typescript@6` behind a shim
 (`src/ts6-shim.ts`), because the repo pinned 5.9.3 while

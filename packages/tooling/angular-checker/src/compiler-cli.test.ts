@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -168,6 +169,68 @@ describe("resolveTypescript", () => {
     );
     expect(r.status).toBe("load-failed");
     if (r.status === "load-failed") expect(r.message).toContain("ts boom");
+  });
+});
+
+describe("resolveTypescript beside the resolved compiler-cli", () => {
+  /** A project whose compiler-cli is a symlink to a package with its own typescript. */
+  function split(projectTs?: string): { dir: string; cliJson: string } {
+    const other = realpathSync(mkdtempSync(path.join(tmpdir(), "mx-ngts-")));
+    created.push(other);
+    const cli = path.join(other, "node_modules/@angular/compiler-cli");
+    mkdirSync(cli, { recursive: true });
+    writeFileSync(
+      path.join(cli, "package.json"),
+      '{"name":"@angular/compiler-cli","version":"22.0.0","main":"index.js"}',
+    );
+    writeFileSync(path.join(cli, "index.js"), "module.exports = {};");
+    const ts = path.join(other, "node_modules/typescript");
+    mkdirSync(ts, { recursive: true });
+    writeFileSync(
+      path.join(ts, "package.json"),
+      '{"name":"typescript","version":"8.8.8","main":"index.js"}',
+    );
+    writeFileSync(path.join(ts, "index.js"), "module.exports = {};");
+
+    const dir = project(
+      projectTs ? { version: projectTs } : undefined,
+      "typescript",
+    );
+    mkdirSync(path.join(dir, "node_modules/@angular"), { recursive: true });
+    symlinkSync(cli, path.join(dir, "node_modules/@angular/compiler-cli"));
+    return { dir, cliJson: realpathSync(path.join(cli, "package.json")) };
+  }
+
+  it("prefers the typescript the compiler-cli itself loads over the project's", () => {
+    const { dir, cliJson } = split("9.9.9");
+    expect(resolveTypescript(dir).status).toBe("ok");
+    const viaProject = resolveTypescript(dir);
+    if (viaProject.status === "ok") expect(viaProject.version).toBe("9.9.9");
+    const viaCli = resolveTypescript(dir, cliJson);
+    expect(viaCli.status).toBe("ok");
+    if (viaCli.status === "ok") expect(viaCli.version).toBe("8.8.8");
+  });
+
+  it("resolveCompilerCli reports the real path of the compiler-cli's package.json", () => {
+    const { dir, cliJson } = split("9.9.9");
+    const r = resolveCompilerCli(dir);
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") expect(r.packageJson).toBe(cliJson);
+  });
+
+  it("finds typescript beside a compiler-cli even when the project has none (strict layouts)", () => {
+    const { dir, cliJson } = split();
+    expect(resolveTypescript(dir).status).toBe("missing");
+    const viaCli = resolveTypescript(dir, cliJson);
+    expect(viaCli.status).toBe("ok");
+  });
+
+  it("falls back to the project when the compiler-cli has no typescript beside it", () => {
+    const dir = project({ version: "7.7.7" }, "typescript");
+    const cliJson = path.join(project({ version: "22.0.0" }), "package.json");
+    const r = resolveTypescript(dir, cliJson);
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") expect(r.version).toBe("7.7.7");
   });
 });
 

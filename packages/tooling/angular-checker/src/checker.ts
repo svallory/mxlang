@@ -210,7 +210,10 @@ export function createAngularChecker(
   if (resolution.status !== "ok") {
     throw new CompilerCliUnavailableError(resolution);
   }
-  const tsResolution = resolveTypescript(options.projectDir);
+  const tsResolution = resolveTypescript(
+    options.projectDir,
+    resolution.packageJson,
+  );
   if (tsResolution.status !== "ok") {
     throw new CompilerCliUnavailableError(tsResolution);
   }

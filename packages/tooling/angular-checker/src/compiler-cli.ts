@@ -11,6 +11,7 @@
  * the diagnostics off.
  */
 
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
@@ -21,7 +22,13 @@ export const SUPPORTED_COMPILER_CLI_RANGE = ">=22.0.0 <23.0.0";
 export type CompilerCliModule = typeof import("@angular/compiler-cli");
 
 export type CompilerCliResolution =
-  | { status: "ok"; version: string; module: CompilerCliModule }
+  | {
+      status: "ok";
+      version: string;
+      module: CompilerCliModule;
+      /** Real path of the resolved `@angular/compiler-cli/package.json`. */
+      packageJson: string;
+    }
   | { status: "missing"; message: string }
   | { status: "out-of-range"; version: string; message: string }
   | { status: "load-failed"; version: string; message: string };
@@ -51,7 +58,11 @@ export function resolveCompilerCli(projectDir: string): CompilerCliResolution {
   const require = createRequire(join(projectDir, "package.json"));
 
   let version: string;
+  let packageJson: string;
   try {
+    packageJson = realpathSync(
+      require.resolve("@angular/compiler-cli/package.json"),
+    );
     const pkg = require("@angular/compiler-cli/package.json") as {
       version?: unknown;
     };
@@ -76,6 +87,7 @@ export function resolveCompilerCli(projectDir: string): CompilerCliResolution {
       status: "ok",
       version,
       module: require("@angular/compiler-cli") as CompilerCliModule,
+      packageJson,
     };
   } catch (err) {
     const cause = err instanceof Error ? err.message : String(err);
@@ -96,20 +108,35 @@ export type TypescriptResolution =
   | { status: "load-failed"; message: string };
 
 /**
- * Resolve `typescript` from `projectDir`, the same way as the compiler-cli.
+ * Resolve `typescript` for the checker.
  *
- * `typescript` is never bundled or shipped with this package: the checker runs
- * in a forked worker that tsserver hands no `ts` object, and the project's
- * compiler-cli loads the project's own TypeScript, so a second copy here would
- * disagree with it. Resolving it beside the compiler-cli keeps one copy.
+ * It is never bundled or shipped with this package: the checker runs in a
+ * forked worker that tsserver hands no `ts` object. The instance that matters
+ * is the one the project's compiler-cli loads (the checker's compiler host and
+ * source files are handed to `NgtscProgram`), so when `compilerCliPackageJson`
+ * (the real path of the resolved compiler-cli) is given, `typescript` is
+ * resolved from there first, which is exactly what compiler-cli itself loads.
+ * Only if that fails (or no path is given) does it fall back to `projectDir`.
  */
-export function resolveTypescript(projectDir: string): TypescriptResolution {
-  const require = createRequire(join(projectDir, "package.json"));
-  let version: string;
-  try {
-    const pkg = require("typescript/package.json") as { version?: unknown };
-    version = typeof pkg.version === "string" ? pkg.version : "unknown";
-  } catch {
+export function resolveTypescript(
+  projectDir: string,
+  compilerCliPackageJson?: string,
+): TypescriptResolution {
+  const candidates = [
+    ...(compilerCliPackageJson ? [createRequire(compilerCliPackageJson)] : []),
+    createRequire(join(projectDir, "package.json")),
+  ];
+  let require = candidates[0] as NodeJS.Require;
+  let version: string | undefined;
+  for (const candidate of candidates) {
+    try {
+      const pkg = candidate("typescript/package.json") as { version?: unknown };
+      version = typeof pkg.version === "string" ? pkg.version : "unknown";
+      require = candidate;
+      break;
+    } catch {}
+  }
+  if (version === undefined) {
     return {
       status: "missing",
       message: `typescript was not found from ${projectDir}: ${TS_HOW_TO_FIX}.`,
