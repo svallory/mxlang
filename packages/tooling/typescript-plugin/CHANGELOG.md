@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: tsserver loads the plugin (CJS `module.exports` is the factory)
+
+Before this fix, tsserver skipped `@mxlang/typescript-plugin`, so none of its features (`.solid.mx`/`.mx`/`.ng.mx`/`.amx` language support, the diagnostics it injects) loaded in VS Code or any other tsserver editor. `dist/index.cjs` exported the module namespace as an object (`{ default: pluginFactory, ...named }`); tsserver loads a plugin with a plain `require()` and only proceeds when the result is a function, so `Project.enableProxy` logged "did not expose a proper factory function" and moved on. The build now appends `module.exports = Object.assign(module.exports.default, module.exports)` (guarded on `.default` being a function) to `dist/index.cjs` (`build/cjs-factory.ts`): `require()` returns the factory itself, and `default` and every named export are still there. Additive: no export is removed or renamed, and the ESM entry and `dist/index.d.ts` are unchanged. Covered by `src/cjs-factory.test.ts` (loads the built entry through `ts.sys.require`, as tsserver does) and `src/tsserver-load.test.ts` (one real tsserver loads the plugin and serves a plugin-only diagnostic).
+
 ### Fixed: the package ships declarations, not source (ts-plugin-declarations)
 
 `types` pointed at `src/index.ts` and there was no `files` field, so a tarball carried `src/`, tests and fixtures, and the types resolved only because the source did. `bun run build` (and the moon `build` task, which now delegates to it) now emits `dist/*.d.ts` with `tsc -p tsconfig.build.json --emitDeclarationOnly`, `types` is `dist/index.d.ts` and `files` is `["dist", "README.md"]`. The public surface is unchanged: `dist/index.d.ts` exports exactly what `src/index.ts` does. `@mxlang/tsc` typechecks against the plugin's `src` through a tsconfig `paths` mapping, so no typecheck needs a prebuilt dist. `scripts/pack-hygiene.test.ts` and `scripts/pack-probe.ts` now cover the plugin.
