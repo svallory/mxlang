@@ -280,6 +280,37 @@ describe("checkExtensionRoot", () => {
       ).toEqual([]);
     });
 
+    it.each([
+      ["index.cjs", "index"],
+      ["ng-worker.cjs", "ng-worker"],
+    ])(
+      "fails on a plain top-level require of typescript in %s (the HIGH-2 regression)",
+      (_label, file) => {
+        const base = withIndex("");
+        base[`${PLUGIN}/dist/${file}.cjs`] =
+          `${file === "index" ? FACTORY : ""}\nfunction f() { require("typescript"); }`;
+        const problems = check({ files: base, locked: [] });
+        expect(problems).toEqual([
+          expect.stringContaining(`dist/${file}.cjs requires "typescript"`),
+        ]);
+      },
+    );
+
+    it.each(["require", "__require"])(
+      "fails on a plain %s of @angular/compiler-cli",
+      (callee) => {
+        const problems = check({
+          files: withIndex(
+            `function f() { ${callee}("@angular/compiler-cli"); }`,
+          ),
+          locked: [],
+        });
+        expect(problems).toEqual([
+          expect.stringContaining('requires "@angular/compiler-cli"'),
+        ]);
+      },
+    );
+
     it("ignores node builtins", () => {
       expect(
         check({
@@ -362,9 +393,15 @@ describe("bareRequires", () => {
     const code = [
       'require("a"); require7("a"); require22("@s/pkg/sub");',
       'require("node:path"); require("./x"); foo.require("nope");',
+      'require("a"); __require("b");',
       "require(variable);",
     ].join("\n");
-    expect(bareRequires(code)).toEqual(["@s/pkg/sub", "a"]);
+    expect(bareRequires(code)).toEqual([
+      { spec: "@s/pkg/sub", fromBundleLocation: false },
+      { spec: "a", fromBundleLocation: false },
+      { spec: "a", fromBundleLocation: true },
+      { spec: "b", fromBundleLocation: true },
+    ]);
   });
 });
 
