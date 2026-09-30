@@ -97,7 +97,13 @@ export {
   positionRegionSource,
   type RegionPosition,
 } from "./fragment.ts";
-export { type HostPolicy, resolveHostPolicy } from "./host-policy.ts";
+export {
+  type HostPolicy,
+  type HostPolicyDiagnostic,
+  type HostPolicyResolution,
+  resolveHostPolicy,
+  resolveHostPolicyDetailed,
+} from "./host-policy.ts";
 export type {
   Attr,
   AttributeTag,

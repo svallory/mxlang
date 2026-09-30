@@ -497,6 +497,29 @@ all six branches including two-host ambiguity and a walk that reaches the
 filesystem root). Unlike the rest of this package it reads the filesystem,
 which is why it is its own module rather than part of `core.ts`.
 
+Edge cases of the walk, each pinned by tests:
+
+- The nearest `package.json` is the one that *exists*. A malformed one (or one
+  that is not a JSON object) ends the walk with the default `html` policy and a
+  warning naming it and the ancestor whose host the file used to take; it never
+  falls through to an unrelated ancestor (Node, TypeScript and `scan.ts` stop
+  there too).
+- A directory with no `package.json` of its own belongs to the nearest
+  ancestor's project, a monorepo root included — that is how `src/` works, and
+  it cannot be told apart from a member that forgot its manifest. Give the
+  member its own `package.json` (or `mx.host`) to opt out.
+- The walk stops at a `node_modules` directory, as Node's package scope does:
+  an installed package with no `package.json` gets `html`, not the consumer's host.
+- An `mx.host` naming no host warns (valid hosts, nearest match) and is ignored.
+- Two or more host dependencies still mean `html`.
+
+`resolveHostPolicyDetailed(filePath)` returns `{ policy, diagnostics }`;
+`resolveHostPolicy` is its `policy`. All diagnostics are warnings
+(`{ file, message, line, column }`, positioned in the `package.json`). Today
+only the Vite plugin (`this.warn`) and the language server (a warning on the
+open document) surface them; `mx-tsc` and the editor's TypeScript plugin get
+the same fallback behaviour silently.
+
 ## The IR, and what a host implements (decision 79)
 
 The core **lowers** a Marko template into a small host-independent tree, and

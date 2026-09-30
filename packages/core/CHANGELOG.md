@@ -2,6 +2,19 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `resolveHostPolicy` stops at a malformed `package.json` and at `node_modules`; unknown `mx.host` warns (host-policy-walk-edge-cases)
+
+Three silent failures in the upward walk that decides a file's host are closed. **Behaviour change:** the first two can change which host a file compiles under, only in setups that were already misconfigured.
+
+- **A malformed `package.json` no longer hands the file to an unrelated ancestor.** The walk used to skip a `package.json` that failed to parse (or held `null`, `[]`, a string) and keep climbing, so a project with a syntax error in its own manifest silently took a monorepo root's host. It now stops at the nearest `package.json` that *exists*, as Node, TypeScript and `scan.ts` do, and resolves to the default `html` host. The new warning names the broken file, its parse error (positioned when the runtime reports a position: V8 does, Bun does not, then it is 1:0) and the ancestor `package.json` whose host the file would have used before.
+- **The walk stops at a `node_modules` directory** (Node's package-scope rule). A `.mx` file in an installed package that ships no `package.json` used to take the consumer's host; it now gets the default `html` host, silently, as Node treats it.
+- **An `mx.host` that is not a host now warns** (it was ignored silently and the dependency rule decided). The warning lists the valid hosts, suggests the nearest one within two edits (`"solidd"` → `"solid"`), and is positioned at the value in `package.json`. Resolution is unchanged: the value is still ignored.
+- **Unchanged, now written down and pinned by tests:** a directory with no `package.json` of its own (a monorepo member) inherits the nearest ancestor's host. Two or more host dependencies still mean `html`.
+
+New, additive API: `resolveHostPolicyDetailed(filePath)` returns `{ policy, diagnostics }` (`HostPolicyDiagnostic` has `ScanDiagnostic`'s shape: `file`, `message`, `line`, `column`); `resolveHostPolicy` is its `policy` and is otherwise unchanged. Every diagnostic is a warning; none can fail a build that worked. Only the Vite plugin and the language server surface them today — `mx-tsc` and the editor's TypeScript plugin get the new fallback behaviour (html for a malformed `package.json`, no climb out of `node_modules`) without a warning.
+
+Internally `scan.ts` and `host-policy.ts` now read `package.json` through one cached reader keyed on mtime + ctime + size + inode (so an edit that pins the mtime or replaces the file atomically is still seen) (`src/package-json.ts`). `scanCustomTags` output is byte-identical (checked over every `.mx` in the repo plus broken/empty/`null`/`mx.tags`-typo trees).
+
 ### Fix: `parseFragment` throws on a broken base position; new `positionRegionSource` (core-parsefragment-contract-check)
 
 `parseFragment` and `parseFragmentNative` now reject a base that cannot describe a real file (non-integer numbers, negative `baseLine`, or `baseOffset < baseLine + baseColumn` when `baseOffset` is given) with a positioned `TranslateError` naming the rule. Before, a host that clamped the impossible filler count mis-mapped line/column-only positions (attribute names) silently. The contract is now written out on `FragmentBase`.

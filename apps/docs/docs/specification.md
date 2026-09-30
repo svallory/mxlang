@@ -2013,6 +2013,18 @@ Resolved by `@mxlang/core`'s `resolveHostPolicy`, walking upward for the nearest
    default policy. Two or more → no match.
 3. Otherwise `html`, non-strict.
 
+**Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
+a malformed one (or one that is not a JSON object) ends the walk with the
+default `html` policy and a warning naming it and the ancestor whose host the
+file used to take; it does not fall through to an unrelated ancestor. A
+directory with **no** `package.json` of its own belongs to the nearest
+ancestor's project — including a monorepo root — so a workspace member that
+should not inherit the root's host needs its own `package.json` (or `mx.host`).
+The walk stops at a `node_modules` directory, so an installed package that
+ships no `package.json` resolves to `html`, not to the consumer's host. An
+`mx.host` that names no host is ignored with a warning listing the valid hosts
+(and the nearest one, if close).
+
 **One resolver, shared** by the Vite plugin, the Bun loaders, the language server
 and the TypeScript plugin — so an editor, a `tsc` run and a build cannot disagree
 about a file's host.
@@ -2047,6 +2059,18 @@ Resolved by `@mxlang/core`'s `resolveHostPolicy`, walking upward for the nearest
 2. Failing that, **exactly one** `@mxlang/*` host dependency → that host at its
    default policy.
 3. Otherwise the translator's default (non-strict) policy.
+
+**Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
+a malformed one (or one that is not a JSON object) ends the walk with the
+default `html` policy and a warning naming it and the ancestor whose host the
+file used to take; it does not fall through to an unrelated ancestor. A
+directory with **no** `package.json` of its own belongs to the nearest
+ancestor's project — including a monorepo root — so a workspace member that
+should not inherit the root's host needs its own `package.json` (or `mx.host`).
+The walk stops at a `node_modules` directory, so an installed package that
+ships no `package.json` resolves to `html`, not to the consumer's host. An
+`mx.host` that names no host is ignored with a warning listing the valid hosts
+(and the nearest one, if close).
 
 **One resolver, shared** by the Vite plugin, the Bun loaders, the language server
 and the TypeScript plugin — so an editor, a `tsc` run and a build cannot disagree

@@ -366,7 +366,7 @@ Five facts worth knowing before editing it:
   — the Bun loaders (`"html"`, `"hono"`), `@mxlang/astro`'s `.amx` plugin
   (`"astro"`), the SolidMX and whole-file `.mx` typescript-plugin paths
   (`"solid"`, resolved per file via `resolveHostPolicy`), the language
-  server (`hostPolicy.host`), the Vite plugin (`resolveHostPolicy(file).host`
+  server (`hostPolicy.host`), the Vite plugin (`resolveHostPolicyDetailed(file)`
   per compiled file), and the Angular build/oracle (`"angular"`) — so a
   scan's cache key (`scanCached`) now also includes the host, since two hosts
   scanning the same directory can get different filtered results.
@@ -538,24 +538,28 @@ Five facts worth knowing before editing it:
   this the read was `JSON.parse(readFileSync(...))` on every scan, and a
   parse error silently set the manifest to `undefined` — a page edit during a
   broken `package.json` (an editor mid-save, a merge conflict) lost every
-  `mx.tags` entry with nothing said. `readManifest` in `scan.ts` now caches
-  the parsed result per path, keyed fresh on the file's mtime; on a parse
-  failure it keeps the *previous* revision's manifest in force and stores the
-  positioned `ScanDiagnostic` naming the `package.json` on the cache entry
-  itself (`ManifestCacheEntry.brokenDiagnostic`) — parsed once per broken
-  revision, but pushed into *every* fresh `ScanResult` built against that
+  `mx.tags` entry with nothing said. The read lives in `package-json.ts`
+  (`readPackageJsonCached`), **shared by `scan.ts` and `host-policy.ts`** so
+  the two upward walks cannot disagree about which `package.json` is nearest
+  or what a broken one means. It caches the parsed result per path, keyed
+  fresh on the file's mtime; on a parse failure it keeps the *previous*
+  revision's manifest on the result and carries a `PackageJsonParseError`
+  (message, plus a line/column only when the runtime's message has one —
+  V8's does, Bun's does not, so `1:0` is the fallback). `scan.ts`'s
+  `readManifest` turns that error into the positioned `ScanDiagnostic`
+  naming the `package.json` (built once per broken revision, `brokenDiagnostics`
+  WeakMap) and pushes it into *every* fresh `ScanResult` built against that
   revision, including a cache hit: two hosts scanning the same directory
-  (`scanCached`'s cache key now includes `host`, so they are two independent
+  (`scanCached`'s cache key includes `host`, so they are two independent
   `ScanResult`s) both get the diagnostic, and so does a caller that scans the
   same broken `package.json` again after `clearScanCache()`. What *is*
   deduped is a `scanCached` cache hit — its own outer cache short-circuits
-  before `readManifest` runs again at all, so a language server re-scanning
-  the same broken file on every keystroke still gets one diagnostic per
-  `scanCached` call, not one per `readManifest` call. `scanCustomTags` never
-  throws on a broken manifest. `scanCached`'s own freshness check (directory listings,
-  tag file mtimes, `package.json` mtimes) already invalidates a cached scan
-  when the manifest's mtime changes, so the two caches agree without needing
-  to know about each other.
+  before `readManifest` runs again at all. `scanCustomTags` never throws on a
+  broken manifest. `host-policy.ts` ignores the kept manifest on error (a
+  stale host is not better than the default) and warns instead. `scanCached`'s
+  own freshness check (directory listings, tag file mtimes, `package.json`
+  mtimes) invalidates a cached scan when the manifest's mtime changes, so the
+  two caches agree without needing to know about each other.
 - **Anything that must run the scan is tested where it can be driven.** The
   Bun loaders are exercised through `Bun.plugin` under `bun test`
   (`packages/hosts/{html,hono}/src/bun.test.ts`, both wired into the root

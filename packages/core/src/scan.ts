@@ -50,6 +50,11 @@ import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import { TranslateError } from "./core.ts";
 import type { CustomTag, CustomTagParseOptions } from "./custom-tags.ts";
 import { HOST_NAMES } from "./host-policy.ts";
+import {
+  clearPackageJsonCache,
+  type PackageJsonParseError,
+  readPackageJsonCached,
+} from "./package-json.ts";
 import type { TemplateTag } from "./template-tag.ts";
 
 const require = createRequire(import.meta.url);
@@ -659,94 +664,53 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
   return definition;
 }
 
-interface ManifestCacheEntry {
-  mtimeMs: number;
-  manifest: { mx?: { tags?: unknown } } | undefined;
-  /**
-   * Set only when this revision failed to parse. Carried on the cache entry
-   * (rather than only pushed once at parse time) so a *later* scan — a
-   * different host, or any other fresh call reusing this cached revision —
-   * still learns about the broken manifest instead of silently getting
-   * `diagnostics: []`. Re-pushed into every caller's own `diagnostics` array
-   * on a cache hit; per-scan-result dedup is `scanCached`'s job (its outer
-   * cache short-circuits before `readManifest` is even called again for an
-   * unchanged directory), not this cache's.
-   */
-  brokenDiagnostic?: ScanDiagnostic;
-}
-
 /**
- * `package.json` reads, cached by path and keyed fresh by mtime.
+ * `package.json` reads go through the shared mtime-keyed reader
+ * (`package-json.ts`), which `host-policy.ts` also uses.
  *
  * `JSON.parse` on every scan is real work repeated for every file a project
  * compiles, and a parse failure mid-edit used to silently set `manifest =
  * undefined` — dropping every `mx.tags` entry, with no diagnostic, for as
- * long as the file stayed broken. Both are fixed here: the parsed manifest
+ * long as the file stayed broken. Both are fixed there: the parsed manifest
  * is reused while the file's mtime is unchanged, and a parse failure keeps
  * the *previous* good manifest in force (an editor mid-save is not a reason
  * to make every open file's tags disappear) while still surfacing a
  * diagnostic — into *every* `ScanResult` a caller builds against this broken
- * revision (see `ManifestCacheEntry.brokenDiagnostic`), not merely the first
- * one that happened to hit the parse error.
+ * revision, not merely the first one that happened to hit the parse error.
+ * That diagnostic is built once per broken revision (`brokenDiagnostics`) and
+ * re-pushed into every caller's own `diagnostics` array on a cache hit;
+ * per-scan-result dedup is `scanCached`'s job (its outer cache short-circuits
+ * before `readManifest` is even called again for an unchanged directory).
  */
-const manifestCache = new Map<string, ManifestCacheEntry>();
+const brokenDiagnostics = new WeakMap<PackageJsonParseError, ScanDiagnostic>();
 
 /** For tests: drops every cached `package.json` read. */
 export function clearManifestCache(): void {
-  manifestCache.clear();
+  clearPackageJsonCache();
 }
 
 function readManifest(
   packageJson: string,
   diagnostics: ScanDiagnostic[],
 ): { mx?: { tags?: unknown } } | undefined {
-  let mtimeMs: number;
-  try {
-    mtimeMs = statSync(packageJson).mtimeMs;
-  } catch {
-    manifestCache.delete(packageJson);
-    return undefined;
-  }
+  const read = readPackageJsonCached(packageJson);
+  if (!read) return undefined;
 
-  const cached = manifestCache.get(packageJson);
-  if (cached && cached.mtimeMs === mtimeMs) {
-    // Already resolved for this revision: reuse the manifest (good or, on a
-    // parse failure, the previous good one). The diagnostic is still owed to
-    // *this* result, though — a cache hit means the parse itself was not
-    // redone, not that this particular `ScanResult` already carries it.
-    if (cached.brokenDiagnostic) diagnostics.push(cached.brokenDiagnostic);
-    return cached.manifest;
+  const { error } = read;
+  if (error) {
+    let diagnostic = brokenDiagnostics.get(error);
+    if (!diagnostic) {
+      diagnostic = {
+        file: packageJson,
+        message: `\`package.json\` could not be parsed as JSON: ${error.message}; the previous valid \`mx.tags\` stays in force`,
+        line: 1,
+        column: 0,
+      };
+      brokenDiagnostics.set(error, diagnostic);
+    }
+    diagnostics.push(diagnostic);
   }
-
-  let parsed: { mx?: { tags?: unknown } } | undefined;
-  let parseError: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(packageJson, "utf8"));
-  } catch (cause) {
-    parseError = cause;
-  }
-
-  if (parseError === undefined) {
-    manifestCache.set(packageJson, { mtimeMs, manifest: parsed });
-    return parsed;
-  }
-
-  // Keep-last: a broken revision does not erase the `mx.tags` a good one
-  // already established.
-  const previous = cached?.manifest;
-  const brokenDiagnostic: ScanDiagnostic = {
-    file: packageJson,
-    message: `\`package.json\` could not be parsed as JSON: ${(parseError as Error).message}; the previous valid \`mx.tags\` stays in force`,
-    line: 1,
-    column: 0,
-  };
-  manifestCache.set(packageJson, {
-    mtimeMs,
-    manifest: previous,
-    brokenDiagnostic,
-  });
-  diagnostics.push(brokenDiagnostic);
-  return previous;
+  return read.manifest as { mx?: { tags?: unknown } } | undefined;
 }
 
 interface IndexOptions {
