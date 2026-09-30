@@ -138,10 +138,14 @@ jobs:
         with:
           bun-version: "1.3.14"
       - run: bun install --frozen-lockfile
-      - run: bun run --cwd packages/editors/vscode build
+      # The VSIX bundles @mxlang/typescript-plugin from its sources, which
+      # import the workspace packages' built dist/; the check also compares
+      # against the plugin's own built dist/*.cjs.
+      - run: bun run build
       - name: Package VSIX
-        working-directory: packages/editors/vscode
-        run: bunx @vscode/vsce@3.9.2 package --no-dependencies -o mxlang.vsix
+        run: bun run --cwd packages/editors/vscode package
+      - name: Check VSIX contents
+        run: bun run --cwd packages/editors/vscode check-vsix
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
         with:
