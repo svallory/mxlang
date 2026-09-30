@@ -13,9 +13,8 @@ import {
 import type { LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
 import {
-  checkNgMxFiles,
+  checkNgMxProjects,
   type NgDiagnosticsResult,
-  resolveProjectTsconfig,
 } from "./ng-diagnostics.ts";
 
 /**
@@ -58,7 +57,9 @@ export function resolveTscPath(): string {
 export function runMxTsc(): void {
   const astro = consumeAstroFlag(process.argv);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
-  let compiledNgMx: () => CompiledNgMx[] = () => [];
+  // One language plugin per program: `tsc -b` creates one for each project,
+  // and every one of them holds compiles the Angular pass has to see.
+  const ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[] = [];
   let tscExitCode = 0;
   const exit = process.exit;
   const stopped = Symbol("mx-tsc-exit");
@@ -77,7 +78,7 @@ export function runMxTsc(): void {
         const ngMx = createNgMxLanguagePlugin(typescript, {
           retainCompiled: true,
         });
-        compiledNgMx = () => ngMx.getCompiledNgMx();
+        ngPlugins.push(ngMx);
         const mx = createMxLanguagePlugin(typescript);
         diagnosticPlugins.push(solidMx, ngMx, mx);
         const plugins: LanguagePlugin<string>[] = [solidMx, ngMx, mx];
@@ -109,9 +110,18 @@ export function runMxTsc(): void {
   // only over `.ng.mx` files that compiled, and never loads compiler-cli when
   // there are none. A template error, or a project whose templates could not
   // be checked at all, fails the run.
-  const angular = checkNgMxFiles(compiledNgMx(), undefined, {
-    tsconfigPath: resolveProjectTsconfig(process.argv.slice(2), process.cwd()),
-  });
+  const angular = checkNgMxProjects(
+    // A file two projects both compile (via `references`) is checked once.
+    [
+      ...new Map(
+        ngPlugins
+          .flatMap((plugin) => plugin.getCompiledNgMx())
+          .map((entry) => [entry.fileName, entry] as const),
+      ).values(),
+    ],
+    process.argv.slice(2),
+    process.cwd(),
+  );
   reportNgDiagnostics(angular);
   const hasAngularError =
     angular.errors.length > 0 ||

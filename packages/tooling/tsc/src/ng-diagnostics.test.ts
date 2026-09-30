@@ -14,8 +14,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { reportNgDiagnostics } from "./index.ts";
 import {
   checkNgMxFiles,
+  checkNgMxProjects,
   type NgDiagnosticsDeps,
   resolveProjectTsconfig,
+  resolveProjectTsconfigs,
 } from "./ng-diagnostics.ts";
 
 const created: string[] = [];
@@ -259,14 +261,13 @@ describe("checkNgMxFiles tsconfig", () => {
 });
 
 describe("resolveProjectTsconfig", () => {
-  it("follows -p, --project and --project=, file or directory", () => {
+  it("follows -p and --project, file or directory", () => {
     const dir = project();
     writeFileSync(join(dir, "tsconfig.json"), "{}");
     writeFileSync(join(dir, "tsconfig.app.json"), "{}");
     const app = join(dir, "tsconfig.app.json");
     expect(resolveProjectTsconfig(["-p", app], "/")).toBe(app);
     expect(resolveProjectTsconfig(["--project", app], "/")).toBe(app);
-    expect(resolveProjectTsconfig([`--project=${app}`], "/")).toBe(app);
     expect(resolveProjectTsconfig(["-p", dir], "/")).toBe(
       join(dir, "tsconfig.json"),
     );
@@ -283,6 +284,162 @@ describe("resolveProjectTsconfig", () => {
     );
   });
 
+  it("reads -p case-insensitively, like TypeScript's own option parser", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    writeFileSync(join(dir, "tsconfig.app.json"), "{}");
+    const app = join(dir, "tsconfig.app.json");
+    expect(resolveProjectTsconfig(["-P", app], "/")).toBe(app);
+    expect(resolveProjectTsconfig(["--PROJECT", app], "/")).toBe(app);
+  });
+
+  it("ignores --project=<path>: tsc rejects that spelling (TS5023) and never reads it", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.app.json"), "{}");
+    // No -p was understood, so this is the no-argument case: the nearest
+    // tsconfig.json, never the one the rejected flag named.
+    expect(
+      resolveProjectTsconfig(
+        [`--project=${join(dir, "tsconfig.app.json")}`],
+        dir,
+      ),
+    ).toBeUndefined();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    expect(
+      resolveProjectTsconfig(
+        [`--project=${join(dir, "tsconfig.app.json")}`],
+        dir,
+      ),
+    ).toBe(join(dir, "tsconfig.json"));
+  });
+
+  it("follows a -p inside a response file (@args.txt)", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    writeFileSync(join(dir, "tsconfig.app.json"), "{}");
+    writeFileSync(join(dir, "args.txt"), "--noEmit -p tsconfig.app.json\n");
+    expect(resolveProjectTsconfig(["@args.txt"], dir)).toBe(
+      join(dir, "tsconfig.app.json"),
+    );
+  });
+
+  it("uses no tsconfig when input files are named without -p, like tsc", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    expect(
+      resolveProjectTsconfig(["src/a.ts"], join(dir, "src")),
+    ).toBeUndefined();
+  });
+
+  it("is undefined when -p names a directory with no tsconfig.json (TS5057)", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    expect(resolveProjectTsconfig(["-p", "src"], dir)).toBeUndefined();
+    expect(resolveProjectTsconfig(["-p", "src/"], dir)).toBeUndefined();
+  });
+
+  it("uses no tsconfig for --help, --version and --init", () => {
+    const dir = project();
+    writeFileSync(join(dir, "tsconfig.json"), "{}");
+    for (const flag of ["--help", "--version", "--init"]) {
+      expect(resolveProjectTsconfig([flag], dir)).toBeUndefined();
+    }
+  });
+
+  describe("-b / --build", () => {
+    it("resolves the one project (default '.', a directory or a file), like tsc -b", () => {
+      const dir = project();
+      writeFileSync(join(dir, "tsconfig.json"), "{}");
+      writeFileSync(join(dir, "tsconfig.app.json"), "{}");
+      const root = join(dir, "tsconfig.json");
+      const app = join(dir, "tsconfig.app.json");
+      expect(resolveProjectTsconfig(["-b"], dir)).toBe(root);
+      expect(resolveProjectTsconfig(["--build", "."], dir)).toBe(root);
+      expect(resolveProjectTsconfig(["-b", "tsconfig.app.json"], dir)).toBe(
+        app,
+      );
+      expect(resolveProjectTsconfig(["-b", "--verbose", dir], "/")).toBe(root);
+    });
+
+    it("does not walk up from a nested cwd: tsc -b looks only at '.'", () => {
+      const dir = project();
+      writeFileSync(join(dir, "tsconfig.json"), "{}");
+      expect(resolveProjectTsconfig(["-b"], join(dir, "src"))).toBeUndefined();
+    });
+
+    it("returns every project, in the order given", () => {
+      const dir = project();
+      writeFileSync(join(dir, "tsconfig.json"), "{}");
+      writeFileSync(join(dir, "tsconfig.app.json"), "{}");
+      expect(
+        resolveProjectTsconfigs(["-b", "tsconfig.app.json", "."], dir),
+      ).toEqual([join(dir, "tsconfig.app.json"), join(dir, "tsconfig.json")]);
+    });
+
+    it("drops a project that has no tsconfig (tsc reports TS5083 itself)", () => {
+      const dir = project();
+      writeFileSync(join(dir, "tsconfig.json"), "{}");
+      expect(resolveProjectTsconfigs(["-b", "src", "."], dir)).toEqual([
+        join(dir, "tsconfig.json"),
+      ]);
+    });
+  });
+});
+
+describe("checkNgMxProjects", () => {
+  /** Two sibling projects under one root, each with its own tsconfig. */
+  function twoProjects() {
+    const root = project();
+    const dirs = ["a", "b"].map((name) => {
+      const dir = join(root, name);
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name }));
+      writeFileSync(join(dir, "tsconfig.json"), "{}");
+      return dir;
+    });
+    return { root, a: dirs[0] as string, b: dirs[1] as string };
+  }
+
+  it("under -b a b, checks each project's files once, in the order given", () => {
+    const { root, a, b } = twoProjects();
+    const spy = spyOf();
+    const result = checkNgMxProjects(
+      [compiled(b), compiled(a)],
+      ["-b", "b", "a"],
+      root,
+      deps(spy),
+    );
+    expect(spy.created).toEqual([b, a]);
+    expect(spy.checked).toEqual([
+      `${join(b, "src", "x.component.ng.mx")}.ts`,
+      `${join(a, "src", "x.component.ng.mx")}.ts`,
+    ]);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("under -b a b, skips a project with no .ng.mx and a file owned by neither", () => {
+    const { root, a, b } = twoProjects();
+    const spy = spyOf();
+    checkNgMxProjects(
+      [compiled(a), { ...compiled(root), fileName: join(root, "stray.ng.mx") }],
+      ["-b", "a", "b"],
+      root,
+      deps(spy),
+    );
+    expect(spy.created).toEqual([a]);
+    expect(spy.checked).toHaveLength(1);
+    expect(b).toBeTruthy();
+  });
+
+  it("never resolves a tsconfig when there is nothing to check", () => {
+    const spy = spyOf();
+    const result = checkNgMxProjects([], ["-b", "x", "y"], "/", deps(spy));
+    expect(result).toEqual({ reports: [], errors: [], warnings: [] });
+    expect(spy.resolved).toEqual([]);
+  });
+});
+
+describe("resolveProjectTsconfig (continued)", () => {
   it("is undefined when -p names nothing that exists", () => {
     expect(
       resolveProjectTsconfig(["-p", "/nonexistent/tsconfig.json"], "/"),

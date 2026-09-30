@@ -794,6 +794,64 @@ describe("mx-tsc", () => {
         SPAWN_TIMEOUT_MS,
       );
 
+      describe("tsc -b with several projects", () => {
+        const failing = join(fixtures, "ng-diag-failing");
+        const passing = join(fixtures, "ng-diag-passing");
+        const off = join(fixtures, "ng-diag-off");
+
+        // `-b` writes tsconfig.tsbuildinfo, and an up-to-date project is not
+        // compiled again, so its templates are not checked either: `--force`
+        // below, and no leftovers in the fixtures.
+        afterEach(() => {
+          for (const dir of [failing, passing, off]) {
+            rmSync(join(dir, "tsconfig.tsbuildinfo"), { force: true });
+          }
+        });
+
+        it(
+          "checks the templates of every project and reports the failing one's file, whatever the order",
+          () => {
+            for (const projects of [
+              [passing, failing],
+              [failing, passing],
+            ]) {
+              const result = run(mxTsc, ["-b", "--force", ...projects]);
+              expect(result.status).toBe(1);
+              expect(result.output).toContain("x.component.ng.mx(");
+              expect(result.output).toContain("error TS2339");
+              expect(result.output).toContain("nmae");
+              expect(result.output).not.toContain("error mxlang");
+              expect(result.output).not.toContain(passing);
+            }
+          },
+          SPAWN_TIMEOUT_MS,
+        );
+
+        it(
+          "passes when every project is clean, including one that turns diagnostics off",
+          () => {
+            const result = run(mxTsc, ["-b", "--force", passing, off]);
+            expect(result.output).toBe("");
+            expect(result.status).toBe(0);
+          },
+          SPAWN_TIMEOUT_MS,
+        );
+      });
+
+      it(
+        "fails with tsc's own message and exit 1 for a command line it rejects",
+        () => {
+          const result = run(mxTsc, [
+            "--noEmit",
+            `--project=${join(fixtures, "ng-diag-passing")}`,
+          ]);
+          expect(result.status).toBe(1);
+          expect(result.output).toContain("TS5023");
+          expect(result.output).not.toContain("error mxlang");
+        },
+        SPAWN_TIMEOUT_MS,
+      );
+
       it(
         "passes a clean template with exit 0 and no output",
         () => {

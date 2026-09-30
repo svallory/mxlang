@@ -601,8 +601,10 @@ src/x.component.ng.mx(5,18): error TS2339: Property 'nmae' does not exist on typ
 ```
 
 A template error makes `mx-tsc` exit non-zero. Templates are checked under the
-same tsconfig as the code (the one named with `-p`/`--project`, else the nearest
-`tsconfig.json`); an unreadable or malformed one fails the run with its path
+same tsconfig as the code, chosen by TypeScript's own command-line rules: the one
+named with `-p`/`--project` (also from an `@args.txt` response file), else the
+nearest `tsconfig.json`, and none when input files are named without `-p`. With
+`-b`, the one project named (default `.`); several are an error. An unreadable or malformed one fails the run with its path
 instead of falling back to defaults. A position inside an expression
 resolves to the start of that whole expression. Only Angular's template
 diagnostics are added here; TypeScript's own errors in the module are the

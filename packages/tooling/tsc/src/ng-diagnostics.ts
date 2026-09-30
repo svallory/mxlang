@@ -7,7 +7,8 @@
  * `.ng.mx` positions.
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { readAngularConfig } from "@mxlang/angular";
 import {
@@ -67,34 +68,108 @@ function nearestPackageDir(fileName: string): string {
 }
 
 /**
- * The tsconfig `tsc` itself uses for `argv`: the value of `-p` / `--project`
- * (a file, or a directory holding `tsconfig.json`), else the nearest
- * `tsconfig.json` at or above `cwd`. `undefined` when there is none (for
- * example `tsc file.ts`, which uses no tsconfig).
+ * The tsconfigs `tsc` itself uses for `argv`, decided by TypeScript's own
+ * command-line parser (so `-p`/`-P`, response files and every other spelling
+ * agree with the TypeScript pass by construction) and by the same rules as
+ * `tsc`'s `executeCommandLine`:
+ *
+ * - `-p` names a file, or a directory holding `tsconfig.json`;
+ * - without `-p`, input files on the command line mean no tsconfig at all;
+ *   otherwise `ts.findConfigFile` from `cwd` upwards;
+ * - `-b` / `--build` names its projects positionally (default `.`, no walk
+ *   up), each a file or a directory, in the order given.
+ *
+ * Empty when `tsc` uses none or cannot find one (it reports that itself and
+ * fails the run). Exactly one entry except under `-b` with several projects.
  */
+export function resolveProjectTsconfigs(
+  argv: readonly string[],
+  cwd: string,
+): string[] {
+  const require = createRequire(import.meta.url);
+  const ts = require("typescript") as typeof import("typescript");
+  const configIn = (fileOrDirectory: string): string[] => {
+    const path = resolve(cwd, fileOrDirectory);
+    if (ts.sys.directoryExists(path)) {
+      const config = join(path, "tsconfig.json");
+      return ts.sys.fileExists(config) ? [config] : [];
+    }
+    return ts.sys.fileExists(path) ? [path] : [];
+  };
+  // `tsc` enters build mode only when `-b` / `--build` is the first argument.
+  const first = argv[0]?.replace(/^--?/, "").toLowerCase();
+  if (argv[0]?.startsWith("-") && (first === "b" || first === "build")) {
+    const { projects } = ts.parseBuildCommand([...argv]);
+    return (projects.length > 0 ? projects : ["."]).flatMap(configIn);
+  }
+  const { options, fileNames } = ts.parseCommandLine([...argv], (path) =>
+    ts.sys.readFile(resolve(cwd, path)),
+  );
+  if (options.help || options.all || options.version || options.init) {
+    return [];
+  }
+  if (options.project) return configIn(options.project);
+  if (fileNames.length > 0) return [];
+  const found = ts.findConfigFile(cwd, ts.sys.fileExists);
+  return found === undefined ? [] : [found];
+}
+
+/** The first tsconfig {@link resolveProjectTsconfigs} finds, if any. */
 export function resolveProjectTsconfig(
   argv: readonly string[],
   cwd: string,
 ): string | undefined {
-  let project: string | undefined;
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i] as string;
-    if (arg === "-p" || arg === "--project") project = argv[i + 1];
-    else if (arg.startsWith("--project=")) project = arg.slice(10);
+  return resolveProjectTsconfigs(argv, cwd)[0];
+}
+
+/**
+ * {@link checkNgMxFiles} once per tsconfig `argv` makes `tsc` use, results
+ * merged in that order. One tsconfig (every case but `tsc -b a b`) checks all
+ * entries, as before. With several, a file belongs to the project whose
+ * directory holds it most closely; a file under none is not checked (the
+ * TypeScript pass has no project for it either), and a project with no
+ * `.ng.mx` is skipped.
+ */
+export function checkNgMxProjects(
+  entries: readonly CompiledNgMx[],
+  argv: readonly string[],
+  cwd: string,
+  deps: NgDiagnosticsDeps = {},
+): NgDiagnosticsResult {
+  const result: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
+  if (entries.length === 0) return result;
+  const configs = resolveProjectTsconfigs(argv, cwd);
+  const run = (group: readonly CompiledNgMx[], tsconfigPath?: string) => {
+    if (group.length === 0) return;
+    const part = checkNgMxFiles(group, deps, { tsconfigPath });
+    result.reports.push(...part.reports);
+    result.errors.push(...part.errors);
+    result.warnings.push(...part.warnings);
+  };
+  if (configs.length <= 1) {
+    run(entries, configs[0]);
+    return result;
   }
-  if (project !== undefined) {
-    const path = resolve(cwd, project);
-    if (!existsSync(path)) return undefined;
-    return statSync(path).isDirectory() ? join(path, "tsconfig.json") : path;
-  }
-  let dir = cwd;
-  for (;;) {
-    const candidate = join(dir, "tsconfig.json");
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
+  const dirs = configs.map((config) => dirname(config));
+  const owner = (fileName: string): number => {
+    let best = -1;
+    dirs.forEach((dir, index) => {
+      if (
+        fileName.startsWith(`${dir}/`) &&
+        (best < 0 || dir.length > (dirs[best] as string).length)
+      ) {
+        best = index;
+      }
+    });
+    return best;
+  };
+  configs.forEach((config, index) => {
+    run(
+      entries.filter((entry) => owner(entry.fileName) === index),
+      config,
+    );
+  });
+  return result;
 }
 
 function plural(count: number): string {
