@@ -33,7 +33,9 @@ export function activate(context: ExtensionContext) {
           { scheme: "untitled", language: "mx" },
           { scheme: "file", language: "solidmx" },
           { scheme: "untitled", language: "solidmx" },
-          // astromx is intentionally excluded as the LS does not handle .amx yet
+          // astromx and ngmx are intentionally excluded as the LS does not
+          // handle .amx or .ng.mx yet (`.ng.mx` is highlighting-only until
+          // the Angular diagnostics wiring lands)
         ],
         // biome-ignore lint/suspicious/noExplicitAny: reason
         outputChannel: outputChannel as any,

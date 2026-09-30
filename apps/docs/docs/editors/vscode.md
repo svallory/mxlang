@@ -1,11 +1,11 @@
 ---
 title: "VS Code"
-description: "Highlighting, formatting, and diagnostics for .mx, .solid.mx, .ng.mx, and .amx files in VS Code."
+description: "Highlighting for .mx, .solid.mx, .ng.mx, and .amx files in VS Code, plus formatting and diagnostics for .mx and .solid.mx."
 ---
 
 # VS Code
 
-The official `@mxlang/vscode` extension provides highlighting, language server integration, and TypeScript diagnostics for MX.
+The official `@mxlang/vscode` extension provides highlighting, language server integration, and TypeScript diagnostics for MX. `.ng.mx` is highlighting-only for now.
 
 Since the extension is not yet published to the VS Code Marketplace, you must install it manually from the `.vsix` artifact generated in CI.
 Download `mxlang.vsix` from the latest GitHub Actions run on `main` and run:
@@ -20,7 +20,7 @@ The extension provides:
 - **MX (`.mx`, `.marko`)**: Full highlighting powered by the official Marko TextMate grammar.
 - **AstroMX (`.amx`)**: Highlighting for the Astro frontmatter and delegates the body to the Marko grammar.
 - **SolidMX (`.solid.mx`)**: Highlighting as `source.tsx`. *Note: True grammar injection for MX regions within SolidMX is not feasible via regex alone, so `.solid.mx` falls back to standard TSX highlighting for now.*
-- **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as SolidMX — an ordinary TypeScript module whose `@Component` template is MX.
+- **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as SolidMX — an ordinary TypeScript module whose `@Component` template is MX. Highlighting only: the language server and TypeScript plugin do not handle `.ng.mx` yet.
 
 ## Formatting
 
@@ -38,7 +38,7 @@ This requires `prettier` and `prettier-plugin-marko` to be installed in your pro
 
 ## Diagnostics
 
-The extension automatically starts `@mxlang/language-server` for `.mx` and `.solid.mx` files. (Note: The language server does not currently handle `.amx` files.)
+The extension automatically starts `@mxlang/language-server` for `.mx` and `.solid.mx` files. (Note: The language server does not currently handle `.amx` or `.ng.mx` files.)
 
 ### Command Resolution
 The extension looks for the language server in the following order:
