@@ -151,7 +151,7 @@ describe("literal-only overrides (LOW-1)", () => {
 });
 
 describe("authored `.mx` imports inside a tag module (LOW-4)", () => {
-  it("reads the override through a non-relative specifier, never silently prefix + kebab", () => {
+  it("reads the override through a non-relative specifier", () => {
     const dir = project({
       "card.mx":
         'import Badge from "shared-tags/badge.mx";\n<div><Badge/></div>\n',
@@ -164,20 +164,13 @@ describe("authored `.mx` imports inside a tag module (LOW-4)", () => {
         join(pkg, "badge.mx"),
         'export const selector = "liuna-badge";\n<b/>\n',
       );
-      let code: string | undefined;
-      let error: unknown;
-      try {
-        code = compileTagModuleFile(join(dir, "tags", "card.mx"), {
-          customTags: getCustomTags(join(dir, "tags", "card.mx"), {
-            host: "angular",
-          }) as never,
-        }).code;
-      } catch (e) {
-        error = e;
-      }
-      if (code !== undefined) expect(code).toContain("<liuna-badge>");
-      else expect(String(error)).toMatch(/shared-tags\/badge\.mx/);
-      expect(code ?? "").not.toContain("<mx-badge>");
+      const { code } = compileTagModuleFile(join(dir, "tags", "card.mx"), {
+        customTags: getCustomTags(join(dir, "tags", "card.mx"), {
+          host: "angular",
+        }) as never,
+      });
+      expect(code).toContain("<liuna-badge></liuna-badge>");
+      expect(code).not.toContain("<mx-badge>");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -194,7 +187,7 @@ describe("authored `.mx` imports inside a tag module (LOW-4)", () => {
             host: "angular",
           }) as never,
         }),
-      ).toThrow();
+      ).toThrow(/cannot resolve .*gone\.mx/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
