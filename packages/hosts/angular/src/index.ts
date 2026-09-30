@@ -35,6 +35,11 @@ export type AttrTag<
 > = C extends AttrTagConfig ? never : never;
 
 export {
+  type AngularConfig,
+  type OnError,
+  readAngularConfig,
+} from "./config.ts";
+export {
   angularDeclarations,
   TranslateError,
   type UsedTag,

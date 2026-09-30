@@ -32,6 +32,11 @@
   import (`import { Badge as Chip } from "./tags/badge"` when aliased). An
   unresolvable path is a positioned error. A plain `.mx` page keeps its
   by-design authored-import error.
+- **`readAngularConfig`, `AngularConfig` and `OnError` are exported from
+  `@mxlang/angular`.** Tooling-facing API so editor tooling reads
+  `package.json#mx.angular` exactly as the build does. It throws on an
+  unknown key or a wrongly typed value rather than defaulting. Not reachable
+  from `@mxlang/angular/runtime`.
 - **`@mxlang/angular/runtime`: the event invoker as a base class and a mixin.**
   A zero-import, browser-safe subpath exporting `MxHandlers` (a base class) and
   `MxHandlersMixin(Base)` (for a component that already extends a class), both

@@ -85,7 +85,21 @@ function readOnError(packageFile: string, value: unknown): OnError {
   return value;
 }
 
-/** Reads and validates `package.json#mx.angular` in `projectDir`, applying A3's defaults. */
+/**
+ * Reads and validates `package.json#mx.angular` in `projectDir`, applying A3's
+ * defaults.
+ *
+ * Tooling-facing API: the build, the watcher and editor tooling (the
+ * TypeScript plugin) read the same config through it, so they cannot disagree
+ * about a project. Not part of `@mxlang/angular/runtime`, which stays
+ * zero-import.
+ *
+ * Throws a positioned `TranslateError` (line 1 of `<projectDir>/package.json`)
+ * when `package.json` cannot be read, when a value has the wrong type, and for
+ * an unknown key: `` `mx.angular.<key>` is not a recognized key; expected one
+ * of ... ``. It never falls back to defaults on invalid input, so a caller must
+ * catch and report the error rather than ignore it.
+ */
 export function readAngularConfig(projectDir: string): AngularConfig {
   const packageFile = join(projectDir, "package.json");
   let pkg: PackageJsonShape;

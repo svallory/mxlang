@@ -147,13 +147,11 @@ export interface CompileNgMxResult {
   /** A source map for the module, against the `.ng.mx` file. */
   map: ReturnType<MagicString["generateMap"]>;
   /**
-   * Identifier-level mappings from each emitted template back to the source,
-   * flattened across regions.
-   *
-   * Identifier-level only today: the Angular emitter records a mapping per
-   * name, not per expression, while template type errors land almost entirely
-   * on expressions (spike §Q3). Task 2.2b closes that through core's
-   * `Expr.span` (C4). This is the seam for it — the shape is already right.
+   * Module-absolute mappings from each emitted template back to the source,
+   * flattened across regions: one whole-to-whole span per source-derived
+   * expression (`user.name.toUpperCase()`, `a.b > 2`), not per identifier.
+   * The module text outside the regions is not covered here; it maps through
+   * {@link CompileNgMxResult.map}.
    */
   mappings: AngularMapping[];
   /** Every warning, across every region. */
