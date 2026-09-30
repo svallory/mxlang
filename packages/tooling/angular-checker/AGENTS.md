@@ -73,7 +73,12 @@ TS `getOptionsDiagnostics`, e.g. `extendedDiagnostics` with `strictTemplates:
 false`): config-level, not per file, deduped, `file` = the tsconfig; mx-tsc
 reports them once per project and fails on errors. It is a separate method
 (not a `check` record or a creation-time `TsconfigError`) because option
-diagnostics exist only once a program has been built.
+diagnostics have no file position. It builds a throwaway program on demand when
+nothing has been checked, so `[]` always means "no option errors".
+**Editor wiring (2.3b-2):** `check()` never returns these, so an editor path
+must call `configDiagnostics()` once per project (not per file or per
+keystroke) and show the `"ngtsc"` records against the tsconfig; drop the `"ts"`
+ones, which the TypeScript pass already reports. Warnings are shown, never failing.
 
 **`@angular/core` must resolve from `projectDir`**, or a template using a
 signal input or `signal()` has nothing to check against and a broken one

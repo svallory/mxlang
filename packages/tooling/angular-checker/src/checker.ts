@@ -283,16 +283,30 @@ export function createAngularChecker(
 
     configDiagnostics(): Diagnostic[] {
       assertLive();
-      if (program === undefined) return [];
       const configPath = options.tsconfigPath
         ? resolve(options.tsconfigPath)
         : "";
+      // Built on demand, not retained, when nothing has been checked yet: an
+      // empty list must never mean "not computed yet". Option diagnostics do
+      // not depend on any file, so an empty root list is enough.
+      let target = program;
+      if (target === undefined) {
+        const compilerOptions = buildOptions(
+          options,
+          resolution.module.readConfiguration,
+        );
+        target = new Program(
+          [],
+          compilerOptions,
+          buildHost(files, options.projectDir, compilerOptions),
+        );
+      }
       const seen = new Set<string>();
       return [
-        ...program
+        ...target
           .getNgOptionDiagnostics()
           .map((d) => toRecord(d, configPath, "ngtsc")),
-        ...program
+        ...target
           .getTsProgram()
           .getOptionsDiagnostics()
           .map((d) => toRecord(d, configPath, "ts")),

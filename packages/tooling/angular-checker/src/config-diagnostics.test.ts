@@ -53,8 +53,20 @@ describe("configDiagnostics (compiler option errors)", () => {
     expect(records).toHaveLength(1);
   });
 
-  it("is empty before anything has been checked", () => {
-    expect(withChecker("ext.json", (c) => c.configDiagnostics())).toEqual([]);
+  it("reports the option error even when called before any check (no silent [] )", () => {
+    // Builds a program on demand: an empty list must never mean "not
+    // computed yet".
+    const records = withChecker("ext.json", (c) => c.configDiagnostics());
+    expect(records).toHaveLength(1);
+    expect(records[0]?.message).toContain("extendedDiagnostics");
+  });
+
+  it("is empty before any check for valid options, and does not disturb later checks", () => {
+    withChecker("on.json", (c) => {
+      expect(c.configDiagnostics()).toEqual([]);
+      expect(c.check(VIRTUAL, CLEAN)).toEqual([]);
+      expect(c.configDiagnostics()).toEqual([]);
+    });
   });
 
   it.each(["on.json", "off.json", "unset.json"])(
