@@ -125,8 +125,9 @@ function readDiagnostics(
  * an unknown key: `` `mx.angular.<key>` is not a recognized key; expected one
  * of ... ``, and for a `diagnostics` value other than `"idle"`, `"save"` or
  * `"off"` (`"off"` turns Angular template diagnostics off everywhere; the
- * other two are editor scheduling modes that `mx-tsc` treats as on). It never falls back to defaults on invalid input, so a caller must
- * catch and report the error rather than ignore it.
+ * other two are editor scheduling modes that `mx-tsc` treats as on). It
+ * never falls back to defaults on invalid input, so a caller must catch and
+ * report the error rather than ignore it.
  */
 export function readAngularConfig(projectDir: string): AngularConfig {
   const packageFile = join(projectDir, "package.json");
