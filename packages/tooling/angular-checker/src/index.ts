@@ -20,6 +20,7 @@ import {
 } from "./compiler-cli.ts";
 import {
   diagnoseNgMx,
+  mapNgMxDiagnostics,
   type NgMxDiagnostic,
   type NgMxMapped,
 } from "./diagnose.ts";
@@ -52,6 +53,7 @@ export {
   DEFAULT_GRACE_MS,
   diagnoseNgMx,
   isProcessAlive,
+  mapNgMxDiagnostics,
   type NgMxDiagnostic,
   type NgMxMapped,
   resolveCompilerCli,

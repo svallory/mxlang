@@ -1,7 +1,11 @@
 import path from "node:path";
 import { compileNgMx } from "@mxlang/angular";
 import { describe, expect, it } from "vitest";
-import { createAngularChecker, diagnoseNgMx } from "./index.ts";
+import {
+  createAngularChecker,
+  diagnoseNgMx,
+  mapNgMxDiagnostics,
+} from "./index.ts";
 import type { AngularChecker, Diagnostic } from "./types.ts";
 
 const PROJECT_DIR = path.resolve(import.meta.dirname, "..");
@@ -261,5 +265,19 @@ describe("decorator-analysis diagnostics", () => {
     const ngtsc = records.filter((r) => r.source === "ngtsc");
     expect(ngtsc).toHaveLength(1);
     expect(ngtsc[0]?.code).toBe(-991010);
+  });
+});
+
+describe("mapNgMxDiagnostics (records from a worker)", () => {
+  it("maps ngtsc records and drops ts ones, like diagnoseNgMx", () => {
+    const source = ngMx("<p>${user.nmae}</p>");
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    const start = compiled.code.indexOf("user.nmae");
+    const out = mapNgMxDiagnostics(compiled, [
+      record({ start, source: "ngtsc" }),
+      record({ start, source: "ts" }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ source: "angular", mapped: "exact" });
   });
 });

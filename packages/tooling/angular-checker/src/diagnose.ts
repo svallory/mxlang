@@ -14,7 +14,11 @@ import {
   offsetAt,
   sourceOffsetFor,
 } from "@mxlang/angular";
-import type { AngularChecker, DiagnosticCategory } from "./types.ts";
+import type {
+  AngularChecker,
+  Diagnostic,
+  DiagnosticCategory,
+} from "./types.ts";
 
 /** One Angular template diagnostic, positioned in the `.ng.mx` source. */
 export interface NgMxDiagnostic {
@@ -97,12 +101,33 @@ function locate(
 }
 
 /**
- * Check a compiled `.ng.mx` and return its Angular template diagnostics,
- * positioned in the `.ng.mx`.
+ * Map checker records for a compiled `.ng.mx` to positions in the `.ng.mx`.
  *
  * Only `source: "ngtsc"` records are kept. The `"ts"` records (errors in the
  * module's own TypeScript) are dropped: Volar and `tsc` already report those,
  * and repeating them would print each twice.
+ *
+ * Split out of {@link diagnoseNgMx} for hosts that get their records from a
+ * checker worker process instead of calling `check` themselves.
+ */
+export function mapNgMxDiagnostics(
+  compiled: CompileNgMxResult,
+  records: readonly Diagnostic[],
+): NgMxDiagnostic[] {
+  return records
+    .filter((d) => d.source === "ngtsc")
+    .map((d) => ({
+      ...locate(compiled, d.start),
+      code: d.code,
+      message: d.message,
+      category: d.category,
+      source: "angular" as const,
+    }));
+}
+
+/**
+ * Check a compiled `.ng.mx` and return its Angular template diagnostics,
+ * positioned in the `.ng.mx` (see {@link mapNgMxDiagnostics} for what is kept).
  *
  * `virtualPath` is where the module is presented to the checker; it must sit
  * in the project so `@angular/core` resolves (see the README).
@@ -112,14 +137,8 @@ export function diagnoseNgMx(
   checker: AngularChecker,
   virtualPath: string,
 ): NgMxDiagnostic[] {
-  return checker
-    .check(virtualPath, compiled.code)
-    .filter((d) => d.source === "ngtsc")
-    .map((d) => ({
-      ...locate(compiled, d.start),
-      code: d.code,
-      message: d.message,
-      category: d.category,
-      source: "angular" as const,
-    }));
+  return mapNgMxDiagnostics(
+    compiled,
+    checker.check(virtualPath, compiled.code),
+  );
 }
