@@ -91,8 +91,11 @@ export { exportNameFor, moduleExportName } from "./export-name.ts";
 export {
   type FragmentBase,
   type FragmentResult,
+  type PositionedRegion,
   parseFragment,
   parseFragmentNative,
+  positionRegionSource,
+  type RegionPosition,
 } from "./fragment.ts";
 export { type HostPolicy, resolveHostPolicy } from "./host-policy.ts";
 export type {

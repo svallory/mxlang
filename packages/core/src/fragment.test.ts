@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type Node, parseFragment } from "./index.ts";
+import {
+  type Node,
+  parseFragment,
+  parseFragmentNative,
+  positionRegionSource,
+  TranslateError,
+} from "./index.ts";
 
 /**
  * The fragment front door: positions reported against the *enclosing* file.
@@ -126,5 +132,189 @@ describe("parseFragment shifts a thrown parse error", () => {
     // Raw `{ line: 1, column: 0 }` for an unclosed `<div>`; on the fragment's
     // first line, so both halves of the base apply.
     expect(caught?.loc?.start).toMatchObject({ line: 8, column: 4 });
+  });
+});
+
+/** Strips ANSI, so the assertions hold under FORCE_COLOR. */
+const plain = (text: string) =>
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape byte is the point
+  text.replace(/\u001b\[[0-9;]*m/g, "");
+
+function caught(run: () => unknown): TranslateError {
+  try {
+    run();
+  } catch (error) {
+    expect(error).toBeInstanceOf(TranslateError);
+    return error as TranslateError;
+  }
+  throw new Error("expected a TranslateError");
+}
+
+describe("parseFragment validates the base numbers (padding contract)", () => {
+  for (const [label, run] of [
+    ["parseFragment", parseFragment],
+    ["parseFragmentNative", parseFragmentNative],
+  ] as const) {
+    describe(label, () => {
+      it("accepts the boundary baseOffset === baseLine + baseColumn", () => {
+        // A file of 3 empty lines, then the fragment at column 4: 3 + 4.
+        expect(() =>
+          run("<p>x</p>\n", { baseOffset: 7, baseLine: 3, baseColumn: 4 }),
+        ).not.toThrow();
+      });
+
+      it("rejects one below the boundary, naming the rule and the position", () => {
+        const error = caught(() =>
+          run("<p>x</p>\n", {
+            filename: "a.mx",
+            baseOffset: 6,
+            baseLine: 3,
+            baseColumn: 4,
+          }),
+        );
+        const message = plain(error.message);
+        expect(message).toContain(
+          "baseOffset must be >= baseLine + baseColumn",
+        );
+        expect(message).toContain("a.mx at line 4, column 4");
+        expect(error.line).toBe(4);
+        expect(error.column).toBe(4);
+        expect(error.file).toBe("a.mx");
+      });
+
+      it.each([
+        ["baseOffset", { baseOffset: 1.5 }],
+        ["baseLine", { baseLine: Number.NaN }],
+        ["baseColumn", { baseColumn: Number.POSITIVE_INFINITY }],
+      ])("rejects a non-integer %s", (name, base) => {
+        const error = caught(() => run("<p>x</p>\n", base));
+        expect(plain(error.message)).toContain(
+          `${name} must be a finite integer`,
+        );
+      });
+
+      it("rejects a negative baseLine", () => {
+        const error = caught(() => run("<p>x</p>\n", { baseLine: -1 }));
+        expect(plain(error.message)).toContain("baseLine must be >= 0");
+      });
+
+      it("skips the offset check when baseOffset is omitted", () => {
+        expect(() =>
+          run("<p>x</p>\n", { baseLine: 3, baseColumn: 2 }),
+        ).not.toThrow();
+      });
+
+      it("allows a wrapper-compensated pair: negative baseOffset and baseColumn together", () => {
+        // A host that prepends 6 characters to the parsed text subtracts 6 from
+        // both, so a fragment at the very start of a file goes negative.
+        expect(() =>
+          run("<p>x</p>\n", { baseOffset: -4, baseColumn: -4 }),
+        ).not.toThrow();
+      });
+    });
+  }
+
+  it("leaves a valid base's positions unchanged", () => {
+    // Raw: `href` attr starts at column 3, `input` at index 8, `class` value at
+    // index 24. Line +2 and (first line) column +6; every index +42.
+    const { body } = parseFragment('<a href=input.url class="c">x</a>\n', {
+      baseOffset: 42,
+      baseLine: 2,
+      baseColumn: 6,
+    });
+    const tag = firstTag(body);
+    expect(tag.loc.start).toMatchObject({ line: 3, column: 6 });
+    expect(tag.attributes[0].loc.start).toMatchObject({ line: 3, column: 9 });
+    expect(tag.attributes[0].value.object.loc.start).toMatchObject({
+      line: 3,
+      column: 14,
+      index: 50,
+    });
+    expect(tag.attributes[1].value.loc.start).toMatchObject({ index: 66 });
+  });
+});
+
+describe("positionRegionSource", () => {
+  const PREAMBLE = 'import x from "y";\n\nconst t = ';
+  const at = {
+    baseOffset: PREAMBLE.length,
+    baseLine: 2,
+    baseColumn: "const t = ".length,
+  };
+
+  /** `offsetOf`'s walk: preceding line lengths plus newlines, then the column. */
+  const walk = (text: string, line: number, column: number) => {
+    const lines = text.split("\n");
+    let offset = 0;
+    for (let i = 0; i < line; i++) offset += (lines[i]?.length ?? 0) + 1;
+    return offset + column;
+  };
+
+  it("pads so the (line, column) walk and the length both land on baseOffset", () => {
+    const { padded } = positionRegionSource("<p>x</p>", at);
+    expect(padded.length - "<p>x</p>".length).toBe(at.baseOffset);
+    expect(walk(padded, at.baseLine, at.baseColumn)).toBe(at.baseOffset);
+    expect(padded.split("\n")[at.baseLine]).toBe(
+      `${" ".repeat(at.baseColumn)}<p>x</p>`,
+    );
+  });
+
+  it("returns the base unchanged without a wrapper, and minus it with one", () => {
+    expect(positionRegionSource("x", at).base).toEqual(at);
+    const wrapped = positionRegionSource("x", at, { wrapper: 6 });
+    expect(wrapped.base).toEqual({
+      baseOffset: at.baseOffset - 6,
+      baseLine: at.baseLine,
+      baseColumn: at.baseColumn - 6,
+    });
+    // `padded` describes the file, so the wrapper never reaches it.
+    expect(wrapped.padded).toBe(positionRegionSource("x", at).padded);
+  });
+
+  it("the pre-#176 hand-rolled pad walks to the wrong offset; this one does not", () => {
+    // Angular's old shape: baseLine newlines, then max(baseOffset - baseLine,
+    // baseColumn) spaces on the region's own line.
+    const oldPad = `${"\n".repeat(at.baseLine)}${" ".repeat(
+      Math.max(at.baseOffset - at.baseLine, at.baseColumn),
+    )}<p>x</p>`;
+    const oldWalk = walk(oldPad, at.baseLine, at.baseColumn);
+    expect(oldWalk).not.toBe(at.baseOffset);
+    // Sliced where the old pad says `<p>` starts, the region is not there.
+    expect(oldPad.slice(oldWalk, oldWalk + 3)).not.toBe("<p>");
+
+    const { padded } = positionRegionSource("<p>x</p>", at);
+    const newWalk = walk(padded, at.baseLine, at.baseColumn);
+    expect(padded.slice(newWalk, newWalk + 3)).toBe("<p>");
+  });
+
+  it("throws the contract's error instead of clamping a negative filler", () => {
+    const error = caught(() =>
+      positionRegionSource(
+        "x",
+        { baseOffset: 3, baseLine: 2, baseColumn: 4 },
+        { filename: "b.mx" },
+      ),
+    );
+    expect(plain(error.message)).toContain("b.mx at line 3, column 4");
+    expect(plain(error.message)).toContain("baseOffset must be >=");
+  });
+
+  it("handles the file's first position (all zeros)", () => {
+    const { padded, base } = positionRegionSource("x", {
+      baseOffset: 0,
+      baseLine: 0,
+      baseColumn: 0,
+    });
+    expect(padded).toBe("x");
+    expect(base).toEqual({ baseOffset: 0, baseLine: 0, baseColumn: 0 });
+  });
+
+  it("CRLF files only raise baseOffset, so the invariant still holds", () => {
+    const prefix = "a\r\nbb\r\n  ";
+    const base = { baseOffset: prefix.length, baseLine: 2, baseColumn: 2 };
+    expect(base.baseOffset).toBeGreaterThanOrEqual(
+      base.baseLine + base.baseColumn,
+    );
+    expect(() => positionRegionSource("x", base)).not.toThrow();
   });
 });

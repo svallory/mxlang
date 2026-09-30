@@ -2,6 +2,12 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `parseFragment` throws on a broken base position; new `positionRegionSource` (core-parsefragment-contract-check)
+
+`parseFragment` and `parseFragmentNative` now reject a base that cannot describe a real file (non-integer numbers, negative `baseLine`, or `baseOffset < baseLine + baseColumn` when `baseOffset` is given) with a positioned `TranslateError` naming the rule. Before, a host that clamped the impossible filler count mis-mapped line/column-only positions (attribute names) silently. The contract is now written out on `FragmentBase`.
+
+`positionRegionSource(region, at, { wrapper?, filename? })` is new and exported: it returns the host's padded `Ctx` source together with the matching `parseFragment` base, so the two cannot diverge. `@mxlang/angular` and `@mxlang/solid` use it in place of their hand-rolled copies; their output is byte-identical. `parseFragment` cannot see a host's pad, so a host that builds its own pad is still unchecked.
+
 ### Add: `HostDeclarations.resolveDiscoveredTagModule` and `binding` on a named `Component` target (html-tags-marko-import)
 
 Both optional. A host that answers the hook with a taglib-discovered tag's template path gets `import _name from "<relative path>"` added to the module (Marko's own form: default import, extension kept, `_` plus the camelCased name, numeric suffix on a collision, once per module) and `binding` set on the `Component` target, so its emitter can call the imported identifier while `name` stays the authored spelling. Absent, or `undefined`, changes nothing. `Ctx.lookup.getTag`'s return type also gains an optional `template?: string`, the absolute template path `@marko/compiler` already puts on the tag definition it returns (a type-only widening; nothing in MX sets it). Only `@mxlang/html` implements the hook; every other host's output is byte-identical.

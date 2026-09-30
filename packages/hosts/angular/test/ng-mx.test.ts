@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseTemplate } from "@angular/compiler";
-import { getCustomTags } from "@mxlang/core";
+import { getCustomTags, positionRegionSource } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import {
   compileNgMx,
@@ -10,7 +10,6 @@ import {
   NG_MX_FRAGMENT_POSITION_MESSAGE,
   NG_MX_POSITION_MESSAGE,
   ngMxPositionCheck,
-  positionRegionSource,
   rebaseRegionMappings,
 } from "../src/ng-mx.ts";
 import { assertModuleTypechecks } from "./helpers.ts";
@@ -1284,7 +1283,7 @@ describe("compileNgMx: region padding follows parseFragment's contract", () => {
   it("puts exactly baseColumn filler before the region on its own line", () => {
     const region = '<div class="a">x</div>';
     const b = base(PREAMBLE);
-    const padded = positionRegionSource(region, b);
+    const padded = positionRegionSource(region, b).padded;
     const lines = padded.split("\n");
     expect(lines.length - 1).toBe(b.baseLine);
     expect(lines[b.baseLine]).toBe(`${" ".repeat(b.baseColumn)}${region}`);
@@ -1293,7 +1292,7 @@ describe("compileNgMx: region padding follows parseFragment's contract", () => {
   it("makes a (line, column) walk of the region's first character land on baseOffset", () => {
     const region = "<p>x</p>";
     const b = base(PREAMBLE);
-    const padded = positionRegionSource(region, b);
+    const padded = positionRegionSource(region, b).padded;
     const lines = padded.split("\n");
     let offset = 0;
     for (let line = 0; line < b.baseLine; line++) {

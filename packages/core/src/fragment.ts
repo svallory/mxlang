@@ -35,7 +35,7 @@
 
 import { createRequire } from "node:module";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
-import type { Node } from "./core.ts";
+import { type Node, TranslateError } from "./core.ts";
 import {
   type CustomTag,
   customTagTaglib,
@@ -70,10 +70,65 @@ function parseOnlyTranslator(
     : PARSE_ONLY_TRANSLATOR;
 }
 
+/**
+ * The base position of a fragment, and the contract a host keeps with it.
+ *
+ * ## The padding contract
+ *
+ * `parseFragment` only ever sees the fragment, never the file, so it cannot
+ * check the host's side of this contract — it checks what it can see, the
+ * numbers (see `assertBaseContract`). The host's side is this: a host that
+ * also reads *the same positions* through a padded copy of the file (its
+ * `Ctx` source — `sliceLoc`'s `lines[line]`, `offsetOf`'s
+ * `(line - 1) + column` walk, `expr()`'s index slice) must build that copy as
+ *
+ * 1. `baseOffset - baseLine - baseColumn` filler characters, then
+ * 2. exactly `baseLine` newlines, then
+ * 3. exactly `baseColumn` characters on the fragment's own line, then
+ * 4. the fragment.
+ *
+ * Why: Marko reports most nodes as `{ line, column }` only, with no index.
+ * Such a position is shifted by `baseLine` lines and, on the fragment's first
+ * line only, by `baseColumn`; an index is shifted by `baseOffset`. The two
+ * systems then agree with the file only if the filler sits *before* the
+ * newlines (inert to line/column readers) and the fragment's line carries
+ * exactly `baseColumn` characters. Padding the fragment's line out to
+ * `baseOffset - baseLine` instead overshoots `baseColumn` whenever anything
+ * precedes the fragment on an earlier line, and every first-line attribute
+ * name then resolves into unrelated text.
+ *
+ * Conventions (what each number counts): all are UTF-16 code units, the unit
+ * of a JS string index and of Babel/Marko columns. `baseLine` is zero-based
+ * (the count of `\n` before the fragment; Marko's own lines are one-based and
+ * shifted by it). `baseColumn` is zero-based: the units between the last `\n`
+ * before the fragment (or the file start) and the fragment's first unit.
+ * `baseOffset` is the unit count of everything before the fragment.
+ *
+ * Invariants on the numbers:
+ *
+ * - each is a finite integer;
+ * - `baseLine >= 0`;
+ * - when `baseOffset` is given, `baseOffset >= baseLine + baseColumn`. Proof:
+ *   the `baseOffset` units before the fragment contain `baseLine` newline
+ *   units, and the last line holds `baseColumn` further units that are not
+ *   newlines; the two sets are disjoint. Equality holds for a file of empty
+ *   lines followed by a fragment; `\r\n` endings only raise `baseOffset`.
+ *   This is what makes the filler count in rule 1 non-negative; a host that
+ *   clamps it (`Math.max(…, 0)`) hides a violation and mis-maps silently.
+ *
+ * `baseOffset` and `baseColumn` may be negative together: a host that wraps
+ * the fragment in extra text (angular's `<>` wrapper) subtracts the wrapper's
+ * length from both, and the invariant still holds. A violation throws a
+ * `TranslateError` positioned at the fragment's start.
+ */
 export interface FragmentBase {
   /** The name reported for the *enclosing* file, in diagnostics. */
   filename?: string;
-  /** Character offset of the fragment's first character within the file. */
+  /**
+   * Character offset of the fragment's first character within the file. When
+   * omitted, indexes stay fragment-relative and the `baseOffset >=
+   * baseLine + baseColumn` check is skipped.
+   */
   baseOffset?: number;
   /**
    * Zero-based line offset: the number of newlines before the fragment. Added
@@ -180,6 +235,97 @@ function shiftNode(
 }
 
 /**
+ * Throws, positioned at the fragment's start, when `base` breaks the numeric
+ * half of the padding contract documented on `FragmentBase`. O(1): the padded
+ * prefix is the host's, and never reaches this function.
+ */
+function assertBaseContract(base: FragmentBase, filename: string): void {
+  const line = (base.baseLine ?? 0) + 1;
+  const column = base.baseColumn ?? 0;
+  const fail = (rule: string): never => {
+    throw new TranslateError(
+      `parseFragment: broken padding contract in ${filename} at line ${line}, column ${column}: ${rule} ` +
+        `(baseOffset: ${base.baseOffset}, baseLine: ${base.baseLine}, baseColumn: ${base.baseColumn})`,
+      line,
+      column,
+      filename,
+    );
+  };
+  for (const name of ["baseOffset", "baseLine", "baseColumn"] as const) {
+    const value = base[name];
+    if (value !== undefined && !Number.isInteger(value)) {
+      fail(`${name} must be a finite integer`);
+    }
+  }
+  if (base.baseLine !== undefined && base.baseLine < 0) {
+    fail("baseLine must be >= 0");
+  }
+  if (
+    base.baseOffset !== undefined &&
+    base.baseOffset < (base.baseLine ?? 0) + (base.baseColumn ?? 0)
+  ) {
+    fail(
+      "baseOffset must be >= baseLine + baseColumn (the padded prefix would need a negative filler)",
+    );
+  }
+}
+
+/** A region's position in its file, in the units `FragmentBase` documents. */
+export interface RegionPosition {
+  baseOffset: number;
+  baseLine: number;
+  baseColumn: number;
+}
+
+export interface PositionedRegion {
+  /**
+   * The text a host builds its `Ctx` over: the region behind a prefix that
+   * makes line/column readers and index readers agree with the file (rules
+   * 1–4 on `FragmentBase`).
+   */
+  padded: string;
+  /** What to pass to `parseFragment`, matching `padded` by construction. */
+  base: Required<Pick<FragmentBase, "baseOffset" | "baseLine" | "baseColumn">>;
+}
+
+/**
+ * Builds a region's padded `Ctx` source *and* the `parseFragment` base that
+ * goes with it, so the two cannot diverge — the pad is the host's half of the
+ * contract `FragmentBase` documents, and `parseFragment` cannot see it.
+ *
+ * `at` is where the region's first character sits in the file. Throws the
+ * contract's positioned `TranslateError` when `at` violates its invariants,
+ * rather than clamping the filler.
+ *
+ * `wrapper` is the length of text the host puts *in front of the region inside
+ * the string it parses* (angular's `<${0}>` around a `<>…</>` fragment's
+ * children). It sits on the parsed first line, so `base` is `at` minus
+ * `wrapper` in offset and column, while `padded` still describes the file —
+ * without the wrapper. Those two may only differ by construction.
+ *
+ * O(prefix length): one string of `baseOffset + region.length` units.
+ */
+export function positionRegionSource(
+  region: string,
+  at: RegionPosition,
+  options: { wrapper?: number; filename?: string } = {},
+): PositionedRegion {
+  assertBaseContract(at, options.filename ?? "fragment.mx");
+  const wrapper = options.wrapper ?? 0;
+  const leadingFill = at.baseOffset - at.baseLine - at.baseColumn;
+  return {
+    padded: `${" ".repeat(leadingFill)}${"\n".repeat(at.baseLine)}${" ".repeat(
+      at.baseColumn,
+    )}${region}`,
+    base: {
+      baseOffset: at.baseOffset - wrapper,
+      baseLine: at.baseLine,
+      baseColumn: at.baseColumn - wrapper,
+    },
+  };
+}
+
+/**
  * Parses `source` as a Marko fragment, with every position shifted by `base`.
  *
  * Uses `@marko/compiler`'s own parser (`output: "source"`, `ast: true`), so
@@ -190,6 +336,7 @@ export function parseFragment(
   source: string,
   base: FragmentBase = {},
 ): FragmentResult {
+  assertBaseContract(base, base.filename ?? "fragment.mx");
   const resolved: ResolvedFragmentBase = {
     filename: base.filename ?? "fragment.mx",
     baseOffset: base.baseOffset ?? 0,
@@ -245,6 +392,7 @@ export function parseFragmentNative(
   base: FragmentBase = {},
 ): FragmentResult {
   const filename = base.filename ?? "fragment.mx";
+  assertBaseContract(base, filename);
   const compiler = require("@marko/compiler");
   const ast: Node = compiler.compileSync(source, filename, {
     output: "source",

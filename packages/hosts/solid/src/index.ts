@@ -11,6 +11,7 @@ import {
   type Node,
   newCtx,
   parseFragment,
+  positionRegionSource,
   printExpression,
   registerCalleeInputReader,
   TranslateError,
@@ -231,41 +232,25 @@ export function compileSolidMx(
   source: string,
   options: CompileSolidMxOptions,
 ): CompileSolidMxResult {
-  const baseOffset = options.baseOffset ?? 0;
+  // `positionRegionSource` builds the `Ctx` source and the matching
+  // `parseFragment` base together (the padding contract on `FragmentBase`), so
+  // `sliceLoc`'s line/column reads and `expr()`'s index slice agree with the
+  // file and a violating position throws instead of mis-mapping.
+  const { padded: positionedSource, base } = positionRegionSource(
+    source,
+    {
+      baseOffset: options.baseOffset ?? 0,
+      baseLine: options.baseLine ?? 0,
+      baseColumn: options.baseColumn ?? 0,
+    },
+    { filename: options.filename },
+  );
   const { body } = parseFragment(source, {
     filename: options.filename,
-    baseOffset,
-    baseLine: options.baseLine ?? 0,
-    baseColumn: options.baseColumn ?? 0,
+    ...base,
     customTags: options.customTags,
   });
   repairEmbeddedTsx(body);
-  // Two position systems read this string: `sliceLoc` (line/column, for
-  // `import`/`static`/`export`, whose nodes carry no `start`/`end`) and
-  // `expr()`'s index slice (`node.start`/`node.end`, file-absolute after
-  // `parseFragment`'s `baseOffset` shift — see packages/core's fragment.ts).
-  // `parseFragment`'s own contract (`FragmentBase.baseColumn`) shifts a
-  // *first-line* column by exactly `baseColumn`, because "a later line
-  // starts at its own column 0 in both the fragment and the file" — so
-  // `sliceLoc`'s `ctx.lines[line]` must have *exactly* `baseColumn` filler
-  // characters before `source` starts, not more. A prior version padded
-  // that same line out to `baseOffset - baseLine` instead, to make an
-  // absolute-index slice land correctly for a region after the file's first
-  // line — but when anything (e.g. an import statement) precedes the
-  // region's own line, `baseOffset - baseLine` overshoots `baseColumn`, and
-  // the extra spaces land *before* the sliced column on that very line,
-  // silently eating the first few characters of a param/import slice
-  // (measured: `<For|item|>` after a leading `import` printed `item` as
-  // nothing, `{() => ...}` instead of `{(item) => ...}`).
-  // The fix keeps both contracts: put the extra filler *before* the
-  // newlines (inert to both `sliceLoc`, which only reads lines at or after
-  // `baseLine`, and to `expr()`, which only cares about total length), then
-  // exactly `baseLine` newlines, then exactly `baseColumn` spaces on the
-  // region's own line.
-  const baseLine = options.baseLine ?? 0;
-  const baseColumn = options.baseColumn ?? 0;
-  const leadingFill = Math.max(baseOffset - baseLine - baseColumn, 0);
-  const positionedSource = `${" ".repeat(leadingFill)}${"\n".repeat(baseLine)}${" ".repeat(baseColumn)}${source}`;
   const ctx = newCtx(
     positionedSource,
     printExpression,

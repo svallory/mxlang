@@ -15,6 +15,7 @@ import {
   type MxWarning,
   newCtx,
   parseFragment,
+  positionRegionSource,
   printExpression,
   resolveSpecifier,
   TranslateError,
@@ -186,39 +187,6 @@ export interface CompileNgMxResult {
   regions: NgMxRegion[];
 }
 
-/**
- * The text a region's `Ctx` is built over, padded so both position systems
- * that read it agree with the file.
- *
- * `parseFragment`'s contract (`FragmentBase`): it shifts a *first-line* column
- * by exactly `baseColumn` (a later line starts at column 0 in both fragment
- * and file) and every index by `baseOffset`. So `sliceLoc`'s
- * `ctx.lines[line]` needs exactly `baseColumn` filler before the region on its
- * own line, `baseLine` newlines before that, and the remaining
- * `baseOffset - baseLine - baseColumn` characters *before the newlines*, where
- * they are inert to `sliceLoc` and only make an absolute offset
- * (`offsetOf`'s `(line - 1) + column` walk, `expr()`'s index slice) land at
- * `baseOffset`. Padding the region's own line out to `baseOffset - baseLine`
- * instead overshoots `baseColumn` whenever anything precedes the region on an
- * earlier line, and every first-line attribute name span then resolves into
- * the wrong text (`class` at the `from ` of the import line). Same formula as
- * `@mxlang/solid`'s `compileSolidMx`.
- *
- * Exported for `test/ng-mx.test.ts`; not part of the package's public API.
- */
-export function positionRegionSource(
-  regionSource: string,
-  base: { baseOffset: number; baseLine: number; baseColumn: number },
-): string {
-  const leadingFill = Math.max(
-    base.baseOffset - base.baseLine - base.baseColumn,
-    0,
-  );
-  return `${" ".repeat(leadingFill)}${"\n".repeat(base.baseLine)}${" ".repeat(
-    base.baseColumn,
-  )}${regionSource}`;
-}
-
 /** What one region's lowering produced, before it is spliced into the module. */
 interface LoweredRegion
   extends Omit<NgMxRegion, "generatedStart" | "generatedEnd"> {
@@ -291,29 +259,22 @@ function lowerRegion(
   // the fragment's *first line*, later lines starting at their own column 0.
   // The wrapper's `FRAGMENT_WRAPPER_OPEN` characters precede the children on
   // that first line, so the children sit that much later than they do in the
-  // file. Subtracting exactly that from both bases puts every index, and every
-  // first-line column, back on the author's file; a later line needs no
-  // correction and gets none. `positionRegionSource` (below) is built from
-  // `regionSource` and the *unadjusted* base, because it describes the file,
-  // not the wrapped string: it puts exactly `baseColumn` fillers before the
-  // region's first line, which is where `regionSource` starts (the children,
-  // after `<>`), so the two position systems agree without the wrapper.
+  // file. `positionRegionSource` owns the correction: `parseBase` is the
+  // file's base minus the wrapper (index and first-line column), `padded`
+  // describes the file itself (the `Ctx` source, without the wrapper), so the
+  // two position systems agree by construction, not by a formula kept in step
+  // by hand.
   const fragment = base.fragment === true;
+  const { padded: positionedSource, base: parseBase } = positionRegionSource(
+    regionSource,
+    base,
+    { wrapper: fragment ? FRAGMENT_WRAPPER_OPEN.length : 0, filename },
+  );
   const parsed = parseFragment(
     fragment ? `${FRAGMENT_WRAPPER_OPEN}${regionSource}</>` : regionSource,
-    {
-      filename,
-      baseOffset:
-        base.baseOffset - (fragment ? FRAGMENT_WRAPPER_OPEN.length : 0),
-      baseLine: base.baseLine,
-      baseColumn:
-        base.baseColumn - (fragment ? FRAGMENT_WRAPPER_OPEN.length : 0),
-      customTags: options.customTags,
-    },
+    { filename, ...parseBase, customTags: options.customTags },
   );
   const body = fragment ? unwrapFragment(parsed.body, filename) : parsed.body;
-
-  const positionedSource = positionRegionSource(regionSource, base);
 
   const ctx = newCtx(
     positionedSource,
