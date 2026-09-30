@@ -249,3 +249,13 @@ condition, pass-through, property read, and so on) errors with a fix-it naming
 generation excludes every declared projected property from `@Input()` fields
 and auto-imports the marker type when needed. `as: "data"` and
 `as: "renderable"` intentionally select the same projection on this host.
+
+**Tag selectors at call sites.** A call site honors the callee's exported
+selector: `export const selector = "liuna-badge"` in a tag file is what every
+caller emits (element and closing tag), read from the callee's hoisted
+statements by the same `selectorDeclarationOf` rule `compileTagModule` uses
+(never a file-wide scan, so an `export` inside a comment cannot disagree).
+Overrides are literal-only (`"x"`, `'x'`, a substitution-free template
+literal, each optionally `as const`); any other form is a warning and the
+derived `<prefix><kebab(basename)>` stays. The mapping kind for such a run is
+`resolved-selector`, and its `deriveContext` is the exact selector.

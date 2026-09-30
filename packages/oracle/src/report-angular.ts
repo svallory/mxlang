@@ -302,11 +302,20 @@ export function isDerivedFrom(
       // that does not carry it cannot be checked exactly.
       return deriveContext !== undefined && generated === deriveContext + kebab;
     }
-    // A resolved tag module's selector: the emitter knows the exact string
-    // (its own `export const selector`, else prefix + kebab(basename)) and
-    // carries it, so the check is equality — no shape heuristic.
+    // A resolved tag module's selector: the source span holds a tag-name
+    // token, and the emitted text equals the selector the emitter carried
+    // (`deriveContext`: the callee's exported selector as core parsed it, else
+    // prefix + kebab(basename)). The equality is alignment-only — the emitter
+    // both carries and writes that string, and the oracle cannot re-read the
+    // callee — so what it pins is that the run mapped is the run derived; the
+    // extraction rule itself is pinned by the host's tests against real
+    // callee files.
     case "resolved-selector":
-      return deriveContext !== undefined && generated === deriveContext;
+      return (
+        /^[A-Za-z_$][\w$-]*$/.test(source) &&
+        deriveContext !== undefined &&
+        generated === deriveContext
+      );
     // A DOM event name, checked against the actual derivation — never waved
     // through on the source's shape alone. `onClick` -> `click`: lowercased
     // exactly as written, with NO aliases (decision 101 (c): `onDoubleClick`

@@ -115,6 +115,9 @@ describe("resolvable tags still compile (decision 114)", () => {
     // statically-resolved component case and must NOT route dynamic.
     const dir = mkdtempSync(join(tmpdir(), "mx-ng-mximport-"));
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "f" }));
+    // The callee must exist: an import whose file cannot be read is an error
+    // (its exported `selector` is part of the call site), not a guess.
+    writeFileSync(join(dir, "badge.mx"), "<b>!</b>\n");
     const path = join(dir, "page.mx");
     const source = 'import Badge from "./badge.mx";\n<div><Badge/></div>\n';
     const result = compileTagModule(source, path);

@@ -94,8 +94,8 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
   });
 
   it("requires a resolved selector to equal the emitter's exact selector", () => {
-    const r = (g: string, ctx?: string) =>
-      isDerivedFrom(g, "Badge", "resolved-selector", ctx);
+    const r = (g: string, ctx?: string, src = "Badge") =>
+      isDerivedFrom(g, src, "resolved-selector", ctx);
     expect(r("liuna-badge", "liuna-badge")).toBe(true);
     // No hyphen requirement: a hyphenless prefix or a bare override is exact.
     expect(r("appbadge", "appbadge")).toBe(true);
@@ -103,6 +103,9 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
     // A wrong string is rejected, hyphenated or not.
     expect(r("mx-badge", "liuna-badge")).toBe(false);
     expect(r("other-thing", "liuna-badge")).toBe(false);
+    // The source span must be a tag-name token.
+    expect(r("liuna-badge", "liuna-badge", "a b")).toBe(false);
+    expect(r("liuna-badge", "liuna-badge", '"x"')).toBe(false);
     // No carried selector: cannot be checked, reject.
     expect(r("liuna-badge")).toBe(false);
     expect(isDerivedFrom("liuna-badge", "Badge")).toBe(false);

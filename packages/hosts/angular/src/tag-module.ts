@@ -23,6 +23,7 @@ import {
   moduleExportName,
   type Position,
   TranslateError,
+  warn,
 } from "@mxlang/core";
 import { directivesFor } from "./directives.ts";
 import {
@@ -34,9 +35,10 @@ import {
   emitTemplate,
   isTagModuleImport,
   kebabCase,
-  selectorOverrideOf,
+  selectorDeclarationOf,
   tagBasename,
   type UsedTag,
+  unreadableSelectorMessage,
 } from "./emitter.ts";
 import {
   type AngularMapping,
@@ -980,10 +982,20 @@ export function compileTagModule(
         // (design note O9, RULED): the tag owns its element name, so the
         // derived default is overridable. Consumed here rather than passed
         // through, since it becomes the `@Component({ selector })` value.
-        const override = selectorOverrideOf(node.code);
-        if (override) {
-          selector = override;
+        const declaration = selectorDeclarationOf(node.code);
+        if (declaration?.kind === "literal") {
+          selector = declaration.value;
           continue;
+        }
+        if (declaration) {
+          // Not statically readable: the same warning the call sites of this
+          // tag give, and the statement stays an ordinary export.
+          warn(ctx, {
+            message: unreadableSelectorMessage(
+              `${prefix}${kebabCase(basename)}`,
+            ),
+            ...node.loc,
+          } as MxWarning);
         }
         passthroughExports.push(node.code);
       }

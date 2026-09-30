@@ -4,8 +4,7 @@
  * Emits an Angular template string from the core IR.
  */
 
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync, statSync } from "node:fs";
 import {
   type Attr,
   type AttributeTag,
@@ -23,8 +22,11 @@ import {
   type Ir,
   type IrNode,
   type MxWarning,
+  metadataForTemplate,
   type Position,
+  resolveSpecifier,
   type SourceSpan,
+  type TemplateMetadata,
   TranslateError,
   unresolvedCustomTagMessage,
   warn,
@@ -647,26 +649,39 @@ export function tagBasename(resolvedPath: string): string {
 const TAG_SELECTOR_PREFIX = "mx-";
 
 /**
- * A tag author's `export const selector = "…"` value, or undefined.
+ * What one hoisted top-level statement says about the tag's selector.
  *
- * The one rule both sides share: `compileTagModule` reads it from each hoisted
- * statement to name the component, and a call site reads it from the callee's
- * source to name the element. `code` may be one statement or a whole file.
+ * `undefined`: it is not `export const selector`. `literal`: a plain string
+ * (`"x-y"`, `'x-y'`, a template literal without substitutions, each
+ * optionally followed by `as const`). `unreadable`: it declares `selector`
+ * but by a form no static read can resolve (typed declaration, identifier,
+ * substitution) — the caller reports it rather than guessing.
+ *
+ * The one rule both sides share: `compileTagModule` applies it to each of
+ * its own hoisted statements, and a call site applies it to the callee's
+ * (carried in core's `TemplateMetadata.hoistedExports`), so an `export`
+ * inside a comment or a string — never a statement — can not disagree.
  */
-export function selectorOverrideOf(code: string): string | undefined {
-  return code.match(
-    /^export\s+const\s+selector\s*=\s*(["'])([^"']+)\1\s*;?\s*$/m,
-  )?.[2];
+export function selectorDeclarationOf(
+  statement: string,
+): { kind: "literal"; value: string } | { kind: "unreadable" } | undefined {
+  if (!/^export\s+const\s+selector\b/.test(statement)) return undefined;
+  const literal = statement.match(
+    /^export\s+const\s+selector\s*=\s*(?:(["'])([^"']+)\1|`([^`$\\]+)`)(?:\s+as\s+const)?\s*;?\s*$/,
+  );
+  const value = literal?.[2] ?? literal?.[3];
+  return value === undefined
+    ? { kind: "unreadable" }
+    : { kind: "literal", value };
 }
 
-/** `selectorOverrideOf` over a tag file on disk; unreadable means no override. */
-function readSelectorOverride(resolvedPath: string | undefined) {
-  if (!resolvedPath) return undefined;
-  try {
-    return selectorOverrideOf(readFileSync(resolvedPath, "utf8"));
-  } catch {
-    return undefined;
-  }
+/**
+ * The warning both sides emit for an `export const selector` that is not a
+ * literal. Identical text on both, so the tag module and its caller say the
+ * same thing about the same declaration.
+ */
+export function unreadableSelectorMessage(fallback: string): string {
+  return `\`export const selector\` must be a plain string literal (\`"x-y"\`, \`'x-y'\`, or a template literal without substitutions, optionally \`as const\`); this declaration is ignored and the selector stays \`${fallback}\`.`;
 }
 
 /**
@@ -959,6 +974,11 @@ class AngularEmitter implements Emitter<string> {
     this.tsFilename = filename.endsWith(".ng.mx")
       ? filename.replace(/\.ng\.mx$/, ".ts")
       : filename.replace(/\.mx$/, ".ts");
+    // The callee's own selector, once per tag file: two bindings of one path
+    // (or a re-spelled import) must not read — or warn about — it twice. Kept
+    // per emitter, so every compile re-reads through core's mtime/source-keyed
+    // metadata cache and a watch rebuild sees an edited override.
+    const calleeSelectors = new Map<string, string | undefined>();
     for (const node of imports) {
       // A *synthesized* import carries `specifier`/`resolvedPath`
       // structurally (tag-unit phase 2a). An **authored** one carries
@@ -981,17 +1001,33 @@ class AngularEmitter implements Emitter<string> {
       // The emitted module sits beside the tag file with a `.ts` extension,
       // so the call site's import path is the specifier minus `.mx`.
       const specifier = specifierSource.replace(/\.mx$/, "");
+      const derived = `${selectorPrefix}${kebabCase(basename)}`;
+      // The callee's own `export const selector` wins over the derived
+      // default, exactly as it does for the component it declares. Resolved
+      // by core's resolver when the import carries no path (an authored one),
+      // and an unresolvable or unreadable callee is an error, never a silent
+      // fall back to the derived name.
+      const calleePath =
+        node.resolvedPath ??
+        resolveSpecifier(specifierSource, { importer: filename });
+      if (!calleePath) {
+        throw new TranslateError(
+          `cannot resolve \`${specifierSource}\` to read its \`export const selector\`; check the import path.`,
+          node.loc.line,
+          node.loc.column,
+          filename,
+        );
+      }
+      if (!calleeSelectors.has(calleePath)) {
+        calleeSelectors.set(
+          calleePath,
+          this.readCalleeSelector(calleePath, derived, node.loc, filename),
+        );
+      }
+      const selector = calleeSelectors.get(calleePath) ?? derived;
       for (const binding of node.bindings) {
         this.tagModules.set(binding, {
-          // The callee's own `export const selector` wins over the derived
-          // default, exactly as it does for the component it declares.
-          selector:
-            readSelectorOverride(
-              node.resolvedPath ??
-                (specifierSource.startsWith(".")
-                  ? resolve(dirname(filename), specifierSource)
-                  : undefined),
-            ) ?? `${selectorPrefix}${kebabCase(basename)}`,
+          selector,
           // The same derivation the called tag's own module used to name its
           // exported class, so the import this warning tells the author to
           // write binds the name that module actually exports.
@@ -1001,6 +1037,48 @@ class AngularEmitter implements Emitter<string> {
         });
       }
     }
+  }
+
+  /**
+   * The selector the tag file at `path` exports, or undefined when it has
+   * none. Read from core's parsed metadata for that file (its hoisted
+   * `export` statements), through the same `selectorDeclarationOf` rule
+   * `compileTagModule` applies to its own statements.
+   */
+  private readCalleeSelector(
+    path: string,
+    derived: string,
+    loc: Position,
+    filename: string,
+  ): string | undefined {
+    let metadata: TemplateMetadata;
+    try {
+      metadata = metadataForTemplate(this.ctx, {
+        filename: path,
+        source: readFileSync(path, "utf8"),
+        mtimeMs: statSync(path).mtimeMs,
+      });
+    } catch (error) {
+      if (error instanceof TranslateError) throw error;
+      throw new TranslateError(
+        `cannot read \`${path}\` to find its \`export const selector\`: ${(error as Error).message}`,
+        loc.line,
+        loc.column,
+        filename,
+      );
+    }
+    let selector: string | undefined;
+    for (const statement of metadata.hoistedExports ?? []) {
+      const declaration = selectorDeclarationOf(statement);
+      if (declaration?.kind === "literal") selector = declaration.value;
+      else if (declaration) {
+        warn(this.ctx, {
+          message: unreadableSelectorMessage(derived),
+          ...loc,
+        } as MxWarning);
+      }
+    }
+    return selector;
   }
 
   /**
@@ -1253,7 +1331,7 @@ class AngularEmitter implements Emitter<string> {
         selector,
         node.nameSpan,
         "resolved-selector",
-        selector,
+        tagModule.selector,
       );
     } else {
       this.out.writeMapped(

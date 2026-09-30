@@ -46,7 +46,8 @@ import type { GeneratedMapping, SourceSpan } from "@mxlang/core";
  *   (`deriveContext` is the prefix that was applied)
  * - `resolved-selector`: a component call's tag name -> the selector of the
  *   tag module it resolved to (its own `export const selector`, else prefix +
- *   kebab(basename)); `deriveContext` is that exact selector
+ *   kebab(basename)); `deriveContext` is that exact selector, and the
+ *   source must be a tag-name token
  * - `event`: an attribute name -> its DOM event name (`onClick` -> `click`)
  * - `track`: a `by=` expression -> the `track` expression
  *   (`deriveContext` is the loop's row alias)
