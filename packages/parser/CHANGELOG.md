@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **The packed tarball is now `dist/` + `README.md`, and `types` points inside
+  it** (TODO `parser-package-types`, LiUNA gap G8). `package.json` gains
+  `"files": ["dist", "README.md"]` and `"types": "dist/index.d.ts"` (was
+  `src/public.d.ts`, which only resolved because the whole of `src/`,
+  `scripts/`, `moon.yml` and the test config shipped: 2.4 MB unpacked, now
+  1.3 MB). `bun run build` now clears `dist/` and runs
+  `scripts/emit-declarations.ts`, which writes `dist/index.d.ts` from
+  `src/public.d.ts` with the ambient `declare module` wrapper removed, so the
+  exported surface is identical. In-repo consumers still map the specifier to
+  `src/public.d.ts` through `paths`. `src/pack-contents.test.ts` pins the
+  tarball contents and the export-list equality.
+
 - **`hoistRegionImports` now declares a `.solid.mx` region's `/var` binding
   as `let n: any;`, not a bare `let n;`** (TODO `tag-var-type-from-return`,
   filed from PR #159 round 2; firstmate's ruling: option C — the real
