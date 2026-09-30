@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
 import { compile } from "@mxlang/angular";
+import { describe, expect, it } from "vitest";
 import { isDerivedFrom, runAngularTable } from "../src/report-angular";
 
 const here = dirname(fileURLToPath(import.meta.url));
