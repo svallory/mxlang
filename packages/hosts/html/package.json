@@ -42,7 +42,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:bun": "bun --tsconfig-override=../../../tsconfig.base.json test src/bun.test.ts src/helpers.bun.test.ts",
+    "test:bun": "bun --tsconfig-override=../../../tsconfig.base.json test src/bun.test.ts src/helpers.bun.test.ts src/example.bun.test.ts",
     "build": "rm -rf dist && bun build src/index.ts src/bun.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "example": "bun src/example.ts"
   },

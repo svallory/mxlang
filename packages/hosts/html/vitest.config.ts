@@ -13,6 +13,7 @@ export default defineConfig({
       "**/node_modules/**",
       "src/bun.test.ts",
       "src/helpers.bun.test.ts",
+      "src/example.bun.test.ts",
     ],
   },
 });

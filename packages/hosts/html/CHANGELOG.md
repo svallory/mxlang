@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `bun run example <fixture>` runs again (html-readme-example-nested-layout)
+
+Every example, `class-object` and `nested-layout` included, died with `SyntaxError: Unexpected token ':'`. `src/example.ts` executed the compiled module by regex-stripping its `import`s and `export default function (input: Input): string {` line, a shape the emitter stopped producing when the module became a named, branded `function Input(input: Input): string`. It now runs the real emitted module through Bun's loader instead of matching its text, applies `tags/` discovery, and so cannot drift from the emitter again. `src/example.bun.test.ts` (in `test:bun`) runs the script against every fixture stock Marko compiles and checks the README's named examples are among them.
+
 ### Fix: the tarball no longer ships `dist/example.js` (html-ships-example-js)
 
 `src/example.ts` (the `bun run example` demo) was a `bun build` entry, so its bundle landed in `dist/` and in the tarball although nothing exports it. It is no longer built: `bun run example` now runs the source directly (`bun src/example.ts`, no build step). The `exports` map and the emitted declarations are unchanged. `scripts/pack-hygiene.test.ts` now pins the exact set of `dist/` files the tarball may contain.
