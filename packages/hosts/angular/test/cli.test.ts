@@ -1329,4 +1329,61 @@ describe("discovery: core's host-module extension rule", () => {
       ),
     ).toHaveLength(1);
   });
+
+  it("positions every host-module diagnostic at line 1, column 0", () => {
+    // Core's `rejectHostModuleFile` positions its diagnostic at the file
+    // (line 1, column 0); the include path must match, and neither path may
+    // drop the position on the way to the build's warnings.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/pages/**/*.mx"] } },
+      }),
+      "src/pages/via-include.solid.mx": "const x = () => <p>x</p>;",
+      "src/tags/via-tags.solid.mx": "const x = () => <p>x</p>;",
+      "src/tags/via-tags.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-t", template: <p>x</p> })',
+        "export class TComponent {}",
+      ].join("\n"),
+    });
+
+    const { diagnostics } = discoverFiles(
+      projectDir,
+      readAngularConfig(projectDir),
+    );
+
+    for (const name of [
+      "via-include.solid.mx",
+      "via-tags.solid.mx",
+      "via-tags.component.ng.mx",
+    ]) {
+      const found = diagnostics.filter((d) => d.file.endsWith(name));
+      expect(found, name).toHaveLength(1);
+      expect(found[0]?.line, name).toBe(1);
+      expect(found[0]?.column, name).toBe(0);
+    }
+  });
+
+  it("reports no diagnostic for a host-module file an include glob reaches outside the project", () => {
+    const outsideDir = mkdtempSync(join(tmpdir(), "mx-angular-outside-"));
+    try {
+      writeFileSync(join(outsideDir, "leak.solid.mx"), "const x = 1;", "utf8");
+      writeProject({
+        "package.json": JSON.stringify({
+          mx: { host: "angular", angular: { include: ["linked/**/*.mx"] } },
+        }),
+      });
+      symlinkSync(outsideDir, join(projectDir, "linked"), "dir");
+
+      const { files, diagnostics } = discoverFiles(
+        projectDir,
+        readAngularConfig(projectDir),
+      );
+
+      expect(files).toHaveLength(0);
+      expect(diagnostics).toHaveLength(0);
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
 });

@@ -23,6 +23,9 @@ import type { AngularConfig } from "./config.ts";
 export interface DiscoverDiagnostic {
   file: string;
   message: string;
+  /** 1-based; set when the diagnostic points at a position in `file`. */
+  line?: number;
+  column?: number;
 }
 
 /**
@@ -118,18 +121,21 @@ function expandInclude(
       exclude: ["**/node_modules/**"],
     })) {
       if (!file.endsWith(".mx")) continue;
+      const resolved = resolve(projectDir, file);
+      // Before the host-module diagnostic: a match outside the project is not
+      // a project file, so it gets no diagnostic either.
+      if (!isInside(realProjectDir, realResolve(resolved))) continue;
       const segment = hostModuleSegment(basename(file));
       if (segment !== undefined && segment !== "ng") {
-        const resolved = resolve(projectDir, file);
         diagnostics?.push({
           file: resolved,
           message: `\`${basename(file)}\` is a host module file, not a tag template; tag templates are \`.mx\``,
+          line: 1,
+          column: 0,
         });
         continue;
       }
-      const resolved = resolve(projectDir, file);
-      if (isInside(realProjectDir, realResolve(resolved)))
-        matched.add(resolved);
+      matched.add(resolved);
     }
   }
   return matched;
@@ -215,10 +221,17 @@ function discoverTagFiles(
         file: d.file,
         message:
           "a `.ng.mx` file is a component module, not a tag; move it out of the `tags/` directory or make it a `.mx` template.",
+        line: d.line,
+        column: d.column,
       });
       rejected.add(resolve(d.file));
     } else {
-      diagnostics.push({ file: d.file, message: d.message });
+      diagnostics.push({
+        file: d.file,
+        message: d.message,
+        line: d.line,
+        column: d.column,
+      });
     }
   }
 
@@ -298,14 +311,12 @@ export function discoverFiles(
 
   const overlapWarnings: string[] = [];
   const files: RoutedFile[] = [];
+  // Seeded with `rejected`: a file core rejected is never routed anywhere.
   const seen = new Set<string>(rejected);
 
   for (const path of included) {
     if (seen.has(path)) continue;
     seen.add(path);
-    // Core rejected it and the diagnostic is already recorded; routing it
-    // anywhere would compile a file the author was just told to move.
-    if (rejected.has(path)) continue;
     // `.ng.mx` is its own file kind, not a page: it emits a whole TypeScript
     // module rather than a bare template, so it must never take the page
     // route — which would write a `.html` beside it and drop the module.
@@ -327,7 +338,6 @@ export function discoverFiles(
   for (const path of ngMxFiles) {
     if (seen.has(path)) continue;
     seen.add(path);
-    if (rejected.has(path)) continue;
     files.push({ path, kind: "ngmx" });
   }
 

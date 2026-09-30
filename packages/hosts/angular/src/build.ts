@@ -745,7 +745,7 @@ export function build(projectDir: string): BuildResult {
       message:
         "matched by both `include` and the tag index; the tag-index route wins",
     })),
-    ...diagnostics.map((d) => ({ file: d.file, message: d.message })),
+    ...diagnostics,
   ];
 
   const knownOutputs = new Set<string>();
