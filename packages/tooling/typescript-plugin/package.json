@@ -14,7 +14,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external @angular/compiler-cli --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/angular --external @mxlang/astro --external @mxlang/core --external @mxlang/hono --external @mxlang/html --external @mxlang/parser --external @mxlang/preact --external @mxlang/react --external @mxlang/solid --external @volar/language-core --external @volar/typescript --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external @angular/compiler-cli --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/angular --external @mxlang/astro --external @mxlang/core --external @mxlang/hono --external @mxlang/html --external @mxlang/parser --external @mxlang/preact --external @mxlang/react --external @mxlang/solid --external @volar/language-core --external @volar/typescript --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist && rm -f dist/ng-diagnostics.d.ts dist/ng-worker.d.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -23,7 +23,6 @@
     "@jridgewell/sourcemap-codec": "1.6.0",
     "@marko/compiler": "5.42.5",
     "@mxlang/angular": "workspace:*",
-    "@mxlang/angular-checker": "workspace:*",
     "@mxlang/astro": "workspace:*",
     "@mxlang/core": "workspace:*",
     "@mxlang/hono": "workspace:*",
@@ -45,6 +44,7 @@
     }
   },
   "devDependencies": {
+    "@mxlang/angular-checker": "workspace:*",
     "@angular/compiler-cli": "22.1.7",
     "@angular/core": "22.1.7",
     "@astrojs/language-server": "2.16.16",

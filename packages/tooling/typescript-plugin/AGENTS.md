@@ -67,7 +67,7 @@ entry.
   process** (`@mxlang/angular-checker`'s `createCheckerWorker`; one per nearest
   `package.json`; superseded runs are never delivered, and a stale run still
   going after 5 s is SIGKILLed and restarted; the worker ends when tsserver's
-  IPC channel closes). The build emits `dist/ng-worker.cjs` beside
+  IPC channel closes). `@mxlang/angular-checker` is a **devDependency**: the bundle inlines it (no bare import of it in `dist/*.cjs`), and the build deletes `dist/ng-diagnostics.d.ts` and `dist/ng-worker.d.ts`, so no packed declaration reaches the checker or the optional `@angular/compiler-cli` peer (pack-probe's `skipLibCheck:false` node16 typecheck failed with TS2307 otherwise). `angularDiagnostics` is not exported from the entry. The build emits `dist/ng-worker.cjs` beside
   `dist/index.cjs` (`src/ng-worker.ts`, resolved via `__dirname`) and keeps
   `@angular/compiler-cli` external: the worker resolves it from the user's
   project. Delivery hook: the `getSemanticDiagnostics` branch of the same Proxy

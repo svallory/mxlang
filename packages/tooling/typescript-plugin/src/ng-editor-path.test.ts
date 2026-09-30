@@ -1,9 +1,9 @@
 import path from "node:path";
 import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
-import { angularDiagnostics } from "./index.ts";
 import { createNgMxLanguagePlugin } from "./language.ts";
 import {
+  angularDiagnostics,
   createNgDiagnosticsService,
   type NgDiagnosticsService,
 } from "./ng-diagnostics.ts";

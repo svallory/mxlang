@@ -24,6 +24,7 @@ import {
   type MxLanguagePlugin,
 } from "./mx-language.ts";
 import {
+  angularDiagnostics,
   createNgDiagnosticsService,
   type NgDiagnosticsService,
 } from "./ng-diagnostics.ts";
@@ -247,69 +248,6 @@ function withSyntaxDiagnostics(
       };
     },
   });
-}
-
-/** The four-way category map `mx-tsc` uses (`tsc/src/index.ts`). */
-const DIAGNOSTIC_CATEGORIES = (typescript: typeof ts) =>
-  ({
-    error: typescript.DiagnosticCategory.Error,
-    warning: typescript.DiagnosticCategory.Warning,
-    suggestion: typescript.DiagnosticCategory.Suggestion,
-    message: typescript.DiagnosticCategory.Message,
-  }) as const;
-
-/**
- * The Angular diagnostics (and project notices) for a `.ng.mx`, as TypeScript
- * diagnostics with `source: "angular"`. A degraded position says so, like
- * `mx-tsc` does.
- */
-export function angularDiagnostics(
-  typescript: typeof ts,
-  ng: NgDiagnosticsService,
-  fileName: string,
-): ts.Diagnostic[] {
-  const result = ng.getDiagnostics(fileName);
-  const out: ts.Diagnostic[] = [];
-  const file = (text: string) =>
-    typescript.createSourceFile(
-      fileName,
-      text,
-      typescript.ScriptTarget.Latest,
-      false,
-      typescript.ScriptKind.TS,
-    );
-  if (result) {
-    const sourceFile = file(result.source);
-    for (const d of result.diagnostics) {
-      out.push({
-        file: sourceFile,
-        start: d.start,
-        length: d.length,
-        category: DIAGNOSTIC_CATEGORIES(typescript)[d.category],
-        code: d.code,
-        source: "angular",
-        messageText:
-          d.mapped === "exact"
-            ? d.message
-            : `${d.message} (approximate location)`,
-      });
-    }
-  }
-  for (const notice of ng.getNotices(fileName)) {
-    out.push({
-      file: file(""),
-      start: 0,
-      length: 0,
-      category:
-        notice.category === "error"
-          ? typescript.DiagnosticCategory.Error
-          : typescript.DiagnosticCategory.Warning,
-      code: 80003,
-      source: "angular",
-      messageText: notice.message,
-    });
-  }
-  return out;
 }
 
 export {

@@ -481,7 +481,6 @@
         "@jridgewell/sourcemap-codec": "1.6.0",
         "@marko/compiler": "5.42.5",
         "@mxlang/angular": "workspace:*",
-        "@mxlang/angular-checker": "workspace:*",
         "@mxlang/astro": "workspace:*",
         "@mxlang/core": "workspace:*",
         "@mxlang/hono": "workspace:*",
@@ -497,6 +496,7 @@
         "@angular/compiler-cli": "22.1.7",
         "@angular/core": "22.1.7",
         "@astrojs/language-server": "2.16.16",
+        "@mxlang/angular-checker": "workspace:*",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
