@@ -16,6 +16,7 @@
     "test:bun": "bun --tsconfig-override=../../tsconfig.base.json test src/mx/region-compile.bun.test.ts"
   },
   "dependencies": {
+    "@babel/types": "7.29.8",
     "@mxlang/core": "workspace:*"
   },
   "devDependencies": {

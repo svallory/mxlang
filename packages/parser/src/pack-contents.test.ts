@@ -10,6 +10,8 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8")) as {
   main: string;
   types: string;
   files?: string[];
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
 };
 
 /** The paths `bun pm pack` would put in the tarball, without writing one. */
@@ -95,5 +97,37 @@ describe("@mxlang/parser emitted declarations", () => {
   it("are a real module, not an ambient `declare module` block", () => {
     const text = readFileSync(join(pkgDir, pkg.types), "utf8");
     expect(text).not.toMatch(/^declare module /m);
+  });
+
+  it("only imports bare specifiers the package declares", () => {
+    const sf = ts.createSourceFile(
+      "index.d.ts",
+      readFileSync(join(pkgDir, pkg.types), "utf8"),
+      ts.ScriptTarget.Latest,
+    );
+    const declared = new Set([
+      ...Object.keys(pkg.dependencies ?? {}),
+      ...Object.keys(pkg.peerDependencies ?? {}),
+    ]);
+    const undeclared: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
+        const spec = node.moduleSpecifier.text;
+        if (!spec.startsWith(".") && !spec.startsWith("node:")) {
+          const parts = spec.split("/");
+          const name = spec.startsWith("@")
+            ? parts.slice(0, 2).join("/")
+            : (parts[0] ?? spec);
+          if (!declared.has(name)) undeclared.push(spec);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    expect(undeclared).toEqual([]);
   });
 });

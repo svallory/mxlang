@@ -18,26 +18,15 @@ tasks:
       - "src/**/*"
       - "/vitest.config.ts"
 
+  # Delegates to package.json's build (bundle, `rm -rf dist`, declaration
+  # emit) so the two cannot drift: a moon-built dist must carry the
+  # `dist/index.d.ts` that `types` points at.
   build:
     command: "bun"
-    args:
-      [
-        "build",
-        "src/index.ts",
-        "--outdir",
-        "dist",
-        "--target",
-        "node",
-        "--format",
-        "esm",
-        "--define",
-        "process.env.BABEL_8_BREAKING=false",
-        "--define",
-        "process.env.USE_ESM=true",
-        "--define",
-        "process.env.IS_PUBLISH=true",
-      ]
+    args: ["run", "build"]
     inputs:
       - "src/**/*"
+      - "scripts/emit-declarations.ts"
+      - "package.json"
     outputs:
       - "dist"
