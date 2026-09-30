@@ -23,6 +23,15 @@ import {
   type NgMxDiagnostic,
   type NgMxMapped,
 } from "./diagnose.ts";
+import { runCheckerWorker } from "./worker.ts";
+import {
+  type CheckerWorker,
+  type CheckerWorkerOptions,
+  type CheckOutcome,
+  createCheckerWorker,
+  DEFAULT_GRACE_MS,
+  isProcessAlive,
+} from "./worker-client.ts";
 
 export type {
   AngularChecker,
@@ -32,14 +41,21 @@ export type {
   DiagnosticCategory,
 } from "./types.ts";
 export {
+  type CheckerWorker,
+  type CheckerWorkerOptions,
+  type CheckOutcome,
   type CompilerCliModule,
   type CompilerCliResolution,
   CompilerCliUnavailableError,
   createAngularChecker,
+  createCheckerWorker,
+  DEFAULT_GRACE_MS,
   diagnoseNgMx,
+  isProcessAlive,
   type NgMxDiagnostic,
   type NgMxMapped,
   resolveCompilerCli,
+  runCheckerWorker,
   SUPPORTED_COMPILER_CLI_RANGE,
   TsconfigError,
   typescriptVersion,

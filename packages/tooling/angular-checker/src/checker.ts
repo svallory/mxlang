@@ -287,8 +287,9 @@ export function createAngularChecker(
         ? resolve(options.tsconfigPath)
         : "";
       // Built on demand, not retained, when nothing has been checked yet: an
-      // empty list must never mean "not computed yet". Option diagnostics do
-      // not depend on any file, so an empty root list is enough.
+      // empty list must never mean "not computed yet". ngtsc option
+      // diagnostics do not depend on any file, so an empty root list is
+      // enough (TS-source ones, TS6059 for example, do).
       let target = program;
       if (target === undefined) {
         const compilerOptions = buildOptions(
