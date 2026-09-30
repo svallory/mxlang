@@ -173,7 +173,7 @@ function createEditorNgDiagnostics(
     // send a fresh `geterr` round (`Project.refreshDiagnostics`, which
     // emits `projectsUpdatedInBackground`).
     refresh: () => project.refreshDiagnostics?.(),
-    log: (message) => project.projectService?.logger.info(message),
+    log: (message) => project.projectService?.logger?.info(message),
   });
   // Tear the workers down with the project (a worker also ends itself when
   // tsserver's IPC channel closes, so a dying tsserver leaves none behind).

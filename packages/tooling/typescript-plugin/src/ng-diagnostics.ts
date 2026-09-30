@@ -160,7 +160,10 @@ export function createNgDiagnosticsService(
           message:
             outcome.reason === "compiler-cli"
               ? `${where}: ${outcome.message} ${RESTART_HINT}`
-              : `${where}: ${outcome.message}`,
+              : // A tsconfig error already leads with the tsconfig path.
+                outcome.reason === "config"
+                ? outcome.message
+                : `${where}: ${outcome.message}`,
           category: "warning",
         });
         refresh();

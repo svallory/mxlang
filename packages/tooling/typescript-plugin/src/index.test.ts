@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -3483,8 +3484,15 @@ function createPluginService(
 function createMutablePluginService(
   files: Record<string, string>,
   rootFiles: string[],
+  hooks: {
+    refreshDiagnostics?: () => void;
+    log?: (m: string) => void;
+    /** No tsconfig on disk: the real worker then checks under defaults. */
+    inferredProject?: boolean;
+  } = {},
 ): {
   service: ts.LanguageService;
+  project: { close(): void };
   setFile(fileName: string, source: string): void;
 } {
   const snapshots = new Map(
@@ -3560,23 +3568,29 @@ function createMutablePluginService(
   };
   const languageService = ts.createLanguageService(host);
   const project = {
-    projectKind: ts.server.ProjectKind.Configured,
+    projectKind: hooks.inferredProject
+      ? ts.server.ProjectKind.Inferred
+      : ts.server.ProjectKind.Configured,
     getProjectName: () => "/project/tsconfig.json",
     getCurrentDirectory: () => "/project",
     getScriptVersion: (fileName: string) => String(versions.get(fileName) ?? 0),
     getScriptInfo: (fileName: string) => {
       const snapshot = snapshots.get(fileName);
-      return snapshot ? { getSnapshot: () => snapshot } : undefined;
+      return snapshot
+        ? { getSnapshot: () => snapshot, isScriptOpen: () => true }
+        : undefined;
     },
     readFile: host.readFile,
     fileExists: host.fileExists,
     readDirectory: host.readDirectory,
     useCaseSensitiveFileNames: () => true,
-    refreshDiagnostics: () => undefined,
+    refreshDiagnostics: () => hooks.refreshDiagnostics?.(),
+    close: () => undefined,
     getCanonicalFileName: (fileName: string) => fileName,
     getModuleResolutionCache: () => undefined,
     projectService: {
       host: ts.sys,
+      logger: { info: (message: string) => hooks.log?.(message) },
     },
   };
   const info = {
@@ -3595,6 +3609,7 @@ function createMutablePluginService(
   const service = pluginFactory({ typescript: ts }).create(info);
   return {
     service,
+    project,
     setFile(fileName, source) {
       snapshots.set(fileName, ts.ScriptSnapshot.fromString(source));
       versions.set(fileName, (versions.get(fileName) ?? 0) + 1);
@@ -3692,6 +3707,98 @@ describe(".ng.mx language plugin", () => {
     const lines = source.split("\n");
     expect(pos.line).toBe(lines.length);
     expect(pos.column).toBe((lines.at(-1) as string).indexOf("bad"));
+  });
+
+  describe("Angular template diagnostics through the real plugin wiring", () => {
+    const ngDir = join(here, "..", "fixtures", "ng-project");
+    const bad = [
+      'import { Component } from "@angular/core";',
+      "@Component({",
+      '  selector: "app-x",',
+      "  standalone: true,",
+      "  template: <p>${user.nmae}</p>,",
+      "})",
+      "export class XComponent { user = { name: 'a' }; }",
+    ].join("\n");
+
+    /** Worker processes this process has forked (the harness's real workers). */
+    const workerPids = () => {
+      try {
+        return execFileSync("pgrep", [
+          "-P",
+          String(process.pid),
+          "-f",
+          "ng-worker",
+        ])
+          .toString()
+          .split("\n")
+          .filter(Boolean);
+      } catch {
+        return []; // pgrep exits 1 when nothing matches
+      }
+    };
+    const until = async (cond: () => boolean, ms = 30_000) => {
+      const end = Date.now() + ms;
+      while (!cond()) {
+        if (Date.now() > end) throw new Error("timed out");
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    };
+
+    it("a known-bad .ng.mx yields source 'angular' TS2339 from getSemanticDiagnostics (silent-zero guard)", async () => {
+      const file = `${ngDir}/x.component.ng.mx`;
+      const consumer = `${ngDir}/consumer.ts`;
+      let refreshed = 0;
+      const { service, project } = createMutablePluginService(
+        { [file]: bad, [consumer]: 'import "./x.component.ng.mx";\n' },
+        [consumer],
+        {
+          refreshDiagnostics: () => {
+            refreshed += 1;
+          },
+          inferredProject: true,
+        },
+      );
+      try {
+        // The first request compiles the file and arms the idle timer; it
+        // carries no Angular diagnostics yet (they are asynchronous).
+        service.getSemanticDiagnostics(file);
+        await until(() => refreshed > 0);
+        const found = service
+          .getSemanticDiagnostics(file)
+          .filter((d) => d.source === "angular");
+        expect(found.length).toBeGreaterThanOrEqual(1);
+        expect(found[0]?.code).toBe(2339);
+        expect(found[0]?.start).toBe(bad.indexOf("user.nmae"));
+      } finally {
+        project.close();
+      }
+    }, 90_000);
+
+    it("project.close() kills the worker and leaves no exit listener behind", async () => {
+      const file = `${ngDir}/x.component.ng.mx`;
+      const consumer = `${ngDir}/consumer.ts`;
+      const listeners = process.listenerCount("exit");
+      const before = workerPids().length;
+      let refreshed = 0;
+      const { service, project } = createMutablePluginService(
+        { [file]: bad, [consumer]: 'import "./x.component.ng.mx";\n' },
+        [consumer],
+        {
+          refreshDiagnostics: () => {
+            refreshed += 1;
+          },
+          inferredProject: true,
+        },
+      );
+      service.getSemanticDiagnostics(file);
+      await until(() => refreshed > 0);
+      expect(workerPids().length).toBeGreaterThan(before);
+      expect(process.listenerCount("exit")).toBe(listeners);
+      project.close();
+      await until(() => workerPids().length === before, 10_000);
+      expect(process.listenerCount("exit")).toBe(listeners);
+    }, 90_000);
   });
 
   describe("retained compiles (mx-tsc's template diagnostics)", () => {
