@@ -6,11 +6,13 @@ description: "The Angular host — a .mx page template compiles to a plain Angul
 # Angular
 
 **Preview.** This host is not yet a complete "Angular host" by the same bar
-every other host meets: its TypeScript plugin (step 2, `.ng.mx`) doesn't
-exist yet, and until it does, a template's MX tag imports must be
-hand-maintained in the caller's `.ts` file. What's here — page compilation,
-the `mx-angular` CLI's `build`/`watch`/`map` — is real and tested, just not
-the whole story.
+every other host meets: `.ng.mx` now has TypeScript semantics in the editor
+and in `mx-tsc`, but Angular template diagnostics (checking the expressions
+inside `template:`) and the language server do not handle it yet, and a
+`.mx` page still gets no TypeScript plugin support, so a page's MX tag imports
+must be hand-maintained in the caller's `.ts` file. What's here — page
+compilation, the `mx-angular` CLI's `build`/`watch`/`map` — is real and
+tested, just not the whole story.
 
 `@mxlang/angular` compiles a `.mx` page template to a plain Angular template
 string: no MX runtime, no Angular dependency in the compiled output. The
@@ -307,10 +309,10 @@ Zed's `AngularMX` language reuses `SolidMX`'s grammar package unchanged (the
 grammar's only MX-specific addition, the opaque `mx_element` token, is
 neither Solid- nor Angular-specific); VS Code's `ngmx` language falls back to
 `source.tsx` highlighting, the same fallback `solidmx` uses. See
-[VS Code](/editors/vscode/) and [Zed](/editors/zed/) for setup. Type-checking
-and language-server diagnostics for `.ng.mx` are a separate task
-(`.ng.mx`'s TypeScript plugin, mentioned in the "Preview" note above) and are
-not covered by this editor registration.
+[VS Code](/editors/vscode/) and [Zed](/editors/zed/) for setup. TypeScript
+semantics for `.ng.mx` come from `@mxlang/typescript-plugin` and `mx-tsc`
+(see [`.ng.mx`](#ngmx)); language-server diagnostics are not covered by this
+editor registration.
 
 ## Custom tags (preview)
 
@@ -424,8 +426,8 @@ needs — in step 1 MX does not edit that file:
 ```
 
 Without that `imports:` entry Angular renders an unknown element as an inert
-empty tag with no error, which is why the warning exists. **In step 2
-(`.ng.mx`) this obligation disappears** — MX owns the module and injects
+empty tag with no error, which is why the warning exists. **In a
+`.ng.mx` module this obligation disappears** — MX owns the module and injects
 both lines itself.
 
 **Calling a tag through an authored import (`.ng.mx`).** In a `.ng.mx`, `import Badge from "./tags/badge.mx"` followed by `<Badge/>` works, inside or outside `tags/`, and emits exactly what `<badge/>` does: the callee's selector, one `imports:` entry, and the import rewritten to the generated class (`import { Badge as Chip } from "./tags/badge"` when you alias it). The import must be a **sole default import**; `import A, { b } from "./x.mx"` used as `<A/>` is a positioned error (import the tag alone and the other names separately, or use the discovered spelling), a deliberate divergence from Marko (see `divergences.md`). A `.marko` component cannot be used as a tag here.
@@ -511,6 +513,21 @@ able to skip silently.
 overwrite a module it did not generate. Configure the output extension with
 `mx.angular.ngExtension` (default `.ts`). **Gitignore the emitted `.ts`** —
 it is a build artifact, like the `.html` a page template emits.
+
+### TypeScript semantics
+
+`@mxlang/typescript-plugin` (editor) and `mx-tsc` (CI) treat `.ng.mx` as its
+own file kind, compiled with the same `compileNgMx` the build uses. TypeScript
+errors in the component class, the imports and the rest of the module are
+reported at their position in the `.ng.mx` file, including code below a
+`template:` region. An invalid `package.json#mx.angular` is reported as an
+error at the start of the file rather than silently falling back to defaults.
+
+TypeScript sees a `template:` region as an opaque template literal, so an
+error in a template *expression* (`${user.nmae}`) is not reported by
+TypeScript. Checking those needs Angular's own compiler and lands separately
+as Angular template diagnostics. The language server does not handle
+`.ng.mx` yet.
 
 ## Errors
 
