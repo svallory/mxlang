@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   compileNgMx,
   escapeTemplateLiteral,
+  NG_MX_FRAGMENT_POSITION_MESSAGE,
   NG_MX_POSITION_MESSAGE,
   ngMxPositionCheck,
   positionRegionSource,
@@ -1340,5 +1341,343 @@ describe("compileNgMx: region padding follows parseFragment's contract", () => {
       );
       for (const name of names) expect(pairs.get(name)).toBe(name);
     }
+  });
+});
+
+// G9 (`angular-ngmx-multi-root`): an Angular template may have several roots,
+// and a region has exactly one. `<>…</>` is the spelling for several: the
+// parser treats it as a fragment *region* here (`mxRegionFragment`, which
+// only this host turns on), and the host lowers its children as siblings —
+// the same lowering a page template with several roots gets.
+describe("compileNgMx: fragment regions (G9)", () => {
+  /** [authored region, the template it lowers to]. */
+  const lowered: Array<[string, string]> = [
+    ["<></>", ""],
+    // Whitespace between the fragment's tags is text, as on a page template.
+    ["<>   </>", " "],
+    ["<>hello</>", "hello"],
+    ["<>hello ${name}</>", "hello {{ name }}"],
+    ["<>${name}</>", "{{ name }}"],
+    ["<><b>hi</b><i>x</i></>", "<b>hi</b><i>x</i>"],
+    ["<>\n  <b>hi</b>\n  <i>x</i>\n</>", "<b>hi</b><i>x</i>"],
+    ["<><ng-content/><b>hi</b></>", "<ng-content></ng-content><b>hi</b>"],
+    [
+      "<><if=a><b/></if><if=b><i/></if></>",
+      "@if (a) { <b></b> }@if (b) { <i></i> }",
+    ],
+    ["<><b>a</b> tail</>", "<b>a</b> tail"],
+    // `</>` inside an expression is not the fragment's close.
+    ['<>${"</>"}</>', '{{ "</>" }}'],
+  ];
+
+  for (const [region, template] of lowered) {
+    it(`lowers ${JSON.stringify(region)} to sibling nodes`, () => {
+      const result = compileNgMx(componentFile(region), "/p/x.component.ng.mx");
+      expect(emittedTemplate(result.code)).toBe(template);
+      // Nothing of the fragment syntax survives, and the module still reads
+      // as the author's: the decorator and class are untouched.
+      expect(result.code).not.toMatch(/template: <>/);
+      expect(result.code).toContain("export class XComponent");
+    });
+  }
+
+  it("emits a template the real Angular compiler parses", () => {
+    const result = compileNgMx(
+      componentFile(
+        "<>\n  <ng-content/>\n  <if=open><b>hi</b></if>\n  <for|p| of=people by=(p => p.id)><li>${p.name}</li></for>\n</>",
+      ),
+      "/p/x.component.ng.mx",
+    );
+    const parsed = parseTemplate(emittedTemplate(result.code), "x.html");
+    expect(parsed.errors).toBeNull();
+    expect(parsed.nodes.length).toBeGreaterThan(2);
+  });
+
+  it("emits a module that typechecks", () => {
+    const result = compileNgMx(
+      componentFile("<><b>${name}</b><i>${name}</i></>", " name = 'x';"),
+      "/p/x.component.ng.mx",
+    );
+    assertModuleTypechecks(result.code);
+  });
+
+  it("reports the whole `<>…</>` as the region's span", () => {
+    const source = componentFile("<><b>hi</b><i>x</i></>");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    const [region] = result.regions;
+    expect(source.slice(region?.start, region?.end)).toBe(
+      "<><b>hi</b><i>x</i></>",
+    );
+  });
+
+  it("maps each sibling's expressions back to the .ng.mx source", () => {
+    const source = componentFile(
+      "<>\n  <p>${first}</p>\n  <p title=second>x</p>\n</>",
+    );
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    const pairs = result.mappings.map((mapping) => ({
+      generated: result.code.slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
+      ),
+      source: source.slice(mapping.sourceStart, mapping.sourceEnd),
+    }));
+    expect(pairs).toContainEqual({ generated: "first", source: "first" });
+    expect(pairs).toContainEqual({ generated: "second", source: "second" });
+  });
+
+  it("adds the directives a fragment's children need to imports", () => {
+    const result = compileNgMx(
+      componentFile("<><div class={ on: flag }/><b/></>"),
+      "/p/x.component.ng.mx",
+    );
+    expect(result.code).toContain("NgClass");
+    expect(result.code).toMatch(/imports: \[[^\]]*NgClass/);
+  });
+
+  it("lowers a fragment region beside an ordinary one in the same module", () => {
+    const source = [
+      'import { Component } from "@angular/core";',
+      '@Component({ selector: "app-a", template: <><b>a</b><i>a</i></> })',
+      "export class A {}",
+      '@Component({ selector: "app-b", template: <p>b</p> })',
+      "export class B {}",
+    ].join("\n");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    expect(result.code).toContain("template: `<b>a</b><i>a</i>`");
+    expect(result.code).toContain("template: `<p>b</p>`");
+  });
+
+  it("refuses a fragment nested in a fragment, naming the rule", () => {
+    expect(() =>
+      compileNgMx(componentFile("<><><b/></></>"), "/p/x.component.ng.mx"),
+    ).toThrow(
+      "A fragment `<>…</>` cannot contain another fragment. Its children are already siblings. (5:14)",
+    );
+  });
+
+  it("refuses an unterminated fragment, naming the fragment", () => {
+    expect(() =>
+      compileNgMx(componentFile("<><b/>"), "/p/x.component.ng.mx"),
+    ).toThrow("Unterminated fragment: expected a closing `</>`. (5:12)");
+  });
+
+  // In a `.ng.mx` file a fragment is MX syntax, not TSX. Outside `template:`
+  // it used to parse as a TSX fragment and be emitted as raw `<>`, invalid
+  // TypeScript; it is now an error that says where a fragment may go.
+  it.each([" x = <></>;", " x = f(<>a</>);"])(
+    "rejects a fragment outside `template:`: %j",
+    (extra) => {
+      const source = componentFile("<p/>", extra);
+      let message = "";
+      try {
+        compileNgMx(source, "/p/x.component.ng.mx");
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message.startsWith(NG_MX_FRAGMENT_POSITION_MESSAGE)).toBe(true);
+      // Positioned at the fragment's `<`.
+      const at = message.match(/\((\d+):(\d+)\)$/);
+      const line = source.split("\n")[Number(at?.[1]) - 1] ?? "";
+      expect(line.slice(Number(at?.[2]))).toMatch(/^<>/);
+    },
+  );
+
+  it("names the fragment rule exactly", () => {
+    expect(NG_MX_FRAGMENT_POSITION_MESSAGE).toBe(
+      "in a `.ng.mx` file a fragment `<>…</>` is only allowed as the root of the `template:` region of an `@Component({ … })` decorator.",
+    );
+  });
+
+  it("still rejects a non-fragment region outside `template:` with the position message", () => {
+    const source = componentFile("<p/>", "").replace(
+      "export class XComponent {}",
+      "export class XComponent { x = <b/>; }",
+    );
+    expect(() => compileNgMx(source, "/p/x.component.ng.mx")).toThrow(
+      NG_MX_POSITION_MESSAGE,
+    );
+  });
+  it("refuses a fragment nested inside an element child, naming the rule", () => {
+    expect(() =>
+      compileNgMx(
+        componentFile("<><div><></></div></>"),
+        "/p/x.component.ng.mx",
+      ),
+    ).toThrow(
+      "A fragment `<>…</>` cannot contain another fragment. Its children are already siblings.",
+    );
+  });
+
+  // The fragment is read inside a wrapper node. If the wrapper could resolve as
+  // a project tag, that tag's parse options would change how the author's
+  // children are read. It is a dynamic tag, which no taglib entry can name.
+  it.each(["f", "_", "0", "fragment", "mx-fragment"])(
+    "is not affected by a project tag named %j",
+    (name) => {
+      const result = compileNgMx(
+        componentFile("<><b>x</b>\n  <i>y</i></>"),
+        "/p/x.component.ng.mx",
+        {
+          customTags: {
+            [name]: { parseOptions: { text: true } },
+          } as never,
+        },
+      );
+      const plain = compileNgMx(
+        componentFile("<><b>x</b>\n  <i>y</i></>"),
+        "/p/x.component.ng.mx",
+      );
+      expect(emittedTemplate(result.code)).toBe(emittedTemplate(plain.code));
+      expect(emittedTemplate(result.code)).toBe("<b>x</b><i>y</i>");
+    },
+  );
+
+  // Name spans on the 2nd+ sibling, on later lines of a multi-line fragment.
+  // Asserts the CORRECT spans: the generated text a mapping selects and the
+  // source text it claims are the same word. The wrapper shifts only the first
+  // line's columns (see `lowerRegion`), so a later line is where a wrong
+  // adjustment would show.
+  it("maps names and expressions on later lines of a multi-line fragment", () => {
+    const source = componentFile(
+      '<>\n  <p class="a">${first}</p>\n\n  <a href=link title="t">x</a>\n</>',
+    );
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    const pairs = result.mappings.map((mapping) => ({
+      generated: result.code.slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
+      ),
+      source: source.slice(mapping.sourceStart, mapping.sourceEnd),
+    }));
+    for (const word of ["first", "link", "href", "title"]) {
+      expect(pairs).toContainEqual({ generated: word, source: word });
+    }
+  });
+  // Attribute-name spans when the name is on the SAME line as the region
+  // start (region at line 5, col 12, after four module lines). Asserts the
+  // CORRECT span: the generated text and the source text are both `class`.
+  // Before #176 fixed `positionedSource` these mapped unrelated text; the
+  // single-root case shows that was never fragment-specific.
+  it.each([
+    ["a fragment", '<><i/><b class="k">x</b></>'],
+    ["a single root", '<b class="k">x</b>'],
+  ])("maps a same-line attribute name in %s", (_kind, region) => {
+    const source = componentFile(region);
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    const pairs = result.mappings.map((mapping) => ({
+      generated: result.code.slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
+      ),
+      source: source.slice(mapping.sourceStart, mapping.sourceEnd),
+    }));
+    expect(pairs).toContainEqual({ generated: "class", source: "class" });
+  });
+  // The fragment adjustment must compose with `positionRegionSource`: every
+  // name and expression maps to itself, whether it is the first child or a
+  // later sibling, on the fragment's own line or a later one, and wherever the
+  // `<>` sits, including columns 0 and 1 (where the wrapper's shift would go
+  // negative if applied to the wrong quantity).
+  describe("mappings compose with the region padding", () => {
+    /** `component` with the template value starting after `lead`. */
+    const at = (lead: string, region: string) =>
+      [
+        'import { Component } from "@angular/core";',
+        "",
+        "@Component({",
+        '  selector: "app-x",',
+        `  template:${lead}${region},`,
+        "})",
+        "export class XComponent {}",
+      ].join("\n");
+    const cases: Array<[string, string, string, string[]]> = [
+      [
+        "first child, same line",
+        " ",
+        '<>${aa}<p title=bb class="k">x</p></>',
+        ["aa", "bb", "title", "class"],
+      ],
+      [
+        "later sibling, same line",
+        " ",
+        '<><i/><b class="k" id=cc>x</b></>',
+        ["class", "cc", "id"],
+      ],
+      [
+        "later lines",
+        " ",
+        '<>\n  <i title=dd/>\n  <b class="k" id=ee>${ff}</b>\n</>',
+        ["title", "dd", "class", "id", "ee", "ff"],
+      ],
+      [
+        "`<>` at column 0",
+        "\n",
+        '<><i title=gg/><b class="k">x</b></>',
+        ["title", "gg", "class"],
+      ],
+      [
+        "`<>` at column 1",
+        "\n ",
+        '<><i title=hh/><b class="k">x</b></>',
+        ["title", "hh", "class"],
+      ],
+      [
+        "`<>` at column 0 with later lines",
+        "\n",
+        '<>\n<i title=ii/>\n<b class="k">${jj}</b></>',
+        ["title", "ii", "class", "jj"],
+      ],
+    ];
+    it.each(cases)("%s", (_name, lead, region, words) => {
+      const source = at(lead, region);
+      const result = compileNgMx(source, "/p/x.component.ng.mx");
+      const pairs = result.mappings.map((mapping) => ({
+        generated: result.code.slice(
+          mapping.generatedStart,
+          mapping.generatedEnd,
+        ),
+        source: source.slice(mapping.sourceStart, mapping.sourceEnd),
+      }));
+      for (const word of words) {
+        expect(pairs).toContainEqual({ generated: word, source: word });
+      }
+      // No mapping may select different text on the two sides.
+      expect(pairs.filter((pair) => pair.generated !== pair.source)).toEqual(
+        [],
+      );
+    });
+  });
+});
+
+// Several bare roots are still an error, but one that names the rule and the
+// way out. The rewrite happens in the parser and only ever replaces a failure:
+// what parsed before must parse now, unchanged.
+describe("compileNgMx: several bare roots (G9)", () => {
+  const RULE =
+    "An MX region has exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.";
+
+  it.each([
+    ["<b/><c/>", "5:16"],
+    ["<b>a</b> <i>b</i>", "5:21"],
+    ["<b/>\n<c/>", "6:0"],
+    ["<if=a>x</if><if=b>y</if>", "5:24"],
+    ["<ng-content/><b>hi</b>", "5:25"],
+  ])("rejects %j, naming the rule at the second root", (region, at) => {
+    expect(() =>
+      compileNgMx(componentFile(region), "/p/x.component.ng.mx"),
+    ).toThrow(`${RULE} (${at})`);
+  });
+
+  // Each of these parsed before the rewrite existed (TypeScript reads the
+  // second `<` as a comparison). They must keep parsing, to the same output.
+  it.each([
+    ["<b/> < c", "`<b></b>` < c"],
+    ["<b/> <c", "`<b></b>` <c"],
+    ["<b/> <c>", "`<b></b>` <c>"],
+    ["<b/> > c", "`<b></b>` > c"],
+  ])("still parses %j exactly as before", (region, expected) => {
+    const result = compileNgMx(componentFile(region), "/p/x.component.ng.mx");
+    expect(result.code).toContain(`template: ${expected},`);
   });
 });

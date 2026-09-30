@@ -57,6 +57,16 @@ export const NG_MX_POSITION_MESSAGE =
   "an MX region in a `.ng.mx` file is only valid as the `template` property of an `@Component({ … })` decorator.";
 
 /**
+ * The same veto for a fragment `<>…</>`. In a `.ng.mx` file a fragment is MX
+ * syntax (`mxRegionFragment`), not TSX, and Angular has one place for it: as
+ * the root of a `template:` region. Before fragments were regions, `<></>`
+ * elsewhere parsed as TSX and was emitted as raw `<>`, invalid TypeScript;
+ * this makes it an error that says why.
+ */
+export const NG_MX_FRAGMENT_POSITION_MESSAGE =
+  "in a `.ng.mx` file a fragment `<>…</>` is only allowed as the root of the `template:` region of an `@Component({ … })` decorator.";
+
+/**
  * Angular's veto on where a region may appear, as the spike's §Q4 specifies.
  *
  * All four conditions are load-bearing and none implies another:
@@ -73,7 +83,12 @@ export const ngMxPositionCheck: MxRegionPositionCheck = (
   context.decoratorNames.includes("Component") &&
   context.argumentIndex === 0
     ? { ok: true }
-    : { ok: false, message: NG_MX_POSITION_MESSAGE };
+    : {
+        ok: false,
+        message: context.fragment
+          ? NG_MX_FRAGMENT_POSITION_MESSAGE
+          : NG_MX_POSITION_MESSAGE,
+      };
 
 /**
  * Escapes an emitted Angular template for a backtick template literal.
@@ -214,6 +229,23 @@ interface LoweredRegion extends NgMxRegion {
   }>;
 }
 
+/** What stands in for a fragment's `<>` while `parseFragment` reads it. */
+// biome-ignore lint/suspicious/noTemplateCurlyInString: MX dynamic-tag syntax
+const FRAGMENT_WRAPPER_OPEN = "<${0}>";
+
+/** The children of the wrapper node `lowerRegion` put around a fragment. */
+type FragmentBody = ReturnType<typeof parseFragment>["body"];
+
+function unwrapFragment(body: FragmentBody, filename: string): FragmentBody {
+  const [wrapper] = body as Array<{ body?: { body?: FragmentBody } }>;
+  if (body.length !== 1 || !Array.isArray(wrapper?.body?.body)) {
+    throw new Error(
+      `@mxlang/angular internal: a fragment region did not parse to one wrapper node in ${filename}`,
+    );
+  }
+  return wrapper.body.body;
+}
+
 /**
  * Lowers one MX region to an Angular template, as a backtick literal.
  *
@@ -234,13 +266,42 @@ function lowerRegion(
   // so a region goes through `parseFragment` + `lower` instead — the same
   // path `compileSolidMx` takes, and for the same reason: every position the
   // IR carries must be relative to the `.ng.mx` file, not to the region.
-  const { body } = parseFragment(regionSource, {
-    filename,
-    baseOffset: base.baseOffset,
-    baseLine: base.baseLine,
-    baseColumn: base.baseColumn,
-    customTags: options.customTags,
-  });
+  //
+  // A fragment region (`<>…</>`) hands over its children, which Marko would
+  // read in concise mode when they open with text (`hello` is a tag there).
+  // Wrapping them forces HTML mode. The wrapper is a *dynamic* tag,
+  // `<${0}>…</>`, so that no project tag can be confused with it: a tag's
+  // parse options (`text`, `preserveWhitespace`, `openTagOnly`) are looked up
+  // by its static name in the taglib built from `customTags`, and a dynamic
+  // name has none. It is also unwrapped by position, not name — the single
+  // top-level node the parse returns — and anything else is an internal error.
+  //
+  // Composition with `parseFragment`'s padding contract (`FragmentBase`): it
+  // adds `baseOffset` to every index, and `baseColumn` to a column only on
+  // the fragment's *first line*, later lines starting at their own column 0.
+  // The wrapper's `FRAGMENT_WRAPPER_OPEN` characters precede the children on
+  // that first line, so the children sit that much later than they do in the
+  // file. Subtracting exactly that from both bases puts every index, and every
+  // first-line column, back on the author's file; a later line needs no
+  // correction and gets none. `positionRegionSource` (below) is built from
+  // `regionSource` and the *unadjusted* base, because it describes the file,
+  // not the wrapped string: it puts exactly `baseColumn` fillers before the
+  // region's first line, which is where `regionSource` starts (the children,
+  // after `<>`), so the two position systems agree without the wrapper.
+  const fragment = base.fragment === true;
+  const parsed = parseFragment(
+    fragment ? `${FRAGMENT_WRAPPER_OPEN}${regionSource}</>` : regionSource,
+    {
+      filename,
+      baseOffset:
+        base.baseOffset - (fragment ? FRAGMENT_WRAPPER_OPEN.length : 0),
+      baseLine: base.baseLine,
+      baseColumn:
+        base.baseColumn - (fragment ? FRAGMENT_WRAPPER_OPEN.length : 0),
+      customTags: options.customTags,
+    },
+  );
+  const body = fragment ? unwrapFragment(parsed.body, filename) : parsed.body;
 
   const positionedSource = positionRegionSource(regionSource, base);
 
@@ -404,8 +465,9 @@ function lowerRegion(
   }
 
   return {
-    start: base.baseOffset,
-    end: base.baseOffset + regionSource.length,
+    // A fragment region replaces its `<>` (2 characters) and `</>` (3) too.
+    start: base.baseOffset - (fragment ? 2 : 0),
+    end: base.baseOffset + regionSource.length + (fragment ? 3 : 0),
     literal: `\`${escapeTemplateLiteral(template)}\``,
     moduleStatements,
     directives: directivesFor(template),
@@ -1390,6 +1452,9 @@ export function compileNgMx(
     plugins: ["typescript", "jsx", "decorators"],
     mxRegionCompile: regionCompile,
     mxRegionPositionCheck: ngMxPositionCheck,
+    // `<>…</>` is a region here, not TSX: a template has nothing to lower a
+    // TSX fragment to, so the several roots of a template are written as one.
+    mxRegionFragment: true,
     mxCustomTags: options.customTags,
   });
 

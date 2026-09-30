@@ -14,6 +14,17 @@
   own TypeScript still reads, or that another component in the file lists, is
   kept. The emitted module is checked with a real TypeScript program under
   `noUnusedLocals`, for the single- and two-alias cases.
+- **`.ng.mx` fragment regions: `<>…</>` lowers to sibling nodes** (TODO
+  `angular-ngmx-multi-root`, LiUNA gap G9, decision 120). A `@Component`
+  template can now have several roots: `template: <><ng-content/><b>hi</b></>`
+  emits `` `<ng-content></ng-content><b>hi</b>` `` with no wrapper element or
+  comment node. `<></>` emits an empty template, `<>text</>` text. Before, a
+  fragment was left in the emitted `.ts` as raw MX (invalid TypeScript, no
+  diagnostic). Two bare roots stay an error, now one that names the rule and
+  suggests `<>`. A fragment inside a fragment (also inside an element child) is
+  a positioned error. A fragment anywhere but the `template:` root, such as
+  `x = <></>` or `f(<>a</>)` in the class body, is now an error naming that rule
+  instead of raw `<>` in the emitted `.ts`.
 - **Round 2 of the authored `.mx` import in `.ng.mx`.** An aliased import now
   emits one import (`import { Badge as Chip } from "./tags/badge"`) and lists the
   author's local in `imports:` (`imports: [Chip]`), deduped against a discovered

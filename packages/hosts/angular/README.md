@@ -113,7 +113,7 @@ CI and tests) both build on.
 export class XComponent { people = []; }
 ```
 
-Four things are worth knowing before editing `src/ng-mx.ts`:
+Five things are worth knowing before editing `src/ng-mx.ts`:
 
 - **A region is legal in exactly one position** — the direct value of
   `template:` in `@Component({ … })`'s *first* argument, enforced through
@@ -122,6 +122,15 @@ Four things are worth knowing before editing `src/ng-mx.ts`:
   `isDirectPropertyValue` carries no decorator-adjacency guarantee, and
   `argumentIndex` is the only one that tells `@Component({ template })`
   from `@Component(opts, { template })`.
+- **`<>…</>` is a fragment region** (`mxRegionFragment: true` in the `parse`
+  call; off by default in the parser, so `.solid.mx` keeps TSX `<>`). The
+  parser hands `lowerRegion` the fragment's *children* with `fragment: true`;
+  they are wrapped in `<f>…</f>` before `parseFragment` (Marko reads a leading
+  word as a concise-mode tag, and the wrapper forces HTML mode) with the base
+  offset and column moved back three so every position lands on the author's
+  file, then lowered as siblings. The region's `start`/`end` widen to cover the
+  `<>` and `</>`, or the overwrite would leave them in the module (the G9 leak).
+  Two bare roots are the parser's `MultipleRoots` error, not a lowering.
 - **The template is a backtick literal**, with `` ` ``, `${` and `\`
   escaped (decision 99, reversing the design note's A4 divergence 3). The
   reversal is a mapping decision, not a taste one: the spike measured that
