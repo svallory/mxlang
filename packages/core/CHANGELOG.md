@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Add: `HostDeclarations.resolveDiscoveredTagModule` and `binding` on a named `Component` target (html-tags-marko-import)
+
+Both optional. A host that answers the hook with a taglib-discovered tag's template path gets `import _name from "<relative path>"` added to the module (Marko's own form: default import, extension kept, `_` plus the camelCased name, numeric suffix on a collision, once per module) and `binding` set on the `Component` target, so its emitter can call the imported identifier while `name` stays the authored spelling. Absent, or `undefined`, changes nothing. Only `@mxlang/html` implements it; every other host's output is byte-identical.
+
 ### Fix: the tarball ships only `dist/` and the README (pkg-types-g10)
 
 `tsconfig.build.json` now excludes `src/**/fixtures/**` (the scan fixtures' `*.tag.d.ts` no longer land in `dist/fixtures/`) and turns `declarationMap` off (each `.d.ts.map` pointed at a `../src/*.ts` that is not in the tarball, so go-to-definition was dead anyway). `files` drops the `types` and `LICENSE` entries, which name paths that do not exist here. `scripts/pack-hygiene.test.ts` and `scripts/pack-probe.ts` pin the tarball contents and a `skipLibCheck: false` consumer typecheck.

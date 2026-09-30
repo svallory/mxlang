@@ -651,6 +651,65 @@ function generatedBinding(ctx: Ctx, tagName: string): string {
   return binding;
 }
 
+/**
+ * The binding for a taglib-discovered tag's module (`tags/badge.marko`),
+ * importing it on first use.
+ *
+ * Mirrors what Marko emits for such a tag: `import _badge from
+ * "./tags/badge.marko"`, a default import with the extension kept, named with
+ * Babel's `generateUid` rule (`_` + camelCased tag name, a numeric suffix on a
+ * collision), one import per module.
+ */
+export function bindingForDiscoveredModule(
+  ctx: Ctx,
+  path: string,
+  tagName: string,
+  loc: TagCall["loc"],
+): string {
+  path = resolve(path);
+  // A tag file calling itself already has its own function in scope.
+  if (path === resolve(ctx.filename) && ctx.exportName) return ctx.exportName;
+
+  ctx.customTagImports ??= new Map();
+  const existing = ctx.customTagImports.get(path);
+  if (existing) return existing;
+
+  const camel = tagName
+    .replace(/[^A-Za-z0-9_$]+(.)?/g, (_, c: string | undefined) =>
+      c ? c.toUpperCase() : "",
+    )
+    .replace(/^[_$\d]+/, "");
+  const base = `_${camel || "tag"}`;
+  let binding = base;
+  for (let n = 2; isTaken(ctx, binding); n++) binding = `${base}${n}`;
+
+  const specifier = importSpecifier(ctx.filename, path);
+  ctx.customTagImports.set(path, binding);
+  ctx.imports.add(binding);
+  ctx.customTagImportNodes ??= [];
+  ctx.customTagImportNodes.push({
+    kind: "Import",
+    code: `import ${binding} from ${JSON.stringify(specifier)}`,
+    bindings: [binding],
+    loc,
+    end: loc,
+    synthesized: true,
+    specifier,
+    resolvedPath: path,
+  });
+  return binding;
+}
+
+function isTaken(ctx: Ctx, binding: string): boolean {
+  return (
+    ctx.imports.has(binding) ||
+    ctx.defines.has(binding) ||
+    new RegExp(`(^|[^\\w$])${binding.replaceAll("$", "\\$")}([^\\w$]|$)`).test(
+      ctx.source,
+    )
+  );
+}
+
 function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
   const path = resolve(tag.filename);
 

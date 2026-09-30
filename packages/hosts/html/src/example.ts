@@ -5,7 +5,7 @@
  * a compiled module with no runtime but `escape`, and the HTML it produces.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanCached } from "@mxlang/core";
@@ -54,24 +54,10 @@ async function render(file: string, input: unknown): Promise<string> {
 
 /**
  * `compileFile` with the `tags/` discovery the Bun plugin in `bun.ts` applies
- * per loaded file, plus the import the emitter leaves out.
- *
- * A `tags/*.marko` component is called by bare identifier and the emitted
- * module does not import it, so Bun would hit a `ReferenceError`. The oracle's
- * `translator-render.ts` makes the same addition for the same reason.
+ * per loaded file. The emitted module imports each `tags/*.marko` tag it
+ * calls, as Marko does, so nothing is added here.
  */
 function compileWithTags(file: string) {
   const { customTags } = scanCached(file, { host: "html" });
-  const result = compileFile(file, { customTags });
-  const tagsDir = join(dirname(file), "tags");
-  if (!existsSync(tagsDir)) return result;
-  const imports = readdirSync(tagsDir)
-    .filter((name) => name.endsWith(".marko"))
-    .map((name) => name.slice(0, -".marko".length))
-    .filter((tag) => result.code.includes(`${tag}(`))
-    .map(
-      (tag) =>
-        `import ${tag} from ${JSON.stringify(join(tagsDir, `${tag}.marko`))};\n`,
-    );
-  return { ...result, code: imports.join("") + result.code };
+  return compileFile(file, { customTags });
 }

@@ -14,6 +14,7 @@ export default defineConfig({
       "src/bun.test.ts",
       "src/helpers.bun.test.ts",
       "src/example.bun.test.ts",
+      "src/marko-tags.bun.test.ts",
     ],
   },
 });

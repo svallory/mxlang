@@ -240,6 +240,31 @@ function isComponent(name: string, ctx: Ctx): boolean {
 }
 
 /**
+ * The `.marko` template Marko's taglib lookup resolved a tag to, so the
+ * emitted module can import it the way Marko's own translator does.
+ *
+ * Only a taglib-discovered tag (`tags/badge.marko`, a package's `marko.json`)
+ * has one: a `<define>` or an import is already in scope, and the element
+ * and host taglibs carry no template. A tag the taglib declares with no
+ * template (a Marko 5 `renderer`) gets `undefined` and keeps its bare call.
+ */
+function resolveDiscoveredTagModule(
+  name: string,
+  ctx: Ctx,
+): string | undefined {
+  if (ctx.defines.has(name) || ctx.imports.has(name)) return undefined;
+  const tag = ctx.lookup?.getTag(name);
+  if (tag?.taglibId === undefined) return undefined;
+  if (
+    ELEMENT_TAGLIBS.has(tag.taglibId) ||
+    tag.taglibId === "mx-translator-core"
+  ) {
+    return undefined;
+  }
+  return tag.template;
+}
+
+/**
  * `class:foo` / `style:foo` — rejected, with this dialect's own message.
  *
  * The brief asked for these to lower to Marko's semantics. Marko 5.42.5 /
@@ -480,6 +505,7 @@ export const policy: Policy = {
   tags: TAGS,
   isElement,
   isComponent,
+  resolveDiscoveredTagModule,
   checkBinding: rejectInputShadowing,
   claimsTag,
   resolveHostTag,

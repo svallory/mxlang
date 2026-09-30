@@ -635,8 +635,12 @@ export function createEmitter(): StringEmitter {
 
     component(node) {
       const target = node.target;
+      // A discovered `tags/*.marko` tag is called through the local the
+      // module imported it as; everything else by its own name.
+      const callee =
+        target.kind === "name" ? (target.binding ?? target.name) : "";
       const ownerType =
-        target.kind === "name" ? `Parameters<typeof ${target.name}>[0]` : null;
+        target.kind === "name" ? `Parameters<typeof ${callee}>[0]` : null;
       const { parts, named, spreads } = propsOf(
         node.attrs,
         node.attrTagProps,
@@ -739,7 +743,7 @@ export function createEmitter(): StringEmitter {
           push(
             concatMapped(
               `const ${temp} = `,
-              mapped(target.name, node.nameSpan),
+              mapped(callee, node.nameSpan),
               "(",
               props,
               ");",
@@ -752,7 +756,7 @@ export function createEmitter(): StringEmitter {
         push(
           concatMapped(
             "out += ",
-            mapped(target.name, node.nameSpan),
+            mapped(callee, node.nameSpan),
             "(",
             props,
             ").output;",
@@ -764,7 +768,7 @@ export function createEmitter(): StringEmitter {
       push(
         concatMapped(
           "out += ",
-          mapped(target.name, node.nameSpan),
+          mapped(callee, node.nameSpan),
           "(",
           props,
           ");",

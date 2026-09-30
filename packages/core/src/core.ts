@@ -272,7 +272,9 @@ export interface Ctx {
   /** The current unit's resolved Input, for callee-side data-tag checks. */
   ownInput?: CalleeInput;
   /** Set by a dialect that resolves tags through Marko's taglib lookup. */
-  lookup?: { getTag(name: string): { taglibId?: string } | undefined };
+  lookup?: {
+    getTag(name: string): { taglibId?: string; template?: string } | undefined;
+  };
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Readonly<Record<string, CustomTag>>;
   /**

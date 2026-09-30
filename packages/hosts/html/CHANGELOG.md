@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: a page calling a `tags/*.marko` tag imports it (html-tags-marko-import)
+
+An html-host page calling a tag from `tags/*.marko` emitted a bare `badge({...})` with no import, so it threw `ReferenceError: badge is not defined` at run time (and `<fancy-btn/>` emitted the invalid `fancy - btn(...)`). The module now imports the tag the way Marko 6.3.51 does: `import _badge from "./tags/badge.marko"`, a default import with the extension kept, relative to the page, named `_` plus the camelCased tag name, once per module. Discovery is Marko's own (nearest `tags/` per name up to the package root, `tags/x/index.marko` before `tags/x.marko`). A same-name `tags/x.mx` still wins over `tags/x.marko` regardless of distance (an mx-only rule, recorded in `divergences.md`). `bun run example` and the oracle's `translator-render.ts` no longer inject the import themselves. `src/marko-tags.bun.test.ts` (in `test:bun`) renders real `.mx` pages through Bun; `src/marko-tags.test.ts` pins the emitted import. No golden changes.
+
 ### Fix: `bun run example <fixture>` runs again (html-readme-example-nested-layout)
 
 Every example, `class-object` and `nested-layout` included, died with `SyntaxError: Unexpected token ':'`. `src/example.ts` executed the compiled module by regex-stripping its `import`s and `export default function (input: Input): string {` line, a shape the emitter stopped producing when the module became a named, branded `function Input(input: Input): string`. It now runs the real emitted module through Bun's loader instead of matching its text, applies `tags/` discovery, and so cannot drift from the emitter again. `src/example.bun.test.ts` (in `test:bun`) runs the script against every fixture stock Marko compiles and checks the README's named examples are among them.

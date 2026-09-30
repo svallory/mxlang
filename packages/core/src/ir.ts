@@ -312,7 +312,22 @@ export interface AttrTagProp {
  */
 export type ComponentTarget =
   /** An `import` binding or a taglib/`tags/`-discovered tag, by name. */
-  | { kind: "name"; name: string; resolvedPath?: string }
+  | {
+      kind: "name";
+      name: string;
+      resolvedPath?: string;
+      /**
+       * The local identifier the emitter calls, when it differs from `name`.
+       *
+       * Set by `lowerTag` only for a tag whose host answered
+       * `resolveDiscoveredTagModule`: the tag's written name (`fancy-btn`) is
+       * not an identifier, so the module imports the template under a minted
+       * one (`_fancyBtn`). `name` stays the authored spelling for diagnostics
+       * and callee-Input lookup. Absent means "call `name` itself", which is
+       * every other target.
+       */
+      binding?: string;
+    }
   /** A `<define>` in scope, with the parameter names it declared. */
   | { kind: "define"; name: string; params: string[] }
   /**

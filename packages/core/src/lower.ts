@@ -91,6 +91,7 @@ import type {
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import {
+  bindingForDiscoveredModule,
   hasTemplate,
   inputMember,
   metadataOfIr,
@@ -2308,7 +2309,19 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         valueImportBinding: name,
       });
     }
-    return lowerComponent(ctx, node, { kind: "name", name });
+    // A taglib-discovered tag the host imports (Marko imports every tag its
+    // lookup finds). Not for a file-local binding: that is already in scope.
+    const modulePath = fileLocalBinding
+      ? undefined
+      : ctx.declarations.resolveDiscoveredTagModule?.(name, ctx);
+    const binding = modulePath
+      ? bindingForDiscoveredModule(ctx, modulePath, name, posOf(node))
+      : undefined;
+    return lowerComponent(
+      ctx,
+      node,
+      binding ? { kind: "name", name, binding } : { kind: "name", name },
+    );
   }
 
   // No HTML element is ever capitalized, so an unbound PascalCase tag is a

@@ -130,6 +130,25 @@ export interface HostDeclarations {
    */
   rejectComponentTag?(name: string, node: Node, ctx: Ctx): void;
   /**
+   * The module a taglib-discovered component tag lives in, for a host whose
+   * emitted module must import it.
+   *
+   * Called from `lowerTag` for a tag that `isComponent` routed as a plain
+   * named call, is not shadowed by a file-local binding, and is not a
+   * registered custom tag (a `tags/*.mx` tag is imported by its own
+   * mechanism). Return the absolute path of the tag's template, e.g. the
+   * `tags/badge.marko` Marko's taglib lookup found, and the core mints a
+   * binding, adds `import <binding> from "<path relative to the file>"` to
+   * the module and sets `binding` on the `Component` target so the emitter
+   * calls it. Marko does the same for every tag its lookup finds.
+   *
+   * `undefined` (and leaving the hook out) means "nothing to import": the
+   * call keeps its bare `name`, which is what a host that resolves the name
+   * some other way, or a tag with no template, needs. No host but the vanilla
+   * HTML host implements it.
+   */
+  resolveDiscoveredTagModule?(name: string, ctx: Ctx): string | undefined;
+  /**
    * Rejects an unresolved tag name in this host's own words.
    *
    * Called before the core's generic "unknown tag" message. A Marko-parity

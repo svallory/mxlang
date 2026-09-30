@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import { compile } from "@mxlang/html";
 
 /**
@@ -70,19 +70,7 @@ export async function renderTranslator(
         )
         .replace('from "@mxlang/html"', `from ${JSON.stringify(escapeEntry)}`);
 
-      // A `tags/`-discovered component is called by bare identifier with no
-      // import of its own — that is the whole point of tag discovery — so
-      // one is synthesized here for each discovered tag the emitted code
-      // actually calls, pointing at that tag's own compiled sibling.
-      const imports = discoveredTags(dirname(file))
-        .filter((name) => new RegExp(`\\b${name}\\(`).test(rewritten))
-        .map(
-          (name) =>
-            `import ${name} from ${JSON.stringify(withTsExtension(join(dirname(file), "tags", `${name}.marko`)))};\n`,
-        )
-        .join("");
-
-      writeFileSync(withTsExtension(file), imports + rewritten);
+      writeFileSync(withTsExtension(file), rewritten);
     }
 
     const entry = withTsExtension(join(scratch, relative(dir, filename)));
@@ -122,15 +110,4 @@ function withMxExtension(file: string): string {
 
 function withTsExtension(file: string): string {
   return file.replace(/\.marko$/, ".ts");
-}
-
-/** Tag names discoverable from a `tags/` directory beside `dir`, if any. */
-function discoveredTags(dir: string): string[] {
-  try {
-    return readdirSync(join(dir, "tags"))
-      .filter((f) => /\.marko$/.test(f))
-      .map((f) => f.replace(/\.marko$/, ""));
-  } catch {
-    return [];
-  }
 }

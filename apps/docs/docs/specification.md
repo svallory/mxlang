@@ -1364,6 +1364,20 @@ walk with `package.json#mx.tags` (a string, or entries of
 entries come last, in array order. An explicitly passed `customTags` still beats
 a discovered tag of the same name.
 
+**`tags/*.marko` and `tags/*.mx` together.** The scan above indexes only `.mx` and
+`.tag.ts`; a `tags/x.marko` is found by Marko's own taglib lookup (nearest `tags/`
+per name, up to the package root, ahead of `node_modules` taglibs; in one
+directory `tags/x/index.marko` beats `tags/x.marko`). A host that routes such a
+tag as a plain component call (`@mxlang/html` today) imports it the way Marko
+6.3.51 does: `import _x from "./tags/x.marko"`, a default import, extension kept,
+relative to the calling file, named `_` plus the camelCased tag name (numeric
+suffix on a collision), once per module. It is the optional
+`HostDeclarations.resolveDiscoveredTagModule` hook plus `binding` on the
+`Component` target. **MX-only rule:** a same-name `tags/x.mx` beats
+`tags/x.marko` *regardless of distance* (registered custom tags are consulted
+before the taglib lookup, step 6 above); Marko has no `.mx`, so it has no
+answer here. See `divergences.md`.
+
 The config key is **`mx`**, not `mxlang` — a hard rename with no legacy path
 (decision 89a).
 
