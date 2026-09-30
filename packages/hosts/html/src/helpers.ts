@@ -19,12 +19,18 @@
  *
  * ## Two runtimes, two evaluation mechanisms, no writes on either
  *
- * - **Bun**: `require(`data:text/typescript;base64,...`)` evaluates
- *   synchronously with Bun's own real TypeScript stripping. A `data:` URL
- *   has no location of its own, so a relative import inside it cannot
- *   resolve — which is why every import is rewritten to an absolute
- *   `file://` target (or another in-memory module's own URL) before this
- *   ever runs, not left for Bun's own resolver to puzzle out.
+ * - **Bun**: a `Bun.plugin` virtual module (`build.module(name, …)`) under
+ *   the same private `mx-virtual:` scheme Node uses, evaluated with a
+ *   synchronous `require()` and Bun's own real TypeScript stripping. Not a
+ *   `data:` URL: Bun 1.3.14 (the CI pin) fails `require("data:…")` with
+ *   `NameTooLong while resolving package 'data:text/typescript;base64,…'`
+ *   once the URL passes ~1.5 KB, and a nested tag's `data:` URL is embedded
+ *   base64-in-base64 in its importer, so any page that calls a tag crosses
+ *   that line. A virtual module has no location of its own either, so a
+ *   relative import inside it cannot resolve — which is why every import is
+ *   rewritten to an absolute `file://` target (or another in-memory
+ *   module's own URL) before this ever runs, not left for Bun's own
+ *   resolver to puzzle out.
  * - **Node ≥22.15**: `node:module`'s `registerHooks({ resolve, load })`
  *   intercepts a synchronous `require()` for a private `mx-virtual:` scheme
  *   this module owns; `load` runs the source through `node:module`'s
@@ -47,14 +53,14 @@
  *   never the process's current working directory. This is what makes the
  *   caller's own `node_modules` resolve regardless of where the process
  *   happened to be started from — Bun's own bare-specifier resolution from
- *   a `data:` URL is CWD-relative and silently wrong whenever a
+ *   a virtual module is CWD-relative and silently wrong whenever a
  *   caller's CWD differs from their project root.
  * - **Relative, non-`.mx`** (`import { helper } from "./util.ts"`) —
  *   rewritten to an absolute `file://` URL against the anchor's directory.
  * - **Relative `.mx`/`.marko`** (a discovered custom tag's own injected
  *   import) — compiled *recursively* through this same cache, and the
- *   import is pointed at that nested module's own in-memory form (a fresh
- *   data URL on Bun, a versioned `mx-virtual:` URL on Node) rather than a
+ *   import is pointed at that nested module's own in-memory form (a
+ *   versioned `mx-virtual:` URL, on both runtimes) rather than a
  *   file path, since there is no file to point at.
  *
  * `mx(source)` with no `options.filename` and no relative imports in its
@@ -93,9 +99,8 @@
  * version forever regardless of what `isFresh` decides — confirmed by
  * measurement: a bare `mx-virtual:<path>` scheme with no version, tried
  * first, never picked up a nested dependency's edit at all under Node
- * (Bun's own data-URL path needed no such trick, since a changed payload is
- * already a new URL). Each recompile therefore adds one more `mx-virtual:`
- * URL Node's require cache holds — Node has no API to evict a `require`d
+ * (Bun gets the same versioned URLs). Each recompile therefore adds one more
+ * `mx-virtual:` URL Node's require cache holds — Node has no API to evict a `require`d
  * ESM module, so **a long-lived dev process that edits templates over and
  * over grows this cache without bound**. An unchanged file is a cache hit
  * (`isFresh`) and mints no new URL, so this only grows on a real edit, at
@@ -124,6 +129,7 @@ import {
   type MxWarning,
   TranslateError,
 } from "@mxlang/core";
+import type { PluginBuilder } from "bun";
 import { type CompileOptions, compile } from "./index.ts";
 
 /**
@@ -266,6 +272,27 @@ const virtualSources = new Map<string, string>();
 /** Real path -> its current virtual/data URL, so a cache hit reuses it. */
 const urlForPath = new Map<string, string>();
 let virtualVersion = 0;
+
+/**
+ * Bun's half of the `mx-virtual:` scheme: one plugin, registered lazily,
+ * whose builder is kept so each new module is added with `build.module`
+ * (registering a whole plugin per module would pile up plugins).
+ */
+let bunBuild: PluginBuilder | undefined;
+
+function registerVirtual(url: string, source: string): void {
+  virtualSources.set(url, source);
+  if (!isBun) return;
+  if (!bunBuild) {
+    (globalThis as unknown as { Bun: typeof import("bun") }).Bun.plugin({
+      name: "mxlang-virtual",
+      setup(build) {
+        bunBuild = build;
+      },
+    });
+  }
+  bunBuild?.module(url, () => ({ contents: source, loader: "ts" }));
+}
 
 let nodeHooksRegistered = false;
 
@@ -513,10 +540,8 @@ function loadNestedMx(
   for (const dep of dependencies) deps.set(dep, statSync(dep).mtimeMs);
 
   const rewritten = rewriteImports(code, path, deps, nextSeen);
-  const url = isBun
-    ? `data:text/typescript;base64,${Buffer.from(rewritten, "utf8").toString("base64")}`
-    : `mx-virtual:${path}#v${virtualVersion++}`;
-  virtualSources.set(url, rewritten);
+  const url = `mx-virtual:${path}#v${virtualVersion++}`;
+  registerVirtual(url, rewritten);
   urlForPath.set(path, url);
   pathCache.set(path, { renderer: null as never, deps });
   evictOldest(pathCache, MAX_CACHE_ENTRIES);
@@ -528,8 +553,8 @@ function loadNestedMx(
 /**
  * Evaluates `rewritten` and returns both the module and the exact URL it was
  * evaluated under, per runtime — round 2, finding 2: recording a URL
- * reconstructed *after* the fact (a guessed `mx-virtual:` string on Node, or
- * one that Bun's own data-URL path never even uses) went stale the moment
+ * reconstructed *after* the fact (a guessed `mx-virtual:` string) went stale
+ * the moment
  * `virtualVersion` next incremented, so a file `loadMx`'d standalone and
  * later imported as a nested tag resolved to nothing. The caller records
  * exactly what comes back from here, never reconstructs it.
@@ -538,13 +563,10 @@ function evaluate(
   rewritten: string,
   anchor: string | undefined,
 ): { mod: unknown; url: string } {
-  if (isBun) {
-    const url = `data:text/typescript;base64,${Buffer.from(rewritten, "utf8").toString("base64")}`;
-    return { mod: require(url), url };
-  }
-  ensureNodeHooks();
   const url = `mx-virtual:${anchor ?? "inline"}#v${virtualVersion++}`;
-  virtualSources.set(url, rewritten);
+  registerVirtual(url, rewritten);
+  if (isBun) return { mod: require(url), url };
+  ensureNodeHooks();
   const req = createRequire(anchor ?? import.meta.url);
   return { mod: req(url), url };
 }

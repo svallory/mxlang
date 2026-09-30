@@ -13,7 +13,7 @@ import { loadMx, mx } from "./helpers.ts";
 /**
  * Runs under `bun test` (`bun run test:bun`), not vitest — vitest's own
  * worker process reports no `Bun` global even when invoked via `bunx`
- * (measured), so `mx`/`loadMx`'s Bun branch (`require` of a `data:` URL) is
+ * (measured), so `mx`/`loadMx`'s Bun branch (`require` of a plugin virtual module) is
  * otherwise never actually exercised by the vitest suite in
  * `helpers.test.ts`, which only ever runs the Node `registerHooks` branch.
  * `bun:test`'s own worker genuinely runs under Bun, so this file is what
@@ -60,7 +60,7 @@ function bumpMtime(path: string): void {
   utimesSync(path, past, past);
 }
 
-describe("mx-helpers on Bun (data: URL require path)", () => {
+describe("mx-helpers on Bun (virtual-module require path)", () => {
   it("compiles and renders a template with no imports and no filename", () => {
     const render = mx<{ n: number }>("<p>${input.n}</p>");
     expect(render({ n: 42 })).toBe("<p>42</p>");
@@ -126,6 +126,38 @@ describe("mx-helpers on Bun (data: URL require path)", () => {
       const r2 = loadMx(path);
       expect(r2).not.toBe(r1);
       expect(r2({})).toBe("<div><span>CHANGED-hi</span></div>");
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Bun 1.3.14 (the CI pin) cannot resolve a `data:` URL past ~1.5 KB:
+  // `NameTooLong while resolving package 'data:text/typescript;base64,…'`.
+  // Bun 1.4.2 has no such limit, so these only go red on the pinned Bun — run
+  // them with `~/.proto/tools/bun/1.3.14/bun` to see the regression.
+  it("evaluates a template whose emitted module is far past any data: URL limit", () => {
+    const big = "lorem ipsum dolor sit amet ".repeat(400);
+    const render = mx<{ n: number }>(`<p>${big}\${input.n}</p>`);
+    expect(render({ n: 7 })).toBe(`<p>${big}7</p>`);
+  });
+
+  it("evaluates a large page that imports a large nested tag", () => {
+    const { dir, cleanup } = makeFixture();
+    try {
+      const big = "lorem ipsum dolor sit amet ".repeat(400);
+      writeFileSync(
+        join(dir, "tags", "label.mx"),
+        [
+          "export interface Input { label: string }",
+          `<span>${big}\${input.label}</span>`,
+        ].join("\n"),
+      );
+      writeFileSync(
+        join(dir, "page.mx"),
+        `<icon label="hi"/>\n<p>${big}</p>\n`,
+      );
+      const html = loadMx<Record<string, never>>(join(dir, "page.mx"))({});
+      expect(html).toBe(`<div><span>${big}hi</span></div><p>${big}</p>`);
     } finally {
       cleanup();
     }
