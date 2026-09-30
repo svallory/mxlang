@@ -2,6 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
+    // Declarations resolve the workspace deps through their published `types`
+    // (dist), not the typecheck-only src mapping in tsconfig.json.
+    "paths": {},
     "declarationMap": false
   },
   "exclude": ["src/**/*.test.ts", "src/**/fixtures/**", "test/**/*"]

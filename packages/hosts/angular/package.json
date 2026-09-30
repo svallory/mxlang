@@ -42,7 +42,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "rm -rf dist && bun build src/index.ts src/bin.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && bun build src/runtime.ts --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
+    "build": "rm -rf dist && bun build src/index.ts src/bin.ts --tsconfig-override tsconfig.build.json --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && bun build src/runtime.ts --tsconfig-override tsconfig.build.json --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
     "@jridgewell/sourcemap-codec": "1.6.0",
