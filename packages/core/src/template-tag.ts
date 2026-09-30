@@ -84,6 +84,18 @@ export interface TemplateMetadata {
    * Only set when the unit has at least one of them.
    */
   inputAuxCode?: string;
+  /**
+   * The verbatim source of each top-level `export` statement this unit
+   * hoists (`export const …`, `export function …`), one entry per statement,
+   * in source order. `export interface Input` is not among them.
+   *
+   * Carried so a host can read a callee's own `export const` facts (the
+   * Angular host reads `selector`) from the same parsed statements its
+   * module emission consumes, rather than re-scanning the callee's text —
+   * which would also see an `export` inside a comment or a string. Only set
+   * when the unit has at least one.
+   */
+  hoistedExports?: string[];
 }
 
 export interface TemplateBackedTag extends CustomTag {
@@ -584,6 +596,10 @@ export function metadataOfIr(
     if (node.kind === "Static" || node.kind === "Export") aux.push(node.code);
   }
   if (aux.length > 0) metadata.inputAuxCode = aux.join("\n");
+  const exported = (ir.hoisted ?? [])
+    .filter((node) => node.kind === "Export")
+    .map((node) => node.code);
+  if (exported.length > 0) metadata.hoistedExports = exported;
   return metadata;
 }
 
