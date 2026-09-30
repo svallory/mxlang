@@ -235,6 +235,11 @@ export interface NgMxLanguagePluginOptions
    * the type-check used.
    */
   retainCompiled?: boolean;
+  /**
+   * Called after every successful compile. The editor uses it to schedule
+   * Angular template diagnostics without holding every result.
+   */
+  onCompiled?: (compiled: CompiledNgMx) => void;
 }
 
 /** One `.ng.mx` file's latest successful compile. */
@@ -323,8 +328,10 @@ export function createNgMxLanguagePlugin(
           tagSelectorPrefix,
         });
         syntaxErrors.delete(fileName);
-        if (options.retainCompiled) {
-          compiled.set(fileName, { fileName, source, result });
+        if (options.retainCompiled || options.onCompiled) {
+          const entry = { fileName, source, result };
+          if (options.retainCompiled) compiled.set(fileName, entry);
+          options.onCompiled?.(entry);
         }
         compileDiagnostics.set(
           fileName,
@@ -412,7 +419,7 @@ function configErrorMessage(cause: unknown): string {
 /** `mx.angular.tagSelectorPrefix`'s default (`config.ts` `DEFAULTS`). */
 const DEFAULT_TAG_SELECTOR_PREFIX = "mx-";
 
-function nearestPackageDir(start: string): string | undefined {
+export function nearestPackageDir(start: string): string | undefined {
   let dir = start;
   for (;;) {
     if (existsSync(join(dir, "package.json"))) return dir;

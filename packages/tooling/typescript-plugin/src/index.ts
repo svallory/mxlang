@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
 import type * as ts from "typescript";
@@ -22,6 +23,10 @@ import {
   createMxLanguagePlugin,
   type MxLanguagePlugin,
 } from "./mx-language.ts";
+import {
+  createNgDiagnosticsService,
+  type NgDiagnosticsService,
+} from "./ng-diagnostics.ts";
 
 type AnyMxLanguagePlugin =
   | SolidMxLanguagePlugin
@@ -31,13 +36,18 @@ type AnyMxLanguagePlugin =
 
 const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
   let languagePlugins: Array<AnyMxLanguagePlugin> | undefined;
+  let ngDiagnostics: NgDiagnosticsService | undefined;
   const volarFactory = createLanguageServicePlugin((typescript, info) => {
     const readSource = createProjectSourceReader(info);
     const solidMxPlugin = createSolidMxLanguagePlugin(typescript, {
       readSource,
     });
     const mxPlugin = createMxLanguagePlugin(typescript, { readSource });
-    const ngMxPlugin = createNgMxLanguagePlugin(typescript, { readSource });
+    ngDiagnostics = createEditorNgDiagnostics(typescript, info);
+    const ngMxPlugin = createNgMxLanguagePlugin(typescript, {
+      readSource,
+      onCompiled: (entry) => ngDiagnostics?.notifyCompiled(entry),
+    });
     languagePlugins = [solidMxPlugin, ngMxPlugin, mxPlugin];
     if (info.config?.astro === true) {
       languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
@@ -73,6 +83,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         modules.typescript,
         service,
         () => languagePlugins,
+        () => ngDiagnostics,
       );
     },
   };
@@ -127,13 +138,69 @@ export function createConfiguredLanguagePlugins(
   ];
 }
 
+/**
+ * The worker entry sits next to this bundle (`ng-worker.cjs`). Outside the
+ * bundle (tests, source checkouts) `__dirname` is the source directory, where
+ * the worker is `ng-worker.ts`.
+ */
+function ngWorkerPath(): string {
+  return join(
+    __dirname,
+    __filename.endsWith(".cjs") ? "ng-worker.cjs" : "ng-worker.ts",
+  );
+}
+
+/**
+ * One Angular diagnostics service per tsserver project: its debounce, its
+ * worker per Angular package, and its teardown with the project.
+ */
+function createEditorNgDiagnostics(
+  typescript: typeof ts,
+  info: ts.server.PluginCreateInfo,
+): NgDiagnosticsService {
+  const project = info.project;
+  const service = createNgDiagnosticsService({
+    workerPath: ngWorkerPath(),
+    tsconfigPath:
+      project.projectKind === typescript.server.ProjectKind.Configured
+        ? project.getProjectName()
+        : undefined,
+    watchFile: (fileName, onChange) =>
+      info.serverHost.watchFile(fileName, () => onChange()),
+    // Results arrive after the request that wanted them: ask tsserver to
+    // send a fresh `geterr` round (`Project.refreshDiagnostics`, which
+    // emits `projectsUpdatedInBackground`).
+    refresh: () => project.refreshDiagnostics(),
+    log: (message) => project.projectService.logger.info(message),
+  });
+  // Tear the workers down with the project (and, as a backstop, the process;
+  // a worker also ends itself when tsserver's IPC channel closes).
+  const close = project.close.bind(project);
+  project.close = () => {
+    service.dispose();
+    close();
+  };
+  process.once("exit", () => service.dispose());
+  return service;
+}
+
 function withSyntaxDiagnostics(
   typescript: typeof ts,
   service: ts.LanguageService,
   getLanguagePlugins: () => Array<AnyMxLanguagePlugin> | undefined,
+  getNgDiagnostics: () => NgDiagnosticsService | undefined = () => undefined,
 ): ts.LanguageService {
   return new Proxy(service, {
     get(target, property, receiver) {
+      if (property === "getSemanticDiagnostics") {
+        return (fileName: string) => {
+          const diagnostics = target.getSemanticDiagnostics(fileName);
+          const ng = isNgMx(fileName) ? getNgDiagnostics() : undefined;
+          return ng
+            ? [...diagnostics, ...angularDiagnostics(typescript, ng, fileName)]
+            : diagnostics;
+        };
+      }
       if (property !== "getSyntacticDiagnostics") {
         return Reflect.get(target, property, receiver);
       }
@@ -176,6 +243,63 @@ function withSyntaxDiagnostics(
       };
     },
   });
+}
+
+/**
+ * The Angular diagnostics (and project notices) for a `.ng.mx`, as TypeScript
+ * diagnostics with `source: "angular"`. A degraded position says so, like
+ * `mx-tsc` does.
+ */
+export function angularDiagnostics(
+  typescript: typeof ts,
+  ng: NgDiagnosticsService,
+  fileName: string,
+): ts.Diagnostic[] {
+  const result = ng.getDiagnostics(fileName);
+  const out: ts.Diagnostic[] = [];
+  const file = (text: string) =>
+    typescript.createSourceFile(
+      fileName,
+      text,
+      typescript.ScriptTarget.Latest,
+      false,
+      typescript.ScriptKind.TS,
+    );
+  if (result) {
+    const sourceFile = file(result.source);
+    for (const d of result.diagnostics) {
+      out.push({
+        file: sourceFile,
+        start: d.start,
+        length: d.length,
+        category:
+          d.category === "error"
+            ? typescript.DiagnosticCategory.Error
+            : typescript.DiagnosticCategory.Warning,
+        code: d.code,
+        source: "angular",
+        messageText:
+          d.mapped === "exact"
+            ? d.message
+            : `${d.message} (approximate location)`,
+      });
+    }
+  }
+  for (const notice of ng.getNotices(fileName)) {
+    out.push({
+      file: file(""),
+      start: 0,
+      length: 0,
+      category:
+        notice.category === "error"
+          ? typescript.DiagnosticCategory.Error
+          : typescript.DiagnosticCategory.Warning,
+      code: 80003,
+      source: "angular",
+      messageText: notice.message,
+    });
+  }
+  return out;
 }
 
 export {
