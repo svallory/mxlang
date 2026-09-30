@@ -153,7 +153,10 @@ export function reportNgDiagnostics(result: NgDiagnosticsResult): void {
           category: categories[d.category],
           code: d.code,
           source: d.source,
-          messageText: d.message,
+          messageText:
+            d.mapped === "exact"
+              ? d.message
+              : `${d.message} (approximate location)`,
         }));
       }),
       {

@@ -32,7 +32,17 @@ export interface NgMxDiagnostic {
   message: string;
   category: DiagnosticCategory;
   source: "angular";
+  /**
+   * How exactly `start` locates the problem. `"exact"`: inside a mapped
+   * expression (the whole expression's start). Degraded, so tooling can say
+   * the location is approximate: `"region"` the start of the enclosing
+   * `template:` region; `"sourcemap"` the module source map's nearest
+   * position; `"none"` nothing located it and `start` is 0.
+   */
+  mapped: NgMxMapped;
 }
+
+export type NgMxMapped = "exact" | "region" | "sourcemap" | "none";
 
 /**
  * Resolve an offset in the emitted module to a `.ng.mx` position, never
@@ -43,7 +53,7 @@ export interface NgMxDiagnostic {
 function locate(
   compiled: CompileNgMxResult,
   generatedOffset: number,
-): { start: number; length: number } {
+): { start: number; length: number; mapped: NgMxMapped } {
   const start = sourceOffsetFor(compiled.mappings, generatedOffset);
   if (start !== null) {
     let length = 0;
@@ -60,14 +70,14 @@ function locate(
         length = m.sourceEnd - m.sourceStart;
       }
     }
-    return { start, length };
+    return { start, length, mapped: "exact" };
   }
 
   const region = compiled.regions.find(
     (r) =>
       generatedOffset >= r.generatedStart && generatedOffset < r.generatedEnd,
   );
-  if (region) return { start: region.start, length: 0 };
+  if (region) return { start: region.start, length: 0, mapped: "region" };
 
   const source = compiled.map.sourcesContent?.[0];
   if (typeof source === "string") {
@@ -75,9 +85,15 @@ function locate(
       compiled.map.mappings,
       lineColumnAt(compiled.code, generatedOffset),
     );
-    if (original) return { start: offsetAt(source, original), length: 0 };
+    if (original) {
+      return {
+        start: offsetAt(source, original),
+        length: 0,
+        mapped: "sourcemap",
+      };
+    }
   }
-  return { start: 0, length: 0 };
+  return { start: 0, length: 0, mapped: "none" };
 }
 
 /**

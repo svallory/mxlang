@@ -212,3 +212,34 @@ describe("diagnoseNgMx (mapping rules)", () => {
     expect(out[0]?.start).toBe(source.indexOf("user = "));
   });
 });
+
+describe("diagnoseNgMx `mapped` flag (how exact the position is)", () => {
+  const source = ngMx("<p>${user.name}</p>");
+  const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+  const region = compiled.regions[0];
+  const expression = compiled.mappings.find(
+    (m) => source.slice(m.sourceStart, m.sourceEnd) === "user.name",
+  );
+  const mappedOf = (start: number, c = compiled) =>
+    diagnoseNgMx(c, stubChecker([record({ start })]), VIRTUAL)[0]?.mapped;
+
+  it('is "exact" for an offset inside a mapped expression', () => {
+    expect(mappedOf(expression?.generatedStart ?? -1)).toBe("exact");
+  });
+
+  it('is "region" when it fell back to the enclosing region start', () => {
+    expect(mappedOf(region?.generatedStart ?? -1)).toBe("region");
+  });
+
+  it('is "sourcemap" when the module source map located it', () => {
+    expect(mappedOf(compiled.code.indexOf("user = "))).toBe("sourcemap");
+  });
+
+  it('is "none" when nothing located it and it landed at the file start', () => {
+    const noContent = {
+      ...compiled,
+      map: { ...compiled.map, sourcesContent: undefined },
+    } as unknown as typeof compiled;
+    expect(mappedOf(0, noContent)).toBe("none");
+  });
+});

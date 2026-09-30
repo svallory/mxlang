@@ -11,6 +11,7 @@ import { compileNgMx } from "@mxlang/angular";
 import type { AngularChecker, Diagnostic } from "@mxlang/angular-checker";
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
 import { afterEach, describe, expect, it } from "vitest";
+import { reportNgDiagnostics } from "./index.ts";
 import {
   checkNgMxFiles,
   type NgDiagnosticsDeps,
@@ -313,5 +314,46 @@ describe("checkNgMxFiles when the checker cannot be created", () => {
       "/x/tsconfig.app.json: cannot read file",
     );
     expect(spy.checked).toEqual([`${compiled(good).fileName}.ts`]);
+  });
+});
+
+describe("reportNgDiagnostics", () => {
+  it("marks a degraded position as approximate, and leaves an exact one alone", () => {
+    const writes: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      const base = {
+        length: 0,
+        code: 2339,
+        category: "error",
+        source: "angular",
+      } as const;
+      reportNgDiagnostics({
+        errors: [],
+        reports: [
+          {
+            fileName: "/p/x.ng.mx",
+            source: "abc\ndef\n",
+            diagnostics: [
+              { ...base, start: 0, message: "exact one", mapped: "exact" },
+              { ...base, start: 4, message: "region one", mapped: "region" },
+              { ...base, start: 4, message: "map one", mapped: "sourcemap" },
+              { ...base, start: 0, message: "none one", mapped: "none" },
+            ],
+          },
+        ],
+      });
+    } finally {
+      process.stderr.write = orig;
+    }
+    const out = writes.join("");
+    expect(out).toContain("exact one\n");
+    for (const m of ["region one", "map one", "none one"]) {
+      expect(out).toContain(`${m} (approximate location)`);
+    }
   });
 });

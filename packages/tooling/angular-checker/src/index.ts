@@ -18,7 +18,11 @@ import {
   resolveCompilerCli,
   SUPPORTED_COMPILER_CLI_RANGE,
 } from "./compiler-cli.ts";
-import { diagnoseNgMx, type NgMxDiagnostic } from "./diagnose.ts";
+import {
+  diagnoseNgMx,
+  type NgMxDiagnostic,
+  type NgMxMapped,
+} from "./diagnose.ts";
 
 export type {
   AngularChecker,
@@ -34,6 +38,7 @@ export {
   createAngularChecker,
   diagnoseNgMx,
   type NgMxDiagnostic,
+  type NgMxMapped,
   resolveCompilerCli,
   SUPPORTED_COMPILER_CLI_RANGE,
   TsconfigError,
