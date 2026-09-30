@@ -40,6 +40,19 @@ entry.
   errors a build silently missed. `--astro` adds Astro's plugin and extension,
   and is removed before TypeScript parses its own arguments.
 
+- **`.ng.mx` is its own file kind.** `createNgMxLanguagePlugin` (`src/language.ts`,
+  language id `ngmx`) compiles it with `compileNgMx` from `@mxlang/angular`
+  (no `print` round trip) and is routed by core's `hostModuleSegment(...) ===
+  "ng"` *before* the host-policy branch; `isMx` excludes it. Outside the
+  `template:` regions the module maps through `result.map`; each template
+  expression maps through `result.mappings` (whole-to-whole, so the sides may
+  differ in length: `generatedLengths` is set). TypeScript sees a region as an
+  opaque template literal, so this yields class/module semantics only —
+  template expressions need Angular's compiler. `tagSelectorPrefix` comes from
+  `readAngularConfig`, which throws on a bad config: the plugin reports that as
+  an error diagnostic at offset 0 and emits empty virtual code, never defaults.
+  The host-policy "angular not wired" guard still covers Angular `.mx` pages.
+
 Four facts worth knowing before editing either:
 
 - **`runTsc` needs `require('typescript')` passed as its fourth argument.**
