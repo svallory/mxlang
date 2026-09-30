@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { compile } from "@mxlang/angular";
 import { isDerivedFrom, runAngularTable } from "../src/report-angular";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -68,7 +69,7 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
   it("scopes the containment hatch to a `by=` arrow's body", () => {
     // The one place a contained-but-not-equal run is real: `by=(p => p.id)`
     // tracks the arrow's body, sliced out of the source.
-    expect(isDerivedFrom("p.id", "(p => p.id)", "track")).toBe(true);
+    expect(isDerivedFrom("p.id", "(p => p.id)", "track", "p")).toBe(true);
     expect(isDerivedFrom("p.id", "p => p.id", "track")).toBe(true);
     // Anywhere else containment proves nothing: `name` appearing inside
     // `user.name` does not make one a derivation of the other.
@@ -77,16 +78,50 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
   });
 
   it("requires an exact `<prefix><kebab(source)>` for a selector", () => {
-    expect(isDerivedFrom("mx-user-card", "UserCard", "selector")).toBe(true);
-    expect(isDerivedFrom("mx-user-card", "user-card", "selector")).toBe(true);
+    const sel = (g: string, src: string, prefix?: string) =>
+      isDerivedFrom(g, src, "selector", prefix);
+    expect(sel("mx-user-card", "UserCard", "mx-")).toBe(true);
+    expect(sel("mx-user-card", "user-card", "mx-")).toBe(true);
     // The old branch admitted any `<anything>-<kebab(source)>`.
-    expect(isDerivedFrom("mx-foo-user-card", "UserCard", "selector")).toBe(
+    expect(sel("mx-foo-user-card", "UserCard", "mx-")).toBe(false);
+    expect(sel("other-user-card", "UserCard", "mx-")).toBe(false);
+    expect(sel("user-card", "UserCard", "mx-")).toBe(false);
+    // The prefix is the emitter's actual `tagSelectorPrefix`, not a constant.
+    expect(sel("acme-user-card", "UserCard", "acme-")).toBe(true);
+    expect(sel("mx-user-card", "UserCard", "acme-")).toBe(false);
+    // A selector mapping that names no prefix cannot be checked: reject.
+    expect(sel("mx-user-card", "UserCard")).toBe(false);
+  });
+
+  it("accepts a tag module's explicit selector only as a custom-element name for a tag-name source", () => {
+    // `export const selector = "liuna-badge"` wins over prefix + kebab, and
+    // the string is the callee's, not derivable from the caller's source.
+    expect(isDerivedFrom("liuna-badge", "Badge", "tag-module-selector")).toBe(
+      true,
+    );
+    expect(isDerivedFrom("badge", "Badge", "tag-module-selector")).toBe(false);
+    expect(isDerivedFrom("liuna-badge", "a b", "tag-module-selector")).toBe(
       false,
     );
-    expect(isDerivedFrom("other-user-card", "UserCard", "selector")).toBe(
-      false,
-    );
-    expect(isDerivedFrom("user-card", "UserCard", "selector")).toBe(false);
+    expect(isDerivedFrom("liuna-badge", "Badge")).toBe(false);
+  });
+
+  it("checks `<prefix>` and tag-module selectors end to end from the emitter", () => {
+    const strict = (code: string, tagSelectorPrefix?: string) => {
+      const r = compile(code, "x.mx", { tagSelectorPrefix, warnings: [] });
+      const m = r.mappings.find((x) => x.derive === "selector");
+      return { r, m };
+    };
+    const { r, m } = strict("<const/UserCard=() => 1/><UserCard/>", "acme-");
+    expect(m?.deriveContext).toBe("acme-");
+    expect(
+      isDerivedFrom(
+        r.code.slice(m?.generatedStart, m?.generatedEnd),
+        "UserCard",
+        m?.derive,
+        m?.deriveContext,
+      ),
+    ).toBe(true);
   });
 
   it("requires the `track` provenance for every `by=` branch", () => {
@@ -94,17 +129,18 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
     // (`endsWith(".id")`), whatever emitted it.
     expect(isDerivedFrom("row.id", "id")).toBe(false);
     expect(isDerivedFrom("row.id", "id", "selector")).toBe(false);
-    expect(isDerivedFrom("row.id", "id", "track")).toBe(true);
-    expect(isDerivedFrom("row.id", '"id"', "track")).toBe(true);
-    // The bare-identifier branch: `by=identity` tracks the loop variable, so
-    // the generated text must at least be an identifier.
-    expect(isDerivedFrom("row", "identity", "track")).toBe(true);
+    expect(isDerivedFrom("row.id", "id", "track", "row")).toBe(true);
+    expect(isDerivedFrom("row.id", '"id"', "track", "row")).toBe(true);
+    // `by=identity` tracks the loop variable: the emitter's own row alias,
+    // carried on the mapping — not merely any identifier.
+    expect(isDerivedFrom("row", "identity", "track", "row")).toBe(true);
+    expect(isDerivedFrom("banana", "identity", "track", "row")).toBe(false);
+    expect(isDerivedFrom("row", "identity", "track")).toBe(false);
     expect(isDerivedFrom("COMPLETELY-UNRELATED", "identity")).toBe(false);
-    expect(isDerivedFrom("COMPLETELY-UNRELATED", "identity", "track")).toBe(
-      false,
-    );
+    expect(
+      isDerivedFrom("COMPLETELY-UNRELATED", "identity", "track", "row"),
+    ).toBe(false);
   });
-
   it("lists the define-param and directive derivations explicitly", () => {
     expect(isDerivedFrom("let-x", "x", "define-param")).toBe(true);
     expect(isDerivedFrom("let-y", "x", "define-param")).toBe(false);

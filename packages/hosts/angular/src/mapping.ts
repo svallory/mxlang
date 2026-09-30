@@ -43,13 +43,19 @@ import type { GeneratedMapping, SourceSpan } from "@mxlang/core";
  * derived).
  *
  * - `selector`: a component call's tag name -> `<prefix><kebab(name)>`
+ *   (`deriveContext` is the prefix that was applied)
+ * - `tag-module-selector`: a component call's tag name -> the callee tag
+ *   module's own `export const selector`, which no rule over the caller's
+ *   source can predict, so only its shape is checkable
  * - `event`: an attribute name -> its DOM event name (`onClick` -> `click`)
  * - `track`: a `by=` expression -> the `track` expression
+ *   (`deriveContext` is the loop's row alias)
  * - `define-param`: a `<define>` param -> its `let-<param>` token
  * - `directive`: a `class`/`style` attribute name -> `ngClass`/`ngStyle`
  */
 export type MappingDerive =
   | "selector"
+  | "tag-module-selector"
   | "event"
   | "track"
   | "define-param"
@@ -61,6 +67,11 @@ export type MappingDerive =
  */
 export interface AngularMapping extends GeneratedMapping {
   derive?: MappingDerive;
+  /**
+   * The emitter-side fact the derivation needs to be checked exactly: the
+   * selector prefix for `selector`, the row alias for `track`.
+   */
+  deriveContext?: string;
 }
 
 /**
@@ -98,12 +109,14 @@ export class TemplateWriter {
    * written unmapped rather than mapped to a position the author never wrote.
    *
    * `derive` names the derivation when `text` is derived from, not copied
-   * from, the source under `span`.
+   * from, the source under `span`; `deriveContext` carries what the check
+   * needs beyond the two strings (see {@link AngularMapping}).
    */
   writeMapped(
     text: string,
     span: SourceSpan | null | undefined,
     derive?: MappingDerive,
+    deriveContext?: string,
   ): void {
     const start = this.#out.length;
     this.#out += text;
@@ -116,6 +129,7 @@ export class TemplateWriter {
         generatedStart: start,
         generatedEnd: start + text.length,
         ...(derive ? { derive } : {}),
+        ...(deriveContext === undefined ? {} : { deriveContext }),
       });
     }
   }
@@ -341,6 +355,9 @@ export function rebaseThroughEscaping(
       generatedStart: start,
       generatedEnd: start + run.length,
       ...(mapping.derive ? { derive: mapping.derive } : {}),
+      ...(mapping.deriveContext === undefined
+        ? {}
+        : { deriveContext: mapping.deriveContext }),
     });
   }
   return out;
@@ -395,6 +412,9 @@ export function templateMappingsToModule(
       generatedStart: start,
       generatedEnd: start + run.length,
       ...(mapping.derive ? { derive: mapping.derive } : {}),
+      ...(mapping.deriveContext === undefined
+        ? {}
+        : { deriveContext: mapping.deriveContext }),
     });
   }
   return out;

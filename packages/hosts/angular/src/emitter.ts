@@ -1044,7 +1044,18 @@ class AngularEmitter implements Emitter<string> {
     // `mx-user-card`), so it maps whole-to-whole back to the name the author
     // wrote — the spellings differ, which is exactly what the mapping is for.
     this.out.write("<");
-    this.out.writeMapped(selector, node.nameSpan, "selector");
+    // A callee tag module's own `export const selector` is not derived from
+    // the name at the call site; only the prefix + kebab fallback is.
+    if (tagModule?.selector) {
+      this.out.writeMapped(selector, node.nameSpan, "tag-module-selector");
+    } else {
+      this.out.writeMapped(
+        selector,
+        node.nameSpan,
+        "selector",
+        this.selectorPrefix,
+      );
+    }
     emitAttrs(this.out, node.attrs, (directive) => {
       this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
     });
@@ -1384,7 +1395,7 @@ class AngularEmitter implements Emitter<string> {
       this.out.write(`@for (${row} of `);
       this.out.writeMapped(source.list.code, source.list.span);
       this.out.write("; track ");
-      this.out.writeMapped(track, node.key?.span, "track");
+      this.out.writeMapped(track, node.key?.span, "track", row);
       this.out.write(`${aliasLets}) { `);
       for (const field of destructure) {
         this.out.write(`@let ${field} = ${row}.${field}; `);

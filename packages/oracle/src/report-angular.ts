@@ -272,9 +272,6 @@ function unescapeGenerated(text: string): string {
     .replace(/&amp;/g, "&");
 }
 
-/** The selector prefix `compile()` uses when no `selectorPrefix` is given. */
-const DEFAULT_SELECTOR_PREFIX = "mx-";
-
 /**
  * Is `generated` what MX derives from `source` under the derivation `derive`?
  *
@@ -292,6 +289,7 @@ export function isDerivedFrom(
   generated: string,
   source: string,
   derive?: MappingDerive,
+  deriveContext?: string,
 ): boolean {
   switch (derive) {
     // A component selector: `UserCard`/`user-card` -> `mx-user-card`.
@@ -300,8 +298,18 @@ export function isDerivedFrom(
         .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
         .replace(/[_\s]+/g, "-")
         .toLowerCase();
-      return generated === DEFAULT_SELECTOR_PREFIX + kebab;
+      // The prefix is the emitter's actual `tagSelectorPrefix`; a mapping
+      // that does not carry it cannot be checked exactly.
+      return deriveContext !== undefined && generated === deriveContext + kebab;
     }
+    // A callee tag module's own `export const selector`: not derivable from
+    // the caller's source, so check the alignment (the span holds a tag name)
+    // and that the emitted text is a valid custom-element name.
+    case "tag-module-selector":
+      return (
+        /^[A-Za-z_$][\w$-]*$/.test(source) &&
+        /^[a-z][\w.]*(-[\w.]+)+$/.test(generated)
+      );
     // A DOM event name, checked against the actual derivation — never waved
     // through on the source's shape alone. `onClick` -> `click`: lowercased
     // exactly as written, with NO aliases (decision 101 (c): `onDoubleClick`
@@ -330,10 +338,10 @@ export function isDerivedFrom(
         return generated === body;
       }
       // `by=identity` tracks the row itself, so the emitted `track`
-      // expression is the loop variable — a name that appears nowhere in the
-      // `by=` text, but is always an identifier.
+      // expression is the loop's row alias — a name that appears nowhere in
+      // the `by=` text, carried on the mapping by the emitter.
       if (source.trim() === "identity") {
-        return /^[A-Za-z_$][\w$]*$/.test(generated);
+        return deriveContext !== undefined && generated === deriveContext;
       }
       // A property name: `"id"` -> `<row>.id`.
       const bare = source.replace(/^['"`]|['"`]$/g, "");
@@ -613,7 +621,12 @@ export function runAngularTable(update: boolean): {
       // Otherwise the emitted text must be one MX *derives* from the source
       // text rather than copying — every such derivation is enumerated, so a
       // genuinely misaligned mapping cannot hide behind this branch.
-      return !isDerivedFrom(generatedText, sourceText, mapping.derive);
+      return !isDerivedFrom(
+        generatedText,
+        sourceText,
+        mapping.derive,
+        mapping.deriveContext,
+      );
     });
     if (misaligned) {
       rows.push({

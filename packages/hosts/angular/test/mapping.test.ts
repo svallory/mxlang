@@ -17,6 +17,7 @@ import { compile, compileTagModule } from "../src/index.ts";
 import {
   lineColumnAt,
   offsetAt,
+  offsetMappings,
   rebaseThroughEscaping,
   resolveLineColumn,
   sourceOffsetFor,
@@ -449,5 +450,59 @@ describe("compileNgMx(): mappings through template-literal escaping", () => {
       source: source.slice(mapping.sourceStart, mapping.sourceEnd),
     }));
     expect(pairs).toContainEqual({ generated: "name", source: "name" });
+  });
+});
+
+describe("derive provenance survives the rebase helpers", () => {
+  const tagged = {
+    sourceStart: 0,
+    sourceEnd: 4,
+    generatedStart: 2,
+    generatedEnd: 6,
+    derive: "selector" as const,
+    deriveContext: "acme-",
+  };
+
+  it("rebaseThroughEscaping keeps derive and deriveContext", () => {
+    const out = rebaseThroughEscaping("xxabcdyy", [tagged], 10, (c) => c);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      generatedStart: 12,
+      derive: "selector",
+      deriveContext: "acme-",
+    });
+  });
+
+  it("templateMappingsToModule keeps derive and deriveContext", () => {
+    const out = templateMappingsToModule("xxabcdyy", [tagged], 10);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      generatedStart: 13,
+      derive: "selector",
+      deriveContext: "acme-",
+    });
+  });
+
+  it("offsetMappings keeps derive and deriveContext", () => {
+    expect(offsetMappings([tagged], 5)[0]).toMatchObject({
+      generatedStart: 7,
+      derive: "selector",
+      deriveContext: "acme-",
+    });
+  });
+
+  it("an untagged mapping stays untagged through both rebases", () => {
+    const bare = {
+      sourceStart: 0,
+      sourceEnd: 4,
+      generatedStart: 2,
+      generatedEnd: 6,
+    };
+    expect(
+      rebaseThroughEscaping("xxabcdyy", [bare], 0, (c) => c)[0],
+    ).not.toHaveProperty("derive");
+    expect(
+      templateMappingsToModule("xxabcdyy", [bare], 0)[0],
+    ).not.toHaveProperty("derive");
   });
 });
