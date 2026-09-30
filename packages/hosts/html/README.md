@@ -181,6 +181,22 @@ Two loaders make `import page from "./page.mx"` resolve, one per runtime:
 
   See `examples/mx-site` for a full app built this way.
 
+  `@mxlang/html/bun` imports its types from `bun`, so a TypeScript consumer of
+  this subpath needs `@types/bun` (an optional peer dependency: nothing else in
+  the package needs it):
+
+  ```sh
+  bun add -d @types/bun
+  ```
+
+- **Typing `*.mx` imports**: `@mxlang/html/types/marko` is an ambient
+  `declare module "*.mx"` (`(input: unknown) => string`). Load it once from any
+  file in your program:
+
+  ```ts
+  import "@mxlang/html/types/marko";
+  ```
+
 - **Vite**: `@mxlang/vite-plugin`'s `mx()` plugin handles `.mx`
   alongside `.solid.mx` (which keeps precedence regardless of extension
   order) — add it to `plugins` and import `.mx` files as usual. See

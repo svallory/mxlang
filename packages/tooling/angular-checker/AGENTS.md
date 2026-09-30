@@ -28,6 +28,8 @@ what a failure means: `mx-tsc` fails the run, an editor shows the message once.
 The package depends on `@mxlang/angular` (for `compileNgMx`'s result type and
 `sourceOffsetFor`).
 
+`typescript` is a **required peer dependency** (`>=5.9.0 <7`, the repo's peer policy for `typescript`; the pinned devDependency stays exact): `dist/*.d.ts` imports `typescript`, and `scripts/pack-hygiene.test.ts` fails a shipped declaration or runtime import that no dependency or peer declares.
+
 **`diagnoseNgMx(compiled, checker, virtualPath)`** (`src/diagnose.ts`) is the
 `.ng.mx` entry: it checks `compiled.code`, keeps `source: "ngtsc"` records and
 **drops `"ts"`** ones (Volar/`tsc` already report those), and maps each

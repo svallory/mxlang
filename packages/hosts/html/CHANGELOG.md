@@ -2,6 +2,18 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `@mxlang/html/bun` typechecks for a consumer with `skipLibCheck: false` (pkg-types-g10)
+
+`dist/bun.d.ts` has `import type { BunPlugin } from "bun"`, but `bun` was not a declared dependency, so a strict consumer of the `./bun` subpath got `TS2307: Cannot find module 'bun'`. `@types/bun` is now an **optional peer dependency** (`>=1.3`): only a consumer of `./bun` runs Bun, and a consumer of `.` needs nothing. The README's Loaders section says so.
+
+### Added: `@mxlang/html/types/marko` export (pkg-types-g10)
+
+`types/marko.d.ts` (the ambient `declare module "*.mx"`) shipped in the tarball but the `exports` map blocked it, so the only way in was a `/// <reference path="node_modules/…">`. It is now `"./types/marko"`; `import "@mxlang/html/types/marko"` types `import page from "./page.mx"`.
+
+### Fix: the tarball no longer ships `.d.ts.map` files (pkg-types-g10)
+
+`tsconfig.build.json` sets `declarationMap: false` (the maps pointed at unpublished `../src/*.ts`) and excludes `src/**/fixtures/**`.
+
 ### Added: `mx(source)`/`loadMx(path)` — bundler-free compile, cache and execute (html-mx-helpers)
 
 `mx()`/`loadMx()` compile a template once, resolve every import in the compiled output to a real absolute target, and evaluate the result synchronously, in memory, with zero disk writes — on Bun (`require` of a `data:` URL) and on Node ≥22.15 (`node:module`'s `registerHooks`, plus its experimental `stripTypeScriptTypes`). Pug-style ergonomics (`compile`/`renderFile`) for an Express/Hono/plain-Bun consumer with no bundler step: `loadMx(path)` caches by resolved path and every transitive dependency's mtime, `mx(source, { filename? })` by a hash of source plus filename, both bounded LRU-256. A discovered custom tag's own `.mx` import is compiled recursively through the same cache, so a page whose tag itself imports another `.mx` file invalidates on the deepest file's change, not just the page's own. `mx(source)` needs `filename` (an anchor to resolve against) whenever the template has any import of its own; `loadMx`'s own path already is that anchor. An import cycle across `.mx` files is a compile-time error naming the cycle; a nested compile error is reported against the nested file's own path and position. See `README.md` for the full contract, including two Node-only caveats: one `ExperimentalWarning` per process from `stripTypeScriptTypes` (not per call), and unbounded `require`-cache growth under heavy template-edit churn in a long-lived process (bounded by how often templates are actually edited).

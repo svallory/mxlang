@@ -42,6 +42,7 @@
     "@mxlang/angular": "workspace:*"
   },
   "peerDependencies": {
+    "typescript": ">=5.9.0 <7",
     "@angular/compiler-cli": ">=22.0.0 <23.0.0"
   },
   "peerDependenciesMeta": {

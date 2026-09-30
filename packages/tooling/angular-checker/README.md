@@ -35,6 +35,11 @@ bundled: this package runs inside the VS Code extension's TypeScript plugin and
 `CompilerCliUnavailableError` rather than returning a list that reads as clean.
 The version is checked before the module is loaded.
 
+`typescript` is a **required peer dependency** (`>=5.9.0 <7`): the emitted
+`dist/*.d.ts` imports `typescript` types, so a consumer typechecking with
+`skipLibCheck: false` needs it resolvable. Every consumer of the TypeScript
+plugin or `mx-tsc` already has one.
+
 ## `.ng.mx`
 
 ```ts

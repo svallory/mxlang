@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **The tarball no longer ships `.d.ts.map` files** (pkg-types-g10): `tsconfig.build.json` sets `declarationMap: false` (each map pointed at a `../src/*.ts` that is not published) and excludes `src/**/fixtures/**`. `scripts/pack-hygiene.test.ts` pins the tarball contents and the declared bare specifiers; `scripts/pack-probe.ts` typechecks the packed package with `skipLibCheck: false`.
+
 ### Added
 
 - **`NgMxRegion.generatedStart` / `generatedEnd`** (optional tooling-facing fields): the `[start, end)` span of each region's template literal in the emitted module, `CompileNgMxResult.code`. Diagnostics tooling uses it to find the region an emitted-module offset falls in when no mapping covers that offset. Additive.

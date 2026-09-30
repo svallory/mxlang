@@ -31,7 +31,8 @@
     "./bun": {
       "types": "./dist/bun.d.ts",
       "default": "./dist/bun.js"
-    }
+    },
+    "./types/marko": "./types/marko.d.ts"
   },
   "files": [
     "dist",
@@ -48,6 +49,14 @@
   "dependencies": {
     "@marko/compiler": "5.42.5",
     "@mxlang/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@types/bun": ">=1.3"
+  },
+  "peerDependenciesMeta": {
+    "@types/bun": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/bun": "1.4.2"

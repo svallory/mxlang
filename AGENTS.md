@@ -2,7 +2,7 @@
 
 ## Package manager
 
-bun (bun workspaces). Do not use npm/pnpm/yarn, with one exception: `packages/hosts/html/scripts/consumer-check.ts` packs tarballs with `npm pack`, because `bun pm pack` hangs on macOS with bun 1.3.14 (it also hangs from a plain shell; PR #51). npm is only that script's packer, never the project's package manager; the node/npm toolchain is pinned in `.prototools` (`node`) and in CI. Toolchain versions are pinned in `.prototools` (`bun`, `moon`, `node`); root `package.json` `packageManager` matches the pinned bun version.
+bun (bun workspaces). Do not use npm/pnpm/yarn, with one exception: `packages/hosts/html/scripts/consumer-check.ts` and `scripts/pack-probe.ts` pack tarballs with `npm pack`, because `bun pm pack` hangs on macOS with bun 1.3.14 (it also hangs from a plain shell; PR #51). npm is only those scripts' packer, never the project's package manager; the node/npm toolchain is pinned in `.prototools` (`node`) and in CI. Toolchain versions are pinned in `.prototools` (`bun`, `moon`, `node`); root `package.json` `packageManager` matches the pinned bun version.
 
 ## Scripts
 

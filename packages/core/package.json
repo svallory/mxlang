@@ -14,9 +14,7 @@
   },
   "files": [
     "dist",
-    "types",
-    "README.md",
-    "LICENSE"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/parser && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",

@@ -151,6 +151,14 @@ node node_modules/@mxlang/language-server/dist/bin.js --stdio
 inspected: `vscode-languageserver`'s `createConnection` auto-detects the
 stdio transport when no other transport flag is given.
 
+## Typechecking against this package's declarations
+
+`dist/index.d.ts` re-exposes types from `vscode-languageserver/node`, whose own
+declarations use `NodeJS` and `child_process`. A consumer that typechecks with
+`skipLibCheck: false` needs `@types/node` installed **and** loaded (`types:
+["node"]`, or no `types` option). The language server is a Node-only binary, so
+this is not declared as a dependency.
+
 ## Tests
 
 ```

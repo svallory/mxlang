@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: the tarball ships only `dist/` and the README (pkg-types-g10)
+
+`tsconfig.build.json` now excludes `src/**/fixtures/**` (the scan fixtures' `*.tag.d.ts` no longer land in `dist/fixtures/`) and turns `declarationMap` off (each `.d.ts.map` pointed at a `../src/*.ts` that is not in the tarball, so go-to-definition was dead anyway). `files` drops the `types` and `LICENSE` entries, which name paths that do not exist here. `scripts/pack-hygiene.test.ts` and `scripts/pack-probe.ts` pin the tarball contents and a `skipLibCheck: false` consumer typecheck.
+
 ### Added: `TemplateMetadata.hoistedExports` (host-authoring metadata)
 
 An optional `string[]` on `TemplateMetadata`: the verbatim source of each top-level `export` statement a template hoists (not `export interface Input`), in source order, set only when there is at least one. It lets a host read a callee's own `export const` facts from the same parsed statements its module emission uses, instead of re-scanning the callee's text — the Angular host reads a tag's exported `selector` this way. Additive, following `inputAuxCode`.

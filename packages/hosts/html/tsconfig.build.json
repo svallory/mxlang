@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["src/**/*.test.ts", "src/example.ts"]
+  "compilerOptions": {
+    "declarationMap": false
+  },
+  "exclude": ["src/**/*.test.ts", "src/**/fixtures/**", "src/example.ts"]
 }
