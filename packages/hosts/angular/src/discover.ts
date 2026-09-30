@@ -23,7 +23,10 @@ import type { AngularConfig } from "./config.ts";
 export interface DiscoverDiagnostic {
   file: string;
   message: string;
-  /** 1-based; set when the diagnostic points at a position in `file`. */
+  /**
+   * Set when the diagnostic points at a position in `file`, as core reports
+   * it: `line` is 1-based, `column` is 0-based.
+   */
   line?: number;
   column?: number;
 }
