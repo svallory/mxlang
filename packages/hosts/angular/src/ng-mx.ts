@@ -8,6 +8,7 @@
  * see the divergence list in `packages/hosts/angular/README.md`.
  */
 
+import traverseModule from "@babel/traverse";
 import {
   type CustomTag,
   type Ir,
@@ -600,8 +601,7 @@ function rewriteAuthoredTagImports(
     // `noUnusedLocals`). It is dropped — unless the author's own TypeScript
     // still reads the name, in which case the aliased import stays.
     if (!listedLocals.has(local) && !isReferencedElsewhere(file, local)) {
-      const end = source[node.end] === "\n" ? node.end + 1 : node.end;
-      rewritten.remove(node.start, end);
+      removeImportLine(rewritten, source, node.start, node.end);
       return;
     }
     const binding =
@@ -614,13 +614,77 @@ function rewriteAuthoredTagImports(
   });
 }
 
-/** Whether `name` is an identifier anywhere besides its own default import. */
+// `@babel/traverse` is CommonJS: under ESM interop its default export is
+// sometimes the module namespace, with the function one level down.
+const traverse = (
+  "default" in traverseModule
+    ? (traverseModule as unknown as { default: typeof traverseModule }).default
+    : traverseModule
+) as typeof traverseModule;
+
+/**
+ * Whether the module-scope binding `name` is read anywhere. Scope-aware: a
+ * property key (`{ name: 1 }`), a member name (`o.name`) and a shadowing
+ * local in a nested scope are not references to the import.
+ */
 function isReferencedElsewhere(file: unknown, name: string): boolean {
-  let count = 0;
-  walk(file, (node) => {
-    if (node.type === "Identifier" && node.name === name) count++;
+  let referenced = false;
+  traverse(file as Parameters<typeof traverse>[0], {
+    Program(path) {
+      const binding = path.scope.getBinding(name);
+      if (!binding) return path.stop();
+      referenced = binding.referenced;
+      // Babel does not register type-position uses (`typeof Pill`,
+      // `x: Pill`) as references; an import read only there is still used.
+      if (!referenced) {
+        path.traverse({
+          Identifier(id) {
+            if (id.node.name !== name) return;
+            if (id.scope.getBinding(name) !== binding) return;
+            const parent = id.parent;
+            if (
+              (parent.type === "TSTypeQuery" && parent.exprName === id.node) ||
+              (parent.type === "TSTypeReference" &&
+                parent.typeName === id.node) ||
+              (parent.type === "TSQualifiedName" && parent.left === id.node)
+            ) {
+              referenced = true;
+              id.stop();
+            }
+          },
+        });
+      }
+      path.stop();
+    },
   });
-  return count > 1;
+  return referenced;
+}
+
+/**
+ * Removes the import at `[start, end)`. When it owns its line the whole line
+ * goes, newline included; when other text shares the line only the statement
+ * (and the space after it) goes, so the next statement is never joined onto
+ * the previous line.
+ */
+function removeImportLine(
+  rewritten: MagicString,
+  source: string,
+  start: number,
+  end: number,
+): void {
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const eol = source.indexOf("\n", end);
+  const lineEnd = eol === -1 ? source.length : eol;
+  const ownsLine =
+    source.slice(lineStart, start).trim() === "" &&
+    source.slice(end, lineEnd).trim() === "";
+  if (ownsLine) {
+    rewritten.remove(lineStart, eol === -1 ? lineEnd : lineEnd + 1);
+    return;
+  }
+  let stop = end;
+  while (source[stop] === " " || source[stop] === "\t") stop++;
+  rewritten.remove(start, stop);
 }
 
 /** A `TranslateError` at the start of the import declaration at `offset`. */

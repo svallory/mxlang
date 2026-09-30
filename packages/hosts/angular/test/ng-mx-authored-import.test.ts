@@ -423,6 +423,93 @@ describe("authored .mx import in a .ng.mx region", () => {
     expect(typeCheck(dir, result.code)).toEqual([]);
   });
 
+  it("drops the second alias when Pill is only a property key or member name", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export const o = { Pill: 1 }; export const p = o.Pill;",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).not.toContain("Badge as Pill");
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("drops the second alias when Pill is only a shadowing local in a nested function", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export function f(Pill: number) { return Pill; }",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).not.toContain("import { Badge as Pill }");
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("keeps the second alias when Pill is read in a type position", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+          "export declare const t: typeof Pill;",
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(result.code).toContain(
+      'import { Badge as Pill } from "./tags/badge";',
+    );
+    expect(typeCheck(dir, result.code)).toEqual([]);
+  });
+
+  it("removes a dropped import's whole line and never joins the next statement onto it", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const own = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx";',
+          'import Pill from "./tags/badge.mx";',
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    const lines = own.code.split("\n");
+    expect(lines.slice(0, 3)).toEqual([
+      'import { Component } from "@angular/core";',
+      'import { Badge as Chip } from "./tags/badge";',
+      "@Component({",
+    ]);
+    // Sharing a line with the next statement: only the import goes.
+    const shared = run(
+      dir,
+      ngMx(
+        [
+          'import Chip from "./tags/badge.mx"; import Pill from "./tags/badge.mx"; export const k = 1;',
+        ],
+        "<div><Chip/><Pill/></div>",
+      ),
+    );
+    expect(shared.code.split("\n")[1]).toBe(
+      'import { Badge as Chip } from "./tags/badge"; export const k = 1;',
+    );
+    expect(typeCheck(dir, shared.code)).toEqual([]);
+  });
+
   it("is byte-identical to the discovered spelling except the import line", () => {
     const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
     const authored = run(
