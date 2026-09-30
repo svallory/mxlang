@@ -215,12 +215,18 @@ members on the component, `__mxOn(handler, receiver, $event)` and
 a 0-arg, 1-arg or 2-arg `(event, element)` handler type-checks under
 `strictTemplates` and its return value reaches Angular. The receiver comes from
 the parsed expression (`handlerShape`), never a regex: a bare name is `this`,
-`a.b` is `a` evaluated once. The members are inlined (this package has no
-runtime): `.ng.mx` injects them into the decorated class, a tag module writes
-them into its class, and a page's own class gets a once-per-file warning
-(`EVENT_HELPER_ADVICE_CODE`) with the text to paste. `this` is the component and
-`element` is `$event.currentTarget` as `EventTarget | null` — both recorded in
-`divergences.md`. The tests check the emitted template with ngtsc
+`a.b` is `a` evaluated once. The members are inlined: `.ng.mx` injects them
+into the decorated class, a tag module writes them into its class, and a
+page's own class gets a once-per-file warning
+(`EVENT_HELPER_ADVICE_CODE`) with the text to paste, or to extend
+`MxHandlers` / `MxHandlersMixin(Base)` from `@mxlang/angular/runtime` instead
+(decision 118; `src/runtime.ts`, built to `dist/runtime.js`). That module must
+keep **zero imports** (`test/runtime.test.ts` checks the built output) and its
+members **public** (TS4094), and its text must stay in step with
+`EVENT_HELPER_MEMBERS`. `.ng.mx` skips injection for a class whose `extends`
+reaches either export (`findComponentDecorators`, by import binding, not by
+name). `this` is the component and `element` is `$event.currentTarget` as
+`EventTarget | null` — both recorded in `divergences.md`. The tests check the emitted template with ngtsc
 (`test/event-handler.test.ts`, via `@mxlang/angular-checker`).
 
 ### Attribute tags (decisions 106–107)

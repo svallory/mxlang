@@ -165,6 +165,28 @@ names would fall through the emitter's bare-case test and render as a
 literal lowercase element instead — the same silent-wrong-render bug this
 error table closes.
 
+## Event handlers and `@mxlang/angular/runtime`
+
+A template that binds an element event calls two members on its component,
+`__mxOn` and `__mxOnAt` (decision 117). `.ng.mx` and tag modules get them
+written in. A page's own class either pastes the text the build prints, or
+extends the zero-import runtime subpath, which carries the same members
+(public, `@internal`):
+
+```ts
+import { MxHandlers, MxHandlersMixin } from "@mxlang/angular/runtime";
+
+export class FormComponent extends MxHandlers {}
+export class ListComponent extends MxHandlersMixin(PagedBase) {}
+```
+
+If application code imports `@mxlang/angular/runtime`, list `@mxlang/angular`
+under `dependencies`, not `devDependencies`: `npm ci --omit=dev` would leave a
+production build without it. Its own runtime dependencies (see `package.json`) are
+installed too, not bundled. Extend `MxHandlers` / `MxHandlersMixin` directly:
+`.ng.mx` injects the members into an indirect base, and TypeScript then reports
+a conflict. Pasting the members needs no dependency.
+
 ## Not yet in this package
 
 - The tooling integration for `.ng.mx` (typescript-plugin, language-server,

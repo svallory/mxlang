@@ -4,6 +4,17 @@
 
 ### Added
 
+- **`@mxlang/angular/runtime`: the event invoker as a base class and a mixin.**
+  A zero-import, browser-safe subpath exporting `MxHandlers` (a base class) and
+  `MxHandlersMixin(Base)` (for a component that already extends a class), both
+  carrying the `__mxOn` / `__mxOnAt` members a generated template calls, with
+  the same semantics as the injected ones. The members are public, marked
+  `@internal`, so a mixin stays emittable under `declaration: true`. `.ng.mx`
+  skips injecting them when the class extends either, through a named, aliased
+  or namespace import or a base declared in the same file. The page header and
+  the once-per-file warning now name both options (paste the members, or extend
+  the runtime). App code importing the subpath needs `@mxlang/angular` in
+  `dependencies`, not `devDependencies`; see the Angular host docs.
 - **A `standalone: false` `.ng.mx` component no longer gets an injected
   `imports:`.** Angular rejects `imports` on a non-standalone component, so
   `compileNgMx` now leaves such a decorator alone (and skips the matching

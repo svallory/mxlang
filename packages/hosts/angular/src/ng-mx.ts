@@ -35,6 +35,7 @@ import {
   EVENT_HELPER_NAMES,
   emitTemplate,
   IMPORTS_ADVICE_CODE,
+  RUNTIME_SPECIFIER,
   type UsedTag,
 } from "./emitter.ts";
 import {
@@ -346,6 +347,10 @@ interface NgMxNode {
   superClass?: NgMxNode;
   declaration?: NgMxNode;
   local?: NgMxNode;
+  imported?: NgMxNode;
+  specifiers?: NgMxNode[];
+  object?: NgMxNode;
+  property?: NgMxNode;
   id?: NgMxNode | null;
   body?: NgMxNode[] | NgMxNode;
   program?: { body?: NgMxNode[] };
@@ -540,8 +545,10 @@ interface ComponentDecorator {
   classBodyStart?: number;
   /**
    * Member names the decorated class has: its own, and those of any
-   * `extends` chain whose classes are declared in this file. A base that
-   * cannot be seen (an import, a call such as a mixin) contributes nothing.
+   * `extends` chain whose classes are declared in this file, plus the event
+   * invoker members when the chain reaches `MxHandlers` / `MxHandlersMixin`
+   * from the runtime subpath. Any other base that cannot be seen (an import,
+   * a call such as a mixin) contributes nothing.
    */
   members?: Set<string>;
 }
@@ -592,10 +599,63 @@ function findComponentDecorators(file: unknown): ComponentDecorator[] {
       declared.set(node.id.name, node);
     }
   });
+  // What the file imports from the runtime subpath (`MxHandlers`,
+  // `MxHandlersMixin`), by the local name it is bound to. A class that extends
+  // one of them (or wraps its base in the mixin) already has the invoker
+  // members, so they must not be injected a second time: the injected
+  // `protected` property would clash with the inherited public one.
+  const runtimeLocals = new Set<string>();
+  const runtimeNamespaces = new Set<string>();
+  walk(file, (node) => {
+    if (node.type !== "ImportDeclaration") return;
+    if (node.source?.value !== RUNTIME_SPECIFIER) return;
+    for (const specifier of node.specifiers ?? []) {
+      const local = specifier.local?.name;
+      if (!local) continue;
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        runtimeNamespaces.add(local);
+      } else if (specifier.type === "ImportSpecifier") {
+        const imported =
+          specifier.imported?.name ??
+          (specifier.imported as { value?: string } | undefined)?.value;
+        if (imported === "MxHandlers" || imported === "MxHandlersMixin") {
+          runtimeLocals.add(local);
+        }
+      }
+    }
+  });
+  // Exactly three heritage shapes count, each resolved through an import
+  // from the runtime subpath: `extends X`, `extends X(...)` (the mixin) and
+  // `extends ns.X` / `extends ns.X(...)` with `ns` a namespace import of it.
+  // A runtime name merely mentioned inside the expression (a callback, a
+  // wrapper call's argument), or bound to something else, does not count: an
+  // indirect base gets the members injected and TypeScript reports the clash.
+  const isRuntimeRef = (node: NgMxNode | undefined): boolean => {
+    if (node?.type === "Identifier") {
+      return runtimeLocals.has(node.name ?? "");
+    }
+    return (
+      node?.type === "MemberExpression" &&
+      !node.computed &&
+      node.object?.type === "Identifier" &&
+      runtimeNamespaces.has(node.object.name ?? "") &&
+      (node.property?.name === "MxHandlers" ||
+        node.property?.name === "MxHandlersMixin")
+    );
+  };
+  const extendsRuntime = (klass: NgMxNode): boolean => {
+    const base = klass.superClass;
+    return base?.type === "CallExpression"
+      ? isRuntimeRef(base.callee)
+      : isRuntimeRef(base);
+  };
   const membersOf = (klass: NgMxNode, seen = new Set<NgMxNode>()) => {
     const names = new Set<string>();
     if (seen.has(klass)) return names;
     seen.add(klass);
+    if (extendsRuntime(klass)) {
+      for (const name of EVENT_HELPER_NAMES) names.add(name);
+    }
     const body = Array.isArray(klass.body) ? undefined : klass.body;
     for (const member of (body?.body as NgMxNode[] | undefined) ?? []) {
       if (member.computed) continue;

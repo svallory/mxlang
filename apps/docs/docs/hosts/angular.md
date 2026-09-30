@@ -161,16 +161,41 @@ protected readonly __mxOn = <E, R>(handler: ((event: E, element: EventTarget | n
 protected readonly __mxOnAt = <K extends PropertyKey, E, R>(object: { [P in K]?: ((event: E, element: EventTarget | null) => R) | null | undefined | false }, key: K, event: E): R | undefined => this.__mxOn(object[key], object, event);
 ```
 
+Or skip the paste and take the members from the runtime subpath, which carries
+the same two members (public, marked `@internal`) as a base class or, for a
+component that already extends a class, a mixin:
+
 ```ts
-// shared base class for page components; both members are `protected`
-export abstract class MxEventHandlers {
-  protected readonly __mxOn = /* …first line above… */;
-  protected readonly __mxOnAt = /* …second line above… */;
-}
+import { MxHandlers, MxHandlersMixin } from "@mxlang/angular/runtime";
 
 @Component({ /* … */ templateUrl: "./form.html" })
-export class FormComponent extends MxEventHandlers {}
+export class FormComponent extends MxHandlers {}
+
+@Component({ /* … */ templateUrl: "./list.html" })
+export class ListComponent extends MxHandlersMixin(PagedBase) {}
 ```
+
+`@mxlang/angular/runtime` has no imports, so a browser bundle takes only the
+two members. `.ng.mx` sees the `extends` and does not inject a second copy. The
+warning and the page header name both options.
+
+**Extend `MxHandlers` / `MxHandlersMixin(Base)` directly.** `.ng.mx` recognises
+only `extends MxHandlers`, `extends MxHandlersMixin(...)` and the same through a
+namespace import (`extends rt.MxHandlers`), each imported from
+`@mxlang/angular/runtime`, plus a same-file base class that does. Any indirect
+base (`const B = MxHandlers; extends B`, a base class from another file or a
+re-export, a mixin wrapped in another call) gets the members injected as well,
+and TypeScript then reports the clash (TS2415: the injected `protected` member
+cannot override the inherited public one). A hand-written page has no such
+injection, so there an indirect base works.
+
+**`@mxlang/angular` must then be in `dependencies`, not `devDependencies`.**
+The app's own code imports the subpath at run time, so a production install
+that omits dev dependencies (`npm ci --omit=dev`) would otherwise leave the
+build without it. The package installs its own runtime dependencies too
+(see its `package.json`; they include the compiler); they are installed, not
+bundled. A separate, dependency-free runtime package is a possible follow-up
+(TODO `angular-runtime-package`). Pasting the members adds no dependency.
 
 A component without them fails the build: under `strictTemplates` AOT reports
 `TS2339 Property '__mxOn' does not exist on type 'FormComponent'` (or

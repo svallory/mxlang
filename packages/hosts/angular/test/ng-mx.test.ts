@@ -1023,6 +1023,199 @@ describe("compileNgMx: event invoker members already declared (per class, by AST
     expect(code.match(/protected readonly __mxOnAt = /g)).toHaveLength(1);
   });
 
+  describe("a base from @mxlang/angular/runtime", () => {
+    const RT = "@mxlang/angular/runtime";
+    const runtimeFile = (importLine: string, heritage: string, body = "") =>
+      classFile(`\n  cancel() {}\n${body}`, importLine).replace(
+        "export class XComponent {",
+        `export class XComponent${heritage} {`,
+      );
+    const injected = (code: string) =>
+      code.match(/protected readonly __mxOn(At)? = /g)?.length ?? 0;
+
+    it("skips injection when the class extends MxHandlers", () => {
+      const code = compileIt(
+        runtimeFile(
+          `import { MxHandlers } from "${RT}";`,
+          " extends MxHandlers",
+        ),
+      );
+      expect(injected(code)).toBe(0);
+      expect(code).toContain('(click)="__mxOn(cancel, this, $event)"');
+    });
+
+    it("skips injection when the class extends MxHandlersMixin(Base)", () => {
+      const code = compileIt(
+        runtimeFile(
+          `import { MxHandlersMixin } from "${RT}";\nclass Base {}`,
+          " extends MxHandlersMixin(Base)",
+        ),
+      );
+      expect(injected(code)).toBe(0);
+    });
+
+    it("follows an aliased import and a namespace import", () => {
+      const aliased = compileIt(
+        runtimeFile(`import { MxHandlers as H } from "${RT}";`, " extends H"),
+      );
+      expect(injected(aliased)).toBe(0);
+      const ns = compileIt(
+        runtimeFile(`import * as rt from "${RT}";`, " extends rt.MxHandlers"),
+      );
+      expect(injected(ns)).toBe(0);
+      const nsMixin = compileIt(
+        runtimeFile(
+          `import * as rt from "${RT}";\nclass Base {}`,
+          " extends rt.MxHandlersMixin(Base)",
+        ),
+      );
+      expect(injected(nsMixin)).toBe(0);
+    });
+
+    it("follows a same-file base that itself extends MxHandlers", () => {
+      const code = compileIt(
+        runtimeFile(
+          `import { MxHandlers } from "${RT}";\nclass Mid extends MxHandlers {}`,
+          " extends Mid",
+        ),
+      );
+      expect(injected(code)).toBe(0);
+    });
+
+    it("still injects when a same-named symbol is not from the runtime subpath", () => {
+      const code = compileIt(
+        runtimeFile(
+          'import { MxHandlers } from "./my-handlers";',
+          " extends MxHandlers",
+        ),
+      );
+      expect(injected(code)).toBe(2);
+    });
+
+    it("still injects for a local class that merely shares the name", () => {
+      const code = compileIt(
+        runtimeFile("class MxHandlers {}", " extends MxHandlers"),
+      );
+      expect(injected(code)).toBe(2);
+    });
+
+    // Only three heritage shapes count, each resolved through an import from
+    // the runtime subpath: `extends X`, `extends X(...)`, `extends ns.X` /
+    // `extends ns.X(...)`. Anything else keeps injection.
+    it("skips for the call shape with any arguments, and for ns.X(...)", () => {
+      const call = compileIt(
+        runtimeFile(
+          `import { MxHandlersMixin as M } from "${RT}";\nclass Base {}`,
+          " extends M(Base)",
+        ),
+      );
+      expect(injected(call)).toBe(0);
+      const nsCall = compileIt(
+        runtimeFile(
+          `import * as rt from "${RT}";\nclass Base {}`,
+          " extends rt.MxHandlersMixin(class extends Base {})",
+        ),
+      );
+      expect(injected(nsCall)).toBe(0);
+    });
+
+    it("still injects for other.MxHandlers when `other` is not a namespace import of the runtime", () => {
+      expect(
+        injected(
+          compileIt(
+            runtimeFile(
+              `import * as other from "./other";\nimport { MxHandlers } from "${RT}";\nvoid MxHandlers;`,
+              " extends other.MxHandlers",
+            ),
+          ),
+        ),
+      ).toBe(2);
+      // A default or named import called `rt` is not a namespace either.
+      expect(
+        injected(
+          compileIt(
+            runtimeFile(
+              `import { rt } from "${RT}";`,
+              " extends rt.MxHandlers",
+            ),
+          ),
+        ),
+      ).toBe(2);
+    });
+
+    it("still injects when the runtime name is only mentioned inside the heritage expression", () => {
+      const code = compileIt(
+        runtimeFile(
+          `import { MxHandlers } from "${RT}";\nconst Foo = (f: () => unknown) => class {};\nvoid MxHandlers;`,
+          " extends Foo(() => MxHandlers)",
+        ),
+      );
+      expect(injected(code)).toBe(2);
+    });
+
+    // Pinned current behaviour (indirect bases): injection still happens, and
+    // TypeScript then reports a conflict (TS2415). The docs say to extend the
+    // runtime directly.
+    it("still injects for an indirect base: an alias, a cross-file or re-exported base, a wrapped mixin", () => {
+      const alias = compileIt(
+        runtimeFile(
+          `import { MxHandlers } from "${RT}";\nconst B = MxHandlers;`,
+          " extends B",
+        ),
+      );
+      expect(injected(alias)).toBe(2);
+      const crossFile = compileIt(
+        runtimeFile('import { Base } from "./base";', " extends Base"),
+      );
+      expect(injected(crossFile)).toBe(2);
+      const reExported = compileIt(
+        runtimeFile(
+          `export { MxHandlers as Handlers } from "${RT}";\nimport { Handlers } from "./handlers";`,
+          " extends Handlers",
+        ),
+      );
+      expect(injected(reExported)).toBe(2);
+      const wrapped = compileIt(
+        runtimeFile(
+          `import { MxHandlersMixin } from "${RT}";\nclass Base {}\nconst Other = <T>(b: T) => b;`,
+          " extends Other(MxHandlersMixin(Base))",
+        ),
+      );
+      expect(injected(wrapped)).toBe(2);
+    });
+
+    it("decides per class: only the class that extends the runtime skips", () => {
+      const source = [
+        'import { Component } from "@angular/core";',
+        `import { MxHandlers } from "${RT}";`,
+        "@Component({",
+        '  selector: "app-a",',
+        `  template: ${HANDLER},`,
+        "})",
+        "export class A extends MxHandlers {}",
+        "@Component({",
+        '  selector: "app-b",',
+        `  template: ${HANDLER},`,
+        "})",
+        "export class B {}",
+      ].join("\n");
+      expect(injected(compileIt(source))).toBe(2);
+    });
+
+    it("emits no advice warning either way", () => {
+      const warnings: { message: string }[] = [];
+      compileNgMx(
+        runtimeFile(
+          `import { MxHandlers } from "${RT}";`,
+          " extends MxHandlers",
+        ),
+        "/p/x.component.ng.mx",
+        { warnings: warnings as never },
+      );
+      expect(warnings.filter((w) => w.message.includes("__mxOn"))).toEqual([]);
+    });
+  });
+
   it("decides per class: a second decorated class is judged on its own members", () => {
     const source = [
       'import { Component } from "@angular/core";',

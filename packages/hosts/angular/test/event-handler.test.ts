@@ -258,6 +258,20 @@ describe("emitted shape", () => {
     expect(advice).toHaveLength(1);
     expect(advice[0]?.code).toBe("angular.event-helper-advice");
   });
+
+  it("names both options in the warning: paste the members, or extend the runtime base", () => {
+    const { warnings } = compileMx("<button onClick=a>x</button>");
+    const message = warnings.find((w) => w.message.includes("__mxOn"))?.message;
+    expect(message).toContain("protected readonly __mxOn = ");
+    expect(message).toContain("`MxHandlers`");
+    expect(message).toContain("`MxHandlersMixin(Base)`");
+    expect(message).toContain("@mxlang/angular/runtime");
+    // The package must be a runtime dependency for the second option.
+    expect(message).toContain("`dependencies`");
+    // An indirect base is not recognised; the warning says to extend directly.
+    expect(message).toContain("extend `MxHandlers`/`MxHandlersMixin` directly");
+    expect(message).toContain("TypeScript then reports a conflict");
+  });
 });
 
 // A model of Angular's listener: a template expression runs against the

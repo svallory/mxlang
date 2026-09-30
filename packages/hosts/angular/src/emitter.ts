@@ -367,6 +367,13 @@ const NGCLASS_NGSTYLE_WARNING: Record<"ngClass" | "ngStyle", string> = {
 // element type without a template reference (spec divergences).
 export const EVENT_HELPER_MARKER = "__mxOn";
 
+/**
+ * The subpath that carries the same two members as a base class (`MxHandlers`)
+ * and a mixin (`MxHandlersMixin(Base)`), for a component that would rather
+ * extend them than paste them (`src/runtime.ts`).
+ */
+export const RUNTIME_SPECIFIER = "@mxlang/angular/runtime";
+
 /** The invoker members, one class-body line each (2-space indented). */
 export const EVENT_HELPER_MEMBERS = [
   "  protected readonly __mxOn = <E, R>(handler: ((event: E, element: EventTarget | null) => R) | null | undefined | false, receiver: unknown, event: E): R | undefined => handler ? handler.call(receiver, event, (event as { currentTarget?: EventTarget | null } | null)?.currentTarget ?? null) : undefined;",
@@ -378,7 +385,10 @@ export const EVENT_HELPER_NAMES = EVENT_HELPER_MEMBERS.map(
   (member) => /readonly (\w+)/.exec(member)?.[1] as string,
 );
 
-const EVENT_HELPER_ADVICE = `this template binds an event handler; add these members to the component class: ${EVENT_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}.`;
+/** The second option, appended to the advice in the page header and the warning. */
+export const EVENT_HELPER_RUNTIME_OPTION = `or extend \`MxHandlers\` (or \`MxHandlersMixin(Base)\` when the class already extends another) from "${RUNTIME_SPECIFIER}"`;
+
+const EVENT_HELPER_ADVICE = `this template binds an event handler; add these members to the component class: ${EVENT_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION} (app code importing it needs \`@mxlang/angular\` in \`dependencies\`, not \`devDependencies\`; extend \`MxHandlers\`/\`MxHandlersMixin\` directly: \`.ng.mx\` injects the members into an indirect base, and TypeScript then reports a conflict).`;
 
 interface HandlerNode {
   type: string;

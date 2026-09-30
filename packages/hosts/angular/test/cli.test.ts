@@ -162,7 +162,7 @@ describe("build: page header lists the event invoker members (decision 117)", ()
       " and ",
     );
     expect(lines[1]).toBe(
-      `<!-- Add to the component class in form.ts: ${members} -->`,
+      `<!-- Add to the component class in form.ts: ${members}, or extend \`MxHandlers\` (or \`MxHandlersMixin(Base)\` when the class already extends another) from "@mxlang/angular/runtime" -->`,
     );
     expect(lines[2]).toBe(
       '<button (click)="__mxOn(cancel, this, $event)">x</button>',
