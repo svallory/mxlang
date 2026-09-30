@@ -1,0 +1,10 @@
+import { Component } from "@angular/core";
+import Chip from "./tags/badge.mx";
+
+@Component({
+  selector: "app-listing",
+  template: <ul>
+    <li>MX <Chip/> <badge/></li>
+  </ul>,
+})
+export class ListingComponent {}

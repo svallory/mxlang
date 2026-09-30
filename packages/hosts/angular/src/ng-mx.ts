@@ -10,6 +10,7 @@
 
 import {
   type CustomTag,
+  type Ir,
   lower,
   type MxWarning,
   newCtx,
@@ -151,6 +152,8 @@ interface LoweredRegion extends NgMxRegion {
   moduleStatements: string[];
   /** Angular directives the emitted template needs in `imports:`. */
   directives: string[];
+  /** The module's own `.mx` default imports visible to this region. */
+  authoredTagImports: Array<{ local: string }>;
   /** Imports the compiler minted for discovered tags this region called. */
   hoistedImports: Array<{
     code: string;
@@ -169,7 +172,7 @@ interface LoweredRegion extends NgMxRegion {
 function lowerRegion(
   regionSource: string,
   filename: string,
-  base: { baseOffset: number; baseLine: number; baseColumn: number },
+  base: MxRegionCompileInput,
   options: CompileNgMxOptions,
 ): LoweredRegion {
   const warnings: MxWarning[] = [];
@@ -207,6 +210,21 @@ function lowerRegion(
   );
   ctx.customTags = options.customTags;
   ctx.warnings = warnings;
+  // Seed the module's own bindings exactly as `compileSolidMx` does, so a
+  // capitalized tag bound by the surrounding module (an authored
+  // `import Badge from "./tags/badge.mx"`) resolves instead of hitting
+  // Marko's "Unable to find entry point" (LiUNA gap G7).
+  for (const [name, specifier] of base.importSpecifiers ?? []) {
+    ctx.importSpecifiers.set(name, specifier);
+    ctx.imports.add(name);
+  }
+  for (const name of base.moduleBindings ?? []) ctx.imports.add(name);
+  for (const name of base.unknownModuleBindings ?? []) {
+    ctx.unknownLocalValue.add(name);
+  }
+  for (const name of base.importDefaultFromMarkoOrMx ?? []) {
+    ctx.importDefaultFromMarkoOrMx.add(name);
+  }
 
   const ir = lower(ctx, body);
 
@@ -251,6 +269,26 @@ function lowerRegion(
   }
   if (ir.inputInterface) moduleStatements.push(ir.inputInterface.code);
 
+  // The author's own `.mx` default imports live in the surrounding module,
+  // not in the region, so the IR never carries them. They are handed to the
+  // emitter as imports (its constructor already resolves an authored `.mx`
+  // import to the same selector, class and path a discovered tag gets), and
+  // reported back so `compileNgMx` can rewrite the module's own line.
+  const authoredTagImports: LoweredRegion["authoredTagImports"] = [];
+  const authoredImportNodes: Ir["imports"] = [];
+  for (const name of base.importDefaultFromMarkoOrMx ?? []) {
+    const specifier = base.importSpecifiers?.get(name);
+    if (!specifier?.endsWith(".mx")) continue;
+    authoredTagImports.push({ local: name });
+    authoredImportNodes.push({
+      kind: "Import",
+      code: `import ${name} from ${JSON.stringify(specifier)};`,
+      bindings: [name],
+      loc: { line: base.baseLine + 1, column: base.baseColumn, file: filename },
+      end: { line: base.baseLine + 1, column: base.baseColumn, file: filename },
+    } as Ir["imports"][number]);
+  }
+
   const templateMappings: AngularMapping[] = [];
   const template = emitTemplate(
     {
@@ -258,7 +296,10 @@ function lowerRegion(
       // The emitter reads the tag-module imports to resolve each call site's
       // selector and import path; everything else was hoisted above and
       // would otherwise be rejected as module-level.
-      imports: ir.imports.filter((node) => node.synthesized),
+      imports: [
+        ...ir.imports.filter((node) => node.synthesized),
+        ...authoredImportNodes,
+      ],
       hoisted: [],
       inputInterface: null,
     },
@@ -303,6 +344,7 @@ function lowerRegion(
     ),
     warnings,
     hoistedImports,
+    authoredTagImports,
   };
 }
 
@@ -432,6 +474,50 @@ function applyComponentImports(
   const first = properties[0];
   if (first?.end === undefined) return;
   rewritten.appendLeft(first.end, `,\n  imports: [${symbols.join(", ")}]`);
+}
+
+/**
+ * Replaces the author's `import Badge from "./tags/badge.mx"` with the named
+ * class import the discovered spelling of the same tag gets.
+ *
+ * The `.mx` file itself is not importable from TypeScript; the class lives in
+ * the generated sibling `.ts` (`./tags/badge`). Only an import some region
+ * actually called as a tag is rewritten, and only when the default binding is
+ * the declaration's sole specifier — anything else is the author's own to
+ * keep. The alias is written only when the local name differs from the class,
+ * so the author's other references to the binding still resolve; the
+ * class's own un-aliased import, when needed, comes from
+ * `hoistModuleStatements`.
+ */
+function rewriteAuthoredTagImports(
+  rewritten: MagicString,
+  file: unknown,
+  regions: readonly LoweredRegion[],
+): void {
+  const called = new Map<string, UsedTag>();
+  for (const region of regions) {
+    const authored = new Set(region.authoredTagImports.map((i) => i.local));
+    for (const tag of region.usedTags) {
+      if (authored.has(tag.name)) called.set(tag.name, tag);
+    }
+  }
+  if (called.size === 0) return;
+  walk(file, (node) => {
+    if (node.type !== "ImportDeclaration") return;
+    if (!node.source?.value?.endsWith(".mx")) return;
+    const [only, ...rest] = node.specifiers ?? [];
+    if (rest.length > 0 || only?.type !== "ImportDefaultSpecifier") return;
+    const tag = called.get(only.local?.name ?? "");
+    if (!tag || node.start === undefined || node.end === undefined) return;
+    const local = only.local?.name as string;
+    const binding =
+      local === tag.className ? local : `${tag.className} as ${local}`;
+    rewritten.overwrite(
+      node.start,
+      node.end,
+      `import { ${binding} } from "${tag.specifier}";`,
+    );
+  });
 }
 
 /** The property of a decorator object literal named `name` (bare or quoted key). */
@@ -875,6 +961,7 @@ export function compileNgMx(
   }
 
   const usedTags = dedupeTags(lowered.flatMap((region) => region.usedTags));
+  rewriteAuthoredTagImports(rewritten, file, lowered);
 
   // `imports:` is edited **per component**, from the regions that decorator
   // actually encloses — not from the file-wide union. A file with two

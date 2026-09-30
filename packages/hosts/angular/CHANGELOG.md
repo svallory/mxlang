@@ -4,6 +4,17 @@
 
 ### Added
 
+- **An authored `.mx` default import now works as a tag in a `.ng.mx` region**
+  (`import Badge from "./tags/badge.mx"` … `<Badge/>`), inside or outside
+  `tags/`, aliased or not. It used to fail with Marko's "Unable to find entry
+  point for custom tag" because `lowerRegion` never seeded the lowering context
+  from the module's bindings. It now emits what the discovered spelling of the
+  same callee emits: the callee's selector (its exported override, else
+  `<prefix><kebab(basename)>`), one `imports:` entry even alongside `<badge/>`,
+  and the authored `.mx` line rewritten to the generated module's named class
+  import (`import { Badge as Chip } from "./tags/badge"` when aliased). An
+  unresolvable path is a positioned error. A plain `.mx` page keeps its
+  by-design authored-import error.
 - **`@mxlang/angular/runtime`: the event invoker as a base class and a mixin.**
   A zero-import, browser-safe subpath exporting `MxHandlers` (a base class) and
   `MxHandlersMixin(Base)` (for a component that already extends a class), both
