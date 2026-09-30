@@ -99,7 +99,12 @@ function deps(
           message: "RANGE-MESSAGE",
         };
       }
-      return { status: "ok", version: "22.1.7", module: {} as never };
+      return {
+        status: "ok",
+        version: "22.1.7",
+        module: {} as never,
+        packageJson: "",
+      };
     },
     createChecker: (options): AngularChecker => {
       spy.created.push(options.projectDir);
