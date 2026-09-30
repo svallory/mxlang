@@ -42,6 +42,12 @@ HTML-syntax body (`<div>${x}</div>`) is unaffected — it parses as
 `MarkoPlaceholder`, never `MarkoTag`, and never reaches `lowerTag`. Test:
 `packages/core/src/lower.test.ts`, "a dynamic tag's bare shape".
 
+## Host syntax: `<>…</>` in an Angular region
+
+| Construct | Why it was wanted | Marko verdict | Test |
+|---|---|---|---|
+| `<>…</>` as a fragment region in `.ng.mx` | An Angular template may have several roots, and a region is one expression with one root. | Marko has no expression-position templates: a template or tag body has many root nodes natively, and `<fragment>` is rejected (above). `<>` is host syntax here, as TSX `<>` is in `.solid.mx`; decision 72 lets a host add no syntax to a *file*, and a region is the host's own expression grammar. Output is the plain sibling nodes Marko would produce for several roots. | `packages/hosts/angular/test/ng-mx.test.ts` — `compileNgMx: fragment regions (G9)` |
+
 ## Deferred to MX 2
 
 | Construct | Why it was wanted | Marko verdict | Test |

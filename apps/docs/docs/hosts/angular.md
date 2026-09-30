@@ -489,8 +489,48 @@ than something MX tries to lower — a wrapping call, a ternary, an object one
 level deeper, a non-`Component` decorator, no decorator at all, or a second
 decorator argument.
 
+A fragment `<>…</>` is MX syntax in a `.ng.mx` file, not TSX, and it has one
+place too: **as the root of the `template:` region**. Anywhere else (`x = <></>`,
+`f(<>a</>)`) it is an error naming that rule and positioned at the `<>`:
+
+```text
+in a `.ng.mx` file a fragment `<>…</>` is only allowed as the root of the `template:` region of an `@Component({ … })` decorator.
+```
+
+(It used to parse as a TSX fragment and be emitted as raw `<>`, which is not
+valid TypeScript.)
+
 A region is one expression, so it has exactly one root element — the same
-rule a `.solid.mx` region follows. Wrap siblings in a container.
+rule a `.solid.mx` region follows. Two bare roots are an error that says so:
+
+```text
+An MX region has exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.
+```
+
+### Several roots: a fragment
+
+An Angular template may have many roots, and `<>…</>` is how a region says so:
+
+```ts title="sortable-th.component.ng.mx"
+@Component({
+  selector: "[sortable-th]",
+  template: <>
+    <ng-content/>
+    <liuna-sort-indicator direction=direction/>
+  </>,
+})
+export class SortableTh {}
+```
+
+The children lower as siblings, exactly as a page template with several roots
+does — no `<ng-container>` (which would add a comment node) and no wrapper
+`<div>` (which would change the DOM and the CSS). That matters most for an
+attribute-selector component like the one above, whose host element is the
+author's and cannot be wrapped at all. `<></>` lowers to an empty template.
+
+Unlike `.solid.mx`, where `<>` is a TSX fragment, `<>` here is MX syntax: there
+is no TSX to fall back to in an Angular template. A fragment cannot contain
+another fragment, and it must be closed with `</>`.
 
 ### Module-level tags stay in the module
 

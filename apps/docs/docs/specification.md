@@ -194,6 +194,23 @@ error — it is handed back for the caller to place. The split is by *origin*,
 carried on `Import.synthesized`; every whole-file host emits both kinds
 identically and ignores the flag.
 
+**A region has exactly one root; a fragment region has several.** A region is
+one expression, so a second root directly after it (`<a/><b/>`) is a positioned
+error naming the rule and the way out, on every region file. Wrapping the
+siblings in `<>…</>` is that way out, and what it means depends on the host:
+
+- In `.solid.mx` `<>…</>` is a TSX fragment (the output is JSX, so there is
+  nothing to lower); each MX child is its own region.
+- In `.ng.mx` it is a **fragment region** (the parser's `mxRegionFragment`
+  option, on for this host only): the host lowers its children as siblings,
+  exactly as it lowers a page template with several roots, and no wrapper
+  element or comment node reaches the Angular template. `<></>` and `<>text</>`
+  are regions too. A fragment cannot contain a fragment, and must be closed with
+  `</>`.
+
+Marko has no expression-position templates, so this is a host decision, not a
+Marko semantic (decision 120).
+
 ### Errors
 
 Core-owned:
