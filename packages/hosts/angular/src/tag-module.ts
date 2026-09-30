@@ -17,7 +17,6 @@ import {
   type CustomTag,
   compileSource,
   type Expr,
-  type GeneratedMapping,
   type Ir,
   type IrNode,
   type MxWarning,
@@ -35,7 +34,11 @@ import {
   tagBasename,
   type UsedTag,
 } from "./emitter.ts";
-import { encodeMappings, templateMappingsToModule } from "./mapping.ts";
+import {
+  type AngularMapping,
+  encodeMappings,
+  templateMappingsToModule,
+} from "./mapping.ts";
 
 export interface CompileTagModuleOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
@@ -67,7 +70,7 @@ export interface CompileTagModuleResult extends CompileResult {
    * backslash) is dropped rather than mapped to a span that would slice the
    * wrong bytes — see `templateMappingsToModule`.
    */
-  mappings: GeneratedMapping[];
+  mappings: AngularMapping[];
 }
 
 /**
@@ -913,7 +916,7 @@ export function compileTagModule(
 ): CompileTagModuleResult {
   const warnings: MxWarning[] = options.warnings ?? [];
   const usedTags: UsedTag[] = [];
-  const templateMappings: GeneratedMapping[] = [];
+  const templateMappings: AngularMapping[] = [];
   const basename = tagBasename(filename);
   const prefix = options.tagSelectorPrefix ?? "mx-";
   let selector = `${prefix}${kebabCase(basename)}`;

@@ -10,7 +10,6 @@
 
 import {
   type CustomTag,
-  type GeneratedMapping,
   lower,
   type MxWarning,
   type Node,
@@ -34,7 +33,11 @@ import {
   IMPORTS_ADVICE_CODE,
   type UsedTag,
 } from "./emitter.ts";
-import { offsetMappings, rebaseThroughEscaping } from "./mapping.ts";
+import {
+  type AngularMapping,
+  offsetMappings,
+  rebaseThroughEscaping,
+} from "./mapping.ts";
 
 /**
  * Prints a Marko-owned Babel expression node back to source text.
@@ -108,7 +111,7 @@ export interface NgMxRegion {
   /** The tags this region's template called, in source order. */
   usedTags: UsedTag[];
   /** Identifier-level mappings from the emitted template back to the source. */
-  mappings: GeneratedMapping[];
+  mappings: AngularMapping[];
   /** Warnings the emitter produced while lowering this region. */
   warnings: MxWarning[];
 }
@@ -139,7 +142,7 @@ export interface CompileNgMxResult {
    * on expressions (spike §Q3). Task 2.2b closes that through core's
    * `Expr.span` (C4). This is the seam for it — the shape is already right.
    */
-  mappings: GeneratedMapping[];
+  mappings: AngularMapping[];
   /** Every warning, across every region. */
   warnings: MxWarning[];
   /** Every tag called, across every region. */
@@ -256,7 +259,7 @@ function lowerRegion(
   }
   if (ir.inputInterface) moduleStatements.push(ir.inputInterface.code);
 
-  const templateMappings: GeneratedMapping[] = [];
+  const templateMappings: AngularMapping[] = [];
   const template = emitTemplate(
     {
       ...ir,
@@ -685,7 +688,7 @@ export function compileNgMx(
   // one; `searchFrom` advances monotonically so two regions emitting the
   // same literal cannot both resolve to the first occurrence.
   let searchFrom = 0;
-  const moduleMappings: GeneratedMapping[] = [];
+  const moduleMappings: AngularMapping[] = [];
   for (const region of lowered) {
     const at = code.indexOf(region.literal, searchFrom);
     if (at < 0) continue;

@@ -15,12 +15,11 @@ import {
   type CompileResult,
   type CustomTag,
   compileSource,
-  type GeneratedMapping,
   type MxWarning,
   TranslateError,
 } from "@mxlang/core";
 import { angularDeclarations, emitTemplate, type UsedTag } from "./emitter.ts";
-import { encodeMappings } from "./mapping.ts";
+import { type AngularMapping, encodeMappings } from "./mapping.ts";
 
 /**
  * Compile-time marker for Angular content projection.
@@ -41,9 +40,11 @@ export {
   type UsedTag,
 } from "./emitter.ts";
 export {
+  type AngularMapping,
   type LineColumn,
   lineColumnAt,
   lookupMapping,
+  type MappingDerive,
   offsetAt,
   offsetMappings,
   resolveLineColumn,
@@ -93,7 +94,7 @@ export interface CompileAngularResult extends CompileResult {
    * template diagnostic as an offset into the template string, and
    * `sourceOffsetFor` (`./mapping.ts`) turns it back into a source offset.
    */
-  mappings: GeneratedMapping[];
+  mappings: AngularMapping[];
   /**
    * Every MX tag this template called, in source order, as the caller's own
    * TypeScript must name it: the class the tag's emitted module exports and
@@ -123,7 +124,7 @@ export function compile(
 ): CompileAngularResult {
   const warnings: MxWarning[] = options.warnings ?? [];
   const usedTags: UsedTag[] = [];
-  const mappings: GeneratedMapping[] = [];
+  const mappings: AngularMapping[] = [];
   const result = compileSource(source, filename, angularDeclarations, {
     customTags: options.customTags,
     warnings,

@@ -18,7 +18,6 @@ import {
   exportNameFor,
   expr,
   type ForSource,
-  type GeneratedMapping,
   type HostDeclarations,
   type Ir,
   type IrNode,
@@ -29,7 +28,7 @@ import {
   unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";
-import { TemplateWriter } from "./mapping.ts";
+import { type AngularMapping, TemplateWriter } from "./mapping.ts";
 
 type TryData = { kind: "try" };
 type HtmlCommentData = { kind: "html-comment" };
@@ -368,7 +367,7 @@ function emitAttrs(
         // attribute name (`onClick` -> `click`), so it maps back to that
         // name even though the two spellings differ.
         out.write(" (");
-        out.writeMapped(attr.event, attr.nameSpan);
+        out.writeMapped(attr.event, attr.nameSpan, "event");
         out.write(')="(');
         out.writeMapped(esc(attr.value.code), attr.value.span);
         out.write(')($event)"');
@@ -383,7 +382,7 @@ function emitAttrs(
           // instead of a dead `[onclick]` property binding. On a component
           // call the same attribute stays the callee's `[onclick]` input.
           out.write(" (");
-          out.writeMapped(name.slice(2), attr.nameSpan);
+          out.writeMapped(name.slice(2), attr.nameSpan, "event");
           out.write(')="(');
           out.writeMapped(esc(attr.value.code), attr.value.span);
           out.write(')($event)"');
@@ -393,7 +392,7 @@ function emitAttrs(
             const directive = name === "class" ? "ngClass" : "ngStyle";
             onceWarn(directive);
             out.write(" [");
-            out.writeMapped(directive, attr.nameSpan);
+            out.writeMapped(directive, attr.nameSpan, "directive");
             out.write(']="');
             out.writeMapped(esc(attr.value.code), attr.value.span);
             out.write('"');
@@ -1036,7 +1035,7 @@ class AngularEmitter implements Emitter<string> {
     // `mx-user-card`), so it maps whole-to-whole back to the name the author
     // wrote — the spellings differ, which is exactly what the mapping is for.
     this.out.write("<");
-    this.out.writeMapped(selector, node.nameSpan);
+    this.out.writeMapped(selector, node.nameSpan, "selector");
     emitAttrs(this.out, node.attrs, (directive) => {
       this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
     });
@@ -1376,7 +1375,7 @@ class AngularEmitter implements Emitter<string> {
       this.out.write(`@for (${row} of `);
       this.out.writeMapped(source.list.code, source.list.span);
       this.out.write("; track ");
-      this.out.writeMapped(track, node.key?.span);
+      this.out.writeMapped(track, node.key?.span, "track");
       this.out.write(`${aliasLets}) { `);
       for (const field of destructure) {
         this.out.write(`@let ${field} = ${row}.${field}; `);
@@ -1425,7 +1424,11 @@ class AngularEmitter implements Emitter<string> {
       this.out.write(" ");
       // The `let-` prefix is generated, so the whole `let-x` token maps
       // whole-to-whole onto the param the author wrote.
-      this.out.writeMapped(`let-${param}`, node.paramSpans?.[i]);
+      this.out.writeMapped(
+        `let-${param}`,
+        node.paramSpans?.[i],
+        "define-param",
+      );
       if (i > 0) this.out.write(`="${param}"`);
     });
     this.out.write("> ");
@@ -1554,7 +1557,7 @@ class AngularEmitter implements Emitter<string> {
    * single return value is the template text every caller already consumes;
    * a caller that wants positions asks for them.
    */
-  mappings(): GeneratedMapping[] {
+  mappings(): AngularMapping[] {
     return [...this.out.mappings];
   }
 
@@ -1658,7 +1661,7 @@ export function emitTemplate(
    * core signature returns the module text alone, so a second result has no
    * return channel of its own.
    */
-  mappingsOut?: GeneratedMapping[],
+  mappingsOut?: AngularMapping[],
 ): string {
   // A *synthesized* import is not a module-level statement the author wrote:
   // the core minted it for a discovered tag the template calls, and there is

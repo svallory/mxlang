@@ -35,6 +35,35 @@ import {
 import type { GeneratedMapping, SourceSpan } from "@mxlang/core";
 
 /**
+ * Why an emitted run's text differs from the source text it maps to, for the
+ * runs MX *derives* rather than copies. Recorded by the emitter at the one
+ * place that performs each derivation, so the oracle checks a mapping against
+ * the derivation that actually produced it instead of inferring one from the
+ * two strings' shapes (which admits any misaligned pair that happens to look
+ * derived).
+ *
+ * - `selector`: a component call's tag name -> `<prefix><kebab(name)>`
+ * - `event`: an attribute name -> its DOM event name (`onClick` -> `click`)
+ * - `track`: a `by=` expression -> the `track` expression
+ * - `define-param`: a `<define>` param -> its `let-<param>` token
+ * - `directive`: a `class`/`style` attribute name -> `ngClass`/`ngStyle`
+ */
+export type MappingDerive =
+  | "selector"
+  | "event"
+  | "track"
+  | "define-param"
+  | "directive";
+
+/**
+ * A {@link GeneratedMapping} that may say how its generated text was derived
+ * from its source text. Absent means the run was copied (modulo escaping).
+ */
+export interface AngularMapping extends GeneratedMapping {
+  derive?: MappingDerive;
+}
+
+/**
  * Accumulates emitted template text and the mappings into it.
  *
  * Text is appended either unmapped (`write`) or mapped to a source span
@@ -44,7 +73,7 @@ import type { GeneratedMapping, SourceSpan } from "@mxlang/core";
  */
 export class TemplateWriter {
   #out = "";
-  readonly #mappings: GeneratedMapping[] = [];
+  readonly #mappings: AngularMapping[] = [];
 
   /** The text written so far. */
   get code(): string {
@@ -67,8 +96,15 @@ export class TemplateWriter {
    * A null span means the text has no authored source — a synthesized
    * expression, a gensym'd loop variable, a fabricated default — and is
    * written unmapped rather than mapped to a position the author never wrote.
+   *
+   * `derive` names the derivation when `text` is derived from, not copied
+   * from, the source under `span`.
    */
-  writeMapped(text: string, span: SourceSpan | null | undefined): void {
+  writeMapped(
+    text: string,
+    span: SourceSpan | null | undefined,
+    derive?: MappingDerive,
+  ): void {
     const start = this.#out.length;
     this.#out += text;
     // A zero-length run would map an empty generated span, which no lookup
@@ -79,17 +115,18 @@ export class TemplateWriter {
         sourceEnd: span.sourceEnd,
         generatedStart: start,
         generatedEnd: start + text.length,
+        ...(derive ? { derive } : {}),
       });
     }
   }
 
   /** The mappings recorded so far, in the order they were written. */
-  get mappings(): readonly GeneratedMapping[] {
+  get mappings(): readonly AngularMapping[] {
     return this.#mappings;
   }
 
   /** The finished text and its mappings. */
-  result(): { code: string; mappings: GeneratedMapping[] } {
+  result(): { code: string; mappings: AngularMapping[] } {
     return { code: this.#out, mappings: [...this.#mappings] };
   }
 }
@@ -102,9 +139,9 @@ export class TemplateWriter {
  * template, not to the module text the caller will actually index into.
  */
 export function offsetMappings(
-  mappings: readonly GeneratedMapping[],
+  mappings: readonly AngularMapping[],
   offset: number,
-): GeneratedMapping[] {
+): AngularMapping[] {
   return mappings.map((mapping) => ({
     ...mapping,
     generatedStart: mapping.generatedStart + offset,
@@ -276,10 +313,10 @@ export function encodeMappings(
  */
 export function rebaseThroughEscaping(
   template: string,
-  mappings: readonly GeneratedMapping[],
+  mappings: readonly AngularMapping[],
   embeddedStart: number,
   escapeChar: (char: string, next: string | undefined) => string,
-): GeneratedMapping[] {
+): AngularMapping[] {
   const escapedUpTo = new Int32Array(template.length + 1);
   for (let i = 0; i < template.length; i += 1) {
     escapedUpTo[i + 1] =
@@ -287,7 +324,7 @@ export function rebaseThroughEscaping(
       escapeChar(template[i] as string, template[i + 1]).length;
   }
 
-  const out: GeneratedMapping[] = [];
+  const out: AngularMapping[] = [];
   for (const mapping of mappings) {
     const run = template.slice(mapping.generatedStart, mapping.generatedEnd);
     const escapedRunLength =
@@ -303,6 +340,7 @@ export function rebaseThroughEscaping(
       sourceEnd: mapping.sourceEnd,
       generatedStart: start,
       generatedEnd: start + run.length,
+      ...(mapping.derive ? { derive: mapping.derive } : {}),
     });
   }
   return out;
@@ -321,9 +359,9 @@ export function rebaseThroughEscaping(
  */
 export function templateMappingsToModule(
   template: string,
-  mappings: readonly GeneratedMapping[],
+  mappings: readonly AngularMapping[],
   quotedStart: number,
-): GeneratedMapping[] {
+): AngularMapping[] {
   // Quoted length per character, prefix-summed: `quotedUpTo[i]` is how many
   // bytes `template.slice(0, i)` occupies inside the quoted string. The walk
   // is by **code point**, not UTF-16 unit: a lone surrogate stringifies to
@@ -339,7 +377,7 @@ export function templateMappingsToModule(
     cursor = next;
   }
 
-  const out: GeneratedMapping[] = [];
+  const out: AngularMapping[] = [];
   for (const mapping of mappings) {
     const run = template.slice(mapping.generatedStart, mapping.generatedEnd);
     const quotedRunLength =
@@ -356,6 +394,7 @@ export function templateMappingsToModule(
       sourceEnd: mapping.sourceEnd,
       generatedStart: start,
       generatedEnd: start + run.length,
+      ...(mapping.derive ? { derive: mapping.derive } : {}),
     });
   }
   return out;

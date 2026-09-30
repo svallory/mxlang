@@ -13,12 +13,14 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTemplate } from "@angular/compiler";
-import { compile, compileNgMx, compileTagModuleFile } from "@mxlang/angular";
 import {
-  type GeneratedMapping,
-  getCustomTags,
-  type MxWarning,
-} from "@mxlang/core";
+  type AngularMapping,
+  compile,
+  compileNgMx,
+  compileTagModuleFile,
+  type MappingDerive,
+} from "@mxlang/angular";
+import { getCustomTags, type MxWarning } from "@mxlang/core";
 import ts from "typescript";
 
 /**
@@ -270,67 +272,85 @@ function unescapeGenerated(text: string): string {
     .replace(/&amp;/g, "&");
 }
 
+/** The selector prefix `compile()` uses when no `selectorPrefix` is given. */
+const DEFAULT_SELECTOR_PREFIX = "mx-";
+
 /**
- * Is `generated` a name MX *derives* from `source` rather than copying?
+ * Is `generated` what MX derives from `source` under the derivation `derive`?
  *
- * Every derivation the emitter performs is listed. A mapping whose two sides
- * differ for any other reason is misaligned, which is what the oracle's
- * third assertion exists to catch.
+ * `derive` is the emitter's own record of which derivation produced the run
+ * (`AngularMapping.derive`), so each branch checks the one derivation that
+ * actually happened — exactly, not by the strings' shape. An untagged mapping
+ * was copied, and a copy that does not un-escape to its source is misaligned:
+ * it derives from nothing, so this returns false. That, and each kind's exact
+ * check below, is what the oracle's third assertion exists to catch.
  *
  * Exported for `test/angular.test.ts`, which pins the boundary of each
- * derivation directly — a branch here that ignores `generated` (or accepts a
- * run merely *contained* in the source outside the one context that is real)
- * lets a misaligned mapping pass.
+ * derivation directly.
  */
-export function isDerivedFrom(generated: string, source: string): boolean {
-  // A component selector: `UserCard`/`user-card` -> `mx-user-card`.
-  const kebab = source
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/[_\s]+/g, "-")
-    .toLowerCase();
-  if (
-    generated.endsWith(kebab) &&
-    /^[a-z][\w-]*-$/.test(generated.slice(0, generated.length - kebab.length))
-  ) {
-    return true;
-  }
-  // A DOM event name, checked against the actual derivation — never waved
-  // through on the source's shape alone. `onClick` -> `click`: lowercased
-  // exactly as written, with NO aliases (decision 101 (c): `onDoubleClick`
-  // is `(doubleclick)`, never `dblclick`). `on-my-event` -> `my-event`
-  // verbatim. A native element's lowercase `onclick=fn` -> `click`.
-  if (/^on[A-Z]/.test(source)) {
-    return generated === source.slice(2).toLowerCase();
-  }
-  if (/^on-/.test(source)) return generated === source.slice(3);
-  if (/^on[a-z]+$/.test(source)) return generated === source.slice(2);
-  // A `track` expression derived from `by=`: `"id"` -> `<row>.id`.
-  const bare = source.replace(/^['"`]|['"`]$/g, "");
-  if (generated.endsWith(`.${bare}`)) return true;
-  // The arrow form of `by=` — `by=(p => p.id)` — tracks the arrow's body,
-  // sliced out of the source text. This is the ONLY context where the
-  // generated run is contained in the source rather than equal to it: the
-  // body is what follows the `=>`, minus the wrapping parens when the whole
-  // arrow was parenthesized. Anywhere else, containment proves nothing.
-  const arrow = source.indexOf("=>");
-  if (arrow >= 0) {
-    let body = source.slice(arrow + 2).trim();
-    if (source.trimStart().startsWith("(") && body.endsWith(")")) {
-      body = body.slice(0, -1).trimEnd();
+export function isDerivedFrom(
+  generated: string,
+  source: string,
+  derive?: MappingDerive,
+): boolean {
+  switch (derive) {
+    // A component selector: `UserCard`/`user-card` -> `mx-user-card`.
+    case "selector": {
+      const kebab = source
+        .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+        .replace(/[_\s]+/g, "-")
+        .toLowerCase();
+      return generated === DEFAULT_SELECTOR_PREFIX + kebab;
     }
-    return generated === body;
+    // A DOM event name, checked against the actual derivation — never waved
+    // through on the source's shape alone. `onClick` -> `click`: lowercased
+    // exactly as written, with NO aliases (decision 101 (c): `onDoubleClick`
+    // is `(doubleclick)`, never `dblclick`). `on-my-event` -> `my-event`
+    // verbatim. A native element's lowercase `onclick=fn` -> `click`.
+    case "event":
+      if (/^on[A-Z]/.test(source)) {
+        return generated === source.slice(2).toLowerCase();
+      }
+      if (/^on-/.test(source)) return generated === source.slice(3);
+      if (/^on[a-z]+$/.test(source)) return generated === source.slice(2);
+      return false;
+    // A `track` expression derived from `by=`.
+    case "track": {
+      // The arrow form — `by=(p => p.id)` — tracks the arrow's body, sliced
+      // out of the source text. This is the ONLY context where the generated
+      // run is contained in the source rather than equal to it: the body is
+      // what follows the `=>`, minus the wrapping parens when the whole arrow
+      // was parenthesized.
+      const arrow = source.indexOf("=>");
+      if (arrow >= 0) {
+        let body = source.slice(arrow + 2).trim();
+        if (source.trimStart().startsWith("(") && body.endsWith(")")) {
+          body = body.slice(0, -1).trimEnd();
+        }
+        return generated === body;
+      }
+      // `by=identity` tracks the row itself, so the emitted `track`
+      // expression is the loop variable — a name that appears nowhere in the
+      // `by=` text, but is always an identifier.
+      if (source.trim() === "identity") {
+        return /^[A-Za-z_$][\w$]*$/.test(generated);
+      }
+      // A property name: `"id"` -> `<row>.id`.
+      const bare = source.replace(/^['"`]|['"`]$/g, "");
+      return generated.endsWith(`.${bare}`);
+    }
+    // A `<define>` param: `x` -> the `let-x` token that binds it.
+    case "define-param":
+      return generated === `let-${source}`;
+    // An `[ngClass]`/`[ngStyle]` directive name, from a `class`/`style` value.
+    case "directive":
+      return (
+        (generated === "ngClass" && source === "class") ||
+        (generated === "ngStyle" && source === "style")
+      );
+    default:
+      return false;
   }
-  // `by=identity` tracks the row itself, so the emitted `track` expression
-  // is the loop variable — a name that appears nowhere in the `by=` text.
-  if (source.trim() === "identity") return true;
-  // An `[ngClass]`/`[ngStyle]` directive name, from a `class`/`style` value.
-  if (
-    (generated === "ngClass" && source === "class") ||
-    (generated === "ngStyle" && source === "style")
-  ) {
-    return true;
-  }
-  return false;
 }
 
 export function runAngularTable(update: boolean): {
@@ -444,7 +464,7 @@ export function runAngularTable(update: boolean): {
       : FIXTURE_FILENAME;
 
     let code: string;
-    let mappings: GeneratedMapping[] = [];
+    let mappings: AngularMapping[] = [];
     const warnings: MxWarning[] = [];
     try {
       const result = compile(input, compilePath, {
@@ -552,12 +572,13 @@ export function runAngularTable(update: boolean): {
     // transforms the emitter applies (`esc()`'s `&amp;`/`&quot;`, the brace
     // interpolation literals, and `&#64;`).
     //
-    // Two kinds of mapping are exempt, because the emitted text is *derived*
-    // rather than copied and no un-escaping can recover the source spelling:
-    // a component selector (`UserCard` -> `mx-user-card`), a DOM event name
-    // (`onClick` -> `click`), a `track` expression (`by="id"` -> `row.id`)
-    // and an `[ngClass]`/`[ngStyle]` directive name. Those are still
-    // bounds-checked; the equality applies to every run copied verbatim.
+    // A mapping the emitter tagged with a `derive` kind (selector, DOM event
+    // name, `track` expression, `define` param, `[ngClass]`/`[ngStyle]`
+    // directive) is not a copy — its text is *derived* and no un-escaping
+    // recovers the source spelling. Those are checked instead against the one
+    // derivation the tag names (`isDerivedFrom`), exactly, so a mapping
+    // misaligned onto a different token still fails. An untagged mapping has
+    // no such exemption: it must un-escape to its source.
     const badMapping = mappings.find(
       (mapping) =>
         mapping.sourceStart < 0 ||
@@ -592,7 +613,7 @@ export function runAngularTable(update: boolean): {
       // Otherwise the emitted text must be one MX *derives* from the source
       // text rather than copying — every such derivation is enumerated, so a
       // genuinely misaligned mapping cannot hide behind this branch.
-      return !isDerivedFrom(generatedText, sourceText);
+      return !isDerivedFrom(generatedText, sourceText, mapping.derive);
     });
     if (misaligned) {
       rows.push({

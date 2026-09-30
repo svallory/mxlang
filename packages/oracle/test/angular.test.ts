@@ -51,28 +51,67 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
   it("checks the DOM event name, not only the source's shape", () => {
     // The derivation is real: `onClick` -> `click`, lowercased exactly as
     // written — no aliases (decision 101 (c)), so `dblclick` is NOT it.
-    expect(isDerivedFrom("click", "onClick")).toBe(true);
-    expect(isDerivedFrom("doubleclick", "onDoubleClick")).toBe(true);
-    expect(isDerivedFrom("dblclick", "onDoubleClick")).toBe(false);
+    expect(isDerivedFrom("click", "onClick", "event")).toBe(true);
+    expect(isDerivedFrom("doubleclick", "onDoubleClick", "event")).toBe(true);
+    expect(isDerivedFrom("dblclick", "onDoubleClick", "event")).toBe(false);
     // The hole this closes: any generated text used to pass beside an
     // `onX` source, so a misaligned event mapping could not fail.
-    expect(isDerivedFrom("banana", "onClick")).toBe(false);
+    expect(isDerivedFrom("banana", "onClick", "event")).toBe(false);
   });
 
   it("derives `on-<exact>` and a native element's lowercase `onclick`", () => {
-    expect(isDerivedFrom("my-event", "on-my-event")).toBe(true);
-    expect(isDerivedFrom("click", "onclick")).toBe(true);
-    expect(isDerivedFrom("onclick", "onclick")).toBe(false);
+    expect(isDerivedFrom("my-event", "on-my-event", "event")).toBe(true);
+    expect(isDerivedFrom("click", "onclick", "event")).toBe(true);
+    expect(isDerivedFrom("onclick", "onclick", "event")).toBe(false);
   });
 
   it("scopes the containment hatch to a `by=` arrow's body", () => {
     // The one place a contained-but-not-equal run is real: `by=(p => p.id)`
     // tracks the arrow's body, sliced out of the source.
-    expect(isDerivedFrom("p.id", "(p => p.id)")).toBe(true);
-    expect(isDerivedFrom("p.id", "p => p.id")).toBe(true);
+    expect(isDerivedFrom("p.id", "(p => p.id)", "track")).toBe(true);
+    expect(isDerivedFrom("p.id", "p => p.id", "track")).toBe(true);
     // Anywhere else containment proves nothing: `name` appearing inside
     // `user.name` does not make one a derivation of the other.
-    expect(isDerivedFrom("name", "user.name")).toBe(false);
-    expect(isDerivedFrom("id", "(p => p.id)")).toBe(false);
+    expect(isDerivedFrom("name", "user.name", "track")).toBe(false);
+    expect(isDerivedFrom("id", "(p => p.id)", "track")).toBe(false);
+  });
+
+  it("requires an exact `<prefix><kebab(source)>` for a selector", () => {
+    expect(isDerivedFrom("mx-user-card", "UserCard", "selector")).toBe(true);
+    expect(isDerivedFrom("mx-user-card", "user-card", "selector")).toBe(true);
+    // The old branch admitted any `<anything>-<kebab(source)>`.
+    expect(isDerivedFrom("mx-foo-user-card", "UserCard", "selector")).toBe(
+      false,
+    );
+    expect(isDerivedFrom("other-user-card", "UserCard", "selector")).toBe(
+      false,
+    );
+    expect(isDerivedFrom("user-card", "UserCard", "selector")).toBe(false);
+  });
+
+  it("requires the `track` provenance for every `by=` branch", () => {
+    // Without the tag a dotted run beside a bare source used to pass
+    // (`endsWith(".id")`), whatever emitted it.
+    expect(isDerivedFrom("row.id", "id")).toBe(false);
+    expect(isDerivedFrom("row.id", "id", "selector")).toBe(false);
+    expect(isDerivedFrom("row.id", "id", "track")).toBe(true);
+    expect(isDerivedFrom("row.id", '"id"', "track")).toBe(true);
+    // The bare-identifier branch: `by=identity` tracks the loop variable, so
+    // the generated text must at least be an identifier.
+    expect(isDerivedFrom("row", "identity", "track")).toBe(true);
+    expect(isDerivedFrom("COMPLETELY-UNRELATED", "identity")).toBe(false);
+    expect(isDerivedFrom("COMPLETELY-UNRELATED", "identity", "track")).toBe(
+      false,
+    );
+  });
+
+  it("lists the define-param and directive derivations explicitly", () => {
+    expect(isDerivedFrom("let-x", "x", "define-param")).toBe(true);
+    expect(isDerivedFrom("let-y", "x", "define-param")).toBe(false);
+    expect(isDerivedFrom("let-x", "x")).toBe(false);
+    expect(isDerivedFrom("ngClass", "class", "directive")).toBe(true);
+    expect(isDerivedFrom("ngStyle", "style", "directive")).toBe(true);
+    expect(isDerivedFrom("ngStyle", "class", "directive")).toBe(false);
+    expect(isDerivedFrom("ngClass", "class")).toBe(false);
   });
 });

@@ -69,7 +69,14 @@ nothing and is reported as such rather than fabricated — each run is
 bounded by a terminator segment in the emitted v3 map, so a position *after*
 a run does not inherit it (the encoder emits one segment at each run's start
 and a source-less one at its end; `@jridgewell/sourcemap-codec` does the
-encode/decode). `buildMap` shifts
+encode/decode). A run whose text is *derived* rather than copied (selector,
+DOM event name, `track` expression, `<define>` param, `[ngClass]`/`[ngStyle]`)
+carries an angular-local `AngularMapping.derive` tag (`src/mapping.ts`,
+`MappingDerive`), threaded through the rebase helpers; the oracle's
+mapping-alignment check (`isDerivedFrom`) verifies each such run against the
+one derivation its tag names, exactly, and treats an untagged run as a copy
+that must un-escape to its source. Record `derive` at the emission site of any
+new derivation, or the oracle rejects the mapping. `buildMap` shifts
 the map by the generated header's line count, since the sidecar describes
 the file on disk while the compile map is template-relative. A *discovered*
 tag call has no `nameSpan` (core derives it from the gensym'd binding it
