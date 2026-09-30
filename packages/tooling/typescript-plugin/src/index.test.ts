@@ -3694,6 +3694,46 @@ describe(".ng.mx language plugin", () => {
     expect(pos.column).toBe((lines.at(-1) as string).indexOf("bad"));
   });
 
+  describe("retained compiles (mx-tsc's template diagnostics)", () => {
+    const file = `${dir}/x.component.ng.mx`;
+    const compileOn = (
+      plugin: ReturnType<typeof createNgMxLanguagePlugin>,
+      source: string,
+    ) =>
+      plugin.createVirtualCode?.(
+        file,
+        NG_MX_LANGUAGE_ID,
+        ts.ScriptSnapshot.fromString(source),
+        { getAssociatedScript: () => undefined },
+      );
+
+    it("keeps nothing unless asked: an editor must not hold every compile", () => {
+      const plugin = createNgMxLanguagePlugin(ts);
+      compileOn(plugin, component("<p>${n}</p>", "n: number = 1;"));
+      expect(plugin.getCompiledNgMx()).toEqual([]);
+    });
+
+    it("keeps the latest successful compile per file when asked", () => {
+      const plugin = createNgMxLanguagePlugin(ts, { retainCompiled: true });
+      compileOn(plugin, component("<p>${n}</p>", "n: number = 1;"));
+      const second = component("<p>${m}</p>", "m: number = 2;");
+      compileOn(plugin, second);
+      const kept = plugin.getCompiledNgMx();
+      expect(kept).toHaveLength(1);
+      expect(kept[0]?.fileName).toBe(file);
+      expect(kept[0]?.source).toBe(second);
+      expect(kept[0]?.result.code).toContain("{{ m }}");
+    });
+
+    it("drops a file whose recompile fails: a stale compile must not be checked", () => {
+      const plugin = createNgMxLanguagePlugin(ts, { retainCompiled: true });
+      compileOn(plugin, component("<p>${n}</p>", "n: number = 1;"));
+      expect(plugin.getCompiledNgMx()).toHaveLength(1);
+      compileOn(plugin, component("<p>${n</p>", "n: number = 1;"));
+      expect(plugin.getCompiledNgMx()).toEqual([]);
+    });
+  });
+
   it("maps a template expression back to its start in the .ng.mx", () => {
     const source = component(
       "<p>${user.name.toUpperCase()}</p>",

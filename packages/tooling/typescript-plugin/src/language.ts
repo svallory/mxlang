@@ -3,6 +3,7 @@ import { basename, dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
   type AngularMapping,
+  type CompileNgMxResult,
   compileNgMx,
   readAngularConfig,
 } from "@mxlang/angular";
@@ -224,8 +225,34 @@ export function createSolidMxLanguagePlugin(
   };
 }
 
+export interface NgMxLanguagePluginOptions
+  extends DependencyLanguagePluginOptions {
+  /**
+   * Keep each file's latest successful compile for
+   * {@link NgMxLanguagePlugin.getCompiledNgMx}. Off by default: an editor
+   * session compiles continuously and must not hold every result. `mx-tsc`
+   * turns it on to run Angular template diagnostics over the same compiles
+   * the type-check used.
+   */
+  retainCompiled?: boolean;
+}
+
+/** One `.ng.mx` file's latest successful compile. */
+export interface CompiledNgMx {
+  fileName: string;
+  /** The `.ng.mx` text that was compiled. */
+  source: string;
+  result: CompileNgMxResult;
+}
+
 export interface NgMxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): SolidMxSyntaxError | undefined;
+  /**
+   * The latest successful compile of every `.ng.mx` file, when the plugin was
+   * created with `retainCompiled`; always `[]` otherwise. A file whose latest
+   * compile failed is absent, so a stale compile is never checked.
+   */
+  getCompiledNgMx(): CompiledNgMx[];
 }
 
 /**
@@ -243,8 +270,9 @@ export interface NgMxLanguagePlugin extends MxDiagnosticLanguagePlugin {
  */
 export function createNgMxLanguagePlugin(
   typescript: typeof ts,
-  options: DependencyLanguagePluginOptions = {},
+  options: NgMxLanguagePluginOptions = {},
 ): NgMxLanguagePlugin {
+  const compiled = new Map<string, CompiledNgMx>();
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const reportedScanDiagnostics = new Set<string>();
@@ -260,6 +288,7 @@ export function createNgMxLanguagePlugin(
       }
 
       const source = snapshot.getText(0, snapshot.getLength());
+      compiled.delete(fileName);
       const fail = (error: SolidMxSyntaxError) => {
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
@@ -294,6 +323,9 @@ export function createNgMxLanguagePlugin(
           tagSelectorPrefix,
         });
         syntaxErrors.delete(fileName);
+        if (options.retainCompiled) {
+          compiled.set(fileName, { fileName, source, result });
+        }
         compileDiagnostics.set(
           fileName,
           result.warnings.map((warning) =>
@@ -329,6 +361,10 @@ export function createNgMxLanguagePlugin(
 
     getSyntaxError(fileName) {
       return syntaxErrors.get(fileName);
+    },
+
+    getCompiledNgMx() {
+      return [...compiled.values()];
     },
 
     getCompileDiagnostics(fileName) {

@@ -184,8 +184,11 @@ export {
 } from "./amx-language.ts";
 export { createAstroLanguagePlugin } from "./astro-language.ts";
 export type {
+  CompiledNgMx,
   MxCompileDiagnostic,
   MxDiagnosticLanguagePlugin,
+  NgMxLanguagePlugin,
+  NgMxLanguagePluginOptions,
 } from "./language.ts";
 export {
   createCompoundExtensionResolver,
