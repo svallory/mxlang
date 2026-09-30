@@ -19,6 +19,7 @@ import { dirname, resolve } from "node:path";
 import type { NgtscProgram } from "@angular/compiler-cli";
 import ts from "typescript";
 import {
+  type CompilerCliModule,
   CompilerCliUnavailableError,
   resolveCompilerCli,
 } from "./compiler-cli.ts";
@@ -94,7 +95,10 @@ function toRecord(
  * `compilerOptions`/`angularCompilerOptions` are layered on top of the
  * defaults.
  */
-function buildOptions(options: AngularCheckerOptions): ts.CompilerOptions {
+function buildOptions(
+  options: AngularCheckerOptions,
+  readConfiguration: CompilerCliModule["readConfiguration"],
+): ts.CompilerOptions {
   const base: ts.CompilerOptions = {
     strict: true,
     // `strictTemplates` is an Angular option, not a TypeScript one, so it
@@ -109,27 +113,16 @@ function buildOptions(options: AngularCheckerOptions): ts.CompilerOptions {
 
   if (options.tsconfigPath) {
     const configPath = resolve(options.tsconfigPath);
-    const read = ts.readConfigFile(configPath, ts.sys.readFile);
-    if (read.error) throw new TsconfigError(configPath, [read.error]);
-    // Relative `extends`, `include`, `paths` and `baseUrl` in a tsconfig are
-    // relative to that tsconfig, not to the project dir the checker resolves
-    // modules from -- the two differ for `tsc -p sub/tsconfig.app.json`.
-    const parsed = ts.parseJsonConfigFileContent(
-      read.config,
-      ts.sys,
-      dirname(configPath),
-      undefined,
-      configPath,
-    );
+    // compiler-cli's own reader, the one the Angular CLI uses: it resolves
+    // `extends` (relative to each tsconfig) and merges `angularCompilerOptions`
+    // along the chain, which reading the leaf's JSON would miss.
+    const config = readConfiguration(configPath);
     // TS18003 ("no inputs were found") is about the tsconfig's own file list,
     // which the checker never uses: its one root is the virtual module.
-    const errors = parsed.errors.filter((d) => d.code !== 18003);
+    const errors = config.errors.filter((d) => d.code !== 18003);
     if (errors.length > 0) throw new TsconfigError(configPath, errors);
     // The project's options win, except `noEmit`: the checker never emits.
-    Object.assign(base, parsed.options, { noEmit: true });
-    if (read.config.angularCompilerOptions) {
-      Object.assign(base, read.config.angularCompilerOptions);
-    }
+    Object.assign(base, config.options, { noEmit: true });
     // `strictTemplates` is FORCED on, not merely defaulted. It is the whole
     // reason this checker exists, and a project that sets it to false would
     // otherwise silently turn template checking off -- the caller would get
@@ -206,7 +199,7 @@ export function createAngularChecker(
   }
   const { NgtscProgram: Program } = resolution.module;
   // Fail at creation, not at the first check, if the tsconfig is unusable.
-  buildOptions(options);
+  buildOptions(options, resolution.module.readConfiguration);
 
   const files = new Map<string, string>();
   let program: NgtscProgram | undefined;
@@ -237,7 +230,10 @@ export function createAngularChecker(
       if (token?.isCancelled()) return [];
 
       compileCount += 1;
-      const compilerOptions = buildOptions(options);
+      const compilerOptions = buildOptions(
+        options,
+        resolution.module.readConfiguration,
+      );
       const host = buildHost(files, options.projectDir, compilerOptions);
 
       const reusedOldProgram = program !== undefined;
