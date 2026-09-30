@@ -5,6 +5,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
+import { basename } from "node:path";
 import {
   type Attr,
   type AttributeTag,
@@ -19,6 +20,7 @@ import {
   expr,
   type ForSource,
   type HostDeclarations,
+  hostModuleSegment,
   type Ir,
   type IrNode,
   type MxWarning,
@@ -977,9 +979,10 @@ class AngularEmitter implements Emitter<string> {
     // filename with a `.ts` extension when it has none of MX's own.
     // Both extension segments, not just `.mx`: a `.ng.mx` otherwise names
     // `x.component.ng.ts`, a file that never exists.
-    this.tsFilename = filename.endsWith(".ng.mx")
-      ? filename.replace(/\.ng\.mx$/, ".ts")
-      : filename.replace(/\.mx$/, ".ts");
+    this.tsFilename =
+      hostModuleSegment(basename(filename)) === "ng"
+        ? filename.replace(/\.ng\.mx$/, ".ts")
+        : filename.replace(/\.mx$/, ".ts");
     // The callee's own selector, once per tag file: two bindings of one path
     // (or a re-spelled import) must not read — or warn about — it twice. Kept
     // per emitter, so every compile re-reads through core's mtime/source-keyed
