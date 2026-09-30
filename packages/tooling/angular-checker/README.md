@@ -101,9 +101,21 @@ type-checked as dependencies, but their own diagnostics are not returned).
 `check` itself does not map back to a `.ng.mx` source — its offsets are in the
 `.ts` text handed in; `diagnoseNgMx` (above) does.
 
-**`strictTemplates` is forced on**, even if the project's `tsconfig.json` sets
-it to `false`: it is the checker's reason to exist, and honouring `false` would
-silently turn template checking off while still returning an empty list.
+**`strictTemplates` follows the project**, it is not forced. Whatever
+`angularCompilerOptions` the project's tsconfig sets, through its `extends`
+chain (`strictTemplates`, `strictInputTypes`, `strictNullInputTypes`, ...),
+reaches ngtsc unchanged, so the checker reports what `ng build` reports. Unset,
+`@angular/compiler-cli`'s own default applies, which is **on** in 22.x
+(`get strictTemplates() { return this.options.strictTemplates !== false; }`,
+`chunk-M25TUZDV.js:4950` in 22.1.7; `examples/angular-app`'s CLI-style tsconfig does
+not set it either, so real apps usually hit this default). With `strictTemplates: false` ngtsc still type-checks templates
+in *basic* mode (an unknown property such as `{{ nope }}` is an error), so the
+checker is never silently off; only the strict-only checks (a `string | null`
+bound to a `string` input, for example) stop being reported.
+
+*History:* earlier versions forced it on (PR #104), so a project that builds with
+`strictTemplates: false` would fail `mx-tsc` on errors `ng build` accepts, once CI
+counted template errors. That decision is superseded.
 
 ## Known gaps
 

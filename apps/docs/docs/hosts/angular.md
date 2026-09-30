@@ -578,8 +578,13 @@ reopened, not immediately: a config error also stays reported until then.
 ### Template diagnostics {#ngmx-diagnostics}
 
 `mx-tsc` checks the expressions inside every `.ng.mx` `template:` with Angular's
-own compiler (`@angular/compiler-cli`, under `strictTemplates`), after the
-TypeScript pass, and prints each finding at its position in the `.ng.mx`:
+own compiler (`@angular/compiler-cli`), after the TypeScript pass, and prints
+each finding at its position in the `.ng.mx`. It reports what `ng build` reports:
+the project's `strictTemplates` (and the other `angularCompilerOptions`, read
+through `extends`) is honoured, and unset means compiler-cli's own default, which
+is on in Angular 22. With `strictTemplates: false` templates are still checked in
+basic mode; only the strict-only checks stop being reported. The same applies to
+editors.
 
 ```
 src/x.component.ng.mx(5,18): error TS2339: Property 'nmae' does not exist on type '{ name: string; }'.

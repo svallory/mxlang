@@ -64,7 +64,9 @@ export interface AngularCheckerOptions {
   projectDir: string;
   /**
    * Path to the project's `tsconfig.json`. When omitted, the checker uses its
-   * own defaults (`strict`, `strictTemplates`, bundler resolution).
+   * own defaults (`strict`, bundler resolution; `strictTemplates` is left to
+   * compiler-cli's default, on). Its `angularCompilerOptions`, `strictTemplates`
+   * included, are honoured, never forced.
    */
   tsconfigPath?: string;
   /**

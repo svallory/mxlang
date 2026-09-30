@@ -15,7 +15,8 @@
  * a process or cache boundary.
  */
 
-import { dirname, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { NgtscProgram } from "@angular/compiler-cli";
 import ts from "typescript";
 import {
@@ -37,12 +38,20 @@ import type {
  * the code and pass or fail for the wrong reason.
  */
 export class TsconfigError extends Error {
-  constructor(configPath: string, diagnostics: readonly ts.Diagnostic[]) {
-    super(
-      `${configPath}: ${diagnostics
-        .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))
-        .join("; ")}`,
-    );
+  constructor(
+    configPath: string,
+    diagnostics: readonly (ts.Diagnostic | string)[],
+  ) {
+    // One line: a reader library may put a stack trace in a message, and
+    // only its first line is the reason.
+    const reasons = diagnostics.map((d) => {
+      const text =
+        typeof d === "string"
+          ? d
+          : ts.flattenDiagnosticMessageText(d.messageText, "\n");
+      return text.split("\n")[0];
+    });
+    super(`${configPath}: ${reasons.join("; ")}`);
     this.name = "TsconfigError";
   }
 }
@@ -101,9 +110,6 @@ function buildOptions(
 ): ts.CompilerOptions {
   const base: ts.CompilerOptions = {
     strict: true,
-    // `strictTemplates` is an Angular option, not a TypeScript one, so it
-    // rides along in the same object (which is how NgtscProgram takes it).
-    strictTemplates: true,
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -113,6 +119,11 @@ function buildOptions(
 
   if (options.tsconfigPath) {
     const configPath = resolve(options.tsconfigPath);
+    if (!existsSync(configPath)) {
+      throw new TsconfigError(configPath, [
+        `The specified path does not exist: '${configPath}'.`,
+      ]);
+    }
     // compiler-cli's own reader, the one the Angular CLI uses: it resolves
     // `extends` (relative to each tsconfig) and merges `angularCompilerOptions`
     // along the chain, which reading the leaf's JSON would miss.
@@ -122,14 +133,10 @@ function buildOptions(
     const errors = config.errors.filter((d) => d.code !== 18003);
     if (errors.length > 0) throw new TsconfigError(configPath, errors);
     // The project's options win, except `noEmit`: the checker never emits.
+    // That includes `strictTemplates` (and the other strict* Angular flags):
+    // they are NOT forced, so the checker reports what `ng build` reports.
+    // Unset, compiler-cli's own default applies (on, in 22.x).
     Object.assign(base, config.options, { noEmit: true });
-    // `strictTemplates` is FORCED on, not merely defaulted. It is the whole
-    // reason this checker exists, and a project that sets it to false would
-    // otherwise silently turn template checking off -- the caller would get
-    // an empty diagnostic list and read it as "no errors", which is the same
-    // silent-success failure the in-memory host guard exists to prevent.
-    // A project wanting Angular's own looser behavior should run `ngc`.
-    (base as Record<string, unknown>).strictTemplates = true;
   }
 
   if (options.angularCoreTypes) {

@@ -63,9 +63,11 @@ checked module, **including errors in the component's own class body**.
 `getNgSemanticDiagnostics` covers templates only, so a class-body error yields
 zero Angular diagnostics — returning a clean list for a file that does not
 compile would read as success. Consumers filter on `source`, never a code
-range. `strictTemplates` is forced on even when a project tsconfig sets it
-false, since honouring false would silently disable the checker while still
-returning an empty list.
+range. `strictTemplates` is **not** forced: the project's
+`angularCompilerOptions` (read with compiler-cli's `readConfiguration`, through
+`extends`) reach ngtsc unchanged, and unset follows compiler-cli's default (on
+in 22.x, `strictTemplates !== false`). `false` still checks in basic mode, so
+the checker is never silently off (supersedes the PR #104 "forced on" ruling).
 
 **`@angular/core` must resolve from `projectDir`**, or a template using a
 signal input or `signal()` has nothing to check against and a broken one
