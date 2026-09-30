@@ -531,3 +531,33 @@ describe("known gaps: these keep Marko's message", () => {
     );
   });
 });
+
+describe("a quote that never closes is not a tag prefix", () => {
+  // `<b">` inside a string looked like a tag start; its quote then swallowed
+  // the scriptlet below and let the valid `*ngIf` be hinted.
+  for (const quote of ['"', "'"]) {
+    const source = `<p title=${quote}a<b${quote}>q</p>\n$ x = 1 = 2\n<div *ngIf="x">y</div>`;
+    it(`leaves Marko's message alone (${quote})`, () => {
+      const message = thrown(() => compile(source, "t.mx")).message;
+      expect(message).toContain("Invalid left-hand side");
+      expect(message).not.toContain("cannot follow");
+      // Byte-for-byte what core gives without the hint.
+      const plain = thrown(() =>
+        compileSource(source, "t.mx", {} as never, {} as never),
+      ).message;
+      expect(message).toBe(plain);
+    });
+  }
+});
+
+describe("the stack survives replacement patterns in the source", () => {
+  it("keeps `$&` in an unrelated member's source line", () => {
+    const source = '<a class="a" *ngIf="x">1</a>\n<b>$&' + "$" + "{1 = 2}</b>";
+    const error = thrown(() => compile(source, "t.mx"));
+    expect(error.name).toBe("CompileErrors");
+    if (typeof error.stack === "string") {
+      expect(error.stack).toContain(error.message);
+      expect(error.stack).toContain("<b>$&");
+    }
+  });
+});

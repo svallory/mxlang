@@ -85,6 +85,9 @@ function balancedTagPrefix(
     const c = text[i] as string;
     if (c === '"' || c === "'" || c === "`") {
       i = skipQuoted(text, i);
+      // A quote that runs past the value (or never closes) is not a string
+      // inside this tag: the `<` this prefix started at was not a tag start.
+      if (i > valueStart) return false;
       continue;
     }
     if (c === "(" || c === "[" || c === "{") depth++;
@@ -326,7 +329,7 @@ export function structuralAttrHint(
     aggregate.message = message;
     aggregate.errors = errors;
     if (typeof stack === "string") {
-      aggregate.stack = stack.replace(oldMessage, message);
+      aggregate.stack = stack.replace(oldMessage, () => message);
     }
     return aggregate;
   }
