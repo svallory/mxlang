@@ -56,7 +56,7 @@ interface FakeWorker extends CheckerWorker {
   disposed: boolean;
 }
 
-function fakes(opts: { config?: Diagnostic[] } = {}) {
+function fakes(opts: { config?: Diagnostic[]; open?: Set<string> } = {}) {
   const workers = new Map<string, FakeWorker>();
   const watchers = new Map<string, () => void>();
   const refresh = vi.fn();
@@ -88,6 +88,7 @@ function fakes(opts: { config?: Diagnostic[] } = {}) {
   });
   const service = createNgDiagnosticsService({
     workerPath: "/x/ng-worker.cjs",
+    ...(opts.open ? { isOpen: (f: string) => opts.open?.has(f) === true } : {}),
     createWorker,
     watchFile,
     refresh,
@@ -258,10 +259,10 @@ describe("delivery", () => {
 });
 
 describe("project notices", () => {
-  it("shows a missing compiler-cli once per project, on one file", async () => {
+  it("computes a missing compiler-cli notice once and shows it on every open file", async () => {
     vi.useFakeTimers();
     const dir = project("nocli");
-    const { service, workers, refresh } = fakes();
+    const { service, workers, refresh, createWorker } = fakes();
     const a = entry(dir, "a");
     const b = entry(dir, "b");
     service.notifyCompiled(a);
@@ -275,16 +276,20 @@ describe("project notices", () => {
       });
     }
     await flush();
-    const notices = [a, b].flatMap((f) => service.getNotices(f.fileName));
-    expect(notices).toHaveLength(1);
-    expect(notices[0]?.message).toContain("install compiler-cli");
+    expect(createWorker).toHaveBeenCalledTimes(1);
+    for (const f of [a, b]) {
+      const notices = service.getNotices(f.fileName);
+      expect(notices).toHaveLength(1); // deduplicated per file
+      expect(notices[0]?.message).toContain("install compiler-cli");
+      // Names where the project is configured, and how to recover.
+      expect(notices[0]?.message).toContain(path.join(dir, "package.json"));
+      expect(notices[0]?.message).toContain("Restart TS Server");
+    }
     expect(refresh).toHaveBeenCalled();
-    // Later edits do not repeat it.
+    // Later edits do not repeat or re-compute it.
     service.notifyCompiled(entry(dir, "a"));
     await vi.advanceTimersByTimeAsync(1_000);
-    expect([a, b].flatMap((f) => service.getNotices(f.fileName))).toHaveLength(
-      1,
-    );
+    expect(service.getNotices(a.fileName)).toHaveLength(1);
   });
 
   it("shows configDiagnostics once per project: ngtsc kept, ts dropped, warnings stay warnings", async () => {
@@ -315,11 +320,105 @@ describe("project notices", () => {
       c.resolve({ kind: "ok", diagnostics: [] });
     await flush();
     expect(workers.get(dir)?.configCalls).toBe(1);
-    const notices = [a, b].flatMap((f) => service.getNotices(f.fileName));
-    expect(notices.map((n) => [n.category, n.message])).toEqual([
-      ["error", expect.stringContaining("bad option")],
-      ["warning", expect.stringContaining("soft option")],
-    ]);
-    expect(notices[0]?.message).toContain("tsconfig.json");
+    for (const f of [a, b]) {
+      const notices = service.getNotices(f.fileName);
+      expect(notices.map((n) => [n.category, n.message])).toEqual([
+        ["error", expect.stringContaining("bad option")],
+        ["warning", expect.stringContaining("soft option")],
+      ]);
+      expect(notices[0]?.message).toContain("tsconfig.json");
+    }
+  });
+});
+
+describe("open files only", () => {
+  it("never checks a closed file, and the notice lands on the open one", async () => {
+    vi.useFakeTimers();
+    const dir = project("closed-first");
+    const closed = entry(dir, "closed");
+    const open = entry(dir, "open");
+    const { service, workers } = fakes({ open: new Set([open.fileName]) });
+    service.notifyCompiled(closed); // compiled first, never open
+    service.notifyCompiled(open);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const checks = workers.get(dir)?.checks ?? [];
+    expect(checks.map((c) => c.path)).toEqual([`${open.fileName}.ts`]);
+    checks[0]?.resolve({
+      kind: "unavailable",
+      reason: "compiler-cli",
+      message: "install compiler-cli",
+    });
+    await flush();
+    expect(service.getNotices(open.fileName)).toHaveLength(1);
+    expect(service.getNotices(closed.fileName)).toEqual([]);
+  });
+
+  it("keeps the notice on B after A (the file that raised it) closes", async () => {
+    vi.useFakeTimers();
+    const dir = project("owner-close");
+    const a = entry(dir, "a");
+    const b = entry(dir, "b");
+    const open = new Set([a.fileName, b.fileName]);
+    const { service, workers } = fakes({ open });
+    service.notifyCompiled(a);
+    await vi.advanceTimersByTimeAsync(1_000);
+    workers.get(dir)?.checks[0]?.resolve({
+      kind: "unavailable",
+      reason: "compiler-cli",
+      message: "install compiler-cli",
+    });
+    await flush();
+    open.delete(a.fileName);
+    service.notifyCompiled(b);
+    expect(service.getNotices(a.fileName)).toEqual([]);
+    expect(service.getNotices(b.fileName)).toHaveLength(1);
+  });
+
+  it("save mode installs no watcher for a closed file, and drops it on close", async () => {
+    vi.useFakeTimers();
+    const dir = project("save-closed", "save");
+    const closed = entry(dir, "closed");
+    const open = entry(dir, "open");
+    const openSet = new Set([open.fileName]);
+    const { service, watchers, watchFile } = fakes({ open: openSet });
+    service.notifyCompiled(closed);
+    service.notifyCompiled(open);
+    expect(watchFile).toHaveBeenCalledTimes(1);
+    expect(watchers.has(closed.fileName)).toBe(false);
+    openSet.delete(open.fileName);
+    service.request(open.fileName); // the editor's next request sweeps it
+    expect(watchers.has(open.fileName)).toBe(false);
+  });
+
+  it("drops a pending idle timer when the file closes", async () => {
+    vi.useFakeTimers();
+    const dir = project("timer-close");
+    const a = entry(dir, "a");
+    const openSet = new Set([a.fileName]);
+    const { service, workers, createWorker } = fakes({ open: openSet });
+    service.notifyCompiled(a);
+    openSet.delete(a.fileName);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(createWorker).not.toHaveBeenCalled();
+    expect(workers.size).toBe(0);
+  });
+
+  it("schedules a file that was compiled before it was opened, on the editor's first request", async () => {
+    vi.useFakeTimers();
+    const dir = project("late-open");
+    const a = entry(dir, "a");
+    const openSet = new Set<string>();
+    const { service, workers } = fakes({ open: openSet });
+    service.notifyCompiled(a); // compiled while closed: nothing scheduled
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(workers.size).toBe(0);
+    openSet.add(a.fileName);
+    service.request(a.fileName);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(workers.get(dir)?.checks).toHaveLength(1);
+    // Asking again for the same text does not re-arm it.
+    service.request(a.fileName);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(workers.get(dir)?.checks).toHaveLength(1);
   });
 });

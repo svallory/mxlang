@@ -165,6 +165,8 @@ function createEditorNgDiagnostics(
       project.projectKind === typescript.server.ProjectKind.Configured
         ? project.getProjectName()
         : undefined,
+    isOpen: (fileName) =>
+      project.getScriptInfo(fileName)?.isScriptOpen() === true,
     watchFile: (fileName, onChange) =>
       info.serverHost.watchFile(fileName, () => onChange()),
     // Results arrive after the request that wanted them: ask tsserver to
@@ -173,8 +175,8 @@ function createEditorNgDiagnostics(
     refresh: () => project.refreshDiagnostics?.(),
     log: (message) => project.projectService?.logger.info(message),
   });
-  // Tear the workers down with the project (and, as a backstop, the process;
-  // a worker also ends itself when tsserver's IPC channel closes).
+  // Tear the workers down with the project (a worker also ends itself when
+  // tsserver's IPC channel closes, so a dying tsserver leaves none behind).
   if (typeof project.close === "function") {
     const close = project.close.bind(project);
     project.close = () => {
@@ -182,7 +184,6 @@ function createEditorNgDiagnostics(
       close();
     };
   }
-  process.once("exit", () => service.dispose());
   return service;
 }
 
@@ -198,6 +199,7 @@ function withSyntaxDiagnostics(
         return (fileName: string) => {
           const diagnostics = target.getSemanticDiagnostics(fileName);
           const ng = isNgMx(fileName) ? getNgDiagnostics() : undefined;
+          ng?.request(fileName);
           return ng
             ? [...diagnostics, ...angularDiagnostics(typescript, ng, fileName)]
             : diagnostics;
@@ -247,6 +249,15 @@ function withSyntaxDiagnostics(
   });
 }
 
+/** The four-way category map `mx-tsc` uses (`tsc/src/index.ts`). */
+const DIAGNOSTIC_CATEGORIES = (typescript: typeof ts) =>
+  ({
+    error: typescript.DiagnosticCategory.Error,
+    warning: typescript.DiagnosticCategory.Warning,
+    suggestion: typescript.DiagnosticCategory.Suggestion,
+    message: typescript.DiagnosticCategory.Message,
+  }) as const;
+
 /**
  * The Angular diagnostics (and project notices) for a `.ng.mx`, as TypeScript
  * diagnostics with `source: "angular"`. A degraded position says so, like
@@ -274,10 +285,7 @@ export function angularDiagnostics(
         file: sourceFile,
         start: d.start,
         length: d.length,
-        category:
-          d.category === "error"
-            ? typescript.DiagnosticCategory.Error
-            : typescript.DiagnosticCategory.Warning,
+        category: DIAGNOSTIC_CATEGORIES(typescript)[d.category],
         code: d.code,
         source: "angular",
         messageText:
