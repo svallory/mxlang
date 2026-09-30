@@ -565,6 +565,45 @@ function hoistModuleStatements(
 }
 
 /**
+ * Rebases each region's mappings onto the finished module.
+ *
+ * Each region's mappings are relative to its own literal (see `lowerRegion`),
+ * so they are rebased by where that literal actually landed — after every
+ * splice and every hoisted statement has shifted the text. The literal is
+ * located by search rather than by arithmetic over the insertions, which
+ * would have to model each one; `searchFrom` advances monotonically so two
+ * regions emitting the same literal cannot both resolve to the first
+ * occurrence.
+ *
+ * A literal that is not in `code` throws: it was written into the module by
+ * this same function's caller, so a miss means the search and the splice have
+ * diverged. Skipping the region would silently drop its mappings — "this
+ * template has no positions" — where `compileTagModule` throws on the same
+ * divergence.
+ *
+ * Exported for `test/ng-mx.test.ts`; not part of the package's public API.
+ */
+export function rebaseRegionMappings(
+  code: string,
+  regions: readonly { literal: string; mappings: readonly AngularMapping[] }[],
+  filename: string,
+): AngularMapping[] {
+  let searchFrom = 0;
+  const moduleMappings: AngularMapping[] = [];
+  for (const region of regions) {
+    const at = code.indexOf(region.literal, searchFrom);
+    if (at < 0) {
+      throw new Error(
+        `@mxlang/angular internal: a region's template literal is not present in the emitted module for ${filename}`,
+      );
+    }
+    searchFrom = at + region.literal.length;
+    moduleMappings.push(...offsetMappings(region.mappings, at));
+  }
+  return moduleMappings;
+}
+
+/**
  * Compiles a `.ng.mx` file to an Angular component module.
  *
  * The file stays an ordinary TypeScript module: the parser finds each MX
@@ -680,21 +719,7 @@ export function compileNgMx(
   if (options.warnings) options.warnings.push(...warnings);
 
   const code = rewritten.toString();
-  // Each region's mappings are relative to its own literal (see
-  // `lowerRegion`), so they are rebased onto the finished module by where
-  // that literal actually landed — after every splice and every hoisted
-  // statement has shifted the text. The literal is located by search rather
-  // than by arithmetic over the insertions, which would have to model each
-  // one; `searchFrom` advances monotonically so two regions emitting the
-  // same literal cannot both resolve to the first occurrence.
-  let searchFrom = 0;
-  const moduleMappings: AngularMapping[] = [];
-  for (const region of lowered) {
-    const at = code.indexOf(region.literal, searchFrom);
-    if (at < 0) continue;
-    searchFrom = at + region.literal.length;
-    moduleMappings.push(...offsetMappings(region.mappings, at));
-  }
+  const moduleMappings = rebaseRegionMappings(code, lowered, filename);
 
   return {
     code,

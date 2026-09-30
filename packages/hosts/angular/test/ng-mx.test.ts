@@ -9,6 +9,7 @@ import {
   escapeTemplateLiteral,
   NG_MX_POSITION_MESSAGE,
   ngMxPositionCheck,
+  rebaseRegionMappings,
 } from "../src/ng-mx.ts";
 
 /** A `.ng.mx` module around one region, as an author would write it. */
@@ -491,5 +492,58 @@ describe("compileNgMx: round 2 review", () => {
     expect(aBlock).toMatch(/imports: \[[^\]]*NgClass/);
     expect(aBlock ?? "").not.toMatch(/imports: \[[^\]]*KeyValuePipe/);
     expect(bBlock).toMatch(/imports: \[[^\]]*KeyValuePipe/);
+  });
+});
+
+describe("rebaseRegionMappings", () => {
+  const mapping = {
+    sourceStart: 0,
+    sourceEnd: 1,
+    generatedStart: 0,
+    generatedEnd: 1,
+  };
+
+  it("offsets each region's mappings by where its literal landed", () => {
+    const code = "aa `x` bb `y`";
+    const out = rebaseRegionMappings(
+      code,
+      [
+        { literal: "`x`", mappings: [mapping] },
+        { literal: "`y`", mappings: [mapping] },
+      ],
+      "a.ng.mx",
+    );
+    expect(out.map((m) => m.generatedStart)).toEqual([3, 10]);
+  });
+
+  it("throws when a region's literal is not in the module, rather than dropping its mappings", () => {
+    expect(() =>
+      rebaseRegionMappings(
+        "no literal here",
+        [{ literal: "`x`", mappings: [mapping] }],
+        "a.ng.mx",
+      ),
+    ).toThrow(/template literal is not present.*a\.ng\.mx/);
+  });
+
+  it("does not resolve two regions emitting the same literal to the first occurrence", () => {
+    const out = rebaseRegionMappings(
+      "`x` `x`",
+      [
+        { literal: "`x`", mappings: [mapping] },
+        { literal: "`x`", mappings: [mapping] },
+      ],
+      "a.ng.mx",
+    );
+    expect(out.map((m) => m.generatedStart)).toEqual([0, 4]);
+  });
+
+  it("carries a mapping's derive tag through the rebase", () => {
+    const out = rebaseRegionMappings(
+      "`x`",
+      [{ literal: "`x`", mappings: [{ ...mapping, derive: "selector" }] }],
+      "a.ng.mx",
+    );
+    expect(out[0]?.derive).toBe("selector");
   });
 });
