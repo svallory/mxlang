@@ -26,6 +26,7 @@ function stubChecker(records: Diagnostic[]): AngularChecker {
   return {
     check: () => records,
     update: () => {},
+    configDiagnostics: () => [],
     dispose: () => {},
   };
 }

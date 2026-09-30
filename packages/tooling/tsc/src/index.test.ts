@@ -895,6 +895,20 @@ describe("mx-tsc", () => {
         SPAWN_TIMEOUT_MS,
       );
 
+      it(
+        "fails once, naming the tsconfig, for a compiler option error (extendedDiagnostics with strictTemplates: false)",
+        () => {
+          const dir = join(fixtures, "ng-diag-ext");
+          const result = run(mxTsc, ["--noEmit", "-p", dir]);
+          expect(result.status).not.toBe(0);
+          expect(result.output).toContain(join(dir, "tsconfig.json"));
+          expect(result.output).toContain("extendedDiagnostics");
+          // Two .ng.mx files in the project, one report.
+          expect(result.output.split("error mxlang:").length - 1).toBe(1);
+        },
+        SPAWN_TIMEOUT_MS,
+      );
+
       describe("without a usable @angular/compiler-cli", () => {
         const created: string[] = [];
         afterEach(() => {

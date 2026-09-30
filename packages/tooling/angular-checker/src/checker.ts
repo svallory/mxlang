@@ -281,6 +281,31 @@ export function createAngularChecker(
       ];
     },
 
+    configDiagnostics(): Diagnostic[] {
+      assertLive();
+      if (program === undefined) return [];
+      const configPath = options.tsconfigPath
+        ? resolve(options.tsconfigPath)
+        : "";
+      const seen = new Set<string>();
+      return [
+        ...program
+          .getNgOptionDiagnostics()
+          .map((d) => toRecord(d, configPath, "ngtsc")),
+        ...program
+          .getTsProgram()
+          .getOptionsDiagnostics()
+          .map((d) => toRecord(d, configPath, "ts")),
+      ]
+        .map((d) => ({ ...d, file: configPath, start: 0, length: 0 }))
+        .filter((d) => {
+          const key = `${d.source}:${d.code}:${d.message}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    },
+
     update(virtualPath: string, source: string): void {
       assertLive();
       files.set(virtualPath, source);

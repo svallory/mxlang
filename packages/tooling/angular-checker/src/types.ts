@@ -106,6 +106,17 @@ export interface AngularChecker {
    * later `check` of a *different* file sees the update.
    */
   update(virtualPath: string, source: string): void;
+  /**
+   * Compiler *option* errors of the retained program (Angular's
+   * `getNgOptionDiagnostics` and TypeScript's `getOptionsDiagnostics`), for
+   * example `extendedDiagnostics` combined with `strictTemplates: false`,
+   * which `ng build` rejects. They belong to the configuration, not to any
+   * file, so `check` never returns them: each record has `file` set to the
+   * tsconfig (empty when none was given), `start` and `length` 0, and each
+   * distinct problem appears once however many files were checked. `[]`
+   * until a `check` has built a program.
+   */
+  configDiagnostics(): Diagnostic[];
   /** Release the retained program and in-memory sources. */
   dispose(): void;
 }

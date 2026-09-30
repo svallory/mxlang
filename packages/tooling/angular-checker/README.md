@@ -113,6 +113,12 @@ type-checks templates in *basic* mode (an unknown property such as `{{ nope }}`
 is an error), so the checker is never silently off; only the strict-only checks
 (a `string | null` bound to a `string` input, for example) stop being reported.
 
+Compiler *option* errors are not file diagnostics, so `check` never returns
+them: `configDiagnostics()` does (`extendedDiagnostics` combined with
+`strictTemplates: false` is one, which `ng build` rejects). Each record names
+the tsconfig and each distinct problem appears once however many files were
+checked; `mx-tsc` fails the run on them, once per project.
+
 *History:* earlier versions forced it on (PR #104), so a project that builds with
 `strictTemplates: false` would fail `mx-tsc` on errors `ng build` accepts, once CI
 counted template errors. That decision is superseded.

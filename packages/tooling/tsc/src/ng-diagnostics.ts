@@ -186,6 +186,16 @@ export function checkNgMxFiles(
           );
         }
       }
+      // Compiler option errors (e.g. `extendedDiagnostics` with
+      // `strictTemplates: false`, which `ng build` rejects) belong to the
+      // configuration, not to a file: report them once per project, against
+      // the tsconfig.
+      for (const d of checker.configDiagnostics()) {
+        if (d.category !== "error") continue;
+        result.errors.push(
+          `${options.tsconfigPath ?? join(projectDir, "package.json")}: ${d.message} (code ${d.code})`,
+        );
+      }
     } finally {
       checker.dispose();
     }

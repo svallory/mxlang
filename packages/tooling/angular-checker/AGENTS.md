@@ -68,6 +68,12 @@ range. `strictTemplates` is **not** forced: the project's
 `extends`) reach ngtsc unchanged, and unset follows compiler-cli's default (on
 in 22.x, `strictTemplates !== false`). `false` still checks in basic mode, so
 the checker is never silently off (supersedes the PR #104 "forced on" ruling).
+`configDiagnostics()` returns compiler *option* errors (`getNgOptionDiagnostics` +
+TS `getOptionsDiagnostics`, e.g. `extendedDiagnostics` with `strictTemplates:
+false`): config-level, not per file, deduped, `file` = the tsconfig; mx-tsc
+reports them once per project and fails on errors. It is a separate method
+(not a `check` record or a creation-time `TsconfigError`) because option
+diagnostics exist only once a program has been built.
 
 **`@angular/core` must resolve from `projectDir`**, or a template using a
 signal input or `signal()` has nothing to check against and a broken one

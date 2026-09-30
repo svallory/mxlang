@@ -1,0 +1,7 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-x",
+  template: <p>${user.name}</p>,
+})
+export class XComponent { user = { name: "a" }; }

@@ -1,0 +1,7 @@
+{
+  "compilerOptions": { "strict": true },
+  "angularCompilerOptions": {
+    "strictTemplates": false,
+    "extendedDiagnostics": { "defaultCategory": "warning" }
+  }
+}

@@ -77,6 +77,7 @@ function deps(
     status?: "ok" | "missing" | "out-of-range";
     records?: (path: string) => Diagnostic[];
     throwOnCheck?: boolean;
+    config?: (projectDir: string) => Diagnostic[];
   } = {},
 ): NgDiagnosticsDeps {
   return {
@@ -103,6 +104,7 @@ function deps(
           return over.records?.(path) ?? [];
         },
         update: () => {},
+        configDiagnostics: () => over.config?.(options.projectDir) ?? [],
         dispose: () => {
           spy.disposed.push(options.projectDir);
         },
@@ -355,5 +357,57 @@ describe("reportNgDiagnostics", () => {
     for (const m of ["region one", "map one", "none one"]) {
       expect(out).toContain(`${m} (approximate location)`);
     }
+  });
+});
+
+describe("checkNgMxFiles compiler option errors", () => {
+  const optionError = (file: string): Diagnostic => ({
+    file,
+    start: 0,
+    length: 0,
+    code: -991014,
+    message:
+      'Angular compiler option "extendedDiagnostics" requires strictTemplates',
+    category: "error",
+    source: "ngtsc",
+  });
+
+  it("reports a config error once per project, against the tsconfig, however many files", () => {
+    const spy = spyOf();
+    const dir = project();
+    const tsconfigPath = join(dir, "tsconfig.app.json");
+    const result = checkNgMxFiles(
+      [compiled(dir, "a.ng.mx"), compiled(dir, "b.ng.mx")],
+      deps(spy, { config: () => [optionError(tsconfigPath)] }),
+      { tsconfigPath },
+    );
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain(tsconfigPath);
+    expect(result.errors[0]).toContain("extendedDiagnostics");
+    expect(spy.checked).toHaveLength(2);
+    expect(spy.disposed).toEqual([dir]);
+  });
+
+  it("does not turn a config warning into a failure", () => {
+    const spy = spyOf();
+    const dir = project();
+    const result = checkNgMxFiles(
+      [compiled(dir)],
+      deps(spy, {
+        config: () => [{ ...optionError("/x"), category: "warning" }],
+      }),
+      { tsconfigPath: "/x" },
+    );
+    expect(result.errors).toEqual([]);
+  });
+
+  it("names the project when no tsconfig was given", () => {
+    const spy = spyOf();
+    const dir = project();
+    const result = checkNgMxFiles(
+      [compiled(dir)],
+      deps(spy, { config: () => [optionError("")] }),
+    );
+    expect(result.errors[0]).toContain(dir);
   });
 });
