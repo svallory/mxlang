@@ -11,8 +11,11 @@ import {
 } from "./astro-language.ts";
 import {
   createCompoundExtensionResolver,
+  createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
   type DependencySourceReader,
+  isNgMx,
+  type NgMxLanguagePlugin,
   type SolidMxLanguagePlugin,
 } from "./language.ts";
 import {
@@ -20,17 +23,22 @@ import {
   type MxLanguagePlugin,
 } from "./mx-language.ts";
 
+type AnyMxLanguagePlugin =
+  | SolidMxLanguagePlugin
+  | NgMxLanguagePlugin
+  | MxLanguagePlugin
+  | AmxLanguagePlugin;
+
 const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
-  let languagePlugins:
-    | Array<SolidMxLanguagePlugin | MxLanguagePlugin | AmxLanguagePlugin>
-    | undefined;
+  let languagePlugins: Array<AnyMxLanguagePlugin> | undefined;
   const volarFactory = createLanguageServicePlugin((typescript, info) => {
     const readSource = createProjectSourceReader(info);
     const solidMxPlugin = createSolidMxLanguagePlugin(typescript, {
       readSource,
     });
     const mxPlugin = createMxLanguagePlugin(typescript, { readSource });
-    languagePlugins = [solidMxPlugin, mxPlugin];
+    const ngMxPlugin = createNgMxLanguagePlugin(typescript, { readSource });
+    languagePlugins = [solidMxPlugin, ngMxPlugin, mxPlugin];
     if (info.config?.astro === true) {
       languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
     }
@@ -53,6 +61,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       ).filter(
         (fileName) =>
           fileName.endsWith(".solid.mx") ||
+          isNgMx(fileName) ||
           fileName.endsWith(".mx") ||
           fileName.endsWith(".amx") ||
           fileName.endsWith(".astro"),
@@ -99,10 +108,9 @@ export function createConfiguredLanguagePlugins(
   typescript: typeof ts,
   astro: boolean,
   loadAstro?: AstroLanguagePluginLoader,
-  mxPlugins: Array<
-    SolidMxLanguagePlugin | MxLanguagePlugin | AmxLanguagePlugin
-  > = [
+  mxPlugins: Array<AnyMxLanguagePlugin> = [
     createSolidMxLanguagePlugin(typescript),
+    createNgMxLanguagePlugin(typescript),
     createMxLanguagePlugin(typescript),
   ],
 ) {
@@ -122,9 +130,7 @@ export function createConfiguredLanguagePlugins(
 function withSyntaxDiagnostics(
   typescript: typeof ts,
   service: ts.LanguageService,
-  getLanguagePlugins: () =>
-    | Array<SolidMxLanguagePlugin | MxLanguagePlugin | AmxLanguagePlugin>
-    | undefined,
+  getLanguagePlugins: () => Array<AnyMxLanguagePlugin> | undefined,
 ): ts.LanguageService {
   return new Proxy(service, {
     get(target, property, receiver) {
@@ -159,9 +165,11 @@ function withSyntaxDiagnostics(
             code: diagnostic.category === "error" ? 80001 : 80002,
             source: fileName.endsWith(".solid.mx")
               ? "solidmx"
-              : fileName.endsWith(".amx")
-                ? "amx"
-                : "mx",
+              : isNgMx(fileName)
+                ? "ngmx"
+                : fileName.endsWith(".amx")
+                  ? "amx"
+                  : "mx",
             messageText: diagnostic.message,
           })),
         ];
@@ -181,6 +189,7 @@ export type {
 } from "./language.ts";
 export {
   createCompoundExtensionResolver,
+  createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
 } from "./language.ts";
 export {

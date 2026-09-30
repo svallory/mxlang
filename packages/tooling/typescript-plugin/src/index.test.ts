@@ -32,8 +32,10 @@ import pluginFactory, { createConfiguredLanguagePlugins } from "./index.ts";
 import {
   appendSolidBuiltinImport,
   compileWithDependencies,
+  createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
   decodeMappings,
+  NG_MX_LANGUAGE_ID,
   SOLID_MX_LANGUAGE_ID,
   solidRegionCompile,
 } from "./language.ts";
@@ -3599,6 +3601,157 @@ function createMutablePluginService(
     },
   };
 }
+
+describe(".ng.mx language plugin", () => {
+  const dir = `${here}/fixtures/angular-ngmx`;
+  const stub = [
+    "export function Component(_: object): ClassDecorator {",
+    "  return () => undefined;",
+    "}",
+  ].join("\n");
+  const component = (template: string, body: string) =>
+    [
+      'import { Component } from "./stub.ts";',
+      "",
+      "@Component({",
+      '  selector: "app-x",',
+      `  template: ${template},`,
+      "})",
+      `export class XComponent { ${body} }`,
+    ].join("\n");
+
+  function diagnosticsOf(source: string, fixtureDir = dir) {
+    const file = `${fixtureDir}/x.component.ng.mx`;
+    const consumer = `${fixtureDir}/consumer.ts`;
+    const service = createPluginService(
+      {
+        [file]: source,
+        [`${fixtureDir}/stub.ts`]: stub,
+        [consumer]: 'import "./x.component.ng.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+    return {
+      file,
+      diagnostics: [
+        ...service.getSyntacticDiagnostics(file),
+        ...service.getSemanticDiagnostics(file),
+      ],
+    };
+  }
+
+  const lineCol = (diagnostic: ts.Diagnostic, source: string) => {
+    const before = source.slice(0, diagnostic.start ?? 0).split("\n");
+    return { line: before.length, column: (before.at(-1) ?? "").length };
+  };
+
+  it("routes .ng.mx to its own language id, not the page plugin", () => {
+    const plugin = createNgMxLanguagePlugin(ts);
+    expect(plugin.getLanguageId?.(`${dir}/x.component.ng.mx`)).toBe(
+      NG_MX_LANGUAGE_ID,
+    );
+    expect(plugin.getLanguageId?.(`${dir}/x.mx`)).toBeUndefined();
+    expect(plugin.getLanguageId?.(`${dir}/x.solid.mx`)).toBeUndefined();
+    const mx = createMxLanguagePlugin(ts);
+    expect(mx.getLanguageId?.(`${dir}/x.component.ng.mx`)).toBeUndefined();
+    expect(mx.getLanguageId?.(`${dir}/x.mx`)).toBe(MX_LANGUAGE_ID);
+  });
+
+  it("reports no diagnostics for a clean file", () => {
+    const { diagnostics } = diagnosticsOf(
+      component("<p>${n}</p>", "n: number = 1;"),
+    );
+    expect(diagnostics).toEqual([]);
+  });
+
+  it("positions a class-body type error in the .ng.mx", () => {
+    const source = component("<p>${n}</p>", 'n: number = "s";');
+    const { diagnostics } = diagnosticsOf(source);
+    expect(diagnostics.length).toBeGreaterThanOrEqual(1);
+    const error = diagnostics.find((d) => d.code === 2322);
+    expect(error).toBeDefined();
+    const line = source.split("\n").findIndex((l) => l.includes("n: number"));
+    expect(lineCol(error as ts.Diagnostic, source)).toEqual({
+      line: line + 1,
+      column: source.split("\n")[line]?.indexOf("n: number") as number,
+    });
+  });
+
+  it("keeps positions after a template region that changes the line's length", () => {
+    // The region lowers to a longer/shorter literal; the class below it must
+    // still map to its own source column.
+    const source = component(
+      "<ul><for|p| of=people by=(p => p.id)><li>${p.name}</li></for></ul>",
+      'people = [{ id: 1, name: "a" }]; bad: string = 1;',
+    );
+    const { diagnostics } = diagnosticsOf(source);
+    const error = diagnostics.find((d) => d.code === 2322);
+    expect(error).toBeDefined();
+    const pos = lineCol(error as ts.Diagnostic, source);
+    const lines = source.split("\n");
+    expect(pos.line).toBe(lines.length);
+    expect(pos.column).toBe((lines.at(-1) as string).indexOf("bad"));
+  });
+
+  it("maps a template expression back to its start in the .ng.mx", () => {
+    const source = component(
+      "<p>${user.name.toUpperCase()}</p>",
+      "user = { name: 'a' };",
+    );
+    const file = `${dir}/x.component.ng.mx`;
+    const plugin = createNgMxLanguagePlugin(ts);
+    const virtual = plugin.createVirtualCode?.(
+      file,
+      NG_MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    if (!virtual) throw new Error("Expected virtual code");
+    const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    const expression = "user.name.toUpperCase()";
+    const inside = generated.indexOf(expression) + 5;
+    const hit = virtual.mappings.find((mapping) => {
+      const start = mapping.generatedOffsets[0] ?? 0;
+      const length = mapping.generatedLengths?.[0] ?? mapping.lengths[0] ?? 0;
+      return inside >= start && inside < start + length;
+    });
+    expect(hit).toBeDefined();
+    expect(hit?.sourceOffsets[0]).toBe(source.indexOf(expression));
+  });
+
+  it("no longer hits the angular 'not wired' guard for .ng.mx", () => {
+    const { diagnostics } = diagnosticsOf(component("<p>hi</p>", ""));
+    expect(
+      diagnostics.some((d) => String(d.messageText).includes("not wired")),
+    ).toBe(false);
+  });
+
+  it("surfaces an invalid package.json#mx.angular as a positioned error, not a crash", () => {
+    const bad = `${here}/fixtures/angular-ngmx-bad-config`;
+    const { diagnostics } = diagnosticsOf(component("<p>hi</p>", ""), bad);
+    const config = diagnostics.filter((d) =>
+      String(d.messageText).includes("notAKey"),
+    );
+    expect(config).toHaveLength(1);
+    expect(config[0]?.category).toBe(ts.DiagnosticCategory.Error);
+    expect(config[0]?.start).toBe(0);
+  });
+
+  it("keeps the host-policy guard for angular .mx pages", () => {
+    const angularFile = `${here}/fixtures/angular-policy/card.mx`;
+    const plugin = createMxLanguagePlugin(ts);
+    plugin.createVirtualCode?.(
+      angularFile,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString("<div>hi</div>"),
+      { getAssociatedScript: () => undefined },
+    );
+    expect(plugin.getSyntaxError(angularFile)?.message).toContain(
+      "the angular host is not wired into @mxlang/typescript-plugin yet",
+    );
+  });
+});
 
 describe("custom tag template mappings", () => {
   /**

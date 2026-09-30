@@ -1,0 +1,11 @@
+{
+  "name": "angular-ngmx-bad-config-fixture",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  },
+  "mx": {
+    "angular": {
+      "notAKey": true
+    }
+  }
+}

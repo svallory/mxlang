@@ -32,6 +32,7 @@ import {
   decodeMappings,
   diagnosticsFrom,
   foreignTemplateError,
+  isNgMx,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
   mergeMappings,
@@ -577,7 +578,7 @@ function offsetAt(
 
 function isMx(fileName: string): boolean {
   const lower = fileName.toLowerCase();
-  if (lower.endsWith(".solid.mx")) return false;
+  if (lower.endsWith(".solid.mx") || isNgMx(fileName)) return false;
   return MX_EXTENSIONS.some((extension) => lower.endsWith(`.${extension}`));
 }
 

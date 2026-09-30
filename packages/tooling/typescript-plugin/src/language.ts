@@ -1,6 +1,13 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
+  type AngularMapping,
+  compileNgMx,
+  readAngularConfig,
+} from "@mxlang/angular";
+import {
+  hostModuleSegment,
   type MxWarning,
   reportScanDiagnostics,
   scanCached,
@@ -29,6 +36,9 @@ export const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
 
 export const SOLID_MX_EXTENSION = "solid.mx";
 export const SOLID_MX_LANGUAGE_ID = "solidmx";
+
+export const NG_MX_EXTENSION = "ng.mx";
+export const NG_MX_LANGUAGE_ID = "ngmx";
 
 export const codeInformation: CodeInformation = {
   verification: true,
@@ -211,6 +221,168 @@ export function createSolidMxLanguagePlugin(
         };
       },
     },
+  };
+}
+
+export interface NgMxLanguagePlugin extends MxDiagnosticLanguagePlugin {
+  getSyntaxError(fileName: string): SolidMxSyntaxError | undefined;
+}
+
+/**
+ * `.ng.mx`: an Angular module whose `template:` values are MX regions.
+ *
+ * Unlike `.solid.mx` there is no `print` round trip — `compileNgMx` returns
+ * the whole emitted TypeScript module. The text outside the regions maps
+ * through the module's source map; each region's expressions map through
+ * `result.mappings`. The two never overlap (the source map leaves a region's
+ * lowered literal unmapped), so they are concatenated.
+ *
+ * TypeScript sees a region as an opaque template literal, so this gives
+ * TypeScript semantics for the class and the module. Checking the template's
+ * own expressions is Angular's compiler, not TypeScript's.
+ */
+export function createNgMxLanguagePlugin(
+  typescript: typeof ts,
+  options: DependencyLanguagePluginOptions = {},
+): NgMxLanguagePlugin {
+  const syntaxErrors = new Map<string, SolidMxSyntaxError>();
+  const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
+  const reportedScanDiagnostics = new Set<string>();
+
+  return {
+    getLanguageId(fileName) {
+      return isNgMx(fileName) ? NG_MX_LANGUAGE_ID : undefined;
+    },
+
+    createVirtualCode(fileName, languageId, snapshot) {
+      if (languageId !== NG_MX_LANGUAGE_ID && !isNgMx(fileName)) {
+        return undefined;
+      }
+
+      const source = snapshot.getText(0, snapshot.getLength());
+      const fail = (error: SolidMxSyntaxError) => {
+        syntaxErrors.set(fileName, error);
+        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
+        return createVirtualCode(typescript, "", source, undefined, [], "ts");
+      };
+
+      // A config error must be loud: falling back to defaults would compile
+      // the file against a prefix the author did not choose, and tsserver
+      // must not crash. Positioned at the file's start, naming package.json.
+      let tagSelectorPrefix: string;
+      try {
+        const projectDir = nearestPackageDir(dirname(fileName));
+        tagSelectorPrefix = projectDir
+          ? readAngularConfig(projectDir).tagSelectorPrefix
+          : DEFAULT_TAG_SELECTOR_PREFIX;
+      } catch (cause) {
+        return fail({
+          fileName,
+          message: cause instanceof Error ? cause.message : String(cause),
+          offset: 0,
+          source,
+        });
+      }
+
+      try {
+        const scan = scanCached(fileName, { host: "angular" });
+        reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+          console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
+        );
+        const result = compileNgMx(source, fileName, {
+          customTags: scan.customTags,
+          tagSelectorPrefix,
+        });
+        syntaxErrors.delete(fileName);
+        compileDiagnostics.set(
+          fileName,
+          result.warnings.map((warning) =>
+            warningDiagnostic(fileName, source, warning),
+          ),
+        );
+        return createVirtualCode(
+          typescript,
+          result.code,
+          source,
+          result.map,
+          result.mappings.map(regionMapping),
+          "ts",
+        );
+      } catch (cause) {
+        const foreign = foreignTemplateError(
+          cause,
+          fileName,
+          source,
+          options.readSource,
+        );
+        if (foreign) {
+          syntaxErrors.delete(fileName);
+          compileDiagnostics.set(foreign.templateFileName, [
+            foreign.templateDiagnostic,
+          ]);
+          compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
+          return createVirtualCode(typescript, "", source, undefined, [], "ts");
+        }
+        return fail(toSyntaxError(fileName, source, cause));
+      }
+    },
+
+    getSyntaxError(fileName) {
+      return syntaxErrors.get(fileName);
+    },
+
+    getCompileDiagnostics(fileName) {
+      return diagnosticsFrom(compileDiagnostics, fileName);
+    },
+
+    typescript: {
+      resolveHiddenExtensions: true,
+      extraFileExtensions: [
+        {
+          extension: NG_MX_EXTENSION,
+          isMixedContent: false,
+          scriptKind: typescript.ScriptKind.TS,
+        },
+      ],
+      getServiceScript(root) {
+        return {
+          code: root,
+          extension: ".ts",
+          scriptKind: typescript.ScriptKind.TS,
+          // No `preventLeadingOffset`, for the reason the `.solid.mx` plugin
+          // documents: a region lowers to a literal of a different length, and
+          // Volar must pad against the source's own lines so a column after a
+          // region is measured against the source line, not the emitted one.
+        };
+      },
+    },
+  };
+}
+
+/** `mx.angular.tagSelectorPrefix`'s default (`config.ts` `DEFAULTS`). */
+const DEFAULT_TAG_SELECTOR_PREFIX = "mx-";
+
+function nearestPackageDir(start: string): string | undefined {
+  let dir = start;
+  for (;;) {
+    if (existsSync(join(dir, "package.json"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+/**
+ * One region-expression mapping as a Volar `CodeMapping`. The two sides can
+ * differ in length (template escaping), so `generatedLengths` is set.
+ */
+function regionMapping(mapping: AngularMapping): CodeMapping {
+  return {
+    sourceOffsets: [mapping.sourceStart],
+    generatedOffsets: [mapping.generatedStart],
+    lengths: [mapping.sourceEnd - mapping.sourceStart],
+    generatedLengths: [mapping.generatedEnd - mapping.generatedStart],
+    data: codeInformation,
   };
 }
 
@@ -476,10 +648,11 @@ function createVirtualCode(
   source: string,
   map: RawSourceMap | undefined,
   supplementalMappings: CodeMapping[] = [],
+  kind: "tsx" | "ts" = "tsx",
 ): VirtualCode {
   return {
     id: "root",
-    languageId: "typescriptreact",
+    languageId: kind === "ts" ? "typescript" : "typescriptreact",
     snapshot: typescript.ScriptSnapshot.fromString(generated),
     mappings: [
       ...(map ? decodeMappings(map, generated, source) : []),
@@ -966,6 +1139,11 @@ function equalLength(
     length++;
   }
   return length;
+}
+
+/** `.ng.mx` by file kind (core's `hostModuleSegment`), case-insensitively. */
+export function isNgMx(fileName: string): boolean {
+  return hostModuleSegment(basename(fileName).toLowerCase()) === "ng";
 }
 
 function isSolidMx(fileName: string): boolean {

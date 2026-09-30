@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: `.ng.mx` is its own file kind (`createNgMxLanguagePlugin`)
+
+A `.ng.mx` file is no longer compiled as a whole-file `.mx` page. `createNgMxLanguagePlugin` (language id `ngmx`) compiles it with `compileNgMx` from `@mxlang/angular` and hands Volar the emitted TypeScript module, so TypeScript semantics (class, imports, decorators) are reported at the right `.ng.mx` line and column. Text outside the `template:` regions maps through the module's source map; each template expression maps through `result.mappings`. TypeScript sees a region as an opaque template literal, so template-expression checking is not part of this (it needs Angular's compiler). `isMx` excludes `.ng.mx` by core's `hostModuleSegment`; the host-policy guard for Angular `.mx` pages is unchanged. An invalid `package.json#mx.angular` is reported as an error positioned at the start of the `.ng.mx` file instead of throwing or defaulting.
+
 ### Fix: whole-file Solid `.mx` component props are type-checked (solid-whole-file-prop-typing)
 
 The virtual code for a whole-file Solid `.mx` is `compileSolidUnit`'s output, which now keeps `export interface Input` and annotates `function Card(input: Input)`. A wrong ordinary prop at the caller is TS2322 at the attribute, a missing required prop TS2741; correct calls, optional props, AttrTag props and a component with no `Input` stay clean. No plugin code changed.
