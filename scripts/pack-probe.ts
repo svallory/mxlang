@@ -335,6 +335,17 @@ function nodeTypes(
  * bundles `@mxlang/astro` (a `bun build --external`), whose `main` is
  * `src/*.ts`, so a consumer install cannot load it (D5).
  */
+/** The plugin's own exact `devDependencies.typescript`: the version CI builds with. */
+function pluginTypescript(): string {
+  const version = (
+    readPackageJson(workspaceDirs["@mxlang/typescript-plugin"] as string) as {
+      devDependencies?: Record<string, string>;
+    }
+  ).devDependencies?.typescript;
+  if (!version) fail("typescript-plugin has no devDependencies.typescript");
+  return version;
+}
+
 function privateStubs(
   name: string,
 ): Pick<ConsumerOptions, "stubExtra" | "extraDeps"> {
@@ -343,7 +354,7 @@ function privateStubs(
         stubExtra: ["@mxlang/astro"],
         // `typescript` is a required peer (">=5.9.0 <7"); a consumer supplies
         // it, and an unpinned install would resolve 7.x.
-        extraDeps: { typescript: "6.0.3" },
+        extraDeps: { typescript: pluginTypescript() },
       }
     : {};
 }
