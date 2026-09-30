@@ -147,7 +147,16 @@ export const angularDeclarations: HostDeclarations = {
     ...STATEFUL_ERRORS,
     try: { kind: "error", reason: TRY_MESSAGE },
   },
-  isElement: (name) => !/^[A-Z]/.test(name),
+  // Element-vs-component follows Marko's own rule — what the taglib lookup
+  // resolves the name to — with casing only as the fallback for a name no
+  // taglib knows, so a `tags/`-discovered `<badge/>` is the component it is
+  // in Marko. Matches the JSX hosts' `isElement`; `isComponent` below still
+  // wins for a file-local binding, and the core consults it first.
+  isElement: (name, ctx) => {
+    const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+    if (taglibId !== undefined) return ELEMENT_TAGLIBS.has(taglibId);
+    return !/^[A-Z]/.test(name);
+  },
   // Decision 114: routing by PascalCase alone made `<TotallyUndefined/>` —
   // no import, binding, or taglib entry — a "component" that emitted
   // `<mx-totally-undefined>` plus a step-1 import warning, where Marko
