@@ -61,6 +61,8 @@ jobs:
       - run: bun run oracle:preact -- --strict
       - run: bun run oracle:react -- --strict
       - run: bun run oracle:hono -- --strict
+      - run: bun run oracle:angular -- --strict
+      - run: bun run oracle:custom-tags -- --strict
 
   zed-compile-check:
     # Reproduces Zed's own grammar compile step against a clean clone of
