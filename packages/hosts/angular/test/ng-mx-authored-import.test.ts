@@ -59,6 +59,21 @@ function run(dir: string, source: string) {
   });
 }
 
+/** `line:column` a `TranslateError` carries. */
+function at(error: Error): string {
+  const { line, column } = error as Error & { line: number; column: number };
+  return `${line}:${column}`;
+}
+
+function thrown(fn: () => unknown): Error {
+  try {
+    fn();
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error("expected a throw");
+}
+
 const count = (haystack: string, needle: string) =>
   haystack.split(needle).length - 1;
 
@@ -99,7 +114,7 @@ describe("authored .mx import in a .ng.mx region", () => {
       ngMx(['import Chip from "./tags/badge.mx";'], "<div><Chip/></div>"),
     );
     expect(result.code).toContain("<div><mx-badge></mx-badge></div>");
-    expect(result.code).toContain("imports: [Badge]");
+    expect(result.code).toContain("imports: [Chip]");
     expect(result.code).toContain(
       'import { Badge as Chip } from "./tags/badge";',
     );
@@ -146,21 +161,140 @@ describe("authored .mx import in a .ng.mx region", () => {
     expect(result.code).toContain('import { x } from "./x";');
   });
 
-  it("reports a positioned error for an unresolvable import, never a fallback", () => {
+  it("reports an unresolvable import at the import line, never a fallback", () => {
     const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
-    let error: unknown;
-    try {
+    const err = thrown(() =>
       run(
         dir,
         ngMx(['import Nope from "./tags/missing.mx";'], "<div><Nope/></div>"),
-      );
-    } catch (e) {
-      error = e;
-    }
-    const err = error as Error & { loc?: { line: number }; line?: number };
+      ),
+    );
     expect(err.message).toContain("cannot resolve `./tags/missing.mx`");
-    // Positioned: the message carries `(line:column)` like every other error.
-    expect(err.message).toMatch(/\(\d+:\d+\)$/);
+    // Line 2 is the import, column 0 its start.
+    expect(at(err)).toBe("2:0");
+  });
+
+  it("does not fail on an unresolvable .mx default import never used as a tag", () => {
+    const dir = project({});
+    const result = run(
+      dir,
+      ngMx(['import Nope from "./tags/missing.mx";'], "<div>hi</div>"),
+    );
+    expect(result.code).toContain('import Nope from "./tags/missing.mx";');
+  });
+
+  it("rejects a mixed default + named .mx import used as a tag, at the import", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const err = thrown(() =>
+      run(
+        dir,
+        ngMx(
+          ['import Badge, { b } from "./tags/badge.mx";'],
+          "<div><Badge/></div>",
+        ),
+      ),
+    );
+    expect(err.message).toContain("must be a sole default import");
+    expect(err.message).toContain("discovered `<kebab-name/>` spelling");
+    expect(at(err)).toBe("2:0");
+  });
+
+  it("rejects a .marko default import used as a tag, at the import", () => {
+    const dir = project({ "tags/x.marko": "<b>x</b>\n" });
+    const err = thrown(() =>
+      run(
+        dir,
+        ngMx(['import Foo from "./tags/x.marko";'], "<div><Foo/></div>"),
+      ),
+    );
+    expect(err.message).toContain(
+      "a `.marko` component cannot be used as a tag in an Angular `.ng.mx` module",
+    );
+    expect(at(err)).toBe("2:0");
+  });
+
+  it("emits one import and uses the alias in imports: when aliased", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(['import Chip from "./tags/badge.mx";'], "<div><Chip/></div>"),
+    );
+    expect(result.code).toContain("imports: [Chip]");
+    expect(count(result.code, "./tags/badge")).toBe(1);
+    expect(result.code).toContain(
+      'import { Badge as Chip } from "./tags/badge";',
+    );
+    expect(result.code).not.toContain("import { Badge }");
+  });
+
+  it("lists an aliased class once when the same callee is also discovered", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const result = run(
+      dir,
+      ngMx(
+        ['import Chip from "./tags/badge.mx";'],
+        "<div><Chip/><badge/></div>",
+      ),
+    );
+    expect(result.code).toContain("imports: [Chip]");
+    expect(count(result.code, "./tags/badge")).toBe(1);
+    expect(result.code).toContain(
+      "<div><mx-badge></mx-badge><mx-badge></mx-badge></div>",
+    );
+  });
+
+  it("is byte-identical to the discovered spelling except the import line", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const authored = run(
+      dir,
+      ngMx(['import Badge from "./tags/badge.mx";'], "<div><Badge/></div>"),
+    );
+    const discovered = run(dir, ngMx([], "<div><badge/></div>"));
+    const withoutImport = (code: string) =>
+      code
+        .split("\n")
+        .filter((line) => line !== 'import { Badge } from "./tags/badge";')
+        .join("\n")
+        .replace(/\n{2,}/g, "\n\n");
+    expect(withoutImport(authored.code)).toBe(
+      withoutImport(discovered.code).replace("<badge/>", "<Badge/>"),
+    );
+    expect(authored.warnings).toEqual(discovered.warnings);
+    // Mappings: every run the discovered spelling maps is mapped identically
+    // (same emitted text, same derivation). The authored spelling additionally
+    // maps the tag name, which the author wrote and a discovered tag has no
+    // span for.
+    const runs = (result: typeof authored) =>
+      result.mappings.map(
+        (m) =>
+          `${result.code.slice(m.generatedStart, m.generatedEnd)}|${m.derive ?? ""}`,
+      );
+    const authoredRuns = runs(authored);
+    for (const run of runs(discovered)) expect(authoredRuns).toContain(run);
+    for (const m of authored.mappings) {
+      const text = authored.code.slice(m.generatedStart, m.generatedEnd);
+      if (!runs(discovered).includes(`${text}|${m.derive ?? ""}`)) {
+        expect(m.derive).toBe("resolved-selector");
+      }
+    }
+  });
+
+  it("preserves a .mx default import never used as a tag byte-for-byte", () => {
+    const dir = project({ "tags/badge.mx": "<b>!</b>\n" });
+    const source = ngMx(
+      ['import Badge from "./tags/badge.mx";'],
+      "<div>hi</div>",
+    );
+    const result = run(dir, source);
+    expect(result.code).toBe(
+      source.replace("<div>hi</div>", "`<div>hi</div>`"),
+    );
+  });
+
+  it("lowers a module-scope const used as a tag to ngComponentOutlet (decision 116)", () => {
+    const dir = project({});
+    const result = run(dir, ngMx(["const Local = 1;"], "<div><Local/></div>"));
+    expect(result.code).toContain("ngComponentOutlet");
   });
 });
 

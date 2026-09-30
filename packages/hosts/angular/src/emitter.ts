@@ -756,6 +756,12 @@ export interface UsedTag {
   className: string;
   /** The import path of the emitted `.ts`, e.g. `./tags/user-card`. */
   specifier: string;
+  /**
+   * The author's own local binding, set by `.ng.mx` when the tag was called
+   * through an authored `import X from "./x.mx"`. `imports:` then names
+   * `local`, not `className`.
+   */
+  local?: string;
 }
 
 /** How a call site references one tag module. */

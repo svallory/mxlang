@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Round 2 of the authored `.mx` import in `.ng.mx`.** An aliased import now
+  emits one import (`import { Badge as Chip } from "./tags/badge"`) and lists the
+  author's local in `imports:` (`imports: [Chip]`), deduped against a discovered
+  use of the same class. Errors, all positioned at the import: a mixed
+  `import A, { b } from "./x.mx"` used as a tag (must be a sole default import),
+  a `.marko` default import used as a tag, and an unresolvable path. A `.mx`
+  default import never used as a tag is left byte-for-byte. A module-scope
+  binding used as a tag (`const Local = 1; <Local/>`) now lowers to
+  `ngComponentOutlet` (decision 116) instead of the unresolved-tag error.
 - **An authored `.mx` default import now works as a tag in a `.ng.mx` region**
   (`import Badge from "./tags/badge.mx"` … `<Badge/>`), inside or outside
   `tags/`, aliased or not. It used to fail with Marko's "Unable to find entry

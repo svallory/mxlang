@@ -16,6 +16,7 @@ import {
   newCtx,
   parseFragment,
   printExpression,
+  resolveSpecifier,
   TranslateError,
 } from "@mxlang/core";
 import {
@@ -95,6 +96,25 @@ export function escapeTemplateLiteral(template: string): string {
     .replace(/`/g, "\\`")
     .replace(/\$\{/g, "\\${");
 }
+
+/**
+ * A problem with one authored import, found while lowering a region that has
+ * no source position for it. `compileNgMx` re-throws it at the import's own
+ * line and column once the module AST is available.
+ */
+class AuthoredImportError extends Error {
+  constructor(
+    readonly local: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const MIXED_IMPORT_MESSAGE =
+  'an authored `.mx` tag import must be a sole default import (`import A from "./x.mx"`); import other names in a separate statement, or use the discovered `<kebab-name/>` spelling.';
+const MARKO_TAG_MESSAGE =
+  "a `.marko` component cannot be used as a tag in an Angular `.ng.mx` module: it is not an Angular component. Use an MX tag file (`.mx`) instead, imported with a sole default import or through the discovered `<kebab-name/>` spelling.";
 
 /** One region's lowering, keyed by its span in the `.ng.mx` file. */
 export interface NgMxRegion {
@@ -214,19 +234,43 @@ function lowerRegion(
   // capitalized tag bound by the surrounding module (an authored
   // `import Badge from "./tags/badge.mx"`) resolves instead of hitting
   // Marko's "Unable to find entry point" (LiUNA gap G7).
-  for (const [name, specifier] of base.importSpecifiers ?? []) {
+  //
+  // A `.marko` import is deliberately not seeded: a Marko component is not an
+  // Angular component, so the tag keeps the unresolved-tag error (upgraded
+  // below to a message that says why).
+  const specifiers = base.importSpecifiers ?? new Map<string, string>();
+  const markoLocals = new Set(
+    [...specifiers].filter(([, s]) => s.endsWith(".marko")).map(([n]) => n),
+  );
+  for (const [name, specifier] of specifiers) {
+    if (markoLocals.has(name)) continue;
     ctx.importSpecifiers.set(name, specifier);
     ctx.imports.add(name);
   }
-  for (const name of base.moduleBindings ?? []) ctx.imports.add(name);
+  for (const name of base.moduleBindings ?? []) {
+    if (!markoLocals.has(name)) ctx.imports.add(name);
+  }
   for (const name of base.unknownModuleBindings ?? []) {
-    ctx.unknownLocalValue.add(name);
+    if (!markoLocals.has(name)) ctx.unknownLocalValue.add(name);
   }
   for (const name of base.importDefaultFromMarkoOrMx ?? []) {
-    ctx.importDefaultFromMarkoOrMx.add(name);
+    if (specifiers.get(name)?.endsWith(".mx")) {
+      ctx.importDefaultFromMarkoOrMx.add(name);
+    }
   }
 
-  const ir = lower(ctx, body);
+  let ir: ReturnType<typeof lower>;
+  try {
+    ir = lower(ctx, body);
+  } catch (error) {
+    const tag = /Unable to find entry point for custom tag `<([^>]+)>`/.exec(
+      (error as Error).message,
+    )?.[1];
+    if (tag && markoLocals.has(tag)) {
+      throw new AuthoredImportError(tag, MARKO_TAG_MESSAGE);
+    }
+    throw error;
+  }
 
   // A4 divergence 4, the functional gain of `.ng.mx` over a `.mx` page:
   // module-level MX statements are *hoisted* into the surrounding TypeScript
@@ -276,10 +320,18 @@ function lowerRegion(
   // reported back so `compileNgMx` can rewrite the module's own line.
   const authoredTagImports: LoweredRegion["authoredTagImports"] = [];
   const authoredImportNodes: Ir["imports"] = [];
+  const unresolved = new Map<string, string>();
   for (const name of base.importDefaultFromMarkoOrMx ?? []) {
     const specifier = base.importSpecifiers?.get(name);
     if (!specifier?.endsWith(".mx")) continue;
     authoredTagImports.push({ local: name });
+    // An unresolvable path is an error only if the import is called as a
+    // tag; the emitter would reject it eagerly, so it is withheld here and
+    // checked against the tags actually used below.
+    if (!resolveSpecifier(specifier, { importer: filename })) {
+      unresolved.set(name, specifier);
+      continue;
+    }
     authoredImportNodes.push({
       kind: "Import",
       code: `import ${name} from ${JSON.stringify(specifier)};`,
@@ -312,6 +364,21 @@ function lowerRegion(
     true,
     templateMappings,
   );
+
+  // An authored import called as a tag is referenced by its own local name
+  // (`imports: [Chip]`), and an unresolvable one is an error at the import.
+  const authoredLocals = new Set(authoredTagImports.map((i) => i.local));
+  for (const tag of usedTags) {
+    if (!authoredLocals.has(tag.name)) continue;
+    const missing = unresolved.get(tag.name);
+    if (missing !== undefined) {
+      throw new AuthoredImportError(
+        tag.name,
+        `cannot resolve \`${missing}\` to read its \`export const selector\`; check the import path.`,
+      );
+    }
+    tag.local = tag.name;
+  }
 
   return {
     start: base.baseOffset,
@@ -350,12 +417,22 @@ function lowerRegion(
 
 /** One entry per tag, first occurrence winning, keyed by emitted class. */
 function dedupeTags(tags: UsedTag[]): UsedTag[] {
+  // Class identity is the key (emitted class + module), not the local name.
+  // An authored import's alias wins over the discovered spelling of the same
+  // class, so the class is listed once and only under a name the module
+  // actually imports.
   const seen = new Map<string, UsedTag>();
   for (const tag of tags) {
     const key = `${tag.className}\u0000${tag.specifier}`;
-    if (!seen.has(key)) seen.set(key, tag);
+    const existing = seen.get(key);
+    if (!existing || (!existing.local && tag.local)) seen.set(key, tag);
   }
   return [...seen.values()];
+}
+
+/** The identifier a tag is referenced by in `imports:`. */
+function symbolOf(tag: UsedTag): string {
+  return tag.local ?? tag.className;
 }
 
 /** The narrow slice of Babel's AST these two edits read. */
@@ -421,7 +498,7 @@ function applyComponentImports(
   usedTags: UsedTag[],
   directives: string[],
 ): void {
-  const symbols = [...usedTags.map((tag) => tag.className), ...directives];
+  const symbols = [...usedTags.map(symbolOf), ...directives];
   if (symbols.length === 0) return;
   if (!decoratorArg.properties) return;
 
@@ -492,24 +569,31 @@ function applyComponentImports(
 function rewriteAuthoredTagImports(
   rewritten: MagicString,
   file: unknown,
+  source: string,
+  filename: string,
   regions: readonly LoweredRegion[],
 ): void {
   const called = new Map<string, UsedTag>();
   for (const region of regions) {
-    const authored = new Set(region.authoredTagImports.map((i) => i.local));
     for (const tag of region.usedTags) {
-      if (authored.has(tag.name)) called.set(tag.name, tag);
+      if (tag.local) called.set(tag.local, tag);
     }
   }
   if (called.size === 0) return;
   walk(file, (node) => {
     if (node.type !== "ImportDeclaration") return;
     if (!node.source?.value?.endsWith(".mx")) return;
-    const [only, ...rest] = node.specifiers ?? [];
-    if (rest.length > 0 || only?.type !== "ImportDefaultSpecifier") return;
-    const tag = called.get(only.local?.name ?? "");
-    if (!tag || node.start === undefined || node.end === undefined) return;
-    const local = only.local?.name as string;
+    if (node.start === undefined || node.end === undefined) return;
+    const specifiers = node.specifiers ?? [];
+    const defaultSpecifier = specifiers.find(
+      (specifier) => specifier.type === "ImportDefaultSpecifier",
+    );
+    const tag = called.get(defaultSpecifier?.local?.name ?? "");
+    if (!tag) return;
+    if (specifiers.length > 1) {
+      throw importError(source, filename, node.start, MIXED_IMPORT_MESSAGE);
+    }
+    const local = defaultSpecifier?.local?.name as string;
     const binding =
       local === tag.className ? local : `${tag.className} as ${local}`;
     rewritten.overwrite(
@@ -518,6 +602,35 @@ function rewriteAuthoredTagImports(
       `import { ${binding} } from "${tag.specifier}";`,
     );
   });
+}
+
+/** A `TranslateError` at the start of the import declaration at `offset`. */
+function importError(
+  source: string,
+  filename: string,
+  offset: number,
+  message: string,
+): TranslateError {
+  const { line, column } = positionAt(source, offset);
+  return new TranslateError(message, line, column, filename);
+}
+
+/** Re-throws an `AuthoredImportError` at the import that binds its local. */
+function throwAtImport(
+  file: unknown,
+  source: string,
+  filename: string,
+  error: AuthoredImportError,
+): never {
+  let offset: number | undefined;
+  walk(file, (node) => {
+    if (node.type !== "ImportDeclaration" || offset !== undefined) return;
+    if (node.specifiers?.some((s) => s.local?.name === error.local)) {
+      offset = node.start;
+    }
+  });
+  if (offset === undefined) throw new Error(error.message);
+  throw importError(source, filename, offset, error.message);
 }
 
 /** The property of a decorator object literal named `name` (bare or quoted key). */
@@ -825,9 +938,15 @@ function hoistModuleStatements(
 
   // A tag's import is emitted here rather than by the bridge because its
   // specifier is the *emitted module*'s path, which only this host knows.
-  const tagImports = usedTags
-    .filter((tag) => !authoredNames.has(tag.className))
-    .map((tag) => `import { ${tag.className} } from "${tag.specifier}";`);
+  // A tag called through an authored import already has its import: the
+  // author's line is rewritten in place (`rewriteAuthoredTagImports`).
+  const tagImports = [
+    ...new Map(
+      usedTags
+        .filter((tag) => !tag.local && !authoredNames.has(tag.className))
+        .map((tag) => [`${tag.className}\u0000${tag.specifier}`, tag]),
+    ).values(),
+  ].map((tag) => `import { ${tag.className} } from "${tag.specifier}";`);
 
   // `applyComponentImports` puts every needed directive in the decorator's
   // `imports:` array; without the matching `import` statement those are
@@ -924,8 +1043,18 @@ export function compileNgMx(
   // `any` here and the parameter would be implicitly `any` under
   // `noImplicitAny`. The fix is landing in the parser; the annotation is
   // correct either way and can stay.
+  let deferred: AuthoredImportError | undefined;
   const regionCompile: MxRegionCompile = (input: MxRegionCompileInput) => {
-    const region = lowerRegion(input.source, filename, input, options);
+    let region: LoweredRegion;
+    try {
+      region = lowerRegion(input.source, filename, input, options);
+    } catch (error) {
+      if (!(error instanceof AuthoredImportError)) throw error;
+      // No module AST yet to position it against: let the parse finish with
+      // an empty stand-in, then throw at the import (below).
+      deferred ??= error;
+      return { code: '""', hoistedImports: [], returnVars: [] };
+    }
     lowered.push(region);
     return {
       // The region's *expression* is the template literal: the bridge parses
@@ -953,6 +1082,10 @@ export function compileNgMx(
     mxCustomTags: options.customTags,
   });
 
+  if (deferred) {
+    throwAtImport(file, source, filename, deferred as AuthoredImportError);
+  }
+
   lowered.sort((a, b) => a.start - b.start);
 
   const rewritten = new MagicString(source);
@@ -961,7 +1094,7 @@ export function compileNgMx(
   }
 
   const usedTags = dedupeTags(lowered.flatMap((region) => region.usedTags));
-  rewriteAuthoredTagImports(rewritten, file, lowered);
+  rewriteAuthoredTagImports(rewritten, file, source, filename, lowered);
 
   // `imports:` is edited **per component**, from the regions that decorator
   // actually encloses — not from the file-wide union. A file with two
@@ -997,7 +1130,7 @@ export function compileNgMx(
       nonStandalone.add(decorator);
       const symbols = [
         ...dirs.map((name) => ({ name, from: "@angular/common" })),
-        ...tags.map((tag) => ({ name: tag.className, from: tag.specifier })),
+        ...tags.map((tag) => ({ name: symbolOf(tag), from: tag.specifier })),
       ];
       if (symbols.length > 0) {
         moduleWarnings.push(
@@ -1049,7 +1182,23 @@ export function compileNgMx(
     rewritten,
     file,
     lowered.flatMap((region) => region.moduleStatements),
-    dedupeTags(standaloneRegions.flatMap((region) => region.usedTags)),
+    // Merged per component, exactly as its `imports:` was, so a class that a
+    // component lists under an authored alias is not also imported plain.
+    [
+      ...new Set(
+        standaloneRegions.map((region) =>
+          decoratorForRegion(decorators, region.start),
+        ),
+      ),
+    ].flatMap((owner) =>
+      dedupeTags(
+        standaloneRegions
+          .filter(
+            (region) => decoratorForRegion(decorators, region.start) === owner,
+          )
+          .flatMap((region) => region.usedTags),
+      ),
+    ),
     [...new Set(standaloneRegions.flatMap((region) => region.directives))],
   );
 

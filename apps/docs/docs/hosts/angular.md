@@ -428,6 +428,8 @@ empty tag with no error, which is why the warning exists. **In step 2
 (`.ng.mx`) this obligation disappears** — MX owns the module and injects
 both lines itself.
 
+**Calling a tag through an authored import (`.ng.mx`).** In a `.ng.mx`, `import Badge from "./tags/badge.mx"` followed by `<Badge/>` works, inside or outside `tags/`, and emits exactly what `<badge/>` does: the callee's selector, one `imports:` entry, and the import rewritten to the generated class (`import { Badge as Chip } from "./tags/badge"` when you alias it). The import must be a **sole default import**; `import A, { b } from "./x.mx"` used as `<A/>` is a positioned error (import the tag alone and the other names separately, or use the discovered spelling), a deliberate divergence from Marko (see `divergences.md`). A `.marko` component cannot be used as a tag here.
+
 Hand-written Angular components: use their selector as an element; PascalCase calls are for MX tag files. A `.mx` template can call a plain hand-written
 component (`product-list.component.ts`, `selector: "app-product-list"`)
 exactly as it would in a `.html` template — `<app-product-list/>` — with no

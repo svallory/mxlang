@@ -259,3 +259,17 @@ Overrides are literal-only (`"x"`, `'x'`, a substitution-free template
 literal, each optionally `as const`); any other form is a warning and the
 derived `<prefix><kebab(basename)>` stays. The mapping kind for such a run is
 `resolved-selector`, and its `deriveContext` is the exact selector.
+
+**Authored `.mx` imports in a `.ng.mx` region** (`lowerRegion`, `rewriteAuthoredTagImports`
+in `src/ng-mx.ts`). The region is seeded from the parser's `MxRegionCompileInput`
+like Solid's, except a `.marko` specifier is never seeded (a Marko component is
+not an Angular component; using it as a tag is a positioned error). An authored
+`import X from "./p.mx"` called as a tag is handed to the emitter, which resolves
+it to the discovered spelling's selector/class/path, and the author's line is
+rewritten to `import { Class }` (`{ Class as X }` when aliased); `imports:` names
+the author's local (`UsedTag.local`), deduped against a discovered use by class
+identity. It must be a **sole default import**: a mixed `import A, { b } from
+"./x.mx"` used as a tag is a positioned error (Marko accepts it; recorded in the
+root `divergences.md`). Unresolvable-path, mixed and `.marko` errors are thrown
+by `compileNgMx` at the import declaration, via the deferred `AuthoredImportError`.
+
