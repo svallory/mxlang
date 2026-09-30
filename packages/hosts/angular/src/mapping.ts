@@ -83,25 +83,6 @@ export class TemplateWriter {
     }
   }
 
-  /**
-   * Adopts a nested writer's output, rebasing its mappings onto this one.
-   *
-   * A child emitter builds `<if>`/`<for>` bodies and attribute-tag content
-   * against its own zero offset, so its mappings are relative to its own text
-   * and have to be shifted by wherever that text lands here.
-   */
-  writeNested(nested: { code: string; mappings: GeneratedMapping[] }): void {
-    const offset = this.#out.length;
-    this.#out += nested.code;
-    for (const mapping of nested.mappings) {
-      this.#mappings.push({
-        ...mapping,
-        generatedStart: mapping.generatedStart + offset,
-        generatedEnd: mapping.generatedEnd + offset,
-      });
-    }
-  }
-
   /** The mappings recorded so far, in the order they were written. */
   get mappings(): readonly GeneratedMapping[] {
     return this.#mappings;
@@ -281,22 +262,6 @@ export function encodeMappings(
 }
 
 /**
- * Rebases template-relative mappings onto a module that embeds the template
- * as a `JSON.stringify`'d string starting at `quotedStart`.
- *
- * `JSON.stringify` escapes per character, so a run containing a quote, a
- * backslash or a control character occupies more bytes quoted than raw and
- * every offset after it shifts. Rather than guess, each run's own quoted
- * form is computed: when it is byte-identical to the raw form the mapping is
- * rebased past the quoted prefix, and when it is not, the mapping is
- * **dropped** — a span that would slice the wrong bytes out of the module is
- * worse than no span at all.
- *
- * The quoted length of every prefix is accumulated in one pass rather than
- * re-stringifying the prefix per mapping, which was quadratic in the
- * template's length.
- */
-/**
  * Rebases template-relative mappings onto text that embeds the template
  * under an escaping function, starting at `embeddedStart`.
  *
@@ -343,6 +308,17 @@ export function rebaseThroughEscaping(
   return out;
 }
 
+/**
+ * Rebases template-relative mappings onto a module that embeds the template
+ * as a `JSON.stringify`'d string starting at `quotedStart`.
+ *
+ * `JSON.stringify` escapes per character, so a run containing a quote, a
+ * backslash or a control character occupies more bytes quoted than raw and
+ * every offset after it shifts. Each run's own quoted form is computed: when
+ * it is byte-identical to the raw form the mapping is rebased past the quoted
+ * prefix, and when it is not, the mapping is **dropped** — a span that would
+ * slice the wrong bytes out of the module is worse than no span at all.
+ */
 export function templateMappingsToModule(
   template: string,
   mappings: readonly GeneratedMapping[],
