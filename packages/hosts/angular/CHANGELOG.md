@@ -43,7 +43,6 @@
   no-op, as in Marko's `handler?.(event, target)`. Divergences from Marko, in
   `divergences.md`: `this` is the component (Marko: the element), and the element
   is `$event.currentTarget` typed `EventTarget | null`.
-||||||| parent of 8074c923 (fix(angular): honor a tag's exported selector at call sites)
 
 - **A call site honors a tag's exported `selector`.** `tags/badge.mx` with
   `export const selector = "liuna-badge"` is now emitted as
