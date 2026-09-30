@@ -8,9 +8,13 @@
   "private": true,
   "type": "module",
   "main": "dist/index.cjs",
-  "types": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/angular --external @mxlang/astro --external @mxlang/core --external @mxlang/hono --external @mxlang/html --external @mxlang/parser --external @mxlang/preact --external @mxlang/react --external @mxlang/solid --external @volar/language-core --external @volar/typescript --external typescript",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/angular --external @mxlang/astro --external @mxlang/core --external @mxlang/hono --external @mxlang/html --external @mxlang/parser --external @mxlang/preact --external @mxlang/react --external @mxlang/solid --external @volar/language-core --external @volar/typescript --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

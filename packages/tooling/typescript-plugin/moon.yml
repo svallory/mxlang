@@ -17,3 +17,17 @@ tasks:
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
+
+  # Delegates to package.json's build (bundle, `rm -rf dist`, declaration
+  # emit) so the two cannot drift: a moon-built dist must carry the
+  # `dist/index.d.ts` that `types` points at.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    inputs:
+      - "src/**/*"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"

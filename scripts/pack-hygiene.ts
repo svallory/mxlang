@@ -77,6 +77,12 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     declarations: true,
   },
   {
+    name: "@mxlang/typescript-plugin",
+    dir: "packages/tooling/typescript-plugin",
+    extraTopLevel: [],
+    declarations: true,
+  },
+  {
     name: "@mxlang/language-server",
     dir: "packages/tooling/language-server",
     extraTopLevel: [],

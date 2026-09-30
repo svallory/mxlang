@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: the package ships declarations, not source (ts-plugin-declarations)
+
+`types` pointed at `src/index.ts` and there was no `files` field, so a tarball carried `src/`, tests and fixtures, and the types resolved only because the source did. `bun run build` (and the moon `build` task, which now delegates to it) now emits `dist/*.d.ts` with `tsc -p tsconfig.build.json --emitDeclarationOnly`, `types` is `dist/index.d.ts` and `files` is `["dist", "README.md"]`. The public surface is unchanged: `dist/index.d.ts` exports exactly what `src/index.ts` does. `@mxlang/tsc` resolves the plugin through these declarations, so the plugin builds before it (the root `build` already orders them). `scripts/pack-hygiene.test.ts` and `scripts/pack-probe.ts` now cover the plugin.
+
 ### Added: `retainCompiled` for `.ng.mx`
 
 `createNgMxLanguagePlugin` takes `{ retainCompiled: true }` and exposes `getCompiledNgMx()`, the latest successful compile of each `.ng.mx` file (a file whose latest compile failed is absent). Off by default, so an editor session does not hold every compile; `mx-tsc` turns it on to run Angular template diagnostics over the compiles its type-check used. No change to the editor path.

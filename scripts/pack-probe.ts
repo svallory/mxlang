@@ -133,6 +133,16 @@ workspaceDirs["@mxlang/typescript-plugin"] = join(
   "packages/tooling/typescript-plugin",
 );
 
+/**
+ * Type surface a stub must carry because a probed package's `.d.ts` imports it
+ * (`skipLibCheck: false` needs the module to have declarations). D5 stubs have
+ * no real types; each entry names the one type the importing `.d.ts` uses.
+ */
+const STUB_TYPES: Record<string, string> = {
+  // `typescript-plugin/dist/amx-language.d.ts` imports it from `@mxlang/astro/template`.
+  "@mxlang/astro": "export type AstroTemplateMapping = unknown;\n",
+};
+
 function stubDir(name: string): string {
   const dir = join(work, "stubs", name.replace("/", "__"));
   mkdirSync(dir, { recursive: true });
@@ -143,10 +153,14 @@ function stubDir(name: string): string {
       name,
       version: "0.0.0",
       main: "index.js",
-      exports: { ".": "./index.js", "./*": "./index.js" },
+      exports: {
+        ".": { types: "./index.d.ts", default: "./index.js" },
+        "./*": { types: "./index.d.ts", default: "./index.js" },
+      },
     }),
   );
   writeFileSync(join(dir, "index.js"), "module.exports = {};\n");
+  writeFileSync(join(dir, "index.d.ts"), STUB_TYPES[name] ?? "export {};\n");
   return dir;
 }
 
@@ -316,6 +330,24 @@ function nodeTypes(
     : { compilerOptions };
 }
 
+/**
+ * Private workspace deps of a probed package beyond `STUB_PRIVATE`: the plugin
+ * bundles `@mxlang/astro` (a `bun build --external`), whose `main` is
+ * `src/*.ts`, so a consumer install cannot load it (D5).
+ */
+function privateStubs(
+  name: string,
+): Pick<ConsumerOptions, "stubExtra" | "extraDeps"> {
+  return name === "@mxlang/typescript-plugin"
+    ? {
+        stubExtra: ["@mxlang/astro"],
+        // `typescript` is a required peer (">=5.9.0 <7"); a consumer supplies
+        // it, and an unpinned install would resolve 7.x.
+        extraDeps: { typescript: "6.0.3" },
+      }
+    : {};
+}
+
 const only_ = (name: string) => !only || name === only;
 const problems: string[] = [];
 
@@ -327,6 +359,7 @@ try {
       root: p.name,
       label: p.name.replace("@mxlang/", ""),
       withOptionalPeers: true,
+      ...privateStubs(p.name),
       ...nodeTypes(p.name),
     });
     const r = typecheck(dir);
@@ -372,6 +405,7 @@ try {
       root: p.name,
       label: `${p.name.replace("@mxlang/", "")}-node16`,
       withOptionalPeers: true,
+      ...privateStubs(p.name),
       ...nodeTypes(p.name),
       ...nodeTypes(p.name, { module: "node16", moduleResolution: "node16" }),
     });
