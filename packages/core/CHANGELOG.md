@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: `TemplateMetadata.hoistedExports` (host-authoring metadata)
+
+An optional `string[]` on `TemplateMetadata`: the verbatim source of each top-level `export` statement a template hoists (not `export interface Input`), in source order, set only when there is at least one. It lets a host read a callee's own `export const` facts from the same parsed statements its module emission uses, instead of re-scanning the callee's text — the Angular host reads a tag's exported `selector` this way. Additive, following `inputAuxCode`.
+
 ### Internal: shared `unresolvedCustomTagMessage(name)` (source-bindings-silent-parse-failure)
 
 Marko's own "Unable to find entry point for custom tag `<Name>`." wording (decision 114) was hand-copied at four separate `rejectUnknownTag` call sites — `@mxlang/html`, `@mxlang/solid`, the shared preact/react/hono JSX emitter, and `@mxlang/astro`. Now exported once from `core.ts` (`unresolvedCustomTagMessage`) and called from all four; no wording change.

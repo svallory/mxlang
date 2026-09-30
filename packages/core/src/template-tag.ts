@@ -89,7 +89,8 @@ export interface TemplateMetadata {
    * hoists (`export const …`, `export function …`), one entry per statement,
    * in source order. `export interface Input` is not among them.
    *
-   * Carried so a host can read a callee's own `export const` facts (the
+   * Host-authoring metadata, additive like `inputAuxCode`: carried so a host
+   * can read a callee's own `export const` facts (the
    * Angular host reads `selector`) from the same parsed statements its
    * module emission consumes, rather than re-scanning the callee's text —
    * which would also see an `export` inside a comment or a string. Only set
