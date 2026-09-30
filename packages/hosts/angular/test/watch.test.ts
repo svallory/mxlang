@@ -47,6 +47,28 @@ describe("startWatch --once", () => {
     const html = readFileSync(join(projectDir, "src/greeting.html"), "utf8");
     expect(html).toContain("{{ input.name }}");
   });
+
+  it("prints a host-module diagnostic with its position, matching build", async () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/x.solid.mx": "const x = () => <p>x</p>;",
+    });
+
+    const lines: string[] = [];
+    handle = startWatch(projectDir, {
+      once: true,
+      onLine: (line) => lines.push(line),
+    });
+    await handle.onIdle;
+
+    expect(lines).toContainEqual(
+      expect.stringMatching(
+        /x\.solid\.mx:1:0 warning: `x\.solid\.mx` is a host module file/,
+      ),
+    );
+  });
 });
 
 describe("startWatch incremental rebuilds", () => {

@@ -299,7 +299,7 @@ export function startWatch(
       );
     }
     for (const d of diagnostics) {
-      onLine(formatMessage("warning", { file: d.file, message: d.message }));
+      onLine(formatMessage("warning", d));
     }
 
     const nextRouted = new Map<string, RoutedFile>();
