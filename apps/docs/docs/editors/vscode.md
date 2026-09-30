@@ -67,4 +67,4 @@ You do **not** need to configure `typescript.tsserver.pluginPaths` or `compilerO
 
 *(Note: Command-line typechecking still requires `mx-tsc` instead of `tsc` because `tsc` ignores `compilerOptions.plugins`.)*
 
-Until the VSIX ships the TS plugin (TODO `vscode-vsix-ships-ts-plugin`, a separate PR in flight), TS-plugin features, including Angular diagnostics, work only when the plugin is resolvable, e.g. from a source checkout.
+The VSIX ships the TS plugin itself (bundled, with `@marko/compiler` and `@astrojs/compiler`). `@angular/compiler-cli` and `typescript` are not shipped: the Angular diagnostics worker resolves both from your project. See the extension README, "How the TS plugin is shipped".
