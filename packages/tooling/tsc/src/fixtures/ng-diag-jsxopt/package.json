@@ -1,0 +1,6 @@
+{
+  "name": "ng-diag-jsxopt",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

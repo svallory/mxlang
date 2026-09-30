@@ -167,6 +167,9 @@ export function reportNgDiagnostics(result: NgDiagnosticsResult): void {
     );
     process.stderr.write(formatted);
   }
+  for (const warning of result.warnings) {
+    process.stderr.write(`warning mxlang: ${warning}\n`);
+  }
   for (const error of result.errors) {
     process.stderr.write(`error mxlang: ${error}\n`);
   }

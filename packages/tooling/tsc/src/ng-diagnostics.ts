@@ -52,6 +52,8 @@ export interface NgDiagnosticsResult {
    * unchecked.
    */
   errors: string[];
+  /** Compiler option warnings: printed, never failing the run. */
+  warnings: string[];
 }
 
 function nearestPackageDir(fileName: string): string {
@@ -119,7 +121,11 @@ export function checkNgMxFiles(
 ): NgDiagnosticsResult {
   const resolve = deps.resolveCompilerCli ?? resolveCompilerCli;
   const createChecker = deps.createChecker ?? createAngularChecker;
-  const result: NgDiagnosticsResult = { reports: [], errors: [] };
+  const result: NgDiagnosticsResult = {
+    reports: [],
+    errors: [],
+    warnings: [],
+  };
 
   const byProject = new Map<string, CompiledNgMx[]>();
   for (const entry of [...entries].sort((a, b) =>
@@ -191,10 +197,13 @@ export function checkNgMxFiles(
       // configuration, not to a file: report them once per project, against
       // the tsconfig.
       for (const d of checker.configDiagnostics()) {
-        if (d.category !== "error") continue;
-        result.errors.push(
-          `${options.tsconfigPath ?? join(projectDir, "package.json")}: ${d.message} (code ${d.code})`,
-        );
+        // TypeScript's own option errors are already printed by the
+        // TypeScript pass for this same tsconfig; repeating them would print
+        // each twice (the same reason `diagnoseNgMx` drops `ts` records).
+        if (d.source === "ts") continue;
+        const text = `${options.tsconfigPath ?? join(projectDir, "package.json")}: ${d.message} (code ${d.code})`;
+        if (d.category === "error") result.errors.push(text);
+        else result.warnings.push(text);
       }
     } finally {
       checker.dispose();

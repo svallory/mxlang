@@ -909,6 +909,21 @@ describe("mx-tsc", () => {
         SPAWN_TIMEOUT_MS,
       );
 
+      it(
+        "prints a TypeScript option error exactly once (tsc's own; not repeated by the Angular step)",
+        () => {
+          const result = run(mxTsc, [
+            "--noEmit",
+            "-p",
+            join(fixtures, "ng-diag-jsxopt"),
+          ]);
+          expect(result.status).not.toBe(0);
+          expect(result.output.split("TS5089").length - 1).toBe(1);
+          expect(result.output).not.toContain("error mxlang:");
+        },
+        SPAWN_TIMEOUT_MS,
+      );
+
       describe("without a usable @angular/compiler-cli", () => {
         const created: string[] = [];
         afterEach(() => {

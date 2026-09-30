@@ -125,7 +125,7 @@ describe("checkNgMxFiles", () => {
     const spy = spyOf();
     const result = checkNgMxFiles([], deps(spy));
     expect(spy.resolved).toEqual([]);
-    expect(result).toEqual({ reports: [], errors: [] });
+    expect(result).toEqual({ reports: [], errors: [], warnings: [] });
   });
 
   it("skips a project whose diagnostics are off, without resolving", () => {
@@ -133,7 +133,7 @@ describe("checkNgMxFiles", () => {
     const entry = compiled(project({ diagnostics: "off" }));
     const result = checkNgMxFiles([entry], deps(spy, { status: "missing" }));
     expect(spy.resolved).toEqual([]);
-    expect(result).toEqual({ reports: [], errors: [] });
+    expect(result).toEqual({ reports: [], errors: [], warnings: [] });
   });
 
   it.each(["idle", "save"])("treats diagnostics=%s as on", (mode) => {
@@ -336,6 +336,7 @@ describe("reportNgDiagnostics", () => {
       } as const;
       reportNgDiagnostics({
         errors: [],
+        warnings: [],
         reports: [
           {
             fileName: "/p/x.ng.mx",
@@ -388,7 +389,7 @@ describe("checkNgMxFiles compiler option errors", () => {
     expect(spy.disposed).toEqual([dir]);
   });
 
-  it("does not turn a config warning into a failure", () => {
+  it("does not turn a config warning into a failure, and does not drop it", () => {
     const spy = spyOf();
     const dir = project();
     const result = checkNgMxFiles(
@@ -399,6 +400,23 @@ describe("checkNgMxFiles compiler option errors", () => {
       { tsconfigPath: "/x" },
     );
     expect(result.errors).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("/x");
+    expect(result.warnings[0]).toContain("extendedDiagnostics");
+  });
+
+  it("leaves TypeScript's own option errors to the TypeScript pass (no double report)", () => {
+    const spy = spyOf();
+    const dir = project();
+    const result = checkNgMxFiles(
+      [compiled(dir)],
+      deps(spy, {
+        config: () => [{ ...optionError("/x"), source: "ts", code: 5089 }],
+      }),
+      { tsconfigPath: "/x" },
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
   });
 
   it("names the project when no tsconfig was given", () => {
@@ -409,5 +427,28 @@ describe("checkNgMxFiles compiler option errors", () => {
       deps(spy, { config: () => [optionError("")] }),
     );
     expect(result.errors[0]).toContain(dir);
+  });
+});
+
+describe("reportNgDiagnostics warnings", () => {
+  it("prints config warnings as warnings", () => {
+    const writes: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      reportNgDiagnostics({
+        reports: [],
+        errors: [],
+        warnings: ["/x/tsconfig.json: be careful"],
+      });
+    } finally {
+      process.stderr.write = orig;
+    }
+    expect(writes.join("")).toBe(
+      "warning mxlang: /x/tsconfig.json: be careful\n",
+    );
   });
 });
