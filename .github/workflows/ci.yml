@@ -61,6 +61,8 @@ jobs:
       - run: bun run oracle:preact -- --strict
       - run: bun run oracle:react -- --strict
       - run: bun run oracle:hono -- --strict
+      # oracle:angular and oracle:custom-tags ignore --strict: they always exit
+      # nonzero on any mismatch. The flag is passed for uniformity only.
       - run: bun run oracle:angular -- --strict
       - run: bun run oracle:custom-tags -- --strict
 
