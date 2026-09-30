@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `mx()`/`loadMx()` on Bun no longer fail with `NameTooLong` for larger or nested templates (test-bun-example-nametoolong)
+
+On Bun, `mx()`/`loadMx()` evaluated each compiled module as a `data:text/typescript;base64,…` URL. Bun before 1.4 (1.3.14 measured) fails such a `require` with `NameTooLong while resolving package 'data:…'` once the URL passes about 1.5 KB, and a nested tag's URL is embedded base64-in-base64 in its importer, so any page that called a tag could hit it. On Bun the helpers now load compiled modules through a `Bun.plugin` virtual-module namespace (`mx-virtual:`, the same versioned scheme Node already used), registered once per process; the plugin is process-global but only answers `mx-virtual:` names. Node is unchanged. Compiled modules are kept for the process lifetime, as before. `src/helpers.bun.test.ts` (in `test:bun`) now covers a large single template and a large page importing a large nested tag.
+
 ### Fix: a page calling a `tags/*.marko` tag imports it (html-tags-marko-import)
 
 An html-host page calling a tag from `tags/*.marko` emitted a bare `badge({...})` with no import, so it threw `ReferenceError: badge is not defined` at run time (and `<fancy-btn/>` emitted the invalid `fancy - btn(...)`). The module now imports the tag the way Marko 6.3.51 does: `import _badge from "./tags/badge.marko"`, a default import with the extension kept, relative to the page, named `_` plus the camelCased tag name, once per module. Discovery is Marko's own (nearest `tags/` per name up to the package root, `tags/x/index.marko` before `tags/x.marko`). A same-name `tags/x.mx` still wins over `tags/x.marko` regardless of distance (an mx-only rule, recorded in `divergences.md`). `bun run example` and the oracle's `translator-render.ts` no longer inject the import themselves. `src/marko-tags.bun.test.ts` (in `test:bun`) renders real `.mx` pages through Bun; `src/marko-tags.test.ts` pins the emitted import. No golden changes.
