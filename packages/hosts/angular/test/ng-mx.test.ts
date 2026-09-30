@@ -9,6 +9,7 @@ import {
   escapeTemplateLiteral,
   NG_MX_POSITION_MESSAGE,
   ngMxPositionCheck,
+  positionRegionSource,
   rebaseRegionMappings,
 } from "../src/ng-mx.ts";
 import { assertModuleTypechecks } from "./helpers.ts";
@@ -1236,5 +1237,83 @@ describe("compileNgMx: event invoker members already declared (per class, by AST
     expect(code.indexOf("protected readonly __mxOn = ")).toBeGreaterThan(
       code.indexOf("export class B"),
     );
+  });
+});
+
+describe("compileNgMx: region padding follows parseFragment's contract", () => {
+  const base = (preamble: string) => {
+    const lines = preamble.split("\n");
+    return {
+      baseOffset: preamble.length,
+      baseLine: lines.length - 1,
+      baseColumn: lines[lines.length - 1]?.length ?? 0,
+    };
+  };
+  const PREAMBLE = [
+    'import { Component } from "@angular/core";',
+    "",
+    `const filler = "${"x".repeat(70)}";`,
+    "@Component({",
+    '  selector: "app-x",',
+    "  template: ",
+  ].join("\n");
+
+  it("puts exactly baseColumn filler before the region on its own line", () => {
+    const region = '<div class="a">x</div>';
+    const b = base(PREAMBLE);
+    const padded = positionRegionSource(region, b);
+    const lines = padded.split("\n");
+    expect(lines.length - 1).toBe(b.baseLine);
+    expect(lines[b.baseLine]).toBe(`${" ".repeat(b.baseColumn)}${region}`);
+  });
+
+  it("makes a (line, column) walk of the region's first character land on baseOffset", () => {
+    const region = "<p>x</p>";
+    const b = base(PREAMBLE);
+    const padded = positionRegionSource(region, b);
+    const lines = padded.split("\n");
+    let offset = 0;
+    for (let line = 0; line < b.baseLine; line++) {
+      offset += (lines[line]?.length ?? 0) + 1;
+    }
+    // `offsetOf`'s walk: preceding line lengths, then the file column.
+    expect(offset + b.baseColumn).toBe(b.baseOffset);
+    expect(padded.length - region.length).toBe(b.baseOffset);
+  });
+
+  it("slices static, bound and boolean attribute names exactly, after line 1 with a long preamble", () => {
+    const source = `${PREAMBLE}<div class="a" id="b" title=x disabled>\${x}</div>,\n})\nexport class XComponent { x = 1; }\n`;
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    const pairs = new Map(
+      result.mappings.map((m) => [
+        result.code.slice(m.generatedStart, m.generatedEnd),
+        source.slice(m.sourceStart, m.sourceEnd),
+      ]),
+    );
+    for (const name of ["class", "id", "title", "disabled"]) {
+      expect(pairs.get(name)).toBe(name);
+    }
+  });
+
+  it("slices attribute names exactly on every line of a multi-line region", () => {
+    // The case that mapped `class`/`id`/`title` to `olid-`, `\nc`, `fille`:
+    // the first attribute shares the region's first line, the rest follow.
+    const region = [
+      '<section class="wrap"',
+      '  id="main"',
+      "  title=x",
+      ">${x}</section>",
+    ].join("\n");
+    const source = `${PREAMBLE}${region},\n})\nexport class XComponent { x = 1; }\n`;
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+    const pairs = new Map(
+      result.mappings.map((m) => [
+        result.code.slice(m.generatedStart, m.generatedEnd),
+        source.slice(m.sourceStart, m.sourceEnd),
+      ]),
+    );
+    for (const name of ["class", "id", "title"]) {
+      expect(pairs.get(name)).toBe(name);
+    }
   });
 });

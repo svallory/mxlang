@@ -4,6 +4,8 @@
 
 ### Added
 
+- **A mapping invariant test over every `.ng.mx` mapping** (`test/ng-mx-mapping-invariant.test.ts`): each mapping `compileNgMx` returns must slice the source to the text its generated run un-escapes to, or be a `derive`-tagged run the oracle's `isDerivedFrom` accepts. It runs over every oracle `.ng.mx` fixture and a set of attribute shapes.
+
 - **Two aliases of one authored `.mx` tag import no longer leave an unused
   import in `.ng.mx`.** With `import Chip from "./tags/badge.mx"` and
   `import Pill from "./tags/badge.mx"` both used as tags, the class is listed
@@ -89,6 +91,10 @@
 - Attribute-tag IR v2 support for singular `ngProjectAs` projections,
   including mutually exclusive `<if>`/`<else if>`/`<else>` branches and the
   Angular `AttrTag<C>` projection marker with automatic type imports.
+
+### Fixed
+
+- **`.ng.mx` attribute-name mappings pointed into the wrong text.** A region padded its `Ctx` source differently from `parseFragment`'s contract (and from `.solid.mx`), so the source span of a first-line attribute name (`class`, `id`, `title`, ...) resolved to unrelated text earlier in the file (`class` mapped to the `from ` of the import line). `compileNgMx` now pads with the same formula as the Solid host (`positionRegionSource`). Expression mappings were never affected.
 
 ### Changed
 
