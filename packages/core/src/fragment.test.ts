@@ -198,6 +198,44 @@ describe("parseFragment validates the base numbers (padding contract)", () => {
         expect(plain(error.message)).toContain("baseLine must be >= 0");
       });
 
+      it("requires equality on line 0: the reviewer's exact case throws", () => {
+        // `<div class=..>` at column 19 of a one-line file: offset must be 19.
+        const error = caught(() =>
+          run('<div class="a">x</div>', {
+            filename: "c.mx",
+            baseOffset: 24,
+            baseLine: 0,
+            baseColumn: 19,
+          }),
+        );
+        const message = plain(error.message);
+        expect(message).toContain("baseOffset must equal baseColumn");
+        expect(message).toContain("c.mx at line 1, column 19");
+      });
+
+      it("line 0 boundaries: equal passes, one above and one below throw", () => {
+        const at = (baseOffset: number) => () =>
+          run("<p>x</p>", { baseOffset, baseLine: 0, baseColumn: 19 });
+        expect(at(19)).not.toThrow();
+        expect(at(20)).toThrow(/must equal baseColumn/);
+        expect(at(18)).toThrow(/must equal baseColumn/);
+      });
+
+      it("line 1 is the first line that allows a larger offset", () => {
+        const at = (baseOffset: number) => () =>
+          run("<p>x</p>", { baseOffset, baseLine: 1, baseColumn: 19 });
+        expect(at(20)).not.toThrow(); // empty first line
+        expect(at(57)).not.toThrow(); // a long first line
+        expect(at(19)).toThrow(/must be >= baseLine \+ baseColumn/);
+      });
+
+      it("rejects a negative baseColumn without its baseOffset partner", () => {
+        const error = caught(() => run("<p>x</p>", { baseColumn: -3 }));
+        expect(plain(error.message)).toContain(
+          "a negative baseColumn needs its baseOffset partner",
+        );
+      });
+
       it("skips the offset check when baseOffset is omitted", () => {
         expect(() =>
           run("<p>x</p>\n", { baseLine: 3, baseColumn: 2 }),
@@ -297,6 +335,51 @@ describe("positionRegionSource", () => {
     );
     expect(plain(error.message)).toContain("b.mx at line 3, column 4");
     expect(plain(error.message)).toContain("baseOffset must be >=");
+  });
+
+  it("rejects a negative pre-wrapper position with a positioned error, not a RangeError", () => {
+    // Line 0 with offset === column passes the base check; only the
+    // non-negativity of a *file* position catches it.
+    const error = caught(() =>
+      positionRegionSource(
+        "x",
+        { baseOffset: -4, baseLine: 0, baseColumn: -4 },
+        { filename: "d.mx" },
+      ),
+    );
+    expect(plain(error.message)).toContain("d.mx at line 1, column -4");
+    expect(plain(error.message)).toContain("must be >= 0");
+    // A lone negative column on a later line: the base check cannot see it.
+    const lone = caught(() =>
+      positionRegionSource("x", {
+        baseOffset: 30,
+        baseLine: 2,
+        baseColumn: -3,
+      }),
+    );
+    expect(plain(lone.message)).toContain("must be >= 0");
+  });
+
+  it("pre-#176 pad, end to end through parseFragment: attribute name slices wrong, then right", () => {
+    const region = '<div class="a" id="b">x</div>';
+    const { body } = parseFragment(region, at);
+    const tag = firstTag(body);
+    const readNames = (padded: string) =>
+      tag.attributes.map((attribute: Node) => {
+        // What `sliceLoc`/`offsetOf` do for a line/column-only position:
+        // take the file-relative start and read the padded text there.
+        const { line, column } = attribute.loc.start;
+        const text = padded.split("\n")[line - 1] ?? "";
+        return text.slice(column, column + attribute.name.length);
+      });
+
+    const oldPad = `${"\n".repeat(at.baseLine)}${" ".repeat(
+      Math.max(at.baseOffset - at.baseLine, at.baseColumn),
+    )}${region}`;
+    expect(readNames(oldPad)).not.toEqual(["class", "id"]);
+
+    const { padded } = positionRegionSource(region, at);
+    expect(readNames(padded)).toEqual(["class", "id"]);
   });
 
   it("handles the file's first position (all zeros)", () => {

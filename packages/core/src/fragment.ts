@@ -108,17 +108,29 @@ function parseOnlyTranslator(
  *
  * - each is a finite integer;
  * - `baseLine >= 0`;
- * - when `baseOffset` is given, `baseOffset >= baseLine + baseColumn`. Proof:
- *   the `baseOffset` units before the fragment contain `baseLine` newline
- *   units, and the last line holds `baseColumn` further units that are not
- *   newlines; the two sets are disjoint. Equality holds for a file of empty
- *   lines followed by a fragment; `\r\n` endings only raise `baseOffset`.
- *   This is what makes the filler count in rule 1 non-negative; a host that
- *   clamps it (`Math.max(…, 0)`) hides a violation and mis-maps silently.
+ * - when `baseOffset` is given and `baseLine` is 0, `baseOffset === baseColumn`:
+ *   the fragment is on the file's first line, so everything before it is that
+ *   line's first `baseColumn` units. A larger offset would put filler on the
+ *   fragment's own line and shift every first-line column (measured:
+ *   `{ baseOffset: 24, baseLine: 0, baseColumn: 19 }` read `<div ` where the
+ *   attribute name `class` was);
+ * - when `baseOffset` is given and `baseLine >= 1`, `baseOffset >= baseLine +
+ *   baseColumn`. Proof: the `baseOffset` units before the fragment contain
+ *   `baseLine` newline units, and the last line holds `baseColumn` further
+ *   units that are not newlines; the two sets are disjoint. Earlier lines may
+ *   hold any number of units, so nothing tighter than `>=` is knowable from
+ *   the numbers; equality is a file of empty lines followed by the fragment,
+ *   and `\r\n` endings only raise `baseOffset`. This is what makes the filler
+ *   count in rule 1 non-negative; a host that clamps it (`Math.max(…, 0)`)
+ *   hides a violation and mis-maps silently.
  *
  * `baseOffset` and `baseColumn` may be negative together: a host that wraps
  * the fragment in extra text (angular's `<>` wrapper) subtracts the wrapper's
- * length from both, and the invariant still holds. A violation throws a
+ * length from both, and both invariants still hold. `parseFragment` cannot
+ * tell such a pair from a lone bad value when `baseLine >= 1` (the wrapper's
+ * length is unknown to it), so it only rejects a negative `baseColumn` that
+ * has no `baseOffset` partner; `positionRegionSource` sees the pre-wrapper
+ * position and requires both to be non-negative. A violation throws a
  * `TranslateError` positioned at the fragment's start.
  */
 export interface FragmentBase {
@@ -126,8 +138,8 @@ export interface FragmentBase {
   filename?: string;
   /**
    * Character offset of the fragment's first character within the file. When
-   * omitted, indexes stay fragment-relative and the `baseOffset >=
-   * baseLine + baseColumn` check is skipped.
+   * omitted, indexes stay fragment-relative and the offset checks
+   * (`===` on line 0, `>=` after) are skipped.
    */
   baseOffset?: number;
   /**
@@ -260,10 +272,21 @@ function assertBaseContract(base: FragmentBase, filename: string): void {
   if (base.baseLine !== undefined && base.baseLine < 0) {
     fail("baseLine must be >= 0");
   }
-  if (
-    base.baseOffset !== undefined &&
-    base.baseOffset < (base.baseLine ?? 0) + (base.baseColumn ?? 0)
-  ) {
+  const { baseOffset, baseColumn = 0 } = base;
+  const baseLine = base.baseLine ?? 0;
+  if (baseOffset === undefined) {
+    if (baseColumn < 0) {
+      fail("a negative baseColumn needs its baseOffset partner");
+    }
+    return;
+  }
+  if (baseLine === 0) {
+    if (baseOffset !== baseColumn) {
+      fail(
+        "baseOffset must equal baseColumn when baseLine is 0 (the fragment is on the file's first line)",
+      );
+    }
+  } else if (baseOffset < baseLine + baseColumn) {
     fail(
       "baseOffset must be >= baseLine + baseColumn (the padded prefix would need a negative filler)",
     );
@@ -310,7 +333,21 @@ export function positionRegionSource(
   at: RegionPosition,
   options: { wrapper?: number; filename?: string } = {},
 ): PositionedRegion {
-  assertBaseContract(at, options.filename ?? "fragment.mx");
+  const filename = options.filename ?? "fragment.mx";
+  assertBaseContract(at, filename);
+  // The pre-wrapper position is a real file position: neither can be negative.
+  // (Only the wrapper-compensated `base` below may be.)
+  if (at.baseOffset < 0 || at.baseColumn < 0) {
+    throw new TranslateError(
+      `parseFragment: broken padding contract in ${filename} at line ${
+        at.baseLine + 1
+      }, column ${at.baseColumn}: baseOffset and baseColumn must be >= 0 before any wrapper is subtracted ` +
+        `(baseOffset: ${at.baseOffset}, baseLine: ${at.baseLine}, baseColumn: ${at.baseColumn})`,
+      at.baseLine + 1,
+      at.baseColumn,
+      filename,
+    );
+  }
   const wrapper = options.wrapper ?? 0;
   const leadingFill = at.baseOffset - at.baseLine - at.baseColumn;
   return {

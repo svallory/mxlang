@@ -6,7 +6,7 @@
 
 `parseFragment` and `parseFragmentNative` now reject a base that cannot describe a real file (non-integer numbers, negative `baseLine`, or `baseOffset < baseLine + baseColumn` when `baseOffset` is given) with a positioned `TranslateError` naming the rule. Before, a host that clamped the impossible filler count mis-mapped line/column-only positions (attribute names) silently. The contract is now written out on `FragmentBase`.
 
-`positionRegionSource(region, at, { wrapper?, filename? })` is new and exported: it returns the host's padded `Ctx` source together with the matching `parseFragment` base, so the two cannot diverge. `@mxlang/angular` and `@mxlang/solid` use it in place of their hand-rolled copies; their output is byte-identical. `parseFragment` cannot see a host's pad, so a host that builds its own pad is still unchecked.
+`positionRegionSource(region, at, { wrapper?, filename? })` is new and exported: it returns the host's padded `Ctx` source together with the matching `parseFragment` base, so the two cannot diverge. `@mxlang/angular` and `@mxlang/solid` use it in place of their hand-rolled copies; their output is byte-identical. On line 0 the offset must equal the column; from line 1 it must be at least `baseLine + baseColumn`. A partial base that used to be clamped now throws, by design: `compileSolidMx` with `{ baseLine: 3 }` alone (`baseOffset` defaults to 0) is such a case. `parseFragment` cannot see a host's pad, so a host that builds its own pad is still unchecked.
 
 ### Add: `HostDeclarations.resolveDiscoveredTagModule` and `binding` on a named `Component` target (html-tags-marko-import)
 
