@@ -1,0 +1,6 @@
+{
+  "name": "ng-mx-failing",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

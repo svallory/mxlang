@@ -1,0 +1,6 @@
+{
+  "name": "ng-mx-passing",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

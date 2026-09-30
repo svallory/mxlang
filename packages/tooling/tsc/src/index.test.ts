@@ -727,4 +727,53 @@ describe("mx-tsc", () => {
     },
     SPAWN_TIMEOUT_MS,
   );
+  describe(".ng.mx", () => {
+    it(
+      "type-checks a clean .ng.mx with no diagnostics",
+      () => {
+        const result = run(mxTsc, [
+          "--noEmit",
+          "-p",
+          join(fixtures, "ng-mx-passing"),
+        ]);
+        expect(result.output).toBe("");
+        expect(result.status).toBe(0);
+      },
+      SPAWN_TIMEOUT_MS,
+    );
+
+    it(
+      "reports a class TS error at its .ng.mx line and column, past a lowered region",
+      () => {
+        const result = run(mxTsc, [
+          "--noEmit",
+          "-p",
+          join(fixtures, "ng-mx-failing"),
+        ]);
+        expect(result.status).not.toBe(0);
+        // Line 7, column 60: `bad` in the class line below the region.
+        expect(result.output).toContain(
+          "x.component.ng.mx(7,60): error TS2322",
+        );
+        expect(result.output).not.toContain("not wired");
+      },
+      SPAWN_TIMEOUT_MS,
+    );
+
+    it(
+      "still reports the not-wired guard for an angular .mx page",
+      () => {
+        const result = run(mxTsc, [
+          "--noEmit",
+          "-p",
+          join(fixtures, "ng-mx-page-guard"),
+        ]);
+        expect(result.status).not.toBe(0);
+        expect(result.output).toContain(
+          "the angular host is not wired into @mxlang/typescript-plugin yet",
+        );
+      },
+      SPAWN_TIMEOUT_MS,
+    );
+  });
 });

@@ -4,6 +4,7 @@ import {
   createAstroLanguagePlugin,
   createCompoundExtensionResolver,
   createMxLanguagePlugin,
+  createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
@@ -12,11 +13,11 @@ import type { LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
 
 /**
- * The compound extension `.solid.mx` as `runTsc` wants it: no leading dot, and
- * both halves, because TypeScript's own module resolver appends the terminal
+ * The compound extensions `.solid.mx` and `.ng.mx` as `runTsc` wants them: no
+ * leading dot, and both halves, because TypeScript's own module resolver appends the terminal
  * segment when probing for declaration files.
  */
-const EXTRA_SUPPORTED_EXTENSIONS = [".solid.mx", ".mx"];
+const EXTRA_SUPPORTED_EXTENSIONS = [".solid.mx", ".ng.mx", ".mx"];
 const ASTRO_SUPPORTED_EXTENSIONS = [
   ...EXTRA_SUPPORTED_EXTENSIONS,
   ".astro",
@@ -64,9 +65,10 @@ export function runMxTsc(): void {
       astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
       (typescript) => {
         const solidMx = createSolidMxLanguagePlugin(typescript);
+        const ngMx = createNgMxLanguagePlugin(typescript);
         const mx = createMxLanguagePlugin(typescript);
-        diagnosticPlugins.push(solidMx, mx);
-        const plugins: LanguagePlugin<string>[] = [solidMx, mx];
+        diagnosticPlugins.push(solidMx, ngMx, mx);
+        const plugins: LanguagePlugin<string>[] = [solidMx, ngMx, mx];
         if (astro) {
           const amx = createAmxLanguagePlugin(typescript);
           diagnosticPlugins.push(amx);

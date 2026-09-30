@@ -1,0 +1,7 @@
+import { Component } from "./stub.ts";
+
+@Component({
+  selector: "app-x",
+  template: <ul><for|p| of=people by=(p => p.id)><li>${p.name}</li></for></ul>,
+})
+export class XComponent { people = [{ id: 1, name: "a" }]; bad: string = 1; }
