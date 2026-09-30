@@ -187,12 +187,14 @@ export function createNgDiagnosticsService(
       if (mode === "idle") {
         timers.set(
           fileName,
+          // unref: a pending check must not keep a host process alive.
           setTimeout(() => {
             timers.delete(fileName);
             const current = latest.get(fileName);
             if (current) void run(current);
           }, IDLE_DELAY_MS),
         );
+        timers.get(fileName)?.unref?.();
         return;
       }
       // "save": a write to the file is the trigger.

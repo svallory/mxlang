@@ -170,16 +170,18 @@ function createEditorNgDiagnostics(
     // Results arrive after the request that wanted them: ask tsserver to
     // send a fresh `geterr` round (`Project.refreshDiagnostics`, which
     // emits `projectsUpdatedInBackground`).
-    refresh: () => project.refreshDiagnostics(),
-    log: (message) => project.projectService.logger.info(message),
+    refresh: () => project.refreshDiagnostics?.(),
+    log: (message) => project.projectService?.logger.info(message),
   });
   // Tear the workers down with the project (and, as a backstop, the process;
   // a worker also ends itself when tsserver's IPC channel closes).
-  const close = project.close.bind(project);
-  project.close = () => {
-    service.dispose();
-    close();
-  };
+  if (typeof project.close === "function") {
+    const close = project.close.bind(project);
+    project.close = () => {
+      service.dispose();
+      close();
+    };
+  }
   process.once("exit", () => service.dispose());
   return service;
 }
