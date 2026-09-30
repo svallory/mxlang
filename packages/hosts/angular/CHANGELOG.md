@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **A structural attribute after another attribute now fails with a message that names the cause** (`angular-ngif-attr-hint`): `<div class="a" *ngIf="x">` used to report `Invalid left-hand side in assignment expression.` at the value `"a"`. It now reports a positioned error at the `*` saying that after `class=…` Marko reads `*ngIf` as a multiplication, and naming the fixes: make it the first attribute, or use `<if=cond>…</if>` / `<for|item| of=items>…</for>`. Applies to `.mx` pages, tag modules and `.ng.mx` regions, for any `*name=` (not only `ng*`). The parse is unchanged (still Marko's), so `a=b *c`, `a=(b * c)` and a first-position `*ngIf` compile as before, and every other parse error keeps its message.
 - **The tarball no longer ships `.d.ts.map` files** (pkg-types-g10): `tsconfig.build.json` sets `declarationMap: false` (each map pointed at a `../src/*.ts` that is not published) and excludes `src/**/fixtures/**`. `scripts/pack-hygiene.test.ts` pins the tarball contents and the declared bare specifiers; `scripts/pack-probe.ts` typechecks the packed package with `skipLibCheck: false`.
 
 ### Added

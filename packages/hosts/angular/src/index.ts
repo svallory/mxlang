@@ -14,12 +14,12 @@ import {
   type AttrTagConfig,
   type CompileResult,
   type CustomTag,
-  compileSource,
   type MxWarning,
   TranslateError,
 } from "@mxlang/core";
 import { angularDeclarations, emitTemplate, type UsedTag } from "./emitter.ts";
 import { type AngularMapping, encodeMappings } from "./mapping.ts";
+import { compileSourceWithHint } from "./structural-attr-hint.ts";
 
 /**
  * Compile-time marker for Angular content projection.
@@ -131,7 +131,7 @@ export function compile(
   const warnings: MxWarning[] = options.warnings ?? [];
   const usedTags: UsedTag[] = [];
   const mappings: AngularMapping[] = [];
-  const result = compileSource(source, filename, angularDeclarations, {
+  const result = compileSourceWithHint(source, filename, angularDeclarations, {
     customTags: options.customTags,
     warnings,
     emitIr: (ir, ctx) => {

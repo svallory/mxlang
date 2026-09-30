@@ -1,0 +1,260 @@
+/**
+ * A structural attribute (`*ngIf="…"`, `*ngFor="…"`) that is not the first
+ * attribute of its tag.
+ *
+ * Marko reads an attribute value greedily: after `class="a"`, the text
+ * ` *ngIf` continues the value as a multiplication, and the `=` that follows
+ * makes the whole thing an assignment to a non-assignable target. Marko
+ * 5.42.5 (the compiler mx embeds, with the 6.3.51 runtime translator) throws
+ * `Invalid left-hand side in assignment expression.` at the *value*, which
+ * says nothing about the real cause. The parse is Marko's and stays exactly
+ * that; only the message gains the diagnosis and the two fixes.
+ */
+
+import { describe, expect, it } from "vitest";
+import { compile } from "../src/index.ts";
+import { compileNgMx } from "../src/ng-mx.ts";
+import { compileMx } from "./helpers.ts";
+
+interface Positioned extends Error {
+  line: number;
+  column: number;
+}
+
+/** Runs `fn` and returns what it threw; fails the test if it did not throw. */
+function thrown(fn: () => unknown): Positioned {
+  try {
+    fn();
+  } catch (error) {
+    return error as Positioned;
+  }
+  throw new Error("expected the call to throw");
+}
+
+function componentFile(template: string): string {
+  return [
+    'import { Component } from "@angular/core";',
+    "",
+    "@Component({",
+    '  selector: "app-x",',
+    `  template: ${template},`,
+    "})",
+    "export class XComponent {}",
+  ].join("\n");
+}
+
+/** The hint, asserted piece by piece: what happened, the attribute, both fixes. */
+function expectHint(message: string, structural: string, attribute: string) {
+  expect(message).toContain(`\`${structural}\``);
+  expect(message).toContain(`\`${attribute}=`);
+  expect(message).toContain("multiplication");
+  // Fix 1: move it to the first position.
+  expect(message).toMatch(/first attribute/);
+  // Fix 2: the control-flow tag that replaces the directive.
+  if (structural !== "*ngFor") expect(message).toContain("<if=");
+  if (structural !== "*ngIf") expect(message).toContain("<for|");
+  // The old message said nothing about the cause.
+  expect(message).not.toContain("Invalid left-hand side");
+}
+
+describe("non-first structural attribute: .mx page", () => {
+  const cases: {
+    name: string;
+    source: string;
+    structural: string;
+    attribute: string;
+    /** 1-based line of the `*`. */
+    line: number;
+    /** 0-based column of the `*`. */
+    column: number;
+  }[] = [
+    {
+      name: "*ngIf after a static attribute",
+      source: '<div class="a" *ngIf="x">y</div>',
+      structural: "*ngIf",
+      attribute: "class",
+      line: 1,
+      column: 15,
+    },
+    {
+      name: "*ngFor after a static attribute",
+      source: '<li class="a" *ngFor="let i of xs">y</li>',
+      structural: "*ngFor",
+      attribute: "class",
+      line: 1,
+      column: 14,
+    },
+    {
+      name: "*ngIf with an `else` template",
+      source: '<div id="a" *ngIf="x; else tpl">y</div>',
+      structural: "*ngIf",
+      attribute: "id",
+      line: 1,
+      column: 12,
+    },
+    {
+      name: "*ngIf after an expression value with operators",
+      source: '<div a=b + c *ngIf="x">y</div>',
+      structural: "*ngIf",
+      attribute: "a",
+      line: 1,
+      column: 13,
+    },
+    {
+      name: "*ngIf after a value holding a string that looks like one",
+      source: '<div a="x" b="p *q=r" *ngIf="x">y</div>',
+      structural: "*ngIf",
+      attribute: "b",
+      line: 1,
+      column: 22,
+    },
+    {
+      name: "a second structural attribute after a first-position one",
+      source: '<div *ngIf="x" class="a" *ngFor="let i of xs">y</div>',
+      structural: "*ngFor",
+      attribute: "class",
+      line: 1,
+      column: 25,
+    },
+    {
+      name: "a structural attribute that is not an ng one",
+      source: '<div a=1 *transloco="let t">y</div>',
+      structural: "*transloco",
+      attribute: "a",
+      line: 1,
+      column: 9,
+    },
+    {
+      name: "*ngIf on line 3 of a multi-line tag",
+      source: '<div\n  class="a"\n  *ngIf="x"\n>y</div>',
+      structural: "*ngIf",
+      attribute: "class",
+      line: 3,
+      column: 2,
+    },
+    {
+      name: "*ngIf on line 2 after an attribute on the tag's first line",
+      source: '<div class="a"\n     *ngIf="x">y</div>',
+      structural: "*ngIf",
+      attribute: "class",
+      line: 2,
+      column: 5,
+    },
+  ];
+
+  for (const c of cases) {
+    it(`${c.name}: a positioned error with the cause and both fixes`, () => {
+      const error = thrown(() => compile(c.source, "t.mx"));
+      expectHint(error.message, c.structural, c.attribute);
+      expect(error.name).toBe("TranslateError");
+      expect({ line: error.line, column: error.column }).toEqual({
+        line: c.line,
+        column: c.column,
+      });
+    });
+  }
+
+  it("names the matching control-flow tag for each directive", () => {
+    const ngIf = thrown(() => compile('<div a=1 *ngIf="x">y</div>', "t.mx"));
+    const ngFor = thrown(() =>
+      compile('<div a=1 *ngFor="let i of xs">y</div>', "t.mx"),
+    );
+    expect(ngIf.message).toContain("<if=cond>");
+    expect(ngFor.message).toContain("<for|item| of=items>");
+  });
+});
+
+describe("non-first structural attribute: .ng.mx region", () => {
+  it("reports the `*` position in the file, not in the region", () => {
+    const error = thrown(() =>
+      compileNgMx(
+        componentFile('<div class="a" *ngIf="x">hi</div>'),
+        "/p/x.component.ng.mx",
+      ),
+    );
+    expectHint(error.message, "*ngIf", "class");
+    // Line 5 of the file; `  template: <div class="a" ` is 27 chars before `*`.
+    expect(error.message).toContain("(5:27)");
+  });
+
+  it("reports a later line for a multi-line tag", () => {
+    const error = thrown(() =>
+      compileNgMx(
+        componentFile(
+          '<div\n    class="a"\n    *ngFor="let i of xs"\n  >hi</div>',
+        ),
+        "/p/x.component.ng.mx",
+      ),
+    );
+    expectHint(error.message, "*ngFor", "class");
+    expect(error.message).toContain("(7:4)");
+  });
+});
+
+describe("what must not change", () => {
+  it("compiles a first-position structural attribute through as before", () => {
+    expect(compileMx('<div *ngIf="x" class="a">y</div>').code).toBe(
+      '<div *ngIf="x" class="a">y</div>',
+    );
+    expect(compileMx('<div a *ngIf="x">y</div>').code).toBe(
+      '<div a *ngIf="x">y</div>',
+    );
+  });
+
+  it("compiles a first-position structural attribute in a region as before", () => {
+    const { code } = compileNgMx(
+      componentFile('<div *ngIf="x" class="a">hi</div>'),
+      "/p/x.component.ng.mx",
+    );
+    expect(code).toContain('template: `<div *ngIf="x" class="a">hi</div>`');
+  });
+
+  it("keeps a multiplication in an attribute value, with no hint", () => {
+    expect(compileMx("<div a=b *c>y</div>").code).toBe(
+      '<div [a]="b *c">y</div>',
+    );
+    expect(compileMx("<div a=(b * c)>y</div>").code).toBe(
+      '<div [a]="b * c">y</div>',
+    );
+    // No `=` after the name: still a multiplication, still Marko's meaning.
+    expect(compileMx("<div a=1 *foo>y</div>").code).toBe(
+      '<div [a]="1 *foo">y</div>',
+    );
+    expect(compileMx("<div a=b *ngIf>y</div>").code).toBe(
+      '<div [a]="b *ngIf">y</div>',
+    );
+  });
+
+  it("keeps a multiplication in a region, with no hint", () => {
+    const { code } = compileNgMx(
+      componentFile("<div a=b *c>hi</div>"),
+      "/p/x.component.ng.mx",
+    );
+    expect(code).toContain('template: `<div [a]="b *c">hi</div>`');
+  });
+
+  it("leaves an unrelated invalid-left-hand-side error byte-for-byte", () => {
+    // `+b=2` is the same Marko failure without the `*` — not ours to explain.
+    const error = thrown(() => compile("<div a=1 +b=2>x</div>", "t.mx"));
+    expect(error.constructor.name).toBe("CompileError");
+    expect(error.message).toBe(
+      "\n    at t.mx:1:8\n    > 1 | <div a=1 +b=2>x</div>\n        |        ^ Invalid left-hand side in assignment expression.",
+    );
+  });
+
+  it("leaves an unrelated parse error byte-for-byte", () => {
+    const error = thrown(() => compile("<div>x", "t.mx"));
+    expect(error.message).toBe(
+      '\n    at t.mx:1:1\n    > 1 | <div>x\n        | ^^^^^ Missing ending "div" tag',
+    );
+  });
+
+  it("leaves an unrelated region error byte-for-byte", () => {
+    const error = thrown(() =>
+      compileNgMx(componentFile("<div a=1 +b=2>hi</div>"), "/p/x.ng.mx"),
+    );
+    expect(error.message).toBe(
+      "Invalid left-hand side in assignment expression. (5:19)",
+    );
+  });
+});

@@ -110,6 +110,13 @@ A few of Angular's own idioms:
 | a dynamic `data-*`/`aria-*` attribute | `[attr.data-x]`/`[attr.aria-x]` (no DOM property to bind) |
 | every other dynamic attribute | `[x]` |
 
+A structural directive written as an attribute (`*ngIf="x"`, `*ngFor="…"`,
+`*transloco="…"`) passes through to Angular only as the **first** attribute of
+its tag. After another attribute, Marko reads ` *ngIf` as a multiplication and
+the `=` that follows makes the parse fail; the error points at the `*` and says
+so. Write `<if=x>…</if>` / `<for|i| of=xs>…</for>`, or move the directive
+first: `<div *ngIf="x" class="a">`.
+
 `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `<id>`,
 `<await>`, `client`/`server` blocks and `:=` are compile errors — this host
 has no reactive runtime of its own; that state belongs in the hand-written

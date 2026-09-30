@@ -45,6 +45,7 @@ import {
   offsetMappings,
   rebaseThroughEscaping,
 } from "./mapping.ts";
+import { withStructuralAttrHint } from "./structural-attr-hint.ts";
 
 /**
  * The message C3's position check reports for a region Angular cannot place.
@@ -354,7 +355,11 @@ function lowerRegion(
 
   let ir: ReturnType<typeof lower>;
   try {
-    ir = lower(ctx, body);
+    // A `*ngIf="…"` after another attribute fails in `lower` with Marko's
+    // message about an assignment; the hint names the cause.
+    ir = withStructuralAttrHint(positionedSource, filename, () =>
+      lower(ctx, body),
+    );
   } catch (error) {
     const tag = /Unable to find entry point for custom tag `<([^>]+)>`/.exec(
       (error as Error).message,

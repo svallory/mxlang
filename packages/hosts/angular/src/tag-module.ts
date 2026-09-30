@@ -15,7 +15,6 @@ import {
   type CompileResult,
   type Ctx,
   type CustomTag,
-  compileSource,
   type Expr,
   type Ir,
   type IrNode,
@@ -45,6 +44,7 @@ import {
   encodeMappings,
   templateMappingsToModule,
 } from "./mapping.ts";
+import { compileSourceWithHint } from "./structural-attr-hint.ts";
 
 export interface CompileTagModuleOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
@@ -935,7 +935,7 @@ export function compileTagModule(
   let inputProps: InputProp[] = [];
   const passthroughExports: string[] = [];
 
-  const result = compileSource(source, filename, angularDeclarations, {
+  const result = compileSourceWithHint(source, filename, angularDeclarations, {
     customTags: options.customTags,
     warnings,
     emitIr: (ir: Ir, ctx: Ctx) => {
