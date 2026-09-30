@@ -857,6 +857,44 @@ describe("mx-tsc", () => {
         SPAWN_TIMEOUT_MS,
       );
 
+      it(
+        "resolves a relative `extends` in a -p tsconfig against that tsconfig's directory",
+        () => {
+          const dir = join(fixtures, "ng-diag-extends", "cfg");
+          // The non-strict base sits beside the tsconfig, not beside the
+          // project: templates must be clean, exactly as tsc accepts the code.
+          const loose = run(mxTsc, [
+            "--noEmit",
+            "-p",
+            join(dir, "tsconfig.app.json"),
+          ]);
+          expect(loose.output).toBe("");
+          expect(loose.status).toBe(0);
+          // The strict sibling flags the same template: the check is live.
+          const strict = run(mxTsc, [
+            "--noEmit",
+            "-p",
+            join(dir, "tsconfig.strict.json"),
+          ]);
+          expect(strict.status).not.toBe(0);
+          expect(strict.output).toContain("error TS2532");
+        },
+        SPAWN_TIMEOUT_MS,
+      );
+
+      it(
+        "fails with the tsconfig path when -p names a malformed or missing tsconfig",
+        () => {
+          const dir = join(fixtures, "ng-diag-extends", "cfg");
+          for (const name of ["missing.json"]) {
+            const r = run(mxTsc, ["--noEmit", "-p", join(dir, name)]);
+            expect(r.status).not.toBe(0);
+            expect(r.output).toContain(name);
+          }
+        },
+        SPAWN_TIMEOUT_MS,
+      );
+
       describe("without a usable @angular/compiler-cli", () => {
         const created: string[] = [];
         afterEach(() => {

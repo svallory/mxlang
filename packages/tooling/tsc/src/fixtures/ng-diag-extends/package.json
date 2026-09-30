@@ -1,0 +1,6 @@
+{
+  "name": "ng-diag-extends",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

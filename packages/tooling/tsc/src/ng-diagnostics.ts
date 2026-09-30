@@ -151,10 +151,20 @@ export function checkNgMxFiles(
       continue;
     }
 
-    const checker = createChecker({
-      projectDir,
-      ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
-    });
+    let checker: AngularChecker;
+    try {
+      checker = createChecker({
+        projectDir,
+        ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
+      });
+    } catch (cause) {
+      // An unusable tsconfig (unreadable, malformed, bad `extends`) or
+      // compiler-cli: report it, never fall back to other options.
+      result.errors.push(
+        `${message(cause)} (${plural(files.length)} in ${projectDir} not checked)`,
+      );
+      continue;
+    }
     try {
       for (const entry of files) {
         try {

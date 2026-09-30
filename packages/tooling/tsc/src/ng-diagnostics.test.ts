@@ -286,3 +286,32 @@ describe("resolveProjectTsconfig", () => {
     ).toBeUndefined();
   });
 });
+
+describe("checkNgMxFiles when the checker cannot be created", () => {
+  it("reports the failure (e.g. an unusable tsconfig) and still checks other projects", () => {
+    const spy = spyOf();
+    const bad = project();
+    const good = project();
+    const d = deps(spy, { records: () => [] });
+    const result = checkNgMxFiles(
+      [compiled(bad), compiled(good)],
+      {
+        ...d,
+        createChecker: (options) => {
+          if (options.projectDir === bad) {
+            throw new Error("/x/tsconfig.app.json: cannot read file");
+          }
+          return (d.createChecker as NonNullable<typeof d.createChecker>)(
+            options,
+          );
+        },
+      },
+      { tsconfigPath: "/x/tsconfig.app.json" },
+    );
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain(
+      "/x/tsconfig.app.json: cannot read file",
+    );
+    expect(spy.checked).toEqual([`${compiled(good).fileName}.ts`]);
+  });
+});
