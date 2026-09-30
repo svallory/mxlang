@@ -48,7 +48,8 @@ function componentFile(template: string): string {
 /** The hint, asserted piece by piece: what happened, the attribute, both fixes. */
 function expectHint(message: string, structural: string, attribute: string) {
   expect(message).toContain(`\`${structural}\``);
-  expect(message).toContain(`\`${attribute}=`);
+  if (attribute === "another attribute") expect(message).toContain(attribute);
+  else expect(message).toContain(`\`${attribute}=`);
   expect(message).toContain("multiplication");
   // Fix 1: move it to the first position.
   expect(message).toMatch(/first attribute/);
@@ -125,6 +126,46 @@ describe("non-first structural attribute: .mx page", () => {
       attribute: "a",
       line: 1,
       column: 9,
+    },
+    {
+      name: "*ngIf in concise syntax",
+      source: 'div class="a" *ngIf="x"',
+      structural: "*ngIf",
+      attribute: "class",
+      line: 1,
+      column: 14,
+    },
+    {
+      name: "*ngFor on a nested concise line",
+      source: 'ul\n  li class="a" *ngFor="let i of xs"',
+      structural: "*ngFor",
+      attribute: "class",
+      line: 2,
+      column: 15,
+    },
+    {
+      name: "*ngIf after a spread attribute",
+      source: '<div ...attrs *ngIf="x">y</div>',
+      structural: "*ngIf",
+      attribute: "another attribute",
+      line: 1,
+      column: 14,
+    },
+    {
+      name: "*ngIf after a value holding a `<` (a=1<2)",
+      source: '<div a=1<2 class="a" *ngIf="x">y</div>',
+      structural: "*ngIf",
+      attribute: "class",
+      line: 1,
+      column: 21,
+    },
+    {
+      name: "*ngIf after a value holding a `<` in brackets (a=(x<y))",
+      source: '<div a=(x<y) class="a" *ngIf="x">y</div>',
+      structural: "*ngIf",
+      attribute: "class",
+      line: 1,
+      column: 23,
     },
     {
       name: "*ngIf on line 3 of a multi-line tag",
@@ -415,5 +456,78 @@ describe("the `*name=` must be in the failing value's own tag", () => {
   it("does not hint a `*name=` in a later tag", () => {
     const message = unhinted('<div a=1 +b=2>x</div>\n<p *ngIf="x">y</p>');
     expect(message).not.toContain("cannot follow");
+  });
+});
+
+describe("the stack carries the message that is thrown", () => {
+  // On V8 `stack` embeds the message, and some loggers print only that.
+  it("for a single error", () => {
+    const error = thrown(() =>
+      compile('<div class="a" *ngIf="x">y</div>', "t.mx"),
+    );
+    if (typeof error.stack === "string") {
+      expect(error.stack).toContain("`*ngIf` cannot follow");
+      expect(error.stack).not.toContain("Invalid left-hand side");
+    }
+  });
+
+  it("for an aggregate of hinted errors", () => {
+    const error = thrown(() =>
+      compile(
+        '<div class="a" *ngIf="x"><p class="b" *ngFor="let i of xs">y</p></div>',
+        "t.mx",
+      ),
+    );
+    expect(error.name).toBe("CompileErrors");
+    if (typeof error.stack === "string") {
+      expect(error.stack).toContain("`*ngIf` cannot follow");
+      expect(error.stack).toContain("`*ngFor` cannot follow");
+      expect(error.stack).not.toContain("Invalid left-hand side");
+    }
+  });
+
+  it("for a mixed aggregate, keeping the unrelated member's text", () => {
+    const error = thrown(() =>
+      compile('<a class="a" *ngIf="x">1</a>\n<b>$' + "{1 = 2}</b>", "t.mx"),
+    );
+    expect(error.name).toBe("CompileErrors");
+    if (typeof error.stack === "string") {
+      expect(error.stack).toContain("`*ngIf` cannot follow");
+      expect(error.stack).toContain("^ Invalid left-hand side");
+    }
+  });
+});
+
+describe("concise syntax and brackets add no false hint", () => {
+  it("does not hint a scriptlet failure before a valid first-position concise tag", () => {
+    const message = thrown(() =>
+      compile('$ 1 = 2\ndiv *ngIf="x"', "t.mx"),
+    ).message;
+    expect(message).toContain("Invalid left-hand side");
+    expect(message).not.toContain("cannot follow");
+  });
+
+  it("does not hint a concise line with a valid attribute between", () => {
+    const message = thrown(() =>
+      compile('div a=1 +b=2 c *ngIf="x"', "t.mx"),
+    ).message;
+    expect(message).not.toContain("cannot follow");
+  });
+});
+
+describe("known gaps: these keep Marko's message", () => {
+  const plain = (source: string) =>
+    thrown(() => compile(source, "t.mx")).message;
+
+  it("a word operator (in, instanceof, typeof) joins the value to the directive", () => {
+    const message = plain('<div a=x in y *ngIf="x">y</div>');
+    expect(message).toContain("Invalid left-hand side");
+    expect(message).not.toContain("cannot follow");
+  });
+
+  it("a directive without `=` is Marko's multiplication and compiles", () => {
+    expect(compileMx('<div class="a" *ngIf>y</div>').code).toBe(
+      '<div [class]="&quot;a&quot; *ngIf">y</div>',
+    );
   });
 });

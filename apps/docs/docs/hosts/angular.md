@@ -115,7 +115,8 @@ A structural directive written as an attribute (`*ngIf="x"`, `*ngFor="…"`,
 its tag. After another attribute, Marko reads ` *ngIf` as a multiplication and
 the `=` that follows makes the parse fail; the error points at the `*` and says
 so. Write `<if=x>…</if>` / `<for|i| of=xs>…</for>`, or move the directive
-first: `<div *ngIf="x" class="a">`.
+first: `<div *ngIf="x" class="a">`. (A directive with no `=`, as in
+`class="a" *ngIf`, is Marko's multiplication and compiles without an error.)
 
 `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `<id>`,
 `<await>`, `client`/`server` blocks and `:=` are compile errors — this host

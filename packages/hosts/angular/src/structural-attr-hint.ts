@@ -74,17 +74,14 @@ function structuralAt(
 
 const OPERATOR = /[-+*/%&|^<>=!?:,.~]/;
 
-/**
- * Whether `text[valueStart]` begins an attribute value inside an open tag:
- * the nearest earlier `<` opens a tag name, and nothing between it and the
- * value closes the tag or unbalances a bracket. A scriptlet (`$ x = 1 = 2`)
- * or a `${…}` placeholder fails this.
- */
-function insideOpenTag(text: string, valueStart: number): boolean {
-  const open = text.lastIndexOf("<", valueStart);
-  if (open === -1 || !/[A-Za-z@_$/{]/.test(text[open + 1] ?? "")) return false;
+/** Whether `from..valueStart` is the inside of one open tag: brackets balance, no `>` closes it. */
+function balancedTagPrefix(
+  text: string,
+  from: number,
+  valueStart: number,
+): boolean {
   let depth = 0;
-  for (let i = open + 1; i < valueStart; ) {
+  for (let i = from; i < valueStart; ) {
     const c = text[i] as string;
     if (c === '"' || c === "'" || c === "`") {
       i = skipQuoted(text, i);
@@ -96,7 +93,52 @@ function insideOpenTag(text: string, valueStart: number): boolean {
     if (depth < 0) return false;
     i++;
   }
-  return depth === 0 && previousAttribute(text, valueStart) !== undefined;
+  return depth === 0;
+}
+
+/** The value at `valueStart` follows `name=` or a `...` spread. */
+function followsAttribute(text: string, valueStart: number): boolean {
+  return (
+    previousAttribute(text, valueStart) !== undefined ||
+    /(^|\s)\.\.\.\s*$/.test(text.slice(0, valueStart))
+  );
+}
+
+/**
+ * Whether `text[valueStart]` begins an attribute value inside an open tag,
+ * in either syntax. A scriptlet (`$ x = 1 = 2`) or a `${…}` placeholder is
+ * neither.
+ *
+ * HTML syntax: some earlier `<` opens a tag name and nothing between it and
+ * the value closes the tag or unbalances a bracket. Earlier `<`s are tried
+ * nearest first, because a `<` inside an earlier value (`a=1<2`, `a=(x<y)`)
+ * is not a tag start and fails the test on its own.
+ *
+ * Concise syntax: the value's line, from its indentation, starts with a tag
+ * name (a letter or `@`, so `$` scriptlets are out) and the rest of the line
+ * up to the value is balanced.
+ */
+function insideOpenTag(text: string, valueStart: number): boolean {
+  if (!followsAttribute(text, valueStart)) return false;
+  for (
+    let open = text.lastIndexOf("<", valueStart);
+    open !== -1;
+    open = open === 0 ? -1 : text.lastIndexOf("<", open - 1)
+  ) {
+    if (
+      /[A-Za-z@_$/{]/.test(text[open + 1] ?? "") &&
+      balancedTagPrefix(text, open + 1, valueStart)
+    ) {
+      return true;
+    }
+  }
+  const lineStart = text.lastIndexOf("\n", valueStart - 1) + 1;
+  const line = text.slice(lineStart, valueStart);
+  const name = /^[ \t]*[A-Za-z@][\w.:#@-]*(?=[\s(])/.exec(line);
+  return (
+    name !== null &&
+    balancedTagPrefix(text, lineStart + name[0].length, valueStart)
+  );
 }
 
 /**
@@ -277,11 +319,14 @@ export function structuralAttrHint(
           : aggregatePart(member),
       )
       .join("\n\n")}`;
+    // `failure` and `aggregate` are one object: read the old message before
+    // the mutation, or the stack (which embeds it on V8) would keep it.
+    const oldMessage = aggregate.message;
     const stack = aggregate.stack;
     aggregate.message = message;
     aggregate.errors = errors;
     if (typeof stack === "string") {
-      aggregate.stack = stack.replace(String(failure.message), message);
+      aggregate.stack = stack.replace(oldMessage, message);
     }
     return aggregate;
   }
