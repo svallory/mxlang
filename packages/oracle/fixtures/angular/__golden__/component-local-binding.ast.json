@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Panel",
+    "value": {
+      "ast": {
+        "parameters": [],
+        "body": {
+          "value": "x"
+        }
+      }
+    }
+  },
+  {
+    "name": "mx-panel",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "title",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "t"
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

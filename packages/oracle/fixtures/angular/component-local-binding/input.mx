@@ -1,0 +1,2 @@
+<const/Panel=() => "x"/>
+<Panel title=t/>

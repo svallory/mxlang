@@ -1,0 +1,1 @@
+this template calls 1 MX tag(s): `Panel`. In step 1, MX cannot edit your component's TypeScript. Add to x.ts: `import Panel from "./tags/panel";` and `imports: [Panel]`.
