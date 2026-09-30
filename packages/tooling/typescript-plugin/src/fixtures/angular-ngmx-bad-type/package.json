@@ -1,0 +1,11 @@
+{
+  "name": "angular-ngmx-bad-type-fixture",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  },
+  "mx": {
+    "angular": {
+      "tagSelectorPrefix": 5
+    }
+  }
+}

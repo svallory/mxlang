@@ -278,7 +278,7 @@ export function createNgMxLanguagePlugin(
       } catch (cause) {
         return fail({
           fileName,
-          message: cause instanceof Error ? cause.message : String(cause),
+          message: configErrorMessage(cause),
           offset: 0,
           source,
         });
@@ -357,6 +357,20 @@ export function createNgMxLanguagePlugin(
       },
     },
   };
+}
+
+/**
+ * A config error's text, naming the `package.json` to fix. `readAngularConfig`
+ * carries the file on the `TranslateError` and keeps it out of the message, so
+ * without this the diagnostic on the `.ng.mx` would name a key but not where
+ * that key lives.
+ */
+function configErrorMessage(cause: unknown): string {
+  if (!(cause instanceof Error)) return String(cause);
+  const file = cause instanceof TranslateError ? cause.file : undefined;
+  return file && !cause.message.includes(file)
+    ? `${file}: ${cause.message}`
+    : cause.message;
 }
 
 /** `mx.angular.tagSelectorPrefix`'s default (`config.ts` `DEFAULTS`). */

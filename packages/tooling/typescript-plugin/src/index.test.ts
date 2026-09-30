@@ -3736,6 +3736,20 @@ describe(".ng.mx language plugin", () => {
     expect(config).toHaveLength(1);
     expect(config[0]?.category).toBe(ts.DiagnosticCategory.Error);
     expect(config[0]?.start).toBe(0);
+    // Names the file the author has to fix, not just the key.
+    expect(String(config[0]?.messageText)).toContain(`${bad}/package.json`);
+  });
+
+  it("names package.json and the key for a wrongly typed config value", () => {
+    const bad = `${here}/fixtures/angular-ngmx-bad-type`;
+    const { diagnostics } = diagnosticsOf(component("<p>hi</p>", ""), bad);
+    const config = diagnostics.filter((d) =>
+      String(d.messageText).includes("tagSelectorPrefix"),
+    );
+    expect(config).toHaveLength(1);
+    const text = String(config[0]?.messageText);
+    expect(text).toContain(`${bad}/package.json`);
+    expect(text).toContain("mx.angular.tagSelectorPrefix");
   });
 
   it("keeps the host-policy guard for angular .mx pages", () => {
