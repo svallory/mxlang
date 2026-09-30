@@ -91,6 +91,50 @@ describe("diagnoseNgMx (real ngtsc)", () => {
   });
 });
 
+describe("diagnoseNgMx (fragment-root region, G9)", () => {
+  it("maps a diagnostic in either sibling of a <> fragment back to the .ng.mx", () => {
+    // Two roots: a fragment lowers its children as siblings, and both the
+    // first and the second must resolve to their own expression.
+    const source = ngMx("<><p>${user.nmae}</p><span>${user.nmee}</span></>");
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    const diagnostics = diagnoseNgMx(compiled, checker, VIRTUAL);
+    checker.dispose();
+
+    expect(diagnostics.map((d) => d.start).sort((a, b) => a - b)).toEqual([
+      source.indexOf("user.nmae"),
+      source.indexOf("user.nmee"),
+    ]);
+    for (const d of diagnostics) {
+      expect(d.source).toBe("angular");
+      expect(source.slice(d.start, d.start + d.length)).toMatch(/^user\.nm/);
+    }
+  });
+
+  it("reports nothing for a clean fragment-root region", () => {
+    const compiled = compileNgMx(
+      ngMx("<><p>${user.name}</p><span>${user.name}</span></>"),
+      "/p/x.component.ng.mx",
+    );
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    expect(diagnoseNgMx(compiled, checker, VIRTUAL)).toEqual([]);
+    checker.dispose();
+  });
+
+  it("finds the enclosing fragment region for generated punctuation", () => {
+    const source = ngMx("<><p>${user.name}</p><span>x</span></>");
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    const region = compiled.regions[0];
+    const [d] = diagnoseNgMx(
+      compiled,
+      stubChecker([record({ start: region?.generatedStart ?? -1 })]),
+      VIRTUAL,
+    );
+    expect(d?.start).toBe(region?.start);
+    expect(source.slice(region?.start, region?.end)).toMatch(/^<>/);
+  });
+});
+
 describe("diagnoseNgMx (mapping rules)", () => {
   const source = ngMx("<p>${user.name}</p>");
   const compiled = compileNgMx(source, "/p/x.component.ng.mx");
