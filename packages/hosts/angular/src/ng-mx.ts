@@ -357,9 +357,7 @@ function lowerRegion(
   try {
     // A `*ngIf="…"` after another attribute fails in `lower` with Marko's
     // message about an assignment; the hint names the cause.
-    ir = withStructuralAttrHint(positionedSource, filename, () =>
-      lower(ctx, body),
-    );
+    ir = withStructuralAttrHint(positionedSource, () => lower(ctx, body));
   } catch (error) {
     const tag = /Unable to find entry point for custom tag `<([^>]+)>`/.exec(
       (error as Error).message,

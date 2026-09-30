@@ -10,15 +10,20 @@
  * the fix. The parse is Marko's and stays exactly that: this only rewrites
  * the message of the error Marko already threw.
  *
- * Detection never trusts the error's `line`/`column` (Bun gives every `Error`
- * some). It needs all of: Marko's own `CompileError` name, a numeric
- * `loc.start.index` (the offset of the value Marko gave up on), and, in the
- * source from that offset, a value that is followed at bracket depth 0 by
- * whitespace and `*name=`. That shape is an error in Marko whatever `name`
+ * Detection never trusts the mere presence of `line`/`column` (Bun gives every
+ * `Error` some). It needs all of: a `CompileError` (or core's `TranslateError`,
+ * for a `.ng.mx` region) by `name`, with Babel's reason text, for this file
+ * itself (no `file`); the value it points at must be an attribute value in an
+ * open tag; and, in the source from that value, only operator-joined text
+ * at bracket depth 0 may separate it from whitespace and `*name=`, before
+ * the tag ends. That shape is an error in Marko whatever `name`
  * is (no valid template has `value *name=`), so any name is explained, not
  * only `ng*`: `*transloco`, `*cdkVirtualFor` and project directives hit the
  * same wall. `a=b *c` and `a=(b * c)` never reach this code (they compile),
- * and a failure without `*name=` after the value (`a=1 +b=2`) is left alone.
+ * and a failure without `*name=` right after the value (`a=1 +b=2`) is left
+ * alone. A file with several failures arrives as one `CompileErrors`
+ * aggregate; each member is judged on its own, and those that do not match
+ * keep Marko's text byte for byte.
  */
 
 import {
@@ -67,14 +72,44 @@ function structuralAt(
   return { name, end: j };
 }
 
+const OPERATOR = /[-+*/%&|^<>=!?:,.~]/;
+
+/**
+ * Whether `text[valueStart]` begins an attribute value inside an open tag:
+ * the nearest earlier `<` opens a tag name, and nothing between it and the
+ * value closes the tag or unbalances a bracket. A scriptlet (`$ x = 1 = 2`)
+ * or a `${…}` placeholder fails this.
+ */
+function insideOpenTag(text: string, valueStart: number): boolean {
+  const open = text.lastIndexOf("<", valueStart);
+  if (open === -1 || !/[A-Za-z@_$/{]/.test(text[open + 1] ?? "")) return false;
+  let depth = 0;
+  for (let i = open + 1; i < valueStart; ) {
+    const c = text[i] as string;
+    if (c === '"' || c === "'" || c === "`") {
+      i = skipQuoted(text, i);
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") depth--;
+    else if (depth === 0 && c === ">" && text[i - 1] !== "=") return false;
+    if (depth < 0) return false;
+    i++;
+  }
+  return depth === 0 && previousAttribute(text, valueStart) !== undefined;
+}
+
 /**
  * Finds the `*name=` that the attribute value starting at `valueStart`
- * swallowed, scanning to the end of the tag at most.
+ * swallowed: the failing value must be an attribute value of an open tag, and
+ * only operator-joined text may lie between it and the directive, so a
+ * directive past another attribute, or in another tag, is not it.
  */
 export function findStructuralAttr(
   text: string,
   valueStart: number,
 ): StructuralAttr | undefined {
+  if (!insideOpenTag(text, valueStart)) return undefined;
   let depth = 0;
   for (let i = valueStart; i < text.length; ) {
     const c = text[i] as string;
@@ -85,15 +120,23 @@ export function findStructuralAttr(
     if (c === "(" || c === "[" || c === "{") depth++;
     else if (c === ")" || c === "]" || c === "}") depth--;
     else if (depth === 0 && c === ">" && text[i - 1] !== "=") return undefined;
-    else if (depth === 0 && c === "*" && /\s/.test(text[i - 1] ?? "")) {
-      const found = structuralAt(text, i);
+    else if (depth === 0 && /\s/.test(c)) {
+      let next = i;
+      while (/\s/.test(text[next] ?? "")) next++;
+      const found = structuralAt(text, next);
       if (found) {
         return {
-          index: i,
+          index: next,
           name: found.name,
           previous: previousAttribute(text, valueStart),
         };
       }
+      // Whitespace ends the value unless an operator joins the two sides.
+      const joined =
+        OPERATOR.test(text[i - 1] ?? "") || OPERATOR.test(text[next] ?? "");
+      if (!joined) return undefined;
+      i = next;
+      continue;
     }
     i++;
   }
@@ -129,13 +172,16 @@ export function structuralAttrMessage(attr: StructuralAttr): string {
 /** Babel's reason for an assignment to a non-assignable target. */
 const INVALID_LHS = "Invalid left-hand side in assignment expression.";
 
-/** The narrow shape of the two errors that carry the failure. */
+/** The narrow shape of the errors that carry the failure. */
 interface ParseFailure {
   name?: unknown;
   message?: unknown;
+  stack?: unknown;
+  file?: unknown;
   line?: unknown;
   column?: unknown;
   loc?: { start?: { line?: unknown; column?: unknown } };
+  errors?: unknown;
 }
 
 /**
@@ -161,20 +207,19 @@ function failurePosition(
 }
 
 /**
- * The positioned hint for `error`, or `undefined` when `error` is not the
- * swallowed-`*name=` failure (the caller then rethrows `error` untouched).
+ * The positioned hint for one error, or `undefined` when it is not the
+ * swallowed-`*name=` failure.
  *
- * `text` is the source the error's position refers to: the file, or for a
- * `.ng.mx` region its `positionRegionSource`, which keeps file coordinates.
+ * `file` is left exactly as core's contract has it (`TranslateError.file`,
+ * core.ts: set only for an error in a file other than the one being compiled),
+ * which for this file's own failure is unset. An error that names another file
+ * is not judged at all, since `text` is this file's.
  */
-export function structuralAttrHint(
-  error: unknown,
-  text: string,
-  filename: string,
-): TranslateError | undefined {
+function memberHint(error: unknown, text: string): TranslateError | undefined {
   const failure = (error ?? {}) as ParseFailure;
   if (typeof failure.message !== "string") return undefined;
   if (!failure.message.includes(INVALID_LHS)) return undefined;
+  if (failure.file !== undefined) return undefined;
   const start = failurePosition(failure);
   if (!start) return undefined;
   const valueStart = offsetAt(text, start);
@@ -190,27 +235,75 @@ export function structuralAttrHint(
   const line = start.line + newlines;
   const column =
     lastBreak === -1 ? start.column + gap.length : gap.length - lastBreak - 1;
-  return new TranslateError(
-    structuralAttrMessage(attr),
-    line,
-    column,
-    filename,
-  );
+  return new TranslateError(structuralAttrMessage(attr), line, column);
+}
+
+/** One member of Marko's `CompileErrors`, as that class renders it. */
+function aggregatePart(member: { stack?: unknown }): string {
+  const prefix = "CompileError: \n    at ";
+  const stack = String(member.stack);
+  if (stack.startsWith(prefix)) return stack.slice("CompileError: \n".length);
+  return stack.replace(/^(?!\s*$)/gm, "    ");
+}
+
+/**
+ * The error to throw instead of `error`, or `undefined` when `error` is not,
+ * and contains nothing that is, the swallowed-`*name=` failure (the caller
+ * then rethrows `error` untouched).
+ *
+ * `text` is the source the error's position refers to: the file, or for a
+ * `.ng.mx` region its `positionRegionSource`, which keeps file coordinates.
+ *
+ * Marko reports several invalid values as one `CompileErrors` aggregate
+ * (`errors`). Each member is hinted on its own; the members that do not match
+ * stay the very same objects, and the aggregate's message is rebuilt with the
+ * same formula Marko uses, so their text is unchanged.
+ */
+export function structuralAttrHint(
+  error: unknown,
+  text: string,
+): Error | undefined {
+  const failure = (error ?? {}) as ParseFailure;
+  if (failure.name === "CompileErrors" && Array.isArray(failure.errors)) {
+    const members = failure.errors as { stack?: unknown }[];
+    const replaced = members.map((member) => memberHint(member, text));
+    if (replaced.every((hint) => hint === undefined)) return undefined;
+    const errors = members.map((member, i) => replaced[i] ?? member);
+    const aggregate = error as Error & { errors: unknown[] };
+    const message = `\n${errors
+      .map((member, i) =>
+        replaced[i]
+          ? hintPart(replaced[i] as Positioned)
+          : aggregatePart(member),
+      )
+      .join("\n\n")}`;
+    const stack = aggregate.stack;
+    aggregate.message = message;
+    aggregate.errors = errors;
+    if (typeof stack === "string") {
+      aggregate.stack = stack.replace(String(failure.message), message);
+    }
+    return aggregate;
+  }
+  return memberHint(error, text);
+}
+
+type Positioned = TranslateError;
+
+/** A hint's slot in an aggregate message: position, then the text. */
+function hintPart(hint: Positioned): string {
+  return `    at ${hint.line}:${hint.column + 1}\n        ${hint.message}`;
 }
 
 /**
  * Runs `run`; if it throws the swallowed-`*name=` failure, throws the hint
  * instead, otherwise rethrows the original error untouched.
  */
-export function withStructuralAttrHint<T>(
-  text: string,
-  filename: string,
-  run: () => T,
-): T {
+export function withStructuralAttrHint<T>(text: string, run: () => T): T {
   try {
     return run();
   } catch (error) {
-    throw structuralAttrHint(error, text, filename) ?? error;
+    throw structuralAttrHint(error, text) ?? error;
   }
 }
 
@@ -218,6 +311,5 @@ export function withStructuralAttrHint<T>(
 export function compileSourceWithHint(
   ...args: Parameters<typeof compileSource>
 ): CompileResult {
-  const [source, filename] = args;
-  return withStructuralAttrHint(source, filename, () => compileSource(...args));
+  return withStructuralAttrHint(args[0], () => compileSource(...args));
 }

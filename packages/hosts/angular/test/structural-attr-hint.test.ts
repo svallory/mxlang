@@ -11,9 +11,11 @@
  * that; only the message gains the diagnosis and the two fixes.
  */
 
+import { compileSource } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
+import { compileTagModule } from "../src/tag-module.ts";
 import { compileMx } from "./helpers.ts";
 
 interface Positioned extends Error {
@@ -256,5 +258,162 @@ describe("what must not change", () => {
     expect(error.message).toBe(
       "Invalid left-hand side in assignment expression. (5:19)",
     );
+  });
+});
+
+describe("non-first structural attribute: tag module", () => {
+  it("explains it at the `*`, with the file left unset", () => {
+    const error = thrown(() =>
+      compileTagModule('<div class="a" *ngIf="x">y</div>', "/p/tags/badge.mx"),
+    );
+    expectHint(error.message, "*ngIf", "class");
+    expect({ line: error.line, column: error.column }).toEqual({
+      line: 1,
+      column: 15,
+    });
+    expect((error as { file?: string }).file).toBeUndefined();
+  });
+
+  it("reports a later line for a multi-line tag", () => {
+    const error = thrown(() =>
+      compileTagModule(
+        '<div\n  class="a"\n  *ngFor="let i of xs"\n>y</div>',
+        "/p/tags/badge.mx",
+      ),
+    );
+    expectHint(error.message, "*ngFor", "class");
+    expect({ line: error.line, column: error.column }).toEqual({
+      line: 3,
+      column: 2,
+    });
+  });
+
+  it("leaves an unrelated tag-module error byte-for-byte", () => {
+    const error = thrown(() =>
+      compileTagModule("<div a=1 +b=2>x</div>", "/p/tags/badge.mx"),
+    );
+    expect(error.constructor.name).toBe("CompileError");
+    expect(error.message).toContain(
+      "^ Invalid left-hand side in assignment expression.",
+    );
+    expect(error.message).not.toContain("cannot follow");
+  });
+});
+
+describe("TranslateError.file keeps core's contract", () => {
+  // core.ts: `file` is set only for an error in a file other than the one
+  // being compiled, so it stays undefined for this file's own error. A
+  // consumer (the language server, the vite plugin) treats a set `file` as a
+  // second file and would misattribute the diagnostic.
+  it("is undefined for a whole-file compile, whatever the filename looks like", () => {
+    for (const filename of ["t.mx", "/p/x.mx", "file:///p/x.mx"]) {
+      const error = thrown(() =>
+        compile('<div class="a" *ngIf="x">y</div>', filename),
+      );
+      expect(error.name).toBe("TranslateError");
+      expect((error as { file?: string }).file).toBeUndefined();
+    }
+  });
+
+  it("is undefined for a region error", () => {
+    const error = thrown(() =>
+      compileNgMx(
+        componentFile('<div class="a" *ngIf="x">hi</div>'),
+        "/p/x.component.ng.mx",
+      ),
+    );
+    // The bridge re-raises as a SyntaxError; the hint it carries came from an
+    // error with no `file`, which is why the message is the bare hint.
+    expect(error.message).toMatch(/^`\*ngIf` cannot follow/);
+  });
+});
+
+describe("a file with several failures", () => {
+  // Marko reports several invalid values as one `CompileErrors` aggregate.
+  const source =
+    '<div>\n  <a class="a" *ngIf="x">1</a>\n  <b>$' +
+    '{1 = 2}</b>\n  <i id="c" *ngFor="let i of xs">2</i>\n</div>';
+
+  function members(run: () => unknown): Error[] {
+    return (thrown(run) as unknown as { errors: Error[] }).errors;
+  }
+
+  it("hints each matching member, positioned per member", () => {
+    const error = thrown(() => compile(source, "/p/x.mx"));
+    expect(error.name).toBe("CompileErrors");
+    const [first, unrelated, second] = (
+      error as unknown as { errors: Positioned[] }
+    ).errors;
+    expectHint(first?.message ?? "", "*ngIf", "class");
+    expect({ line: first?.line, column: first?.column }).toEqual({
+      line: 2,
+      column: 15,
+    });
+    expectHint(second?.message ?? "", "*ngFor", "id");
+    expect({ line: second?.line, column: second?.column }).toEqual({
+      line: 4,
+      column: 12,
+    });
+    // The aggregate's own message carries both hints.
+    expect(error.message).toContain("`*ngIf` cannot follow");
+    expect(error.message).toContain("`*ngFor` cannot follow");
+    expect(unrelated?.message).toContain(
+      "^ Invalid left-hand side in assignment expression.",
+    );
+  });
+
+  it("leaves the unrelated member byte-identical to Marko's", () => {
+    const plain = members(() =>
+      compileSource(source, "/p/x.mx", {} as never, {} as never),
+    );
+    const hinted = members(() => compile(source, "/p/x.mx"));
+    expect(hinted).toHaveLength(3);
+    expect((hinted[1] as Error).message).toBe((plain[1] as Error).message);
+    expect((hinted[1] as Error).name).toBe("CompileError");
+    const aggregate = thrown(() => compile(source, "/p/x.mx")).message;
+    expect(aggregate).toContain(
+      ((plain[1] as Error).stack ?? "").replace(/^CompileError: \n/, ""),
+    );
+  });
+
+  it("hints two bad tags in one file with nothing else wrong", () => {
+    const error = thrown(() =>
+      compile(
+        '<div class="a" *ngIf="x"><p class="b" *ngFor="let i of xs">y</p></div>',
+        "/p/x.mx",
+      ),
+    );
+    expect(
+      error.message.match(/cannot follow another attribute/g),
+    ).toHaveLength(2);
+    expect(error.message).not.toContain("Invalid left-hand side");
+  });
+});
+
+describe("the `*name=` must be in the failing value's own tag", () => {
+  const unhinted = (source: string) =>
+    thrown(() => compile(source, "t.mx")).message;
+
+  it("does not hint a scriptlet failure before a valid first-position directive", () => {
+    for (const source of [
+      '$ 1 = 2\n<div *ngIf="x">y</div>',
+      '$ x = 1 = 2\n<div *ngIf="x">y</div>',
+      '$ 1 = 2\n<ng-container *transloco="let t">y</ng-container>',
+    ]) {
+      const message = unhinted(source);
+      expect(message).toContain("Invalid left-hand side");
+      expect(message).not.toContain("cannot follow");
+    }
+  });
+
+  it("does not hint when another attribute sits between the failure and the `*`", () => {
+    const message = unhinted('<div a=1 +b=2 c *ngIf="x">y</div>');
+    expect(message).toContain("Invalid left-hand side");
+    expect(message).not.toContain("cannot follow");
+  });
+
+  it("does not hint a `*name=` in a later tag", () => {
+    const message = unhinted('<div a=1 +b=2>x</div>\n<p *ngIf="x">y</p>');
+    expect(message).not.toContain("cannot follow");
   });
 });
