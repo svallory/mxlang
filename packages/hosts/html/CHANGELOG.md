@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: the tarball no longer ships `dist/example.js` (html-ships-example-js)
+
+`src/example.ts` (the `bun run example` demo) was a `bun build` entry, so its bundle landed in `dist/` and in the tarball although nothing exports it. It is no longer built: `bun run example` now runs the source directly (`bun src/example.ts`, no build step). The `exports` map and the emitted declarations are unchanged. `scripts/pack-hygiene.test.ts` now pins the exact set of `dist/` files the tarball may contain.
+
 ### Fix: `@mxlang/html/bun` typechecks for a consumer with `skipLibCheck: false` (pkg-types-g10)
 
 `dist/bun.d.ts` has `import type { BunPlugin } from "bun"`, but `bun` was not a declared dependency, so a strict consumer of the `./bun` subpath got `TS2307: Cannot find module 'bun'`. `@types/bun` is now an **optional peer dependency** (`>=1.3`): only a consumer of `./bun` runs Bun, and a consumer of `.` needs nothing. The README's Loaders section says so.

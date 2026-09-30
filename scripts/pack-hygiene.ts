@@ -35,6 +35,12 @@ export interface PackedPackage {
   dir: string;
   /** Top-level paths (besides `dist/`) the tarball may contain. */
   extraTopLevel: string[];
+  /**
+   * When set, the exact `dist/` files the tarball may contain (paths relative
+   * to the package). A stray build entry (a dev-only script, an example) then
+   * fails instead of shipping unnoticed.
+   */
+  distFiles?: string[];
   /** True when the package emits `.d.ts` (a `types` entry, `dist/**.d.ts`). */
   declarations: boolean;
   /**
@@ -56,6 +62,15 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     name: "@mxlang/html",
     dir: "packages/hosts/html",
     extraTopLevel: ["types"],
+    distFiles: [
+      "dist/bun.d.ts",
+      "dist/bun.js",
+      "dist/emitter.d.ts",
+      "dist/helpers.d.ts",
+      "dist/index.d.ts",
+      "dist/index.js",
+      "dist/translate.d.ts",
+    ],
     declarations: true,
     specifierAliases: {
       // `dist/bun.d.ts` has `import type { BunPlugin } from "bun"`. The `bun`

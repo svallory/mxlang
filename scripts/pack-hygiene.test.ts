@@ -65,6 +65,15 @@ for (const p of PACKED_PACKAGES) {
       expect(stray).toEqual([]);
     });
 
+    if (p.distFiles) {
+      const allowedDist = p.distFiles;
+      it("packs only the allowed dist/ files (no dev-only build entries)", () => {
+        expect(packed.filter((f) => f.startsWith("dist/")).sort()).toEqual(
+          [...allowedDist].sort(),
+        );
+      });
+    }
+
     it("ships no tests, fixtures, source maps of declarations or config", () => {
       const junk = packed.filter(
         (f) =>
