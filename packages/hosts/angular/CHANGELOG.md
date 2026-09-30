@@ -4,6 +4,8 @@
 
 ### Added
 
+- **`NgMxRegion.generatedStart` / `generatedEnd`** (optional tooling-facing fields): the `[start, end)` span of each region's template literal in the emitted module, `CompileNgMxResult.code`. Diagnostics tooling uses it to find the region an emitted-module offset falls in when no mapping covers that offset. Additive.
+
 - **`mx.angular.diagnostics` config key** (`"idle"` | `"save"` | `"off"`, default `"idle"`), read by `readAngularConfig` and exported as the `AngularDiagnosticsMode` type. `"off"` disables Angular template diagnostics for `.ng.mx` everywhere (`mx-tsc` and editors); `"idle"` and `"save"` are editor scheduling modes (after 1 s idle / on save) that `mx-tsc` treats as on. Any other value throws a positioned error.
 
 - **A mapping invariant test over every `.ng.mx` mapping** (`test/ng-mx-mapping-invariant.test.ts`): each mapping `compileNgMx` returns must slice the source to the text its generated run un-escapes to, or be a `derive`-tagged run the oracle's `isDerivedFrom` accepts. It runs over every oracle `.ng.mx` fixture and a set of attribute shapes.

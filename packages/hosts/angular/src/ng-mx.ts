@@ -136,6 +136,14 @@ export interface NgMxRegion {
   /** The region's `[start, end)` offsets in the source file. */
   start: number;
   end: number;
+  /**
+   * The `[generatedStart, generatedEnd)` offsets of the region's template
+   * literal in the emitted module (`CompileNgMxResult.code`). A diagnostic
+   * tool uses it to find the region an emitted-module offset falls in when
+   * no mapping covers that offset.
+   */
+  generatedStart: number;
+  generatedEnd: number;
   /** The tags this region's template called, in source order. */
   usedTags: UsedTag[];
   /** Identifier-level mappings from the emitted template back to the source. */
@@ -211,7 +219,8 @@ export function positionRegionSource(
 }
 
 /** What one region's lowering produced, before it is spliced into the module. */
-interface LoweredRegion extends NgMxRegion {
+interface LoweredRegion
+  extends Omit<NgMxRegion, "generatedStart" | "generatedEnd"> {
   /** The backtick template literal replacing the region's source text. */
   literal: string;
   /** Module-level statements this region's IR hoisted out. */
@@ -1370,9 +1379,24 @@ export function rebaseRegionMappings(
   regions: readonly { literal: string; mappings: readonly AngularMapping[] }[],
   filename: string,
 ): AngularMapping[] {
+  const offsets = locateRegionLiterals(code, regions, filename);
+  return regions.flatMap((region, i) =>
+    offsetMappings(region.mappings, offsets[i] as number),
+  );
+}
+
+/**
+ * Where each region's template literal landed in `code`, in region order.
+ * The search resumes after the previous literal, so regions emitting the same
+ * literal resolve to distinct offsets. Throws when a literal is absent.
+ */
+function locateRegionLiterals(
+  code: string,
+  regions: readonly { literal: string }[],
+  filename: string,
+): number[] {
   let searchFrom = 0;
-  const moduleMappings: AngularMapping[] = [];
-  for (const region of regions) {
+  return regions.map((region) => {
     const at = code.indexOf(region.literal, searchFrom);
     if (at < 0) {
       throw new Error(
@@ -1380,9 +1404,8 @@ export function rebaseRegionMappings(
       );
     }
     searchFrom = at + region.literal.length;
-    moduleMappings.push(...offsetMappings(region.mappings, at));
-  }
-  return moduleMappings;
+    return at;
+  });
 }
 
 /**
@@ -1615,6 +1638,7 @@ export function compileNgMx(
 
   const code = rewritten.toString();
   const moduleMappings = rebaseRegionMappings(code, lowered, filename);
+  const literalOffsets = locateRegionLiterals(code, lowered, filename);
 
   return {
     code,
@@ -1628,9 +1652,21 @@ export function compileNgMx(
     warnings,
     usedTags,
     regions: lowered.map(
-      ({ start, end, usedTags: tags, mappings, warnings: regionWarnings }) => ({
+      (
+        {
+          start,
+          end,
+          literal,
+          usedTags: tags,
+          mappings,
+          warnings: regionWarnings,
+        },
+        i,
+      ) => ({
         start,
         end,
+        generatedStart: literalOffsets[i] as number,
+        generatedEnd: (literalOffsets[i] as number) + literal.length,
         usedTags: tags,
         mappings,
         warnings: regionWarnings,

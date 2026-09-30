@@ -330,6 +330,28 @@ describe("compileNgMx", () => {
     expect(source.slice(region?.start, region?.end)).toBe(template);
   });
 
+  it("reports each region's template literal span in the emitted module", () => {
+    const source = [
+      'import { Component } from "@angular/core";',
+      '@Component({ selector: "app-a", template: <p>${a}</p> })',
+      "export class A { a = 1; }",
+      '@Component({ selector: "app-b", template: <p>${a}</p> })',
+      "export class B { a = 1; }",
+    ].join("\n");
+    const result = compileNgMx(source, "/p/x.component.ng.mx");
+
+    expect(result.regions).toHaveLength(2);
+    const slices = result.regions.map((r) =>
+      result.code.slice(r.generatedStart, r.generatedEnd),
+    );
+    // Two regions emitting the same literal land at distinct offsets, each
+    // slicing the module to a backtick template literal.
+    expect(slices).toEqual(["`<p>{{ a }}</p>`", "`<p>{{ a }}</p>`"]);
+    expect(result.regions[1]?.generatedStart).toBeGreaterThan(
+      result.regions[0]?.generatedEnd ?? Infinity,
+    );
+  });
+
   it("maps each region's expressions back to the .ng.mx source (2.2b)", () => {
     // The flip this test was written to catch: mappings used to be `[]`
     // because the emitter was a plain string builder. It now records a span
