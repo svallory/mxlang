@@ -76,9 +76,15 @@ entry.
   `Project.refreshDiagnostics()` (public in TS 6.0, emits
   `projectsUpdatedInBackground`, which makes the client re-run `geterr`). A
   missing compiler-cli / bad tsconfig and the compiler *option* diagnostics are
-  per-project **notices**, shown on the first `.ng.mx` that hit them (tsserver
-  can only attach a diagnostic to the file it was asked about, so they are not
-  attached to the tsconfig). The plugin never loads compiler-cli in the
+  per-project **notices**, computed once and shown on **every open** `.ng.mx`
+  the editor asks about (no owner file; tsserver can only attach a diagnostic
+  to the file it was asked about, so they are not attached to the tsconfig; the
+  text names the tsconfig and, for compiler-cli, says to restart the TS server).
+  Checks, idle timers and `save` watchers exist only for **open** files
+  (`isOpen` = `project.getScriptInfo(f).isScriptOpen()`): the program compiles
+  every closed `.ng.mx` too, and `getSemanticDiagnostics` calls
+  `service.request(file)` to schedule a file compiled before it was opened and
+  to release files that have since closed. The plugin never loads compiler-cli in the
   tsserver thread. `ng-editor-path.test.ts` drives the whole path with the real
   worker; `ng-worker-bundle.test.ts` checks the built bundle.
   **Known limitations (2.3b-2b):** a

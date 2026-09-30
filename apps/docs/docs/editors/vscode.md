@@ -66,3 +66,5 @@ The extension automatically contributes `@mxlang/typescript-plugin` to VS Code's
 You do **not** need to configure `typescript.tsserver.pluginPaths` or `compilerOptions.plugins` for editor diagnostics, as the extension injects the plugin directly.
 
 *(Note: Command-line typechecking still requires `mx-tsc` instead of `tsc` because `tsc` ignores `compilerOptions.plugins`.)*
+
+Until the VSIX ships the TS plugin (TODO `vscode-vsix-ships-ts-plugin`, a separate PR in flight), TS-plugin features, including Angular diagnostics, work only when the plugin is resolvable, e.g. from a source checkout.

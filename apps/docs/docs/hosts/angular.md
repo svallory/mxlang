@@ -636,11 +636,14 @@ going five seconds after it went stale is killed and the worker restarted. The
 worker exits with the editor.
 
 If `@angular/compiler-cli` is missing, out of range or fails to load, the editor
-shows one message (on the first `.ng.mx` of the project, not on every file, and
-not repeated) saying how to fix it or turn the check off; nothing else breaks.
-Compiler option errors and warnings (for example `extendedDiagnostics` with
-`strictTemplates: false`) are shown once per project the same way, prefixed with
-the tsconfig they come from; warnings never fail anything. An error in the
+shows one message per open `.ng.mx` (computed once per project, not repeated on
+every edit) naming the project's tsconfig, saying how to fix it or turn the
+check off; nothing else breaks. After installing compiler-cli, run "TypeScript:
+Restart TS Server" (the unusable state is remembered until then). Only `.ng.mx`
+files that are open in the editor are checked, so a project's closed files cost
+nothing. Compiler option errors and warnings (for example `extendedDiagnostics`
+with `strictTemplates: false`) are shown the same way, prefixed with the
+tsconfig they come from; warnings never fail anything. An error in the
 element or attribute itself (NG8001, NG8002) is marked "(approximate location)",
 as in `mx-tsc`.
 
