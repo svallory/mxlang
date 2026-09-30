@@ -125,19 +125,69 @@ An element's `on<Name>=fn` (`onClick`, `onDblClick`), `on-<exact>=fn`
 (`on-my-event`), or a lowercase `onclick=fn` is an event handler. MX derives
 the **DOM event name** — everything after `on` lowercased, or the exact text
 after `on-` — and this host emits an Angular event binding from it:
-`onClick=f` → `(click)="(f)($event)"`. The handler is wrapped so it is
-*called* with `$event`, not returned: an arrow handler writes
-`onClick=(e => handle(e))` → `(click)="(e => handle(e))($event)"`.
+`onClick=f` → `(click)="__mxOn(f, this, $event)"`. The handler is called
+*through a typed invoker on the component* (decision 117), because
+`(f)($event)` is TS2554 under `strictTemplates` for a 0-arg handler (`cancel()`),
+which Marko accepts, and Angular's template grammar has no cast (`$any` would
+drop the check). The invoker calls the handler with exactly Marko's
+`(event, element)` and returns its result, so a handler returning `false` still
+calls `preventDefault()`. A falsy handler (`onClick=(cond && f)`, `null`,
+`undefined`, `false`) is a no-op, as in Marko:
+
+| MX | Angular |
+|---|---|
+| `onClick=f` | `(click)="__mxOn(f, this, $event)"` |
+| `onClick=svc.f` | `(click)="__mxOnAt(svc, 'f', $event)"` — `this` is `svc` |
+| `onClick=a().f` / `a[i].f` / `a!.f` | `__mxOnAt(a(), 'f', $event)` etc. — the object is evaluated once |
+| `onClick=(e => handle(e))` | `(click)="__mxOn(e => handle(e), null, $event)"` |
+
+0-arg, 1-arg, 2-arg `(event, element)` and arrow handlers all type-check; a
+handler typed for another event (a `KeyboardEvent` handler on `click`) is still
+an error. Two divergences from Marko: `this` is **the component** (or the
+object of the member), where Marko's is the element, and `element` is
+`$event.currentTarget` typed `EventTarget | null` — `null` for an output whose
+payload is not an event.
+
+**The component needs the invoker members.** `.ng.mx` adds them to the
+decorated class, and a tag module writes them into its generated class. For a
+**page** (a `.mx` beside your own component class) MX cannot edit the class, so
+declare **both** members in every component whose template uses one of these
+handlers (a shared base class is the usual home, so each page component
+`extends` it). The compile warns once per file, and the generated `.html`
+header carries the same text, when the page binds a handler:
+
+```ts
+protected readonly __mxOn = <E, R>(handler: ((event: E, element: EventTarget | null) => R) | null | undefined | false, receiver: unknown, event: E): R | undefined => handler ? handler.call(receiver, event, (event as { currentTarget?: EventTarget | null } | null)?.currentTarget ?? null) : undefined;
+protected readonly __mxOnAt = <K extends PropertyKey, E, R>(object: { [P in K]?: ((event: E, element: EventTarget | null) => R) | null | undefined | false }, key: K, event: E): R | undefined => this.__mxOn(object[key], object, event);
+```
+
+```ts
+// shared base class for page components; both members are `protected`
+export abstract class MxEventHandlers {
+  protected readonly __mxOn = /* …first line above… */;
+  protected readonly __mxOnAt = /* …second line above… */;
+}
+
+@Component({ /* … */ templateUrl: "./form.html" })
+export class FormComponent extends MxEventHandlers {}
+```
+
+A component without them fails the build: under `strictTemplates` AOT reports
+`TS2339 Property '__mxOn' does not exist on type 'FormComponent'` (or
+`__mxOnAt`) at the handler, including handlers inside `@if`/`@for`. **Basic
+mode** (`strictTemplates: false`) checks only top-level bindings, so a handler
+that appears only inside `@if`/`@for` is missed at build time and fails at run
+time; JIT has no build step at all. Use `strictTemplates`.
 
 - **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
   a DOM event: the compiler warns at the attribute and emits
-  `(doubleclick)="(f)($event)"` exactly as written — never silently
+  `(doubleclick)="__mxOn(f, this, $event)"` exactly as written — never silently
   `dblclick`. Spell the DOM name (`onDblClick`).
-- **`on-<exact>` works verbatim** — `(my-event)="(f)($event)"` — which is
+- **`on-<exact>` works verbatim** — `(my-event)="__mxOn(f, this, $event)"` — which is
   what makes custom events first-class on this host, the one MX host whose
   binding syntax takes any event name.
 - **Lowercase `onclick=fn`** (an expression, not a string) maps to
-  `(click)="(f)($event)"` — the binding an inline handler string would have
+  `(click)="__mxOn(f, this, $event)"` — the binding an inline handler string would have
   driven — rather than a dead `[onclick]` property binding.
 - **Static strings** (`onClick="alert(1)"`) are an ordinary attribute and
   pass through verbatim; MX does not invent a policy against inline handler
@@ -149,7 +199,6 @@ after `on-` — and this host emits an Angular event binding from it:
   not infer `@Output()`.
 
 `$event` is typed by Angular's own template checker from the event name.
-
 ## `mx-angular`
 
 ```

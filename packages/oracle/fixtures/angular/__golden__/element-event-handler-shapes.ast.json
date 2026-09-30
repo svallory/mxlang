@@ -5,20 +5,22 @@
     "inputs": [],
     "outputs": [
       {
-        "name": "doubleclick",
+        "name": "click",
         "type": 0,
         "handler": {
           "ast": {
             "receiver": {
               "receiver": {},
-              "name": "__mxOn"
+              "name": "__mxOnAt"
             },
             "args": [
               {
                 "receiver": {},
-                "name": "a"
+                "name": "svc"
               },
-              {},
+              {
+                "value": "cancel"
+              },
               {
                 "receiver": {},
                 "name": "$event"
@@ -33,7 +35,7 @@
     "directives": [],
     "children": [
       {
-        "value": "x"
+        "value": "a"
       }
     ],
     "references": [],
@@ -46,7 +48,7 @@
     "inputs": [],
     "outputs": [
       {
-        "name": "dblclick",
+        "name": "click",
         "type": 0,
         "handler": {
           "ast": {
@@ -56,10 +58,18 @@
             },
             "args": [
               {
-                "receiver": {},
-                "name": "b"
+                "parameters": [],
+                "body": {
+                  "receiver": {
+                    "receiver": {},
+                    "name": "f"
+                  },
+                  "args": []
+                }
               },
-              {},
+              {
+                "value": null
+              },
               {
                 "receiver": {},
                 "name": "$event"
@@ -74,7 +84,7 @@
     "directives": [],
     "children": [
       {
-        "value": "y"
+        "value": "b"
       }
     ],
     "references": [],
@@ -87,7 +97,7 @@
     "inputs": [],
     "outputs": [
       {
-        "name": "dblclick",
+        "name": "click",
         "type": 0,
         "handler": {
           "ast": {
@@ -97,10 +107,27 @@
             },
             "args": [
               {
-                "receiver": {},
-                "name": "c"
+                "parameters": [
+                  {
+                    "name": "e"
+                  }
+                ],
+                "body": {
+                  "receiver": {
+                    "receiver": {},
+                    "name": "g"
+                  },
+                  "args": [
+                    {
+                      "receiver": {},
+                      "name": "e"
+                    }
+                  ]
+                }
               },
-              {},
+              {
+                "value": null
+              },
               {
                 "receiver": {},
                 "name": "$event"
@@ -115,7 +142,7 @@
     "directives": [],
     "children": [
       {
-        "value": "z"
+        "value": "c"
       }
     ],
     "references": [],

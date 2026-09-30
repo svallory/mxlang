@@ -10,12 +10,15 @@
         "handler": {
           "ast": {
             "receiver": {
-              "expression": {
-                "receiver": {},
-                "name": "f"
-              }
+              "receiver": {},
+              "name": "__mxOn"
             },
             "args": [
+              {
+                "receiver": {},
+                "name": "f"
+              },
+              {},
               {
                 "receiver": {},
                 "name": "$event"

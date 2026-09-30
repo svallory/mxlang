@@ -11,6 +11,7 @@ import {
   ngMxPositionCheck,
   rebaseRegionMappings,
 } from "../src/ng-mx.ts";
+import { assertModuleTypechecks } from "./helpers.ts";
 
 /** A `.ng.mx` module around one region, as an author would write it. */
 function componentFile(template: string, extra = ""): string {
@@ -875,5 +876,172 @@ describe("compileNgMx: standalone warnings, round 3", () => {
     ).code;
     expect(code.match(/NgClass/g)?.length).toBeGreaterThanOrEqual(1);
     expect(code).toContain("imports: [NgClass]");
+  });
+});
+
+describe("compileNgMx: event handlers", () => {
+  it("writes the event invoker members into the decorated class and drops the advice", () => {
+    const warnings: { message: string }[] = [];
+    const result = compileNgMx(
+      componentFile("<button onClick=cancel>x</button>", "\n  cancel() {}\n"),
+      "/p/x.component.ng.mx",
+      { warnings: warnings as never },
+    );
+
+    expect(result.code).toContain("protected readonly __mxOn = ");
+    expect(result.code).toContain("protected readonly __mxOnAt = ");
+    expect(emittedTemplate(result.code)).toBe(
+      '<button (click)="__mxOn(cancel, this, $event)">x</button>',
+    );
+    expect(warnings.filter((w) => w.message.includes("__mxOn"))).toEqual([]);
+    assertModuleTypechecks(result.code, "x.component.ts");
+  });
+
+  it("adds no members when the template binds no handler, or the author declared __mxOn", () => {
+    expect(
+      compileNgMx(componentFile("<div>x</div>"), "/p/x.component.ng.mx").code,
+    ).not.toContain("__mxOn");
+    const authored = compileNgMx(
+      componentFile(
+        "<button onClick=cancel>x</button>",
+        "\n  cancel() {}\n  protected readonly __mxOn = null as never;\n",
+      ),
+      "/p/x.component.ng.mx",
+    ).code;
+    expect(authored.match(/__mxOn =/g)).toHaveLength(1);
+  });
+});
+
+describe("compileNgMx: event invoker members already declared (per class, by AST)", () => {
+  const HANDLER = "<button onClick=cancel>x</button>";
+  const classFile = (body: string, before = "", after = "") =>
+    [
+      'import { Component } from "@angular/core";',
+      before,
+      "@Component({",
+      '  selector: "app-x",',
+      `  template: ${HANDLER},`,
+      "})",
+      `export class XComponent {${body}}`,
+      after,
+    ].join("\n");
+  // Class-body declarations only (a line starting with the member), not the
+  // template's own `__mxOn(...)` calls.
+  const count = (code: string, name: string) =>
+    code.match(
+      new RegExp(
+        `^\\s*(?:protected\\s+)?(?:readonly\\s+)?${name}\\b\\s*[=(<]`,
+        "gm",
+      ),
+    )?.length ?? 0;
+  const compileIt = (source: string) =>
+    compileNgMx(source, "/p/x.component.ng.mx").code;
+
+  it("injects only __mxOnAt when the class declares __mxOn as a property", () => {
+    const code = compileIt(
+      classFile(
+        "\n  cancel() {}\n  protected readonly __mxOn = null as never;\n",
+      ),
+    );
+    expect(count(code, "__mxOn")).toBe(1);
+    expect(count(code, "__mxOnAt")).toBe(1);
+  });
+
+  it("injects only __mxOn when the class declares only __mxOnAt", () => {
+    const code = compileIt(
+      classFile(
+        "\n  cancel() {}\n  protected readonly __mxOnAt = null as never;\n",
+      ),
+    );
+    expect(count(code, "__mxOn")).toBe(1);
+    expect(count(code, "__mxOnAt")).toBe(1);
+  });
+
+  it("injects nothing when the class declares both, in any spelling", () => {
+    const code = compileIt(
+      classFile(
+        "\n  cancel() {}\n  __mxOn=null as never;\n  protected __mxOnAt(): void {}\n",
+      ),
+    );
+    expect(count(code, "__mxOn")).toBe(1);
+    expect(count(code, "__mxOnAt")).toBe(1);
+  });
+
+  it("is not suppressed by a comment, a string, or a later class", () => {
+    const code = compileIt(
+      classFile(
+        "\n  cancel() {}\n  // __mxOn = old\n  note = '__mxOn = x';\n",
+        "",
+        "class Other { __mxOn = 1; __mxOnAt = 2; }",
+      ),
+    );
+    expect(code.match(/protected readonly __mxOn = /g)).toHaveLength(1);
+    expect(code.match(/protected readonly __mxOnAt = /g)).toHaveLength(1);
+  });
+
+  it("sees members inherited from a base class in the same file", () => {
+    const both = compileIt(
+      classFile("\n  cancel() {}\n", "class Base { __mxOn = 1; __mxOnAt = 2; }")
+        .replace("class XComponent", "class XComponent")
+        .replace(
+          "export class XComponent {",
+          "export class XComponent extends Base {",
+        ),
+    );
+    expect(both.match(/protected readonly __mxOn/g)).toBeNull();
+    const one = compileIt(
+      classFile("\n  cancel() {}\n", "class Base { __mxOn = 1; }").replace(
+        "export class XComponent {",
+        "export class XComponent extends Base {",
+      ),
+    );
+    expect(one.match(/protected readonly __mxOn = /g)).toBeNull();
+    expect(one.match(/protected readonly __mxOnAt = /g)).toHaveLength(1);
+  });
+
+  it("follows a chain of visible base classes", () => {
+    const code = compileIt(
+      classFile(
+        "\n  cancel() {}\n",
+        "class Root { __mxOn = 1; __mxOnAt = 2; }\nclass Mid extends Root {}",
+      ).replace(
+        "export class XComponent {",
+        "export class XComponent extends Mid {",
+      ),
+    );
+    expect(code.match(/protected readonly __mxOn/g)).toBeNull();
+  });
+
+  it("injects both when the base is not visible in the file", () => {
+    const code = compileIt(
+      classFile("\n  cancel() {}\n").replace(
+        "export class XComponent {",
+        "export class XComponent extends Unknown(Base) {",
+      ),
+    );
+    expect(code.match(/protected readonly __mxOn = /g)).toHaveLength(1);
+    expect(code.match(/protected readonly __mxOnAt = /g)).toHaveLength(1);
+  });
+
+  it("decides per class: a second decorated class is judged on its own members", () => {
+    const source = [
+      'import { Component } from "@angular/core";',
+      "@Component({",
+      '  selector: "app-a",',
+      `  template: ${HANDLER},`,
+      "})",
+      "export class A { __mxOn = 1; __mxOnAt = 2; }",
+      "@Component({",
+      '  selector: "app-b",',
+      `  template: ${HANDLER},`,
+      "})",
+      "export class B {}",
+    ].join("\n");
+    const code = compileIt(source);
+    expect(code.match(/protected readonly __mxOn = /g)).toHaveLength(1);
+    expect(code.match(/protected readonly __mxOnAt = /g)).toHaveLength(1);
+    expect(code.indexOf("protected readonly __mxOn = ")).toBeGreaterThan(
+      code.indexOf("export class B"),
+    );
   });
 });

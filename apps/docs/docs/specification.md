@@ -496,6 +496,14 @@ Host differences here are **documented, not shimmed**:
 
 - The handler's parameters are whatever the host runtime passes — the DOM event
   on every current host. (Marko's own runtime would pass `(event, target)`.)
+- **Angular calls the handler as Marko does, `(event, element)`, through a
+  typed invoker on the component** (decision 117), so a 0-arg, 1-arg, 2-arg or
+  inline-arrow handler all pass `strictTemplates` and the handler's return
+  value reaches Angular (`false` still calls `preventDefault()`). Two recorded
+  divergences from Marko (`divergences.md`): `this` is **the component** (Marko:
+  the element the handler is bound to), and `element` is `$event.currentTarget`,
+  typed `EventTarget | null` (Angular types no element without a template
+  reference; Marko types it as the element).
 - **hono's `onChange` binds the `input` event**, for React compatibility, while
   every other host binds `change`. The same MX source therefore fires on every
   keystroke on hono and on commit elsewhere. If you need one specific

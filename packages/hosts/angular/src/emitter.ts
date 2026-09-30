@@ -320,6 +320,12 @@ const DATA_OR_ARIA = /^(data|aria)-/;
  */
 export const IMPORTS_ADVICE_CODE = "angular.imports-advice";
 
+/**
+ * Marks the "add the event invoker members to your component class" warning.
+ * `.ng.mx` and tag modules write those members themselves and drop it.
+ */
+export const EVENT_HELPER_ADVICE_CODE = "angular.event-helper-advice";
+
 // A1:112-113's exact wording, one per directive — "class" takes "object or
 // array" (both structured shapes route here) while "style" takes only
 // "object" (an array-valued `style=` is not a shape the emitter's own
@@ -331,6 +337,146 @@ const NGCLASS_NGSTYLE_WARNING: Record<"ngClass" | "ngStyle", string> = {
   ngStyle:
     "this template binds `style` to an object value, emitted as [ngStyle]; add `NgStyle` to the component's imports.",
 };
+
+// A handler reference is a value, not a call: Marko calls it as
+// `handler(event, element)` and types it `(event, target) => unknown`, so a
+// 0-arg `onClick=cancel` is valid there. `(cancel)($event)` is TS2554 under
+// `strictTemplates` for that handler, and Angular's template grammar has no
+// cast (`$any` would drop the check). A call cannot pass fewer arguments than
+// its callee takes, but an *assignment* can, so the call goes through a typed
+// invoker member on the component: it takes the handler as a parameter typed
+// `(event: E, element: EventTarget | null) => R`, so 0-arg, 1-arg, 2-arg and
+// inline arrow handlers all check, a handler for the wrong event type still
+// fails, and the handler's result is returned to Angular (a `false` still
+// calls `preventDefault()`).
+//
+// The invoker is a member, not an import: a template can only call what its
+// component instance has. It is inlined per component rather than imported
+// from a runtime module because this package has no runtime, and one would
+// make every generated module depend on `@mxlang/angular` at run time for two
+// one-liners. `.ng.mx` and tag modules write the members themselves; for a
+// page (whose class is the author's) a warning carries the text to paste.
+//
+// A falsy handler (`onClick=cond && fn`, `null`, `undefined`, `false`) is a
+// no-op, as in Marko's `handler?.(event, target)` dispatch: the invoker
+// returns `undefined` without calling and its parameter types accept those
+// values, while a real function is still checked against the event type.
+//
+// `this` is the component (Marko: the element), and `element` is
+// `$event.currentTarget` typed `EventTarget | null` — Angular gives no
+// element type without a template reference (spec divergences).
+export const EVENT_HELPER_MARKER = "__mxOn";
+
+/** The invoker members, one class-body line each (2-space indented). */
+export const EVENT_HELPER_MEMBERS = [
+  "  protected readonly __mxOn = <E, R>(handler: ((event: E, element: EventTarget | null) => R) | null | undefined | false, receiver: unknown, event: E): R | undefined => handler ? handler.call(receiver, event, (event as { currentTarget?: EventTarget | null } | null)?.currentTarget ?? null) : undefined;",
+  "  protected readonly __mxOnAt = <K extends PropertyKey, E, R>(object: { [P in K]?: ((event: E, element: EventTarget | null) => R) | null | undefined | false }, key: K, event: E): R | undefined => this.__mxOn(object[key], object, event);",
+];
+
+/** The name each `EVENT_HELPER_MEMBERS` line declares, in the same order. */
+export const EVENT_HELPER_NAMES = EVENT_HELPER_MEMBERS.map(
+  (member) => /readonly (\w+)/.exec(member)?.[1] as string,
+);
+
+const EVENT_HELPER_ADVICE = `this template binds an event handler; add these members to the component class: ${EVENT_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}.`;
+
+interface HandlerNode {
+  type: string;
+  start: number;
+  end: number;
+  computed?: boolean;
+  optional?: boolean;
+  extra?: { parenthesized?: boolean };
+  object?: HandlerNode;
+  property?: HandlerNode & { name?: string };
+}
+
+/**
+ * The receiver of a handler expression, read from its parsed AST (never from
+ * the text): a bare name is the component (`this`); `a.b` / `a[k]` /
+ * `a().b` / `a!.b` is the object `a`, which must be evaluated once, so the
+ * member form hands `(a, key)` to `__mxOnAt` rather than `a.b` and `a` to
+ * `__mxOn`. Anything else (an arrow, a call result, `a?.b`, which must keep
+ * its short-circuit) has no receiver.
+ */
+function handlerShape(code: string):
+  | { form: "bare" }
+  | {
+      form: "member";
+      object: string;
+      key: string;
+      /** `[start, end)` of the object in `code`; absent when parenthesized. */
+      objectRange?: [number, number];
+    }
+  | { form: "other" } {
+  let node: HandlerNode;
+  try {
+    const babel = require("@marko/compiler/internal/babel") as {
+      parseExpression(source: string, options: unknown): HandlerNode;
+    };
+    node = babel.parseExpression(code, { plugins: [["typescript", {}]] });
+  } catch {
+    return { form: "other" };
+  }
+  if (node.type === "Identifier") return { form: "bare" };
+  if (node.type === "MemberExpression" && node.object && node.property) {
+    const text = (n: HandlerNode) => {
+      const slice = code.slice(n.start, n.end);
+      return n.extra?.parenthesized ? `(${slice})` : slice;
+    };
+    const objectRange: [number, number] | undefined = node.object.extra
+      ?.parenthesized
+      ? undefined
+      : [node.object.start, node.object.end];
+    if (node.computed) {
+      return {
+        form: "member",
+        object: text(node.object),
+        key: text(node.property),
+        objectRange,
+      };
+    }
+    if (node.property.type === "Identifier" && node.property.name) {
+      return {
+        form: "member",
+        object: text(node.object),
+        key: `'${node.property.name}'`,
+        objectRange,
+      };
+    }
+  }
+  return { form: "other" };
+}
+
+function writeHandlerCall(
+  out: TemplateWriter,
+  value: Expr,
+  source: string,
+): void {
+  const shape = handlerShape(value.code);
+  if (shape.form === "member") {
+    out.write(`${EVENT_HELPER_MARKER}At(`);
+    // A mapping must slice its own source text, so the object maps to its own
+    // sub-span, and only when `code` is still the authored text (no reference
+    // rewriting) and the object is not re-parenthesized.
+    const { span } = value;
+    const authored =
+      span && source.slice(span.sourceStart, span.sourceEnd) === value.code;
+    if (span && authored && shape.objectRange) {
+      out.writeMapped(esc(shape.object), {
+        sourceStart: span.sourceStart + shape.objectRange[0],
+        sourceEnd: span.sourceStart + shape.objectRange[1],
+      });
+    } else {
+      out.write(esc(shape.object));
+    }
+    out.write(`, ${esc(shape.key)}, $event)`);
+    return;
+  }
+  out.write(`${EVENT_HELPER_MARKER}(`);
+  out.writeMapped(esc(value.code), value.span);
+  out.write(`, ${shape.form === "bare" ? "this" : "null"}, $event)`);
+}
 
 /**
  * Writes an attribute list into `out`.
@@ -351,6 +497,7 @@ function emitAttrs(
   // (components have props; elements have events), so the distinction is
   // threaded in exactly like the core's `isElement` gate.
   isElement = false,
+  onHandler?: () => string,
 ): void {
   for (const attr of attrs) {
     switch (attr.kind) {
@@ -377,9 +524,9 @@ function emitAttrs(
         // name even though the two spellings differ.
         out.write(" (");
         out.writeMapped(attr.event, attr.nameSpan, "event");
-        out.write(')="(');
-        out.writeMapped(esc(attr.value.code), attr.value.span);
-        out.write(')($event)"');
+        out.write(')="');
+        writeHandlerCall(out, attr.value, onHandler?.() ?? "");
+        out.write('"');
         break;
       case "dynamic": {
         const name = attr.name;
@@ -392,9 +539,9 @@ function emitAttrs(
           // call the same attribute stays the callee's `[onclick]` input.
           out.write(" (");
           out.writeMapped(name.slice(2), attr.nameSpan, "event");
-          out.write(')="(');
-          out.writeMapped(esc(attr.value.code), attr.value.span);
-          out.write(')($event)"');
+          out.write(')="');
+          writeHandlerCall(out, attr.value, onHandler?.() ?? "");
+          out.write('"');
         } else if (name === "class" || name === "style") {
           const shape = attr.value.shape;
           if (shape === "object" || shape === "array") {
@@ -865,14 +1012,15 @@ class AngularEmitter implements Emitter<string> {
    * type, owned by the tag-unit squad), so the marker rides as an extra
    * property; a reader that does not know it simply ignores it.
    */
-  private warnOnce(key: string, message: string, loc: Position): void {
+  private warnOnce(
+    key: string,
+    message: string,
+    loc: Position,
+    code = IMPORTS_ADVICE_CODE,
+  ): void {
     if (this.warnedOnce.has(key)) return;
     this.warnedOnce.add(key);
-    warn(this.ctx, {
-      message,
-      ...loc,
-      code: IMPORTS_ADVICE_CODE,
-    } as MxWarning);
+    warn(this.ctx, { message, ...loc, code } as MxWarning);
   }
 
   /**
@@ -954,6 +1102,17 @@ class AngularEmitter implements Emitter<string> {
         this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
       },
       true,
+      // Also hands back the source text, which the handler's sub-mapping is
+      // checked against.
+      () => {
+        this.warnOnce(
+          "eventHelper",
+          EVENT_HELPER_ADVICE,
+          node.loc,
+          EVENT_HELPER_ADVICE_CODE,
+        );
+        return this.ctx.source;
+      },
     );
     this.out.write(">");
     if (node.void) return;

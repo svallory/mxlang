@@ -642,3 +642,31 @@ describe("compileTagModule: tagSelectorPrefix (R-d)", () => {
     expect(templateOf(code)).toBe("<div><liuna-badge></liuna-badge></div>");
   });
 });
+
+describe("compileTagModule: event handlers", () => {
+  it("writes the event invoker members into the generated class, typechecks, and drops the paste-it-yourself advice", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-angular-tag-"));
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
+    const source =
+      "export interface Input { label: string }\n<button onClick=cancel>${input.label}</button>\n";
+    const path = join(dir, "tags", "cancel-button.mx");
+    writeFileSync(path, source);
+    const warnings: { message: string }[] = [];
+    const result = compileTagModule(source, path, {
+      customTags: getCustomTags(path) as never,
+      warnings: warnings as never,
+    });
+
+    expect(result.code).toContain("protected readonly __mxOn = ");
+    expect(result.code).toContain("protected readonly __mxOnAt = ");
+    expect(templateOf(result.code)).toContain("__mxOn(cancel, this, $event)");
+    expect(warnings.filter((w) => w.message.includes("__mxOn"))).toEqual([]);
+    assertModuleTypechecks(result.code, "cancel-button.ts");
+  });
+
+  it("emits no invoker members for a tag with no handler", () => {
+    const { code } = compileTag("<span>x</span>\n");
+    expect(code).not.toContain("__mxOn");
+  });
+});

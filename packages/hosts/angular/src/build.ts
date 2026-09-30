@@ -25,6 +25,7 @@ import {
 } from "@mxlang/core";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { discoverFiles, isInside } from "./discover.ts";
+import { EVENT_HELPER_MARKER, EVENT_HELPER_MEMBERS } from "./emitter.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
 import { buildMap, writeMap } from "./map-file.ts";
@@ -550,7 +551,13 @@ export function compileOne(
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
     });
-    const header = buildHeader(sourceBasename, tsFilename, result.usedTags);
+    const header = buildHeader(
+      sourceBasename,
+      tsFilename,
+      result.usedTags,
+      "html",
+      result.code.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_MEMBERS : [],
+    );
     const usedTagNames = result.usedTags.map((t) => t.name);
     const content = header + result.code;
 

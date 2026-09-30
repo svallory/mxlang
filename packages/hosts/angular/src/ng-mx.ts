@@ -29,6 +29,10 @@ import MagicString from "magic-string";
 import { directivesFor } from "./directives.ts";
 import {
   angularDeclarations,
+  EVENT_HELPER_ADVICE_CODE,
+  EVENT_HELPER_MARKER,
+  EVENT_HELPER_MEMBERS,
+  EVENT_HELPER_NAMES,
   emitTemplate,
   IMPORTS_ADVICE_CODE,
   type UsedTag,
@@ -339,6 +343,7 @@ interface NgMxNode {
   callee?: NgMxNode;
   arguments?: NgMxNode[];
   decorators?: NgMxNode[];
+  superClass?: NgMxNode;
   declaration?: NgMxNode;
   local?: NgMxNode;
   id?: NgMxNode | null;
@@ -531,6 +536,14 @@ interface ComponentDecorator {
   argument: NgMxNode;
   /** The decorated class's name, from the AST; absent for an anonymous class. */
   className?: string;
+  /** Offset just after the decorated class body's `{`, where members go. */
+  classBodyStart?: number;
+  /**
+   * Member names the decorated class has: its own, and those of any
+   * `extends` chain whose classes are declared in this file. A base that
+   * cannot be seen (an import, a call such as a mixin) contributes nothing.
+   */
+  members?: Set<string>;
 }
 
 /**
@@ -571,6 +584,50 @@ function findComponentDecorators(file: unknown): ComponentDecorator[] {
     if (node.start === undefined || node.end === undefined) return;
     const className = classOf.get(node.start)?.id?.name;
     found.push({ start: node.start, end: node.end, argument, className });
+  });
+  // The class each decorator is attached to, for member injection.
+  const declared = new Map<string, NgMxNode>();
+  walk(file, (node) => {
+    if (node.type === "ClassDeclaration" && node.id?.name) {
+      declared.set(node.id.name, node);
+    }
+  });
+  const membersOf = (klass: NgMxNode, seen = new Set<NgMxNode>()) => {
+    const names = new Set<string>();
+    if (seen.has(klass)) return names;
+    seen.add(klass);
+    const body = Array.isArray(klass.body) ? undefined : klass.body;
+    for (const member of (body?.body as NgMxNode[] | undefined) ?? []) {
+      if (member.computed) continue;
+      const key = member.key;
+      const name =
+        key?.type === "Identifier"
+          ? key.name
+          : key?.type === "StringLiteral"
+            ? (key as { value?: string }).value
+            : undefined;
+      if (name) names.add(name);
+    }
+    const base =
+      klass.superClass?.type === "Identifier" && klass.superClass.name
+        ? declared.get(klass.superClass.name)
+        : undefined;
+    if (base) for (const name of membersOf(base, seen)) names.add(name);
+    return names;
+  };
+  walk(file, (node) => {
+    if (node.type !== "ClassDeclaration" && node.type !== "ClassExpression") {
+      return;
+    }
+    const bodyStart = Array.isArray(node.body) ? undefined : node.body?.start;
+    if (bodyStart === undefined) return;
+    for (const attached of node.decorators ?? []) {
+      const decorator = found.find((d) => d.start === attached.start);
+      if (decorator) {
+        decorator.classBodyStart = bodyStart + 1;
+        decorator.members = membersOf(node);
+      }
+    }
   });
   return found.sort((a, b) => a.start - b.start);
 }
@@ -826,6 +883,27 @@ export function compileNgMx(
       dedupeTags(mine.flatMap((region) => region.usedTags)),
       [...new Set(mine.flatMap((region) => region.directives))],
     );
+    // The template calls the event invoker on the component instance, so the
+    // class must carry it. The author's own class body, so this is the one
+    // place MX edits it beyond `imports:`. Each member is judged on its own,
+    // per class and from the AST: one the class declares (any spelling — a
+    // property or a method) or inherits from a base visible in this file is
+    // left alone, and only the missing ones are written.
+    if (
+      decorator.classBodyStart !== undefined &&
+      mine.some((region) => region.literal.includes(EVENT_HELPER_MARKER))
+    ) {
+      const missing = EVENT_HELPER_MEMBERS.filter(
+        (_member, index) =>
+          !decorator.members?.has(EVENT_HELPER_NAMES[index] as string),
+      );
+      if (missing.length > 0) {
+        rewritten.appendLeft(
+          decorator.classBodyStart,
+          `\n${missing.join("\n")}\n`,
+        );
+      }
+    }
   }
   // A non-standalone component's directives and tags are not imported: it
   // has no `imports:` to name them in, and the NgModule imports them itself.
@@ -852,7 +930,9 @@ export function compileNgMx(
   const warnings = lowered
     .flatMap((region) => region.warnings)
     .filter(
-      (warning) => (warning as { code?: string }).code !== IMPORTS_ADVICE_CODE,
+      (warning) =>
+        (warning as { code?: string }).code !== IMPORTS_ADVICE_CODE &&
+        (warning as { code?: string }).code !== EVENT_HELPER_ADVICE_CODE,
     );
   warnings.push(...moduleWarnings);
   if (options.warnings) options.warnings.push(...warnings);

@@ -34,13 +34,17 @@ describe("Element", () => {
 
   it("emits an event binding", () => {
     const out = emit("<button onClick=handler>x</button>");
-    expect(out).toBe('<button (click)="(handler)($event)">x</button>');
+    expect(out).toBe(
+      '<button (click)="__mxOn(handler, this, $event)">x</button>',
+    );
     assertAngularParses(out);
   });
 
-  it("parenthesises an arrow-function event handler so it is called, not returned", () => {
+  it("passes an arrow-function event handler through the typed invoker", () => {
     const out = emit("<button onClick=(e => handle(e))>x</button>");
-    expect(out).toBe('<button (click)="(e => handle(e))($event)">x</button>');
+    expect(out).toBe(
+      '<button (click)="__mxOn(e => handle(e), null, $event)">x</button>',
+    );
     assertAngularParses(out);
     expect(angularAstSnapshot(out)).toMatchObject([
       { outputs: [{ name: "click", handler: { ast: { receiver: {} } } }] },
@@ -58,7 +62,7 @@ describe("Element", () => {
     // the `event` kind carrying `event: "my-event"` verbatim, and Angular's
     // `(x)` can bind it — the phase-A `[on-my-event]=` passthrough is gone.
     const out = emit("<div on-my-event=f>x</div>");
-    expect(out).toBe('<div (my-event)="(f)($event)">x</div>');
+    expect(out).toBe('<div (my-event)="__mxOn(f, this, $event)">x</div>');
     assertAngularParses(out);
   });
 
@@ -67,7 +71,9 @@ describe("Element", () => {
     // `/^on[A-Z-]/` gate keeps it `dynamic`), but decision 101 maps it on
     // this host instead of leaving a dead `[onclick]` property binding.
     const out = emit("<button onclick=handler>x</button>");
-    expect(out).toBe('<button (click)="(handler)($event)">x</button>');
+    expect(out).toBe(
+      '<button (click)="__mxOn(handler, this, $event)">x</button>',
+    );
     assertAngularParses(out);
   });
 
@@ -98,10 +104,15 @@ describe("Element", () => {
     const { code, warnings } = compileMx(
       "<button onDoubleClick=handler>x</button>",
     );
-    expect(code).toBe('<button (doubleclick)="(handler)($event)">x</button>');
+    expect(code).toBe(
+      '<button (doubleclick)="__mxOn(handler, this, $event)">x</button>',
+    );
     assertAngularParses(code);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.message).toBe(
+    // The event invoker's "add these members" advice is separate; see
+    // event-handler.test.ts.
+    const own = warnings.filter((w) => !w.message.includes("__mxOn"));
+    expect(own).toHaveLength(1);
+    expect(own[0]?.message).toBe(
       "`onDoubleClick` is not a DOM event; did you mean `onDblclick`",
     );
   });
@@ -114,10 +125,12 @@ describe("Element", () => {
       "<button onDblClick=a>x</button><button on-dblclick=b>y</button>",
     );
     expect(code).toBe(
-      '<button (dblclick)="(a)($event)">x</button><button (dblclick)="(b)($event)">y</button>',
+      '<button (dblclick)="__mxOn(a, this, $event)">x</button><button (dblclick)="__mxOn(b, this, $event)">y</button>',
     );
     assertAngularParses(code);
-    expect(warnings).toHaveLength(0);
+    expect(warnings.filter((w) => !w.message.includes("__mxOn"))).toHaveLength(
+      0,
+    );
   });
 
   it("emits a two-way binding", () => {
@@ -211,7 +224,9 @@ describe("Element", () => {
 describe("lowercase onclick mapping is native-element-only", () => {
   it("maps onclick=fn to (click) on a native element", () => {
     const out = emit("<button onclick=handler>x</button>");
-    expect(out).toBe('<button (click)="(handler)($event)">x</button>');
+    expect(out).toBe(
+      '<button (click)="__mxOn(handler, this, $event)">x</button>',
+    );
     assertAngularParses(out);
   });
 

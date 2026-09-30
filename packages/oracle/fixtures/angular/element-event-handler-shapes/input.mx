@@ -1,0 +1,1 @@
+<button onClick=svc.cancel>a</button><button onClick=(() => f())>b</button><button onClick=(e => g(e))>c</button>

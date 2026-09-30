@@ -16,6 +16,22 @@
   recognised, and any other non-literal `standalone` value keeps the
   standalone behaviour but warns (positioned) that it cannot be determined.
 
+- **Event handlers type-check for any arity under `strictTemplates` and
+  receive exactly Marko's `(event, element)`** (`angular-event-handler-arity`,
+  decision 117): `onClick=cancel` with a 0-arg `cancel()` emitted
+  `(click)="(cancel)($event)"`, which is TS2554, though Marko 6.3.51 accepts it.
+  The template now calls a typed invoker on the component,
+  `(click)="__mxOn(cancel, this, $event)"` (`svc.cancel` emits
+  `__mxOnAt(svc, 'cancel', $event)`, evaluating the object once). Its return
+  value reaches Angular, so `false` still calls `preventDefault()`; a handler for
+  the wrong event type still fails; no `$any`. `.ng.mx` and tag modules write the
+  invoker members into the class; a page's hand-written class gets a
+  once-per-file warning with the text to paste. `.ng.mx` decides per class, from
+  the AST, which members are missing (own or inherited from a base class visible
+  in the file). A falsy handler (`cond && fn`, `null`, `undefined`, `false`) is a
+  no-op, as in Marko's `handler?.(event, target)`. Divergences from Marko, in
+  `divergences.md`: `this` is the component (Marko: the element), and the element
+  is `$event.currentTarget` typed `EventTarget | null`.
 - Attribute-tag IR v2 support for singular `ngProjectAs` projections,
   including mutually exclusive `<if>`/`<else if>`/`<else>` branches and the
   Angular `AttrTag<C>` projection marker with automatic type imports.

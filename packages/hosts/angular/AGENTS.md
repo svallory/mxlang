@@ -207,6 +207,22 @@ watcher and resolves `onIdle` off the initial build alone (for CI and tests).
 The CLI's non-`--once` path resolves on `SIGINT`/`SIGTERM` (`Ctrl-C`, exit
 0).
 
+### Event handlers (decision 117)
+
+An element event handler is emitted as a call through two `protected` invoker
+members on the component, `__mxOn(handler, receiver, $event)` and
+`__mxOnAt(object, 'key', $event)` (`EVENT_HELPER_MEMBERS`, `src/emitter.ts`), so
+a 0-arg, 1-arg or 2-arg `(event, element)` handler type-checks under
+`strictTemplates` and its return value reaches Angular. The receiver comes from
+the parsed expression (`handlerShape`), never a regex: a bare name is `this`,
+`a.b` is `a` evaluated once. The members are inlined (this package has no
+runtime): `.ng.mx` injects them into the decorated class, a tag module writes
+them into its class, and a page's own class gets a once-per-file warning
+(`EVENT_HELPER_ADVICE_CODE`) with the text to paste. `this` is the component and
+`element` is `$event.currentTarget` as `EventTarget | null` — both recorded in
+`divergences.md`. The tests check the emitted template with ngtsc
+(`test/event-handler.test.ts`, via `@mxlang/angular-checker`).
+
 ### Attribute tags (decisions 106–107)
 
 This host declares `attrTags: 2` and emits component projections only from

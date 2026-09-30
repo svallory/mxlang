@@ -22,6 +22,9 @@ export interface UsedTag {
  * `usedTags` is non-empty (the compiled template called at least one MX
  * tag it cannot import for the caller).
  *
+ * `eventMembers`, when non-empty, adds a line with the class members the
+ * template's event handlers call.
+ *
  * `style` picks the comment syntax: a page's emitted `.html` takes `<!-- -->`,
  * a tag file's emitted `.ts` module takes `//` (A3's two output kinds).
  */
@@ -30,6 +33,7 @@ export function buildHeader(
   tsFilename: string,
   usedTags: UsedTag[],
   style: "html" | "ts" = "html",
+  eventMembers: readonly string[] = [],
 ): string {
   const open = style === "ts" ? "// " : "<!-- ";
   const close = style === "ts" ? "" : " -->";
@@ -42,6 +46,12 @@ export function buildHeader(
       )
       .join(", ");
     header += `${open}Add to ${tsFilename}: ${lines}${close}\n`;
+  }
+  if (eventMembers.length > 0) {
+    // Same audience as the imports line: a page's own class must declare the
+    // event invoker members its template calls (decision 117).
+    const members = eventMembers.map((m) => `\`${m.trim()}\``).join(" and ");
+    header += `${open}Add to the component class in ${tsFilename}: ${members}${close}\n`;
   }
   return header;
 }
