@@ -60,7 +60,7 @@ map, else offset 0: a diagnostic is never dropped.
 
 ## TypeScript
 
-Uses the workspace TypeScript (6.0.3), like every other package here.
+At run time the checker uses the **project's** `typescript`, resolved from `projectDir` exactly like `@angular/compiler-cli` (`resolveTypescript`), never a copy of its own: the forked worker is handed no `ts` by tsserver, and the VSIX ships none. A project without `typescript` gets the same one-notice "unavailable" outcome as a missing compiler-cli, and the message names `typescript`. In this repo that resolves to the workspace TypeScript (6.0.3).
 
 *History:* this package originally carried its own `typescript@6` behind a shim
 (`src/ts6-shim.ts`), because the repo pinned 5.9.3 while
@@ -137,10 +137,10 @@ counted template errors. That decision is superseded.
   arrive through `getNgSemanticDiagnostics`, each exactly once; the structural
   list was probed on those cases and added nothing, so it is left out rather
   than deduplicated.
-- **Two TypeScript instances.** The checker builds compiler options and the
-  host with its own `typescript`, while `@angular/compiler-cli` loads the
-  project's. Compiler-cli 22 requires TypeScript `>=6.0 <6.1`, which keeps them
-  the same copy in practice; there is no test for a divergent one.
+- **One TypeScript instance, in practice.** The checker builds compiler
+  options and the host with the project's `typescript`, and
+  `@angular/compiler-cli` loads its own peer `typescript`. In a normal install
+  those are the same copy; a project that nests a second one is untested.
 
 ## Diagnostic offsets
 

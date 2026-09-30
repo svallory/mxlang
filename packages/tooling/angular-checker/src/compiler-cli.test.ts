@@ -12,6 +12,7 @@ import {
   CompilerCliUnavailableError,
   createAngularChecker,
   resolveCompilerCli,
+  resolveTypescript,
   SUPPORTED_COMPILER_CLI_RANGE,
 } from "./index.ts";
 
@@ -138,5 +139,52 @@ describe("createAngularChecker without a usable compiler-cli", () => {
     expect(() =>
       createAngularChecker({ projectDir: project({ version: "21.0.0" }) }),
     ).toThrow(CompilerCliUnavailableError);
+  });
+});
+
+describe("resolveTypescript", () => {
+  it("resolves from the PROJECT, not from the checker's own location", () => {
+    // The workspace's own TypeScript must not win over the project's.
+    const dir = project({ version: "9.9.9" }, "typescript");
+    const r = resolveTypescript(dir);
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") expect(r.version).toBe("9.9.9");
+  });
+
+  it("reports `missing`, naming typescript and how to fix it", () => {
+    const r = resolveTypescript(project());
+    expect(r.status).toBe("missing");
+    if (r.status !== "missing") return;
+    expect(r.message).toContain("typescript was not found from");
+    expect(r.message).toContain('"mx.angular.diagnostics": "off"');
+  });
+
+  it("reports `load-failed` when typescript throws on load", () => {
+    const r = resolveTypescript(
+      project(
+        { version: "6.0.0", main: 'throw new Error("ts boom");' },
+        "typescript",
+      ),
+    );
+    expect(r.status).toBe("load-failed");
+    if (r.status === "load-failed") expect(r.message).toContain("ts boom");
+  });
+});
+
+describe("createAngularChecker without typescript in the project", () => {
+  it("throws CompilerCliUnavailableError naming typescript, not compiler-cli", () => {
+    // A usable compiler-cli, but no typescript beside it.
+    const dir = project({ version: "22.0.0" });
+    let caught: unknown;
+    try {
+      createAngularChecker({ projectDir: dir });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(CompilerCliUnavailableError);
+    const err = caught as CompilerCliUnavailableError;
+    expect(err.status).toBe("missing");
+    expect(err.message).toContain("typescript was not found");
+    expect(err.message).not.toContain("@angular/compiler-cli was not found");
   });
 });

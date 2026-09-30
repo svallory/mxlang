@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 // Test-only introspection, deliberately not part of the package's public API.
 import { getProgramReuseCount } from "./checker.ts";
-import { createAngularChecker, typescriptVersion } from "./index.ts";
+import { createAngularChecker, resolveTypescript } from "./index.ts";
 
 /**
  * `projectDir` is this package's own directory, so `@angular/core` resolves
@@ -45,7 +45,10 @@ describe("createAngularChecker", () => {
     // @angular/compiler-cli@22.1.7 requires typescript >=6.0 <6.1. If this
     // ever reads something else, the workspace pin has drifted out of that
     // range and every diagnostic below is running on an unsupported compiler.
-    expect(typescriptVersion).toMatch(/^6\.0\./);
+    const resolved = resolveTypescript(import.meta.dirname);
+    expect(resolved.status).toBe("ok");
+    if (resolved.status !== "ok") return;
+    expect(resolved.version).toMatch(/^6\.0\./);
   });
 
   it("reports a diagnostic for a known-bad template", () => {

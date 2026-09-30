@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -83,5 +83,35 @@ describe("the real checker worker", () => {
       path.join(PROJECT_DIR, "no-such-tsconfig.json"),
     ).check(VIRTUAL, component("{{ user.name }}"));
     expect(out).toMatchObject({ kind: "unavailable", reason: "config" });
+  });
+});
+
+describe("the real checker worker without typescript in the project", () => {
+  it("answers with one unavailable outcome that names typescript", async () => {
+    // compiler-cli resolves (a fake), typescript does not.
+    const dir = mkdtempSync(path.join(tmpdir(), "mx-ngworker-nots-"));
+    dirs.push(dir);
+    writeFileSync(path.join(dir, "package.json"), "{}");
+    const cli = path.join(dir, "node_modules/@angular/compiler-cli");
+    mkdirSync(cli, { recursive: true });
+    writeFileSync(
+      path.join(cli, "package.json"),
+      '{"name":"@angular/compiler-cli","version":"22.0.0","main":"index.js"}',
+    );
+    writeFileSync(
+      path.join(cli, "index.js"),
+      "module.exports = { NgtscProgram: class {} };",
+    );
+    const w = make(dir);
+    const first = await w.check(path.join(dir, "a.component.ts"), "");
+    expect(first.kind).toBe("unavailable");
+    if (first.kind !== "unavailable") return;
+    expect(first.reason).toBe("compiler-cli");
+    expect(first.message).toContain("typescript was not found");
+    // One notice per project: a second check reports the same, no restart loop.
+    const pid = w.pid();
+    const second = await w.check(path.join(dir, "a.component.ts"), "");
+    expect(second.kind).toBe("unavailable");
+    expect(w.pid()).toBe(pid);
   });
 });

@@ -8,7 +8,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileNgMx } from "@mxlang/angular";
-import type { AngularChecker, Diagnostic } from "@mxlang/angular-checker";
+import {
+  type AngularChecker,
+  createAngularChecker,
+  type Diagnostic,
+} from "@mxlang/angular-checker";
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { reportNgDiagnostics } from "./index.ts";
@@ -201,6 +205,30 @@ describe("checkNgMxFiles", () => {
     expect(result.reports).toEqual([]);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toContain("MISSING-MESSAGE");
+    expect(result.errors[0]).toContain("2 .ng.mx files");
+  });
+
+  it("reports a project without typescript once, naming typescript, using the real checker", () => {
+    // A usable (fake) compiler-cli, but no typescript in the project: the
+    // checker resolves typescript from the project, like compiler-cli.
+    const dir = project();
+    const cli = join(dir, "node_modules/@angular/compiler-cli");
+    mkdirSync(cli, { recursive: true });
+    writeFileSync(
+      join(cli, "package.json"),
+      '{"name":"@angular/compiler-cli","version":"22.0.0","main":"index.js"}',
+    );
+    writeFileSync(
+      join(cli, "index.js"),
+      "module.exports = { NgtscProgram: class {} };",
+    );
+    const result = checkNgMxFiles(
+      [compiled(dir, "a.ng.mx"), compiled(dir, "b.ng.mx")],
+      { createChecker: createAngularChecker },
+    );
+    expect(result.reports).toEqual([]);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain("typescript was not found");
     expect(result.errors[0]).toContain("2 .ng.mx files");
   });
 

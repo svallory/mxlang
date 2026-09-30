@@ -18,11 +18,13 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { NgtscProgram } from "@angular/compiler-cli";
-import ts from "typescript";
+import type ts from "typescript";
 import {
   type CompilerCliModule,
   CompilerCliUnavailableError,
   resolveCompilerCli,
+  resolveTypescript,
+  type TypescriptModule,
 } from "./compiler-cli.ts";
 import type {
   AngularChecker,
@@ -41,6 +43,7 @@ export class TsconfigError extends Error {
   constructor(
     configPath: string,
     diagnostics: readonly (ts.Diagnostic | string)[],
+    tsModule: TypescriptModule,
   ) {
     // One line: a reader library may put a stack trace in a message, and
     // only its first line is the reason.
@@ -48,16 +51,13 @@ export class TsconfigError extends Error {
       const text =
         typeof d === "string"
           ? d
-          : ts.flattenDiagnosticMessageText(d.messageText, "\n");
+          : tsModule.flattenDiagnosticMessageText(d.messageText, "\n");
       return text.split("\n")[0];
     });
     super(`${configPath}: ${reasons.join("; ")}`);
     this.name = "TsconfigError";
   }
 }
-
-/** The TypeScript version templates are checked with. */
-export const typescriptVersion: string = ts.version;
 
 /**
  * How many times a program was constructed with a non-undefined `oldProgram`.
@@ -84,6 +84,7 @@ function toCategory(category: ts.DiagnosticCategory): DiagnosticCategory {
 
 /** Convert one TypeScript diagnostic into a plain record. */
 function toRecord(
+  tsModule: TypescriptModule,
   d: ts.Diagnostic,
   entry: string,
   fallbackSource: string,
@@ -93,7 +94,7 @@ function toRecord(
     start: d.start ?? 0,
     length: d.length ?? 0,
     code: d.code,
-    message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
+    message: tsModule.flattenDiagnosticMessageText(d.messageText, "\n"),
     category: toCategory(d.category),
     source: d.source ?? fallbackSource,
   };
@@ -105,14 +106,15 @@ function toRecord(
  * defaults.
  */
 function buildOptions(
+  tsModule: TypescriptModule,
   options: AngularCheckerOptions,
   readConfiguration: CompilerCliModule["readConfiguration"],
 ): ts.CompilerOptions {
   const base: ts.CompilerOptions = {
     strict: true,
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    target: tsModule.ScriptTarget.ES2022,
+    module: tsModule.ModuleKind.ESNext,
+    moduleResolution: tsModule.ModuleResolutionKind.Bundler,
     skipLibCheck: true,
     noEmit: true,
   } as ts.CompilerOptions;
@@ -120,9 +122,11 @@ function buildOptions(
   if (options.tsconfigPath) {
     const configPath = resolve(options.tsconfigPath);
     if (!existsSync(configPath)) {
-      throw new TsconfigError(configPath, [
-        `The specified path does not exist: '${configPath}'.`,
-      ]);
+      throw new TsconfigError(
+        configPath,
+        [`The specified path does not exist: '${configPath}'.`],
+        tsModule,
+      );
     }
     // compiler-cli's own reader, the one the Angular CLI uses: it resolves
     // `extends` (relative to each tsconfig) and merges `angularCompilerOptions`
@@ -131,7 +135,8 @@ function buildOptions(
     // TS18003 ("no inputs were found") is about the tsconfig's own file list,
     // which the checker never uses: its one root is the virtual module.
     const errors = config.errors.filter((d) => d.code !== 18003);
-    if (errors.length > 0) throw new TsconfigError(configPath, errors);
+    if (errors.length > 0)
+      throw new TsconfigError(configPath, errors, tsModule);
     // The project's options win, except `noEmit`: the checker never emits.
     // That includes `strictTemplates` (and the other strict* Angular flags):
     // they are NOT forced, so the checker reports what `ng build` reports.
@@ -160,11 +165,12 @@ function buildOptions(
  * with a known-bad template that must produce a diagnostic.
  */
 function buildHost(
+  tsModule: TypescriptModule,
   files: ReadonlyMap<string, string>,
   projectDir: string,
   options: ts.CompilerOptions,
 ): ts.CompilerHost {
-  const base = ts.createCompilerHost(options, true);
+  const base = tsModule.createCompilerHost(options, true);
   const host: ts.CompilerHost = Object.create(base);
 
   host.fileExists = (f) => files.has(f) || base.fileExists(f);
@@ -173,7 +179,7 @@ function buildHost(
     const virtual = files.get(f);
     return virtual === undefined
       ? base.getSourceFile(f, languageVersion, onError, shouldCreate)
-      : ts.createSourceFile(f, virtual, languageVersion, true);
+      : tsModule.createSourceFile(f, virtual, languageVersion, true);
   };
   host.writeFile = () => {};
   host.getCurrentDirectory = () => projectDir;
@@ -204,9 +210,14 @@ export function createAngularChecker(
   if (resolution.status !== "ok") {
     throw new CompilerCliUnavailableError(resolution);
   }
+  const tsResolution = resolveTypescript(options.projectDir);
+  if (tsResolution.status !== "ok") {
+    throw new CompilerCliUnavailableError(tsResolution);
+  }
+  const tsModule = tsResolution.module;
   const { NgtscProgram: Program } = resolution.module;
   // Fail at creation, not at the first check, if the tsconfig is unusable.
-  buildOptions(options, resolution.module.readConfiguration);
+  buildOptions(tsModule, options, resolution.module.readConfiguration);
 
   const files = new Map<string, string>();
   let program: NgtscProgram | undefined;
@@ -238,10 +249,16 @@ export function createAngularChecker(
 
       compileCount += 1;
       const compilerOptions = buildOptions(
+        tsModule,
         options,
         resolution.module.readConfiguration,
       );
-      const host = buildHost(files, options.projectDir, compilerOptions);
+      const host = buildHost(
+        tsModule,
+        files,
+        options.projectDir,
+        compilerOptions,
+      );
 
       const reusedOldProgram = program !== undefined;
       const next = new Program([virtualPath], compilerOptions, host, program);
@@ -276,8 +293,8 @@ export function createAngularChecker(
       // own diagnostics already carry "ngtsc"; plain TypeScript ones carry
       // nothing, so they are tagged "ts" here rather than left undefined.
       return [
-        ...ngRaw.map((d) => toRecord(d, virtualPath, "ngtsc")),
-        ...tsRaw.map((d) => toRecord(d, virtualPath, "ts")),
+        ...ngRaw.map((d) => toRecord(tsModule, d, virtualPath, "ngtsc")),
+        ...tsRaw.map((d) => toRecord(tsModule, d, virtualPath, "ts")),
       ];
     },
 
@@ -293,24 +310,25 @@ export function createAngularChecker(
       let target = program;
       if (target === undefined) {
         const compilerOptions = buildOptions(
+          tsModule,
           options,
           resolution.module.readConfiguration,
         );
         target = new Program(
           [],
           compilerOptions,
-          buildHost(files, options.projectDir, compilerOptions),
+          buildHost(tsModule, files, options.projectDir, compilerOptions),
         );
       }
       const seen = new Set<string>();
       return [
         ...target
           .getNgOptionDiagnostics()
-          .map((d) => toRecord(d, configPath, "ngtsc")),
+          .map((d) => toRecord(tsModule, d, configPath, "ngtsc")),
         ...target
           .getTsProgram()
           .getOptionsDiagnostics()
-          .map((d) => toRecord(d, configPath, "ts")),
+          .map((d) => toRecord(tsModule, d, configPath, "ts")),
       ]
         .map((d) => ({ ...d, file: configPath, start: 0, length: 0 }))
         .filter((d) => {

@@ -21,6 +21,15 @@ describe.skipIf(!built)("the built ng-worker bundle", () => {
     expect(code).toContain("runCheckerWorker");
   });
 
+  it("never imports typescript from its own location", () => {
+    // The forked worker gets no `ts` from tsserver and the VSIX ships none, so
+    // a bare `require("typescript")` would crash it on start. TypeScript must
+    // come from the project, via the checker's createRequire.
+    const code = readFileSync(path.join(DIST, "ng-worker.cjs"), "utf8");
+    expect(code).not.toMatch(/require\(["']typescript["']\)/);
+    expect(code).not.toMatch(/from ["']typescript["']/);
+  });
+
   it("the plugin bundle does not inline it either", () => {
     const code = readFileSync(path.join(DIST, "index.cjs"), "utf8");
     expect(code).not.toContain("class NgtscProgram");

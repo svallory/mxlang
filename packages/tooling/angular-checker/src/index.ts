@@ -6,17 +6,16 @@
  * TypeScript's object graph. See `checker.ts`.
  */
 
-import {
-  createAngularChecker,
-  TsconfigError,
-  typescriptVersion,
-} from "./checker.ts";
+import { createAngularChecker, TsconfigError } from "./checker.ts";
 import {
   type CompilerCliModule,
   type CompilerCliResolution,
   CompilerCliUnavailableError,
   resolveCompilerCli,
+  resolveTypescript,
   SUPPORTED_COMPILER_CLI_RANGE,
+  type TypescriptModule,
+  type TypescriptResolution,
 } from "./compiler-cli.ts";
 import {
   diagnoseNgMx,
@@ -57,8 +56,10 @@ export {
   type NgMxDiagnostic,
   type NgMxMapped,
   resolveCompilerCli,
+  resolveTypescript,
   runCheckerWorker,
   SUPPORTED_COMPILER_CLI_RANGE,
   TsconfigError,
-  typescriptVersion,
+  type TypescriptModule,
+  type TypescriptResolution,
 };
