@@ -1247,3 +1247,86 @@ describe("build: .ng.mx round 2 review", () => {
     expect(existsSync(join(projectDir, "src/tags/widget.html"))).toBe(false);
   });
 });
+
+describe("discovery: core's host-module extension rule", () => {
+  it("routes a `.ng.mx` file to the ng.mx module compiler", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/x.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-x", template: <p>hi</p> })',
+        "export class XComponent {}",
+      ].join("\n"),
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    const routed = result.files.find((f) => f.path.endsWith(".ng.mx"));
+    expect(routed?.kind).toBe("ngmx");
+  });
+
+  it("excludes a `.solid.mx` page from page compilation with a positioned diagnostic", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/x.solid.mx": "const x = () => <p>hi</p>;",
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    expect(result.files.some((f) => f.path.endsWith(".solid.mx"))).toBe(false);
+    expect(
+      result.diagnostics.some((d) =>
+        /`x\.solid\.mx` is a host module file, not a tag template/.test(
+          d.message,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports a positioned diagnostic for a `.ng.mx` under tags/ and never routes it", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/tags/bad.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-bad", template: <p>x</p> })',
+        "export class BadComponent {}",
+      ].join("\n"),
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    expect(result.files.some((f) => f.path.endsWith(".ng.mx"))).toBe(false);
+    const diagnostics = result.diagnostics.filter((d) =>
+      d.file.endsWith("bad.component.ng.mx"),
+    );
+    // Exactly one: the guard's duplicate blocks are gone.
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toMatch(/component module, not a tag/);
+  });
+
+  it("keeps core's own message for a `.solid.mx` under tags/", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/tags/bad.solid.mx": "const x = () => <p>x</p>;",
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    expect(result.files.some((f) => f.path.endsWith(".solid.mx"))).toBe(false);
+    expect(
+      result.diagnostics.filter((d) =>
+        /`bad\.solid\.mx` is a host module file, not a tag template; tag templates are `\.mx`/.test(
+          d.message,
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+});
