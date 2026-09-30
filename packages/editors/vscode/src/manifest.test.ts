@@ -71,4 +71,18 @@ describe("Manifest", () => {
     expect(tsPlugin.languages).toContain("ngmx");
     expect(tsPlugin.languages).toContain("astromx");
   });
+
+  it("keeps ngmx out of the language server client's document selector", () => {
+    // The LS still throws "angular host not wired" for a .ng.mx (it routes it
+    // as a page), so selecting ngmx would put that bogus error on every
+    // .ng.mx. Drop this once the LS handles .ng.mx.
+    const source = fs.readFileSync(
+      path.join(__dirname, "extension.ts"),
+      "utf-8",
+    );
+    const selector = source.slice(source.indexOf("documentSelector"));
+    const block = selector.slice(0, selector.indexOf("]"));
+    expect(block).toContain('language: "mx"');
+    expect(block).not.toMatch(/language:\s*"ngmx"/);
+  });
 });
