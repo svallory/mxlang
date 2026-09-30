@@ -34,6 +34,7 @@ import {
   emitTemplate,
   isTagModuleImport,
   kebabCase,
+  selectorOverrideOf,
   tagBasename,
   type UsedTag,
 } from "./emitter.ts";
@@ -979,11 +980,9 @@ export function compileTagModule(
         // (design note O9, RULED): the tag owns its element name, so the
         // derived default is overridable. Consumed here rather than passed
         // through, since it becomes the `@Component({ selector })` value.
-        const override = node.code.match(
-          /^export\s+const\s+selector\s*=\s*(["'])([^"']+)\1\s*;?\s*$/,
-        );
+        const override = selectorOverrideOf(node.code);
         if (override) {
-          selector = override[2] as string;
+          selector = override;
           continue;
         }
         passthroughExports.push(node.code);

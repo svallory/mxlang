@@ -1,0 +1,25 @@
+[
+  {
+    "name": "div",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "name": "liuna-badge",
+        "attributes": [],
+        "inputs": [],
+        "outputs": [],
+        "directives": [],
+        "children": [],
+        "references": [],
+        "isSelfClosing": false,
+        "isVoid": false
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

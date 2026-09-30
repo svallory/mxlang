@@ -44,9 +44,9 @@ import type { GeneratedMapping, SourceSpan } from "@mxlang/core";
  *
  * - `selector`: a component call's tag name -> `<prefix><kebab(name)>`
  *   (`deriveContext` is the prefix that was applied)
- * - `tag-module-selector`: a component call's tag name -> the callee tag
- *   module's own `export const selector`, which no rule over the caller's
- *   source can predict, so only its shape is checkable
+ * - `resolved-selector`: a component call's tag name -> the selector of the
+ *   tag module it resolved to (its own `export const selector`, else prefix +
+ *   kebab(basename)); `deriveContext` is that exact selector
  * - `event`: an attribute name -> its DOM event name (`onClick` -> `click`)
  * - `track`: a `by=` expression -> the `track` expression
  *   (`deriveContext` is the loop's row alias)
@@ -55,7 +55,7 @@ import type { GeneratedMapping, SourceSpan } from "@mxlang/core";
  */
 export type MappingDerive =
   | "selector"
-  | "tag-module-selector"
+  | "resolved-selector"
   | "event"
   | "track"
   | "define-param"
@@ -69,7 +69,8 @@ export interface AngularMapping extends GeneratedMapping {
   derive?: MappingDerive;
   /**
    * The emitter-side fact the derivation needs to be checked exactly: the
-   * selector prefix for `selector`, the row alias for `track`.
+   * selector prefix for `selector`, the resolved selector for
+   * `resolved-selector`, the row alias for `track`.
    */
   deriveContext?: string;
 }

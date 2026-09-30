@@ -93,16 +93,18 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
     expect(sel("mx-user-card", "UserCard")).toBe(false);
   });
 
-  it("accepts a tag module's explicit selector only as a custom-element name for a tag-name source", () => {
-    // `export const selector = "liuna-badge"` wins over prefix + kebab, and
-    // the string is the callee's, not derivable from the caller's source.
-    expect(isDerivedFrom("liuna-badge", "Badge", "tag-module-selector")).toBe(
-      true,
-    );
-    expect(isDerivedFrom("badge", "Badge", "tag-module-selector")).toBe(false);
-    expect(isDerivedFrom("liuna-badge", "a b", "tag-module-selector")).toBe(
-      false,
-    );
+  it("requires a resolved selector to equal the emitter's exact selector", () => {
+    const r = (g: string, ctx?: string) =>
+      isDerivedFrom(g, "Badge", "resolved-selector", ctx);
+    expect(r("liuna-badge", "liuna-badge")).toBe(true);
+    // No hyphen requirement: a hyphenless prefix or a bare override is exact.
+    expect(r("appbadge", "appbadge")).toBe(true);
+    expect(r("Badge", "Badge")).toBe(true);
+    // A wrong string is rejected, hyphenated or not.
+    expect(r("mx-badge", "liuna-badge")).toBe(false);
+    expect(r("other-thing", "liuna-badge")).toBe(false);
+    // No carried selector: cannot be checked, reject.
+    expect(r("liuna-badge")).toBe(false);
     expect(isDerivedFrom("liuna-badge", "Badge")).toBe(false);
   });
 

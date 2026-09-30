@@ -42,6 +42,27 @@ function compileTag(
   };
 }
 
+/** `compileTag`, keeping the mappings `compileTagModule` reports. */
+function compileTagWithMappings(
+  source: string,
+  filename: string,
+  siblings: Record<string, string>,
+  tagSelectorPrefix?: string,
+) {
+  const dir = mkdtempSync(join(tmpdir(), "mx-angular-tag-"));
+  mkdirSync(join(dir, "tags"), { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
+  for (const [name, content] of Object.entries(siblings)) {
+    writeFileSync(join(dir, "tags", name), content);
+  }
+  const path = join(dir, "tags", filename);
+  writeFileSync(path, source);
+  return compileTagModule(source, path, {
+    customTags: getCustomTags(path) as never,
+    tagSelectorPrefix,
+  });
+}
+
 /** The `template: "…"` string of an emitted module, unescaped. */
 function templateOf(code: string): string {
   const match = code.match(/^ {2}template: (".*"),$/m);
@@ -626,6 +647,33 @@ describe("compileTagModule: authored tag import", () => {
     expect(code.match(/import Badge from/g)).toHaveLength(1);
     expect(code).toContain('import Badge from "./badge";');
     expect(code).toContain("imports: [Badge]");
+  });
+});
+
+describe("compileTagModule: authored import of a tag with an exported selector", () => {
+  it("emits the override and carries it as the mapping's exact deriveContext", () => {
+    const { code, mappings } = compileTagWithMappings(
+      'import Badge from "./badge.mx";\n<div><Badge/></div>\n',
+      "card.mx",
+      { "badge.mx": 'export const selector = "liuna-badge";\n<b>!</b>\n' },
+    );
+
+    expect(templateOf(code)).toBe("<div><liuna-badge></liuna-badge></div>");
+    const mapping = mappings.find((m) => m.derive === "resolved-selector");
+    expect(mapping?.deriveContext).toBe("liuna-badge");
+  });
+
+  it("carries prefix + kebab(basename) when the callee has no override", () => {
+    const { mappings } = compileTagWithMappings(
+      'import Badge from "./badge.mx";\n<div><Badge/></div>\n',
+      "card.mx",
+      { "badge.mx": "<b>!</b>\n" },
+      "app",
+    );
+
+    expect(
+      mappings.find((m) => m.derive === "resolved-selector")?.deriveContext,
+    ).toBe("appbadge");
   });
 });
 

@@ -5,6 +5,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import {
   type Attr,
   type AttributeTag,
@@ -646,6 +647,29 @@ export function tagBasename(resolvedPath: string): string {
 const TAG_SELECTOR_PREFIX = "mx-";
 
 /**
+ * A tag author's `export const selector = "…"` value, or undefined.
+ *
+ * The one rule both sides share: `compileTagModule` reads it from each hoisted
+ * statement to name the component, and a call site reads it from the callee's
+ * source to name the element. `code` may be one statement or a whole file.
+ */
+export function selectorOverrideOf(code: string): string | undefined {
+  return code.match(
+    /^export\s+const\s+selector\s*=\s*(["'])([^"']+)\1\s*;?\s*$/m,
+  )?.[2];
+}
+
+/** `selectorOverrideOf` over a tag file on disk; unreadable means no override. */
+function readSelectorOverride(resolvedPath: string | undefined) {
+  if (!resolvedPath) return undefined;
+  try {
+    return selectorOverrideOf(readFileSync(resolvedPath, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The module specifier of an authored `import` statement, or undefined.
  *
  * A synthesized import carries `specifier` structurally; an authored one
@@ -959,7 +983,15 @@ class AngularEmitter implements Emitter<string> {
       const specifier = specifierSource.replace(/\.mx$/, "");
       for (const binding of node.bindings) {
         this.tagModules.set(binding, {
-          selector: `${selectorPrefix}${kebabCase(basename)}`,
+          // The callee's own `export const selector` wins over the derived
+          // default, exactly as it does for the component it declares.
+          selector:
+            readSelectorOverride(
+              node.resolvedPath ??
+                (specifierSource.startsWith(".")
+                  ? resolve(dirname(filename), specifierSource)
+                  : undefined),
+            ) ?? `${selectorPrefix}${kebabCase(basename)}`,
           // The same derivation the called tag's own module used to name its
           // exported class, so the import this warning tells the author to
           // write binds the name that module actually exports.
@@ -1213,10 +1245,16 @@ class AngularEmitter implements Emitter<string> {
     // `mx-user-card`), so it maps whole-to-whole back to the name the author
     // wrote — the spellings differ, which is exactly what the mapping is for.
     this.out.write("<");
-    // A callee tag module's own `export const selector` is not derived from
-    // the name at the call site; only the prefix + kebab fallback is.
-    if (tagModule?.selector) {
-      this.out.writeMapped(selector, node.nameSpan, "tag-module-selector");
+    // A resolved tag module's selector is exact: its own `export const
+    // selector`, else prefix + kebab(file basename). Either way it is a fact
+    // the emitter holds, so it rides as `deriveContext` for an exact check.
+    if (tagModule) {
+      this.out.writeMapped(
+        selector,
+        node.nameSpan,
+        "resolved-selector",
+        selector,
+      );
     } else {
       this.out.writeMapped(
         selector,

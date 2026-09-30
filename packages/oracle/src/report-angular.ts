@@ -302,14 +302,11 @@ export function isDerivedFrom(
       // that does not carry it cannot be checked exactly.
       return deriveContext !== undefined && generated === deriveContext + kebab;
     }
-    // A callee tag module's own `export const selector`: not derivable from
-    // the caller's source, so check the alignment (the span holds a tag name)
-    // and that the emitted text is a valid custom-element name.
-    case "tag-module-selector":
-      return (
-        /^[A-Za-z_$][\w$-]*$/.test(source) &&
-        /^[a-z][\w.]*(-[\w.]+)+$/.test(generated)
-      );
+    // A resolved tag module's selector: the emitter knows the exact string
+    // (its own `export const selector`, else prefix + kebab(basename)) and
+    // carries it, so the check is equality — no shape heuristic.
+    case "resolved-selector":
+      return deriveContext !== undefined && generated === deriveContext;
     // A DOM event name, checked against the actual derivation — never waved
     // through on the source's shape alone. `onClick` -> `click`: lowercased
     // exactly as written, with NO aliases (decision 101 (c): `onDoubleClick`

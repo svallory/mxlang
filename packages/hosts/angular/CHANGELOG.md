@@ -43,6 +43,17 @@
   no-op, as in Marko's `handler?.(event, target)`. Divergences from Marko, in
   `divergences.md`: `this` is the component (Marko: the element), and the element
   is `$event.currentTarget` typed `EventTarget | null`.
+||||||| parent of 8074c923 (fix(angular): honor a tag's exported selector at call sites)
+
+- **A call site honors a tag's exported `selector`.** `tags/badge.mx` with
+  `export const selector = "liuna-badge"` is now emitted as
+  `<liuna-badge></liuna-badge>` where it is called (discovered tag or authored
+  `.mx` import), instead of `<mx-badge>`; a tag without an override keeps
+  `<prefix><kebab(basename)>`. The `tag-module-selector` mapping kind is now
+  `resolved-selector` and carries the exact selector as `deriveContext`, so the
+  oracle check is `generated === deriveContext` (no hyphen heuristic: a
+  hyphenless `tagSelectorPrefix` or override is accepted, a wrong string is not).
+
 - Attribute-tag IR v2 support for singular `ngProjectAs` projections,
   including mutually exclusive `<if>`/`<else if>`/`<else>` branches and the
   Angular `AttrTag<C>` projection marker with automatic type imports.

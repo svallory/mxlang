@@ -63,7 +63,8 @@ None. The two A1 rows this file used to list as absent — a tag's own
 (`tag-content`, `tag-named-slot`), along with the rest of task 1.7's surface:
 inputs (`tag-inputs`), the selector override (`tag-selector-override`),
 module-level statements (`tag-static-import`), and a page calling a
-discovered tag (`page-calls-discovered-tag`).
+discovered tag (`page-calls-discovered-tag`), and one whose callee exports
+a `selector` (`page-calls-tag-selector-override`).
 
 ## `for-in` iteration order
 

@@ -19,6 +19,7 @@ import { assertAngularParses } from "./helpers.ts";
 function compilePage(
   page: string,
   tags: Record<string, string> = { "icon.mx": "<i>*</i>\n" },
+  options: { tagSelectorPrefix?: string } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), "mx-angular-call-"));
   mkdirSync(join(dir, "tags"), { recursive: true });
@@ -28,7 +29,10 @@ function compilePage(
   }
   const path = join(dir, "page.mx");
   writeFileSync(path, page);
-  return compile(page, path, { customTags: getCustomTags(path) as never });
+  return compile(page, path, {
+    customTags: getCustomTags(path) as never,
+    ...options,
+  });
 }
 
 describe("calling a discovered tag from a page", () => {
@@ -96,5 +100,39 @@ describe("calling a discovered tag from a page", () => {
     ).toThrow(
       "array attribute tag `<@item>` isn't supported by @mxlang/angular",
     );
+  });
+
+  describe("a tag's exported `selector` at the call site", () => {
+    const badge = (selector: string) =>
+      `export const selector = ${JSON.stringify(selector)};\n<b>!</b>\n`;
+
+    it("emits the override for the element name and the closing tag", () => {
+      const result = compilePage("<div><badge/><badge>x</badge></div>\n", {
+        "badge.mx": badge("liuna-badge"),
+      });
+      expect(result.code).toBe(
+        "<div><liuna-badge></liuna-badge><liuna-badge>x</liuna-badge></div>",
+      );
+      assertAngularParses(result.code);
+    });
+
+    it("keeps prefix + kebab(basename) for a tag without an override, honoring a custom prefix", () => {
+      const tags = { "badge.mx": "<b>!</b>\n", "user-card.mx": "<i/>\n" };
+      expect(
+        compilePage("<user-card/>\n", tags, { tagSelectorPrefix: "acme-" })
+          .code,
+      ).toBe("<acme-user-card></acme-user-card>");
+      expect(compilePage("<badge/>\n", tags).code).toBe(
+        "<mx-badge></mx-badge>",
+      );
+    });
+
+    it("lets the override beat a custom prefix, and permits a hyphenless prefix", () => {
+      const tags = { "badge.mx": badge("liuna-badge"), "icon.mx": "<i/>\n" };
+      expect(
+        compilePage("<badge/><icon/>\n", tags, { tagSelectorPrefix: "app" })
+          .code,
+      ).toBe("<liuna-badge></liuna-badge><appicon></appicon>");
+    });
   });
 });
