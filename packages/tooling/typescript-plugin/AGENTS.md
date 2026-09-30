@@ -52,6 +52,10 @@ entry.
   `readAngularConfig`, which throws on a bad config: the plugin reports that as
   an error diagnostic at offset 0 and emits empty virtual code, never defaults.
   The host-policy "angular not wired" guard still covers Angular `.mx` pages.
+  **Known limitations (fixed with the Angular template diagnostics work):** a
+  config error stays until the `.ng.mx` is next edited, and the plugin tracks no
+  `dependencies` for `.ng.mx`, so an edit to `package.json` or to a called tag
+  file takes effect when the `.ng.mx` is next edited or reopened.
 
 Four facts worth knowing before editing either:
 

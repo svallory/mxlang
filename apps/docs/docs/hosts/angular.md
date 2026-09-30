@@ -529,6 +529,10 @@ TypeScript. Checking those needs Angular's own compiler and lands separately
 as Angular template diagnostics. The language server does not handle
 `.ng.mx` yet.
 
+**Known limitations.** Edits to `package.json` (including `mx.angular`) or to a
+called tag file take effect in the editor when the `.ng.mx` is next edited or
+reopened, not immediately: a config error also stays reported until then.
+
 ## Errors
 
 Exit code `0` on a clean build, `1` on any error. Every message is
