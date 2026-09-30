@@ -139,7 +139,11 @@ describe("mx(source, options)", () => {
     }
     const hot2 = mx(hotSource);
     expect(hot2).toBe(hot1);
-  });
+    // 261 real Babel compiles (the 256 cap makes fewer impossible): ~0.5 s
+    // alone, but 4-6 s in the root run, where ten projects share the CPU —
+    // past vitest's 5 s default. Scoped, not global: the work is CPU-bound and
+    // irreducible, so only the ceiling moves.
+  }, 30_000);
 });
 
 describe("loadMx(path)", () => {

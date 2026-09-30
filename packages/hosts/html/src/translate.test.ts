@@ -36,13 +36,25 @@ async function renderModules(
     for (const [name, source] of Object.entries(sources)) {
       writeFileSync(join(dir, name), src(source));
     }
-    writeFileSync(
-      join(dir, "runtime.ts"),
-      [
-        `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/index.ts", import.meta.url)))};`,
-        `export type { AttrTag } from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))};`,
-      ].join("\n"),
-    );
+    const writeRuntime = (lean: boolean) =>
+      writeFileSync(
+        join(dir, "runtime.ts"),
+        (lean
+          ? [
+              // tsc only needs signatures. Re-exporting from the real entry
+              // points makes every strict run typecheck the whole host + core
+              // graph (~220 files): ~3x the wall time, past vitest's 5 s
+              // default under load. `fixtures/lean-runtime.check.ts` guards
+              // the stub against drift from the real names.
+              `export * from ${JSON.stringify(fileURLToPath(new URL("./fixtures/lean-runtime.ts", import.meta.url)))};`,
+            ]
+          : [
+              `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/index.ts", import.meta.url)))};`,
+              `export type { AttrTag } from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))};`,
+            ]
+        ).join("\n"),
+      );
+    writeRuntime(strictTypecheck);
     for (const [name, source] of Object.entries(sources)) {
       if (!name.endsWith(".mx")) continue;
       const path = join(dir, name);
@@ -89,6 +101,7 @@ async function renderModules(
         );
       }
     }
+    if (strictTypecheck) writeRuntime(false);
     const module = (await import(
       `${pathToFileURL(join(dir, entry.replace(/\.mx$/, ".ts"))).href}?t=${Date.now()}`
     )) as { default: (value: unknown) => string };
@@ -637,7 +650,10 @@ describe("attribute-tag v2 values (executed)", () => {
       true,
     );
     expect(html).toBe("<p>0:!</p><p>7:!</p>");
-  });
+    // A tsc subprocess over ~200 files (mostly @types/node): ~1 s alone,
+    // 1.4-2.3 s in the root run after the lean runtime stub, but the sibling
+    // tsc-backed tests in other packages reach 4-5 s under load. Scoped headroom.
+  }, 15_000);
 
   it("passes an empty array when a declared repeated tag has no occurrences", async () => {
     const html = await renderModules(
