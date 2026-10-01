@@ -174,7 +174,10 @@ describe("resolveTypescript", () => {
 
 describe("resolveTypescript beside the resolved compiler-cli", () => {
   /** A project whose compiler-cli is a symlink to a package with its own typescript. */
-  function split(projectTs?: string): { dir: string; cliJson: string } {
+  function split(
+    projectTs?: string,
+    sources: { cli?: string; ts?: string; projectTs?: string } = {},
+  ): { dir: string; cliJson: string } {
     const other = realpathSync(mkdtempSync(path.join(tmpdir(), "mx-ngts-")));
     created.push(other);
     const cli = path.join(other, "node_modules/@angular/compiler-cli");
@@ -183,17 +186,23 @@ describe("resolveTypescript beside the resolved compiler-cli", () => {
       path.join(cli, "package.json"),
       '{"name":"@angular/compiler-cli","version":"22.0.0","main":"index.js"}',
     );
-    writeFileSync(path.join(cli, "index.js"), "module.exports = {};");
+    writeFileSync(
+      path.join(cli, "index.js"),
+      sources.cli ?? "module.exports = {};",
+    );
     const ts = path.join(other, "node_modules/typescript");
     mkdirSync(ts, { recursive: true });
     writeFileSync(
       path.join(ts, "package.json"),
       '{"name":"typescript","version":"8.8.8","main":"index.js"}',
     );
-    writeFileSync(path.join(ts, "index.js"), "module.exports = {};");
+    writeFileSync(
+      path.join(ts, "index.js"),
+      sources.ts ?? "module.exports = {};",
+    );
 
     const dir = project(
-      projectTs ? { version: projectTs } : undefined,
+      projectTs ? { version: projectTs, main: sources.projectTs } : undefined,
       "typescript",
     );
     mkdirSync(path.join(dir, "node_modules/@angular"), { recursive: true });
@@ -231,6 +240,48 @@ describe("resolveTypescript beside the resolved compiler-cli", () => {
     const r = resolveTypescript(dir, cliJson);
     expect(r.status).toBe("ok");
     if (r.status === "ok") expect(r.version).toBe("7.7.7");
+  });
+
+  it("createAngularChecker builds its options with the compiler-cli's typescript, not the project's", () => {
+    // The production call site (checker.ts) must hand resolveTypescript the
+    // compiler-cli's package.json. Each fake typescript marks the options the
+    // checker builds with its own `ScriptTarget.ES2022`; a fake compiler-cli
+    // records the options it is given. Reverting the call to
+    // `resolveTypescript(projectDir)` makes the project's 9999 win.
+    const fakeTs = (marker: number) =>
+      `module.exports = {
+        version: "0.0.0",
+        ScriptTarget: { ES2022: ${marker} },
+        ModuleKind: { ESNext: 1 },
+        ModuleResolutionKind: { Bundler: 2 },
+        createCompilerHost: () => ({ fileExists() {}, readFile() {}, getSourceFile() {} }),
+        createSourceFile() {},
+        flattenDiagnosticMessageText: String,
+      };`;
+    const cli = `module.exports = {
+      readConfiguration() {},
+      NgtscProgram: class {
+        constructor(_roots, options) { globalThis.__mxSeenOptions = options; }
+        getNgOptionDiagnostics() { return []; }
+        getTsProgram() { return { getOptionsDiagnostics() { return []; } }; }
+      },
+    };`;
+    const { dir } = split("9.9.9", {
+      cli,
+      ts: fakeTs(8888),
+      projectTs: fakeTs(9999),
+    });
+    const g = globalThis as { __mxSeenOptions?: { target?: number } };
+    const seenTarget = () => g.__mxSeenOptions?.target;
+    delete g.__mxSeenOptions;
+    const checker = createAngularChecker({ projectDir: dir });
+    try {
+      checker.configDiagnostics();
+      expect(seenTarget()).toBe(8888);
+    } finally {
+      checker.dispose();
+      delete g.__mxSeenOptions;
+    }
   });
 });
 
