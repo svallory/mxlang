@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { diagnoseDocument } from "../../language-server/src/diagnose.ts";
 import { runInProcess } from "./in-process.ts";
@@ -41,6 +42,19 @@ const { resolveHostPolicyDetailed } = (await import(
       : never;
   };
 };
+
+/**
+ * The compiler's code frame: everything from the `> 1 |` marker on, without
+ * colour. CI colourises the frame (agent shells inject NO_COLOR, CI does not),
+ * which hides the marker from a raw `indexOf`; strip ANSI first, and fail
+ * loudly when the marker is missing rather than slicing from -1.
+ */
+function frameOf(text: string): string {
+  const plain = stripVTControlCharacters(text);
+  const at = plain.indexOf("> 1 |");
+  expect(at, `no "> 1 |" code frame in: ${plain}`).toBeGreaterThanOrEqual(0);
+  return plain.slice(at);
+}
 
 const fixtures = join(import.meta.dirname, "fixtures");
 
@@ -87,14 +101,26 @@ describe("unknown mx.host: language server and mx-tsc agree", () => {
     expect(lsError).toBeDefined();
     const start = lsError?.range.start;
     const at = `page.mx(${(start?.line ?? -1) + 1},${(start?.character ?? -1) + 1})`;
-    const tscLine = tsc.stdout.split("\n").find((l) => l.includes(at));
-    expect(tscLine, tsc.stdout).toContain("error TS80001");
+    const atPretty = `page.mx:${(start?.line ?? -1) + 1}:${(start?.character ?? -1) + 1}`;
+    const plainTsc = stripVTControlCharacters(tsc.stdout);
+    const tscLine = plainTsc
+      .split("\n")
+      .find((l) => l.includes(at) || l.includes(atPretty));
+    expect(tscLine, plainTsc).toContain("error TS80001");
 
     // Same message: both carry the compiler's code frame (the part after the
     // leading `at <path>:<line>:<col>` line, whose path form differs).
-    const frame = (text: string) => text.slice(text.indexOf("> 1 |"));
-    const lsFrame = frame(String(lsError?.message ?? ""));
+    const lsFrame = frameOf(String(lsError?.message ?? ""));
     expect(lsFrame).toContain('Missing ending "div" tag');
-    expect(frame(tsc.stdout)).toContain(lsFrame.trimEnd());
+    expect(frameOf(tsc.stdout)).toContain(lsFrame.trimEnd());
+  });
+});
+
+describe("frameOf", () => {
+  it("finds the frame in a colourised message, as CI renders it", () => {
+    const coloured = "\n    at x.mx:1:1\n    \u001b[31m>\u001b[0m 1 |";
+    // A raw `indexOf("> 1 |")` misses this: the colour splits the marker.
+    expect(coloured.indexOf("> 1 |")).toBe(-1);
+    expect(frameOf(`${coloured} <div>`)).toBe("> 1 | <div>");
   });
 });
