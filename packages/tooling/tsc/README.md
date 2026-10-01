@@ -64,8 +64,12 @@ solution-style `tsconfig.json` (`"files": []`) with a non-composite
 sources are replaced by its output `.d.ts`, so its `.ng.mx` is owned by that
 project and checked under its tsconfig. If two projects' programs both hold a
 file (overlapping `include`s), the first in build order (dependencies first)
-checks it, once. A project tsc rebuilds reuses the
-compile the type-check made, so its diagnostics are not repeated. `--clean`
+checks it, once. That ownership rule relies on claiming dependencies first: a
+program can hold a referenced project's `.ng.mx` as a source file (for example
+when its output `.d.ts` re-imports it), so the set a program compiles may
+include a referenced lib's file, and the dependency must claim it before the
+referencing project does. Compile diagnostics from the extra programs are
+de-duplicated against the main run's. `--clean`
 checks nothing; `--dry` builds nothing and prints, per project, that a build would check its
 `.ng.mx` files; `-b --help` and a `-b` command line tsc
 rejects run nothing; `--watch` runs the pass once, after the

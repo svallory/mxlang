@@ -142,11 +142,13 @@ function compileProjectNgMx(
  */
 function collectBuildGroups(
   astro: boolean,
-  projects: readonly { tsconfigPath: string }[],
+  projects: readonly { tsconfigPath: string; hasFiles: boolean }[],
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
 ): { tsconfigPath: string; entries: CompiledNgMx[] }[] {
   const claimed = new Set<string>();
-  return projects.map(({ tsconfigPath }) => {
+  return projects.map(({ tsconfigPath, hasFiles }) => {
+    // No root files, no program (a solution root): nothing to compile.
+    if (!hasFiles) return { tsconfigPath, entries: [] };
     const entries = compileProjectNgMx(
       astro,
       tsconfigPath,

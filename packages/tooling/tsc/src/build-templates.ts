@@ -49,6 +49,12 @@ export function parseBuildMode(argv: readonly string[]): BuildMode | undefined {
 
 export interface BuildProject {
   tsconfigPath: string;
+  /**
+   * Whether the project selects any root file. A solution root (`"files": []`
+   * plus `references`) selects none: it has no program worth creating, only
+   * the projects it references do.
+   */
+  hasFiles: boolean;
 }
 
 /**
@@ -77,13 +83,24 @@ export function resolveBuildProjects(
       dirname(tsconfigPath),
       undefined,
       tsconfigPath,
+      undefined,
+      // The extension `runTsc` registers, so a project whose files are all
+      // `.mx` still counts as having root files (`Deferred`: without a script
+      // kind the `include` glob ignores `.mx`).
+      [
+        {
+          extension: ".mx",
+          isMixedContent: false,
+          scriptKind: ts.ScriptKind.Deferred,
+        },
+      ],
     );
     // References first: a project follows everything it depends on, which is
     // tsc's own build order and decides who owns a file two programs both hold.
     for (const reference of parsed.projectReferences ?? []) {
       visit(ts.resolveProjectReferencePath(reference));
     }
-    projects.push({ tsconfigPath });
+    projects.push({ tsconfigPath, hasFiles: parsed.fileNames.length > 0 });
   };
   for (const root of resolveProjectTsconfigs(argv, cwd)) visit(root);
   return projects;
