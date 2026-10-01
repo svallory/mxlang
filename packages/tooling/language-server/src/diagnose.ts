@@ -6,11 +6,13 @@
  * tested directly, as the brief requires, without spawning a process.
  */
 
+import { basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   type CustomTag,
   getCustomTags,
   type HostPolicy,
+  hostModuleSegment,
   type MxWarning,
   type ScanDiagnostic,
   scanCached,
@@ -159,9 +161,6 @@ function documentPath(uri: string): string {
   }
 }
 
-/** Wording of core's unknown-`mx.host` host-policy diagnostic (`host-policy.ts`). */
-const UNKNOWN_HOST = /^unknown mx\.host /;
-
 export function diagnoseDocument(
   text: string,
   uri: string,
@@ -204,14 +203,6 @@ export function diagnoseDocument(
   // the scan's configuration warnings above, and routed per file below, since
   // one raised inside a template belongs to that template.
   const warnings: MxWarning[] = [];
-
-  // An unknown `mx.host` resolves to a *guessed* host (the @mxlang
-  // dependencies' or the html default). Compiling under it reports errors
-  // that belong to a host the author did not choose (audit a24), so the
-  // warning is all this document gets until the host is fixed.
-  if (hostPolicyDiagnostics?.some((d) => UNKNOWN_HOST.test(d.message))) {
-    return scanWarnings;
-  }
 
   try {
     // Tag discovery is filesystem work, so it needs a path. `startServer`
@@ -281,13 +272,18 @@ export function diagnoseDocument(
       const result = compileHonoMx(text, uri, { customTags, warnings });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
-    } else if (hostPolicy.host === "angular") {
-      // Deliberately silent. Angular-host documents are checked by `mx-tsc`
-      // and the TS plugin (template diagnostics need `@angular/compiler-cli`,
-      // which the server never loads). Diagnosing them under html's
-      // declarations would be wrong policy, and reporting "not wired" as an
-      // Error is a false positive on every file. Host-policy warnings from
-      // the resolution still reach the author via `scanWarnings` below.
+    } else if (
+      hostModuleSegment(basename(path)) === "ng" ||
+      hostPolicy.host === "angular"
+    ) {
+      // Deliberately silent. Routed by file kind first, as `mx-tsc` does: a
+      // `.ng.mx` is an Angular host module whatever `mx.host` says (an unknown
+      // host resolves to a derived or default one), so it never reaches the
+      // html compile. Angular documents are checked by `mx-tsc` and the TS
+      // plugin (template diagnostics need `@angular/compiler-cli`, which the
+      // server never loads); reporting "not wired" as an Error was a false
+      // positive on every file. Host-policy warnings from the resolution
+      // still reach the author via `scanWarnings` below.
     } else {
       // Through `@mxlang/html`'s own front door, not `compileSource`
       // directly: this registers the host taglib and compiles via the IR.

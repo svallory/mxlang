@@ -11,7 +11,7 @@
 ### Fixed
 
 - **No false "angular host is not wired" Error** (ls-angular-not-wired): `diagnoseDocument` no longer throws a severity-1 error at 1:1 on every Angular-host document, clean ones included (25 of 26 audit angular cases). Angular-host documents now get no diagnostics from the server; `mx-tsc` and the TypeScript plugin own them (host-policy warnings are still published). Wiring `@mxlang/angular` into the server is tracked as `ls-angular-host-wiring`.
-- **An unknown `mx.host` no longer compiles the document under a guessed host** (audit a24: an `.ng.mx` under a typo'd host got html's `@tags must be nested within another element`). The unknown-host warning is published and nothing else.
+- **A `.ng.mx` never reaches the html compile** (audit a24: an `.ng.mx` under a typo'd `mx.host`, resolved to the html default, got html's `@tags must be nested within another element`). Routed by file kind first (`hostModuleSegment`), as `mx-tsc` does. An unknown `mx.host` on an `.mx` page compiles under the host the resolver returns plus the warning, matching `mx-tsc` and vite (parity test in `@mxlang/tsc`).
 
 - **The tarball ships only `dist/` and the README** (pkg-types-g10): `tsconfig.build.json` excludes `src/**/fixtures/**` (`dist/fixtures/…/stamp.tag.d.ts.map` is gone) and turns `declarationMap` off.
 

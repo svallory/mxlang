@@ -59,13 +59,15 @@ compiles, so wiring it needs its own diagnose path, not just a `Policy`
 object. `resolveStrict` falls back to the translator's own default rather
 than throwing, keeping the rest of a mixed workspace diagnosed.
 
-**Angular and unknown hosts.** `diagnoseDocument` returns no compile
-diagnostics for `host: "angular"` (never an Error, never loads
-`@angular/compiler-cli`; `mx-tsc` owns those) and, when
-`hostPolicyDiagnostics` holds core's `unknown mx.host …` warning (matched by
-message prefix, since core exposes no code), returns only the warnings
-without compiling under the guessed host. Real Angular wiring is TODO
-`ls-angular-host-wiring`.
+**Angular and unknown hosts.** `diagnoseDocument` routes by file kind before
+host policy: a `.ng.mx` (`hostModuleSegment(basename) === "ng"`, core's helper,
+as `mx-tsc` does) and any `host: "angular"` document return no compile
+diagnostics (never an Error, never loads `@angular/compiler-cli`; `mx-tsc`
+owns those), so a `.ng.mx` never reaches the html compile even under an
+unknown `mx.host` that resolved to the html default. An unknown host on an
+`.mx` page compiles under the resolver's host plus the warning; the parity
+test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`. Real Angular
+wiring is TODO `ls-angular-host-wiring`.
 
 **Zed finding** (brief item 4): there is **no zero-Rust path** to register a
 second `[language_servers.*]` entry in Zed's `extension.toml`. Reading

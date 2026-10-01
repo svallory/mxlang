@@ -543,9 +543,10 @@ describe("an unknown mx.host", () => {
     column: 13,
   };
 
-  it("returns the warning and does not compile under a guessed host", () => {
+  it("a24's shape: an .ng.mx under a derived html host gets the warning only", () => {
     // `@tags` outside an element is an html-compile error (the false error
-    // the audit saw for a24); it must not surface.
+    // the audit saw for a24); a `.ng.mx` is routed by file kind and never
+    // reaches the html compile, whatever host the resolver derived.
     const diagnostics = diagnoseDocument(
       "<@tags/>\n",
       "file:///app/x.component.ng.mx",
@@ -562,7 +563,7 @@ describe("an unknown mx.host", () => {
     expect(diagnostics[0]?.message).toContain('unknown mx.host "angualr"');
   });
 
-  it("compiles normally when the host-policy warning is something else", () => {
+  it("h23's shape: an .mx page compiles under the derived host, plus the warning", () => {
     const diagnostics = diagnoseDocument(
       "<div>\n",
       "file:///app/page.mx",
@@ -572,11 +573,12 @@ describe("an unknown mx.host", () => {
       undefined,
       undefined,
       undefined,
-      [{ ...unknownHost, message: "package.json could not be parsed as JSON" }],
+      [unknownHost],
     );
-    expect(
-      diagnostics.some((d) => d.severity === DiagnosticSeverity.Error),
-    ).toBe(true);
+    expect(diagnostics.map((d) => d.severity)).toEqual([
+      DiagnosticSeverity.Warning,
+      DiagnosticSeverity.Error,
+    ]);
   });
 });
 

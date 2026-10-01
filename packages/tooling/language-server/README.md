@@ -12,8 +12,11 @@ successful compile clears any previous diagnostics for that file.
   server.** `mx-tsc` and the TypeScript plugin report them (template
   diagnostics need `@angular/compiler-cli`, which the server never loads). Host-policy warnings
   still appear.
-- **An unknown `mx.host`** publishes only the host-policy warning; the
-  document is not compiled under a guessed host.
+- **A `.ng.mx` file is never compiled as html**, whatever `mx.host` resolves
+  to (routed by file kind, as `mx-tsc` does).
+- **An unknown `mx.host`** publishes the host-policy warning; an `.mx` page
+  compiles under the host the resolver derives (the `@mxlang` dependency's, or
+  the html default), the same as `mx-tsc` and vite.
 - `.mx` compiles as a whole-file template under the resolved host
   policy. The HTML and Astro hosts use `@mxlang/html`; a file routed to
   `host: "solid"` uses `@mxlang/solid`'s fixed profile, where stateful Marko
