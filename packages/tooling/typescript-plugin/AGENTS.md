@@ -113,16 +113,15 @@ entry.
   (`packages/tooling/tsc/src/build-templates.ts`): an up-to-date project never
   gets a program, so its plugin never compiles its `.ng.mx`, and tsc's build
   info knows nothing about templates. `resolveBuildProjects` walks the named
-  projects and their `references`, takes each project's `.ng.mx` from its
-  parsed `include`/`files` (the `.mx` extra extension needs
-  `scriptKind: Deferred`, or the glob matches nothing) **and its import
-  closure** (`ngMxImportClosure`: `preProcessFile` + `resolveModuleName` under
-  the project's options; the Angular CLI default layout matches no `.ng.mx` by
-  glob), and
-  `collectBuildTemplateInputs` reuses tsc's compile where there is one and
-  compiles the rest with a fresh plugin (no program). Each file is checked once,
-  under its project's tsconfig. `--clean` skips the pass; `--dry` prints what it
-  would check. Never gate this on tsc's up-to-date state. Fixtures under
+  projects and their `references` (dependencies first, tsc's build order);
+  `compileProjectNgMx` (in `index.ts`) runs the real patched `tsc` again per
+  project as `-p <tsconfig> --listFilesOnly` (same plugins, resolver and
+  options as non-build mode; tsc's own output swallowed) and takes the `.ng.mx`
+  compiles that program made. The program is the source of truth: do not
+  re-implement tsc's file selection or module resolution (a hand-written import
+  walk missed `paths` aliases and crossed project references). A file is checked
+  once, under the first project in build order whose program holds it.
+  `--clean` skips the pass; `--dry` prints what it would check. Never gate this on tsc's up-to-date state. Fixtures under
   `packages/tooling/tsc/src/fixtures` find compiler-cli by walking up to
   `packages/tooling/tsc/node_modules`, so tests for a *missing* or
   *out-of-range* compiler-cli build their project under the OS temp dir. The

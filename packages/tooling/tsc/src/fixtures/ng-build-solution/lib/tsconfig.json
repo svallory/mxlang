@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./out",
+    "strict": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "jsx": "preserve",
+    "types": [],
+    "paths": { "@lib/*": ["./src/*"] }
+  },
+  "include": ["src/**/*.ts"]
+}

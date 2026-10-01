@@ -1,0 +1,6 @@
+{
+  "name": "ng-solution-app",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

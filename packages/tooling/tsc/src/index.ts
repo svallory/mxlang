@@ -12,11 +12,7 @@ import {
 } from "@mxlang/typescript-plugin";
 import type { LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
-import {
-  collectBuildTemplateInputs,
-  parseBuildMode,
-  resolveBuildProjects,
-} from "./build-templates.ts";
+import { parseBuildMode, resolveBuildProjects } from "./build-templates.ts";
 import {
   checkNgMxGroups,
   checkNgMxProjects,
@@ -51,21 +47,15 @@ export function resolveTscPath(): string {
 }
 
 /**
- * Runs `tsc` with `.solid.mx` files compiled as their lowered TSX.
- *
- * This is the CI half of decision 81: an editor gets `.solid.mx` types from
- * `@mxlang/typescript-plugin` loaded into tsserver, but a `tsc --noEmit` in a
- * build has no tsserver and no plugin host, so the same language plugin is
- * handed to Volar's `runTsc` instead. Both halves share one implementation of
- * the lowering, which is what keeps an editor and CI from disagreeing about
- * whether a file type-checks.
+ * One run of the real `tsc` entry point (`process.argv` as it stands), with the
+ * MX language plugins spliced in. Every plugin it creates is pushed to the given
+ * lists. Returns tsc's exit code.
  */
-export function runMxTsc(): void {
-  const astro = consumeAstroFlag(process.argv);
-  const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
-  // One language plugin per program: `tsc -b` creates one for each project,
-  // and every one of them holds compiles the Angular pass has to see.
-  const ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[] = [];
+function runPatchedTsc(
+  astro: boolean,
+  diagnosticPlugins: MxDiagnosticLanguagePlugin[],
+  ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[],
+): number {
   let tscExitCode = 0;
   const exit = process.exit;
   const stopped = Symbol("mx-tsc-exit");
@@ -79,8 +69,8 @@ export function runMxTsc(): void {
       astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
       (typescript) => {
         const solidMx = createSolidMxLanguagePlugin(typescript);
-        // `retainCompiled`: Angular template diagnostics below run over the
-        // very compiles the type-check used, not a second pass of them.
+        // `retainCompiled`: Angular template diagnostics run over the very
+        // compiles the type-check used, not a second pass of them.
         const ngMx = createNgMxLanguagePlugin(typescript, {
           retainCompiled: true,
         });
@@ -103,6 +93,87 @@ export function runMxTsc(): void {
   } finally {
     process.exit = exit;
   }
+  return tscExitCode;
+}
+
+/**
+ * The `.ng.mx` compiles of the program `tsc -p <tsconfig>` would create, built
+ * by the very `tsc` entry point, language plugins and resolver `mx-tsc` uses in
+ * non-build mode (`--listFilesOnly`: the program is created, nothing is
+ * type-checked or emitted). So the set is, by construction, what tsc compiles
+ * for that project: `paths`, `moduleResolution`, `references` (a referenced
+ * project's sources are substituted by its output `.d.ts`, so its `.ng.mx` is
+ * the referenced project's, not this one's) included. tsc's own listing and
+ * diagnostics are swallowed.
+ */
+function compileProjectNgMx(
+  astro: boolean,
+  tsconfigPath: string,
+  diagnosticPlugins: MxDiagnosticLanguagePlugin[],
+): CompiledNgMx[] {
+  const ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[] = [];
+  const argv = process.argv;
+  const stdout = process.stdout.write;
+  const stderr = process.stderr.write;
+  process.argv = [
+    argv[0] as string,
+    argv[1] as string,
+    "-p",
+    tsconfigPath,
+    "--listFilesOnly",
+  ];
+  process.stdout.write = (() => true) as typeof process.stdout.write;
+  process.stderr.write = (() => true) as typeof process.stderr.write;
+  try {
+    runPatchedTsc(astro, diagnosticPlugins, ngPlugins);
+  } finally {
+    process.argv = argv;
+    process.stdout.write = stdout;
+    process.stderr.write = stderr;
+  }
+  return ngPlugins.flatMap((plugin) => plugin.getCompiledNgMx());
+}
+
+/**
+ * Per project of the `-b` graph, in graph order, the `.ng.mx` compiles to
+ * check. A file belongs to the first project whose program holds it as a source
+ * file (overlapping `include`s: first in build order wins), so it is checked
+ * once, under that project's tsconfig.
+ */
+function collectBuildGroups(
+  astro: boolean,
+  projects: readonly { tsconfigPath: string }[],
+  diagnosticPlugins: MxDiagnosticLanguagePlugin[],
+): { tsconfigPath: string; entries: CompiledNgMx[] }[] {
+  const claimed = new Set<string>();
+  return projects.map(({ tsconfigPath }) => {
+    const entries = compileProjectNgMx(
+      astro,
+      tsconfigPath,
+      diagnosticPlugins,
+    ).filter((entry) => !claimed.has(entry.fileName));
+    for (const entry of entries) claimed.add(entry.fileName);
+    return { tsconfigPath, entries };
+  });
+}
+
+/**
+ * Runs `tsc` with `.solid.mx` files compiled as their lowered TSX.
+ *
+ * This is the CI half of decision 81: an editor gets `.solid.mx` types from
+ * `@mxlang/typescript-plugin` loaded into tsserver, but a `tsc --noEmit` in a
+ * build has no tsserver and no plugin host, so the same language plugin is
+ * handed to Volar's `runTsc` instead. Both halves share one implementation of
+ * the lowering, which is what keeps an editor and CI from disagreeing about
+ * whether a file type-checks.
+ */
+export function runMxTsc(): void {
+  const astro = consumeAstroFlag(process.argv);
+  const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
+  // One language plugin per program: `tsc -b` creates one for each project,
+  // and every one of them holds compiles the Angular pass has to see.
+  const ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[] = [];
+  const tscExitCode = runPatchedTsc(astro, diagnosticPlugins, ngPlugins);
 
   // Under `-b`, tsc skips an up-to-date project, so no program (and no
   // language plugin) ever sees its `.ng.mx` files. tsc's incremental state
@@ -120,16 +191,21 @@ export function runMxTsc(): void {
   ];
   const buildProjects =
     build && !build.clean ? resolveBuildProjects(argv, process.cwd()) : [];
-  const buildInputs =
+  const buildGroups =
     build && !build.clean && !build.dry
-      ? collectBuildTemplateInputs(buildProjects, compiledNgMx)
+      ? collectBuildGroups(astro, buildProjects, diagnosticPlugins)
       : undefined;
-  if (buildInputs) diagnosticPlugins.push(...buildInputs.freshPlugins);
   if (build?.dry) reportDryRun(buildProjects);
 
-  const diagnostics = diagnosticPlugins.flatMap((plugin) =>
-    plugin.getCompileDiagnostics(),
-  );
+  // The projects' programs were each created again for their `.ng.mx` files,
+  // so a diagnostic of a file two runs both compiled would be printed twice.
+  const diagnostics = [
+    ...new Map(
+      diagnosticPlugins
+        .flatMap((plugin) => plugin.getCompileDiagnostics())
+        .map((d) => [JSON.stringify(d), d] as const),
+    ).values(),
+  ];
   reportCompileDiagnostics(diagnostics);
   const hasCompileError = diagnostics.some(
     (diagnostic) => diagnostic.category === "error",
@@ -139,8 +215,8 @@ export function runMxTsc(): void {
   // only over `.ng.mx` files that compiled, and never loads compiler-cli when
   // there are none. A template error, or a project whose templates could not
   // be checked at all, fails the run. `--clean` and `--dry` check nothing.
-  const angular = buildInputs
-    ? checkNgMxGroups(buildInputs.groups)
+  const angular = buildGroups
+    ? checkNgMxGroups(buildGroups)
     : build
       ? { reports: [], errors: [], warnings: [] }
       : checkNgMxProjects(compiledNgMx, argv, process.cwd());
@@ -158,14 +234,10 @@ export function runMxTsc(): void {
  * `tsc -b --dry` builds nothing, so no template is checked either; say so
  * (and what a real run would check) instead of letting silence read as "ok".
  */
-function reportDryRun(
-  projects: readonly { tsconfigPath: string; ngMxFiles: string[] }[],
-): void {
+function reportDryRun(projects: readonly { tsconfigPath: string }[]): void {
   for (const project of projects) {
-    if (project.ngMxFiles.length === 0) continue;
-    const count = project.ngMxFiles.length;
     process.stdout.write(
-      `mx-tsc: --dry skips Angular template diagnostics; a build would check ${count} .ng.mx file${count === 1 ? "" : "s"} of '${project.tsconfigPath}'\n`,
+      `mx-tsc: --dry skips Angular template diagnostics; a build would check the .ng.mx files of '${project.tsconfigPath}'\n`,
     );
   }
 }

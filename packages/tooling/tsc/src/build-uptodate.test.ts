@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -11,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -33,6 +34,8 @@ const packageDir = join(here, "..");
 const mxTsc = join(packageDir, "dist", "bin.cjs");
 const fixture = join(here, "fixtures", "ng-build-refs");
 /** Angular CLI's default layout: a solution root, a non-composite app project. */
+const solutionFixture = join(here, "fixtures", "ng-build-solution");
+const refsFixture = fixture;
 const cliFixture = join(here, "fixtures", "ng-build-cli");
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: MX interpolation, not a JS template
@@ -314,11 +317,11 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
         expect(dry.status).toBe(0);
         expect(templateErrors(dry.output)).toEqual([]);
         expect(dry.stdout).toMatch(
-          /--dry skips Angular template diagnostics; a build would check 1 \.ng\.mx file of '.*app\/tsconfig\.json'/,
+          /--dry skips Angular template diagnostics; a build would check the \.ng\.mx files of '.*app\/tsconfig\.json'/,
         );
         // lib too: a dry run names every project of the graph.
         expect(dry.stdout).toMatch(
-          /would check 1 \.ng\.mx file of '.*lib\/tsconfig\.json'/,
+          /would check the \.ng\.mx files of '.*lib\/tsconfig\.json'/,
         );
         expect(existsSync(join(app, "out"))).toBe(false);
       }
@@ -424,4 +427,129 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
     },
     SPAWN_TIMEOUT_MS,
   );
+
+  /** Break the template of every `.ng.mx` under `dir` (no node_modules). */
+  function breakAll(dir: string): string[] {
+    const broken: string[] = [];
+    const visit = (d: string) => {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const full = join(d, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== "node_modules" && entry.name !== "out")
+            visit(full);
+        } else if (entry.name.endsWith(".ng.mx")) {
+          writeFileSync(
+            full,
+            readFileSync(full, "utf8").replace(CLEAN, BROKEN),
+          );
+          broken.push(full);
+        }
+      }
+    };
+    visit(dir);
+    return broken;
+  }
+
+  /** Both runs must fail with exactly these diagnostics, each once. */
+  function expectBothRuns(dir: string, args: string[], expected: string[]) {
+    for (const run of [1, 2]) {
+      const result = mxTscIn(dir, args);
+      expect(result.status, `run ${run}`).toBe(1);
+      expect(templateErrors(result.output).sort(), `run ${run}`).toEqual(
+        expected,
+      );
+    }
+  }
+
+  const importsOf = (dir: string, body: string) =>
+    writeFileSync(join(dir, "src", "main.ts"), body);
+
+  it(
+    "checks a .ng.mx the program resolves through a paths alias",
+    () => {
+      const dir = scratch(cliFixture);
+      breakAll(dir);
+      importsOf(
+        dir,
+        'import { AppComponent } from "@app/app.component.ng.mx";\nexport const c = AppComponent;\n',
+      );
+      const config = join(dir, "tsconfig.app.json");
+      const json = JSON.parse(readFileSync(config, "utf8"));
+      json.compilerOptions.paths = { "@app/*": ["./src/*"] };
+      writeFileSync(config, JSON.stringify(json));
+      expectBothRuns(dir, ["-b", "."], ["app.component.ng.mx(5,18): TS2339"]);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "is not silent for an extensionless .ng.mx specifier: tsc itself rejects it on every run",
+    () => {
+      for (const specifier of ["./app.component.ng", "./app.component"]) {
+        const dir = scratch(cliFixture);
+        breakAll(dir);
+        importsOf(
+          dir,
+          `import { AppComponent } from "${specifier}";\nexport const c = AppComponent;\n`,
+        );
+        for (const run of [1, 2]) {
+          const result = mxTscIn(dir, ["-b", "."]);
+          expect(result.status, `${specifier} run ${run}`).toBe(1);
+          expect(result.output).toContain("TS2307");
+        }
+      }
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "checks a referenced project's .ng.mx under that project's own tsconfig (its paths), not the referencing one's",
+    () => {
+      const dir = scratch(solutionFixture);
+      breakAll(dir);
+      expectBothRuns(dir, ["-b", "."], ["lib.component.ng.mx(6,18): TS2339"]);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  describe("the checked set is the set mx-tsc's own program lists", () => {
+    const cases: [string, string, string[]][] = [
+      ["ng-build-refs", refsFixture, ["app", "lib"]],
+      ["ng-build-cli", cliFixture, ["."]],
+      ["ng-build-solution", solutionFixture, ["app", "lib"]],
+    ];
+    for (const [name, from, projects] of cases) {
+      it(
+        `${name}: every .ng.mx the projects' programs list is checked, and nothing else`,
+        () => {
+          const dir = scratch(from);
+          const broken = breakAll(dir);
+          const roots = from === refsFixture ? [join(dir, "app")] : [dir];
+          const first = mxTscIn(roots[0] as string, ["-b", "."]);
+          // The oracle: what `mx-tsc -p <project> --listFilesOnly` lists.
+          const listed = new Set<string>();
+          for (const project of projects) {
+            const projectDir = project === "." ? dir : join(dir, project);
+            const config = existsSync(join(projectDir, "tsconfig.app.json"))
+              ? join(projectDir, "tsconfig.app.json")
+              : join(projectDir, "tsconfig.json");
+            const out = mxTscIn(projectDir, ["-p", config, "--listFilesOnly"]);
+            for (const line of out.stdout.split("\n")) {
+              if (line.endsWith(".ng.mx")) listed.add(basename(line));
+            }
+          }
+          expect(listed.size).toBeGreaterThan(0);
+          const second = mxTscIn(roots[0] as string, ["-b", "."]);
+          for (const result of [first, second]) {
+            const checked = new Set(
+              templateErrors(result.output).map((e) => e.split("(")[0]),
+            );
+            expect(checked).toEqual(listed);
+          }
+          expect(listed.size).toBeLessThanOrEqual(broken.length);
+        },
+        SPAWN_TIMEOUT_MS,
+      );
+    }
+  });
 });
