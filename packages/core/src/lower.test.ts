@@ -3202,6 +3202,12 @@ describe("<for by=> loop-param scope", () => {
     ok("<for|x| of=xs by=o?.x><p/></for>");
   });
 
+  it("treats an object key as a read only when shorthand or computed", () => {
+    ok("<for|x| of=xs by={x: 1}><p/></for>");
+    fails("<for|x| of=xs by={§x}><p/></for>", "x");
+    fails("<for|x| of=xs by={[§x]: 1}><p/></for>", "x");
+  });
+
   it("allows an outer variable or function that shares no param name", () => {
     ok("<for|x| of=xs by=id><p/></for>");
     ok("<for|x| of=xs by=someFn><p/></for>");
