@@ -151,6 +151,13 @@ the same fresh-worktree caveat `@mxlang/parser`'s `dist/index.js` carries;
 bunx vitest run --root ../../.. --project @mxlang/tsc
 ```
 
+Most cases run `mx-tsc` in the test process through `runMxTscArgs` (an additive,
+test-only export of `src/index.ts`: argv in, exit code out; the CLI does not use
+it) via `src/in-process.ts`, which captures `process.stdout`/`stderr`. Runs are
+synchronous and process-global, so they never overlap, and diagnostic paths print
+relative to the process's working directory. A few cases spawn `dist/bin.cjs` for
+the exit code and the bin path.
+
 `src/fixtures/` is excluded from this package's own `tsconfig.json`: the
 failing fixture is *meant* to be a type error, and must not fail the package's
 own typecheck.

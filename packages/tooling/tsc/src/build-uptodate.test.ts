@@ -16,6 +16,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { resolveBuildProjects } from "./build-templates.ts";
+import { runInProcess } from "./in-process.ts";
 
 /**
  * `tsc -b` skips a project its build info calls up to date, and tsc's
@@ -29,17 +30,20 @@ import { resolveBuildProjects } from "./build-templates.ts";
  * `node_modules` linked in so `@angular/compiler-cli` and `@angular/core`
  * resolve.
  *
- * Runtime: every run is an async child process (a synchronous spawn blocks the
- * vitest worker, and past a minute of that its RPC to the runner times out:
- * `Timeout calling "onTaskUpdate"`). Cases are independent, so they run
- * concurrently, behind a gate that caps live `mx-tsc` processes. Each case
- * spends its runs on one scenario (build, rebuild, edit, rebuild ...) instead
+ * Runtime: most cases run `mx-tsc` in this process (`runMxTscArgs`, see
+ * `mxTscIn`): no node start-up, no child processes competing with the other
+ * tsc test worker (a worker blocked in a synchronous spawn is what made CI's
+ * `[vitest-worker]: Timeout calling "onTaskUpdate"` fire). They run one after
+ * another: the entry is synchronous and touches process-global state. Two cases
+ * spawn the real binary for the exit code and the bin path (the up-to-date
+ * silent pass, and `-b --help` / `--version`), asynchronously and gated.
+ * Each case spends its runs on one scenario (build, rebuild, edit, ...) instead
  * of rebuilding a fresh copy per assertion.
  */
 
 const CASE_TIMEOUT_MS = 300_000;
-/** Live `mx-tsc` processes at once: 2 locally (not a CPU burner), more on CI. */
-const MAX_PROCESSES = process.env.CI ? 4 : 2;
+/** Live spawned `mx-tsc` processes at once (only the e2e cases spawn). */
+const MAX_PROCESSES = 2;
 const here = dirname(fileURLToPath(import.meta.url));
 const packageDir = join(here, "..");
 const mxTsc = join(packageDir, "dist", "bin.cjs");
@@ -76,7 +80,7 @@ function release(): void {
   else live--;
 }
 
-async function mxTscIn(cwd: string, args: string[]): Promise<Run> {
+async function mxTscSpawn(cwd: string, args: string[]): Promise<Run> {
   await acquire();
   try {
     return await new Promise<Run>((resolve) => {
@@ -103,6 +107,19 @@ async function mxTscIn(cwd: string, args: string[]): Promise<Run> {
   } finally {
     release();
   }
+}
+
+/** Most cases run in-process (see `runInProcess`); `spawn` runs the real binary. */
+async function mxTscIn(
+  cwd: string,
+  args: string[],
+  options: { spawn?: boolean } = {},
+): Promise<Run> {
+  if (options.spawn) return mxTscSpawn(cwd, args);
+  const { status, stdout, stderr } = runInProcess(args, cwd);
+  // Hand the event loop back (vitest's worker RPC) between runs.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  return { status, stdout, stderr, output: `${stdout}${stderr}` };
 }
 
 /** The `.ng.mx` diagnostics (`file(line,col): error TSnnnn`) in `output`, basename only. */
@@ -195,10 +212,11 @@ async function expectCheckedSetIsListedSet(
   expect(checked).toEqual(listed);
 }
 
+const SPAWN = { spawn: true };
 const APP_ERROR = "app.component.ng.mx(5,18): TS2339";
 const LIB_ERROR = "lib.component.ng.mx(5,18): TS2339";
 
-describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () => {
+describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
   it(
     "fails the up-to-date run exactly as the first, at tsc's own position and message; a markup break is reported",
     async () => {
@@ -206,7 +224,7 @@ describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () =>
       const app = join(dir, "app");
       setTemplate(dir, "app", BROKEN);
 
-      const first = await mxTscIn(app, ["-b", "."]);
+      const first = await mxTscIn(app, ["-b", "."], SPAWN);
       expect(first.status).toBe(1);
       // Exact position, and tsc's own message (the one a non-build run prints).
       expect(templateErrors(first.output)).toEqual([APP_ERROR]);
@@ -216,12 +234,12 @@ describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () =>
 
       // tsc's build info now says everything is up to date.
       expect(existsSync(join(app, "out", "tsconfig.tsbuildinfo"))).toBe(true);
-      const second = await mxTscIn(app, ["-b", "."]);
+      const second = await mxTscIn(app, ["-b", "."], SPAWN);
       expect(second.status).toBe(1);
       expect(second.output).toBe(first.output);
 
       // A forced rebuild reports each template error exactly once.
-      const forced = await mxTscIn(app, ["-b", "--force", "."]);
+      const forced = await mxTscIn(app, ["-b", "--force", "."], SPAWN);
       expect(forced.status).toBe(1);
       expect(templateErrors(forced.output)).toEqual([APP_ERROR]);
 
@@ -231,7 +249,7 @@ describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () =>
         template(dir, "app"),
         readFileSync(template(dir, "app"), "utf8").replace("<p>", "<p"),
       );
-      const markup = await mxTscIn(app, ["-b", "."]);
+      const markup = await mxTscIn(app, ["-b", "."], SPAWN);
       expect(markup.status).toBe(1);
       expect(markup.output).toContain("app.component.ng.mx(");
     },
@@ -340,11 +358,11 @@ describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () =>
         expect(existsSync(join(app, "out"))).toBe(false);
       }
 
-      const help = await mxTscIn(app, ["-b", "--help"]);
+      const help = await mxTscIn(app, ["-b", "--help"], SPAWN);
       expect(help.status).toBe(0);
       expect(templateErrors(help.output)).toEqual([]);
       // tsc itself rejects `--version` under `-b` (TS5094) and exits 1.
-      const version = await mxTscIn(app, ["-b", "--version"]);
+      const version = await mxTscIn(app, ["-b", "--version"], SPAWN);
       expect(version.output).toContain("TS5094");
       expect(templateErrors(version.output)).toEqual([]);
 
@@ -401,7 +419,7 @@ describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () =>
     CASE_TIMEOUT_MS,
   );
 
-  describe.concurrent("extensionless .ng.mx specifiers (known gap)", () => {
+  describe("extensionless .ng.mx specifiers (known gap)", () => {
     // Known gap, TODO mx-tsc-build-extensionless-resolve: `mx-tsc -p` resolves
     // `./x` and `./x.ng` to `x.ng.mx`, but under `-b` tsc reports TS2307. Not
     // silent (exit 1 on every run, the project can never be up to date), only

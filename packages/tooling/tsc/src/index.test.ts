@@ -9,9 +9,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { runInProcess } from "./in-process.ts";
 import { consumeAstroFlag, resolveTscPath } from "./index.ts";
 
 /**
@@ -57,6 +58,13 @@ interface Run {
 }
 
 function run(entry: string, args: string[]): Run {
+  // `mx-tsc` itself runs in this process (no child competing for the CPU, no
+  // worker blocked in a synchronous spawn); other entries (plain `tsc`, for
+  // contrast) are spawned.
+  if (entry === mxTsc) {
+    const { status, stdout, stderr } = runInProcess(args, here);
+    return { status, output: `${stdout}${stderr}` };
+  }
   try {
     const output = execFileSync(process.execPath, [entry, ...args], {
       cwd: here,
@@ -91,6 +99,7 @@ interface RunSplit {
  * captures both streams regardless of exit code.
  */
 function runSplit(entry: string, args: string[]): RunSplit {
+  if (entry === mxTsc) return runInProcess(args, here);
   const result = spawnSync(process.execPath, [entry, ...args], {
     cwd: here,
     encoding: "utf8",
@@ -304,7 +313,8 @@ describe("mx-tsc", () => {
       // which only calls it.
       expect(result.output).toContain("broken.mx(3,1): error TS80001");
       expect(result.output).toContain(
-        "`<else>` without a preceding `<if>`\nfixtures/template-error-failing/src/page.mx(1,1)",
+        // Paths print relative to the process's working directory.
+        `\`<else>\` without a preceding \`<if>\`\n${relative(process.cwd(), join(fixtures, "template-error-failing", "src", "page.mx"))}(1,1)`,
       );
       // `page.mx` still gets a pointer diagnostic naming the template *and*
       // its exact position, so a broken template a build's overlay never

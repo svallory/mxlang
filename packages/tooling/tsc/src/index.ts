@@ -170,6 +170,30 @@ function collectBuildGroups(
  * whether a file type-checks.
  */
 export function runMxTsc(): void {
+  process.exitCode = runMxTscBody();
+}
+
+/**
+ * {@link runMxTsc} for `args` (what follows `mx-tsc` on a command line): runs
+ * to completion and returns the exit code instead of setting
+ * `process.exitCode`. Output goes to `process.stdout`/`process.stderr` as
+ * ever. Additive, for tests that exercise the entry point in-process; the CLI
+ * does not use it. `process.argv` is replaced for the call and restored; every
+ * path in `args` must be absolute or relative to `process.cwd()` (nothing
+ * changes directory). Runs are synchronous and share process-global state
+ * (`process.argv`, the stream writes), so they cannot overlap.
+ */
+export function runMxTscArgs(args: readonly string[]): number {
+  const saved = process.argv;
+  process.argv = [saved[0] ?? "node", saved[1] ?? "mx-tsc", ...args];
+  try {
+    return runMxTscBody();
+  } finally {
+    process.argv = saved;
+  }
+}
+
+function runMxTscBody(): number {
   const astro = consumeAstroFlag(process.argv);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
   // One language plugin per program: `tsc -b` creates one for each project,
@@ -229,7 +253,7 @@ export function runMxTsc(): void {
       report.diagnostics.some((d) => d.category === "error"),
     );
 
-  process.exitCode = hasCompileError || hasAngularError ? 1 : tscExitCode;
+  return hasCompileError || hasAngularError ? 1 : tscExitCode;
 }
 
 /**
