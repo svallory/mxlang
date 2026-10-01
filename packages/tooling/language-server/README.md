@@ -105,7 +105,11 @@ this is not a workaround, it's how ESLint+TS or Tailwind+CSS coexist today
 
 ### VS Code
 
-No bundled extension ships from this package (out of scope for this task). A
+The `@mxlang/vscode` extension ships this server inside its VSIX and runs it
+with VS Code's own Node (a VSIX-only self-contained build, `bun
+build/bundled.ts` writes it to `bundle/`, outside this package's `files`; the
+npm tarball is unchanged), so VS Code users need to install nothing. To run a
+different build, set `mxlang.languageServer.path`. In another VS Code setup, a
 generic LSP client extension (e.g.
 [`vscode-generic-lsp`](https://marketplace.visualstudio.com/items?itemName=Gerrnperl.custom-lsp-client),
 or a minimal `LanguageClient` of your own) can launch it directly:

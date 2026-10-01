@@ -1,6 +1,10 @@
 # vscode — agent instructions
 
-## How the TS plugin is shipped in the VSIX
+## What the VSIX ships
+
+The plugin and the language server, each as a self-contained build copied into `node_modules/@mxlang/<name>/dist/` of the stage. The plugin is described first, the language server in "The language server" below it.
+
+### How the TS plugin is shipped
 
 `contributes.typescriptServerPlugins` names `@mxlang/typescript-plugin`, and VS Code's TypeScript extension loads it from `<extension dir>/node_modules`. The plugin is a private workspace package and not a dependency of the extension, and `vsce package --no-dependencies` never ships `node_modules` (vsce globs with `ignore: node_modules/**`), so a plain `vsce package` produced a VSIX with no plugin and every TS-plugin feature (`.mx`, `.solid.mx`, `.ng.mx`, `.amx`) dead in an installed extension.
 
@@ -21,8 +25,22 @@ vsce must walk dependencies itself (`npm list --production`, a vsce internal, no
 
 Known limitation: `{ astro: true }` composition for `.amx` does not work from the VSIX, because the plugin's `createRequire(import.meta.url)("@astrojs/language-server/...")` resolves from the plugin's location and the optional peer is not shipped. Fixing it means resolving the peer from the project.
 
+### The language server
+
+`@mxlang/language-server` is private-dep-only and not on npm, so before this the extension's `bunx`/`npx` fallback found nothing for a real user and in-file host-policy diagnostics (decision 71) were dead. `bun ../../tooling/language-server/build/bundled.ts` (run by `bun run package`) writes `packages/tooling/language-server/bundle/` (gitignored, outside the LS's `files`): `src/bin.ts` bundled to `bundle/bin.cjs` with `@mxlang/*` and `vscode-languageserver` inlined and `@marko/compiler` left external (it loads its own translator and runtime files), taken from one list, `build/bundled-config.ts` (`BUNDLED_ENTRIES`, `BUNDLED_MAIN`, `BUNDLED_INSTALLED`, `BUNDLED_PROJECT_RESOLVED`, which is empty). The LS's npm tarball, `files` and `package.json` are unchanged. The build and the dependency-closure copy are shared with the plugin: `scripts/bundled-build.ts` (repo root) and `packages/editors/vscode/scripts/closure.ts`. `@marko/compiler` is shared by both bundles and placed once.
+
+`stage-vsix.ts` copies `bundle/` to `node_modules/@mxlang/language-server/dist/` and ships `@marko/compiler` with its closure from the workspace install (versions asserted against `bun.lock`, no registry). `check-vsix` also asserts the LS resolves inside the VSIX to `dist/bin.cjs`, ships every `BUNDLED_ENTRIES` entry, that its bare requires resolve, and that the closure is complete; `scripts/check-vsix.test.ts` has the failing case for a VSIX with no LS.
+
+`src/server-command.ts` resolution order: (1) `mxlang.languageServer.path`; (2) the bundled `dist/bin.cjs`, run by `LanguageClient` through its `module` server option with `TransportKind.stdio` (VS Code's own Node; stdio because `scripts/ls-smoke.mts` drives exactly that transport, so CI proves the path the editor takes); (3) only when the bundle is absent (a dev or source checkout that never ran `bun run package`): workspace install, global install, `bunx`, `npx`. Those fallbacks are kept because a source checkout without a VSIX build has no other server; with the bundle present they are never reached, so a different LS version on PATH or in the workspace can not shadow the shipped one.
+
+`scripts/ls-smoke.mts` (`bun run ls-smoke`, a CI step, run with `node`, never bun) unpacks the VSIX, starts the LS from there with plain `node ... --stdio`, speaks `initialize`, `initialized`, `textDocument/didOpen` of a `.mx` file under `"mx": { "host": "astro", "strict": true }` (`<let>`), expects exactly one `publishDiagnostics` with exactly one diagnostic, then `shutdown`/`exit`. A 30 s timeout kills the server on a hang or an early exit (stderr goes into the error), and a final `pgrep` fails the run if anything from the unpacked VSIX is still alive. Nothing Bun-only may be reachable from the bundle (`Bun.`, `bun:`, `import.meta.dir`/`main`, the `mx-virtual:` Bun plugin): the smoke is the proof, because it runs under Node.
+
+Editor/LS version skew: the editor runs the extension's LS version, like the TS plugin (see below).
+
 Do not launch VS Code or install the VSIX to verify this; the check is the gate.
 
 ## Editor/build version skew
+
+The language server follows the same rule as the plugin: the editor runs the LS the VSIX shipped, never the one a project or machine has installed (`mxlang.languageServer.path` is the only override).
 
 The VSIX pins `@mxlang/core`, `@mxlang/parser` and the host emitters at the extension's version, while a project's build uses its own installed `@mxlang/*`. While MX semantics still move, the editor can type a file differently from the build. **Editor typing follows the extension's bundled plugin version, even when the project installs and configures its own `@mxlang/typescript-plugin`.** In TypeScript 6.0.3 (`lib/typescript.js`): `getGlobalPluginSearchPaths` puts `pluginProbeLocations` first (189285-189290), and VS Code puts the extension dir there; tsconfig `compilerOptions.plugins` entries are resolved from those same search paths (`enablePluginsWithOptions`, 190047-190067: `searchPaths` at 190056, `enablePlugin` at 190064), so the extension's copy is found first. Listing the plugin in tsconfig only stops the *global* load (`enableGlobalPlugins` skips a name already in `options.plugins`, 189302); it does not switch to the project's copy. The project's own directory is added to the search paths only when tsserver runs with `allowLocalPluginLoads` (190057-190060).
