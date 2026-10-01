@@ -1,7 +1,8 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { build } from "../src/build.ts";
 
@@ -28,24 +29,42 @@ describe("examples/angular-app", () => {
   // `ng build` of the example fails with TS2339 `__mxOn` when a page binds an
   // event handler but its hand-written class lacks the invoker members. The
   // build warns on every such page (it cannot see the class), so each warned
-  // page's own class must carry the members or extend `MxHandlers`.
-  it("gives every page that binds an event handler its invoker members", () => {
+  // page's class is type-checked: it must have both members, whether pasted
+  // or inherited from `MxHandlers`. A comment or a stray string cannot pass.
+  it("gives every page that binds an event handler a class with the invoker", () => {
     const result = build(projectDir);
     expect(result.errors).toEqual([]);
     const pages = result.warnings
       .filter((w) => w.message.includes("binds an event handler"))
-      .map((w) => w.file);
+      .map((w) => w.file.replace(projectDir, exampleDir));
     expect(pages.length).toBeGreaterThan(0);
-    for (const page of pages) {
-      const classFile = page.replace(/\.mx$/, ".ts");
-      const source = readFileSync(classFile, "utf8");
-      const hasMembers =
-        /readonly __mxOn\b/.test(source) && /readonly __mxOnAt\b/.test(source);
-      const extendsRuntime = /\bMxHandlers(Mixin)?\b/.test(source);
-      expect(
-        hasMembers || extendsRuntime,
-        `${classFile} lacks the invoker`,
-      ).toBe(true);
+
+    const config = ts.getParsedCommandLineOfConfigFile(
+      join(exampleDir, "tsconfig.app.json"),
+      {},
+      { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} },
+    );
+    const classFiles = pages.map((page) => page.replace(/\.mx$/, ".ts"));
+    const program = ts.createProgram(classFiles, config?.options ?? {});
+    const checker = program.getTypeChecker();
+    for (const classFile of classFiles) {
+      const sourceFile = program.getSourceFile(classFile);
+      expect(sourceFile, `${classFile} is not in the program`).toBeDefined();
+      const classes = (sourceFile as ts.SourceFile).statements.filter(
+        ts.isClassDeclaration,
+      );
+      expect(classes.length, `${classFile} declares no class`).toBeGreaterThan(
+        0,
+      );
+      for (const decl of classes) {
+        const type = checker.getTypeAtLocation(decl);
+        for (const member of ["__mxOn", "__mxOnAt"]) {
+          expect(
+            type.getProperty(member),
+            `${classFile}: class lacks ${member}`,
+          ).toBeDefined();
+        }
+      }
     }
   });
 });
