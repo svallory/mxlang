@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -143,6 +144,8 @@ async function expectPluginLoaded(
   root: string,
   extraArgs: string[],
   plugins: { name: string }[],
+  /** Where the log must say the plugin was loaded from. */
+  loadedFrom?: string,
 ) {
   const { file, logFile } = writeProject(root, plugins);
   const server = startTsserver(
@@ -172,6 +175,14 @@ async function expectPluginLoaded(
     const log = readFileSync(logFile, "utf8");
 
     expect(log).toMatch(/Loading @mxlang\/typescript-plugin from/);
+    if (loadedFrom !== undefined) {
+      // Not just "loaded": loaded from THIS location (the unpacked VSIX), not
+      // from some other copy reachable through the executing path.
+      const line = log
+        .split("\n")
+        .find((l) => l.includes("Loading @mxlang/typescript-plugin from"));
+      expect(line).toContain(`${loadedFrom}${path.sep}node_modules`);
+    }
     expect(log).not.toContain("did not expose a proper factory function");
     expect(log).toContain("Plugin validation succeeded");
     // Skipped plugin: TS2307 "Cannot find module './comp.mx'". Loaded: the
@@ -224,6 +235,7 @@ describe.skipIf(!extensionDir)(
             extensionDir as string,
           ],
           [],
+          realpathSync(extensionDir as string),
         );
       } finally {
         rmSync(root, { recursive: true, force: true });
