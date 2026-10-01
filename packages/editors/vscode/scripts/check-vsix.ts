@@ -9,8 +9,12 @@
 //     real `typescript`, returns `{ create }`;
 //   - it ships a `dist/<entry>.cjs` for every entry of the plugin's bundled
 //     build (`build/bundled-config.ts`, the one list);
-//   - every bare `require("x")` in a shipped `dist/*.cjs` resolves from that
-//     file, except the documented project-resolved modules;
+//   - the language server (`@mxlang/language-server`) resolves from the same
+//     root, to a `main` that exists, and ships `dist/<entry>.cjs` for every
+//     entry of its own bundled build (`build/bundled-config.ts`);
+//   - every bare `require("x")` in a shipped `dist/*.cjs` of the plugin or the
+//     language server resolves from that file, except the documented
+//     project-resolved modules;
 //   - every shipped package's version is one `bun.lock` pins;
 //   - `@angular/compiler-cli` and `typescript` are not shipped.
 
@@ -30,9 +34,15 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import {
+  BUNDLED_ENTRIES as LS_ENTRIES,
+  BUNDLED_MAIN as LS_MAIN,
+} from "../../../tooling/language-server/build/bundled-config.ts";
+import {
   BUNDLED_ENTRIES,
   BUNDLED_PROJECT_RESOLVED,
 } from "../../../tooling/typescript-plugin/build/bundled-config.ts";
+
+const LS_NAME = "@mxlang/language-server";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const defaultLockfile = join(repoRoot, "bun.lock");
@@ -48,6 +58,8 @@ const FORBIDDEN = PROJECT_RESOLVED;
 export interface CheckOptions {
   /** The `dist/<entry>.cjs` files the VSIX must carry (default: the plugin build's entries). */
   entries?: readonly string[];
+  /** The `dist/<entry>.cjs` files the language server must carry (default: its bundled build's entries). */
+  lsEntries?: readonly string[];
   /** `bun.lock`, for the shipped-version assertion. */
   lockfile?: string;
 }
@@ -160,9 +172,74 @@ function resolvesFrom(fromDir: string, dep: string, root: string): boolean {
   }
 }
 
+/** Every bare require in a package's shipped `dist/*.cjs` must resolve from that bundle. */
+function unresolvedRequires(pkgRoot: string, what: string): string[] {
+  const problems: string[] = [];
+  const dist = join(pkgRoot, "dist");
+  if (!existsSync(dist)) return problems;
+  for (const file of readdirSync(dist).filter((f) => f.endsWith(".cjs"))) {
+    const path = join(dist, file);
+    const requireFromFile = createRequire(path);
+    for (const { spec, fromBundleLocation } of bareRequires(
+      readFileSync(path, "utf8"),
+    )) {
+      // Only a project `createRequire` may load a project-resolved module;
+      // a plain top-level require of one is the HIGH-2 regression.
+      if (!fromBundleLocation && PROJECT_RESOLVED.includes(packageName(spec))) {
+        continue;
+      }
+      try {
+        requireFromFile.resolve(spec);
+      } catch {
+        problems.push(
+          `dist/${file} requires "${spec}", which does not resolve from the ${what}`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * The extension runs `node_modules/@mxlang/language-server/dist/bin.cjs` with
+ * VS Code's Node (`src/server-command.ts`), so it must resolve inside the
+ * VSIX, be complete, and resolve every bare require it makes.
+ */
+function checkLanguageServer(
+  root: string,
+  requireFromRoot: NodeRequire,
+  entries: readonly string[],
+): string[] {
+  let main: string;
+  try {
+    main = requireFromRoot.resolve(LS_NAME);
+  } catch {
+    return [`${LS_NAME} does not resolve from ${root}/node_modules`];
+  }
+  const problems: string[] = [];
+  const lsRoot = join(root, "node_modules", LS_NAME);
+  if (!main.startsWith(resolve(lsRoot))) {
+    problems.push(`"${LS_NAME}" resolved outside the extension: ${main}`);
+  }
+  if (main !== join(lsRoot, "dist", LS_MAIN)) {
+    problems.push(`"${LS_NAME}" main is ${main}, expected dist/${LS_MAIN}`);
+  }
+  for (const file of entries) {
+    if (!existsSync(join(lsRoot, "dist", `${file}.cjs`))) {
+      problems.push(`"${LS_NAME}" is missing dist/${file}.cjs`);
+    }
+  }
+  problems.push(...unresolvedRequires(lsRoot, "shipped language server"));
+  return problems;
+}
+
 export function checkExtensionRoot(
   root: string,
-  { entries = BUNDLED_ENTRIES, lockfile = defaultLockfile }: CheckOptions = {},
+  {
+    entries = BUNDLED_ENTRIES,
+    lsEntries = LS_ENTRIES,
+    lockfile = defaultLockfile,
+  }: CheckOptions = {},
 ): string[] {
   const problems: string[] = [];
   root = realpathSync(root); // resolution reports real paths (macOS /var -> /private/var)
@@ -220,40 +297,16 @@ export function checkExtensionRoot(
       );
     }
 
-    // Every bare require in a shipped bundle must resolve from that bundle.
-    const dist = join(pluginRoot, "dist");
-    if (existsSync(dist)) {
-      for (const file of readdirSync(dist).filter((f) => f.endsWith(".cjs"))) {
-        const path = join(dist, file);
-        const requireFromFile = createRequire(path);
-        for (const { spec, fromBundleLocation } of bareRequires(
-          readFileSync(path, "utf8"),
-        )) {
-          // Only a project `createRequire` may load a project-resolved module;
-          // a plain top-level require of one is the HIGH-2 regression.
-          if (
-            !fromBundleLocation &&
-            PROJECT_RESOLVED.includes(packageName(spec))
-          ) {
-            continue;
-          }
-          try {
-            requireFromFile.resolve(spec);
-          } catch {
-            problems.push(
-              `dist/${file} requires "${spec}", which does not resolve from the shipped plugin`,
-            );
-          }
-        }
-      }
-    }
+    problems.push(...unresolvedRequires(pluginRoot, "shipped plugin"));
   }
+
+  problems.push(...checkLanguageServer(root, requireFromRoot, lsEntries));
 
   // Shipped versions must be the ones bun.lock pins (no floating transitives).
   const locked = lockedVersions(lockfile);
   const shipped = shippedPackages(root);
   for (const { name, version } of shipped) {
-    if (name === "@mxlang/typescript-plugin") continue;
+    if (name === "@mxlang/typescript-plugin" || name === LS_NAME) continue;
     if (!locked.get(name)?.has(version)) {
       problems.push(
         `${name}@${version} is not a version bun.lock pins (${[...(locked.get(name) ?? [])].join(", ") || "not in the lockfile"})`,

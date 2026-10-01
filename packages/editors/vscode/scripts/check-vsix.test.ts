@@ -24,6 +24,9 @@ const write = (root: string, path: string, contents = "") => {
   writeFileSync(join(root, path), contents);
 };
 
+const pkg = (name: string, version: string, main = "index.js") =>
+  JSON.stringify({ name, version, main });
+
 const FACTORY = "module.exports = function (m) { return { create() {} }; };";
 const PLUGIN = "node_modules/@mxlang/typescript-plugin";
 
@@ -35,10 +38,21 @@ interface Options {
   entries?: string[];
   /** `name@version` pairs the lockfile pins. */
   locked?: string[];
+  /** Files of the shipped language server (default: a healthy one); `{}` ships none. */
+  lsFiles?: Record<string, string>;
+  /** `dist/<entry>.cjs` files expected of the language server. */
+  lsEntries?: string[];
 }
 
-const pkg = (name: string, version: string, main = "index.js") =>
-  JSON.stringify({ name, version, main });
+const LS = "node_modules/@mxlang/language-server";
+const HEALTHY_LS: Record<string, string> = {
+  [`${LS}/package.json`]: pkg(
+    "@mxlang/language-server",
+    "0.1.0",
+    "dist/bin.cjs",
+  ),
+  [`${LS}/dist/bin.cjs`]: "",
+};
 
 /** A healthy extension, overridden per case. */
 function fixture(options: Options = {}) {
@@ -67,7 +81,10 @@ function fixture(options: Options = {}) {
     ),
     "node_modules/@marko/compiler/index.js": "",
   };
-  for (const [path, contents] of Object.entries(files)) {
+  for (const [path, contents] of Object.entries({
+    ...files,
+    ...(options.lsFiles ?? HEALTHY_LS),
+  })) {
     write(root, path, contents);
   }
 
@@ -82,14 +99,20 @@ function fixture(options: Options = {}) {
       })
       .join("\n")}\n  },\n}\n`,
   );
-  return { root, lockfile, entries: options.entries };
+  return {
+    root,
+    lockfile,
+    entries: options.entries,
+    lsEntries: options.lsEntries,
+  };
 }
 
 const check = (options?: Options) => {
-  const { root, lockfile, entries } = fixture(options);
+  const { root, lockfile, entries, lsEntries } = fixture(options);
   return checkExtensionRoot(root, {
     lockfile,
     ...(entries ? { entries } : {}),
+    ...(lsEntries ? { lsEntries } : {}),
   });
 };
 
@@ -116,6 +139,62 @@ describe("checkExtensionRoot", () => {
     });
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("@mxlang/other");
+  });
+
+  describe("the language server", () => {
+    it("fails on a VSIX with the language server removed (today's main)", () => {
+      expect(check({ lsFiles: {} })).toEqual([
+        expect.stringContaining(
+          "@mxlang/language-server does not resolve from",
+        ),
+      ]);
+    });
+
+    it("fails when the entry the build declares is not shipped", () => {
+      expect(check({ lsEntries: ["bin", "other"] })).toEqual([
+        '"@mxlang/language-server" is missing dist/other.cjs',
+      ]);
+    });
+
+    it("fails when main is not the bundled bin", () => {
+      const problems = check({
+        lsFiles: {
+          [`${LS}/package.json`]: pkg(
+            "@mxlang/language-server",
+            "0.1.0",
+            "dist/other.cjs",
+          ),
+          [`${LS}/dist/other.cjs`]: "",
+          [`${LS}/dist/bin.cjs`]: "",
+        },
+      });
+      expect(problems).toEqual([expect.stringContaining("main is")]);
+    });
+
+    it("fails when a bare require of the server does not resolve", () => {
+      const problems = check({
+        lsFiles: {
+          ...HEALTHY_LS,
+          [`${LS}/dist/bin.cjs`]: 'require("left-pad")',
+        },
+      });
+      expect(problems).toEqual([
+        expect.stringContaining(
+          'dist/bin.cjs requires "left-pad", which does not resolve from the shipped language server',
+        ),
+      ]);
+    });
+
+    it("passes when the server's require resolves from the shipped closure", () => {
+      expect(
+        check({
+          lsFiles: {
+            ...HEALTHY_LS,
+            [`${LS}/dist/bin.cjs`]: 'require4("@marko/compiler")',
+          },
+        }),
+      ).toEqual([]);
+    });
   });
 
   describe("plugin entries come from the bundled build's one list", () => {

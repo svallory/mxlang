@@ -14,15 +14,39 @@ export function which(command: string): string | undefined {
   }
 }
 
+/**
+ * The language server shipped inside the VSIX: a self-contained Node bundle
+ * the client runs with VS Code's own Node (`LanguageClient`'s `module` server
+ * option), so the user needs no Node, bun or package install.
+ */
+export interface BundledServer {
+  module: string;
+}
+
+/**
+ * Resolution order:
+ * 1. `mxlang.languageServer.path`, an explicit user override.
+ * 2. The bundled server (`bundledModule`, present in every packaged VSIX).
+ *    When it is there nothing below is consulted: the editor runs the LS
+ *    version the extension shipped with, never a different one found on PATH
+ *    or in a workspace.
+ * 3. Only when the bundle is missing (a dev or source checkout that never ran
+ *    `bun run package`): a workspace install, a global install, then bunx/npx.
+ */
 export function getServerCommand(
   configuredPath: string | undefined,
   workspaceFolders: string[],
-): Executable {
+  bundledModule?: string,
+): Executable | BundledServer {
   if (configuredPath) {
     return {
       command: configuredPath,
       args: ["--stdio"],
     };
+  }
+
+  if (bundledModule && fs.existsSync(bundledModule)) {
+    return { module: bundledModule };
   }
 
   // 1. Local install
@@ -82,6 +106,6 @@ export function getServerCommand(
   }
 
   throw new Error(
-    "could not find mxlang-language-server (local install, global install, bunx, or npx)",
+    "could not find mxlang-language-server (bundled, local install, global install, bunx, or npx)",
   );
 }

@@ -1,10 +1,11 @@
+import * as path from "node:path";
 import type { ExtensionContext } from "vscode";
 import { commands, window, workspace } from "vscode";
 import type {
   LanguageClientOptions,
   ServerOptions,
 } from "vscode-languageclient/node";
-import { type Executable, LanguageClient } from "vscode-languageclient/node";
+import { LanguageClient, TransportKind } from "vscode-languageclient/node";
 import { getServerCommand } from "./server-command.js";
 
 let client: LanguageClient;
@@ -13,7 +14,7 @@ export function activate(context: ExtensionContext) {
   const outputChannel = window.createOutputChannel("MX Language Server");
 
   const startClient = async () => {
-    let serverCommand: Executable | undefined;
+    let serverCommand: ReturnType<typeof getServerCommand> | undefined;
     try {
       const config = workspace.getConfiguration("mxlang");
       const configuredPath = config.get<string>("languageServer.path");
@@ -21,11 +22,33 @@ export function activate(context: ExtensionContext) {
         (f) => f.uri.fsPath,
       );
 
-      serverCommand = getServerCommand(configuredPath, workspaceFolders);
-      const serverOptions: ServerOptions = {
-        run: serverCommand,
-        debug: serverCommand,
-      };
+      serverCommand = getServerCommand(
+        configuredPath,
+        workspaceFolders,
+        path.join(
+          context.extensionPath,
+          "node_modules",
+          "@mxlang",
+          "language-server",
+          "dist",
+          "bin.cjs",
+        ),
+      );
+      // stdio, not ipc: it is the transport `scripts/ls-smoke.ts` drives, so
+      // CI proves the exact path the editor takes.
+      const serverOptions: ServerOptions =
+        "module" in serverCommand
+          ? {
+              run: {
+                module: serverCommand.module,
+                transport: TransportKind.stdio,
+              },
+              debug: {
+                module: serverCommand.module,
+                transport: TransportKind.stdio,
+              },
+            }
+          : { run: serverCommand, debug: serverCommand };
 
       const clientOptions: LanguageClientOptions = {
         documentSelector: [
@@ -53,9 +76,11 @@ export function activate(context: ExtensionContext) {
       await client.start();
       // biome-ignore lint/suspicious/noExplicitAny: reason
     } catch (e: any) {
-      const cmdStr = serverCommand
-        ? `${serverCommand.command} ${serverCommand.args?.join(" ") || ""}`
-        : "resolution failed";
+      const cmdStr = !serverCommand
+        ? "resolution failed"
+        : "module" in serverCommand
+          ? `node ${serverCommand.module}`
+          : `${serverCommand.command} ${serverCommand.args?.join(" ") || ""}`;
       const msg = `Failed to start MX language server (Command: ${cmdStr}). To override, set "mxlang.languageServer.path" in settings. Error: ${e.message}`;
       outputChannel.appendLine(msg);
       window.showErrorMessage(msg);

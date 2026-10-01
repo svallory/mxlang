@@ -14,9 +14,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --root ../../.. --project @mxlang/vscode",
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external vscode",
-    "package": "bun run build && bun run --cwd ../../tooling/typescript-plugin build:bundled && bun run scripts/stage-vsix.ts",
+    "package": "bun run build && bun run --cwd ../../tooling/typescript-plugin build:bundled && bun ../../tooling/language-server/build/bundled.ts && bun run scripts/stage-vsix.ts",
     "check-vsix": "bun run scripts/check-vsix.ts mxlang.vsix",
-    "tsserver-load": "bun run scripts/tsserver-load.ts mxlang.vsix"
+    "tsserver-load": "bun run scripts/tsserver-load.ts mxlang.vsix",
+    "ls-smoke": "node scripts/ls-smoke.mts mxlang.vsix"
   },
   "dependencies": {
     "vscode-languageclient": "10.1.1"
@@ -122,7 +123,7 @@
         "mxlang.languageServer.path": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the @mxlang/language-server executable. If not specified, the extension will attempt to find a local installation in node_modules, then globally via bunx or npx."
+          "description": "Absolute path to an @mxlang/language-server executable that overrides the language server bundled with this extension. Leave empty to use the bundled one."
         }
       }
     },
