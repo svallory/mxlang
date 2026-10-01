@@ -185,6 +185,45 @@ describe("checkExtensionRoot", () => {
       ]);
     });
 
+    it("fails on a baked file:/// URL (a createRequire that resolves from the build tree)", () => {
+      const problems = check({
+        lsFiles: {
+          ...HEALTHY_LS,
+          [`${LS}/dist/bin.cjs`]:
+            'createRequire("file:///build/packages/core/dist/index.js")',
+        },
+      });
+      expect(problems).toEqual([
+        'dist/bin.cjs contains a "file:///" literal: a baked build-machine path',
+      ]);
+    });
+
+    it("fails on the build root baked as a plain path", () => {
+      const { root, lockfile } = fixture({
+        lsFiles: {
+          ...HEALTHY_LS,
+          [`${LS}/dist/bin.cjs`]: 'var __filename = "/build/x/files.js";',
+        },
+      });
+      expect(
+        checkExtensionRoot(root, { lockfile, buildRoot: "/build/x" }),
+      ).toEqual(["dist/bin.cjs contains the build root /build/x"]);
+    });
+
+    it("does not let the server load a project-resolved module the plugin may (its own list is empty)", () => {
+      const problems = check({
+        lsFiles: {
+          ...HEALTHY_LS,
+          [`${LS}/dist/bin.cjs`]: 'require7("typescript")',
+        },
+      });
+      expect(problems).toEqual([
+        expect.stringContaining(
+          'dist/bin.cjs requires "typescript", which does not resolve from the shipped language server',
+        ),
+      ]);
+    });
+
     it("passes when the server's require resolves from the shipped closure", () => {
       expect(
         check({
@@ -195,6 +234,28 @@ describe("checkExtensionRoot", () => {
         }),
       ).toEqual([]);
     });
+  });
+
+  it("fails on a baked file:/// URL in the plugin bundle", () => {
+    const problems = check({
+      files: {
+        [`${PLUGIN}/package.json`]: pkg(
+          "@mxlang/typescript-plugin",
+          "0.0.0",
+          "dist/index.cjs",
+        ),
+        [`${PLUGIN}/dist/index.cjs`]: `${FACTORY}\n// createRequire("file:///build/x.ts")`,
+        [`${PLUGIN}/dist/ng-worker.cjs`]: "",
+        "node_modules/@marko/compiler/package.json": pkg(
+          "@marko/compiler",
+          "5.42.5",
+        ),
+        "node_modules/@marko/compiler/index.js": "",
+      },
+    });
+    expect(problems).toEqual([
+      'dist/index.cjs contains a "file:///" literal: a baked build-machine path',
+    ]);
   });
 
   describe("plugin entries come from the bundled build's one list", () => {

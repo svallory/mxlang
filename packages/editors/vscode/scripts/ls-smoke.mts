@@ -2,6 +2,9 @@
 //
 //   node scripts/ls-smoke.mts [path/to/mxlang.vsix]   (default: ./mxlang.vsix)
 //
+// `MX_LS_NODE=/path/to/node` runs the SERVER (not this harness) on another
+// Node, e.g. 20.9.0, the Node of VS Code 1.90 (`engines.vscode`).
+//
 // Run it with `node` (Node strips the types), not bun: nothing Bun-only may be
 // reachable from the shipped server, and the harness itself must not mask it.
 //
@@ -32,6 +35,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { BUNDLED_MAIN } from "../../../tooling/language-server/build/bundled-config.ts";
 
 export const TIMEOUT_MS = 30_000;
+/** How long the server gets to leave on its own after `exit`. */
+const EXIT_MS = 5_000;
 
 interface Message {
   id?: number;
@@ -88,9 +93,20 @@ export async function smokeLanguageServer(
   const uri = pathToFileURL(file).href;
 
   // `node` explicitly: never bun, which would hide a Bun-only dependency.
-  const child: ChildProcess = spawn("node", [bin, "--stdio"], {
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  // `MX_LS_NODE` picks another Node for the server (CI runs the floor, 20.9.0:
+  // the bundle runs on VS Code's Node, not on the engines of this repo).
+  // Isolated: cwd is the throwaway project (not the repo), and NODE_PATH is
+  // dropped, so a bundle that leaked a workspace path could not find it here.
+  const { NODE_PATH: _nodePath, ...env } = process.env;
+  const child: ChildProcess = spawn(
+    process.env.MX_LS_NODE || "node",
+    [bin, "--stdio"],
+    {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: project,
+      env,
+    },
+  );
   let stderr = "";
   child.stderr?.on("data", (chunk) => {
     stderr += String(chunk);
@@ -100,7 +116,7 @@ export async function smokeLanguageServer(
   });
 
   try {
-    return await new Promise<SmokeResult>((resolveResult, reject) => {
+    const result = await new Promise<SmokeResult>((resolveResult, reject) => {
       const fail = (reason: string) =>
         reject(new Error(`${reason}\nserver stderr:\n${stderr || "(empty)"}`));
       const timer = setTimeout(
@@ -167,6 +183,18 @@ export async function smokeLanguageServer(
         params: { processId: process.pid, rootUri: null, capabilities: {} },
       });
     });
+    // `exit` was sent: the server must leave by itself, with code 0, before
+    // any SIGKILL.
+    const code = await Promise.race([
+      exited,
+      new Promise<"timeout">((r) => setTimeout(() => r("timeout"), EXIT_MS)),
+    ]);
+    if (code !== 0) {
+      throw new Error(
+        `the server did not exit cleanly after shutdown/exit (${code === "timeout" ? `still running after ${EXIT_MS} ms` : `code ${code}`})\nserver stderr:\n${stderr || "(empty)"}`,
+      );
+    }
+    return result;
   } finally {
     if (child.exitCode === null) child.kill("SIGKILL");
     await Promise.race([exited, new Promise((r) => setTimeout(r, 5000))]);
@@ -174,7 +202,7 @@ export async function smokeLanguageServer(
   }
 }
 
-function assertResult(result: SmokeResult, extensionRoot: string): void {
+function assertResult(result: SmokeResult): void {
   if (result.diagnostics.length !== 1) {
     throw new Error(
       `expected exactly one diagnostic, got ${result.diagnostics.length}: ${JSON.stringify(result.diagnostics)}`,
@@ -184,15 +212,14 @@ function assertResult(result: SmokeResult, extensionRoot: string): void {
   if (diagnostic?.source !== "mxlang" || !/let/i.test(diagnostic.message)) {
     throw new Error(`unexpected diagnostic: ${JSON.stringify(diagnostic)}`);
   }
-  const left = pgrepAlive(extensionRoot);
-  if (left.length > 0) {
-    throw new Error(
-      `processes from the VSIX are still running: ${left.join(", ")}`,
-    );
-  }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// realpath on both sides: a checkout under a symlinked dir (macOS /var) would
+// otherwise skip this block and exit 0 having tested nothing.
+if (
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+) {
   const vsix = resolve(process.argv[2] ?? "mxlang.vsix");
   if (!existsSync(vsix)) {
     console.error(`${vsix} does not exist: run \`bun run package\` first`);
@@ -203,7 +230,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     execFileSync("unzip", ["-q", vsix, "-d", dir]);
     const root = join(dir, "extension");
     const result = await smokeLanguageServer(root);
-    assertResult(result, root);
+    assertResult(result);
     console.log(
       `LS smoke passed for ${vsix}: 1 diagnostic, ${JSON.stringify(result.diagnostics[0]?.message)}`,
     );
@@ -213,6 +240,19 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
     process.exitCode = 1;
   } finally {
+    // On the failure path too: nothing from the VSIX may outlive the run.
+    const left = pgrepAlive(dir);
+    if (left.length > 0) {
+      console.error(
+        `processes from the unpacked VSIX are still running: ${left.join(", ")}`,
+      );
+      for (const pid of left) {
+        try {
+          process.kill(Number(pid), "SIGKILL");
+        } catch {}
+      }
+      process.exitCode = 1;
+    }
     rmSync(dir, { recursive: true, force: true });
   }
 }

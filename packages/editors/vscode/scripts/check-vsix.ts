@@ -36,6 +36,7 @@ import ts from "typescript";
 import {
   BUNDLED_ENTRIES as LS_ENTRIES,
   BUNDLED_MAIN as LS_MAIN,
+  BUNDLED_PROJECT_RESOLVED as LS_PROJECT_RESOLVED,
 } from "../../../tooling/language-server/build/bundled-config.ts";
 import {
   BUNDLED_ENTRIES,
@@ -60,6 +61,8 @@ export interface CheckOptions {
   entries?: readonly string[];
   /** The `dist/<entry>.cjs` files the language server must carry (default: its bundled build's entries). */
   lsEntries?: readonly string[];
+  /** The checkout the bundles were built in; no shipped bundle may name it (default: this repo). */
+  buildRoot?: string;
   /** `bun.lock`, for the shipped-version assertion. */
   lockfile?: string;
 }
@@ -172,8 +175,38 @@ function resolvesFrom(fromDir: string, dep: string, root: string): boolean {
   }
 }
 
+/**
+ * A bundle must find its own files at run time. Bun's CJS output bakes
+ * `import.meta.url` as the build machine's `file:///` URL, which made every
+ * `createRequire(import.meta.url)` resolve from the build tree (the workspace
+ * copy where it was built, nothing on a user's machine). Fail on any
+ * `file:///` literal or on the build root appearing in a shipped bundle.
+ */
+function bakedPaths(pkgRoot: string, buildRoot: string): string[] {
+  const dist = join(pkgRoot, "dist");
+  if (!existsSync(dist)) return [];
+  const problems: string[] = [];
+  for (const file of readdirSync(dist).filter((f) => f.endsWith(".cjs"))) {
+    const code = readFileSync(join(dist, file), "utf8");
+    if (code.includes("file:///")) {
+      problems.push(
+        `dist/${file} contains a "file:///" literal: a baked build-machine path`,
+      );
+    }
+    if (code.includes(buildRoot)) {
+      problems.push(`dist/${file} contains the build root ${buildRoot}`);
+    }
+  }
+  return problems;
+}
+
 /** Every bare require in a package's shipped `dist/*.cjs` must resolve from that bundle. */
-function unresolvedRequires(pkgRoot: string, what: string): string[] {
+function unresolvedRequires(
+  pkgRoot: string,
+  what: string,
+  /** Modules a bundler-renamed (`createRequire(projectDir)`) require may load without shipping. */
+  projectResolved: readonly string[],
+): string[] {
   const problems: string[] = [];
   const dist = join(pkgRoot, "dist");
   if (!existsSync(dist)) return problems;
@@ -185,7 +218,7 @@ function unresolvedRequires(pkgRoot: string, what: string): string[] {
     )) {
       // Only a project `createRequire` may load a project-resolved module;
       // a plain top-level require of one is the HIGH-2 regression.
-      if (!fromBundleLocation && PROJECT_RESOLVED.includes(packageName(spec))) {
+      if (!fromBundleLocation && projectResolved.includes(packageName(spec))) {
         continue;
       }
       try {
@@ -209,6 +242,7 @@ function checkLanguageServer(
   root: string,
   requireFromRoot: NodeRequire,
   entries: readonly string[],
+  buildRoot: string,
 ): string[] {
   let main: string;
   try {
@@ -229,7 +263,14 @@ function checkLanguageServer(
       problems.push(`"${LS_NAME}" is missing dist/${file}.cjs`);
     }
   }
-  problems.push(...unresolvedRequires(lsRoot, "shipped language server"));
+  problems.push(
+    ...unresolvedRequires(
+      lsRoot,
+      "shipped language server",
+      LS_PROJECT_RESOLVED,
+    ),
+    ...bakedPaths(lsRoot, buildRoot),
+  );
   return problems;
 }
 
@@ -239,6 +280,7 @@ export function checkExtensionRoot(
     entries = BUNDLED_ENTRIES,
     lsEntries = LS_ENTRIES,
     lockfile = defaultLockfile,
+    buildRoot = repoRoot,
   }: CheckOptions = {},
 ): string[] {
   const problems: string[] = [];
@@ -297,10 +339,15 @@ export function checkExtensionRoot(
       );
     }
 
-    problems.push(...unresolvedRequires(pluginRoot, "shipped plugin"));
+    problems.push(
+      ...unresolvedRequires(pluginRoot, "shipped plugin", PROJECT_RESOLVED),
+      ...bakedPaths(pluginRoot, buildRoot),
+    );
   }
 
-  problems.push(...checkLanguageServer(root, requireFromRoot, lsEntries));
+  problems.push(
+    ...checkLanguageServer(root, requireFromRoot, lsEntries, buildRoot),
+  );
 
   // Shipped versions must be the ones bun.lock pins (no floating transitives).
   const locked = lockedVersions(lockfile);

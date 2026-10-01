@@ -134,8 +134,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      # The LS smoke runs `node` (not bun) so nothing Bun-only can hide in the
-      # shipped server; same pin as the other jobs.
+      # The bundled server runs on VS Code's own Node, whose floor is the
+      # Electron Node of `engines.vscode` (^1.90.0: Node 20.9.0), not the repo's
+      # `node >=22.18`. Install that floor first and keep its path for the
+      # second smoke run.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20.9.0"
+      - name: Remember the floor Node
+        run: echo "MX_LS_NODE_FLOOR=$(command -v node)" >> "$GITHUB_ENV"
+      # The LS smoke harness runs `node` (not bun) so nothing Bun-only can hide
+      # in the shipped server; same pin as the other jobs.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "26.7.0"
@@ -154,6 +163,11 @@ jobs:
         run: bun run --cwd packages/editors/vscode tsserver-load
       - name: Start the shipped language server from the unpacked VSIX
         run: node packages/editors/vscode/scripts/ls-smoke.mts packages/editors/vscode/mxlang.vsix
+        timeout-minutes: 2
+      - name: Start the shipped language server on VS Code 1.90's Node (20.9.0)
+        run: node packages/editors/vscode/scripts/ls-smoke.mts packages/editors/vscode/mxlang.vsix
+        env:
+          MX_LS_NODE: ${{ env.MX_LS_NODE_FLOOR }}
         timeout-minutes: 2
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
