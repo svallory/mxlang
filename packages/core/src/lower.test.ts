@@ -3150,3 +3150,89 @@ describe("`on:` and `oncapture:` reach the modifier hook unchanged", () => {
     expect(warnings).toEqual([]);
   });
 });
+
+// `by=` runs once, before the loop, so a read of the tag's own params is an
+// error (Marko 6.3.51 `findLoopParamRead`). Driven through `lowerSource`: the
+// walk is private to `lowerForHead`.
+describe("<for by=> loop-param scope", () => {
+  // `§` marks where the error must land; it is stripped before lowering.
+  const fails = (marked: string, name: string): void => {
+    const column = marked.indexOf("§");
+    const source = marked.replace("§", "");
+    expect(() => lowerSource(source)).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(`\`${name}\` is not in scope`),
+        line: 1,
+        column,
+      }),
+    );
+  };
+  const ok = (source: string): void => {
+    expect(() => lowerSource(source)).not.toThrow();
+  };
+
+  it("rejects a direct read, at the name", () => {
+    fails("<for|x| of=xs by=§x><p/></for>", "x");
+  });
+
+  it("rejects a nested member read, at the root identifier", () => {
+    fails("<for|x| of=xs by=§x.a.b><p/></for>", "x");
+    fails("<for|x| of=xs by=§x?.a><p/></for>", "x");
+    fails("<for|x| of=xs by=o[§x.k]><p/></for>", "x");
+  });
+
+  it("rejects a read in a call argument, a conditional and a template", () => {
+    fails("<for|x| of=xs by=f(§x)><p/></for>", "x");
+    fails("<for|x| of=xs by=c ? §x.a : 1><p/></for>", "x");
+    fails("<for|x| of=xs by=`k${§x.a}`><p/></for>", "x");
+  });
+
+  it("allows a read inside an arrow body (not evaluated at `by=` time)", () => {
+    ok("<for|x| of=xs by=(y) => x.id><p/></for>");
+    ok("<for|x| of=xs by=(y) => y.id + x.id><p/></for>");
+  });
+
+  it("allows an arrow whose own param shadows the loop param", () => {
+    ok("<for|x| of=xs by=(x) => x.id><p/></for>");
+    ok("<for|x, i| of=xs by=(x, i) => `${i}${x.id}`><p/></for>");
+  });
+
+  it("treats a member property named like the param as a name, not a read", () => {
+    ok("<for|x| of=xs by=o.x><p/></for>");
+    ok("<for|x| of=xs by=o?.x><p/></for>");
+  });
+
+  it("allows an outer variable or function that shares no param name", () => {
+    ok("<for|x| of=xs by=id><p/></for>");
+    ok("<for|x| of=xs by=someFn><p/></for>");
+    ok('<for|x| of=xs by="id"><p/></for>');
+  });
+
+  it("rejects each name a destructured param binds", () => {
+    fails("<for|{ id }| of=xs by=§id><p/></for>", "id");
+    fails("<for|{ a: { id } }| of=xs by=§id><p/></for>", "id");
+    fails("<for|[a, b]| of=xs by=§b><p/></for>", "b");
+    fails("<for|{ id: k }| of=xs by=§k><p/></for>", "k");
+    ok("<for|{ id: k }| of=xs by=id><p/></for>");
+  });
+
+  it("rejects the second (index) param too", () => {
+    fails("<for|x, i| of=xs by=§i><p/></for>", "i");
+  });
+
+  it("applies to every loop form", () => {
+    fails("<for|i| to=3 by=§i><p/></for>", "i");
+    fails("<for|i| until=3 by=§i><p/></for>", "i");
+    fails("<for|k, v| in=o by=§v><p/></for>", "v");
+  });
+
+  it("lets an inner loop read the outer param, but not its own", () => {
+    ok("<for|a| of=as><for|b| of=bs by=a.id><p/></for></for>");
+    ok("<for|a| of=as><for|b| of=bs by=(b) => a.id><p/></for></for>");
+    fails("<for|a| of=as><for|b| of=bs by=§b.id><p/></for></for>", "b");
+  });
+
+  it("lets a nested loop in the body reuse the name", () => {
+    ok('<for|x| of=xs by=(x) => x.id><for|x| of=x.ys by="id"><p/></for></for>');
+  });
+});

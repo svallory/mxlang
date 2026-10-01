@@ -47,6 +47,8 @@ Add `by=` to key each row for reconciliation:
 
 On the HTML host this is a plain `for`/`.map` loop. On SolidMX, `of=` lowers to Solid's `<For each={...} keyed={...}>`, and `by="id"` becomes the `keyed` key function.
 
+`by=` is evaluated once, outside the loop body, so the loop param is not in scope there. Key with a property-name string (`by="id"`) or a function (`by=(item) => item.id`); `by=item.id` is a compile error pointing at `item`, as in Marko.
+
 ### `in=` — iterate an object's entries
 
 ```html
