@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (audit-01-prop-attr-parity):** an attribute name outside Marko's grammar (`[prop]=`, `#ref`, `*ngIf`) is now a positioned "Invalid attribute name" error, as in Marko 6.3.51, instead of passing through. See `@mxlang/core`.
+
 - **Fixed:** the shared `mxDynamic` helper (`@mxlang/preact`, this package's
   own emitter) now recognizes a `$$typeof`-carrying host component object
   (React's `memo`/`forwardRef`) as a component rather than a plain data

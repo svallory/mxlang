@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: an attribute name outside Marko's grammar is a positioned error, not a silent pass-through (audit-01-prop-attr-parity)
+
+**Behaviour change:** `<div [prop]="x">`, `<div #ref>`, `<div *ngIf="x">`, `<div [attr.x]="y">` and `<div @foo=1>` compiled silently on every non-Angular host (html passed every surface; preact then emitted invalid JSX that failed at a generated position). Marko 6.3.51 rejects them ("Invalid attribute name.", `runtime-tags` `normalizeTag`). `lowerAttr` now applies Marko's own name grammar (`[a-z_][a-z0-9._:-]*`, the same for elements and custom tags: Marko 6.3.51 also rejects `<foo $foo=1/>`) and fails at the authored name with a hint (`write \`prop=\``, `<if=cond>`, `class={ a: cond }`, …). `HostDeclarations.acceptsForeignAttrNames` opts a host out; only `@mxlang/angular` sets it.
+
 ### Fix: `resolveHostPolicy` stops at a malformed `package.json` and at `node_modules`; unknown `mx.host` warns (host-policy-walk-edge-cases)
 
 Three silent failures in the upward walk that decides a file's host are closed. **Behaviour change:** the first two can change which host a file compiles under, only in setups that were already misconfigured.

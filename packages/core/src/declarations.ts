@@ -37,6 +37,14 @@ export interface HostDeclarations {
   /** Attribute-tag IR/emission contract implemented by this host. */
   attrTags?: 2;
   /**
+   * Whether attribute names outside Marko's grammar pass through to the
+   * target. Only a host whose output language has its own attribute syntax
+   * (Angular's `[prop]=`, `(event)=`, `#ref`, `*ngIf`) sets this; every other
+   * host rejects such a name the way Marko 6.3.51 does ("Invalid attribute
+   * name."), positioned at the authored name.
+   */
+  acceptsForeignAttrNames?: boolean;
+  /**
    * Per-tag-name dispositions: `inert` (accepted, no output, in a declared
    * shape) or `error` (this target cannot express it). Decision 65: never "my
    * code cannot".

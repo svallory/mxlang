@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (audit-01-prop-attr-parity):** an attribute name outside Marko's grammar (`[prop]=`, `#ref`, `*ngIf`) is now a positioned "Invalid attribute name" error, as in Marko 6.3.51, instead of passing through. See `@mxlang/core`.
+
 ### Docs: `/var` on a returning tag from `.amx` explains why, and shows the workaround (amx-tag-var)
 
 The `/var` refusal on a returning tag called from an `.amx` template previously read as an unshipped feature ("is not supported in `.amx` yet"). Ruled 2026-09-28: it is a structural host limit, not a missing one — Astro runs the `---` fence to completion before the template's tags are ever lowered or called, so there is no statement position left, in the fence or the template, to bind a value into. The message now says why and points at the route that already works: calling the unit directly from the fence's own TypeScript, an ordinary function call since a `.mx` unit compiled for this host still exports the plain `{ value, output }` shape. Documented in the language spec's `/var` section, this package's README and AGENTS.md, and a new pinned test alongside the existing `astro-template.test.ts:689-720` cases. No behavior change — the refusal itself is unchanged, only its wording.

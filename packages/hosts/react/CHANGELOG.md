@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (audit-01-prop-attr-parity):** an attribute name outside Marko's grammar (`[prop]=`, `#ref`, `*ngIf`) is now a positioned "Invalid attribute name" error, as in Marko 6.3.51, instead of passing through. See `@mxlang/core`.
+
 - **Fixed:** a `memo(Foo)`/`forwardRef(...)` value reached through the
   dynamic path (a local classified "unknown" under decision 116's local
   extension, or a `.tsx` value import) now renders correctly instead of

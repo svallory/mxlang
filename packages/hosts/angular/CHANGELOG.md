@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Unchanged (audit-01-prop-attr-parity):** `[prop]=`, `#ref`, `*ngIf` keep passing through; the host sets `acceptsForeignAttrNames` to opt out of core's new Marko attribute-name check. Pinned by `test/attr-name-passthrough.test.ts`.
+
 ### Fixed
 
 - **A structural attribute after another attribute now fails with a message that names the cause** (`angular-ngif-attr-hint`): `<div class="a" *ngIf="x">` used to report `Invalid left-hand side in assignment expression.` at the value `"a"`. It now reports a positioned error at the `*` saying that after `class=…` Marko reads `*ngIf` as a multiplication, and naming the fixes: make it the first attribute, or use `<if=cond>…</if>` / `<for|item| of=items>…</for>`. Applies to `.mx` pages, tag modules and `.ng.mx` regions, for any `*name=` (not only `ng*`). The parse is unchanged (still Marko's), so `a=b *c`, `a=(b * c)` and a first-position `*ngIf` compile as before, and every other parse error keeps its message. Known gaps, which keep Marko's message: a word operator (`in`, `instanceof`, `typeof`) between the value and the directive, and a directive with no `=` (Marko's multiplication, which compiles).

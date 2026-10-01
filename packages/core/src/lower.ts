@@ -355,6 +355,47 @@ function warnOnReactEventSpelling(ctx: Ctx, attr: Node, name: string): void {
   });
 }
 
+/**
+ * Marko's attribute-name grammar (`runtime-tags/src/common/helpers.ts`
+ * `htmlAttrNameReg` / `userAttrNameReg`, applied in `normalizeTag`): a letter
+ * or `_`, then `[a-z0-9._:-]`. `userAttrNameReg` lets a leading `$` through
+ * its first alternative, but its second (`[^a-z0-9._:-]` anywhere) rejects that
+ * same `$`, so custom tags follow the element rule (`<foo $foo=1/>` errors in
+ * 6.3.51).
+ */
+const ATTR_NAME = /^[a-z_][a-z0-9._:-]*$/i;
+
+/** Angular-style names and how to write what they were reaching for, first match wins. */
+const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [
+    /^\[\(([^()[\]]+)\)\]$/,
+    (m) => `Marko's two-way binding is \`${m[1]}:=expr\``,
+  ],
+  [/^\[class\.([^[\]]+)\]$/, (m) => `write \`class={ ${m[1]}: cond }\``],
+  [
+    /^\[style\.([^[\].]+)[^[\]]*\]$/,
+    (m) => `write \`style={ ${m[1]}: value }\``,
+  ],
+  [
+    /^\[(?:attr\.)?([^[\]]+)\]$/,
+    (m) => `write \`${m[1]}=\` with the expression as the value`,
+  ],
+  [/^#/, () => "template reference variables are Angular syntax"],
+  [
+    /^\*/,
+    () =>
+      "structural directives are Angular syntax; use `<if=cond>` / `<for|item| of=list>`",
+  ],
+];
+
+function foreignAttrHint(name: string): string {
+  for (const [pattern, hint] of FOREIGN_ATTR_HINTS) {
+    const match = name.match(pattern);
+    if (match) return hint(match);
+  }
+  return "an attribute name may use letters, digits and `._:-`";
+}
+
 /** Resolves one attribute of an element or component call. */
 function lowerAttr(
   ctx: Ctx,
@@ -367,6 +408,20 @@ function lowerAttr(
 
   if (attr.type === "MarkoSpreadAttribute") {
     return { kind: "spread", value: exprOf(ctx, attr.value), loc };
+  }
+
+  // Marko rejects a name outside its grammar for every tag; only a host with
+  // its own attribute syntax (Angular) opts out. A modifier (`class:x`) is
+  // `name` + `modifier` here, both valid, and goes through its own branch.
+  if (
+    !ctx.declarations.acceptsForeignAttrNames &&
+    typeof attr.name === "string" &&
+    !ATTR_NAME.test(attr.name)
+  ) {
+    fail(
+      `Invalid attribute name \`${attr.name}\`; Marko rejects it too — ${foreignAttrHint(attr.name)}`,
+      attr,
+    );
   }
 
   if (attr.arguments || attr.value?.type === "FunctionExpression") {

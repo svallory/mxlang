@@ -148,6 +148,8 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/angular",
   attrTags: 2,
+  // `[prop]=`, `#ref`, `*ngIf` are the target's own syntax and pass through.
+  acceptsForeignAttrNames: true,
   tags: {
     ...STATEFUL_ERRORS,
     try: { kind: "error", reason: TRY_MESSAGE },

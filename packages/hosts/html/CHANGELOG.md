@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (audit-01-prop-attr-parity):** an attribute name outside Marko's grammar (`[prop]=`, `#ref`, `*ngIf`) is now a positioned "Invalid attribute name" error, as in Marko 6.3.51, instead of passing through. See `@mxlang/core`.
+
 ### Fix: `mx()`/`loadMx()` on Bun no longer fail with `NameTooLong` for larger or nested templates (test-bun-example-nametoolong)
 
 On Bun, `mx()`/`loadMx()` evaluated each compiled module as a `data:text/typescript;base64,…` URL. Bun before 1.4 (1.3.14 measured) fails such a `require` with `NameTooLong while resolving package 'data:…'` once the URL passes about 1.5 KB, and a nested tag's URL is embedded base64-in-base64 in its importer, so any page that called a tag could hit it. On Bun the helpers now load compiled modules through a `Bun.plugin` virtual-module namespace (`mx-virtual:`, the same versioned scheme Node already used), registered once per process; the plugin is process-global but only answers `mx-virtual:` names. Node is unchanged. Compiled modules are kept for the process lifetime, as before. `src/helpers.bun.test.ts` (in `test:bun`) now covers a large single template and a large page importing a large nested tag.

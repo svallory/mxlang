@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (audit-01-prop-attr-parity):** an attribute name outside Marko's grammar (`[prop]=`, `#ref`, `*ngIf`) is now a positioned "Invalid attribute name" error, as in Marko 6.3.51, instead of passing through. See `@mxlang/core`.
+
 - **Internal (hook-guard-module-list), round 2:** `HOOK_MODULES` (the closed
   list of hook-import specifiers `rejectHooksInReturningUnit` refuses inside
   a returning unit) moved off a single literal tuple hardcoded in this
