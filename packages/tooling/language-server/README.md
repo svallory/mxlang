@@ -8,6 +8,12 @@ Watches `.mx` and `.solid.mx` documents an editor opens or edits
 and publishes one LSP `Diagnostic` for a positioned compile error. A
 successful compile clears any previous diagnostics for that file.
 
+- **Angular-host documents (`.mx` or `.ng.mx`) get no diagnostics from this
+  server.** `mx-tsc` and the TypeScript plugin report them (template
+  diagnostics need `@angular/compiler-cli`, which the server never loads). Host-policy warnings
+  still appear.
+- **An unknown `mx.host`** publishes only the host-policy warning; the
+  document is not compiled under a guessed host.
 - `.mx` compiles as a whole-file template under the resolved host
   policy. The HTML and Astro hosts use `@mxlang/html`; a file routed to
   `host: "solid"` uses `@mxlang/solid`'s fixed profile, where stateful Marko

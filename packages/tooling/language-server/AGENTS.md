@@ -59,6 +59,14 @@ compiles, so wiring it needs its own diagnose path, not just a `Policy`
 object. `resolveStrict` falls back to the translator's own default rather
 than throwing, keeping the rest of a mixed workspace diagnosed.
 
+**Angular and unknown hosts.** `diagnoseDocument` returns no compile
+diagnostics for `host: "angular"` (never an Error, never loads
+`@angular/compiler-cli`; `mx-tsc` owns those) and, when
+`hostPolicyDiagnostics` holds core's `unknown mx.host …` warning (matched by
+message prefix, since core exposes no code), returns only the warnings
+without compiling under the guessed host. Real Angular wiring is TODO
+`ls-angular-host-wiring`.
+
 **Zed finding** (brief item 4): there is **no zero-Rust path** to register a
 second `[language_servers.*]` entry in Zed's `extension.toml`. Reading
 `marko-js/zed`'s own `extension.toml` and `src/lib.rs` (via `gh api

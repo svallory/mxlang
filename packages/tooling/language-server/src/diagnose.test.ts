@@ -11,6 +11,7 @@ import { pathToFileURL } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { clearScanCache } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DiagnosticSeverity } from "vscode-languageserver/node";
 import { diagnoseDocument, type RelatedDiagnostics } from "./diagnose.ts";
 
 describe("diagnoseDocument", () => {
@@ -476,17 +477,106 @@ describe("the Hono host", () => {
 });
 
 describe("the Angular host", () => {
-  it("reports the host as not wired in yet, rather than diagnosing under html's declarations", () => {
+  // The LS does not diagnose Angular-host documents: `mx-tsc` and the TS
+  // plugin own them. Silence is honest; an Error here is a false positive on
+  // every file, clean ones included.
+  it("reports nothing for a clean whole-file .mx page", () => {
+    expect(
+      diagnoseDocument("<div>hi</div>\n", "file:///app/greeting.mx", {
+        host: "angular",
+      }),
+    ).toEqual([]);
+  });
+
+  it("reports nothing for a clean .ng.mx file", () => {
+    expect(
+      diagnoseDocument(
+        "<div>hi</div>\n",
+        "file:///app/greeting.component.ng.mx",
+        { host: "angular" },
+      ),
+    ).toEqual([]);
+  });
+
+  it("raises no Error for a broken Angular-host file (mx-tsc reports it)", () => {
+    const diagnostics = diagnoseDocument(
+      "<div>unclosed\n",
+      "file:///app/broken.component.ng.mx",
+      { host: "angular" },
+    );
+    expect(
+      diagnostics.filter((d) => d.severity === DiagnosticSeverity.Error),
+    ).toEqual([]);
+  });
+
+  it("still returns host-policy warnings", () => {
     const diagnostics = diagnoseDocument(
       "<div>hi</div>\n",
       "file:///app/greeting.mx",
       { host: "angular" },
+      undefined,
+      "",
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          file: "/app/package.json",
+          message: "some warning",
+          line: 1,
+          column: 0,
+        },
+      ],
     );
+    expect(diagnostics.map((d) => d.severity)).toEqual([
+      DiagnosticSeverity.Warning,
+    ]);
+  });
+});
 
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toContain(
-      "the angular host is not wired into @mxlang/language-server yet",
+describe("an unknown mx.host", () => {
+  const unknownHost = {
+    file: "/app/package.json",
+    message:
+      'unknown mx.host "angualr"; valid hosts: html, astro, solid, preact, react, hono, angular. Ignoring it; the host is taken from the @mxlang dependencies instead.',
+    line: 5,
+    column: 13,
+  };
+
+  it("returns the warning and does not compile under a guessed host", () => {
+    // `@tags` outside an element is an html-compile error (the false error
+    // the audit saw for a24); it must not surface.
+    const diagnostics = diagnoseDocument(
+      "<@tags/>\n",
+      "file:///app/x.component.ng.mx",
+      { host: "html" },
+      undefined,
+      "",
+      undefined,
+      undefined,
+      undefined,
+      [unknownHost],
     );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Warning);
+    expect(diagnostics[0]?.message).toContain('unknown mx.host "angualr"');
+  });
+
+  it("compiles normally when the host-policy warning is something else", () => {
+    const diagnostics = diagnoseDocument(
+      "<div>\n",
+      "file:///app/page.mx",
+      { host: "html" },
+      undefined,
+      "",
+      undefined,
+      undefined,
+      undefined,
+      [{ ...unknownHost, message: "package.json could not be parsed as JSON" }],
+    );
+    expect(
+      diagnostics.some((d) => d.severity === DiagnosticSeverity.Error),
+    ).toBe(true);
   });
 });
 
