@@ -1,0 +1,6 @@
+{
+  "name": "ng-build-lib",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

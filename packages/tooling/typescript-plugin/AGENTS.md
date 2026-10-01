@@ -108,7 +108,18 @@ entry.
   no `.ng.mx` files. With `.ng.mx` files and diagnostics on, a missing,
   out-of-range or unloadable compiler-cli, an invalid config, or a check that
   throws **fails the run** with an explicit message (a silent pass would leave
-  templates unchecked in CI); template errors fail it too. Fixtures under
+  templates unchecked in CI); template errors fail it too. **Under `-b` the
+  pass runs for every project of the graph, up to date or not**
+  (`packages/tooling/tsc/src/build-templates.ts`): an up-to-date project never
+  gets a program, so its plugin never compiles its `.ng.mx`, and tsc's build
+  info knows nothing about templates. `resolveBuildProjects` walks the named
+  projects and their `references`, takes each project's `.ng.mx` from its
+  parsed `include`/`files` (the `.mx` extra extension needs
+  `scriptKind: Deferred`, or the glob matches nothing), and
+  `collectBuildTemplateInputs` reuses tsc's compile where there is one and
+  compiles the rest with a fresh plugin (no program). Each file is checked once,
+  under its project's tsconfig. `--clean` skips the pass; `--dry` prints what it
+  would check. Never gate this on tsc's up-to-date state. Fixtures under
   `packages/tooling/tsc/src/fixtures` find compiler-cli by walking up to
   `packages/tooling/tsc/node_modules`, so tests for a *missing* or
   *out-of-range* compiler-cli build their project under the OS temp dir. The

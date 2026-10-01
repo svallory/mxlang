@@ -172,6 +172,26 @@ export function checkNgMxProjects(
   return result;
 }
 
+/**
+ * {@link checkNgMxFiles} once per project, each under its own tsconfig, results
+ * merged in order. The `-b` path: the caller has already assigned every file to
+ * exactly one project, so nothing here guesses ownership.
+ */
+export function checkNgMxGroups(
+  groups: readonly { tsconfigPath: string; entries: readonly CompiledNgMx[] }[],
+  deps: NgDiagnosticsDeps = {},
+): NgDiagnosticsResult {
+  const result: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
+  for (const { tsconfigPath, entries } of groups) {
+    if (entries.length === 0) continue;
+    const part = checkNgMxFiles(entries, deps, { tsconfigPath });
+    result.reports.push(...part.reports);
+    result.errors.push(...part.errors);
+    result.warnings.push(...part.warnings);
+  }
+  return result;
+}
+
 function plural(count: number): string {
   return `${count} .ng.mx file${count === 1 ? "" : "s"}`;
 }

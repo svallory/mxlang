@@ -47,7 +47,22 @@ run. `@angular/compiler-cli` is resolved from the project that holds the
 `.ng.mx` (`>=22.0.0 <23.0.0`); with `.ng.mx` files present, diagnostics on, and
 compiler-cli missing or out of range, `mx-tsc` fails with a message saying how
 to install a supported version or turn the diagnostics off. A run with no
-`.ng.mx` files never looks for it. See
+`.ng.mx` files never looks for it.
+
+Under `tsc -b` the pass runs for **every project of the build graph** (the
+named projects and, transitively, their `references`), including a project tsc
+judges up to date: tsc's build info knows nothing about templates, so a
+template error must fail the second, unchanged run exactly as the first. Each
+project's `.ng.mx` files are those its `include`/`files` select, checked under
+that project's own tsconfig, each file once. A project tsc rebuilds reuses the
+compile the type-check made, so its diagnostics are not repeated. `--clean`
+checks nothing; `--dry` builds nothing and prints, per project, how many
+`.ng.mx` files a build would check; `--watch` runs the pass once, after the
+initial build, and does not re-run it on later changes. A `.ng.mx` reached only
+through an import, outside every project's `include`/`files`, is checked when
+tsc compiles it (a rebuilt project) and not otherwise.
+The cost is one Angular checker per project with `.ng.mx` files on every `-b`
+run; caching it is not done. See
 [Angular → Template diagnostics](../../../apps/docs/docs/hosts/angular.md).
 
 ## What it proves

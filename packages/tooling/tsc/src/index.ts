@@ -13,6 +13,12 @@ import {
 import type { LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
 import {
+  collectBuildTemplateInputs,
+  parseBuildMode,
+  resolveBuildProjects,
+} from "./build-templates.ts";
+import {
+  checkNgMxGroups,
   checkNgMxProjects,
   type NgDiagnosticsResult,
 } from "./ng-diagnostics.ts";
@@ -98,6 +104,29 @@ export function runMxTsc(): void {
     process.exit = exit;
   }
 
+  // Under `-b`, tsc skips an up-to-date project, so no program (and no
+  // language plugin) ever sees its `.ng.mx` files. tsc's incremental state
+  // knows nothing about templates, so the Angular pass runs over every project
+  // of the build graph regardless of that state.
+  const argv = process.argv.slice(2);
+  const build = parseBuildMode(argv);
+  const compiledNgMx = [
+    // A file two projects both compile (via `references`) is checked once.
+    ...new Map(
+      ngPlugins
+        .flatMap((plugin) => plugin.getCompiledNgMx())
+        .map((entry) => [entry.fileName, entry] as const),
+    ).values(),
+  ];
+  const buildProjects =
+    build && !build.clean ? resolveBuildProjects(argv, process.cwd()) : [];
+  const buildInputs =
+    build && !build.clean && !build.dry
+      ? collectBuildTemplateInputs(buildProjects, compiledNgMx)
+      : undefined;
+  if (buildInputs) diagnosticPlugins.push(...buildInputs.freshPlugins);
+  if (build?.dry) reportDryRun(buildProjects);
+
   const diagnostics = diagnosticPlugins.flatMap((plugin) =>
     plugin.getCompileDiagnostics(),
   );
@@ -109,19 +138,12 @@ export function runMxTsc(): void {
   // Angular template diagnostics (`mx.angular.diagnostics`, default on). Runs
   // only over `.ng.mx` files that compiled, and never loads compiler-cli when
   // there are none. A template error, or a project whose templates could not
-  // be checked at all, fails the run.
-  const angular = checkNgMxProjects(
-    // A file two projects both compile (via `references`) is checked once.
-    [
-      ...new Map(
-        ngPlugins
-          .flatMap((plugin) => plugin.getCompiledNgMx())
-          .map((entry) => [entry.fileName, entry] as const),
-      ).values(),
-    ],
-    process.argv.slice(2),
-    process.cwd(),
-  );
+  // be checked at all, fails the run. `--clean` and `--dry` check nothing.
+  const angular = buildInputs
+    ? checkNgMxGroups(buildInputs.groups)
+    : build
+      ? { reports: [], errors: [], warnings: [] }
+      : checkNgMxProjects(compiledNgMx, argv, process.cwd());
   reportNgDiagnostics(angular);
   const hasAngularError =
     angular.errors.length > 0 ||
@@ -130,6 +152,22 @@ export function runMxTsc(): void {
     );
 
   process.exitCode = hasCompileError || hasAngularError ? 1 : tscExitCode;
+}
+
+/**
+ * `tsc -b --dry` builds nothing, so no template is checked either; say so
+ * (and what a real run would check) instead of letting silence read as "ok".
+ */
+function reportDryRun(
+  projects: readonly { tsconfigPath: string; ngMxFiles: string[] }[],
+): void {
+  for (const project of projects) {
+    if (project.ngMxFiles.length === 0) continue;
+    const count = project.ngMxFiles.length;
+    process.stdout.write(
+      `mx-tsc: --dry skips Angular template diagnostics; a build would check ${count} .ng.mx file${count === 1 ? "" : "s"} of '${project.tsconfigPath}'\n`,
+    );
+  }
 }
 
 /**
