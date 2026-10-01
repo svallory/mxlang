@@ -13,10 +13,17 @@ function consumerCodes(stub: string, consumer: string): number[] {
   const host = ts.createCompilerHost({});
   const read = host.readFile.bind(host);
   host.readFile = (f) => files[f] ?? read(f);
+  const realExists = host.fileExists.bind(host);
+  const realSource = host.getSourceFile.bind(host);
+  const ours = (f: string) => f.startsWith("/project/");
   host.directoryExists = () => true;
-  host.fileExists = (f) => f in files;
-  host.getSourceFile = (f, lang) =>
-    files[f] === undefined ? undefined : ts.createSourceFile(f, files[f], lang);
+  host.fileExists = (f) => (ours(f) ? f in files : realExists(f));
+  host.getSourceFile = (f, lang, ...rest) =>
+    ours(f)
+      ? files[f] === undefined
+        ? undefined
+        : ts.createSourceFile(f, files[f], lang)
+      : realSource(f, lang, ...rest);
   const program = ts.createProgram(
     ["/project/index.ts"],
     {
@@ -24,7 +31,7 @@ function consumerCodes(stub: string, consumer: string): number[] {
       noEmit: true,
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
-      noLib: true,
+      types: [],
       allowImportingTsExtensions: true,
     },
     host,
@@ -40,6 +47,49 @@ function parseErrors(text: string): number {
   return (file as unknown as { parseDiagnostics: unknown[] }).parseDiagnostics
     .length;
 }
+
+const USAGES = [
+  'import Def, { count, label, make, Box, Color, list, fromOther, arrow, ünï, get, type as kind } from "./stub.ts";',
+  'import * as NS from "./stub.ts";',
+  "declare function takesNum(n: number): void;",
+  "declare function takesStr(s: string): void;",
+  "const a1 = count + 1; const a2 = count * 2; const a3 = count < 3; const a12 = -count;",
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: TypeScript source under test
+  "const a4 = `${label}!`; const a5 = { ...count }; const a6 = [...list];",
+  "async function f() { return await count; }",
+  "const a7 = Def instanceof Box;",
+  "const a8: number = count; takesNum(count); takesStr(label);",
+  "const a9 = list[0]; const a10 = ({} as Record<string, number>)[label];",
+  "const a11 = count === 1;",
+  "for (const x of list) { void x; }",
+  "const [d0] = list;",
+  "const a13 = label.toUpperCase();",
+  "const a14 = new Box<string>(); const a15 = make<number>(1); const a16: Box<string> = a14;",
+  "const a17 = Color.Red; const a18: Color = Color.Red;",
+  'const a19 = NS.make<string>("x"); const a19b = arrow<number>(1); const a19c = NS.get + ünï;',
+  "const a20 = count ? 1 : 2; const a21 = String(count); const a22 = count + '';",
+  "const a23 = fromOther + 1; const a24 = label + 's';",
+  "const a25 = Math.max(count, 2); const a26 = JSON.stringify(count);",
+  "const a27 = list.map((x: number) => x + 1); const a28: string[] = list;",
+  "const a29 = typeof count === 'number' ? count + 1 : 0;",
+  "switch (count) { case 1: break; }",
+  "const a30 = [count, 2].includes(count); const k: kind = 1;",
+  "export { a1, a2, a3, a4, a5, a6, f, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a19b, a19c, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, d0, k };",
+].join("\n");
+
+const USAGE_SOURCE = [
+  "export const count = 1;",
+  "export const label = 'x';",
+  "export function make<T>(x: T): T { return x }",
+  "export class Box<T> { v!: T }",
+  "export enum Color { Red }",
+  "export const list = [1, 2];",
+  "export const arrow = <T,>(x: T) => x;",
+  "export const ünï = 1;",
+  "export const get = 1;",
+  "export type type = number;",
+  "const fromOther = 1; export { fromOther };",
+].join("\n");
 
 const EVERY_FORM = [
   'import S, { Box, make, Color, Input, helper } from "./stub.ts";',
@@ -67,6 +117,23 @@ describe("failedModuleStub", () => {
       ].join("\n"),
     );
     expect(consumerCodes(stub, EVERY_FORM)).toEqual([]);
+  });
+
+  it("a table of ordinary usages through every import form gives no stub error", () => {
+    expect(consumerCodes(failedModuleStub(USAGE_SOURCE), USAGES)).toEqual([]);
+  });
+
+  it("keeps contextual keywords and unicode names, and survives helper-name exports", () => {
+    const stub = failedModuleStub(
+      "export const get = 1;\nexport function set() {}\nexport const café = 1;\nexport const __mxFailed = 1;\nexport const __MxAny = 2;\nexport const type = 3;",
+    );
+    expect(parseErrors(stub)).toBe(0);
+    expect(
+      consumerCodes(
+        stub,
+        'import { get, set, café, __mxFailed, __MxAny, type } from "./stub.ts";\nexport const x = [get, set, café, __mxFailed, __MxAny, type];',
+      ),
+    ).toEqual([]);
   });
 
   it("does not miscount type parameters containing =>", () => {
