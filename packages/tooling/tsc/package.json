@@ -19,7 +19,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build src/index.ts src/bin.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external @mxlang/angular --external @mxlang/angular-checker --external @mxlang/parser --external @mxlang/typescript-plugin --external @volar/language-core --external @volar/typescript --external typescript",
+    "build": "bun build src/index.ts src/bin.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --define import.meta.url=__mxImportMetaUrl --define __filename=__mxFilename --define __dirname=__mxDirname --banner 'var __mxImportMetaUrl = require(\"node:url\").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;' --external @mxlang/angular --external @mxlang/angular-checker --external @mxlang/parser --external @mxlang/typescript-plugin --external @volar/language-core --external @volar/typescript --external typescript && bun ../../../scripts/bundled-build.ts dist/*.cjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

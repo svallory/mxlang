@@ -136,6 +136,26 @@ export function packedFiles(dir: string): string[] {
   );
 }
 
+/**
+ * Packed files that bake the machine they were built on: a `file:///` literal
+ * or the build root. Bun's CJS output inlines `import.meta.url` as the build
+ * machine's absolute URL, so a `createRequire(import.meta.url)` resolved from
+ * the build tree instead of the installed package (see
+ * `scripts/bundled-build.ts`). Only text files are read.
+ */
+export function bakedBuildPaths(
+  dir: string,
+  packed: string[],
+  root: string = repoRoot,
+): string[] {
+  return packed
+    .filter((f) => /\.(c|m)?js$/.test(f))
+    .filter((f) => {
+      const code = readFileSync(join(dir, f), "utf8");
+      return code.includes("file:///") || code.includes(root);
+    });
+}
+
 /** Every string a `main`/`types`/`bin`/`exports` field points at, as a tarball path. */
 export function entryTargets(pkg: PackageJson): string[] {
   const targets: string[] = [];

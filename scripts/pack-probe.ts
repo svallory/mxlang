@@ -34,6 +34,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -318,6 +319,42 @@ function smokeMxTsc(): string | undefined {
   );
   if (r.status !== 0 || !/Version \d+\.\d+/.test(r.out)) {
     return `mx-tsc --version did not print a TypeScript version (exit ${r.status})\n${r.out}`;
+  }
+
+  // One real typecheck, which loads the plugin and the compiler through the
+  // packed bundle's own `createRequire`s: the `.mx` import resolves and types,
+  // so the deliberate misuse is the only error (an unresolved plugin would
+  // report TS2307 for `./comp.mx` instead).
+  const manifestPath = join(dir, "package.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as object;
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({ ...manifest, mx: { host: "html" } }, null, 2),
+  );
+  writeFileSync(join(dir, "comp.mx"), "<div>hi</div>\n");
+  writeFileSync(
+    join(dir, "index.ts"),
+    'import Comp from "./comp.mx";\nconst misuse: number = Comp;\n',
+  );
+  writeFileSync(
+    join(dir, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        module: "esnext",
+        moduleResolution: "bundler",
+        jsx: "preserve",
+        noEmit: true,
+        skipLibCheck: true,
+      },
+      files: ["index.ts"],
+    }),
+  );
+  const check = run(bin, ["-p", "tsconfig.json"], dir);
+  console.log(
+    `[pack-probe] mx-tsc typecheck: exit ${check.status}\n${check.out.trim().split("\n").slice(0, 6).join("\n")}`,
+  );
+  if (!/TS2322/.test(check.out) || /TS2307/.test(check.out)) {
+    return `mx-tsc did not type the .mx import (expected exactly the planted TS2322):\n${check.out}`;
   }
   return undefined;
 }

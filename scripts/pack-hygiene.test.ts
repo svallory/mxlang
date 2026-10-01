@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
+  bakedBuildPaths,
   declarationFiles,
   declaredNames,
   entryTargets,
@@ -83,6 +84,10 @@ for (const p of PACKED_PACKAGES) {
           /(^|\/)(moon\.yml|tsconfig[^/]*\.json)$/.test(f),
       );
       expect(junk).toEqual([]);
+    });
+
+    it("bakes no build-machine path (file:/// or the build root) into shipped JS", () => {
+      expect(bakedBuildPaths(dir, packed)).toEqual([]);
     });
 
     it("packs every main/types/bin/exports target, none into src", () => {
@@ -185,6 +190,27 @@ describe("@mxlang/html ambient `*.mx` declaration", () => {
 function never(): never {
   throw new Error("@mxlang/html is not in PACKED_PACKAGES");
 }
+
+describe("bakedBuildPaths", () => {
+  it("flags a file:/// literal and the build root, only in JS files", () => {
+    const dir = mkdtempSync(join(tmpdir(), "baked-"));
+    try {
+      writeFileSync(join(dir, "a.cjs"), 'createRequire("file:///b/x.ts")');
+      writeFileSync(join(dir, "b.js"), 'const r = "/build/root/x";');
+      writeFileSync(join(dir, "c.js"), "clean");
+      writeFileSync(join(dir, "d.d.ts"), 'import "file:///ignored"');
+      expect(
+        bakedBuildPaths(
+          dir,
+          ["a.cjs", "b.js", "c.js", "d.d.ts"],
+          "/build/root",
+        ),
+      ).toEqual(["a.cjs", "b.js"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("runtime bare-import check", () => {
   const scratch = mkdtempSync(join(tmpdir(), "runtime-imports-"));

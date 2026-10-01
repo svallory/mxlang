@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: the plugin's builds no longer bake the build machine's path
+
+`dist/index.cjs` and the VSIX `bundle/` contained `createRequire("file:///<build tree>/...")` (Bun inlines `import.meta.url` in CJS output), so the plugin loaded `@marko/compiler`, `@mxlang/core`'s dependencies and the Angular worker from the machine that built it. `build` and `build:bundled` now define `import.meta.url`, `__filename` and `__dirname` from the bundle's own location, and fail if a `file:///` literal or the build root remains.
+
 ### Changed: `build/bundled.ts` uses the shared `scripts/bundled-build.ts`
 
 The `Bun.build` call moved to the repo-root `scripts/bundled-build.ts`, shared with the language server's own bundled build. The output is unchanged.
