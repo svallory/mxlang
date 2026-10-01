@@ -49,7 +49,7 @@ function parseErrors(text: string): number {
 }
 
 const USAGES = [
-  'import Def, { count, label, make, Box, Color, list, fromOther, arrow, ünï, get, type as kind } from "./stub.ts";',
+  'import Def, { count, label, make, Box, Color, list, fromOther, arrow, ünï, get, type as kind, view, row, t, total, C, E, asyncFn, typed } from "./stub.ts";',
   'import * as NS from "./stub.ts";',
   "declare function takesNum(n: number): void;",
   "declare function takesStr(s: string): void;",
@@ -74,7 +74,9 @@ const USAGES = [
   "const a29 = typeof count === 'number' ? count + 1 : 0;",
   "switch (count) { case 1: break; }",
   "const a30 = [count, 2].includes(count); const k: kind = 1;",
-  "export { a1, a2, a3, a4, a5, a6, f, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a19b, a19c, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, d0, k };",
+  "const jv: { a: 1 } = view; const jr: { a: 1 } = row; const tn: number = t; const tt: number = total;",
+  "const ci = new C<string>(); const ce = new E<number>(); const af = asyncFn<number>(1); const sf = typed<string>('s');",
+  "export { jv, jr, tn, tt, ci, ce, af, sf, a1, a2, a3, a4, a5, a6, f, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a19b, a19c, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, d0, k };",
 ].join("\n");
 
 const USAGE_SOURCE = [
@@ -88,6 +90,14 @@ const USAGE_SOURCE = [
   "export const ünï = 1;",
   "export const get = 1;",
   "export type type = number;",
+  "export const view = <Card a={1}>text</Card>;",
+  "export const row = (\n  <Card>\n    <b/>\n  </Card>\n);",
+  "export const t = (1 + 2);",
+  "export const total = (count * 2) + 1;",
+  "export const C = class <T> { v!: T };",
+  "export const E = (class <T> { v!: T }) as unknown as new <T>() => unknown;",
+  "export const asyncFn = async <T,>(x: T): Promise<T> => x;",
+  "export const typed: <T>(x: T) => T = (x) => x;",
   "const fromOther = 1; export { fromOther };",
 ].join("\n");
 
@@ -108,6 +118,7 @@ const EVERY_FORM = [
 describe("failedModuleStub", () => {
   it("absorbs generic types, generic new and generic calls through every import form", () => {
     const stub = failedModuleStub(
+      ts,
       [
         "export class Box<T> { v!: T }",
         "export function make<T>(x: T): T { return x }",
@@ -120,11 +131,14 @@ describe("failedModuleStub", () => {
   });
 
   it("a table of ordinary usages through every import form gives no stub error", () => {
-    expect(consumerCodes(failedModuleStub(USAGE_SOURCE), USAGES)).toEqual([]);
+    expect(consumerCodes(failedModuleStub(ts, USAGE_SOURCE), USAGES)).toEqual(
+      [],
+    );
   });
 
   it("keeps contextual keywords and unicode names, and survives helper-name exports", () => {
     const stub = failedModuleStub(
+      ts,
       "export const get = 1;\nexport function set() {}\nexport const café = 1;\nexport const __mxFailed = 1;\nexport const __MxAny = 2;\nexport const type = 3;",
     );
     expect(parseErrors(stub)).toBe(0);
@@ -138,6 +152,7 @@ describe("failedModuleStub", () => {
 
   it("does not miscount type parameters containing =>", () => {
     const stub = failedModuleStub(
+      ts,
       "export interface Box<A extends () => void, B> { a: A; b: B }",
     );
     expect(
@@ -149,7 +164,10 @@ describe("failedModuleStub", () => {
   });
 
   it("keeps later exports when a mid-edit export has no name yet", () => {
-    const stub = failedModuleStub("export type\nexport const helper = 1;\n");
+    const stub = failedModuleStub(
+      ts,
+      "export type\nexport const helper = 1;\n",
+    );
     expect(parseErrors(stub)).toBe(0);
     expect(stub).not.toMatch(/\bexport (declare )?const export\b/);
     expect(
@@ -181,7 +199,7 @@ describe("failedModuleStub", () => {
     ];
     for (const source of garbage) {
       expect(
-        parseErrors(failedModuleStub(source)),
+        parseErrors(failedModuleStub(ts, source)),
         JSON.stringify(source),
       ).toBe(0);
     }
@@ -189,6 +207,7 @@ describe("failedModuleStub", () => {
 
   it("copies export-star re-exports verbatim", () => {
     const stub = failedModuleStub(
+      ts,
       'export * from "./other.ts";\nexport * as ns from "./other.ts";\n',
     );
     expect(
@@ -201,6 +220,7 @@ describe("failedModuleStub", () => {
 
   it("stubs destructured exports", () => {
     const stub = failedModuleStub(
+      ts,
       "export const { alpha, b: beta, c = 1, ...rest } = obj;\nexport const [first, , third] = arr;",
     );
     expect(
@@ -212,7 +232,7 @@ describe("failedModuleStub", () => {
   });
 
   it("does not leak the name of `export default function Named`", () => {
-    const stub = failedModuleStub("export default function Named() {}");
+    const stub = failedModuleStub(ts, "export default function Named() {}");
     expect(stub).not.toContain("Named");
     expect(
       consumerCodes(stub, 'import { Named } from "./stub.ts";\nvoid Named;'),

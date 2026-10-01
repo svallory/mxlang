@@ -1,3 +1,5 @@
+import type * as ts from "typescript";
+
 /**
  * The virtual module for a template that failed to compile.
  *
@@ -83,16 +85,115 @@ function escapeRegExp(text: string): string {
   return text.replace(/[$()*+.?[\\\]^{|}]/gu, "\\$&");
 }
 
-/** Is `name` declared in `source` as a function, a class or a function-valued binding? */
-function declaredCallable(source: string, name: string): boolean {
-  const id = escapeRegExp(name);
-  return new RegExp(
-    `\\b(?:function\\*?|class)[ \\t]+${id}(?![\\p{ID_Continue}$])|\\b(?:const|let|var)[ \\t]+${id}[ \\t]*(?::[^=\\n]*)?=[ \\t]*(?:async[ \\t]+)?(?:function\\b|<|\\(|${IDENT}[ \\t]*=>)`,
-    "u",
-  ).test(source);
+const STATEMENT_START =
+  /^[ \t]*(?:export|import|const|let|var|function|class|interface|type|enum|static)\b/u;
+
+/**
+ * The text of the statement that starts at `start`: up to the next blank line
+ * or statement-keyword line once every bracket opened so far is closed. The
+ * source is a *failed* template, not TypeScript, so only this slice is ever
+ * parsed, never the whole file.
+ */
+function statementText(source: string, start: number): string {
+  let depth = 0;
+  for (let index = start; index < source.length; index++) {
+    const char = source[index];
+    if (char === "{" || char === "[" || char === "(") depth++;
+    else if (char === "}" || char === "]" || char === ")") depth--;
+    else if (char === "\n" && depth <= 0) {
+      const rest = source.slice(index + 1);
+      const line = rest.slice(0, rest.indexOf("\n") + 1 || undefined);
+      if (line.trim() === "" || STATEMENT_START.test(line)) {
+        return source.slice(start, index);
+      }
+    }
+  }
+  return source.slice(start);
 }
 
-function namedExports(source: string): Map<string, Kind> {
+/**
+ * Does the `const`/`let`/`var` statement at `start` initialize `name` with a
+ * function, an arrow or a class (through parentheses, `as`, `satisfies`, `!`)?
+ * Parsed with the TypeScript AST as TSX, so a JSX initializer parses as JSX
+ * and is data. Never throws: anything unparseable is data, the safe default,
+ * because a wrongly callable data binding is what cascades.
+ */
+function initializerIsCallable(
+  typescript: typeof ts,
+  source: string,
+  start: number,
+  name: string,
+): boolean {
+  try {
+    const file = typescript.createSourceFile(
+      "stub.tsx",
+      statementText(source, start).replace(/^[ \t]*export[ \t]+/u, ""),
+      typescript.ScriptTarget.Latest,
+      false,
+      typescript.ScriptKind.TSX,
+    );
+    for (const statement of file.statements) {
+      if (!typescript.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          !typescript.isIdentifier(declaration.name) ||
+          declaration.name.text !== name
+        ) {
+          continue;
+        }
+        let init: ts.Expression | undefined = declaration.initializer;
+        while (
+          init &&
+          (typescript.isParenthesizedExpression(init) ||
+            typescript.isAsExpression(init) ||
+            typescript.isSatisfiesExpression(init) ||
+            typescript.isNonNullExpression(init) ||
+            typescript.isTypeAssertionExpression(init))
+        ) {
+          init = init.expression;
+        }
+        return (
+          init !== undefined &&
+          (typescript.isArrowFunction(init) ||
+            typescript.isFunctionExpression(init) ||
+            typescript.isClassExpression(init))
+        );
+      }
+    }
+  } catch {
+    // fall through: data
+  }
+  return false;
+}
+
+/** Is a local `name` a function, a class or a function-valued binding? */
+function declaredCallable(
+  typescript: typeof ts,
+  source: string,
+  name: string,
+): boolean {
+  const id = escapeRegExp(name);
+  if (
+    new RegExp(
+      `(?<![\\p{ID_Continue}$.])(?:function\\*?|class)[ \\t]+${id}(?![\\p{ID_Continue}$])`,
+      "u",
+    ).test(source)
+  ) {
+    return true;
+  }
+  const declaration = new RegExp(
+    `(?<![\\p{ID_Continue}$.])(?:const|let|var)[ \\t]+${id}(?![\\p{ID_Continue}$])`,
+    "u",
+  ).exec(source);
+  return declaration
+    ? initializerIsCallable(typescript, source, declaration.index, name)
+    : false;
+}
+
+function namedExports(
+  typescript: typeof ts,
+  source: string,
+): Map<string, Kind> {
   const names = new Map<string, Kind>();
   const add = (name: string, kind: Kind) => {
     if (kind === "callable" || !names.has(name)) names.set(name, kind);
@@ -108,7 +209,13 @@ function namedExports(source: string): Map<string, Kind> {
         match[3],
         keyword.startsWith("function") || keyword === "class"
           ? "callable"
-          : declaredCallable(source, match[3])
+          : (keyword === "const" || keyword === "let" || keyword === "var") &&
+              initializerIsCallable(
+                typescript,
+                source,
+                match.index ?? 0,
+                match[3],
+              )
             ? "callable"
             : "data",
       );
@@ -125,7 +232,9 @@ function namedExports(source: string): Map<string, Kind> {
       if (usable(exported)) {
         add(
           exported,
-          local && declaredCallable(source, local) ? "callable" : "data",
+          local && declaredCallable(typescript, source, local)
+            ? "callable"
+            : "data",
         );
       }
     }
@@ -137,13 +246,16 @@ function namedExports(source: string): Map<string, Kind> {
 const PARAMS = Array.from({ length: 8 }, (_, i) => `_${i} = any`).join(", ");
 const CALLABLE = `{ <${PARAMS}>(...a: any[]): any; new <${PARAMS}>(...a: any[]): any; [k: string]: any }`;
 
-export function failedModuleStub(source: string): string {
+export function failedModuleStub(
+  typescript: typeof ts,
+  source: string,
+): string {
   const lines = [
     "declare const __mx$failed$: any;",
     "export default __mx$failed$;",
     `type __Mx$Any$ = ${CALLABLE};`,
   ];
-  for (const [name, kind] of namedExports(source)) {
+  for (const [name, kind] of namedExports(typescript, source)) {
     lines.push(
       `export declare const ${name}: ${kind === "callable" ? "__Mx$Any$" : "any"}; export type ${name}<${PARAMS}> = any;`,
     );

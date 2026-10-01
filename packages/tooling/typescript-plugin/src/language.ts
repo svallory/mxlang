@@ -176,7 +176,7 @@ export function createSolidMxLanguagePlugin(
           compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
           return createVirtualCode(
             typescript,
-            failedModuleStub(source),
+            failedModuleStub(typescript, source),
             source,
             undefined,
           );
@@ -186,7 +186,7 @@ export function createSolidMxLanguagePlugin(
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
         return createVirtualCode(
           typescript,
-          failedModuleStub(source),
+          failedModuleStub(typescript, source),
           source,
           undefined,
         );
@@ -310,7 +310,7 @@ export function createNgMxLanguagePlugin(
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
         return createVirtualCode(
           typescript,
-          failedModuleStub(source),
+          failedModuleStub(typescript, source),
           source,
           undefined,
           [],
@@ -380,7 +380,7 @@ export function createNgMxLanguagePlugin(
           compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
           return createVirtualCode(
             typescript,
-            failedModuleStub(source),
+            failedModuleStub(typescript, source),
             source,
             undefined,
             [],

@@ -153,12 +153,20 @@ export function createMxLanguagePlugin(
             foreign.templateDiagnostic,
           ]);
           compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
-          return createVirtualCode(typescript, failedModuleStub(source), []);
+          return createVirtualCode(
+            typescript,
+            failedModuleStub(typescript, source),
+            [],
+          );
         }
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
-        return createVirtualCode(typescript, failedModuleStub(source), []);
+        return createVirtualCode(
+          typescript,
+          failedModuleStub(typescript, source),
+          [],
+        );
       }
     },
 
