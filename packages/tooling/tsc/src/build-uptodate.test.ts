@@ -220,6 +220,11 @@ describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () =>
       expect(second.status).toBe(1);
       expect(second.output).toBe(first.output);
 
+      // A forced rebuild reports each template error exactly once.
+      const forced = await mxTscIn(app, ["-b", "--force", "."]);
+      expect(forced.status).toBe(1);
+      expect(templateErrors(forced.output)).toEqual([APP_ERROR]);
+
       // Breaking the template's own markup: the compile itself fails, and that
       // is reported by the language plugin, once, not by the template pass.
       writeFileSync(
@@ -266,6 +271,18 @@ describe.concurrent("mx-tsc -b: Angular templates of up-to-date projects", () =>
       const third = await mxTscIn(app, ["-b", "."]);
       expect(third.status).toBe(1);
       expect(templateErrors(third.output)).toEqual([LIB_ERROR]);
+
+      // Only the root is named, the root is clean, and the referenced lib is
+      // the broken one: still reported, on the rebuild and on the up-to-date
+      // run after it (the transitive silent pass).
+      setTemplate(dir, "app", CLEAN);
+      for (const run of [1, 2]) {
+        const result = await mxTscIn(app, ["-b", "."]);
+        expect(result.status, `root clean, run ${run}`).toBe(1);
+        expect(templateErrors(result.output), `root clean, run ${run}`).toEqual(
+          [LIB_ERROR],
+        );
+      }
     },
     CASE_TIMEOUT_MS,
   );
