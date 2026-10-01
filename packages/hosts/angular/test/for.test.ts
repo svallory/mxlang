@@ -73,7 +73,7 @@ describe("For of", () => {
   });
 
   it("rejects a template-literal by= containing an interpolation", () => {
-    expect(() => emit("<for|p| of=people by=`${p.a}id`>${p}</for>")).toThrow(
+    expect(() => emit("<for|p| of=people by=`${prefix}id`>${p}</for>")).toThrow(
       /Angular's `track` is an expression, not a function/,
     );
   });

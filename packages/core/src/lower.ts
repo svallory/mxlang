@@ -1431,6 +1431,67 @@ function lowerIfChain(
 }
 
 /**
+ * The first read, in `by=`'s value, of a name the loop's own params bind.
+ *
+ * A plain walk, as in Marko's translator (`findLoopParamRead` in
+ * `packages/runtime-tags/src/translator/core/for.ts`, 6.3.51): functions and
+ * classes are skipped, since their own params may shadow, and a member
+ * property or a non-computed object key is a name, not a read.
+ */
+function findLoopParamRead(
+  value: Node,
+  names: ReadonlySet<string>,
+): Node | undefined {
+  switch (value.type) {
+    case "Identifier":
+      return names.has(value.name) ? value : undefined;
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return (
+        findLoopParamRead(value.object, names) ||
+        (value.computed ? findLoopParamRead(value.property, names) : undefined)
+      );
+  }
+
+  const { types } = markoBabel();
+  if (types.isFunction(value) || types.isClass(value)) return undefined;
+
+  for (const key of types.VISITOR_KEYS[value.type] ?? []) {
+    if (key === "typeAnnotation" || key === "typeParameters") continue;
+    if (key === "key" && !value.computed) continue;
+    const child = value[key];
+    for (const item of Array.isArray(child) ? child : [child]) {
+      const found = item?.type && findLoopParamRead(item, names);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * `by=` runs once, before the loop, so the tag's params are not in scope there
+ * (Marko: "The `by=` attribute is evaluated before the loop runs"). Reported at
+ * the offending name, as Marko does, instead of surviving to a host's own
+ * type error at a generated position or to a render-time ReferenceError.
+ */
+function rejectLoopParamInBy(node: Node, by: Node): void {
+  const { types } = markoBabel();
+  const names = new Set<string>();
+  for (const param of node.body?.params ?? []) {
+    for (const name of Object.keys(types.getBindingIdentifiers(param))) {
+      names.add(name);
+    }
+  }
+  if (names.size === 0) return;
+  const read = findLoopParamRead(by.value, names);
+  if (!read) return;
+  fail(
+    `The \`by=\` attribute is evaluated before the loop runs, so \`${read.name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
+    read,
+  );
+}
+
+/**
  * All of `<for>`'s forms, normalized to the three a host emits.
  *
  * `by=` names which item a DOM node belongs to across re-renders. A one-shot
@@ -1497,6 +1558,7 @@ function lowerForHead(
   requireValue(until, "until");
   requireValue(step, "step");
   requireValue(by, "by");
+  if (by) rejectLoopParamInBy(node, by);
 
   let source: ForSource;
   if (of) {

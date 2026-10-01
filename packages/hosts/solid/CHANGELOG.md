@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (audit-02-for-by-parity):** `<for by=x.id>` (any read of a loop param in `by=`) is now a positioned error, as in Marko 6.3.51, instead of passing silently (solid used to surface a stray `TS2304` at a generated position). See `@mxlang/core`.
+
 - **Fix (audit-01-prop-attr-parity):** an attribute name outside Marko's grammar (`[prop]=`, `#ref`, `*ngIf`) is now a positioned "Invalid attribute name" error, as in Marko 6.3.51, instead of passing through. See `@mxlang/core`.
 
 ### Test: a real client (DOM) render harness for live `<for>` updates (solid-client-render-harness)

@@ -1126,7 +1126,7 @@ describe("one fixture per IR kind", () => {
       ).not.toThrow();
       expect(() =>
         lowerSource(
-          "<Panel><for|x| of=input.xs by=x.id><@of/><@by/></for></Panel>",
+          "<Panel><for|x| of=input.xs by='id'><@of/><@by/></for></Panel>",
           v2(),
         ),
       ).not.toThrow();

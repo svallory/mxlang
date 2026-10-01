@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: `<for by=>` that reads a loop param is a positioned error, not a silent pass (audit-02-for-by-parity)
+
+**Behaviour change:** `<for|x| of=items by=x.id>` compiled silently on html and preact and surfaced only as a stray `TS2304 'x'` at a generated position on solid. `by=` is evaluated once, before the loop, so the tag's params are not in scope there; Marko 6.3.51 rejects it (`runtime-tags` `translator/core/for.ts`, `findLoopParamRead`). `lowerForHead` now fails at the offending name, for `of`, `in`, `to` and `until`, with Marko's message and its hint (`by="id"` or `by=(x) => key`). The walk is Marko's own: a function or class in the value is skipped (`by=(x) => x.id`, `by=(y) => x.id` stay valid), a non-computed member property is a name and not a read, and an outer variable (`by=key`) or function (`by=someFn`) is accepted. Applies to every host, Angular included (its `by=(p => p.id)` and `by="id"` forms are unchanged).
+
 ### Fix: an attribute name outside Marko's grammar is a positioned error, not a silent pass-through (audit-01-prop-attr-parity)
 
 **Behaviour change:** `<div [prop]="x">`, `<div #ref>`, `<div *ngIf="x">`, `<div [attr.x]="y">` and `<div @foo=1>` compiled silently on every non-Angular host (html passed every surface; preact then emitted invalid JSX that failed at a generated position). Marko 6.3.51 rejects them ("Invalid attribute name.", `runtime-tags` `normalizeTag`). `lowerAttr` now applies Marko's own name grammar (`[a-z_][a-z0-9._:-]*`, the same for elements and custom tags: Marko 6.3.51 also rejects `<foo $foo=1/>`) and fails at the authored name with a hint (`write \`prop=\``, `<if=cond>`, `class={ a: cond }`, …). `HostDeclarations.acceptsForeignAttrNames` opts a host out; only `@mxlang/angular` sets it.

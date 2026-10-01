@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (audit-02-for-by-parity):** `<for by=x.id>` (any read of a loop param in `by=`) is now a positioned error, as in Marko 6.3.51, instead of passing silently (the bare `by=p.id` form already failed, at the loop; it now fails at the name). See `@mxlang/core`.
+
 - **Unchanged (audit-01-prop-attr-parity):** `[prop]=`, `#ref`, `*ngIf` keep passing through; the host sets `acceptsForeignAttrNames` to opt out of core's new Marko attribute-name check. Pinned by `test/attr-name-passthrough.test.ts`.
 
 ### Fixed
