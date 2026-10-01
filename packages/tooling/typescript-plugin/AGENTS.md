@@ -115,7 +115,10 @@ entry.
   info knows nothing about templates. `resolveBuildProjects` walks the named
   projects and their `references`, takes each project's `.ng.mx` from its
   parsed `include`/`files` (the `.mx` extra extension needs
-  `scriptKind: Deferred`, or the glob matches nothing), and
+  `scriptKind: Deferred`, or the glob matches nothing) **and its import
+  closure** (`ngMxImportClosure`: `preProcessFile` + `resolveModuleName` under
+  the project's options; the Angular CLI default layout matches no `.ng.mx` by
+  glob), and
   `collectBuildTemplateInputs` reuses tsc's compile where there is one and
   compiles the rest with a fresh plugin (no program). Each file is checked once,
   under its project's tsconfig. `--clean` skips the pass; `--dry` prints what it

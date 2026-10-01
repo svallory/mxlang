@@ -9,7 +9,7 @@
  * build graph and the `.ng.mx` files it owns, whether or not tsc rebuilt it.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import {
@@ -42,14 +42,68 @@ export function parseBuildMode(argv: readonly string[]): BuildMode | undefined {
   if (!argv[0]?.startsWith("-") || (first !== "b" && first !== "build")) {
     return undefined;
   }
-  const { buildOptions } = loadTypeScript().parseBuildCommand([...argv]);
+  const { buildOptions, errors } = loadTypeScript().parseBuildCommand([
+    ...argv,
+  ]);
+  // `--help`, `--version` and a command line tsc rejects build nothing.
+  if (buildOptions.help || buildOptions.version || errors.length > 0) {
+    return undefined;
+  }
   return { clean: !!buildOptions.clean, dry: !!buildOptions.dry };
 }
 
 export interface BuildProject {
   tsconfigPath: string;
-  /** Absolute paths of the `.ng.mx` files the project's `include`/`files` select. */
+  /** Absolute paths of the `.ng.mx` files the project selects or imports. */
   ngMxFiles: string[];
+}
+
+const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|mx)$/;
+const IMPORTABLE_MX = /\.mx$/;
+
+/**
+ * The `.ng.mx` files a project reaches: its own root files (`include`/`files`)
+ * and everything they import, transitively, under the project's compiler
+ * options (`paths`, `baseUrl`, `moduleResolution`). Lexical only (`preProcessFile`
+ * and `resolveModuleName`), no program and no type-check, so it costs
+ * milliseconds. Needed because the Angular CLI's default `tsconfig.app.json`
+ * includes `src/**\/*.ts`, which matches no `.ng.mx`: every component is reached
+ * only by import. Node modules and declaration files are not followed.
+ */
+export function ngMxImportClosure(
+  rootFiles: readonly string[],
+  options: import("typescript").CompilerOptions,
+): string[] {
+  const ts = loadTypeScript();
+  const seen = new Set<string>();
+  const found: string[] = [];
+  const queue = rootFiles.filter((file) => SOURCE_FILE.test(file));
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    if (seen.has(file) || file.includes("/node_modules/")) continue;
+    seen.add(file);
+    if (file.endsWith(".d.ts") || !existsSync(file)) continue;
+    if (file.endsWith(".ng.mx")) found.push(file);
+    let specifiers: string[];
+    try {
+      specifiers = ts
+        .preProcessFile(readFileSync(file, "utf8"), true, true)
+        .importedFiles.map((imported) => imported.fileName);
+    } catch {
+      continue;
+    }
+    for (const specifier of specifiers) {
+      // TypeScript's resolver does not know `.mx`; a relative specifier that
+      // names one is a plain path.
+      const target =
+        IMPORTABLE_MX.test(specifier) && specifier.startsWith(".")
+          ? resolve(dirname(file), specifier)
+          : ts.resolveModuleName(specifier, file, options, ts.sys)
+              .resolvedModule?.resolvedFileName;
+      if (target && SOURCE_FILE.test(target)) queue.push(target);
+    }
+  }
+  return found;
 }
 
 /**
@@ -88,7 +142,12 @@ export function resolveBuildProjects(
     );
     projects.push({
       tsconfigPath,
-      ngMxFiles: parsed.fileNames.filter((file) => file.endsWith(".ng.mx")),
+      ngMxFiles: [
+        ...new Set([
+          ...parsed.fileNames.filter((file) => file.endsWith(".ng.mx")),
+          ...ngMxImportClosure(parsed.fileNames, parsed.options),
+        ]),
+      ],
     });
     for (const reference of parsed.projectReferences ?? []) {
       visit(ts.resolveProjectReferencePath(reference));

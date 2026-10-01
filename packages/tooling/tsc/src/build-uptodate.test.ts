@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -31,6 +32,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packageDir = join(here, "..");
 const mxTsc = join(packageDir, "dist", "bin.cjs");
 const fixture = join(here, "fixtures", "ng-build-refs");
+/** Angular CLI's default layout: a solution root, a non-composite app project. */
+const cliFixture = join(here, "fixtures", "ng-build-cli");
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: MX interpolation, not a JS template
 const CLEAN = "<p>${user.name}</p>";
@@ -81,10 +84,10 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
     await new Promise<void>((resolve) => setImmediate(resolve));
   });
 
-  function scratch(): string {
+  function scratch(from = fixture): string {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-tsc-build-")));
     created.push(dir);
-    cpSync(fixture, dir, { recursive: true });
+    cpSync(from, dir, { recursive: true });
     symlinkSync(join(packageDir, "node_modules"), join(dir, "node_modules"));
     return dir;
   }
@@ -338,6 +341,86 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
       const result = mxTscIn(app, ["-b", "."]);
       expect(result.status).toBe(1);
       expect(result.output).toContain("app.component.ng.mx(");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "checks a .ng.mx reached only by import (the Angular CLI solution layout) on every run",
+    () => {
+      const dir = scratch(cliFixture);
+      const file = join(dir, "src", "app.component.ng.mx");
+      const broken = (body: string) =>
+        writeFileSync(
+          file,
+          readFileSync(file, "utf8").replace(
+            /template: .*,\n/,
+            `template: ${body},\n`,
+          ),
+        );
+      broken(BROKEN);
+
+      const first = mxTscIn(dir, ["-b", "."]);
+      expect(first.status).toBe(1);
+      expect(templateErrors(first.output)).toEqual([
+        "app.component.ng.mx(5,18): TS2339",
+      ]);
+      // tsc's build info says the project is up to date; the file is in
+      // no `include`, only in `main.ts`'s import closure.
+      const second = mxTscIn(dir, ["-b", "."]);
+      expect(second.status).toBe(1);
+      expect(second.output).toBe(first.output);
+
+      broken(CLEAN);
+      expect(mxTscIn(dir, ["-b", "."]).status).toBe(0);
+      expect(mxTscIn(dir, ["-b", "."]).status).toBe(0);
+      broken(BROKEN);
+      expect(mxTscIn(dir, ["-b", "."]).status).toBe(1);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "follows imports through .ts files and a paths alias, and checks each file once",
+    () => {
+      const dir = scratch(cliFixture);
+      const file = join(dir, "src", "app.component.ng.mx");
+      writeFileSync(file, readFileSync(file, "utf8").replace(CLEAN, BROKEN));
+      mkdirSync(join(dir, "src", "deep"));
+      writeFileSync(join(dir, "src", "main.ts"), 'import "@app/barrel";\n');
+      writeFileSync(
+        join(dir, "src", "deep", "barrel.ts"),
+        'export { AppComponent } from "../app.component.ng.mx";\nexport { AppComponent as Again } from "../app.component.ng.mx";\n',
+      );
+      const config = join(dir, "tsconfig.app.json");
+      const json = JSON.parse(readFileSync(config, "utf8"));
+      json.compilerOptions.paths = { "@app/*": ["./src/deep/*"] };
+      writeFileSync(config, JSON.stringify(json));
+
+      for (const expectedRun of [1, 2]) {
+        const result = mxTscIn(dir, ["-b", "."]);
+        expect(result.status, `run ${expectedRun}`).toBe(1);
+        expect(templateErrors(result.output)).toEqual([
+          "app.component.ng.mx(5,18): TS2339",
+        ]);
+      }
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
+    "never runs the template pass for -b --help, nor for a -b command line tsc rejects",
+    () => {
+      const dir = scratch();
+      setTemplate(dir, "app", BROKEN);
+      const app = join(dir, "app");
+      const help = mxTscIn(app, ["-b", "--help"]);
+      expect(help.status).toBe(0);
+      expect(templateErrors(help.output)).toEqual([]);
+      // tsc itself rejects `--version` under `-b` (TS5094) and exits 1.
+      const version = mxTscIn(app, ["-b", "--version"]);
+      expect(version.output).toContain("TS5094");
+      expect(templateErrors(version.output)).toEqual([]);
     },
     SPAWN_TIMEOUT_MS,
   );

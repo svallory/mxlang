@@ -1,0 +1,7 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-cli",
+  template: <p>${user.name}</p>,
+})
+export class AppComponent { user = { name: "a" }; }

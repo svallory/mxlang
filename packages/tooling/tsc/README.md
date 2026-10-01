@@ -53,14 +53,18 @@ Under `tsc -b` the pass runs for **every project of the build graph** (the
 named projects and, transitively, their `references`), including a project tsc
 judges up to date: tsc's build info knows nothing about templates, so a
 template error must fail the second, unchanged run exactly as the first. Each
-project's `.ng.mx` files are those its `include`/`files` select, checked under
-that project's own tsconfig, each file once. A project tsc rebuilds reuses the
+project's `.ng.mx` files are those its `include`/`files` select **plus every
+`.ng.mx` its files import, transitively** (resolved under that project's own
+compiler options, lexically, with no program): the Angular CLI's default
+solution-style `tsconfig.json` (`"files": []`) and non-composite
+`tsconfig.app.json` (`"include": ["src/**/*.ts"]`) match no `.ng.mx` at all, so
+every component is reached only by import. Each file is checked under the first
+project (in graph order) that reaches it, once. A project tsc rebuilds reuses the
 compile the type-check made, so its diagnostics are not repeated. `--clean`
 checks nothing; `--dry` builds nothing and prints, per project, how many
-`.ng.mx` files a build would check; `--watch` runs the pass once, after the
-initial build, and does not re-run it on later changes. A `.ng.mx` reached only
-through an import, outside every project's `include`/`files`, is checked when
-tsc compiles it (a rebuilt project) and not otherwise.
+`.ng.mx` files a build would check; `-b --help` and a `-b` command line tsc
+rejects run nothing; `--watch` runs the pass once, after the
+initial build, and does not re-run it on later changes.
 The cost is one Angular checker per project with `.ng.mx` files on every `-b`
 run; caching it is not done. See
 [Angular → Template diagnostics](../../../apps/docs/docs/hosts/angular.md).
