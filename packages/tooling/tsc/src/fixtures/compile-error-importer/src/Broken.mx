@@ -1,0 +1,4 @@
+export interface Input<T = string> { v: T }
+export const helper = 1;
+
+<div>

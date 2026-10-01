@@ -213,7 +213,7 @@ describe("SolidMX language plugin", () => {
     expect(mappings.every((mapping) => mapping.data.navigation)).toBe(true);
   });
 
-  it("returns empty virtual code and records one positioned syntax error", () => {
+  it("returns a no-mapping stub module and records one positioned syntax error", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const fileName = "/src/broken.solid.mx";
     const source = "const el = <button>oops;\n";
@@ -224,7 +224,9 @@ describe("SolidMX language plugin", () => {
       { getAssociatedScript: () => undefined },
     );
 
-    expect(virtual?.snapshot.getLength()).toBe(0);
+    expect(
+      virtual?.snapshot.getText(0, virtual.snapshot.getLength()),
+    ).toContain("export default");
     expect(virtual?.mappings).toEqual([]);
     expect(plugin.getSyntaxError(fileName)).toMatchObject({
       fileName,
@@ -2117,7 +2119,10 @@ describe("MX language plugin", () => {
       { getAssociatedScript: () => undefined },
     );
 
-    expect(astroVirtual?.snapshot.getLength()).toBe(0);
+    expect(astroVirtual?.mappings).toEqual([]);
+    expect(
+      astroVirtual?.snapshot.getText(0, astroVirtual.snapshot.getLength()),
+    ).toContain("export default");
     expect(plugin.getSyntaxError(astroFile)?.message).toContain(
       "strict policy",
     );
@@ -2311,6 +2316,127 @@ describe("MX language plugin", () => {
       ),
     );
     expect(mapped).toContain("input.a < input.b ? 'lo' : 'hi'");
+  });
+
+  describe("failed compile leaves a typed stub module (ts2306-cascade)", () => {
+    const consumerSource = [
+      'import Broken from "./broken.EXT";',
+      'import { Input, helper } from "./broken.EXT";',
+      'import type { Input as TypeOnly, Shape } from "./broken.EXT";',
+      'import * as NS from "./broken.EXT";',
+      "export const uses: [unknown, unknown, unknown, unknown, unknown, Input<string>, TypeOnly, Shape<1, 2>] = [Broken, helper, NS.default, NS.helper, NS.Input, null as never, null as never, null as never];",
+      "",
+    ].join("\n");
+    const brokenBody = [
+      "export interface Input<T = unknown> { v: T }",
+      "export interface Shape<A, B> { a: A; b: B }",
+      "export const helper = 1;",
+    ].join("\n");
+
+    for (const [label, ext, broken, code] of [
+      [
+        "whole-file .mx",
+        "mx",
+        `${brokenBody}\n<await=value>oops</await>`,
+        80001,
+      ],
+      [
+        "Solid .solid.mx",
+        "solid.mx",
+        "const el = <button>oops;\n" + brokenBody,
+        80001,
+      ],
+    ] as const) {
+      it(`reports only the real compile error for every import form (${label})`, () => {
+        const fileName = `/project/broken.${ext}`;
+        const consumer = "/project/index.ts";
+        const service = createPluginService(
+          {
+            [fileName]: broken,
+            [consumer]: consumerSource.replaceAll("EXT", ext),
+          },
+          [consumer],
+        );
+
+        const semantic = service.getSemanticDiagnostics(consumer);
+        expect(
+          semantic.map((d) => d.code),
+          semantic.map((d) => String(d.messageText)).join("\n"),
+        ).toEqual([]);
+        const own = service.getSyntacticDiagnostics(fileName);
+        expect(own).toHaveLength(1);
+        expect(own[0]?.code).toBe(code);
+      });
+    }
+
+    it("still reports a type error on a misused import from a clean .mx", () => {
+      const clean = "/project/clean.mx";
+      const consumer = "/project/index.ts";
+      const service = createPluginService(
+        {
+          [clean]:
+            "export interface Input { n: number }\n<div>${input.n}</div>",
+          [consumer]:
+            'import Clean, { type Input } from "./clean.mx";\nconst bad: Input = { n: "x" };\nvoid [Clean, bad];\n',
+        },
+        [consumer],
+      );
+      const codes = service.getSemanticDiagnostics(consumer).map((d) => d.code);
+      expect(codes).toContain(2322);
+      expect(codes).not.toContain(2306);
+    });
+
+    it("stubs a failed .amx too: valid module, no mappings, every import form resolves", () => {
+      const fileName = "/project/broken.amx";
+      const source =
+        "---\nexport const helper = 1;\nexport interface Input { a: 1 }\n---\n<await=value>oops</await>\n";
+      const plugin = createAmxLanguagePlugin(ts);
+      const virtual = plugin.createVirtualCode?.(
+        fileName,
+        AMX_LANGUAGE_ID,
+        ts.ScriptSnapshot.fromString(source),
+        { getAssociatedScript: () => undefined },
+      );
+      expect(virtual?.mappings).toEqual([]);
+      const stub = virtual?.snapshot.getText(0, virtual.snapshot.getLength());
+      expect(stub).toContain("export default");
+      const consumer = [
+        'import Broken, { helper, Input } from "./stub.ts";',
+        'import type { Input as T } from "./stub.ts";',
+        'import * as NS from "./stub.ts";',
+        "const t: T = 1; const i: Input = 2; void [Broken, helper, NS, t, i];",
+      ].join("\n");
+      const files: Record<string, string> = {
+        "/project/stub.ts": stub ?? "",
+        "/project/index.ts": consumer,
+      };
+      const host = ts.createCompilerHost({});
+      const read = host.readFile.bind(host);
+      host.readFile = (f) => files[f] ?? read(f);
+      host.directoryExists = () => true;
+      host.fileExists = (f) => f in files || ts.sys.fileExists(f);
+      host.getSourceFile = (f, lang) =>
+        files[f] === undefined
+          ? undefined
+          : ts.createSourceFile(f, files[f], lang);
+      const program = ts.createProgram(
+        ["/project/index.ts"],
+        {
+          strict: true,
+          noEmit: true,
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          noLib: true,
+          allowImportingTsExtensions: true,
+        },
+        host,
+      );
+      const codes = ts
+        .getPreEmitDiagnostics(program)
+        .filter((d) => d.file?.fileName === "/project/index.ts")
+        .map((d) => d.code);
+      expect(codes).toEqual([]);
+    });
   });
 
   it("reports an MX compile error once through tsserver diagnostics", () => {

@@ -412,3 +412,9 @@ diagnostic; use it for anything about the generated code's types.
   for the underlying gap; running `@mxlang/language-server` alongside this
   plugin (both are supported together, see that package's `AGENTS.md`)
   closes it.
+
+## Failed compiles produce a typed stub module, never `""`
+
+When a template fails to compile, `createVirtualCode` returns `failedModuleStub(source)` (`src/failed-module-stub.ts`), not an empty string. An empty virtual module is not a module, so each importer gets `TS2306 … is not a module`, printed by `mx-tsc` *before* the real compile error and at the wrong file. Do not revert it to `""`.
+
+The stub is `export default` of an `any`, plus `Input` and every `export`ed name found by a tolerant lexical scan of the failed source (the source did not parse, so a real parse is unavailable), each declared as a value and a type, with the same type-parameter count for a generic declaration. TypeScript has no wildcard export, so a default-only stub would only move the cascade to `TS2305`/`TS2614` for named imports. Known limit: a name the failed source defines in a way the scan cannot see (a re-export `export * from`) still reports `TS2305`/`TS2339` at the importer. The stub has no source mappings, so nothing is ever reported inside it. Tests: `describe("failed compile leaves a typed stub module")` in `src/index.test.ts` and the `compile-error-importer` fixture in `packages/tooling/tsc`.

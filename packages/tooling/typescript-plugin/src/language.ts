@@ -26,6 +26,7 @@ import type {
 } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
+import { failedModuleStub } from "./failed-module-stub.ts";
 
 /**
  * Adapts `compileSolidMx`'s own `(source, options)` signature to the
@@ -173,12 +174,22 @@ export function createSolidMxLanguagePlugin(
             foreign.templateDiagnostic,
           ]);
           compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
-          return createVirtualCode(typescript, "", source, undefined);
+          return createVirtualCode(
+            typescript,
+            failedModuleStub(source),
+            source,
+            undefined,
+          );
         }
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
-        return createVirtualCode(typescript, "", source, undefined);
+        return createVirtualCode(
+          typescript,
+          failedModuleStub(source),
+          source,
+          undefined,
+        );
       }
     },
 
@@ -297,7 +308,14 @@ export function createNgMxLanguagePlugin(
       const fail = (error: SolidMxSyntaxError) => {
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
-        return createVirtualCode(typescript, "", source, undefined, [], "ts");
+        return createVirtualCode(
+          typescript,
+          failedModuleStub(source),
+          source,
+          undefined,
+          [],
+          "ts",
+        );
       };
 
       // A config error must be loud: falling back to defaults would compile
@@ -360,7 +378,14 @@ export function createNgMxLanguagePlugin(
             foreign.templateDiagnostic,
           ]);
           compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
-          return createVirtualCode(typescript, "", source, undefined, [], "ts");
+          return createVirtualCode(
+            typescript,
+            failedModuleStub(source),
+            source,
+            undefined,
+            [],
+            "ts",
+          );
         }
         return fail(toSyntaxError(fileName, source, cause));
       }

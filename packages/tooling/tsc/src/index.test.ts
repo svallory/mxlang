@@ -211,6 +211,29 @@ describe("mx-tsc", () => {
   );
 
   it(
+    "reports only the real compile error when importers use a broken .mx every way (ts2306-cascade)",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "compile-error-importer"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.output).toContain("Broken.mx(4,1): error TS80001");
+      expect(result.output).not.toMatch(/TS2306|TS2305|TS2614|TS7016|TS2307/);
+      expect(result.output.match(/error TS/g)).toHaveLength(1);
+      // The real error comes first.
+      expect(result.output.indexOf("TS80001")).toBeLessThan(
+        result.output.search(/error TS(?!80001)/) === -1
+          ? Number.POSITIVE_INFINITY
+          : result.output.search(/error TS(?!80001)/),
+      );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
     "reports stored MX compile failures and exits non-zero",
     () => {
       const result = run(mxTsc, [

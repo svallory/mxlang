@@ -25,6 +25,7 @@ import { compileSolidUnit } from "@mxlang/solid";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
+import { failedModuleStub } from "./failed-module-stub.ts";
 import {
   codeInformation,
   compileWithDependencies,
@@ -152,12 +153,12 @@ export function createMxLanguagePlugin(
             foreign.templateDiagnostic,
           ]);
           compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
-          return createVirtualCode(typescript, "", []);
+          return createVirtualCode(typescript, failedModuleStub(source), []);
         }
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
-        return createVirtualCode(typescript, "", []);
+        return createVirtualCode(typescript, failedModuleStub(source), []);
       }
     },
 

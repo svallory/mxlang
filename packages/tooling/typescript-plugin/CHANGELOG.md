@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: a failed `.mx` compile no longer cascades `TS2306 … is not a module` into every importer
+
+When a template failed to compile, its virtual module was the empty string. Every importer then reported `TS2306 File '…/x.mx' is not a module`, which `mx-tsc` printed first, at the importer, before the real compile error (a reader went to the wrong file; 21 of 21 compile-error cases in the agent-feedback audit). The virtual module is now a typed stub (`failed-module-stub.ts`): an `any` default export, an `Input` type, and every name the failed source itself exports, each declared as both a value and a type. Default, named, `import type` and `import * as` imports all resolve, so the real compile error is the only diagnostic. Applies to `.mx`, `.amx`, `.solid.mx` and `.ng.mx`, on both the syntax-error and the foreign-template-error paths.
+
 ### Fixed: the plugin's builds no longer bake the build machine's path
 
 `dist/index.cjs` and the VSIX `bundle/` contained `createRequire("file:///<build tree>/...")` (Bun inlines `import.meta.url` in CJS output), so the plugin loaded `@marko/compiler`, `@mxlang/core`'s dependencies and the Angular worker from the machine that built it. `build` and `build:bundled` now define `import.meta.url`, `__filename` and `__dirname` from the bundle's own location, and fail if a `file:///` literal or the build root remains.
