@@ -39,3 +39,6 @@ apps/docs/site/
 # VSIX staging output (packages/editors/vscode/scripts/stage-vsix.ts)
 packages/editors/vscode/.vsix-stage/
 packages/editors/vscode/mxlang.vsix
+
+# VSIX-only self-contained plugin build (packages/tooling/typescript-plugin/build/bundled.ts)
+packages/tooling/typescript-plugin/bundle/

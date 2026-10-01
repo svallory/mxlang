@@ -9,7 +9,8 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-const ENTRY = path.resolve(import.meta.dirname, "../dist/index.cjs");
+/** The plugin's published entry; `build/bundled.ts` passes its own. */
+const DEFAULT_ENTRY = path.resolve(import.meta.dirname, "../dist/index.cjs");
 // The `typeof` guard is for loaders that evaluate the bundle under a shimmed
 // `module` (vite-node, which `@mxlang/tsc`'s tests use): there `.default` is
 // not the function and the assign would throw. Under Node, where tsserver runs,
@@ -19,12 +20,19 @@ if (typeof module.exports.default === "function")
   module.exports = Object.assign(module.exports.default, module.exports);
 `;
 
-const code = readFileSync(ENTRY, "utf8");
-// The footer reads `module.exports.default`, so it is only right on the shape
-// `bun build --format cjs` emits today; fail the build if that changes.
-if (!/^module\.exports = __toCommonJS\(/m.test(code)) {
-  throw new Error(
-    `${ENTRY} has no \`module.exports = __toCommonJS(...)\`: bun's CJS output changed shape, revisit build/cjs-factory.ts`,
-  );
+/** Appends the factory footer to a `bun build --format cjs` plugin entry. */
+export function applyCjsFactory(entry: string): void {
+  const code = readFileSync(entry, "utf8");
+  // The footer reads `module.exports.default`, so it is only right on the shape
+  // `bun build --format cjs` emits today; fail the build if that changes.
+  if (!/^module\.exports = __toCommonJS\(/m.test(code)) {
+    throw new Error(
+      `${entry} has no \`module.exports = __toCommonJS(...)\`: bun's CJS output changed shape, revisit build/cjs-factory.ts`,
+    );
+  }
+  appendFileSync(entry, FOOTER);
 }
-appendFileSync(ENTRY, FOOTER);
+
+if (import.meta.main) {
+  applyCjsFactory(path.resolve(process.argv[2] ?? DEFAULT_ENTRY));
+}

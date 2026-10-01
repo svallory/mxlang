@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: a VSIX-only self-contained build (`build:bundled`)
+
+`bun run build:bundled` writes `bundle/` (gitignored, outside `files`): the plugin and the Angular worker with `@mxlang/*`, volar and babel inlined, `cjs-factory` applied, and the entries and externals taken from one list (`build/bundled-config.ts`). The VS Code extension copies it into its VSIX. `build/cjs-factory.ts` now exports `applyCjsFactory(entry)`. The npm tarball, `files` and the public exports are unchanged.
+
 ### Fixed: tsserver loads the plugin (CJS `module.exports` is the factory)
 
 Before this fix, tsserver skipped `@mxlang/typescript-plugin`, so none of its features (`.solid.mx`/`.mx`/`.ng.mx`/`.amx` language support, the diagnostics it injects) loaded in VS Code or any other tsserver editor. `dist/index.cjs` exported the module namespace as an object (`{ default: pluginFactory, ...named }`); tsserver loads a plugin with a plain `require()` and only proceeds when the result is a function, so `Project.enableProxy` logged "did not expose a proper factory function" and moved on. The build now appends `module.exports = Object.assign(module.exports.default, module.exports)` (guarded on `.default` being a function) to `dist/index.cjs` (`build/cjs-factory.ts`): `require()` returns the factory itself, and `default` and every named export are still there. Additive: no export is removed or renamed, and the ESM entry and `dist/index.d.ts` are unchanged. Covered by `src/cjs-factory.test.ts` (loads the built entry through `ts.sys.require`, as tsserver does) and `src/tsserver-load.test.ts` (one real tsserver loads the plugin and serves a plugin-only diagnostic).
