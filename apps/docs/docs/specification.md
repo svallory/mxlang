@@ -2010,7 +2010,11 @@ Resolved by `@mxlang/core`'s `resolveHostPolicy`, walking upward for the nearest
    is a **deprecated alias** for `"html"` and warns.
 2. Failing that, **exactly one** `@mxlang/*` host dependency (in `dependencies`
    or `devDependencies`; `@mxlang/core` does not count) → that host at its
-   default policy. Two or more → no match.
+   default policy. Two or more distinct hosts → no match, so `html`; none → `html`.
+   **`peerDependencies` are not counted** (decision 124; Marko counts them, see
+   `divergences.md`): a host listed only as a peer does not select that host. Counting
+   peers could silently flip a package's host (one host in `dependencies`, another in
+   `peerDependencies` would collapse to `html`); the `dependencies` + `devDependencies` rule stays predictable.
 3. Otherwise `html`, non-strict.
 
 **Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
@@ -2023,7 +2027,7 @@ should not inherit the root's host needs its own `package.json` (or `mx.host`).
 The walk stops at a `node_modules` directory, so an installed package that
 ships no `package.json` resolves to `html`, not to the consumer's host. An
 `mx.host` that names no host is ignored with a warning listing the valid hosts
-(and the nearest one, if close).
+(and the nearest one, if close) and resolution continues with step 2.
 
 **One resolver, shared** by the Vite plugin, the Bun loaders, the language server
 and the TypeScript plugin — so an editor, a `tsc` run and a build cannot disagree

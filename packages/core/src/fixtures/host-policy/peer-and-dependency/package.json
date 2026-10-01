@@ -1,0 +1,10 @@
+{
+  "name": "peer-and-dependency",
+  "private": true,
+  "dependencies": {
+    "@mxlang/solid": "*"
+  },
+  "peerDependencies": {
+    "@mxlang/react": "*"
+  }
+}

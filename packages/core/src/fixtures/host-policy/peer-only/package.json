@@ -1,0 +1,7 @@
+{
+  "name": "peer-only",
+  "private": true,
+  "peerDependencies": {
+    "@mxlang/react": "*"
+  }
+}

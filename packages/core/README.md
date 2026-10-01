@@ -512,6 +512,7 @@ Edge cases of the walk, each pinned by tests:
   an installed package with no `package.json` gets `html`, not the consumer's host.
 - An `mx.host` naming no host warns (valid hosts, nearest match) and is ignored.
 - Two or more host dependencies still mean `html`.
+- `peerDependencies` are never counted: a host listed only as a peer does not select that host (decision 124).
 
 `resolveHostPolicyDetailed(filePath)` returns `{ policy, diagnostics }`;
 `resolveHostPolicy` is its `policy`. All diagnostics are warnings

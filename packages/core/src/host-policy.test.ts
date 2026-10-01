@@ -118,6 +118,19 @@ describe("resolveHostPolicy", () => {
     expect(resolveHostPolicy(filePath)).toEqual({ host: "html" });
   });
 
+  it("ignores a host listed only in peerDependencies (decision 124)", () => {
+    const filePath = join(FIXTURES, "peer-only/App.mx");
+
+    expect(resolveHostPolicy(filePath)).toEqual({ host: "html" });
+  });
+
+  it("takes the host from dependencies when another host is only a peer (decision 124)", () => {
+    // A counted peer would make two hosts and collapse to html.
+    const filePath = join(FIXTURES, "peer-and-dependency/App.mx");
+
+    expect(resolveHostPolicy(filePath)).toEqual({ host: "solid" });
+  });
+
   it("falls back to the default policy when the walk reaches the filesystem root with no package.json", () => {
     // The walk must terminate at the root rather than looping forever on
     // `dirname("/") === "/"`. A path with no `package.json` anywhere above it
