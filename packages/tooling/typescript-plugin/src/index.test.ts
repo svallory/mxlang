@@ -3999,6 +3999,18 @@ describe(".ng.mx language plugin", () => {
       expect(kept[0]?.result.code).toContain("{{ m }}");
     });
 
+    it("leaves a no-mapping stub module when the compile fails (ts2306-cascade)", () => {
+      const plugin = createNgMxLanguagePlugin(ts);
+      const virtual = compileOn(
+        plugin,
+        component("<p>${n</p>", "export class Box<T> { n: number = 1; }"),
+      );
+      expect(virtual?.mappings).toEqual([]);
+      const text = virtual?.snapshot.getText(0, virtual.snapshot.getLength());
+      expect(text).toContain("export default");
+      expect(text).toContain("Box");
+    });
+
     it("drops a file whose recompile fails: a stale compile must not be checked", () => {
       const plugin = createNgMxLanguagePlugin(ts, { retainCompiled: true });
       compileOn(plugin, component("<p>${n}</p>", "n: number = 1;"));
