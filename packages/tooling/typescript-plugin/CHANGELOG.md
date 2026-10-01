@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Changed: `build/bundled.ts` uses the shared `scripts/bundled-build.ts`
+
+The `Bun.build` call moved to the repo-root `scripts/bundled-build.ts`, shared with the language server's own bundled build. The output is unchanged.
+
 ### Added: a VSIX-only self-contained build (`build:bundled`)
 
 `bun run build:bundled` writes `bundle/` (gitignored, outside `files`): the plugin and the Angular worker with `@mxlang/*`, volar and babel inlined, `cjs-factory` applied, and the entries and externals taken from one list (`build/bundled-config.ts`). The VS Code extension copies it into its VSIX. `build/cjs-factory.ts` now exports `applyCjsFactory(entry)`. The npm tarball, `files` and the public exports are unchanged.

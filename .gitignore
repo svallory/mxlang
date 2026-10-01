@@ -42,3 +42,4 @@ packages/editors/vscode/mxlang.vsix
 
 # VSIX-only self-contained plugin build (packages/tooling/typescript-plugin/build/bundled.ts)
 packages/tooling/typescript-plugin/bundle/
+packages/tooling/language-server/bundle/
