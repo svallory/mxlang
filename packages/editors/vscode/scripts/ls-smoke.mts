@@ -34,6 +34,33 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { BUNDLED_MAIN } from "../../../tooling/language-server/build/bundled-config.ts";
 
+/**
+ * The Node that runs the server: `MX_LS_NODE` when set, else `node` on PATH.
+ * Fails closed: a set-but-empty `MX_LS_NODE` (an unset CI variable) must not
+ * quietly fall back to the harness's Node, and `MX_LS_NODE_EXPECT` (a version
+ * prefix such as `v20.9.0`) must match what that Node reports.
+ */
+export function serverNode(
+  env: Record<string, string | undefined>,
+  version: (node: string) => string = (node) =>
+    execFileSync(node, ["--version"], { encoding: "utf8" }).trim(),
+): string {
+  const node = env.MX_LS_NODE === undefined ? "node" : env.MX_LS_NODE;
+  if (node === "") {
+    throw new Error(
+      "MX_LS_NODE is set but empty: refusing to fall back to the default node",
+    );
+  }
+  const expected = env.MX_LS_NODE_EXPECT;
+  if (expected) {
+    const actual = version(node);
+    if (!actual.startsWith(expected)) {
+      throw new Error(`the server Node is ${actual}, expected ${expected}`);
+    }
+  }
+  return node;
+}
+
 export const TIMEOUT_MS = 30_000;
 /** How long the server gets to leave on its own after `exit`. */
 const EXIT_MS = 5_000;
@@ -95,18 +122,18 @@ export async function smokeLanguageServer(
   // `node` explicitly: never bun, which would hide a Bun-only dependency.
   // `MX_LS_NODE` picks another Node for the server (CI runs the floor, 20.9.0:
   // the bundle runs on VS Code's Node, not on the engines of this repo).
-  // Isolated: cwd is the throwaway project (not the repo), and NODE_PATH is
-  // dropped, so a bundle that leaked a workspace path could not find it here.
+  // cwd is the throwaway project and NODE_PATH is dropped, so the server
+  // cannot pick up a module through either. That is all this isolates: a
+  // baked absolute `createRequire("file:///<build tree>/...")` is not affected
+  // by cwd or NODE_PATH. The guards for that are static (`assertRelocatable`
+  // at build, `check-vsix` and `pack-hygiene` on the artifacts), and the
+  // proof is running a moved build (see AGENTS.md).
   const { NODE_PATH: _nodePath, ...env } = process.env;
-  const child: ChildProcess = spawn(
-    process.env.MX_LS_NODE || "node",
-    [bin, "--stdio"],
-    {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: project,
-      env,
-    },
-  );
+  const child: ChildProcess = spawn(serverNode(process.env), [bin, "--stdio"], {
+    stdio: ["pipe", "pipe", "pipe"],
+    cwd: project,
+    env,
+  });
   let stderr = "";
   child.stderr?.on("data", (chunk) => {
     stderr += String(chunk);

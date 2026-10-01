@@ -33,6 +33,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { bakedPathsIn } from "../../../../scripts/baked-paths.ts";
 import {
   BUNDLED_ENTRIES as LS_ENTRIES,
   BUNDLED_MAIN as LS_MAIN,
@@ -187,14 +188,11 @@ function bakedPaths(pkgRoot: string, buildRoot: string): string[] {
   if (!existsSync(dist)) return [];
   const problems: string[] = [];
   for (const file of readdirSync(dist).filter((f) => f.endsWith(".cjs"))) {
-    const code = readFileSync(join(dist, file), "utf8");
-    if (code.includes("file:///")) {
-      problems.push(
-        `dist/${file} contains a "file:///" literal: a baked build-machine path`,
-      );
-    }
-    if (code.includes(buildRoot)) {
-      problems.push(`dist/${file} contains the build root ${buildRoot}`);
+    for (const what of bakedPathsIn(
+      readFileSync(join(dist, file), "utf8"),
+      buildRoot,
+    )) {
+      problems.push(`dist/${file} contains ${what}`);
     }
   }
   return problems;

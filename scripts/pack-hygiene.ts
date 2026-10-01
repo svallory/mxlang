@@ -12,6 +12,7 @@ import { builtinModules } from "node:module";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { bakedPathsIn } from "./baked-paths.ts";
 
 export const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -55,6 +56,12 @@ export const PACKED_PACKAGES: PackedPackage[] = [
   {
     name: "@mxlang/core",
     dir: "packages/core",
+    extraTopLevel: [],
+    declarations: true,
+  },
+  {
+    name: "@mxlang/parser",
+    dir: "packages/parser",
     extraTopLevel: [],
     declarations: true,
   },
@@ -150,10 +157,9 @@ export function bakedBuildPaths(
 ): string[] {
   return packed
     .filter((f) => /\.(c|m)?js$/.test(f))
-    .filter((f) => {
-      const code = readFileSync(join(dir, f), "utf8");
-      return code.includes("file:///") || code.includes(root);
-    });
+    .filter(
+      (f) => bakedPathsIn(readFileSync(join(dir, f), "utf8"), root).length > 0,
+    );
 }
 
 /** Every string a `main`/`types`/`bin`/`exports` field points at, as a tarball path. */

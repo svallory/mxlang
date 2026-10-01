@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { RELOCATABLE_BANNER, RELOCATABLE_DEFINE } from "./bundled-build.ts";
 import {
   bakedBuildPaths,
   declarationFiles,
@@ -15,6 +16,7 @@ import {
   packedFiles,
   pkgDirOf,
   readPackageJson,
+  repoRoot,
   runtimeSpecifiers,
   undeclaredRuntimeImports,
 } from "./pack-hygiene.ts";
@@ -190,6 +192,28 @@ describe("@mxlang/html ambient `*.mx` declaration", () => {
 function never(): never {
   throw new Error("@mxlang/html is not in PACKED_PACKAGES");
 }
+
+describe("the relocatable build flags", () => {
+  // `bundledBuild` passes RELOCATABLE_* to Bun.build; the published CJS builds
+  // pass the same as CLI flags. They are two spellings of one setting, so a
+  // change to one must show up in the other.
+  const flagged = [
+    "packages/tooling/tsc",
+    "packages/tooling/typescript-plugin",
+  ];
+  for (const dir of flagged) {
+    it(`${dir}'s build script carries every RELOCATABLE_DEFINE and the banner`, () => {
+      const { scripts } = readPackageJson(join(repoRoot, dir)) as unknown as {
+        scripts: { build: string };
+      };
+      for (const [key, value] of Object.entries(RELOCATABLE_DEFINE)) {
+        expect(scripts.build).toContain(`--define ${key}=${value}`);
+      }
+      expect(scripts.build).toContain(`--banner '${RELOCATABLE_BANNER}'`);
+      expect(scripts.build).toContain("scripts/bundled-build.ts dist/*.cjs");
+    });
+  }
+});
 
 describe("bakedBuildPaths", () => {
   it("flags a file:/// literal and the build root, only in JS files", () => {

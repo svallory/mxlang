@@ -6,8 +6,7 @@
 // stays in that package's `build/`.
 import { readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
-
-const repoRoot = path.resolve(import.meta.dirname, "..");
+import { bakedPathsIn } from "./baked-paths.ts";
 
 /**
  * Bun's CJS output inlines `import.meta.url` (and the ESM shim's `__filename`
@@ -17,7 +16,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
  * silent failure either way. A `define` plus a banner make them the bundle's
  * own location at run time. The published CJS builds (`@mxlang/tsc`,
  * `@mxlang/typescript-plugin` `dist/`) pass the same two options as CLI flags
- * (`--define`/`--banner`); `scripts/pack-hygiene.test.ts` keeps them in step.
+ * (`--define`/`--banner`); `scripts/pack-hygiene.test.ts` asserts they match.
  */
 export const RELOCATABLE_BANNER =
   'var __mxImportMetaUrl = require("node:url").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;';
@@ -27,18 +26,10 @@ export const RELOCATABLE_DEFINE = {
   __dirname: "__mxDirname",
 } as const;
 
-/** The baked build-machine paths in a bundle's code (empty when it is relocatable). */
-export function bakedPaths(code: string, root: string = repoRoot): string[] {
-  const found: string[] = [];
-  if (code.includes("file:///")) found.push('a "file:///" literal');
-  if (code.includes(root)) found.push(`the build root ${root}`);
-  return found;
-}
-
 /** Throws when any file in `files` still names the build machine. */
 export function assertRelocatable(files: readonly string[]): void {
   const problems = files.flatMap((file) =>
-    bakedPaths(readFileSync(file, "utf8")).map(
+    bakedPathsIn(readFileSync(file, "utf8")).map(
       (what) => `${file} contains ${what}`,
     ),
   );

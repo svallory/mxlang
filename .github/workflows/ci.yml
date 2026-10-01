@@ -168,6 +168,7 @@ jobs:
         run: node packages/editors/vscode/scripts/ls-smoke.mts packages/editors/vscode/mxlang.vsix
         env:
           MX_LS_NODE: ${{ env.MX_LS_NODE_FLOOR }}
+          MX_LS_NODE_EXPECT: v20.9.0
         timeout-minutes: 2
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
