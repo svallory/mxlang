@@ -9,7 +9,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { bareRequires, checkExtensionRoot, lockedVersions } from "./check-vsix";
-import { pluginEntries } from "./plugin-entries";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -25,8 +24,6 @@ const write = (root: string, path: string, contents = "") => {
   writeFileSync(join(root, path), contents);
 };
 
-const BUILD =
-  "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs";
 const FACTORY = "module.exports = function (m) { return { create() {} }; };";
 const PLUGIN = "node_modules/@mxlang/typescript-plugin";
 
@@ -34,10 +31,8 @@ interface Options {
   /** Files of the shipped extension, path to contents. */
   files?: Record<string, string>;
   plugins?: string[];
-  /** Plugin `build` script. */
-  build?: string;
-  /** Whether the plugin's built dist/ exists. */
-  built?: boolean;
+  /** `dist/<entry>.cjs` files expected (default: the plugin's bundled entries). */
+  entries?: string[];
   /** `name@version` pairs the lockfile pins. */
   locked?: string[];
 }
@@ -76,14 +71,6 @@ function fixture(options: Options = {}) {
     write(root, path, contents);
   }
 
-  const pluginDir = tmp();
-  write(
-    pluginDir,
-    "package.json",
-    JSON.stringify({ scripts: { build: options.build ?? BUILD } }),
-  );
-  if (options.built !== false) mkdirSync(join(pluginDir, "dist"));
-
   const lockfile = join(tmp(), "bun.lock");
   const locked = options.locked ?? ["@marko/compiler@5.42.5"];
   writeFileSync(
@@ -95,12 +82,15 @@ function fixture(options: Options = {}) {
       })
       .join("\n")}\n  },\n}\n`,
   );
-  return { root, pluginDir, lockfile };
+  return { root, lockfile, entries: options.entries };
 }
 
 const check = (options?: Options) => {
-  const { root, pluginDir, lockfile } = fixture(options);
-  return checkExtensionRoot(root, { pluginDir, lockfile });
+  const { root, lockfile, entries } = fixture(options);
+  return checkExtensionRoot(root, {
+    lockfile,
+    ...(entries ? { entries } : {}),
+  });
 };
 
 describe("checkExtensionRoot", () => {
@@ -128,19 +118,15 @@ describe("checkExtensionRoot", () => {
     expect(problems[0]).toContain("@mxlang/other");
   });
 
-  describe("plugin entries come from the build script", () => {
-    it("fails when an entry the build script declares is not shipped", () => {
-      const problems = check({
-        build:
-          "bun build src/index.ts src/ng-worker.ts src/other.ts --outdir dist",
-      });
+  describe("plugin entries come from the bundled build's one list", () => {
+    it("fails when an entry the build declares is not shipped", () => {
+      const problems = check({ entries: ["index", "ng-worker", "other"] });
       expect(problems).toEqual([
         '"@mxlang/typescript-plugin" is missing dist/other.cjs',
       ]);
     });
 
-    it("does not depend on what the built dist/ holds", () => {
-      // An empty built dist/ must not make a missing worker pass.
+    it("defaults to the plugin build's own entries (index and the Angular worker)", () => {
       const problems = check({
         files: {
           [`${PLUGIN}/package.json`]: pkg(
@@ -156,22 +142,9 @@ describe("checkExtensionRoot", () => {
         '"@mxlang/typescript-plugin" is missing dist/ng-worker.cjs',
       );
     });
-
-    it("throws, never silently weakens, when the plugin dist/ is missing", () => {
-      expect(() => check({ built: false })).toThrow(/dist is missing/);
-    });
-
-    it("throws when the build script's entries cannot be read", () => {
-      expect(() => check({ build: "tsc" })).toThrow(
-        /cannot read the bundle entries/,
-      );
-    });
   });
 
   describe("the entry tsserver loads", () => {
-    // These depend on the plugin-shape PR (fix/typescript-plugin-cjs-factory):
-    // the plugin's build today emits an object, so the real VSIX stays red on
-    // the first case until that merges.
     it("fails when the entry exports an object, not a factory function", () => {
       const problems = check({
         files: {
@@ -416,23 +389,5 @@ describe("lockedVersions", () => {
     const v = lockedVersions(join(dir, "bun.lock"));
     expect([...(v.get("@a/b") ?? [])]).toEqual(["1.2.3"]);
     expect([...(v.get("c") ?? [])]).toEqual(["4.5.6"]);
-  });
-});
-
-describe("pluginEntries", () => {
-  const entries = (build: string) => {
-    const dir = tmp();
-    write(dir, "package.json", JSON.stringify({ scripts: { build } }));
-    return pluginEntries(dir);
-  };
-
-  it("reads every src entry before --outdir", () => {
-    expect(entries(BUILD)).toEqual(["index", "ng-worker"]);
-  });
-
-  it("rejects a build with no index entry", () => {
-    expect(() => entries("bun build src/other.ts --outdir dist")).toThrow(
-      /no src\/index.ts/,
-    );
   });
 });

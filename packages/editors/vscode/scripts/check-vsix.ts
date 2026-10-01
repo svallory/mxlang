@@ -7,8 +7,8 @@
 //   - every `typescriptServerPlugins[].name` resolves, `require()`s to a factory
 //     function (tsserver skips a module that is not one) and, called with the
 //     real `typescript`, returns `{ create }`;
-//   - it ships a `dist/<entry>.cjs` for every entry in the plugin's own `build`
-//     script (not a dist listing, and not a fixed list);
+//   - it ships a `dist/<entry>.cjs` for every entry of the plugin's bundled
+//     build (`build/bundled-config.ts`, the one list);
 //   - every bare `require("x")` in a shipped `dist/*.cjs` resolves from that
 //     file, except the documented project-resolved modules;
 //   - every shipped package's version is one `bun.lock` pins;
@@ -29,28 +29,25 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { pluginEntries } from "./plugin-entries.ts";
+import {
+  BUNDLED_ENTRIES,
+  BUNDLED_PROJECT_RESOLVED,
+} from "../../../tooling/typescript-plugin/build/bundled-config.ts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
-const defaultPluginDir = join(repoRoot, "packages/tooling/typescript-plugin");
 const defaultLockfile = join(repoRoot, "bun.lock");
 
-/** Never ship: resolved from the user's project / handed over by tsserver. */
-const FORBIDDEN = ["@angular/compiler-cli", "typescript"];
 /**
- * Bare requires that are expected NOT to resolve from the shipped plugin,
- * because they load from the user's project (`createRequire(projectDir)`) or
- * are an optional peer. Matched by package name.
+ * Never shipped, and the only modules a bundler-renamed (`createRequire`)
+ * require may load without them being in the VSIX: the plugin build's
+ * project-resolved externals, from its one list.
  */
-const PROJECT_RESOLVED = [
-  "@angular/compiler-cli",
-  "typescript",
-  "@astrojs/language-server",
-];
+const PROJECT_RESOLVED: readonly string[] = BUNDLED_PROJECT_RESOLVED;
+const FORBIDDEN = PROJECT_RESOLVED;
 
 export interface CheckOptions {
-  /** The plugin package dir; its `build` script lists the expected entries. */
-  pluginDir?: string;
+  /** The `dist/<entry>.cjs` files the VSIX must carry (default: the plugin build's entries). */
+  entries?: readonly string[];
   /** `bun.lock`, for the shipped-version assertion. */
   lockfile?: string;
 }
@@ -165,20 +162,10 @@ function resolvesFrom(fromDir: string, dep: string, root: string): boolean {
 
 export function checkExtensionRoot(
   root: string,
-  {
-    pluginDir = defaultPluginDir,
-    lockfile = defaultLockfile,
-  }: CheckOptions = {},
+  { entries = BUNDLED_ENTRIES, lockfile = defaultLockfile }: CheckOptions = {},
 ): string[] {
   const problems: string[] = [];
   root = realpathSync(root); // resolution reports real paths (macOS /var -> /private/var)
-  if (!existsSync(join(pluginDir, "dist"))) {
-    // Never silently weaken: an unbuilt plugin means the check cannot compare.
-    throw new Error(
-      `${pluginDir}/dist is missing: run \`bun run build\` first`,
-    );
-  }
-  const entries = pluginEntries(pluginDir);
   const manifest = JSON.parse(
     readFileSync(join(root, "package.json"), "utf8"),
   ) as {

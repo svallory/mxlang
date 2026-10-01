@@ -7,15 +7,15 @@
 // --no-dependencies` (the only mode that works under bun) ships no
 // `node_modules` at all, so the plugin was missing from the VSIX.
 //
-// The stage holds a self-contained plugin: `@mxlang/*`, volar and the other
-// pure-JS dependencies are bundled into `dist/*.cjs`; only the packages that
-// cannot be bundled (`@marko/compiler`, loaded through `createRequire`, and
-// `@astrojs/compiler`, which reads a wasm file next to itself) are copied in,
-// with their dependency closure, from the workspace install: no registry access
-// and exactly the versions `bun.lock` pins. `typescript` and
-// `@angular/compiler-cli` resolve from the user's project (the checker worker
-// uses `createRequire(projectDir)`; tsserver hands the plugin its own `ts`);
-// `@astrojs/language-server` is an optional peer.
+// The stage COPIES the plugin package's own self-contained build
+// (`typescript-plugin`'s `bun run build:bundled`, output `bundle/`; entries and
+// externals are defined once in its `build/bundled-config.ts`), so the shipped
+// plugin gets the same factory-function export as the published build. The
+// packages that build leaves external and ships (`@marko/compiler`,
+// `@astrojs/compiler`) are copied in with their dependency closure from the
+// workspace install: no registry access and exactly the versions `bun.lock`
+// pins. The project-resolved ones (`typescript`, `@angular/compiler-cli`,
+// `@astrojs/language-server`) are never shipped.
 
 import { execFileSync } from "node:child_process";
 import {
@@ -30,7 +30,11 @@ import {
 import { createRequire } from "node:module";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { pluginEntries } from "./plugin-entries.ts";
+import {
+  BUNDLED_ENTRIES,
+  BUNDLED_INSTALLED,
+  BUNDLED_OUTDIR,
+} from "../../../tooling/typescript-plugin/build/bundled-config.ts";
 
 const extensionDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(extensionDir, "../../..");
@@ -38,14 +42,8 @@ const pluginDir = join(repoRoot, "packages/tooling/typescript-plugin");
 const stageDir = join(extensionDir, ".vsix-stage");
 const pluginStage = join(stageDir, "node_modules/@mxlang/typescript-plugin");
 
-/** Loaded at runtime from the extension's own node_modules, never bundled. */
-const INSTALLED = ["@marko/compiler", "@astrojs/compiler"] as const;
-/** Never shipped: resolved from the user's project or tsserver. */
-const EXTERNAL_UNSHIPPED = [
-  "typescript",
-  "@angular/compiler-cli",
-  "@astrojs/language-server",
-] as const;
+const INSTALLED = BUNDLED_INSTALLED;
+const bundleDir = join(pluginDir, BUNDLED_OUTDIR);
 
 const run = (cmd: string, args: string[], cwd: string) =>
   execFileSync(cmd, args, { cwd, stdio: "inherit" });
@@ -111,11 +109,12 @@ function place(realDir: string, into: string): void {
 }
 
 const pluginManifest = readManifest(pluginDir);
-const entries = pluginEntries(pluginDir);
-if (!existsSync(join(pluginDir, "dist"))) {
-  throw new Error(
-    `${pluginDir}/dist is missing: run \`bun run build\` first. The check compares the VSIX against the plugin's own build, so a stage without it is not checkable.`,
-  );
+for (const entry of BUNDLED_ENTRIES) {
+  if (!existsSync(join(bundleDir, `${entry}.cjs`))) {
+    throw new Error(
+      `${bundleDir}/${entry}.cjs is missing: run \`bun run build:bundled\` in the plugin package first (\`bun run package\` does)`,
+    );
+  }
 }
 
 rmSync(stageDir, { recursive: true, force: true });
@@ -133,29 +132,8 @@ for (const path of [
   cpSync(join(extensionDir, path), join(stageDir, path), { recursive: true });
 }
 
-// 2. The plugin, bundled. Entries come from the plugin's own `build` script
-// (e.g. `index` and the Angular `ng-worker`), so a new entry ships without
-// touching this script. Externals must match INSTALLED/EXTERNAL_UNSHIPPED.
-run(
-  "bun",
-  [
-    "build",
-    ...entries.map((name) => join(pluginDir, "src", `${name}.ts`)),
-    "--outdir",
-    join(pluginStage, "dist"),
-    "--target",
-    "node",
-    "--format",
-    "cjs",
-    "--entry-naming",
-    "[dir]/[name].cjs",
-    ...[...INSTALLED, ...EXTERNAL_UNSHIPPED].flatMap((name) => [
-      "--external",
-      name,
-    ]),
-  ],
-  repoRoot,
-);
+// 2. The plugin: a copy of its self-contained build, nothing re-bundled here.
+cpSync(bundleDir, join(pluginStage, "dist"), { recursive: true });
 const nodeModules = join(stageDir, "node_modules");
 writeFileSync(
   join(pluginStage, "package.json"),

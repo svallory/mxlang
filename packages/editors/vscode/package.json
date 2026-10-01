@@ -14,8 +14,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --root ../../.. --project @mxlang/vscode",
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --external vscode",
-    "package": "bun run build && bun run scripts/stage-vsix.ts",
-    "check-vsix": "bun run scripts/check-vsix.ts mxlang.vsix"
+    "package": "bun run build && bun run --cwd ../../tooling/typescript-plugin build:bundled && bun run scripts/stage-vsix.ts",
+    "check-vsix": "bun run scripts/check-vsix.ts mxlang.vsix",
+    "tsserver-load": "bun run scripts/tsserver-load.ts mxlang.vsix"
   },
   "dependencies": {
     "vscode-languageclient": "10.1.1"

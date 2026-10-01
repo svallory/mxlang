@@ -2,7 +2,7 @@
 
 ## Package manager
 
-bun (bun workspaces). Do not use npm/pnpm/yarn, with one exception: `packages/hosts/html/scripts/consumer-check.ts` and `scripts/pack-probe.ts` pack tarballs with `npm pack`, because `bun pm pack` hangs on macOS with bun 1.3.14 (it also hangs from a plain shell; PR #51). npm is only those scripts' packer, never the project's package manager; the node/npm toolchain is pinned in `.prototools` (`node`) and in CI. Toolchain versions are pinned in `.prototools` (`bun`, `moon`, `node`); root `package.json` `packageManager` matches the pinned bun version.
+bun (bun workspaces). Do not use npm/pnpm/yarn, with two exceptions. (1) `packages/hosts/html/scripts/consumer-check.ts` and `scripts/pack-probe.ts` pack tarballs with `npm pack`, because `bun pm pack` hangs on macOS with bun 1.3.14 (it also hangs from a plain shell; PR #51). (2) `packages/editors/vscode/scripts/stage-vsix.ts` runs `vsce package` in its dependency mode, which shells out to `npm list --production` (`--no-dependencies` cannot ship `node_modules`, so the plugin would be missing from the VSIX). In both, npm is only that tool's packer, never the project's package manager; the node/npm toolchain is pinned in `.prototools` (`node`) and in CI. Toolchain versions are pinned in `.prototools` (`bun`, `moon`, `node`); root `package.json` `packageManager` matches the pinned bun version.
 
 ## Scripts
 

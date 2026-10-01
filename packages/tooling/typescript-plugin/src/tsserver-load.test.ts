@@ -1,6 +1,13 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { makePluginInstall } from "./fixtures/plugin-install.ts";
@@ -98,6 +105,84 @@ function startTsserver(args: string[], cwd: string, logFile: string) {
   };
 }
 
+/** Writes the project files every load test uses; `plugins` is the tsconfig list. */
+function writeProject(
+  root: string,
+  plugins: { name: string }[],
+): { file: string; logFile: string } {
+  writeFileSync(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        module: "esnext",
+        moduleResolution: "bundler",
+        jsx: "preserve",
+        ...(plugins.length > 0 ? { plugins } : {}),
+      },
+      files: ["index.ts"],
+    }),
+  );
+  writeFileSync(
+    path.join(root, "package.json"),
+    JSON.stringify({ mx: { host: "html" } }),
+  );
+  // Only the plugin can make `./comp.mx` resolve and type as a function.
+  writeFileSync(path.join(root, "comp.mx"), "<div>hi</div>\n");
+  writeFileSync(
+    path.join(root, "index.ts"),
+    'import Comp from "./comp.mx";\nconst misuse: number = Comp;\n',
+  );
+  return {
+    file: path.join(root, "index.ts"),
+    logFile: path.join(root, "tsserver.log"),
+  };
+}
+
+/** Opens `index.ts` in one real tsserver and asserts the plugin loaded and typed it. */
+async function expectPluginLoaded(
+  root: string,
+  extraArgs: string[],
+  plugins: { name: string }[],
+) {
+  const { file, logFile } = writeProject(root, plugins);
+  const server = startTsserver(
+    [
+      "--logVerbosity",
+      "verbose",
+      "--logFile",
+      logFile,
+      ...extraArgs,
+      "--disableAutomaticTypingAcquisition",
+    ],
+    root,
+    logFile,
+  );
+  try {
+    // What an editor sends so the project can hold `.mx` files at all.
+    await server.request("configure", {
+      extraFileExtensions: [
+        { extension: ".mx", isMixedContent: false, scriptKind: 7 },
+      ],
+    });
+    await server.request("open", { file });
+    // `open` answers once the project (and its plugins) are loaded.
+    const diagnostics = (await server.request("semanticDiagnosticsSync", {
+      file,
+    })) as { code: number; text: string }[];
+    const log = readFileSync(logFile, "utf8");
+
+    expect(log).toMatch(/Loading @mxlang\/typescript-plugin from/);
+    expect(log).not.toContain("did not expose a proper factory function");
+    expect(log).toContain("Plugin validation succeeded");
+    // Skipped plugin: TS2307 "Cannot find module './comp.mx'". Loaded: the
+    // import resolves and types, so the misuse is the only error.
+    expect(diagnostics.map((d) => d.code)).toEqual([2322]);
+    expect(diagnostics[0]?.text).toContain("(input: Input) => string");
+  } finally {
+    server.kill();
+  }
+}
+
 // The plugin-load path tsserver runs (`sys.require` -> `enableProxy`) is the
 // only thing that can tell a factory export from an object export, so this
 // drives one real tsserver instead of mirroring its check.
@@ -108,68 +193,41 @@ describe.skipIf(!built)("tsserver loads the built plugin", () => {
   });
 
   it("loads the plugin instead of skipping it", async () => {
-    writeFileSync(
-      path.join(root, "tsconfig.json"),
-      JSON.stringify({
-        // Declares the plugin the way a user does.
-        compilerOptions: {
-          module: "esnext",
-          moduleResolution: "bundler",
-          jsx: "preserve",
-          plugins: [{ name: "@mxlang/typescript-plugin" }],
-        },
-        files: ["index.ts"],
-      }),
-    );
-    writeFileSync(
-      path.join(root, "package.json"),
-      JSON.stringify({ mx: { host: "html" } }),
-    );
-    // Only the plugin can make `./comp.mx` resolve and type as a function.
-    writeFileSync(path.join(root, "comp.mx"), "<div>hi</div>\n");
-    writeFileSync(
-      path.join(root, "index.ts"),
-      'import Comp from "./comp.mx";\nconst misuse: number = Comp;\n',
-    );
-    const logFile = path.join(root, "tsserver.log");
-
-    const server = startTsserver(
-      [
-        "--logVerbosity",
-        "verbose",
-        "--logFile",
-        logFile,
-        "--pluginProbeLocations",
-        root,
-        "--disableAutomaticTypingAcquisition",
-      ],
+    await expectPluginLoaded(
       root,
-      logFile,
+      ["--pluginProbeLocations", root],
+      // Declares the plugin the way a user does.
+      [{ name: "@mxlang/typescript-plugin" }],
     );
-    try {
-      // What an editor sends so the project can hold `.mx` files at all.
-      await server.request("configure", {
-        extraFileExtensions: [
-          { extension: ".mx", isMixedContent: false, scriptKind: 7 },
-        ],
-      });
-      const file = path.join(root, "index.ts");
-      await server.request("open", { file });
-      // `open` answers once the project (and its plugins) are loaded.
-      const diagnostics = (await server.request("semanticDiagnosticsSync", {
-        file,
-      })) as { code: number; text: string }[];
-      const log = readFileSync(logFile, "utf8");
-
-      expect(log).toMatch(/Loading @mxlang\/typescript-plugin from/);
-      expect(log).not.toContain("did not expose a proper factory function");
-      expect(log).toContain("Plugin validation succeeded");
-      // Skipped plugin: TS2307 "Cannot find module './comp.mx'". Loaded: the
-      // import resolves and types, so the misuse is the only error.
-      expect(diagnostics.map((d) => d.code)).toEqual([2322]);
-      expect(diagnostics[0]?.text).toContain("(input: Input) => string");
-    } finally {
-      server.kill();
-    }
   }, 50_000);
 });
+
+// The same load, against the plugin an installed VS Code extension ships:
+// `MX_VSIX_EXTENSION_DIR` is the unpacked VSIX's `extension/` directory
+// (`packages/editors/vscode`'s `tsserver-load` script sets it). VS Code starts
+// tsserver with `--globalPlugins <name>` and the extension dir as a plugin
+// probe location for each `contributes.typescriptServerPlugins` entry, so this
+// does the same, with no plugin entry in the project's tsconfig.
+const extensionDir = process.env.MX_VSIX_EXTENSION_DIR;
+describe.skipIf(!extensionDir)(
+  "tsserver loads the plugin shipped in the VSIX",
+  () => {
+    it("loads the VSIX's plugin instead of skipping it", async () => {
+      const root = mkdtempSync(path.join(tmpdir(), "mx-vsix-project-"));
+      try {
+        await expectPluginLoaded(
+          root,
+          [
+            "--globalPlugins",
+            "@mxlang/typescript-plugin",
+            "--pluginProbeLocations",
+            extensionDir as string,
+          ],
+          [],
+        );
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }, 50_000);
+  },
+);
