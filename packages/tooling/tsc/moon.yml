@@ -16,4 +16,6 @@ tasks:
     args: ["run", "--root", "../..", "--project", "@mxlang/tsc"]
     inputs:
       - "src/**/*"
+      # unknown-host-parity.test.ts runs the language server's diagnoseDocument.
+      - "../language-server/src/**/*"
       - "/vitest.config.ts"

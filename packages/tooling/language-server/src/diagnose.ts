@@ -33,6 +33,14 @@ export type { HostPolicy };
 
 export const SOLID_MX_LANGUAGE_IDS = new Set(["solidmx", "SolidMX"]);
 
+/**
+ * Whether `filePath` is an Angular host module (`x.ng.mx`). Case-insensitive,
+ * like the TS plugin's `isNgMx`, which lowercases before matching.
+ */
+function isNgMxDocument(filePath: string): boolean {
+  return hostModuleSegment(basename(filePath).toLowerCase()) === "ng";
+}
+
 export function isSolidMxDocument(uri: string, languageId = ""): boolean {
   return uri.endsWith(".solid.mx") || SOLID_MX_LANGUAGE_IDS.has(languageId);
 }
@@ -228,7 +236,18 @@ export function diagnoseDocument(
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
 
-    if (isSolidMxDocument(uri, languageId)) {
+    if (isNgMxDocument(path)) {
+      // Deliberately silent, and checked FIRST: routed by file kind before
+      // any host branch, as `mx-tsc`'s `isNgMx` does. A `.ng.mx` is an
+      // Angular host module whatever `mx.host` says (an unknown host resolves
+      // to a derived or default one, a `react`/`solid` host is simply the
+      // wrong host for this file), so it must never reach another host's
+      // compile. Angular documents are checked by `mx-tsc` and the TS plugin
+      // (template diagnostics need `@angular/compiler-cli`, which the server
+      // never loads); reporting "not wired" as an Error was a false positive
+      // on every file. Host-policy warnings from the resolution still reach
+      // the author via `scanWarnings` below.
+    } else if (isSolidMxDocument(uri, languageId)) {
       // `parse` is the Vite path's whole-file parser and the cheapest public
       // entry that discovers every MX region. A language id can identify an
       // untitled/mis-suffixed buffer, so give that case the suffix that turns
@@ -272,18 +291,8 @@ export function diagnoseDocument(
       const result = compileHonoMx(text, uri, { customTags, warnings });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
-    } else if (
-      hostModuleSegment(basename(path)) === "ng" ||
-      hostPolicy.host === "angular"
-    ) {
-      // Deliberately silent. Routed by file kind first, as `mx-tsc` does: a
-      // `.ng.mx` is an Angular host module whatever `mx.host` says (an unknown
-      // host resolves to a derived or default one), so it never reaches the
-      // html compile. Angular documents are checked by `mx-tsc` and the TS
-      // plugin (template diagnostics need `@angular/compiler-cli`, which the
-      // server never loads); reporting "not wired" as an Error was a false
-      // positive on every file. Host-policy warnings from the resolution
-      // still reach the author via `scanWarnings` below.
+    } else if (hostPolicy.host === "angular") {
+      // Same silence for an Angular-host `.mx` page; see the `.ng.mx` branch.
     } else {
       // Through `@mxlang/html`'s own front door, not `compileSource`
       // directly: this registers the host taglib and compiles via the IR.

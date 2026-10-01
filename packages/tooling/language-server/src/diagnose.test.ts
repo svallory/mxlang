@@ -509,6 +509,27 @@ describe("the Angular host", () => {
     ).toEqual([]);
   });
 
+  it.each(["react", "solid", "preact", "hono", "html", "astro"] as const)(
+    "never compiles a .ng.mx under the %s host (file kind wins)",
+    (host) => {
+      expect(
+        diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", { host }),
+      ).toEqual([]);
+    },
+  );
+
+  it("matches .NG.mx case-insensitively, like the TS plugin", () => {
+    expect(
+      diagnoseDocument("<@tags/>\n", "file:///app/X.NG.mx", { host: "html" }),
+    ).toEqual([]);
+  });
+
+  it("raises no Error for an unknown-host .ng.mx with a react dependency's policy", () => {
+    expect(
+      diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", { host: "react" }),
+    ).toEqual([]);
+  });
+
   it("still returns host-policy warnings", () => {
     const diagnostics = diagnoseDocument(
       "<div>hi</div>\n",

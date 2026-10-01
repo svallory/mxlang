@@ -67,7 +67,10 @@ owns those), so a `.ng.mx` never reaches the html compile even under an
 unknown `mx.host` that resolved to the html default. An unknown host on an
 `.mx` page compiles under the resolver's host plus the warning; the parity
 test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`. Real Angular
-wiring is TODO `ls-angular-host-wiring`.
+wiring is TODO `ls-angular-host-wiring`. The `.ng.mx` check is the first
+branch, ahead of every host branch and case-insensitive (like the TS plugin's
+`isNgMx`). Known gap, pre-existing: an `.amx` file is not routed by kind in the
+LS, so it compiles under whatever host policy resolves.
 
 **Zed finding** (brief item 4): there is **no zero-Rust path** to register a
 second `[language_servers.*]` entry in Zed's `extension.toml`. Reading
