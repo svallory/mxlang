@@ -1882,6 +1882,29 @@ describe("contract-only custom tags", () => {
     ).toThrowError(message);
   });
 
+  it("accepts a self-closing call but rejects a body when `openTagOnly` is set", () => {
+    const flag: CustomTag = {
+      attributes: { a: { type: "string" } },
+      parseOptions: { openTagOnly: true },
+    };
+    const { tag } = find(
+      lowerWithTags(
+        '<attribute a="1"/>\n',
+        { attribute: flag },
+        claimAttribute(),
+      ).body,
+      "HostTag",
+    );
+    expect(tag.children).toEqual([]);
+    expect(() =>
+      lowerWithTags(
+        '<attribute a="1">hi</attribute>\n',
+        { attribute: flag },
+        claimAttribute(),
+      ),
+    ).toThrowError("does not accept content");
+  });
+
   it("leaves a tag with both a contract and a transform to its transform", () => {
     const both: CustomTag = {
       attributes: { value: { type: "string" } },

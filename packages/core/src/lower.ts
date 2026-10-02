@@ -2056,10 +2056,12 @@ function lowerCustomTag(
     // A contract-only call on a claimed name becomes a HostTag, so its
     // attributes lower as `lowerHostTag` lowers them.
     attrs: lowerAttrs(ctx, node, name, handsToHost ? "element" : "component"),
-    // `handsToHost` skips the `hasContent` gate like `isBuiltin`: the host
-    // gets the body exactly as an unregistered claimed tag would.
+    // `handsToHost` skips the `hasContent` gate like `isBuiltin`, so the host
+    // gets an authored body exactly as an unregistered claimed tag would; a
+    // call with no authored body keeps `content: null`, which `openTagOnly`
+    // validation relies on.
     content:
-      isBuiltin || handsToHost || hasContent(children)
+      isBuiltin || (handsToHost && children.length > 0) || hasContent(children)
         ? lowerBlock(ctx, node, children)
         : null,
     attributeTags: loweredTags.flat,
