@@ -85,6 +85,6 @@
     }
   },
   "mxTsc": [
-    "<root>/tags-x-ng/tags/x.ng.mx(1,1): error TS80001: an MX region in a `.ng.mx` file is only valid as the `template` property of an `@Component({ … })` decorator. (1:0)"
+    "<root>/tags-x-ng/tags/x.ng.mx(1,1): error TS80001: an MX region in a `.ng.mx` file is only valid as the `template` property of an `@Component({ … })` decorator."
   ]
 }

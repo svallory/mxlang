@@ -156,6 +156,6 @@
   },
   "mxTsc": [
     "<root>/solid-file/card.solid.mx(2,15): error TS2322: Type '{ children: string; class: string; }' is not assignable to type 'DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>'.\n  Property 'class' does not exist on type 'DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>'. Did you mean 'className'?",
-    "<root>/solid-file/broken.solid.mx(1,33): error TS80001: The closing \"div\" tag does not match the corresponding opening \"span\" tag (1:32)"
+    "<root>/solid-file/broken.solid.mx(1,33): error TS80001: The closing \"div\" tag does not match the corresponding opening \"span\" tag"
   ]
 }

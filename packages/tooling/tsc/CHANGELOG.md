@@ -10,7 +10,7 @@
 
 ### Fixed
 
-- **Compact output when stdout is not a TTY, even under `FORCE_COLOR`** (agent-output-positions, audit item 20): `tsc` switches its `pretty` mode on for any non-empty `FORCE_COLOR`, which CI sets, so `mx-tsc` printed a code frame, ANSI and declaration sites under every error (about 1.7x the text; 525 characters instead of 84 for audit case h01). `mx-tsc` now hides `FORCE_COLOR` from `tsc` when stdout is not a TTY and restores it after the run. `--pretty` on the command line or `pretty` in the tsconfig still wins; a TTY is unchanged. Pinned by `pretty.test.ts`; documented in the README.
+- **Compact output when stdout is not a TTY, even under `FORCE_COLOR`** (agent-output-positions, audit item 20): `tsc` switches its `pretty` mode on for any non-empty `FORCE_COLOR`, which CI sets, so `mx-tsc` printed a code frame, ANSI and declaration sites under every error (about 1.7x the text; 525 characters with ANSI (394 stripped) instead of 84 for audit case h01). `mx-tsc` now hides `FORCE_COLOR` from `tsc` when stdout is not a TTY and restores it after the run. `--pretty` on the command line or `pretty` in the tsconfig still wins; a TTY is unchanged. Pinned by `pretty.test.ts`; documented in the README.
 
 - **A `TS80001` line carries one location** (agent-output-positions, audit item 13): `file(5,28): error TS80001: … (5:27)` ended with a second, 0-based `(line:column)` that Babel appends to a syntax error's message, so one line spelled the same position twice with two different columns. `mx-tsc` now strips that trailing suffix (the vite plugin already did). Pinned by `position-output.test.ts`.
 
