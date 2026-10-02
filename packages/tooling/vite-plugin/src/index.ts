@@ -204,6 +204,9 @@ export interface MxPluginOptions {
 
 const DEFAULT_EXTENSIONS = [".solid.mx", ".mx"];
 
+/** A Marko tag file, compiled when an MX module imports it. */
+const TAG_EXT = ".marko";
+
 /**
  * Multi-dot MX extensions that are *not* this plugin's to compile, but which
  * a shorter registered extension would otherwise swallow.
@@ -439,10 +442,10 @@ function markoPosition(
  * own doc comment — the translator builds text directly, not from a printed
  * AST), so this plugin has no real source map to hand Vite yet for that
  * extension; `transform` returns `map: null` for it rather than a
- * placeholder Vite would treat as real. `.marko` is deliberately not
- * accepted here: MX only supports the MX 1.0 subset of Marko syntax, so
- * treating a real `.marko` file as MX would silently claim support it does
- * not have.
+ * placeholder Vite would treat as real. `.marko` is not an MX
+ * extension: it is never claimed by itself, and `extensions` rejects it. It
+ * is only compiled when an MX module imports it (`tags/*.marko`, Marko's own
+ * tag discovery), through the host of the tag's own `package.json`.
  *
  * Why `resolveId` rewrites the id to `<path><ext>.tsx`/`.ts` rather than just
  * returning the resolved path — three separate parts of the pipeline dispatch
@@ -686,8 +689,19 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
   const matchExt = (file: string): string | undefined =>
     isForeign(file) ? undefined : extensions.find((ext) => file.endsWith(ext));
+  /**
+   * An id this plugin rewrote: an MX module, or a `tags/*.marko` tag that an
+   * MX module imports (see `resolveId`). The tag's extension is `.marko`, but
+   * it never joins `extensions`: that list decides which *imports* the plugin
+   * claims on sight, and a `.marko` file must only be claimed when MX code
+   * asked for it.
+   */
   const isMxModule = (file: string): string | undefined =>
-    extensions.find((ext) => file.endsWith(ext + suffixFor(ext)));
+    extensions.find((ext) => file.endsWith(ext + suffixFor(ext))) ??
+    (file.endsWith(TAG_EXT + suffixFor(TAG_EXT)) ? TAG_EXT : undefined);
+  /** A file this plugin compiles from disk: matched by extension, or a tag. */
+  const sourceExt = (file: string): string | undefined =>
+    matchExt(file) ?? (file.endsWith(TAG_EXT) ? TAG_EXT : undefined);
   /** `/a/App.solid.mx.tsx` -> `/a/App.solid.mx`; `/a/x.mx.ts` -> `/a/x.mx` */
   const sourcePath = (file: string, ext: string) =>
     file.slice(0, -suffixFor(ext).length);
@@ -717,6 +731,25 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
       // Already rewritten (a re-resolve of our own id): keep it as is.
       if (isMxModule(path) !== undefined) return id;
+
+      // `import _badge from "./tags/badge.marko"`: the import every host's
+      // emitter writes for a `tags/*.marko` tag (#187), as Marko does. Nothing
+      // else in a Vite build handles `.marko` (that is `@marko/vite`'s job,
+      // and its output is a Marko runtime template, not the function MX's
+      // emitted call expects), so the tag is compiled here, by the same
+      // whole-file path as the page. Claimed only for an importer that is
+      // itself ours — a stray `.marko` import elsewhere stays untouched.
+      if (path.endsWith(TAG_EXT)) {
+        if (!importer || isMxModule(splitId(importer)[0]) === undefined) {
+          return null;
+        }
+        const resolved = await this.resolve(id, importer, { skipSelf: true });
+        if (!resolved || resolved.external) return null;
+        const [resolvedPath, resolvedSuffix] = splitId(resolved.id);
+        if (!resolvedPath.endsWith(TAG_EXT)) return null;
+        return resolvedPath + suffixFor(TAG_EXT) + (resolvedSuffix || suffix);
+      }
+
       const ext = matchExt(path);
       if (ext === undefined) return null;
 
@@ -781,7 +814,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       if (dependents.size > 0) {
         const stale = [...dependents]
           .map((dependent) => {
-            const dependentExt = matchExt(dependent);
+            const dependentExt = sourceExt(dependent);
             return dependentExt === undefined
               ? undefined
               : graph.getModuleById(dependent + suffixFor(dependentExt));
@@ -791,7 +824,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         if (stale.length > 0) return [...ctx.modules, ...stale];
       }
 
-      const ext = matchExt(file);
+      const ext = sourceExt(file);
       if (ext === undefined) return;
 
       const mod = graph.getModuleById(file + suffixFor(ext));
@@ -821,7 +854,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       const source = sourcePath(path, ext);
 
       try {
-        if (ext === ".mx") {
+        if (ext === ".mx" || ext === TAG_EXT) {
           // Register compound-host readers before an ordinary template can
           // inspect one of their Inputs. This also closes the configResolved
           // import race in direct plugin-hook users and dev-server startup.

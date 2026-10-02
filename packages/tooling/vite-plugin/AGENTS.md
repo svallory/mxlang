@@ -94,6 +94,24 @@ filename: `transform` prints against the stripped path, and parse errors are
 re-raised with a Vite-shaped `loc` (`{ file, line, column }`) so the overlay
 points at the MX line.
 
+**`tags/*.marko` imports (audit case h18).** Every host's emitter writes
+Marko's own `import _badge from "./tags/badge.marko"` for a tag the scan found
+(#187), and nothing else in a Vite build handles `.marko` — rolldown parsed the
+raw file as JS ("Unexpected JSX expression"). `resolveId` therefore claims a
+`.marko` id when its importer is an id this plugin rewrote (`isMxModule`: an MX
+page, or a tag it already claimed, so tag-calls-tag chains work) and rewrites
+it to `<path>.marko.tsx`, exactly as it does for `.mx`; `load` and `transform`
+then run unchanged, so the tag compiles through `compileMarko()` with the host
+of the tag's own `package.json`. `.marko` is deliberately *not* in `extensions`
+(still rejected there): that list claims imports on sight, a stray `.marko`
+import from plain TS must stay untouched, and `@marko/vite` is no substitute
+(its output is a Marko runtime template, not the function the emitted call
+expects; same shape the Bun loader's test gives `.marko` tags,
+`packages/hosts/html/src/marko-tags.bun.test.ts`). `sourceExt()` is the
+extension lookup for HMR (an edited tag invalidates its own module and the
+callers recorded against it). Tests: `marko-tags-build.test.ts` (real
+`vite build` + `createServer().ssrLoadModule`, output executed).
+
 `@mxlang/parser`'s `main` is `dist/index.js`, not `src/index.ts`. Vite's config
 loader externalizes bare imports, so a consumer that pulls the parser's TS
 source makes Node load the vendored Babel tree, whose `const enum`s the

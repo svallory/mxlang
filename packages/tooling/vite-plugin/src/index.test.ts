@@ -157,6 +157,76 @@ describe("mx()", () => {
       expect(resolved).toBe(`/root/src/features/Counter.solid.mx${MX_SUFFIX}`);
     });
 
+    describe("a .marko tag import", () => {
+      it("is claimed when an MX module imports it", async () => {
+        const resolveId = resolveIdOf(mx());
+        const ctx = makeContext();
+
+        expect(
+          await resolveId.call(
+            ctx,
+            "./tags/badge.marko",
+            `/root/src/page.mx${MX_SUFFIX}`,
+          ),
+        ).toBe(`/root/src/tags/badge.marko${MX_SUFFIX}`);
+        // A tag importing another tag: its importer is itself a claimed tag.
+        expect(
+          await resolveId.call(
+            ctx,
+            "./inner.marko",
+            `/root/src/tags/outer.marko${MX_SUFFIX}`,
+          ),
+        ).toBe(`/root/src/tags/inner.marko${MX_SUFFIX}`);
+        // A `.solid.mx` page too: it emits the same import.
+        expect(
+          await resolveId.call(
+            ctx,
+            "./tags/badge.marko",
+            `/root/src/Page.solid.mx${MX_SUFFIX}`,
+          ),
+        ).toBe(`/root/src/tags/badge.marko${MX_SUFFIX}`);
+      });
+
+      it("is left alone for any other importer, and with none", async () => {
+        const resolveId = resolveIdOf(mx());
+        const ctx = makeContext();
+
+        expect(
+          await resolveId.call(ctx, "./x.marko", "/root/src/main.ts"),
+        ).toBeNull();
+        expect(await resolveId.call(ctx, "/root/src/x.marko")).toBeNull();
+        expect(ctx.calls).toHaveLength(0);
+      });
+
+      it("is not claimed when the resolver cannot find it", async () => {
+        const resolveId = resolveIdOf(mx());
+        expect(
+          await resolveId.call(
+            { resolve: async () => null },
+            "./missing.marko",
+            `/root/src/page.mx${MX_SUFFIX}`,
+          ),
+        ).toBeNull();
+      });
+
+      it("keeps the query across the rewrite", async () => {
+        const resolveId = resolveIdOf(mx());
+        expect(
+          await resolveId.call(
+            makeContext(),
+            "./tags/badge.marko?t=1",
+            `/root/src/page.mx${MX_SUFFIX}`,
+          ),
+        ).toBe(`/root/src/tags/badge.marko${MX_SUFFIX}?t=1`);
+      });
+
+      it("is still not an accepted `extensions` entry", () => {
+        expect(() => mx({ extensions: [".marko"] })).toThrow(
+          /'\.marko' is not a supported extension/,
+        );
+      });
+    });
+
     it("delegates with skipSelf so the hook cannot recurse", async () => {
       const context = makeContext();
       const resolveId = resolveIdOf(mx());
