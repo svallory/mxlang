@@ -156,6 +156,28 @@ export {
   scanCached,
 } from "./scan-cache.ts";
 export {
+  createTargetLookup,
+  type HostFileKind,
+  type HostRegionInput,
+  type HostRegionResult,
+  type TargetCompileOptions,
+  type TargetCompileResult,
+  type TargetCompiler,
+  type TargetDescriptor,
+  TargetDescriptorError,
+  type TargetHost,
+  type TargetLookup,
+  TargetLookupError,
+  type TargetLookupRule,
+  validateDescriptor,
+} from "./target-descriptor.ts";
+export {
+  clearTargetDescriptorCache,
+  loadTargetDescriptor,
+  TargetLoadError,
+  type TargetLoadErrorCode,
+} from "./target-loader.ts";
+export {
   hasTemplate,
   metadataForTemplate,
   peekTemplateMetadata,

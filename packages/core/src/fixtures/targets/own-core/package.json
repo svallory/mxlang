@@ -1,0 +1,5 @@
+{
+  "name": "@acme/mx-own-core",
+  "private": true,
+  "type": "module"
+}

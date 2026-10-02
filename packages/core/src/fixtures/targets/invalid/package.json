@@ -1,0 +1,5 @@
+{
+  "name": "@acme/mx-invalid",
+  "private": true,
+  "type": "module"
+}
