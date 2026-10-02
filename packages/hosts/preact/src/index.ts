@@ -360,12 +360,27 @@ export function emitModuleWithMappings(
   // that reads `input.content` gets the alias, and one that does not is
   // emitted unchanged: without it, `<Card><p/></Card>` compiled cleanly and
   // rendered an empty card, which is the S8 silent-drop class.
+  //
+  // A bare string or number body is made a fragment here, once, for every
+  // caller (an MX call site, hand-written TSX, a test harness): Marko's body
+  // is a renderer, never a string, but a JSX child may be one, and
+  // `<${input.content}/>` (`mxDynamic`) reads a string as a tag NAME. A
+  // number goes through `String` because hono drops a bare `0` inside a
+  // fragment; an empty string becomes `undefined` (renders nothing, stays
+  // falsy for `<if=input.content>`). A tag-name value never comes through
+  // `input.content`, so `<${tag}/>` is unaffected.
   lines.push(
+    "  const $mxBody =",
+    "    (props as { content?: unknown }).content ??",
+    "    (props as { children?: unknown }).children;",
     "  const input: Input & { content?: unknown } = {",
     "    ...props,",
     "    content:",
-    "      (props as { content?: unknown }).content ??",
-    "      (props as { children?: unknown }).children,",
+    '      typeof $mxBody === "string" || typeof $mxBody === "number"',
+    '        ? $mxBody === ""',
+    "          ? undefined",
+    "          : <>{String($mxBody)}</>",
+    "        : $mxBody,",
     "  };",
   );
   // A statement lifted by the core's own hoist hook precedes the author's, so

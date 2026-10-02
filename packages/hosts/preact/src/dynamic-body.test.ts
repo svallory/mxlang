@@ -143,4 +143,38 @@ describe("a body forwarded through <${input.content}/> (preact, Marko parity)", 
       ),
     ).toBe("<section>hello</section>");
   });
+
+  it.each([
+    ["0", 0, "<section>0</section>"],
+    ['""', "", "<section></section>"],
+    ["false", false, "<section></section>"],
+    ["null", null, "<section></section>"],
+    ["undefined", undefined, "<section></section>"],
+    ["7", 7, "<section>7</section>"],
+  ])(
+    "a sole placeholder body of %s renders as Marko does",
+    async (_label, x, expected) => {
+      expect(await renderPair("<Wrap>${input.x}</Wrap>", { x })).toBe(expected);
+    },
+  );
+
+  it.each([
+    ["content", { content: "hello" }, "<section>hello</section>"],
+    ["children", { children: "hello" }, "<section>hello</section>"],
+    [
+      "a tag-name-looking content",
+      { content: "div" },
+      "<section>div</section>",
+    ],
+    ["a numeric content", { content: 7 }, "<section>7</section>"],
+    ["a zero content", { content: 0 }, "<section>0</section>"],
+    ["an empty-string content", { content: "" }, "<section></section>"],
+  ])(
+    "a plain caller passing a string or number as %s renders it as text",
+    async (_label, props, expected) => {
+      // `...input` forwards the props untouched, the shape a hand-written
+      // TSX caller (not this emitter's own call site) produces.
+      expect(await renderPair("<Wrap ...input/>", props)).toBe(expected);
+    },
+  );
 });

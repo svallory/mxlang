@@ -415,26 +415,6 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /**
-   * A called unit's children, kept from reaching it as a bare string.
-   *
-   * A sole text or `${…}` child is a plain string in JSX's `children`, and
-   * the callee's `<${input.content}/>` reads a string as a tag name
-   * (`mxDynamic`). Marko's body is always a renderer, so there a text body is
-   * text; a fragment makes it a vnode here too.
-   */
-  #bareStringSafe(nodes: IrNode[], rendered: MappedCode): MappedCode {
-    const content = meaningful(nodes);
-    const only = content[0];
-    if (
-      content.length === 1 &&
-      (only?.kind === "Text" || only?.kind === "Interpolation")
-    ) {
-      return concatMapped("<>", rendered, "</>");
-    }
-    return rendered;
-  }
-
-  /**
    * A child list as a single JSX *expression*.
    *
    * One element stays itself; anything else is wrapped in a fragment, because
@@ -1281,7 +1261,7 @@ export class PreactEmitter implements Emitter<string> {
           this.#expression(contentNodes, true),
           "}",
         )
-      : this.#bareStringSafe(contentNodes, this.#render(contentNodes, true));
+      : this.#render(contentNodes, true);
     if (children.code === "") {
       this.#out.push(
         concatMapped("<", mapped(name, node.nameSpan), attrs, tags, " />"),
