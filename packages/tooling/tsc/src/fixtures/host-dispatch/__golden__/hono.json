@@ -1,0 +1,243 @@
+{
+  "files": {
+    "Card.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "hono"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "/** @jsxImportSource hono/jsx */\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              34
+            ],
+            "lengths": [
+              49
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "/** @jsxImportSource hono/jsx */\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
+        "map": null,
+        "warnings": []
+      }
+    },
+    "broken.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "hono"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "Missing ending \"div\" tag",
+            "data": {
+              "codeFrame": "  1 | export interface Input {}\n  2 |\n> 3 | <div>\n    | ^^^^^ Missing ending \"div\" tag\n  4 |"
+            },
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 1
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/hono/broken.mx",
+            "message": "\n    at <root>/hono/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+            "offset": 27,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "CompileError",
+          "message": "Missing ending \"div\" tag",
+          "id": "<root>/hono/broken.mx",
+          "loc": {
+            "file": "<root>/hono/broken.mx",
+            "line": 3,
+            "column": 0
+          },
+          "frame": "3 | <div>\n    ^"
+        },
+        "warnings": []
+      }
+    },
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "hono"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/hono/page.mx: `<let>` is Marko reactive state; use Hono's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 1
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/hono/page.mx",
+            "message": "<root>/hono/page.mx: `<let>` is Marko reactive state; use Hono's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+            "offset": 30,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "`<let>` is Marko reactive state; use Hono's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+          "id": "<root>/hono/page.mx",
+          "loc": {
+            "file": "<root>/hono/page.mx",
+            "line": 3,
+            "column": 0
+          },
+          "frame": "3 | <let/count=0/>\n    ^"
+        },
+        "warnings": []
+      }
+    },
+    "plain.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "hono"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [
+          "<root>/hono/Card.mx"
+        ],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "/** @jsxImportSource hono/jsx */\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              34
+            ],
+            "lengths": [
+              28
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              31
+            ],
+            "generatedOffsets": [
+              511
+            ],
+            "lengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              38
+            ],
+            "generatedOffsets": [
+              516
+            ],
+            "lengths": [
+              3
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "/** @jsxImportSource hono/jsx */\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/hono/broken.mx(3,1): error TS80001: \n    at <root>/hono/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+    "<root>/hono/page.mx(3,1): error TS80001: <root>/hono/page.mx: `<let>` is Marko reactive state; use Hono's `useState` via `<const/x=useState(0)/>` or in the surrounding module"
+  ]
+}

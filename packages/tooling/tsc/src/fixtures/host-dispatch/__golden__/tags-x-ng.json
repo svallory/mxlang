@@ -1,0 +1,90 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "<root>/tags-x-ng/tags/x.ng.mx:1:1: `x.ng.mx` is a host module file, not a tag template; tag templates are `.mx`",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/tags-x-ng/tags/x.ng.mx",
+                  "range": {
+                    "start": {
+                      "line": 0,
+                      "character": 0
+                    },
+                    "end": {
+                      "line": 0,
+                      "character": 1
+                    }
+                  }
+                },
+                "message": "`x.ng.mx` is a host module file, not a tag template; tag templates are `.mx`"
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/tags-x-ng/tags/x.ng.mx",
+            "diagnostics": [
+              {
+                "severity": 2,
+                "source": "mxlang",
+                "message": "`x.ng.mx` is a host module file, not a tag template; tag templates are `.mx`",
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 0
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 1
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": [
+          "@mxlang/typescript-plugin: <root>/tags-x-ng/tags/x.ng.mx: `x.ng.mx` is a host module file, not a tag template; tag templates are `.mx`"
+        ]
+      },
+      "vite": {
+        "code": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "map": null,
+        "warnings": [
+          "@mxlang/vite-plugin: <root>/tags-x-ng/tags/x.ng.mx: `x.ng.mx` is a host module file, not a tag template; tag templates are `.mx`"
+        ]
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/tags-x-ng/tags/x.ng.mx(1,1): error TS80001: an MX region in a `.ng.mx` file is only valid as the `template` property of an `@Component({ … })` decorator. (1:0)"
+  ]
+}

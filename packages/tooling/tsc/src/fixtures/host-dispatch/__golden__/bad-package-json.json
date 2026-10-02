@@ -1,0 +1,165 @@
+{
+  "files": {
+    "Card.mx": {
+      "languageServer": [
+        {
+          "severity": 2,
+          "source": "mxlang",
+          "message": "<root>/bad-package-json/package.json:1:27: could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\")",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 1
+            }
+          },
+          "relatedInformation": [
+            {
+              "location": {
+                "uri": "file://<root>/bad-package-json/package.json",
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 26
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 27
+                  }
+                }
+              },
+              "message": "could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\")"
+            }
+          ]
+        },
+        {
+          "severity": 2,
+          "source": "mxlang",
+          "message": "<root>/bad-package-json/package.json:1:1: `package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 1
+            }
+          },
+          "relatedInformation": [
+            {
+              "location": {
+                "uri": "file://<root>/bad-package-json/package.json",
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 0
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 1
+                  }
+                }
+              },
+              "message": "`package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force"
+            }
+          ]
+        }
+      ],
+      "tsPluginHostPolicy": [
+        {
+          "code": "malformed-package-json",
+          "file": "<root>/bad-package-json/package.json",
+          "message": "<root>/bad-package-json/package.json could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\")",
+          "line": 1,
+          "column": 26
+        }
+      ]
+    },
+    "page.mx": {
+      "languageServer": [
+        {
+          "severity": 2,
+          "source": "mxlang",
+          "message": "<root>/bad-package-json/package.json:1:27: could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\")",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 1
+            }
+          },
+          "relatedInformation": [
+            {
+              "location": {
+                "uri": "file://<root>/bad-package-json/package.json",
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 26
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 27
+                  }
+                }
+              },
+              "message": "could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\")"
+            }
+          ]
+        },
+        {
+          "severity": 2,
+          "source": "mxlang",
+          "message": "<root>/bad-package-json/package.json:1:1: `package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 1
+            }
+          },
+          "relatedInformation": [
+            {
+              "location": {
+                "uri": "file://<root>/bad-package-json/package.json",
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 0
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 1
+                  }
+                }
+              },
+              "message": "`package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force"
+            }
+          ]
+        }
+      ],
+      "tsPluginHostPolicy": [
+        {
+          "code": "malformed-package-json",
+          "file": "<root>/bad-package-json/package.json",
+          "message": "<root>/bad-package-json/package.json could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\")",
+          "line": 1,
+          "column": 26
+        }
+      ]
+    }
+  },
+  "mxTsc": [
+    "<root>/bad-package-json/package.json(1,27): warning TS80003: could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\")"
+  ]
+}

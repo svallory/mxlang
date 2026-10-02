@@ -1,0 +1,291 @@
+{
+  "files": {
+    "Card.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "<root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/unknown-host/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 13
+                    }
+                  }
+                },
+                "message": "unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/unknown-host/package.json",
+            "diagnostics": [
+              {
+                "severity": 2,
+                "source": "mxlang",
+                "message": "unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 12
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 13
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              40
+            ],
+            "lengths": [
+              49
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "unknown-host",
+            "file": "<root>/unknown-host/package.json",
+            "message": "unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+            "line": 3,
+            "column": 12
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "code": "import { escape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
+        "map": null,
+        "warnings": [
+          "@mxlang/vite-plugin: <root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+        ]
+      }
+    },
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "<root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/unknown-host/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 13
+                    }
+                  }
+                },
+                "message": "unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/unknown-host/package.json",
+            "diagnostics": [
+              {
+                "severity": 2,
+                "source": "mxlang",
+                "message": "unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 12
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 13
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [
+          "<root>/unknown-host/Card.mx"
+        ],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  const count = 0;\n  out += Card({ tab: () => {\n    let out = \"\";\n    return out;\n  } });\n  out += \"<p>\";\n  out += escape(count);\n  out += \"</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              40
+            ],
+            "lengths": [
+              28
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              41
+            ],
+            "generatedOffsets": [
+              167
+            ],
+            "lengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              46
+            ],
+            "generatedOffsets": [
+              179
+            ],
+            "lengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              53
+            ],
+            "generatedOffsets": [
+              186
+            ],
+            "lengths": [
+              3
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              71
+            ],
+            "generatedOffsets": [
+              273
+            ],
+            "lengths": [
+              5
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "unknown-host",
+            "file": "<root>/unknown-host/package.json",
+            "message": "unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+            "line": 3,
+            "column": 12
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "code": "import { escape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  const count = 0;\n  out += Card({ tab: () => {\n    let out = \"\";\n    return out;\n  } });\n  out += \"<p>\";\n  out += escape(count);\n  out += \"</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "map": null,
+        "warnings": [
+          "@mxlang/vite-plugin: <root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+        ]
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/unknown-host/package.json(3,13): warning TS80003: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+  ]
+}

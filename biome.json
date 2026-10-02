@@ -11,6 +11,7 @@
       "**",
       "!**/fixtures/**/__golden__",
       "!**/fixtures/**/*.solid.mx",
+      "!**/fixtures/host-dispatch/bad-package-json",
       "!packages/core/src/fixtures/callee-input/parse-error.ts",
       "!**/fixtures-marko",
       "!**/fixtures/angular",

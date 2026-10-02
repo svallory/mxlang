@@ -1,0 +1,161 @@
+{
+  "files": {
+    "broken.solid.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "The closing \"div\" tag does not match the corresponding opening \"span\" tag (1:32)",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 32
+              },
+              "end": {
+                "line": 0,
+                "character": 33
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescriptreact",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const A: any; export type A<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/solid-file/broken.solid.mx",
+            "message": "The closing \"div\" tag does not match the corresponding opening \"span\" tag (1:32)",
+            "offset": 32,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "SyntaxError",
+          "message": "The closing \"div\" tag does not match the corresponding opening \"span\" tag",
+          "id": "<root>/solid-file/broken.solid.mx",
+          "loc": {
+            "file": "<root>/solid-file/broken.solid.mx",
+            "line": 1,
+            "column": 32
+          },
+          "frame": "1 | export const A = <div><span>oops</div>;\n                                    ^"
+        },
+        "warnings": []
+      }
+    },
+    "card.solid.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescriptreact",
+        "generated": "export function Card() {\n  return <div class=\"card\">hi</div>;\n}",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              0
+            ],
+            "lengths": [
+              21
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              23
+            ],
+            "generatedOffsets": [
+              23
+            ],
+            "lengths": [
+              2
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              27
+            ],
+            "generatedOffsets": [
+              27
+            ],
+            "lengths": [
+              36
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "export function Card() {\n  return <div class=\"card\">hi</div>;\n}",
+        "map": {
+          "version": 3,
+          "names": [
+            "Card"
+          ],
+          "sources": [
+            "<root>/solid-file/card.solid.mx"
+          ],
+          "sourcesContent": [
+            null
+          ],
+          "mappings": "AAAA,OAAO,SAASA,IAAIA,CAAA,EAAG;EACrB,OAAO,CAAC,GAAG,CAAC,KAAK,CAAC,MAAM,CAAC,EAAE,EAAE,GAAG,CAAC;AACnC",
+          "ignoreList": []
+        },
+        "warnings": []
+      },
+      "languageServerUntitled": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [],
+        "related": [],
+        "unexpected": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/solid-file/card.solid.mx(2,15): error TS2322: Type '{ children: string; class: string; }' is not assignable to type 'DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>'.\n  Property 'class' does not exist on type 'DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>'. Did you mean 'className'?",
+    "<root>/solid-file/broken.solid.mx(1,33): error TS80001: The closing \"div\" tag does not match the corresponding opening \"span\" tag (1:32)"
+  ]
+}

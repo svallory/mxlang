@@ -1,0 +1,7 @@
+import { Component } from "./stub.ts";
+
+@Component({
+  selector: "app-x",
+  template: <p>${n}</p>,
+})
+export class XComponent { n: number = 1; }

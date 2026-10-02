@@ -1,0 +1,13 @@
+{
+  "mx": {
+    "host": "astro",
+    "tags": [
+      {
+        "dir": "extra-tags",
+        "hosts": [
+          "astro"
+        ]
+      }
+    ]
+  }
+}

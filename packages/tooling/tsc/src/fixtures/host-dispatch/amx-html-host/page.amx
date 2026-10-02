@@ -1,0 +1,5 @@
+---
+const title = "x";
+---
+<badge/>
+<p>hi</p>

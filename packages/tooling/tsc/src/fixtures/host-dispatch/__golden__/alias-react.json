@@ -1,0 +1,149 @@
+{
+  "files": {
+    "Card.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "react"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "/** @jsxImportSource react */\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              31
+            ],
+            "lengths": [
+              49
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "/** @jsxImportSource react */\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
+        "map": null,
+        "warnings": []
+      }
+    },
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "react"
+        },
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call",
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 1
+              },
+              "end": {
+                "line": 2,
+                "character": 2
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "/** @jsxImportSource react */\n\nimport Card from \"~/Card.mx\"\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /></>);\n}\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              31
+            ],
+            "lengths": [
+              28
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              31
+            ],
+            "generatedOffsets": [
+              507
+            ],
+            "lengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              38
+            ],
+            "generatedOffsets": [
+              512
+            ],
+            "lengths": [
+              3
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/alias-react/page.mx",
+            "message": "couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call",
+            "offset": 31,
+            "category": "warning"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "/** @jsxImportSource react */\n\nimport Card from \"~/Card.mx\"\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /></>);\n}\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/alias-react/page.mx(1,18): error TS2307: Cannot find module '~/Card.mx' or its corresponding type declarations.",
+    "<root>/alias-react/page.mx(3,2): warning TS80002: couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call"
+  ]
+}

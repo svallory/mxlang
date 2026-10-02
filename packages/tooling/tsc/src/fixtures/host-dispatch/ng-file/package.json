@@ -1,0 +1,8 @@
+{
+  "mx": {
+    "host": "angular",
+    "angular": {
+      "diagnostics": "off"
+    }
+  }
+}

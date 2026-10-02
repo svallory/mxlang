@@ -1,0 +1,103 @@
+{
+  "files": {
+    "x.component.ng.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "angular"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { Component } from \"./stub.ts\";\n\n@Component({\n  selector: \"app-x\",\n  template: `<p>{{ n }}</p>`,\n})\nexport class XComponent { n: number = 1; }\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              0
+            ],
+            "lengths": [
+              39
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              40
+            ],
+            "generatedOffsets": [
+              40
+            ],
+            "lengths": [
+              46
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              91
+            ],
+            "generatedOffsets": [
+              93
+            ],
+            "lengths": [
+              1
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              97
+            ],
+            "generatedOffsets": [
+              102
+            ],
+            "lengths": [
+              48
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": []
+}
