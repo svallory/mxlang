@@ -381,6 +381,79 @@ function locate(
 }
 
 /**
+ * A specifier worth asking the resolver about: not a virtual module (`\0…`),
+ * a `data:` URL or a remote URL, none of which are files a build resolves.
+ */
+const isProbeable = (specifier: string): boolean =>
+  !specifier.startsWith("\0") && !/^(?:data|https?):/.test(specifier);
+
+/**
+ * Where `specifier` is written in an authored `.mx` source: the 1-based line
+ * and 0-based column of its opening quote, found as the operand of
+ * `from "…"`, a bare `import "…"`, `import("…")` or `require("…")`.
+ *
+ * The source is searched rather than the generated module because the `.mx`
+ * path has no source map (see `transform`): the specifier is the only thing
+ * both texts share. `undefined` when the specifier is not written in the
+ * source — an import the emitter added — and the caller then has no authored
+ * position to offer.
+ */
+function findImportSpecifier(
+  source: string,
+  specifier: string,
+): { line: number; column: number } | undefined {
+  const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(
+    `(?:\\bfrom\\s*|\\bimport\\s*\\(?\\s*|\\brequire\\s*\\(\\s*)(["'])${escaped}\\1`,
+  ).exec(source);
+  if (!match) return undefined;
+  const quote = match.index + match[0].length - specifier.length - 2;
+  const before = source.slice(0, quote).split("\n");
+  return {
+    line: before.length,
+    column: before[before.length - 1]?.length ?? 0,
+  };
+}
+
+/**
+ * The error for an import in an authored `.mx` file that nothing resolves.
+ *
+ * Left to rolldown it names the generated `page.mx.tsx`, at a position in
+ * generated text, with a full stack (audit item 10). Raised here it names the
+ * authored file at the specifier, with `loc` and `frame` carrying the position
+ * (`column` 0-based, like every other `loc` this plugin raises).
+ */
+function unresolvedImport(
+  source: string,
+  specifier: string,
+): Error | undefined {
+  const text = readTemplateSource(source);
+  const at =
+    text === undefined ? undefined : findImportSpecifier(text, specifier);
+  if (at === undefined) return undefined;
+  const error = Object.assign(new Error(), { code: "UNRESOLVED_IMPORT" });
+  const located = locate(error, {
+    file: source,
+    ...at,
+    source: text,
+    message: `Could not resolve "${specifier}"`,
+  });
+  // The dev server resolves an import while transforming its importer, and
+  // Vite then maps any `err.loc` it finds through that importer's sourcemap
+  // as if it were a position in the *generated* module — which turned the
+  // authored `page.mx:2:17` into `page.mx.tsx:7:14` (checked on Vite 8.2.2).
+  // This position is already authored, so keep it where Vite cannot rewrite
+  // it: an accessor whose setter drops the assignment.
+  const loc = located.loc;
+  Object.defineProperty(located, "loc", {
+    enumerable: true,
+    get: () => loc,
+    set: () => {},
+  });
+  return located;
+}
+
+/**
  * `instanceof TranslateError`, plus a name check: the error is raised from
  * `@mxlang/html`'s own copy of core, which is a different module instance
  * than this file's whenever the module graph is reloaded (a Vite config
@@ -705,6 +778,21 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   /** `/a/App.solid.mx.tsx` -> `/a/App.solid.mx`; `/a/x.mx.ts` -> `/a/x.mx` */
   const sourcePath = (file: string, ext: string) =>
     file.slice(0, -suffixFor(ext).length);
+  /**
+   * The located error for `specifier` imported by `importer`, when `importer`
+   * is an MX module and the specifier is written in its authored source;
+   * `undefined` otherwise, and the caller leaves the failure to rolldown.
+   */
+  const unresolvedFrom = (
+    importer: string,
+    specifier: string,
+  ): Error | undefined => {
+    const [importerPath] = splitId(importer);
+    const ext = isMxModule(importerPath);
+    return ext === undefined
+      ? undefined
+      : unresolvedImport(sourcePath(importerPath, ext), specifier);
+  };
 
   return {
     name: "mx",
@@ -744,21 +832,43 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           return null;
         }
         const resolved = await this.resolve(id, importer, { skipSelf: true });
-        if (!resolved || resolved.external) return null;
+        if (!resolved) {
+          const error = unresolvedFrom(importer, path);
+          if (error) throw error;
+          return null;
+        }
+        if (resolved.external) return null;
         const [resolvedPath, resolvedSuffix] = splitId(resolved.id);
         if (!resolvedPath.endsWith(TAG_EXT)) return null;
         return resolvedPath + suffixFor(TAG_EXT) + (resolvedSuffix || suffix);
       }
 
       const ext = matchExt(path);
-      if (ext === undefined) return null;
+      if (ext === undefined) {
+        // Not ours to rewrite, but an import written in an authored MX file
+        // that nothing resolves is ours to report: rolldown would name the
+        // generated `page.mx.tsx` at a generated position (audit item 10).
+        // The probe is a plain `this.resolve` through the rest of the chain —
+        // what rolldown would do next — and its answer is discarded, so a
+        // resolvable import resolves exactly as before.
+        if (importer && isProbeable(path) && isMxModule(splitId(importer)[0])) {
+          const probed = await this.resolve(id, importer, { skipSelf: true });
+          const error = probed ? undefined : unresolvedFrom(importer, path);
+          if (error) throw error;
+        }
+        return null;
+      }
 
       // Delegate to Vite: this handles relative ids against the real importer
       // directory, root-relative (`/src/x.mx`) and `/@fs/` forms,
       // `resolve.alias`, and bare specifiers into workspace packages.
       // `skipSelf` stops this hook from recursing into itself.
       const resolved = await this.resolve(id, importer, { skipSelf: true });
-      if (!resolved) return null;
+      if (!resolved) {
+        const error = importer && unresolvedFrom(importer, path);
+        if (error) throw error;
+        return null;
+      }
 
       const [resolvedPath, resolvedSuffix] = splitId(resolved.id);
       const resolvedExt = matchExt(resolvedPath);

@@ -180,6 +180,31 @@ loc })` changes nothing (checked on rolldown 1.2.8) — and `vite build`'s CLI
 prints its own ~7-frame stack for the aggregate `Build failed` error. `id`,
 `loc.file` and the dev-server overlay do carry the authored path.
 
+**Unresolved imports are located at the authored specifier (audit item 10).**
+For an import that nothing resolves, rolldown raised `UNRESOLVED_IMPORT` against
+the generated `page.mx.tsx`. The `.mx` path has no source map (`map: null`), so
+that position could not be remapped; `resolveId` raises the error itself
+instead. For an importer that is an MX module, an id the plugin does not claim
+is probed with `this.resolve(id, importer, { skipSelf: true })` — what rolldown
+would do next — and only a `null` answer throws; a resolvable import is
+returned `null` as before (the probe's answer is discarded, so resolution of a
+valid build is unchanged), and `external` is not `null`, so an explicit
+`rollupOptions.external` specifier is still fine. The claimed `.mx`/`.marko`
+branches throw on their own `null`. `findImportSpecifier` finds the specifier in
+the authored source (`from "…"`, `import "…"`, `import("…")`, `require("…")`);
+when it is not written there (an import the emitter added) there is no authored
+position, so nothing is thrown and rolldown reports it. Two traps: (1) the
+error's `loc` is pinned behind an accessor with a no-op setter, because in the
+dev server the resolve happens while transforming the importer and Vite
+(`TransformPluginContext`, Vite 8.2.2) maps any `err.loc` through that
+importer's combined sourcemap as if it were generated-module coordinates — the
+authored `page.mx:2:17` came out as `page.mx.tsx:7:14`; (2) a `vite build`
+error is rolldown's `Build failed with 1 error` aggregate: it carries the
+position in its message only (no `loc`/`id`), and vite's own ~7-frame stack
+stays. `loc.column` is 0-based, so the build prints `1:17` for what `mx-tsc`
+calls `1:18`. Tests: `unresolved-import-build.test.ts` (real `vite build` and
+`createServer().ssrLoadModule`; error text is ANSI-stripped).
+
 **`readTemplateSource(file, read?)` guards that read (round 3/4).** The
 named file may no longer exist, or be unreadable, between the compile's own
 read and this one — a failure here must not replace the real diagnostic

@@ -2,6 +2,22 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (audit-05-vite-unresolved-import, audit cases h15, p10, s11):** an import in an authored `.mx` / `.solid.mx` file that nothing resolves (a missing `./card.mx`, a missing `./helper.ts`, a package that is not installed) now fails `vite build` and the dev server against the authored file and the import's own line:col, with a one-line code frame:
+
+  ```
+  [plugin mx] …/src/page.mx:1:17
+  Error: Could not resolve "./card.mx"
+  1 | import Card from "./card.mx";
+                       ^
+  ```
+
+  It used to name the generated `page.mx.tsx` at a position in generated text (rolldown's `UNRESOLVED_IMPORT`), which an author could not map back.
+
+  - `resolveId` asks the rest of the resolver chain about each import written in an MX module and raises the error only when nothing resolves it; a resolvable import resolves exactly as before, and an `external` one is still external. The position is found by searching the authored source for the specifier, because the `.mx` path has no source map. An import the emitter added (not written by the author) is left to rolldown.
+  - Also covers a `tags/*.mx` tag's own imports (the error names the tag file) and the `.marko` tag import.
+  - The column is 0-based like every other `loc` this plugin raises (`1:17` where `mx-tsc` prints `1:18`).
+  - In the dev server, Vite maps any `err.loc` raised while an importer is being transformed through that importer's sourcemap, which turned the authored position into a generated one; this error pins its `loc` so Vite cannot rewrite it.
+
 - **Fix (audit-04-vite-tags-marko, audit case h18):** a page that calls a `tags/*.marko` tag now builds under `vite build` and the dev server. It used to pass `mx-tsc` and the language server, then fail the build with `PARSE_ERROR Unexpected JSX expression` at `tags/<tag>.marko:1:1`, because every host emits Marko's `import _badge from "./tags/badge.marko"` (#187) and nothing in the plugin handled a `.marko` module.
 
   - The plugin now claims a `.marko` import **only when an MX module (or a tag it already claimed) imports it**, and compiles the tag through the same whole-file path as a page, so a tag takes the host of its own nearest `package.json`. This is parity with Marko's auto-discovery of `tags/*.marko`; there is no new option or dependency. `@marko/vite` is not used: it emits Marko runtime templates, not the `(input) => string` / component function the emitted call expects.
