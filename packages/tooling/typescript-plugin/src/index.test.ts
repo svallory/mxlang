@@ -4191,3 +4191,106 @@ describe("custom tag template mappings", () => {
     expect(withTag.length).toBeGreaterThan(0);
   });
 });
+
+describe("host-policy diagnostics through tsserver", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    clearScanCache();
+  });
+
+  /** A real directory holding `package.json`: host resolution reads the disk. */
+  function packageDir(packageJson: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "mx-ts-host-policy-"));
+    dirs.push(dir);
+    writeFileSync(join(dir, "package.json"), packageJson);
+    return dir;
+  }
+
+  function hostPolicyDiagnostics(dir: string, fileName: string) {
+    const file = join(dir, fileName);
+    const consumer = join(dir, "index.ts");
+    const service = createPluginService(
+      {
+        [file]: fileName.endsWith(".ng.mx")
+          ? "export class X {}\n"
+          : "<div>hi</div>\n",
+        [consumer]: `import "./${fileName}";\n`,
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+    return service.getSyntacticDiagnostics(file);
+  }
+
+  const UNKNOWN = '{\n  "mx": {\n    "host": "vue"\n  }\n}\n';
+
+  it("puts an unknown mx.host on the .mx file at 1:1, as a warning naming package.json:line:col", () => {
+    const dir = packageDir(UNKNOWN);
+
+    const [diagnostic, ...rest] = hostPolicyDiagnostics(dir, "page.mx");
+
+    expect(rest).toEqual([]);
+    expect(diagnostic).toMatchObject({
+      start: 0,
+      length: 0,
+      source: "mx",
+      code: 80003,
+      category: ts.DiagnosticCategory.Warning,
+    });
+    expect(String(diagnostic?.messageText)).toContain(
+      'unknown mx.host "vue"; valid hosts: html',
+    );
+    expect(String(diagnostic?.messageText)).toContain(
+      `(${join(dir, "package.json")}:3:13)`,
+    );
+  });
+
+  it("puts a malformed package.json on the .mx file as a warning", () => {
+    const dir = packageDir('{ "mx": { "host": "html", }');
+
+    // Babel (under Marko's compiler) may also fail on the unparseable
+    // package.json depending on the cwd; that error is not what is asserted.
+    const diagnostic = hostPolicyDiagnostics(dir, "page.mx").find(
+      (d) => d.code === 80003,
+    );
+
+    expect(diagnostic?.category).toBe(ts.DiagnosticCategory.Warning);
+    expect(String(diagnostic?.messageText)).toContain(
+      "could not be parsed as JSON",
+    );
+  });
+
+  it("reports nothing for a valid host", () => {
+    const dir = packageDir('{ "mx": { "host": "html" } }');
+
+    expect(hostPolicyDiagnostics(dir, "page.mx")).toEqual([]);
+  });
+
+  it("reports on a .ng.mx too (a24: the unknown host sits beside Angular files)", () => {
+    const dir = packageDir('{ "mx": { "host": "angualr" } }');
+
+    const diagnostics = hostPolicyDiagnostics(dir, "x.component.ng.mx");
+
+    expect(
+      diagnostics.some(
+        (d) =>
+          d.code === 80003 &&
+          String(d.messageText).includes('Did you mean "angular"?'),
+      ),
+    ).toBe(true);
+  });
+
+  it("stops reporting once package.json is fixed (a new service per project sees the fixed manifest)", () => {
+    const dir = packageDir(UNKNOWN);
+    expect(hostPolicyDiagnostics(dir, "page.mx")).toHaveLength(1);
+
+    writeFileSync(join(dir, "package.json"), '{ "mx": { "host": "html" } }');
+    clearScanCache();
+
+    // A new service (one per project in tsserver) sees the fixed manifest.
+    expect(hostPolicyDiagnostics(dir, "page.mx")).toEqual([]);
+  });
+});

@@ -8,6 +8,7 @@ import {
   readAngularConfig,
 } from "@mxlang/angular";
 import {
+  type HostPolicyDiagnostic,
   hostModuleSegment,
   type MxWarning,
   reportScanDiagnostics,
@@ -27,6 +28,7 @@ import type {
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
+import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
 
 /**
  * Adapts `compileSolidMx`'s own `(source, options)` signature to the
@@ -62,6 +64,8 @@ export interface MxCompileDiagnostic extends SolidMxSyntaxError {
 
 export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
   getCompileDiagnostics(fileName?: string): MxCompileDiagnostic[];
+  /** Only the `.mx` plugin resolves hosts, so only it implements this. */
+  getHostPolicyDiagnostics?(fileName?: string): HostPolicyDiagnostic[];
 }
 
 export interface SolidMxLanguagePlugin extends MxDiagnosticLanguagePlugin {
@@ -94,6 +98,7 @@ export function createSolidMxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
   const reportedScanDiagnostics = new Set<string>();
+  const hostPolicies = createHostPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -106,6 +111,8 @@ export function createSolidMxLanguagePlugin(
       }
 
       const source = snapshot.getText(0, snapshot.getLength());
+      // Only for what it reports: this file's host is fixed by its extension.
+      hostPolicies.resolve(fileName);
       try {
         // The tags this file can call, discovered the same way every other
         // integration discovers them. Without this the editor would know
@@ -201,6 +208,10 @@ export function createSolidMxLanguagePlugin(
       return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
+    getHostPolicyDiagnostics(fileName) {
+      return hostPolicies.get(fileName);
+    },
+
     typescript: {
       resolveHiddenExtensions: true,
       extraFileExtensions: [
@@ -292,6 +303,7 @@ export function createNgMxLanguagePlugin(
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const reportedScanDiagnostics = new Set<string>();
+  const hostPolicies = createHostPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -304,6 +316,8 @@ export function createNgMxLanguagePlugin(
       }
 
       const source = snapshot.getText(0, snapshot.getLength());
+      // Only for what it reports: this file's host is fixed by its extension.
+      hostPolicies.resolve(fileName);
       compiled.delete(fileName);
       const fail = (error: SolidMxSyntaxError) => {
         syntaxErrors.set(fileName, error);
@@ -401,6 +415,10 @@ export function createNgMxLanguagePlugin(
 
     getCompileDiagnostics(fileName) {
       return diagnosticsFrom(compileDiagnostics, fileName);
+    },
+
+    getHostPolicyDiagnostics(fileName) {
+      return hostPolicies.get(fileName);
     },
 
     typescript: {

@@ -13,6 +13,7 @@ import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
+import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
 import {
   codeInformation,
   compileWithDependencies,
@@ -43,6 +44,7 @@ export function createAmxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
   const reportedScanDiagnostics = new Set<string>();
+  const hostPolicies = createHostPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -53,6 +55,8 @@ export function createAmxLanguagePlugin(
       if (languageId !== AMX_LANGUAGE_ID && !isAmx(fileName)) return undefined;
 
       const source = snapshot.getText(0, snapshot.getLength());
+      // Only for what it reports: this file's host is fixed by its extension.
+      hostPolicies.resolve(fileName);
       try {
         // The same tags `@mxlang/astro`'s own Vite plugin discovers for this
         // file. Without them a tag that compiles under `astro build` is an
@@ -139,6 +143,10 @@ export function createAmxLanguagePlugin(
 
     getCompileDiagnostics(fileName) {
       return diagnosticsFrom(compileDiagnostics, fileName);
+    },
+
+    getHostPolicyDiagnostics(fileName) {
+      return hostPolicies.get(fileName);
     },
 
     typescript: {

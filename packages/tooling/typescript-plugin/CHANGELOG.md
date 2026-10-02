@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: host-policy diagnostics (host-policy-diagnostics-tsc-tsserver)
+
+An unknown `mx.host` or a malformed `package.json` was silent in tsserver (the file just got the fallback host). Every language plugin now records what `resolveHostPolicyDetailed` said for each file it compiles, per plugin instance (`getHostPolicyDiagnostics(fileName?)`), and tsserver reports it as a `TS80003` warning on that file at 1:1, naming `package.json:line:col` (tsserver reports no diagnostics on a `package.json`). `mx-tsc` prints the same records positioned in the `package.json`. New exports: `HOST_POLICY_DIAGNOSTIC_CODE`, `hostPolicyMessage`, type `HostPolicyDiagnostic`.
+
 ### Fixed: a failed `.mx` compile no longer cascades `TS2306 … is not a module` into every importer
 
 When a template failed to compile, its virtual module was the empty string. Every importer then reported `TS2306 File '…/x.mx' is not a module`, which `mx-tsc` printed first, at the importer, before the real compile error (a reader went to the wrong file; 21 of 21 compile-error cases in the agent-feedback audit). The virtual module is now a typed stub (`failed-module-stub.ts`): an `any` default export, an `Input` type, and every name the failed source itself exports, each declared as both a value and a type. Default, named, `import type` and `import * as` imports all resolve, so the real compile error is the only diagnostic for the ordinary import and usage forms (see `AGENTS.md` for the known limits: unscanned names and `TS7006` on callbacks passed to a stubbed value's methods). Applies to `.mx`, `.amx`, `.solid.mx` and `.ng.mx`, on both the syntax-error and the foreign-template-error paths.

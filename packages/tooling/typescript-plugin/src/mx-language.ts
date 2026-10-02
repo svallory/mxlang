@@ -6,6 +6,7 @@ import {
   type GeneratedMapping,
   getCustomTags,
   type HostDeclarations,
+  type HostPolicyDiagnostic,
   type Ir,
   type IrNode,
   type Lookup,
@@ -14,7 +15,6 @@ import {
   newCtx,
   parseFragment,
   printExpression,
-  resolveHostPolicy,
   scanCached,
 } from "@mxlang/core";
 import { compileHonoMx, honoDeclarations } from "@mxlang/hono";
@@ -26,6 +26,7 @@ import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
+import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
 import {
   codeInformation,
   compileWithDependencies,
@@ -52,6 +53,15 @@ export interface MxSyntaxError {
 
 export interface MxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): MxSyntaxError | undefined;
+  /**
+   * What resolving the host of each `.mx` file this plugin compiled had to say
+   * (an unknown `mx.host`, a malformed `package.json`), as
+   * `resolveHostPolicyDetailed` reported it. Kept per plugin instance, never
+   * process-global: tsserver hosts several projects per process, and each
+   * has its own plugin. One file's entries are replaced whenever it is
+   * compiled again, so a fixed `package.json` stops being reported.
+   */
+  getHostPolicyDiagnostics(fileName?: string): HostPolicyDiagnostic[];
 }
 
 export interface MxLanguagePluginOptions
@@ -76,6 +86,8 @@ export function createMxLanguagePlugin(
   const syntaxErrors = new Map<string, MxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
+  const hostPolicies = createHostPolicyRecorder();
+  const resolveHost = (fileName: string) => hostPolicies.resolve(fileName);
 
   /**
    * The tags callable from one file: everything discovered around it, with an
@@ -96,7 +108,7 @@ export function createMxLanguagePlugin(
     // channel for a problem in a *different* file than the one being checked,
     // so this goes to the log, which is tsserver's own log in an editor and
     // stderr under `mx-tsc`.
-    const host = resolveHostPolicy(fileName).host;
+    const host = resolveHost(fileName).host;
     for (const diagnostic of scanCached(fileName, { host }).diagnostics) {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
@@ -174,6 +186,10 @@ export function createMxLanguagePlugin(
       return syntaxErrors.get(fileName);
     },
 
+    getHostPolicyDiagnostics(fileName) {
+      return hostPolicies.get(fileName);
+    },
+
     getCompileDiagnostics(fileName) {
       return diagnosticsFrom(compileDiagnostics, fileName);
     },
@@ -220,7 +236,7 @@ export function createMxLanguagePlugin(
     dependencies: string[];
     warnings: MxWarning[];
   } {
-    const hostPolicy = resolveHostPolicy(fileName);
+    const hostPolicy = resolveHost(fileName);
     const strict = hostPolicy.host === "astro" || hostPolicy.strict === true;
     const warnings: MxWarning[] = [];
     if (hostPolicy.host === "angular") {

@@ -11,6 +11,10 @@ import {
   createAstroLanguagePlugin,
 } from "./astro-language.ts";
 import {
+  HOST_POLICY_DIAGNOSTIC_CODE,
+  hostPolicyMessage,
+} from "./host-policy-diagnostics.ts";
+import {
   createCompoundExtensionResolver,
   createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
@@ -216,7 +220,17 @@ function withSyntaxDiagnostics(
           getLanguagePlugins()?.flatMap((plugin) =>
             plugin.getCompileDiagnostics(fileName),
           ) ?? [];
-        if (compileDiagnostics.length === 0) return diagnostics;
+        // A host-policy problem is about a `package.json`, which tsserver
+        // reports no diagnostics for, so it goes on the `.mx` file that was
+        // compiled under that policy, at 1:1, naming the `package.json`
+        // position (the language server does the same).
+        const hostPolicy =
+          getLanguagePlugins()?.flatMap(
+            (plugin) => plugin.getHostPolicyDiagnostics?.(fileName) ?? [],
+          ) ?? [];
+        if (compileDiagnostics.length === 0 && hostPolicy.length === 0) {
+          return diagnostics;
+        }
 
         return [
           ...diagnostics,
@@ -244,17 +258,37 @@ function withSyntaxDiagnostics(
                   : "mx",
             messageText: diagnostic.message,
           })),
+          ...hostPolicy.map((diagnostic) => ({
+            file: typescript.createSourceFile(
+              fileName,
+              "",
+              typescript.ScriptTarget.Latest,
+              false,
+              typescript.ScriptKind.TSX,
+            ),
+            start: 0,
+            length: 0,
+            category: typescript.DiagnosticCategory.Warning,
+            code: HOST_POLICY_DIAGNOSTIC_CODE,
+            source: "mx",
+            messageText: hostPolicyMessage(diagnostic),
+          })),
         ];
       };
     },
   });
 }
 
+export type { HostPolicyDiagnostic } from "@mxlang/core";
 export {
   composeAmxMappings,
   createAmxLanguagePlugin,
 } from "./amx-language.ts";
 export { createAstroLanguagePlugin } from "./astro-language.ts";
+export {
+  HOST_POLICY_DIAGNOSTIC_CODE,
+  hostPolicyMessage,
+} from "./host-policy-diagnostics.ts";
 export type {
   CompiledNgMx,
   MxCompileDiagnostic,
