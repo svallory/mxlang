@@ -15,7 +15,7 @@ export function moduleExportName(
 ): string {
   if (!ir.exportName) {
     throw new Error(
-      `${host}: this IR has no \`exportName\`, so it was lowered as a non-module (a \`.solid.mx\` region). A host that emits a module must set \`Ctx.emitsModule\` before lowering.`,
+      `${host}: this IR has no \`exportName\`, so it was lowered as a non-module (a host module region spliced into another module). A host that emits a module must set \`Ctx.emitsModule\` before lowering.`,
     );
   }
   return ir.exportName;

@@ -1,0 +1,10 @@
+import { Component } from "@angular/core";
+
+export interface Input {
+  title: string;
+}
+
+@Component({ selector: "app-card", standalone: true })
+export class Card {}
+
+<div>{{ title }}</div>

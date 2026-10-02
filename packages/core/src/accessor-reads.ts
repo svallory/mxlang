@@ -3,17 +3,18 @@
  *
  * This is the generic half of what `template-tag.ts` does for `input.<name>`:
  * "every free reference to name `x` becomes expression `f(x)`". It exists
- * separately because a host needs the same machinery for a reason that has
- * nothing to do with custom tags — Solid 2's `<For>` hands some callback
- * parameters as **accessors**, so a body the author wrote against a value
- * (`${p.name}`) has to read `p().name` instead.
+ * separately because a host may need the same machinery for a reason that has
+ * nothing to do with custom tags — a bound name that is not read as a plain
+ * value. Any host can map a bound name to a replacement read expression; for
+ * example, a host whose `<for>` callback parameters are **accessors** rewrites
+ * a body the author wrote against a value (`${p.name}`) to read `p().name`.
  *
  * ## Why rewrite reads rather than snapshot
  *
  * The obvious alternative is one `const p = p$()` at the top of the callback.
- * It is wrong: that runs once per row, so the row goes stale the moment Solid
- * updates a same-key row in place. Rewriting each read keeps the call inside
- * Solid's tracking scope, which is the whole point of being handed an
+ * It is wrong: that runs once per row, so the row goes stale the moment the
+ * runtime updates a same-key row in place. Rewriting each read keeps the call
+ * inside the runtime's tracking scope, which is the whole point of being handed an
  * accessor.
  *
  * ## Why an AST and not a regex

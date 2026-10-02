@@ -24,12 +24,19 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  resolve as resolvePath,
+} from "node:path";
 import { parse } from "@babel/parser";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
+import { HOST_NAMES } from "./host-policy.ts";
 import type { ComponentTarget } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { hostModuleSegment } from "./scan.ts";
 import { metadataForTemplate, touchAndEvict } from "./template-tag.ts";
 
 const require = createRequire(import.meta.url);
@@ -130,6 +137,19 @@ export type CalleeInputReader = (request: {
   source: string;
   analyze(program: readonly unknown[]): CalleeInput;
 }) => CalleeInput;
+
+/**
+ * The packages `AttrTag` may be imported from as the ambient type: core and
+ * every host, derived from `HOST_NAMES` so a new host is registered once.
+ */
+const MX_ATTR_TAG_SOURCES: ReadonlySet<string> = new Set([
+  "@mxlang/core",
+  ...HOST_NAMES.map((host) => `@mxlang/${host}`),
+]);
+
+function isMxAttrTagSource(specifier: string): boolean {
+  return MX_ATTR_TAG_SOURCES.has(specifier);
+}
 
 const MAX_ALIAS_DEPTH = 4;
 const MAX_CACHED_CALLEES = 256;
@@ -454,8 +474,21 @@ function resolveTarget(
   };
 }
 
-/** Extension probes, in the order the brief pins (literal path first). */
-const EXTENSION_PROBES = [".mx", ".solid.mx", ".tsx", ".ts", ".jsx", ".js"];
+/**
+ * Extension probes, in order (literal path first): `.mx`, then every compound
+ * extension a host registered through {@link registerCalleeInputReader} (in
+ * registration order), then the script extensions. A host module extension is
+ * therefore only probed once its host package is loaded.
+ */
+function extensionProbes(): string[] {
+  return [
+    ...new Set([".mx", ...calleeInputReaders.keys()]),
+    ".tsx",
+    ".ts",
+    ".jsx",
+    ".js",
+  ];
+}
 const SCRIPT_EXTENSIONS = [
   ".ts",
   ".tsx",
@@ -468,10 +501,11 @@ const SCRIPT_EXTENSIONS = [
 ];
 
 function probeFile(base: string, probes?: string[]): string | undefined {
+  const extensions = extensionProbes();
   for (const candidate of [
     base,
-    ...EXTENSION_PROBES.map((ext) => base + ext),
-    ...["", ...EXTENSION_PROBES].map((ext) => resolvePath(base, `index${ext}`)),
+    ...extensions.map((ext) => base + ext),
+    ...["", ...extensions].map((ext) => resolvePath(base, `index${ext}`)),
   ]) {
     probes?.push(candidate);
     // An editor snapshot can be the only place an unsaved callee exists (a
@@ -588,10 +622,11 @@ function readInputAt(
     });
     return { input, dependencies, parsedSources };
   }
-  // Compound hosts are ordinary TypeScript modules, not Marko templates.
-  // Until their package registers a reader, an absent schema is the safe
-  // fallback and must never become an invalid Marko parse.
-  if (path.endsWith(".solid.mx")) {
+  // A host module file (`card.ng.mx`, `card.solid.mx`, ...) is an ordinary
+  // TypeScript module with a template region, not a Marko template. Until its
+  // host package registers a reader, an absent schema is the safe fallback and
+  // must never become an invalid Marko parse.
+  if (hostModuleSegment(basename(path)) !== undefined) {
     return {
       input: { kind: "none", path },
       dependencies: [path],
@@ -843,16 +878,7 @@ class InputAnalyzer {
       }
       case "ImportDeclaration": {
         const specifier = node.source.value as string;
-        const mxAttrTagSource = new Set([
-          "@mxlang/core",
-          "@mxlang/html",
-          "@mxlang/preact",
-          "@mxlang/react",
-          "@mxlang/hono",
-          "@mxlang/solid",
-          "@mxlang/astro",
-          "@mxlang/angular",
-        ]).has(specifier);
+        const mxAttrTagSource = isMxAttrTagSource(specifier);
         for (const specifierNode of node.specifiers ?? []) {
           const local = specifierNode.local.name as string;
           const imported =

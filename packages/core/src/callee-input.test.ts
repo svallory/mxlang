@@ -56,7 +56,7 @@ function fixtureSource(name: string): string {
 
 function probed(name: string, foundExtension: string): string[] {
   const base = fixture(name);
-  const extensions = ["", ".mx", ".solid.mx", ".tsx", ".ts", ".jsx", ".js"];
+  const extensions = ["", ".mx", ".tsx", ".ts", ".jsx", ".js"];
   return extensions
     .slice(0, extensions.indexOf(foundExtension) + 1)
     .map((extension) => base + extension);
@@ -582,6 +582,27 @@ describe("readCalleeInput", () => {
       input: { kind: "none", path: fixture("no-input.solid.mx") },
       dependencies: [fixture("no-input.solid.mx")],
     } satisfies CalleeInputResult);
+  });
+
+  it("returns none for an unregistered .ng.mx callee instead of Marko-parsing it", () => {
+    // A host module is a TypeScript module with a template region, never a
+    // Marko template. With no reader registered for the extension the callee
+    // must fall back to an untyped `none`, not through the plain `.mx` branch.
+    for (const withCtx of [false, true]) {
+      resetCalleeInputCache();
+      const ctx = withCtx
+        ? newCtx("", printExpression, declarations(), undefined, CALLER)
+        : undefined;
+      expect(
+        readCalleeInput(
+          namedTarget("Card"),
+          context({ imports: new Map([["Card", "./no-input.ng.mx"]]), ctx }),
+        ),
+      ).toEqual({
+        input: { kind: "none", path: fixture("no-input.ng.mx") },
+        dependencies: [fixture("no-input.ng.mx")],
+      } satisfies CalleeInputResult);
+    }
   });
 
   it("returns none for an untyped .marko callee", () => {

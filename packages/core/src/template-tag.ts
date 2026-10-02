@@ -728,7 +728,7 @@ function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
     // emitted a reference to a binding nothing declares — valid-looking JSX
     // that fails at runtime with no diagnostic anywhere.
     throw new TranslateError(
-      `\`<${call.name}>\` is this file's own tag, and a \`.solid.mx\` region has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file`,
+      `\`<${call.name}>\` is this file's own tag, and a host module region (an expression spliced into another module) has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file`,
       call.loc.line,
       call.loc.column,
       call.loc.file,

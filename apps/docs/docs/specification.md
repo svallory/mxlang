@@ -1588,7 +1588,7 @@ walk, because a self-recursive call resolves during that walk.
 
 | Message | When |
 |---|---|
-| `` `<${call.name}>` is this file's own tag, and a `.solid.mx` region has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file `` | A self-call from a region file, which exports nothing. |
+| `` `<${call.name}>` is this file's own tag, and a host module region (an expression spliced into another module) has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file `` | A self-call from a region file, which exports nothing. |
 
 ### 9.7 Registration errors
 
