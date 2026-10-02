@@ -30,6 +30,10 @@ import {
   solidDeclarations,
 } from "./emitter.ts";
 
+/** Local names for the body-channel helpers a unit imports from `solid-js`. */
+const MX_CHILDREN_BINDING = "$mxChildren";
+const MX_MERGE_BINDING = "$mxMerge";
+
 export type { AttrTagConfig, AttrTagOf } from "@mxlang/core";
 export {
   createEmitter,
@@ -499,12 +503,39 @@ export function compileSolidUnit(
   const inputType = ir.returnValue
     ? `Input & { ${JSON.stringify(MX_RETURN_PROP)}?: (value: unknown) => void }`
     : "Input";
+  // Marko names a tag's body `content` and a template reads it as
+  // `${input.content}`; a Solid component receives the same slot as
+  // `props.children`, and this host emits calls that way so a hand-written
+  // Solid component called from MX, and an MX tag called from plain TSX,
+  // both work. A unit that reads `input.content` therefore gets `input` as a
+  // lazy view over its props whose `content` is the body — an explicit
+  // `content=` prop winning, else `children` — so `props.children` is left
+  // untouched. Without this `<Card><p/></Card>` compiled cleanly and rendered
+  // an empty card. A unit that never reads it is emitted unchanged.
+  //
+  // `merge` keeps `props` reactive (a spread would snapshot it), and
+  // `children` resolves the body once into a memo: reading `input.content`
+  // twice (`<if=input.content>` then `<${input.content}/>`) must not create
+  // the body's nodes twice. A bare string or number body becomes a fragment
+  // because `<${input.content}/>` lowers to a dynamic tag that reads a string
+  // as a tag NAME; an empty string becomes `undefined` (renders nothing and
+  // stays falsy for `<if=input.content>`). `<${tagName}/>` never comes
+  // through `input.content`, so it is unaffected.
+  const bodyAlias = ir.tagMetadata.readsContent;
+  if (bodyAlias) {
+    parts.unshift(
+      `import { children as ${MX_CHILDREN_BINDING}, merge as ${MX_MERGE_BINDING} } from "solid-js";\n`,
+    );
+  }
+  const head = bodyAlias
+    ? `export default function ${name}($mxProps: ${inputType}) { const $mxBody = ${MX_CHILDREN_BINDING}(() => ($mxProps as { content?: unknown }).content ?? ($mxProps as { children?: unknown }).children); const input = ${MX_MERGE_BINDING}($mxProps, { get content() { const $mxValue = $mxBody() as unknown; return typeof $mxValue === "string" || typeof $mxValue === "number" ? $mxValue === "" ? undefined : <>{String($mxValue)}</> : $mxValue; } }) as ${inputType} & { content?: unknown }; ${varDecls}`
+    : `export default function ${name}(input: ${inputType}) { ${varDecls}`;
   parts.push(
     ir.returnValue
-      ? `export default function ${name}(input: ${inputType}) { ${varDecls}input[${JSON.stringify(
+      ? `${head}input[${JSON.stringify(
           MX_RETURN_PROP,
         )}]?.(${ir.returnValue.code}); return <>`
-      : `export default function ${name}(input: ${inputType}) { ${varDecls}return <>`,
+      : `${head}return <>`,
     emittedBody,
     "</>; }",
   );

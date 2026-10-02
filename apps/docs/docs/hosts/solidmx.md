@@ -34,6 +34,8 @@ Type-checking uses `mx-tsc --noEmit` rather than `tsc --noEmit`: `tsc` ignores `
 
 Two rules make MX markup work naturally inside Solid, both applying to any tag, not only Solid's built-in control-flow components:
 
+**The body is `input.content` in a tag unit, `props.children` everywhere else.** A Solid component receives its body as `props.children`, and MX calls are emitted that way, so a hand-written Solid component called from MX, and an MX tag called from plain TSX, both work. A `.solid.mx` tag unit that reads `input.content` (for example `<section><${input.content}/></section>`) gets Marko's name for the same slot: `input.content` is the body (an explicit `content=` prop wins, else `children`), element, text or mixed, and `props.children` is left untouched. It stays reactive, and a text-only body renders as text rather than as a tag name. `<if=input.content>` is true only when a body was passed, except that an empty-string body counts as none.
+
 **Tag params turn children into a function.** `<Tag|p1, p2|>body</Tag>` lowers to `<Tag>{(p1, p2) => body}</Tag>`. This is what lets Solid's own render-prop components be called directly from MX markup:
 
 ```html

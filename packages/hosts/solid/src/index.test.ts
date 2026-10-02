@@ -1009,9 +1009,21 @@ describe("compileSolidUnit", () => {
     const code = unitOf("panel.mx");
 
     expect(code).toMatch(/export interface Input \{[^}]*\}/);
-    expect(code).toContain("export default function Panel(input: Input)");
+    // `panel.mx` reads `input.content`, so its parameter is `$mxProps` and
+    // `input` is the body-channel view over it (see `body-content.test.ts`);
+    // a unit that never reads the body keeps `(input: Input)`.
+    expect(code).toContain("export default function Panel($mxProps: Input)");
+    expect(code).toContain("as Input & { content?: unknown }");
     // The body that reads `input.title` is still emitted.
     expect(code).toContain("input.title");
+  });
+
+  it("keeps `(input: Input)` for a unit that never reads the body", () => {
+    const code = compileSolidUnit("<p>${input.title}</p>", {
+      filename: "/fixtures/nobody.mx",
+    }).code;
+    expect(code).toContain("export default function Nobody(input: Input)");
+    expect(code).not.toContain("$mxMerge");
   });
 
   it("emits an empty Input for a unit that declares none", () => {
