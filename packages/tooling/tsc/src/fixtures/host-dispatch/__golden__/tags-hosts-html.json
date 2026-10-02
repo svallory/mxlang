@@ -1,0 +1,31 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [
+          "<root>/tags-hosts-html/extra-tags/thing.mx"
+        ],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nimport $mx_Thing1 from \"./extra-tags/thing.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += $mx_Thing1({  });\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "import { escape } from \"@mxlang/html\";\n\nimport $mx_Thing1 from \"./extra-tags/thing.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += $mx_Thing1({  });\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": []
+}

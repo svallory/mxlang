@@ -1,7 +1,7 @@
 {
   "files": {
     "page.amx": {
-      "languageServer": "not diagnosed: the server only watches .amx",
+      "languageServer": "watched by the server, not diagnosed",
       "tsPlugin": {
         "languageId": "typescriptreact",
         "generated": "/* @jsxImportSource astro */\n\n\nconst title = \"x\";\nimport $mx_Badge1 from \"./extra-tags/badge.mx\"\n\n{};<Fragment>\n<$mx_Badge1 /{`>`}<p>hi</p>\n</Fragment>\nexport default function Page__AstroComponent_(_props: Record<string, any>): any {}\n",

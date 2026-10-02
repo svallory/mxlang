@@ -70,6 +70,11 @@ const goldens = join(root, "__golden__");
  * - tags-hosts-package: changes in PR 3 (§5: `mx.tags[].hosts` naming a
  *   package specifier must not warn; the scan's warning for an unknown
  *   target name stays for a bare word, as tags-hosts-bogus pins).
+ * - html-with-solid-dep: `mx.host: "html"` beats rule 2 (a lone `@mxlang/solid`
+ *   dependency would otherwise pick solid). PR 3 rewrites rule 2.
+ * - translator: the deprecated alias for html and its warning.
+ * - tags-hosts-html: a `hosts: ["html"]` tag restriction on an html project
+ *   stays visible; PR 3 moves the unknown-name check, not this match.
  * - unknown-host, bad-package-json: #215's policy diagnostics. PR 7 adds new
  *   codes beside them and leaves these.
  */
@@ -96,6 +101,9 @@ const ROWS = [
   "tags-icon-small",
   "tags-hosts-bogus",
   "tags-hosts-package",
+  "html-with-solid-dep",
+  "translator",
+  "tags-hosts-html",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
@@ -127,7 +135,7 @@ function normalise<T>(value: T): T {
     let out = stripVTControlCharacters(text)
       .replaceAll(root, "<root>")
       .replaceAll(repo, "<repo>");
-    if (cwdRelative !== "" && !cwdRelative.startsWith("..")) {
+    if (cwdRelative !== "") {
       out = out.replaceAll(`${cwdRelative}/`, "<root>/");
     }
     return out;
@@ -364,7 +372,11 @@ describe("dispatch goldens", () => {
         // Babel config lookup throws "Error while parsing JSON" for it when
         // vitest runs from the repo root (`bun run test`) and not from this
         // package's directory, so generated text, mappings and the compile
-        // diagnostics differ between the two. Reported, not fixed here.
+        // diagnostics differ between the two. Reported, not fixed here (TODO
+        // compile-beside-malformed-package-json-cwd). The policy warning also
+        // names the package.json this file's target was taken from instead
+        // (`<repo>/packages/tooling/tsc/package.json`), so the golden depends
+        // on that file's `mx` field staying `html`.
         const lsLeg = languageServerLeg(file, text, "mx");
         files[name] = {
           languageServer: lsLeg.diagnostics.filter((d) =>
@@ -376,7 +388,7 @@ describe("dispatch goldens", () => {
       }
       const entry: Record<string, unknown> = {
         languageServer: name.endsWith(".amx")
-          ? "not diagnosed: the server only watches .amx"
+          ? "watched by the server, not diagnosed"
           : languageServerLeg(
               file,
               text,

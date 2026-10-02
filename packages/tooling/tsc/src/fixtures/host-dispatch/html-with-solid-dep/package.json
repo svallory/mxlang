@@ -1,0 +1,8 @@
+{
+  "mx": {
+    "host": "html"
+  },
+  "dependencies": {
+    "@mxlang/solid": "workspace:*"
+  }
+}
