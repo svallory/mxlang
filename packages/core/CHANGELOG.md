@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Breaking: `claimsTag`/`HostTag` renamed to `isDelegatedTag`/`DelegatedTag` (delegated-tag-rename, decision 132)
+
+**Breaking, no aliases.** `HostDeclarations.claimsTag` is now `isDelegatedTag`, `HostDeclarations.resolveHostTag` is now `resolveDelegatedTag`, the IR kind `HostTag` (the `kind` literal and the type) is now `DelegatedTag`, and the `ctx.build.hostTag` builder is now `ctx.build.delegatedTag`. `Emitter.hostTag` is now `Emitter.delegatedTag`; the exported helper `isContractOnlyClaimed` is now `isContractOnlyDelegated`. Hosts must rename these; behaviour, output and diagnostics are unchanged. Earlier entries below keep the names they shipped with. Spec §9.8.
+
 ### Chore: the spelling hints name no framework (core-hints-neutral-names)
 
 **No behaviour change.** The hint shown for a `#…` attribute name now reads "`#…` template reference variables have no meaning in MX" and the one for `*…` reads "`*…` structural directives have no meaning in MX; use `<if=cond>` / `<for|item| of=list>`" (previously "… are Angular syntax"). When the hints fire, where they are positioned and the `onDoubleClick` warning text are unchanged. Internally `REACT_EVENT_SPELLINGS` and `warnOnReactEventSpelling` are now `NON_DOM_EVENT_SPELLINGS` and `warnOnNonDomEventSpelling`.

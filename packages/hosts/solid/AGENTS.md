@@ -107,8 +107,8 @@ Three facts worth knowing before touching it:
   `.amx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or
   `<Repeat count from>` (`from=`/`to=`/`until=`, with `step` folded into a
-  per-row callback when present); `<try>` is a `HostTag` (`claimsTag`/
-  `resolveHostTag`) lowering to `<Loading>`/`<Errored>`.
+  per-row callback when present); `<try>` is a `DelegatedTag` (`isDelegatedTag`/
+  `resolveDelegatedTag`) lowering to `<Loading>`/`<Errored>`.
 
 - **A `<for>` body always reads its params as values; the emitter rewrites
   the reads.** Solid 2 hands some `<For>` callback parameters as accessors

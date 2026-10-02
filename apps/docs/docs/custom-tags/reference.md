@@ -94,7 +94,7 @@ export interface IrBuilders {
     children: IrNode[];
   }): IrNode;
   block(children: IrNode[], params?: string[]): Block;
-  hostTag(
+  delegatedTag(
     name: string,
     children: IrNode[],
     attributeTags: AttributeTag[],
@@ -176,7 +176,7 @@ is a positioned compile error.
 | `ifChain` | Creates ordered conditional/fallback branches. |
 | `forLoop` | Creates an IR loop with source, params, bindings, key, and children. |
 | `block` | Creates a child block and its optional params. |
-| `hostTag` | Requests a primitive by name from the active host. |
+| `delegatedTag` | Requests a primitive by name from the active host. |
 | `template` | Expands this tag's adjacent L1 template with the supplied call. |
 
 ## Positioned errors
@@ -227,7 +227,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 
 | Trigger | Diagnostic form |
 | --- | --- |
-| `hostTag` is called from `finalize`. | `` `<name>`: `ctx.build.hostTag` is not available in `finalize` `` |
+| `delegatedTag` is called from `finalize`. | `` `<name>`: `ctx.build.delegatedTag` is not available in `finalize` `` |
 | The active host does not claim a requested primitive. | `` `<name>`: this host does not claim `<primitive>`, so a custom tag cannot emit one `` |
 | `template` is called from `finalize`. | `` `<name>`: `ctx.build.template` is not available in `finalize` `` |
 | `template(call)` is used without an adjacent template file. | `` `<name>`: this tag has no template file… `` |

@@ -12,8 +12,8 @@ A host supplies one `HostDeclarations` object to `@mxlang/core`. Every member an
 | `tags` | Per-tag-name disposition: `inert` (accepted, produces no output, in a declared shape) or `error` (this target cannot express the tag). |
 | `isElement(name, ctx)` | Whether an unbound lowercase tag name is a real HTML/SVG element. |
 | `isComponent(name, ctx)` | Whether a tag name resolves to a component in this host. |
-| `claimsTag?(name, ctx)` | Whether this host handles the tag itself, rather than letting the core route it to a component or an element. |
-| `resolveHostTag?(name, node, ctx)` | Records what this host decided about a claimed tag, into the `HostTag` node's `data` slot. |
+| `isDelegatedTag?(name, ctx)` | Whether this host handles the tag itself, rather than letting the core route it to a component or an element. |
+| `resolveDelegatedTag?(name, node, ctx)` | Records what this host decided about a claimed tag, into the `DelegatedTag` node's `data` slot. |
 | `rejectModifier?(attr, on)` | Rejects an attribute modifier (`class:active`) in this host's own words. |
 | `resolveModifier?(attr, on)` | Accepts a modifier a host keeps as target syntax, returning the emitted name. |
 | `rejectAttributeMethod?(…)` | Rejects an attribute method (`onClick() { … }`) in this host's own words. |
@@ -26,13 +26,13 @@ A host supplies one `HostDeclarations` object to `@mxlang/core`. Every member an
 
 `Policy` still exists as a name, but only as a compatibility alias of `HostDeclarations`.
 
-Two patterns are worth noticing. The `reject*` hooks exist so a host phrases its own diagnostics: a Marko-parity target quotes Marko's own fix-it, which reads very differently from a generic "not supported here". And `claimsTag`/`resolveHostTag` replaced a single `emitSpecial` that decided by emitting and *then* returning true or false — declaring the claim up front is what lets the resolved `HostTag` node carry the decision in its `data` slot, so the emitter never needs the original Marko node.
+Two patterns are worth noticing. The `reject*` hooks exist so a host phrases its own diagnostics: a Marko-parity target quotes Marko's own fix-it, which reads very differently from a generic "not supported here". And `isDelegatedTag`/`resolveDelegatedTag` replaced a single `emitSpecial` that decided by emitting and *then* returning true or false — declaring the claim up front is what lets the resolved `DelegatedTag` node carry the decision in its `data` slot, so the emitter never needs the original Marko node.
 
 ## The three stateful-tag hooks
 
 MX itself defines no meaning for `<let>`, `<effect>`, `<lifecycle>`, `<script>`, or `:=` — those are framework territory, and each host that wants them gives them its own semantics through three capabilities the core provides.
 
-**1. The tag handler — `claimsTag` / `resolveHostTag`.** Every tag the core has no lowering of its own for is offered to the host by name before the core decides whether it's a component or an element; `claimsTag` returning true claims it. The tag then resolves to the `HostTag` IR kind — attributes, children, attribute tags, params and `var` already resolved — and `resolveHostTag` stores whatever the host decided in its `data` slot, for the host's emitter to read. A host implements a stateful tag like `<signal/count=1/>` here.
+**1. The tag handler — `isDelegatedTag` / `resolveDelegatedTag`.** Every tag the core has no lowering of its own for is offered to the host by name before the core decides whether it's a component or an element; `isDelegatedTag` returning true claims it. The tag then resolves to the `DelegatedTag` IR kind — attributes, children, attribute tags, params and `var` already resolved — and `resolveDelegatedTag` stores whatever the host decided in its `data` slot, for the host's emitter to read. A host implements a stateful tag like `<signal/count=1/>` here.
 
 **2. Hoisting — `ctx.hoist(code)`.** Lifts a statement to the head of the enclosing function — the render function, or the nearest nested function a `<define>` opened. This is how a declaration written inside a conditional still resolves for code that runs after the conditional:
 

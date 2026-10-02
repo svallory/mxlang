@@ -38,7 +38,7 @@ placeholder. A bare `${expr}` line and `<${expr}/>` parse to the identical
 Marko node (see the "four Marko facts" in `AGENTS.md`); MX 1.0's bare-is-text
 special case was an undocumented divergence from that, never a recorded one.
 Fixed: `@mxlang/core`'s `lowerTag` now treats both shapes as the dynamic-tag
-construct — a claiming host still gets its `HostTag`, and an unclaiming host
+construct — a claiming host still gets its `DelegatedTag`, and an unclaiming host
 gets a `Component` with a dynamic target instead of a silent `Interpolation`.
 Text on its own line is written `-- ${x}`, and a placeholder inside an
 HTML-syntax body (`<div>${x}</div>`) is unaffected — it parses as

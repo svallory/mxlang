@@ -25,7 +25,7 @@ Every kind carries a source position, which is what lets a diagnostic and a sour
 | `For` | Any `<for>` form — its source is `of`, `in`, or a `range` (with an optional `step`) — plus the resolved `key` |
 | `Define` | A `<define>`, with its name and params |
 | `Const` | A `<const>` binding: name and initializer |
-| `HostTag` | A tag this host claimed, with whatever `resolveHostTag` recorded in its `data` slot |
+| `DelegatedTag` | A tag this host claimed, with whatever `resolveDelegatedTag` recorded in its `data` slot |
 | `DocumentType` | `<!doctype html>` |
 | `Comment` | A comment, and whether it was an HTML comment or a `//` line comment |
 
@@ -46,7 +46,7 @@ interface Emitter<Out> {
   define(node): void;
   constant(node): void;
   hoisted(node): void;
-  hostTag(node): void;
+  delegatedTag(node): void;
   documentType(node): void;
   comment(node): void;
   done(): Out;
@@ -59,6 +59,6 @@ A host that cannot express a kind **throws**, naming the construct. There is no 
 
 ## Where a host's own decisions live
 
-Nothing target-specific leaks into the IR. A host-specific decision made at resolve time travels in `HostTag.data`, opaque to the core — which is how `<try>` becomes `<Loading>`/`<Errored>` on Solid, a `try`/`catch` on the HTML host, and an error boundary on React, from one IR kind and no special-casing in `packages/core`.
+Nothing target-specific leaks into the IR. A host-specific decision made at resolve time travels in `DelegatedTag.data`, opaque to the core — which is how `<try>` becomes `<Loading>`/`<Errored>` on Solid, a `try`/`catch` on the HTML host, and an error boundary on React, from one IR kind and no special-casing in `packages/core`.
 
 The two exceptions prove the rule: `For` carries a `key`, and a range source carries `step`. Both are structural facts any Marko-syntax host needs regardless of target, not a concession to one framework.

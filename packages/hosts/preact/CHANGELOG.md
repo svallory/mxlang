@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.
+
 - **Fix (jsx-dynamic-body-text):** a text-only body (`<wrap>hello</wrap>`, a sole `${x}`, or a string/number `content`/`children` from a hand-written caller) forwarded through a dynamic tag (`<${input.content}/>`) now renders as text, as in Marko 6.3.51, instead of an element named by the text (`<hello></hello>`). The generated callee preamble turns a string or number body into a fragment (numbers via `String`, so hono keeps a `0`; an empty string becomes `undefined`). `<${tagName}/>` string targets are unchanged. Also covers `@mxlang/react` and `@mxlang/hono`, which share this emitter.
 
 - **Fix (audit-02-for-by-parity):** `<for by=x.id>` (any read of a loop param in `by=`) is now a positioned error, as in Marko 6.3.51, instead of passing silently. See `@mxlang/core`.

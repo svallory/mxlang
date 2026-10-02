@@ -124,7 +124,7 @@ Four facts worth knowing before editing `src/astro-template.ts` or
 - **This is `Emitter<string>` over core's IR.** `.amx` uses `parseFragment` for
   fence-relative positions, then `lower()` and the shared `drive`/`emit`
   traversal. Astro-specific decisions happen in `HostDeclarations`; the
-  emitter consumes IR and opaque `HostTag.data`, never Marko nodes. `static`
+  emitter consumes IR and opaque `DelegatedTag.data`, never Marko nodes. `static`
   statements resolve into `Ir.hoisted` and are inserted into the fence.
 - **Typing composes two maps.** The emitter records the unchanged fence,
   expressions, attribute names, `<for>` params, and whole hoisted blocks at

@@ -38,21 +38,23 @@ alias of that type only. Every member is a lower-time question:
 | `tags` | Per-tag-name dispositions: `inert` (accepted, no output, in a declared shape) or `error` (this target cannot express it). Decision 65: never "my code cannot". |
 | `isElement(name, ctx)` | Whether an unbound lowercase tag name is a real element. |
 | `isComponent(name, ctx)` | Whether a tag name resolves to a component in this host. |
-| `claimsTag?(name, ctx, shape?)` | Whether the host owns a tag the structural core does not. |
-| `resolveHostTag?(name, node, ctx)` | Records the host's decision in `HostTag.data` while the Marko node is available. |
+| `isDelegatedTag?(name, ctx, shape?)` | Whether the host owns a tag the structural core does not. |
+| `resolveDelegatedTag?(name, node, ctx)` | Records the host's decision in `DelegatedTag.data` while the Marko node is available. |
 | `rejectModifier?`, `rejectAttributeMethod?` | Replace generic attribute diagnostics with the host's own wording. |
 | `rejectElementAttributeTags?`, `rejectComponentTag?`, `rejectUnknownTag?` | Replace generic tag-routing diagnostics with the host's own wording. |
 | `checkBinding?(target, what)` | Inspects a name a construct is about to bind at *render* scope; not called for tag params, which open a nested scope. |
 | `keepComments?` | Whether an HTML comment reaches the output. |
 
-`DYNAMIC_TAG` is the sentinel name `claimsTag` receives for `<${expr}/>`;
+The tag hooks and IR node are named `isDelegatedTag`, `resolveDelegatedTag` and `DelegatedTag` (decision 132; formerly `claimsTag`, `resolveHostTag`, `HostTag`).
+
+`DYNAMIC_TAG` is the sentinel name `isDelegatedTag` receives for `<${expr}/>`;
 match against the exported constant rather than retyping it. A bare
 `${expr}` placeholder and `<${expr}/>` parse to the identical Marko node (no
-attrs, no body), so `claimsTag`'s third argument carries `"bare"` or
+attrs, no body), so `isDelegatedTag`'s third argument carries `"bare"` or
 `"tagged"` — `"bare"` only for the no-attrs-no-body shape, `"tagged"`
 otherwise — letting a host opt out of claiming the bare shape and leave it to
 the `Interpolation` fallback. The argument is passed only alongside
-`DYNAMIC_TAG`; every other tag name gets `undefined`. A `claimsTag` that
+`DYNAMIC_TAG`; every other tag name gets `undefined`. An `isDelegatedTag` that
 ignores the third argument keeps claiming both shapes, which is every
 current host's behavior — the parameter is opt-in, not a required change.
 
@@ -63,9 +65,9 @@ those are framework territory, and mean whatever the host says (decision 71).
 The core gives a host exactly three capabilities, exercised through the
 resolver tests:
 
-**1. Tag handler — `claimsTag` + `resolveHostTag`.** The core offers every tag
+**1. Tag handler — `isDelegatedTag` + `resolveDelegatedTag`.** The core offers every tag
 it does not own to the declarations before component/element routing. A host's
-`<signal/count=1/>` records its resolved form in `HostTag.data`; the emitter
+`<signal/count=1/>` records its resolved form in `DelegatedTag.data`; the emitter
 consumes that data and never sees the Marko node.
 
 **2. Hoist — `ctx.hoist(code)`.** Lifts a statement to the head of the
@@ -229,10 +231,10 @@ retired name such as `staticOnly`/`repeated`) is rejected at registration,
 before any file is parsed, since neither key is checked against a runtime
 schema anywhere else. Transforms receive resolved author material and return ordinary IR. Builder
 output is stamped with the call-site position, `ctx.gensym()` is unique within
-the file, and `ctx.build.hostTag(name, children, attributeTags, attrs?)` is the
+the file, and `ctx.build.delegatedTag(name, children, attributeTags, attrs?)` is the
 only route to a host primitive from a `transform`. A tag with only a contract
 (no `transform`, no template) on a name the host claims skips the transform
-altogether: core validates the call and lowers it to a `HostTag` carrying the
+altogether: core validates the call and lowers it to a `DelegatedTag` carrying the
 call's attributes (decision 130). On a host that does not claim the name it
 still fails with "neither a `transform` nor a template".
 
@@ -556,7 +558,7 @@ shape `TranslateError` reports, which is what an editor squiggle needs):
 | `Export` | Any other top-level `export`, hoisted verbatim |
 | `InputInterface` | `export interface Input`, lifted so a host can place it |
 | `Hoisted` | A statement lifted by decision 70's `hoist` hook |
-| `HostTag` | A tag the host claimed, with attrs/children/attribute tags/params/var resolved, plus its own opaque `data` |
+| `DelegatedTag` | A tag the host claimed, with attrs/children/attribute tags/params/var resolved, plus its own opaque `data` |
 | `DocumentType` | `<!doctype html>`, delimiters already stripped by Marko |
 | `Comment` | A comment; `html` distinguishes `<!-- -->` from `//`, which only the source can tell apart |
 
@@ -598,11 +600,11 @@ section).
 
 1. **Declare.** Supply a `HostDeclarations` (`src/declarations.ts`): the `tags`
    disposition table, `isElement`, `isComponent`, optionally `checkBinding`,
-   `keepComments`, `claimsTag`, `resolveHostTag` and `rejectModifier`. Every
+   `keepComments`, `isDelegatedTag`, `resolveDelegatedTag` and `rejectModifier`. Every
    member is a *question* — none of them can emit, because during lower there
    is nothing to emit into.
-2. **Claim what is yours.** `claimsTag(name)` says the host lowers a tag
-   itself; `resolveHostTag(name, node, ctx)` then records its decision into the
+2. **Claim what is yours.** `isDelegatedTag(name)` says the host lowers a tag
+   itself; `resolveDelegatedTag(name, node, ctx)` then records its decision into the
    node's `data` slot while the Marko node is still in hand. An emitter that
    had to re-inspect `tag.node` would be walking Marko nodes again — the thing
    the IR exists to stop. This is also the seam decision 80's user-tag macros

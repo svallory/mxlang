@@ -35,7 +35,7 @@ Two syntax decisions are settled and encoded in `@mxlang/solid`'s lowering (`pac
   becomes `name={(p) => body}`; ordinary children stay the child callback, and
   props are emitted as the parent's own attributes in source order followed
   by the attribute tags in source order. `<try>` is expressed *on top of*
-  this in `@mxlang/solid`'s `resolveHostTag`: it reads `<@catch>`/
+  this in `@mxlang/solid`'s `resolveDelegatedTag`: it reads `<@catch>`/
   `<@placeholder>` out of the same attribute-tag resolution every other tag
   uses, so the special and generic paths cannot drift. An attribute tag whose
   name is already an attribute on the parent is a parse error rather than a
@@ -119,7 +119,7 @@ Four Marko facts that are easy to get wrong (all measured against
   expression**, not a `MarkoPlaceholder` — concise mode has no other shape for
   it, and it is the dynamic-tag construct, the same as the tagged
   `<${expr} .../>` form: `@mxlang/core`'s `lowerTag` routes both shapes to a
-  claiming host's `HostTag` (`shape` "bare"/"tagged"), or, when no host
+  claiming host's `DelegatedTag` (`shape` "bare"/"tagged"), or, when no host
   claims `DYNAMIC_TAG`, to a `Component` with a dynamic target. Marko's own
   fixture `error-dynamic-tag-name`
   (`packages/hosts/html/fixtures-marko/error-dynamic-tag-name/`) is the

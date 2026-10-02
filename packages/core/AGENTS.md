@@ -23,13 +23,13 @@ Both current hosts are on the driver. `@mxlang/html` uses
 `packages/hosts/html/src/emitter.ts` for vanilla HTML strings;
 `@mxlang/astro` uses `packages/hosts/astro/src/astro-template.ts` for `.amx`'s
 expression-shaped Astro syntax. Neither emitter reads a Marko node; a
-host-specific resolve-time decision goes in `HostTag.data` through
-`claimsTag`/`resolveHostTag`.
+host-specific resolve-time decision goes in `DelegatedTag.data` through
+`isDelegatedTag`/`resolveDelegatedTag` (decision 132 renamed these from `claimsTag`/`resolveHostTag`; `HostTag` is now `DelegatedTag`).
 
 Five facts worth knowing before editing it:
 
 - **Attribute-tag IR has three synchronized views (decisions 106–108).**
-  `Component` and a dynamic `HostTag` keep `attributeTags`, the flat
+  `Component` and a dynamic `DelegatedTag` keep `attributeTags`, the flat
   source-order occurrence list used by existing emitters and tooling; add
   `attributeTagTree` to preserve nested `<if>`/`<for>` structure; and resolve
   `attrTagProps`, the cardinality/shape emission plan. `AttributeTag` carries
@@ -43,7 +43,7 @@ Five facts worth knowing before editing it:
   occurrence with attributes or nested tags makes the whole property `data`.
   Cardinality is still derived independently from paths and loops. A declared
   `Input` remains authoritative and defaults to `data` (decision 108).
-  A claimed dynamic `HostTag` also retains its tag arguments in `args`; an
+  A claimed dynamic `DelegatedTag` also retains its tag arguments in `args`; an
   emitter must forward them when it reconstructs a `Component` call. For a
   named custom tag, Marko's own call shapes are exclusive: arguments cannot
   also come with attributes, attribute tags, or body content
@@ -56,7 +56,7 @@ Five facts worth knowing before editing it:
   "dynamic tag fallback content") and only rejects arguments plus a plain
   attribute. `rejectArgsWithProps` takes this lenient rule for `target.kind`
   `"dynamic"`/`"define"` (or no target — the dynamic-tag call site before a
-  `HostTag`/`Component` split) and the strict rule only for `"name"`. The
+  `DelegatedTag`/`Component` split) and the strict rule only for `"name"`. The
   trailing shape a host emits is `callee(...args, { content, <attribute
   tags> })` — Marko's own, confirmed against `@marko/compiler`/`marko`
   6.3.51's translator and runtime: the props object is appended once,
@@ -160,7 +160,7 @@ Five facts worth knowing before editing it:
   and `<button onClick="alert(1)">` stays `static` (deriving the kind first
   rendered `<div onClick="true">` on html and `(click)="(true)($event)"` on
   Angular). `on-` with no name after the dash is a positioned error. The **`isElement` gate** is what makes it correct: `lowerAttrs`
-  defaults its `on` parameter to `"element"` and a `HostTag` takes that
+  defaults its `on` parameter to `"element"` and a `DelegatedTag` takes that
   default, so the gate travels as a separate `isElement` boolean set only at
   the real `Element` call site — on a component call, a `<define>` call, a
   custom tag, a host tag (`<try onClick=…>`) or an attribute tag, `on*` stays a
@@ -200,7 +200,7 @@ Five facts worth knowing before editing it:
   ordinary static attribute verbatim — MX does not invent a policy against
   inline handler strings — and an `on*` on a component stays a plain prop.
 - **Three stateful-tag hooks** (decision 70), unit-tested through
-  `src/lower.test.ts`: `claimsTag`/`resolveHostTag` (the lower-time tag
+  `src/lower.test.ts`: `isDelegatedTag`/`resolveDelegatedTag` (the lower-time tag
   handler), `ctx.hoist(code)` (lift a statement to the enclosing function's
   head — the render function, or the nearest `Define`), and
   `ctx.bindings.register(name, rewrite)` (rewrite identifier *references*, so a
@@ -320,13 +320,13 @@ Five facts worth knowing before editing it:
   `<@placeholder>` with no params of its own — the first two through the
   tag's own checks, the attribute-tag shape through the tag's declared
   `attributeTags` contract) and then asks for the primitive with
-  `ctx.build.hostTag("try", children, attributeTags)` (a fourth `attrs`
+  `ctx.build.delegatedTag("try", children, attributeTags)` (a fourth `attrs`
   argument carries attributes; omitted means none). `lowerCustomTag`
   passes an `isBuiltin` flag that skips the ordinary `hasContent` gate on a
   custom tag's body: a template-authored tag treats a whitespace-only body as
   "no children supplied", but `<try>` is a structural pass-through wrapper
   and must reproduce the caller's body unchanged, matching what
-  `lowerHostTag` always did. Each host's `claimsTag`/`resolveHostTag` for
+  `lowerDelegatedTag` always did. Each host's `isDelegatedTag`/`resolveDelegatedTag` for
   `"try"` only decides how the primitive renders now — `@mxlang/html`,
   `@mxlang/solid`, and `@mxlang/preact`'s shared JSX emitter (reused by
   `@mxlang/react`/`@mxlang/hono`) all shrank to that. `@mxlang/astro` never
@@ -387,14 +387,14 @@ Five facts worth knowing before editing it:
   then a *PascalCase* name the file itself binds — an `import`, a `<define>`
   name, a `<const>` binding, or a `<for>`/`<define>` tag param, each scoped to
   where the binding is in effect — then a registered custom tag, then a host
-  claim (`ctx.declarations.claimsTag`), then components/elements.** `lower.ts`'s
+  claim (`ctx.declarations.isDelegatedTag`), then components/elements.** `lower.ts`'s
   tag-name switch checks `/^[A-Z]/.test(name) && (ctx.defines.has(name) ||
   ctx.imports.has(name) || (ctx.tagVarShadowed?.has(name) ?? false))`
   directly — a *core* rule inline in `lower.ts`, not a call into a host's own
   `isComponent` (Solid's and Astro's `isComponent` are casing-only and never
   consult `ctx.imports`/`ctx.defines`/`ctx.tagVarShadowed` at all, so there is
   no shared "file-local half" of `isComponent` to call into) — before ever
-  consulting `ctx.customTags` or `claimsTag`, so `import Panel from
+  consulting `ctx.customTags` or `isDelegatedTag`, so `import Panel from
   "./panel.mx"` in a package that also has a `tags/Panel.mx` or a registered
   `Panel` custom tag resolves to the import, not the custom tag. This was
   previously backwards (`ctx.customTags` was checked first) with no test
@@ -488,15 +488,15 @@ Five facts worth knowing before editing it:
   its own registry; Bun and Node both do re-evaluate, which is what ships. A
   Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
-- **A contract-only tag is a `HostTag` on a claimed name (decision 130).** A
+- **A contract-only tag is a `DelegatedTag` on a claimed name (decision 130).** A
   definition declaring at least one of `attributes`/`attributeTags`/
   `parseOptions` (`{}` and hooks-only do not count) and no `transform` and no
   template fails with "neither a `transform` nor a template" unless
-  `claimsTag(name)` is true; then `transformCustomTag` validates the call, runs
-  the `analyze` recording like any custom tag, and returns one `HostTag` built
-  from the call (`contractOnlyHostTag`; whitespace-only body kept). Core asks
-  the host only `claimsTag`, never a host name (decision 126). `lowerCustomTag`
-  lowers such a call's attributes as `"element"`, like `lowerHostTag`, so a
+  `isDelegatedTag(name)` is true; then `transformCustomTag` validates the call, runs
+  the `analyze` recording like any custom tag, and returns one `DelegatedTag` built
+  from the call (`contractOnlyDelegatedTag`; whitespace-only body kept). Core asks
+  the host only `isDelegatedTag`, never a host name (decision 126). `lowerCustomTag`
+  lowers such a call's attributes as `"element"`, like `lowerDelegatedTag`, so a
   host's `resolveAttributeMethod`/`orderAttrs` see the same `on` either way.
   `/var` and attributes on attribute tags stay rejected (no template).
 - **A template-only tag is discovered with no hooks**; calling one routes to

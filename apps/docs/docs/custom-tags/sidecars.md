@@ -82,7 +82,7 @@ Discovery reads `parseOptions` without executing the module. Keep the default ex
 | `params` | Tag params as source text. |
 | `var` | The `/var` binding as source text, or `null`. |
 
-Build results through `ctx.build`; do not construct IR objects by hand. Its methods are `text`, `interpolation`, `element`, `attr`, `dynamicAttr`, `booleanAttr`, `expr`, `ifChain`, `forLoop`, `block`, `hostTag`, and `template`. Every synthetic node receives the appropriate position automatically.
+Build results through `ctx.build`; do not construct IR objects by hand. Its methods are `text`, `interpolation`, `element`, `attr`, `dynamicAttr`, `booleanAttr`, `expr`, `ifChain`, `forLoop`, `block`, `delegatedTag`, and `template`. Every synthetic node receives the appropriate position automatically.
 
 The fixture's transform validates the one shape its declaration cannot express, obtains a hygienic row name, and builds a real IR loop:
 
@@ -128,7 +128,7 @@ The explicit `throw` matters: TypeScript does not reliably narrow after a bare c
 
 ## Request a host primitive
 
-`ctx.build.hostTag(name, children, attributeTags)` is the only way a custom tag can request a primitive supplied by the active host. The core then asks that host to resolve it.
+`ctx.build.delegatedTag(name, children, attributeTags)` is the only way a custom tag can request a primitive supplied by the active host. The core then asks that host to resolve it.
 
 **A custom tag may request a primitive by name; only a host may define one.** The custom tag still cannot inspect which host is compiling. If the active host does not claim that primitive, compilation fails in that host's terms.
 

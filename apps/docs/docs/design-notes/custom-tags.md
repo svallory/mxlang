@@ -29,7 +29,7 @@ history, no rejected options.
 | `description` / `autocomplete` / `deprecated` | No consumer: the LS advertises only `textDocumentSync` | §II.7.1 |
 | Package-dependency tag discovery (`node_modules` walk) | Later; needs a resolution story | §II.5.8 |
 | Per-directory `mx.json` | `package.json#mx.tags` covers the cases; purely additive later | §II.8.8 |
-| Per-host `emit` override | Inverts decision 80's arithmetic; `ctx.build.hostTag` covers the real case | §II.7.3 |
+| Per-host `emit` override | Inverts decision 80's arithmetic; `ctx.build.delegatedTag` covers the real case | §II.7.3 |
 | Marko taglib files (`marko.json`, `marko-tag.json`, `tagDiscoveryDirs`) | MX owns everything after parse | §II.5.9 |
 
 **Constraints that bound every decision here:**
@@ -153,8 +153,8 @@ interface TagStore {
 
 `IrBuilders` is the experiment's set, unchanged: `text`, `interpolation`,
 `element`, `attr`, `dynamicAttr`, `booleanAttr`, `expr`, `ifChain`, `forLoop`,
-`block`, and **`hostTag(name, children, attributeTags)`** — the only route to a
-host primitive. The core calls the host's own `resolveHostTag`, so a host that
+`block`, and **`delegatedTag(name, children, attributeTags)`** — the only route to a
+host primitive. The core calls the host's own `resolveDelegatedTag`, so a host that
 does not claim the name fails in its own words (report §II.2.4). Module-level IR
 kinds (`Import`, `Static`, `Export`, `InputInterface`) are deliberately absent.
 
@@ -402,7 +402,7 @@ cross-file TS-plugin mappings, the path+mtime cache, cycle detection.
 inside a tag template points into that file; a cycle errors naming the cycle.
 
 **P4 — `try-as-custom-tag`.** Replace five host `<try>` implementations with one
-custom tag using `ctx.build.hostTag`.
+custom tag using `ctx.build.delegatedTag`.
 *Acceptance:* byte-identical output on all six hosts, oracles unchanged, five
 implementations deleted.
 
@@ -432,7 +432,7 @@ reference; the `throw ctx.fail` rule.
   P4 additionally asserts byte-identical `<try>` output before and after.
 - **Negative tests:** unknown attribute; missing required attribute; `enum`
   violation; `literalOnly` violation on a dynamic value; a `transform` that
-  throws (wrapped, positioned, tag named); a `hostTag` name the host does not
+  throws (wrapped, positioned, tag named); a `delegatedTag` name the host does not
   claim; recursion past the depth cap; a tag-file cycle; **a warning when an
   expansion never reads `attributeTags` it was handed** (the silent-drop class).
 - **Position tests:** author material keeps real `loc`; synthetic takes the call
@@ -463,7 +463,7 @@ tag-resolution hook (TODO `custom-tags-resolve-hook`).
 | `packages/tooling/typescript-plugin/src/mx-language.ts` | same | double-resolve fix |
 | `fixtures-custom-tags/icon/*` | `packages/core/src/fixtures/custom-tags/icon/*` | promote to a gate |
 | `fixtures-custom-tags/run.ts` | oracle harness | productionize |
-| `fixtures-custom-tags/try/try.tag.ts` | `<try>` tag (P4) | keep `asBuiltHostTag` only |
+| `fixtures-custom-tags/try/try.tag.ts` | `<try>` tag (P4) | keep `asBuiltDelegatedTag` only |
 | `fixtures-custom-tags/{try,positions}/probe.ts` | — | experiment-only, do not port |
 
 Packages remain `@mxlang/*` on npm; `mx` is the `package.json` **config key**

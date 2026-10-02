@@ -355,7 +355,7 @@ template rather than at the stray `---`.
 every diagnostic after the frontmatter fence. The core resolves that Marko AST
 into its host-independent IR, consulting Astro's `HostDeclarations` for
 host-specific rejections, then drives this package's `Emitter<string>`. The
-emitter sees IR kinds and resolved `HostTag.data`, never Marko nodes. Module
+emitter sees IR kinds and resolved `DelegatedTag.data`, never Marko nodes. Module
 statements such as `static` arrive in the IR's hoisted fields and are inserted
 into the Astro fence; the template emitter produces the expression-shaped
 ternaries, `.map` calls, attributes and slots below it.

@@ -315,12 +315,12 @@ construct** (§11/§7). Marko's own fixture
 bare `${tagName}` at column 0 fails at render with "Invalid tag name" — it
 compiled to a dynamic tag, not a placeholder.
 
-Both shapes now lower alike (`lowerTag`, decision — a `HostTag` for a host
+Both shapes now lower alike (`lowerTag`, decision — a `DelegatedTag` for a host
 claiming `DYNAMIC_TAG` with `shape` `"bare"`/`"tagged"`, or, unclaimed, a
 `Component` with a dynamic target):
 
-- A host that claims `DYNAMIC_TAG` gets the identical `HostTag` for either
-  shape (`claimsTag(name, ctx, shape)` can inspect `shape` to opt a *new* host
+- A host that claims `DYNAMIC_TAG` gets the identical `DelegatedTag` for either
+  shape (`isDelegatedTag(name, ctx, shape)` can inspect `shape` to opt a *new* host
   out of the bare form, but every existing host ignores it and claims both).
 - A host that does not claim `DYNAMIC_TAG` gets a dynamic-target `Component`
   for either shape — no compile error, no silent `Interpolation`.
@@ -730,7 +730,7 @@ deferred per `divergences.md`.
 
 `<try>` is a **core-owned custom tag** (decision 91), not per-host code and not a
 structural tag. Core validates one portable call shape, then asks the active
-host for its `try` primitive via `ctx.build.hostTag("try", …)`.
+host for its `try` primitive via `ctx.build.delegatedTag("try", …)`.
 
 ```mx
 <try>
@@ -795,7 +795,7 @@ The **normative** order, as shipped (decisions 93, 113):
    `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag param —
    each in effect only within its own lexical scope
 6. A registered custom tag
-7. A host claim (`claimsTag`)
+7. A host claim (`isDelegatedTag`)
 8. `declarations.isComponent`
 9. PascalCase with nothing matching → error; else an element if
    `isElement` accepts it; else error
@@ -970,7 +970,7 @@ two shapes for the `.solid.mx` *region* path.
 is a **bare** `${expr}` line (**corrected 2026-09-17, core PR #103** —
 see §3): both parse to the identical node, and Marko itself treats them
 alike. At the *lowering* stage (`lowerTag`), a host that claims `DYNAMIC_TAG`
-gets a `HostTag` for either shape; a host that does not claim it gets a
+gets a `DelegatedTag` for either shape; a host that does not claim it gets a
 `Component` with a dynamic target for either shape instead of the previous
 unconditional `fail()` — what a given host's *emitter* then does with that
 `Component` (render it, as Preact/Solid do through their own dynamic-target
@@ -1601,7 +1601,9 @@ walk, because a self-recursive call resolves during that walk.
 
 ### 9.8 Call-site validation
 
-**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only when it declares at least one of `attributes`, `attributeTags` or `parseOptions`; `{}` and a hooks-only definition keep the "neither a `transform` nor a template" error. Where the active host claims the tag's name (`HostDeclarations.claimsTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `HostTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` tag arguments `(...)` on `<tag>` are not supported in a standalone template ``; and `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags `` (the contract-extensions item lifts the last). Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a whitespace-only body is rejected with a positioned "does not accept content" error on this path, while a `transform` tag accepts it; this is intentional and stricter. A tag that has a `transform` or a template is unaffected. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.hostTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
+Naming (decision 132): the host hook that claims a tag is `HostDeclarations.isDelegatedTag`, its resolver is `resolveDelegatedTag`, and the IR node a claimed tag lowers to is `DelegatedTag` (built with `ctx.build.delegatedTag`). These replace `claimsTag`, `resolveHostTag` and `HostTag`, with no aliases.
+
+**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only when it declares at least one of `attributes`, `attributeTags` or `parseOptions`; `{}` and a hooks-only definition keep the "neither a `transform` nor a template" error. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` tag arguments `(...)` on `<tag>` are not supported in a standalone template ``; and `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags `` (the contract-extensions item lifts the last). Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a whitespace-only body is rejected with a positioned "does not accept content" error on this path, while a `transform` tag accepts it; this is intentional and stricter. A tag that has a `transform` or a template is unaffected. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
 
 All carry the `` `<tag>`:  `` prefix:
 
@@ -1811,7 +1813,7 @@ tag taking a body (raw text).
 
 ### The three hooks
 
-1. `claimsTag`/`resolveHostTag` — the lower-time tag handler.
+1. `isDelegatedTag`/`resolveDelegatedTag` — the lower-time tag handler.
 2. `ctx.hoist(code)` — lift a statement to the enclosing function's head (the
    render function, or the nearest `<define>`).
 3. `ctx.bindings.register(name, rewrite)` — rewrite identifier **references**, so
