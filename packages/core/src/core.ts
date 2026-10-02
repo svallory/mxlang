@@ -308,7 +308,7 @@ export interface Ctx {
   /**
    * This compilation emits a module with a default export.
    *
-   * False for a `.solid.mx` **region**, which is an expression spliced into
+   * False for a host module **region**, which is an expression spliced into
    * someone else's module and has no `export default function` of its own.
    * It gates the export name and, through it, the self-recursion branch: a
    * region calling its own file's tag must be a positioned error, not a

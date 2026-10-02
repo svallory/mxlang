@@ -2,6 +2,12 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: a `.ng.mx` callee reads as untyped, not as an invalid Marko parse; callee-input no longer names `.solid.mx` (core-host-cleanup)
+
+**Behaviour change:** a host module file (`card.ng.mx`, `card.solid.mx`) with no registered callee-input reader used to fall into the plain `.mx` branch of `readCalleeInput` and be Marko-parsed. For `.ng.mx`, which no host registers a reader for, that returned `{ kind: "invalid" }` ("@tags must be nested within another element", or "requires ResolveContext.ctx" without a Ctx), so a valid `.ng.mx` callee put a spurious error on its callers. It now returns `{ kind: "none" }`, the same untyped result an unregistered `.solid.mx` already had (`hostModuleSegment` is the generic test). No emitted code or oracle output changes.
+
+The extension probes are now derived from the readers registered through `registerCalleeInputReader` instead of hard-coding `.solid.mx`. **Precondition:** an extensionless import resolves to `X.solid.mx` only once `@mxlang/solid` is loaded (its reader registration adds the probe); every tool already loads its host package. The `AttrTag` source packages are derived from `HOST_NAMES`, and two error messages say "a host module region" instead of "a `.solid.mx` region".
+
 ### Fix: `<for by=>` that reads a loop param is a positioned error, not a silent pass (audit-02-for-by-parity)
 
 **Behaviour change:** `<for|x| of=items by=x.id>` compiled silently on html and preact and surfaced only as a stray `TS2304 'x'` at a generated position on solid. `by=` is evaluated once, before the loop, so the tag's params are not in scope there; Marko 6.3.51 rejects it (`runtime-tags` `translator/core/for.ts`, `findLoopParamRead`). `lowerForHead` now fails at the offending name, for `of`, `in`, `to` and `until`, with Marko's message and its hint (`by="id"` or `by=(x) => key`). The walk is Marko's own: a function or class in the value is skipped (`by=(x) => x.id`, `by=(y) => x.id` stay valid), a non-computed member property is a name and not a read, and an outer variable (`by=key`) or function (`by=someFn`) is accepted. Applies to every host, Angular included (its `by=(p => p.id)` and `by="id"` forms are unchanged).

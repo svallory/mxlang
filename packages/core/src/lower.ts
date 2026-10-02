@@ -2682,7 +2682,7 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
   // `generatedBinding` uses: a name can reach the emitted module without
   // passing through `ctx.imports`/`ctx.defines` (a `<const>`, a tag param).
   //
-  // Only when the caller actually emits a module. A `.solid.mx` *region* is
+  // Only when the caller actually emits a module. A host module *region* is
   // an expression with no `export default function` of its own, so a name
   // here would be one nothing declares — and `bindingForTemplate` would hand
   // a region calling its own file's tag a dangling identifier rather than an

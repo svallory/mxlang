@@ -722,7 +722,7 @@ function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
     // import".
     if (ctx.exportName) return ctx.exportName;
 
-    // Unless there is no declaration to call. A `.solid.mx` **region** is an
+    // Unless there is no declaration to call. A host module **region** is an
     // expression spliced into someone else's module, so it exports nothing
     // and has no name for a self-call to resolve to. Returning one anyway
     // emitted a reference to a binding nothing declares — valid-looking JSX
