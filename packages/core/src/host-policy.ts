@@ -111,6 +111,11 @@ function isKnownHost(
   );
 }
 
+/** Why a {@link HostPolicyDiagnostic} was raised. */
+export type HostPolicyDiagnosticCode =
+  | "unknown-host"
+  | "malformed-package-json";
+
 /**
  * One problem found while resolving a host, positioned in the `package.json`
  * that caused it. Same shape as `ScanDiagnostic` so a caller can merge the
@@ -120,6 +125,11 @@ function isKnownHost(
  * here may fail a build that compiled before.
  */
 export interface HostPolicyDiagnostic {
+  /**
+   * What went wrong, so a caller can word or route it without matching the
+   * message text.
+   */
+  code: HostPolicyDiagnosticCode;
   /** The `package.json` to point an author at. */
   file: string;
   message: string;
@@ -312,6 +322,7 @@ export function resolveHostPolicyDetailed(
       ? `; before, its host was taken from ${former.file} ("${former.host}")`
       : "";
     diagnostics.push({
+      code: "malformed-package-json",
       file,
       message: `${file} ${reason}; using the default "${DEFAULT_POLICY.host}" host for the files under ${dir}${before}`,
       line: read.error?.line ?? 1,
@@ -333,6 +344,7 @@ export function resolveHostPolicyDetailed(
         ? nearestHost(resolved.ignoredHost)
         : undefined;
     diagnostics.push({
+      code: "unknown-host",
       file,
       message: `unknown mx.host ${shown}; valid hosts: ${HOST_NAMES.join(", ")} ('translator' is a deprecated alias for html).${hint ? ` Did you mean "${hint}"?` : ""} Ignoring it; the host is taken from the @mxlang dependencies instead.`,
       ...locateMxHost(read.text, resolved.ignoredHost),

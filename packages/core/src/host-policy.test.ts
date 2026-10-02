@@ -589,3 +589,45 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
     });
   });
 });
+
+describe("HostPolicyDiagnostic code", () => {
+  const roots: string[] = [];
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  function project(packageJson: string): string {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-host-code-")));
+    roots.push(root);
+    writeFileSync(join(root, "package.json"), packageJson);
+    writeFileSync(join(root, "a.mx"), "");
+    return join(root, "a.mx");
+  }
+
+  it('is "unknown-host" for an mx.host naming no host', () => {
+    const { diagnostics } = resolveHostPolicyDetailed(
+      project(JSON.stringify({ mx: { host: "vue" } })),
+    );
+
+    expect(diagnostics.map((d) => d.code)).toEqual(["unknown-host"]);
+  });
+
+  it.each([
+    ["unparseable JSON", "{ not json"],
+    ["a non-object manifest", "[]"],
+  ])('is "malformed-package-json" for %s', (_name, text) => {
+    const { diagnostics } = resolveHostPolicyDetailed(project(text));
+
+    expect(diagnostics.map((d) => d.code)).toEqual(["malformed-package-json"]);
+  });
+
+  it("raises none for a valid host", () => {
+    const { diagnostics } = resolveHostPolicyDetailed(
+      project(JSON.stringify({ mx: { host: "html" } })),
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+});

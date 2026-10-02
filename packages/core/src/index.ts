@@ -100,6 +100,7 @@ export {
 export {
   type HostPolicy,
   type HostPolicyDiagnostic,
+  type HostPolicyDiagnosticCode,
   type HostPolicyResolution,
   resolveHostPolicy,
   resolveHostPolicyDetailed,
