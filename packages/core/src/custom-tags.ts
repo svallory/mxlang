@@ -326,7 +326,10 @@ export interface IrBuilders {
     children: IrNode[];
   }): IrNode;
   block(children: IrNode[], params?: string[]): Block;
-  /** Requests a primitive from the active host without exposing that host. */
+  /**
+   * Requests a primitive from the active host without exposing that host.
+   * `attrs` are carried on the node as given; omitted means none.
+   */
   hostTag(
     name: string,
     children: IrNode[],
@@ -1124,16 +1127,40 @@ function observedCall(call: TagCall): {
 }
 
 /**
- * Whether a contract-only tag of this name hands its validated call to the
- * active host. The one question core asks is the generic `claimsTag`.
+ * Whether a call of this definition hands its validated call to the host.
+ *
+ * The definition must be contract-only: it declares at least one of
+ * `attributes`, `attributeTags` or `parseOptions`, and has neither a
+ * `transform` nor a template. `{}` or a hooks-only definition declares no
+ * contract, so it keeps the "neither a `transform` nor a template" error. The
+ * one question core asks the host is the generic `claimsTag`.
  */
-export function isContractOnlyClaimed(ctx: Ctx, name: string): boolean {
-  return ctx.declarations.claimsTag?.(name, ctx) === true;
+export function isContractOnlyClaimed(
+  ctx: Ctx,
+  name: string,
+  definition: CustomTag,
+): boolean {
+  return (
+    !definition.transform &&
+    !hasTemplate(definition) &&
+    (definition.attributes !== undefined ||
+      definition.attributeTags !== undefined ||
+      definition.parseOptions !== undefined) &&
+    ctx.declarations.claimsTag?.(name, ctx) === true
+  );
 }
 
 /**
- * The `HostTag` a validated contract-only call lowers to: the same node an
- * unregistered claimed tag produces, so the host sees an ordinary call.
+ * The `HostTag` a validated contract-only call lowers to. It is the node an
+ * unregistered claimed tag produces (same body, same attributes), except that
+ * the call is validated against its contract and declared defaults are added.
+ * Validation also rejects what the contract-only path cannot carry, which an
+ * unregistered claimed tag accepts: `/var` ("`/var` on `<tag>` is not
+ * supported: it has no template, so it has no `<return>` to bind"), tag
+ * arguments ("tag arguments `(...)` on `<tag>` are not supported in a
+ * standalone template"), and attributes or nested attribute tags on an attribute tag
+ * ("`<tag>`: attribute tag `<@x>` does not support attributes" / "does not
+ * support nested attribute tags").
  */
 function contractOnlyHostTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
   return {
@@ -1166,8 +1193,8 @@ export function transformCustomTag(
   // Decision 130: a contract-only tag (no `transform`, no template) is valid
   // on a name the active host claims; anywhere else a call has nothing to
   // expand to.
-  const contractOnly = !definition.transform && !hasTemplate(definition);
-  if (contractOnly && !isContractOnlyClaimed(ctx, call.name)) {
+  const contractOnly = isContractOnlyClaimed(ctx, call.name, definition);
+  if (!definition.transform && !hasTemplate(definition) && !contractOnly) {
     failAt(
       call.name,
       "custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
@@ -1180,7 +1207,6 @@ export function transformCustomTag(
     ...call,
     attrs: applyCustomTagDefaults(definition, call),
   };
-  if (contractOnly) return [contractOnlyHostTag(ctx, withDefaults, node)];
 
   // The analyze pre-pass. Validation above has already run, so a bad call is
   // reported once at its real position rather than twice or (worse) only on
@@ -1198,6 +1224,9 @@ export function transformCustomTag(
     }
     return [];
   }
+  // A claimed contract-only call has no transform to run: after validation
+  // and the analyze recording above, it is handed to the host as is.
+  if (contractOnly) return [contractOnlyHostTag(ctx, withDefaults, node)];
   const observed = observedCall(withDefaults);
   const originalAttributeTagTree = cloneAttributeTagTree(
     withDefaults.attributeTagTree ??

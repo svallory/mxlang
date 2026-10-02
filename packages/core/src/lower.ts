@@ -2045,24 +2045,21 @@ function lowerCustomTag(
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, name));
   raiseInvalidCalleeInput(ctx, input, name, loweredTags.flat);
   const children = loweredTags.contentChildren;
+  const handsToHost =
+    !isBuiltin &&
+    !definition.transform &&
+    !hasTemplate(definition) &&
+    isContractOnlyClaimed(ctx, name, definition);
   const call: TagCall = {
     name,
     loc: posOf(node),
     // A contract-only call on a claimed name becomes a HostTag, so its
     // attributes lower as `lowerHostTag` lowers them.
-    attrs: lowerAttrs(
-      ctx,
-      node,
-      name,
-      !isBuiltin &&
-        !definition.transform &&
-        !hasTemplate(definition) &&
-        isContractOnlyClaimed(ctx, name)
-        ? "element"
-        : "component",
-    ),
+    attrs: lowerAttrs(ctx, node, name, handsToHost ? "element" : "component"),
+    // `handsToHost` skips the `hasContent` gate like `isBuiltin`: the host
+    // gets the body exactly as an unregistered claimed tag would.
     content:
-      isBuiltin || hasContent(children)
+      isBuiltin || handsToHost || hasContent(children)
         ? lowerBlock(ctx, node, children)
         : null,
     attributeTags: loweredTags.flat,

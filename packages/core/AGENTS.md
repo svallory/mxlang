@@ -489,10 +489,12 @@ Five facts worth knowing before editing it:
   Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
 - **A contract-only tag is a `HostTag` on a claimed name (decision 130).** A
-  definition with `attributes`/`attributeTags`/`parseOptions` and no `transform`
-  and no template fails with "neither a `transform` nor a template" unless
-  `claimsTag(name)` is true; then `transformCustomTag` validates the call and
-  returns one `HostTag` built from the call (`contractOnlyHostTag`). Core asks
+  definition declaring at least one of `attributes`/`attributeTags`/
+  `parseOptions` (`{}` and hooks-only do not count) and no `transform` and no
+  template fails with "neither a `transform` nor a template" unless
+  `claimsTag(name)` is true; then `transformCustomTag` validates the call, runs
+  the `analyze` recording like any custom tag, and returns one `HostTag` built
+  from the call (`contractOnlyHostTag`; whitespace-only body kept). Core asks
   the host only `claimsTag`, never a host name (decision 126). `lowerCustomTag`
   lowers such a call's attributes as `"element"`, like `lowerHostTag`, so a
   host's `resolveAttributeMethod`/`orderAttrs` see the same `on` either way.

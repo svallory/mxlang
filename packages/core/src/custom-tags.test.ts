@@ -1708,7 +1708,11 @@ describe("contract-only custom tags", () => {
         claimAttribute(),
       ),
     ).toThrowError(
-      expect.objectContaining({ message: expect.stringContaining("nope") }),
+      expect.objectContaining({
+        message: expect.stringContaining("unknown attribute `nope`"),
+        line: 1,
+        column: 35,
+      }),
     );
   });
 
@@ -1740,6 +1744,8 @@ describe("contract-only custom tags", () => {
     ).toThrowError(
       expect.objectContaining({
         message: expect.stringContaining('must be one of "string", "enum"'),
+        line: 1,
+        column: 21,
       }),
     );
   });
@@ -1782,6 +1788,98 @@ describe("contract-only custom tags", () => {
     expect(() =>
       lowerWithTags('<attribute value="a" type="string"/>\n', { attribute }),
     ).toThrowError("so a call has nothing to expand to");
+  });
+
+  it("runs `analyze` over every call of a claimed contract-only tag", () => {
+    const seen: number[] = [];
+    const analyzed: CustomTag = {
+      attributes: { value: { type: "string" } },
+      analyze: (calls) => {
+        seen.push(calls.length);
+      },
+    };
+    const ir = lowerWithTags(
+      '<attribute value="a"/>\n<attribute value="b"/>\n',
+      { attribute: analyzed },
+      claimAttribute(),
+    );
+    expect(seen).toEqual([2]);
+    expect(ir.body.filter((node) => node.kind === "HostTag")).toHaveLength(2);
+  });
+
+  it.each([
+    ["an empty definition", {}],
+    ["a hooks-only definition", { analyze: () => {} }],
+  ] as const)(
+    "keeps today's error for %s on a claimed name",
+    (_label, definition) => {
+      expect(() =>
+        lowerWithTags(
+          "<attribute foo=1/>\n",
+          { attribute: definition as CustomTag },
+          claimAttribute(),
+        ),
+      ).toThrowError("so a call has nothing to expand to");
+    },
+  );
+
+  it.each([
+    ["attributes", { attributes: {} }],
+    ["attributeTags", { attributeTags: {} }],
+    ["parseOptions", { parseOptions: {} }],
+  ] as const)(
+    "counts a definition declaring only `%s` as a contract",
+    (_key, definition) => {
+      const { tag } = find(
+        lowerWithTags(
+          "<attribute/>\n",
+          { attribute: definition as CustomTag },
+          claimAttribute(),
+        ).body,
+        "HostTag",
+      );
+      expect(tag.name).toBe("attribute");
+    },
+  );
+
+  it("keeps a whitespace-only body, as an unregistered claimed tag does", () => {
+    const source = '<attribute value="a" type="string">  </attribute>\n';
+    const registered = find(
+      lowerWithTags(source, { attribute }, claimAttribute()).body,
+      "HostTag",
+    );
+    const unregistered = find(
+      lowerWithTags(source, {}, claimAttribute()).body,
+      "HostTag",
+    );
+    expect(registered.tag.children).toEqual(unregistered.tag.children);
+    expect(registered.tag.children).not.toEqual([]);
+  });
+
+  it.each([
+    [
+      "/var",
+      '<attribute/x value="a" type="string"/>\n',
+      "`/var` on `<attribute>` is not supported: it has no template, so it has no `<return>` to bind",
+    ],
+    [
+      "tag arguments",
+      '<attribute(1) value="a" type="string"/>\n',
+      "tag arguments `(...)` on `<attribute>` are not supported in a standalone template",
+    ],
+    [
+      "attributes on an attribute tag",
+      '<attribute value="a" type="string"><@field x=1/></attribute>\n',
+      "`<attribute>`: attribute tag `<@field>` does not support attributes",
+    ],
+  ])("rejects %s on a claimed contract-only tag", (_label, source, message) => {
+    const declared: CustomTag = {
+      ...attribute,
+      attributeTags: { field: { repeatable: true } },
+    };
+    expect(() =>
+      lowerWithTags(source, { attribute: declared }, claimAttribute()),
+    ).toThrowError(message);
   });
 
   it("leaves a tag with both a contract and a transform to its transform", () => {
