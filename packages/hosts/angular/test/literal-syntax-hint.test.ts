@@ -14,7 +14,7 @@ describe("literal Angular syntax in a template", () => {
     const w = lit("<div><p>{{ title }}</p></div>");
     expect(w).toHaveLength(1);
     expect(plain(w[0]?.message ?? "")).toBe(
-      "`{{ title }}` is literal text in an MX template, not an Angular interpolation. Write `${title}`.",
+      '`{{ title }}` is literal text in an MX template, not an Angular interpolation. Write `${title}`, or use `${"{{"}` for literal braces.',
     );
     expect([w[0]?.line, w[0]?.column]).toEqual([1, 8]);
   });
@@ -23,7 +23,7 @@ describe("literal Angular syntax in a template", () => {
     const w = lit("<div>\n  @if (title) {\n    <p>x</p>\n  }\n</div>");
     expect(w).toHaveLength(1);
     expect(plain(w[0]?.message ?? "")).toBe(
-      "`@if (title)…` is literal text in an MX template, not Angular control flow. Use `<if=title>…</if>`.",
+      '`@if (title)…` is literal text in an MX template, not Angular control flow. Use `<if=title>…</if>`, or `${"@"}if` for literal text.',
     );
     expect([w[0]?.line, w[0]?.column]).toEqual([2, 2]);
   });
@@ -34,7 +34,7 @@ describe("literal Angular syntax in a template", () => {
     );
     expect(w).toHaveLength(1);
     expect(plain(w[0]?.message ?? "")).toBe(
-      "`@for (j of items; track j)…` is literal text in an MX template, not Angular control flow. Use `<for|j| of=items>…</for>`.",
+      '`@for (j of items; track j)…` is literal text in an MX template, not Angular control flow. Use `<for|j| of=items>…</for>`, or `${"@"}for` for literal text.',
     );
     expect([w[0]?.line, w[0]?.column]).toEqual([1, 14]);
   });
@@ -49,6 +49,30 @@ describe("literal Angular syntax in a template", () => {
   it("the position survives collapsed whitespace and later lines", () => {
     const w = lit("<div>\n  <p>a</p>\n  text   {{ a }}\n</div>");
     expect([w[0]?.line, w[0]?.column]).toEqual([3, 9]);
+  });
+
+  it("real block shapes warn, including a multi-line condition", () => {
+    expect(lit("<div>@if (a &&\n b) {\n</div>")).toHaveLength(1);
+    expect(lit("<div>@else {</div>")).toHaveLength(1);
+    expect(lit("<div>@default {</div>")).toHaveLength(1);
+    expect(lit("<div>@defer { x }</div>")).toHaveLength(1);
+    expect(lit("<div>@defer (on idle) { x }</div>")).toHaveLength(1);
+    expect(lit("<div>@placeholder (minimum 1s) { x }</div>")).toHaveLength(1);
+    expect(lit("<div>@let n = 1;</div>")).toHaveLength(1);
+    expect(lit("<div>@else if (b) { x }</div>")).toHaveLength(1);
+  });
+
+  it("prose between braces is not offered as an expression", () => {
+    const w = lit("<p>{{ not an interpolation }}</p>");
+    expect(plain(w[0]?.message ?? "")).toBe(
+      '`{{ not an interpolation }}` is literal text in an MX template, not an Angular interpolation. Use `${"{{"}` for literal braces.',
+    );
+  });
+
+  it("pre, code and textarea text still warns (Angular interpolates there too)", () => {
+    expect(lit("<pre>{{ x }}</pre>")).toHaveLength(1);
+    expect(lit("<code>@if (x) { y }</code>")).toHaveLength(1);
+    expect(lit("<textarea>{{ x }}</textarea>")).toHaveLength(1);
   });
 
   it("several matches in one run each get a warning", () => {
@@ -68,6 +92,17 @@ describe("literal Angular syntax in a template", () => {
       ["prose at-word", "<p>the @if keyword and @for too</p>"],
       ["at-sign alone", "<p>@ home</p>"],
       ["handle", "<p>follow @elseware (ok)</p>"],
+      ["prose @if with parens", "<p>Ping me @if (urgent) only</p>"],
+      ["prose @error with parens", "<p>log @error (see below)</p>"],
+      ["prose @default with parens", "<p>set @default (none)</p>"],
+      ["prose @for with parens", "<p>Thanks @for (sure)</p>"],
+      ["prose @let", "<p>@let me know</p>"],
+      ["prose @let with =", "<p>we @let people = in</p>"],
+      ["bare @else in prose", "<p>or @else maybe</p>"],
+      ["@else with parens", "<p>@else (x) y</p>"],
+      ["unclosed paren", "<p>@if (a && b</p>"],
+      ["escaped @", '<p>${"@"}if (x) {</p>'],
+      ["escaped {{", '<p>${"{{"} not }}</p>'],
     ])("%s", (_name, src) => {
       expect(lit(src)).toEqual([]);
     });

@@ -215,8 +215,9 @@ with `ctx.source` and the node's `loc`; it scans the **raw source** run (to the
 next `<` or `${`), not the normalized `value`, so positions are exact. Nothing
 in core: attribute values, placeholders and comments are never `Text`, and
 `<style>`/`<script>` bodies are skipped through `Emitter.codeDepth`. Only
-unambiguous shapes warn (`{{` needs `}}`; `@kw` needs `(`/`{`, at a word
-start). The warning is kept on the `.ng.mx` path (not import advice).
+unambiguous shapes warn (`{{` needs `}}`; `@kw` needs real block syntax at a
+word start: `(…) {`, a bare `{`, or `@let name = …;`; each message names the
+`${"{{"}`/`${"@"}if` escape). The warning is kept on the `.ng.mx` path (not import advice).
 Marko compiles the text without a diagnostic, so it is recorded as an mx-only
 lint in `divergences.md`.
 

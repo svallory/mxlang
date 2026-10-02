@@ -1920,8 +1920,15 @@ literally. The Angular host reports each occurrence as a **positioned warning**
 
 It never fires in an attribute value, a `${…}` placeholder (so `${"{{"}` writes
 a real literal `{{`), an HTML comment, `<script>`/`<style>` content, or on a lone `{`/`}`
-or an `@` in prose (`user@host`, "the @if keyword"): `{{` needs its closing `}}`
-and `@name` needs the block keyword followed by `(` or `{`. This is a lint
+or an `@` in prose (`user@host`, "the @if keyword", "Ping me @if (now) only"):
+`{{` needs its closing `}}`, and `@name` needs real block syntax after the
+keyword: a balanced `(…)` then `{` (`@if`, `@for`, `@switch`, `@case`,
+`@else if`, `@defer`), a bare `{` (`@else`, `@default`, `@empty`,
+`@placeholder`, `@loading`, `@error`), or `name = …;` (`@let`). Each message
+also names the literal escape, `${"{{"}` or `${"@"}if`. Text in `<pre>`,
+`<code>` and `<textarea>` still warns (Angular interpolates there too), so a
+page that shows Angular syntax uses the escape. The lint covers `.mx` pages and
+tags compiled by the Angular host as well as `.ng.mx` regions. This is a lint
 beyond Marko (decision 72), lives only in `packages/hosts/angular`, and is
 recorded in `divergences.md`.
 

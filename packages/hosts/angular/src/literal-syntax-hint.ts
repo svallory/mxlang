@@ -18,8 +18,11 @@
  * a comment, or script/style content: those are never `Text` nodes.
  *
  * Only unambiguous shapes warn. `{{` needs its closing `}}`; `@name` needs
- * the block keyword *and* a following `(` or `{`, at a word start (so
- * `user@host` and `the @if keyword` stay silent); a lone `{`/`}` never warns.
+ * the block keyword at a word start *and* real block syntax after it: a
+ * balanced `(…)` then `{` (`@if`, `@for`, …), a bare `{` (`@else`, …), or
+ * `name = …;` (`@let`). So `user@host`, `the @if keyword`, `Ping me @if (now)
+ * only` and `@let me know` stay silent; a lone `{`/`}` never warns. Each
+ * message also names the escape (`${"{{"}`, `${"@"}if`) for literal text.
  */
 
 import type { MxWarning } from "@mxlang/core";
@@ -29,10 +32,40 @@ import { offsetAt } from "./mapping.ts";
 const BLOCK_KEYWORDS =
   "else if|if|else|for|switch|case|default|empty|defer|placeholder|loading|error|let";
 
-const BLOCK = new RegExp(
-  `(?<![\\w@.$-])@(${BLOCK_KEYWORDS})(?![\\w$-])(?=\\s*[({]|\\s+\\w+\\s*=)`,
-  "g",
-);
+const BLOCK = new RegExp(`(?<![\\w@.$-])@(${BLOCK_KEYWORDS})(?![\\w$-])`, "g");
+
+/** Keywords whose `(…)` is required / optional before the block's `{`. */
+const NEEDS_PAREN = new Set(["if", "else if", "for", "switch", "case"]);
+const MAY_PAREN = new Set(["defer", "placeholder", "loading"]);
+
+/** A `{{ … }}` body of only bare words: prose, not an expression to suggest. */
+const PROSE = /^[A-Za-z]+(\s+[A-Za-z]+)+$/;
+
+const LET_DECL = /^\s+[A-Za-z_$][\w$]*\s*=[^;]*;/;
+
+/**
+ * Whether the text after `@keyword` is real block syntax: `(…)` then `{` (or a
+ * bare `{`), or `name = …;` for `@let`. Returns the condition when it has one.
+ */
+function blockAfter(
+  keyword: string,
+  text: string,
+  from: number,
+): { cond: string | undefined } | undefined {
+  if (keyword === "let")
+    return LET_DECL.test(text.slice(from)) ? { cond: undefined } : undefined;
+  let at = from;
+  let cond: string | undefined;
+  const paren = /^\s*\(/.exec(text.slice(from));
+  if (paren) {
+    if (!NEEDS_PAREN.has(keyword) && !MAY_PAREN.has(keyword)) return undefined;
+    const group = parenBody(text, from + paren[0].length - 1);
+    if (!group) return undefined;
+    cond = group.body;
+    at = group.end;
+  } else if (NEEDS_PAREN.has(keyword)) return undefined;
+  return /^\s*\{/.test(text.slice(at)) ? { cond } : undefined;
+}
 
 /** The text run that starts at `start`: up to the next `<` or placeholder. */
 function runEnd(source: string, start: number): number {
@@ -42,8 +75,11 @@ function runEnd(source: string, start: number): number {
   return m ? m.index : source.length;
 }
 
-/** The text inside the balanced `(…)` opening at `open`, or `undefined`. */
-function parenBody(text: string, open: number): string | undefined {
+/** The text inside the balanced `(…)` opening at `open`, and the index after its `)`. */
+function parenBody(
+  text: string,
+  open: number,
+): { body: string; end: number } | undefined {
   let depth = 0;
   for (let i = open; i < text.length; i++) {
     const c = text[i];
@@ -52,16 +88,10 @@ function parenBody(text: string, open: number): string | undefined {
       if (close < 0) return undefined;
       i = close;
     } else if (c === "(") depth++;
-    else if (c === ")" && --depth === 0) return text.slice(open + 1, i);
+    else if (c === ")" && --depth === 0)
+      return { body: text.slice(open + 1, i).trim(), end: i + 1 };
   }
   return undefined;
-}
-
-/** The condition after `@keyword`, when it is a parenthesised one. */
-function conditionAfter(text: string, from: number): string | undefined {
-  const at = /^\s*\(/.exec(text.slice(from));
-  if (!at) return undefined;
-  return parenBody(text, from + at[0].length - 1)?.trim();
 }
 
 function blockHint(keyword: string, cond: string | undefined): string {
@@ -130,21 +160,21 @@ export function literalSyntaxWarnings(
     const close = run.indexOf("}}", i + 2);
     if (close < 0) break;
     const expr = run.slice(i + 2, close).trim();
+    const write = PROSE.test(expr) || !expr ? "" : `Write \`\${${expr}}\`, or `;
     found.push({
       index: i,
-      message: expr
-        ? `\`{{ ${expr} }}\` is literal text in an MX template, not an Angular interpolation. Write \`\${${expr}}\`.`
-        : "`{{ }}` is literal text in an MX template, not an Angular interpolation. Write `${expr}`.",
+      message: `\`{{ ${expr ? `${expr} ` : ""}}}\` is literal text in an MX template, not an Angular interpolation. ${write}${write ? "use" : "Use"} \`\${"{{"}\` for literal braces.`,
     });
     i = close;
   }
 
   for (const m of run.matchAll(BLOCK)) {
     const keyword = m[1] as string;
-    const cond = conditionAfter(run, m.index + m[0].length);
+    const block = blockAfter(keyword, run, m.index + m[0].length);
+    if (!block) continue;
     found.push({
       index: m.index,
-      message: `${describe(keyword, cond)} is literal text in an MX template, not Angular control flow. Use ${blockHint(keyword, cond)}.`,
+      message: `${describe(keyword, block.cond)} is literal text in an MX template, not Angular control flow. Use ${blockHint(keyword, block.cond)}, or \`\${"@"}${keyword.split(" ")[0]}\` for literal text.`,
     });
   }
 
