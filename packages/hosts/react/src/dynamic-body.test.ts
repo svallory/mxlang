@@ -157,18 +157,18 @@ describe("a body forwarded through <${input.content}/> (react, Marko parity)", (
   );
 
   it.each([
-    ["content", { content: "hello" }, "<section>hello</section>"],
-    ["children", { children: "hello" }, "<section>hello</section>"],
+    ['content="hello"', { content: "hello" }, "<section>hello</section>"],
+    ['children="hello"', { children: "hello" }, "<section>hello</section>"],
     [
       "a tag-name-looking content",
       { content: "div" },
       "<section>div</section>",
     ],
-    ["a numeric content", { content: 7 }, "<section>7</section>"],
-    ["a zero content", { content: 0 }, "<section>0</section>"],
-    ["an empty-string content", { content: "" }, "<section></section>"],
+    ["content=7", { content: 7 }, "<section>7</section>"],
+    ["content=0", { content: 0 }, "<section>0</section>"],
+    ['content=""', { content: "" }, "<section></section>"],
   ])(
-    "a plain caller passing a string or number as %s renders it as text",
+    "a plain caller passing %s renders as text",
     async (_label, props, expected) => {
       // `...input` forwards the props untouched, the shape a hand-written
       // TSX caller (not this emitter's own call site) produces.
