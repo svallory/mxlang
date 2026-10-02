@@ -228,3 +228,10 @@ export async function expectCheckedSetIsListedSet(
 export const SPAWN = { spawn: true };
 export const APP_ERROR = "app.component.ng.mx(5,18): TS2339";
 export const LIB_ERROR = "lib.component.ng.mx(5,18): TS2339";
+
+/** The `error TSnnnn` lines of `output`, sorted: what two runs must agree on. */
+export const errorLines = (output: string) =>
+  output
+    .split("\n")
+    .filter((line) => /error TS\d+/.test(line))
+    .sort();

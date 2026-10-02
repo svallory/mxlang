@@ -59,7 +59,11 @@ function frameOf(text: string): string {
 const fixtures = join(import.meta.dirname, "fixtures");
 
 describe("unknown mx.host: language server and mx-tsc agree", () => {
-  it("report the same compile error, message and position, for an .mx page", () => {
+  // Runs `mx-tsc` in this process; under a loaded machine (the whole package's
+  // files in parallel) it can pass vitest's 5 s default.
+  it("report the same compile error, message and position, for an .mx page", {
+    timeout: 60_000,
+  }, () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-unknown-host-")));
     created.push(dir);
     writeFileSync(

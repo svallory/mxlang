@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import {
   type CompiledNgMx,
   createAmxLanguagePlugin,
@@ -49,8 +50,24 @@ export function resolveTscPath(): string {
 }
 
 /**
+ * What the wrapper installed on a host consults: the Volar resolver of the
+ * latest program (`setup` re-runs for every project of a `-b`, so it is
+ * replaced, not nested) and its cache of resolved imports.
+ */
+interface VolarFallback {
+  resolve: ReturnType<typeof createResolveModuleName>;
+  /** Resolved imports only: a failure must be retried once the file appears. */
+  resolved: Map<string, ts.ResolvedModuleFull>;
+  extensions: readonly string[];
+}
+
+const fallbacks = new WeakMap<object, VolarFallback>();
+
+/**
  * Gives an import the host's own resolver left unresolved a second chance
- * through Volar's resolver, the one that maps `x.d.mx.ts` probes back to `x.mx`.
+ * through Volar's resolver, the one that maps `x.d.mx.ts` probes back to `x.mx`,
+ * and lets that resolver overrule a host answer that is a `.d.ts` shadowing a
+ * template of the same stem (what `-p` picks, see `shadowsTemplate`).
  *
  * Volar's `proxyCreateProgram` keeps the host's `resolveModuleNameLiterals` /
  * `resolveModuleNames` for any batch of imports none of which ends in a plugin
@@ -63,23 +80,70 @@ export function resolveTscPath(): string {
  *
  * Wrapping, not replacing, keeps what the host's resolver owns: the builder's
  * cross-project resolution cache and, in `-w` / `-b -w`, the failed-lookup
- * watching that makes a module installed later recover. Volar's resolver is
- * consulted only for what the host's left unresolved. Runs from the language
- * plugins' `setup`, which Volar calls before it reads the host's methods.
+ * watching that makes a module installed later recover. Where Volar's resolver
+ * also fails, the host's own result is returned, so tsc's resolution cache keeps
+ * the object (and the failed lookups) it created. Runs from the language
+ * plugins' `setup`, which Volar calls before it reads the host's methods; the
+ * wrapper goes on a host once, later calls only swap what it consults.
  */
 function fallBackToVolarResolution(
-  typescript: typeof import("typescript"),
+  typescript: typeof ts,
   host: ts.CompilerHost | undefined,
   language: Language<string>,
+  extensions: readonly string[],
 ): void {
   if (!host) return;
-  const volarResolve = createResolveModuleName(
-    typescript,
-    typescript.sys.getFileSize,
-    host,
-    language.plugins,
-    (fileName) => language.scripts.get(fileName),
-  );
+  const known = fallbacks.has(host);
+  fallbacks.set(host, {
+    resolve: createResolveModuleName(
+      typescript,
+      typescript.sys.getFileSize,
+      host,
+      language.plugins,
+      (fileName) => language.scripts.get(fileName),
+    ),
+    resolved: new Map(),
+    extensions,
+  });
+  if (known) return;
+
+  const state = () => fallbacks.get(host) as VolarFallback;
+  /** `x.d.ts` next to `x.ng.mx`: `-p` resolves the template, a host the `.d.ts`. */
+  const shadowsTemplate = (module: ts.ResolvedModule | undefined) => {
+    const file = module?.resolvedFileName;
+    if (!file?.endsWith(".d.ts") || module?.isExternalLibraryImport) {
+      return false;
+    }
+    const stem = file.slice(0, -".d.ts".length);
+    return state().extensions.some((extension) =>
+      host.fileExists(stem + extension),
+    );
+  };
+  const resolveWithVolar = (
+    name: string,
+    containingFile: string,
+    options: ts.CompilerOptions,
+    redirectedReference: ts.ResolvedProjectReference | undefined,
+    mode: ts.ResolutionMode,
+  ): ts.ResolvedModuleWithFailedLookupLocations["resolvedModule"] => {
+    const { resolve, resolved } = state();
+    const key = `${dirname(containingFile)}\0${name}\0${mode}\0${redirectedReference?.sourceFile.fileName}`;
+    const cached = resolved.get(key);
+    if (cached && host.fileExists(cached.resolvedFileName)) return cached;
+    const module = resolve(
+      name,
+      containingFile,
+      options,
+      undefined,
+      redirectedReference,
+      mode,
+    ).resolvedModule;
+    if (module) resolved.set(key, module);
+    return module;
+  };
+  const needsVolar = (module: ts.ResolvedModule | undefined) =>
+    !module || shadowsTemplate(module);
+
   const literals = host.resolveModuleNameLiterals;
   const names = host.resolveModuleNames;
   if (literals) {
@@ -103,20 +167,19 @@ function fallBackToVolarResolution(
         )
         .map((result, index) => {
           const literal = moduleLiterals[index];
-          return result.resolvedModule || !literal
-            ? result
-            : volarResolve(
-                literal.text,
-                containingFile,
-                options,
-                undefined,
-                redirectedReference,
-                typescript.getModeForUsageLocation(
-                  containingSourceFile,
-                  literal,
-                  options,
-                ),
-              );
+          if (!literal || !needsVolar(result.resolvedModule)) return result;
+          const module = resolveWithVolar(
+            literal.text,
+            containingFile,
+            options,
+            redirectedReference,
+            typescript.getModeForUsageLocation(
+              containingSourceFile,
+              literal,
+              options,
+            ),
+          );
+          return module ? { resolvedModule: module } : result;
         });
   }
   if (names) {
@@ -138,17 +201,16 @@ function fallBackToVolarResolution(
           options,
           containingSourceFile,
         )
-        .map(
-          (result, index) =>
-            result ??
-            volarResolve(
-              moduleNames[index] as string,
-              containingFile,
-              options,
-              undefined,
-              redirectedReference,
-              containingSourceFile?.impliedNodeFormat,
-            ).resolvedModule,
+        .map((result, index) =>
+          needsVolar(result)
+            ? (resolveWithVolar(
+                moduleNames[index] as string,
+                containingFile,
+                options,
+                redirectedReference,
+                containingSourceFile?.impliedNodeFormat,
+              ) ?? result)
+            : result,
         );
   }
 }
@@ -194,7 +256,12 @@ function runPatchedTsc(
         return {
           languagePlugins: plugins,
           setup: (language) =>
-            fallBackToVolarResolution(typescript, options.host, language),
+            fallBackToVolarResolution(
+              typescript,
+              options.host,
+              language,
+              astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
+            ),
         };
       },
       TYPESCRIPT_OBJECT,

@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -12,6 +12,13 @@ import {
 } from "./build-uptodate-support.ts";
 
 /**
+ * Watch timing is the one thing that differs by platform (inotify, FSEvents),
+ * so these cases do not depend on it: tsc is told to poll files and
+ * directories itself (`TSC_WATCHFILE` / `TSC_WATCHDIRECTORY`), a module is
+ * installed with one atomic rename (no half-written package for a rebuild to
+ * catch), and recovery is asserted on that install alone, with no edit to the
+ * importer to trigger the rebuild.
+ *
  * Watch modes keep tsc's own failed-lookup watching only while the host's
  * resolver stays in charge: a module that is missing and then installed must
  * clear its TS2307 without restarting the watcher, and `-b -w` must still
@@ -27,7 +34,12 @@ afterEach(() => {
 function watch(cwd: string, args: string[]) {
   const child = spawn(process.execPath, [mxTsc, ...args], {
     cwd,
-    env: { ...process.env, NO_COLOR: "1" },
+    env: {
+      ...process.env,
+      NO_COLOR: "1",
+      TSC_WATCHFILE: "DynamicPriorityPolling",
+      TSC_WATCHDIRECTORY: "RecursiveDirectoryUsingDynamicPriorityPolling",
+    },
   });
   running.push(child);
   let output = "";
@@ -52,16 +64,17 @@ function watch(cwd: string, args: string[]) {
 }
 
 function installLatePackage(dir: string) {
-  const pkg = join(dir, "node_modules", "late-pkg");
-  mkdirSync(pkg, { recursive: true });
+  const staged = join(dir, "staged", "late-pkg");
+  mkdirSync(staged, { recursive: true });
   writeFileSync(
-    join(pkg, "package.json"),
+    join(staged, "package.json"),
     '{ "name": "late-pkg", "types": "index.d.ts" }',
   );
   writeFileSync(
-    join(pkg, "index.d.ts"),
+    join(staged, "index.d.ts"),
     "export declare const late: number;\n",
   );
+  renameSync(staged, join(dir, "node_modules", "late-pkg"));
 }
 
 describe("mx-tsc watch modes", () => {
@@ -82,15 +95,35 @@ describe("mx-tsc watch modes", () => {
         await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
         const mark = run.output().length;
         installLatePackage(dir);
-        importsOf(
-          dir,
-          'import { late } from "late-pkg";\nexport const a: number = late;\n// touch\n',
-        );
         await run.until(/Found 0 errors/, mark);
       },
       CASE_TIMEOUT_MS,
     );
   }
+
+  it(
+    "-p -w picks the template, as -p does, when x.d.ts sits beside x.ng.mx",
+    async () => {
+      const dir = scratch(cliFixture);
+      writeFileSync(
+        join(dir, "src", "app.component.d.ts"),
+        "export declare const AppComponent: string;\n",
+      );
+      importsOf(
+        dir,
+        'import { AppComponent } from "./app.component";\nexport const s: string = AppComponent;\n',
+      );
+      const run = watch(dir, [
+        "-w",
+        "-p",
+        "tsconfig.app.json",
+        "--preserveWatchOutput",
+      ]);
+      const output = await run.until(/Found \d+ errors?/);
+      expect(output).toContain("TS2322");
+    },
+    CASE_TIMEOUT_MS,
+  );
 
   it(
     "-b -w resolves an extensionless .ng.mx import",
