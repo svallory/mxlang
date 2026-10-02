@@ -90,6 +90,10 @@ The resolver lives in `@mxlang/core` (`src/host-policy.ts`), shared with
 `@mxlang/typescript-plugin`; see `src/host-policy.test.ts` there for every
 branch.
 
+## Compact messages and `data.codeFrame`
+
+A compile error's `message` is the compiler's error text alone (`Missing ending "div" tag`): no `at <path>:L:C` line, no source snippet, no colour. The range already says where. The compiler's code frame (the `> 1 | <div>` line, its caret line and the context after it) is in the diagnostic's `data.codeFrame`, ANSI-free and dedented to the `> 1 |` marker. It is a string, present only when the compiler produced a frame; a message with no frame is unchanged and carries no `data`. `mx-tsc` prints the same frame under the same text. It is deliberately not in `relatedInformation`: VS Code renders that as a second, repeated entry beneath the message, and the editor already draws the snippet at the range.
+
 ## Where host-policy diagnostics appear
 
 A problem in `package.json` (unknown `mx.host`, malformed file, bad `mx.tags`) is published twice: on the open `.mx` at 1:1 with the message `<path>/package.json:<line>:<col>: <message>` and `relatedInformation` at the real range, and on the `package.json` itself at that range. The server watches `**/package.json` and treats the nearest `package.json` (and any one a diagnostic names) as a dependency of each document, so fixing it re-diagnoses every open document that read it and clears all copies, with no edit to the `.mx` files. It also clears when the last document that reported it closes. The message names the `package.json` once.

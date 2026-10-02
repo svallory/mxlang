@@ -53,7 +53,14 @@ function frameOf(text: string): string {
   const plain = stripVTControlCharacters(text);
   const at = plain.indexOf("> 1 |");
   expect(at, `no "> 1 |" code frame in: ${plain}`).toBeGreaterThanOrEqual(0);
-  return plain.slice(at);
+  // Dedent to the marker, as the LS's `data.codeFrame` is: mx-tsc indents the
+  // frame under its `at` line, the LS carries it bare.
+  const indent = at - (plain.lastIndexOf("\n", at) + 1);
+  return plain
+    .slice(at)
+    .split("\n")
+    .map((l, i) => (i === 0 ? l : l.replace(new RegExp(`^ {0,${indent}}`), "")))
+    .join("\n");
 }
 
 const fixtures = join(import.meta.dirname, "fixtures");
@@ -112,11 +119,21 @@ describe("unknown mx.host: language server and mx-tsc agree", () => {
       .find((l) => l.includes(at) || l.includes(atPretty));
     expect(tscLine, plainTsc).toContain("error TS80001");
 
-    // Same message: both carry the compiler's code frame (the part after the
-    // leading `at <path>:<line>:<col>` line, whose path form differs).
-    const lsFrame = frameOf(String(lsError?.message ?? ""));
+    // Same message: the LS keeps the compact error text in `message` and the
+    // compiler's frame in `data.codeFrame`; mx-tsc prints both in one
+    // diagnostic. The compact text must be mx-tsc's own, and the frame must
+    // be the very frame mx-tsc prints.
+    expect(lsError?.message).toBe('Missing ending "div" tag');
+    // mx-tsc prints that text on the frame's caret line, after the carets.
+    expect(stripVTControlCharacters(tsc.stdout)).toMatch(
+      new RegExp(`^\\s*\\|\\s*\\^+ ${lsError?.message}$`, "m"),
+    );
+    const lsFrame = (lsError?.data as { codeFrame?: string } | undefined)
+      ?.codeFrame;
+    expect(lsFrame, "LS diagnostic carries data.codeFrame").toBeDefined();
+    expect(lsFrame).toBe(stripVTControlCharacters(lsFrame ?? ""));
     expect(lsFrame).toContain('Missing ending "div" tag');
-    expect(frameOf(tsc.stdout)).toContain(lsFrame.trimEnd());
+    expect(frameOf(tsc.stdout)).toContain(lsFrame?.trimEnd());
   });
 });
 

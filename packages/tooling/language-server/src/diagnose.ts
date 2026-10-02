@@ -8,6 +8,7 @@
 
 import { basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import {
   type CustomTag,
   getCustomTags,
@@ -106,6 +107,38 @@ function warningDiagnostics(
     own.push(diagnostic);
   }
   return own;
+}
+
+/**
+ * Splits a compiler error into its compact text and its code frame.
+ *
+ * Babel/Marko errors read `\n    at <path>:L:C\n    > 1 | <src>\n        | ^^^ <text>\n      2 | ...`:
+ * the error text rides on the caret line, and the `at` line repeats what the
+ * range already carries. The message keeps only that text (an agent pays for
+ * every token); the frame, ANSI-free and dedented to its `> 1 |` marker, goes
+ * to `data.codeFrame`. A message with no frame, or a frame whose caret line
+ * carries no text, comes back unchanged.
+ */
+export function splitCodeFrame(raw: string): {
+  message: string;
+  codeFrame?: string;
+} {
+  const plain = stripVTControlCharacters(raw);
+  const lines = plain.split("\n");
+  const marker = lines.findIndex((l) => /^\s*> \d+ \|/.test(l));
+  if (marker < 0) return { message: raw };
+  const caret = lines
+    .slice(marker + 1)
+    .map((l) => /^\s*\|\s*\^+\s+(\S.*)$/.exec(l))
+    .find((m) => m !== null);
+  if (!caret) return { message: raw };
+  const indent = /^\s*/.exec(lines[marker] ?? "")?.[0].length ?? 0;
+  const codeFrame = lines
+    .slice(marker)
+    .map((l) => (/^\s*$/.test(l.slice(0, indent)) ? l.slice(indent) : l))
+    .join("\n")
+    .trimEnd();
+  return { message: caret[1] ?? raw, codeFrame };
 }
 
 /**
@@ -331,14 +364,16 @@ export function diagnoseDocument(
       const column = Math.max(0, position.column);
       // These errors carry only a start position, not a span, so synthesize a
       // one-character range that marks where the error occurred.
-      const message =
+      const { message, codeFrame } = splitCodeFrame(
         error instanceof Error
           ? error.message
-          : String((error as { message?: unknown }).message ?? error);
+          : String((error as { message?: unknown }).message ?? error),
+      );
       const diagnostic: Diagnostic = {
         severity: DiagnosticSeverity.Error,
         source: "mxlang",
         message,
+        ...(codeFrame === undefined ? {} : { data: { codeFrame } }),
         range: {
           start: { line, character: column },
           end: { line, character: column + 1 },

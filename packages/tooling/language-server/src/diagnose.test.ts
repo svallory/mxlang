@@ -14,7 +14,11 @@ import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { clearScanCache } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
-import { diagnoseDocument, type RelatedDiagnostics } from "./diagnose.ts";
+import {
+  diagnoseDocument,
+  type RelatedDiagnostics,
+  splitCodeFrame,
+} from "./diagnose.ts";
 
 describe("diagnoseDocument", () => {
   it("reports one Error diagnostic for <let> under a strict policy", () => {
@@ -825,9 +829,18 @@ describe("diagnoseDocument given a file:// URI", () => {
         );
         const error = diagnostics.find((d) => d.severity === 1);
         expect(error, JSON.stringify(diagnostics)).toBeDefined();
-        const message = stripVTControlCharacters(String(error?.message));
-        expect(message).toContain(path);
-        expect(message).not.toContain("file:");
+        // The path no longer rides in the message (the range carries the
+        // position); a URI mistaken for a path would still leak a `file:` or a
+        // cwd-relative `../` hop into the message or the frame.
+        const frame = (error?.data as { codeFrame?: string } | undefined)
+          ?.codeFrame;
+        const text = stripVTControlCharacters(
+          `${error?.message}\n${frame ?? ""}`,
+        );
+        expect(frame, "frame carried in data").toBeDefined();
+        expect(text).not.toContain("file:");
+        expect(text).not.toContain("../");
+        expect(text).not.toContain(path);
       } finally {
         rmSync(dir, { recursive: true });
       }
@@ -858,5 +871,52 @@ describe("host-policy message wording", () => {
     expect(diagnostics[0]?.message).toBe(
       "/app/package.json:1:1: could not be parsed as JSON; using html",
     );
+  });
+});
+
+describe("compiler code frame placement", () => {
+  const frameLine = /^\s*(>\s*)?\d+ \||^\s*\|\s*\^/m;
+
+  it("keeps a compact message and moves the frame to data.codeFrame", () => {
+    const [d] = diagnoseDocument(
+      "<div>\n  <p>hi</p>\n",
+      "file:///project/page.mx",
+      { host: "html" },
+    );
+    expect(d?.message).toBe('Missing ending "div" tag');
+    expect(d?.message).not.toMatch(frameLine);
+    expect(d?.message).not.toContain("page.mx");
+    const frame = (d?.data as { codeFrame?: string } | undefined)?.codeFrame;
+    expect(frame).toBeDefined();
+    expect(frame).toBe(stripVTControlCharacters(frame ?? ""));
+    expect(frame).toMatch(/^> 1 \| <div>/);
+    expect(frame).toContain('^^^^^ Missing ending "div" tag');
+    expect(frame).not.toContain("page.mx");
+  });
+
+  it("strips colour from the frame and the message (CI colourises)", () => {
+    const { message, codeFrame } = splitCodeFrame(
+      "\n    at /project/page.mx:1:1\n    \u001b[31m>\u001b[0m 1 | <div>\n        \u001b[31m|\u001b[0m ^^^^^ boom\n      2 |",
+    );
+    expect(message).toBe("boom");
+    expect(codeFrame).toBe("> 1 | <div>\n    | ^^^^^ boom\n  2 |");
+  });
+
+  it("splits only a message that carries a frame", () => {
+    expect(splitCodeFrame("plain text")).toEqual({ message: "plain text" });
+    expect(splitCodeFrame("a > 1 | b")).toEqual({ message: "a > 1 | b" });
+    // a frame whose caret line has no text keeps the whole message
+    const bare = "at x:1:1\n> 1 | <div>\n    | ^^^^^";
+    expect(splitCodeFrame(bare).message).toBe(bare);
+  });
+
+  it("leaves a message with no frame unchanged and adds no data", () => {
+    const [d] = diagnoseDocument("<let/count=1/>\n", "file:///project/App.mx", {
+      host: "html",
+      strict: true,
+    });
+    expect(d?.message).toMatch(/let/i);
+    expect(d?.message).not.toMatch(frameLine);
+    expect(d?.data).toBeUndefined();
   });
 });
