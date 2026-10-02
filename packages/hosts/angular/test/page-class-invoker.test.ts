@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -16,6 +22,10 @@ afterEach(() => {
 });
 
 const RT = "@mxlang/angular/runtime";
+
+function readHtml(): string {
+  return readFileSync(join(projectDir, "src/page.html"), "utf8");
+}
 
 function write(files: Record<string, string>): void {
   for (const [name, content] of Object.entries(files)) {
@@ -141,10 +151,128 @@ describe("page invoker warning vs the page's own class", () => {
     ).toHaveLength(1);
   });
 
-  it("keeps the warning when the base is imported from elsewhere (cannot be seen)", () => {
+  // A base the file cannot show: the ORIGINAL warning, never "is missing".
+  describe.each([
+    [
+      "an imported base",
+      component('import { Base } from "./base";', " extends Base {}"),
+    ],
+    [
+      "a wrapper around an imported base",
+      component(
+        'import { Base } from "./base";\nconst O = (b: any) => b;',
+        " extends O(Base) {}",
+      ),
+    ],
+    [
+      "a const class expression base",
+      component(
+        `import { MxHandlers } from "${RT}";\nconst B = class extends MxHandlers {};`,
+        " extends B {}",
+      ),
+    ],
+    [
+      "a wrapper with no runtime inside",
+      component("const O = (b: any) => b;\nclass B {}", " extends O(B) {}"),
+    ],
+  ])("%s", (_name, source) => {
+    it("keeps the original warning text, claims nothing missing, keeps the paste line", () => {
+      const warnings = invokerWarnings(source);
+      expect(warnings).toHaveLength(1);
+      const message = warnings[0]?.message ?? "";
+      expect(message).not.toContain("is missing");
+      expect(message).not.toContain("page.ts:");
+      expect(message).toMatch(
+        /^this template binds an event handler; add these members/,
+      );
+      expect(readHtml()).toContain("Add to the component class");
+    });
+  });
+
+  it("is silent for a chained mixin that reaches the runtime", () => {
     expect(
       invokerWarnings(
-        component('import { Base } from "./base";', " extends Base {}"),
+        component(
+          `import { MxHandlersMixin } from "${RT}";\nconst O = (b: any) => b;\nclass B {}`,
+          " extends O(MxHandlersMixin(B)) {}",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("keeps the declared members when the chain is unseen but both are declared", () => {
+    expect(
+      invokerWarnings(
+        component('import { Base } from "./base";', ` extends Base ${MEMBERS}`),
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not count `import type { MxHandlers }`", () => {
+    expect(
+      invokerWarnings(
+        component(
+          `import type { MxHandlers } from "${RT}";`,
+          " extends MxHandlers {}",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      invokerWarnings(
+        component(
+          `import { type MxHandlers } from "${RT}";`,
+          " extends MxHandlers {}",
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
+  // Members that type-check but do not exist on the instance at run time.
+  describe.each([
+    ["declare", "{\n  declare __mxOn: any;\n  declare __mxOnAt: any;\n}"],
+    [
+      "definite-assignment, no value",
+      "{\n  __mxOn!: any;\n  __mxOnAt!: any;\n}",
+    ],
+    [
+      "static",
+      "{\n  static __mxOn = (h: any) => h;\n  static __mxOnAt = (h: any) => h;\n}",
+    ],
+    ["bodiless methods", "{\n  __mxOn(): void;\n  __mxOnAt(): void;\n}"],
+    ["abstract", "{\n  abstract __mxOn: any;\n  abstract __mxOnAt: any;\n}"],
+  ])("type-only members (%s)", (_name, body) => {
+    it("do not count as provided", () => {
+      const source = component("", ` ${body}`);
+      const warnings = invokerWarnings(
+        body.includes("abstract")
+          ? source.replace("export class", "export abstract class")
+          : source,
+      );
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.message).toContain(
+        "`PageComponent` is missing `__mxOn` and `__mxOnAt`",
+      );
+    });
+  });
+
+  it("counts a definite property that has an initializer", () => {
+    expect(
+      invokerWarnings(
+        component(
+          "",
+          " {\n  __mxOn!: any = (h: any) => h;\n  __mxOnAt = (h: any) => h;\n}",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("ignores a nested class that shadows the base name", () => {
+    expect(
+      invokerWarnings(
+        component(
+          `import { MxHandlers } from "${RT}";\nfunction f() { class Base extends MxHandlers {} return Base; }\nclass Base {}`,
+          " extends Base {}",
+        ),
       ),
     ).toHaveLength(1);
   });
@@ -172,9 +300,7 @@ describe("page invoker warning vs the page's own class", () => {
         " extends MxHandlers {}",
       ),
     );
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const html = readFileSync(join(projectDir, "src/page.html"), "utf8");
-    expect(html).not.toContain("Add to the component class");
+    expect(readHtml()).not.toContain("Add to the component class");
   });
 });
 

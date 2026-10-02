@@ -6,8 +6,11 @@
  * A page `foo.mx` is paired with its sibling `foo.ts` (the same name the
  * build's header already tells the author to edit). The class is read with a
  * light Babel parse, never type-checked, so it sees only what the file says:
- * a base imported from another module cannot be followed and counts as
- * providing nothing. Every failure (no file, unreadable, unparsable, no
+ * a base imported from another module cannot be followed, so a class whose
+ * chain leaves the file is `unknown` unless it declares both members itself.
+ * All `@Component` classes in the file are judged; `templateUrl` is not
+ * matched (a second component with the invoker could silence the warning for
+ * a template bound to a class elsewhere — rare, noted). Every failure (no file, unreadable, unparsable, no
  * component class) answers `unknown`, and the caller keeps the warning —
  * a redundant hint is cheaper than a silent missing member.
  */
@@ -46,20 +49,6 @@ const asNode = (value: unknown): Node | undefined =>
     ? (value as Node)
     : undefined;
 
-function walk(node: unknown, visit: (node: Node) => void): void {
-  if (Array.isArray(node)) {
-    for (const item of node) walk(item, visit);
-    return;
-  }
-  const n = asNode(node);
-  if (!n) return;
-  visit(n);
-  for (const [key, value] of Object.entries(n)) {
-    if (key === "loc" || key === "extra") continue;
-    if (value && typeof value === "object") walk(value, visit);
-  }
-}
-
 /** Whether the class carries a `@Component(...)` decorator. */
 function isComponent(klass: Node): boolean {
   const decorators = (klass.decorators as Node[] | undefined) ?? [];
@@ -97,17 +86,47 @@ export function inspectPageClass(classFile: string): PageClassInspection {
   }
 }
 
+/** The top-level class declarations of a statement list, through `export`/`export default`. */
+function topLevelClass(statement: Node): Node | undefined {
+  if (statement.type === "ClassDeclaration") return statement;
+  if (
+    statement.type === "ExportNamedDeclaration" ||
+    statement.type === "ExportDefaultDeclaration"
+  ) {
+    const declaration = asNode(statement.declaration);
+    if (declaration?.type === "ClassDeclaration") return declaration;
+  }
+  return undefined;
+}
+
+/**
+ * Whether a class member is a real instance member at run time. `declare`,
+ * `static`, `abstract`, a bodiless method and a `!`-only property type-check
+ * but leave `ctx.__mxOn` undefined on the instance.
+ */
+function isInstanceMember(member: Node): boolean {
+  if (member.declare || member.static || member.abstract) return false;
+  if (member.type === "TSDeclareMethod") return false;
+  if (member.type === "ClassProperty" && member.definite && !member.value) {
+    return false;
+  }
+  return true;
+}
+
 function inspectFile(file: unknown, filename: string): PageClassInspection {
+  const program = asNode(asNode(file)?.program);
+  const statements = (program?.body as Node[] | undefined) ?? [];
   const runtimeLocals = new Set<string>();
   const runtimeNamespaces = new Set<string>();
   const declared = new Map<string, Node>();
   const classes: Node[] = [];
-  walk(file, (node) => {
-    if (node.type === "ImportDeclaration") {
-      if (asNode(node.source)?.value !== RUNTIME_SPECIFIER) return;
-      for (const spec of (node.specifiers as Node[] | undefined) ?? []) {
+  for (const statement of statements) {
+    if (statement.type === "ImportDeclaration") {
+      if (asNode(statement.source)?.value !== RUNTIME_SPECIFIER) continue;
+      if (statement.importKind === "type") continue;
+      for (const spec of (statement.specifiers as Node[] | undefined) ?? []) {
         const local = asNode(spec.local)?.name;
-        if (!local) continue;
+        if (!local || spec.importKind === "type") continue;
         if (spec.type === "ImportNamespaceSpecifier") {
           runtimeNamespaces.add(local);
         } else if (spec.type === "ImportSpecifier") {
@@ -118,18 +137,19 @@ function inspectFile(file: unknown, filename: string): PageClassInspection {
           }
         }
       }
-    } else if (
-      node.type === "ClassDeclaration" ||
-      node.type === "ClassExpression"
-    ) {
-      classes.push(node);
-      const id = asNode(node.id)?.name;
-      if (id && node.type === "ClassDeclaration") declared.set(id, node);
+      continue;
     }
-  });
+    const klass = topLevelClass(statement);
+    if (klass) {
+      classes.push(klass);
+      const id = asNode(klass.id)?.name;
+      if (id) declared.set(id, klass);
+    }
+  }
 
-  // Only the three shapes resolved through the runtime subpath count:
-  // `extends X`, `extends X(...)` and `extends ns.X` / `ns.X(...)`.
+  // Only the shapes resolved through the runtime subpath count:
+  // `extends X`, `extends X(...)` (also nested: `extends O(X(...))`) and
+  // `extends ns.X` / `ns.X(...)`.
   const isRuntimeRef = (n: Node | undefined): boolean => {
     if (n?.type === "Identifier") return runtimeLocals.has(n.name ?? "");
     const object = asNode(n?.object);
@@ -142,40 +162,56 @@ function inspectFile(file: unknown, filename: string): PageClassInspection {
       (property?.name === "MxHandlers" || property?.name === "MxHandlersMixin")
     );
   };
-  const extendsRuntime = (klass: Node): boolean => {
-    const base = asNode(klass.superClass);
-    return base?.type === "CallExpression"
-      ? isRuntimeRef(asNode(base.callee))
-      : isRuntimeRef(base);
+  const reachesRuntime = (base: Node | undefined): boolean => {
+    if (base?.type !== "CallExpression") return isRuntimeRef(base);
+    if (isRuntimeRef(asNode(base.callee))) return true;
+    const [first] = (base.arguments as Node[] | undefined) ?? [];
+    return reachesRuntime(asNode(first));
   };
-  const membersOf = (klass: Node, seen = new Set<Node>()): Set<string> => {
+  // The members a class has, and whether its whole chain was seen. A base
+  // that is neither the runtime nor a top-level class of this file (imported,
+  // a `const B = class ...`, a wrapper call with no runtime inside) may carry
+  // the members, so the chain is `complete: false` and nobody may claim
+  // anything is missing.
+  const membersOf = (
+    klass: Node,
+    seen = new Set<Node>(),
+  ): { names: Set<string>; complete: boolean } => {
     const names = new Set<string>();
-    if (seen.has(klass)) return names;
+    if (seen.has(klass)) return { names, complete: true };
     seen.add(klass);
-    if (extendsRuntime(klass)) for (const n of EVENT_HELPER_NAMES) names.add(n);
     const body = asNode(klass.body);
     for (const member of (body?.body as Node[] | undefined) ?? []) {
+      if (!isInstanceMember(member)) continue;
       const name = memberName(member);
       if (name) names.add(name);
     }
-    const superName = asNode(klass.superClass);
+    const superClass = asNode(klass.superClass);
+    if (!superClass) return { names, complete: true };
+    if (reachesRuntime(superClass)) {
+      for (const n of EVENT_HELPER_NAMES) names.add(n);
+      return { names, complete: true };
+    }
     const base =
-      superName?.type === "Identifier" && superName.name
-        ? declared.get(superName.name)
+      superClass.type === "Identifier" && superClass.name
+        ? declared.get(superClass.name)
         : undefined;
-    if (base) for (const n of membersOf(base, seen)) names.add(n);
-    return names;
+    if (!base) return { names, complete: false };
+    const inherited = membersOf(base, seen);
+    for (const n of inherited.names) names.add(n);
+    return { names, complete: inherited.complete };
   };
 
   const components = classes.filter(isComponent);
   if (components.length === 0) return { status: "unknown" };
   const reports: PageClassReport[] = [];
   for (const klass of components) {
-    const have = membersOf(klass);
-    const missing = EVENT_HELPER_NAMES.filter((n) => !have.has(n));
-    if (missing.length > 0) {
-      reports.push({ name: asNode(klass.id)?.name ?? "(anonymous)", missing });
-    }
+    const { names, complete } = membersOf(klass);
+    const missing = EVENT_HELPER_NAMES.filter((n) => !names.has(n));
+    if (missing.length === 0) continue;
+    // Cannot see the whole chain: keep the original warning, claim nothing.
+    if (!complete) return { status: "unknown" };
+    reports.push({ name: asNode(klass.id)?.name ?? "(anonymous)", missing });
   }
   return reports.length === 0
     ? { status: "provided" }
