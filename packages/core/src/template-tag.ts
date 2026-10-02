@@ -299,6 +299,23 @@ const propertyNameOf = (
   return { name: null, dynamic: true };
 };
 
+/**
+ * Nodes that wrap an expression without changing which value it denotes:
+ * `x as T`, `x!`, `x satisfies T`, `<T>x`, `(x)`.
+ */
+const isTypeWrapper = (node: Node): boolean =>
+  node.type === "TSAsExpression" ||
+  node.type === "TSNonNullExpression" ||
+  node.type === "TSSatisfiesExpression" ||
+  node.type === "TSTypeAssertion" ||
+  node.type === "ParenthesizedExpression";
+
+const unwrapTypeWrappers = (node: Node): Node => {
+  let current = node;
+  while (isTypeWrapper(current)) current = current.expression;
+  return current;
+};
+
 const isMemberOf = (node: Node): boolean =>
   node.type === "MemberExpression" || node.type === "OptionalMemberExpression";
 
@@ -477,9 +494,13 @@ function scanAstForInputMembers(ast: Node): InputScan {
         if (path.node.name !== "input" || !path.isReferencedIdentifier())
           return;
         if (!isRealInput(path)) return;
-        const parent = path.parent;
-        if (isMemberOf(parent) && parent.object === path.node) return;
-        const pattern = destructurePatternOf(path);
+        // `(input as any).x` and `input!.x` read `x`: climb out of the type
+        // wrappers before deciding what the reference is the object of.
+        let outer = path;
+        while (isTypeWrapper(outer.parent)) outer = outer.parentPath;
+        const parent = outer.parent;
+        if (isMemberOf(parent) && parent.object === outer.node) return;
+        const pattern = destructurePatternOf(outer);
         if (pattern) {
           const read = patternMembers(pattern);
           for (const name of read.names) {
@@ -492,10 +513,9 @@ function scanAstForInputMembers(ast: Node): InputScan {
       },
       "MemberExpression|OptionalMemberExpression"(path: Node) {
         const node = path.node;
-        if (node.object.type !== "Identifier" || node.object.name !== "input") {
-          return;
-        }
-        if (!isRealInput({ node: node.object, scope: path.scope })) return;
+        const object = unwrapTypeWrappers(node.object);
+        if (object.type !== "Identifier" || object.name !== "input") return;
+        if (!isRealInput({ node: object, scope: path.scope })) return;
         const { name, dynamic: computed } = propertyNameOf(node);
         if (computed) {
           dynamic = true;

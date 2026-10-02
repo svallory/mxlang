@@ -524,14 +524,32 @@ describe("template custom tags as compilation units", () => {
         "a top-level await",
         "<const/w=await input/>\n<span>${JSON.stringify(w)}</span>",
       ],
-      ["a typed member read", "<span>${(input as any).head}</span>"],
-      ["a non-null member read", "<span>${input!.head}</span>"],
     ])(
       "does not warn when the read is spelled with TypeScript or await: %s",
       (_case, source) => {
         expect(run("typed", source)).toEqual([]);
       },
     );
+
+    describe.each([
+      ["a type assertion", "(input as any)"],
+      ["a non-null assertion", "input!"],
+      ["a satisfies expression", "(input satisfies object)"],
+      ["a double wrapper", "((input as any)!)"],
+    ])("a member read through %s", (_case, receiver) => {
+      const droppedHead = (name: string, member: string): MxWarning[] =>
+        run(name, `<span>\${${receiver}.${member}}</span>`).filter((w) =>
+          w.message.includes("`<@head>` was dropped"),
+        );
+
+      it("counts as a read of that member", () => {
+        expect(droppedHead("wrapped-read", "head")).toEqual([]);
+      });
+
+      it("still warns for an attribute tag it does not read", () => {
+        expect(droppedHead("wrapped-other", "other")).toHaveLength(1);
+      });
+    });
 
     it("scans a default value inside a destructure for reads of input", () => {
       const dropped = run(
