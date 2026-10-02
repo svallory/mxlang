@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build, createServer } from "vite";
+import { build, createServer, type Plugin } from "vite";
 import { afterAll, describe, expect, it } from "vitest";
 import mx from "./index.ts";
 
@@ -48,6 +48,7 @@ function host(project: string, name: string): void {
 async function buildError(
   project: string,
   entry: string,
+  extraPlugins: Plugin[] = [],
 ): Promise<Wrapped | undefined> {
   const projectRoot = join(root, project);
   try {
@@ -55,7 +56,7 @@ async function buildError(
       root: projectRoot,
       configFile: false,
       logLevel: "silent",
-      plugins: [mx()],
+      plugins: [mx(), ...extraPlugins],
       build: {
         ssr: join(projectRoot, entry),
         outDir: join(projectRoot, "dist"),
@@ -103,6 +104,12 @@ function expectLocated(
     expect(err.loc?.file).toMatch(/page\.mx$/);
     expect(err.id).toMatch(/page\.mx$/);
     expect(err.frame).toContain(at.specifier);
+    // Vite must not re-attribute it to its import analysis or to the
+    // generated module.
+    expect((err as { plugin?: string }).plugin).toBe("mx");
+    expect(String((err as { pluginCode?: string }).pluginCode)).toContain(
+      "import Card",
+    );
   }
 }
 
@@ -273,6 +280,94 @@ export interface Input {}
       (err: unknown) => err,
     );
     expect(error).toBeUndefined();
+  });
+
+  it("skips the specifier in a comment and in a string above the real import", async () => {
+    html("decoys");
+    write(
+      "decoys",
+      "src/page.mx",
+      `// see: import Card from "./card.mx"
+/* import Card from "./card.mx"
+   from "./card.mx" */
+export interface Input { name: string }
+<p title="import Card from './card.mx'" class="./card.mx"/>
+import Card from "./card.mx";
+<Card title="x"/>
+`,
+    );
+    expectLocated(
+      await buildError("decoys", "src/page.mx"),
+      { line: 6, column: 17, specifier: "./card.mx" },
+      "build",
+    );
+  });
+
+  it("an apostrophe in template text above the import does not hide it", async () => {
+    html("apostrophe");
+    write(
+      "apostrophe",
+      "src/page.mx",
+      `// don't panic
+import Card from "./card.mx";
+export interface Input { name: string }
+<p>it's \${input.name}</p>
+<Card/>
+`,
+    );
+    expectLocated(
+      await buildError("apostrophe", "src/page.mx"),
+      { line: 2, column: 17, specifier: "./card.mx" },
+      "build",
+    );
+  });
+
+  it("a CRLF source reports the authored position and a frame without \\r", async () => {
+    html("crlf");
+    write(
+      "crlf",
+      "src/page.mx",
+      'export interface Input { name: string }\r\nimport Card from "./card.mx";\r\n<Card/>\r\n',
+    );
+    const error = await buildError("crlf", "src/page.mx");
+    expectLocated(
+      error,
+      { line: 2, column: 17, specifier: "./card.mx" },
+      "build",
+    );
+    expect(error?.message).not.toContain("\r");
+  });
+
+  it("downstream resolvers run once per import, not twice", async () => {
+    html("once");
+    write("once", "src/helper.ts", "export const helper = (s: string) => s;");
+    write("once", "src/card.mx", `<b>card</b>`);
+    write(
+      "once",
+      "src/page.mx",
+      `import { helper } from "./helper.ts";
+import Card from "./card.mx";
+export interface Input { name: string }
+<p>\${helper(input.name)}<Card/></p>
+`,
+    );
+    const seen: string[] = [];
+    const counter: Plugin = {
+      name: "count-resolves",
+      // Vite's own resolver runs before ordinary plugins, so only a `pre`
+      // plugin ordered after mx sees an import mx's probe resolves.
+      enforce: "pre",
+      resolveId(id, importer) {
+        if (importer?.endsWith("page.mx.tsx")) seen.push(id);
+        return null;
+      },
+    };
+    const error = await buildError("once", "src/page.mx", [counter]);
+    expect(error).toBeUndefined();
+    expect(seen.filter((id) => id === "./helper.ts")).toHaveLength(1);
+    expect(seen.filter((id) => id === "./card.mx")).toHaveLength(1);
+    // The emitter's own import goes through the same probe.
+    expect(seen.filter((id) => id === "@mxlang/html")).toHaveLength(1);
   });
 
   it("a valid import still builds", async () => {

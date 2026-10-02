@@ -186,24 +186,35 @@ the generated `page.mx.tsx`. The `.mx` path has no source map (`map: null`), so
 that position could not be remapped; `resolveId` raises the error itself
 instead. For an importer that is an MX module, an id the plugin does not claim
 is probed with `this.resolve(id, importer, { skipSelf: true })` — what rolldown
-would do next — and only a `null` answer throws; a resolvable import is
-returned `null` as before (the probe's answer is discarded, so resolution of a
-valid build is unchanged), and `external` is not `null`, so an explicit
-`rollupOptions.external` specifier is still fine. The claimed `.mx`/`.marko`
-branches throw on their own `null`. `findImportSpecifier` finds the specifier in
-the authored source (`from "…"`, `import "…"`, `import("…")`, `require("…")`);
-when it is not written there (an import the emitter added) there is no authored
-position, so nothing is thrown and rolldown reports it. Two traps: (1) the
-error's `loc` is pinned behind an accessor with a no-op setter, because in the
-dev server the resolve happens while transforming the importer and Vite
-(`TransformPluginContext`, Vite 8.2.2) maps any `err.loc` through that
-importer's combined sourcemap as if it were generated-module coordinates — the
-authored `page.mx:2:17` came out as `page.mx.tsx:7:14`; (2) a `vite build`
+would do next. A hit is **returned as is**, so the resolvers after mx run once
+per import (returning `null` after the probe ran them twice: a resolver with a
+side effect saw every import double); only a `null` answer throws, and
+`external` is not `null`, so an explicit `rollupOptions.external` specifier is
+still fine. (Vite's own resolver runs before ordinary plugins, so only a
+`pre`-ordered plugin after mx sees an id the probe resolves.) The claimed
+`.mx`/`.marko` branches throw on their own `null`. `findImportSpecifier` is a
+small lexer over the authored source, not a text search: a specifier mentioned
+in a `//` or `/* */` comment, or inside a longer string, is not the import. A
+string counts only right after `from`/`import` or as the argument of
+`import(`/`require(`; quotes close at end of line, so a `'` in template text
+(`don't`) cannot swallow the file. When the specifier is not written as an
+import operand (an import the emitter added) there is no authored position, so
+nothing is thrown and rolldown reports it. Two traps: (1) in the dev server the
+resolve happens while transforming the importer, and Vite (`_formatLog`,
+Vite 8.2.2) rewrites the error it catches — it maps `err.loc` through the
+importer's combined sourcemap as if generated-module coordinates (authored
+`page.mx:2:17` came out `page.mx.tsx:7:14`) and stamps `plugin:
+vite:import-analysis`. An error that already has `pluginCode` is returned
+untouched, so this one carries the authored source there and `plugin: "mx"`.
+Left over: import-analysis still sets a stale `pos` (offset into the generated
+module) on it; nothing reads it once `pluginCode` is set. (2) a `vite build`
 error is rolldown's `Build failed with 1 error` aggregate: it carries the
 position in its message only (no `loc`/`id`), and vite's own ~7-frame stack
-stays. `loc.column` is 0-based, so the build prints `1:17` for what `mx-tsc`
-calls `1:18`. Tests: `unresolved-import-build.test.ts` (real `vite build` and
-`createServer().ssrLoadModule`; error text is ANSI-stripped).
+stays. The source is normalized to `\n` first, so a CRLF file's frame has no
+`\r`. `loc.column` is 0-based (lead's ruling), so the build prints `1:17` for
+what `mx-tsc` calls `1:18`. Not covered: a missing `?raw` file fails in `load`,
+not in resolution. Tests: `unresolved-import-build.test.ts` (real `vite build`
+and `createServer().ssrLoadModule`; error text is ANSI-stripped).
 
 **`readTemplateSource(file, read?)` guards that read (round 3/4).** The
 named file may no longer exist, or be unreadable, between the compile's own

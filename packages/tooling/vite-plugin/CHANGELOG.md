@@ -16,7 +16,8 @@
   - `resolveId` asks the rest of the resolver chain about each import written in an MX module and raises the error only when nothing resolves it; a resolvable import resolves exactly as before, and an `external` one is still external. The position is found by searching the authored source for the specifier, because the `.mx` path has no source map. An import the emitter added (not written by the author) is left to rolldown.
   - Also covers a `tags/*.mx` tag's own imports (the error names the tag file) and the `.marko` tag import.
   - The column is 0-based like every other `loc` this plugin raises (`1:17` where `mx-tsc` prints `1:18`).
-  - In the dev server, Vite maps any `err.loc` raised while an importer is being transformed through that importer's sourcemap, which turned the authored position into a generated one; this error pins its `loc` so Vite cannot rewrite it.
+  - In the dev server, Vite rewrites an error raised while an importer is being transformed (it maps `err.loc` through the importer's sourcemap and re-attributes the error to `vite:import-analysis`), which turned the authored position into a generated one; this error carries the authored source as `pluginCode` and `plugin: "mx"`, which makes Vite leave it alone.
+  - The import is found by a small lexer over the authored source, so the same text in a comment or a string above the real import is ignored; a CRLF file's code frame has no `\r`. A resolvable import is returned as resolved, so later resolvers run once per import.
 
 - **Fix (audit-04-vite-tags-marko, audit case h18):** a page that calls a `tags/*.marko` tag now builds under `vite build` and the dev server. It used to pass `mx-tsc` and the language server, then fail the build with `PARSE_ERROR Unexpected JSX expression` at `tags/<tag>.marko:1:1`, because every host emits Marko's `import _badge from "./tags/badge.marko"` (#187) and nothing in the plugin handled a `.marko` module.
 

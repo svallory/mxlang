@@ -388,31 +388,97 @@ const isProbeable = (specifier: string): boolean =>
   !specifier.startsWith("\0") && !/^(?:data|https?):/.test(specifier);
 
 /**
- * Where `specifier` is written in an authored `.mx` source: the 1-based line
- * and 0-based column of its opening quote, found as the operand of
- * `from "…"`, a bare `import "…"`, `import("…")` or `require("…")`.
+ * Where `specifier` is written in an authored `.mx` source as the operand of
+ * an import: the 1-based line and 0-based column of its opening quote.
  *
- * The source is searched rather than the generated module because the `.mx`
+ * The source is scanned rather than the generated module because the `.mx`
  * path has no source map (see `transform`): the specifier is the only thing
- * both texts share. `undefined` when the specifier is not written in the
- * source — an import the emitter added — and the caller then has no authored
- * position to offer.
+ * both texts share. The scan is a small lexer, not a text search, so the same
+ * text in a `//` or `/* *\/` comment, or inside a longer string, is not
+ * mistaken for the import. A string counts only when it directly follows
+ * `from` or `import`, or is the argument of `import(` / `require(`. Quotes are
+ * closed at the end of their line (a `'` in template text, as in `don't`, must
+ * not swallow the file); backticks may span lines.
+ *
+ * `undefined` when the specifier is not written as an import operand — an
+ * import the emitter added — and the caller then has no authored position.
  */
 function findImportSpecifier(
   source: string,
   specifier: string,
 ): { line: number; column: number } | undefined {
-  const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(
-    `(?:\\bfrom\\s*|\\bimport\\s*\\(?\\s*|\\brequire\\s*\\(\\s*)(["'])${escaped}\\1`,
-  ).exec(source);
-  if (!match) return undefined;
-  const quote = match.index + match[0].length - specifier.length - 2;
-  const before = source.slice(0, quote).split("\n");
-  return {
-    line: before.length,
-    column: before[before.length - 1]?.length ?? 0,
+  let line = 1;
+  let lineStart = 0;
+  let last = "";
+  let beforeLast = "";
+  const push = (token: string): void => {
+    beforeLast = last;
+    last = token;
   };
+  let i = 0;
+  while (i < source.length) {
+    const ch = source[i] as string;
+    if (ch === "\n") {
+      line++;
+      lineStart = ++i;
+      continue;
+    }
+    if (ch === "\r" || ch === " " || ch === "\t") {
+      i++;
+      continue;
+    }
+    if (ch === "/" && source[i + 1] === "/") {
+      while (i < source.length && source[i] !== "\n") i++;
+      continue;
+    }
+    if (ch === "/" && source[i + 1] === "*") {
+      const end = source.indexOf("*/", i + 2);
+      const stop = end === -1 ? source.length : end + 2;
+      for (let j = i; j < stop; j++) {
+        if (source[j] === "\n") {
+          line++;
+          lineStart = j + 1;
+        }
+      }
+      i = stop;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const start = i;
+      const startLine = line;
+      const startColumn = i - lineStart;
+      i++;
+      while (i < source.length && source[i] !== ch) {
+        if (source[i] === "\\") i++;
+        else if (source[i] === "\n") {
+          if (ch !== "`") break;
+          line++;
+          lineStart = i + 1;
+        }
+        i++;
+      }
+      const closed = source[i] === ch;
+      if (closed) i++;
+      const isOperand =
+        last === "from" ||
+        last === "import" ||
+        (last === "(" && (beforeLast === "import" || beforeLast === "require"));
+      if (closed && isOperand && source.slice(start + 1, i - 1) === specifier) {
+        return { line: startLine, column: startColumn };
+      }
+      push('"');
+      continue;
+    }
+    const word = /^[A-Za-z_$][\w$]*/.exec(source.slice(i, i + 64));
+    if (word) {
+      push(word[0]);
+      i += word[0].length;
+      continue;
+    }
+    push(ch);
+    i++;
+  }
+  return undefined;
 }
 
 /**
@@ -427,30 +493,30 @@ function unresolvedImport(
   source: string,
   specifier: string,
 ): Error | undefined {
-  const text = readTemplateSource(source);
+  // Normalized first: a `\r` would reach the code frame, and a lone `\r` is a
+  // line break to an editor but not to the scan below.
+  const text = readTemplateSource(source)?.replace(/\r\n?/g, "\n");
   const at =
     text === undefined ? undefined : findImportSpecifier(text, specifier);
-  if (at === undefined) return undefined;
-  const error = Object.assign(new Error(), { code: "UNRESOLVED_IMPORT" });
-  const located = locate(error, {
+  if (text === undefined || at === undefined) return undefined;
+  const error = Object.assign(new Error(), {
+    code: "UNRESOLVED_IMPORT",
+    plugin: "mx",
+    // The dev server resolves an import while transforming its importer, and
+    // Vite then rewrites the error it catches: it maps `err.loc` through that
+    // importer's sourcemap as if it were a position in the *generated* module
+    // (the authored `page.mx:2:17` became `page.mx.tsx:7:14`, Vite 8.2.2), and
+    // stamps its own `plugin`, `pos` and the generated code on it. An error
+    // that already has `pluginCode` is returned untouched (`_formatLog`), and
+    // this one is already authored, so it carries the authored source there.
+    pluginCode: text,
+  });
+  return locate(error, {
     file: source,
     ...at,
     source: text,
     message: `Could not resolve "${specifier}"`,
   });
-  // The dev server resolves an import while transforming its importer, and
-  // Vite then maps any `err.loc` it finds through that importer's sourcemap
-  // as if it were a position in the *generated* module — which turned the
-  // authored `page.mx:2:17` into `page.mx.tsx:7:14` (checked on Vite 8.2.2).
-  // This position is already authored, so keep it where Vite cannot rewrite
-  // it: an accessor whose setter drops the assignment.
-  const loc = located.loc;
-  Object.defineProperty(located, "loc", {
-    enumerable: true,
-    get: () => loc,
-    set: () => {},
-  });
-  return located;
 }
 
 /**
@@ -849,11 +915,13 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // that nothing resolves is ours to report: rolldown would name the
         // generated `page.mx.tsx` at a generated position (audit item 10).
         // The probe is a plain `this.resolve` through the rest of the chain —
-        // what rolldown would do next — and its answer is discarded, so a
-        // resolvable import resolves exactly as before.
+        // what rolldown would do next — and a hit is returned as is, so the
+        // chain below runs once per import, not twice, and a resolvable
+        // import resolves exactly as before.
         if (importer && isProbeable(path) && isMxModule(splitId(importer)[0])) {
           const probed = await this.resolve(id, importer, { skipSelf: true });
-          const error = probed ? undefined : unresolvedFrom(importer, path);
+          if (probed) return probed;
+          const error = unresolvedFrom(importer, path);
           if (error) throw error;
         }
         return null;
