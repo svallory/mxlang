@@ -1,0 +1,11 @@
+{
+  "name": "ng-literal-syntax",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  },
+  "mx": {
+    "angular": {
+      "diagnostics": "off"
+    }
+  }
+}

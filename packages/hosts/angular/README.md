@@ -205,6 +205,8 @@ a conflict. Pasting the members needs no dependency.
 
 ## Warnings
 
+Every position `build`, `watch` and the CLI print is `file:line:column` with a **1-based** column, the basis `mx-tsc` prints (`file(line,column)`), so both surfaces point at the same character. (`CompileResult.warnings[].column`, `TranslateError.column` and the `map` argument stay 0-based; only the printed text is 1-based.)
+
 `compile()`'s `warnings` array collects positioned, non-fatal diagnostics —
 a construct that compiles but diverges from an exact Angular equivalent, or
 needs an import the watcher (not this package) cannot add for the caller.

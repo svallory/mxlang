@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { TranslateError } from "@mxlang/core";
 import { build } from "./build.ts";
 import { readMap, resolvePosition } from "./map-file.ts";
+import { positionSuffix } from "./position.ts";
 import { startWatch } from "./watch.ts";
 
 function usage(): string {
@@ -99,7 +100,7 @@ function formatMessage(
   kind: "warning" | "error",
   m: { file: string; line?: number; column?: number; message: string },
 ): string {
-  const position = m.line !== undefined ? `:${m.line}:${m.column}` : "";
+  const position = positionSuffix(m.line, m.column);
   return `${m.file}${position} ${kind}: ${m.message}`;
 }
 

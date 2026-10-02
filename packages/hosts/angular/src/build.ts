@@ -38,6 +38,7 @@ import { buildMap, writeMap } from "./map-file.ts";
 import { encodeMappings } from "./mapping.ts";
 import { compileNgMx } from "./ng-mx.ts";
 import { inspectPageClass } from "./page-class.ts";
+import { positionSuffix } from "./position.ts";
 import { compileTagModuleFile } from "./tag-module.ts";
 
 /**
@@ -340,7 +341,7 @@ function compileTagFile(
     const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
     const warnings = [...scanWarnings, ...warningsFor(mxPath, result.warnings)];
     for (const w of warnings) {
-      const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
+      const position = positionSuffix(w.line, w.column);
       lines.push(`${w.file}${position} warning: ${w.message}`);
     }
 
@@ -361,7 +362,7 @@ function compileTagFile(
     // caller, and is reported against that file (A5).
     const errorFile = positioned && err.file ? err.file : mxPath;
     const message = positioned
-      ? `${errorFile}:${err.line}:${err.column} ${err.message}`
+      ? `${errorFile}${positionSuffix(err.line, err.column)} ${err.message}`
       : `${mxPath}: ${err instanceof Error ? err.message : String(err)}`;
     const applied = applyOnError(
       outputPath,
@@ -477,7 +478,7 @@ function compileNgMxFile(
     const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
     const warnings = [...scanWarnings, ...warningsFor(mxPath, result.warnings)];
     for (const w of warnings) {
-      const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
+      const position = positionSuffix(w.line, w.column);
       lines.push(`${w.file}${position} warning: ${w.message}`);
     }
 
@@ -499,7 +500,7 @@ function compileNgMxFile(
     const at = positionOf(err, mxPath);
     const message =
       at.line !== undefined
-        ? `${at.file}:${at.line}:${at.column} ${at.message}`
+        ? `${at.file}${positionSuffix(at.line, at.column)} ${at.message}`
         : `${at.file}: ${at.message}`;
     const applied = applyOnError(
       outputPath,
@@ -654,7 +655,7 @@ export function compileOne(
     const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
     const warnings = [...scanWarnings, ...warningsFor(mxPath, pageWarnings)];
     for (const w of warnings) {
-      const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
+      const position = positionSuffix(w.line, w.column);
       lines.push(`${w.file}${position} warning: ${w.message}`);
     }
 
@@ -688,7 +689,7 @@ export function compileOne(
     // stripping the Babel-added `${errorFile}: ` prefix above must not
     // also drop the filename from what actually lands in the `<pre>`.
     const message = positioned
-      ? `${errorFile}:${err.line}:${err.column} ${strippedMessage}`
+      ? `${errorFile}${positionSuffix(err.line, err.column)} ${strippedMessage}`
       : `${errorFile}: ${strippedMessage}`;
     const header = buildHeader(sourceBasename, tsFilename, []);
     const { error: overwriteError, line: onErrorLine } = applyOnError(
@@ -712,7 +713,7 @@ export function compileOne(
       ok: false,
       lines: [
         onErrorLine,
-        `${errorFile}:${positioned ? `${err.line}:${err.column}` : "1:0"} error: ${strippedMessage}`,
+        `${errorFile}${positioned ? positionSuffix(err.line, err.column) : positionSuffix(1, 0)} error: ${strippedMessage}`,
       ],
       errors: positioned
         ? [

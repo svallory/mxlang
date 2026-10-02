@@ -26,6 +26,7 @@ import {
 } from "./build.ts";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { discoverFiles, isInside, type RoutedFile } from "./discover.ts";
+import { positionSuffix } from "./position.ts";
 
 export interface WatchHandle {
   /** Stops every underlying watcher and pending timer. Idempotent. */
@@ -54,7 +55,7 @@ function formatMessage(
   kind: "warning" | "error",
   m: PositionedMessage,
 ): string {
-  const position = m.line !== undefined ? `:${m.line}:${m.column}` : "";
+  const position = positionSuffix(m.line, m.column);
   return `${m.file}${position} ${kind}: ${m.message}`;
 }
 
@@ -117,7 +118,7 @@ export function startWatch(
       return config;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      onLine(`${join(projectDir, "package.json")}:1:0 error: ${message}`);
+      onLine(`${join(projectDir, "package.json")}:1:1 error: ${message}`);
       return lastGoodConfig;
     }
   }

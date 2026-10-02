@@ -65,7 +65,7 @@ describe("startWatch --once", () => {
 
     expect(lines).toContainEqual(
       expect.stringMatching(
-        /x\.solid\.mx:1:0 warning: `x\.solid\.mx` is a host module file/,
+        /x\.solid\.mx:1:1 warning: `x\.solid\.mx` is a host module file/,
       ),
     );
   });
