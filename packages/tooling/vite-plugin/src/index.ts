@@ -260,8 +260,16 @@ interface MxSyntaxError extends Error {
   reasonCode?: string;
 }
 
+/**
+ * A parse error about authored source: a `SyntaxError` (by name, since the
+ * vendored Babel's class is not this realm's) whose `loc` is Babel-shaped.
+ * A plain `Error` that merely has a `loc` is an mx bug on generated output
+ * and must keep its stack, so `"loc" in err` alone is not enough.
+ */
 function isSyntaxError(err: unknown): err is MxSyntaxError {
-  return err instanceof Error && "loc" in err;
+  if (!(err instanceof Error) || err.name !== "SyntaxError") return false;
+  const loc = (err as { loc?: { line?: unknown; column?: unknown } }).loc;
+  return typeof loc?.line === "number" && typeof loc.column === "number";
 }
 
 /** Splits a module id into its path and its `?query`/`#hash` suffix. */

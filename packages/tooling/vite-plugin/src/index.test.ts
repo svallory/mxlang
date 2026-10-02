@@ -1644,6 +1644,37 @@ $ const x = ;
       expect(rendered(error)).not.toMatch(STACK_FRAME);
     });
 
+    it("a plain Error that merely has a loc keeps its stack", async () => {
+      // `"loc" in err` used to be the whole test for "a parse error", so an
+      // mx bug on generated output that happened to carry a `loc` lost its
+      // stack. Only a SyntaxError with a Babel-shaped loc is user-facing.
+      const BUG = Object.assign(new Error("bug with a loc"), {
+        loc: { line: 3, column: 4 },
+      });
+      const SOURCE = "export function A() {\n  return <div/>;\n}\n";
+      const path = writeMx("Loc.solid.mx", SOURCE);
+      const transform = transformOf(
+        mx({
+          customTags: new Proxy(
+            {},
+            {
+              ownKeys() {
+                throw BUG;
+              },
+            },
+          ),
+        }),
+      );
+
+      const caught = await transform
+        .call({}, SOURCE, path + MX_SUFFIX)
+        .catch((err: unknown) => err);
+
+      expect(caught).toBe(BUG);
+      expect((caught as Error).stack).toMatch(STACK_FRAME);
+      expect((caught as Wrapped).id).toBeUndefined();
+    });
+
     it("an internal error keeps its stack and its identity", async () => {
       // A bug in mx itself, not in the authored source: injected where the
       // plugin spreads the caller's `customTags`, so the throw happens inside
