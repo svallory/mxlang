@@ -22,7 +22,7 @@ function run(source: string) {
 }
 
 const MESSAGE = (name: string, line: number, column: number) =>
-  `duplicate attribute \`${name}\`: also written at ${line}:${column}; keep one, because which value wins depends on the target`;
+  `duplicate attribute \`${name}\`: also written at ${line}:${column + 1}; keep one, because which value wins depends on the target`;
 
 describe("duplicate attributes (astro)", () => {
   it("warns once at the second occurrence, naming both positions", () => {

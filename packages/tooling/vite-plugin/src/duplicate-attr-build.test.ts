@@ -65,7 +65,7 @@ describe("duplicate attribute in a vite build", () => {
       const dup = lines.filter((line) => line.includes("duplicate attribute"));
       expect(dup).toHaveLength(1);
       expect(dup[0]).toContain("page.mx:2:2:");
-      expect(dup[0]).toContain("`class`: also written at 1:5");
+      expect(dup[0]).toContain("`class`: also written at 1:6");
       const out = readFileSync(join(projectRoot, "dist", "entry.mjs"), "utf8");
       expect(out).toContain('class=\\"a\\" class=\\"b\\"');
     } finally {

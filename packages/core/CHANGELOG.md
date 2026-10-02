@@ -8,7 +8,7 @@
 
 ### Feature: a duplicate attribute is a positioned warning on every host (dup-attr-warning)
 
-`<div class="a" class="b">` (or `on-click` twice) now raises one `MxWarning` per repeated attribute, positioned at the repeat's name and naming the earlier occurrence as `line:column`. Never an error; emitted output is byte-identical to before. Marko 6.3.51 accepts duplicates silently. Names compare case-sensitively on the resolved attribute name; a spread and `onClick` beside `on-click` do not count. The warning reaches `mx-tsc` and the host compile APIs' `warnings` lists through the existing channel, and a Vite build through core's `console.warn` fallback (build still succeeds). An mx-only lint recorded in `divergences.md`; spec §4 "Duplicate attributes".
+`<div class="a" class="b">` (or `on-click` twice) now raises one `MxWarning` per repeated attribute, positioned at the repeat's name and naming the earlier occurrence as a 1-based `line:column` (decision 133). Never an error; emitted output is byte-identical to before. Marko 6.3.51 accepts duplicates silently. Names compare case-sensitively on the resolved attribute name; a spread and `onClick` beside `on-click` do not count. The warning reaches `mx-tsc` and the host compile APIs' `warnings` lists through the existing channel, and a Vite build through core's `console.warn` fallback (build still succeeds). An mx-only lint recorded in `divergences.md`; spec §4 "Duplicate attributes".
 
 ### Breaking: `claimsTag`/`HostTag` renamed to `isDelegatedTag`/`DelegatedTag` (delegated-tag-rename, decision 132)
 

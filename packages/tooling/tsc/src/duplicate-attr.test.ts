@@ -18,10 +18,10 @@ describe("mx-tsc duplicate attributes", () => {
 
       expect(result.status).toBe(0);
       // Line 4, column 3 (1-based) is the second `class`; the message names
-      // the first at 3:5 in the compiler's own 1-based line, 0-based column.
+      // the first at 3:6, 1-based like the position mx-tsc prints.
       expect(stderr).toMatch(/Page\.mx\(4,3\): warning TS80002/);
       expect(stderr).toContain(
-        "duplicate attribute `class`: also written at 3:5",
+        "duplicate attribute `class`: also written at 3:6",
       );
       expect(stderr.match(/duplicate attribute/g)).toHaveLength(1);
     },

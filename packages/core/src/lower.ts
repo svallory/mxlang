@@ -580,8 +580,9 @@ function lowerAttrs(
  * so `on-click` twice is a duplicate and `onClick` next to `on-click` is not.
  * A spread (`...attrs`) has no static name, so it never counts. One warning
  * per repeated occurrence, positioned at that occurrence's name and naming the
- * occurrence before it; `line:column` in the text uses the warning's own
- * numbering (1-based line, 0-based column).
+ * occurrence before it. The text's `line:column` is 1-based for both, like
+ * `mx-tsc` and editors; the structured warning position keeps core's 0-based
+ * column.
  */
 function warnOnDuplicateAttrs(ctx: Ctx, attrs: Attr[]): void {
   const previous = new Map<string, Position>();
@@ -592,7 +593,7 @@ function warnOnDuplicateAttrs(ctx: Ctx, attrs: Attr[]): void {
     previous.set(attr.name, at);
     if (!earlier) continue;
     warn(ctx, {
-      message: `duplicate attribute \`${attr.name}\`: also written at ${earlier.line}:${earlier.column}; keep one, because which value wins depends on the target`,
+      message: `duplicate attribute \`${attr.name}\`: also written at ${earlier.line}:${earlier.column + 1}; keep one, because which value wins depends on the target`,
       line: at.line,
       column: at.column,
       file: ctx.filename,

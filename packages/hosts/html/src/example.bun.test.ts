@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 // `bun run example <fixture>` is advertised in the README and is the first
 // thing a reader runs. It executes the emitted module, so it breaks whenever
@@ -34,6 +35,32 @@ async function runExample(name: string) {
   return { stdout, stderr, exitCode };
 }
 
+/**
+ * Every fixture must run silent, except where it deliberately trips a warning.
+ * `spread-between-props` writes `name` before and after a spread, and the
+ * earlier one is dead on every host, so it is a real duplicate attribute.
+ * `src/example.ts` compiles each fixture twice (once to print the module,
+ * line 19, and once in the Bun loader's onLoad, line 44), so the one warning
+ * per compile shows up as two identical lines. Columns in the text are 1-based.
+ */
+const DUPLICATE_NAME =
+  "fixtures-marko/spread-between-props/input.marko:3:38: duplicate attribute `name`: also written at 3:11; keep one, because which value wins depends on the target";
+const EXPECTED_STDERR: Record<string, string> = {
+  "spread-between-props": `${DUPLICATE_NAME}\n${DUPLICATE_NAME}`,
+};
+
+/** ANSI-stripped stderr with the machine-specific path prefix cut off each line. */
+function normalizeStderr(stderr: string): string {
+  return stripVTControlCharacters(stderr)
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => {
+      const at = line.indexOf("fixtures-marko/");
+      return at < 0 ? line : line.slice(at);
+    })
+    .join("\n");
+}
+
 const runnable = readdirSync(fixtures).filter(isRunnable);
 
 describe("bun run example", () => {
@@ -54,7 +81,10 @@ describe("bun run example", () => {
   for (const name of runnable) {
     test(`renders ${name}`, async () => {
       const { stdout, stderr, exitCode } = await runExample(name);
-      expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" });
+      expect({ exitCode, stderr: normalizeStderr(stderr) }).toEqual({
+        exitCode: 0,
+        stderr: EXPECTED_STDERR[name] ?? "",
+      });
       const rendered = stdout.split(/^--- rendered with .*---$/m)[1]?.trim();
       expect(rendered).toBeTruthy();
     }, 30_000);

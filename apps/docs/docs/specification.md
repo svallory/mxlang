@@ -398,9 +398,9 @@ Writing the same attribute name twice on one tag (`<div class="a" class="b">`,
 `on-click` twice) is a **positioned warning on every host**: never an error,
 and the build and `mx-tsc` exit codes are unchanged. The warning sits at the
 repeated attribute's name and names the earlier occurrence by `line:column`
-(1-based line, 0-based column, UTF-16 code units), one warning per repeat:
+(1-based line and column in the text, like `mx-tsc` and editors; UTF-16 code units), one warning per repeat:
 
-> `duplicate attribute \`class\`: also written at 1:5; keep one, because which value wins depends on the target`
+> `duplicate attribute \`class\`: also written at 1:6; keep one, because which value wins depends on the target`
 
 | Case | Warns? |
 |---|---|
@@ -414,7 +414,7 @@ Output is unchanged: MX emits the attributes as authored. Stock Marko 6.3.51
 accepts duplicates silently and its later value wins (`class` and `style` are
 not merged), but a target may resolve them differently (a browser reading
 HTML keeps the first), so the warning does not name a winner. An mx-only lint
-beyond Marko, recorded in `divergences.md`; decision number to be recorded.
+beyond Marko, recorded in `divergences.md`; decision 133.
 
 ### `class` and `style`
 
