@@ -92,6 +92,10 @@ package.json(5,13): warning TS80003: unknown mx.host "vue"; valid hosts: html, a
 - a `package.json` that cannot be parsed (the file is skipped and the default
   `html` host is used for the files under it).
 
+The path is the location only, never repeated in the message; the language
+server and the tsserver plugin print the same text as
+`package.json:line:col: <message>`.
+
 Both are warnings: the exit code is exactly what it was before they were
 printed. Each is printed once per run, however many `.mx`, `.solid.mx`,
 `.ng.mx` or `.amx` files sit under that `package.json`.

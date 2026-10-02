@@ -137,9 +137,12 @@ describe("mx-tsc prints host-policy diagnostics", { timeout: 60_000 }, () => {
     const { status, text } = check(dir, true);
 
     expect(text).toMatch(
-      /(?:^|\n)package\.json\(1,\d+\): warning TS80003: <dir>\/package\.json could not be parsed as JSON: /,
+      /(?:^|\n)package\.json\(1,\d+\): warning TS80003: could not be parsed as JSON: /,
     );
     expect(text).toContain('using the default "html" host');
+    // The path is the location; the message does not repeat it.
+    const line = text.split("\n").find((l) => l.includes("TS80003")) ?? "";
+    expect(line).not.toContain("<dir>/package.json");
     expect(status, text).toBe(control.status);
     expect(control.status).toBe(0);
   });
@@ -155,15 +158,31 @@ describe("mx-tsc prints host-policy diagnostics", { timeout: 60_000 }, () => {
         2,
       ),
       "src/app/x.component.ng.mx":
-        'export class XComponent {\n  title = "hi";\n  template = <div><p>hi</p></div>;\n}\n',
+        'declare function Component(options: object): ClassDecorator;\n@Component({ template: <div><p>hi</p></div> })\nexport class XComponent {\n  title = "hi";\n}\n',
     });
 
-    const { text } = check(dir);
+    const { status, text } = check(dir);
 
     expect(text).toContain(
       '<dir>/package.json(4,13): warning TS80003: unknown mx.host "angualr"',
     );
     expect(text).toContain('Did you mean "angular"?');
+    expect(status, text).toBe(0);
+  });
+
+  it("prints it for a .solid.mx file too", () => {
+    const dir = project({
+      "package.json": UNKNOWN_HOST,
+      "src/widget.solid.mx": "export const widget = 1;\n",
+      "src/main.ts":
+        'import { widget } from "./widget.solid.mx";\nconsole.log(widget);\n',
+    });
+
+    const { text } = check(dir);
+
+    expect(text).toContain(
+      '<dir>/package.json(5,13): warning TS80003: unknown mx.host "vue"',
+    );
   });
 
   it("prints a diagnostic once however many files share the package.json", () => {

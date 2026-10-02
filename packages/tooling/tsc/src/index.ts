@@ -11,6 +11,7 @@ import {
   createSolidMxLanguagePlugin,
   HOST_POLICY_DIAGNOSTIC_CODE,
   type HostPolicyDiagnostic,
+  hostPolicyText,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
 } from "@mxlang/typescript-plugin";
@@ -603,7 +604,7 @@ export function reportHostPolicyDiagnostics(
         category: typescript.DiagnosticCategory.Warning,
         code: HOST_POLICY_DIAGNOSTIC_CODE,
         source: "mxlang",
-        messageText: diagnostic.message,
+        messageText: hostPolicyText(diagnostic),
       };
     }),
     {

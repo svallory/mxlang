@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
+import { hostPolicyMessage } from "@mxlang/typescript-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { diagnoseDocument } from "../../language-server/src/diagnose.ts";
 import { runInProcess } from "./in-process.ts";
@@ -135,6 +136,79 @@ describe("unknown mx.host: language server and mx-tsc agree", () => {
     expect(lsFrame).toContain('Missing ending "div" tag');
     expect(frameOf(tsc.stdout)).toContain(lsFrame?.trimEnd());
   });
+});
+
+describe("host-policy diagnostics: language server, tsserver plugin and mx-tsc print one text", () => {
+  // The same text three ways: the LS and the plugin as one message
+  // (`<package.json>:L:C: <text>`), mx-tsc as `package.json(L,C): warning
+  // TS80003: <text>`. The absolute path appears once, as the location.
+  const cases = [
+    {
+      name: "unknown-host",
+      packageJson: JSON.stringify({ name: "tmp", mx: { host: "angualr" } }),
+      text: /^unknown mx\.host "angualr"; valid hosts: .*Did you mean "angular"\?/,
+    },
+    {
+      name: "malformed-package-json",
+      packageJson: '{ "name": "tmp", "mx": { "host": "html", }',
+      text: /^could not be parsed as JSON: .*using the default "html" host/,
+    },
+  ];
+  for (const { name, packageJson, text } of cases) {
+    it(`${name}`, { timeout: 60_000 }, () => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-hp-parity-")));
+      created.push(dir);
+      const manifest = join(dir, "package.json");
+      writeFileSync(manifest, packageJson);
+      writeFileSync(
+        join(dir, "tsconfig.json"),
+        readFileSync(join(fixtures, "ng-mx-passing", "tsconfig.json"), "utf8"),
+      );
+      mkdirSync(join(dir, "src"));
+      const page = join(dir, "src", "page.mx");
+      writeFileSync(page, "<div></div>\n");
+      writeFileSync(
+        join(dir, "src", "main.ts"),
+        'import render from "./page.mx";\nconsole.log(render({}));\n',
+      );
+
+      const { policy, diagnostics } = resolveHostPolicyDetailed(page);
+      expect(diagnostics).toHaveLength(1);
+      const [policyDiagnostic] = diagnostics;
+      const ls = diagnoseDocument(
+        "<div></div>\n",
+        pathToFileURL(page).href,
+        policy,
+        undefined,
+        "",
+        undefined,
+        undefined,
+        undefined,
+        diagnostics,
+      ).find(
+        (d) =>
+          typeof d.message === "string" && d.message.startsWith(`${manifest}:`),
+      );
+      expect(ls, "the LS reports the host-policy diagnostic").toBeDefined();
+      const message = typeof ls?.message === "string" ? ls.message : "";
+
+      // LS === tsserver plugin text.
+      expect(hostPolicyMessage(policyDiagnostic as never)).toBe(message);
+      expect(message.split(manifest).length - 1).toBe(1);
+      const body = message.replace(/^[^ ]+:\d+:\d+: /, "");
+      expect(body).toMatch(text);
+
+      // mx-tsc: same body, same position, the path only as the location.
+      const run = runInProcess(["--noEmit", "-p", "tsconfig.json"], dir);
+      const out = stripVTControlCharacters(run.stdout + run.stderr);
+      const where = /:(\d+):(\d+): /.exec(message);
+      const line = out.split("\n").find((l) => l.includes("warning TS80003:"));
+      expect(line, out).toContain(
+        `package.json(${where?.[1]},${where?.[2]}): warning TS80003: ${body}`,
+      );
+      expect(line?.split("warning TS80003:")[1]).not.toContain(manifest);
+    });
+  }
 });
 
 describe("frameOf", () => {
