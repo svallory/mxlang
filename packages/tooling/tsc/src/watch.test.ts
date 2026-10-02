@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -12,12 +13,12 @@ import {
 } from "./build-uptodate-support.ts";
 
 /**
- * Watch timing is the one thing that differs by platform (inotify, FSEvents),
- * so these cases do not depend on it: tsc is told to poll files and
- * directories itself (`TSC_WATCHFILE` / `TSC_WATCHDIRECTORY`), a module is
- * installed with one atomic rename (no half-written package for a rebuild to
- * catch), and recovery is asserted on that install alone, with no edit to the
- * importer to trigger the rebuild.
+ * Watch timing differs by platform, and so does tsc's own behaviour (see the
+ * `-w -p` case), so nothing here asserts more than tsc itself does: a module
+ * is installed with one atomic rename (no half-written package for a rebuild
+ * to catch) and recovery is asserted on that install alone, with no edit to
+ * the importer. tsc is told to poll (`TSC_WATCHFILE` / `TSC_WATCHDIRECTORY`)
+ * to keep timing steady; that does not remove the platform difference.
  *
  * Watch modes keep tsc's own failed-lookup watching only while the host's
  * resolver stays in charge: a module that is missing and then installed must
@@ -25,14 +26,21 @@ import {
  * resolve an extensionless `.ng.mx` import.
  */
 const WAIT_MS = 60_000;
+/** How long a late install gets to be noticed before it counts as never. */
+const PARITY_WAIT_MS = 15_000;
+const plainTsc = createRequire(import.meta.url).resolve(
+  "typescript/lib/tsc.js",
+);
+const LATE_IMPORT =
+  'import { late } from "late-pkg";\nexport const a: number = late;\n';
 const running: ChildProcess[] = [];
 
 afterEach(() => {
   for (const child of running.splice(0)) child.kill("SIGKILL");
 });
 
-function watch(cwd: string, args: string[]) {
-  const child = spawn(process.execPath, [mxTsc, ...args], {
+function watch(cwd: string, args: string[], entry = mxTsc) {
+  const child = spawn(process.execPath, [entry, ...args], {
     cwd,
     env: {
       ...process.env,
@@ -52,8 +60,12 @@ function watch(cwd: string, args: string[]) {
   return {
     output: () => output,
     /** Resolves once `output` matches; rejects with the output on timeout. */
-    async until(pattern: RegExp, since = 0): Promise<string> {
-      const deadline = Date.now() + WAIT_MS;
+    async until(
+      pattern: RegExp,
+      since = 0,
+      timeoutMs = WAIT_MS,
+    ): Promise<string> {
+      const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         if (pattern.test(output.slice(since))) return output;
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -78,28 +90,61 @@ function installLatePackage(dir: string) {
 }
 
 describe("mx-tsc watch modes", () => {
-  for (const [mode, args] of [
-    ["-w -p", ["-w", "-p", "tsconfig.app.json", "--preserveWatchOutput"]],
-    ["-b -w", ["-b", "-w", "tsconfig.app.json", "--preserveWatchOutput"]],
-  ] as const) {
-    it(
-      `${mode}: a module that is missing and then installed stops being TS2307`,
-      async () => {
+  it(
+    "-b -w: a module that is missing and then installed stops being TS2307",
+    async () => {
+      const dir = scratch(cliFixture);
+      privateNodeModules(dir);
+      importsOf(dir, LATE_IMPORT);
+      const run = watch(dir, [
+        "-b",
+        "-w",
+        "tsconfig.app.json",
+        "--preserveWatchOutput",
+      ]);
+      await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
+      const mark = run.output().length;
+      installLatePackage(dir);
+      await run.until(/Found 0 errors/, mark);
+    },
+    CASE_TIMEOUT_MS,
+  );
+
+  // Plain `tsc -w -p` (TypeScript 6.0.3) does not recover from a module
+  // installed after the first error on Linux (it does on macOS); `-b -w` does on
+  // both. So `-w -p` is asserted as parity with plain tsc, never as recovery:
+  // mx-tsc must lose none of tsc's failed-lookup watching, and gain none either.
+  // See scratch/reports/review-mx-tsc-build-extensionless-resolve-r3.md.
+  it(
+    "-w -p: recovers from a late install exactly when plain tsc -w -p does",
+    async () => {
+      const recovered = async (entry: string) => {
         const dir = scratch(cliFixture);
         privateNodeModules(dir);
-        importsOf(
+        importsOf(dir, LATE_IMPORT);
+        const run = watch(
           dir,
-          'import { late } from "late-pkg";\nexport const a: number = late;\n',
+          ["-w", "-p", "tsconfig.app.json", "--preserveWatchOutput"],
+          entry,
         );
-        const run = watch(dir, [...args]);
         await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
         const mark = run.output().length;
         installLatePackage(dir);
-        await run.until(/Found 0 errors/, mark);
-      },
-      CASE_TIMEOUT_MS,
-    );
-  }
+        try {
+          await run.until(/Found 0 errors/, mark, PARITY_WAIT_MS);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const [mx, plain] = await Promise.all([
+        recovered(mxTsc),
+        recovered(plainTsc),
+      ]);
+      expect(mx).toBe(plain);
+    },
+    CASE_TIMEOUT_MS,
+  );
 
   it(
     "-p -w picks the template, as -p does, when x.d.ts sits beside x.ng.mx",

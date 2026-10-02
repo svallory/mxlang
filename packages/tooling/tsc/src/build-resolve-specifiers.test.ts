@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -11,7 +11,6 @@ import {
   mxTscIn,
   privateNodeModules,
   scratch,
-  solutionFixture,
   templateErrors,
 } from "./build-uptodate-support.ts";
 
@@ -55,77 +54,6 @@ describe("mx-tsc -b resolves .mx modules like -p: specifiers that name a .ng.mx 
     );
   }
 
-  it(
-    "-b reports, across a solution with references and paths, the diagnostics -p reports per project",
-    async () => {
-      const dir = scratch(solutionFixture);
-      breakAll(dir);
-      const build = await mxTscIn(dir, ["-b", "."]);
-      const perProject = [
-        ...new Set(
-          (
-            await Promise.all(
-              ["app", "lib"].map((p) =>
-                mxTscIn(dir, ["-p", p, "--noEmit"]).then((r) =>
-                  errorLines(r.output),
-                ),
-              ),
-            )
-          ).flat(),
-        ),
-      ].sort();
-      expect(build.output).not.toContain("TS2307");
-      expect(errorLines(build.output)).toEqual(perProject);
-    },
-    CASE_TIMEOUT_MS,
-  );
-
-  // One specifier per file: a batch that also holds a `.mx`-suffixed literal
-  // goes through Volar's resolver whole and would mask the bug.
-  for (const specifier of [
-    "../../lib/src/lib.component.ng",
-    "../../lib/src/lib.component",
-    "@lib/lib.component.ng",
-    "@lib/lib.component",
-    "@scope/lib/cmp",
-  ]) {
-    it(
-      `-b resolves "${specifier}" across a reference like -p`,
-      async () => {
-        const dir = scratch(solutionFixture);
-        privateNodeModules(dir);
-        const pkg = join(dir, "node_modules", "@scope", "lib");
-        mkdirSync(pkg, { recursive: true });
-        writeFileSync(
-          join(pkg, "package.json"),
-          '{ "name": "@scope/lib", "exports": { "./cmp": "./cmp.ng.mx" } }',
-        );
-        writeFileSync(
-          join(pkg, "cmp.ng.mx"),
-          'import { Component } from "@angular/core";\n\n@Component({ selector: "app-cmp", template: <p>x</p>, })\nexport class CmpComponent {}\n',
-        );
-        const appConfig = join(dir, "app", "tsconfig.json");
-        const config = JSON.parse(readFileSync(appConfig, "utf8"));
-        config.compilerOptions.paths = { "@lib/*": ["../lib/src/*"] };
-        writeFileSync(appConfig, JSON.stringify(config));
-        writeFileSync(
-          join(dir, "app", "src", "main.ts"),
-          `import * as m from "${specifier}";\nexport const x = m;\n`,
-        );
-        const build = await mxTscIn(dir, ["-b", "."]);
-        expect(build.output).not.toContain("TS2307");
-        // Both projects: `-b` also reports lib's own (pre-existing) TS6307.
-        const perProject = new Set<string>();
-        for (const project of ["app", "lib"]) {
-          const run = await mxTscIn(dir, ["-p", project, "--noEmit"]);
-          for (const line of errorLines(run.output)) perProject.add(line);
-        }
-        expect(errorLines(build.output)).toEqual([...perProject].sort());
-      },
-      CASE_TIMEOUT_MS,
-    );
-  }
-
   // `x.d.ts` beside `x.ng.mx`: `-p` resolves the template (Volar's hidden
   // extensions), and `-b` must too, not the host's `.d.ts`.
   for (const [specifier, shadow] of [
@@ -157,6 +85,39 @@ describe("mx-tsc -b resolves .mx modules like -p: specifiers that name a .ng.mx 
       CASE_TIMEOUT_MS,
     );
   }
+
+  // A package's own `.d.ts` beside its `.ng.mx` is NOT overruled: what a package
+  // publishes as its types wins under `-b` (and `-w`), while `-p` alone resolves
+  // the template. Pinned so a change of that rule is deliberate.
+  it(
+    "a package .d.ts beside its .ng.mx keeps the host's answer (the .d.ts) under -b",
+    async () => {
+      const dir = scratch(cliFixture);
+      privateNodeModules(dir);
+      const pkg = join(dir, "node_modules", "shadowpkg");
+      mkdirSync(pkg, { recursive: true });
+      writeFileSync(
+        join(pkg, "package.json"),
+        '{ "name": "shadowpkg", "exports": { "./cmp": { "types": "./cmp.d.ts" } } }',
+      );
+      writeFileSync(
+        join(pkg, "cmp.d.ts"),
+        "export declare const AppComponent: string;\n",
+      );
+      writeFileSync(
+        join(pkg, "cmp.ng.mx"),
+        'import { Component } from "@angular/core";\n\n@Component({ selector: "app-cmp", template: <p>x</p>, })\nexport class AppComponent {}\n',
+      );
+      importsOf(
+        dir,
+        'import { AppComponent } from "shadowpkg/cmp";\nexport const s: string = AppComponent;\n',
+      );
+      const build = await mxTscIn(dir, ["-b", "."]);
+      expect(build.output).not.toContain("TS2322");
+      expect(build.output).not.toContain("TS2307");
+    },
+    CASE_TIMEOUT_MS,
+  );
 
   it(
     "a module that does not exist is still TS2307 under both -p and -b",

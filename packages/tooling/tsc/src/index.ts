@@ -53,11 +53,18 @@ export function resolveTscPath(): string {
  * What the wrapper installed on a host consults: the Volar resolver of the
  * latest program (`setup` re-runs for every project of a `-b`, so it is
  * replaced, not nested) and its cache of resolved imports.
+ *
+ * The cache holds resolved answers only (a failure is retried, so a module that
+ * appears later is found) and re-checks that the cached target still exists. It
+ * can therefore only be stale when the old target still exists but a better
+ * candidate appears: `x.solid.mx` added beside a cached `x.ng.mx` for `./x`, or
+ * a package's `exports` retargeted while the old file stays. It is rebuilt
+ * whenever `setup` re-runs (any change of a program's root names or options).
  */
 interface VolarFallback {
   resolve: ReturnType<typeof createResolveModuleName>;
   /** Resolved imports only: a failure must be retried once the file appears. */
-  resolved: Map<string, ts.ResolvedModuleFull>;
+  resolved: Map<string, ts.ResolvedModuleWithFailedLookupLocations>;
   extensions: readonly string[];
 }
 
@@ -108,7 +115,14 @@ function fallBackToVolarResolution(
   if (known) return;
 
   const state = () => fallbacks.get(host) as VolarFallback;
-  /** `x.d.ts` next to `x.ng.mx`: `-p` resolves the template, a host the `.d.ts`. */
+  /**
+   * `x.d.ts` next to `x.ng.mx`: `-p` resolves the template (Volar's
+   * `resolveHiddenExtensions`), a host the `.d.ts`. A package's own `.d.ts`
+   * (`isExternalLibraryImport`) is deliberately left alone: what a package
+   * publishes as its types is the right answer even if a template sits beside
+   * it, so there `-b` and `-w` keep the host's `.d.ts` where `-p` alone
+   * resolves the template. Pinned by build-resolve-specifiers.test.ts.
+   */
   const shadowsTemplate = (module: ts.ResolvedModule | undefined) => {
     const file = module?.resolvedFileName;
     if (!file?.endsWith(".d.ts") || module?.isExternalLibraryImport) {
@@ -125,21 +139,26 @@ function fallBackToVolarResolution(
     options: ts.CompilerOptions,
     redirectedReference: ts.ResolvedProjectReference | undefined,
     mode: ts.ResolutionMode,
-  ): ts.ResolvedModuleWithFailedLookupLocations["resolvedModule"] => {
+  ): ts.ResolvedModuleWithFailedLookupLocations => {
     const { resolve, resolved } = state();
     const key = `${dirname(containingFile)}\0${name}\0${mode}\0${redirectedReference?.sourceFile.fileName}`;
     const cached = resolved.get(key);
-    if (cached && host.fileExists(cached.resolvedFileName)) return cached;
-    const module = resolve(
+    if (
+      cached?.resolvedModule &&
+      host.fileExists(cached.resolvedModule.resolvedFileName)
+    ) {
+      return cached;
+    }
+    const result = resolve(
       name,
       containingFile,
       options,
       undefined,
       redirectedReference,
       mode,
-    ).resolvedModule;
-    if (module) resolved.set(key, module);
-    return module;
+    );
+    if (result.resolvedModule) resolved.set(key, result);
+    return result;
   };
   const needsVolar = (module: ts.ResolvedModule | undefined) =>
     !module || shadowsTemplate(module);
@@ -168,7 +187,7 @@ function fallBackToVolarResolution(
         .map((result, index) => {
           const literal = moduleLiterals[index];
           if (!literal || !needsVolar(result.resolvedModule)) return result;
-          const module = resolveWithVolar(
+          const volar = resolveWithVolar(
             literal.text,
             containingFile,
             options,
@@ -179,7 +198,7 @@ function fallBackToVolarResolution(
               options,
             ),
           );
-          return module ? { resolvedModule: module } : result;
+          return volar.resolvedModule ? volar : result;
         });
   }
   if (names) {
@@ -209,7 +228,7 @@ function fallBackToVolarResolution(
                 options,
                 redirectedReference,
                 containingSourceFile?.impliedNodeFormat,
-              ) ?? result)
+              ).resolvedModule ?? result)
             : result,
         );
   }
