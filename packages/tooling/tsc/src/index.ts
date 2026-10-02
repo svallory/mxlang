@@ -10,8 +10,10 @@ import {
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
 } from "@mxlang/typescript-plugin";
-import type { LanguagePlugin } from "@volar/language-core";
+import type { Language, LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
+import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName";
+import type ts from "typescript";
 import { parseBuildMode, resolveBuildProjects } from "./build-templates.ts";
 import {
   checkNgMxGroups,
@@ -47,29 +49,108 @@ export function resolveTscPath(): string {
 }
 
 /**
- * Makes Volar's module resolver, not the host's own, answer for every import.
+ * Gives an import the host's own resolver left unresolved a second chance
+ * through Volar's resolver, the one that maps `x.d.mx.ts` probes back to `x.mx`.
  *
  * Volar's `proxyCreateProgram` keeps the host's `resolveModuleNameLiterals` /
- * `resolveModuleNames` for any import whose specifier does not end in a plugin
- * extension, and only otherwise resolves through its patched resolver (the one
- * that maps `x.d.mx.ts` probes back to `x.mx`). `tsc -p` hands it a plain
- * compiler host with neither method, so every import takes the patched path and
- * `./x` / `./x.ng` find `x.ng.mx`. `tsc -b`'s solution builder installs its own
- * `resolveModuleNameLiterals` on the host, so there an extensionless import
- * takes the stock path and fails with a false TS2307. Removing the builder's
- * methods (both are optional on a `CompilerHost`; its resolution is the same
- * `ts.resolveModuleName`, only with its own cache) makes `-b` resolve exactly
- * as `-p` does. Runs from the language-plugin factory, which Volar calls before
- * it reads the host's resolution methods.
+ * `resolveModuleNames` for any batch of imports none of which ends in a plugin
+ * extension, and only otherwise resolves through its patched resolver. `tsc -p`
+ * hands it a plain compiler host with neither method, so every import takes the
+ * patched path and `./x` / `./x.ng` find `x.ng.mx`. `tsc -b`'s solution builder
+ * installs its own on the host (one shared `compilerHost` for every project and
+ * every watch rebuild), so there an extensionless import took the stock path
+ * and gave a false TS2307.
+ *
+ * Wrapping, not replacing, keeps what the host's resolver owns: the builder's
+ * cross-project resolution cache and, in `-w` / `-b -w`, the failed-lookup
+ * watching that makes a module installed later recover. Volar's resolver is
+ * consulted only for what the host's left unresolved. Runs from the language
+ * plugins' `setup`, which Volar calls before it reads the host's methods.
  */
-function useVolarModuleResolution(
-  host:
-    | { resolveModuleNameLiterals?: unknown; resolveModuleNames?: unknown }
-    | undefined,
+function fallBackToVolarResolution(
+  typescript: typeof import("typescript"),
+  host: ts.CompilerHost | undefined,
+  language: Language<string>,
 ): void {
   if (!host) return;
-  host.resolveModuleNameLiterals = undefined;
-  host.resolveModuleNames = undefined;
+  const volarResolve = createResolveModuleName(
+    typescript,
+    typescript.sys.getFileSize,
+    host,
+    language.plugins,
+    (fileName) => language.scripts.get(fileName),
+  );
+  const literals = host.resolveModuleNameLiterals;
+  const names = host.resolveModuleNames;
+  if (literals) {
+    host.resolveModuleNameLiterals = (
+      moduleLiterals,
+      containingFile,
+      redirectedReference,
+      options,
+      containingSourceFile,
+      ...rest
+    ) =>
+      literals
+        .call(
+          host,
+          moduleLiterals,
+          containingFile,
+          redirectedReference,
+          options,
+          containingSourceFile,
+          ...rest,
+        )
+        .map((result, index) => {
+          const literal = moduleLiterals[index];
+          return result.resolvedModule || !literal
+            ? result
+            : volarResolve(
+                literal.text,
+                containingFile,
+                options,
+                undefined,
+                redirectedReference,
+                typescript.getModeForUsageLocation(
+                  containingSourceFile,
+                  literal,
+                  options,
+                ),
+              );
+        });
+  }
+  if (names) {
+    host.resolveModuleNames = (
+      moduleNames,
+      containingFile,
+      reusedNames,
+      redirectedReference,
+      options,
+      containingSourceFile,
+    ) =>
+      names
+        .call(
+          host,
+          moduleNames,
+          containingFile,
+          reusedNames,
+          redirectedReference,
+          options,
+          containingSourceFile,
+        )
+        .map(
+          (result, index) =>
+            result ??
+            volarResolve(
+              moduleNames[index] as string,
+              containingFile,
+              options,
+              undefined,
+              redirectedReference,
+              containingSourceFile?.impliedNodeFormat,
+            ).resolvedModule,
+        );
+  }
 }
 
 /**
@@ -94,7 +175,6 @@ function runPatchedTsc(
       resolveTscPath(),
       astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
       (typescript, options) => {
-        useVolarModuleResolution(options.host);
         const solidMx = createSolidMxLanguagePlugin(typescript);
         // `retainCompiled`: Angular template diagnostics run over the very
         // compiles the type-check used, not a second pass of them.
@@ -111,7 +191,11 @@ function runPatchedTsc(
           plugins.push(amx, createAstroLanguagePlugin());
         }
         plugins.push(createCompoundExtensionResolver(typescript));
-        return plugins;
+        return {
+          languagePlugins: plugins,
+          setup: (language) =>
+            fallBackToVolarResolution(typescript, options.host, language),
+        };
       },
       TYPESCRIPT_OBJECT,
     );

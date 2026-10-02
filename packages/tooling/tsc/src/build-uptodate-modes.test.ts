@@ -13,6 +13,7 @@ import {
   importsOf,
   LIB_ERROR,
   mxTscIn,
+  privateNodeModules,
   type Run,
   refsFixture,
   SPAWN,
@@ -23,6 +24,12 @@ import {
   templateErrors,
   unlinkProjects,
 } from "./build-uptodate-support.ts";
+
+const errorLines = (output: string) =>
+  output
+    .split("\n")
+    .filter((line) => /error TS\d+/.test(line))
+    .sort();
 
 describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
   it(
@@ -143,12 +150,6 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
     // `-b` must resolve exactly as `-p` does: the solution builder hands tsc's
     // program a host that already resolves modules, and the Volar resolver must
     // still be the one answering for these specifiers.
-    const errorLines = (output: string) =>
-      output
-        .split("\n")
-        .filter((line) => /error TS\d+/.test(line))
-        .sort();
-
     for (const specifier of [
       "./app.component.ng.mx",
       "./app.component.ng",
@@ -209,6 +210,52 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
       },
       CASE_TIMEOUT_MS,
     );
+
+    // One specifier per file: a batch that also holds a `.mx`-suffixed literal
+    // goes through Volar's resolver whole and would mask the bug.
+    for (const specifier of [
+      "../../lib/src/lib.component.ng",
+      "../../lib/src/lib.component",
+      "@lib/lib.component.ng",
+      "@lib/lib.component",
+      "@scope/lib/cmp",
+    ]) {
+      it(
+        `-b resolves "${specifier}" across a reference like -p`,
+        async () => {
+          const dir = scratch(solutionFixture);
+          privateNodeModules(dir);
+          const pkg = join(dir, "node_modules", "@scope", "lib");
+          mkdirSync(pkg, { recursive: true });
+          writeFileSync(
+            join(pkg, "package.json"),
+            '{ "name": "@scope/lib", "exports": { "./cmp": "./cmp.ng.mx" } }',
+          );
+          writeFileSync(
+            join(pkg, "cmp.ng.mx"),
+            'import { Component } from "@angular/core";\n\n@Component({ selector: "app-cmp", template: <p>x</p>, })\nexport class CmpComponent {}\n',
+          );
+          const appConfig = join(dir, "app", "tsconfig.json");
+          const config = JSON.parse(readFileSync(appConfig, "utf8"));
+          config.compilerOptions.paths = { "@lib/*": ["../lib/src/*"] };
+          writeFileSync(appConfig, JSON.stringify(config));
+          writeFileSync(
+            join(dir, "app", "src", "main.ts"),
+            `import * as m from "${specifier}";\nexport const x = m;\n`,
+          );
+          const build = await mxTscIn(dir, ["-b", "."]);
+          expect(build.output).not.toContain("TS2307");
+          // Both projects: `-b` also reports lib's own (pre-existing) TS6307.
+          const perProject = new Set<string>();
+          for (const project of ["app", "lib"]) {
+            const run = await mxTscIn(dir, ["-p", project, "--noEmit"]);
+            for (const line of errorLines(run.output)) perProject.add(line);
+          }
+          expect(errorLines(build.output)).toEqual([...perProject].sort());
+        },
+        CASE_TIMEOUT_MS,
+      );
+    }
 
     it(
       "a module that does not exist is still TS2307 under both -p and -b",

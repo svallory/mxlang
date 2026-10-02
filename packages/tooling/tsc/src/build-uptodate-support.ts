@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import {
   cpSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -140,6 +141,21 @@ export function scratch(from: string): string {
   cpSync(from, dir, { recursive: true });
   symlinkSync(join(packageDir, "node_modules"), join(dir, "node_modules"));
   return dir;
+}
+
+/**
+ * `scratch` links the package's own `node_modules` as one symlink, so
+ * installing into it would write into the repo. A private `node_modules` of
+ * per-entry links keeps the install inside the scratch dir.
+ */
+export function privateNodeModules(dir: string) {
+  const modules = join(dir, "node_modules");
+  rmSync(modules);
+  mkdirSync(modules);
+  const source = join(packageDir, "node_modules");
+  for (const entry of readdirSync(source)) {
+    symlinkSync(join(source, entry), join(modules, entry));
+  }
 }
 
 export type Project = "lib" | "app";
