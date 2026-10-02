@@ -187,9 +187,9 @@ export const angularDeclarations: HostDeclarations = {
   rejectUnknownTag(name, node) {
     rawFail(unresolvedCustomTagMessage(name), node);
   },
-  claimsTag: (name) =>
+  isDelegatedTag: (name) =>
     name === "try" || name === "html-comment" || name === DYNAMIC_TAG,
-  resolveHostTag(
+  resolveDelegatedTag(
     name,
     node,
     ctx,
@@ -1289,7 +1289,7 @@ class AngularEmitter implements Emitter<string> {
         // the call emits the same `ngComponentOutlet` an authored
         // `<${expr}/>` does — `valueImportBinding` has no use on this
         // host, which has no type surface to spend it on. An authored
-        // `<${expr}/>` itself still arrives through `HostTag` (the
+        // `<${expr}/>` itself still arrives through `DelegatedTag` (the
         // `DYNAMIC_TAG` sentinel), never through this branch.
         this.emitDynamicComponent(
           node.target.expr.code,
@@ -1784,7 +1784,7 @@ class AngularEmitter implements Emitter<string> {
     fail(`a \`<Hoisted>\` ${MODULE_LEVEL_MESSAGE}`, node);
   }
 
-  hostTag(node: Extract<IrNode, { kind: "HostTag" }>): void {
+  delegatedTag(node: Extract<IrNode, { kind: "DelegatedTag" }>): void {
     const tag = node.tag;
     const data = tag.data as TryData | HtmlCommentData | DynamicComponentData;
     if (data.kind === "try") {
@@ -1951,8 +1951,8 @@ class AngularEmitter implements Emitter<string> {
       case "Hoisted":
         this.hoisted(node);
         return;
-      case "HostTag":
-        this.hostTag(node);
+      case "DelegatedTag":
+        this.delegatedTag(node);
         return;
       case "DocumentType":
         this.documentType(node);

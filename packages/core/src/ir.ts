@@ -240,7 +240,7 @@ export interface Branch extends IrBase {
  * resolved, so the host emits rather than re-parses. `node` is the original
  * Marko node, for a host that needs a field the IR does not model.
  */
-export interface HostTag<Data = unknown> extends IrBase {
+export interface DelegatedTag<Data = unknown> extends IrBase {
   name: string;
   /**
    * File-absolute UTF-16 code-unit span of the tag name (`x` in `<x>`). `undefined` for a
@@ -264,7 +264,7 @@ export interface HostTag<Data = unknown> extends IrBase {
   var: string | null;
   /**
    * Whatever the host decided about this tag at *lower* time, from its
-   * `resolveHostTag` hook.
+   * `resolveDelegatedTag` hook.
    *
    * The point of the slot is that a host records its decision once, while the
    * Marko node is still in hand, instead of re-deriving it at emit time — an
@@ -517,7 +517,7 @@ export type IrNode =
   | ({ kind: "InputInterface"; code: string; end: Position } & IrBase)
   /** A statement lifted by decision 70's `hoist` hook. */
   | ({ kind: "Hoisted"; code: string; end: Position } & IrBase)
-  | ({ kind: "HostTag"; tag: HostTag<unknown> } & IrBase)
+  | ({ kind: "DelegatedTag"; tag: DelegatedTag<unknown> } & IrBase)
   /** `<!doctype html>`; `value` has its delimiters stripped by Marko. */
   | ({ kind: "DocumentType"; value: string } & IrBase)
   /**

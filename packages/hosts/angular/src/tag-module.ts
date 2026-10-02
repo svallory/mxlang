@@ -389,7 +389,7 @@ function slotNameOf(node: IrNode): string | null {
 
 /** `<${input.x}/>` / `<${input.x.content}/>`, including optional chains. */
 function dynamicSlotNameOf(node: IrNode): string | null {
-  if (node.kind !== "HostTag") return null;
+  if (node.kind !== "DelegatedTag") return null;
   const data = node.tag.data as Partial<DynamicComponentData>;
   if (
     data.kind !== "dynamic-component" ||

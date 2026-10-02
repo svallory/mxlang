@@ -59,7 +59,7 @@ export interface HostDeclarations {
    * route it to a component or an element.
    *
    * The declaration half of what `emitSpecial` used to decide by returning
-   * true or false *after* emitting. A claimed tag resolves to the `HostTag` IR
+   * true or false *after* emitting. A claimed tag resolves to the `DelegatedTag` IR
    * kind with its attributes, children, attribute tags, params and `var`
    * already resolved, and the host's emitter renders it.
    *
@@ -71,21 +71,21 @@ export interface HostDeclarations {
    * host's behaviour — the parameter only lets a *new* host opt out of the
    * bare shape and leave it to the `Interpolation` fallback.
    */
-  claimsTag?(name: string, ctx: Ctx, shape?: "bare" | "tagged"): boolean;
+  isDelegatedTag?(name: string, ctx: Ctx, shape?: "bare" | "tagged"): boolean;
   /**
    * Records whatever this host decided about a claimed tag, into the
-   * `HostTag` node's `data` slot.
+   * `DelegatedTag` node's `data` slot.
    *
    * Called once per claimed tag, during lower, with the Marko node still in
    * hand. Without it a host's emitter would have no resolved record of the
-   * decision; the original Marko node is deliberately absent from `HostTag`,
+   * decision; the original Marko node is deliberately absent from `DelegatedTag`,
    * so emission cannot fall back to walking parser nodes.
    *
    * Also the seam decision 80's user-tag macros need: a user-defined tag with
    * compile-time meaning hands its resolved form to every host through this
    * channel, since the core cannot know what the macro decided.
    */
-  resolveHostTag?(name: string, node: Node, ctx: Ctx): unknown;
+  resolveDelegatedTag?(name: string, node: Node, ctx: Ctx): unknown;
   /**
    * Rejects an attribute modifier (`class:active`) in this host's own words.
    *

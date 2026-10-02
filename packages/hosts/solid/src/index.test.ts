@@ -208,7 +208,7 @@ describe("Solid IR lowering", () => {
       ["Risky"],
     ],
     // Round 1 item 1 regression: `<try>`'s body must reach the host
-    // unchanged, matching `lowerHostTag`'s old unconditional lowering,
+    // unchanged, matching `lowerDelegatedTag`'s old unconditional lowering,
     // rather than being gated on `hasContent` the way an ordinary
     // (template-authored) custom tag's body is.
     ["try whitespace-only body", `<try>  </try>`, ["<Loading> </Loading>"]],
@@ -529,7 +529,7 @@ describe("Solid host errors", () => {
 
   it("resolves a Solid JSX built-in with no import (decision 114)", () => {
     // `<Show>` is a real MX tag reference here, not a claimed host tag
-    // (`claimsTag` only claims `try`) — `isComponent` must recognize it by
+    // (`isDelegatedTag` only claims `try`) — `isComponent` must recognize it by
     // name.
     expect(() => compile(`<Show when=cond>x</Show>`)).not.toThrow();
   });

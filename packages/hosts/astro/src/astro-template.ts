@@ -162,7 +162,7 @@ function rejectUnknownTag(name: string, node: Node): void {
   fail(unresolvedCustomTagMessage(name), node);
 }
 
-type HostTagData = { kind: "interpolation"; expr: Expr };
+type DelegatedTagData = { kind: "interpolation"; expr: Expr };
 
 /** Questions the Astro host answers while Marko nodes are still available. */
 const declarations: HostDeclarations = {
@@ -182,8 +182,8 @@ const declarations: HostDeclarations = {
     const value = attrs[index] as Attr;
     return [value, ...attrs.slice(0, index), ...attrs.slice(index + 1)];
   },
-  claimsTag: (name) => name === DYNAMIC_TAG,
-  resolveHostTag: (name, node): HostTagData => {
+  isDelegatedTag: (name) => name === DYNAMIC_TAG,
+  resolveDelegatedTag: (name, node): DelegatedTagData => {
     if (name !== DYNAMIC_TAG) {
       fail(`unknown Astro host tag ${JSON.stringify(name)}`, node);
     }
@@ -650,8 +650,8 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
       );
     },
 
-    hostTag(node) {
-      const data = node.tag.data as HostTagData;
+    delegatedTag(node) {
+      const data = node.tag.data as DelegatedTagData;
       if (data.kind !== "interpolation") {
         fail("unknown Astro host-tag lowering", node);
       }

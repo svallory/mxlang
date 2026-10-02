@@ -92,8 +92,8 @@ function statefulErrors(targetName: string): HostDeclarations["tags"] {
   };
 }
 
-/** What `resolveHostTag` records for a claimed tag. */
-type HostTagData = { kind: "try" };
+/** What `resolveDelegatedTag` records for a claimed tag. */
+type DelegatedTagData = { kind: "try" };
 
 function fail(message: string, node: { loc: Position }): never {
   throw new TranslateError(message, node.loc.line, node.loc.column);
@@ -175,13 +175,13 @@ export function createJsxDeclarations(targetName: string): HostDeclarations {
     rejectUnknownTag(name, node) {
       rawFail(unresolvedCustomTagMessage(name), node);
     },
-    claimsTag: (name) => name === "try",
+    isDelegatedTag: (name) => name === "try",
     // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):
     // the shape checks that used to live here — no params, no `/var`, one
     // `<@catch>`, one `<@placeholder>` with no params of its own — are the
     // core's `attributeTags` declaration and the tag's own `transform`. This
     // host only decides how the claimed primitive renders.
-    resolveHostTag(name, node): HostTagData {
+    resolveDelegatedTag(name, node): DelegatedTagData {
       if (name !== "try")
         rawFail(`unknown ${targetName} host tag ${name}`, node);
       return { kind: "try" };
@@ -435,7 +435,7 @@ export class PreactEmitter implements Emitter<string> {
         only.kind === "Component" ||
         only.kind === "IfChain" ||
         only.kind === "For" ||
-        only.kind === "HostTag"
+        only.kind === "DelegatedTag"
       ) {
         return this.#render(content, callbackScope);
       }
@@ -672,7 +672,7 @@ export class PreactEmitter implements Emitter<string> {
     let value =
       only?.kind === "Element" ||
       only?.kind === "Component" ||
-      only?.kind === "HostTag"
+      only?.kind === "DelegatedTag"
         ? this.#render(children, true)
         : concatMapped("<>", this.#render(children, true), "{null}</>");
     // The renderable nested inside every array entry needs a key even when
@@ -1495,8 +1495,8 @@ export class PreactEmitter implements Emitter<string> {
     fail("a hoisted statement cannot be emitted inside a JSX expression", node);
   }
 
-  hostTag(node: Extract<IrNode, { kind: "HostTag" }>): void {
-    const data = node.tag.data as HostTagData;
+  delegatedTag(node: Extract<IrNode, { kind: "DelegatedTag" }>): void {
+    const data = node.tag.data as DelegatedTagData;
     if (data.kind !== "try") fail("unknown Preact host-tag lowering", node);
 
     const catchTag = node.tag.attributeTags.find((tag) => tag.name === "catch");
@@ -1581,4 +1581,4 @@ export function emitPreact(ir: Ir, target: Target = preactTarget): string {
   return emitter.done();
 }
 
-export type { HostTagData };
+export type { DelegatedTagData };

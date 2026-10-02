@@ -48,7 +48,7 @@ describe("Comment", () => {
   });
 });
 
-describe("HostTag html-comment", () => {
+describe("DelegatedTag html-comment", () => {
   it("emits a plain-text html-comment", () => {
     const out = emit("<html-comment>plain text</html-comment>");
     expect(out).toBe("<!-- plain text -->");

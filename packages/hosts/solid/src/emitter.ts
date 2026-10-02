@@ -551,7 +551,7 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
  * else unresolved) applied to `.solid.mx`'s larger scope.
  *
  * By the time core asks `isComponent`, a capitalized name has already failed
- * every *MX-level* route: core structural tags, `<try>` (`claimsTag`), an
+ * every *MX-level* route: core structural tags, `<try>` (`isDelegatedTag`), an
  * `import`/`<define>`/`<const>`/tag-param binding local to the region, and a
  * registered custom tag (`packages/core/src/lower.ts`'s precedence order
  * runs all of those first). Two routes remain, neither of them Marko
@@ -606,13 +606,13 @@ export const solidDeclarations: HostDeclarations = {
   isElement: (name) => !/^[A-Z]/.test(name),
   isComponent,
   rejectUnknownTag,
-  claimsTag: (name) => name === "try",
+  isDelegatedTag: (name) => name === "try",
   // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):
   // the shape checks that used to live here — no params, no `/var`, one
   // `<@catch>`, one `<@placeholder>` with no params of its own — are the
   // core's `attributeTags` declaration and the tag's own `transform`. This
   // host only decides how the claimed primitive renders.
-  resolveHostTag(name, node): TryData {
+  resolveDelegatedTag(name, node): TryData {
     if (name !== "try") rawFail(`unknown Solid host tag ${name}`, node);
     return { kind: "try" };
   },
@@ -925,7 +925,7 @@ function blockExpression(nodes: IrNode[]): MappedCode {
       only.kind === "Component" ||
       only.kind === "IfChain" ||
       only.kind === "For" ||
-      only.kind === "HostTag"
+      only.kind === "DelegatedTag"
     ) {
       return renderWithNewEmitter(content);
     }
@@ -2050,7 +2050,7 @@ export class SolidEmitter implements Emitter<string> {
     fail("a hoisted statement cannot be emitted inside a JSX expression", node);
   }
 
-  hostTag(node: Extract<IrNode, { kind: "HostTag" }>): void {
+  delegatedTag(node: Extract<IrNode, { kind: "DelegatedTag" }>): void {
     const data = node.tag.data as TryData;
     if (data.kind !== "try") fail("unknown Solid host-tag lowering", node);
     const catchTag = node.tag.attributeTags.find((tag) => tag.name === "catch");

@@ -117,7 +117,7 @@ export type {
   ExprShape,
   ForHead,
   ForSource,
-  HostTag,
+  DelegatedTag,
   Ir,
   IrNode,
   Position,

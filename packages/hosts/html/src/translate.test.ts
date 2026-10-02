@@ -453,7 +453,7 @@ describe("<try> without a placeholder is a plain try/catch", () => {
   });
 
   // Round 1 item 1 regression: a whitespace-only `<try>` body must still
-  // reach the emitter, matching `lowerHostTag`'s old unconditional lowering
+  // reach the emitter, matching `lowerDelegatedTag`'s old unconditional lowering
   // rather than being dropped by the `hasContent` gate an ordinary custom
   // tag's body uses.
   it("preserves a whitespace-only body", () => {
@@ -1486,7 +1486,7 @@ describe("import precedence over registered custom tags", () => {
 
   // Same regression, against a host-claimed lowercase tag instead of a
   // registered custom tag: `<style>` is claimed by this host's own
-  // `claimsTag`, and an unrelated lowercase import of the same name must not
+  // `isDelegatedTag`, and an unrelated lowercase import of the same name must not
   // block that claim either.
   it("does not let a lowercase import shadow a host-claimed tag of the same name", () => {
     const body = [

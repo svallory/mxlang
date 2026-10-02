@@ -1095,7 +1095,7 @@ export function bindingIdentifiers(pattern: Node): string[] {
 }
 
 /**
- * The name `claimsTag` receives for a dynamic tag (`<${expr}/>`).
+ * The name `isDelegatedTag` receives for a dynamic tag (`<${expr}/>`).
  *
  * A sentinel rather than a real tag name, so it can never collide with a
  * name an author wrote. Exported so that declarations match the same value the

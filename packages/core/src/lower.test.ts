@@ -756,7 +756,7 @@ describe("one fixture per IR kind", () => {
 
   // attribute-tag-silent-drops B1/B2: the IR itself already carries every
   // repeated `<@name>` (a flat array, never last-wins) and forwards
-  // `attributeTags` on a `HostTag` too — the bugs found by the spec backfill
+  // `attributeTags` on a `DelegatedTag` too — the bugs found by the spec backfill
   // were emitter-only (Solid's JSX-prop-per-tag last-wins for a repeat;
   // html's dynamic-tag path building its own synthetic `Component` with a
   // hardcoded `attributeTags: []`), not a core lowering gap. These tests
@@ -826,7 +826,7 @@ describe("one fixture per IR kind", () => {
         fakeDeclarations({
           name: "TestHost",
           attrTags: 2,
-          claimsTag: (name) => name === "signal",
+          isDelegatedTag: (name) => name === "signal",
         }),
         undefined,
       ],
@@ -1399,14 +1399,14 @@ describe("one fixture per IR kind", () => {
       expect(error).toHaveProperty("column", 1);
     });
 
-    it("gates control-flow attribute tags on a claimed dynamic HostTag", () => {
+    it("gates control-flow attribute tags on a claimed dynamic DelegatedTag", () => {
       expect(() =>
         lowerSource(
           // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
           "<${input.tag}><if=input.ok><@head/></if></>",
           fakeDeclarations({
             name: "@mxlang/legacy",
-            claimsTag: (name) => name === DYNAMIC_TAG,
+            isDelegatedTag: (name) => name === DYNAMIC_TAG,
           }),
         ),
       ).toThrowError(
@@ -1822,15 +1822,15 @@ describe("one fixture per IR kind", () => {
     expect(component.args.map((a) => a.code)).toEqual(["'a'"]);
   });
 
-  it("HostTag hands a claimed tag over with its parts lowered", () => {
+  it("DelegatedTag hands a claimed tag over with its parts lowered", () => {
     const ir = lowerSource(
       "<signal/count=1>body</signal>\n",
       fakeDeclarations({
-        claimsTag: (name) => name === "signal",
-        resolveHostTag: (name) => ({ seen: name }),
+        isDelegatedTag: (name) => name === "signal",
+        resolveDelegatedTag: (name) => ({ seen: name }),
       }),
     );
-    const hosted = find(ir.body, "HostTag").tag;
+    const hosted = find(ir.body, "DelegatedTag").tag;
     expect(hosted.name).toBe("signal");
     expect(hosted.var).toBe("count");
     expect(hosted.attrs).toMatchObject([{ kind: "dynamic", name: "value" }]);
@@ -1844,8 +1844,8 @@ describe("one fixture per IR kind", () => {
     const ir = lowerSource(
       "<if=input.on>\n  <signal/count=7/>\n</if>\n<p>x</p>\n",
       fakeDeclarations({
-        claimsTag: (name) => name === "signal",
-        resolveHostTag: (_name, node, ctx) => {
+        isDelegatedTag: (name) => name === "signal",
+        resolveDelegatedTag: (_name, node, ctx) => {
           ctx.hoist(`const ${node.var.name} = 7;`, node);
           return null;
         },
@@ -1882,7 +1882,7 @@ describe("one fixture per IR kind", () => {
 
 /**
  * A bare `${expr}` line and `<${expr}/>` parse to the same Marko node (no
- * attrs, no body) — see the "four Marko facts" in `AGENTS.md`. `claimsTag`'s
+ * attrs, no body) — see the "four Marko facts" in `AGENTS.md`. `isDelegatedTag`'s
  * `shape` argument is the only signal that lets a host tell them apart.
  */
 describe("a dynamic tag's bare shape", () => {
@@ -1919,16 +1919,16 @@ describe("a dynamic tag's bare shape", () => {
     },
   );
 
-  it("retains arguments on a claimed dynamic HostTag", () => {
+  it("retains arguments on a claimed dynamic DelegatedTag", () => {
     const ir = lowerSource(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
       '<${input.fn}("A", input.n)/>',
       fakeDeclarations({
-        claimsTag: (name) => name === DYNAMIC_TAG,
-        resolveHostTag: () => ({ seen: true }),
+        isDelegatedTag: (name) => name === DYNAMIC_TAG,
+        resolveDelegatedTag: () => ({ seen: true }),
       }),
     );
-    expect(find(ir.body, "HostTag").tag.args).toMatchObject([
+    expect(find(ir.body, "DelegatedTag").tag.args).toMatchObject([
       { code: '"A"' },
       { code: "input.n" },
     ]);
@@ -1939,7 +1939,7 @@ describe("a dynamic tag's bare shape", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       "${input.tag}\n",
       fakeDeclarations({
-        claimsTag: (name, _ctx, shape) =>
+        isDelegatedTag: (name, _ctx, shape) =>
           name === DYNAMIC_TAG && shape !== "bare",
       }),
     );
@@ -1952,34 +1952,34 @@ describe("a dynamic tag's bare shape", () => {
     const ir = lowerSource(
       "<${input.tag} a=1/>\n",
       fakeDeclarations({
-        claimsTag: (name, _ctx, shape) =>
+        isDelegatedTag: (name, _ctx, shape) =>
           name === DYNAMIC_TAG && shape !== "bare",
-        resolveHostTag: () => ({ seen: true }),
+        resolveDelegatedTag: () => ({ seen: true }),
       }),
     );
-    const hosted = find(ir.body, "HostTag").tag;
+    const hosted = find(ir.body, "DelegatedTag").tag;
     expect(hosted.name).toBe(DYNAMIC_TAG);
     expect(hosted.attrs).toMatchObject([{ kind: "dynamic", name: "a" }]);
     expect(hosted.data).toEqual({ seen: true });
   });
 
   // attribute-tag-silent-drops B2: html's dynamic-tag path claims
-  // DYNAMIC_TAG and gets a `HostTag`, not a `Component` — its emitter used to
+  // DYNAMIC_TAG and gets a `DelegatedTag`, not a `Component` — its emitter used to
   // build its own synthetic `Component` with a hardcoded `attributeTags: []`
   // instead of this field, dropping every attribute tag on the call. The
   // core side of the contract (this field is populated) was never the bug,
   // but is pinned here so a future regression is caught before it reaches an
   // emitter.
-  it("a claimed dynamic tag's HostTag carries its attribute tags", () => {
+  it("a claimed dynamic tag's DelegatedTag carries its attribute tags", () => {
     const ir = lowerSource(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
       "<${input.comp}><@header>hi</@header></>\n",
       fakeDeclarations({
-        claimsTag: (name) => name === DYNAMIC_TAG,
-        resolveHostTag: () => ({ seen: true }),
+        isDelegatedTag: (name) => name === DYNAMIC_TAG,
+        resolveDelegatedTag: () => ({ seen: true }),
       }),
     );
-    const hosted = find(ir.body, "HostTag").tag;
+    const hosted = find(ir.body, "DelegatedTag").tag;
     expect(hosted.name).toBe(DYNAMIC_TAG);
     expect(hosted.attributeTags.map((t) => t.name)).toEqual(["header"]);
   });
@@ -1989,11 +1989,11 @@ describe("a dynamic tag's bare shape", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       "${input.tag}\n",
       fakeDeclarations({
-        claimsTag: (name) => name === DYNAMIC_TAG,
-        resolveHostTag: () => ({ seen: true }),
+        isDelegatedTag: (name) => name === DYNAMIC_TAG,
+        resolveDelegatedTag: () => ({ seen: true }),
       }),
     );
-    const hosted = find(ir.body, "HostTag").tag;
+    const hosted = find(ir.body, "DelegatedTag").tag;
     expect(hosted.name).toBe(DYNAMIC_TAG);
     expect(hosted.data).toEqual({ seen: true });
   });
@@ -2219,8 +2219,8 @@ describe("binding scopes are per JS block", () => {
    * wrong output from a successful compile.
    */
   const signalPolicy = fakeDeclarations({
-    claimsTag: (name) => name === "signal",
-    resolveHostTag: (_name, node, ctx) => {
+    isDelegatedTag: (name) => name === "signal",
+    resolveDelegatedTag: (_name, node, ctx) => {
       ctx.hoist(`const ${node.var.name} = () => 0;`, node);
       ctx.bindings.register(node.var.name, (ref) => `${ref}()`);
       return null;
@@ -2281,7 +2281,7 @@ describe("binding scopes are per JS block", () => {
      * (packages/core/src/core.ts). Any other name in an expression alongside a
      * registered one puts the registry in scope for the whole expression, and
      * `rewriteReferencesSource` (not the node-cloning `rewriteReferences`) does
-     * the splice — this is the path a `resolveHostTag` binding (e.g. `<signal>`)
+     * the splice — this is the path a `resolveDelegatedTag` binding (e.g. `<signal>`)
      * takes for every interpolation once any binding is registered.
      *
      * No shipping host calls `ctx.bindings.register` today — `@mxlang/preact`'s
@@ -2367,7 +2367,7 @@ describe("binding scopes are per JS block", () => {
 
 describe("a claimed tag's children are lowered exactly once", () => {
   /**
-   * `resolveHostTag` receives children the core has *already* lowered. A host
+   * `resolveDelegatedTag` receives children the core has *already* lowered. A host
    * that walked the Marko nodes again replayed every lowerer side effect —
    * each `ctx.hoist` ran twice — and nested tags lowered exponentially.
    */
@@ -2383,8 +2383,8 @@ describe("a claimed tag's children are lowered exactly once", () => {
         "",
       ].join("\n"),
       fakeDeclarations({
-        claimsTag: (name) => name === "dyn" || name === "signal",
-        resolveHostTag: (name, node, ctx) => {
+        isDelegatedTag: (name) => name === "dyn" || name === "signal",
+        resolveDelegatedTag: (name, node, ctx) => {
           if (name !== "signal") return null;
           hoists++;
           ctx.hoist(`const ${node.var.name} = 1;`, node);
@@ -3104,16 +3104,16 @@ describe("`on*` outside a native element stays a prop", () => {
 
   it("stays dynamic on a host tag", () => {
     // The gap the design note found by reading the call sites: `lowerAttrs`
-    // defaults `on` to `"element"`, and a `HostTag` took that default — so a
+    // defaults `on` to `"element"`, and a `DelegatedTag` took that default — so a
     // gate keyed on `on` alone would wrongly make `<try onClick=f>` an event.
     const ir = lowerSource(
       "<signal onClick=f>body</signal>\n",
       fakeDeclarations({
-        claimsTag: (name) => name === "signal",
-        resolveHostTag: (name) => ({ seen: name }),
+        isDelegatedTag: (name) => name === "signal",
+        resolveDelegatedTag: (name) => ({ seen: name }),
       }),
     );
-    expect(find(ir.body, "HostTag").tag.attrs).toMatchObject([
+    expect(find(ir.body, "DelegatedTag").tag.attrs).toMatchObject([
       { kind: "dynamic", name: "onClick" },
     ]);
   });

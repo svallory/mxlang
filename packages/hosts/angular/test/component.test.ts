@@ -198,7 +198,7 @@ describe("Component define target", () => {
   });
 });
 
-describe("Component dynamic target (via HostTag routing)", () => {
+describe("Component dynamic target (via DelegatedTag routing)", () => {
   it("emits ngComponentOutlet with a warning", () => {
     const { code, warnings } = compileMx("<${Cmp} a=1/>");
     expect(code).toBe(

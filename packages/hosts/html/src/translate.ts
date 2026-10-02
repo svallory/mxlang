@@ -361,7 +361,7 @@ function rejectUnknownTag(name: string, node: Node): void {
 }
 
 /**
- * The sentinel `claimsTag`/`resolveHostTag` see for `<${expr}/>`.
+ * The sentinel `isDelegatedTag`/`resolveDelegatedTag` see for `<${expr}/>`.
  *
  * Re-exported under this package's own name so the emitter matches the same
  * value the core passes, rather than retyping a sentinel — two hand-typed
@@ -370,13 +370,13 @@ function rejectUnknownTag(name: string, node: Node): void {
 export const DYNAMIC = DYNAMIC_TAG;
 
 /**
- * What `resolveHostTag` decides about a tag this host claims, for its emitter.
+ * What `resolveDelegatedTag` decides about a tag this host claims, for its emitter.
  *
  * Recorded while the Marko node is still in hand (decision 79's `data` slot),
  * so the emitter never re-inspects one to recover a decision the resolver
  * already made.
  */
-export type HostTagData =
+export type DelegatedTagData =
   /** `<let>`/`<const>`: bind the initial value at render scope. */
   | { kind: "binding"; init: string }
   /** A `server` block: hoists and runs, exactly as `static` does. */
@@ -389,7 +389,7 @@ export type HostTagData =
   /**
    * `<${expr}/>`: the target expression only.
    *
-   * The children live on the `HostTag`'s own `children`, already resolved by
+   * The children live on the `DelegatedTag`'s own `children`, already resolved by
    * the core — this carries no `content` block, so nothing re-resolves them.
    */
   | { kind: "dynamic"; expr: Expr };
@@ -397,7 +397,7 @@ export type HostTagData =
 /** Tag names this host lowers itself, rather than as a component or element. */
 const CLAIMED = new Set([
   // `<const>` is deliberately absent: the core's own switch dispatches it to
-  // `lowerConst` before `claimsTag` is ever consulted, so an entry here
+  // `lowerConst` before `isDelegatedTag` is ever consulted, so an entry here
   // would be dead code that reads as though this host owned the tag.
   "let",
   "server",
@@ -409,7 +409,7 @@ const CLAIMED = new Set([
   DYNAMIC_TAG,
 ]);
 
-function claimsTag(name: string): boolean {
+function isDelegatedTag(name: string): boolean {
   return CLAIMED.has(name);
 }
 
@@ -420,11 +420,11 @@ function claimsTag(name: string): boolean {
  * resolve, so a construct the target cannot express fails with a position
  * rather than reaching an emitter that would have to re-derive why.
  */
-function resolveHostTag(name: string, node: Node, ctx: Ctx): HostTagData {
+function resolveDelegatedTag(name: string, node: Node, ctx: Ctx): DelegatedTagData {
   if (name === DYNAMIC_TAG) {
     // Only the target expression is decided here. The children are *not*
     // resolved again: the core has already resolved them into the
-    // `HostTag`'s own `children`, and walking the same Marko nodes a second
+    // `DelegatedTag`'s own `children`, and walking the same Marko nodes a second
     // time replays every resolver side effect (hoists, binding
     // registrations) and makes nested dynamic tags resolve exponentially.
     // The emitter builds the `content` block from `tag.children`.
@@ -507,8 +507,8 @@ export const policy: Policy = {
   isComponent,
   resolveDiscoveredTagModule,
   checkBinding: rejectInputShadowing,
-  claimsTag,
-  resolveHostTag,
+  isDelegatedTag,
+  resolveDelegatedTag,
   orderAttrs: (name, attrs) => {
     if (name !== "input") return attrs;
     const index = attrs.findIndex(

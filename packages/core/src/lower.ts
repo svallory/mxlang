@@ -64,7 +64,7 @@ import {
 } from "./core.ts";
 import {
   type CustomTag,
-  isContractOnlyClaimed,
+  isContractOnlyDelegated,
   runAnalyzeHooks,
   runFinalizeHooks,
   shadowedBuiltinMessage,
@@ -1827,7 +1827,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 }
 
 /** A tag this host claims, with every part lowered for its emitter. */
-function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
+function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   const loc = posOf(node);
   const target: ComponentTarget =
     name === DYNAMIC_TAG
@@ -1853,7 +1853,7 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
   unscope();
 
   return {
-    kind: "HostTag",
+    kind: "DelegatedTag",
     tag: {
       name,
       nameSpan: name === DYNAMIC_TAG ? undefined : exprSpan(ctx, node.name),
@@ -1868,7 +1868,7 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
       var: node.var ? declName(ctx, node.var) : null,
-      data: ctx.declarations.resolveHostTag?.(name, node, ctx),
+      data: ctx.declarations.resolveDelegatedTag?.(name, node, ctx),
       loc,
     },
     loc,
@@ -1883,7 +1883,7 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
  * default for a template-authored tag deciding what an empty call means. A
  * core-owned built-in like `<try>` is a structural pass-through wrapper, not
  * a template — its whole job is to reproduce the caller's body unchanged, the
- * way `lowerHostTag` always did (`lowerChildren(node.body?.body ?? [])`,
+ * way `lowerDelegatedTag` always did (`lowerChildren(node.body?.body ?? [])`,
  * unconditionally). Gating it the same way silently dropped whitespace-only
  * bodies (`<try>  </try>`) that used to render. `isBuiltin` therefore skips
  * the gate and always lowers the raw block.
@@ -2052,14 +2052,14 @@ function lowerCustomTag(
     !isBuiltin &&
     !definition.transform &&
     !hasTemplate(definition) &&
-    isContractOnlyClaimed(ctx, name, definition);
+    isContractOnlyDelegated(ctx, name, definition);
   const call: TagCall = {
     name,
     nameSpan: exprSpan(ctx, node.name),
     span: exprSpan(ctx, node),
     loc: posOf(node),
-    // A contract-only call on a claimed name becomes a HostTag, so its
-    // attributes lower as `lowerHostTag` lowers them.
+    // A contract-only call on a claimed name becomes a DelegatedTag, so its
+    // attributes lower as `lowerDelegatedTag` lowers them.
     attrs: lowerAttrs(ctx, node, name, handsToHost ? "element" : "component"),
     // `handsToHost` skips the `hasContent` gate like `isBuiltin`, so the host
     // gets an authored body exactly as an unregistered claimed tag would; a
@@ -2266,7 +2266,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
   // *name* is the expression — Marko's concise mode has no other shape for
   // a bare one (see the "four Marko facts" in AGENTS.md). Both are dynamic
-  // tags: when a host claims DYNAMIC_TAG it gets the HostTag (shape "bare"
+  // tags: when a host claims DYNAMIC_TAG it gets the DelegatedTag (shape "bare"
   // or "tagged", as before); otherwise core lowers a `Component` with a
   // dynamic target, resolved at run time like any other host.
   if (node.name && node.name.type !== "StringLiteral") {
@@ -2289,12 +2289,12 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       node.name,
       (node.arguments ?? []).length,
     );
-    const claimed = ctx.declarations.claimsTag?.(
+    const claimed = ctx.declarations.isDelegatedTag?.(
       DYNAMIC_TAG,
       ctx,
       isBare ? "bare" : "tagged",
     );
-    if (claimed) return lowerHostTag(ctx, node, DYNAMIC_TAG);
+    if (claimed) return lowerDelegatedTag(ctx, node, DYNAMIC_TAG);
     return lowerComponent(ctx, node, {
       kind: "dynamic",
       expr: dynamicExpr,
@@ -2393,7 +2393,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       (ctx.tagVarShadowed?.has(name) ?? false));
 
   // Registered custom tags take precedence over host claims so a shared tag
-  // may be expressed in terms of `ctx.build.hostTag(...)`. Structural tags
+  // may be expressed in terms of `ctx.build.delegatedTag(...)`. Structural tags
   // above remain core-owned and cannot be shadowed; a file-local binding
   // (checked above) outranks a custom tag of the same name.
   const customTag =
@@ -2402,8 +2402,8 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       : undefined;
   if (customTag) return lowerCustomTag(ctx, node, name, customTag);
 
-  if (!fileLocalBinding && ctx.declarations.claimsTag?.(name, ctx)) {
-    return lowerHostTag(ctx, node, name);
+  if (!fileLocalBinding && ctx.declarations.isDelegatedTag?.(name, ctx)) {
+    return lowerDelegatedTag(ctx, node, name);
   }
 
   // `fileLocalBinding` alone is sufficient here for a `<const>`/`<for>`-param/

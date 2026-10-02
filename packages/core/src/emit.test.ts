@@ -30,7 +30,7 @@ function recordingEmitter(): Emitter<string[]> & { calls: string[] } {
     define: note("define"),
     constant: note("constant"),
     hoisted: note("hoisted"),
-    hostTag: note("hostTag"),
+    delegatedTag: note("delegatedTag"),
     documentType: note("documentType"),
     comment: note("comment"),
     done: () => calls,

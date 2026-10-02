@@ -43,7 +43,7 @@ export interface Emitter<Out> {
   define(node: Extract<IrNode, { kind: "Define" }>): void;
   constant(node: Extract<IrNode, { kind: "Const" }>): void;
   hoisted(node: Extract<IrNode, { kind: "Hoisted" }>): void;
-  hostTag(node: Extract<IrNode, { kind: "HostTag" }>): void;
+  delegatedTag(node: Extract<IrNode, { kind: "DelegatedTag" }>): void;
   documentType(node: Extract<IrNode, { kind: "DocumentType" }>): void;
   comment(node: Extract<IrNode, { kind: "Comment" }>): void;
   /** The accumulated output, once the walk is done. */
@@ -87,8 +87,8 @@ export function drive<Out>(emitter: Emitter<Out>, nodes: IrNode[]): void {
       case "Hoisted":
         emitter.hoisted(node);
         break;
-      case "HostTag":
-        emitter.hostTag(node);
+      case "DelegatedTag":
+        emitter.delegatedTag(node);
         break;
       case "DocumentType":
         emitter.documentType(node);

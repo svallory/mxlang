@@ -3,8 +3,8 @@
  *
  * `<try>` used to be five near-identical per-host implementations, each
  * re-deriving the same `<@catch>`/`<@placeholder>` shape checks by walking the
- * raw Marko node in its own `resolveHostTag`. It is now one definition here,
- * expressed in terms of `ctx.build.hostTag("try", ...)` — the boundary the
+ * raw Marko node in its own `resolveDelegatedTag`. It is now one definition here,
+ * expressed in terms of `ctx.build.delegatedTag("try", ...)` — the boundary the
  * spec draws between a tag (what) and a host (how): a host that claims `"try"`
  * still decides its own rendering (`packages/hosts/*` keep that), but the
  * shape of a `<try>` call — no params, no `/var`, at most one `<@catch>`, at
@@ -50,7 +50,7 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
   }
 
   return [
-    ctx.build.hostTag("try", call.content?.children ?? [], call.attributeTags),
+    ctx.build.delegatedTag("try", call.content?.children ?? [], call.attributeTags),
   ];
 }
 

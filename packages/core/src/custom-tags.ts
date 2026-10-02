@@ -335,7 +335,7 @@ export interface IrBuilders {
    * Requests a primitive from the active host without exposing that host.
    * `attrs` are carried on the node as given; omitted means none.
    */
-  hostTag(
+  delegatedTag(
     name: string,
     children: IrNode[],
     attributeTags: AttributeTag[],
@@ -506,15 +506,15 @@ function buildersFor(
       children,
       loc,
     }),
-    hostTag: (name, children, attributeTags, attrs = []) => {
+    delegatedTag: (name, children, attributeTags, attrs = []) => {
       if (node === null) {
         return failAt(
           tagName,
-          "`ctx.build.hostTag` is not available in `finalize`",
+          "`ctx.build.delegatedTag` is not available in `finalize`",
           loc,
         );
       }
-      if (ctx.declarations.claimsTag?.(name, ctx) !== true) {
+      if (ctx.declarations.isDelegatedTag?.(name, ctx) !== true) {
         return failAt(
           tagName,
           `this host does not claim \`<${name}>\`, so a custom tag cannot emit one`,
@@ -540,7 +540,7 @@ function buildersFor(
         ),
       }));
       return {
-        kind: "HostTag",
+        kind: "DelegatedTag",
         tag: {
           name,
           attrs,
@@ -550,7 +550,7 @@ function buildersFor(
           attrTagProps,
           params: [],
           var: null,
-          data: ctx.declarations.resolveHostTag?.(name, node, ctx),
+          data: ctx.declarations.resolveDelegatedTag?.(name, node, ctx),
           loc,
         },
         loc,
@@ -1138,9 +1138,9 @@ function observedCall(call: TagCall): {
  * `attributes`, `attributeTags` or `parseOptions`, and has neither a
  * `transform` nor a template. `{}` or a hooks-only definition declares no
  * contract, so it keeps the "neither a `transform` nor a template" error. The
- * one question core asks the host is the generic `claimsTag`.
+ * one question core asks the host is the generic `isDelegatedTag`.
  */
-export function isContractOnlyClaimed(
+export function isContractOnlyDelegated(
   ctx: Ctx,
   name: string,
   definition: CustomTag,
@@ -1151,12 +1151,12 @@ export function isContractOnlyClaimed(
     (definition.attributes !== undefined ||
       definition.attributeTags !== undefined ||
       definition.parseOptions !== undefined) &&
-    ctx.declarations.claimsTag?.(name, ctx) === true
+    ctx.declarations.isDelegatedTag?.(name, ctx) === true
   );
 }
 
 /**
- * The `HostTag` a validated contract-only call lowers to. It is the node an
+ * The `DelegatedTag` a validated contract-only call lowers to. It is the node an
  * unregistered claimed tag produces (same body, same attributes), except that
  * the call is validated against its contract and declared defaults are added.
  * With `openTagOnly`, a whitespace-only body is rejected (positioned), while
@@ -1169,9 +1169,9 @@ export function isContractOnlyClaimed(
  * ("`<tag>`: attribute tag `<@x>` does not support attributes" / "does not
  * support nested attribute tags").
  */
-function contractOnlyHostTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
+function contractOnlyDelegatedTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
   return {
-    kind: "HostTag",
+    kind: "DelegatedTag",
     tag: {
       name: call.name,
       nameSpan: call.nameSpan,
@@ -1185,7 +1185,7 @@ function contractOnlyHostTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
       attrTagProps: call.attrTagProps ?? [],
       params: call.params,
       var: call.var,
-      data: ctx.declarations.resolveHostTag?.(call.name, node, ctx),
+      data: ctx.declarations.resolveDelegatedTag?.(call.name, node, ctx),
       loc: call.loc,
     },
     loc: call.loc,
@@ -1202,7 +1202,7 @@ export function transformCustomTag(
   // Decision 130: a contract-only tag (no `transform`, no template) is valid
   // on a name the active host claims; anywhere else a call has nothing to
   // expand to.
-  const contractOnly = isContractOnlyClaimed(ctx, call.name, definition);
+  const contractOnly = isContractOnlyDelegated(ctx, call.name, definition);
   if (!definition.transform && !hasTemplate(definition) && !contractOnly) {
     failAt(
       call.name,
@@ -1235,7 +1235,7 @@ export function transformCustomTag(
   }
   // A claimed contract-only call has no transform to run: after validation
   // and the analyze recording above, it is handed to the host as is.
-  if (contractOnly) return [contractOnlyHostTag(ctx, withDefaults, node)];
+  if (contractOnly) return [contractOnlyDelegatedTag(ctx, withDefaults, node)];
   const observed = observedCall(withDefaults);
   const originalAttributeTagTree = cloneAttributeTagTree(
     withDefaults.attributeTagTree ??

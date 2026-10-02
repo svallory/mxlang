@@ -102,7 +102,7 @@ describe("custom tag transforms", () => {
         value: "check",
       }),
     ]);
-    expect(tryFind(ir.body, "HostTag")).toBeNull();
+    expect(tryFind(ir.body, "DelegatedTag")).toBeNull();
     expect(tryFind(ir.body, "Component")).toBeNull();
   });
 
@@ -414,7 +414,7 @@ describe("custom tag transforms", () => {
     // core does not reserve.
     const boundary: CustomTag = {
       transform: (call, ctx) => [
-        ctx.build.hostTag(
+        ctx.build.delegatedTag(
           "boundary",
           call.content?.children ?? [],
           call.attributeTags,
@@ -426,11 +426,11 @@ describe("custom tag transforms", () => {
       { boundary },
       {
         ...fakeDeclarations(),
-        claimsTag: (name) => name === "boundary",
-        resolveHostTag: (name) => ({ name }),
+        isDelegatedTag: (name) => name === "boundary",
+        resolveDelegatedTag: (name) => ({ name }),
       },
     );
-    expect(find(ir.body, "HostTag").tag).toMatchObject({
+    expect(find(ir.body, "DelegatedTag").tag).toMatchObject({
       name: "boundary",
       data: { name: "boundary" },
     });
@@ -438,7 +438,7 @@ describe("custom tag transforms", () => {
 
   it("refuses a host primitive the active host does not claim", () => {
     const tag: CustomTag = {
-      transform: (_call, ctx) => [ctx.build.hostTag("missing", [], [])],
+      transform: (_call, ctx) => [ctx.build.delegatedTag("missing", [], [])],
     };
     expect(() => lowerWithTags("<tag/>\n", { tag })).toThrowError(
       "`<tag>`: this host does not claim `<missing>`, so a custom tag cannot emit one",
@@ -1097,13 +1097,13 @@ describe("analyze, finalize and the per-file store", () => {
     );
   });
 
-  it("refuses ctx.build.hostTag in finalize", () => {
+  it("refuses ctx.build.delegatedTag in finalize", () => {
     const tag: CustomTag = {
       transform: () => [],
-      finalize: (ctx) => [ctx.build.hostTag("try", [], [])],
+      finalize: (ctx) => [ctx.build.delegatedTag("try", [], [])],
     };
     expect(() => lowerWithTags("<tag/>\n", { tag })).toThrowError(
-      "`<tag>`: `ctx.build.hostTag` is not available in `finalize`",
+      "`<tag>`: `ctx.build.delegatedTag` is not available in `finalize`",
     );
   });
 
@@ -1212,8 +1212,8 @@ it("uses TranslateError for custom-tag diagnostics", () => {
 describe("core-owned custom tags", () => {
   const tryDeclarations: Policy = {
     ...fakeDeclarations(),
-    claimsTag: (name) => name === "try",
-    resolveHostTag: (name) => ({ name }),
+    isDelegatedTag: (name) => name === "try",
+    resolveDelegatedTag: (name) => ({ name }),
   };
 
   it("rejects a registered `try` custom tag as an attempt to shadow a built-in", () => {
@@ -1227,9 +1227,9 @@ describe("core-owned custom tags", () => {
 
   it("lowers a plain `<try>` to the host's `try` primitive with no attribute tags", () => {
     const ir = lowerWithTags("<try><p>x</p></try>\n", {}, tryDeclarations);
-    const hostTag = find(ir.body, "HostTag");
-    expect(hostTag.tag).toMatchObject({ name: "try" });
-    expect(hostTag.tag.attributeTags).toEqual([]);
+    const delegatedTag = find(ir.body, "DelegatedTag");
+    expect(delegatedTag.tag).toMatchObject({ name: "try" });
+    expect(delegatedTag.tag.attributeTags).toEqual([]);
   });
 
   it("passes `<@catch>`/`<@placeholder>` through as the host tag's attribute tags", () => {
@@ -1238,8 +1238,8 @@ describe("core-owned custom tags", () => {
       {},
       tryDeclarations,
     );
-    const hostTag = find(ir.body, "HostTag");
-    expect(hostTag.tag.attributeTags.map((tag) => tag.name).sort()).toEqual([
+    const delegatedTag = find(ir.body, "DelegatedTag");
+    expect(delegatedTag.tag.attributeTags.map((tag) => tag.name).sort()).toEqual([
       "catch",
       "placeholder",
     ]);
@@ -1365,21 +1365,21 @@ describe("core-owned custom tags", () => {
   // Round 1 item 1: `hasContent` treats whitespace-only body text as no
   // content, the right default for a template-authored tag deciding what an
   // empty call means. `<try>` is a structural pass-through, not a template —
-  // its body must reach the host unchanged, the way `lowerHostTag` always
+  // its body must reach the host unchanged, the way `lowerDelegatedTag` always
   // lowered `node.body?.body ?? []` unconditionally. `lowerCustomTag`'s
   // `isBuiltin` flag skips the `hasContent` gate for built-ins.
   it("preserves a whitespace-only `<try>` body rather than dropping it", () => {
     const ir = lowerWithTags("<try>  </try>\n", {}, tryDeclarations);
-    const hostTag = find(ir.body, "HostTag");
-    expect(hostTag.tag.children).toEqual([
+    const delegatedTag = find(ir.body, "DelegatedTag");
+    expect(delegatedTag.tag.children).toEqual([
       expect.objectContaining({ kind: "Text", value: " " }),
     ]);
   });
 
   it("preserves markup mixed with text in a `<try>` body", () => {
     const ir = lowerWithTags("<try>a <b>c</b></try>\n", {}, tryDeclarations);
-    const hostTag = find(ir.body, "HostTag");
-    expect(hostTag.tag.children).toMatchObject([
+    const delegatedTag = find(ir.body, "DelegatedTag");
+    expect(delegatedTag.tag.children).toMatchObject([
       { kind: "Text", value: "a " },
       { kind: "Element", name: "b" },
     ]);
@@ -1449,14 +1449,14 @@ describe("import precedence over registered custom tags (IR-level)", () => {
     expect(find(ir.body, "Element").name).toBe("mx-marker");
   });
 
-  // The `!fileLocalBinding && claimsTag(...)` branch (lower.ts, gating a
+  // The `!fileLocalBinding && isDelegatedTag(...)` branch (lower.ts, gating a
   // host claim on the absence of a file-local binding) is currently
   // unreachable by any real host: every host that claims tags beyond `try`
   // and the dynamic-tag sentinel (only `@mxlang/html`, for `let`/`server`/
   // `html-comment`/`html-script`/`html-style`/`style`) claims exclusively
   // lowercase names, and the casing gate above means `fileLocalBinding` is
   // never true for a lowercase name in the first place — so on every real
-  // host the `!fileLocalBinding &&` in front of `claimsTag` never changes
+  // host the `!fileLocalBinding &&` in front of `isDelegatedTag` never changes
   // the outcome. This test exercises it directly against a synthetic policy
   // that claims a PascalCase name, purely to pin the order the code encodes
   // (file-local binding wins over a host claim) should a host ever claim a
@@ -1468,8 +1468,8 @@ describe("import precedence over registered custom tags (IR-level)", () => {
       {},
       {
         ...componentPolicy,
-        claimsTag: (name) => name === "Boundary",
-        resolveHostTag: (name) => ({ name }),
+        isDelegatedTag: (name) => name === "Boundary",
+        resolveDelegatedTag: (name) => ({ name }),
       },
     );
     expect(find(ir.body, "Component").target).toMatchObject({
@@ -1622,7 +1622,7 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
 /**
  * Decision 130: a custom tag that declares only a contract (no `transform`, no
  * template) is valid on a name the active host claims. Core validates the call,
- * then lowers it to the same `HostTag` an unregistered claimed tag would be.
+ * then lowers it to the same `DelegatedTag` an unregistered claimed tag would be.
  */
 describe("contract-only custom tags", () => {
   const attribute: CustomTag = {
@@ -1634,14 +1634,14 @@ describe("contract-only custom tags", () => {
   };
   const claimAttribute = (): Policy =>
     fakeDeclarations({
-      claimsTag: (name) => name === "attribute",
-      resolveHostTag: (name) => ({ name }),
+      isDelegatedTag: (name) => name === "attribute",
+      resolveDelegatedTag: (name) => ({ name }),
     });
 
-  it("lowers a claimed contract-only tag to a HostTag that carries its attributes", () => {
+  it("lowers a claimed contract-only tag to a DelegatedTag that carries its attributes", () => {
     const source = '<attribute="title" type="string" public/>\n';
     const ir = lowerWithTags(source, { attribute }, claimAttribute());
-    const { tag } = find(ir.body, "HostTag");
+    const { tag } = find(ir.body, "DelegatedTag");
     expect(tag.name).toBe("attribute");
     expect(tag.data).toEqual({ name: "attribute" });
     expect(tag.attrs.map((attr) => attr.kind)).toEqual([
@@ -1660,7 +1660,7 @@ describe("contract-only custom tags", () => {
     const source = '<attribute value="a" type="string"/>\n';
     const { tag } = find(
       lowerWithTags(source, { attribute }, claimAttribute()).body,
-      "HostTag",
+      "DelegatedTag",
     );
     const typeAttr = named(tag.attrs, "type");
     if (!typeAttr || typeAttr.kind === "spread") throw new Error("no type");
@@ -1675,7 +1675,7 @@ describe("contract-only custom tags", () => {
         { attribute },
         claimAttribute(),
       ).body,
-      "HostTag",
+      "DelegatedTag",
     );
     expect(tag.loc).toMatchObject({ line: 2, column: 0 });
     expect(tag.children).toMatchObject([{ kind: "Element", name: "p" }]);
@@ -1690,9 +1690,9 @@ describe("contract-only custom tags", () => {
       lowerWithTags(
         '<resource name="post"><@field/><@field/></resource>\n',
         { resource },
-        fakeDeclarations({ claimsTag: (name) => name === "resource" }),
+        fakeDeclarations({ isDelegatedTag: (name) => name === "resource" }),
       ).body,
-      "HostTag",
+      "DelegatedTag",
     );
     expect(tag.attributeTags.map((item) => item.name)).toEqual([
       "field",
@@ -1771,7 +1771,7 @@ describe("contract-only custom tags", () => {
       lowerWithTags(
         '\n<attribute value="a" type="string"/>\n',
         { attribute },
-        fakeDeclarations({ claimsTag: (name) => name === "other" }),
+        fakeDeclarations({ isDelegatedTag: (name) => name === "other" }),
       ),
     ).toThrowError(
       expect.objectContaining({
@@ -1784,7 +1784,7 @@ describe("contract-only custom tags", () => {
     );
   });
 
-  it("keeps today's error on a host with no claimsTag at all", () => {
+  it("keeps today's error on a host with no isDelegatedTag at all", () => {
     expect(() =>
       lowerWithTags('<attribute value="a" type="string"/>\n', { attribute }),
     ).toThrowError("so a call has nothing to expand to");
@@ -1804,7 +1804,7 @@ describe("contract-only custom tags", () => {
       claimAttribute(),
     );
     expect(seen).toEqual([2]);
-    expect(ir.body.filter((node) => node.kind === "HostTag")).toHaveLength(2);
+    expect(ir.body.filter((node) => node.kind === "DelegatedTag")).toHaveLength(2);
   });
 
   it.each([
@@ -1836,7 +1836,7 @@ describe("contract-only custom tags", () => {
           { attribute: definition as CustomTag },
           claimAttribute(),
         ).body,
-        "HostTag",
+        "DelegatedTag",
       );
       expect(tag.name).toBe("attribute");
     },
@@ -1846,11 +1846,11 @@ describe("contract-only custom tags", () => {
     const source = '<attribute value="a" type="string">  </attribute>\n';
     const registered = find(
       lowerWithTags(source, { attribute }, claimAttribute()).body,
-      "HostTag",
+      "DelegatedTag",
     );
     const unregistered = find(
       lowerWithTags(source, {}, claimAttribute()).body,
-      "HostTag",
+      "DelegatedTag",
     );
     expect(registered.tag.children).toEqual(unregistered.tag.children);
     expect(registered.tag.children).not.toEqual([]);
@@ -1893,7 +1893,7 @@ describe("contract-only custom tags", () => {
         { attribute: flag },
         claimAttribute(),
       ).body,
-      "HostTag",
+      "DelegatedTag",
     );
     expect(tag.children).toEqual([]);
     expect(() =>
@@ -1928,11 +1928,11 @@ describe("contract-only custom tags", () => {
       'héllo\n<attribute value="é" type="string"><p>x</p></attribute>\n';
     const registered = find(
       lowerWithTags(source, { attribute }, claimAttribute()).body,
-      "HostTag",
+      "DelegatedTag",
     ).tag;
     const unregistered = find(
       lowerWithTags(source, {}, claimAttribute()).body,
-      "HostTag",
+      "DelegatedTag",
     ).tag;
     expect(registered.span).toBeDefined();
     expect(registered.nameSpan).toBeDefined();
@@ -1951,11 +1951,11 @@ describe("contract-only custom tags", () => {
     const source = '<attribute="title" type="string"/>\n';
     const registered = find(
       lowerWithTags(source, { attribute }, claimAttribute()).body,
-      "HostTag",
+      "DelegatedTag",
     ).tag;
     const unregistered = find(
       lowerWithTags(source, {}, claimAttribute()).body,
-      "HostTag",
+      "DelegatedTag",
     ).tag;
     expect(named(registered.attrs, "value")).toMatchObject({
       nameSpan: (named(unregistered.attrs, "value") as { nameSpan: unknown })
@@ -1975,18 +1975,18 @@ describe("contract-only custom tags", () => {
       { attribute: both },
       claimAttribute(),
     );
-    expect(ir.body.filter((node) => node.kind === "HostTag")).toEqual([]);
+    expect(ir.body.filter((node) => node.kind === "DelegatedTag")).toEqual([]);
   });
 });
 
-describe("ctx.build.hostTag attributes", () => {
+describe("ctx.build.delegatedTag attributes", () => {
   const declarations = (): Policy =>
-    fakeDeclarations({ claimsTag: (name) => name === "boundary" });
+    fakeDeclarations({ isDelegatedTag: (name) => name === "boundary" });
 
   it("carries the attributes it is given", () => {
     const boundary: CustomTag = {
       transform: (call, ctx) => [
-        ctx.build.hostTag("boundary", [], call.attributeTags, [
+        ctx.build.delegatedTag("boundary", [], call.attributeTags, [
           ctx.build.attr("id", "x"),
           ctx.build.booleanAttr("open"),
         ]),
@@ -1994,7 +1994,7 @@ describe("ctx.build.hostTag attributes", () => {
     };
     const { tag } = find(
       lowerWithTags("<boundary/>\n", { boundary }, declarations()).body,
-      "HostTag",
+      "DelegatedTag",
     );
     expect(tag.attrs.map((attr) => (attr as { name: string }).name)).toEqual([
       "id",
@@ -2005,12 +2005,12 @@ describe("ctx.build.hostTag attributes", () => {
   it("carries none when called as before", () => {
     const boundary: CustomTag = {
       transform: (call, ctx) => [
-        ctx.build.hostTag("boundary", [], call.attributeTags),
+        ctx.build.delegatedTag("boundary", [], call.attributeTags),
       ],
     };
     const { tag } = find(
       lowerWithTags('<boundary id="x"/>\n', { boundary }, declarations()).body,
-      "HostTag",
+      "DelegatedTag",
     );
     expect(tag.attrs).toEqual([]);
   });

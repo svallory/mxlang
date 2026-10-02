@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import type { HostDeclarations } from "./declarations.ts";
-import type { Attr, HostTag, Ir, IrNode } from "./ir.ts";
+import type { Attr, DelegatedTag, Ir, IrNode } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 
 /**
  * UTF-16 code-unit offset contracts (the unit of every span in the IR) for the spans lowering records: attribute name spans,
  * a static attribute's value span, and the whole-tag and tag-name spans on
- * `HostTag`, `Element` and `Component`. Every assertion is made against the
+ * `DelegatedTag`, `Element` and `Component`. Every assertion is made against the
  * source text, so a span that lands on the wrong text fails loudly.
  */
 
@@ -17,7 +17,7 @@ const claimAll: HostDeclarations = {
   tags: {},
   isElement: () => false,
   isComponent: () => false,
-  claimsTag: () => true,
+  isDelegatedTag: () => true,
   resolveAttributeMethod: () => true,
 };
 
@@ -47,8 +47,8 @@ function slice(source: string, span: SourceSpan | null | undefined): string {
   return source.slice(span.sourceStart, span.sourceEnd);
 }
 
-function hostTag(node: IrNode | undefined): HostTag {
-  if (node?.kind !== "HostTag") throw new Error("expected a HostTag");
+function delegatedTag(node: IrNode | undefined): DelegatedTag {
+  if (node?.kind !== "DelegatedTag") throw new Error("expected a DelegatedTag");
   return node.tag;
 }
 
@@ -66,7 +66,7 @@ function nameSpanOf(a: Attr): SourceSpan {
 describe("a default attribute's nameSpan", () => {
   it('is zero-width at the `=`, as in Marko, not `="pos`', () => {
     const source = 'resource="post" table="posts"\n';
-    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
     const value = nameSpanOf(attr(tag.attrs, "value"));
     expect(value).toEqual({ sourceStart: 8, sourceEnd: 8 });
     expect(slice(source, value)).toBe("");
@@ -84,13 +84,13 @@ describe("a default attribute's nameSpan", () => {
 
   it("leaves a spelled attribute name alone", () => {
     const source = '<x="post" type="strng">\n</x>\n';
-    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
     expect(slice(source, nameSpanOf(attr(tag.attrs, "type")))).toBe("type");
   });
 
   it("leaves method shorthand on its own name", () => {
     const source = "<x change(ctx) { ctx.a = 1 }>\n</x>\n";
-    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
     const span = nameSpanOf(attr(tag.attrs, "change"));
     expect(span).toEqual({ sourceStart: 3, sourceEnd: 9 });
     expect(slice(source, span)).toBe("change");
@@ -98,7 +98,7 @@ describe("a default attribute's nameSpan", () => {
 
   it("leaves a modifier attribute spelled `name:modifier`", () => {
     const source = "<x class:a=1>\n</x>\n";
-    const tag = hostTag(
+    const tag = delegatedTag(
       irOf(source, {
         ...claimAll,
         resolveModifier: (a: { name: string; modifier: string }) =>
@@ -114,7 +114,7 @@ describe("a default attribute's nameSpan", () => {
 describe("a static attribute's valueSpan", () => {
   it("covers the string literal, quotes included, like `Expr.span`", () => {
     const source = '<x="post" type="strng">\n</x>\n';
-    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
     const type = attr(tag.attrs, "type");
     if (type.kind !== "static") throw new Error("expected a static attr");
     expect(type.valueSpan).toEqual({ sourceStart: 15, sourceEnd: 22 });
@@ -123,7 +123,7 @@ describe("a static attribute's valueSpan", () => {
 
   it("covers a default attribute's value", () => {
     const source = '<x="post">\n</x>\n';
-    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
     const value = attr(tag.attrs, "value");
     if (value.kind !== "static") throw new Error("expected a static attr");
     expect(slice(source, value.valueSpan)).toBe('"post"');
@@ -140,14 +140,14 @@ describe("a static attribute's valueSpan", () => {
 });
 
 describe("tag spans", () => {
-  it("HostTag: name span and whole-tag span, children and close tag included", () => {
+  it("DelegatedTag: name span and whole-tag span, children and close tag included", () => {
     const source = "<x a=1>\n  <y/>\n</x>\n";
-    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
     expect(tag.nameSpan).toEqual({ sourceStart: 1, sourceEnd: 2 });
     expect(slice(source, tag.nameSpan)).toBe("x");
     expect(tag.span).toEqual({ sourceStart: 0, sourceEnd: 19 });
     expect(slice(source, tag.span)).toBe("<x a=1>\n  <y/>\n</x>");
-    const child = hostTag(tag.children[0]);
+    const child = delegatedTag(tag.children[0]);
     expect(slice(source, child.nameSpan)).toBe("y");
     expect(slice(source, child.span)).toBe("<y/>");
   });
@@ -180,7 +180,7 @@ describe("attribute tag spans", () => {
   const source = '<x>\n  <@y="é">body</@y>\n</x>\n';
 
   it("AttributeTag: whole-tag span, and a default attribute is zero-width at `=`", () => {
-    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
     const y = tag.attributeTags[0];
     if (!y) throw new Error("expected an attribute tag");
     expect(slice(source, y.span)).toBe('<@y="é">body</@y>');
@@ -195,8 +195,8 @@ describe("non-ASCII source", () => {
   it("every span is a UTF-16 code-unit offset into the source string", () => {
     const source = '<p title="ção"/><x a="é">ção</x>\n';
     const ir = irOf(source, claimAll);
-    const x = hostTag(
-      ir.body.find((n) => n.kind === "HostTag" && n.tag.name === "x"),
+    const x = delegatedTag(
+      ir.body.find((n) => n.kind === "DelegatedTag" && n.tag.name === "x"),
     );
     expect(slice(source, x.nameSpan)).toBe("x");
     expect(slice(source, x.span)).toBe('<x a="é">ção</x>');
@@ -204,7 +204,7 @@ describe("non-ASCII source", () => {
     expect(slice(source, nameSpanOf(a))).toBe("a");
     if (a.kind !== "static") throw new Error("expected a static attr");
     expect(slice(source, a.valueSpan)).toBe('"é"');
-    const p = hostTag(ir.body[0]);
+    const p = delegatedTag(ir.body[0]);
     const title = attr(p.attrs, "title");
     if (title.kind !== "static") throw new Error("expected a static attr");
     expect(slice(source, title.valueSpan)).toBe('"ção"');

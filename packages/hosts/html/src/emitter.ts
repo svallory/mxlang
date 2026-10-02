@@ -47,7 +47,7 @@ import {
   escape,
   type ForHead,
   type GeneratedMapping,
-  type HostTag,
+  type DelegatedTag,
   type Ir,
   type IrNode,
   type MappedCode,
@@ -58,7 +58,7 @@ import {
   TranslateError,
   VOID_TAGS,
 } from "@mxlang/core";
-import type { HostTagData } from "./translate.ts";
+import type { DelegatedTagData } from "./translate.ts";
 import { DYNAMIC, escapeComment } from "./translate.ts";
 
 const INDENT = "  ";
@@ -864,8 +864,8 @@ export function createEmitter(): StringEmitter {
       state.prelude.push(node.code);
     },
 
-    hostTag(node) {
-      emitHostTag(node.tag);
+    delegatedTag(node) {
+      emitDelegatedTag(node.tag);
     },
 
     documentType(node) {
@@ -888,11 +888,11 @@ export function createEmitter(): StringEmitter {
    * The tags this host claims for itself, each with its parts already
    * resolved.
    *
-   * `data` is what `resolveHostTag` decided while the Marko node was still in
+   * `data` is what `resolveDelegatedTag` decided while the Marko node was still in
    * hand, so nothing here re-inspects one.
    */
-  function emitHostTag(tag: HostTag): void {
-    const data = tag.data as HostTagData;
+  function emitDelegatedTag(tag: DelegatedTag): void {
+    const data = tag.data as DelegatedTagData;
 
     switch (data.kind) {
       case "binding": {
@@ -977,7 +977,7 @@ export function createEmitter(): StringEmitter {
       }
       case "dynamic": {
         // The children are the ones the **core** already resolved into
-        // `tag.children`. Re-resolving them in `resolveHostTag` (the shape
+        // `tag.children`. Re-resolving them in `resolveDelegatedTag` (the shape
         // this replaced) walked the same Marko nodes a second time, which
         // replayed every lowerer side effect — hoists and binding
         // registrations — and made nested dynamic tags lower exponentially.
@@ -999,7 +999,7 @@ export function createEmitter(): StringEmitter {
           attrs: tag.attrs,
           content,
           // `tag.attributeTags` is what the core already resolved for this
-          // `HostTag` — forwarding it is what keeps `<${expr}><@header>…</@header></>`
+          // `DelegatedTag` — forwarding it is what keeps `<${expr}><@header>…</@header></>`
           // from silently dropping the attribute tag (measured against Marko
           // 6.3.51: attribute tags on a dynamic tag ARE forwarded).
           attributeTags: tag.attributeTags,
