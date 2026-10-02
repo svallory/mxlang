@@ -64,7 +64,11 @@ export interface MxCompileDiagnostic extends SolidMxSyntaxError {
 
 export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
   getCompileDiagnostics(fileName?: string): MxCompileDiagnostic[];
-  /** Only the `.mx` plugin resolves hosts, so only it implements this. */
+  /**
+   * What this plugin's host resolution reported (an unknown `mx.host`, a
+   * malformed `package.json`). Every plugin that resolves a host implements
+   * it: `.mx`, `.solid.mx`, `.ng.mx` and `.amx`.
+   */
   getHostPolicyDiagnostics?(fileName?: string): HostPolicyDiagnostic[];
 }
 

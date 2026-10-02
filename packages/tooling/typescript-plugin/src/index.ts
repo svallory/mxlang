@@ -231,6 +231,13 @@ function withSyntaxDiagnostics(
         if (compileDiagnostics.length === 0 && hostPolicy.length === 0) {
           return diagnostics;
         }
+        const source = fileName.endsWith(".solid.mx")
+          ? "solidmx"
+          : isNgMx(fileName)
+            ? "ngmx"
+            : fileName.endsWith(".amx")
+              ? "amx"
+              : "mx";
 
         return [
           ...diagnostics,
@@ -249,13 +256,7 @@ function withSyntaxDiagnostics(
                 ? typescript.DiagnosticCategory.Error
                 : typescript.DiagnosticCategory.Warning,
             code: diagnostic.category === "error" ? 80001 : 80002,
-            source: fileName.endsWith(".solid.mx")
-              ? "solidmx"
-              : isNgMx(fileName)
-                ? "ngmx"
-                : fileName.endsWith(".amx")
-                  ? "amx"
-                  : "mx",
+            source,
             messageText: diagnostic.message,
           })),
           ...hostPolicy.map((diagnostic) => ({
@@ -270,7 +271,7 @@ function withSyntaxDiagnostics(
             length: 0,
             category: typescript.DiagnosticCategory.Warning,
             code: HOST_POLICY_DIAGNOSTIC_CODE,
-            source: "mx",
+            source,
             messageText: hostPolicyMessage(diagnostic),
           })),
         ];
@@ -288,6 +289,7 @@ export { createAstroLanguagePlugin } from "./astro-language.ts";
 export {
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyMessage,
+  hostPolicyText,
 } from "./host-policy-diagnostics.ts";
 export type {
   CompiledNgMx,

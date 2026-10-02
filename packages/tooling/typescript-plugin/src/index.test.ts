@@ -4209,25 +4209,45 @@ describe("host-policy diagnostics through tsserver", () => {
     return dir;
   }
 
-  function hostPolicyDiagnostics(dir: string, fileName: string) {
+  const SOURCES: Record<string, string> = {
+    "page.mx": "<div>hi</div>\n",
+    "page.solid.mx": "export const X = 1;\n",
+    "x.component.ng.mx": "export class X {}\n",
+  };
+
+  /** One tsserver project (one plugin instance) over `dir`'s `fileName`. */
+  function project(dir: string, fileName: string) {
     const file = join(dir, fileName);
     const consumer = join(dir, "index.ts");
-    const service = createPluginService(
+    const mutable = createMutablePluginService(
       {
-        [file]: fileName.endsWith(".ng.mx")
-          ? "export class X {}\n"
-          : "<div>hi</div>\n",
+        [file]: SOURCES[fileName] ?? "<div>hi</div>\n",
         [consumer]: `import "./${fileName}";\n`,
       },
       [consumer],
     );
-    service.getSemanticDiagnostics(consumer);
-    return service.getSyntacticDiagnostics(file);
+    return {
+      file,
+      /** Builds the project, then asks for the file's own diagnostics. */
+      diagnostics() {
+        mutable.service.getSemanticDiagnostics(consumer);
+        return mutable.service.getSyntacticDiagnostics(file);
+      },
+      /** An edit of the `.mx` itself (same text, new version). */
+      touch() {
+        mutable.setFile(file, `${SOURCES[fileName] ?? ""}\n`);
+      },
+    };
+  }
+
+  function hostPolicyDiagnostics(dir: string, fileName: string) {
+    return project(dir, fileName).diagnostics();
   }
 
   const UNKNOWN = '{\n  "mx": {\n    "host": "vue"\n  }\n}\n';
+  const FIXED = '{ "mx": { "host": "html" } }';
 
-  it("puts an unknown mx.host on the .mx file at 1:1, as a warning naming package.json:line:col", () => {
+  it("puts an unknown mx.host on the .mx file at 1:1, as a warning in the LS's text", () => {
     const dir = packageDir(UNKNOWN);
 
     const [diagnostic, ...rest] = hostPolicyDiagnostics(dir, "page.mx");
@@ -4240,16 +4260,17 @@ describe("host-policy diagnostics through tsserver", () => {
       code: 80003,
       category: ts.DiagnosticCategory.Warning,
     });
-    expect(String(diagnostic?.messageText)).toContain(
-      'unknown mx.host "vue"; valid hosts: html',
-    );
-    expect(String(diagnostic?.messageText)).toContain(
-      `(${join(dir, "package.json")}:3:13)`,
+    // The LS's shape: `<package.json>:line:col: <message>`.
+    expect(String(diagnostic?.messageText)).toMatch(
+      new RegExp(
+        `^${join(dir, "package.json").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:3:13: unknown mx\\.host "vue"; valid hosts: html`,
+      ),
     );
   });
 
-  it("puts a malformed package.json on the .mx file as a warning", () => {
+  it("puts a malformed package.json on the .mx file as a warning naming the path once", () => {
     const dir = packageDir('{ "mx": { "host": "html", }');
+    const manifest = join(dir, "package.json");
 
     // Babel (under Marko's compiler) may also fail on the unparseable
     // package.json depending on the cwd; that error is not what is asserted.
@@ -4258,13 +4279,14 @@ describe("host-policy diagnostics through tsserver", () => {
     );
 
     expect(diagnostic?.category).toBe(ts.DiagnosticCategory.Warning);
-    expect(String(diagnostic?.messageText)).toContain(
-      "could not be parsed as JSON",
-    );
+    const text = String(diagnostic?.messageText);
+    expect(text.startsWith(`${manifest}:1:`)).toBe(true);
+    expect(text).toContain("could not be parsed as JSON");
+    expect(text.split(manifest).length - 1).toBe(1);
   });
 
   it("reports nothing for a valid host", () => {
-    const dir = packageDir('{ "mx": { "host": "html" } }');
+    const dir = packageDir(FIXED);
 
     expect(hostPolicyDiagnostics(dir, "page.mx")).toEqual([]);
   });
@@ -4283,14 +4305,54 @@ describe("host-policy diagnostics through tsserver", () => {
     ).toBe(true);
   });
 
-  it("stops reporting once package.json is fixed (a new service per project sees the fixed manifest)", () => {
+  it("reports on a .solid.mx, with that file kind's source", () => {
     const dir = packageDir(UNKNOWN);
-    expect(hostPolicyDiagnostics(dir, "page.mx")).toHaveLength(1);
 
-    writeFileSync(join(dir, "package.json"), '{ "mx": { "host": "html" } }');
-    clearScanCache();
+    const diagnostic = hostPolicyDiagnostics(dir, "page.solid.mx").find(
+      (d) => d.code === 80003,
+    );
 
-    // A new service (one per project in tsserver) sees the fixed manifest.
-    expect(hostPolicyDiagnostics(dir, "page.mx")).toEqual([]);
+    expect(diagnostic).toMatchObject({
+      source: "solidmx",
+      category: ts.DiagnosticCategory.Warning,
+      start: 0,
+    });
+    expect(String(diagnostic?.messageText)).toContain('unknown mx.host "vue"');
+  });
+
+  it("keeps two projects apart: one bad host in A does not reach B, before or after A is asked again", () => {
+    const bad = packageDir(UNKNOWN);
+    const good = packageDir(FIXED);
+    const a = project(bad, "page.mx");
+    const b = project(good, "page.mx");
+
+    expect(a.diagnostics()).toHaveLength(1);
+    expect(b.diagnostics()).toHaveLength(0);
+    expect(a.diagnostics()).toHaveLength(1);
+    expect(b.diagnostics()).toHaveLength(0);
+  });
+
+  it("clears the warning in the same service once package.json is fixed and the .mx is edited", () => {
+    const dir = packageDir(UNKNOWN);
+    const p = project(dir, "page.mx");
+    expect(p.diagnostics()).toHaveLength(1);
+
+    writeFileSync(join(dir, "package.json"), FIXED);
+    p.touch();
+
+    expect(p.diagnostics()).toEqual([]);
+  });
+
+  it("pins a known limit: fixing package.json alone leaves the warning until the .mx is edited", () => {
+    // The plugin does not watch package.json (the host choice itself is as
+    // stale), so the warning lingers. A package.json watch is a follow-up;
+    // when it lands, this test is meant to flip to `toEqual([])`.
+    const dir = packageDir(UNKNOWN);
+    const p = project(dir, "page.mx");
+    expect(p.diagnostics()).toHaveLength(1);
+
+    writeFileSync(join(dir, "package.json"), FIXED);
+
+    expect(p.diagnostics()).toHaveLength(1);
   });
 });

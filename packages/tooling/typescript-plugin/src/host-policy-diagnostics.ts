@@ -12,12 +12,24 @@ import {
 export const HOST_POLICY_DIAGNOSTIC_CODE = 80003;
 
 /**
+ * Core's message with its own leading `<package.json> ` removed: wherever a
+ * diagnostic is printed, the path is already its location, so it is said once.
+ */
+export function hostPolicyText(diagnostic: HostPolicyDiagnostic): string {
+  const own = `${diagnostic.file} `;
+  return diagnostic.message.startsWith(own)
+    ? diagnostic.message.slice(own.length)
+    : diagnostic.message;
+}
+
+/**
  * The text of a host-policy diagnostic reported somewhere other than the
- * `package.json` itself: core's message plus the position it carries, 1-based
- * like every editor and `tsc` shows one.
+ * `package.json` itself: `<package.json>:line:col: <message>`, 1-based like
+ * every editor and `tsc` shows a position. The language server prints the
+ * same text.
  */
 export function hostPolicyMessage(diagnostic: HostPolicyDiagnostic): string {
-  return `${diagnostic.message} (${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1})`;
+  return `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${hostPolicyText(diagnostic)}`;
 }
 
 /**

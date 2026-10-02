@@ -4,7 +4,7 @@
 
 ### Added: host-policy diagnostics (host-policy-diagnostics-tsc-tsserver)
 
-An unknown `mx.host` or a malformed `package.json` was silent in tsserver (the file just got the fallback host). Every language plugin now records what `resolveHostPolicyDetailed` said for each file it compiles, per plugin instance (`getHostPolicyDiagnostics(fileName?)`), and tsserver reports it as a `TS80003` warning on that file at 1:1, naming `package.json:line:col` (tsserver reports no diagnostics on a `package.json`). `mx-tsc` prints the same records positioned in the `package.json`. New exports: `HOST_POLICY_DIAGNOSTIC_CODE`, `hostPolicyMessage`, type `HostPolicyDiagnostic`.
+An unknown `mx.host` or a malformed `package.json` was silent in tsserver (the file just got the fallback host). Every language plugin now records what `resolveHostPolicyDetailed` said for each file it compiles, per plugin instance (`getHostPolicyDiagnostics(fileName?)`), and tsserver reports it as a `TS80003` warning on that file at 1:1, naming `package.json:line:col` (tsserver reports no diagnostics on a `package.json`). `mx-tsc` prints the same records positioned in the `package.json`. New exports: `HOST_POLICY_DIAGNOSTIC_CODE`, `hostPolicyMessage`, type `HostPolicyDiagnostic`. The text is the language server's (`<package.json>:line:col: <message>`, the path said once; `hostPolicyText` is the message without core's leading path), and `source` follows the file kind (`mx`, `solidmx`, `ngmx`, `amx`). Known limit: the plugin does not watch `package.json`, so a fixed manifest clears the warning only once the `.mx` is edited or the project reloads.
 
 ### Fixed: a failed `.mx` compile no longer cascades `TS2306 … is not a module` into every importer
 
