@@ -420,7 +420,11 @@ function isDelegatedTag(name: string): boolean {
  * resolve, so a construct the target cannot express fails with a position
  * rather than reaching an emitter that would have to re-derive why.
  */
-function resolveDelegatedTag(name: string, node: Node, ctx: Ctx): DelegatedTagData {
+function resolveDelegatedTag(
+  name: string,
+  node: Node,
+  ctx: Ctx,
+): DelegatedTagData {
   if (name === DYNAMIC_TAG) {
     // Only the target expression is decided here. The children are *not*
     // resolved again: the core has already resolved them into the

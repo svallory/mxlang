@@ -50,7 +50,11 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
   }
 
   return [
-    ctx.build.delegatedTag("try", call.content?.children ?? [], call.attributeTags),
+    ctx.build.delegatedTag(
+      "try",
+      call.content?.children ?? [],
+      call.attributeTags,
+    ),
   ];
 }
 

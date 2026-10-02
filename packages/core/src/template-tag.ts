@@ -535,9 +535,8 @@ export function metadataOfIr(
       record(inputMember(interpolation.expr.code));
     }
     if (node.kind === "DelegatedTag") {
-      const data = (node as Extract<IrNode, { kind: "DelegatedTag" }>).tag.data as
-        | { kind?: string; expr?: { code?: string } }
-        | undefined;
+      const data = (node as Extract<IrNode, { kind: "DelegatedTag" }>).tag
+        .data as { kind?: string; expr?: { code?: string } } | undefined;
       if (data?.kind === "dynamic" && typeof data.expr?.code === "string") {
         record(inputMember(data.expr.code));
       }

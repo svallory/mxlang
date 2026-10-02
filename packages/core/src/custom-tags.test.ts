@@ -1239,10 +1239,9 @@ describe("core-owned custom tags", () => {
       tryDeclarations,
     );
     const delegatedTag = find(ir.body, "DelegatedTag");
-    expect(delegatedTag.tag.attributeTags.map((tag) => tag.name).sort()).toEqual([
-      "catch",
-      "placeholder",
-    ]);
+    expect(
+      delegatedTag.tag.attributeTags.map((tag) => tag.name).sort(),
+    ).toEqual(["catch", "placeholder"]);
   });
 
   it.each([
@@ -1804,7 +1803,9 @@ describe("contract-only custom tags", () => {
       claimAttribute(),
     );
     expect(seen).toEqual([2]);
-    expect(ir.body.filter((node) => node.kind === "DelegatedTag")).toHaveLength(2);
+    expect(ir.body.filter((node) => node.kind === "DelegatedTag")).toHaveLength(
+      2,
+    );
   });
 
   it.each([
