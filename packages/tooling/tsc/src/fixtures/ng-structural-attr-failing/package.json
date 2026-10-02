@@ -1,0 +1,11 @@
+{
+  "name": "ng-structural-attr-failing",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  },
+  "mx": {
+    "angular": {
+      "diagnostics": "off"
+    }
+  }
+}

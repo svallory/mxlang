@@ -556,7 +556,10 @@ export function reportCompileDiagnostics(
           : typescript.DiagnosticCategory.Warning,
       code: diagnostic.category === "error" ? 80001 : 80002,
       source: "mxlang",
-      messageText: diagnostic.message,
+      // Babel appends its own 0-based `(line:column)` to a syntax error's
+      // message; tsc already prints `file(line,column)` (1-based), so the
+      // suffix is a second, different spelling of the same position.
+      messageText: diagnostic.message.replace(/\s*\(\d+:\d+\)\s*$/, ""),
     })),
     {
       getCanonicalFileName: (fileName) => fileName,
