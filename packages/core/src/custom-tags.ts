@@ -331,6 +331,7 @@ export interface IrBuilders {
     name: string,
     children: IrNode[],
     attributeTags: AttributeTag[],
+    attrs?: Attr[],
   ): IrNode;
   /**
    * Routes this tag's own template (`tags/x.mx`) as an imported component.
@@ -497,7 +498,7 @@ function buildersFor(
       children,
       loc,
     }),
-    hostTag: (name, children, attributeTags) => {
+    hostTag: (name, children, attributeTags, attrs = []) => {
       if (node === null) {
         return failAt(
           tagName,
@@ -534,7 +535,7 @@ function buildersFor(
         kind: "HostTag",
         tag: {
           name,
-          attrs: [],
+          attrs,
           children,
           attributeTags,
           attributeTagTree,
@@ -1122,6 +1123,39 @@ function observedCall(call: TagCall): {
   };
 }
 
+/**
+ * Whether a contract-only tag of this name hands its validated call to the
+ * active host. The one question core asks is the generic `claimsTag`.
+ */
+export function isContractOnlyClaimed(ctx: Ctx, name: string): boolean {
+  return ctx.declarations.claimsTag?.(name, ctx) === true;
+}
+
+/**
+ * The `HostTag` a validated contract-only call lowers to: the same node an
+ * unregistered claimed tag produces, so the host sees an ordinary call.
+ */
+function contractOnlyHostTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
+  return {
+    kind: "HostTag",
+    tag: {
+      name: call.name,
+      attrs: call.attrs,
+      args: [],
+      children: call.content?.children ?? [],
+      attributeTags: call.attributeTags,
+      attributeTagTree:
+        call.attributeTagTree ?? directAttributeTagTree(call.attributeTags),
+      attrTagProps: call.attrTagProps ?? [],
+      params: call.params,
+      var: call.var,
+      data: ctx.declarations.resolveHostTag?.(call.name, node, ctx),
+      loc: call.loc,
+    },
+    loc: call.loc,
+  };
+}
+
 /** Runs a validated transform and normalizes its failures to TranslateError. */
 export function transformCustomTag(
   ctx: Ctx,
@@ -1129,7 +1163,11 @@ export function transformCustomTag(
   call: TagCall,
   node: Node,
 ): IrNode[] {
-  if (!definition.transform && !hasTemplate(definition)) {
+  // Decision 130: a contract-only tag (no `transform`, no template) is valid
+  // on a name the active host claims; anywhere else a call has nothing to
+  // expand to.
+  const contractOnly = !definition.transform && !hasTemplate(definition);
+  if (contractOnly && !isContractOnlyClaimed(ctx, call.name)) {
     failAt(
       call.name,
       "custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
@@ -1142,6 +1180,7 @@ export function transformCustomTag(
     ...call,
     attrs: applyCustomTagDefaults(definition, call),
   };
+  if (contractOnly) return [contractOnlyHostTag(ctx, withDefaults, node)];
 
   // The analyze pre-pass. Validation above has already run, so a bad call is
   // reported once at its real position rather than twice or (worse) only on

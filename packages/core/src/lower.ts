@@ -64,6 +64,7 @@ import {
 } from "./core.ts";
 import {
   type CustomTag,
+  isContractOnlyClaimed,
   runAnalyzeHooks,
   runFinalizeHooks,
   shadowedBuiltinMessage,
@@ -2047,7 +2048,19 @@ function lowerCustomTag(
   const call: TagCall = {
     name,
     loc: posOf(node),
-    attrs: lowerAttrs(ctx, node, name, "component"),
+    // A contract-only call on a claimed name becomes a HostTag, so its
+    // attributes lower as `lowerHostTag` lowers them.
+    attrs: lowerAttrs(
+      ctx,
+      node,
+      name,
+      !isBuiltin &&
+        !definition.transform &&
+        !hasTemplate(definition) &&
+        isContractOnlyClaimed(ctx, name)
+        ? "element"
+        : "component",
+    ),
     content:
       isBuiltin || hasContent(children)
         ? lowerBlock(ctx, node, children)

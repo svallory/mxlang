@@ -1618,3 +1618,219 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
     expect(find(rest, "Element").name).toBe("mx-marker");
   });
 });
+
+/**
+ * Decision 130: a custom tag that declares only a contract (no `transform`, no
+ * template) is valid on a name the active host claims. Core validates the call,
+ * then lowers it to the same `HostTag` an unregistered claimed tag would be.
+ */
+describe("contract-only custom tags", () => {
+  const attribute: CustomTag = {
+    attributes: {
+      value: { type: "string", required: true },
+      type: { type: "string", required: true, enum: ["string", "enum"] },
+      public: { type: "boolean" },
+    },
+  };
+  const claimAttribute = (): Policy =>
+    fakeDeclarations({
+      claimsTag: (name) => name === "attribute",
+      resolveHostTag: (name) => ({ name }),
+    });
+
+  it("lowers a claimed contract-only tag to a HostTag that carries its attributes", () => {
+    const source = '<attribute="title" type="string" public/>\n';
+    const ir = lowerWithTags(source, { attribute }, claimAttribute());
+    const { tag } = find(ir.body, "HostTag");
+    expect(tag.name).toBe("attribute");
+    expect(tag.data).toEqual({ name: "attribute" });
+    expect(tag.attrs.map((attr) => attr.kind)).toEqual([
+      "static",
+      "static",
+      "boolean",
+    ]);
+    expect(named(tag.attrs, "type")).toMatchObject({
+      kind: "static",
+      value: "string",
+    });
+    expect(named(tag.attrs, "public")).toMatchObject({ kind: "boolean" });
+  });
+
+  it("keeps each attribute's name span", () => {
+    const source = '<attribute value="a" type="string"/>\n';
+    const { tag } = find(
+      lowerWithTags(source, { attribute }, claimAttribute()).body,
+      "HostTag",
+    );
+    const typeAttr = named(tag.attrs, "type");
+    if (!typeAttr || typeAttr.kind === "spread") throw new Error("no type");
+    const { sourceStart: start, sourceEnd: end } = typeAttr.nameSpan;
+    expect(source.slice(start, end)).toBe("type");
+  });
+
+  it("keeps the tag's own position and its children", () => {
+    const { tag } = find(
+      lowerWithTags(
+        '\n<attribute value="a" type="string"><p>x</p></attribute>\n',
+        { attribute },
+        claimAttribute(),
+      ).body,
+      "HostTag",
+    );
+    expect(tag.loc).toMatchObject({ line: 2, column: 0 });
+    expect(tag.children).toMatchObject([{ kind: "Element", name: "p" }]);
+  });
+
+  it("carries attribute tags a contract declares", () => {
+    const resource: CustomTag = {
+      attributes: { name: { type: "string", required: true } },
+      attributeTags: { field: { repeatable: true } },
+    };
+    const { tag } = find(
+      lowerWithTags(
+        '<resource name="post"><@field/><@field/></resource>\n',
+        { resource },
+        fakeDeclarations({ claimsTag: (name) => name === "resource" }),
+      ).body,
+      "HostTag",
+    );
+    expect(tag.attributeTags.map((item) => item.name)).toEqual([
+      "field",
+      "field",
+    ]);
+  });
+
+  it("still reports an unknown attribute on a claimed tag", () => {
+    expect(() =>
+      lowerWithTags(
+        '<attribute value="a" type="string" nope="x"/>\n',
+        { attribute },
+        claimAttribute(),
+      ),
+    ).toThrowError(
+      expect.objectContaining({ message: expect.stringContaining("nope") }),
+    );
+  });
+
+  it("still reports a missing required attribute at the call", () => {
+    expect(() =>
+      lowerWithTags(
+        '\n<attribute value="a"/>\n',
+        { attribute },
+        claimAttribute(),
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "`<attribute>`: missing required attribute `type`",
+        ),
+        line: 2,
+        column: 0,
+      }),
+    );
+  });
+
+  it("still reports an enum violation on a claimed tag", () => {
+    expect(() =>
+      lowerWithTags(
+        '<attribute value="a" type="strng"/>\n',
+        { attribute },
+        claimAttribute(),
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        message: expect.stringContaining('must be one of "string", "enum"'),
+      }),
+    );
+  });
+
+  it("still reports an undeclared attribute tag on a claimed tag", () => {
+    const declared: CustomTag = {
+      ...attribute,
+      attributeTags: { field: { repeatable: true } },
+    };
+    expect(() =>
+      lowerWithTags(
+        '<attribute value="a" type="string"><@oops/></attribute>\n',
+        { attribute: declared },
+        claimAttribute(),
+      ),
+    ).toThrowError(
+      expect.objectContaining({ message: expect.stringContaining("oops") }),
+    );
+  });
+
+  it("keeps today's error when the host does not claim the name", () => {
+    expect(() =>
+      lowerWithTags(
+        '\n<attribute value="a" type="string"/>\n',
+        { attribute },
+        fakeDeclarations({ claimsTag: (name) => name === "other" }),
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "`<attribute>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+        ),
+        line: 2,
+        column: 0,
+      }),
+    );
+  });
+
+  it("keeps today's error on a host with no claimsTag at all", () => {
+    expect(() =>
+      lowerWithTags('<attribute value="a" type="string"/>\n', { attribute }),
+    ).toThrowError("so a call has nothing to expand to");
+  });
+
+  it("leaves a tag with both a contract and a transform to its transform", () => {
+    const both: CustomTag = {
+      attributes: { value: { type: "string" } },
+      transform: () => [],
+    };
+    const ir = lowerWithTags(
+      '<attribute value="a"/>\n',
+      { attribute: both },
+      claimAttribute(),
+    );
+    expect(ir.body.filter((node) => node.kind === "HostTag")).toEqual([]);
+  });
+});
+
+describe("ctx.build.hostTag attributes", () => {
+  const declarations = (): Policy =>
+    fakeDeclarations({ claimsTag: (name) => name === "boundary" });
+
+  it("carries the attributes it is given", () => {
+    const boundary: CustomTag = {
+      transform: (call, ctx) => [
+        ctx.build.hostTag("boundary", [], call.attributeTags, [
+          ctx.build.attr("id", "x"),
+          ctx.build.booleanAttr("open"),
+        ]),
+      ],
+    };
+    const { tag } = find(
+      lowerWithTags("<boundary/>\n", { boundary }, declarations()).body,
+      "HostTag",
+    );
+    expect(tag.attrs.map((attr) => (attr as { name: string }).name)).toEqual([
+      "id",
+      "open",
+    ]);
+  });
+
+  it("carries none when called as before", () => {
+    const boundary: CustomTag = {
+      transform: (call, ctx) => [
+        ctx.build.hostTag("boundary", [], call.attributeTags),
+      ],
+    };
+    const { tag } = find(
+      lowerWithTags('<boundary id="x"/>\n', { boundary }, declarations()).body,
+      "HostTag",
+    );
+    expect(tag.attrs).toEqual([]);
+  });
+});
