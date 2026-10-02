@@ -9,10 +9,10 @@ import {
   type RawSourceMap,
 } from "@mxlang/preact";
 import type { ReactNode } from "react";
-import { reactDeclarations, reactTarget } from "./target.ts";
+import { reactDeclarations, reactDialect } from "./dialect.ts";
 
 export { TranslateError } from "@mxlang/preact";
-export { reactDeclarations, reactTarget } from "./target.ts";
+export { reactDeclarations, reactDialect } from "./dialect.ts";
 export type { CompileResult, RawSourceMap };
 
 /** Attribute-tag value specialised to React's renderable node type. */
@@ -31,7 +31,7 @@ export function compileReactMx(
   > = {},
 ): CompilePreactResult {
   return compilePreactMx(source, filename, {
-    target: reactTarget,
+    dialect: reactDialect,
     declarations: reactDeclarations,
     customTags: options.customTags,
     resolveImport: options.resolveImport,

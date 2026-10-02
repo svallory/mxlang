@@ -1,13 +1,13 @@
 import { type Child, createElement, jsx } from "hono/jsx";
 import { describe, expect, it } from "vitest";
-import { compileHonoMx, honoDeclarations, honoTarget } from "./index.ts";
+import { compileHonoMx, honoDeclarations, honoDialect } from "./index.ts";
 
 function compile(source: string): string {
   return compileHonoMx(source, "/fixtures/test.mx").code;
 }
 
 it("keeps framework diagnostics separate from host capability diagnostics", () => {
-  expect(honoTarget.name).toBe("Hono");
+  expect(honoDialect.name).toBe("Hono");
   expect(honoDeclarations.name).toBe("@mxlang/hono");
 });
 
@@ -27,7 +27,7 @@ function errorOf(source: string): string {
   throw new Error("expected a compile error, but the template compiled");
 }
 
-describe("Hono target", () => {
+describe("Hono dialect", () => {
   it("uses Hono's JSX source and native DOM prop names", () => {
     const code = compile('<label class="field" for="name">Name</label>');
     expect(code).toContain("/** @jsxImportSource hono/jsx */");
@@ -521,9 +521,9 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
   });
 });
 
-describe("hook-guard-module-list: each host's Target declares its own hookModules", () => {
+describe("hook-guard-module-list: each host's JsxDialect declares its own hookModules", () => {
   it("rejects a hook imported from hono/jsx in a unit that declares <return>", () => {
-    // Hono declares only `["hono/jsx"]` on its own Target.hookModules.
+    // Hono declares only `["hono/jsx"]` on its own JsxDialect.hookModules.
     expect(() =>
       compileHonoMx(
         [

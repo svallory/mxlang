@@ -76,10 +76,10 @@ Six facts worth knowing before editing it:
   `mxClass`. This does not contradict decision 82: it is Preact code an author
   would otherwise write by hand, not an MX runtime, and a template that uses
   none of it imports none of it.
-- **Preact-only vocabulary lives in `src/target.ts`.** The JSX import source,
+- **Preact-only vocabulary lives in `src/dialect.ts`.** The JSX import source,
   `class` versus `className`, the raw-HTML prop and the boundary module are a
-  `Target` object so a React package can reuse this emitter. A knob that would
-  need an `if (target.kind === "react")` in the emitter does not belong there.
+  `JsxDialect` object so a React package can reuse this emitter. A knob that would
+  need an `if (dialect.kind === "react")` in the emitter does not belong there.
 
 `bun run oracle:preact` (`packages/oracle/src/report-preact.ts` +
 `preact-render.ts`) compiles every fixture in the stock `.marko` set — the

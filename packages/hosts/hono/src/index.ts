@@ -9,10 +9,10 @@ import {
   type RawSourceMap,
 } from "@mxlang/preact";
 import type { Child } from "hono/jsx";
-import { honoDeclarations, honoTarget } from "./target.ts";
+import { honoDeclarations, honoDialect } from "./dialect.ts";
 
 export { TranslateError } from "@mxlang/preact";
-export { honoDeclarations, honoTarget } from "./target.ts";
+export { honoDeclarations, honoDialect } from "./dialect.ts";
 export type { CompileResult, RawSourceMap };
 
 /** Attribute-tag value specialised to Hono's renderable child type. */
@@ -31,7 +31,7 @@ export function compileHonoMx(
   > = {},
 ): CompilePreactResult {
   return compilePreactMx(source, filename, {
-    target: honoTarget,
+    dialect: honoDialect,
     declarations: honoDeclarations,
     customTags: options.customTags,
     resolveImport: options.resolveImport,

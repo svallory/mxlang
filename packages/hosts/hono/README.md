@@ -14,18 +14,18 @@ with every other host.
 Hono's JSX makes the same structural lowering choices as Preact and React:
 `<if>` is a ternary, `<for>` is `.map()` with a `key`, ordinary children are
 JSX children, and attribute tags are props. `@mxlang/hono` therefore depends on
-`@mxlang/preact` and passes a Hono `Target` to its exported emitter instead of
-forking it. The target owns only vocabulary: JSX import source, native `class`
+`@mxlang/preact` and passes a Hono `JsxDialect` to its exported emitter instead of
+forking it. The dialect object owns only vocabulary: JSX import source, native `class`
 (Hono, like Preact, accepts it directly — no `className`), the raw-HTML prop,
 the Fragment module, and the error-boundary module. Structural changes remain
 one implementation and one test surface.
 
-Two knobs on the shared `Target` exist *because of* Hono, not Preact or React:
+Two knobs on the shared `JsxDialect` exist *because of* Hono, not Preact or React:
 `errorBoundaryFallbackProp` (Hono's built-in `ErrorBoundary` takes
 `fallbackRender`, not `fallback`) and `errorBoundaryFallbackAlwaysFunction`
 (that prop has no non-function form, so a param-less `<@catch>` is still
 wrapped in `() => …`). Both default to Preact's/React's existing `fallback`
-behavior, so neither target had to change.
+behavior, so neither dialect had to change.
 
 Unlike Preact and React, this host ships **no hand-rolled error boundary
 class**: Hono's `hono/jsx` provides `ErrorBoundary` and `Suspense` natively, so
@@ -148,4 +148,4 @@ The oracle compiles all 45 stock Marko fixtures, renders through `hono/jsx`
 error — Hono's `ErrorBoundary` resolves asynchronously), and compares with the
 HTML host using semantic HTML normalization: **32 pass, 13 reasoned skips, 0
 bugs** — identical to `oracle:preact` and `oracle:react`, since all three
-targets share the emitter and the skip list.
+dialects share the emitter and the skip list.

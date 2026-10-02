@@ -1,4 +1,4 @@
-import { createJsxDeclarations, type Target } from "@mxlang/preact";
+import { createJsxDeclarations, type JsxDialect } from "@mxlang/preact";
 
 /**
  * React's own event-prop names, vendored from its registration table.
@@ -144,7 +144,7 @@ export function buildReactEventPropNames(): Record<string, string> {
 }
 
 /** React vocabulary for the shared Preact/React JSX emitter. */
-export const reactTarget: Target = {
+export const reactDialect: JsxDialect = {
   name: "React",
   jsxImportSource: "react",
   attrTagModule: "@mxlang/react",

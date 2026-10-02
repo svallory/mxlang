@@ -14,8 +14,8 @@ with every other host.
 React and Preact make the same structural lowering choices: `<if>` is a
 ternary, `<for>` is `.map()` with a `key`, ordinary children are JSX children,
 and attribute tags are props. `@mxlang/react` therefore depends on
-`@mxlang/preact` and passes a React `Target` to its exported emitter instead of
-forking it. The target owns only vocabulary: JSX import source, `className`,
+`@mxlang/preact` and passes a React `JsxDialect` to its exported emitter instead of
+forking it. The dialect object owns only vocabulary: JSX import source, `className`,
 `htmlFor`, raw-HTML prop, Fragment module, and runtime-helper module. Structural
 changes remain one implementation and one test surface.
 
@@ -23,7 +23,7 @@ When these private workspace packages are published, `@mxlang/preact` becomes
 a regular runtime dependency of `@mxlang/react`, published at the matching
 version; `workspace:*` is only the monorepo development spelling, and release
 packaging replaces it with that exact version. The emitter stays in
-`@mxlang/preact` rather than moving to a neutral package unless the two targets
+`@mxlang/preact` rather than moving to a neutral package unless the two dialects
 eventually gain a third consumer that justifies a separately published shared
 package.
 

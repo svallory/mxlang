@@ -182,7 +182,7 @@ Five facts worth knowing before editing it:
   own registration table (`simpleEventPluginEvents`), which no derivation can
   reverse (`keydown` → `onKeyDown`), so the React target vendors the list and
   looks the spelling up (`buildReactEventPropNames` in
-  `packages/hosts/react/src/target.ts`, guarded by a drift test against the
+  `packages/hosts/react/src/dialect.ts`, guarded by a drift test against the
   installed react-dom). A custom DOM
   event a JSX prop cannot spell (`on-my-event`) is a uniform positioned error
   on solid/preact/react/hono naming the `ref` route — JSX hosts cannot express

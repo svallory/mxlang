@@ -42,7 +42,7 @@ Structured class objects and arrays go through `mxClass` so they remain Marko
 class semantics instead of rendering as `[object Object]`.
 
 React and Preact share one structural emitter. `@mxlang/react` depends on
-`@mxlang/preact` and supplies a React target object containing only the names
+`@mxlang/preact` and supplies a React dialect object containing only the names
 that differ. Its runtime is native React—not a Preact compatibility layer.
 
 Attribute-tag contracts import `AttrTag` from `@mxlang/react`. A renderable is
@@ -58,7 +58,7 @@ An element's `on<Name>=fn` (`onClick`, `onKeyDown`) or `on-<exact>=fn`
 everything after `on` lowercased, or the exact text after `on-` — and that
 name is the *input*; React's prop spelling is a **lookup** in React's own
 event registration table, vendored into this target (`buildReactEventPropNames`
-in `packages/hosts/react/src/target.ts`, from react-dom's
+in `packages/hosts/react/src/dialect.ts`, from react-dom's
 `simpleEventPluginEvents`). There is no rule an author can derive in reverse:
 React's names are camelCase data that react-dom lowercases for the DOM, so
 `keydown` → `onKeyDown`, `mousedown` → `onMouseDown`, `timeupdate` →

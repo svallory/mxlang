@@ -49,7 +49,7 @@ Structured class objects and arrays go through `mxClass` so they remain Marko
 class semantics instead of rendering as `[object Object]`.
 
 Hono shares the same structural emitter as Preact and React. `@mxlang/hono`
-depends on `@mxlang/preact` and supplies a Hono target object containing only
+depends on `@mxlang/preact` and supplies a Hono dialect object containing only
 the names that differ. Unlike Preact and React, it ships **no hand-rolled
 error boundary or suspense component** — Hono's `hono/jsx` provides
 `ErrorBoundary` and `Suspense` natively, so this host's runtime supplies only

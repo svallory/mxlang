@@ -250,10 +250,10 @@ would report a difference in Preact's output as a difference in MX's lowering.
 
 ## A React host
 
-The lowering here is React's lowering. The two targets differ in a handful of
+The lowering here is React's lowering. The two dialects differ in a handful of
 *names* — the JSX import source, `class` versus `className`, which module the
-error boundary comes from — and those live in `target.ts`'s `Target` object,
+error boundary comes from — and those live in `dialect.ts`'s `JsxDialect` object,
 so a `@mxlang/react` package can pass its own and reuse this emitter rather
-than fork it. A knob that would require an `if (target.kind === "react")` in
-the emitter does not belong there: that would mean the targets have genuinely
+than fork it. A knob that would require an `if (dialect.kind === "react")` in
+the emitter does not belong there: that would mean the dialects have genuinely
 diverged, and the fork would be the honest answer.

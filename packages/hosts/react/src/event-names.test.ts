@@ -1,5 +1,5 @@
 /**
- * React's event-prop names are vendored data (see `target.ts`), not a rule
+ * React's event-prop names are vendored data (see `dialect.ts`), not a rule
  * anyone can derive — `keydown` is `onKeyDown`, never `onKeydown`. Two
  * things are pinned here:
  *
@@ -14,11 +14,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { compileReactMx } from "./index.ts";
 import {
   buildReactEventPropNames,
   REACT_SIMPLE_EVENT_NAMES,
-} from "./target.ts";
+} from "./dialect.ts";
+import { compileReactMx } from "./index.ts";
 
 const require = createRequire(import.meta.url);
 

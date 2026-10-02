@@ -2,41 +2,41 @@
  * The knobs that separate Preact from React, isolated from the emitter.
  *
  * The lowering itself — ternary chains, `.map` with `key`, attribute tags as
- * props, an error boundary around `<try>` — is identical for both targets.
+ * props, an error boundary around `<try>` — is identical for both dialects.
  * What differs is a short list of *names*: the JSX runtime the emitted pragma
  * points at, whether a class attribute is spelled `class` or `className`, and
  * the prop that sets raw HTML. Keeping them in one object is what lets a
  * future `@mxlang/react` import this package's emitter and pass a different
- * `Target` rather than fork 600 lines that would then drift.
+ * `JsxDialect` rather than fork 600 lines that would then drift.
  *
  * Deliberately *not* in here: anything the emitter would have to branch on
- * structurally. A knob that required an `if (target.kind === "react")` in the
- * emitter is a sign the two targets have genuinely diverged, and belongs in a
+ * structurally. A knob that required an `if (dialect.kind === "react")` in the
+ * emitter is a sign the two dialects have genuinely diverged, and belongs in a
  * second emitter rather than in a boolean here.
  */
 
-export interface Target {
-  /** Human-readable target name used in host-specific diagnostics. */
+export interface JsxDialect {
+  /** Human-readable dialect name used in host-specific diagnostics. */
   name: string;
   /** Value of the emitted `/** @jsxImportSource … *\/` pragma. */
   jsxImportSource: string;
-  /** Package that exports this target's specialised `AttrTag` type. */
+  /** Package that exports this dialect's specialised `AttrTag` type. */
   attrTagModule: string;
   /**
-   * How this target spells the class attribute in JSX.
+   * How this dialect spells the class attribute in JSX.
    *
    * Preact accepts both `class` and `className`; `class` is its native prop
    * and what its own documentation uses, so that is what MX emits — an MX
    * author writes `class=` and reads `class=` back out of the generated JSX.
    */
   classAttr: string;
-  /** How this target spells HTML's `for` attribute in JSX. */
+  /** How this dialect spells HTML's `for` attribute in JSX. */
   forAttr: string;
   /** The prop that sets raw HTML from a sole `$!{expr}` child. */
   rawHtmlProp: string;
   /**
-   * How raw HTML is wrapped for that prop. Both targets take
-   * `{ __html: expr }`; kept here because it is target vocabulary, not a
+   * How raw HTML is wrapped for that prop. Both dialects take
+   * `{ __html: expr }`; kept here because it is dialect vocabulary, not a
    * structural decision.
    */
   rawHtmlValue(code: string): string;
@@ -56,8 +56,8 @@ export interface Target {
    * The prop `errorBoundaryName` takes its fallback under. Both Preact's and
    * React's hand-rolled boundaries take a `fallback` node/function; Hono's
    * *built-in* `ErrorBoundary` takes a `fallbackRender` function instead
-   * (`(error: Error) => Child`), so this is a target knob rather than an
-   * emitter constant. Defaults to `"fallback"` when a target omits it, which
+   * (`(error: Error) => Child`), so this is a dialect knob rather than an
+   * emitter constant. Defaults to `"fallback"` when a dialect omits it, which
    * is why Preact and React need no change here.
    */
   errorBoundaryFallbackProp?: string;
@@ -73,12 +73,12 @@ export interface Target {
   /** Module the JSX `Fragment` is imported from, for an explicit import. */
   fragmentModule: string;
   /**
-   * This target's event-prop names, keyed by DOM event name — the value is
+   * This dialect's event-prop names, keyed by DOM event name — the value is
    * the middle of the prop (`"KeyDown"` → `onKeyDown`), so the plain
    * `on` + capitalized-DOM-name recomposition is the fallback, not the
-   * rule. Only the React target sets this, and it is a *lookup into React's
+   * rule. Only the React dialect sets this, and it is a *lookup into React's
    * own registration table*, vendored in
-   * `@mxlang/react`'s `target.ts` (`buildReactEventPropNames`, from
+   * `@mxlang/react`'s `dialect.ts` (`buildReactEventPropNames`, from
    * react-dom's `simpleEventPluginEvents` plus the registrations outside
    * that loop): React's names are camelCase data lowercased for the DOM,
    * which no derivation can reverse (`keydown` → `onKeyDown`, never
@@ -89,14 +89,14 @@ export interface Target {
   /**
    * Module specifiers whose hook imports (`use*`) are refused inside a
    * returning unit (`rejectHooksInReturningUnit`, `index.ts`). A returning
-   * unit is invoked as a plain function on every JSX target, so a hook
+   * unit is invoked as a plain function on every JSX dialect, so a hook
    * dispatcher would bind to the *calling* component instead — the same
-   * failure mode regardless of which of these three targets compiled the
+   * failure mode regardless of which of these three dialects compiled the
    * file. A list of module specifiers rather than a name test alone: a
    * local helper called `useTotal` is ordinary code, while `useState`
    * imported from one of these is the thing that breaks.
    *
-   * **Not the same list for every target.** Each host only needs to guard
+   * **Not the same list for every dialect.** Each host only needs to guard
    * the modules it can actually resolve a hook import from: Preact's own
    * `preact/hooks` and `preact/compat`, *plus* `react` — `preact/compat`'s
    * whole purpose is making `import { useState } from "react"` resolve
@@ -109,8 +109,8 @@ export interface Target {
   hookModules: readonly string[];
 }
 
-/** The Preact target. */
-export const preactTarget: Target = {
+/** The Preact dialect. */
+export const preactDialect: JsxDialect = {
   name: "Preact",
   jsxImportSource: "preact",
   attrTagModule: "@mxlang/preact",

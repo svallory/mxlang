@@ -1,15 +1,15 @@
 # hono — agent instructions
 
-## `@mxlang/hono`: the Hono target on the shared JSX emitter
+## `@mxlang/hono`: the Hono dialect on the shared JSX emitter
 
 `packages/hosts/hono` (`@mxlang/hono`) depends on `@mxlang/preact` and passes
-`honoTarget` to its exported emitter, the same shared-implementation shape as
+`honoDialect` to its exported emitter, the same shared-implementation shape as
 `@mxlang/react`: native `class`/`for` (Hono, like Preact, accepts them
 directly), `dangerouslySetInnerHTML` for raw HTML, and `<try>` lowers straight
 to `hono/jsx`'s own **built-in** `ErrorBoundary`/`Suspense` — no hand-rolled
 boundary class needed, unlike Preact/React, since Hono ships one.
 
-Two `Target` knobs on `@mxlang/preact`'s shared emitter exist because of this
+Two `JsxDialect` knobs on `@mxlang/preact`'s shared emitter exist because of this
 host: `errorBoundaryFallbackProp` (Hono's `ErrorBoundary` takes
 `fallbackRender`, not `fallback`) and `errorBoundaryFallbackAlwaysFunction`
 (that prop has no non-function form, so a param-less `<@catch>` is wrapped in

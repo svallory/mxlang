@@ -11,12 +11,12 @@
  * host-specific question through `preactDeclarations` below, and what arrives
  * is IR kinds, printed expressions and positions.
  *
- * ## Why the target is a parameter
+ * ## Why the dialect is a parameter
  *
  * React's lowering is this lowering. The two differ in a handful of *names*
  * (`preact` vs `react` as the JSX import source, `class` vs `className`, which
- * module the error boundary comes from), so those live in `Target` and a React
- * package can reuse this file rather than fork it. See `target.ts` for what
+ * module the error boundary comes from), so those live in `JsxDialect` and a React
+ * package can reuse this file rather than fork it. See `dialect.ts` for what
  * belongs in that object and what does not.
  */
 
@@ -39,7 +39,7 @@ import {
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
-import { preactTarget, type Target } from "./target.ts";
+import { type JsxDialect, preactDialect } from "./dialect.ts";
 
 /**
  * The Marko tags this host refuses, each naming what to write instead.
@@ -133,7 +133,7 @@ function isComponentName(name: string): boolean {
   return /^[A-Z]/.test(name);
 }
 
-/** Resolve-time questions for a Preact/React JSX target. */
+/** Resolve-time questions for a Preact/React JSX dialect. */
 export function createJsxDeclarations(targetName: string): HostDeclarations {
   const declarationName =
     targetName === "Preact"
@@ -314,7 +314,7 @@ function hygienicName(base: string, params: string[], body: string): string {
 /** Preact JSX text emitter over the shared core IR. */
 export class PreactEmitter implements Emitter<string> {
   readonly #out: MappedCode[] = [];
-  readonly #target: Target;
+  readonly #dialect: JsxDialect;
   /**
    * Runtime names this emitter's output needs an import for.
    *
@@ -366,14 +366,14 @@ export class PreactEmitter implements Emitter<string> {
   readonly #callbackScope: boolean;
 
   constructor(
-    target: Target = preactTarget,
+    dialect: JsxDialect = preactDialect,
     runtimeImports?: Set<string>,
     aliases?: Set<string>,
     varStatements?: string[],
     varSerial?: { n: number },
     callbackScope = false,
   ) {
-    this.#target = target;
+    this.#dialect = dialect;
     this.#runtimeImports = runtimeImports ?? new Set();
     this.#aliases = aliases ?? new Set();
     this.#varStatements = varStatements ?? [];
@@ -399,7 +399,7 @@ export class PreactEmitter implements Emitter<string> {
   /** A child emitter sharing this one's target and import collection. */
   #child(callbackScope = this.#callbackScope): PreactEmitter {
     return new PreactEmitter(
-      this.#target,
+      this.#dialect,
       this.#runtimeImports,
       this.#aliases,
       this.#varStatements,
@@ -464,14 +464,14 @@ export class PreactEmitter implements Emitter<string> {
         return JSON.stringify(attr.value);
       case "bound":
         return fail(
-          `\`:=\` is Marko's two-way binding; ${this.#target.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
+          `\`:=\` is Marko's two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
       // Phase B of `dom-events` (decision 101): recompose the prop from the
       // DOM event name core resolved — `on` + capitalized (`click` →
-      // `onClick`, `dblclick` → `onDblclick`), with the React target's own
+      // `onClick`, `dblclick` → `onDblclick`), with the React dialect's own
       // irregular spellings (`onDoubleClick`, `onFocus`, `onBlur`) through
-      // `Target.eventPropNames`. A custom DOM event name JSX cannot spell
+      // `JsxDialect.eventPropNames`. A custom DOM event name JSX cannot spell
       // errors uniformly on all three shared targets.
       case "event": {
         // Only the value lands here; the paired `#attr` emits the recomposed
@@ -528,7 +528,7 @@ export class PreactEmitter implements Emitter<string> {
         // value prop plus an explicit handler — so emitting only the value
         // would produce an input the user cannot type into.
         return fail(
-          `\`:=\` is Marko's two-way binding; ${this.#target.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
+          `\`:=\` is Marko's two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
       // Phase B of `dom-events` (decision 101): the prop is recomposed from
@@ -603,8 +603,8 @@ export class PreactEmitter implements Emitter<string> {
     // would silently reinstate the component renaming this guard exists to
     // prevent, and a dropped prop is invisible in the output.
     if (isComponent) return name;
-    if (name === "class") return this.#target.classAttr;
-    if (name === "for") return this.#target.forAttr;
+    if (name === "class") return this.#dialect.classAttr;
+    if (name === "for") return this.#dialect.forAttr;
     return name;
   }
 
@@ -612,8 +612,8 @@ export class PreactEmitter implements Emitter<string> {
    * The JSX prop name for an `event` attribute, recomposed from the DOM
    * event name core resolved (decision 101, design note §7): `on` plus the
    * capitalized DOM name — `click` → `onClick`, `dblclick` → `onDblclick`.
-   * The React target passes its own irregular spellings through
-   * `Target.eventPropNames` (`dblclick` → `onDoubleClick`, `focusin` →
+   * The React dialect passes its own irregular spellings through
+   * `JsxDialect.eventPropNames` (`dblclick` → `onDoubleClick`, `focusin` →
    * `onFocus`, `focusout` → `onBlur`), React's own registration table in
    * `react-dom`, not an MX invention.
    *
@@ -630,7 +630,7 @@ export class PreactEmitter implements Emitter<string> {
         attr,
       );
     }
-    const irregular = this.#target.eventPropNames?.[attr.event];
+    const irregular = this.#dialect.eventPropNames?.[attr.event];
     const middle =
       irregular ?? attr.event.charAt(0).toUpperCase() + attr.event.slice(1);
     return `on${middle}`;
@@ -1065,15 +1065,15 @@ export class PreactEmitter implements Emitter<string> {
   element(node: Extract<IrNode, { kind: "Element" }>): void {
     rejectMixedRaw(node.children);
     const raw = rawChild(node.children);
-    if (raw && hasNamedAttr(node.attrs, this.#target.rawHtmlProp)) {
+    if (raw && hasNamedAttr(node.attrs, this.#dialect.rawHtmlProp)) {
       fail(
-        `\`$!{…}\` sole child combined with an explicit \`${this.#target.rawHtmlProp}=\` attribute`,
+        `\`$!{…}\` sole child combined with an explicit \`${this.#dialect.rawHtmlProp}=\` attribute`,
         raw,
       );
     }
     const attrs = this.#attrs(node.attrs, false, false);
     const rawHtml = raw
-      ? ` ${this.#target.rawHtmlProp}={${this.#target.rawHtmlValue(raw.expr.code)}}`
+      ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`
       : "";
     if (node.void) {
       this.#out.push(concatMapped(`<${node.name}`, attrs, `${rawHtml} />`));
@@ -1198,9 +1198,9 @@ export class PreactEmitter implements Emitter<string> {
     const contentNodes = node.content?.children ?? [];
     rejectMixedRaw(contentNodes);
     const raw = node.content ? rawChild(contentNodes) : null;
-    if (raw && hasNamedAttr(node.attrs, this.#target.rawHtmlProp)) {
+    if (raw && hasNamedAttr(node.attrs, this.#dialect.rawHtmlProp)) {
       fail(
-        `\`$!{…}\` sole child combined with an explicit \`${this.#target.rawHtmlProp}=\` attribute`,
+        `\`$!{…}\` sole child combined with an explicit \`${this.#dialect.rawHtmlProp}=\` attribute`,
         raw,
       );
     }
@@ -1223,7 +1223,7 @@ export class PreactEmitter implements Emitter<string> {
         // Invariant §7.5-8 rejects the escape rather than emitting it.
         if (this.#callbackScope) {
           fail(
-            `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#target.name} yet; bind it at the top level of the template`,
+            `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
             node,
           );
         }
@@ -1237,7 +1237,7 @@ export class PreactEmitter implements Emitter<string> {
       return;
     }
     const rawHtml = raw
-      ? ` ${this.#target.rawHtmlProp}={${this.#target.rawHtmlValue(raw.expr.code)}}`
+      ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`
       : "";
     if (!node.content || raw) {
       this.#out.push(
@@ -1509,15 +1509,15 @@ export class PreactEmitter implements Emitter<string> {
       // `<@placeholder>` is what renders while the body is suspended, which on
       // this target means the body threw a promise (a `lazy()` child). Preact
       // gives that through `Suspense`; the package re-exports it under one
-      // name so the emitted text is target-independent.
-      this.#runtimeImports.add(this.#target.suspenseName);
+      // name so the emitted text is dialect-independent.
+      this.#runtimeImports.add(this.#dialect.suspenseName);
       const fallback = this.#expression(placeholder.block.children);
       inner = concatMapped(
-        `<${this.#target.suspenseName} fallback={`,
+        `<${this.#dialect.suspenseName} fallback={`,
         fallback,
         `}>`,
         inner,
-        `</${this.#target.suspenseName}>`,
+        `</${this.#dialect.suspenseName}>`,
       );
     }
     if (!catchTag) {
@@ -1528,29 +1528,29 @@ export class PreactEmitter implements Emitter<string> {
     // `<@catch|error|>` renders instead of the body when it throws. Preact has
     // no built-in boundary component, only the `componentDidCatch` hook, so
     // the package ships the class that wraps it.
-    this.#runtimeImports.add(this.#target.errorBoundaryName);
+    this.#runtimeImports.add(this.#dialect.errorBoundaryName);
     const params = catchTag.block.params.join(", ");
     const caught = this.#expression(catchTag.block.children);
     const fallback = catchTag.block.hasParams
       ? concatMapped(`(${params}) => `, caught)
-      : this.#target.errorBoundaryFallbackAlwaysFunction
+      : this.#dialect.errorBoundaryFallbackAlwaysFunction
         ? concatMapped("() => ", caught)
         : caught;
-    const fallbackProp = this.#target.errorBoundaryFallbackProp ?? "fallback";
+    const fallbackProp = this.#dialect.errorBoundaryFallbackProp ?? "fallback";
     this.#out.push(
       concatMapped(
-        `<${this.#target.errorBoundaryName} ${fallbackProp}={`,
+        `<${this.#dialect.errorBoundaryName} ${fallbackProp}={`,
         fallback,
         "}>",
         inner,
-        `</${this.#target.errorBoundaryName}>`,
+        `</${this.#dialect.errorBoundaryName}>`,
       ),
     );
   }
 
   documentType(node: Extract<IrNode, { kind: "DocumentType" }>): void {
     fail(
-      `a document type (\`<!doctype html>\`) cannot appear in a ${this.#target.name} component; write it in the HTML shell that mounts the app`,
+      `a document type (\`<!doctype html>\`) cannot appear in a ${this.#dialect.name} component; write it in the HTML shell that mounts the app`,
       node,
     );
   }
@@ -1570,13 +1570,18 @@ export class PreactEmitter implements Emitter<string> {
   }
 }
 
-export function createEmitter(target: Target = preactTarget): PreactEmitter {
-  return new PreactEmitter(target);
+export function createEmitter(
+  dialect: JsxDialect = preactDialect,
+): PreactEmitter {
+  return new PreactEmitter(dialect);
 }
 
 /** Emits the template body of a resolved IR as one JSX expression. */
-export function emitPreact(ir: Ir, target: Target = preactTarget): string {
-  const emitter = createEmitter(target);
+export function emitPreact(
+  ir: Ir,
+  dialect: JsxDialect = preactDialect,
+): string {
+  const emitter = createEmitter(dialect);
   drive(emitter, ir.body);
   return emitter.done();
 }

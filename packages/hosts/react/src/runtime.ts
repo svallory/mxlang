@@ -66,7 +66,7 @@ export interface MxPlaceholderProps {
   children?: ReactNode;
 }
 
-/** React's native Suspense under the target-independent emitter name. */
+/** React's native Suspense under the dialect-independent emitter name. */
 export function MxPlaceholder(props: MxPlaceholderProps): ReactNode {
   return createElement(Suspense, { fallback: props.fallback }, props.children);
 }

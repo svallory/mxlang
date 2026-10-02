@@ -73,12 +73,12 @@ import {
   TranslateError,
 } from "@mxlang/core";
 import type { ComponentChildren } from "preact";
+import { type JsxDialect, preactDialect } from "./dialect.ts";
 import {
   componentAlias,
   createEmitter,
   preactDeclarations,
 } from "./emitter.ts";
-import { preactTarget, type Target } from "./target.ts";
 
 export type { AttrTagConfig, AttrTagOf } from "@mxlang/core";
 // Re-exported for the hosts built on this emitter (`@mxlang/react`,
@@ -91,6 +91,7 @@ export {
   scanCached,
   TranslateError,
 } from "@mxlang/core";
+export { type JsxDialect, preactDialect } from "./dialect.ts";
 export {
   createEmitter,
   createJsxDeclarations,
@@ -99,7 +100,6 @@ export {
   preactDeclarations,
 } from "./emitter.ts";
 export { MxErrorBoundary, MxPlaceholder, mxClass } from "./runtime.ts";
-export { preactTarget, type Target } from "./target.ts";
 export type { CompileResult, RawSourceMap };
 
 /** Attribute-tag value specialised to Preact's renderable child type. */
@@ -127,11 +127,11 @@ export interface CompilePreactOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
   /**
-   * The JSX target to emit for. Defaults to Preact; a React package passes its
+   * The JSX dialect to emit for. Defaults to Preact; a React package passes its
    * own so it can reuse this emitter rather than fork it.
    */
-  target?: Target;
-  /** Resolve-time declarations paired with a custom JSX target. */
+  dialect?: JsxDialect;
+  /** Resolve-time declarations paired with a custom JSX dialect. */
   declarations?: HostDeclarations;
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
@@ -145,21 +145,21 @@ export interface CompilePreactOptions {
  * from this package's runtime entry — two different modules, so the emitter's
  * collected set is partitioned here rather than at the point of use.
  */
-function importLines(names: Set<string>, target: Target): string[] {
+function importLines(names: Set<string>, dialect: JsxDialect): string[] {
   const lines: string[] = [];
   if (names.has("Fragment")) {
-    lines.push(`import { Fragment } from "${target.fragmentModule}";`);
+    lines.push(`import { Fragment } from "${dialect.fragmentModule}";`);
   }
-  const boundary = [target.errorBoundaryName, target.suspenseName].filter(
+  const boundary = [dialect.errorBoundaryName, dialect.suspenseName].filter(
     (name) => names.has(name),
   );
   if (boundary.length > 0) {
     lines.push(
-      `import { ${boundary.join(", ")} } from "${target.errorBoundaryModule}";`,
+      `import { ${boundary.join(", ")} } from "${dialect.errorBoundaryModule}";`,
     );
   }
   if (names.has("mxClass")) {
-    const mxClassModule = target.mxClassModule ?? target.errorBoundaryModule;
+    const mxClassModule = dialect.mxClassModule ?? dialect.errorBoundaryModule;
     lines.push(`import { mxClass } from "${mxClassModule}";`);
   }
   return lines;
@@ -268,9 +268,9 @@ function mxDynamic(target: any, payload: any, content?: any) {
  */
 export function emitModuleWithMappings(
   ir: Ir,
-  target: Target = preactTarget,
+  dialect: JsxDialect = preactDialect,
 ): MappedCode {
-  const emitter = createEmitter(target);
+  const emitter = createEmitter(dialect);
 
   // Statements first, markup second. Splitting on the top level only: a
   // nested one is refused by the emitter rather than silently relocated.
@@ -280,7 +280,7 @@ export function emitModuleWithMappings(
     if (node.kind === "Const") {
       statements.push(concatMapped(`const ${node.name} = ${node.init.code};`));
     } else if (node.kind === "Define") {
-      const body = createEmitter(target);
+      const body = createEmitter(dialect);
       drive(body, node.children);
       const rendered = body.result();
       for (const name of body.runtimeImports) {
@@ -309,11 +309,13 @@ export function emitModuleWithMappings(
     statements.push(concatMapped(statement));
   }
 
-  const lines: string[] = [`/** @jsxImportSource ${target.jsxImportSource} */`];
+  const lines: string[] = [
+    `/** @jsxImportSource ${dialect.jsxImportSource} */`,
+  ];
   if (ir.needsAttrTagImport) {
-    lines.push(`import type { AttrTag } from "${target.attrTagModule}";`);
+    lines.push(`import type { AttrTag } from "${dialect.attrTagModule}";`);
   }
-  const imports = importLines(emitter.runtimeImports, target);
+  const imports = importLines(emitter.runtimeImports, dialect);
   if (imports.length > 0) lines.push(...imports);
 
   const importedNames = new Set(ir.imports.flatMap((node) => node.bindings));
@@ -395,7 +397,7 @@ export function emitModuleWithMappings(
   // with `/var` and still render the output. `output` is the element, not a
   // string: on this target that is what "the rendered thing" is.
   if (ir.returnValue) {
-    rejectHooksInReturningUnit(ir, target.hookModules);
+    rejectHooksInReturningUnit(ir, dialect.hookModules);
     return concatMapped(
       prefix,
       statementCode,
@@ -431,10 +433,10 @@ export function emitModuleWithMappings(
  * Solid is unaffected, because its callback prop keeps the component a
  * component.
  *
- * `hookModules` is target vocabulary (`Target.hookModules`, `target.ts`),
+ * `hookModules` is dialect vocabulary (`JsxDialect.hookModules`, `dialect.ts`),
  * not a shared constant: each of Preact, React and Hono declares its own
  * hook-import module(s), so this guard checks only the modules relevant to
- * whichever target actually compiled the file.
+ * whichever dialect actually compiled the file.
  */
 function rejectHooksInReturningUnit(
   ir: Ir,
@@ -497,8 +499,11 @@ function hookError(
   );
 }
 
-export function emitModule(ir: Ir, target: Target = preactTarget): string {
-  return emitModuleWithMappings(ir, target).code;
+export function emitModule(
+  ir: Ir,
+  dialect: JsxDialect = preactDialect,
+): string {
+  return emitModuleWithMappings(ir, dialect).code;
 }
 
 export interface CompilePreactResult extends CompileResult {
@@ -518,7 +523,7 @@ export function compilePreactMx(
   filename: string,
   options: CompilePreactOptions = {},
 ): CompilePreactResult {
-  const target = options.target ?? preactTarget;
+  const dialect = options.dialect ?? preactDialect;
   let mappings: GeneratedMapping[] = [];
   const result = compileSource(
     source,
@@ -530,7 +535,7 @@ export function compilePreactMx(
       resolveImport: options.resolveImport,
       warnings: options.warnings,
       emitIr: (ir) => {
-        const emitted = emitModuleWithMappings(ir, target);
+        const emitted = emitModuleWithMappings(ir, dialect);
         mappings = emitted.mappings;
         return emitted.code;
       },

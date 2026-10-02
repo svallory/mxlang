@@ -1,14 +1,14 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { compileReactMx, reactDeclarations, reactTarget } from "./index.ts";
+import { compileReactMx, reactDeclarations, reactDialect } from "./index.ts";
 
 function compile(source: string): string {
   return compileReactMx(source, "/fixtures/test.mx").code;
 }
 
 it("keeps framework diagnostics separate from host capability diagnostics", () => {
-  expect(reactTarget.name).toBe("React");
+  expect(reactDialect.name).toBe("React");
   expect(reactDeclarations.name).toBe("@mxlang/react");
 });
 
@@ -28,7 +28,7 @@ function errorOf(source: string): string {
   throw new Error("expected a compile error, but the template compiled");
 }
 
-describe("React target", () => {
+describe("React dialect", () => {
   it("uses React's JSX source and DOM prop names", () => {
     const code = compile('<label class="field" for="name">Name</label>');
     expect(code).toContain("/** @jsxImportSource react */");
@@ -506,9 +506,9 @@ describe("local-value-as-tag-parity: React's memo()/forwardRef() objects on the 
   });
 });
 
-describe("hook-guard-module-list: each host's Target declares its own hookModules", () => {
+describe("hook-guard-module-list: each host's JsxDialect declares its own hookModules", () => {
   it("rejects a hook imported from react in a unit that declares <return>", () => {
-    // React declares only `["react"]` on its own Target.hookModules — unlike
+    // React declares only `["react"]` on its own JsxDialect.hookModules — unlike
     // Preact, which also guards `react` because `preact/compat` aliases it.
     expect(() =>
       compileReactMx(

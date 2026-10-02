@@ -1,11 +1,11 @@
 # react — agent instructions
 
-## `@mxlang/react`: the React target on the shared JSX emitter
+## `@mxlang/react`: the React dialect on the shared JSX emitter
 
 `packages/hosts/react` (`@mxlang/react`, decision 81) depends on
-`@mxlang/preact` and passes `reactTarget` to its exported emitter. This is a
+`@mxlang/preact` and passes `reactDialect` to its exported emitter. This is a
 deliberate shared implementation, not a compatibility layer: the structural
-lowering is identical, while the target object changes the JSX import source,
+lowering is identical, while the dialect object changes the JSX import source,
 `className`, `htmlFor`, Fragment module and runtime-helper module.
 
 The runtime is native React. `src/runtime.ts` imports `Component` and

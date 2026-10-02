@@ -1,7 +1,7 @@
-import { createJsxDeclarations, type Target } from "@mxlang/preact";
+import { createJsxDeclarations, type JsxDialect } from "@mxlang/preact";
 
 /** Hono vocabulary for the shared Preact/React/Hono JSX emitter. */
-export const honoTarget: Target = {
+export const honoDialect: JsxDialect = {
   name: "Hono",
   jsxImportSource: "hono/jsx",
   attrTagModule: "@mxlang/hono",

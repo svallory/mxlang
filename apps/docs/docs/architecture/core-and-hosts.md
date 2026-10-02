@@ -45,7 +45,7 @@ Every host emits from the same IR, but targets fall into two shapes, and the dif
 
 **Expression-shaped.** JSX has no equivalent of `out += "..."`, so the Solid, Preact, React, Hono and `.amx` emitters produce a single expression instead. An `<if>` becomes a ternary, a `<Show>`, or a `<Switch>` — whatever that target's own author would have written.
 
-Both walk the same IR through the same `drive()`. What differs is only what each method writes, which is why adding a target to an existing emitter can be as small as a vocabulary object: the React and Hono hosts are both the Preact emitter plus a `Target` naming the JSX import source, the class/for attribute spelling, and the runtime module.
+Both walk the same IR through the same `drive()`. What differs is only what each method writes, which is why adding a target to an existing emitter can be as small as a vocabulary object: the React and Hono hosts are both the Preact emitter plus a `JsxDialect` naming the JSX import source, the class/for attribute spelling, and the runtime module.
 
 ## What a host emits, and what it does not
 

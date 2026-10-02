@@ -12,7 +12,7 @@
 import type { CustomTag } from "@mxlang/core";
 import { type FunctionComponent, h } from "preact";
 import { describe, expect, it } from "vitest";
-import { compilePreactMx, preactDeclarations, preactTarget } from "./index.ts";
+import { compilePreactMx, preactDeclarations, preactDialect } from "./index.ts";
 
 /** Compiles one template and returns the emitted module. */
 function compile(source: string): string {
@@ -20,7 +20,7 @@ function compile(source: string): string {
 }
 
 it("keeps framework diagnostics separate from host capability diagnostics", () => {
-  expect(preactTarget.name).toBe("Preact");
+  expect(preactDialect.name).toBe("Preact");
   expect(preactDeclarations.name).toBe("@mxlang/preact");
 });
 
@@ -1545,7 +1545,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
 describe("event name positions and plain-recomposition spellings", () => {
   it("recomposes multi-word DOM names with capitalize-first (onKeydown), unlike React", () => {
     // Preact/hono/solid lowercase the prop at bind time, so `onKeydown`
-    // binds `keydown`; only the React target looks React's camelCase up.
+    // binds `keydown`; only the React dialect looks React's camelCase up.
     expect(markup("<input onKeyDown=handler>")).toBe(
       "<input onKeydown={handler} />",
     );
