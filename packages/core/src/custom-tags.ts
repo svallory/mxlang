@@ -25,6 +25,7 @@ import type {
   IrNode,
   Position,
 } from "./ir.ts";
+import type { SourceSpan } from "./mapping.ts";
 import {
   hasTemplate,
   routeTemplateCall,
@@ -86,6 +87,10 @@ export interface TagCall {
   name: string;
   loc: Position;
   attrs: Attr[];
+  /** UTF-16 span of the tag name at the call site, when the call has source. */
+  nameSpan?: SourceSpan;
+  /** UTF-16 span of the whole call, body and closing tag included. */
+  span?: SourceSpan;
   content: Block | null;
   attributeTags: AttributeTag[];
   /** Preserved control-flow shape for a template-backed component call. */
@@ -1154,6 +1159,8 @@ export function isContractOnlyClaimed(
  * The `HostTag` a validated contract-only call lowers to. It is the node an
  * unregistered claimed tag produces (same body, same attributes), except that
  * the call is validated against its contract and declared defaults are added.
+ * With `openTagOnly`, a whitespace-only body is rejected (positioned), while
+ * a `transform` tag accepts it; this is intentional and stricter.
  * Validation also rejects what the contract-only path cannot carry, which an
  * unregistered claimed tag accepts: `/var` ("`/var` on `<tag>` is not
  * supported: it has no template, so it has no `<return>` to bind"), tag
@@ -1167,6 +1174,8 @@ function contractOnlyHostTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
     kind: "HostTag",
     tag: {
       name: call.name,
+      nameSpan: call.nameSpan,
+      span: call.span,
       attrs: call.attrs,
       args: [],
       children: call.content?.children ?? [],

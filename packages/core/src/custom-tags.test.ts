@@ -1905,6 +1905,66 @@ describe("contract-only custom tags", () => {
     ).toThrowError("does not accept content");
   });
 
+  it("rejects a whitespace-only body under `openTagOnly`, as a transform tag does not", () => {
+    const parseOptions = { openTagOnly: true };
+    expect(() =>
+      lowerWithTags(
+        '<attribute a="1">  </attribute>\n',
+        { attribute: { attributes: { a: { type: "string" } }, parseOptions } },
+        claimAttribute(),
+      ),
+    ).toThrowError("does not accept content");
+    expect(() =>
+      lowerWithTags(
+        '<attribute a="1">  </attribute>\n',
+        { attribute: { parseOptions, transform: () => [] } },
+        claimAttribute(),
+      ),
+    ).not.toThrow();
+  });
+
+  it("carries span and nameSpan exactly as an unregistered claimed tag does", () => {
+    const source =
+      'héllo\n<attribute value="é" type="string"><p>x</p></attribute>\n';
+    const registered = find(
+      lowerWithTags(source, { attribute }, claimAttribute()).body,
+      "HostTag",
+    ).tag;
+    const unregistered = find(
+      lowerWithTags(source, {}, claimAttribute()).body,
+      "HostTag",
+    ).tag;
+    expect(registered.span).toBeDefined();
+    expect(registered.nameSpan).toBeDefined();
+    expect(registered.span).toEqual(unregistered.span);
+    expect(registered.nameSpan).toEqual(unregistered.nameSpan);
+    const { nameSpan, span } = registered;
+    expect(source.slice(nameSpan?.sourceStart, nameSpan?.sourceEnd)).toBe(
+      "attribute",
+    );
+    expect(source.slice(span?.sourceStart, span?.sourceEnd)).toBe(
+      '<attribute value="é" type="string"><p>x</p></attribute>',
+    );
+  });
+
+  it("gives a default attribute the same name span as an unregistered claimed tag", () => {
+    const source = '<attribute="title" type="string"/>\n';
+    const registered = find(
+      lowerWithTags(source, { attribute }, claimAttribute()).body,
+      "HostTag",
+    ).tag;
+    const unregistered = find(
+      lowerWithTags(source, {}, claimAttribute()).body,
+      "HostTag",
+    ).tag;
+    expect(named(registered.attrs, "value")).toMatchObject({
+      nameSpan: (named(unregistered.attrs, "value") as { nameSpan: unknown })
+        .nameSpan,
+      valueSpan: (named(unregistered.attrs, "value") as { valueSpan: unknown })
+        .valueSpan,
+    });
+  });
+
   it("leaves a tag with both a contract and a transform to its transform", () => {
     const both: CustomTag = {
       attributes: { value: { type: "string" } },

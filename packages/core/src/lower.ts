@@ -2052,6 +2052,8 @@ function lowerCustomTag(
     isContractOnlyClaimed(ctx, name, definition);
   const call: TagCall = {
     name,
+    nameSpan: exprSpan(ctx, node.name),
+    span: exprSpan(ctx, node),
     loc: posOf(node),
     // A contract-only call on a claimed name becomes a HostTag, so its
     // attributes lower as `lowerHostTag` lowers them.
