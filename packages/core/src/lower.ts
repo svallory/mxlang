@@ -323,7 +323,7 @@ function withPrelude<T>(ctx: Ctx, run: () => T): [T, Ctx["prelude"]] {
 const EVENT_ATTR = /^on[A-Z-]/;
 
 /**
- * React spellings whose plain lowercase is *not* a DOM event name.
+ * Camel-cased event spellings whose plain lowercase is *not* a DOM event name.
  *
  * MX has no aliases: `onDoubleClick` lowers to `doubleclick` and is emitted as
  * `doubleclick`, which no element ever fires. Rather than rewrite the author's
@@ -342,22 +342,22 @@ const EVENT_ATTR = /^on[A-Z-]/;
  * `onDragExit` and `onEncrypted` are React-only synthetic events with no DOM
  * counterpart, so neither has a spelling to suggest.
  */
-const REACT_EVENT_SPELLINGS: Record<string, string | null> = {
+const NON_DOM_EVENT_SPELLINGS: Record<string, string | null> = {
   onDoubleClick: "onDblclick",
   onDragExit: null,
   onEncrypted: null,
 };
 
 /**
- * Warns — without rewriting — when an event attribute uses a React spelling
- * whose lowercase is not a real DOM event.
+ * Warns — without rewriting — when an event attribute uses a spelling whose
+ * lowercase is not a real DOM event.
  *
  * Positioned at the attribute name so the language server underlines the
  * attribute rather than the whole tag.
  */
-function warnOnReactEventSpelling(ctx: Ctx, attr: Node, name: string): void {
-  if (!(name in REACT_EVENT_SPELLINGS)) return;
-  const suggestion = REACT_EVENT_SPELLINGS[name];
+function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
+  if (!(name in NON_DOM_EVENT_SPELLINGS)) return;
+  const suggestion = NON_DOM_EVENT_SPELLINGS[name];
   const pos = posOf(attr);
   warn(ctx, {
     message:
@@ -379,7 +379,10 @@ function warnOnReactEventSpelling(ctx: Ctx, attr: Node, name: string): void {
  */
 const ATTR_NAME = /^[a-z_][a-z0-9._:-]*$/i;
 
-/** Angular-style names and how to write what they were reaching for, first match wins. */
+/**
+ * Bracketed, `#…` and `*…` attribute names (patterns other template languages
+ * use) and how to write what they were reaching for, first match wins.
+ */
 const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [
     /^\[\(([^()[\]]+)\)\]$/,
@@ -394,11 +397,11 @@ const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
     /^\[(?:attr\.)?([^[\]]+)\]$/,
     (m) => `write \`${m[1]}=\` with the expression as the value`,
   ],
-  [/^#/, () => "template reference variables are Angular syntax"],
+  [/^#/, () => "`#…` template reference variables have no meaning in MX"],
   [
     /^\*/,
     () =>
-      "structural directives are Angular syntax; use `<if=cond>` / `<for|item| of=list>`",
+      "`*…` structural directives have no meaning in MX; use `<if=cond>` / `<for|item| of=list>`",
   ],
 ];
 
@@ -531,7 +534,7 @@ function lowerAttr(
       fail("`on-` needs an event name (`on-<event>`)", attr);
     }
     const event = name[2] === "-" ? name.slice(3) : name.slice(2).toLowerCase();
-    warnOnReactEventSpelling(ctx, attr, name);
+    warnOnNonDomEventSpelling(ctx, attr, name);
     return {
       kind: "event",
       name,
