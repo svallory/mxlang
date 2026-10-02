@@ -213,3 +213,12 @@ One warning per file per category (not per occurrence): `[ngClass]`/
 `$!{…}` raw interpolation, `[ngComponentOutlet]` usage, and the full list of
 MX tags a template calls (with the exact `import`/`imports:` lines to add,
 since step 1 cannot edit the caller's TypeScript file itself).
+
+The "binds an event handler" warning (the `__mxOn`/`__mxOnAt` invoker) is the
+exception to "the build cannot see your class": `build`/`watch` read the page's
+sibling `<name>.ts` and stay silent when each `@Component` class there extends
+`MxHandlers`, extends `MxHandlersMixin(Base)`, or declares both members (a
+same-file base counts). If one member is missing the warning names the class,
+the file and the member. If the file is absent, unparsable, has no
+`@Component` class, or the class extends a base imported from another module,
+the warning stays: `compile()` on its own always warns.

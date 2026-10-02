@@ -14,6 +14,8 @@
 
 ### Added
 
+- **A page's invoker warning now reads the page's class** (`angular-invoker-warning-false-positive`): `build`/`watch` inspect the page's sibling `<name>.ts` (a light Babel parse, never a type-check) and drop the `binds an event handler` warning and the header's paste advice when every `@Component` class in it provides `__mxOn` and `__mxOnAt`: by `extends MxHandlers` (including an aliased or namespace import of `@mxlang/angular/runtime`), by `extends MxHandlersMixin(Base)`, by declaring both members, or by extending a same-file base that does. When a class has only one member, the advice shrinks to the missing one; the warning names the class, its file and what it lacks. No file, an unparsable file, no `@Component` class, or a base imported from another module keeps the warning unchanged. `compile()` alone, with no file system, still warns.
+
 - **`NgMxRegion.generatedStart` / `generatedEnd`** (optional tooling-facing fields): the `[start, end)` span of each region's template literal in the emitted module, `CompileNgMxResult.code`. Diagnostics tooling uses it to find the region an emitted-module offset falls in when no mapping covers that offset. Additive.
 
 - **`mx.angular.diagnostics` config key** (`"idle"` | `"save"` | `"off"`, default `"idle"`), read by `readAngularConfig` and exported as the `AngularDiagnosticsMode` type. `"off"` disables Angular template diagnostics for `.ng.mx` everywhere (`mx-tsc` and editors); `"idle"` and `"save"` are editor scheduling modes (after 1 s idle / on save) that `mx-tsc` treats as on. Any other value throws a positioned error.

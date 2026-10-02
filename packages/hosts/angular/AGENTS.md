@@ -220,7 +220,12 @@ into the decorated class, a tag module writes them into its class, and a
 page's own class gets a once-per-file warning
 (`EVENT_HELPER_ADVICE_CODE`) with the text to paste, or to extend
 `MxHandlers` / `MxHandlersMixin(Base)` from `@mxlang/angular/runtime` instead
-(decision 118; `src/runtime.ts`, built to `dist/runtime.js`). That module must
+(decision 118; `src/runtime.ts`, built to `dist/runtime.js`). `build.ts`
+`compileOne` suppresses that warning (and the header's paste line) when
+`inspectPageClass` (`src/page-class.ts`: sibling `<name>.ts`, Babel parse, same
+three shapes as `.ng.mx`) finds both members on every `@Component` class; a
+class with one missing narrows the advice to it and the warning names class and
+file. Any failure answers `unknown` and keeps the warning. That module must
 keep **zero imports** (`test/runtime.test.ts` checks the built output) and its
 members **public** (TS4094), and its text must stay in step with
 `EVENT_HELPER_MEMBERS`. `.ng.mx` skips injection for a class whose `extends`

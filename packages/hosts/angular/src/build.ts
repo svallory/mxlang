@@ -26,12 +26,18 @@ import {
 } from "@mxlang/core";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { discoverFiles, isInside } from "./discover.ts";
-import { EVENT_HELPER_MARKER, EVENT_HELPER_MEMBERS } from "./emitter.ts";
+import {
+  EVENT_HELPER_ADVICE_CODE,
+  EVENT_HELPER_MARKER,
+  EVENT_HELPER_MEMBERS,
+  EVENT_HELPER_NAMES,
+} from "./emitter.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
 import { buildMap, writeMap } from "./map-file.ts";
 import { encodeMappings } from "./mapping.ts";
 import { compileNgMx } from "./ng-mx.ts";
+import { inspectPageClass } from "./page-class.ts";
 import { compileTagModuleFile } from "./tag-module.ts";
 
 /**
@@ -554,12 +560,50 @@ export function compileOne(
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
     });
+    // The page's own class may already carry the invoker: then neither the
+    // warning nor the header's paste advice applies, and when it carries one
+    // member only the missing one is advised.
+    let neededNames: readonly string[] = result.code.includes(
+      EVENT_HELPER_MARKER,
+    )
+      ? EVENT_HELPER_NAMES
+      : [];
+    let pageWarnings: MxWarning[] = result.warnings;
+    if (neededNames.length > 0) {
+      const classFile = join(dirname(mxPath), tsFilename);
+      const inspection = inspectPageClass(classFile);
+      if (inspection.status === "provided") {
+        neededNames = [];
+        pageWarnings = pageWarnings.filter(
+          (w) => (w as { code?: string }).code !== EVENT_HELPER_ADVICE_CODE,
+        );
+      } else if (inspection.status === "missing") {
+        const lacking = new Set(inspection.classes.flatMap((c) => c.missing));
+        neededNames = EVENT_HELPER_NAMES.filter((n) => lacking.has(n));
+        const where = inspection.classes
+          .map(
+            (c) =>
+              `\`${c.name}\` is missing ${c.missing.map((m) => `\`${m}\``).join(" and ")}`,
+          )
+          .join("; ");
+        pageWarnings = pageWarnings.map((w) =>
+          (w as { code?: string }).code === EVENT_HELPER_ADVICE_CODE
+            ? ({
+                ...w,
+                message: `${w.message} (${inspection.file}: ${where})`,
+              } as MxWarning)
+            : w,
+        );
+      }
+    }
     const header = buildHeader(
       sourceBasename,
       tsFilename,
       result.usedTags,
       "html",
-      result.code.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_MEMBERS : [],
+      EVENT_HELPER_MEMBERS.filter((_m, i) =>
+        neededNames.includes(EVENT_HELPER_NAMES[i] as string),
+      ),
     );
     const usedTagNames = result.usedTags.map((t) => t.name);
     const content = header + result.code;
@@ -608,7 +652,7 @@ export function compileOne(
     knownOutputs.add(mapPath);
 
     const lines = [`${outputPath} ${wrote ? "wrote" : "skipped (unchanged)"}`];
-    const warnings = [...scanWarnings, ...warningsFor(mxPath, result.warnings)];
+    const warnings = [...scanWarnings, ...warningsFor(mxPath, pageWarnings)];
     for (const w of warnings) {
       const position = w.line !== undefined ? `:${w.line}:${w.column}` : "";
       lines.push(`${w.file}${position} warning: ${w.message}`);

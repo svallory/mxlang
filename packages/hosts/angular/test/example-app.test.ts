@@ -1,4 +1,10 @@
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,15 +34,24 @@ afterEach(() => {
 describe("examples/angular-app", () => {
   // `ng build` of the example fails with TS2339 `__mxOn` when a page binds an
   // event handler but its hand-written class lacks the invoker members. The
-  // build warns on every such page (it cannot see the class), so each warned
-  // page's class is type-checked: it must have both members, whether pasted
-  // or inherited from `MxHandlers`. A comment or a stray string cannot pass.
-  it("gives every page that binds an event handler a class with the invoker", () => {
+  // build reads each page's sibling class and stays silent when it provides
+  // them, so a warning here means the example regressed. Independently, each
+  // page whose emitted template calls `__mxOn` has its class type-checked: it
+  // must have both members, whether pasted or inherited from `MxHandlers`. A
+  // comment or a stray string cannot pass.
+  it("gives every page that binds an event handler a class with the invoker, and warns about none", () => {
     const result = build(projectDir);
     expect(result.errors).toEqual([]);
-    const pages = result.warnings
-      .filter((w) => w.message.includes("binds an event handler"))
-      .map((w) => w.file.replace(projectDir, exampleDir));
+    expect(
+      result.warnings.filter((w) =>
+        w.message.includes("binds an event handler"),
+      ),
+    ).toEqual([]);
+    const pages = readdirSync(projectDir, { recursive: true, encoding: "utf8" })
+      .filter((f) => f.endsWith(".html"))
+      .map((f) => join(projectDir, f))
+      .filter((f) => readFileSync(f, "utf8").includes("__mxOn"))
+      .map((f) => f.replace(projectDir, exampleDir).replace(/\.html$/, ".mx"));
     expect(pages.length).toBeGreaterThan(0);
 
     const config = ts.getParsedCommandLineOfConfigFile(
