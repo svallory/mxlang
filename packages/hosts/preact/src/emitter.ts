@@ -49,19 +49,19 @@ import { type JsxDialect, preactDialect } from "./dialect.ts";
  * holds — the message says what this target cannot express and where the
  * equivalent lives, never "not implemented".
  */
-function statefulErrors(targetName: string): HostDeclarations["tags"] {
+function statefulErrors(dialectName: string): HostDeclarations["tags"] {
   return {
     let: {
       kind: "error",
-      reason: `\`<let>\` is Marko reactive state; use ${targetName}'s \`useState\` via \`<const/x=useState(0)/>\` or in the surrounding module`,
+      reason: `\`<let>\` is Marko reactive state; use ${dialectName}'s \`useState\` via \`<const/x=useState(0)/>\` or in the surrounding module`,
     },
     effect: {
       kind: "error",
-      reason: `\`<effect>\` is a Marko reactive effect; use ${targetName}'s \`useEffect\` via \`<const/_=useEffect(...)/>\` or in the surrounding module`,
+      reason: `\`<effect>\` is a Marko reactive effect; use ${dialectName}'s \`useEffect\` via \`<const/_=useEffect(...)/>\` or in the surrounding module`,
     },
     lifecycle: {
       kind: "error",
-      reason: `\`<lifecycle>\` is a Marko lifecycle hook; use ${targetName}'s \`useEffect\`/\`useLayoutEffect\` instead`,
+      reason: `\`<lifecycle>\` is a Marko lifecycle hook; use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\` instead`,
     },
     script: {
       kind: "error",
@@ -70,11 +70,11 @@ function statefulErrors(targetName: string): HostDeclarations["tags"] {
     },
     client: {
       kind: "error",
-      reason: `a \`client\` block is Marko's client-runtime split; a ${targetName} component is already client code`,
+      reason: `a \`client\` block is Marko's client-runtime split; a ${dialectName} component is already client code`,
     },
     id: {
       kind: "error",
-      reason: `\`<id>\` allocates an identifier for Marko's reactive runtime; use ${targetName}'s \`useId\``,
+      reason: `\`<id>\` allocates an identifier for Marko's reactive runtime; use ${dialectName}'s \`useId\``,
     },
     await: {
       kind: "error",
@@ -134,19 +134,19 @@ function isComponentName(name: string): boolean {
 }
 
 /** Resolve-time questions for a Preact/React JSX dialect. */
-export function createJsxDeclarations(targetName: string): HostDeclarations {
+export function createJsxDeclarations(dialectName: string): HostDeclarations {
   const declarationName =
-    targetName === "Preact"
+    dialectName === "Preact"
       ? "@mxlang/preact"
-      : targetName === "React"
+      : dialectName === "React"
         ? "@mxlang/react"
-        : targetName === "Hono"
+        : dialectName === "Hono"
           ? "@mxlang/hono"
-          : targetName;
+          : dialectName;
   return {
     name: declarationName,
     attrTags: 2,
-    tags: statefulErrors(targetName),
+    tags: statefulErrors(dialectName),
     // Element-vs-component follows Marko's own rule — what the taglib lookup
     // and the template's own bindings resolve the name to — not JSX's casing
     // rule, so a `tags/`-discovered `<badge/>` is the component it is in Marko.
@@ -183,7 +183,7 @@ export function createJsxDeclarations(targetName: string): HostDeclarations {
     // host only decides how the claimed primitive renders.
     resolveDelegatedTag(name, node): DelegatedTagData {
       if (name !== "try")
-        rawFail(`unknown ${targetName} host tag ${name}`, node);
+        rawFail(`unknown ${dialectName} host tag ${name}`, node);
       return { kind: "try" };
     },
     rejectModifier(attr) {
@@ -195,7 +195,7 @@ export function createJsxDeclarations(targetName: string): HostDeclarations {
       };
       rawFail(
         eventFixIts[attr.name] ??
-          `attribute modifier \`${attr.name}:${attr.modifier}\` is not ${targetName} syntax; write the prop directly (\`class={{ active: cond }}\` rather than \`class:active\`)`,
+          `attribute modifier \`${attr.name}:${attr.modifier}\` is not ${dialectName} syntax; write the prop directly (\`class={{ active: cond }}\` rather than \`class:active\`)`,
         attr,
       );
     },
@@ -396,7 +396,7 @@ export class PreactEmitter implements Emitter<string> {
     return this.#runtimeImports;
   }
 
-  /** A child emitter sharing this one's target and import collection. */
+  /** A child emitter sharing this one's dialect and import collection. */
   #child(callbackScope = this.#callbackScope): PreactEmitter {
     return new PreactEmitter(
       this.#dialect,

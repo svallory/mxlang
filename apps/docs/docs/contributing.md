@@ -80,7 +80,7 @@ The verification chain includes a consumer smoke check. This step simulates how 
 Many targets (React, Preact) share the same JSX structure. To add a new host on the shared JSX emitter:
 1. Provide a dialect object containing only the differences (e.g., `className` vs `class`, `htmlFor` vs `for`).
 2. Implement your specific runtime boundaries if needed (like `<try>`'s `MxErrorBoundary`).
-3. Point the shared emitter at your target configuration.
+3. Point the shared emitter at your dialect object.
 
 ## The Edit Check Hook
 
