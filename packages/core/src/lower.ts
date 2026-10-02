@@ -169,11 +169,23 @@ export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
   return nodeSpan(ctx, node);
 }
 
-function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
+/**
+ * The span of an attribute's authored name.
+ *
+ * A default attribute (`<x="post">`) is `name: "value"` to the parser, but its
+ * `loc` starts at the `=`: there is no spelled name, so measuring the name's
+ * length from there would cover the `=` and the value's first bytes. When the
+ * source at the attribute's start is not the name, `fallback` (the tag name's
+ * span) is used instead.
+ */
+function attrNameSpan(ctx: Ctx, attr: Node, fallback?: SourceSpan): SourceSpan {
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});
   const sourceName = attr.modifier
     ? `${attr.name}:${attr.modifier}`
     : String(attr.name ?? "");
+  if (fallback && !ctx.source.startsWith(sourceName, sourceStart)) {
+    return fallback;
+  }
   return { sourceStart, sourceEnd: sourceStart + sourceName.length };
 }
 
@@ -402,9 +414,10 @@ function lowerAttr(
   attr: Node,
   on: "element" | "component" = "element",
   isElement = false,
+  tagNameSpan?: SourceSpan,
 ): Attr {
   const loc = posOf(attr);
-  const nameSpan = attrNameSpan(ctx, attr);
+  const nameSpan = attrNameSpan(ctx, attr, tagNameSpan);
 
   if (attr.type === "MarkoSpreadAttribute") {
     return { kind: "spread", value: exprOf(ctx, attr.value), loc };
@@ -481,6 +494,7 @@ function lowerAttr(
       kind: "static",
       name: attr.name,
       value: value.value,
+      valueSpan: exprSpan(ctx, value),
       nameSpan,
       loc,
     };
@@ -543,8 +557,9 @@ function lowerAttrs(
   on: "element" | "component" = "element",
   isElement = false,
 ): Attr[] {
+  const tagNameSpan = exprSpan(ctx, node.name);
   const attrs = (node.attributes ?? []).map((attr: Node) =>
-    lowerAttr(ctx, attr, on, isElement),
+    lowerAttr(ctx, attr, on, isElement, tagNameSpan),
   );
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
 }
@@ -1837,6 +1852,8 @@ function lowerHostTag(ctx: Ctx, node: Node, name: string): IrNode {
     kind: "HostTag",
     tag: {
       name,
+      nameSpan: name === DYNAMIC_TAG ? undefined : exprSpan(ctx, node.name),
+      span: exprSpan(ctx, node),
       attrs: lowerAttrs(ctx, node, name),
       args: (node.arguments ?? []).map((argument: Node) =>
         exprOf(ctx, argument),
@@ -2105,6 +2122,7 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     kind: "Component",
     target,
     nameSpan: target.kind === "dynamic" ? null : nodeSpan(ctx, node.name),
+    span: exprSpan(ctx, node),
     attrs: lowerAttrs(ctx, node, targetName(target), "component"),
     content: hasContent(children) ? lowerBlock(ctx, node, children) : null,
     attributeTags: loweredTags.flat,
@@ -2480,6 +2498,8 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   return {
     kind: "Element",
     name,
+    nameSpan: exprSpan(ctx, node.name),
+    span: exprSpan(ctx, node),
     attrs: lowerAttrs(ctx, node, name, "element", true),
     children: isVoid ? [] : lowerChildren(ctx, node.body?.body ?? []),
     void: isVoid,

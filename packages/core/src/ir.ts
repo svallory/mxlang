@@ -127,6 +127,17 @@ export type Attr =
       kind: "static";
       name: string;
       value: string;
+      /**
+       * File-absolute byte span of the bare string literal, quotes included
+       * (`"strng"` in `type="strng"`) — the same convention as `Expr.span` for
+       * a string expression. For a default attribute (`<x="post">`) it is
+       * `"post"`. `undefined` for an attribute synthesized with no source.
+       */
+      valueSpan?: SourceSpan;
+      /**
+       * The attribute's authored name. A default attribute (`<x="post">`) has
+       * no spelled name, so its span is the tag name's.
+       */
       nameSpan: SourceSpan;
     } & IrBase)
   /** A bare attribute (`disabled`), HTML's spelling of `true`. */
@@ -228,6 +239,16 @@ export interface Branch extends IrBase {
  */
 export interface HostTag<Data = unknown> extends IrBase {
   name: string;
+  /**
+   * File-absolute byte span of the tag name (`x` in `<x>`). `undefined` for a
+   * dynamic tag (`<${expr}>`) and for a synthesized tag with no source.
+   */
+  nameSpan?: SourceSpan;
+  /**
+   * File-absolute byte span of the whole tag: opening tag, body and closing
+   * tag, or the self-closed tag. `undefined` for a synthesized tag.
+   */
+  span?: SourceSpan;
   attrs: Attr[];
   /** Tag arguments, retained for a claimed dynamic tag. */
   args?: Expr[];
@@ -352,6 +373,10 @@ export type IrNode =
   | ({
       kind: "Element";
       name: string;
+      /** File-absolute byte span of the tag name; `undefined` if synthesized. */
+      nameSpan?: SourceSpan;
+      /** File-absolute byte span of the whole tag, body and closing tag included. */
+      span?: SourceSpan;
       attrs: Attr[];
       children: IrNode[];
       /** True for `<br>` and friends: no children, no closing tag. */
@@ -362,6 +387,8 @@ export type IrNode =
       target: ComponentTarget;
       /** The opening tag name; null only for a run-time dynamic target. */
       nameSpan: SourceSpan | null;
+      /** File-absolute byte span of the whole call, body and closing tag included. */
+      span?: SourceSpan;
       attrs: Attr[];
       /** Ordinary children, or null when the call has no content. */
       content: Block | null;

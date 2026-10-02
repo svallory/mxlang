@@ -2,6 +2,12 @@
 
 ## 0.1.0 (unreleased)
 
+### Fix: a default attribute's `nameSpan` is the tag name, not `="pos`; tags and static values gain byte spans (core-span-fixes)
+
+**Behaviour change (one diagnostic position):** `<x="post">` lowers to `name: "value"` with a `loc` that starts at the `=`, so `attrNameSpan` measured `"value".length` from there and `nameSpan` covered `="pos` (for `resource="post"`: 8–13). A default attribute has no spelled name, so its `nameSpan` is now the tag name's span (`resource`: 0–8). Method shorthand (`change(ctx) {…}`) was already correct and is pinned by a test. Spelled attributes and `name:modifier` spellings are unchanged.
+
+**Additive IR fields**, all optional: `span` (the whole tag: opening tag, body and closing tag) and `nameSpan` on `HostTag` and `Element`; `span` on `Component` (which already had `nameSpan`); `valueSpan` on a `static` attribute (the string literal, quotes included, like `Expr.span`). `HostTag.nameSpan` is `undefined` for a dynamic tag. No emitted code changes.
+
 ### Fix: a `.ng.mx` callee reads as untyped, not as an invalid Marko parse; callee-input no longer names `.solid.mx` (core-host-cleanup)
 
 **Behaviour change:** a host module file (`card.ng.mx`, `card.solid.mx`) with no registered callee-input reader used to fall into the plain `.mx` branch of `readCalleeInput` and be Marko-parsed. For `.ng.mx`, which no host registers a reader for, that returned `{ kind: "invalid" }` ("@tags must be nested within another element", or "requires ResolveContext.ctx" without a Ctx), so a valid `.ng.mx` callee put a spurious error on its callers. It now returns `{ kind: "none" }`, the same untyped result an unregistered `.solid.mx` already had (`hostModuleSegment` is the generic test). No emitted code or oracle output changes.
