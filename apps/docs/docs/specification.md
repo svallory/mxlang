@@ -392,6 +392,30 @@ closing tag is a parse error (decision 13).
 | Modifier | `class:active=on` | **Not Marko syntax** — see below |
 | Method | `onClick() { … }` | Event handler — host-defined, see below |
 
+### Duplicate attributes
+
+Writing the same attribute name twice on one tag (`<div class="a" class="b">`,
+`on-click` twice) is a **positioned warning on every host**: never an error,
+and the build and `mx-tsc` exit codes are unchanged. The warning sits at the
+repeated attribute's name and names the earlier occurrence by `line:column`
+(1-based line, 0-based column, UTF-16 code units), one warning per repeat:
+
+> `duplicate attribute \`class\`: also written at 1:5; keep one, because which value wins depends on the target`
+
+| Case | Warns? |
+|---|---|
+| Same name, case-sensitive (`class` twice, `on-click` twice) | yes |
+| `data-a` and `data-A` | no (names differ, as in Marko) |
+| `onClick` next to `on-click` | no (two names) |
+| `...attrs` next to an explicit attribute | no (a spread has no static name) |
+| The same name on different tags | no |
+
+Output is unchanged: MX emits the attributes as authored. Stock Marko 6.3.51
+accepts duplicates silently and its later value wins (`class` and `style` are
+not merged), but a target may resolve them differently (a browser reading
+HTML keeps the first), so the warning does not name a winner. An mx-only lint
+beyond Marko, recorded in `divergences.md`; decision number to be recorded.
+
 ### `class` and `style`
 
 Both take **structured values**, lowered by the host:

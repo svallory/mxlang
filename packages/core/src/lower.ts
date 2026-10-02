@@ -564,7 +564,40 @@ function lowerAttrs(
   const attrs = (node.attributes ?? []).map((attr: Node) =>
     lowerAttr(ctx, attr, on, isElement),
   );
+  warnOnDuplicateAttrs(ctx, attrs);
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
+}
+
+/**
+ * Warns — without changing the output — when one tag writes the same attribute
+ * name twice. Stock Marko 6.3.51 accepts it silently and its later value wins
+ * (`class` and `style` are not merged); MX emits the attributes exactly as
+ * authored, so which value wins is the target's: a browser reading HTML keeps
+ * the first, a JSX object keeps the last. The message therefore names both
+ * occurrences and does not claim a winner.
+ *
+ * Names compare case-sensitively, as Marko's do, on the resolved `Attr.name`,
+ * so `on-click` twice is a duplicate and `onClick` next to `on-click` is not.
+ * A spread (`...attrs`) has no static name, so it never counts. One warning
+ * per repeated occurrence, positioned at that occurrence's name and naming the
+ * occurrence before it; `line:column` in the text uses the warning's own
+ * numbering (1-based line, 0-based column).
+ */
+function warnOnDuplicateAttrs(ctx: Ctx, attrs: Attr[]): void {
+  const previous = new Map<string, Position>();
+  for (const attr of attrs) {
+    if (attr.kind === "spread") continue;
+    const at = positionAtOffset(ctx, attr.nameSpan.sourceStart);
+    const earlier = previous.get(attr.name);
+    previous.set(attr.name, at);
+    if (!earlier) continue;
+    warn(ctx, {
+      message: `duplicate attribute \`${attr.name}\`: also written at ${earlier.line}:${earlier.column}; keep one, because which value wins depends on the target`,
+      line: at.line,
+      column: at.column,
+      file: ctx.filename,
+    });
+  }
 }
 
 /** The tag params of `<for|a, b|>` / `<@name|p|>`, as source text. */

@@ -1,0 +1,4 @@
+export interface Input { [key: string]: unknown }
+
+<div class="a"
+  class="b">hi</div>
