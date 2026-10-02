@@ -394,7 +394,31 @@ export function runMxTscArgs(args: readonly string[]): number {
   }
 }
 
+/**
+ * Runs `body` with `FORCE_COLOR` hidden from `tsc` when stdout is not a TTY.
+ * `tsc` turns its `pretty` output (code frames, declaration sites, ANSI) on
+ * for any non-empty `FORCE_COLOR`, which CI sets, so a piped run printed
+ * roughly 1.7x the text of the compact `file(L,C): error …` lines. `tsc` only
+ * consults the environment when neither `--pretty` nor a tsconfig `pretty`
+ * is set, so both of those still win; and on a TTY nothing changes. The
+ * variable is restored for the caller afterwards.
+ */
+function withoutForcedColorOffTty<T>(body: () => T): T {
+  const forced = process.env.FORCE_COLOR;
+  if (process.stdout.isTTY || forced === undefined) return body();
+  delete process.env.FORCE_COLOR;
+  try {
+    return body();
+  } finally {
+    process.env.FORCE_COLOR = forced;
+  }
+}
+
 function runMxTscBody(): number {
+  return withoutForcedColorOffTty(runMxTscChecks);
+}
+
+function runMxTscChecks(): number {
   const astro = consumeAstroFlag(process.argv);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
   // One language plugin per program: `tsc -b` creates one for each project,

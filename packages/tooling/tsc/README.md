@@ -33,6 +33,20 @@ it *is* `tsc`, with Volar's program proxy spliced in. Point a package's
 script defers to a package's own `typecheck` script when it has one, so those
 three run `mx-tsc` while every other package keeps running plain `tsc`.
 
+### Output when stdout is not a TTY
+
+Off a TTY (a pipe, a file, an AI agent's shell, CI) `mx-tsc` prints `tsc`'s
+compact lines, `file(line,column): error TSxxxx: message`, even when
+`FORCE_COLOR` is set. Plain `tsc` turns its `pretty` mode (an ANSI code frame
+under every error, plus the declaration site of a "did you mean") on for any
+non-empty `FORCE_COLOR`, which CI sets, and that makes the output several times
+larger for no extra information. `mx-tsc` hides `FORCE_COLOR` from `tsc` for
+the run when stdout is not a TTY and puts it back afterwards; `CI` is not read.
+`pretty` is only the default, so it is still yours to choose: `--pretty` (or
+`--pretty true`) on the command line, or `"pretty": true` in the tsconfig,
+gives the pretty output on a pipe too. On a TTY nothing changes. `NO_COLOR`
+still wins over everything but an explicit `pretty` option.
+
 `--astro` is an `mx-tsc` flag, removed before TypeScript parses the rest of the
 command line. It lazily loads the same optional
 `@astrojs/language-server@2.16.16` peer as the tsserver plugin. `.amx` is an
