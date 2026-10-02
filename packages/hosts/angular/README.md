@@ -221,4 +221,4 @@ sibling `<name>.ts` and stay silent when each `@Component` class there extends
 same-file base counts). If one member is missing the warning names the class,
 the file and the member. If the file is absent, unparsable, has no
 `@Component` class, or the class extends a base imported from another module,
-the warning stays unchanged (it only says "missing" when the whole `extends` chain was visible in the file): `compile()` on its own always warns.
+the warning stays unchanged (it only says "missing" when the whole `extends` chain was visible in the file; a mixin chain is followed through its first argument only, and a `declare class` base is unseen; a property with no initializer, a setter-only accessor, `declare`, `static` and `abstract` members do not count): `compile()` on its own always warns.

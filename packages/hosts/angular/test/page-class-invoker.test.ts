@@ -255,6 +255,64 @@ describe("page invoker warning vs the page's own class", () => {
     });
   });
 
+  // The most likely real-world false negative: a bare field to silence TS2339.
+  describe.each([
+    ["bare `: any`", "{\n  __mxOn: any;\n  __mxOnAt: any;\n}", ""],
+    ["optional `?:`", "{\n  __mxOn?: any;\n  __mxOnAt?: any;\n}", ""],
+    [
+      "bare field under implements",
+      "implements Foo {\n  __mxOn: any;\n  __mxOnAt: any;\n}",
+      "interface Foo {}",
+    ],
+    [
+      "setter-only accessors",
+      "{\n  set __mxOn(v: any) {}\n  set __mxOnAt(v: any) {}\n}",
+      "",
+    ],
+  ])("valueless members (%s)", (_name, body, head) => {
+    it("do not count as provided", () => {
+      const warnings = invokerWarnings(component(head, ` ${body}`));
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.message).toContain(
+        "`PageComponent` is missing `__mxOn` and `__mxOnAt`",
+      );
+    });
+  });
+
+  it("counts an arrow-function field and a getter", () => {
+    expect(
+      invokerWarnings(
+        component(
+          "",
+          " {\n  __mxOn = (h: any) => h;\n  get __mxOnAt() { return (o: any) => o; }\n}",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("treats a same-file `declare class` base as unseen: original text, no claim", () => {
+    const warnings = invokerWarnings(
+      component("declare class Base {}", " extends Base {}"),
+    );
+    expect(warnings).toHaveLength(1);
+    const message = warnings[0]?.message ?? "";
+    expect(message).not.toContain("is missing");
+    expect(message).toMatch(
+      /^this template binds an event handler; add these members/,
+    );
+  });
+
+  it("does not follow a mixin that takes the base in a later argument", () => {
+    const warnings = invokerWarnings(
+      component(
+        `import { MxHandlersMixin } from "${RT}";\nconst O = (a: any, b: any) => b;\nclass B {}`,
+        " extends O(1, MxHandlersMixin(B)) {}",
+      ),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).not.toContain("is missing");
+  });
+
   it("counts a definite property that has an initializer", () => {
     expect(
       invokerWarnings(

@@ -101,15 +101,18 @@ function topLevelClass(statement: Node): Node | undefined {
 
 /**
  * Whether a class member is a real instance member at run time. `declare`,
- * `static`, `abstract`, a bodiless method and a `!`-only property type-check
- * but leave `ctx.__mxOn` undefined on the instance.
+ * `static`, `abstract`, a bodiless method, a property with no initializer and
+ * a setter-only accessor type-check but leave `ctx.__mxOn` undefined (or not
+ * callable) on the instance.
  */
 function isInstanceMember(member: Node): boolean {
   if (member.declare || member.static || member.abstract) return false;
   if (member.type === "TSDeclareMethod") return false;
-  if (member.type === "ClassProperty" && member.definite && !member.value) {
-    return false;
-  }
+  // A property with no initializer (`x: any`, `x?: any`, `x!: any`) is never
+  // assigned, so it is `undefined` on the instance whatever `strict` says.
+  if (member.type === "ClassProperty" && !member.value) return false;
+  // A setter-only accessor reads back `undefined`; a getter may return a fn.
+  if (member.kind === "set") return false;
   return true;
 }
 
@@ -143,7 +146,8 @@ function inspectFile(file: unknown, filename: string): PageClassInspection {
     if (klass) {
       classes.push(klass);
       const id = asNode(klass.id)?.name;
-      if (id) declared.set(id, klass);
+      // An ambient `declare class` has no body to read: treat it as unseen.
+      if (id && !klass.declare) declared.set(id, klass);
     }
   }
 
@@ -162,6 +166,9 @@ function inspectFile(file: unknown, filename: string): PageClassInspection {
       (property?.name === "MxHandlers" || property?.name === "MxHandlersMixin")
     );
   };
+  // A wrapper call counts when the runtime is reached through its FIRST
+  // argument (`Other(MxHandlersMixin(Base))`); a mixin taking the base in a
+  // later position is not followed, so that chain is unseen (`unknown`).
   const reachesRuntime = (base: Node | undefined): boolean => {
     if (base?.type !== "CallExpression") return isRuntimeRef(base);
     if (isRuntimeRef(asNode(base.callee))) return true;
