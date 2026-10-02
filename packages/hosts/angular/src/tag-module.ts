@@ -820,7 +820,7 @@ function projectSlots(body: IrNode[], ctx: Ctx): Set<string> {
         const bare = bareLoc.get(slot);
         if (bare) {
           throw new TranslateError(
-            `\`input.${slot}\` is read both as content (\`input.${slot}()\` at ${node.loc.line}:${node.loc.column}) and as a value (\`input.${slot}\` at ${bare.line}:${bare.column}) on Angular. Content projection is a placement, not a value — use one or the other.`,
+            `\`input.${slot}\` is read both as content (\`input.${slot}()\` at ${node.loc.line}:${node.loc.column + 1}) and as a value (\`input.${slot}\` at ${bare.line}:${bare.column + 1}) on Angular. Content projection is a placement, not a value — use one or the other.`,
             node.loc.line,
             node.loc.column,
             node.loc.file,

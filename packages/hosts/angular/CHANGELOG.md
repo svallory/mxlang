@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Fix (agent-output-positions, audit item 13):** `mx-angular build`/`watch` printed `file:line:column` with a 0-based column (`5:15`) where `mx-tsc` prints `(5,16)` for the same warning, so an agent landed one column left. Every printed position (build, watch, CLI errors, the invoker-conflict message) now has a 1-based column. The structured `line`/`column` on `warnings`/`errors` and `TranslateError` are unchanged (0-based). One existing test pinned the old text (`watch.test.ts`, `x.solid.mx:1:0`) and was updated. `mx-angular map` takes and prints its own `file:line:col` unchanged.
+- **Fix (agent-output-positions, audit item 13):** `mx-angular build`/`watch` printed `file:line:column` with a 0-based column (`5:15`) where `mx-tsc` prints `(5,16)` for the same warning, so an agent landed one column left. Every printed diagnostic position (build, watch, CLI errors, and the two positions quoted in the slot/bare invoker-conflict message) now has a 1-based column. The structured `line`/`column` on `warnings`/`errors` and `TranslateError` are unchanged (0-based). One existing test pinned the old text (`watch.test.ts`, `x.solid.mx:1:0`) and was updated. `mx-angular map` takes and prints its own `file:line:col` unchanged.
 
 - **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.
 

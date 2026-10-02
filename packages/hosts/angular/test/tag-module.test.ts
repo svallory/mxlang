@@ -605,6 +605,20 @@ describe("compileTagModule: slot misuse (R-c)", () => {
     );
   });
 
+  it("prints both positions of a slot/bare conflict with 1-based columns", () => {
+    // `input.x` starts at column 3 (0-based) and `input.x()` at 13, so a reader
+    // (and `mx-tsc`, which prints 1-based) sees 1:4 and 1:14.
+    let message = "";
+    try {
+      compileTag("<i>${input.x}${input.x()}</i>\n");
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain(
+      "is read both as content (`input.x()` at 1:14) and as a value (`input.x` at 1:4) on Angular.",
+    );
+  });
+
   it("errors when a slot is called with arguments", () => {
     expect(() => compileTag("<i>${input.header(1)}</i>\n")).toThrow(
       /passes arguments to content/,

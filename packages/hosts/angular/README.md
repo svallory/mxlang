@@ -205,7 +205,7 @@ a conflict. Pasting the members needs no dependency.
 
 ## Warnings
 
-Every position `build`, `watch` and the CLI print is `file:line:column` with a **1-based** column, the basis `mx-tsc` prints (`file(line,column)`), so both surfaces point at the same character. (`CompileResult.warnings[].column`, `TranslateError.column` and the `map` argument stay 0-based; only the printed text is 1-based.)
+Every diagnostic position `build` and `watch` print (their `file:line:column` prefixes, and the positions quoted inside messages) is 1-based, the basis `mx-tsc` prints (`file(line,column)`), so both surfaces point at the same character. `mx-angular map <file.html:line:col>` is the exception: it is the inverse of the sidecar's 0-based mapping, so it takes and prints 0-based columns. The structured `line`/`column` on `CompileResult.warnings`, `errors` and `TranslateError` are 0-based as well; only the printed diagnostic text is 1-based.
 
 `compile()`'s `warnings` array collects positioned, non-fatal diagnostics —
 a construct that compiles but diverges from an exact Angular equivalent, or
