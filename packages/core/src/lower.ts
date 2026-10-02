@@ -428,7 +428,7 @@ function lowerAttr(
   }
 
   // Marko rejects a name outside its grammar for every tag; only a host with
-  // its own attribute syntax (Angular) opts out. A modifier (`class:x`) is
+  // its own attribute syntax opts out (`acceptsForeignAttrNames`). A modifier (`class:x`) is
   // `name` + `modifier` here, both valid, and goes through its own branch.
   if (
     !ctx.declarations.acceptsForeignAttrNames &&

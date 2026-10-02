@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Chore: the spelling hints name no framework (core-hints-neutral-names)
+
+**No behaviour change.** The hint shown for a `#…` attribute name now reads "`#…` template reference variables have no meaning in MX" and the one for `*…` reads "`*…` structural directives have no meaning in MX; use `<if=cond>` / `<for|item| of=list>`" (previously "… are Angular syntax"). When the hints fire, where they are positioned and the `onDoubleClick` warning text are unchanged. Internally `REACT_EVENT_SPELLINGS` and `warnOnReactEventSpelling` are now `NON_DOM_EVENT_SPELLINGS` and `warnOnNonDomEventSpelling`.
+
 ### Fix: a default attribute's `nameSpan` is zero-width at the `=`, as in Marko; tags and static values gain spans (core-span-fixes)
 
 **Behaviour change (one diagnostic position):** `<x="post">` lowers to `name: "value"` with a `loc` that starts at the `=`, so `attrNameSpan` measured `"value".length` from there and `nameSpan` covered `="pos` (for `resource="post"`: 8–13). A default attribute has no spelled name, and Marko anchors it with an empty range at the attribute start (htmljs-parser 5.18.0 `ensureAttrName`; `@marko/language-tools` 2.7.0 treats the empty range as "default"), so `nameSpan` is now zero-width at the `=` (8–8). Consumers detect the empty range, as Marko does. Method shorthand (`change(ctx) {…}`) was already correct and is pinned by a test. Spelled attributes and `name:modifier` spellings are unchanged.
