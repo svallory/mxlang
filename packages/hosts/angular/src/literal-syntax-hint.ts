@@ -41,6 +41,15 @@ const BLOCK = new RegExp(`(?<![\\w@.$-])@(${BLOCK_KEYWORDS})(?![\\w$-])`, "g");
 const NEEDS_PAREN = new Set(["if", "else if", "for", "switch", "case"]);
 const MAY_PAREN = new Set(["defer", "placeholder", "loading"]);
 
+/** The index of the quote closing the string opened at `open`, skipping `\x` escapes; -1 if unclosed. */
+function closingQuote(text: string, open: number): number {
+  for (let i = open + 1; i < text.length; i++) {
+    if (text[i] === "\\") i++;
+    else if (text[i] === text[open]) return i;
+  }
+  return -1;
+}
+
 /**
  * Whether `expr` has an Angular pipe: any single `|` outside a string literal,
  * at any depth. Angular has no bitwise OR, so only `||` is not a pipe.
@@ -49,7 +58,7 @@ function hasPipe(expr: string): boolean {
   for (let i = 0; i < expr.length; i++) {
     const c = expr[i];
     if (c === '"' || c === "'" || c === "`") {
-      const close = expr.indexOf(c, i + 1);
+      const close = closingQuote(expr, i);
       if (close < 0) return false;
       i = close;
     } else if (c === "|") {
@@ -112,7 +121,7 @@ function parenBody(
   for (let i = open; i < text.length; i++) {
     const c = text[i];
     if (c === '"' || c === "'" || c === "`") {
-      const close = text.indexOf(c, i + 1);
+      const close = closingQuote(text, i);
       if (close < 0) return undefined;
       i = close;
     } else if (c === "(") depth++;
@@ -133,7 +142,13 @@ function blockAfter(
 ): { cond: string | undefined; decl?: string } | undefined {
   if (keyword === "let") {
     const m = LET_DECL.exec(text.slice(from));
-    return m ? { cond: undefined, decl: `${m[1]}=${m[2]?.trim()}` } : undefined;
+    if (!m) return undefined;
+    const value = (m[2] ?? "").trim();
+    // A pipe in the value has no MX form: keep the placeholder, not the expression.
+    return {
+      cond: undefined,
+      decl: `${m[1]}=${hasPipe(value) ? "…" : value}`,
+    };
   }
   let at = from;
   let cond: string | undefined;

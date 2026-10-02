@@ -226,6 +226,30 @@ describe("literal Angular syntax in a template", () => {
     });
   });
 
+  describe("@let pipes and escaped quotes", () => {
+    const msg = (src: string) => plain(lit(src)[0]?.message ?? "");
+    it("@let with a pipe keeps the placeholder", () => {
+      expect(msg("<p>@let z = a | async;</p>")).toContain("Use `<const/z=…>`");
+    });
+    it("@let with `||` is still inlined", () => {
+      expect(msg("<p>@let z = a || b;</p>")).toContain(
+        "Use `<const/z=a || b>`",
+      );
+    });
+    it("an escaped quote does not end the string early", () => {
+      expect(msg("<p>{{ 'a\\'b' | date }}</p>")).not.toContain("Write");
+      expect(msg('<p>{{ "a\\"b" | x }}</p>')).not.toContain("Write");
+      expect(msg("<p>{{ 'a\\'b' | date }}</p>")).toContain(
+        "Pipes have no MX form",
+      );
+    });
+    it("`@if` with an escaped quote and a pipe warns, condition not inlined", () => {
+      const w = lit("<p>@if ('x\\'y' | f) { z }</p>");
+      expect(w).toHaveLength(1);
+      expect(plain(w[0]?.message ?? "")).toContain("Use `<if=…>…</if>`");
+    });
+  });
+
   it("several matches in one run each get a warning", () => {
     expect(lit("<p>{{ a }} and {{ b }}</p>")).toHaveLength(2);
   });
