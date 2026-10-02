@@ -77,6 +77,16 @@ export function startServer(
   const callerDependencies = new Map<string, Set<string>>();
   const dependencyCallers = new Map<string, Set<string>>();
 
+  // Whether a document other than `owner` still publishes against `uri`. Open
+  // documents of one package all report the same `package.json` problem, so
+  // one closing (or recovering) must not clear what the others still show.
+  const publishedByOther = (uri: string, owner: string): boolean => {
+    for (const [other, uris] of templateDiagnostics) {
+      if (other !== owner && uris.has(uri)) return true;
+    }
+    return false;
+  };
+
   const pathOf = (uri: string): string => {
     try {
       return fileURLToPath(uri);
@@ -164,24 +174,33 @@ export function startServer(
       recordDependencies(uri, dependencies);
       connection.sendDiagnostics({ uri, diagnostics });
 
-      // Clear whatever this document published against a template last time
-      // before publishing what it found now, so a fixed template's diagnostic
-      // does not linger once the caller compiles clean.
-      const previous = templateDiagnostics.get(uri) ?? new Set<string>();
-      const current = new Set(related.map((entry) => entry.uri));
-      for (const templateUri of previous) {
-        if (!current.has(templateUri)) {
-          connection.sendDiagnostics({ uri: templateUri, diagnostics: [] });
-        }
-      }
+      // Clear whatever this document published against a template or a
+      // `package.json` last time before publishing what it found now, so a
+      // fixed problem does not linger once the document compiles clean. One
+      // URI can arrive in several entries (two problems in one `package.json`)
+      // and is published once, merged.
+      const merged = new Map<string, Diagnostic[]>();
       for (const entry of related) {
-        connection.sendDiagnostics({
-          uri: entry.uri,
-          diagnostics: entry.diagnostics,
-        });
+        merged.set(entry.uri, [
+          ...(merged.get(entry.uri) ?? []),
+          ...entry.diagnostics,
+        ]);
       }
+      const previous = templateDiagnostics.get(uri) ?? new Set<string>();
+      const current = new Set(merged.keys());
       if (current.size > 0) templateDiagnostics.set(uri, current);
       else templateDiagnostics.delete(uri);
+      for (const relatedUri of previous) {
+        if (!current.has(relatedUri) && !publishedByOther(relatedUri, uri)) {
+          connection.sendDiagnostics({ uri: relatedUri, diagnostics: [] });
+        }
+      }
+      for (const [relatedUri, relatedDiagnostics] of merged) {
+        connection.sendDiagnostics({
+          uri: relatedUri,
+          diagnostics: relatedDiagnostics,
+        });
+      }
     }, DEBOUNCE_MS);
 
     pending.set(uri, timer);
@@ -266,11 +285,13 @@ export function startServer(
       pending.delete(event.document.uri);
     }
     connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
-    for (const templateUri of templateDiagnostics.get(event.document.uri) ??
-      []) {
-      connection.sendDiagnostics({ uri: templateUri, diagnostics: [] });
-    }
+    const closing = templateDiagnostics.get(event.document.uri) ?? [];
     templateDiagnostics.delete(event.document.uri);
+    for (const templateUri of closing) {
+      if (!publishedByOther(templateUri, event.document.uri)) {
+        connection.sendDiagnostics({ uri: templateUri, diagnostics: [] });
+      }
+    }
     recordDependencies(event.document.uri, new Set());
     callerDependencies.delete(event.document.uri);
   });

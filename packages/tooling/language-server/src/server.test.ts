@@ -465,6 +465,64 @@ describe("stdio server (e2e)", () => {
     expect(params.diagnostics[0]?.message).toContain("does-not-exist");
   }, 15000);
 
+  it("publishes a package.json problem on package.json too, and clears it on close", async () => {
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    conn.sendNotification("initialized", {});
+
+    type Published = {
+      uri: string;
+      diagnostics: Array<{
+        message: string;
+        range: { start: { line: number; character: number } };
+        relatedInformation?: Array<{ location: { uri: string } }>;
+      }>;
+    };
+    const seen: Published[] = [];
+    conn.onNotification(PublishDiagnosticsNotification, (params) => {
+      seen.push(params as Published);
+    });
+    const until = async (done: () => boolean) => {
+      for (let i = 0; i < 300 && !done(); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    };
+
+    const dir = join(import.meta.dirname, "fixtures/bad-mx-tags");
+    const uri = `file://${join(dir, "page.mx")}`;
+    const pkgUri = `file://${join(dir, "package.json")}`;
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "mx", version: 1, text: "<p>x</p>\n" },
+    });
+    await until(
+      () =>
+        seen.some((p) => p.uri === uri) && seen.some((p) => p.uri === pkgUri),
+    );
+
+    // The .mx gets 1:1 plus a pointer; package.json gets the real range.
+    const onPage = seen.find((p) => p.uri === uri)?.diagnostics[0];
+    expect(onPage?.range.start).toEqual({ line: 0, character: 0 });
+    expect(onPage?.message).toMatch(/package\.json:\d+:\d+: /);
+    expect(onPage?.relatedInformation?.[0]?.location.uri).toBe(pkgUri);
+    const onPkg = seen.find((p) => p.uri === pkgUri)?.diagnostics[0];
+    expect(onPkg?.message).toContain("does-not-exist");
+
+    // Closing the only document that reported it clears package.json.
+    conn.sendNotification("textDocument/didClose", {
+      textDocument: { uri },
+    });
+    await until(() =>
+      seen.some((p) => p.uri === pkgUri && p.diagnostics.length === 0),
+    );
+    expect(
+      seen.some((p) => p.uri === pkgUri && p.diagnostics.length === 0),
+    ).toBe(true);
+  }, 15000);
+
   it.each(["typescript", "marko"])(
     "diagnoses a .solid.mx URI with the %s language id",
     async (languageId) => {

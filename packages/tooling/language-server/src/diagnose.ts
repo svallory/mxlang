@@ -204,7 +204,7 @@ export function diagnoseDocument(
   // are collected here and returned alongside whatever the compile produces,
   // rather than replacing it.
   let scanWarnings: Diagnostic[] = (hostPolicyDiagnostics ?? []).map(
-    scanDiagnosticToLsp,
+    (diagnostic) => scanDiagnosticToLsp(diagnostic, related),
   );
   // Positioned warnings the *compile* raised: content a tag template never
   // placed, an attribute tag a transform never read. A different source from
@@ -224,7 +224,9 @@ export function diagnoseDocument(
     const scan = scanCached(path, { host: hostPolicy.host });
     scanWarnings = [
       ...scanWarnings,
-      ...scan.diagnostics.map(scanDiagnosticToLsp),
+      ...scan.diagnostics.map((diagnostic) =>
+        scanDiagnosticToLsp(diagnostic, related),
+      ),
     ];
     // Tags the caller supplied win over the scan's. Normally nothing is
     // supplied and discovery is the whole story; a caller that does pass a map
@@ -376,21 +378,48 @@ export function diagnoseDocument(
  * Turns one scan diagnostic into an LSP one against the *open* document.
  *
  * The problem is in a `package.json`, not in the file the author is editing,
- * and LSP publishes diagnostics per document — so the message names the file
- * rather than the range pointing at it. A warning rather than an error,
- * because the scan carried on and everything else in the package still
+ * and LSP publishes diagnostics per document. Its line:column are
+ * `package.json`'s, so they mean nothing in the document: the document gets
+ * the warning at 1:1, whose message names `package.json:line:column`
+ * (1-based, like `mx-tsc`'s `file(line,col)`) and whose `relatedInformation`
+ * points at the real spot. The same problem is also pushed onto `related`, so
+ * the server publishes it against the `package.json` URI at its real range,
+ * for clients that show diagnostics on that file. A warning rather than an
+ * error, because the scan carried on and everything else in the package still
  * compiles; the author has a misconfigured entry, not a broken file.
  */
-function scanDiagnosticToLsp(diagnostic: ScanDiagnostic): Diagnostic {
+function scanDiagnosticToLsp(
+  diagnostic: ScanDiagnostic,
+  related?: RelatedDiagnostics[],
+): Diagnostic {
   const line = Math.max(0, diagnostic.line - 1);
   const column = Math.max(0, diagnostic.column);
+  const range = {
+    start: { line, character: column },
+    end: { line, character: column + 1 },
+  };
+  const uri = uriOf(diagnostic.file);
+  related?.push({
+    uri,
+    diagnostics: [
+      {
+        severity: DiagnosticSeverity.Warning,
+        source: "mxlang",
+        message: diagnostic.message,
+        range,
+      },
+    ],
+  });
   return {
     severity: DiagnosticSeverity.Warning,
     source: "mxlang",
-    message: `${diagnostic.file}: ${diagnostic.message}`,
+    message: `${diagnostic.file}:${line + 1}:${column + 1}: ${diagnostic.message}`,
     range: {
-      start: { line, character: column },
-      end: { line, character: column + 1 },
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 1 },
     },
+    relatedInformation: [
+      { location: { uri, range }, message: diagnostic.message },
+    ],
   };
 }

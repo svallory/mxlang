@@ -90,6 +90,10 @@ The resolver lives in `@mxlang/core` (`src/host-policy.ts`), shared with
 `@mxlang/typescript-plugin`; see `src/host-policy.test.ts` there for every
 branch.
 
+## Where host-policy diagnostics appear
+
+A problem in `package.json` (unknown `mx.host`, malformed file, bad `mx.tags`) is published twice: on the open `.mx` at 1:1 with the message `<path>/package.json:<line>:<col>: <message>` and `relatedInformation` at the real range, and on the `package.json` itself at that range. It clears when you fix it or close the last document that reported it.
+
 ## Debounce
 
 150ms per document from the last `didOpen`/`didChange`/`didSave`; a

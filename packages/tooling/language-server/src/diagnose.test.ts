@@ -712,7 +712,8 @@ describe("custom tag template positions", () => {
     ).toEqual([]);
   });
 
-  it("returns host-policy diagnostics as warnings naming the package.json, ahead of the compile's", () => {
+  it("pins a host-policy diagnostic to 1:1 of the document, naming package.json:line:col, with relatedInformation at the real spot", () => {
+    const related: RelatedDiagnostics[] = [];
     const diagnostics = diagnoseDocument(
       "<div>ok</div>\n",
       "file:///app/page.mx",
@@ -720,7 +721,7 @@ describe("custom tag template positions", () => {
       undefined,
       "",
       undefined,
-      undefined,
+      related,
       undefined,
       [
         {
@@ -736,10 +737,41 @@ describe("custom tag template positions", () => {
     const [diagnostic] = diagnostics as [(typeof diagnostics)[number]];
     expect(diagnostic.severity).toBe(2); // DiagnosticSeverity.Warning
     expect(diagnostic.source).toBe("mxlang");
+    // Line:col is 1-based in the message, like mx-tsc's `file(line,col)`.
     expect(diagnostic.message).toBe(
-      '/app/package.json: unknown mx.host "htmll"',
+      '/app/package.json:4:13: unknown mx.host "htmll"',
     );
-    expect(diagnostic.range.start).toEqual({ line: 3, character: 12 });
+    // The document has no coordinate for this: 1:1, never package.json's.
+    expect(diagnostic.range).toEqual({
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 1 },
+    });
+    expect(diagnostic.relatedInformation).toEqual([
+      {
+        location: {
+          uri: "file:///app/package.json",
+          range: {
+            start: { line: 3, character: 12 },
+            end: { line: 3, character: 13 },
+          },
+        },
+        message: 'unknown mx.host "htmll"',
+      },
+    ]);
+    // ...and the same problem is published on package.json at its real range.
+    expect(related).toHaveLength(1);
+    expect(related[0]?.uri).toBe("file:///app/package.json");
+    expect(related[0]?.diagnostics).toEqual([
+      {
+        severity: 2,
+        source: "mxlang",
+        message: 'unknown mx.host "htmll"',
+        range: {
+          start: { line: 3, character: 12 },
+          end: { line: 3, character: 13 },
+        },
+      },
+    ]);
   });
 
   it("keeps host-policy warnings when the compile itself fails", () => {

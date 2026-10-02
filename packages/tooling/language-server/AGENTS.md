@@ -145,3 +145,5 @@ edit found no caller left to re-diagnose. Fixed in `@mxlang/core`
 (`TranslateError.dependencies`, see `packages/core/AGENTS.md`) and forwarded
 here in `diagnoseDocument`'s `catch` block before building the diagnostic.
 
+**Host-policy diagnostic location.** A `package.json` problem (unknown `mx.host`, malformed file, bad `mx.tags`) has *package.json's* coordinates, not the document's. `diagnose.ts`'s `scanDiagnosticToLsp` therefore returns it on the document at 1:1, message `<package.json>:<line>:<col>: <message>`, with `relatedInformation` at the real range, and pushes the same diagnostic onto `related` so `server.ts` publishes it on the `package.json` URI. `server.ts` merges entries per URI and only clears a URI when no other open document still publishes it (`publishedByOther`). `mx-tsc` does not print these warnings at all, so there is no tsc wording to match. `diagnoseDocument` compiles with the filesystem path (`documentPath(uri)`), never the URI.
+
