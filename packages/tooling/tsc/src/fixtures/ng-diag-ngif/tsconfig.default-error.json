@@ -12,6 +12,9 @@
   },
   "include": ["src"],
   "angularCompilerOptions": {
-    "extendedDiagnostics": { "defaultCategory": "error" }
+    "strictTemplates": true,
+    "extendedDiagnostics": {
+      "defaultCategory": "error"
+    }
   }
 }

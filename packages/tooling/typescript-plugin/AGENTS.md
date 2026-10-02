@@ -140,8 +140,10 @@ Four facts worth knowing before editing either:
   checker is built from the project's tsconfig (`readConfiguration`), and
   ngtsc applies `angularCompilerOptions.extendedDiagnostics` (`checks` and
   `defaultCategory`; check name `missingControlFlowDirective` for NG8103) itself,
-  so a promoted check arrives as `category: "error"` and fails the run, a
-  suppressed one never arrives. Do not re-map categories in
+  so a promoted check should arrive as `category: "error"` and fail the run, a
+  suppressed one should never arrive (verified end to end in `mx-tsc` by the
+  test below; **not tested** through the editor plugin's `NgDiagnosticsService`,
+  which maps categories to error|warning only). Do not re-map categories in
   `tsc/src/ng-diagnostics.ts`. Pinned by `tsc/src/ng-extended-diagnostics.test.ts`
   (fixture `ng-diag-ngif`, one tsconfig per case).
 - **`runTsc` needs `require('typescript')` passed as its fourth argument.**

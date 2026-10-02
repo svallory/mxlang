@@ -12,6 +12,9 @@
   },
   "include": ["src"],
   "angularCompilerOptions": {
-    "extendedDiagnostics": { "defaultCategory": "suppress" }
+    "strictTemplates": true,
+    "extendedDiagnostics": {
+      "defaultCategory": "suppress"
+    }
   }
 }

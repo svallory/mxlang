@@ -12,9 +12,12 @@
   },
   "include": ["src"],
   "angularCompilerOptions": {
+    "strictTemplates": true,
     "extendedDiagnostics": {
       "defaultCategory": "error",
-      "checks": { "missingControlFlowDirective": "warning" }
+      "checks": {
+        "missingControlFlowDirective": "warning"
+      }
     }
   }
 }

@@ -10,5 +10,8 @@
     "allowImportingTsExtensions": true,
     "experimentalDecorators": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "angularCompilerOptions": {
+    "strictTemplates": true
+  }
 }

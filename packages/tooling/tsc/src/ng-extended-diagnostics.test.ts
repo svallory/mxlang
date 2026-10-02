@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { fixtures, mxTsc, run, SPAWN_TIMEOUT_MS } from "./test-support.ts";
+import { runInProcess } from "./in-process.ts";
+import { fixtures, SPAWN_TIMEOUT_MS } from "./test-support.ts";
 
 /**
  * NG8103 (`*ngIf` used without `NgIf`/`CommonModule` imported; audit cases a21
@@ -14,19 +15,34 @@ import { fixtures, mxTsc, run, SPAWN_TIMEOUT_MS } from "./test-support.ts";
  */
 const dir = join(fixtures, "ng-diag-ngif");
 
-function check(tsconfig: string): { status: number; text: string } {
-  const result = run(mxTsc, ["--noEmit", "-p", join(dir, tsconfig)]);
-  return {
-    status: result.status,
-    text: stripVTControlCharacters(result.output),
-  };
-}
-
-/** The first line of the message, up to the end of the sentence naming the directive. */
 const MESSAGE =
   "NG8103: The `*ngIf` directive was used in the template, but neither the `NgIf` directive nor the `CommonModule` was imported.";
 // Line 5, column 18: the `*ngIf` attribute in `template: <div *ngIf="title">x</div>,`.
+const FILE = "src/x.component.ng.mx(";
 const POSITION = "src/x.component.ng.mx(5,18)";
+
+/**
+ * The run's output as lines, each cut to start at the fixture's `src/x.component.ng.mx(` path (tsc prints
+ * it relative to the cwd, which differs between runners). Every line the run
+ * prints is kept, so an unexpected extra diagnostic fails the assert too.
+ */
+function check(tsconfig: string): { status: number; lines: string[] } {
+  const result = runInProcess(["--noEmit", "-p", tsconfig], dir);
+  const text = stripVTControlCharacters(result.stdout + result.stderr);
+  return {
+    status: result.status,
+    lines: text
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line) => line.slice(Math.max(line.indexOf(FILE), 0))),
+  };
+}
+
+/** The one NG8103 line a run prints, cut to the length of `expected` (the rest is Angular's advice text). */
+function onlyLine(lines: string[], expected: string): string {
+  expect(lines).toHaveLength(1);
+  return (lines[0] ?? "").slice(0, expected.length);
+}
 
 describe("NG8103 extendedDiagnostics", () => {
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
@@ -34,9 +50,10 @@ describe("NG8103 extendedDiagnostics", () => {
   it(
     "is a warning at the .ng.mx position of the directive by default, exit 0",
     () => {
-      const { status, text } = check("tsconfig.json");
-      expect(text).toContain(`${POSITION}: warning TS-998103: ${MESSAGE}`);
-      expect(text).not.toContain("error");
+      const { status, lines } = check("tsconfig.json");
+      expect(
+        onlyLine(lines, `${POSITION}: warning TS-998103: ${MESSAGE}`),
+      ).toBe(`${POSITION}: warning TS-998103: ${MESSAGE}`);
       expect(status).toBe(0);
     },
     SPAWN_TIMEOUT_MS,
@@ -45,9 +62,10 @@ describe("NG8103 extendedDiagnostics", () => {
   it(
     'checks.missingControlFlowDirective: "error" prints an error and exits non-zero',
     () => {
-      const { status, text } = check("tsconfig.check-error.json");
-      expect(text).toContain(`${POSITION}: error TS-998103: ${MESSAGE}`);
-      expect(text).not.toContain("warning");
+      const { status, lines } = check("tsconfig.check-error.json");
+      expect(onlyLine(lines, `${POSITION}: error TS-998103: ${MESSAGE}`)).toBe(
+        `${POSITION}: error TS-998103: ${MESSAGE}`,
+      );
       expect(status).not.toBe(0);
     },
     SPAWN_TIMEOUT_MS,
@@ -58,7 +76,7 @@ describe("NG8103 extendedDiagnostics", () => {
     () => {
       expect(check("tsconfig.check-suppress.json")).toEqual({
         status: 0,
-        text: "",
+        lines: [],
       });
     },
     SPAWN_TIMEOUT_MS,
@@ -67,8 +85,10 @@ describe("NG8103 extendedDiagnostics", () => {
   it(
     'defaultCategory: "error" promotes it too',
     () => {
-      const { status, text } = check("tsconfig.default-error.json");
-      expect(text).toContain(`${POSITION}: error TS-998103: ${MESSAGE}`);
+      const { status, lines } = check("tsconfig.default-error.json");
+      expect(onlyLine(lines, `${POSITION}: error TS-998103: ${MESSAGE}`)).toBe(
+        `${POSITION}: error TS-998103: ${MESSAGE}`,
+      );
       expect(status).not.toBe(0);
     },
     SPAWN_TIMEOUT_MS,
@@ -77,10 +97,12 @@ describe("NG8103 extendedDiagnostics", () => {
   it(
     "a per-check setting overrides defaultCategory",
     () => {
-      const { status, text } = check(
+      const { status, lines } = check(
         "tsconfig.default-error-check-warning.json",
       );
-      expect(text).toContain(`${POSITION}: warning TS-998103: ${MESSAGE}`);
+      expect(
+        onlyLine(lines, `${POSITION}: warning TS-998103: ${MESSAGE}`),
+      ).toBe(`${POSITION}: warning TS-998103: ${MESSAGE}`);
       expect(status).toBe(0);
     },
     SPAWN_TIMEOUT_MS,
@@ -91,7 +113,7 @@ describe("NG8103 extendedDiagnostics", () => {
     () => {
       expect(check("tsconfig.default-suppress.json")).toEqual({
         status: 0,
-        text: "",
+        lines: [],
       });
     },
     SPAWN_TIMEOUT_MS,

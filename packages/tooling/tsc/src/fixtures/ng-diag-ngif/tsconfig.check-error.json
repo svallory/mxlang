@@ -12,8 +12,11 @@
   },
   "include": ["src"],
   "angularCompilerOptions": {
+    "strictTemplates": true,
     "extendedDiagnostics": {
-      "checks": { "missingControlFlowDirective": "error" }
+      "checks": {
+        "missingControlFlowDirective": "error"
+      }
     }
   }
 }
