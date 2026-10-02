@@ -217,7 +217,7 @@ by walking the source against `value` (whitespace runs, `&…;` entities) and
 stops at the first mismatch, so in concise mode, where a text node ends at its
 line with no `<`, the scan never reaches the next lines' attributes. The
 `${expr}` rewrite is offered only when the `{{ }}` body parses as JS and has no
-top-level pipe. Nothing
+pipe (a single `|` outside a string, at any depth); `<html-script>`/`<html-style>` bodies are skipped like `<script>`/`<style>`. A block condition with a pipe or `;` is not inlined into the hint. Nothing
 in core: attribute values, placeholders and comments are never `Text`, and
 `<style>`/`<script>` bodies are skipped through `Emitter.codeDepth`. Only
 unambiguous shapes warn (`{{` needs `}}`; `@kw` needs real block syntax at a

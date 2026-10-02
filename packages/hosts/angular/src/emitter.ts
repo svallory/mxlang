@@ -1155,7 +1155,7 @@ class AngularEmitter implements Emitter<string> {
     warn(this.ctx, { message, ...loc, code } as MxWarning);
   }
 
-  /** Nesting depth inside `<style>`/`<script>`, whose text the literal-syntax lint skips. */
+  /** Nesting depth inside `<style>`/`<script>` (and `<html-style>`/`<html-script>`), whose text the literal-syntax lint skips. */
   private codeDepth = 0;
 
   /**
@@ -1262,7 +1262,11 @@ class AngularEmitter implements Emitter<string> {
     if (node.void) return;
     // `<style>`/`<script>` bodies are code, not template text: braces and
     // `@` there are CSS/JS, so the literal-syntax lint skips them.
-    const code = node.name === "style" || node.name === "script";
+    const code =
+      node.name === "style" ||
+      node.name === "script" ||
+      node.name === "html-style" ||
+      node.name === "html-script";
     if (code) this.codeDepth++;
     for (const child of node.children) this.emitNode(child);
     if (code) this.codeDepth--;

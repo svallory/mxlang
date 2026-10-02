@@ -1245,6 +1245,24 @@ describe("build: .ng.mx round 2 review", () => {
     ]);
   });
 
+  it("build() stays silent inside an html-script body", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/page.mx":
+        '<p>x</p>\n<html-script>var t = "{{ y }}";</html-script>\n',
+    });
+
+    const result = build(projectDir);
+
+    expect(
+      result.warnings.filter((w) =>
+        /literal text in an MX template/.test(w.message),
+      ),
+    ).toEqual([]);
+  });
+
   it("rejects a .ng.mx inside a tags/ directory", () => {
     // Routed as a tag it reached the tag compiler and failed with a nonsense
     // error about its `@Component` decorator instead of saying what is wrong.

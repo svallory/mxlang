@@ -34,7 +34,7 @@ describe("literal Angular syntax in a template", () => {
     );
     expect(w).toHaveLength(1);
     expect(plain(w[0]?.message ?? "")).toBe(
-      '`@for (j of items; track j)…` is literal text in an MX template, not Angular control flow. Use `<for|j| of=items>…</for>`, or `${"@"}for` for literal text.',
+      '`@for (j of items; track j)…` is literal text in an MX template, not Angular control flow. Use `<for|…| of=…>…</for>`, or `${"@"}for` for literal text.',
     );
     expect([w[0]?.line, w[0]?.column]).toEqual([1, 14]);
   });
@@ -169,6 +169,60 @@ describe("literal Angular syntax in a template", () => {
     it("`@else  if` with a whitespace run is matched", () => {
       const m = msg("<p>@else  if (b) { x }</p>");
       expect(m).toContain("`<else if=b>…</else>`");
+    });
+  });
+
+  describe("pipes at any depth and block conditions with a pipe or `;`", () => {
+    const msg = (src: string) => plain(lit(src)[0]?.message ?? "");
+    it.each([
+      "{{ (user$ | async)?.name }}",
+      "{{ (user$ | async).name }}",
+      "{{ f(a | b) }}",
+      "{{ [a | b] }}",
+    ])("no rewrite for %s", (body) => {
+      expect(msg(`<p>${body}</p>`)).not.toContain("Write");
+      expect(msg(`<p>${body}</p>`)).toContain("Pipes have no MX form");
+    });
+    it("`||` and a quoted `|` are still rewritten", () => {
+      expect(msg("<p>{{ a || b }}</p>")).toContain("Write `${a || b}`");
+      expect(msg("<p>{{ '|' }}</p>")).toContain("Write `${'|'}`");
+    });
+    it("a condition with a pipe or alias is not inlined", () => {
+      expect(msg("<p>@if (user$ | async; as user) { x }</p>")).toContain(
+        "Use `<if=…>…</if>`",
+      );
+      expect(msg("<p>@if (u; as x) { y }</p>")).toContain("Use `<if=…>…</if>`");
+      expect(msg("<p>@if (a | b) { y }</p>")).toContain("Use `<if=…>…</if>`");
+    });
+    it("a `@for` with a pipe or `;` is not inlined", () => {
+      for (const src of [
+        "<p>@for (i of items | async; track i) { x }</p>",
+        "<p>@for (i of items; track i.id) { x }</p>",
+      ]) {
+        expect(msg(src)).toContain("Use `<for|…| of=…>…</for>`");
+      }
+    });
+    it("a plain `@for` condition is still inlined", () => {
+      expect(msg("<p>@for (i of items) { x }</p>")).toContain(
+        "Use `<for|i| of=items>…</for>`",
+      );
+    });
+  });
+
+  describe("html-script / html-style bodies", () => {
+    it.each([
+      ["html script", "<html-script>var t = '{{ y }}';</html-script>"],
+      ["html style", "<html-style>.a{} @if (x) { }</html-style>"],
+      ["html script @", "<html-script>var a = 'x@if (a) { }';</html-script>"],
+      ["concise script", "html-script -- var t = '{{ y }}';"],
+      ["concise style", "html-style -- .a{} @if (x) { }"],
+    ])("%s stays silent", (_n, src) => {
+      expect(lit(src)).toEqual([]);
+    });
+    it("text after the tag still warns", () => {
+      expect(
+        lit("<div><html-style>.a{}</html-style>{{ x }}</div>"),
+      ).toHaveLength(1);
     });
   });
 

@@ -1919,12 +1919,12 @@ literally. The Angular host reports each occurrence as a **positioned warning**
 `@switch`/`@case`/`@default` → `<if>`/`<else if>` chains, `@let z = 1;` →
 `<const/z=1>`. `@defer`, `@placeholder`, `@loading`, `@error` and `@empty` have
 no MX form, so their message gives only the escape. A `{{ … }}` body is
-rewritten to `${…}` only when it parses as JS with no top-level Angular pipe
-(`|`); for a pipe the message says pipes have no MX form. The scan stays inside
+rewritten to `${…}` only when it parses as JS with no Angular pipe
+(any single `|` outside a string, at any depth: Angular has no bitwise OR); for a pipe the message says pipes have no MX form. The scan stays inside
 the text node's own source span (also in concise mode).
 
 It never fires in an attribute value, a `${…}` placeholder (so `${"{{"}` writes
-a real literal `{{`), an HTML comment, `<script>`/`<style>` content, or on a lone `{`/`}`
+a real literal `{{`), an HTML comment, `<script>`/`<style>`/`<html-script>`/`<html-style>` content, or on a lone `{`/`}`
 or an `@` in prose (`user@host`, "the @if keyword", "Ping me @if (now) only"):
 `{{` needs its closing `}}`, and `@name` needs real block syntax after the
 keyword: a balanced `(…)` then `{` (`@if`, `@for`, `@switch`, `@case`,

@@ -41,18 +41,18 @@ const BLOCK = new RegExp(`(?<![\\w@.$-])@(${BLOCK_KEYWORDS})(?![\\w$-])`, "g");
 const NEEDS_PAREN = new Set(["if", "else if", "for", "switch", "case"]);
 const MAY_PAREN = new Set(["defer", "placeholder", "loading"]);
 
-/** Whether `expr` has an Angular pipe: a single `|` outside strings and brackets. */
+/**
+ * Whether `expr` has an Angular pipe: any single `|` outside a string literal,
+ * at any depth. Angular has no bitwise OR, so only `||` is not a pipe.
+ */
 function hasPipe(expr: string): boolean {
-  let depth = 0;
   for (let i = 0; i < expr.length; i++) {
     const c = expr[i];
     if (c === '"' || c === "'" || c === "`") {
       const close = expr.indexOf(c, i + 1);
       if (close < 0) return false;
       i = close;
-    } else if (c === "(" || c === "[" || c === "{") depth++;
-    else if (c === ")" || c === "]" || c === "}") depth--;
-    else if (c === "|" && depth === 0) {
+    } else if (c === "|") {
       if (expr[i + 1] === "|") i++;
       else return true;
     }
@@ -154,7 +154,9 @@ function blockHint(
   cond: string | undefined,
   decl: string | undefined,
 ): string | undefined {
-  const c = cond || "…";
+  // A pipe or a `;` (`as x`, `track …`, `let i = …`) has no MX form: don't inline it.
+  const plain = cond !== undefined && !hasPipe(cond) && !cond.includes(";");
+  const c = cond && plain ? cond : "…";
   switch (keyword) {
     case "if":
       return `\`<if=${c}>…</if>\``;
@@ -163,10 +165,10 @@ function blockHint(
     case "else":
       return "`<else>…</else>`";
     case "for": {
-      const m = /^(\S+)\s+of\s+([^;]+)/.exec(cond ?? "");
+      const m = plain ? /^(\S+)\s+of\s+(.+)$/.exec(cond ?? "") : null;
       return m
         ? `\`<for|${m[1]}| of=${m[2]?.trim()}>…</for>\``
-        : "`<for|item| of=items>…</for>`";
+        : "`<for|…| of=…>…</for>`";
     }
     case "switch":
     case "case":

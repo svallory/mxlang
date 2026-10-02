@@ -218,7 +218,7 @@ Literal Angular syntax in a template (`{{ x }}`, `@if (x) {`, `@for`, `@else`,
 `@switch`, …) is plain text to Marko, so it renders literally. Each occurrence
 gets a positioned warning at the `{{` or `@` with a one-line MX hint (`${x}`,
 `<if=x>`, `<for|i| of=xs>`). Attribute values, `${…}` placeholders, comments,
-`<script>`/`<style>` and prose (`user@host`, lone braces, `Ping me @if (now)
+`<script>`/`<style>`/`<html-script>`/`<html-style>` and prose (`user@host`, lone braces, `Ping me @if (now)
 only`) don't warn: an `@` keyword warns only before real block syntax (`(…) {`,
 a bare `{`, or `@let name = …;`). Each message names the literal escape
 (`${"{{"}`, `${"@"}if`). Text in `<pre>`/`<code>`/`<textarea>` still warns,
