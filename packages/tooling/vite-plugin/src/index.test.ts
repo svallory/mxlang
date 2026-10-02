@@ -1533,4 +1533,148 @@ export default () => <div />;
       }
     });
   });
+  describe("compile errors are compact and located (audit items 11, 19)", () => {
+    // Error text is asserted ANSI-stripped: CI colorizes Babel frames.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape
+    const ANSI = /\u001b\[[0-9;]*m/g;
+    const STACK_FRAME = /^\s+at\s/m;
+
+    type Wrapped = Error & {
+      id?: string;
+      frame?: string;
+      loc?: { file: string; line: number; column: number };
+    };
+
+    async function transformError(
+      plugin: Hooks,
+      code: string,
+      path: string,
+    ): Promise<Wrapped> {
+      let caught: unknown;
+      try {
+        await transformOf(plugin).call({}, code, path + MX_SUFFIX);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      return caught as Wrapped;
+    }
+
+    function writeHtmlMx(name: string, source: string): string {
+      const path = writeMx(name, source);
+      writeFileSync(
+        join(dirname(path), "package.json"),
+        '{"name":"v","mx":{"host":"html"}}',
+      );
+      return path;
+    }
+
+    /** What a build log shows for the error: stack, message and frame. */
+    const rendered = (error: Wrapped): string =>
+      `${error.stack ?? ""}\n${error.message}\n${error.frame ?? ""}`.replace(
+        ANSI,
+        "",
+      );
+
+    const MISMATCH = `export interface Input { name: string }
+<div>
+  <p>\${input.name}
+</div>
+`;
+
+    it("a Marko CompileError carries the authored line:col, no stack, no .tsx", async () => {
+      const path = writeHtmlMx("page.mx", MISMATCH);
+      const error = await transformError(mx(), MISMATCH, path);
+
+      expect(error.name).toBe("CompileError");
+      // `</div>` is on line 4; `loc.column` is 0-based like every other
+      // `loc` this plugin raises.
+      expect(error.loc?.line).toBe(4);
+      expect(error.loc?.column).toBe(0);
+      expect(error.loc?.file).toBe(path);
+      expect(error.id).toBe(path);
+      expect(rendered(error)).not.toMatch(STACK_FRAME);
+      expect(rendered(error)).not.toContain(".mx.tsx");
+      // The message is the reason alone: Marko's embedded `at ../../x:4:1`
+      // path and duplicate code frame are replaced by `loc` + `frame`.
+      expect(error.message).toBe(
+        'The closing "div" tag does not match the corresponding opening "p" tag',
+      );
+      expect(error.frame).toContain("</div>");
+    });
+
+    it("positions a Marko CompileError from the message, not err.loc", async () => {
+      // `err.loc` is `{ file }` only (no line or column): the position is in
+      // the message's `at <path>:L:C` line.
+      const SCRIPTLET = `export interface Input { name: string }
+$ const x = ;
+<div/>
+`;
+      const path = writeHtmlMx("scriptlet.mx", SCRIPTLET);
+      const error = await transformError(mx(), SCRIPTLET, path);
+
+      expect(error.loc?.line).toBe(2);
+      expect(error.loc?.column).toBe(12);
+      expect(error.message).toBe("Unexpected token");
+      expect(rendered(error)).not.toMatch(STACK_FRAME);
+      expect(rendered(error)).not.toContain("undefined");
+    });
+
+    it("a TranslateError drops its stack and keeps its position", async () => {
+      const FOR = `export interface Input { name: string }
+<for|x|>
+</for>
+`;
+      const path = writeHtmlMx("for.mx", FOR);
+      const error = await transformError(mx(), FOR, path);
+
+      expect(error.name).toBe("TranslateError");
+      expect(error.loc?.line).toBe(2);
+      expect(error.id).toBe(path);
+      expect(rendered(error)).not.toMatch(STACK_FRAME);
+      expect(error.message).toMatch(/`<for>` requires/);
+    });
+
+    it("a Babel syntax error in .solid.mx drops its stack and keeps loc", async () => {
+      const path = writeMx("Broken.solid.mx", BROKEN);
+      const error = await transformError(mx(), BROKEN, path);
+
+      expect(error.loc?.line).toBe(3);
+      expect(error.loc?.file).toBe(path);
+      expect(rendered(error)).not.toMatch(STACK_FRAME);
+    });
+
+    it("an internal error keeps its stack and its identity", async () => {
+      // A bug in mx itself, not in the authored source: injected where the
+      // plugin spreads the caller's `customTags`, so the throw happens inside
+      // the same `try` a compile error does but is no TranslateError,
+      // CompileError or parse error. (A throwing tag `transform` is not
+      // usable here: core wraps it into a located `SyntaxError`.)
+      const BOOM = new TypeError("boom: a bug in mx, not in the source");
+      const SOURCE = `export function A() {
+  return <div/>;
+}
+`;
+      const path = writeMx("Boom.solid.mx", SOURCE);
+      const transform = transformOf(
+        mx({
+          customTags: new Proxy(
+            {},
+            {
+              ownKeys() {
+                throw BOOM;
+              },
+            },
+          ),
+        }),
+      );
+
+      const caught = await transform
+        .call({}, SOURCE, path + MX_SUFFIX)
+        .catch((err: unknown) => err);
+
+      expect(caught).toBe(BOOM);
+      expect((caught as Error).stack).toMatch(STACK_FRAME);
+    });
+  });
 });

@@ -136,6 +136,32 @@ TS plugin's `readSource`) and builds `.id`/`.loc`/`.frame` from it instead of
 from the caller's `code`, so the dev-server overlay and a `vite build` failure
 point at the template, not at wherever the call happened to sit in the caller.
 
+**Compile errors are compact and located (audit items 11, 19).** Rolldown and
+Vite print `error.stack` under the location, so an expected compile error used
+to drag ~50 translator/Babel/rolldown frames into every failing build — ~1,450
+tokens per failing `vite build` over the agent-feedback corpus, against ~65 for
+`mx-tsc`. `transform`'s catch now routes the three errors about *authored*
+source — `TranslateError`, Marko's `CompileError` and the vendored Babel parse
+errors — through `locate()`, which sets `id`/`loc`/`frame` and replaces `stack`
+with `Name: message`. Anything else (a bug in mx itself) is rethrown untouched,
+stack included; a test pins that. Two details:
+
+- A Marko `CompileError`'s `loc` is `{ file }` only, so it printed
+  `page.mx.tsx:undefined:undefined`. The only source of its position is the
+  `at <path>:L:C` line its message starts with (`markoPosition`, 1-based
+  column, converted to the 0-based `loc.column` the rest of this plugin
+  raises); its `label` becomes the message, since `loc` + `frame` replace the
+  embedded path and code frame.
+- `TranslateError` is also matched by name: it is raised from `@mxlang/html`'s
+  copy of core, so `instanceof` is false after a module-graph reload and the
+  error used to reach the log raw.
+
+Not fixable here: rolldown builds the header (`[plugin mx] <id>:L:C`) from the
+*module* id, so a build prints `page.mx.tsx`, not `page.mx` — `this.error({ id,
+loc })` changes nothing (checked on rolldown 1.2.8) — and `vite build`'s CLI
+prints its own ~7-frame stack for the aggregate `Build failed` error. `id`,
+`loc.file` and the dev-server overlay do carry the authored path.
+
 **`readTemplateSource(file, read?)` guards that read (round 3/4).** The
 named file may no longer exist, or be unreadable, between the compile's own
 read and this one — a failure here must not replace the real diagnostic

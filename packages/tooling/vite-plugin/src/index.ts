@@ -328,6 +328,89 @@ export function readTemplateSource(
   }
 }
 
+/** The Vite/Rollup error shape this plugin raises for a user-facing error. */
+type LocatedError = Error & {
+  id?: string;
+  frame?: string;
+  loc?: { file: string; line: number; column: number };
+};
+
+/**
+ * Re-shapes an error about the *authored* source into what a build log can
+ * print compactly: `id`, `loc` and `frame` for the position, and a `stack`
+ * that is only `Name: message`.
+ *
+ * Rolldown (and Vite's overlay) print `error.stack` after the location, so an
+ * expected compile error used to drag ~50 internal frames (translator, Babel,
+ * rolldown) into every failing build — an agent reading the log pays for them
+ * and learns nothing from them. Only errors about the user's source go through
+ * here; a bug in mx itself keeps its stack and is rethrown untouched.
+ *
+ * `column` is 0-based, like every other `loc` this plugin raises.
+ */
+function locate(
+  err: Error,
+  at: {
+    file: string;
+    line: number;
+    column: number;
+    source: string | undefined;
+    message?: string;
+  },
+): LocatedError {
+  const located = err as LocatedError;
+  if (at.message !== undefined) located.message = at.message;
+  located.id = at.file;
+  located.loc = { file: at.file, line: at.line, column: at.column };
+  if (at.source !== undefined) {
+    located.frame = codeFrame(at.source, at.line, at.column);
+  }
+  located.stack = `${err.name}: ${located.message}`;
+  return located;
+}
+
+/**
+ * `instanceof TranslateError`, plus a name check: the error is raised from
+ * `@mxlang/html`'s own copy of core, which is a different module instance
+ * than this file's whenever the module graph is reloaded (a Vite config
+ * reload, `vi.resetModules()`), and `instanceof` is then silently false —
+ * the error would reach the build log raw, with no position and a full stack.
+ */
+function isTranslateError(err: unknown): err is TranslateError {
+  return (
+    err instanceof TranslateError ||
+    (err instanceof Error &&
+      err.name === "TranslateError" &&
+      typeof (err as { line?: unknown }).line === "number" &&
+      typeof (err as { column?: unknown }).column === "number")
+  );
+}
+
+/** A Marko `CompileError`: a parse error in an authored `.mx` template. */
+function isMarkoCompileError(err: unknown): err is Error & {
+  label?: unknown;
+  loc?: { file?: unknown };
+} {
+  return err instanceof Error && err.name === "CompileError";
+}
+
+/**
+ * Reads the position out of a Marko `CompileError`.
+ *
+ * `err.loc` is `{ file }` only — no line, no column — so the sole source of
+ * the position is the `at <path>:<line>:<column>` line the message starts
+ * with (1-based column, path relative to the cwd and so not worth printing).
+ * Anchored to a whole line so a `:L:C` inside the quoted code frame below it
+ * cannot match first. `undefined` when the message has no such line.
+ */
+function markoPosition(
+  err: Error,
+): { line: number; column: number } | undefined {
+  const match = /^[ \t]*at[ \t]+.+:(\d+):(\d+)[ \t]*$/m.exec(err.message);
+  if (!match) return undefined;
+  return { line: Number(match[1]), column: Math.max(0, Number(match[2]) - 1) };
+}
+
 /**
  * Compiles `.solid.mx` and `.mx` ahead of the rest of the pipeline.
  *
@@ -772,51 +855,54 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // (`@mxlang/typescript-plugin`) uses for the editor side: `.file` is
         // absent for an error about the file being compiled, in which case
         // this still reports against `source`/`code` as before.
-        if (err instanceof TranslateError) {
+        if (isTranslateError(err)) {
           const errorFile = err.file ?? source;
           const errorSource = err.file ? readTemplateSource(err.file) : code;
-          const wrapped = err as TranslateError & {
-            id?: string;
-            frame?: string;
-            loc?: { file: string; line: number; column: number };
-          };
-          wrapped.id = errorFile;
-          wrapped.loc = {
+          // The message opens with the file it is about; `id` and `loc`
+          // already say so, and the path is the costliest part of the line.
+          const prefix = `${errorFile}: `;
+          throw locate(err, {
             file: errorFile,
             line: err.line,
             column: err.column,
-          };
-          if (errorSource !== undefined) {
-            wrapped.frame = codeFrame(errorSource, err.line, err.column);
-          }
-          throw wrapped;
+            source: errorSource,
+            message: err.message.startsWith(prefix)
+              ? err.message.slice(prefix.length)
+              : undefined,
+          });
+        }
+
+        // A Marko `CompileError` (a parse error in a `.mx` template) has no
+        // `loc.line`/`loc.column`, only the position in its message, so it
+        // used to print `page.mx.tsx:undefined:undefined`.
+        if (isMarkoCompileError(err)) {
+          const position = markoPosition(err);
+          if (!position) throw err;
+          const errorFile =
+            typeof err.loc?.file === "string" ? err.loc.file : source;
+          throw locate(err, {
+            file: errorFile,
+            ...position,
+            source: errorFile === source ? code : readTemplateSource(errorFile),
+            // Marko's own message is `\n    at <path>:L:C` plus a code frame;
+            // `label` is the reason alone, and `loc` + `frame` replace the rest.
+            message: typeof err.label === "string" ? err.label : undefined,
+          });
         }
 
         if (!isSyntaxError(err) || !err.loc) throw err;
-
-        // Re-raise with the shape Vite's overlay reads, so the reported
-        // position is the MX source line rather than a position inside text
-        // the user never wrote.
-        const wrapped = err as MxSyntaxError & {
-          id?: string;
-          frame?: string;
-          loc: { file: string; line: number; column: number };
-        };
 
         // Babel appends its own 1-based `(line:column)` to the message while
         // `loc.column` is 0-based. Leaving both in place shows the reader two
         // different columns for one error, so drop the suffix and let `loc`
         // and `frame` carry the position.
-        wrapped.message = err.message.replace(/\s*\(\d+:\d+\)\s*$/, "");
-        wrapped.id = source;
-        wrapped.loc = {
+        throw locate(err, {
           file: source,
           line: err.loc.line,
           column: err.loc.column,
-        };
-        wrapped.frame = codeFrame(code, err.loc.line, err.loc.column);
-
-        throw wrapped;
+          source: code,
+          message: err.message.replace(/\s*\(\d+:\d+\)\s*$/, ""),
+        });
       }
     },
   };
