@@ -625,6 +625,14 @@ location)"; pointing these at the tag comes with the editor support.
 Template checking needs the modules a template's tags import to exist, so run
 `mx-angular build` first if the template calls discovered MX tags.
 
+**Extended diagnostics.** Angular's extended template checks keep their own
+severity. NG8103 (`*ngIf`/`*ngFor` used without `NgIf`/`NgFor`/`CommonModule`
+imported; the directive is then inert at runtime) is a warning at the directive's
+position and does not fail `mx-tsc`. Promote it in the tsconfig `mx-tsc` runs
+under, as for `ng build`: `angularCompilerOptions.extendedDiagnostics.checks.missingControlFlowDirective`
+set to `"error"` (non-zero exit), `"warning"` or `"suppress"`; `defaultCategory`
+sets every extended check, and a per-check value wins.
+
 Configure it with `package.json#mx.angular.diagnostics`:
 
 | Value | Meaning |

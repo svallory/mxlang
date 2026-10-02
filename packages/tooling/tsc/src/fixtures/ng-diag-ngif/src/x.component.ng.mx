@@ -1,0 +1,7 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-x",
+  template: <div *ngIf="title">x</div>,
+})
+export class XComponent { title = "hi"; }

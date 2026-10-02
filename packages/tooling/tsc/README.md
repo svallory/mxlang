@@ -49,6 +49,28 @@ compiler-cli missing or out of range, `mx-tsc` fails with a message saying how
 to install a supported version or turn the diagnostics off. A run with no
 `.ng.mx` files never looks for it.
 
+**Promoting a warning (NG8103).** Angular's extended diagnostics keep their
+own severity: `*ngIf`/`*ngFor` used without `NgIf`/`NgFor`/`CommonModule`
+imported (NG8103, check `missingControlFlowDirective`) is a **warning**, printed
+at the directive's `.ng.mx` line and column, and does not change the exit code,
+although the directive is inert at runtime. To fail the run on it, set it in the
+tsconfig `mx-tsc` runs under, exactly as for `ng build`:
+
+```jsonc
+{
+  "angularCompilerOptions": {
+    "extendedDiagnostics": {
+      "checks": { "missingControlFlowDirective": "error" }, // or "warning" | "suppress"
+      "defaultCategory": "error" // every extended check; a per-check value wins
+    }
+  }
+}
+```
+
+`"error"` prints it as an error and exits non-zero; `"suppress"` prints nothing.
+`mx-tsc` passes the options to Angular's checker and does not apply the category
+itself.
+
 Under `tsc -b` the pass runs for **every project of the build graph** (the
 named projects and, transitively, their `references`), including a project tsc
 judges up to date: tsc's build info knows nothing about templates, so a

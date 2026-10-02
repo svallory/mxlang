@@ -136,6 +136,14 @@ entry.
 
 Four facts worth knowing before editing either:
 
+  **Extended diagnostics (NG8103).** `mx-tsc` never sets a category: the
+  checker is built from the project's tsconfig (`readConfiguration`), and
+  ngtsc applies `angularCompilerOptions.extendedDiagnostics` (`checks` and
+  `defaultCategory`; check name `missingControlFlowDirective` for NG8103) itself,
+  so a promoted check arrives as `category: "error"` and fails the run, a
+  suppressed one never arrives. Do not re-map categories in
+  `tsc/src/ng-diagnostics.ts`. Pinned by `tsc/src/ng-extended-diagnostics.test.ts`
+  (fixture `ng-diag-ngif`, one tsconfig per case).
 - **`runTsc` needs `require('typescript')` passed as its fourth argument.**
   Its default `typescriptObject` is a proxy resolving names by `eval` inside
   `tsc.js`'s own scope, so it sees only that bundle's locals. `ScriptSnapshot`
