@@ -139,7 +139,7 @@ and `__filename`, none of which exist in an ES module.
 
 ## Tests
 
-`src/index.test.ts` runs the built binary against the SolidMX fixtures and the
+`src/index*.test.ts` (split by scenario family so vitest spreads them over workers; shared helpers in `src/test-support.ts`) run the built binary against the SolidMX fixtures and the
 Astro example's `.astro` and `.amx` correct/wrong fixtures, asserting exact
 diagnostics and exit codes (plus that plain `tsc` does *not* catch the SolidMX
 error). It needs
