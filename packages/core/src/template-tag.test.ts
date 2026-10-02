@@ -468,6 +468,63 @@ describe("template custom tags as compilation units", () => {
     expect(warnings).toEqual([]);
   });
 
+  describe("a whole read of input counts as reading every attribute tag", () => {
+    const run = (name: string, source: string): MxWarning[] => {
+      resetTemplateCache();
+      const panel = template(`/tmp/mx-template-test/tags/${name}.mx`, source, {
+        attributeTags: { head: {} },
+      });
+      const warnings: MxWarning[] = [];
+      lowerWithTags(
+        `<${name}><@head>H</@head>body</${name}>\n`,
+        { [name]: panel },
+        CALLER,
+        warnings,
+      );
+      return warnings;
+    };
+
+    it.each([
+      ["returned", "return=input"],
+      [
+        "passed to a call",
+        "<const/x=JSON.stringify(input)/>\n<span>${x}</span>",
+      ],
+      ["assigned", "<const/copy=input/>\n<span>${JSON.stringify(copy)}</span>"],
+      ["assigned in a static block", "static const props = input\n<span/>"],
+      [
+        "destructured with a rest element",
+        "<const/{ a, ...rest }=input/>\n<span>${a}${JSON.stringify(rest)}</span>",
+      ],
+      ["spread into an attribute", "<span ...input/>"],
+      ["spread into a custom call", "<other ...input/>"],
+      [
+        "spread into an object literal",
+        "<const/x={...input}/>\n<span>${JSON.stringify(x)}</span>",
+      ],
+    ])("does not warn when input is read whole: %s", (_case, source) => {
+      expect(run("whole", source)).toEqual([]);
+    });
+
+    it.each([
+      ["a member read of another name", "<span>${input.other}</span>"],
+      [
+        "a destructure without rest",
+        "<const/{ other }=input/>\n<span>${other}</span>",
+      ],
+      [
+        "a shadowed input passed on",
+        "<span>${[1].map(input => JSON.stringify(input))}</span>",
+      ],
+    ])("still warns when input is not read whole: %s", (_case, source) => {
+      expect(
+        run("partial", source).filter((w) =>
+          w.message.includes("`<@head>` was dropped"),
+        ),
+      ).toHaveLength(1);
+    });
+  });
+
   it("still warns when a tag truly does not read the attribute tag", () => {
     resetTemplateCache();
     const panel = template(

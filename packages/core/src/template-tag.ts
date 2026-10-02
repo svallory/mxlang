@@ -366,6 +366,24 @@ export function inputMember(
 }
 
 /**
+ * Parses a code fragment as a program, falling back to a parenthesized
+ * expression: an object literal in expression position (`{ ...input }`) is a
+ * syntax error as a statement.
+ */
+function parseSnippet(code: string): Node {
+  const { parse } = markoBabel();
+  try {
+    return parse(code, { allowReturnOutsideFunction: true });
+  } catch (error) {
+    try {
+      return parse(`(${code})`, { allowReturnOutsideFunction: true });
+    } catch {
+      throw error;
+    }
+  }
+}
+
+/**
  * Whether `code` spreads `input` wholesale (`...input`), which reads every
  * property — `<@x>` and `input.content` alike — no matter what a caller
  * later does with the copy.
@@ -374,7 +392,7 @@ function spreadsInput(code: string): boolean {
   let found = false;
   try {
     const { traverse } = markoBabel();
-    const expr = markoBabel().parse(code, { allowReturnOutsideFunction: true });
+    const expr = parseSnippet(code);
     traverse(expr, {
       SpreadElement(path: Node) {
         if (
@@ -418,8 +436,32 @@ function scanCodeForInputMembers(code: string): {
   let dynamic = false;
   try {
     const { traverse } = markoBabel();
-    const expr = markoBabel().parse(code, { allowReturnOutsideFunction: true });
+    const expr = parseSnippet(code);
     traverse(expr, {
+      // A bare `input` that is not the object of a member read hands the whole
+      // object on — returned, assigned, passed to a call, spread into a
+      // literal or a tag call — so the receiver may read any attribute tag or
+      // the content. The two reads that look like this but are not: the
+      // object of a member read (`input.x`, counted by the visitor below) and
+      // the source of a rest-less destructure (`const { a } = input`), which
+      // reads exactly the named properties.
+      Identifier(path: Node) {
+        if (path.node.name !== "input" || !path.isReferencedIdentifier())
+          return;
+        if (!isRealInput(path)) return;
+        const parent = path.parent;
+        if (isMemberOf(parent) && parent.object === path.node) return;
+        const pattern = destructurePatternOf(path);
+        if (pattern) {
+          const read = patternMembers(pattern);
+          for (const name of read.names) {
+            members.push({ name, content: name === "content" });
+          }
+          if (read.dynamic) dynamic = true;
+          return;
+        }
+        dynamic = true;
+      },
       "MemberExpression|OptionalMemberExpression"(path: Node) {
         const node = path.node;
         if (node.object.type !== "Identifier" || node.object.name !== "input") {
@@ -438,6 +480,47 @@ function scanCodeForInputMembers(code: string): {
     return { members: [], dynamic: false };
   }
   return { members, dynamic };
+}
+
+/**
+ * The `ObjectPattern` an `input` reference is destructured into —
+ * `const { a } = input` or `({ a } = input)` — or null when the reference is
+ * anything else.
+ */
+function destructurePatternOf(path: Node): Node | null {
+  const parent = path.parent;
+  if (parent.type === "VariableDeclarator" && parent.init === path.node) {
+    return parent.id.type === "ObjectPattern" ? parent.id : null;
+  }
+  if (parent.type === "AssignmentExpression" && parent.right === path.node) {
+    return parent.operator === "=" && parent.left.type === "ObjectPattern"
+      ? parent.left
+      : null;
+  }
+  return null;
+}
+
+/**
+ * What an object pattern bound to `input` reads: the named properties it
+ * lists, and `dynamic` when it also reads an undeterminable set — a rest
+ * element (`...rest` is a copy of every other property) or a computed key
+ * that is not a string literal.
+ */
+function patternMembers(pattern: Node): { names: string[]; dynamic: boolean } {
+  const names: string[] = [];
+  let dynamic = false;
+  for (const prop of pattern.properties) {
+    if (prop.type !== "ObjectProperty") {
+      dynamic = true;
+    } else if (prop.key.type === "Identifier" && !prop.computed) {
+      names.push(prop.key.name);
+    } else if (prop.key.type === "StringLiteral") {
+      names.push(prop.key.value);
+    } else {
+      dynamic = true;
+    }
+  }
+  return { names, dynamic };
 }
 
 /**
@@ -462,35 +545,21 @@ function scanCodeForInputMembers(code: string): {
 function destructuredInputMembers(
   patternCode: string,
   initCode: string,
-): { names: string[]; dynamic: boolean } {
-  if (initCode.trim() !== "input") return { names: [], dynamic: false };
+): { names: string[]; dynamic: boolean; handled: boolean } {
+  const none = { names: [], dynamic: false, handled: false };
+  if (initCode.trim() !== "input") return none;
   let pattern: Node;
   try {
     pattern = markoBabel().parseExpression(`(${patternCode.trim()} = 0)`);
   } catch {
-    return { names: [], dynamic: false };
+    return none;
   }
-  if (pattern.type !== "AssignmentExpression") {
-    return { names: [], dynamic: false };
-  }
+  if (pattern.type !== "AssignmentExpression") return none;
   const left = pattern.left;
-  if (!left || left.type !== "ObjectPattern") {
-    return { names: [], dynamic: false };
-  }
-  const names: string[] = [];
-  let dynamic = false;
-  for (const prop of left.properties) {
-    if (prop.type === "RestElement") {
-      dynamic = true;
-      continue;
-    }
-    if (prop.type !== "ObjectProperty" || prop.computed) {
-      return { names: [], dynamic: false };
-    }
-    if (prop.key.type !== "Identifier") return { names: [], dynamic: false };
-    names.push(prop.key.name);
-  }
-  return { names, dynamic };
+  if (left?.type !== "ObjectPattern") return none;
+  // `handled`: the initializer is fully accounted for here, so the generic
+  // scan must not also see its bare `input` as a whole read.
+  return { ...patternMembers(left), handled: true };
 }
 
 /** Computes the public metadata of one already-lowered tag unit. */
@@ -550,6 +619,7 @@ export function metadataOfIr(
       const destructured = destructuredInputMembers(decl.name, decl.init.code);
       for (const name of destructured.names) attributeTags.add(name);
       if (destructured.dynamic) readsAllInput = true;
+      if (destructured.handled) seen.add(decl.init);
       if (spreadsInput(decl.init.code)) readsAllInput = true;
     }
     if (typeof node.code === "string") {
@@ -569,6 +639,9 @@ export function metadataOfIr(
   // read of the tag's own `input`, so it must feed the same scan the body
   // gets rather than being invisible to it.
   visit(ir.hoisted);
+  // `<return=input/>` lives in `returnValue`, outside the body: returning
+  // `input` hands the whole object to the caller.
+  visit(ir.returnValue);
   if (readsAllInput) readsContent = true;
   const metadata: TemplateMetadata = {
     readsContent,
