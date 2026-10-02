@@ -207,6 +207,19 @@ watcher and resolves `onIdle` off the initial build alone (for CI and tests).
 The CLI's non-`--once` path resolves on `SIGINT`/`SIGTERM` (`Ctrl-C`, exit
 0).
 
+### Literal Angular syntax lint (decision 126)
+
+`src/literal-syntax-hint.ts` warns on `{{ x }}` and `@if (…) {`-style block
+text in a `Text` node (code `LITERAL_SYNTAX_CODE`). `Emitter.text()` calls it
+with `ctx.source` and the node's `loc`; it scans the **raw source** run (to the
+next `<` or `${`), not the normalized `value`, so positions are exact. Nothing
+in core: attribute values, placeholders and comments are never `Text`, and
+`<style>`/`<script>` bodies are skipped through `Emitter.codeDepth`. Only
+unambiguous shapes warn (`{{` needs `}}`; `@kw` needs `(`/`{`, at a word
+start). The warning is kept on the `.ng.mx` path (not import advice).
+Marko compiles the text without a diagnostic, so it is recorded as an mx-only
+lint in `divergences.md`.
+
 ### Event handlers (decision 117)
 
 An element event handler is emitted as a call through two `protected` invoker

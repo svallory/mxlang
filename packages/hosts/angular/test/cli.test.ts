@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { build, checkOverwriteGuard } from "../src/build.ts";
 import { runCli } from "../src/cli.ts";
@@ -1182,6 +1182,39 @@ describe("build: .ng.mx round 2 review", () => {
     // The header's own lines map to nothing, which is the point.
     const lines = map.mappings.split(";");
     for (let i = 0; i < headerLines; i++) expect(lines[i]).toBe("");
+  });
+
+  it("surfaces the literal-Angular-syntax warning from build() with its position", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/x.component.ng.mx": [
+        'import { Component } from "@angular/core";',
+        '@Component({ selector: "app-x", template: <div>',
+        "  @if (title) {",
+        "    <p>x</p>",
+        "  }",
+        "</div> })",
+        "export class XComponent { title = 'hi'; }",
+      ].join("\n"),
+      "src/page.mx": "<p>{{ name }}</p>",
+    });
+
+    const result = build(projectDir);
+    const literal = result.warnings.filter((w) =>
+      /literal text in an MX template/.test(w.message),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(
+      literal
+        .map((w) => [basename(w.file ?? ""), w.line, w.column])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    ).toEqual([
+      ["page.mx", 1, 3],
+      ["x.component.ng.mx", 3, 2],
+    ]);
   });
 
   it("rejects a .ng.mx inside a tags/ directory", () => {

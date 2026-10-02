@@ -214,6 +214,14 @@ One warning per file per category (not per occurrence): `[ngClass]`/
 MX tags a template calls (with the exact `import`/`imports:` lines to add,
 since step 1 cannot edit the caller's TypeScript file itself).
 
+Literal Angular syntax in a template (`{{ x }}`, `@if (x) {`, `@for`, `@else`,
+`@switch`, …) is plain text to Marko, so it renders literally. Each occurrence
+gets a positioned warning at the `{{` or `@` with a one-line MX hint (`${x}`,
+`<if=x>`, `<for|i| of=xs>`). Attribute values, `${…}` placeholders, comments,
+`<script>`/`<style>` and prose (`user@host`, lone braces) never warn. An mx-only
+lint (decision 126), unlike the per-category warnings above it fires once per
+occurrence.
+
 The "binds an event handler" warning (the `__mxOn`/`__mxOnAt` invoker) is the
 exception to "the build cannot see your class": `build`/`watch` read the page's
 sibling `<name>.ts` and stay silent when each `@Component` class there extends

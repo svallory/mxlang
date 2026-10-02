@@ -1907,6 +1907,24 @@ nearest `package.json` (§13.5).
 
 ---
 
+### Literal Angular syntax in an Angular template (mx-only lint, decision 126)
+
+In a `.mx` page, tag or `.ng.mx` region, text that is Angular template syntax
+is **plain text** to Marko and to MX: `{{ name }}` and `@if (x) {` have no
+meaning to Marko's parser (only `${…}` and `<…>` do), so they compile and render
+literally. The Angular host reports each occurrence as a **positioned warning**
+(not an error) at the `{{` or the `@`, with a one-line hint to the MX form:
+`{{ x }}` → `${x}`, `@if (x) {` → `<if=x>…</if>`, `@else if`/`@else` →
+`<else if=…>`/`<else>`, `@for (i of xs; …) {` → `<for|i| of=xs>…</for>`,
+`@switch` → `<if>`/`<else if>` chains.
+
+It never fires in an attribute value, a `${…}` placeholder (so `${"{{"}` writes
+a real literal `{{`), an HTML comment, `<script>`/`<style>` content, or on a lone `{`/`}`
+or an `@` in prose (`user@host`, "the @if keyword"): `{{` needs its closing `}}`
+and `@name` needs the block keyword followed by `(` or `{`. This is a lint
+beyond Marko (decision 72), lives only in `packages/hosts/angular`, and is
+recorded in `divergences.md`.
+
 ## 13. Host semantics table
 
 *This section is written from the host-survey pass and is the one place where

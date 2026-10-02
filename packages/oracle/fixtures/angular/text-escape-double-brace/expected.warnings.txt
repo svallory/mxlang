@@ -1,0 +1,1 @@
+`{{ not an interpolation }}` is literal text in an MX template, not an Angular interpolation. Write `${not an interpolation}`.

@@ -33,6 +33,7 @@ import {
   unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";
+import { literalSyntaxWarnings } from "./literal-syntax-hint.ts";
 import { type AngularMapping, TemplateWriter } from "./mapping.ts";
 
 type TryData = { kind: "try" };
@@ -1154,6 +1155,9 @@ class AngularEmitter implements Emitter<string> {
     warn(this.ctx, { message, ...loc, code } as MxWarning);
   }
 
+  /** Nesting depth inside `<style>`/`<script>`, whose text the literal-syntax lint skips. */
+  private codeDepth = 0;
+
   /**
    * A name guaranteed not to collide with any identifier the compiled
    * template's own source text uses, *or* with any name this emitter has
@@ -1201,6 +1205,15 @@ class AngularEmitter implements Emitter<string> {
       this.out.write(node.value);
       return;
     }
+    if (this.codeDepth === 0) {
+      for (const w of literalSyntaxWarnings(
+        node.value,
+        node.loc,
+        this.ctx.source,
+      )) {
+        warn(this.ctx, w);
+      }
+    }
     // Text runs are deliberately unmapped: a diagnostic never points at
     // literal text, and mapping it would shadow the expressions inside the
     // same element with a coarser span.
@@ -1247,7 +1260,12 @@ class AngularEmitter implements Emitter<string> {
     );
     this.out.write(">");
     if (node.void) return;
+    // `<style>`/`<script>` bodies are code, not template text: braces and
+    // `@` there are CSS/JS, so the literal-syntax lint skips them.
+    const code = node.name === "style" || node.name === "script";
+    if (code) this.codeDepth++;
     for (const child of node.children) this.emitNode(child);
+    if (code) this.codeDepth--;
     this.out.write(`</${node.name}>`);
   }
 

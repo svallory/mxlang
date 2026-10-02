@@ -79,11 +79,13 @@
         "packages/core/src/template-tag.ts",
         "packages/core/src/template-tag.test.ts",
         "packages/hosts/angular/src/emitter.ts",
+        "packages/hosts/angular/src/literal-syntax-hint.ts",
         "packages/hosts/angular/test/cli.test.ts",
         "packages/hosts/angular/test/component.test.ts",
         "packages/hosts/angular/test/control-flow.test.ts",
         "packages/hosts/angular/test/define.test.ts",
         "packages/hosts/angular/test/for.test.ts",
+        "packages/hosts/angular/test/literal-syntax-hint.test.ts",
         "packages/hosts/angular/test/tag-module.test.ts",
         "packages/hosts/angular/test/text-interpolation.test.ts"
       ],
