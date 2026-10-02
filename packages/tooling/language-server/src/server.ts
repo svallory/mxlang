@@ -11,6 +11,8 @@
  * invisible to it).
  */
 
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   resolveHostPolicyDetailed,
@@ -85,6 +87,17 @@ export function startServer(
       if (other !== owner && uris.has(uri)) return true;
     }
     return false;
+  };
+
+  const nearestPackageJson = (file: string): string | undefined => {
+    let dir = dirname(file);
+    for (;;) {
+      const candidate = join(dir, "package.json");
+      if (existsSync(candidate)) return candidate;
+      const parent = dirname(dir);
+      if (parent === dir) return undefined;
+      dir = parent;
+    }
   };
 
   const pathOf = (uri: string): string => {
@@ -171,6 +184,14 @@ export function startServer(
             hostPolicyDiagnostics,
           ),
       );
+      // The package.json files the host resolution read are inputs too: the
+      // nearest one (so breaking it re-diagnoses) and every one a diagnostic
+      // names (so fixing it does).
+      const nearest = nearestPackageJson(filePath);
+      if (nearest) dependencies.add(nearest);
+      for (const diagnostic of hostPolicyDiagnostics) {
+        dependencies.add(diagnostic.file);
+      }
       recordDependencies(uri, dependencies);
       connection.sendDiagnostics({ uri, diagnostics });
 
@@ -224,6 +245,9 @@ export function startServer(
         { globPattern: "**/*.amx" },
         { globPattern: "**/*.ts" },
         { globPattern: "**/*.tsx" },
+        // A host-policy diagnostic is about a package.json, so fixing it must
+        // re-diagnose the documents that reported it.
+        { globPattern: "**/package.json" },
       ],
     });
   });

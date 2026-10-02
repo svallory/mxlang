@@ -92,7 +92,7 @@ branch.
 
 ## Where host-policy diagnostics appear
 
-A problem in `package.json` (unknown `mx.host`, malformed file, bad `mx.tags`) is published twice: on the open `.mx` at 1:1 with the message `<path>/package.json:<line>:<col>: <message>` and `relatedInformation` at the real range, and on the `package.json` itself at that range. It clears when you fix it or close the last document that reported it.
+A problem in `package.json` (unknown `mx.host`, malformed file, bad `mx.tags`) is published twice: on the open `.mx` at 1:1 with the message `<path>/package.json:<line>:<col>: <message>` and `relatedInformation` at the real range, and on the `package.json` itself at that range. The server watches `**/package.json` and treats the nearest `package.json` (and any one a diagnostic names) as a dependency of each document, so fixing it re-diagnoses every open document that read it and clears all copies, with no edit to the `.mx` files. It also clears when the last document that reported it closes. The message names the `package.json` once.
 
 ## Debounce
 

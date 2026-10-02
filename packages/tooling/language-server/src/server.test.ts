@@ -1,5 +1,12 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -522,6 +529,83 @@ describe("stdio server (e2e)", () => {
       seen.some((p) => p.uri === pkgUri && p.diagnostics.length === 0),
     ).toBe(true);
   }, 15000);
+
+  it("keeps a shared package.json problem until the last document closes, and clears all of it when package.json is fixed", async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-pkg-")));
+    try {
+      const pkgPath = join(dir, "package.json");
+      const bad = JSON.stringify({ name: "t", mx: { host: "htmll" } }, null, 2);
+      const good = JSON.stringify({ name: "t", mx: { host: "html" } }, null, 2);
+      writeFileSync(pkgPath, bad);
+      const pkgUri = `file://${pkgPath}`;
+      const uriA = `file://${join(dir, "a.mx")}`;
+      const uriB = `file://${join(dir, "b.mx")}`;
+
+      const conn = startClient();
+      await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: null,
+        capabilities: {},
+      });
+      conn.sendNotification("initialized", {});
+      const latest = new Map<string, number>();
+      conn.onNotification(PublishDiagnosticsNotification, (params) => {
+        latest.set(params.uri, params.diagnostics.length);
+      });
+      const until = async (done: () => boolean) => {
+        for (let i = 0; i < 300 && !done(); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      };
+      const open = (uri: string) =>
+        conn.sendNotification("textDocument/didOpen", {
+          textDocument: {
+            uri,
+            languageId: "mx",
+            version: 1,
+            text: "<p>x</p>\n",
+          },
+        });
+      open(uriA);
+      open(uriB);
+      await until(
+        () =>
+          latest.get(uriA) === 1 &&
+          latest.get(uriB) === 1 &&
+          latest.get(pkgUri) === 1,
+      );
+      expect([latest.get(uriA), latest.get(uriB), latest.get(pkgUri)]).toEqual([
+        1, 1, 1,
+      ]);
+
+      // Closing A must not clear what B still shows.
+      conn.sendNotification("textDocument/didClose", {
+        textDocument: { uri: uriA },
+      });
+      await new Promise((r) => setTimeout(r, 500));
+      expect(latest.get(pkgUri)).toBe(1);
+
+      // Reopen A, then fix package.json and send only the watcher event:
+      // neither document is edited.
+      open(uriA);
+      await until(() => latest.get(uriA) === 1);
+      writeFileSync(pkgPath, good);
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: pkgUri, type: 2 }],
+      });
+      await until(
+        () =>
+          latest.get(uriA) === 0 &&
+          latest.get(uriB) === 0 &&
+          latest.get(pkgUri) === 0,
+      );
+      expect([latest.get(uriA), latest.get(uriB), latest.get(pkgUri)]).toEqual([
+        0, 0, 0,
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  }, 30000);
 
   it.each(["typescript", "marko"])(
     "diagnoses a .solid.mx URI with the %s language id",

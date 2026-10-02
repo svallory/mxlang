@@ -191,8 +191,10 @@ export function diagnoseDocument(
   /**
    * What resolving `hostPolicy` had to say — the `diagnostics` of
    * `resolveHostPolicyDetailed` (`@mxlang/core`): a malformed `package.json`,
-   * an unknown `mx.host`. Each becomes a Warning on this document, worded
-   * `<package.json>: <message>` like the scan's, and is returned ahead of the
+   * an unknown `mx.host`. Each becomes a Warning on this document at 1:1,
+   * worded `<package.json>:<line>:<col>: <message>` like the scan's (with
+   * `relatedInformation` at the real range, and a copy pushed onto `related`
+   * for the `package.json` URI), and is returned ahead of the
    * scan's and the compile's diagnostics (including when the compile itself
    * fails). Optional: omitting it (or passing `[]`) returns exactly what this
    * function returned before the parameter existed. `startServer` passes it.
@@ -254,7 +256,7 @@ export function diagnoseDocument(
       // entry that discovers every MX region. A language id can identify an
       // untitled/mis-suffixed buffer, so give that case the suffix that turns
       // the parser's opt-in MX bridge on.
-      const filename = uri.endsWith(".solid.mx") ? uri : `${uri}.solid.mx`;
+      const filename = path.endsWith(".solid.mx") ? path : `${path}.solid.mx`;
       const result = print(text, filename, {
         customTags,
         mxRegionCompile: (input) =>
@@ -399,6 +401,12 @@ function scanDiagnosticToLsp(
     end: { line, character: column + 1 },
   };
   const uri = uriOf(diagnostic.file);
+  // Core's message usually opens with the file's own path, which the prefix
+  // below already states: keep one.
+  const own = `${diagnostic.file} `;
+  const text = diagnostic.message.startsWith(own)
+    ? diagnostic.message.slice(own.length)
+    : diagnostic.message;
   related?.push({
     uri,
     diagnostics: [
@@ -413,13 +421,11 @@ function scanDiagnosticToLsp(
   return {
     severity: DiagnosticSeverity.Warning,
     source: "mxlang",
-    message: `${diagnostic.file}:${line + 1}:${column + 1}: ${diagnostic.message}`,
+    message: `${diagnostic.file}:${line + 1}:${column + 1}: ${text}`,
     range: {
       start: { line: 0, character: 0 },
       end: { line: 0, character: 1 },
     },
-    relatedInformation: [
-      { location: { uri, range }, message: diagnostic.message },
-    ],
+    relatedInformation: [{ location: { uri, range }, message: text }],
   };
 }

@@ -834,3 +834,29 @@ describe("diagnoseDocument given a file:// URI", () => {
     },
   );
 });
+
+describe("host-policy message wording", () => {
+  it("names the package.json once when core's message already opens with it", () => {
+    const diagnostics = diagnoseDocument(
+      "<div>ok</div>\n",
+      "file:///app/page.mx",
+      { host: "html" },
+      undefined,
+      "",
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          file: "/app/package.json",
+          message: "/app/package.json could not be parsed as JSON; using html",
+          line: 1,
+          column: 0,
+        },
+      ],
+    );
+    expect(diagnostics[0]?.message).toBe(
+      "/app/package.json:1:1: could not be parsed as JSON; using html",
+    );
+  });
+});
