@@ -320,7 +320,8 @@ Five facts worth knowing before editing it:
   `<@placeholder>` with no params of its own — the first two through the
   tag's own checks, the attribute-tag shape through the tag's declared
   `attributeTags` contract) and then asks for the primitive with
-  `ctx.build.hostTag("try", children, attributeTags)`. `lowerCustomTag`
+  `ctx.build.hostTag("try", children, attributeTags)` (a fourth `attrs`
+  argument carries attributes; omitted means none). `lowerCustomTag`
   passes an `isBuiltin` flag that skips the ordinary `hasContent` gate on a
   custom tag's body: a template-authored tag treats a whitespace-only body as
   "no children supplied", but `<try>` is a structural pass-through wrapper
@@ -487,6 +488,15 @@ Five facts worth knowing before editing it:
   its own registry; Bun and Node both do re-evaluate, which is what ships. A
   Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
+- **A contract-only tag is a `HostTag` on a claimed name (decision 130).** A
+  definition with `attributes`/`attributeTags`/`parseOptions` and no `transform`
+  and no template fails with "neither a `transform` nor a template" unless
+  `claimsTag(name)` is true; then `transformCustomTag` validates the call and
+  returns one `HostTag` built from the call (`contractOnlyHostTag`). Core asks
+  the host only `claimsTag`, never a host name (decision 126). `lowerCustomTag`
+  lowers such a call's attributes as `"element"`, like `lowerHostTag`, so a
+  host's `resolveAttributeMethod`/`orderAttrs` see the same `on` either way.
+  `/var` and attributes on attribute tags stay rejected (no template).
 - **A template-only tag is discovered with no hooks**; calling one routes to
   its compiled unit.
 - **The scan never hands a core-owned name onward.** A `tags/try.tag.ts` is

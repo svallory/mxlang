@@ -1601,6 +1601,8 @@ walk, because a self-recursive call resolves during that walk.
 
 ### 9.8 Call-site validation
 
+**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract (`attributes`, `attributeTags`, `parseOptions`) and have neither a `transform` nor a template. Where the active host claims the tag's name (`HostDeclarations.claimsTag`), core runs the validation below and then lowers the call to an ordinary `HostTag` whose attributes, attribute tags and children are the call's own, with each attribute's position intact; the host sees the same node it would see for an unregistered claimed tag. Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. A tag that has a `transform` or a template is unaffected. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.hostTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
+
 All carry the `` `<tag>`:  `` prefix:
 
 | Suffix | When |
@@ -1624,12 +1626,12 @@ Transform-time:
 
 | Message | When |
 |---|---|
-| `custom tag has neither a \`transform\` nor a template file, so a call has nothing to expand to` | Neither present. |
+| `custom tag has neither a \`transform\` nor a template file, so a call has nothing to expand to` | Neither present and the host does not claim the name (§9.8, decision 130). |
 | `` `<${call.name}>`: custom tag threw: ${message} `` | A `transform` threw a non-`TranslateError`. |
 | `custom tag transform must return an array of IR nodes or a TagCall for its template` | Bad return value. |
 | *(warning)* `` `<${call.name}>`: custom tag transform did not read its attributeTags; authored attribute tags were dropped `` | A macro `transform` never touched `call.attributeTags` while the call had some. Detected with a `Proxy`. |
 
-**Decisions:** 80, 85, 87, 89, 90, 91, 93, 94a, 94d, 95, 97, 98.
+**Decisions:** 80, 85, 87, 89, 90, 91, 93, 94a, 94d, 95, 97, 98, 130.
 
 ---
 

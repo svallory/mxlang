@@ -229,7 +229,12 @@ retired name such as `staticOnly`/`repeated`) is rejected at registration,
 before any file is parsed, since neither key is checked against a runtime
 schema anywhere else. Transforms receive resolved author material and return ordinary IR. Builder
 output is stamped with the call-site position, `ctx.gensym()` is unique within
-the file, and `ctx.build.hostTag()` is the only route to a host primitive.
+the file, and `ctx.build.hostTag(name, children, attributeTags, attrs?)` is the
+only route to a host primitive from a `transform`. A tag with only a contract
+(no `transform`, no template) on a name the host claims skips the transform
+altogether: core validates the call and lowers it to a `HostTag` carrying the
+call's attributes (decision 130). On a host that does not claim the name it
+still fails with "neither a `transform` nor a template".
 
 Write failures as `throw ctx.fail(message, position?)`. TypeScript does not
 reliably narrow after a bare call through the parameter property `ctx.fail`,
