@@ -316,3 +316,10 @@ Decision 72's subset rule removed four SolidMX constructs real Marko itself
 rejects (tag params on `<if>`, tag params and attribute tags on native
 elements, `<fragment>`) — see `divergences.md`'s "Deferred to MX 2" table for
 each construct, Marko's exact error, and the test that used to cover it.
+
+### The body channel (`input.content`)
+
+A tag unit that reads `input.content` gets `input` as a `merge` view over its props whose `content` is the body (`props.content ?? props.children`), resolved through a `children()` memo; a unit that never reads the body is emitted unchanged. Pinned by `src/body-content.test.ts`.
+
+- **Evaluated once.** The memo resolves the body once. When `<if=input.content>` is a unit's only use of the body, the body is therefore still evaluated (its nodes created) once, even if the branch is not taken. That is inherent to `children()`; a purely lazy check would need a separate "body present" marker that JSX children do not carry.
+- **Empty body.** `<if=input.content>` with a present-but-empty body (`${""}`, `${null}`, `${false}`, `${undefined}`) takes the else branch, as on the other JSX hosts (see `divergences.md`).
