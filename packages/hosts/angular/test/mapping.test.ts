@@ -506,3 +506,21 @@ describe("derive provenance survives the rebase helpers", () => {
     ).not.toHaveProperty("derive");
   });
 });
+
+describe("mappings: a default attribute", () => {
+  it("keeps the generated `value` mapped to a zero-width source span at the `=`", () => {
+    // A default attribute has no spelled name; its nameSpan is empty at the
+    // `=` (as in Marko). The mapping must survive that, not be dropped.
+    const source = '<div="a" title="t">x</div>';
+    const result = compile(source, "x.mx");
+    const mapping = result.mappings.find(
+      (m) => result.code.slice(m.generatedStart, m.generatedEnd) === "value",
+    );
+    if (!mapping) throw new Error("the `value` mapping was dropped");
+    expect(mapping.sourceStart).toBe(4);
+    expect(mapping.sourceEnd).toBe(4);
+    expect(source[mapping.sourceStart]).toBe("=");
+    // The neighbouring spelled attribute is unaffected.
+    expectPair(source, "title", "title");
+  });
+});

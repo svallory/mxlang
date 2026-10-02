@@ -5,10 +5,10 @@ import type { Attr, HostTag, Ir, IrNode } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 
 /**
- * Byte-offset contracts for the spans lowering records: attribute name spans,
+ * UTF-16 code-unit offset contracts (the unit of every span in the IR) for the spans lowering records: attribute name spans,
  * a static attribute's value span, and the whole-tag and tag-name spans on
  * `HostTag`, `Element` and `Component`. Every assertion is made against the
- * source text, so a span that lands on the wrong bytes fails loudly.
+ * source text, so a span that lands on the wrong text fails loudly.
  */
 
 const claimAll: HostDeclarations = {
@@ -64,21 +64,22 @@ function nameSpanOf(a: Attr): SourceSpan {
 }
 
 describe("a default attribute's nameSpan", () => {
-  it("covers the tag name, not the `=` and the value's first bytes", () => {
+  it('is zero-width at the `=`, as in Marko, not `="pos`', () => {
     const source = 'resource="post" table="posts"\n';
     const tag = hostTag(irOf(source, claimAll).body[0]);
     const value = nameSpanOf(attr(tag.attrs, "value"));
-    expect(value).toEqual({ sourceStart: 0, sourceEnd: 8 });
-    expect(slice(source, value)).toBe("resource");
+    expect(value).toEqual({ sourceStart: 8, sourceEnd: 8 });
+    expect(slice(source, value)).toBe("");
+    expect(source[value.sourceStart]).toBe("=");
   });
 
-  it("does the same on an element", () => {
+  it("is zero-width on an element too", () => {
     const source = '<div="a">x</div>\n';
     const el = irOf(source, elements).body[0];
     if (el?.kind !== "Element") throw new Error("expected an Element");
     const value = nameSpanOf(attr(el.attrs, "value"));
-    expect(value).toEqual({ sourceStart: 1, sourceEnd: 4 });
-    expect(slice(source, value)).toBe("div");
+    expect(value).toEqual({ sourceStart: 4, sourceEnd: 4 });
+    expect(source[value.sourceStart]).toBe("=");
   });
 
   it("leaves a spelled attribute name alone", () => {
@@ -172,5 +173,41 @@ describe("tag spans", () => {
     if (call?.kind !== "Component") throw new Error("expected a Component");
     expect(slice(source, call.nameSpan)).toBe("Row");
     expect(slice(source, call.span)).toBe("<Row(1)/>");
+  });
+});
+
+describe("attribute tag spans", () => {
+  const source = '<x>\n  <@y="é">body</@y>\n</x>\n';
+
+  it("AttributeTag: whole-tag span, and a default attribute is zero-width at `=`", () => {
+    const tag = hostTag(irOf(source, claimAll).body[0]);
+    const y = tag.attributeTags[0];
+    if (!y) throw new Error("expected an attribute tag");
+    expect(slice(source, y.span)).toBe('<@y="é">body</@y>');
+    expect(slice(source, y.nameSpan)).toBe("y");
+    const value = nameSpanOf(attr(y.attrs, "value"));
+    expect(value.sourceStart).toBe(value.sourceEnd);
+    expect(source[value.sourceStart]).toBe("=");
+  });
+});
+
+describe("non-ASCII source", () => {
+  it("every span is a UTF-16 code-unit offset into the source string", () => {
+    const source = '<p title="ção"/><x a="é">ção</x>\n';
+    const ir = irOf(source, claimAll);
+    const x = hostTag(
+      ir.body.find((n) => n.kind === "HostTag" && n.tag.name === "x"),
+    );
+    expect(slice(source, x.nameSpan)).toBe("x");
+    expect(slice(source, x.span)).toBe('<x a="é">ção</x>');
+    const a = attr(x.attrs, "a");
+    expect(slice(source, nameSpanOf(a))).toBe("a");
+    if (a.kind !== "static") throw new Error("expected a static attr");
+    expect(slice(source, a.valueSpan)).toBe('"é"');
+    const p = hostTag(ir.body[0]);
+    const title = attr(p.attrs, "title");
+    if (title.kind !== "static") throw new Error("expected a static attr");
+    expect(slice(source, title.valueSpan)).toBe('"ção"');
+    expect(slice(source, p.span)).toBe('<p title="ção"/>');
   });
 });

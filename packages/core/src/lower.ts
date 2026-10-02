@@ -173,18 +173,19 @@ export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
  * The span of an attribute's authored name.
  *
  * A default attribute (`<x="post">`) is `name: "value"` to the parser, but its
- * `loc` starts at the `=`: there is no spelled name, so measuring the name's
- * length from there would cover the `=` and the value's first bytes. When the
- * source at the attribute's start is not the name, `fallback` (the tag name's
- * span) is used instead.
+ * `loc` starts at the `=`: there is no spelled name. Marko anchors it with an
+ * EMPTY range at the attribute start (htmljs-parser 5.18.0 `ensureAttrName`;
+ * `@marko/language-tools` 2.7.0 treats the empty range as "default"), so this
+ * returns a zero-width span there instead of measuring `"value".length` over
+ * the `=` and the value's first characters.
  */
-function attrNameSpan(ctx: Ctx, attr: Node, fallback?: SourceSpan): SourceSpan {
+function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});
   const sourceName = attr.modifier
     ? `${attr.name}:${attr.modifier}`
     : String(attr.name ?? "");
-  if (fallback && !ctx.source.startsWith(sourceName, sourceStart)) {
-    return fallback;
+  if (!ctx.source.startsWith(sourceName, sourceStart)) {
+    return { sourceStart, sourceEnd: sourceStart };
   }
   return { sourceStart, sourceEnd: sourceStart + sourceName.length };
 }
@@ -414,10 +415,9 @@ function lowerAttr(
   attr: Node,
   on: "element" | "component" = "element",
   isElement = false,
-  tagNameSpan?: SourceSpan,
 ): Attr {
   const loc = posOf(attr);
-  const nameSpan = attrNameSpan(ctx, attr, tagNameSpan);
+  const nameSpan = attrNameSpan(ctx, attr);
 
   if (attr.type === "MarkoSpreadAttribute") {
     return { kind: "spread", value: exprOf(ctx, attr.value), loc };
@@ -557,9 +557,8 @@ function lowerAttrs(
   on: "element" | "component" = "element",
   isElement = false,
 ): Attr[] {
-  const tagNameSpan = exprSpan(ctx, node.name);
   const attrs = (node.attributes ?? []).map((attr: Node) =>
-    lowerAttr(ctx, attr, on, isElement, tagNameSpan),
+    lowerAttr(ctx, attr, on, isElement),
   );
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
 }
@@ -1126,6 +1125,7 @@ function lowerOneAttributeTag(
   return {
     name,
     nameSpan: attributeTagNameSpan(ctx, node),
+    span: exprSpan(ctx, node),
     attrs: lowerAttrs(ctx, node, name, "component"),
     block,
     hasBody: hasContent(nested.contentChildren),

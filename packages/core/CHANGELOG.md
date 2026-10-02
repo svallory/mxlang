@@ -2,11 +2,11 @@
 
 ## 0.1.0 (unreleased)
 
-### Fix: a default attribute's `nameSpan` is the tag name, not `="pos`; tags and static values gain byte spans (core-span-fixes)
+### Fix: a default attribute's `nameSpan` is zero-width at the `=`, as in Marko; tags and static values gain spans (core-span-fixes)
 
-**Behaviour change (one diagnostic position):** `<x="post">` lowers to `name: "value"` with a `loc` that starts at the `=`, so `attrNameSpan` measured `"value".length` from there and `nameSpan` covered `="pos` (for `resource="post"`: 8–13). A default attribute has no spelled name, so its `nameSpan` is now the tag name's span (`resource`: 0–8). Method shorthand (`change(ctx) {…}`) was already correct and is pinned by a test. Spelled attributes and `name:modifier` spellings are unchanged.
+**Behaviour change (one diagnostic position):** `<x="post">` lowers to `name: "value"` with a `loc` that starts at the `=`, so `attrNameSpan` measured `"value".length` from there and `nameSpan` covered `="pos` (for `resource="post"`: 8–13). A default attribute has no spelled name, and Marko anchors it with an empty range at the attribute start (htmljs-parser 5.18.0 `ensureAttrName`; `@marko/language-tools` 2.7.0 treats the empty range as "default"), so `nameSpan` is now zero-width at the `=` (8–8). Consumers detect the empty range, as Marko does. Method shorthand (`change(ctx) {…}`) was already correct and is pinned by a test. Spelled attributes and `name:modifier` spellings are unchanged.
 
-**Additive IR fields**, all optional: `span` (the whole tag: opening tag, body and closing tag) and `nameSpan` on `HostTag` and `Element`; `span` on `Component` (which already had `nameSpan`); `valueSpan` on a `static` attribute (the string literal, quotes included, like `Expr.span`). `HostTag.nameSpan` is `undefined` for a dynamic tag. No emitted code changes.
+**Additive IR fields**, all optional, all UTF-16 code-unit offsets into the source string like every existing span: `span` (the whole tag: opening tag, body and closing tag) and `nameSpan` on `HostTag` and `Element`; `span` on `Component` (which already had `nameSpan`) and on `AttributeTag`; `valueSpan` on a `static` attribute (the string literal, quotes included, like `Expr.span`). `HostTag.nameSpan` is `undefined` for a dynamic tag. No emitted code changes.
 
 ### Fix: a `.ng.mx` callee reads as untyped, not as an invalid Marko parse; callee-input no longer names `.solid.mx` (core-host-cleanup)
 
