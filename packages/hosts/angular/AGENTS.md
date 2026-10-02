@@ -211,8 +211,13 @@ The CLI's non-`--once` path resolves on `SIGINT`/`SIGTERM` (`Ctrl-C`, exit
 
 `src/literal-syntax-hint.ts` warns on `{{ x }}` and `@if (…) {`-style block
 text in a `Text` node (code `LITERAL_SYNTAX_CODE`). `Emitter.text()` calls it
-with `ctx.source` and the node's `loc`; it scans the **raw source** run (to the
-next `<` or `${`), not the normalized `value`, so positions are exact. Nothing
+with `ctx.source` and the node's `loc`; it scans the **raw source** of the node's
+own span, not the normalized `value`, so positions are exact. The span is found
+by walking the source against `value` (whitespace runs, `&…;` entities) and
+stops at the first mismatch, so in concise mode, where a text node ends at its
+line with no `<`, the scan never reaches the next lines' attributes. The
+`${expr}` rewrite is offered only when the `{{ }}` body parses as JS and has no
+top-level pipe. Nothing
 in core: attribute values, placeholders and comments are never `Text`, and
 `<style>`/`<script>` bodies are skipped through `Emitter.codeDepth`. Only
 unambiguous shapes warn (`{{` needs `}}`; `@kw` needs real block syntax at a

@@ -1217,6 +1217,34 @@ describe("build: .ng.mx round 2 review", () => {
     ]);
   });
 
+  it("build() keeps the literal-syntax scan inside a concise text node", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/leak.mx": 'div\n  -- me@x\n  span title="{{ q }}" -- ok\n',
+      "src/two.mx": "div\n  -- {{ a }}\n  p -- {{ b }}\n",
+    });
+
+    const result = build(projectDir);
+    const literal = result.warnings.filter((w) =>
+      /literal text in an MX template/.test(w.message),
+    );
+
+    expect(
+      literal
+        .map((w) => [basename(w.file ?? ""), w.line, w.column])
+        .sort(
+          (a, b) =>
+            String(a[1]).localeCompare(String(b[1])) ||
+            Number(a[2]) - Number(b[2]),
+        ),
+    ).toEqual([
+      ["two.mx", 2, 5],
+      ["two.mx", 3, 7],
+    ]);
+  });
+
   it("rejects a .ng.mx inside a tags/ directory", () => {
     // Routed as a tag it reached the tag compiler and failed with a nonsense
     // error about its `@Component` decorator instead of saying what is wrong.
