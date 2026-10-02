@@ -5,6 +5,7 @@ import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
 import {
+  metadataOfIr,
   peekTemplateMetadata,
   resetTemplateCache,
   type TemplateBackedTag,
@@ -504,6 +505,70 @@ describe("template custom tags as compilation units", () => {
       ],
     ])("does not warn when input is read whole: %s", (_case, source) => {
       expect(run("whole", source)).toEqual([]);
+    });
+
+    it.each([
+      [
+        "a type assertion",
+        "<const/w=(input as any)/>\n<span>${JSON.stringify(w)}</span>",
+      ],
+      [
+        "a satisfies expression",
+        "<const/w=(input satisfies object)/>\n<span>${JSON.stringify(w)}</span>",
+      ],
+      [
+        "a typed arrow returning it",
+        "<const/f=(a: number) => input/>\n<span>${JSON.stringify(f(1))}</span>",
+      ],
+      [
+        "a top-level await",
+        "<const/w=await input/>\n<span>${JSON.stringify(w)}</span>",
+      ],
+      ["a typed member read", "<span>${(input as any).head}</span>"],
+      ["a non-null member read", "<span>${input!.head}</span>"],
+    ])(
+      "does not warn when the read is spelled with TypeScript or await: %s",
+      (_case, source) => {
+        expect(run("typed", source)).toEqual([]);
+      },
+    );
+
+    it("scans a default value inside a destructure for reads of input", () => {
+      const dropped = run(
+        "defaults",
+        "<const/{ v = input.head }=input/>\n<span>${v}</span>",
+      ).filter((w) => w.message.includes("`<@head>` was dropped"));
+      expect(dropped).toEqual([]);
+    });
+
+    it("treats a fragment that cannot be parsed but names input as a whole read", () => {
+      const metadata = metadataOfIr({
+        body: [
+          { kind: "Static", code: "const x = input @@@" } as unknown as IrNode,
+        ],
+      });
+      expect(metadata.readsAllInput).toBe(true);
+    });
+
+    it("positions a remaining warning at the call that dropped the tag", () => {
+      resetTemplateCache();
+      const panel = template(
+        "/tmp/mx-template-test/tags/pos.mx",
+        "<span>${input.other}</span>",
+        { attributeTags: { head: {} } },
+      );
+      const warnings: MxWarning[] = [];
+      lowerWithTags(
+        "<div/>\n<pos><@head>H</@head></pos>\n",
+        { pos: panel },
+        CALLER,
+        warnings,
+      );
+      const dropped = warnings.filter((w) =>
+        w.message.includes("`<@head>` was dropped"),
+      );
+      expect(dropped).toHaveLength(1);
+      expect(dropped[0]).toMatchObject({ line: 2, column: 0 });
     });
 
     it.each([

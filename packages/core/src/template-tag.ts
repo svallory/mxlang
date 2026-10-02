@@ -323,7 +323,7 @@ export function inputMember(
 ): { name: string; content: boolean } | "dynamic" | null {
   let expr: Node;
   try {
-    expr = markoBabel().parseExpression(code.trim());
+    expr = markoBabel().parseExpression(code.trim(), FRAGMENT_OPTIONS);
   } catch {
     return null;
   }
@@ -366,6 +366,18 @@ export function inputMember(
 }
 
 /**
+ * Parse options for every fragment this file reads: the authored code may be
+ * TypeScript (`input as any`, `input!.x`, `satisfies`, typed arrow
+ * parameters) and may `await` at the top level, and a fragment that fails to
+ * parse must never be read as "reads nothing" (see `mentionsInput`).
+ */
+const FRAGMENT_OPTIONS = {
+  plugins: [["typescript", {}]],
+  allowReturnOutsideFunction: true,
+  allowAwaitOutsideFunction: true,
+};
+
+/**
  * Parses a code fragment as a program, falling back to a parenthesized
  * expression: an object literal in expression position (`{ ...input }`) is a
  * syntax error as a statement.
@@ -373,15 +385,22 @@ export function inputMember(
 function parseSnippet(code: string): Node {
   const { parse } = markoBabel();
   try {
-    return parse(code, { allowReturnOutsideFunction: true });
+    return parse(code, FRAGMENT_OPTIONS);
   } catch (error) {
     try {
-      return parse(`(${code})`, { allowReturnOutsideFunction: true });
+      return parse(`(${code})`, FRAGMENT_OPTIONS);
     } catch {
       throw error;
     }
   }
 }
+
+/**
+ * The backstop for a fragment that cannot be parsed: if it names `input` at
+ * all, assume it reads all of it. A parse failure then suppresses the
+ * "was dropped" warning instead of causing a false one.
+ */
+const mentionsInput = (code: string): boolean => /\binput\b/.test(code);
 
 /**
  * Whether `code` spreads `input` wholesale (`...input`), which reads every
@@ -404,7 +423,7 @@ function spreadsInput(code: string): boolean {
       },
     });
   } catch {
-    return false;
+    return mentionsInput(code);
   }
   return found;
 }
@@ -428,16 +447,25 @@ function spreadsInput(code: string): boolean {
  * `MemberExpression`/`OptionalMemberExpression` shapes `inputMember`
  * matches, so `input?.head` is caught the same way `input.head` is.
  */
-function scanCodeForInputMembers(code: string): {
+function scanCodeForInputMembers(code: string): InputScan {
+  try {
+    return scanAstForInputMembers(parseSnippet(code));
+  } catch {
+    return { members: [], dynamic: mentionsInput(code) };
+  }
+}
+
+type InputScan = {
   members: Array<{ name: string; content: boolean }>;
   dynamic: boolean;
-} {
+};
+
+function scanAstForInputMembers(ast: Node): InputScan {
   const members: Array<{ name: string; content: boolean }> = [];
   let dynamic = false;
-  try {
+  {
     const { traverse } = markoBabel();
-    const expr = parseSnippet(code);
-    traverse(expr, {
+    traverse(ast, {
       // A bare `input` that is not the object of a member read hands the whole
       // object on — returned, assigned, passed to a call, spread into a
       // literal or a tag call — so the receiver may read any attribute tag or
@@ -476,8 +504,6 @@ function scanCodeForInputMembers(code: string): {
         }
       },
     });
-  } catch {
-    return { members: [], dynamic: false };
   }
   return { members, dynamic };
 }
@@ -545,21 +571,31 @@ function patternMembers(pattern: Node): { names: string[]; dynamic: boolean } {
 function destructuredInputMembers(
   patternCode: string,
   initCode: string,
-): { names: string[]; dynamic: boolean; handled: boolean } {
-  const none = { names: [], dynamic: false, handled: false };
+): InputScan & { names: string[]; handled: boolean } {
+  const none = { names: [], members: [], dynamic: false, handled: false };
   if (initCode.trim() !== "input") return none;
-  let pattern: Node;
   try {
-    pattern = markoBabel().parseExpression(`(${patternCode.trim()} = 0)`);
+    const ast = markoBabel().parse(
+      `(${patternCode.trim()} = 0)`,
+      FRAGMENT_OPTIONS,
+    );
+    const assign = ast.program.body[0]?.expression;
+    if (assign?.type !== "AssignmentExpression") return none;
+    if (assign.left?.type !== "ObjectPattern") return none;
+    const named = patternMembers(assign.left);
+    // A default (`{ v = input.y }`) is code that runs against `input` too.
+    const inDefaults = scanAstForInputMembers(ast);
+    // `handled`: the initializer is fully accounted for here, so the generic
+    // scan must not also see its bare `input` as a whole read.
+    return {
+      names: named.names,
+      members: inDefaults.members,
+      dynamic: named.dynamic || inDefaults.dynamic,
+      handled: true,
+    };
   } catch {
     return none;
   }
-  if (pattern.type !== "AssignmentExpression") return none;
-  const left = pattern.left;
-  if (left?.type !== "ObjectPattern") return none;
-  // `handled`: the initializer is fully accounted for here, so the generic
-  // scan must not also see its bare `input` as a whole read.
-  return { ...patternMembers(left), handled: true };
 }
 
 /** Computes the public metadata of one already-lowered tag unit. */
@@ -618,6 +654,7 @@ export function metadataOfIr(
       const decl = node as Extract<IrNode, { kind: "Const" }>;
       const destructured = destructuredInputMembers(decl.name, decl.init.code);
       for (const name of destructured.names) attributeTags.add(name);
+      for (const member of destructured.members) record(member);
       if (destructured.dynamic) readsAllInput = true;
       if (destructured.handled) seen.add(decl.init);
       if (spreadsInput(decl.init.code)) readsAllInput = true;
