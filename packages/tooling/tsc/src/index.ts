@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
@@ -8,6 +9,8 @@ import {
   createMxLanguagePlugin,
   createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
+  HOST_POLICY_DIAGNOSTIC_CODE,
+  type HostPolicyDiagnostic,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
 } from "@mxlang/typescript-plugin";
@@ -430,6 +433,16 @@ function runMxTscBody(): number {
     ).values(),
   ];
   reportCompileDiagnostics(diagnostics);
+  // Host-policy problems (an unknown `mx.host`, a malformed package.json):
+  // warnings, so the exit code is what it was before they were printed. A
+  // file two programs both compiled is reported once.
+  reportHostPolicyDiagnostics([
+    ...new Map(
+      diagnosticPlugins
+        .flatMap((plugin) => plugin.getHostPolicyDiagnostics?.() ?? [])
+        .map((d) => [`${d.file}\0${d.message}`, d] as const),
+    ).values(),
+  ]);
   const hasCompileError = diagnostics.some(
     (diagnostic) => diagnostic.category === "error",
   );
@@ -544,6 +557,55 @@ export function reportCompileDiagnostics(
       source: "mxlang",
       messageText: diagnostic.message,
     })),
+    {
+      getCanonicalFileName: (fileName) => fileName,
+      getCurrentDirectory: () => process.cwd(),
+      getNewLine: () => "\n",
+    },
+  );
+  process.stderr.write(formatted);
+}
+
+/**
+ * Prints host-policy diagnostics as warnings in `tsc`'s shape, positioned in
+ * the `package.json` that caused them: `package.json(5,13): warning TS80003`.
+ */
+export function reportHostPolicyDiagnostics(
+  diagnostics: readonly HostPolicyDiagnostic[],
+): void {
+  if (diagnostics.length === 0) return;
+  const require = createRequire(import.meta.url);
+  const typescript = require("typescript") as typeof import("typescript");
+  const formatted = typescript.formatDiagnostics(
+    diagnostics.map((diagnostic) => {
+      let text = "";
+      try {
+        text = readFileSync(diagnostic.file, "utf8");
+      } catch {
+        // Unreadable now: print the message without a line/column rather
+        // than lose it.
+      }
+      const file = typescript.createSourceFile(
+        diagnostic.file,
+        text,
+        typescript.ScriptTarget.Latest,
+        false,
+        typescript.ScriptKind.JSON,
+      );
+      const line = Math.min(
+        Math.max(diagnostic.line - 1, 0),
+        file.getLineStarts().length - 1,
+      );
+      return {
+        file: text === "" ? undefined : file,
+        start: (file.getLineStarts()[line] ?? 0) + diagnostic.column,
+        length: 0,
+        category: typescript.DiagnosticCategory.Warning,
+        code: HOST_POLICY_DIAGNOSTIC_CODE,
+        source: "mxlang",
+        messageText: diagnostic.message,
+      };
+    }),
     {
       getCanonicalFileName: (fileName) => fileName,
       getCurrentDirectory: () => process.cwd(),

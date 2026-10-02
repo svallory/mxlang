@@ -78,6 +78,24 @@ The cost on every `-b` run, up to date or not, is one program creation plus one
 Angular checker per project; caching it is not done. See
 [Angular → Template diagnostics](../../../apps/docs/docs/hosts/angular.md).
 
+## Host-policy diagnostics
+
+`package.json` decides which host compiles a `.mx` file. When that decision
+has a problem, `mx-tsc` prints it as a warning positioned in the
+`package.json`, in `tsc`'s shape:
+
+```
+package.json(5,13): warning TS80003: unknown mx.host "vue"; valid hosts: html, astro, ...
+```
+
+- an `mx.host` that names no host (with a "did you mean" hint when one is close);
+- a `package.json` that cannot be parsed (the file is skipped and the default
+  `html` host is used for the files under it).
+
+Both are warnings: the exit code is exactly what it was before they were
+printed. Each is printed once per run, however many `.mx`, `.solid.mx`,
+`.ng.mx` or `.amx` files sit under that `package.json`.
+
 ## Known limitations
 
 - **Watch, Linux: a module installed after `-w -p` started is not noticed.** If
