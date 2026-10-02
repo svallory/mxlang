@@ -790,3 +790,86 @@ Five facts worth knowing before editing it:
   `export interface Input` and annotates `function Card(input: Input)`, as the
   other JSX hosts do; the output is TSX carrying types and runs through a
   TS-aware step (vite, `.tsx` id) at build time.
+
+## Target contract (unstable; decisions 129 and 132)
+
+`src/target-descriptor.ts` and `src/target-loader.ts` hold the contract a
+target registers with. **Nothing consumes it yet**: no tool, host or core path
+calls these functions, and `host-policy.ts`, `scan.ts` and `callee-input.ts`
+still use their closed host lists. The contract is exported from `index.ts` and
+marked `@unstable`; `descriptorVersion` is `0` until core is published under a
+stable version.
+
+- **Vocabulary.** A *target* is an output format (the `mx.target` value); a
+  *host* is a framework (the `mx.host` value, `host.name`). `html` and `data`
+  would be targets with no host. A `TargetDescriptor` is plain data plus an
+  optional lazy `load(core)`; its optional `host` part carries host facts (name,
+  `default`, file kinds). **Core names no target and no host**: no built-in name
+  appears in core code. `createTargetLookup`'s `reservedNames` option
+  takes names away from third parties (07 Q5); the registry passes the list.
+- **`validateDescriptor(value)`** checks shape only and throws a
+  `TargetDescriptorError` naming the **first** failing field in declaration
+  order (`field`, a dotted path; `message`, the detail with no prefix; `kind`
+  `"version"` for a `descriptorVersion` other than 0). Target and host names,
+  and legacy host values, are bare words (never a package specifier, so
+  `mx.target` can tell a name from a specifier); a file-kind `segment` is one
+  lowercase word, never `mx`. More than one non-deprecated `legacyHostValues`
+  entry is rejected (07 Q3): it is the hostless target's filter key. Unknown
+  extra fields are ignored.
+- **`createTargetLookup(descriptors, { defaultTarget?, reservedNames? })`**
+  validates each descriptor, then enforces what only a set can break, each
+  with a `TargetLookupError.rule`: `duplicate-target`, `target-is-host-name`
+  (a target name equals any host name), `package-conflict` (`packageName`
+  unique for a hostless target, shared only between targets of one
+  `host.name`), `host-default` (exactly one `host.default` when a host has
+  several targets), `host-value-conflict` (every `mx.host` value selects one
+  target) and `segment-conflict`, plus `reserved-name` for any name in the
+  caller's `reservedNames` option. `fromPackage(pkg)` returns the host's
+  default target. `attrTagSources()` dedupes by package name.
+  `hostFilterKey(target)` is the host name, else the single non-deprecated
+  legacy value, else `undefined`. The default target is the first descriptor
+  unless named, so a one-descriptor lookup (a direct host entry) defaults to
+  itself.
+- **`loadTargetDescriptor(spec, fromDir)`** is `loadSidecar`'s mechanism
+  (`scan.ts`) anchored at the **project**
+  (`createRequire(fromDir/package.json)`). It caches by resolved path plus the
+  `package.json` mtime of the nearest manifest above the file, and does
+  **not** evict `require.cache` per call (an installed package is not
+  edited). What is re-evaluated, exactly: on an mtime change, when that
+  manifest belongs to the target package (its directory is neither `fromDir`
+  nor above it), the entry and every module under that directory, except
+  modules under a nested `node_modules` (other packages), and the loader's
+  own cached descriptors for those files; when the manifest is the project's
+  own (a local `./targets/vue.js` has none of its own), the entry file only,
+  so the project's modules and its `node_modules` keep their identity. Also
+  evicted: `clearTargetDescriptorCache()`, a module that evaluated but
+  failed validation (otherwise a fixed install would be served the same
+  invalid exports), and a module that threw while evaluating (Bun keeps it
+  in its registry and re-throws it after the file is fixed). Failures are
+  never cached, and a stale entry is dropped when its reload fails or is
+  invalid, so later calls re-evaluate the entry but do not evict the package
+  again. Errors are `TargetLoadError`: `not-found`, `load-failed`,
+  `invalid-descriptor` (a wrong `descriptorVersion` included). Its messages
+  are one line (the thrown text's first line, or `<no message>` when it is
+  blank; the full error is `cause`; a non-`Error` throw is stringified, or
+  reads `a non-Error value was thrown` when it cannot be) and do not name
+  the config key (`mx.host`/`mx.target`); the caller prefixes that. The
+  sidecar constraints hold (no top-level `await`, explicit extensions on
+  relative imports) and are restated in the message.
+- **`load(core)`** takes the **tool's** core (`typeof import("./index.ts")` in
+  core's source, which emits as the same relative type), so a third-party
+  target shares its registry, caches, editor buffer overrides and one
+  `TranslateError` class. The note's `typeof import("@mxlang/core")` is the
+  same type; core's source uses the relative form because a bare
+  self-import in the emitted `.d.ts` fails `pack-hygiene` (core does not
+  declare itself as a dependency). Proved on the real core: typecheck and
+  declaration emit are clean and the parameter is typed, not `any`. A target
+  that imports its own core anyway throws an `instanceof`-foreign
+  `TranslateError`; the brand check that recognises it is PR 3's (design note
+  §4.4), and `fixtures/targets/own-core` pins the divergence until then.
+- **Fixtures** under `src/fixtures/targets/` are third-party packages loaded by
+  relative specifier (`./ok/index.ts`): `ok`, `missing` (a bare project dir),
+  `throws`, `invalid`, `version`, `own-core`. They are real TypeScript loaded
+  by Node's strip-only `require`: no parameter properties, no enums, and core's
+  own source cannot be imported by one (it uses parameter properties), which is
+  why `own-core` carries a stand-in `core-copy.ts`.

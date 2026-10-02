@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: the target descriptor contract and a synchronous loader (target-descriptor, decisions 129 and 132)
+
+**Unstable; nothing consumes it yet.** New exports: `TargetDescriptor`, `TargetHost`, `TargetCompiler`, `TargetCompileOptions`, `TargetCompileResult`, `HostFileKind`, `HostRegionInput`, `HostRegionResult`, `TargetLookup`, `validateDescriptor`, `createTargetLookup`, `TargetDescriptorError`, `TargetLookupError`, `loadTargetDescriptor`, `clearTargetDescriptorCache`, `TargetLoadError`, `TargetLoadErrorCode`, `TargetLookupRule`. A descriptor is plain data plus a lazy `load(core)`; `createTargetLookup` enforces distinct target and host names, caller-supplied `reservedNames`, `packageName` uniqueness (shared only within one host), one `host.default` per multi-target host, and a single non-deprecated `legacyHostValues` entry as a hostless target's filter key. `loadTargetDescriptor` resolves from the project like `loadSidecar` does and caches by resolved path and the nearest `package.json` mtime. When that manifest belongs to the target package, a change re-evaluates the entry and the modules under the package directory (not a nested `node_modules`); when it is the project's own, only the entry file. No existing behaviour changes.
+
 ### Breaking: `claimsTag`/`HostTag` renamed to `isDelegatedTag`/`DelegatedTag` (delegated-tag-rename, decision 132)
 
 **Breaking, no aliases.** `HostDeclarations.claimsTag` is now `isDelegatedTag`, `HostDeclarations.resolveHostTag` is now `resolveDelegatedTag`, the IR kind `HostTag` (the `kind` literal and the type) is now `DelegatedTag`, and the `ctx.build.hostTag` builder is now `ctx.build.delegatedTag`. `Emitter.hostTag` is now `Emitter.delegatedTag`; the exported helper `isContractOnlyClaimed` is now `isContractOnlyDelegated`. Hosts must rename these; behaviour, output and diagnostics are unchanged. Earlier entries below keep the names they shipped with. Spec §9.8.

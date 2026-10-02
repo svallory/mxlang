@@ -528,6 +528,16 @@ only the Vite plugin (`this.warn`) and the language server (a warning on the
 open document) surface them; `mx-tsc` and the editor's TypeScript plugin get
 the same fallback behaviour silently.
 
+## Target descriptors (unstable)
+
+`TargetDescriptor`, `TargetLookup`, `createTargetLookup`, `validateDescriptor`
+and `loadTargetDescriptor` (`src/target-descriptor.ts`, `src/target-loader.ts`)
+are the contract a *target* (an output format, optionally belonging to a host
+framework) registers with. They are **unstable** (`descriptorVersion: 0`) and
+nothing in the repo consumes them yet; see `AGENTS.md` for the rules the
+validator and the lookup enforce and for how a descriptor is loaded from a
+project.
+
 ## The IR, and what a host implements (decision 79)
 
 The core **lowers** a Marko template into a small host-independent tree, and
