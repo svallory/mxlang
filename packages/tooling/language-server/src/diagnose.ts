@@ -269,7 +269,7 @@ export function diagnoseDocument(
       // same way either compiler does, so there is no looser Solid policy
       // to select.
       const result = compileSolidUnit(text, {
-        filename: uri,
+        filename: path,
         customTags,
         warnings,
       });
@@ -280,15 +280,15 @@ export function diagnoseDocument(
       // declarations reject Marko's stateful tags outright, so like Solid's
       // there is no looser policy to select — the `strict` flag has no
       // meaning for this host and is not consulted.
-      const result = compilePreactMx(text, uri, { customTags, warnings });
+      const result = compilePreactMx(text, path, { customTags, warnings });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else if (hostPolicy.host === "react") {
-      const result = compileReactMx(text, uri, { customTags, warnings });
+      const result = compileReactMx(text, path, { customTags, warnings });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else if (hostPolicy.host === "hono") {
-      const result = compileHonoMx(text, uri, { customTags, warnings });
+      const result = compileHonoMx(text, path, { customTags, warnings });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else if (hostPolicy.host === "angular") {
@@ -296,7 +296,7 @@ export function diagnoseDocument(
     } else {
       // Through `@mxlang/html`'s own front door, not `compileSource`
       // directly: this registers the host taglib and compiles via the IR.
-      const result = compile(text, uri, {
+      const result = compile(text, path, {
         strict: resolveStrict(hostPolicy),
         customTags,
         warnings,

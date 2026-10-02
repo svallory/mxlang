@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   utimesSync,
   writeFileSync,
@@ -8,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { clearScanCache } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -773,4 +775,30 @@ describe("custom tag template positions", () => {
     expect(call([[]])).toEqual(call([]));
     expect(call([undefined])).toEqual(call([]));
   });
+});
+
+describe("diagnoseDocument given a file:// URI", () => {
+  // Marko prints the compiled file's name in its message; a URI there became
+  // `<cwd>/file:/...` when resolved as a path.
+  it.each(["react", "preact", "hono", "solid", "html"] as const)(
+    "the %s compile reports the file path, not a file: URI",
+    (host) => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-uri-")));
+      try {
+        const path = join(dir, "page.mx");
+        const diagnostics = diagnoseDocument(
+          "<div>\n",
+          pathToFileURL(path).href,
+          { host },
+        );
+        const error = diagnostics.find((d) => d.severity === 1);
+        expect(error, JSON.stringify(diagnostics)).toBeDefined();
+        const message = stripVTControlCharacters(String(error?.message));
+        expect(message).toContain(path);
+        expect(message).not.toContain("file:");
+      } finally {
+        rmSync(dir, { recursive: true });
+      }
+    },
+  );
 });
