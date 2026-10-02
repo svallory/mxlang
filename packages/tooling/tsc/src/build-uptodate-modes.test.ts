@@ -139,14 +139,23 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
     CASE_TIMEOUT_MS,
   );
 
-  describe("extensionless .ng.mx specifiers (known gap)", () => {
-    // Known gap, TODO mx-tsc-build-extensionless-resolve: `mx-tsc -p` resolves
-    // `./x` and `./x.ng` to `x.ng.mx`, but under `-b` tsc reports TS2307. Not
-    // silent (exit 1 on every run, the project can never be up to date), only
-    // wrong. Pinned so a fix to the `-b` resolution has to update this test.
-    for (const specifier of ["./app.component.ng", "./app.component"]) {
+  describe("module specifiers that name a .ng.mx file", () => {
+    // `-b` must resolve exactly as `-p` does: the solution builder hands tsc's
+    // program a host that already resolves modules, and the Volar resolver must
+    // still be the one answering for these specifiers.
+    const errorLines = (output: string) =>
+      output
+        .split("\n")
+        .filter((line) => /error TS\d+/.test(line))
+        .sort();
+
+    for (const specifier of [
+      "./app.component.ng.mx",
+      "./app.component.ng",
+      "./app.component",
+    ]) {
       it(
-        `-p resolves "${specifier}" (and -b reports TS2307 for it: known gap)`,
+        `-b and -p agree on "${specifier}": it resolves, no TS2307`,
         async () => {
           const dir = scratch(cliFixture);
           breakAll(dir);
@@ -154,25 +163,73 @@ describe("mx-tsc -b: Angular templates of up-to-date projects", () => {
             dir,
             `import { AppComponent } from "${specifier}";\nexport const c = AppComponent;\n`,
           );
+          const project = await mxTscIn(dir, [
+            "-p",
+            "tsconfig.app.json",
+            "--noEmit",
+          ]);
           const listed = await mxTscIn(dir, [
             "-p",
             "tsconfig.app.json",
             "--listFilesOnly",
           ]);
           expect(listed.stdout).toContain("app.component.ng.mx");
-          expect(listed.output).not.toContain("TS2307");
+          expect(project.output).not.toContain("TS2307");
 
-          // One `-b` is enough (they fail alike); the other specifier is pinned
-          // by `-p` resolving it.
-          if (specifier === "./app.component.ng") {
-            const build = await mxTscIn(dir, ["-b", "."]);
-            expect(build.status).toBe(1);
-            expect(build.output).toContain("TS2307");
-          }
+          const build = await mxTscIn(dir, ["-b", "."]);
+          expect(build.output).not.toContain("TS2307");
+          expect(errorLines(build.output)).toEqual(errorLines(project.output));
+          expect(templateErrors(build.output)).toEqual([APP_ERROR]);
         },
         CASE_TIMEOUT_MS,
       );
     }
+
+    it(
+      "-b reports, across a solution with references and paths, the diagnostics -p reports per project",
+      async () => {
+        const dir = scratch(solutionFixture);
+        breakAll(dir);
+        const build = await mxTscIn(dir, ["-b", "."]);
+        const perProject = [
+          ...new Set(
+            (
+              await Promise.all(
+                ["app", "lib"].map((p) =>
+                  mxTscIn(dir, ["-p", p, "--noEmit"]).then((r) =>
+                    errorLines(r.output),
+                  ),
+                ),
+              )
+            ).flat(),
+          ),
+        ].sort();
+        expect(build.output).not.toContain("TS2307");
+        expect(errorLines(build.output)).toEqual(perProject);
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "a module that does not exist is still TS2307 under both -p and -b",
+      async () => {
+        const dir = scratch(cliFixture);
+        importsOf(
+          dir,
+          `import { Nope } from "./nope";\nexport const c = Nope;\n`,
+        );
+        const project = await mxTscIn(dir, [
+          "-p",
+          "tsconfig.app.json",
+          "--noEmit",
+        ]);
+        const build = await mxTscIn(dir, ["-b", "."]);
+        expect(project.output).toContain("TS2307");
+        expect(build.output).toContain("TS2307");
+        expect(errorLines(build.output)).toEqual(errorLines(project.output));
+      },
+      CASE_TIMEOUT_MS,
+    );
   });
 
   it(

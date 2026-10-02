@@ -47,6 +47,32 @@ export function resolveTscPath(): string {
 }
 
 /**
+ * Makes Volar's module resolver, not the host's own, answer for every import.
+ *
+ * Volar's `proxyCreateProgram` keeps the host's `resolveModuleNameLiterals` /
+ * `resolveModuleNames` for any import whose specifier does not end in a plugin
+ * extension, and only otherwise resolves through its patched resolver (the one
+ * that maps `x.d.mx.ts` probes back to `x.mx`). `tsc -p` hands it a plain
+ * compiler host with neither method, so every import takes the patched path and
+ * `./x` / `./x.ng` find `x.ng.mx`. `tsc -b`'s solution builder installs its own
+ * `resolveModuleNameLiterals` on the host, so there an extensionless import
+ * takes the stock path and fails with a false TS2307. Removing the builder's
+ * methods (both are optional on a `CompilerHost`; its resolution is the same
+ * `ts.resolveModuleName`, only with its own cache) makes `-b` resolve exactly
+ * as `-p` does. Runs from the language-plugin factory, which Volar calls before
+ * it reads the host's resolution methods.
+ */
+function useVolarModuleResolution(
+  host:
+    | { resolveModuleNameLiterals?: unknown; resolveModuleNames?: unknown }
+    | undefined,
+): void {
+  if (!host) return;
+  host.resolveModuleNameLiterals = undefined;
+  host.resolveModuleNames = undefined;
+}
+
+/**
  * One run of the real `tsc` entry point (`process.argv` as it stands), with the
  * MX language plugins spliced in. Every plugin it creates is pushed to the given
  * lists. Returns tsc's exit code.
@@ -67,7 +93,8 @@ function runPatchedTsc(
     runTsc(
       resolveTscPath(),
       astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
-      (typescript) => {
+      (typescript, options) => {
+        useVolarModuleResolution(options.host);
         const solidMx = createSolidMxLanguagePlugin(typescript);
         // `retainCompiled`: Angular template diagnostics run over the very
         // compiles the type-check used, not a second pass of them.
