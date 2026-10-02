@@ -6,7 +6,7 @@
  * tested directly, as the brief requires, without spawning a process.
  */
 
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import {
@@ -112,33 +112,70 @@ function warningDiagnostics(
 /**
  * Splits a compiler error into its compact text and its code frame.
  *
- * Babel/Marko errors read `\n    at <path>:L:C\n    > 1 | <src>\n        | ^^^ <text>\n      2 | ...`:
- * the error text rides on the caret line, and the `at` line repeats what the
- * range already carries. The message keeps only that text (an agent pays for
- * every token); the frame, ANSI-free and dedented to its `> 1 |` marker, goes
- * to `data.codeFrame`. A message with no frame, or a frame whose caret line
- * carries no text, comes back unchanged.
+ * Babel/Marko errors read `<header>\n    at <path>:L:C\n      1 | <src>\n    > 2 | <src>\n        | ^^^ <text>\n      3 | ...`:
+ * the error text rides on the caret line, the `at` line repeats what the
+ * range already carries, and the optional header (for a wrapped callee error,
+ * `` `<box>`: custom tag threw: ``) says where the error came from. The message
+ * keeps the header plus that text (an agent pays for every token); the frame,
+ * ANSI-free and dedented to its shallowest line, goes to `data.codeFrame`. The `at`
+ * line is dropped only when it names `documentPath` itself; otherwise it is
+ * returned resolved in `at`, so the caller can name and link the other file
+ * (the cwd-relative `../..` form the compiler prints is never exposed). A
+ * message with no frame, or a frame whose caret line carries no text, comes
+ * back unchanged.
  */
-export function splitCodeFrame(raw: string): {
+export function splitCodeFrame(
+  raw: string,
+  documentPath?: string,
+): {
   message: string;
   codeFrame?: string;
+  at?: { file: string; line: number; column: number };
 } {
   const plain = stripVTControlCharacters(raw);
   const lines = plain.split("\n");
   const marker = lines.findIndex((l) => /^\s*> \d+ \|/.test(l));
   if (marker < 0) return { message: raw };
-  const caret = lines
-    .slice(marker + 1)
-    .map((l) => /^\s*\|\s*\^+\s+(\S.*)$/.exec(l))
-    .find((m) => m !== null);
-  if (!caret) return { message: raw };
-  const indent = /^\s*/.exec(lines[marker] ?? "")?.[0].length ?? 0;
+  const caretAt = lines.findIndex(
+    (l, i) => i > marker && /^\s*\|\s*\^+\s+\S/.test(l),
+  );
+  if (caretAt < 0) return { message: raw };
+  const text = /^\s*\|\s*\^+\s+(\S.*)$/.exec(lines[caretAt] ?? "")?.[1];
+  if (text === undefined) return { message: raw };
+
+  // The frame starts at the first numbered line before the marker, walking
+  // back over context lines; the `at` line, when present, sits just above.
+  let start = marker;
+  while (start > 0 && /^\s*\d+ \|/.test(lines[start - 1] ?? "")) start--;
+  const atLine = start > 0 ? lines[start - 1] : undefined;
+  const atMatch = atLine ? /^\s*at (.+):(\d+):(\d+)\s*$/.exec(atLine) : null;
+  const headerEnd = atMatch ? start - 1 : start;
+  let header = lines.slice(0, headerEnd).join(" ").replace(/\s+/g, " ").trim();
+  if (documentPath && header.startsWith(`${documentPath}: `))
+    header = header.slice(documentPath.length + 2);
+  else if (documentPath && header === `${documentPath}:`) header = "";
+
+  const frameLines = lines.slice(start, caretAt + 1);
+  const indent = Math.min(
+    ...frameLines.map((l) => /^\s*/.exec(l)?.[0].length ?? 0),
+  );
   const codeFrame = lines
-    .slice(marker)
+    .slice(start)
     .map((l) => (/^\s*$/.test(l.slice(0, indent)) ? l.slice(indent) : l))
     .join("\n")
     .trimEnd();
-  return { message: caret[1] ?? raw, codeFrame };
+
+  let at: { file: string; line: number; column: number } | undefined;
+  if (atMatch) {
+    const file = resolve(atMatch[1] ?? "");
+    if (!documentPath || file !== resolve(documentPath))
+      at = { file, line: Number(atMatch[2]), column: Number(atMatch[3]) };
+  }
+  return {
+    message: header ? `${header} ${text}` : text,
+    codeFrame,
+    ...(at ? { at } : {}),
+  };
 }
 
 /**
@@ -364,16 +401,46 @@ export function diagnoseDocument(
       const column = Math.max(0, position.column);
       // These errors carry only a start position, not a span, so synthesize a
       // one-character range that marks where the error occurred.
-      const { message, codeFrame } = splitCodeFrame(
+      const split = splitCodeFrame(
         error instanceof Error
           ? error.message
           : String((error as { message?: unknown }).message ?? error),
+        filePathOf(uri),
       );
+      const { codeFrame, at } = split;
+      // A wrapped callee parse error has no `file` of its own: its real
+      // location lives only in the frame's `at` line. Name it, and link it.
+      const callee = at && !position.file ? at : undefined;
+      const message = callee
+        ? `${split.message} (in ${callee.file}:${callee.line}:${callee.column})`
+        : split.message;
       const diagnostic: Diagnostic = {
         severity: DiagnosticSeverity.Error,
         source: "mxlang",
         message,
         ...(codeFrame === undefined ? {} : { data: { codeFrame } }),
+        ...(callee
+          ? {
+              relatedInformation: [
+                {
+                  location: {
+                    uri: uriOf(callee.file),
+                    range: {
+                      start: {
+                        line: Math.max(0, callee.line - 1),
+                        character: Math.max(0, callee.column - 1),
+                      },
+                      end: {
+                        line: Math.max(0, callee.line - 1),
+                        character: Math.max(0, callee.column),
+                      },
+                    },
+                  },
+                  message: split.message,
+                },
+              ],
+            }
+          : {}),
         range: {
           start: { line, character: column },
           end: { line, character: column + 1 },

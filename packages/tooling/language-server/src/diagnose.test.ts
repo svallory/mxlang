@@ -920,3 +920,77 @@ describe("compiler code frame placement", () => {
     expect(d?.data).toBeUndefined();
   });
 });
+
+describe("a tag template that fails to parse", () => {
+  const box = (): Record<string, CustomTag> => {
+    const tag: TemplateBackedTag = {
+      template: {
+        filename: "/tags/box.mx",
+        source: "<p>ok</p>\n\n<div>\n",
+      },
+    };
+    return { box: tag };
+  };
+  const page = "<div>\n  <box/>\n</div>\n";
+
+  it.each(["html", "solid", "preact", "react", "hono"] as const)(
+    "the %s host names the template, its position and its frame",
+    (host) => {
+      const [d] = diagnoseDocument(
+        page,
+        "file:///app/page.mx",
+        { host },
+        undefined,
+        "",
+        box(),
+      );
+      expect(d, "diagnostic").toBeDefined();
+      // The header survives, so the author knows a callee threw.
+      expect(d?.message).toContain("`<box>`: custom tag threw:");
+      expect(d?.message).toContain('Missing ending "div" tag');
+      // The callee's own path:line:col, resolved: never a cwd-relative `../`.
+      expect(d?.message).toContain("(in /tags/box.mx:3:1)");
+      expect(d?.message).not.toContain("../");
+      expect(d?.message).not.toMatch(/^\s*(>\s*)?\d+ \|/m);
+      // The editor can jump to the callee's real spot (LSP is 0-based).
+      expect(d?.relatedInformation).toHaveLength(1);
+      expect(d?.relatedInformation?.[0]?.location.uri).toBe(
+        "file:///tags/box.mx",
+      );
+      expect(d?.relatedInformation?.[0]?.location.range.start).toEqual({
+        line: 2,
+        character: 0,
+      });
+      const frame = (d?.data as { codeFrame?: string } | undefined)?.codeFrame;
+      expect(frame).toContain("> 3 | <div>");
+      expect(frame).toContain('^^^^^ Missing ending "div" tag');
+    },
+  );
+
+  it("keeps the document's own errors free of any `(in ...)` suffix", () => {
+    const [d] = diagnoseDocument("<div>\n", "file:///app/page.mx", {
+      host: "html",
+    });
+    expect(d?.message).toBe('Missing ending "div" tag');
+    expect(d?.relatedInformation).toBeUndefined();
+  });
+});
+
+describe("splitCodeFrame headers", () => {
+  const raw =
+    "/app/page.mx: `<box>`: custom tag threw: \n    at ../tags/box.mx:3:1\n      1 | <p>ok</p>\n    > 3 | <div>\n        | ^^^^^ boom\n      4 |";
+  it("keeps the header, drops the document's own path from it, and reports the at-location", () => {
+    const r = splitCodeFrame(raw, "/app/page.mx");
+    expect(r.message).toBe("`<box>`: custom tag threw: boom");
+    expect(r.at?.line).toBe(3);
+    expect(r.at?.column).toBe(1);
+    expect(r.codeFrame).toBe(
+      "  1 | <p>ok</p>\n> 3 | <div>\n    | ^^^^^ boom\n  4 |",
+    );
+  });
+  it("reports no at-location when the at line names the document itself", () => {
+    const own =
+      "\n    at /app/page.mx:1:1\n    > 1 | <div>\n        | ^^^^^ boom";
+    expect(splitCodeFrame(own, "/app/page.mx").at).toBeUndefined();
+  });
+});
