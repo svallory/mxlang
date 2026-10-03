@@ -2016,3 +2016,481 @@ describe("ctx.build.delegatedTag attributes", () => {
     expect(tag.attrs).toEqual([]);
   });
 });
+
+describe("array and function attribute types (decision 138, E1)", () => {
+  const listed: CustomTag = {
+    attributes: { values: { type: "array" } },
+    transform: () => [],
+  };
+  const called: CustomTag = {
+    attributes: { run: { type: "function" } },
+    transform: () => [],
+  };
+  const strings: CustomTag = {
+    attributes: { values: { type: "array", items: "string" } },
+    transform: () => [],
+  };
+  const numbers: CustomTag = {
+    attributes: { values: { type: "array", items: "number" } },
+    transform: () => [],
+  };
+
+  function message(
+    source: string,
+    customTags: Record<string, CustomTag>,
+  ): TranslateError {
+    try {
+      lowerWithTags(source, customTags);
+    } catch (error) {
+      if (error instanceof TranslateError) return error;
+      throw error;
+    }
+    throw new Error("expected a TranslateError");
+  }
+
+  describe("type: array", () => {
+    it("accepts a literal array", () => {
+      expect(() =>
+        lowerWithTags('\n<listed values=["a", "b"]/>\n', { listed }),
+      ).not.toThrow();
+      expect(() =>
+        lowerWithTags("\n<listed values=[]/>\n", { listed }),
+      ).not.toThrow();
+    });
+
+    it("rejects a function expression", () => {
+      for (const written of ["(x) => x", "x => x", "async () => {}"]) {
+        expect(
+          message(`\n<listed values=${written}/>\n`, { listed }),
+        ).toMatchObject({
+          message: expect.stringContaining(
+            "`<listed>`: attribute `values` must be array, got function",
+          ),
+          line: 2,
+        });
+      }
+    });
+
+    it("rejects a string, boolean and number literal", () => {
+      for (const [source, got] of [
+        ['\n<listed values="a"/>\n', "string"],
+        ["\n<listed values/>\n", "boolean"],
+        ["\n<listed values=true/>\n", "boolean"],
+        ["\n<listed values=3/>\n", "number"],
+        ['\n<listed values=("a")/>\n', "string"],
+      ] as const) {
+        expect(message(source, { listed })).toMatchObject({
+          message: expect.stringContaining(
+            `\`<listed>\`: attribute \`values\` must be array, got ${got}`,
+          ),
+          line: 2,
+        });
+      }
+    });
+
+    it("accepts what it cannot know: identifier, call, member, conditional", () => {
+      for (const written of [
+        "list",
+        "make()",
+        "data.items",
+        'flag ? ["a"] : ["b"]',
+      ]) {
+        expect(() =>
+          lowerWithTags(`\n<listed values=${written}/>\n`, { listed }),
+        ).not.toThrow();
+      }
+    });
+
+    it("rejects an object literal as not an array", () => {
+      expect(
+        message("\n<listed values={ a: 1 }/>\n", { listed }),
+      ).toMatchObject({
+        message: expect.stringContaining(
+          "`<listed>`: attribute `values` must be array, got object",
+        ),
+      });
+    });
+
+    it("rejects a spread on a closed contract, as for every type", () => {
+      expect(message("\n<listed ...rest/>\n", { listed }).message).toContain(
+        "spread attributes cannot be checked",
+      );
+    });
+  });
+
+  describe("items", () => {
+    it("accepts a literal array whose elements all match", () => {
+      expect(() =>
+        lowerWithTags('\n<strings values=["a", "b", "c"]/>\n', { strings }),
+      ).not.toThrow();
+      expect(() =>
+        lowerWithTags("\n<numbers values=[1, 2, 3]/>\n", { numbers }),
+      ).not.toThrow();
+    });
+
+    it("reports the first wrong element, 1-based, at the element", () => {
+      const error = message('\n<strings values=["a", 2, 3]/>\n', { strings });
+      expect(error.message).toContain(
+        "`<strings>`: attribute `values` item 2 must be string, got number",
+      );
+      expect(error.line).toBe(2);
+      // The element, not the attribute: `2` sits after `values=["a", `.
+      const attributeColumn = message(
+        '\n<strings values=["a"]x/>\n'.replace('["a"]x', "3"),
+        { strings },
+      ).column;
+      expect(error.column).toBeGreaterThan(attributeColumn);
+    });
+
+    it("positions an element on its own line", () => {
+      const error = message('\n<strings values=[\n  "a",\n  true,\n]/>\n', {
+        strings,
+      });
+      expect(error.message).toContain("item 2 must be string, got boolean");
+      expect(error.line).toBe(4);
+    });
+
+    it("lets a non-literal element pass", () => {
+      expect(() =>
+        lowerWithTags('\n<strings values=["a", name, make(), ...rest]/>\n', {
+          strings,
+        }),
+      ).not.toThrow();
+    });
+
+    it("treats a negative number as a number element", () => {
+      expect(() =>
+        lowerWithTags("\n<numbers values=[-1, 2]/>\n", { numbers }),
+      ).not.toThrow();
+      expect(
+        message('\n<numbers values=[-1, "x"]/>\n', { numbers }).message,
+      ).toContain("item 2 must be number, got string");
+    });
+
+    it("reports a nested array element as an array", () => {
+      expect(
+        message("\n<strings values=[[1]]/>\n", { strings }).message,
+      ).toContain("item 1 must be string, got array");
+    });
+
+    it("checks no elements when `items` is not declared", () => {
+      expect(() =>
+        lowerWithTags("\n<listed values=[1, 'a', true, [2]]/>\n", { listed }),
+      ).not.toThrow();
+    });
+
+    it("does not check items of a non-literal array", () => {
+      expect(() =>
+        lowerWithTags("\n<strings values=makeList()/>\n", { strings }),
+      ).not.toThrow();
+    });
+
+    it("supports boolean items", () => {
+      const flags: CustomTag = {
+        attributes: { values: { type: "array", items: "boolean" } },
+        transform: () => [],
+      };
+      expect(() =>
+        lowerWithTags("\n<flags values=[true, false]/>\n", { flags }),
+      ).not.toThrow();
+      expect(
+        message("\n<flags values=[true, 0]/>\n", { flags }).message,
+      ).toContain("item 2 must be boolean, got number");
+    });
+  });
+
+  describe("type: function", () => {
+    // A method shorthand is an attribute method, which core hands to the host
+    // (`resolveAttributeMethod`); the data target resolves it, a plain host
+    // rejects it before any contract runs.
+    const methodHost = fakeDeclarations({ resolveAttributeMethod: () => true });
+
+    it("accepts an arrow function", () => {
+      for (const written of ["(x) => x", "async (x) => x"]) {
+        expect(() =>
+          lowerWithTags(`\n<called run=${written}/>\n`, { called }),
+        ).not.toThrow();
+      }
+    });
+
+    it("accepts the method shorthand", () => {
+      for (const written of [
+        "run({ post }) { return post }",
+        "async run({ post }) { return post }",
+        "run=function (x) { return x }",
+        "run=function* () {}",
+      ]) {
+        expect(() =>
+          lowerWithTags(`\n<called ${written}/>\n`, { called }, methodHost),
+        ).not.toThrow();
+      }
+    });
+
+    it("rejects a method shorthand under a non-function type", () => {
+      expect(
+        (() => {
+          try {
+            lowerWithTags(
+              "\n<listed values({ post }) { return post }/>\n",
+              { listed },
+              methodHost,
+            );
+          } catch (error) {
+            return (error as Error).message;
+          }
+          return "";
+        })(),
+      ).toContain("attribute `values` must be array, got function");
+    });
+
+    it("rejects a literal array", () => {
+      expect(message('\n<called run=["a"]/>\n', { called })).toMatchObject({
+        message: expect.stringContaining(
+          "`<called>`: attribute `run` must be function, got array",
+        ),
+        line: 2,
+      });
+    });
+
+    it("rejects a string, boolean and number literal", () => {
+      for (const [source, got] of [
+        ['\n<called run="a"/>\n', "string"],
+        ["\n<called run/>\n", "boolean"],
+        ["\n<called run=3/>\n", "number"],
+      ] as const) {
+        expect(message(source, { called }).message).toContain(
+          `\`<called>\`: attribute \`run\` must be function, got ${got}`,
+        );
+      }
+    });
+
+    it("accepts what it cannot know: identifier, call, member, conditional", () => {
+      for (const written of [
+        "handler",
+        "make()",
+        "handlers.run",
+        "flag ? a : b",
+      ]) {
+        expect(() =>
+          lowerWithTags(`\n<called run=${written}/>\n`, { called }),
+        ).not.toThrow();
+      }
+    });
+  });
+
+  describe("template literals and bound attributes (round 2)", () => {
+    it("treats a template literal as a string, plain or interpolated", () => {
+      expect(
+        message("\n<numbers values=[`x`]/>\n", { numbers }).message,
+      ).toContain("item 1 must be number, got string");
+      expect(
+        message("\n<numbers values=[1, `x$" + "{y}`]/>\n", { numbers }).message,
+      ).toContain("item 2 must be number, got string");
+      for (const [tag, def] of [
+        ["listed", listed],
+        ["called", called],
+      ] as const) {
+        const attr = tag === "listed" ? "values" : "run";
+        const type = tag === "listed" ? "array" : "function";
+        for (const written of ["`x`", "`x$" + "{y}`"]) {
+          expect(
+            message(`\n<${tag} ${attr}=${written}/>\n`, { [tag]: def }),
+          ).toMatchObject({
+            message: expect.stringContaining(
+              `attribute \`${attr}\` must be ${type}, got string`,
+            ),
+            line: 2,
+          });
+        }
+      }
+    });
+
+    it("accepts a template literal item under `items: string`", () => {
+      expect(() =>
+        lowerWithTags("\n<strings values=[`x`, `y$" + "{z}`]/>\n", { strings }),
+      ).not.toThrow();
+    });
+
+    it("checks a bound attribute's shape", () => {
+      const wrongShape = message("\n<listed values:=1/>\n", { listed });
+      expect(wrongShape.message).toContain(
+        "`<listed>`: attribute `values` must be array, got number",
+      );
+      expect(wrongShape.line).toBe(2);
+      expect(
+        message("\n<listed values:=(x) => x/>\n", { listed }).message,
+      ).toContain("must be array, got function");
+      expect(message("\n<called run:=[1]/>\n", { called }).message).toContain(
+        "must be function, got array",
+      );
+    });
+
+    it("checks a bound array's items, at the element", () => {
+      const error = message("\n<strings values:=[1]/>\n", { strings });
+      expect(error.message).toContain(
+        "`<strings>`: attribute `values` item 1 must be string, got number",
+      );
+      expect(error.line).toBe(2);
+      const second = message('\n<strings values:=["a",\n  2]/>\n', {
+        strings,
+      });
+      expect(second.message).toContain("item 2 must be string, got number");
+      expect(second.line).toBe(3);
+    });
+
+    it("accepts a bound value it cannot know, and a bound array that matches", () => {
+      expect(() =>
+        lowerWithTags("\n<strings values:=list/>\n", { strings }),
+      ).not.toThrow();
+      expect(() =>
+        lowerWithTags('\n<strings values:=["a"]/>\n', { strings }),
+      ).not.toThrow();
+      expect(() =>
+        lowerWithTags("\n<called run:=handler/>\n", { called }),
+      ).not.toThrow();
+    });
+
+    it("leaves the scalar check on a bound attribute as it was", () => {
+      const scalar: CustomTag = {
+        attributes: { n: { type: "number" } },
+        transform: () => [],
+      };
+      expect(() =>
+        lowerWithTags('\n<scalar n:="x"/>\n', { scalar }),
+      ).not.toThrow();
+    });
+  });
+
+  describe("registration", () => {
+    function register(customTags: Record<string, CustomTag>): void {
+      lowerWithTags("<div/>\n", customTags);
+    }
+
+    it("accepts `items` on an array", () => {
+      expect(() => register({ strings })).not.toThrow();
+    });
+
+    it("rejects `items` without `type: array`", () => {
+      for (const attribute of [
+        { items: "string" },
+        { type: "string", items: "string" },
+        { type: "function", items: "string" },
+      ] as const) {
+        expect(() =>
+          register({
+            bad: { attributes: { values: attribute }, transform: () => [] },
+          } as never),
+        ).toThrowError(
+          /`items` .*`type: "array"`|`items` requires `type: "array"`/,
+        );
+      }
+    });
+
+    it("rejects an `items` value that is not string, number or boolean", () => {
+      expect(() =>
+        register({
+          bad: {
+            attributes: { values: { type: "array", items: "object" } },
+            transform: () => [],
+          },
+        } as never),
+      ).toThrowError(/items/);
+    });
+
+    it("rejects `enum` together with `array` or `function`", () => {
+      for (const type of ["array", "function"] as const) {
+        expect(() =>
+          register({
+            bad: {
+              attributes: { values: { type, enum: ["a"] } },
+              transform: () => [],
+            },
+          }),
+        ).toThrowError(
+          /`enum` cannot be combined with `type: "(array|function)"`/,
+        );
+      }
+    });
+
+    it("names the tag and the attribute in a registration error", () => {
+      expect(() =>
+        register({
+          bad: {
+            attributes: { values: { type: "string", items: "string" } },
+            transform: () => [],
+          },
+        } as never),
+      ).toThrowError(/"values".*"bad"|"bad".*"values"/);
+    });
+
+    it("still rejects a default of type array as a definition error", () => {
+      const withDefault: CustomTag = {
+        attributes: { values: { type: "array", default: ["a"] } },
+        transform: () => [],
+      };
+      expect(() =>
+        lowerWithTags("\n<withDefault/>\n", { withDefault }),
+      ).toThrowError(
+        /declares a `default` that is not a string, number or boolean/,
+      );
+    });
+
+    it("keeps an unknown key rejected, listing `items`", () => {
+      expect(() =>
+        register({
+          bad: {
+            attributes: { values: { type: "array", itemz: "string" } },
+            transform: () => [],
+          },
+        } as never),
+      ).toThrowError(/Unknown key "itemz".*items/);
+    });
+  });
+
+  describe("with other declarations", () => {
+    it("`literalOnly` still accepts an array literal and rejects a call", () => {
+      const only: CustomTag = {
+        attributes: {
+          values: { type: "array", items: "string", literalOnly: true },
+        },
+        transform: () => [],
+      };
+      expect(() =>
+        lowerWithTags('\n<only values=["a"]/>\n', { only }),
+      ).not.toThrow();
+      expect(message("\n<only values=make()/>\n", { only }).message).toContain(
+        "attribute `values` must be a literal",
+      );
+    });
+
+    it("`required` still applies", () => {
+      const needs: CustomTag = {
+        attributes: { values: { type: "array", required: true } },
+        transform: () => [],
+      };
+      expect(message("\n<needs/>\n", { needs }).message).toContain(
+        "missing required attribute `values`",
+      );
+    });
+
+    it("`type: expression` is unchanged", () => {
+      const expr: CustomTag = {
+        attributes: { value: { type: "expression" } },
+        transform: () => [],
+      };
+      expect(() =>
+        lowerWithTags("\n<expr value=[1]/>\n", { expr }),
+      ).not.toThrow();
+    });
+
+    it("the existing scalar checks keep their messages", () => {
+      const scalar: CustomTag = {
+        attributes: { n: { type: "number" } },
+        transform: () => [],
+      };
+      expect(message('\n<scalar n="x"/>\n', { scalar }).message).toContain(
+        "attribute `n` must be number, got string",
+      );
+    });
+  });
+});

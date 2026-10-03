@@ -1665,7 +1665,10 @@ walk, because a self-recursive call resolves during that walk.
 |---|---|
 | `` `<${name}>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` | A registered map contains `try`. |
 | `` `<${name}>`: a custom tag that defines only `finalize` has no call site and nothing to collect; add a `transform`, an `analyze` or a template file `` | `finalize` alone. |
-| `` Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: type, required, enum, default, literalOnly `` | Unknown attribute-declaration key. |
+| `` Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: type, items, required, enum, default, literalOnly `` | Unknown attribute-declaration key. |
+| `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` requires `type: "array"` `` | `items` on an attribute whose `type` is not `"array"` (decision 138). |
+| `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` must be one of string, number, boolean `` | An `items` value outside the three literal element types. |
+| `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `enum` cannot be combined with `type: "array"` `` | `enum` with `type: "array"` or `type: "function"` (the message names the type). |
 | `` Unknown key "${key}" in the "${tagAttrName}" attribute tag declaration of tag "${tagName}"; allowed: repeatable, required `` | Unknown attribute-tag-declaration key. |
 
 ### 9.8 Call-site validation
@@ -1684,6 +1687,8 @@ All carry the `` `<tag>`:  `` prefix:
 | `unknown attribute \`${attr.name}\`` | Not declared. |
 | `attribute \`${attr.name}\` must be a literal` | `literalOnly` violated. |
 | `attribute \`${attr.name}\` must be ${type}, got ${literal.type}` | Declared type disagrees. |
+| `attribute \`${attr.name}\` must be ${type}, got ${shape}` | `type: "array"` or `"function"` and the written value has another shape (`string`, `number`, `boolean`, `object`, `array`, `function`). An identifier, call, member or conditional has no knowable shape and is accepted. A function is an arrow function, a function expression or the method shorthand `value({ post }) { … }`; the last two reach the contract only on a host that resolves attribute methods (`resolveAttributeMethod`), any other host rejects them before the contract runs. A template literal counts as a string, and a bound attribute (`value:=…`) is checked like a dynamic one (decision 138). |
+| `attribute \`${attr.name}\` item ${n} must be ${items}, got ${shape}` | `type: "array"` with `items` and a literal element (1-based) of another shape; positioned at the element. A non-literal element, a spread or a hole passes. |
 | `attribute \`${attr.name}\` must be an expression` | `type: "expression"` but static or boolean. |
 | `attribute \`${attr.name}\` must be a static value from ${…}` | `enum` declared, value not a literal. |
 | `attribute \`${attr.name}\` must be a string from ${…}, got ${literal.type}` | `enum` on a non-string. |

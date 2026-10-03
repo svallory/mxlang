@@ -31,7 +31,8 @@ const icon: CustomTag = {
 
 An attribute declaration supports:
 
-- `type`: `"string"`, `"number"`, `"boolean"`, or `"expression"`.
+- `type`: `"string"`, `"number"`, `"boolean"`, `"expression"`, `"array"` or `"function"`. `array` accepts a literal array and `function` accepts an arrow function, a function expression or the method shorthand (a function expression and the method shorthand reach the contract only on a host that resolves attribute methods, `resolveAttributeMethod`; any other host rejects them before the contract runs); a literal of another type is an error, while an identifier, call, member or conditional is accepted because its type is unknowable.
+- `items`: with `type: "array"`, the literal element type (`"string"`, `"number"` or `"boolean"`). A non-literal element passes. `items` without `type: "array"`, and `enum` with `array` or `function`, are registration errors.
 - `required`: reject a call that omits the attribute.
 - `enum`: accept only one of the listed string literals.
 - `default`: append a string, number, or boolean value when the call omits it.

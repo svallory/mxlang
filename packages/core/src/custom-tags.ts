@@ -42,7 +42,15 @@ export interface CustomTagParseOptions {
 }
 
 export interface CustomTagAttribute {
-  type?: "string" | "number" | "boolean" | "expression";
+  /**
+   * `array` and `function` check the written shape: a literal array, or an
+   * arrow function, function expression or method shorthand. An identifier,
+   * call, member or conditional has no knowable type and is accepted, as for
+   * `string` and `number`.
+   */
+  type?: "string" | "number" | "boolean" | "expression" | "array" | "function";
+  /** The literal element type of an `array` attribute; a non-literal element passes. */
+  items?: "string" | "number" | "boolean";
   required?: boolean;
   enum?: string[];
   default?: unknown;
@@ -647,6 +655,87 @@ function isLiteralNode(node: Node | null | undefined): boolean {
   }
 }
 
+/** The written type of an expression node, or `null` when it cannot be known. */
+function nodeShape(node: Node | null | undefined): string | null {
+  switch (node?.type) {
+    case "StringLiteral":
+    // A template literal, plain or interpolated, always produces a string.
+    case "TemplateLiteral":
+      return "string";
+    case "NumericLiteral":
+      return "number";
+    case "BooleanLiteral":
+      return "boolean";
+    case "ArrayExpression":
+      return "array";
+    case "ObjectExpression":
+      return "object";
+    case "FunctionExpression":
+    case "ArrowFunctionExpression":
+      return "function";
+    case "UnaryExpression":
+      // `-1` is a `UnaryExpression` over a `NumericLiteral`.
+      return node.operator === "-" && node.argument.type === "NumericLiteral"
+        ? "number"
+        : null;
+    default:
+      return null;
+  }
+}
+
+/** The written type of an attribute's value, or `null` when it cannot be known. */
+function attrShape(attr: Attr): string | null {
+  if (attr.kind === "static") return "string";
+  if (attr.kind === "boolean") return "boolean";
+  if (attr.kind !== "dynamic" && attr.kind !== "bound") return null;
+  return nodeShape(attr.value.node);
+}
+
+/**
+ * Checks an `array` or `function` attribute against its written shape.
+ *
+ * Only what is written is knowable: a literal array, a function of any
+ * spelling, or a scalar literal has a shape, while an identifier, call, member
+ * or conditional does not and passes, which is the rule `string` and `number`
+ * already follow. `items` checks each literal element of a literal array; a
+ * non-literal element, a spread or a hole passes the same way.
+ */
+function checkCompositeAttr(
+  call: TagCall,
+  attr: Exclude<Attr, { kind: "spread" }>,
+  declaration: CustomTagAttribute,
+): void {
+  const shape = attrShape(attr);
+  if (shape && shape !== declaration.type) {
+    failAt(
+      call.name,
+      `attribute \`${attr.name}\` must be ${declaration.type}, got ${shape}`,
+      attr.loc,
+    );
+  }
+  if (
+    declaration.type !== "array" ||
+    !declaration.items ||
+    (attr.kind !== "dynamic" && attr.kind !== "bound") ||
+    attr.value.node?.type !== "ArrayExpression"
+  ) {
+    return;
+  }
+  const elements = attr.value.node.elements as Array<Node | null>;
+  for (const [index, element] of elements.entries()) {
+    const got = nodeShape(element);
+    if (!element || !got || got === declaration.items) continue;
+    const start = element.loc?.start;
+    failAt(
+      call.name,
+      `attribute \`${attr.name}\` item ${index + 1} must be ${declaration.items}, got ${got}`,
+      start
+        ? { ...attr.loc, line: start.line, column: start.column }
+        : attr.loc,
+    );
+  }
+}
+
 function isLiteralAttr(attr: Attr): boolean {
   if (attr.kind === "static" || attr.kind === "boolean") return true;
   if (attr.kind !== "dynamic") return false;
@@ -770,7 +859,9 @@ export function validateCustomTagCall(
           attr.loc,
         );
       }
-      if (
+      if (declaration.type === "array" || declaration.type === "function") {
+        checkCompositeAttr(call, attr, declaration);
+      } else if (
         declaration.type &&
         declaration.type !== "expression" &&
         literal &&
@@ -942,12 +1033,44 @@ export function rejectUnreachableHooks(
 
 const ATTRIBUTE_KEYS = [
   "type",
+  "items",
   "required",
   "enum",
   "default",
   "literalOnly",
 ] as const;
 const ATTRIBUTE_TAG_KEYS = ["repeatable", "required"] as const;
+
+const ITEM_TYPES = ["string", "number", "boolean"] as const;
+
+/** Rejects a declaration whose keys contradict each other, at registration. */
+function rejectContradictoryAttribute(
+  tagName: string,
+  attrName: string,
+  declaration: CustomTagAttribute,
+): void {
+  const reject = (problem: string): never => {
+    throw new TranslateError(
+      `Invalid "${attrName}" attribute declaration of tag "${tagName}": ${problem}`,
+      0,
+      0,
+    );
+  };
+  if (declaration.items !== undefined) {
+    if (declaration.type !== "array") {
+      reject('`items` requires `type: "array"`');
+    }
+    if (!(ITEM_TYPES as readonly unknown[]).includes(declaration.items)) {
+      reject(`\`items\` must be one of ${ITEM_TYPES.join(", ")}`);
+    }
+  }
+  if (
+    declaration.enum &&
+    (declaration.type === "array" || declaration.type === "function")
+  ) {
+    reject(`\`enum\` cannot be combined with \`type: "${declaration.type}"\``);
+  }
+}
 
 /**
  * Rejects an unknown key in a registered tag's `attributes`/`attributeTags`
@@ -979,6 +1102,7 @@ export function rejectUnknownDeclarationKeys(
             );
           }
         }
+        rejectContradictoryAttribute(tagName, attrName, declaration);
       }
     }
     if (definition.attributeTags) {

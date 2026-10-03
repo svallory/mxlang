@@ -15,7 +15,8 @@ export interface CustomTagParseOptions {
 }
 
 export interface CustomTagAttribute {
-  type?: "string" | "number" | "boolean" | "expression";
+  type?: "string" | "number" | "boolean" | "expression" | "array" | "function";
+  items?: "string" | "number" | "boolean";
   required?: boolean;
   enum?: string[];
   default?: unknown;
@@ -125,7 +126,8 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `text` | Parses the body as one unparsed text node. |
 | `preserveWhitespace` | Keeps body whitespace. |
 | `openTagOnly` | Forbids a body and closing tag. |
-| `type` | Checks a scalar literal type, or requires expression syntax. |
+| `type` | Checks a scalar literal type, a literal array (`"array"`), or a function (`"function"`), or requires expression syntax. |
+| `items` | With `type: "array"`, checks each literal element as `"string"`, `"number"` or `"boolean"`. |
 | `required` | Requires the attribute or attribute tag. |
 | `enum` | Restricts an attribute to listed string literals. |
 | `default` | Supplies an omitted string, number, or boolean attribute after validation. |
