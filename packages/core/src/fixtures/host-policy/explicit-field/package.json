@@ -1,7 +1,7 @@
 {
   "name": "explicit-field-fixture",
   "mx": {
-    "host": "astro",
+    "host": "view",
     "strict": true
   }
 }

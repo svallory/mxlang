@@ -16,13 +16,17 @@ import {
   type CompileResult,
   type CustomTag,
   compileSource,
+  createTargetLookup,
   createTranslator,
   type GeneratedMapping,
   type MappedCode,
   type MxWarning,
   type RawSourceMap,
+  type TargetLookup,
+  type Translator,
 } from "@mxlang/core";
 import markoTaglib from "../taglib/marko.json" with { type: "json" };
+import descriptor from "./descriptor.ts";
 import { emitModuleWithMappings } from "./emitter.ts";
 import {
   escapeFrom,
@@ -70,17 +74,49 @@ const host = {
 };
 
 /**
+ * This package's own target table: the one descriptor it exports (decisions
+ * 129 and 132). What a direct entry compiles under when the caller names no
+ * lookup of its own (design note §5.1, rule (c)) — the loader, `loadMx`,
+ * `example.ts`. A tool that compiles for several targets at once passes the
+ * full registry's lookup through `options.targets` instead, since core asks
+ * the lookup which packages export `AttrTag` and which file-kind segments
+ * exist, and this table holds only this package's answers.
+ */
+const ownTargets: TargetLookup = createTargetLookup([descriptor]);
+
+/**
+ * This package's own target lookup, for a direct entry that needs one and has
+ * no registry to hand (design note §5.1, rule (c)): the Bun loader, `mx()`,
+ * `loadMx()` and `example.ts` all scan and compile under it unless their
+ * caller passes `options.targets`. Exported so those entry points and a
+ * tool's own composition share one instance rather than one per call.
+ */
+export const htmlTargets = ownTargets;
+
+/**
  * The Marko translator object, for `compile(src, file, { translator })`.
  *
  * Exported for a caller that drives `@marko/compiler` itself (the oracle's
  * stock-Marko comparison does). Built by the core, since the seam is the
  * core's.
  */
-export const translator = createTranslator(host);
+export const translator: Translator = createTranslator({
+  ...host,
+  targets: ownTargets,
+});
 
 export interface CompileOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /**
+   * The registered targets this compile runs under. Defaults to this
+   * package's own descriptor, which is right for a direct entry and for a
+   * tool that only ever compiles html; a tool compiling several targets (the
+   * language server, `mx-tsc`, the Vite plugin) passes the built-in
+   * registry's lookup, so a callee importing `AttrTag` from another
+   * registered target's package reads the same as it does today.
+   */
+  targets?: TargetLookup;
   /**
    * Rejects reactive constructs (`<let>`, `<effect>`, `<lifecycle>`,
    * `<script>`, `client` blocks, `<id>`) by name instead of rendering their
@@ -134,6 +170,7 @@ export function compile(
       customTags: options.customTags,
       warnings: options.warnings,
       resolveImport: options.resolveImport,
+      targets: options.targets ?? ownTargets,
       // Decision 79: this host emits from the core's IR. `postEmit` still
       // appends the helpers a template actually calls and brands the default
       // export, both of which are properties of this target rather than of

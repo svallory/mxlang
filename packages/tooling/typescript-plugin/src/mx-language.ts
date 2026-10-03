@@ -4,7 +4,6 @@ import {
   type CustomTag,
   type Expr,
   type GeneratedMapping,
-  getCustomTags,
   type HostDeclarations,
   type HostPolicyDiagnostic,
   type Ir,
@@ -15,8 +14,13 @@ import {
   newCtx,
   parseFragment,
   printExpression,
-  scanCached,
 } from "@mxlang/core";
+import {
+  builtinLookup,
+  getCustomTags,
+  hostFilterKey,
+  scanCached,
+} from "@mxlang/target-registry";
 import { compileHonoMx, honoDeclarations } from "@mxlang/hono";
 import { compile, policy, strictPolicy, translator } from "@mxlang/html";
 import { compilePreactMx, preactDeclarations } from "@mxlang/preact";
@@ -109,7 +113,10 @@ export function createMxLanguagePlugin(
     // channel for a problem in a *different* file than the one being checked,
     // so this goes to the log, which is tsserver's own log in an editor and
     // stderr under `mx-tsc`.
-    const host = resolveHost(fileName).host;
+    // The filter value `mx.tags[].hosts` is matched against: the target's own
+    // host name, or a hostless target's legacy `mx.host` value (`html`),
+    // which is what every existing `hosts: ["html"]` entry matches.
+    const host = hostFilterKey(resolveHost(fileName).target);
     for (const diagnostic of scanCached(fileName, { host }).diagnostics) {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
@@ -245,16 +252,43 @@ export function createMxLanguagePlugin(
         "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
       );
     }
+    // Every compile carries the built-in lookup: core asks it which packages
+    // export `AttrTag` and which file-kind segments exist, and the answer must
+    // be the whole registered set, not one target's own descriptor, or a
+    // callee importing `AttrTag` from another registered target's package
+    // would stop being recognised.
     const compiled =
       hostPolicy.host === "solid"
-        ? compileSolidUnit(source, { filename: fileName, customTags, warnings })
+        ? compileSolidUnit(source, {
+            filename: fileName,
+            customTags,
+            warnings,
+            targets: builtinLookup(),
+          })
         : hostPolicy.host === "preact"
-          ? compilePreactMx(source, fileName, { customTags, warnings })
+          ? compilePreactMx(source, fileName, {
+              customTags,
+              warnings,
+              targets: builtinLookup(),
+            })
           : hostPolicy.host === "react"
-            ? compileReactMx(source, fileName, { customTags, warnings })
+            ? compileReactMx(source, fileName, {
+                customTags,
+                warnings,
+                targets: builtinLookup(),
+              })
             : hostPolicy.host === "hono"
-              ? compileHonoMx(source, fileName, { customTags, warnings })
-              : compile(source, fileName, { strict, customTags, warnings });
+              ? compileHonoMx(source, fileName, {
+                  customTags,
+                  warnings,
+                  targets: builtinLookup(),
+                })
+              : compile(source, fileName, {
+                  strict,
+                  customTags,
+                  warnings,
+                  targets: builtinLookup(),
+                });
     const generated =
       hostPolicy.host === "astro"
         ? createAstroTypeSurface(compiled.code)
@@ -386,6 +420,7 @@ export function createHtmlMappings(
     declarations ?? (strict ? strictPolicy : policy),
     compiler.taglib.buildLookup(dirname(fileName), translator),
     fileName,
+    builtinLookup(),
   );
   // This is the second lowering of the same source. It must see the same tag
   // map as compilation or a custom tag can make the entire mapping pass fail.

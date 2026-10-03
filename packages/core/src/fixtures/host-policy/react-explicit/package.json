@@ -1,6 +1,6 @@
 {
   "name": "react-explicit-fixture",
   "mx": {
-    "host": "react"
+    "host": "vue"
   }
 }

@@ -3,11 +3,8 @@ import {
   type AstroTemplateMapping,
   lowerAstroMx,
 } from "@mxlang/astro/template";
-import {
-  type MxWarning,
-  reportScanDiagnostics,
-  scanCached,
-} from "@mxlang/core";
+import { type MxWarning, reportScanDiagnostics } from "@mxlang/core";
+import { builtinLookup, scanCached } from "@mxlang/target-registry";
 import type { RawSourceMap } from "@mxlang/parser";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
@@ -81,6 +78,7 @@ export function createAmxLanguagePlugin(
                 ? { customTags: discovered }
                 : undefined),
               warnings,
+              targets: builtinLookup(),
             });
             return { ...lowered, warnings };
           },

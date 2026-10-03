@@ -59,6 +59,7 @@ import {
   type CustomTag,
   compileSource,
   concatMapped,
+  createTargetLookup,
   createTranslator,
   drive,
   type GeneratedMapping,
@@ -70,9 +71,12 @@ import {
   type MxWarning,
   moduleExportName,
   type RawSourceMap,
+  type TargetLookup,
   TranslateError,
+  type Translator,
 } from "@mxlang/core";
 import type { ComponentChildren } from "preact";
+import descriptor from "./descriptor.ts";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 import {
   componentAlias,
@@ -120,12 +124,32 @@ const host = {
   tagDiscoveryDirs: ["tags"],
 };
 
+/**
+ * This package's own target table (decisions 129 and 132): the one descriptor
+ * it exports. The default for a direct entry that names no lookup of its own
+ * (`@mxlang/preact/bun` and its siblings, which route through here — see
+ * design note §5.1, rule (c)). A tool compiling several targets passes the
+ * full registry's lookup through `options.targets` instead.
+ */
+const ownTargets: TargetLookup = createTargetLookup([descriptor]);
+
 /** The Marko translator object, for a caller driving `@marko/compiler` itself. */
-export const translator = createTranslator(host);
+export const translator: Translator = createTranslator({
+  ...host,
+  targets: ownTargets,
+});
 
 export interface CompilePreactOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /**
+   * The registered targets this compile runs under. Defaults to this
+   * package's own descriptor (right for a direct entry); a tool that
+   * compiles for several targets passes the built-in registry's lookup, so a
+   * callee importing `AttrTag` from another registered target's package reads
+   * the same as it does today.
+   */
+  targets?: TargetLookup;
   /**
    * The JSX dialect to emit for. Defaults to Preact; a React package passes its
    * own so it can reuse this emitter rather than fork it.
@@ -534,6 +558,7 @@ export function compilePreactMx(
       customTags: options.customTags,
       resolveImport: options.resolveImport,
       warnings: options.warnings,
+      targets: options.targets ?? ownTargets,
       emitIr: (ir) => {
         const emitted = emitModuleWithMappings(ir, dialect);
         mappings = emitted.mappings;

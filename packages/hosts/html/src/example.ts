@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanCached } from "@mxlang/core";
-import { compileFile } from "./index.ts";
+import { compileFile, htmlTargets } from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = process.argv[2] ?? "class-object";
@@ -58,6 +58,9 @@ async function render(file: string, input: unknown): Promise<string> {
  * calls, as Marko does, so nothing is added here.
  */
 function compileWithTags(file: string) {
-  const { customTags } = scanCached(file, { host: "html" });
+  const { customTags } = scanCached(file, {
+    host: "html",
+    targets: htmlTargets,
+  });
   return compileFile(file, { customTags });
 }

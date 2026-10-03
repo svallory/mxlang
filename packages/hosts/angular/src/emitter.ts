@@ -1011,7 +1011,7 @@ class AngularEmitter implements Emitter<string> {
     // Both extension segments, not just `.mx`: a `.ng.mx` otherwise names
     // `x.component.ng.ts`, a file that never exists.
     this.tsFilename =
-      hostModuleSegment(basename(filename)) === "ng"
+      hostModuleSegment(basename(filename), this.ctx.targets) === "ng"
         ? filename.replace(/\.ng\.mx$/, ".ts")
         : filename.replace(/\.mx$/, ".ts");
     // The callee's own selector, once per tag file: two bindings of one path
@@ -1049,7 +1049,10 @@ class AngularEmitter implements Emitter<string> {
       // fall back to the derived name.
       const calleePath =
         node.resolvedPath ??
-        resolveSpecifier(specifierSource, { importer: filename });
+        resolveSpecifier(specifierSource, {
+          importer: filename,
+          targets: this.ctx.targets,
+        });
       if (!calleePath) {
         throw new TranslateError(
           `cannot resolve \`${specifierSource}\` to read its \`export const selector\`; check the import path.`,

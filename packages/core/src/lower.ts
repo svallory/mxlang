@@ -2553,6 +2553,10 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     ) {
       return lowerComponent(ctx, node, {
         kind: "dynamic",
+        // SAFETY: a dynamic-tag target is a synthesized binding reference,
+        // not parsed source: the expression's `code` is the name and its
+        // `node` has no Babel node behind it, which every reader of a
+        // dynamic target's `expr.node` checks before use.
         expr: { code: name, shape: "other", node: null as unknown as Node },
         valueImportBinding: name,
       });
@@ -2571,6 +2575,10 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     if (ctx.unknownLocalValue.has(name)) {
       return lowerComponent(ctx, node, {
         kind: "dynamic",
+        // SAFETY: a dynamic-tag target is a synthesized binding reference,
+        // not parsed source: the expression's `code` is the name and its
+        // `node` has no Babel node behind it, which every reader of a
+        // dynamic target's `expr.node` checks before use.
         expr: { code: name, shape: "other", node: null as unknown as Node },
         valueImportBinding: name,
       });
@@ -3004,6 +3012,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
     ctx.declarations,
     ctx.lookup,
     ctx.filename,
+    ctx.targets,
   );
   scratch.customTags = customTags;
   // Mirrors the parent: this walk is the same file, so whether it emits a
@@ -3042,6 +3051,7 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
     ctx.declarations,
     ctx.lookup,
     tag.filename,
+    ctx.targets,
   );
   templateCtx.customTags = ctx.customTags;
   // A tag unit is a file that compiles to a module of its own, whatever the

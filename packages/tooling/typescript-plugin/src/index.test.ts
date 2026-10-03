@@ -40,6 +40,7 @@ import {
   SOLID_MX_LANGUAGE_ID,
   solidRegionCompile,
 } from "./language.ts";
+import { builtinLookup } from "@mxlang/target-registry";
 import {
   createAstroTypeSurface,
   createHtmlMappings,
@@ -1740,6 +1741,7 @@ describe("MX language plugin", () => {
           {
             importer: join(dir, "caller.mx"),
             imports: new Map([["Card", "./B.ts"]]),
+            targets: builtinLookup(),
           },
         );
       };

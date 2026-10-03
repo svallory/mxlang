@@ -17,8 +17,10 @@ import {
   hostModuleSegment,
   type MxTagsEntry,
   normalizeMxTags,
+  type TargetLookup,
 } from "@mxlang/core";
 import type { AngularConfig } from "./config.ts";
+import { angularOwnTargets } from "./own-targets.ts";
 
 export interface DiscoverDiagnostic {
   file: string;
@@ -115,7 +117,8 @@ function expandInclude(
   projectDir: string,
   realProjectDir: string,
   include: string[],
-  diagnostics?: DiscoverDiagnostic[],
+  diagnostics: DiscoverDiagnostic[] | undefined,
+  targets: TargetLookup,
 ): Set<string> {
   const matched = new Set<string>();
   for (const pattern of include) {
@@ -128,7 +131,7 @@ function expandInclude(
       // Before the host-module diagnostic: a match outside the project is not
       // a project file, so it gets no diagnostic either.
       if (!isInside(realProjectDir, realResolve(resolved))) continue;
-      const segment = hostModuleSegment(basename(file));
+      const segment = hostModuleSegment(basename(file), targets);
       if (segment !== undefined && segment !== "ng") {
         diagnostics?.push({
           file: resolved,
@@ -201,6 +204,7 @@ function discoverTagFiles(
   projectDir: string,
   realProjectDir: string,
   diagnostics: DiscoverDiagnostic[],
+  targets: TargetLookup,
 ): {
   templates: Set<string>;
   tagDirectories: string[];
@@ -208,7 +212,7 @@ function discoverTagFiles(
   rejected: Set<string>;
 } {
   const rejected = new Set<string>();
-  const result = discoverProjectTags(projectDir, { host: "angular" });
+  const result = discoverProjectTags(projectDir, { host: "angular", targets });
 
   for (const d of result.diagnostics) {
     // A host-module rejection is told apart by the rejected file's own name,
@@ -219,7 +223,7 @@ function discoverTagFiles(
     // another host's module file (a `.solid.mx` in an Angular project)
     // keeps core's own message, since it is not this host's file to advise
     // on and could never be routed here anyway.
-    if (hostModuleSegment(basename(d.file)) === "ng") {
+    if (hostModuleSegment(basename(d.file), targets) === "ng") {
       diagnostics.push({
         file: d.file,
         message:
@@ -287,6 +291,7 @@ function discoverTagFiles(
 export function discoverFiles(
   projectDir: string,
   config: AngularConfig,
+  targets: TargetLookup = angularOwnTargets,
 ): DiscoverResult {
   const diagnostics: DiscoverDiagnostic[] = [];
   // Canonicalized once: on macOS the system temp dir itself is a symlink
@@ -299,18 +304,25 @@ export function discoverFiles(
     realProjectDir,
     config.include,
     diagnostics,
+    targets,
   );
   const {
     templates: tagFiles,
     tagDirectories,
     rejected,
-  } = discoverTagFiles(projectDir, realProjectDir, diagnostics);
+  } = discoverTagFiles(projectDir, realProjectDir, diagnostics, targets);
   // Discovered project-wide rather than through `include`, exactly as the
   // tag index is. A `.ng.mx` emits the component module Angular compiles, so
   // a narrowed `include` (`src/pages/**/*.mx`, say) silently skipping one
   // would leave a component that never builds and no diagnostic saying why.
   // Its own extension makes it unambiguous, so there is nothing to configure.
-  const ngMxFiles = expandInclude(projectDir, realProjectDir, ["**/*.ng.mx"]);
+  const ngMxFiles = expandInclude(
+    projectDir,
+    realProjectDir,
+    ["**/*.ng.mx"],
+    undefined,
+    targets,
+  );
 
   const overlapWarnings: string[] = [];
   const files: RoutedFile[] = [];
@@ -323,7 +335,7 @@ export function discoverFiles(
     // `.ng.mx` is its own file kind, not a page: it emits a whole TypeScript
     // module rather than a bare template, so it must never take the page
     // route — which would write a `.html` beside it and drop the module.
-    if (hostModuleSegment(basename(path)) === "ng") {
+    if (hostModuleSegment(basename(path), targets) === "ng") {
       files.push({ path, kind: "ngmx" });
       continue;
     }

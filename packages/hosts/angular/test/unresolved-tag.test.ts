@@ -14,6 +14,7 @@ import { getCustomTags } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 import { compileTagModule } from "../src/tag-module.ts";
 import { assertAngularParses, compileMx, emit } from "./helpers.ts";
 
@@ -87,7 +88,10 @@ describe("resolvable tags still compile (decision 114)", () => {
     );
     const filePath = join(dir, "page.mx");
     const result = compile("<div><badge/></div>", filePath, {
-      customTags: getCustomTags(filePath, { host: "angular" }),
+      customTags: getCustomTags(filePath, {
+        host: "angular",
+        targets: angularOwnTargets,
+      }),
     });
     expect(result.code).toContain("<mx-badge>");
     assertAngularParses(result.code);

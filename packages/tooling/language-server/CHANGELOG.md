@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed (refactor/target-open-set, decisions 129 and 132)
+
+The server resolves host policy and scans through `@mxlang/target-registry`'s wrappers over the built-in lookup, so it no longer depends on core's deleted closed lists; `diagnoseDocument` takes a policy whose `target` names the target and whose `host` is set only for a target that has one, and matches `mx.tags[].hosts` on `hostFilterKey(policy.target)` — the same string as before for every built-in. Compiles carry the built-in lookup, so a callee importing `AttrTag` from any registered target's package still reads. `isTranslateError` replaces `instanceof TranslateError`, so a positioned error from another copy of core keeps its position and dependencies. No change in the diagnostics published for any document.
+
 ### Changed
 
 - **`x.astro.mx` is routed by kind** (amx-to-astro-mx, decision 134): the server watches `**/*.astro.mx` (it watched `**/*.amx`), and an `.astro.mx` document no longer reaches the `.mx` compile; it is silent, like `.ng.mx`, since Astro-template diagnostics come from `mx-tsc --astro` and the TS plugin.

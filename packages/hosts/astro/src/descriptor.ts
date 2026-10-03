@@ -16,6 +16,16 @@ import type { TargetDescriptor } from "@mxlang/core";
 import htmlDescriptor from "@mxlang/html/descriptor";
 import { createAstroTypeSurface } from "./type-surface.ts";
 
+/**
+ * The CommonJS `require` this descriptor uses to reach its own compile entry,
+ * declared rather than imported. A descriptor is loaded by bundlers, by tools
+ * whose `tsconfig` declares no `types`, and by probe programs that compile a
+ * single emitted module — none of which may have `@types/node` in scope, and
+ * the entry must stay behind a *relative* `require` so a bundler inlines it.
+ * Compile-time only: nothing is imported at module evaluation.
+ */
+declare const require: (specifier: string) => unknown;
+
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "astro-html",

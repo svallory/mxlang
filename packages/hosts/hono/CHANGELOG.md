@@ -2,7 +2,11 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (refactor/target-open-set, decisions 129 and 132):** the Bun loader resolves its targets from this package's own descriptor unless a caller passes a lookup (`createHonoBunPlugin(targets)`), and reports an unknown bare word in `mx.tags[].hosts` (silent for a package specifier).
+- **Changed (refactor/target-open-set, decisions 129 and 132):** `compileHonoMx`/`compileHonoFile` accept `options.targets`, defaulting to this package's own descriptor (`honoTargets`).
+
 - **Added (fix-hints-batch, audit item 14):** the unresolved-tag, event-binding, scriptlet and missing-attribute-value hints reach this host through the shared `@mxlang/preact` emitter and `@mxlang/core`.
+
 
 - **Changed (amx-to-astro-mx, decision 134):** the Bun loader's file filter also declines `x.astro.mx`, Astro's template kind, as it already declines `x.solid.mx`.
 

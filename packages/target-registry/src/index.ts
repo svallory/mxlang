@@ -1,9 +1,12 @@
 /**
  * The built-in target table (decisions 129 and 132; unstable).
  *
- * A closed list of the target descriptors the repo's own hosts export, plus a
- * lookup built over it. Nothing consumes this package yet; the tooling
- * switches to it from the closed host lists in a later change.
+ * A closed list of the target descriptors the repo's own hosts export, a
+ * lookup built over it, and the wrappers every tool imports instead of
+ * threading a lookup through its own call sites: a tool that has the built-in
+ * set in hand imports `resolveHostPolicy`, `hostModuleSegment`, `scanCached`
+ * and the lookup's own questions from here, and core's closed lists stay
+ * deleted (decision 126).
  *
  * Every import below is a light `./descriptor` subpath: loading this module
  * pulls in policy tables and emitters' declaration objects, never
@@ -15,7 +18,19 @@ import angular from "@mxlang/angular/descriptor";
 import astro from "@mxlang/astro/descriptor";
 import {
   createTargetLookup,
+  type CustomTag,
   type HostFileKind,
+  type HostPolicy,
+  type HostPolicyResolution,
+  hostModuleSegment as coreHostModuleSegment,
+  hostRestrictionDiagnostics,
+  registerCalleeInputReader,
+  resolveHostPolicy as coreResolveHostPolicy,
+  resolveHostPolicyDetailed as coreResolveHostPolicyDetailed,
+  type ScanDiagnostic,
+  type ScanOptions,
+  type ScanResult,
+  scanCached as coreScanCached,
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
@@ -37,7 +52,22 @@ export interface BuiltinFileKind extends HostFileKind {
   readonly pipeline: "region" | "ng-template" | "astro-template";
 }
 
-/** The built-in targets, in registration order (the order `mx.host` values are listed in; hostless `data` last, with no `mx.host` value). */
+/**
+ * A descriptor a target package could actually supply, or `undefined` where it
+ * could not. Published tools may lack private target packages; importing the
+ * registry must still work before the first compile.
+ */
+function resolved(
+  descriptor: TargetDescriptor | undefined,
+): descriptor is TargetDescriptor {
+  return (
+    typeof descriptor === "object" &&
+    descriptor !== null &&
+    typeof descriptor.name === "string"
+  );
+}
+
+/** Built-ins in registration order; hostless `data` is last. */
 export const builtinTargets: readonly TargetDescriptor[] = [
   html,
   astro,
@@ -47,16 +77,28 @@ export const builtinTargets: readonly TargetDescriptor[] = [
   hono,
   angular,
   data,
-];
+].filter(resolved);
+
+let cachedLookup: TargetLookup | undefined;
 
 /**
- * `astro-template` is reserved for the Astro template output (`.astro.mx`, decision 134) (design note §8 Q5), so a
- * third-party target cannot take it before the Astro host does.
+ * The built-in lookup, built on first use.
+ *
+ * Deferred rather than built at import: a consumer install of a published tool
+ * may resolve no host package at all (each private package's `main` is
+ * TypeScript source, so none can be installed), and `createTargetLookup`
+ * rejects an empty set. Building here means such an install still *loads* —
+ * `mx-tsc --version` and a Vite config load, the two paths that must work —
+ * and the error surfaces where the missing target is actionable: the first
+ * compile. Every caller inside this repository goes through a wrapper below,
+ * which builds it once and reuses it.
  */
-export const builtinTargetLookup: TargetLookup = createTargetLookup(
-  builtinTargets,
-  { reservedNames: ["astro-template"] },
-);
+export function builtinLookup(): TargetLookup {
+  cachedLookup ??= createTargetLookup(builtinTargets, {
+    reservedNames: ["astro-template"],
+  });
+  return cachedLookup;
+}
 
 const PIPELINES: Readonly<Record<string, BuiltinFileKind["pipeline"]>> = {
   solid: "region",
@@ -76,6 +118,127 @@ export const builtinFileKinds: readonly BuiltinFileKind[] = builtinTargets
     }
     return { ...kind, pipeline };
   });
+
+/**
+ * Installs every built-in file kind's callee reader into *this* core copy,
+ * once, at registry creation (design note §5).
+ *
+ * A reader used to exist only after its host package was imported for a side
+ * effect (`@mxlang/solid` calls `registerCalleeInputReader` at import), so
+ * core's extension probes saw `.solid.mx` only once that import had happened
+ * — an import-order dependency a second copy of core also cannot see. A tool
+ * that has the registry has the whole table, so it registers from the table
+ * instead of relying on an import side effect. Each reader is a lazy closure
+ * over its own package (`require` inside the function body), so this adds no
+ * compile entry to the import graph.
+ */
+function registerBuiltinCalleeReaders(): void {
+  for (const kind of builtinTargets.flatMap((target) => target.host?.fileKinds ?? [])) {
+    if (kind.readCalleeInput) registerCalleeInputReader(`.${kind.segment}.mx`, kind.readCalleeInput);
+  }
+}
+registerBuiltinCalleeReaders();
+
+// ---- the lookup's own questions, bound to the built-in set ----
+
+/** Is `name` a registered built-in target? */
+export const hasTarget = (name: string): boolean => builtinLookup().hasTarget(name);
+/** The registered built-in target names, in registration order. */
+export const targetNames = (): readonly string[] => builtinLookup().targetNames();
+/** One registered built-in target's descriptor, if any. */
+export const target = (name: string): TargetDescriptor | undefined =>
+  builtinLookup().target(name);
+/** The target used when nothing selects one. */
+export const defaultTarget = (): string => builtinLookup().defaultTarget();
+/** The target a project dependency on `pkg` selects. */
+export const fromPackage = (pkg: string): string | undefined =>
+  builtinLookup().fromPackage(pkg);
+/** Every registered target's `packageName`: the specifiers `AttrTag` may come from. */
+export const attrTagSources = (): readonly string[] =>
+  builtinLookup().attrTagSources();
+/** Values `mx.host` accepts: the host names and the legacy values. */
+export const hostValues = (): readonly string[] => builtinLookup().hostValues();
+/** The target an `mx.host` value selects, and whether the value is deprecated. */
+export const hostTarget = (
+  value: string,
+): { target: string; deprecated?: true } | undefined =>
+  builtinLookup().hostTarget(value);
+/** A target's `host.name`, if it has a host. */
+export const hostOf = (targetName: string): string | undefined =>
+  builtinLookup().hostOf(targetName);
+/** The value `mx.tags[].hosts` is matched against for `targetName`. */
+export const hostFilterKey = (targetName: string): string | undefined =>
+  builtinLookup().hostFilterKey(targetName);
+/** Every registered host file-kind segment. */
+export const moduleSegments = (): readonly string[] =>
+  builtinLookup().moduleSegments();
+
+/**
+ * `resolveHostPolicy` over the built-in set: the policy a file compiles
+ * under, resolved from its nearest `package.json`. Core's own takes the
+ * lookup as a required argument; this binds the built-in one, so a tool
+ * changes its import specifier and not its call sites.
+ */
+export function resolveHostPolicy(filePath: string): HostPolicy {
+  return coreResolveHostPolicy(filePath, builtinLookup());
+}
+
+/**
+ * `resolveHostPolicyDetailed` over the built-in set: the same policy plus
+ * whatever the walk had to say (an unknown `mx.host`, a malformed
+ * `package.json`).
+ */
+export function resolveHostPolicyDetailed(
+  filePath: string,
+): HostPolicyResolution {
+  return coreResolveHostPolicyDetailed(filePath, builtinLookup());
+}
+
+/**
+ * `hostModuleSegment(entry)` over the built-in set: the host segment a
+ * `.mx` file name carries (`ng`, `solid`, `astro`) when a registered file
+ * kind declares it, else `undefined`.
+ */
+export function hostModuleSegment(entry: string): string | undefined {
+  return coreHostModuleSegment(entry, builtinLookup());
+}
+
+/**
+ * The `hosts` restrictions a scan read that the built-in set cannot match:
+ * a bare word no registered host accepts, and nothing else (a package
+ * specifier is a host package the project may not use, and a registered
+ * value matches). The scan records what it read; this is the built-in set's
+ * verdict, and the same rule every caller's own lookup applies.
+ */
+function restrictionWarnings(result: ScanResult): ScanDiagnostic[] {
+  return hostRestrictionDiagnostics(result.hostRestrictions, builtinLookup());
+}
+
+/**
+ * `scanCached` over the built-in set, with the scan's diagnostics plus the
+ * warnings its unreadable `hosts` restrictions deserve. The cache key is
+ * core's and does not include the lookup, so the diagnostics are derived from
+ * the same cached result each call — a copy, never a mutation of the cached
+ * one.
+ */
+export function scanCached(
+  filePath: string,
+  options: Omit<ScanOptions, "targets"> = {},
+): ScanResult {
+  const result = coreScanCached(filePath, { ...options, targets: builtinLookup() });
+  const extra = restrictionWarnings(result);
+  return extra.length === 0
+    ? result
+    : { ...result, diagnostics: [...result.diagnostics, ...extra] };
+}
+
+/** `getCustomTags` over the built-in set; see {@link scanCached}. */
+export function getCustomTags(
+  filePath: string,
+  options: Omit<ScanOptions, "targets"> = {},
+): Record<string, CustomTag> {
+  return scanCached(filePath, options).customTags;
+}
 
 export type {
   HostFileKind,

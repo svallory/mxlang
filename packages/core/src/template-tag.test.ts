@@ -12,6 +12,7 @@ import {
   templateCompileCount,
   touchAndEvict,
 } from "./template-tag.ts";
+import { lookup } from "./test-targets.ts";
 
 const CALLER = "/tmp/mx-template-test/page.mx";
 
@@ -42,6 +43,7 @@ function lowerWithTags(
   compileSource(source, filename, policy, {
     customTags,
     warnings,
+    targets: lookup,
     tagDiscoveryDirs: [],
     emitIr(lowered) {
       ir = lowered;

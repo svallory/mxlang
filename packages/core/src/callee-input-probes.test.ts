@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { readCalleeInput, registerCalleeInputReader } from "./callee-input.ts";
+import { lookup } from "./test-targets.ts";
 
 const directory = mkdtempSync(join(tmpdir(), "mx-callee-probes-"));
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
@@ -22,6 +23,7 @@ describe("callee-input extension probes", () => {
     const context = () => ({
       importer: caller,
       imports: new Map([["W", "./widget"]]),
+      targets: lookup,
     });
 
     const before = readCalleeInput(target, context());

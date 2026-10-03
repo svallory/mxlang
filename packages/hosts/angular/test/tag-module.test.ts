@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import { angularOwnTargets } from "../src/own-targets.ts";
 import { compileTagModule } from "../src/tag-module.ts";
 import { assertAngularParses, assertModuleTypechecks } from "./helpers.ts";
 
@@ -32,7 +33,7 @@ function compileTag(
   const path = join(dir, "tags", filename);
   writeFileSync(path, source);
   const result = compileTagModule(source, path, {
-    customTags: getCustomTags(path) as never,
+    customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
     tagSelectorPrefix,
   });
   return {
@@ -58,7 +59,7 @@ function compileTagWithMappings(
   const path = join(dir, "tags", filename);
   writeFileSync(path, source);
   return compileTagModule(source, path, {
-    customTags: getCustomTags(path) as never,
+    customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
     tagSelectorPrefix,
   });
 }
@@ -716,7 +717,7 @@ describe("compileTagModule: event handlers", () => {
     writeFileSync(path, source);
     const warnings: { message: string }[] = [];
     const result = compileTagModule(source, path, {
-      customTags: getCustomTags(path) as never,
+      customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
       warnings: warnings as never,
     });
 

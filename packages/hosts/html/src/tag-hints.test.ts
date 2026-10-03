@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
 import { afterAll, describe, expect, it } from "vitest";
-import { compile } from "./index.ts";
+import { compile, htmlTargets } from "./index.ts";
 
 /**
  * Marko 6.3.51 says only "Unable to find entry point for custom tag `<X>`."
@@ -66,7 +66,10 @@ describe("unresolved tag hints (html)", () => {
     const page = join(dir, "page.mx");
     const source = '<Card title="x"/>';
     writeFileSync(page, source);
-    const customTags = getCustomTags(page, { host: "html" });
+    const customTags = getCustomTags(page, {
+      host: "html",
+      targets: htmlTargets,
+    });
     expect(() => compile(source, page, { customTags })).not.toThrow();
     // …and without the file the same page fails with the hint above.
     const empty = join(root, "empty");

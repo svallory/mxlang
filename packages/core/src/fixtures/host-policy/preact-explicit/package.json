@@ -1,6 +1,6 @@
 {
   "name": "preact-explicit-fixture",
   "mx": {
-    "host": "preact"
+    "host": "atom"
   }
 }

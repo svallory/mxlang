@@ -127,10 +127,11 @@ import {
   getCustomTags,
   isMarkoOrMxSpecifier,
   type MxWarning,
+  type TargetLookup,
   TranslateError,
 } from "@mxlang/core";
 import type { PluginBuilder } from "bun";
-import { type CompileOptions, compile } from "./index.ts";
+import { type CompileOptions, compile, htmlTargets } from "./index.ts";
 
 /**
  * `@marko/compiler`'s own Babel instance, the same one `@mxlang/core`'s own
@@ -396,6 +397,7 @@ function rewriteImports(
   anchor: string | undefined,
   deps: Map<string, number>,
   seen: Set<string>,
+  targets: TargetLookup,
 ): string {
   const { parse } = markoBabel();
   // Compiled MX output is TypeScript (an `export interface Input {}`, a
@@ -433,7 +435,7 @@ function rewriteImports(
       const resolved = specifier.startsWith(".")
         ? resolvePath(dirname(anchor), specifier)
         : specifier;
-      replacement = loadNestedMx(resolved, deps, seen);
+      replacement = loadNestedMx(resolved, deps, seen, targets);
     } else if (specifier.startsWith(".")) {
       if (!anchor) {
         throw new Error(
@@ -493,6 +495,7 @@ function loadNestedMx(
   path: string,
   callerDeps: Map<string, number>,
   seen: Set<string>,
+  targets: TargetLookup,
 ): string {
   if (seen.has(path)) {
     throw new TranslateError(
@@ -520,11 +523,11 @@ function loadNestedMx(
   nextSeen.add(path);
 
   const source = readFileSync(path, "utf8");
-  const customTags = getCustomTags(path, { host: "html" });
+  const customTags = getCustomTags(path, { host: "html", targets });
   let code: string;
   let dependencies: readonly string[];
   try {
-    ({ code, dependencies } = compile(source, path, { customTags }));
+    ({ code, dependencies } = compile(source, path, { customTags, targets }));
   } catch (error) {
     if (error instanceof TranslateError && !error.file) {
       // A nested compile error must carry the nested file's own path and
@@ -539,7 +542,7 @@ function loadNestedMx(
   deps.set(path, statSync(path).mtimeMs);
   for (const dep of dependencies) deps.set(dep, statSync(dep).mtimeMs);
 
-  const rewritten = rewriteImports(code, path, deps, nextSeen);
+  const rewritten = rewriteImports(code, path, deps, nextSeen, targets);
   const url = `mx-virtual:${path}#v${virtualVersion++}`;
   registerVirtual(url, rewritten);
   urlForPath.set(path, url);
@@ -611,7 +614,13 @@ export function mx<I = Record<string, unknown>>(
   if (options.filename) deps.set(options.filename, safeMtime(options.filename));
 
   const seen = new Set<string>(options.filename ? [options.filename] : []);
-  const rewritten = rewriteImports(code, options.filename, deps, seen);
+  const rewritten = rewriteImports(
+    code,
+    options.filename,
+    deps,
+    seen,
+    options.targets ?? htmlTargets,
+  );
   const { mod: rawMod } = evaluate(rewritten, options.filename);
   const mod = rawMod as { default: (input: I) => string };
 
@@ -658,7 +667,10 @@ export function loadMx<I = Record<string, unknown>>(
   }
 
   const source = readFileSync(abs, "utf8");
-  const customTags = getCustomTags(abs, { host: "html" });
+  const customTags = getCustomTags(abs, {
+    host: "html",
+    targets: options.targets ?? htmlTargets,
+  });
   const warnings: MxWarning[] = [];
   const { code } = compile(source, abs, {
     ...options,
@@ -674,7 +686,13 @@ export function loadMx<I = Record<string, unknown>>(
   deps.set(abs, statSync(abs).mtimeMs);
 
   const seen = new Set<string>([abs]);
-  const rewritten = rewriteImports(code, abs, deps, seen);
+  const rewritten = rewriteImports(
+    code,
+    abs,
+    deps,
+    seen,
+    options.targets ?? htmlTargets,
+  );
   const { mod: rawMod, url } = evaluate(rewritten, abs);
   const mod = rawMod as { default: (input: I) => string };
 

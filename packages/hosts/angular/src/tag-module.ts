@@ -21,6 +21,7 @@ import {
   type MxWarning,
   moduleExportName,
   type Position,
+  type TargetLookup,
   TranslateError,
   warn,
 } from "@mxlang/core";
@@ -44,6 +45,7 @@ import {
   encodeMappings,
   templateMappingsToModule,
 } from "./mapping.ts";
+import { angularOwnTargets } from "./own-targets.ts";
 import { compileSourceWithHint } from "./structural-attr-hint.ts";
 
 export interface CompileTagModuleOptions {
@@ -56,6 +58,14 @@ export interface CompileTagModuleOptions {
    * Defaults to `mx-`; the tag's own `export const selector` still wins.
    */
   tagSelectorPrefix?: string;
+  /**
+   * The registered targets this compile runs under (decisions 129 and 132).
+   * Defaults to this package's own descriptor, which is right for a direct
+   * entry; a tool compiling several targets passes the built-in registry's
+   * lookup, so a callee importing `AttrTag` from another registered target's
+   * package reads the same as it does today.
+   */
+  targets?: TargetLookup;
 }
 
 export interface CompileTagModuleResult extends CompileResult {
@@ -937,6 +947,7 @@ export function compileTagModule(
 
   const result = compileSourceWithHint(source, filename, angularDeclarations, {
     customTags: options.customTags,
+    targets: options.targets ?? angularOwnTargets,
     warnings,
     emitIr: (ir: Ir, ctx: Ctx) => {
       className = moduleExportName(ir, "@mxlang/angular");

@@ -12,7 +12,7 @@ import {
   unifyNestedAttrTagPlanGroups,
 } from "./attr-tag.ts";
 import type { Ctx, Node } from "./core.ts";
-import { TranslateError, warn } from "./core.ts";
+import { isTranslateError, TranslateError, warn } from "./core.ts";
 import type {
   Attr,
   AttributeTag,
@@ -427,7 +427,15 @@ export function customTagTaglib(
 }
 
 function syntheticExpr(code: string): Expr {
-  return { code, shape: "other", node: null as unknown as Node };
+  return {
+    code,
+    shape: "other",
+    // SAFETY: an `Expr`'s `node` is the Babel node the expression came from,
+    // and this one has none — the code was synthesized, not parsed. Every
+    // reader of `node` on an `Expr` checks it before use (position lookups,
+    // `emit`, the mapping pass), which is what `shape: "other"` selects.
+    node: null as unknown as Node,
+  };
 }
 
 /**
@@ -765,6 +773,10 @@ function defaultAttr(
   }
   if (typeof value === "number" || typeof value === "boolean") {
     const code = String(value);
+    // SAFETY: a Babel literal carries more than `type`/`value` (a position
+    // among them), and this node is synthesized rather than parsed, so the
+    // cast is the honest shape for a literal whose emitters read only these
+    // two fields. It is never handed back to Marko.
     const node = {
       type: typeof value === "number" ? "NumericLiteral" : "BooleanLiteral",
       value,
@@ -1221,8 +1233,8 @@ function wrapHookError(
   tagName: string,
   hook: string,
   loc: Position,
-): unknown {
-  if (error instanceof TranslateError) return error;
+): TranslateError {
+  if (isTranslateError(error)) return error;
   return new TranslateError(
     `\`<${tagName}>\`: custom tag \`${hook}\` threw: ${error instanceof Error ? error.message : String(error)}`,
     loc.line,
@@ -1408,7 +1420,7 @@ export function transformCustomTag(
       ? definition.transform(observed.call, tagContext)
       : routeTemplateCall(ctx, definition as TemplateBackedTag, observed.call);
   } catch (error) {
-    if (error instanceof TranslateError) throw error;
+    if (isTranslateError(error)) throw error;
     throw new TranslateError(
       `\`<${call.name}>\`: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,
       call.loc.line,

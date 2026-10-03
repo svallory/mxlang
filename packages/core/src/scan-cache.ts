@@ -175,7 +175,7 @@ export function evictTaglibCaches(): void {
  */
 export function getCustomTags(
   filePath: string,
-  options: ScanOptions = {},
+  options: ScanOptions,
 ): Record<string, CustomTag> {
   return scanCached(filePath, options).customTags;
 }
@@ -213,10 +213,12 @@ export function reportScanDiagnostics(
  * The cached scan itself, for a caller that needs the evidence as well as the
  * map — an integration wiring up its own file watcher, for instance.
  */
-export function scanCached(
-  filePath: string,
-  options: ScanOptions = {},
-): ScanResult {
+export function scanCached(filePath: string, options: ScanOptions): ScanResult {
+  // The key is deliberately unchanged by `options.targets`: the lookup is
+  // which file-kind segments exist, not which files are found, and one
+  // process resolves one lookup — the registry's — for every scan it runs.
+  // Folding it in would hand the same tag set a second identity per call,
+  // which is the exact leak the tag-map cache below exists to prevent.
   const key = `${dirname(resolve(filePath))}\0${options.stopAt ?? ""}\0${options.host ?? ""}`;
   const cached = scans.get(key);
   if (cached && isFresh(cached)) return cached.result;

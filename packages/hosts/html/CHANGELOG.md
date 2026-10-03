@@ -2,7 +2,11 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (refactor/target-open-set, decisions 129 and 132):** the Bun loader is a direct entry: it resolves its targets from this package's own descriptor unless a caller passes a lookup (`createHtmlBunPlugin(targets)`). The loader also reports an unknown bare word in `mx.tags[].hosts`, and stays silent for a package specifier.
+- **Changed (refactor/target-open-set, decisions 129 and 132):** `compile`/`compileFile`/`build`/`loadMx`/`mx()` accept `options.targets`, defaulting to this package's own descriptor (`htmlTargets`, now exported). A tool compiling for several targets passes the built-in lookup.
+
 - **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.``, or ``Did you mean `<Badge>`?`` when an import or `<define>` is one or two edits away; an unresolved lowercase tag near an HTML element ends ``Did you mean `<div>`?`` (`<dvi>`). Parse-error and scriptlet hints come from `@mxlang/core`. `(click)="…"` is unchanged: this host has no event handlers to suggest.
+
 
 - **Changed (amx-to-astro-mx, decision 134):** the Bun loader's file filter also declines `x.astro.mx`, Astro's template kind, as it already declines `x.solid.mx`.
 

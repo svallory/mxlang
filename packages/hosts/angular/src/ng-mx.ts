@@ -18,6 +18,7 @@ import {
   positionRegionSource,
   printExpression,
   resolveSpecifier,
+  type TargetLookup,
   TranslateError,
 } from "@mxlang/core";
 import {
@@ -49,6 +50,7 @@ import {
   rebaseAnchorsThroughEscaping,
   rebaseThroughEscaping,
 } from "./mapping.ts";
+import { angularOwnTargets } from "./own-targets.ts";
 import { withStructuralAttrHint } from "./structural-attr-hint.ts";
 
 /**
@@ -169,6 +171,14 @@ export interface CompileNgMxOptions {
   warnings?: MxWarning[];
   /** The element-name prefix for an MX tag, `mx.angular.tagSelectorPrefix`. */
   tagSelectorPrefix?: string;
+  /**
+   * The registered targets this compile runs under (decisions 129 and 132).
+   * Defaults to this package's own descriptor, which is right for a direct
+   * entry; a tool compiling several targets passes the built-in registry's
+   * lookup, so a callee importing `AttrTag` from another registered target's
+   * package reads the same as it does today.
+   */
+  targets?: TargetLookup;
 }
 
 export interface CompileNgMxResult {
@@ -294,6 +304,7 @@ function lowerRegion(
     angularDeclarations,
     undefined,
     filename,
+    options.targets ?? angularOwnTargets,
   );
   ctx.customTags = options.customTags;
   ctx.warnings = warnings;
@@ -397,7 +408,12 @@ function lowerRegion(
     // An unresolvable path is an error only if the import is called as a
     // tag; the emitter would reject it eagerly, so it is withheld here and
     // checked against the tags actually used below.
-    if (!resolveSpecifier(specifier, { importer: filename })) {
+    if (
+      !resolveSpecifier(specifier, {
+        importer: filename,
+        targets: options.targets ?? angularOwnTargets,
+      })
+    ) {
       unresolved.set(name, specifier);
       continue;
     }

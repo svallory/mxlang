@@ -12,6 +12,7 @@ import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { AttributeTag, Ir, IrNode } from "./ir.ts";
 import { exprOf, exprSpan, lower, paramSpansOf } from "./lower.ts";
+import { lookup } from "./test-targets.ts";
 
 /**
  * The lowerer (decision 79): one fixture per IR kind, plus the error cases.
@@ -84,6 +85,7 @@ function lowerSource(
             policy,
             undefined,
             "test.mx",
+            lookup,
           );
           if (calleeInput) {
             ctx.calleeInputFor =
@@ -145,6 +147,7 @@ function lowerWithWarnings(
             policy,
             undefined,
             "test.mx",
+            lookup,
           );
           ctx.warnings = warnings;
           try {
@@ -898,6 +901,7 @@ describe("one fixture per IR kind", () => {
         v2(),
         undefined,
         "test.mx",
+        lookup,
       );
       const ownInput = readOwnInput(ctx, inputCode, [aux]);
       expect(() =>
@@ -910,6 +914,7 @@ describe("one fixture per IR kind", () => {
           v2(),
           undefined,
           "test.mx",
+          lookup,
         ),
         inputCode,
         [aux.replace('"data"', '"renderable"')],
@@ -920,6 +925,7 @@ describe("one fixture per IR kind", () => {
         v2(),
         undefined,
         "test.mx",
+        lookup,
       );
       recursiveCtx.exportName = "Test";
       recursiveCtx.ownInput = renderable;
@@ -2271,6 +2277,7 @@ describe("the lowerer runs under the real front door", () => {
       "/tmp/mx-core-test/probe.mx",
       fakeDeclarations(),
       {
+        targets: lookup,
         emitIr: (ir) => {
           const first = ir.body[0];
           return first?.kind === "Element" ? first.name : "missing";
@@ -2285,7 +2292,7 @@ describe("the lowerer runs under the real front door", () => {
       "<p>hi</p>\n",
       "/tmp/mx-core-test/table-of.mx",
       fakeDeclarations(),
-      { emitIr: (ir) => ir.exportName ?? "missing" },
+      { targets: lookup, emitIr: (ir) => ir.exportName ?? "missing" },
     );
     expect(code).toBe("TableOf");
   });
@@ -2299,7 +2306,7 @@ describe("the lowerer runs under the real front door", () => {
       'import Probe from "./other.ts"\n<p>hi</p>\n',
       "/tmp/mx-core-test/probe.mx",
       fakeDeclarations(),
-      { emitIr: (ir) => ir.exportName ?? "missing" },
+      { targets: lookup, emitIr: (ir) => ir.exportName ?? "missing" },
     );
     expect(code).toBe("Probe2");
   });
@@ -2476,6 +2483,7 @@ describe("binding scopes are per JS block", () => {
         fakeDeclarations(),
         undefined,
         "test.mx",
+        lookup,
       );
       ctx.bindings.register("count", (name: string) => `${name}()`);
 
@@ -2856,6 +2864,7 @@ describe("Expr.span", () => {
       fakeDeclarations(),
       undefined,
       "test.mx",
+      lookup,
     );
     const synthetic = { type: "NumericLiteral", value: 1 };
     const result = exprOf(ctx, synthetic);
@@ -2880,6 +2889,7 @@ describe("Expr.span", () => {
       fakeDeclarations(),
       undefined,
       "test.mx",
+      lookup,
     );
     const synthetic = { type: "Id", start: 7, end: 10 };
     const result = exprOf(ctx, synthetic);
@@ -3002,6 +3012,7 @@ describe("Define/For param and name spans", () => {
       fakeDeclarations(),
       undefined,
       "test.mx",
+      lookup,
     );
     const node = {
       body: {
@@ -3030,6 +3041,7 @@ describe("Define/For param and name spans", () => {
       fakeDeclarations(),
       undefined,
       "test.mx",
+      lookup,
     );
     const noLocVar = { type: "Identifier", name: "Row" };
     expect(exprSpan(ctx, noLocVar)).toBeUndefined();

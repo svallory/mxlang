@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Changed: host policy and dispatch read the built-in lookup (refactor/target-open-set, decisions 129 and 132)
+
+The plugin resolves each file's policy through `@mxlang/target-registry` and scans with the built-in lookup, matching `mx.tags[].hosts` on `hostFilterKey(policy.target)` (unchanged for every built-in). Each compile carries the lookup, so a callee importing `AttrTag` from another registered target's package is recognised as before. The dependency rule for `.solid.mx`/`.ng.mx` callees now reads the same lookup rather than a closed list in core. `isTranslateError` replaces `instanceof TranslateError`. No change to generated text, mappings or diagnostics; the dispatch goldens are unchanged.
+
 ### Fixed: `TS80001` no longer repeats the file and position in its message (translate-error-no-repeated-path, audit item 17)
 
 A parse error's message used to open with Marko's `    at <path>:L:C` line, which `mx-tsc` printed right after `file(L,C)` and an editor showed beside the range. The line is dropped when it names the diagnosed file; one naming another file (an error inside a callee tag) stays, since it is the only place that file is named. The code frame is unchanged.

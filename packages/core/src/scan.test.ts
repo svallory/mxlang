@@ -1,4 +1,8 @@
 import {
+  testTargetLookup,
+  testTargetLookupWithSegments,
+} from "./test-targets.ts";
+import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -20,6 +24,7 @@ import type { Ir, IrNode } from "./ir.ts";
 import {
   clearManifestCache,
   discoverProjectTags,
+  hostRestrictionDiagnostics,
   normalizeMxTags,
   readParseOptions,
   scanCustomTags,
@@ -34,6 +39,13 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, "fixtures", "scan");
+
+/**
+ * The registered set every scan here runs under. The file kinds it knows are
+ * the ones the "host module file" cases name, and nothing else, so a dotted
+ * name whose segment no target declares stays an ordinary dotted tag name.
+ */
+const lookup = testTargetLookup();
 
 function fixture(...parts: string[]): string {
   return join(fixtures, ...parts);
@@ -70,7 +82,7 @@ afterEach(() => {
 
 describe("scanCustomTags", () => {
   it("discovers a sidecar in a sibling tags/ directory with no import", () => {
-    const result = scanCustomTags(fixture("parse-options", "caller.mx"));
+    const result = scanCustomTags(fixture("parse-options", "caller.mx"), { targets: lookup });
 
     expect([...result.tags.keys()]).toEqual(["raw"]);
     expect(result.tags.get("raw")?.sidecar).toBe(
@@ -80,7 +92,7 @@ describe("scanCustomTags", () => {
   });
 
   it("reads parseOptions statically, before any hook runs", () => {
-    const result = scanCustomTags(fixture("parse-options", "caller.mx"));
+    const result = scanCustomTags(fixture("parse-options", "caller.mx"), { targets: lookup });
 
     // The value is present on the map handed to the compiler, which is what
     // lets it reach Marko's taglib before the *caller* is parsed.
@@ -108,7 +120,7 @@ describe("scanCustomTags", () => {
     const globals = globalThis as unknown as { mxScanLoadCount?: number };
     globals.mxScanLoadCount = 0;
 
-    const tags = scanCustomTags(join(dir, "caller.mx")).customTags;
+    const tags = scanCustomTags(join(dir, "caller.mx"), { targets: lookup }).customTags;
     expect(tags.counted?.parseOptions).toEqual({ text: true });
     expect(globals.mxScanLoadCount).toBe(0);
 
@@ -121,8 +133,8 @@ describe("scanCustomTags", () => {
   });
 
   it("lets the nearest tags/ directory win a shared name", () => {
-    const deep = scanCustomTags(fixture("nearest", "deep", "caller.mx"));
-    const shallow = scanCustomTags(fixture("nearest", "caller.mx"));
+    const deep = scanCustomTags(fixture("nearest", "deep", "caller.mx"), { targets: lookup });
+    const shallow = scanCustomTags(fixture("nearest", "caller.mx"), { targets: lookup });
 
     // Which definition won is proven by its declared attribute, not just by
     // the path: the nearer file declares `nearest`, the outer one `where`.
@@ -142,7 +154,7 @@ describe("scanCustomTags", () => {
   });
 
   it("discovers a template-only tag with no sidecar", () => {
-    const result = scanCustomTags(fixture("template-only", "caller.mx"));
+    const result = scanCustomTags(fixture("template-only", "caller.mx"), { targets: lookup });
 
     const note = result.tags.get("note");
     expect(note?.template).toBe(fixture("template-only", "tags", "note.mx"));
@@ -165,13 +177,13 @@ describe("scanCustomTags", () => {
   });
 
   it("extends the walk with package.json#mx.tags, prefix included", () => {
-    const result = scanCustomTags(fixture("mx-tags", "src", "caller.mx"));
+    const result = scanCustomTags(fixture("mx-tags", "src", "caller.mx"), { targets: lookup });
 
     expect([...result.tags.keys()].sort()).toEqual(["ui-override", "ui-panel"]);
   });
 
   it("lets a sidecar override a directory-level parseOptions default", () => {
-    const result = scanCustomTags(fixture("mx-tags", "src", "caller.mx"));
+    const result = scanCustomTags(fixture("mx-tags", "src", "caller.mx"), { targets: lookup });
 
     // `panel` declares none and inherits the entry's default.
     expect(result.customTags["ui-panel"]?.parseOptions).toEqual({ text: true });
@@ -182,7 +194,7 @@ describe("scanCustomTags", () => {
   });
 
   it("reports a missing mx.tags directory without failing the scan", () => {
-    const result = scanCustomTags(fixture("mx-tags-missing", "caller.mx"));
+    const result = scanCustomTags(fixture("mx-tags-missing", "caller.mx"), { targets: lookup });
 
     // A diagnostic, not a throw: one typo in `package.json` must not break
     // compilation of every file in the package, including the files that
@@ -205,7 +217,7 @@ describe("scanCustomTags", () => {
     );
     writeFileSync(join(dir, "tags", "local.mx"), "<div/>\n");
 
-    const result = scanCustomTags(join(dir, "caller.mx"));
+    const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
 
     expect(Object.keys(result.customTags)).toEqual(["local"]);
     expect(result.diagnostics).toHaveLength(1);
@@ -214,7 +226,7 @@ describe("scanCustomTags", () => {
   it("reports a sidecar whose parseOptions is not a literal", () => {
     let error: unknown;
     try {
-      scanCustomTags(fixture("bad-parse-options", "caller.mx"));
+      scanCustomTags(fixture("bad-parse-options", "caller.mx"), { targets: lookup });
     } catch (cause) {
       error = cause;
     }
@@ -229,7 +241,7 @@ describe("scanCustomTags", () => {
 
   it("reports a sidecar that throws while loading, rather than crashing", () => {
     // Discovery itself succeeds: the throw happens only when hooks are read.
-    const result = scanCustomTags(fixture("broken-sidecar", "caller.mx"));
+    const result = scanCustomTags(fixture("broken-sidecar", "caller.mx"), { targets: lookup });
     expect(result.tags.has("boom")).toBe(true);
 
     let error: unknown;
@@ -252,7 +264,7 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "tags", "helper.ts"), "export const x = 1;\n");
     writeFileSync(join(dir, "tags", "card.mx"), "<div/>\n");
 
-    const result = scanCustomTags(join(dir, "caller.mx"));
+    const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect([...result.tags.keys()]).toEqual(["card"]);
   });
 
@@ -271,7 +283,7 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "tags", "real.mx"), "<div/>\n");
 
     expect(
-      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+      Object.keys(scanCustomTags(join(dir, "caller.mx"), { targets: lookup }).customTags),
     ).toEqual(["real"]);
   });
 
@@ -283,7 +295,7 @@ describe("scanCustomTags", () => {
 
     let error: unknown;
     try {
-      scanCustomTags(join(dir, "caller.mx"));
+      scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     } catch (cause) {
       error = cause;
     }
@@ -302,69 +314,75 @@ describe("scanCustomTags", () => {
     // `tags/Icon.tag.ts` is `<Icon>`: a tag name is the filename, and the
     // filename is the author's.
     expect(
-      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+      Object.keys(scanCustomTags(join(dir, "caller.mx"), { targets: lookup }).customTags),
     ).toEqual(["Icon"]);
   });
 
-  it("reports a .solid.mx in a tags/ directory instead of ignoring it", () => {
+  it("reports a file-kind segment the lookup knows instead of indexing it", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });
-    writeFileSync(join(dir, "package.json"), '{"name":"solidtag"}');
-    writeFileSync(
-      join(dir, "tags", "widget.solid.mx"),
-      "export const x = 1;\n",
-    );
+    writeFileSync(join(dir, "package.json"), '{"name":"kindtag"}');
+    writeFileSync(join(dir, "tags", "widget.u.mx"), "export const x = 1;\n");
 
-    // A different file kind, not a tag template. Silence would leave an
-    // author wondering why their file is invisible.
-    const result = scanCustomTags(join(dir, "caller.mx"));
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toMatch(
-      /`widget\.solid\.mx` is a host module file/,
-    );
-  });
-
-  it("reports a .astro.mx in a tags/ directory as a host file kind", () => {
-    const dir = scratch();
-    mkdirSync(join(dir, "tags"), { recursive: true });
-    writeFileSync(join(dir, "package.json"), '{"name":"astrotag"}');
-    writeFileSync(join(dir, "tags", "card.astro.mx"), "---\n---\n<p/>\n");
-
-    // Decision 134: a known host file kind, so the dotted-name rule does not
-    // turn it into the tag `<card.astro>`; it is reported like `.solid.mx`.
-    const result = scanCustomTags(join(dir, "caller.mx"));
+    // `u` is a file-kind segment the lookup holds, so this is a host module
+    // file, not a tag template. Silence would leave an author wondering why
+    // their file is invisible.
+    const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(Object.keys(result.customTags)).toEqual([]);
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.message).toMatch(
-      /`card\.astro\.mx` is a host module file/,
+      /`widget\.u\.mx` is a host module file, not a tag template/,
     );
   });
 
-  it("reports a .ng.mx in a tags/ directory instead of ignoring it", () => {
+  it("reports a second file-kind segment the same way", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });
-    writeFileSync(join(dir, "package.json"), '{"name":"ngtag"}');
-    writeFileSync(join(dir, "tags", "widget.ng.mx"), "export const x = 1;\n");
+    writeFileSync(join(dir, "package.json"), '{"name":"secondkind"}');
+    writeFileSync(join(dir, "tags", "card.g.mx"), "---\n---\n<p/>\n");
 
-    const result = scanCustomTags(join(dir, "caller.mx"));
+    // A lookup that knows two segments rules over both; a dotted name whose
+    // segment no target declares is the other branch (below).
+    const result = scanCustomTags(join(dir, "caller.mx"), {
+      targets: testTargetLookupWithSegments("u", "g"),
+    });
+    expect(Object.keys(result.customTags)).toEqual([]);
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.message).toMatch(
-      /`widget\.ng\.mx` is a host module file/,
+      /`card\.g\.mx` is a host module file/,
     );
   });
 
-  it("indexes <unlisted>.mx as an ordinary dotted tag name", () => {
+  it("reports a file-kind segment found beside a real tag", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"kindandtag"}');
+    writeFileSync(join(dir, "tags", "plain.mx"), "<p/>\n");
+    writeFileSync(join(dir, "tags", "widget.u.mx"), "export const x = 1;\n");
+
+    // The segment rule is per file: the plain tag still indexes, and only the
+    // module file is reported.
+    const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
+    expect(Object.keys(result.customTags)).toEqual(["plain"]);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toMatch(
+      /`widget\.u\.mx` is a host module file/,
+    );
+  });
+
+  it("indexes a dotted tag name no file kind claims as an ordinary tag", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });
     writeFileSync(join(dir, "package.json"), '{"name":"footag"}');
     writeFileSync(join(dir, "tags", "widget.foo.mx"), "");
 
-    // `foo` is not a recognized host segment (only `solid`/`ng` are today):
-    // the host-module list is a closed allowlist, not "any second dotted
-    // segment", precisely so a future dotted tag name is never mistaken for
-    // a host module file it isn't.
+    // `foo` is not a file-kind segment the lookup knows: the host-module
+    // rule is a closed allowlist, not "any second dotted segment",
+    // precisely so a dotted tag name is never mistaken for a host module
+    // file it isn't.
     expect(
-      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+      Object.keys(scanCustomTags(join(dir, "caller.mx"), { targets: lookup })
+        .customTags),
     ).toEqual(["widget.foo"]);
   });
 
@@ -375,7 +393,7 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "tags", "icon.mx"), "");
 
     expect(
-      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+      Object.keys(scanCustomTags(join(dir, "caller.mx"), { targets: lookup }).customTags),
     ).toEqual(["icon"]);
   });
 
@@ -383,13 +401,14 @@ describe("scanCustomTags", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });
     writeFileSync(join(dir, "package.json"), '{"name":"dottedtag"}');
-    // `my.icon` is not a recognized host segment (only `solid`/`ng` are), so
+    // `my.icon` is not a file-kind segment the lookup knows, so
     // `TAG_NAME_RE` — which allows dots in a tag name — still wins: this is
     // the valid tag `<my.icon>`, unaffected by the host-module rule.
     writeFileSync(join(dir, "tags", "my.icon.mx"), "");
 
     expect(
-      Object.keys(scanCustomTags(join(dir, "caller.mx")).customTags),
+      Object.keys(scanCustomTags(join(dir, "caller.mx"), { targets: lookup })
+        .customTags),
     ).toEqual(["my.icon"]);
   });
 
@@ -404,7 +423,7 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "tags", "try.tag.ts"), "export default {};\n");
     writeFileSync(join(dir, "tags", "fine.mx"), "<div/>\n");
 
-    const result = scanCustomTags(join(dir, "caller.mx"));
+    const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
 
     // Excluded from the map, so the rest of the package still compiles...
     expect(Object.keys(result.customTags)).toEqual(["fine"]);
@@ -426,47 +445,41 @@ describe("scanCustomTags", () => {
 
     // The `tags/` directory above the nearest package.json is out of scope:
     // a tag belongs to a package, not to whatever happens to sit above it.
-    const result = scanCustomTags(join(dir, "outer", "pkg", "caller.mx"));
+    const result = scanCustomTags(join(dir, "outer", "pkg", "caller.mx"), { targets: lookup });
     expect(result.tags.has("outside")).toBe(false);
   });
 });
 
 describe("host-filtered discovery", () => {
   it("carries hosts onto a DiscoveredTag from an mx.tags entry", () => {
-    const result = scanCustomTags(fixture("hosts", "caller.mx"));
+    const result = scanCustomTags(fixture("hosts", "caller.mx"), { targets: lookup });
     expect(result.tags.get("gizmo")?.hosts).toEqual(["solid"]);
   });
 
   it("is visible from the host it names", () => {
-    const result = scanCustomTags(fixture("hosts", "caller.mx"), {
-      host: "solid",
-    });
+    const result = scanCustomTags(fixture("hosts", "caller.mx"), { host: "solid", targets: lookup });
     expect(result.tags.has("gizmo")).toBe(true);
     expect(Object.keys(result.customTags)).toEqual(["gizmo"]);
   });
 
   it("is absent from a host it does not name", () => {
-    const result = scanCustomTags(fixture("hosts", "caller.mx"), {
-      host: "html",
-    });
+    const result = scanCustomTags(fixture("hosts", "caller.mx"), { host: "html", targets: lookup });
     expect(result.tags.has("gizmo")).toBe(false);
     expect(Object.keys(result.customTags)).toEqual([]);
   });
 
   it("is visible to every host when the scan carries no host option", () => {
-    const result = scanCustomTags(fixture("hosts", "caller.mx"));
+    const result = scanCustomTags(fixture("hosts", "caller.mx"), { targets: lookup });
     expect(result.tags.has("gizmo")).toBe(true);
   });
 
   it("a local tags/ directory has no hosts restriction", () => {
-    const result = scanCustomTags(fixture("nearest", "caller.mx"), {
-      host: "html",
-    });
+    const result = scanCustomTags(fixture("nearest", "caller.mx"), { host: "html", targets: lookup });
     expect(result.tags.get("badge")?.hosts).toBeUndefined();
     expect(result.tags.has("badge")).toBe(true);
   });
 
-  it("warns, rather than silently dropping, on an unknown host name in mx.tags[].hosts", () => {
+  it("records every mx.tags[].hosts name and decides nothing about it", () => {
     const dir = scratch();
     mkdirSync(join(dir, "widgets"), { recursive: true });
     writeFileSync(join(dir, "widgets", "gadget.mx"), "<div/>\n");
@@ -475,24 +488,43 @@ describe("host-filtered discovery", () => {
       packageJson,
       JSON.stringify({
         name: "unknown-host",
-        mx: { tags: [{ dir: "widgets", hosts: ["solid", "bogus"] }] },
+        mx: {
+          tags: [{ dir: "widgets", hosts: ["unit", "bogus", "@acme/mx-vue"] }],
+        },
       }),
     );
 
-    const result = scanCustomTags(join(dir, "caller.mx"), { host: "solid" });
+    const result = scanCustomTags(join(dir, "caller.mx"), {
+      host: "unit",
+      targets: lookup,
+    });
 
+    // The entry still indexes under its own restriction — a name nothing
+    // matches must not silently drop the tag.
     expect(result.tags.has("gadget")).toBe(true);
+    // Every name is recorded, in the order written, and the scan itself raises
+    // nothing about them: whether one is known is the caller's lookup's answer.
+    expect(result.hostRestrictions).toEqual([
+      { file: packageJson, host: "unit", line: 1, column: 0 },
+      { file: packageJson, host: "bogus", line: 1, column: 0 },
+      { file: packageJson, host: "@acme/mx-vue", line: 1, column: 0 },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+
+    // Which of them deserve a warning is `hostRestrictionDiagnostics`' call.
     expect(
-      result.diagnostics.some(
-        (d) => d.file === packageJson && /bogus/.test(d.message),
+      hostRestrictionDiagnostics(result.hostRestrictions, lookup).map(
+        (d) => d.message,
       ),
-    ).toBe(true);
+    ).toEqual([
+      "`mx.tags` names an unknown host in `hosts`: bogus",
+    ]);
   });
 });
 
 describe("discoverProjectTags", () => {
   it("enumerates every tags/ directory under the project, plus mx.tags", () => {
-    const result = discoverProjectTags(fixture("project-wide"));
+    const result = discoverProjectTags(fixture("project-wide"), { targets: lookup });
     expect([...result.tags.keys()].sort()).toEqual([
       "alpha",
       "beta",
@@ -501,11 +533,11 @@ describe("discoverProjectTags", () => {
   });
 
   it("excludes a nested package's tags/ directory", () => {
-    const result = discoverProjectTags(fixture("project-wide"));
+    const result = discoverProjectTags(fixture("project-wide"), { targets: lookup });
     expect(result.tags.has("gamma")).toBe(false);
   });
 
-  it("reports a .ng.mx under tags/ without failing the project scan", () => {
+  it("reports a file-kind segment under tags/ without failing the project scan", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });
     mkdirSync(join(dir, "nested", "tags"), { recursive: true });
@@ -514,18 +546,18 @@ describe("discoverProjectTags", () => {
       join(dir, "mx.tags"),
       JSON.stringify([{ dir: "tags" }, { dir: "nested/tags" }]),
     );
-    writeFileSync(join(dir, "tags", "widget.ng.mx"), "export const x = 1;\n");
+    writeFileSync(join(dir, "tags", "widget.u.mx"), "export const x = 1;\n");
     writeFileSync(join(dir, "tags", "legit.mx"), "<div/>\n");
     writeFileSync(join(dir, "nested", "tags", "another.mx"), "<div/>\n");
 
-    const result = discoverProjectTags(dir);
+    const result = discoverProjectTags(dir, { targets: lookup });
     expect(result.tags.has("legit")).toBe(true);
     expect(result.tags.has("another")).toBe(true);
     expect(result.directories).toContainEqual(join(dir, "tags"));
     expect(result.directories).toContainEqual(join(dir, "nested", "tags"));
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.message).toMatch(
-      /`widget\.ng\.mx` is a host module file/,
+      /`widget\.u\.mx` is a host module file/,
     );
   });
 
@@ -539,12 +571,12 @@ describe("discoverProjectTags", () => {
     writeFileSync(join(dir, "node_modules", "tags", "delta.mx"), "<div/>\n");
     writeFileSync(join(dir, "package.json"), '{"name":"node-modules-test"}');
 
-    const result = discoverProjectTags(dir);
+    const result = discoverProjectTags(dir, { targets: lookup });
     expect(result.tags.has("delta")).toBe(false);
   });
 
   it("records sourceDir for every discovered tag", () => {
-    const result = discoverProjectTags(fixture("project-wide"));
+    const result = discoverProjectTags(fixture("project-wide"), { targets: lookup });
     expect(result.tags.get("alpha")?.sourceDir).toBe(
       fixture("project-wide", "tags"),
     );
@@ -554,20 +586,18 @@ describe("discoverProjectTags", () => {
   });
 
   it("is stably ordered across repeated calls", () => {
-    const first = [...discoverProjectTags(fixture("project-wide")).tags.keys()];
+    const first = [...discoverProjectTags(fixture("project-wide"), { targets: lookup }).tags.keys()];
     const second = [
-      ...discoverProjectTags(fixture("project-wide")).tags.keys(),
+      ...discoverProjectTags(fixture("project-wide"), { targets: lookup }).tags.keys(),
     ];
     expect(first).toEqual(second);
   });
 
   it("applies the host filter the same way scanCustomTags does", () => {
-    const result = discoverProjectTags(fixture("hosts"), { host: "html" });
+    const result = discoverProjectTags(fixture("hosts"), { host: "html", targets: lookup });
     expect(result.tags.has("gizmo")).toBe(false);
 
-    const solidResult = discoverProjectTags(fixture("hosts"), {
-      host: "solid",
-    });
+    const solidResult = discoverProjectTags(fixture("hosts"), { host: "solid", targets: lookup });
     expect(solidResult.tags.has("gizmo")).toBe(true);
   });
 
@@ -578,7 +608,7 @@ describe("discoverProjectTags", () => {
     writeFileSync(join(dir, "real-tags", "linked.mx"), "<div/>\n");
     symlinkSync(join(dir, "real-tags"), join(dir, "tags"), "dir");
 
-    const result = discoverProjectTags(dir);
+    const result = discoverProjectTags(dir, { targets: lookup });
     expect(result.tags.has("linked")).toBe(true);
   });
 
@@ -594,9 +624,9 @@ describe("discoverProjectTags", () => {
     mkdirSync(join(dir, "nested"), { recursive: true });
     symlinkSync(join(dir, "nested"), join(dir, "nested", "loop"), "dir");
 
-    expect(() => discoverProjectTags(dir)).not.toThrow();
+    expect(() => discoverProjectTags(dir, { targets: lookup })).not.toThrow();
 
-    const result = discoverProjectTags(dir);
+    const result = discoverProjectTags(dir, { targets: lookup });
     expect(result.tags.has("real")).toBe(true);
   });
 });
@@ -706,7 +736,7 @@ describe("tolerant, cached manifest reads", () => {
       JSON.stringify({ name: "manifest-test", mx: { tags: ["shared"] } }),
     );
 
-    const good = scanCustomTags(join(dir, "caller.mx"));
+    const good = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(good.tags.has("widget")).toBe(true);
     expect(good.diagnostics).toHaveLength(0);
 
@@ -714,7 +744,7 @@ describe("tolerant, cached manifest reads", () => {
     touchInFuture(packageJson);
     writeFileSync(packageJson, "{ this is not json");
 
-    const broken = scanCustomTags(join(dir, "caller.mx"));
+    const broken = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     // The previous good `mx.tags` stays in force — the file does not go dark
     // because `package.json` is momentarily invalid.
     expect(broken.tags.has("widget")).toBe(true);
@@ -729,7 +759,7 @@ describe("tolerant, cached manifest reads", () => {
     // first one that happened to trigger the parse. (Dedup belongs to
     // `scanCached`'s own outer cache, which short-circuits before
     // `readManifest` runs again at all — see the two-host test below.)
-    const brokenAgain = scanCustomTags(join(dir, "caller.mx"));
+    const brokenAgain = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(brokenAgain.diagnostics).toHaveLength(1);
     expect(brokenAgain.diagnostics[0]?.message).toContain(
       "could not be parsed",
@@ -742,7 +772,7 @@ describe("tolerant, cached manifest reads", () => {
       packageJson,
       JSON.stringify({ name: "manifest-test", mx: { tags: ["shared"] } }),
     );
-    const fixed = scanCustomTags(join(dir, "caller.mx"));
+    const fixed = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(fixed.tags.has("widget")).toBe(true);
     expect(fixed.diagnostics).toHaveLength(0);
   });
@@ -750,7 +780,7 @@ describe("tolerant, cached manifest reads", () => {
   it("never throws on a broken manifest", () => {
     const dir = scratch();
     writeFileSync(join(dir, "package.json"), "not json at all");
-    expect(() => scanCustomTags(join(dir, "caller.mx"))).not.toThrow();
+    expect(() => scanCustomTags(join(dir, "caller.mx"), { targets: lookup })).not.toThrow();
   });
 
   it("reports the diagnostic to every host scanning the same broken manifest, not just the first", () => {
@@ -766,7 +796,7 @@ describe("tolerant, cached manifest reads", () => {
 
     // Establish a good cached scan for one host first, so the failure below
     // exercises `readManifest`'s cache-hit path, not its first-parse path.
-    scanCached(join(dir, "caller.mx"), { host: "html" });
+    scanCached(join(dir, "caller.mx"), { host: "html", targets: lookup });
 
     touchInFuture(packageJson);
     writeFileSync(packageJson, "{ still not json");
@@ -777,8 +807,8 @@ describe("tolerant, cached manifest reads", () => {
     // of the diagnostic. Before this fix, `readManifest`'s cache hit
     // returned the cached manifest without re-pushing the diagnostic, so
     // only the first caller to hit the parse error ever saw it.
-    const htmlResult = scanCached(join(dir, "caller.mx"), { host: "html" });
-    const solidResult = scanCached(join(dir, "caller.mx"), { host: "solid" });
+    const htmlResult = scanCached(join(dir, "caller.mx"), { host: "html", targets: lookup });
+    const solidResult = scanCached(join(dir, "caller.mx"), { host: "solid", targets: lookup });
 
     expect(htmlResult.diagnostics).toHaveLength(1);
     expect(htmlResult.diagnostics[0]?.message).toContain("could not be parsed");
@@ -792,7 +822,7 @@ describe("tolerant, cached manifest reads", () => {
     // same `ScanResult` object rather than re-running `readManifest` at all —
     // the diagnostic is still there because it is the same array, not
     // because anything re-pushed into it.
-    const htmlAgain = scanCached(join(dir, "caller.mx"), { host: "html" });
+    const htmlAgain = scanCached(join(dir, "caller.mx"), { host: "html", targets: lookup });
     expect(htmlAgain).toBe(htmlResult);
     expect(htmlAgain.diagnostics).toHaveLength(1);
 
@@ -802,7 +832,7 @@ describe("tolerant, cached manifest reads", () => {
     // cache-hit path (mtime unchanged since the last parse) on a genuinely
     // fresh `ScanResult`, and it must still carry the diagnostic — this is
     // the exact case the fix targets.
-    const reactResult = scanCached(join(dir, "caller.mx"), { host: "react" });
+    const reactResult = scanCached(join(dir, "caller.mx"), { host: "react", targets: lookup });
     expect(reactResult).not.toBe(htmlResult);
     expect(reactResult.diagnostics).toHaveLength(1);
     expect(reactResult.diagnostics[0]?.message).toContain(
@@ -896,8 +926,12 @@ describe("readParseOptions", () => {
 
 describe("the scan cache", () => {
   it("returns one map object while the tag set is unchanged", () => {
-    const first = getCustomTags(fixture("parse-options", "caller.mx"));
-    const second = getCustomTags(fixture("parse-options", "caller.mx"));
+    const first = getCustomTags(fixture("parse-options", "caller.mx"), {
+      targets: lookup,
+    });
+    const second = getCustomTags(fixture("parse-options", "caller.mx"), {
+      targets: lookup,
+    });
 
     // Identity, not just equality: Marko keys its taglib cache on the id this
     // map's contents derive, so a new object per compile is the leak.
@@ -907,7 +941,9 @@ describe("the scan cache", () => {
   it("does not grow the live map count across repeated compiles", () => {
     clearScanCache();
     for (let index = 0; index < 50; index++) {
-      getCustomTags(fixture("parse-options", `caller${index}.mx`));
+      getCustomTags(fixture("parse-options", `caller${index}.mx`), {
+        targets: lookup,
+      });
     }
 
     // One tag set was scanned, so exactly one map is live regardless of how
@@ -925,7 +961,7 @@ describe("the scan cache", () => {
       "export default { parseOptions: { text: true } };\n",
     );
 
-    const before = getCustomTags(join(dir, "caller.mx"));
+    const before = getCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(before.thing?.parseOptions).toEqual({ text: true });
 
     // A different mtime is what an editor's save produces; write one
@@ -936,7 +972,7 @@ describe("the scan cache", () => {
     );
     touchInFuture(tagFile);
 
-    const after = getCustomTags(join(dir, "caller.mx"));
+    const after = getCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(after.thing?.parseOptions).toEqual({ text: false });
   });
 
@@ -946,10 +982,10 @@ describe("the scan cache", () => {
     writeFileSync(join(dir, "package.json"), '{"name":"added"}');
     writeFileSync(join(dir, "tags", "one.mx"), "<div/>\n");
 
-    expect(Object.keys(getCustomTags(join(dir, "caller.mx")))).toEqual(["one"]);
+    expect(Object.keys(getCustomTags(join(dir, "caller.mx"), { targets: lookup }))).toEqual(["one"]);
 
     writeFileSync(join(dir, "tags", "two.mx"), "<p/>\n");
-    expect(Object.keys(getCustomTags(join(dir, "caller.mx"))).sort()).toEqual([
+    expect(Object.keys(getCustomTags(join(dir, "caller.mx"), { targets: lookup })).sort()).toEqual([
       "one",
       "two",
     ]);
@@ -962,13 +998,13 @@ describe("the scan cache", () => {
     writeFileSync(join(dir, "tags", "one.mx"), "<div/>\n");
     writeFileSync(join(dir, "tags", "two.mx"), "<p/>\n");
 
-    expect(Object.keys(getCustomTags(join(dir, "caller.mx"))).sort()).toEqual([
+    expect(Object.keys(getCustomTags(join(dir, "caller.mx"), { targets: lookup })).sort()).toEqual([
       "one",
       "two",
     ]);
 
     rmSync(join(dir, "tags", "two.mx"));
-    expect(Object.keys(getCustomTags(join(dir, "caller.mx")))).toEqual(["one"]);
+    expect(Object.keys(getCustomTags(join(dir, "caller.mx"), { targets: lookup }))).toEqual(["one"]);
   });
 
   it("invalidates when package.json#mx.tags changes", () => {
@@ -978,18 +1014,20 @@ describe("the scan cache", () => {
     const manifest = join(dir, "package.json");
     writeFileSync(manifest, '{"name":"config"}');
 
-    expect(Object.keys(getCustomTags(join(dir, "caller.mx")))).toEqual([]);
+    expect(Object.keys(getCustomTags(join(dir, "caller.mx"), { targets: lookup }))).toEqual([]);
 
     writeFileSync(manifest, '{"name":"config","mx":{"tags":"shared"}}');
     touchInFuture(manifest);
 
-    expect(Object.keys(getCustomTags(join(dir, "caller.mx")))).toEqual([
+    expect(Object.keys(getCustomTags(join(dir, "caller.mx"), { targets: lookup }))).toEqual([
       "extra",
     ]);
   });
 
   it("records the evidence an integration needs for its own watcher", () => {
-    const result = scanCached(fixture("parse-options", "caller.mx"));
+    const result = scanCached(fixture("parse-options", "caller.mx"), {
+      targets: lookup,
+    });
 
     expect(result.directories).toContain(fixture("parse-options", "tags"));
     expect(result.packageFiles).toContain(
@@ -1011,7 +1049,9 @@ describe("the scan cache", () => {
     const ids = new Set<string>();
     for (let index = 0; index < 50; index++) {
       const entry = customTagTaglib(
-        getCustomTags(fixture("parse-options", `caller${index}.mx`)),
+        getCustomTags(fixture("parse-options", `caller${index}.mx`), {
+          targets: lookup,
+        }),
       );
       if (entry) ids.add(entry[0]);
     }
@@ -1028,10 +1068,10 @@ describe("the scan cache", () => {
     writeFileSync(join(dir, "package.json"), '{"name":"changing"}');
     writeFileSync(join(dir, "tags", "one.mx"), "<div/>\n");
 
-    const before = customTagTaglib(getCustomTags(join(dir, "caller.mx")))?.[0];
+    const before = customTagTaglib(getCustomTags(join(dir, "caller.mx"), { targets: lookup }))?.[0];
 
     writeFileSync(join(dir, "tags", "two.mx"), "<p/>\n");
-    const after = customTagTaglib(getCustomTags(join(dir, "caller.mx")))?.[0];
+    const after = customTagTaglib(getCustomTags(join(dir, "caller.mx"), { targets: lookup }))?.[0];
 
     expect(before).toBeDefined();
     expect(after).not.toBe(before);
@@ -1051,7 +1091,7 @@ describe("a discovered template tag routes as a unit", () => {
    */
   it("resolves `tags/icon.mx` with no authored import and injects one", () => {
     const file = fixture("template-render", "page.mx");
-    const customTags = getCustomTags(file);
+    const customTags = getCustomTags(file, { targets: lookup });
 
     // Discovered by filename alone.
     expect(Object.keys(customTags)).toContain("icon");
@@ -1059,6 +1099,7 @@ describe("a discovered template tag routes as a unit", () => {
     let ir: Ir | null = null;
     compileSource(readFileSync(file, "utf8"), file, declarations(), {
       customTags,
+      targets: lookup,
       tagDiscoveryDirs: [],
       emitIr(lowered) {
         ir = lowered;

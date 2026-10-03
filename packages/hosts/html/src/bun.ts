@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
-import { reportScanDiagnostics, scanCached } from "@mxlang/core";
+import {
+  hostRestrictionDiagnostics,
+  reportScanDiagnostics,
+  scanCached,
+  type TargetLookup,
+} from "@mxlang/core";
 import type { BunPlugin } from "bun";
-import { compile } from "./index.ts";
+import { compile, htmlTargets } from "./index.ts";
 
 /**
  * Registers an `onLoad` for `.mx` files: `compile()`'s output is plain
@@ -32,25 +37,46 @@ import { compile } from "./index.ts";
  */
 const MX_FILTER = /(?<!\.(?:solid|astro))\.mx$/;
 
-/** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
-const reportedScanDiagnostics = new Set<string>();
+/**
+ * Builds the loader over `targets`: the registered targets it scans and
+ * compiles under (decisions 129 and 132). It defaults to this package's own
+ * descriptor, which is what a plain `import "@mxlang/html/bun"` wants; a
+ * caller that compiles for several targets (the oracle, a tool with the
+ * built-in registry in hand) passes that lookup instead, so the loader
+ * recognises every registered host's file kinds rather than only html's own
+ * (design note §5.1, rule (c)).
+ */
+export function createHtmlBunPlugin(
+  targets: TargetLookup = htmlTargets,
+): BunPlugin {
+  /** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
+  const reportedScanDiagnostics = new Set<string>();
 
-const markoPlugin: BunPlugin = {
-  name: "mxlang-translator",
-  setup(build) {
-    build.onLoad({ filter: MX_FILTER }, ({ path }) => {
-      const source = readFileSync(path, "utf8");
-      const scan = scanCached(path, { host: "html" });
-      reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
-        console.warn(`@mxlang/html: ${d.file}: ${d.message}`),
-      );
-      const { code } = compile(source, path, {
-        customTags: scan.customTags,
+  return {
+    name: "mxlang-translator",
+    setup(build) {
+      build.onLoad({ filter: MX_FILTER }, ({ path }) => {
+        const source = readFileSync(path, "utf8");
+        const scan = scanCached(path, { host: "html", targets });
+        reportScanDiagnostics(
+          [
+            ...scan.diagnostics,
+            ...hostRestrictionDiagnostics(scan.hostRestrictions, targets),
+          ],
+          reportedScanDiagnostics,
+          (d) => console.warn(`@mxlang/html: ${d.file}: ${d.message}`),
+        );
+        const { code } = compile(source, path, {
+          customTags: scan.customTags,
+          targets,
+        });
+        return { contents: code, loader: "ts" };
       });
-      return { contents: code, loader: "ts" };
-    });
-  },
-};
+    },
+  };
+}
+
+const markoPlugin: BunPlugin = createHtmlBunPlugin();
 
 Bun.plugin(markoPlugin);
 
