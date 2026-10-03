@@ -7,6 +7,7 @@ export default defineConfig({
       "packages/core",
       "packages/oracle",
       "packages/parser",
+      "packages/target-registry",
       "packages/hosts/*",
       "packages/tooling/*",
       "packages/editors/*",

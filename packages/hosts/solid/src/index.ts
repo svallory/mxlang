@@ -16,9 +16,9 @@ import {
   registerCalleeInputReader,
   TranslateError,
 } from "@mxlang/core";
-import { parse as parseMx } from "@mxlang/parser";
 import MagicString from "magic-string";
 import type { Element as SolidElement } from "solid-js";
+import { readSolidCalleeInput } from "./callee-reader.ts";
 import {
   collectReturnVars,
   createEmitter,
@@ -51,24 +51,7 @@ export type AttrTag<
   C extends AttrTagConfig = {},
 > = AttrTagOf<C, () => SolidElement>;
 
-function parseSolidCalleeProgram(source: string, path: string): Node[] {
-  return parseMx(source, path, {
-    // The reader only needs module declarations. Compiling region bodies here
-    // would resolve their imported callees, which recurses forever for two
-    // `.solid.mx` files that import one another.
-    mxRegionCompile: () => ({ code: "null" }),
-  }).program.body as Node[];
-}
-
-registerCalleeInputReader(".solid.mx", ({ path, source, analyze }) => {
-  try {
-    return analyze(parseSolidCalleeProgram(source, path));
-  } catch {
-    // A host reader is advisory. Malformed or unsupported SolidMX must never
-    // make a caller invalid merely because its Input could not be inspected.
-    return { kind: "none", path };
-  }
-});
+registerCalleeInputReader(".solid.mx", readSolidCalleeInput);
 
 export interface CompileSolidMxOptions {
   filename: string;

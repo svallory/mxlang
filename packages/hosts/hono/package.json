@@ -11,6 +11,7 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./descriptor": "./src/descriptor.ts",
     "./runtime": "./src/runtime.ts",
     "./bun": "./src/bun.ts"
   },
@@ -20,6 +21,7 @@
     "test:bun": "bun --tsconfig-override=../../../tsconfig.base.json test src/bun.test.ts"
   },
   "dependencies": {
+    "@mxlang/core": "workspace:*",
     "@mxlang/preact": "workspace:*"
   },
   "peerDependencies": {

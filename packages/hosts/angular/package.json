@@ -27,6 +27,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./descriptor": {
+      "types": "./dist/descriptor.d.ts",
+      "default": "./dist/descriptor.js"
+    },
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "default": "./dist/runtime.js"
@@ -42,7 +46,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "rm -rf dist && bun build src/index.ts src/bin.ts --tsconfig-override tsconfig.build.json --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && bun build src/runtime.ts --tsconfig-override tsconfig.build.json --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
+    "build": "rm -rf dist && bun build src/index.ts src/bin.ts src/descriptor.ts --tsconfig-override tsconfig.build.json --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && bun build src/runtime.ts --tsconfig-override tsconfig.build.json --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
     "@jridgewell/sourcemap-codec": "1.6.0",

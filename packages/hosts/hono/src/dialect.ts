@@ -1,4 +1,8 @@
-import { createJsxDeclarations, type JsxDialect } from "@mxlang/preact";
+// Import the light subpaths, not the package root: the root is preact's
+// compile entry, and a descriptor's dependencies must stay light
+// (target-registry's light-import test).
+import type { JsxDialect } from "@mxlang/preact/dialect";
+import { createJsxDeclarations } from "@mxlang/preact/emitter";
 
 /** Hono vocabulary for the shared Preact/React/Hono JSX emitter. */
 export const honoDialect: JsxDialect = {

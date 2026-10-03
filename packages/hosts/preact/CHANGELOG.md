@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `preact-jsx` target descriptor (host `preact`, `preactDeclarations`, `load()` returning `compilePreactMx`). Nothing consumes it yet; see `@mxlang/target-registry`.
+
+- **Added, unstable (target-registry, round 3):** `./emitter` and `./dialect` subpaths export the shared JSX emitter's declarations module and dialect type, so `@mxlang/react` and `@mxlang/hono` can build their dialects without importing this package's compile entry.
+
 - **Breaking (jsx-dialect-rename, decision 132):** the shared JSX emitter's `Target` object is now `JsxDialect`, since "target" now means a registered output format. Renamed, no aliases: `Target` → `JsxDialect`, `preactTarget` → `preactDialect`, `reactTarget` → `reactDialect`, `honoTarget` → `honoDialect`, the `CompilePreactOptions.target` option → `dialect`, and `src/target.ts` → `src/dialect.ts`. No emitted-code change.
 
 - **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.

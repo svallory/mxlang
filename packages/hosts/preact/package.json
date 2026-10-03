@@ -11,6 +11,9 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./descriptor": "./src/descriptor.ts",
+    "./dialect": "./src/dialect.ts",
+    "./emitter": "./src/emitter.ts",
     "./runtime": "./src/runtime.ts"
   },
   "scripts": {

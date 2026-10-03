@@ -68,6 +68,7 @@ const STUB_PRIVATE = [
   "@mxlang/preact",
   "@mxlang/react",
   "@mxlang/solid",
+  "@mxlang/target-registry",
 ];
 
 function fail(message: string): never {

@@ -72,6 +72,8 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     distFiles: [
       "dist/bun.d.ts",
       "dist/bun.js",
+      "dist/descriptor.d.ts",
+      "dist/descriptor.js",
       "dist/emitter.d.ts",
       "dist/helpers.d.ts",
       "dist/index.d.ts",

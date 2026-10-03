@@ -11,6 +11,7 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./descriptor": "./src/descriptor.ts",
     "./server": "./src/server.ts",
     "./template": "./src/astro-template.ts"
   },

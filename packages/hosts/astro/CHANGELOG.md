@@ -6,6 +6,8 @@
 
 - **Added (amx-to-astro-mx, decision 134 addendum):** an `.astro.mx` file under the pages directory (`src/pages`, or the configured `srcDir`) is now an error from the integration, in `astro dev` and `astro build`, listing every offending file at `path:1:1`. Astro strips only the last extension, so `about.astro.mx` routes to `/about.astro`. The message gives the fix: write `about.astro` and import the `.astro.mx` component from it, or write the page as `about.mx`. `.mx` pages are unaffected. New: `findAstroMxPages`, `assertNoAstroMxPages` (`src/pages-guard.ts`).
 
+- **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `astro-html` target descriptor (host `astro`, `strict: "always"`, html's declarations, a `typeSurface`, and `load()` returning `@mxlang/html`'s `compile`). `src/type-surface.ts` holds a copy of `@mxlang/typescript-plugin`'s `createAstroTypeSurface`; the registry's parity test pins the two. The Astro template (`.astro.mx`) is a file kind of the `astro` host (decision 134): segment `astro`, language id `astromx`, diagnostic source `astromx`, no region compile and no callee reader. Nothing consumes it yet; see `@mxlang/target-registry`.
+
 - **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.
 
 - **Fix (audit-02-for-by-parity):** `<for by=x.id>` (any read of a loop param in `by=`) is now a positioned error, as in Marko 6.3.51, instead of passing silently. See `@mxlang/core`.

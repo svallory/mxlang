@@ -289,6 +289,7 @@
       "name": "@mxlang/hono",
       "version": "0.0.0",
       "dependencies": {
+        "@mxlang/core": "workspace:*",
         "@mxlang/preact": "workspace:*",
       },
       "devDependencies": {
@@ -331,6 +332,7 @@
       "name": "@mxlang/react",
       "version": "0.0.0",
       "dependencies": {
+        "@mxlang/core": "workspace:*",
         "@mxlang/preact": "workspace:*",
       },
       "devDependencies": {
@@ -400,6 +402,20 @@
       "devDependencies": {
         "@mxlang/solid": "workspace:*",
         "@types/bun": "1.4.2",
+      },
+    },
+    "packages/target-registry": {
+      "name": "@mxlang/target-registry",
+      "version": "0.0.0",
+      "dependencies": {
+        "@mxlang/angular": "workspace:*",
+        "@mxlang/astro": "workspace:*",
+        "@mxlang/core": "workspace:*",
+        "@mxlang/hono": "workspace:*",
+        "@mxlang/html": "workspace:*",
+        "@mxlang/preact": "workspace:*",
+        "@mxlang/react": "workspace:*",
+        "@mxlang/solid": "workspace:*",
       },
     },
     "packages/tooling/angular-checker": {
@@ -1038,6 +1054,8 @@
     "@mxlang/react": ["@mxlang/react@workspace:packages/hosts/react"],
 
     "@mxlang/solid": ["@mxlang/solid@workspace:packages/hosts/solid"],
+
+    "@mxlang/target-registry": ["@mxlang/target-registry@workspace:packages/target-registry"],
 
     "@mxlang/tree-sitter-amx": ["@mxlang/tree-sitter-amx@workspace:packages/editors/tree-sitter-amx"],
 
