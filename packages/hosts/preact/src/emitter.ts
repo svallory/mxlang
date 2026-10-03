@@ -575,22 +575,24 @@ export class PreactEmitter implements Emitter<string> {
         const name = this.#eventPropName(attr);
         const method = methodExpression(attr.value);
         if (this.#typeCheck && tag !== undefined && NATIVE_TAG.test(tag)) {
-          // TypeScript reports a mismatch on the `satisfies` keyword, and a
-          // body error inside the parenthesized value; an unmapped range would
-          // drop the diagnostic, so the value and the keyword both map to the
-          // handler's source span. A shorthand handler has no span of its own
-          // and maps to the attribute name.
-          const code = method ?? attr.value.code;
-          const span =
-            method !== null && attr.value.node?.start === undefined
-              ? attr.nameSpan
-              : (attr.value.span ?? null);
+          // TypeScript reports a mismatch on the `satisfies` keyword, so that
+          // keyword maps to the handler's source span; the generated
+          // parentheses stay unmapped, and a source-backed value keeps the
+          // exact text mapping it has without the wrapper (a coarse mapping
+          // over `(fn)` would shift every position inside the body by the
+          // length of the `(`). A shorthand handler has no span of its own and
+          // maps to the attribute name.
+          const shorthand =
+            method !== null && attr.value.node?.start === undefined;
+          const span = shorthand ? attr.nameSpan : (attr.value.span ?? null);
           return concatMapped(
             " ",
             mapped(name, null),
-            "={",
-            mapped(`(${code})`, span),
-            " ",
+            "={(",
+            shorthand
+              ? mapped(method, attr.nameSpan)
+              : concatMapped(method ?? attr.value.code),
+            ") ",
             mapped("satisfies", span),
             ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}">}`,
           );

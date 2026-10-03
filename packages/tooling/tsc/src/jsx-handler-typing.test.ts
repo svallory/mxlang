@@ -163,6 +163,16 @@ describe.each(HOSTS)(
       expect(found[0]?.column).toBeLessThanOrEqual(16);
     });
 
+    it("reports an error in an arrow handler's body at main's exact column", () => {
+      // `<button onClick=((e) => e.nope())>`: `nope` is column 27 (the same
+      // column without the wrapper). The wrapper's generated parentheses
+      // must not shift positions inside the handler.
+      const found = errorsIn(host, "BodyArrow");
+      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+        [1, 27, "TS2339"],
+      ]);
+    });
+
     it("keeps the annotations of a shorthand handler and checks them", () => {
       const found = errorsIn(host, "ShorthandTyped");
       expect(found.map((d) => [d.line, d.column, d.code])).toEqual([

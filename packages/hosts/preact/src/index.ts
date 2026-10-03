@@ -291,9 +291,22 @@ interface HandlerTypeNames {
  * the name is avoided.
  */
 function handlerTypeNames(source: string): HandlerTypeNames {
+  // A JavaScript identifier may spell any character as a Unicode escape
+  // (`__Mx\u0048` is `__MxH`), so the scan reads the source both as written
+  // and with every `\uXXXX` / `\u{…}` escape decoded. Decoding every escape,
+  // not only those inside identifiers, is deliberately conservative.
+  const decoded = source.replace(
+    /\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})/g,
+    (whole, braced?: string, fixed?: string) => {
+      const code = Number.parseInt((braced ?? fixed) as string, 16);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    },
+  );
+  const taken = (name: string): boolean =>
+    source.includes(name) || decoded.includes(name);
   const fresh = (base: string): string => {
     let name = base;
-    for (let n = 1; source.includes(name); n++) name = `${base}${n}`;
+    for (let n = 1; taken(name); n++) name = `${base}${n}`;
     return name;
   };
   return {

@@ -123,6 +123,21 @@ describe("typeCheck helper names never collide with the template (decision 140)"
     }
   });
 
+  it.each([
+    ["a braced escape in a type", "export type __Mx\\u{48} = number"],
+    ["a fixed escape in a type", "export type __Mx\\u0048 = number"],
+    [
+      "a fixed escape in an import alias",
+      'import type { Thing as __Mx\\u0048 } from "./x.ts"',
+    ],
+    ["an escape in the first character", "export type \\u005f_MxH = number"],
+  ])("avoids a Unicode-escaped user binding (%s)", (_kind, declare) => {
+    const { code } = compile(`${declare}\n${handler}`, true);
+    expect(code).toContain("type __MxH1<");
+    expect(code).toContain("satisfies __MxH1<");
+    expect(code).not.toMatch(/type __MxH</);
+  });
+
   it("keeps the plain names when nothing collides", () => {
     const { code } = compile(handler, true);
     expect(code).toContain("type __MxH<");
