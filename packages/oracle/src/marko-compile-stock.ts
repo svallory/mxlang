@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { compileFile } from "@marko/compiler";
 import * as translator from "marko/translator";
 
@@ -46,7 +47,9 @@ export async function renderStockMarko(
     // module actually compiled beside it.
     writeFileSync(
       join(scratch, `${relative.slice(0, -".marko".length)}.mjs`),
-      compiled.code.replace(/(from\s+")([^"]+)\.marko(")/g, "$1$2.mjs$3"),
+      pinBareSpecifiers(
+        compiled.code.replace(/(from\s+")([^"]+)\.marko(")/g, "$1$2.mjs$3"),
+      ),
     );
   }
 
@@ -55,6 +58,24 @@ export async function renderStockMarko(
   };
   const rendered = mod.default.render(input);
   return typeof rendered === "string" ? rendered : String(await rendered);
+}
+
+/**
+ * Rewrites every bare `from "marko/…"` / `from "@marko/…"` specifier to the
+ * absolute path it resolves to *from this package*. The scratch copy lives
+ * under the OS tmpdir, which has no `node_modules` ancestor, so a bare
+ * specifier there falls through to Bun's auto-install and fetches
+ * `marko@latest` instead of the pinned runtime the translator was built
+ * against (6.4.x lacks `_serialize_if`, which 6.3.51's translator emits).
+ * Resolving up front keeps the scratch dir hermetic; relative specifiers
+ * (`./x.mjs`) are left alone.
+ */
+function pinBareSpecifiers(code: string): string {
+  return code.replace(
+    /(\bfrom\s*|\bimport\s*)"((?:marko|@marko)(?:\/[^"]*)?)"/g,
+    (_match, prefix: string, specifier: string) =>
+      `${prefix}${JSON.stringify(fileURLToPath(import.meta.resolve(specifier)))}`,
+  );
 }
 
 /** Every `.marko` file in the fixture, including those under `tags/`. */
