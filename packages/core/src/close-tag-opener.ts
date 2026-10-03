@@ -6,8 +6,13 @@ import { createParser, TagType } from "htmljs-parser";
  * an author has to hunt for the unclosed `<p>`. Marko 6.3.51's error carries
  * no second location either, so MX finds it by replaying the source.
  */
-const MISMATCH =
-  /(The closing "[^"\n]*" tag does not match the corresponding opening "[^"\n]*" tag)(?=\r?\n|$)/;
+// With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
+// run to the end of the line, so allow SGR sequences between the reason and the
+// line end, and keep them (group 2) when inserting the position.
+const SGR = "(?:\\u001b\\[[0-9;]*m)*";
+const MISMATCH = new RegExp(
+  `(The closing "[^"\\n]*" tag does not match the corresponding opening "[^"\\n]*" tag)(${SGR})(?=\\r?\\n|$)`,
+);
 
 /** HTML elements that have no closing tag, as Marko's own taglib declares them. */
 const VOID = new Set([
@@ -161,7 +166,7 @@ function annotateOne(error: Located, source: string): string | null {
   const lineStart = source.lastIndexOf("\n", opener - 1) + 1;
   const line = source.slice(0, opener).split("\n").length;
   const suffix = ` at ${line}:${opener - lineStart + 1}`;
-  setMessage(error, error.message.replace(MISMATCH, `$1${suffix}`));
+  setMessage(error, error.message.replace(MISMATCH, `$1${suffix}$2`));
   // `@marko/compiler`'s `CompileError` also keeps the reason alone as `label`,
   // which the Vite plugin reports instead of the message.
   if (typeof error.label === "string" && error.label === found[1]) {
@@ -188,7 +193,10 @@ export function annotateCloseTagOpener(error: unknown, source: string): void {
     // An annotated line no longer matches `MISMATCH`, so this rewrites the
     // aggregate's next un-annotated mismatch line.
     if (suffix) {
-      setMessage(aggregate, aggregate.message.replace(MISMATCH, `$1${suffix}`));
+      setMessage(
+        aggregate,
+        aggregate.message.replace(MISMATCH, `$1${suffix}$2`),
+      );
     }
   }
 }

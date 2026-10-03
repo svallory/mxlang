@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import { compileSource } from "./compile.ts";
 
 /** Compiles `source` and returns the thrown message minus ANSI colour. */
@@ -81,5 +82,21 @@ describe("a mismatched closing tag names the opener's position", () => {
     expect(markerLine(strip(thrown?.errors?.[1]?.message ?? ""))).toContain(
       'opening "p" tag at 4:5',
     );
+  });
+
+  it("annotates a colourised code frame, keeping the escape codes intact", () => {
+    // What `@marko/compiler` prints when CI/FORCE_COLOR turn colours on: the
+    // reason is wrapped in bold-red codes that follow it to the end of the line.
+    const reason =
+      'The closing "div" tag does not match the corresponding opening "p" tag';
+    const tail = "\u001b[22m\u001b[39m";
+    const message = `\n    at x.mx:3:1\n    > 3 | </div>\n        | \u001b[31m\u001b[1m^^^^^^ ${reason}${tail}\n      4 |`;
+    const error = Object.assign(new Error(message), {
+      label: reason,
+      loc: { start: { line: 3, column: 0 } },
+    });
+    annotateCloseTagOpener(error, "<div>\n  <p>x\n</div>\n");
+    expect(error.message).toContain(`${reason} at 2:3${tail}\n`);
+    expect(error.label).toBe(`${reason} at 2:3`);
   });
 });
