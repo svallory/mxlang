@@ -36,6 +36,7 @@ import {
 import { literalSyntaxWarnings } from "./literal-syntax-hint.ts";
 import {
   type AngularMapping,
+  lineColumnAt,
   type NodeAnchor,
   TemplateWriter,
 } from "./mapping.ts";
@@ -79,6 +80,14 @@ function rawPosition(node: { loc?: { start?: Position } }): Position {
 function rawFail(message: string, node: { loc?: { start?: Position } }): never {
   const { line, column, file } = rawPosition(node);
   throw new TranslateError(message, line, column, file);
+}
+
+/** Keep the shared unresolved-tag wording, with Angular's control-flow fix. */
+function unknownTagMessage(name: string): string {
+  const base = unresolvedCustomTagMessage(name);
+  return name === "switch" || name === "case"
+    ? `${base} MX has no switch; use \`<if=…>\` / \`<else if=…>\`.`
+    : base;
 }
 
 const MODULE_LEVEL_MESSAGE =
@@ -189,7 +198,7 @@ export const angularDeclarations: HostDeclarations = {
   // host's old casing-only fallback. The message is core's own constant,
   // shared verbatim with every other Marko-parity host.
   rejectUnknownTag(name, node) {
-    rawFail(unresolvedCustomTagMessage(name), node);
+    rawFail(unknownTagMessage(name), node);
   },
   isDelegatedTag: (name) =>
     name === "try" || name === "html-comment" || name === DYNAMIC_TAG,
@@ -225,8 +234,11 @@ export const angularDeclarations: HostDeclarations = {
   // follows the colon (measured: `attr:aria-label=l` gives
   // `{ name: "attr", modifier: "aria-label" }`).
   rejectModifier(attr): void {
-    const prefix = (attr as unknown as { name: string }).name;
-    const target = (attr as unknown as { modifier?: string }).modifier;
+    // SAFETY: core passes a raw Marko attribute whose name/modifier are strings.
+    const { name: prefix, modifier: target } = attr as unknown as {
+      name: string;
+      modifier?: string;
+    };
     if (prefix === "on" || prefix === "oncapture") {
       // Decision 101 (b): core gives `on:`/`oncapture:` no meaning; each
       // host rejects with a fix-it naming `on-<exact>` (design note §4's
@@ -822,9 +834,11 @@ function deriveTrack(
   if (!key) return null;
   if (key.shape === "string") {
     if (key.node?.type === "StringLiteral") {
+      // SAFETY: a Babel StringLiteral has a string value; the discriminant is checked above.
       return `${row}.${(key.node as unknown as { value: string }).value}`;
     }
     if (key.node?.type === "TemplateLiteral") {
+      // SAFETY: Babel TemplateLiteral nodes have quasis and expressions arrays.
       const template = key.node as unknown as {
         quasis: Array<{ value: { cooked: string | null } }>;
         expressions: unknown[];
@@ -853,14 +867,30 @@ function deriveTrack(
   }
   if (key.code.trim() === "identity") return row;
   if (key.node?.type === "ArrowFunctionExpression") {
+    // SAFETY: the Babel arrow discriminant guarantees params/body; source positions remain optional.
     const arrow = key.node as unknown as {
-      params: Array<{ type: string; name?: string }>;
+      params: Array<{
+        type: string;
+        name?: string;
+        loc?: { start?: Position };
+      }>;
       body: {
         type: string;
         loc?: { start: { index: number }; end: { index: number } };
       };
       loc?: { start: { index: number } };
     };
+    const parameter = arrow.params[0];
+    if (
+      arrow.params.length === 1 &&
+      parameter?.type === "Identifier" &&
+      parameter.name !== row &&
+      arrow.body.type !== "BlockStatement"
+    ) {
+      const message = `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; use \`by=identity\` to track the row itself.`;
+      if (parameter.loc?.start) rawFail(message, parameter);
+      fail(message, node);
+    }
     // A block-bodied arrow (`p => { return p.id }`) has no single expression
     // to slice out — Angular's `track` must be one expression, not a
     // statement list — so it falls through to the same rejection as any
@@ -903,19 +933,21 @@ function bakeRange(
   const literalNumber = (expr: Expr | null, fallback: number): number => {
     if (!expr) return fallback;
     if (expr.node?.type === "NumericLiteral") {
+      // SAFETY: Babel's NumericLiteral discriminant guarantees a numeric value.
       return (expr.node as unknown as { value: number }).value;
     }
     // A unary minus over a numeric literal (`step=-1`) parses as a
     // UnaryExpression, not a NumericLiteral — Babel's own shape for a
     // negative literal.
-    if (
-      expr.node?.type === "UnaryExpression" &&
-      (expr.node as unknown as { operator: string }).operator === "-" &&
-      (expr.node as unknown as { argument: { type: string } }).argument.type ===
-        "NumericLiteral"
-    ) {
-      return -(expr.node as unknown as { argument: { value: number } }).argument
-        .value;
+    if (expr.node?.type === "UnaryExpression") {
+      // SAFETY: Babel UnaryExpression has operator/argument; value is read only after the NumericLiteral guard.
+      const unary = expr.node as unknown as {
+        operator: string;
+        argument: { type: string; value: number };
+      };
+      if (unary.operator === "-" && unary.argument.type === "NumericLiteral") {
+        return -unary.argument.value;
+      }
     }
     fail(
       "a `<for>` range with a non-literal bound cannot be emitted into an Angular template, because Angular has no range loop and MX ships no runtime (decision 79). Compute the array in the component and iterate it with `of=`.",
@@ -1264,6 +1296,26 @@ class AngularEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
+    // Marko recognizes SVG <switch>, not a control-flow switch. A default
+    // attribute (<switch=expr>) is the attempted control-flow form; reject
+    // it here before emitting either it or its <case> children. Keep a real
+    // SVG <switch> (and resolved custom tags) unchanged.
+    if (
+      node.name === "switch" &&
+      node.attrs.some(
+        (attr) =>
+          attr.kind !== "spread" &&
+          attr.nameSpan.sourceStart === attr.nameSpan.sourceEnd,
+      )
+    ) {
+      const loc = node.nameSpan
+        ? {
+            ...node.loc,
+            ...lineColumnAt(this.ctx.source, node.nameSpan.sourceStart),
+          }
+        : node.loc;
+      fail(unknownTagMessage(node.name), { loc });
+    }
     // The tag name stays unmapped (its generated text is the source name
     // verbatim, but a diagnostic lands on the `<`, not the name), so the
     // whole start tag is anchored to the authored name instead.

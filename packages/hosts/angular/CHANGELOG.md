@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (angular-fix-hints, audit items 14/18):** `<switch=…>` now fails once at the authored tag name, before Angular sees its `<case>` children, with the shared unresolved-tag wording and the `<if=…>` / `<else if=…>` replacement. A real SVG `<switch>` remains valid. A `<for by=(y => …)>` whose arrow parameter differs from the row now names both parameters and points at the mismatched one; `by=identity` is offered for tracking the row itself. Every suggested replacement is compiled in regression tests; no generated output changes for valid templates.
+
 - **Fix (ng-mx-tag-import-in-decorator):** a hoisted tag import in a `.ng.mx` module was written inside the `@Component` decorator (`@Comp` / `import { UserCard } from "../tags/user-card";onent({`), giving `TS1206`/`TS2304` under `mx-tsc`. The cause was in `@mxlang/parser`, which spliced its synthesized imports into the AST with snippet-relative offsets that the host read as the last authored import; the parser now removes those locations (see `@mxlang/parser`). No host code change; output for existing files is unchanged.
 
 - **Added (fix-hints-batch, audit item 14):** three hints from `@mxlang/core` reach `.ng.mx`, same message and position otherwise: a tag attribute with `=` and no value (`<div id= class="a">`) says to write `id="…"`/`id=expr` or drop the `=`; a syntax error in a `$` line says scriptlets are not supported and to declare a value with `<const/x=…/>` (compiles here); `<button (click)="go()">` outside the Angular syntax path says to write `onClick=go`. A lowercase tag never reaches the unresolved-tag path on this host, so the element did-you-mean does not apply.
