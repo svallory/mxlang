@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (jsx-whitespace-body-parity, decision 141):** `.mx` templates rendered inside Astro now pass same-line whitespace-only content through imported components and discovered `tags/*.mx`, rendering one space through Astro's renderer. Uses core's host-independent body-presence correction; newline indentation stays absent. Pinned by the Astro compiler and container's rendered output.
+
 - **Changed (refactor/target-open-set, decision 137):** `mxTemplates()` excludes a dotted tag file name from the tag map with a positioned diagnostic but leaves peer `mx.tags[].hosts` restrictions unresolved without a warning; only full-registry tooling validates host names (PR 3 round-2 ruling); package specifiers stay silent. It takes an optional `targets` lookup (default: this package's own descriptor), and `lowerAstroMx` accepts `options.targets`.
 
 - **Added (fix-hints-batch round 2):** a `$` scriptlet that declares a value now says to declare it in the `---` fence (`const y = …;`), since a template rejects `<const>` (new optional `scriptletReplacement` host declaration).

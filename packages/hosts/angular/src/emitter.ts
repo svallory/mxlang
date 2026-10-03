@@ -1397,7 +1397,14 @@ class AngularEmitter implements Emitter<string> {
     // Text runs are deliberately unmapped: a diagnostic never points at
     // literal text, and mapping it would shadow the expressions inside the
     // same element with a coarser span.
-    this.out.write(escapeText(node.value));
+    // Decision 141: Marko already normalized this retained space. Angular's
+    // default whitespace pass would erase it again; `&ngsp;` keeps one actual
+    // space without changing the consumer's global preserveWhitespaces policy.
+    this.out.write(
+      this.codeDepth === 0 && node.value === " "
+        ? "&ngsp;"
+        : escapeText(node.value),
+    );
   }
 
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {

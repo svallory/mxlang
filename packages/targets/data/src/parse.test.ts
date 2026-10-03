@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import cases from "../../../../fixtures/body-whitespace/cases.json";
 import { type ParseDataResult, parseData, parseDataFile } from "./parse.ts";
 import type { DataAttr, DataNode, DataTag } from "./tree.ts";
 
@@ -55,6 +56,39 @@ const RESERVED = (name: string) =>
 
 const STATIC = (construct: string) =>
   `the data tree is static; this file's consumer does not evaluate ${construct}`;
+
+describe("normalized body text (decision 141)", () => {
+  it.each(
+    cases.filter(({ label }) => label !== "element" && label !== "mixed"),
+  )("$label passes through unchanged", ({ body, html }) => {
+    const children = firstTag(ok(`<x>${body}</x>`)).children;
+    expect(
+      children
+        .filter((node) => node.kind === "text")
+        .map((node) => node.value)
+        .join(""),
+    ).toBe(html);
+  });
+  it.each(
+    cases.filter(
+      ({ label, html }) => html === " " && !label.includes("comment"),
+    ),
+  )("$label is still rejected as text", ({ body }) => {
+    failWith(
+      `<x>${body}</x>`,
+      { message: STATIC("text"), line: 1, column: 3 },
+      { structural: "reject" },
+    );
+  });
+  it.each(["\n  ", "\r\n\t  "])(
+    "dropped indentation %j is not structural text",
+    (body) => {
+      expect(
+        firstTag(ok(`<x>${body}</x>`, { structural: "reject" })).children,
+      ).toEqual([]);
+    },
+  );
+});
 
 describe("pass-through constructs (the §3 table)", () => {
   it("text arrives normalized, its span slicing the authored text", () => {

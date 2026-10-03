@@ -266,23 +266,35 @@ no `normalizeText` in core, and **a second normalization pass on any host's path
 would collapse whitespace twice** — this is the same single rule on every host,
 SolidMX included.
 
-The rule, line-based (decision 33, superseding decision 12's run-based
-statement):
+Marko's parser owns boundary trimming and collapses remaining whitespace
+runs with `value.replace(/\s+/g, " ")` (decisions 33 and 141). It ignores
+comments when finding adjacent content. At a body's beginning/end it removes
+leading/trailing CR/LF plus indentation; a whitespace-only run beginning with
+CR/LF is dropped by `onText` before a node is created. `preserveWhitespace`
+parse options bypass that normalization.
 
-1. Split a text run into lines and trim each line.
-2. Drop lines that are then empty.
-3. Join what remains with a single space.
-4. Collapse remaining internal whitespace runs to one space.
+Consequences, measured against Marko 6.3.51:
 
-Consequences, each measured:
-
-- A whitespace-only run **containing a newline** is dropped entirely — so
-  ordinary indentation between tags contributes nothing.
-- A whitespace-only run **without** a newline collapses to one space.
+- A whitespace-only body **beginning with a newline**, such as `"\n  "` or
+  `"\r\n\t  "`, is dropped — ordinary indentation contributes nothing.
+- Same-line spaces, tabs, or a mixture collapse to one space.
+- `" \n "` retains one space: the initial space precedes the newline.
+  “Contains a newline” alone is not Marko's drop test.
 - `"\n  static\n  "` before `<span>` is `"static"` with **no** trailing space.
 - `"a\n  b"` is `"a b"`.
 - `${" "}` is the escape hatch for a literal space the newline rule would drop.
 - **Comments are not content** and do not count when trimming.
+
+**Body presence (decision 141).** Core tests the already-normalized text for
+nonemptiness, never `.trim()`s it. `<Wrap> </Wrap>` and `<wrap>\t  </wrap>`
+therefore supply one-space content, through both imports and discovered
+`tags/*.mx`; `<Wrap>\n  </Wrap>` supplies no content. A comment alone supplies
+none, while `<!--note--> ` supplies a space. All seven hosts preserve that
+text when forwarding the body; Angular uses `&ngsp;` so its own template
+whitespace removal cannot discard the space. The data target's pass-through
+tree carries the same normalized text, and `structural: "reject"` rejects a
+retained space as text. The rendered parity matrix is
+`fixtures/body-whitespace/cases.json`.
 
 ```mx
 <p>
@@ -831,9 +843,10 @@ instead of the shadow diagnostic.
 validator (§13.3).
 
 `<try>` is lowered with `isBuiltin`, which exempts it from the `hasContent`
-gate every other custom tag gets: it is a structural pass-through wrapper and
-must reproduce the caller's body unchanged, so `<try>  </try>` keeps its
-whitespace-only body.
+gate ordinary custom tags get: it is a structural pass-through wrapper and
+must reproduce the caller's body unchanged. `<try>  </try>` keeps its normalized
+space; decision 141 also retains that space on ordinary component/custom-tag
+calls, rather than treating it as an absent body.
 
 Errors, all carrying the `` `<try>`:  `` prefix:
 
@@ -1722,7 +1735,7 @@ Attribute-tag parents use the same two-way cross-check (decision 138 E4): when `
 
 Naming (decision 132): the host hook that claims a tag is `HostDeclarations.isDelegatedTag`, its resolver is `resolveDelegatedTag`, and the IR node a claimed tag lowers to is `DelegatedTag` (built with `ctx.build.delegatedTag`). These replace `claimsTag`, `resolveHostTag` and `HostTag`, with no aliases.
 
-**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only when it declares at least one of `attributes`, `attributeTags`, `children`, `parents` or `parseOptions`; `{}` and a hooks-only definition keep the "neither a `transform` nor a template" error. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` tag arguments `(...)` on `<tag>` are not supported in a standalone template ``; and, for an attribute-tag declaration with none of `attributes`, `attributeTags` or `children`, `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags ``. Decision 138 E4 lifts that restriction only for explicitly extended declarations, as below. Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a whitespace-only body is rejected with a positioned "does not accept content" error on this path, while a `transform` tag accepts it; this is intentional and stricter. A tag that has a `transform` or a template is unaffected. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
+**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only when it declares at least one of `attributes`, `attributeTags`, `children`, `parents` or `parseOptions`; `{}` and a hooks-only definition keep the "neither a `transform` nor a template" error. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` tag arguments `(...)` on `<tag>` are not supported in a standalone template ``; and, for an attribute-tag declaration with none of `attributes`, `attributeTags` or `children`, `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags ``. Decision 138 E4 lifts that restriction only for explicitly extended declarations, as below. Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a retained whitespace-only body is rejected with a positioned "does not accept content" error. Decision 141 makes retained normalized whitespace content on the `transform` path too: both paths reject same-line spaces, while newline indentation removed by Marko supplies no body. A tag that has a `transform` or a template otherwise keeps its existing contract semantics. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
 
 **Recursive attribute-tag contracts (MX addition, decision 138 E4).** `CustomTagAttributeTag` accepts `attributes?: Record<string, CustomTagAttribute>`, recursive `attributeTags?: Record<string, CustomTagAttributeTag>`, and `children?: Record<string, CustomTagChild>`, alongside `required` and `repeatable`. Each declared map closes its own set; an omitted map on an extended declaration stays open. In particular, omitted `attributeTags` accepts undeclared nested attribute tags with attributes and further nesting, recursively, rather than applying the legacy body-only restriction. The shared attribute check enforces unknown names, required attributes, scalar types, expressions, `literalOnly`, enums, and E1's `array` / `function` / `items` rules at every depth. Spreads are rejected in a closed attribute map. Defaults on attribute-tag attributes are **not applied**, and never satisfy a required attribute.
 
@@ -1778,7 +1791,7 @@ Transform-time:
 | `custom tag transform must return an array of IR nodes or a TagCall for its template` | Bad return value. |
 | *(warning)* `` `<${call.name}>`: custom tag transform did not read its attributeTags; authored attribute tags were dropped `` | A macro `transform` never touched `call.attributeTags` while the call had some. Detected with a `Proxy`. |
 
-**Decisions:** 80, 85, 87, 89, 90, 91, 93, 94a, 94d, 95, 97, 98, 130, 138.
+**Decisions:** 80, 85, 87, 89, 90, 91, 93, 94a, 94d, 95, 97, 98, 130, 138, 141.
 
 ---
 

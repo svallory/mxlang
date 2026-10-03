@@ -2007,19 +2007,6 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
 }
 
 /**
- * Lowers one registered custom tag call and splices its ordinary IR roots.
- *
- * `content` is gated on `hasContent` for an ordinary (user-registered) tag:
- * whitespace-only body text means "no children supplied", which is the right
- * default for a template-authored tag deciding what an empty call means. A
- * core-owned built-in like `<try>` is a structural pass-through wrapper, not
- * a template — its whole job is to reproduce the caller's body unchanged, the
- * way `lowerDelegatedTag` always did (`lowerChildren(node.body?.body ?? [])`,
- * unconditionally). Gating it the same way silently dropped whitespace-only
- * bodies (`<try>  </try>`) that used to render. `isBuiltin` therefore skips
- * the gate and always lowers the raw block.
- */
-/**
  * `<return value=EXPR/>` — the unit's value channel (design §3.3).
  *
  * Validated entirely in the tag's *own* compilation, which is what makes the
@@ -2254,6 +2241,15 @@ function authoredChildTree(children: readonly Node[]): ChildNode[] {
   return tree;
 }
 
+/**
+ * Lowers one registered custom tag call and splices its ordinary IR roots.
+ *
+ * `content` is gated on `hasContent` for an ordinary (user-registered) tag.
+ * Decision 141: retained Marko-normalized whitespace is content, not layout;
+ * only comments and empty text mean "no children supplied". A core-owned
+ * built-in like `<try>` is a structural pass-through wrapper, so `isBuiltin`
+ * still bypasses the gate and always lowers the block, like `lowerDelegatedTag`.
+ */
 function lowerCustomTag(
   ctx: Ctx,
   node: Node,
@@ -2327,7 +2323,8 @@ function lowerCustomTag(
     // `handsToHost` skips the `hasContent` gate like `isBuiltin`, so the host
     // gets an authored body exactly as an unregistered claimed tag would; a
     // call with no authored body keeps `content: null`, which `openTagOnly`
-    // validation relies on.
+    // validation relies on. Ordinary tags keep every nonempty normalized text
+    // node, including a lone space (decision 141).
     content:
       isBuiltin || (handsToHost && children.length > 0) || hasContent(children)
         ? lowerBlock(ctx, node, children)
@@ -2405,6 +2402,7 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     nameSpan: target.kind === "dynamic" ? null : nodeSpan(ctx, node.name),
     span: exprSpan(ctx, node),
     attrs: lowerAttrs(ctx, node, targetName(target), "component"),
+    // Same normalized-body presence rule as custom template tags (decision 141).
     content: hasContent(children) ? lowerBlock(ctx, node, children) : null,
     attributeTags: loweredTags.flat,
     attributeTagTree: loweredTags.tree,

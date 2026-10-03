@@ -323,9 +323,10 @@ Five facts worth knowing before editing it:
   `ctx.build.delegatedTag("try", children, attributeTags)` (a fourth `attrs`
   argument carries attributes; omitted means none). `lowerCustomTag`
   passes an `isBuiltin` flag that skips the ordinary `hasContent` gate on a
-  custom tag's body: a template-authored tag treats a whitespace-only body as
-  "no children supplied", but `<try>` is a structural pass-through wrapper
-  and must reproduce the caller's body unchanged, matching what
+  custom tag's body. Decision 141: `hasContent` tests Marko-normalized text
+  for nonemptiness, never trims it again — same-line spaces/tabs are content,
+  while newline indentation already removed by Marko is absent. `<try>` is
+  a structural pass-through wrapper and reproduces the caller's body unchanged, matching what
   `lowerDelegatedTag` always did. Each host's `isDelegatedTag`/`resolveDelegatedTag` for
   `"try"` only decides how the primitive renders now — `@mxlang/html`,
   `@mxlang/solid`, and `@mxlang/preact`'s shared JSX emitter (reused by

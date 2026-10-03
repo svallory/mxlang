@@ -1363,12 +1363,9 @@ describe("core-owned custom tags", () => {
     ).toThrowError(/tag params .*on `<@placeholder>`/);
   });
 
-  // Round 1 item 1: `hasContent` treats whitespace-only body text as no
-  // content, the right default for a template-authored tag deciding what an
-  // empty call means. `<try>` is a structural pass-through, not a template —
-  // its body must reach the host unchanged, the way `lowerDelegatedTag` always
-  // lowered `node.body?.body ?? []` unconditionally. `lowerCustomTag`'s
-  // `isBuiltin` flag skips the `hasContent` gate for built-ins.
+  // `<try>` is a structural pass-through: its body always reaches the host.
+  // Decision 141 also keeps retained normalized spaces on ordinary tags;
+  // built-ins still bypass the presence gate entirely.
   it("preserves a whitespace-only `<try>` body rather than dropping it", () => {
     const ir = lowerWithTags("<try>  </try>\n", {}, tryDeclarations);
     const delegatedTag = find(ir.body, "DelegatedTag");
@@ -1908,7 +1905,7 @@ describe("contract-only custom tags", () => {
     ).toThrowError("does not accept content");
   });
 
-  it("rejects a whitespace-only body under `openTagOnly`, as a transform tag does not", () => {
+  it("rejects retained whitespace under `openTagOnly` for contract and transform tags (decision 141)", () => {
     const parseOptions = { openTagOnly: true };
     expect(() =>
       lowerWithTags(
@@ -1923,7 +1920,23 @@ describe("contract-only custom tags", () => {
         { attribute: { parseOptions, transform: () => [] } },
         claimAttribute(),
       ),
-    ).not.toThrow();
+    ).toThrowError("does not accept content");
+  });
+
+  it("accepts dropped newline indentation under `openTagOnly` (decision 141)", () => {
+    const parseOptions = { openTagOnly: true };
+    for (const definition of [
+      { parseOptions, attributes: { a: { type: "string" } } },
+      { parseOptions, transform: () => [] },
+    ] satisfies CustomTag[]) {
+      expect(() =>
+        lowerWithTags(
+          '<attribute a="1">\n  </attribute>\n',
+          { attribute: definition },
+          claimAttribute(),
+        ),
+      ).not.toThrow();
+    }
   });
 
   it("carries span and nameSpan exactly as an unregistered claimed tag does", () => {

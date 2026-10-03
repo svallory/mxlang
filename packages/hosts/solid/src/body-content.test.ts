@@ -1,11 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
+import { createTargetLookup, getCustomTags } from "@mxlang/core";
 import { sourceBindings } from "@mxlang/parser";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
+import cases from "../../../../fixtures/body-whitespace/cases.json";
+import descriptor from "./descriptor.ts";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
 /**
@@ -77,6 +80,8 @@ globalThis.document = document;
 interface Fixture {
   /** MX tag units, by name, each compiled with `compileSolidUnit`. */
   units: Record<string, string>;
+  /** Discover the units as tags/*.mx rather than importing them. */
+  discovered?: boolean;
   /** Hand-written TSX components, by name (default exports). */
   tsx?: Record<string, string>;
   /** An MX region, compiled by `compileSolidMx` (the mx-caller case). */
@@ -105,20 +110,28 @@ function run(fixture: Fixture, mode: "dom" | "ssr"): string[] {
     const importSpecifiers = new Map<string, string>();
     const importDefaultFromMarkoOrMx = new Set<string>();
     let imports = "";
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ type: "module" }),
+    );
+    if (fixture.discovered) mkdirSync(join(dir, "tags"));
     for (const [name, source] of Object.entries(fixture.units)) {
-      const path = join(dir, `${name}.mx`);
+      const base = fixture.discovered ? `tags/${name}` : name;
+      const path = join(dir, `${base}.mx`);
       writeFileSync(path, source);
       const code = compileSolidUnit(source, { filename: path }).code;
       writeFileSync(
-        join(dir, `${name}.mjs`),
+        join(dir, `${base}.mjs`),
         transform(`${prelude}${code}`, `${name}.tsx`, mode).replace(
           /from "\.\/(\w+)\.(?:tsx|mx)"/g,
           'from "./$1.mjs"',
         ),
       );
-      importSpecifiers.set(name, `./${name}.mx`);
-      importDefaultFromMarkoOrMx.add(name);
-      imports += `import ${name} from "./${name}.mjs";\n`;
+      if (!fixture.discovered) {
+        importSpecifiers.set(name, `./${name}.mx`);
+        importDefaultFromMarkoOrMx.add(name);
+        imports += `import ${name} from "./${name}.mjs";\n`;
+      }
     }
     for (const [name, source] of Object.entries(fixture.tsx ?? {})) {
       writeFileSync(
@@ -136,6 +149,11 @@ function run(fixture: Fixture, mode: "dom" | "ssr"): string[] {
         importSpecifiers,
         importDefaultFromMarkoOrMx,
         moduleBindings: sourceBindings(fixture.setup ?? "").bindings,
+        customTags: fixture.discovered
+          ? getCustomTags(join(dir, "caller.solid.mx"), {
+              targets: createTargetLookup([descriptor]),
+            })
+          : undefined,
       });
       expression = `<>${compiled.code}</>`;
       hoisted = compiled.hoistedImports.map((entry) => entry.code).join("\n");
@@ -148,7 +166,7 @@ function run(fixture: Fixture, mode: "dom" | "ssr"): string[] {
       `${prelude}${hoisted}\n${imports}${fixture.setup ?? ""}\n${execute}`,
       "entry.tsx",
       mode,
-    ).replace(/from "\.\/(\w+)\.tsx"/g, 'from "./$1.mjs"');
+    ).replace(/from "\.\/([\w/]+)\.(?:tsx|mx)"/g, 'from "./$1.mjs"');
     const runner = join(dir, "entry.mjs");
     writeFileSync(runner, `${mode === "dom" ? domShim : ""}\n${entry}`);
     const output = execFileSync(
@@ -169,6 +187,24 @@ const strip = (html: string) => html.replace(/<!--[^>]*-->/g, "");
 
 const Wrap = "<section><${input.content}/></section>";
 const Outer = 'import Wrap from "./Wrap.mx"\n<Wrap><${input.content}/></Wrap>';
+
+describe.each([false, true])(
+  "body whitespace, decision 141 (discovered=%s)",
+  (discovered) => {
+    it.each(cases)("$label", ({ body, html }) => {
+      const tag = discovered ? "wrap" : "Wrap";
+      expect(
+        strip(
+          ssr({
+            units: { [tag]: Wrap },
+            region: `<${tag}>${body}</${tag}>`,
+            discovered,
+          }),
+        ),
+      ).toBe(`<section>${html}</section>`);
+    });
+  },
+);
 
 describe("Solid body channel: input.content carries the body", () => {
   it("forwards an element body", () => {

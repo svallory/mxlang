@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (jsx-whitespace-body-parity, decision 141):** imported components and discovered `tags/*.mx` retain same-line whitespace-only bodies through core. The template emitter uses Angular's `&ngsp;` for a normalized lone-space text node so native whitespace removal cannot drop it. Newline indentation stays absent. Pinned by rendering generated components with Angular TestBed under its default whitespace policy.
+
 - **Fix (angular-fix-hints round 3):** SVG `<switch>` control-flow cases are detected through structural IR wrappers (`<for>`, `<if>`, and nested element bodies), producing one MX error at the authored switch on both CLIs. Resolved components and genuine SVG graphics switches remain exempt. Parameter-mismatch advice now offers concrete code only for simple member chains, replacing just the leading parameter reference; complex bodies (including shorthand objects, nested arrows, and the reviewed `y?.y` shape) get a plain rename instruction instead of an unsafe AST rewrite. Applied member-chain fixes compile on both CLIs and preserve the emitted `track` expression.
 
 - **Fix (angular-fix-hints, audit items 14/18):** `<switch=…>` now fails once at the authored tag name, before Angular sees its `<case>` children, with the shared unresolved-tag wording and the `<if=…>` / `<else if=…>` replacement. A real SVG `<switch>` remains valid. A `<for by=(y => …)>` whose arrow parameter differs from the row now names both parameters and points at the mismatched one; `by=identity` is offered for tracking the row itself. Every suggested replacement is compiled in regression tests; no generated output changes for valid templates.

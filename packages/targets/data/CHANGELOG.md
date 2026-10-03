@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Test (body whitespace, decision 141):** pins Marko-normalized spaces/tabs/CRLF and comments beside whitespace in the pass-through tree. A retained one-space text node is still rejected as text under `structural: "reject"`; dropped newline indentation is not structural text. No data-specific normalization is added.
+
 - **Added, unstable (data-pr3, decisions 129 and 132):** the `data` target
   descriptor (`@mxlang/data/descriptor`: `name: "data"`, no host, the
   delegate-everything declarations, no `translator`, no `mappings`; the mapping

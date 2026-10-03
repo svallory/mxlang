@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { assertAngularParses, compileMx, emit } from "./helpers.ts";
 
 describe("Text", () => {
+  it("protects Marko-normalized retained whitespace from Angular trimming (decision 141)", () => {
+    const out = emit("<div> \t </div>");
+    expect(out).toBe("<div>&ngsp;</div>");
+    assertAngularParses(out);
+    expect(emit("<div>\n  </div>")).toBe("<div></div>");
+  });
+
   it("emits plain text unchanged", () => {
     const out = emit("-- Hello world");
     expect(out).toBe("Hello world");

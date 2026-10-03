@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (jsx-whitespace-body-parity, decision 141):** imported components and discovered `tags/*.mx` now forward same-line whitespace-only bodies as one space, matching Marko 6.3.51 through the shared core body-presence fix. Newline indentation remains absent. Pinned by rendered output, including tabs, CRLF and comments beside whitespace.
+
 - **Changed (refactor/target-open-set, decision 137):** the Bun loader excludes a dotted tag file name from the tag map with a positioned diagnostic, as `@mxlang/core`'s scan does. The loader is a direct entry, so it resolves its targets from this package's own descriptor unless a caller passes a lookup (`createHtmlBunPlugin(targets)`); either way a foreign `tags/x.ng.mx` is rejected. Only full-registry tooling validates unknown bare words in `mx.tags[].hosts`; this direct loader leaves peer restrictions unresolved without a warning (PR 3 round-2 ruling). Package specifiers stay silent.
 - **Changed (refactor/target-open-set, decisions 129 and 132):** `compile`/`compileFile`/`build`/`loadMx`/`mx()` accept `options.targets`, defaulting to this package's own descriptor (`htmlTargets`, now exported). A tool compiling for several targets passes the built-in lookup.
 

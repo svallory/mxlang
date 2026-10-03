@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (jsx-whitespace-body-parity, decision 141):** same-line whitespace-only bodies now render one space when forwarded, through both imported components and discovered `tags/*.mx`. Uses core's host-independent body-presence correction; newline indentation stays absent. Pinned by React's rendered static markup.
+
 - **Fix (jsx-intrinsic-prop-errors, decision 140 (b)):** native-element non-event prop errors now surface at the authored attribute name through the shared JSX emitter, including renamed `class` → `className` and `for` → `htmlFor`. Checks follow React's own JSX types; event handlers and runtime output are unchanged. See `@mxlang/preact`.
 
 - **Added (jsx-handler-typing, decision 140):** `compileReactMx` takes the internal, tooling-only `typeCheck` option (see `@mxlang/preact`); runtime output is unchanged with it unset. **Effect on users (new errors on existing code):** in the editor and `mx-tsc`, native event handlers are now checked against `@types/react`, as in plain TSX. A handler annotated with a DOM event type (`onClick=((e: MouseEvent) => …)`, `(e: Event)`) is now an error, because React's synthetic events are not the DOM's; annotate with `React.MouseEvent<HTMLButtonElement>` or leave the parameter unannotated. Mistyped handlers, the bodies of shorthand handlers and valid `onDblClick`/`onKeyDown` handlers behave as described for `@mxlang/preact`.

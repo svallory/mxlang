@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: preserve normalized whitespace-only bodies (jsx-whitespace-body-parity, decision 141)
+
+`hasContent` now tests Marko-normalized text for nonemptiness rather than trimming it again. Same-line spaces/tabs supply one-space content through imported components, discovered template tags and attribute-tag bodies; newline indentation already removed by Marko stays absent. Host-independent, with no second normalization pass. `openTagOnly` consequently rejects retained same-line spaces on transform tags too; dropped newline indentation stays accepted. Rendered regressions cover all seven hosts; the data target retains the same text and still rejects it under `structural: "reject"`.
+
 ### Added: `dropOwnParserPosition(error, message)` (ts-plugin-ts80001-babel-suffix)
 
 Drops Babel's trailing 0-based ` (line:column)` from a parse error's message only when it provably repeats the error's own parser `loc`; a `TranslateError`, a plain `Error` or a suffix that differs from `loc` keeps its text. Generic; used by `@mxlang/typescript-plugin` and `@mxlang/language-server` so every surface prints the same `TS80001` text.

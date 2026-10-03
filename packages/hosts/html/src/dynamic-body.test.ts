@@ -9,6 +9,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import cases from "../../../../fixtures/body-whitespace/cases.json";
 import { loadMx } from "./helpers.ts";
 
 const packageRoot = new URL("..", import.meta.url).pathname;
@@ -26,6 +27,17 @@ function render(page: string, input: Record<string, unknown> = {}): string {
   writeFileSync(path, page);
   return loadMx<Record<string, unknown>>(path)(input);
 }
+
+describe.each([false, true])(
+  "body whitespace, decision 141 (discovered=%s)",
+  (discovered) => {
+    it.each(cases)("$label", ({ body, html }) => {
+      const tag = discovered ? "wrap" : "Wrap";
+      const page = `${discovered ? "" : 'import Wrap from "./tags/wrap.mx"\n'}<${tag}>${body}</${tag}>`;
+      expect(render(page)).toBe(`<section>${html}</section>`);
+    });
+  },
+);
 
 describe("a body forwarded through <${input.content}/> (html, Marko parity)", () => {
   it.each([

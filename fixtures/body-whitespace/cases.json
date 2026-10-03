@@ -1,0 +1,18 @@
+[
+  { "label": "text", "body": "hello", "html": "hello" },
+  { "label": "one space", "body": " ", "html": " " },
+  { "label": "several spaces", "body": "   ", "html": " " },
+  { "label": "tab", "body": "\t", "html": " " },
+  { "label": "tabs and spaces", "body": " \t\t ", "html": " " },
+  { "label": "newline and indent", "body": "\n  ", "html": "" },
+  { "label": "CRLF and indent", "body": "\r\n\t  ", "html": "" },
+  { "label": "CR and indent", "body": "\r  ", "html": "" },
+  { "label": "spaces before newline", "body": " \n ", "html": " " },
+  { "label": "comment then space", "body": "<!--note--> ", "html": " " },
+  { "label": "space then comment", "body": " <!--note-->", "html": " " },
+  { "label": "space comment space", "body": " <!--note--> ", "html": " " },
+  { "label": "comment then newline", "body": "<!--note-->\n  ", "html": "" },
+  { "label": "comment only", "body": "<!--note-->", "html": "" },
+  { "label": "element", "body": "<b>x</b>", "html": "<b>x</b>" },
+  { "label": "mixed", "body": "a <i>b</i> c", "html": "a <i>b</i> c" }
+]

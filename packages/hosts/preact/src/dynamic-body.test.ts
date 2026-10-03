@@ -8,9 +8,13 @@
  * stock Marko 6.3.51 renders for the same templates (scratch/squad-liuna/
  * jsx-dynamic-body-text.md, parity table).
  */
+
+import { createTargetLookup } from "@mxlang/core";
 import { type FunctionComponent, h } from "preact";
 import { describe, expect, it } from "vitest";
-import { compilePreactMx } from "./index.ts";
+import cases from "../../../../fixtures/body-whitespace/cases.json";
+import descriptor from "./descriptor.ts";
+import { compilePreactMx, getCustomTags } from "./index.ts";
 
 const WRAP = "<section><${input.content}/></section>";
 
@@ -18,10 +22,10 @@ async function renderPair(
   callerSource: string,
   input: Record<string, unknown> = {},
   wrapSource: string = WRAP,
+  discovered = false,
 ): Promise<string> {
-  const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
-    "node:fs"
-  );
+  const { mkdirSync, writeFileSync, mkdtempSync, rmSync, symlinkSync } =
+    await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join, dirname } = await import("node:path");
   const { render } = (await import("preact-render-to-string")) as {
@@ -44,14 +48,27 @@ async function renderPair(
         compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
       }),
     );
+    const wrapPath = discovered ? "tags/wrap.mx" : "wrap.mx";
+    mkdirSync(join(scratch, "tags"));
+    writeFileSync(join(scratch, wrapPath), wrapSource);
     writeFileSync(
-      join(scratch, "wrap.tsx"),
-      compilePreactMx(wrapSource, join(scratch, "wrap.mx")).code,
+      join(scratch, wrapPath.replace(".mx", ".tsx")),
+      compilePreactMx(wrapSource, join(scratch, wrapPath)).code,
     );
+    const callerPath = join(scratch, "caller.mx");
     const caller = compilePreactMx(
-      `import Wrap from "./wrap.mx"\n${callerSource}`,
-      join(scratch, "caller.mx"),
-    ).code.replace('"./wrap.mx"', '"./wrap.tsx"');
+      discovered
+        ? callerSource
+        : `import Wrap from "./wrap.mx"\n${callerSource}`,
+      callerPath,
+      discovered
+        ? {
+            customTags: getCustomTags(callerPath, {
+              targets: createTargetLookup([descriptor]),
+            }),
+          }
+        : {},
+    ).code.replace(`"./${wrapPath}"`, `"./${wrapPath.replace(".mx", ".tsx")}"`);
     const entry = join(scratch, "caller.tsx");
     writeFileSync(entry, caller);
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
@@ -62,6 +79,18 @@ async function renderPair(
     rmSync(scratch, { recursive: true, force: true });
   }
 }
+
+describe.each([false, true])(
+  "body whitespace, decision 141 (discovered=%s)",
+  (discovered) => {
+    it.each(cases)("$label", async ({ body, html }) => {
+      const tag = discovered ? "wrap" : "Wrap";
+      expect(
+        await renderPair(`<${tag}>${body}</${tag}>`, {}, WRAP, discovered),
+      ).toBe(`<section>${html}</section>`);
+    });
+  },
+);
 
 describe("a body forwarded through <${input.content}/> (preact, Marko parity)", () => {
   it("(a) a text-only body renders as text, not as an element named by the text", async () => {

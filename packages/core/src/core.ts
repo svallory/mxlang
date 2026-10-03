@@ -1005,11 +1005,15 @@ export function isFunctionLikeValue(node: Node | null | undefined): boolean {
   }
 }
 
-/** True when a child list holds anything that renders. */
+/**
+ * True when a child list holds anything that renders (decision 141).
+ * Marko's parser has already normalized text: a retained space is content,
+ * while dropped newline indentation creates no node. Never trim it again.
+ */
 export function hasContent(children: Node[]): boolean {
   return children.some((child: Node) => {
     if (child.type === "MarkoComment") return false;
-    if (child.type === "MarkoText") return child.value.trim() !== "";
+    if (child.type === "MarkoText") return child.value !== "";
     return true;
   });
 }

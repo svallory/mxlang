@@ -11,6 +11,16 @@ breaks (grammar, Prettier, language server) — until then MX stays a subset.
 The real-Marko oracle (`bun run oracle:marko`) remains a regression guard for
 the structural core, no longer a contract in itself.
 
+## Fixed: whitespace-only component bodies (decision 141)
+
+Core previously treated an already-normalized one-space body as absent by
+trimming it a second time. Imported components and discovered `tags/*.mx`
+now retain that space, matching Marko 6.3.51 on all seven hosts. Tabs, CRLF,
+comments beside whitespace and mixed bodies are pinned by the rendered
+`fixtures/body-whitespace/cases.json` matrix. This fixes an undocumented bug,
+not a new divergence. The present-but-empty **placeholder** body / `<if>`
+divergence below is unchanged.
+
 ## Recorded divergences
 
 | Divergence | Since | Reason | Test |
