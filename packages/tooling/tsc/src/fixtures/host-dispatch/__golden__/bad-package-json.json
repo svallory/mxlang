@@ -38,7 +38,7 @@
         {
           "severity": 2,
           "source": "mxlang",
-          "message": "<root>/bad-package-json/package.json:1:1: `package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force",
+          "message": "<root>/bad-package-json/package.json:1:1: `package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); no `mx.tags` or `mx.contracts` are loaded until the manifest parses",
           "range": {
             "start": {
               "line": 0,
@@ -64,7 +64,7 @@
                   }
                 }
               },
-              "message": "`package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force"
+              "message": "`package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); no `mx.tags` or `mx.contracts` are loaded until the manifest parses"
             }
           ]
         }
@@ -117,7 +117,7 @@
         {
           "severity": 2,
           "source": "mxlang",
-          "message": "<root>/bad-package-json/package.json:1:1: `package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force",
+          "message": "<root>/bad-package-json/package.json:1:1: `package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); no `mx.tags` or `mx.contracts` are loaded until the manifest parses",
           "range": {
             "start": {
               "line": 0,
@@ -143,7 +143,7 @@
                   }
                 }
               },
-              "message": "`package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); the previous valid `mx.tags` stays in force"
+              "message": "`package.json` could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); no `mx.tags` or `mx.contracts` are loaded until the manifest parses"
             }
           ]
         }

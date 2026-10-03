@@ -7,6 +7,9 @@
  * explicitly named directories carrying directory-level defaults. The result
  * is the `customTags` map every host, loader, plugin and the language server
  * already accept (P1) — discovery is the only thing this module adds.
+ * `mx.contracts` adds package-level declaration maps (decision 142), evaluated
+ * eagerly on a cache miss to learn their names and parser options. Sidecars
+ * retain the static/lazy loading behavior described below.
  *
  * Three properties shape the implementation, each load-bearing:
  *
@@ -48,10 +51,17 @@ import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import { TranslateError } from "./core.ts";
-import type { CustomTag, CustomTagParseOptions } from "./custom-tags.ts";
+import {
+  type ContractMap,
+  type CustomTag,
+  type CustomTagParseOptions,
+  rejectUnknownDeclarationKeys,
+  rejectUnreachableHooks,
+} from "./custom-tags.ts";
 import {
   clearPackageJsonCache,
   type PackageJsonParseError,
+  positionOfOffset,
   readPackageJsonCached,
 } from "./package-json.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
@@ -224,6 +234,10 @@ export interface DiscoveredTag {
   template?: string;
   /** The `x.tag.ts` sidecar, when one exists. */
   sidecar?: string;
+  /** The package-level contracts module that supplied this entry. */
+  module?: string;
+  /** An eagerly loaded module declaration (sidecars remain lazy). */
+  contract?: CustomTag;
   /**
    * `parseOptions` as the scan knows them before any hook runs: the
    * directory-level default from `mx.tags`, overridden by whatever the
@@ -246,8 +260,8 @@ export interface ScanResult {
   /** Discovered tags by call name; nearest directory wins. */
   tags: Map<string, DiscoveredTag>;
   /**
-   * The map to hand a compiler. Each entry's hooks load on first use, so
-   * building this costs no module evaluation.
+   * The map to hand a compiler. Sidecar hooks load on first use; package-level
+   * module declarations have already been evaluated during discovery.
    */
   customTags: Record<string, CustomTag>;
   /** Directories whose contents were read, for invalidation. */
@@ -318,6 +332,8 @@ export interface HostRestriction {
   host: string;
   line: number;
   column: number;
+  /** Absent on existing mx.tags evidence, for byte-identical warnings. */
+  key?: "mx.contracts";
 }
 
 /**
@@ -358,7 +374,7 @@ export function hostRestrictionDiagnostics(
       : "";
     diagnostics.push({
       file: restriction.file,
-      message: `\`mx.tags\` names an unknown host in \`hosts\`: ${restriction.host}${hint}`,
+      message: `\`${restriction.key ?? "mx.tags"}\` names an unknown host in \`hosts\`: ${restriction.host}${hint}`,
       line: restriction.line,
       column: restriction.column,
     });
@@ -430,6 +446,128 @@ export function normalizeMxTags(
       );
     }
     return normalized;
+  });
+}
+
+/** One normalized package-level contracts entry (decision 142). */
+export interface MxContractsEntry {
+  module: string;
+  hosts?: string[];
+}
+
+/** Locate the direct mx.contracts key, not a string or nested decoy. */
+function contractsPosition(packageFile: string): {
+  line: number;
+  column: number;
+} {
+  const text = readPackageJsonCached(packageFile)?.text ?? "";
+  const tokens = [
+    ...text.matchAll(
+      /"(?:\\.|[^"\\])*"|[{}[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g,
+    ),
+  ];
+  let cursor = 0;
+  let offset = 0;
+  const value = (path: string[]): void => {
+    const start = tokens[cursor++];
+    if (!start) return;
+    if (start[0] === "{") {
+      while (tokens[cursor] && tokens[cursor]?.[0] !== "}") {
+        const key = tokens[cursor++];
+        if (!key) return;
+        let name: string;
+        try {
+          name = JSON.parse(key[0]) as string;
+        } catch {
+          return;
+        }
+        if (path.length === 1 && path[0] === "mx" && name === "contracts")
+          offset = key.index;
+        cursor++; // colon
+        value([...path, name]);
+        if (tokens[cursor]?.[0] === ",") cursor++;
+      }
+      cursor++;
+    } else if (start[0] === "[") {
+      while (tokens[cursor] && tokens[cursor]?.[0] !== "]") {
+        value([...path, "[]"]);
+        if (tokens[cursor]?.[0] === ",") cursor++;
+      }
+      cursor++;
+    }
+  };
+  value([]);
+  return positionOfOffset(text, offset);
+}
+
+/** Contracts failures address the actual source file, not the calling page. */
+function failContracts(
+  file: string,
+  message: string,
+  line = 1,
+  column = 0,
+): never {
+  const positioned = message.startsWith(`${file}: `)
+    ? message
+    : `${file}: ${message}`;
+  throw new TranslateError(positioned, line, column, file);
+}
+
+/** Validate configuration and resolve modules against the consuming package. */
+export function normalizeMxContracts(
+  value: unknown,
+  packageDir: string,
+  packageFile: string,
+): MxContractsEntry[] {
+  if (value === undefined) return [];
+  const { line, column } = contractsPosition(packageFile);
+  const reject = (message: string): never =>
+    failContracts(packageFile, message, line, column);
+  return (Array.isArray(value) ? value : [value]).map((entry, index) => {
+    const what = `mx.contracts[${index}]`;
+    if (typeof entry === "string") entry = { module: entry };
+    if (!isRecord(entry))
+      reject(
+        `\`${what}\` must be a string or an object with a \`module\` string`,
+      );
+    // The assertion follows the throwing guard above (TypeScript cannot narrow
+    // through a local never-returning callback).
+    const config = entry as Record<string, unknown>;
+    if (typeof config.module !== "string")
+      reject(`\`${what}.module\` must be a string`);
+    for (const key of Object.keys(config)) {
+      if (key !== "module" && key !== "hosts")
+        reject(
+          `\`${what}.${key}\` is not supported; expected \`module\` or \`hosts\``,
+        );
+    }
+    if (
+      config.hosts !== undefined &&
+      (!Array.isArray(config.hosts) ||
+        config.hosts.some((host) => typeof host !== "string"))
+    ) {
+      reject(`\`${what}.hosts\` must be an array of strings`);
+    }
+    const spec = config.module as string;
+    let module: string;
+    try {
+      const fromPackage = createRequire(join(packageDir, "package.json"));
+      module = fromPackage.resolve(
+        isAbsolute(spec) || spec.startsWith(".")
+          ? resolve(packageDir, spec)
+          : spec,
+      );
+    } catch {
+      return reject(
+        `\`${what}.module\` could not resolve \`${spec}\` from ${packageDir}`,
+      );
+    }
+    return {
+      module,
+      ...(config.hosts === undefined
+        ? {}
+        : { hosts: config.hosts as string[] }),
+    };
   });
 }
 
@@ -680,31 +818,46 @@ function literalToValue(
  * not its hooks. Evicting here rather than in the cache keeps the two facts
  * together: whoever loads the module is who must decide it is stale.
  */
-function sidecarHint(message: string): string {
+function sidecarHint(message: string, what = "custom tag sidecar"): string {
   if (message.includes("top-level await")) {
-    return " — a custom tag sidecar may not use top-level `await`, because it is loaded synchronously before the calling file is parsed";
+    return ` — a ${what} may not use top-level \`await\`, because it is loaded synchronously before the calling file is parsed`;
   }
   if (message.includes("Cannot find module")) {
-    return " — a custom tag sidecar's relative imports need explicit extensions (`./helper.ts`, not `./helper`)";
+    return ` — a ${what}'s relative imports need explicit extensions (\`./helper.ts\`, not \`./helper\`)`;
   }
   return "";
 }
 
-export function loadSidecar(file: string): CustomTag {
+function loadDefaultExport(
+  file: string,
+  what: "sidecar" | "contracts module",
+): Record<string, unknown> {
   let module: { default?: unknown } | undefined;
   try {
     const resolved = require.resolve(file);
     delete require.cache[resolved];
     module = require(file) as { default?: unknown };
   } catch (cause) {
-    const message = (cause as Error).message;
-    failIn(file, `sidecar failed to load: ${message}${sidecarHint(message)}`);
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const fail = what === "sidecar" ? failIn : failContracts;
+    fail(
+      file,
+      `${what} failed to load: ${message}${sidecarHint(message, what === "sidecar" ? "custom tag sidecar" : what)}`,
+    );
   }
   const definition = module?.default;
   if (!isRecord(definition)) {
-    failIn(file, "sidecar must `export default` a CustomTag object");
+    const fail = what === "sidecar" ? failIn : failContracts;
+    fail(
+      file,
+      `${what} must \`export default\` ${what === "sidecar" ? "a CustomTag object" : "a plain ContractMap object"}`,
+    );
   }
-  return definition as CustomTag;
+  return definition as Record<string, unknown>;
+}
+
+export function loadSidecar(file: string): CustomTag {
+  return loadDefaultExport(file, "sidecar") as CustomTag;
 }
 
 /**
@@ -805,7 +958,7 @@ export function clearManifestCache(): void {
 function readManifest(
   packageJson: string,
   diagnostics: ScanDiagnostic[],
-): { mx?: { tags?: unknown } } | undefined {
+): { mx?: { tags?: unknown; contracts?: unknown } } | undefined {
   const read = readPackageJsonCached(packageJson);
   if (!read) return undefined;
 
@@ -815,7 +968,7 @@ function readManifest(
     if (!diagnostic) {
       diagnostic = {
         file: packageJson,
-        message: `\`package.json\` could not be parsed as JSON: ${error.message}; the previous valid \`mx.tags\` stays in force`,
+        message: `\`package.json\` could not be parsed as JSON: ${error.message}; ${read.manifest === undefined ? "no `mx.tags` or `mx.contracts` are loaded until the manifest parses" : "the previous valid `mx.tags` and `mx.contracts` stay in force"}`,
         line: 1,
         column: 0,
       };
@@ -823,7 +976,9 @@ function readManifest(
     }
     diagnostics.push(diagnostic);
   }
-  return read.manifest as { mx?: { tags?: unknown } } | undefined;
+  return read.manifest as
+    | { mx?: { tags?: unknown; contracts?: unknown } }
+    | undefined;
 }
 
 interface IndexOptions {
@@ -970,6 +1125,16 @@ export interface ScanOptions {
   host?: string | null;
 }
 
+/** Whether an entry competes for this caller; undefined disables filtering. */
+function appliesToHost(
+  hosts: readonly string[] | undefined,
+  host: string | null | undefined,
+): boolean {
+  return (
+    !hosts || host === undefined || (host !== null && hosts.includes(host))
+  );
+}
+
 /**
  * Applies a `host` restriction to an in-progress scan's tags, in place.
  *
@@ -984,8 +1149,7 @@ function applyHostFilter(
   host: string | null,
 ): void {
   for (const [name, tag] of tags) {
-    if (tag.hosts && (host === null || !tag.hosts.includes(host)))
-      tags.delete(name);
+    if (!appliesToHost(tag.hosts, host)) tags.delete(name);
   }
 }
 
@@ -994,7 +1158,8 @@ function buildCustomTags(
   tags: Map<string, DiscoveredTag>,
 ): Record<string, CustomTag> {
   const customTags: Record<string, CustomTag> = Object.create(null);
-  for (const [name, tag] of tags) customTags[name] = lazyTag(tag);
+  for (const [name, tag] of tags)
+    customTags[name] = tag.contract ?? lazyTag(tag);
   return customTags;
 }
 
@@ -1014,6 +1179,7 @@ function indexMxTagsEntries(
   directories: string[],
   dottedTagFiles: DottedTagFile[],
   hostRestrictions: HostRestriction[],
+  host: ScanOptions["host"],
 ): void {
   const manifest = readManifest(packageJson, diagnostics);
   const entries = normalizeMxTags(manifest?.mx?.tags, packageDir, packageJson);
@@ -1039,11 +1205,147 @@ function indexMxTagsEntries(
         hostRestrictions.push({ file: packageJson, host, line: 1, column: 0 });
       }
     }
+    // Resolve precedence only among directories available to this caller.
+    if (!appliesToHost(entry.hosts, host)) continue;
     indexDirectory(entry.dir, tags, files, diagnostics, dottedTagFiles, {
       prefix: entry.prefix,
       parseOptions: entry.parseOptions,
       hosts: entry.hosts,
     });
+  }
+  indexMxContractsEntries(
+    manifest?.mx?.contracts,
+    packageDir,
+    packageJson,
+    tags,
+    files,
+    diagnostics,
+    hostRestrictions,
+    host,
+  );
+}
+
+/** Both discovery walks index modules after all file-backed tags. */
+function indexMxContractsEntries(
+  value: unknown,
+  packageDir: string,
+  packageJson: string,
+  tags: Map<string, DiscoveredTag>,
+  files: ScanResult["files"],
+  diagnostics: ScanDiagnostic[],
+  hostRestrictions: HostRestriction[],
+  host: ScanOptions["host"],
+): void {
+  if (value === undefined) return;
+  let position: ReturnType<typeof contractsPosition> | undefined;
+  for (const entry of normalizeMxContracts(value, packageDir, packageJson)) {
+    const file = entry.module;
+    // Stamp before evaluation: a racing edit must read as stale.
+    try {
+      files.push({ path: file, mtimeMs: statSync(file).mtimeMs });
+    } catch {
+      failContracts(file, "contracts module could not be read");
+    }
+    for (const host of entry.hosts ?? []) {
+      position ??= contractsPosition(packageJson);
+      hostRestrictions.push({
+        file: packageJson,
+        host,
+        ...position,
+        key: "mx.contracts",
+      });
+    }
+    const contracts: ContractMap = Object.create(null);
+    try {
+      const exported = loadDefaultExport(file, "contracts module");
+      const plain = (record: Record<string, unknown>): boolean => {
+        const prototype = Object.getPrototypeOf(record);
+        return prototype === Object.prototype || prototype === null;
+      };
+      if (!plain(exported))
+        failContracts(
+          file,
+          "contracts module must `export default` a plain ContractMap object",
+        );
+      for (const [name, definition] of Object.entries(exported)) {
+        if (!TAG_NAME_RE.test(name))
+          failContracts(file, `\`${name}\` is not a usable tag name`);
+        if (Object.hasOwn(BUILTIN_CUSTOM_TAGS, name)) {
+          diagnostics.push({
+            file,
+            line: 1,
+            column: 0,
+            message: `\`<${name}>\` is a core-owned custom tag and cannot be redefined by \`mx.contracts\`; remove this key`,
+          });
+          continue;
+        }
+        if (!isRecord(definition) || !plain(definition))
+          failContracts(file, `\`<${name}>\` must be a plain CustomTag object`);
+        for (const key of Object.getOwnPropertyNames(definition)) {
+          if (
+            ![
+              "parseOptions",
+              "attributes",
+              "attributeTags",
+              "children",
+              "parents",
+              "analyze",
+            ].includes(key)
+          ) {
+            failContracts(
+              file,
+              `\`<${name}>\`: \`${key}\` is not allowed in \`mx.contracts\`; use a tag sidecar for hooks other than \`analyze\` and for templates`,
+            );
+          }
+        }
+        if (
+          definition.analyze !== undefined &&
+          typeof definition.analyze !== "function"
+        )
+          failContracts(file, `\`<${name}>\`.analyze must be a function`);
+        if (definition.parseOptions !== undefined) {
+          checkParseOptions(
+            definition.parseOptions,
+            file,
+            `${name}.parseOptions`,
+          );
+        }
+        contracts[name] = definition as CustomTag;
+      }
+      rejectUnknownDeclarationKeys(contracts);
+      rejectUnreachableHooks(contracts);
+    } catch (cause) {
+      failContracts(
+        file,
+        cause instanceof Error ? cause.message : String(cause),
+      );
+    }
+    // Keep validation and stamps for all modules, but only applicable entries
+    // compete or produce duplicate/shadow warnings for this caller.
+    if (!appliesToHost(entry.hosts, host)) continue;
+    for (const [name, contract] of Object.entries(contracts)) {
+      const existing = tags.get(name);
+      if (existing) {
+        const winner =
+          existing.module ?? existing.sidecar ?? existing.template ?? "";
+        diagnostics.push({
+          file: existing.module ? file : winner,
+          line: 1,
+          column: 0,
+          message: existing.module
+            ? `\`<${name}>\` is defined twice in \`mx.contracts\`: ${winner} and ${file}; the first module's whole entry wins`
+            : `\`<${name}>\` from \`mx.contracts\` (${file}) is shadowed by ${winner}; the module's contract does not apply`,
+        });
+        continue;
+      }
+      tags.set(name, {
+        name,
+        module: file,
+        contract,
+        parseOptions: contract.parseOptions,
+        hosts: entry.hosts,
+      });
+    }
   }
 }
 
@@ -1053,7 +1355,7 @@ function indexMxTagsEntries(
  * Precedence, highest first (spec §4): an explicit import in the template
  * (which the core resolves before ever consulting this map), then local
  * `tags/` directories with the nearest winning, then `package.json#mx.tags`
- * entries in array order.
+ * entries in array order, then `mx.contracts` modules in array order.
  */
 export function scanCustomTags(
   filePath: string,
@@ -1101,6 +1403,7 @@ export function scanCustomTags(
       directories,
       dottedTagFiles,
       hostRestrictions,
+      options.host,
     );
   }
 
@@ -1279,6 +1582,7 @@ export function discoverProjectTags(
       directories,
       dottedTagFiles,
       hostRestrictions,
+      options.host,
     );
   }
 

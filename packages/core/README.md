@@ -264,8 +264,8 @@ The walk runs from the calling file's directory up to the package root,
 collecting `tags/` directories; a tag's name is its file's basename. Nearest
 directory wins. `package.json#mx.tags` — a string, or entries of
 `{ dir, prefix?, hosts?, parseOptions? }` — extends the walk in array order
-with directory-level defaults a sidecar may override, and comes last in
-precedence.
+with directory-level defaults a sidecar may override, after local directories.
+`mx.contracts` names a module (string, `{ module, hosts? }`, or array) default-exporting `ContractMap`: declarations plus `analyze`, no transforms or templates; it comes last, replaces whole entries, and warns on shadowing or duplicate names (decision 142, spec §9.2).
 
 Two properties make this usable from every integration:
 
@@ -310,10 +310,12 @@ reported rather than registered. A `.solid.mx` file in a `tags/` directory is
 a different file kind and is reported, not silently ignored.
 
 Results are cached per directory and invalidated by what the scan recorded: a
-directory's entry list, each tag file's mtime, and the `package.json` carrying
-`mx.tags`. Invalidation is therefore only as precise as the filesystem's mtime
-granularity; every platform MX targets records sub-second mtimes, but two
-writes inside one tick can look like one. A broken sidecar — unparseable `parseOptions`, or a module that
+directory's entry list, each tag file's mtime and content hash, and the
+`package.json` carrying `mx.tags` or `mx.contracts`. Contracts modules evaluate
+on a cache miss; unchanged scans reuse the same map. Edited ESM/TS modules need a
+tool restart under Node; Bun reloads them. CommonJS `.cjs` modules reload correctly
+on Node (TODO `sync-esm-reload-node`). Keep modules self-contained:
+transitive imports are not tracked or evicted; restart to reload edited helpers. A broken sidecar — unparseable `parseOptions`, or a module that
 throws while loading — is a `TranslateError` naming that file, which is what
 lets the language server report a diagnostic rather than crash. An `mx.tags`
 entry naming a directory that does not exist is softer still: it lands in

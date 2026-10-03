@@ -355,6 +355,32 @@ Five facts worth knowing before editing it:
   language plugin — because which tags a template may call follows from where
   the template lives. An explicitly passed `customTags` still wins over a
   discovered tag of the same name.
+- **Package-level contracts use `mx.contracts` (decision 142).** A string,
+  `{ module, hosts? }`, or array names modules default-exporting `ContractMap`
+  (`Record<string, CustomTag>`): declarations plus `analyze`, no `transform`,
+  `finalize`, template or prefix. Both walks share indexing after `tags/` and
+  `mx.tags`; winners replace whole entries, with shadow and duplicate warnings.
+  Only entries applicable to the caller's `host` compete; ineligible entries
+  cannot hide unrestricted fallback contracts or produce shadow warnings.
+  Modules are still validated and stamped before host filtering. Absent
+  `mx.contracts` never triggers contracts-key position tokenization. A broken
+  manifest warning names both `mx.tags` and `mx.contracts`: previous good
+  configuration stays in force, or none is loaded until it parses.
+  Modules evaluate eagerly on a scan-cache miss (their names and parser options
+  must be known); file stamps retain hashes, not source, and unchanged maps
+  remain interned. Config/resolution failures address the direct `"contracts"`
+  key using cached manifest text; module failures and per-module registration
+  errors address the module file at `1:0`. The merged-map check stays intact.
+  Use the required `targets` lookup (`src/test-targets.ts` in tests), with no
+  host-specific core branch. Keep modules self-contained: imported helpers
+  are not tracked or evicted. Vitest reload tests prove rescan/map invalidation,
+  not re-evaluation through its separate module registry (`contracts.test.ts`).
+  **Under Node, an edited ESM/TS contracts module (like an ESM/TS sidecar) is
+  picked up after a tool restart; Bun reloads it. CommonJS `.cjs` modules
+  reload correctly on Node.** Evicting `require.cache` does not clear
+  Node's ESM loader cache; this existing loader limitation is deferred to
+  `sync-esm-reload-node`. The deterministic Node subprocess test pins a new
+  scan-map identity with stale exports and fresh exports after restart.
 - **`DiscoveredTag` carries `hosts`, and every integration's scan honors it.**
   `getCustomTags`/`scanCached`/`scanCustomTags` accept an optional `host`
   (`"html"`, `"astro"`, `"solid"`, `"preact"`, `"react"`, `"hono"`,
@@ -486,8 +512,9 @@ Five facts worth knowing before editing it:
   old hooks after an edit that changed only a `transform` body.
   **Caveat when testing a reload:** under Vitest a deleted `require.cache` key
   does not make `require` re-evaluate a file, because its module runner keeps
-  its own registry; Bun and Node both do re-evaluate, which is what ships. A
-  Vitest test therefore asserts that the directory is rescanned (add a tag
+  its own registry. Bun re-evaluates the entry; Node's ESM loader cache also
+  survives `require.cache` eviction, so ESM/TS entries need a tool restart
+  (TODO `sync-esm-reload-node`). A Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
 - **A contract-only tag is a `DelegatedTag` on a claimed name (decision 130).** A
   definition declaring at least one of `attributes`/`attributeTags`/

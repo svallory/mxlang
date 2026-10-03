@@ -6,6 +6,12 @@
 
 `hasContent` now tests Marko-normalized text for nonemptiness rather than trimming it again. Same-line spaces/tabs supply one-space content through imported components, discovered template tags and attribute-tag bodies; newline indentation already removed by Marko stays absent. Host-independent, with no second normalization pass. `openTagOnly` consequently rejects retained same-line spaces on transform tags too; dropped newline indentation stays accepted. Rendered regressions cover all seven hosts; the data target retains the same text and still rejects it under `structural: "reject"`.
 
+### Added: package-level contract modules (`mx.contracts`, decision 142)
+
+`package.json#mx.contracts` accepts a module string, `{ module, hosts? }`, or an array. Modules default-export the new `ContractMap` type: declarations plus optional `analyze`, never transforms, finalizers or templates. Both discovery walks load them synchronously after local `tags/` and `mx.tags`, with whole-entry replacement and positioned shadow/duplicate warnings. Configuration and resolution errors point at the manifest's `"contracts"` key; module load and declaration errors point at the module file. Module paths and parser options participate in signatures, preserving content-aware hash invalidation and stable unchanged maps. Transitive imports are not tracked; keep modules self-contained. Spec §9.2/§9.7, `divergences.md`, and core regression tests; no host-specific code.
+
+Round 2: host restrictions are applied before resolving entry precedence and module duplicate/shadow warnings, so restricted entries cannot hide unrestricted fallback contracts for other hosts or hostless callers. Module validation and stamps still cover ineligible entries. Broken-manifest warnings name both settings and explicitly say that none load without a previous valid revision; otherwise the last good settings stay in force. Absent `mx.contracts` avoids key-position tokenization. The spec documents `require`/`default` export conditions and limits Node's restart requirement to ESM/TS modules; `.cjs` reloads correctly.
+
 ### Added: `dropOwnParserPosition(error, message)` (ts-plugin-ts80001-babel-suffix)
 
 Drops Babel's trailing 0-based ` (line:column)` from a parse error's message only when it provably repeats the error's own parser `loc`; a `TranslateError`, a plain `Error` or a suffix that differs from `loc` keeps its text. Generic; used by `@mxlang/typescript-plugin` and `@mxlang/language-server` so every surface prints the same `TS80001` text.

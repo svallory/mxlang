@@ -160,7 +160,7 @@ function parserSignatureOf(result: ScanResult): string {
     .sort()
     .map((name) => {
       const tag = result.tags.get(name);
-      return `${name}|${tag?.template ?? ""}|${tag?.sidecar ?? ""}|${JSON.stringify(tag?.parseOptions ?? null)}`;
+      return `${name}|${tag?.template ?? ""}|${tag?.sidecar ?? ""}|${tag?.module ?? ""}|${JSON.stringify(tag?.parseOptions ?? null)}`;
     })
     .join("\n");
 }

@@ -1451,8 +1451,90 @@ decisions 97 and 98 shipped it. The full feature spec is
 `tags/` directories, indexes `x.mx` and `x.tag.ts` by basename, and extends the
 walk with `package.json#mx.tags` (a string, or entries of
 `{ dir, prefix?, hosts?, parseOptions? }`). **Nearest `tags/` wins**; `mx.tags`
-entries come last, in array order. An explicitly passed `customTags` still beats
-a discovered tag of the same name.
+entries follow local directories, in array order. Package-level `mx.contracts`
+modules follow `mx.tags`, also in array order. Each winner replaces the **whole
+entry**, never merging declarations. An explicitly passed `customTags` still
+beats a discovered tag of the same name.
+
+**Package-level contracts (MX addition, decision 142).**
+`package.json#mx.contracts` is a module string, an entry `{ module, hosts? }`, or
+an array of either. The module must default-export a plain
+`ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`); each key
+is a tag name matching the discovery name pattern. Entries may declare
+`parseOptions`, `attributes`, `attributeTags`, `children`, `parents`, and
+`analyze`; `transform`, `finalize`, templates, and unknown keys are rejected.
+There is no `prefix`. Relative and absolute paths resolve against the consuming
+package directory; bare specifiers resolve through that package's
+`node_modules`, using the `require`/`default` package export conditions. A
+package exporting only an `import` condition fails loudly with the positioned
+resolution error below.
+
+The scan evaluates modules synchronously on a cache miss to learn their names
+and parser options. Unlike sidecars, module `parseOptions` may be computed.
+Modules obey the same runtime constraints as sidecars (§9.3): no top-level
+`await`, explicit extensions on relative imports. Installed packages must export
+JavaScript: Node does not strip TypeScript files under `node_modules` (local
+`.ts` modules outside it are supported). Keep modules self-contained:
+transitive imports are not stamped or evicted, so helper-only edits are not
+noticed; restart the process to reliably reload imported helpers. Module files
+are tracked in `ScanResult.files`; mtime **and content hash** changes invalidate
+the loaded map, including edits within one filesystem tick. An unchanged scan
+reuses its tag-map identity. **Under Node, an edited ESM/TS contracts module
+(like an ESM/TS sidecar) is picked up after a tool restart; Bun reloads it.
+CommonJS `.cjs` modules reload correctly on Node.** Evicting
+`require.cache` does not clear Node's ESM loader cache, so a rescan and new map
+identity do not guarantee new module exports there. This pre-existing
+synchronous-loader limitation is deferred to `sync-esm-reload-node`.
+
+`hosts` has the same filtering and lookup-owned unknown-name warning semantics
+as `mx.tags`: `host: null` excludes every restricted entry; omitted `host`
+disables filtering. A hostless target without a filter key should use
+unrestricted contracts. Precedence and duplicate/shadow warnings are resolved
+only among entries whose `hosts` restrictions apply to the caller. A restricted
+entry cannot hide an unrestricted fallback from another host or `host: null`;
+omitted `host` leaves all entries competing in array order. Module validation
+still runs on ineligible entries. A contract-only call still requires the active target
+to delegate the name (§9.8). A file-backed tag shadowing a module declaration
+warns at the winning file; two modules declaring the same name warn at the later
+module and the first wins. Core-owned names (`try`) warn and are skipped.
+
+Both discovery walks index these entries identically. Only the nearest
+`package.json` supplies contracts: a monorepo member with its own manifest must
+redeclare them. Dependency manifests are never scanned for `mx.contracts`;
+the consumer names each module explicitly. This surface provides diagnostics,
+not contract-to-call-site types, completions, or hover.
+
+Contracts errors **throw**, rather than dropping declarations and silently
+passing calls. Configuration and resolution errors point at the direct
+`"contracts"` key in the cached manifest text (1-based line, 0-based column).
+Evaluation, export-shape, and per-module registration errors point at the
+module file, `1:0`, and preserve the declaration diagnostic. The merged-map
+registration pass remains for cross-source consistency checks; its errors
+retain the existing calling-file `0:0` position.
+
+A syntactically broken manifest remains a scan **warning**, not a contracts
+configuration throw. With a previous good revision, its `mx.tags` and
+`mx.contracts` stay in force. Without one, no configured tags or contracts are
+loaded until the manifest parses; the warning says so explicitly. Its position
+remains manifest `1:0`.
+
+| Message | Position / when |
+|---|---|
+| `` `mx.contracts[${index}]` must be a string or an object with a `module` string `` | Manifest `"contracts"` key; entry is not a string or record. |
+| `` `mx.contracts[${index}].module` must be a string `` | Manifest key; missing or non-string module. |
+| `` `mx.contracts[${index}].hosts` must be an array of strings `` | Manifest key; invalid restriction shape. |
+| `` `mx.contracts[${index}].${key}` is not supported; expected `module` or `hosts` `` | Manifest key; unknown config key, including `prefix`. |
+| `` `mx.contracts[${index}].module` could not resolve `${spec}` from ${packageDir} `` | Manifest key; unresolvable module. |
+| `contracts module failed to load: ${message}${hint}` | Module `1:0`; evaluation failed. |
+| `contracts module must \`export default\` a plain ContractMap object` | Module `1:0`; no default, array, function or non-plain export. |
+| `` `${name}` is not a usable tag name `` | Module `1:0`; invalid name. |
+| `` `<${name}>` must be a plain CustomTag object `` | Module `1:0`; invalid tag value. |
+| Existing parse-option and registration messages (§9.3, §9.7) | Module `1:0`; invalid declarations or contradictions, even when shadowed. |
+| *(warning)* `` `<${name}>` from `mx.contracts` (${file}) is shadowed by ${winner}; the module's contract does not apply `` | Winning sidecar/template `1:0`; whole-entry replacement. |
+| *(warning)* `` `<${name}>` is defined twice in `mx.contracts`: ${winner} and ${file}; the first module's whole entry wins `` | Later module `1:0`; duplicate declaration. |
+| *(warning)* `` `<${name}>` is a core-owned custom tag and cannot be redefined by `mx.contracts`; remove this key `` | Module `1:0`; key skipped. |
+| *(warning)* `` `mx.contracts` names an unknown host in `hosts`: ${host}${hint} `` | Manifest key; full-registry name validation only. |
+| *(warning)* `` `package.json` could not be parsed as JSON: ${message}; no `mx.tags` or `mx.contracts` are loaded until the manifest parses `` | Manifest `1:0`; first revision is broken. With a previous valid revision the suffix is `` the previous valid `mx.tags` and `mx.contracts` stay in force `` instead. |
 
 **`tags/*.marko` and `tags/*.mx` together.** The scan above indexes only `.mx` and
 `.tag.ts`; a `tags/x.marko` is found by Marko's own taglib lookup (nearest `tags/`
@@ -1713,6 +1795,17 @@ walk, because a self-recursive call resolves during that walk.
 | `` `<${call.name}>` is this file's own tag, and a host module region (an expression spliced into another module) has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file `` | A self-call from a region file, which exports nothing. |
 
 ### 9.7 Registration errors
+
+Module declarations are validated as a complete map during discovery, before
+precedence or host filtering drops any entry (decision 142). The following
+module-only errors are thrown at the module file, `1:0`; the existing rows below
+also run per module and keep that position. Programmatic maps and sidecars keep
+their existing registration behavior.
+
+| Message | When |
+|---|---|
+| `` `<${name}>`: `${key}` is not allowed in `mx.contracts`; use a tag sidecar for hooks other than `analyze` and for templates `` | `transform`, `finalize`, `template`, or any unknown top-level definition key. |
+| `` `<${name}>`.analyze must be a function `` | Non-function `analyze`. |
 
 | Message | When |
 |---|---|

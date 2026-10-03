@@ -78,6 +78,7 @@ export {
 export type {
   AnalyzeContext,
   ChildNode,
+  ContractMap,
   CustomTag,
   CustomTagAttribute,
   CustomTagAttributeTag,

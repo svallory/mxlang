@@ -358,6 +358,9 @@ export interface CustomTag {
   finalize?(ctx: FinalizeContext): IrNode[];
 }
 
+/** Default export of a package-level `mx.contracts` module (decision 142). */
+export type ContractMap = Record<string, CustomTag>;
+
 /** Builders available to a transform. Module-level IR is deliberately absent. */
 export interface IrBuilders {
   text(value: string): IrNode;
