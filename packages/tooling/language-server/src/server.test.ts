@@ -8,8 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { TargetPolicy } from "@mxlang/core";
-import { defaultTarget, hostOf, hostTarget } from "@mxlang/target-registry";
+import { builtinFileKinds } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createMessageConnection,
@@ -84,22 +83,6 @@ function nextDiagnostics(
       },
     );
   });
-}
-
-/**
- * A policy for `host` as the built-in lookup resolves it: the target that host
- * selects, its host name when it has one, and the `strict` flag. Written
- * through the registry rather than as a literal `{ host }`, because the policy
- * names a target first (decisions 129/132) and `html` is a target with no
- * host — its legacy `mx.host` value is what selects it.
- */
-function policy(host: string, strict?: boolean): TargetPolicy {
-  const target = hostTarget(host)?.target ?? defaultTarget();
-  return {
-    target,
-    host: hostOf(target),
-    ...(strict === undefined ? {} : { strict }),
-  };
 }
 
 describe("stdio server (e2e)", () => {
@@ -732,6 +715,19 @@ describe("stdio server (e2e)", () => {
     expect(isMxDocument("untitled:App", "solidmx")).toBe(true);
     expect(isMxDocument("untitled:App", "SolidMX")).toBe(true);
     expect(isMxDocument("file:///project/App.ts", "typescript")).toBe(false);
+  });
+
+  it("recognizes every registered suffix, but only region language ids on their own", () => {
+    for (const kind of builtinFileKinds) {
+      expect(isMxDocument(`file:///app/card.${kind.segment}.mx`, "")).toBe(
+        true,
+      );
+      for (const id of kind.languageIds ?? []) {
+        expect(isMxDocument("untitled:App", id)).toBe(
+          kind.pipeline === "region",
+        );
+      }
+    }
   });
 
   it("does not recognize a .marko document or the marko language id", () => {

@@ -40,6 +40,8 @@ export interface TargetCompileOptions {
   strict?: boolean;
   /** A synchronous import resolver (decision 107), tried before the built-in resolution. */
   resolveImport?: (specifier: string, importer: string) => string | undefined;
+  /** Caller-owned target set for cross-file resolution; unset uses the descriptor's own lookup. */
+  targets?: TargetLookup;
 }
 
 /**
@@ -92,6 +94,8 @@ export interface HostRegionInput {
   baseColumn: number;
   /** Custom tag definitions the caller registered. */
   customTags?: Record<string, CustomTag>;
+  /** Caller-owned target set for cross-file resolution; unset uses the descriptor's own lookup. */
+  targets?: TargetLookup;
   /** Where the region appeared; opaque here. */
   context?: unknown;
   /** Imports declared by the surrounding module, local binding to specifier. */

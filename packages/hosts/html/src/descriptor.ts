@@ -71,7 +71,7 @@ const descriptor: TargetDescriptor = {
           warnings: options.warnings,
           strict: options.strict,
           resolveImport: options.resolveImport,
-          targets: targets(),
+          targets: options.targets ?? targets(),
         }),
     };
   },

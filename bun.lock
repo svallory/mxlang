@@ -467,12 +467,7 @@
       "dependencies": {
         "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",
-        "@mxlang/hono": "workspace:*",
-        "@mxlang/html": "workspace:*",
         "@mxlang/parser": "workspace:*",
-        "@mxlang/preact": "workspace:*",
-        "@mxlang/react": "workspace:*",
-        "@mxlang/solid": "workspace:*",
         "@mxlang/target-registry": "workspace:*",
         "vscode-languageserver": "10.1.1",
         "vscode-languageserver-textdocument": "1.0.14",

@@ -6,9 +6,10 @@
  * tested directly, as the brief requires, without spawning a process.
  */
 
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
+import * as core from "@mxlang/core";
 import {
   type CustomTag,
   dropOwnParserPosition,
@@ -18,17 +19,13 @@ import {
   type TargetPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import { compileHonoMx } from "@mxlang/hono";
-import { compile } from "@mxlang/html";
-import { print } from "@mxlang/parser";
-import { compilePreactMx } from "@mxlang/preact";
-import { compileReactMx } from "@mxlang/react";
-import { compileSolidMx, compileSolidUnit } from "@mxlang/solid";
+import { type PrintOptions, print } from "@mxlang/parser";
 import {
+  type BuiltinFileKind,
+  builtinFileKinds,
   builtinLookup,
   getCustomTags,
   hostFilterKey,
-  hostModuleSegment,
   scanCached,
 } from "@mxlang/target-registry";
 import {
@@ -38,26 +35,39 @@ import {
 
 export type { TargetPolicy };
 
-export const SOLID_MX_LANGUAGE_IDS = new Set(["solidmx", "SolidMX"]);
+export const SOLID_MX_LANGUAGE_IDS = new Set(
+  builtinFileKinds
+    .filter((kind) => kind.pipeline === "region")
+    .flatMap((kind) => kind.languageIds ?? []),
+);
 
 /**
- * Whether `filePath` is an Angular host module (`x.ng.mx`). Case-insensitive,
- * like the TS plugin's `isNgMx`, which lowercases before matching.
+ * File kinds take precedence over page policy. Silent template suffixes keep
+ * their case-insensitive match; region suffixes keep their exact match. A
+ * region language id also identifies an untitled or mis-suffixed buffer, but
+ * cannot override a silent template suffix. Silent kinds match suffixes only:
+ * changing a page's language mode must never suppress its diagnostics.
  */
-function isNgMxDocument(filePath: string): boolean {
-  return hostModuleSegment(basename(filePath).toLowerCase()) === "ng";
+function fileKindOf(uri: string, languageId = ""): BuiltinFileKind | undefined {
+  return (
+    builtinFileKinds.find((kind) =>
+      (kind.pipeline === "region" ? uri : uri.toLowerCase()).endsWith(
+        `.${kind.segment}.mx`,
+      ),
+    ) ??
+    builtinFileKinds.find(
+      (kind) =>
+        kind.pipeline === "region" && kind.languageIds?.includes(languageId),
+    )
+  );
 }
 
-/**
- * Whether `filePath` is an Astro template (`x.astro.mx`, decision 134).
- * Case-insensitive, like `isNgMxDocument`.
- */
 export function isAstroMxDocument(filePath: string): boolean {
-  return hostModuleSegment(basename(filePath).toLowerCase()) === "astro";
+  return fileKindOf(filePath)?.pipeline === "astro-template";
 }
 
 export function isSolidMxDocument(uri: string, languageId = ""): boolean {
-  return uri.endsWith(".solid.mx") || SOLID_MX_LANGUAGE_IDS.has(languageId);
+  return fileKindOf(uri, languageId)?.pipeline === "region";
 }
 
 /** The filesystem path a document URI names, for comparing with a `TranslateError`'s file. */
@@ -192,18 +202,6 @@ export function splitCodeFrame(
   };
 }
 
-/**
- * Resolves a `TargetPolicy` to the `strict` flag the translator compiles under.
- *
- * Solid, Preact and React documents take their own compiler path before this
- * function is called. Astro is always strict; HTML follows the resolved
- * policy.
- */
-function resolveStrict(hostPolicy: TargetPolicy): boolean {
-  if (hostPolicy.host === "astro") return true;
-  return hostPolicy.strict ?? false;
-}
-
 function errorPosition(
   error: unknown,
 ): { line: number; column: number; file?: string } | null {
@@ -229,20 +227,6 @@ function errorPosition(
   return null;
 }
 
-/**
- * Compiles or parses `text` for its document kind and returns the diagnostics
- * to publish for `uri`. Never throws: a positioned error becomes one Error
- * diagnostic; a successful run returns `[]`, which clears any previous
- * diagnostics; a locationless exception is reported via `onUnexpectedError`
- * and also returns `[]`.
- *
- * Custom tags are discovered from the document's own path (spec §4), so a
- * `<icon>` a `vite build` compiles is a `<icon>` the editor knows about too.
- * A sidecar that is broken — unparseable `parseOptions`, or a module that
- * throws while loading — fails the scan with a positioned `TranslateError`
- * naming that file, which lands here as an ordinary diagnostic rather than
- * taking the server down. That is why the scan is inside the `try`.
- */
 /** A filesystem path for `uri`, which may already be one. */
 function documentPath(uri: string): string {
   if (!uri.startsWith("file://")) return uri;
@@ -253,6 +237,27 @@ function documentPath(uri: string): string {
   }
 }
 
+/**
+ * Compiles or parses `text` for its document kind and returns the diagnostics
+ * to publish for `uri`. Never throws: a positioned error becomes one Error
+ * diagnostic; a successful run returns `[]`, which clears any previous
+ * diagnostics; a locationless exception is reported via `onUnexpectedError`
+ * and also returns `[]`.
+ *
+ * Supply the policy from `@mxlang/target-registry`'s `resolveTargetPolicy` or
+ * `resolveTargetPolicyDetailed`. Those wrappers enforce tooling availability,
+ * including staging/rejecting the data target. A hand-built policy bypasses
+ * that staging: `{ target: "data" }` reaches the data compiler, not HTML or an
+ * unwired-target fallback. Such direct dispatch is outside the supported
+ * language-server policy path; this function does not re-resolve the policy.
+ *
+ * Custom tags are discovered from the document's own path (spec §4), so a
+ * `<icon>` a `vite build` compiles is a `<icon>` the editor knows about too.
+ * A sidecar that is broken — unparseable `parseOptions`, or a module that
+ * throws while loading — fails the scan with a positioned `TranslateError`
+ * naming that file, which lands here as an ordinary diagnostic rather than
+ * taking the server down. That is why the scan is inside the `try`.
+ */
 export function diagnoseDocument(
   text: string,
   uri: string,
@@ -329,92 +334,42 @@ export function diagnoseDocument(
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
 
-    if (isAstroMxDocument(path)) {
-      // Deliberately silent, and checked FIRST for the reason the `.ng.mx`
-      // branch below is: an `.astro.mx` file is an Astro component whatever
-      // `mx.host` says, so it must never reach the `.mx` compile (it ends in
-      // `.mx`, but its template is Astro syntax, not an html page). The
-      // lowering lives in `@mxlang/astro`, which the server does not load;
-      // `mx-tsc --astro` and the TS plugin report its diagnostics.
-    } else if (isNgMxDocument(path)) {
-      // Deliberately silent, and checked FIRST: routed by file kind before
-      // any host branch, as `mx-tsc`'s `isNgMx` does. A `.ng.mx` is an
-      // Angular host module whatever `mx.host` says (an unknown host resolves
-      // to a derived or default one, a `react`/`solid` host is simply the
-      // wrong host for this file), so it must never reach another host's
-      // compile. Angular documents are checked by `mx-tsc` and the TS plugin
-      // (template diagnostics need `@angular/compiler-cli`, which the server
-      // never loads); reporting "not wired" as an Error was a false positive
-      // on every file. Host-policy warnings from the resolution still reach
-      // the author via `scanWarnings` below.
-    } else if (isSolidMxDocument(uri, languageId)) {
-      // `parse` is the Vite path's whole-file parser and the cheapest public
-      // entry that discovers every MX region. A language id can identify an
-      // untitled/mis-suffixed buffer, so give that case the suffix that turns
-      // the parser's opt-in MX bridge on.
-      const filename = path.endsWith(".solid.mx") ? path : `${path}.solid.mx`;
+    const kind = fileKindOf(path, languageId);
+    if (
+      kind?.pipeline === "astro-template" ||
+      kind?.pipeline === "ng-template"
+    ) {
+      // Template diagnostics belong to mx-tsc and the TS plugin, never the
+      // page compiler. Configuration diagnostics still reach the author.
+      return scanWarnings;
+    }
+    if (kind?.pipeline === "region") {
+      const compileRegion = kind.compileRegion;
+      if (!compileRegion) return scanWarnings;
+      // A language id can identify an untitled/mis-suffixed buffer. Supply
+      // the registered suffix so the parser opts into its region bridge.
+      const suffix = `.${kind.segment}.mx`;
+      const filename = path.endsWith(suffix) ? path : `${path}${suffix}`;
       const result = print(text, filename, {
         customTags,
-        mxRegionCompile: (input) =>
-          compileSolidMx(input.source, {
-            ...input,
-            warnings,
-            targets: builtinLookup(),
-          }),
+        mxRegionCompile: (input) => {
+          const regionInput = { ...input, warnings, targets: builtinLookup() };
+          // Core keeps the parser's hoisted AST nodes opaque to avoid a
+          // dependency cycle. This built-in pipeline supplies parser nodes.
+          return compileRegion(input.source, regionInput) as ReturnType<
+            NonNullable<PrintOptions["mxRegionCompile"]>
+          >;
+        },
       });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
-    } else if (hostPolicy.host === "solid") {
-      // A whole-file `.mx` document routed to the Solid host. Unlike an
-      // embedded `.solid.mx` region — a fragment spliced into someone
-      // else's module — a whole-file unit is a module of its own, so it
-      // goes through `compileSolidUnit`, not the region compiler
-      // (decision 115); its declarations reject stateful Marko tags the
-      // same way either compiler does, so there is no looser Solid policy
-      // to select.
-      const result = compileSolidUnit(text, {
-        filename: path,
-        customTags,
-        warnings,
-        targets: builtinLookup(),
-      });
-      for (const dependency of result.dependencies)
-        dependencies?.add(dependency);
-    } else if (hostPolicy.host === "preact") {
-      // A whole-file `.mx` document routed to the Preact host. Its
-      // declarations reject Marko's stateful tags outright, so like Solid's
-      // there is no looser policy to select — the `strict` flag has no
-      // meaning for this host and is not consulted.
-      const result = compilePreactMx(text, path, {
-        customTags,
-        warnings,
-        targets: builtinLookup(),
-      });
-      for (const dependency of result.dependencies)
-        dependencies?.add(dependency);
-    } else if (hostPolicy.host === "react") {
-      const result = compileReactMx(text, path, {
-        customTags,
-        warnings,
-        targets: builtinLookup(),
-      });
-      for (const dependency of result.dependencies)
-        dependencies?.add(dependency);
-    } else if (hostPolicy.host === "hono") {
-      const result = compileHonoMx(text, path, {
-        customTags,
-        warnings,
-        targets: builtinLookup(),
-      });
-      for (const dependency of result.dependencies)
-        dependencies?.add(dependency);
-    } else if (hostPolicy.host === "angular") {
-      // Same silence for an Angular-host `.mx` page; see the `.ng.mx` branch.
     } else {
-      // Through `@mxlang/html`'s own front door, not `compileSource`
-      // directly: this registers the host taglib and compiles via the IR.
-      const result = compile(text, path, {
-        strict: resolveStrict(hostPolicy),
+      const descriptor = builtinLookup().target(hostPolicy.target);
+      const load = descriptor?.load;
+      // An unwired page target stays silent (D4); never guess a compiler.
+      if (!load) return scanWarnings;
+      const result = load(core).compileModule(text, path, {
+        strict: descriptor.strict === "always" || hostPolicy.strict === true,
         customTags,
         warnings,
         targets: builtinLookup(),

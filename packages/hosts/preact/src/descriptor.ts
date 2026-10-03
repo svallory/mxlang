@@ -51,7 +51,7 @@ const descriptor: TargetDescriptor = {
           customTags: options.customTags,
           warnings: options.warnings,
           resolveImport: options.resolveImport,
-          targets: targets(),
+          targets: options.targets ?? targets(),
         }),
     };
   },

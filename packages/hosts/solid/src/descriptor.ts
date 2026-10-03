@@ -52,7 +52,7 @@ const descriptor: TargetDescriptor = {
           filename,
           customTags: options.customTags,
           warnings: options.warnings,
-          targets: targets(),
+          targets: options.targets ?? targets(),
         }) as TargetCompileResult,
     };
   },
@@ -67,7 +67,10 @@ const descriptor: TargetDescriptor = {
         compileRegion: (source, input) =>
           (
             require("./compile.ts") as typeof import("./compile.ts")
-          ).compileSolidMx(source, { ...input, targets: targets() }),
+          ).compileSolidMx(source, {
+            ...input,
+            targets: input.targets ?? targets(),
+          }),
         readCalleeInput: (request) =>
           (
             require("./callee-reader.ts") as typeof import("./callee-reader.ts")

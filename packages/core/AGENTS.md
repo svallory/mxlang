@@ -875,6 +875,12 @@ stable version.
   the config key (`mx.host`/`mx.target`); the caller prefixes that. The
   sidecar constraints hold (no top-level `await`, explicit extensions on
   relative imports) and are restated in the message.
+- **Caller-owned target lookup (decision 126 addendum).**
+  `TargetCompileOptions.targets` and `HostRegionInput.targets` are optional
+  generic `TargetLookup` fields. A descriptor forwards the supplied lookup
+  into its compile entry's `HostOptions`, defaulting to its own lookup only
+  when none was supplied. This preserves the caller's full cross-file
+  resolution scope without naming any host or target in core.
 - **`load(core)`** takes the **tool's** core (`typeof import("./index.ts")` in
   core's source, which emits as the same relative type), so a third-party
   target shares its registry, caches, editor buffer overrides and one

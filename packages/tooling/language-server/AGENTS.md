@@ -2,6 +2,35 @@
 
 ## `@mxlang/language-server`: diagnostics-only LSP server (decision 71/72)
 
+### Current dispatch (decisions 129/132)
+
+`diagnoseDocument` selects `builtinLookup().target(policy.target)`, calls its
+lazy `load(core).compileModule`, and takes strictness from
+`descriptor.strict === "always" || policy.strict === true`. No host-name
+compiler branches remain. The registry supplies tag discovery/policy wrappers
+and file kinds; `fileKindOf` matches suffixes and region language ids only.
+The `ng-template` and `astro-template` pipelines are silent by suffix, never
+by language id alone. A `region` pipeline uses its `compileRegion` through
+parser `print`. Both page and region calls pass `targets: builtinLookup()`;
+the descriptors forward it rather than narrowing cross-file `AttrTag` sources
+to their own package (decision 126 addendum). A descriptor without `load`
+stays silent for page compilation too. The registry policy wrapper continues
+staging/rejecting the data target. Hand-built policies bypass that staging,
+including a raw data policy; `diagnoseDocument`'s TSDoc documents that such a
+call is outside the supported language-server policy path.
+
+Both dist and VSIX builds inline the registry and descriptors: their lazy
+synchronous `require` must not escape into a source module under Node ESM.
+Dist leaves core/parser external and builds index/bin independently. The
+index uses explicit exported value bindings: Bun 1.3.14 can emit a re-export-only entry
+containing exports with no bindings when the lazy descriptor graph is bundled.
+`src/dist-build.test.ts` loads the built index under plain Node and exercises all wired page compilers
+and the region pipeline. VSIX externals remain defined only in
+`build/bundled-config.ts`; check with the editor's `check-vsix` and `ls-smoke`.
+
+The historical mechanism and policy discussion below predates this dispatch
+refactor; its mentions of direct host imports/branches no longer apply.
+
 `packages/tooling/language-server` (`@mxlang/language-server`) exists to close one
 gap decisions 71/72 name explicitly: "a host is not done without its editor
 diagnostics." Marko's own language server (`marko-js/language-server`)

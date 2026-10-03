@@ -4,9 +4,11 @@
 // (the VSIX stage, its check and the LS smoke), so the externals exist in
 // exactly one place.
 //
-// Not published: the npm tarball keeps the `@mxlang/*` packages external
-// (`build` in package.json) and `files` stays `["dist", "README.md"]`. This
-// output (`bundle/`) is a VSIX-only self-contained build.
+// Not published: the dist build keeps core and parser external, but bundles
+// the target registry and descriptors so their synchronous load() never
+// depends on a global require in Node ESM. This VSIX build inlines every
+// @mxlang/* package; only the externals below may remain outside the bundle.
+// `files` stays ["dist", "README.md"], so bundle/ is VSIX-only.
 
 /** `src/<entry>.ts` bundled to `bundle/<entry>.cjs`. */
 export const BUNDLED_ENTRIES = ["bin"] as const;

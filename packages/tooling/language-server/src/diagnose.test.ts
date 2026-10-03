@@ -12,7 +12,13 @@ import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { clearScanCache, type TargetPolicy } from "@mxlang/core";
-import { defaultTarget, hostOf, hostTarget } from "@mxlang/target-registry";
+import {
+  builtinFileKinds,
+  builtinLookup,
+  defaultTarget,
+  hostOf,
+  hostTarget,
+} from "@mxlang/target-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
@@ -36,6 +42,87 @@ function policy(host: string, strict?: boolean): TargetPolicy {
     ...(strict === undefined ? {} : { strict }),
   };
 }
+
+describe("target-table dispatch", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("selects the target, not the policy's optional host", () => {
+    const source = "<let/count=0/>\n";
+    expect(
+      diagnoseDocument(source, "/app/page.mx", {
+        target: "html",
+        host: "astro",
+        strict: false,
+      }),
+    ).toEqual([]);
+    expect(
+      diagnoseDocument(source, "/app/page.mx", {
+        target: "astro-html",
+        strict: false,
+      }),
+    ).toHaveLength(1);
+    expect(
+      diagnoseDocument(source, "/app/page.mx", { target: "preact-jsx" })[0]
+        ?.message,
+    ).toContain("useState");
+  });
+
+  it("does not load a compiler for silent template kinds", () => {
+    const descriptor = builtinLookup().target("html");
+    if (!descriptor?.load) throw new Error("missing html descriptor");
+    const load = vi.spyOn(descriptor, "load");
+    for (const kind of builtinFileKinds.filter(
+      (kind) => kind.pipeline !== "region",
+    )) {
+      for (const uri of [
+        `/app/file.${kind.segment}.mx`,
+        `/app/file.${kind.segment.toUpperCase()}.MX`,
+      ]) {
+        expect(
+          diagnoseDocument(
+            "<broken",
+            uri,
+            { target: "html" },
+            undefined,
+            "solidmx",
+          ),
+        ).toEqual([]);
+      }
+    }
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("uses the registered region compiler for an untitled language id", () => {
+    const kind = builtinFileKinds.find((kind) => kind.pipeline === "region");
+    if (!kind?.compileRegion) throw new Error("missing region compiler");
+    const compileRegion = vi.spyOn(kind, "compileRegion");
+    expect(
+      diagnoseDocument(
+        "export const view = () => <p>hello</p>;\n",
+        "untitled:region",
+        { target: "html" },
+        undefined,
+        kind.languageIds?.[0],
+      ),
+    ).toEqual([]);
+    expect(compileRegion).toHaveBeenCalled();
+    expect(compileRegion).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        filename: `untitled:region.${kind.segment}.mx`,
+        warnings: [],
+      }),
+    );
+  });
+
+  it("keeps an unwired page target silent even without a host field", () => {
+    expect(
+      diagnoseDocument("<broken", "/app/page.mx", {
+        target: "angular-template",
+      }),
+    ).toEqual([]);
+  });
+});
 
 describe("diagnoseDocument", () => {
   it("reports one Error diagnostic for <let> under a strict policy", () => {

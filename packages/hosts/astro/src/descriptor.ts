@@ -12,7 +12,11 @@
  * default export (`typeSurface`). Importing this module loads only html's
  * descriptor (policy tables); the compile entry is required inside `load`.
  */
-import type { TargetDescriptor } from "@mxlang/core";
+import {
+  createTargetLookup,
+  type TargetDescriptor,
+  type TargetLookup,
+} from "@mxlang/core";
 import htmlDescriptor from "@mxlang/html/descriptor";
 import { createAstroTypeSurface } from "./type-surface.ts";
 
@@ -25,6 +29,13 @@ import { createAstroTypeSurface } from "./type-surface.ts";
  * Compile-time only: nothing is imported at module evaluation.
  */
 declare const require: (specifier: string) => unknown;
+
+/** Lazy self lookup; callers may supply the full target set instead. */
+let ownLookup: TargetLookup | undefined;
+function targets(): TargetLookup {
+  ownLookup ??= createTargetLookup([descriptor]);
+  return ownLookup;
+}
 
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
@@ -49,6 +60,7 @@ const descriptor: TargetDescriptor = {
           warnings: options.warnings,
           strict: options.strict,
           resolveImport: options.resolveImport,
+          targets: options.targets ?? targets(),
         }),
     };
   },

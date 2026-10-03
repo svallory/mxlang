@@ -1,5 +1,5 @@
 /**
- * A dedicated file so `vi.mock` of `@mxlang/html` cannot leak into other
+ * A dedicated file so a compiler-load spy cannot leak into other
  * suites. Same cases as the TypeScript plugin's: Babel's trailing `(L:C)` is
  * kept unless it repeats the diagnostic's own parser position.
  */
@@ -9,28 +9,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
-import type { TargetPolicy } from "@mxlang/core";
-import { defaultTarget, hostOf } from "@mxlang/target-registry";
+import type { TargetCompiler, TargetPolicy } from "@mxlang/core";
+import { builtinLookup, defaultTarget, hostOf } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { diagnoseDocument } from "./diagnose.ts";
-
-vi.mock("@mxlang/html", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@mxlang/html")>();
-  return {
-    ...actual,
-    compile: (source: string, ...rest: unknown[]) => {
-      if (source.includes("PLAIN-ERROR")) {
-        // The LS reads positions from `loc` only (never from the numeric
-        // line/column Bun gives every Error), so give the error a `loc` that
-        // disagrees with its own `(12:7)`.
-        throw Object.assign(new Error("only position (12:7)"), {
-          loc: { line: 1, column: 3 },
-        });
-      }
-      return (actual.compile as (...a: unknown[]) => unknown)(source, ...rest);
-    },
-  };
-});
 
 // The built-in html target, as the registry resolves it.
 const html = (): TargetPolicy => {
@@ -40,6 +22,7 @@ const html = (): TargetPolicy => {
 
 const dirs: string[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true });
 });
 
@@ -77,6 +60,20 @@ describe("Babel's (L:C) is kept unless it repeats the diagnostic's own position"
   });
 
   it("keeps an (L:C) that differs from the error's own loc", () => {
+    const descriptor = builtinLookup().target(defaultTarget());
+    if (!descriptor?.load) throw new Error("missing default target compiler");
+    // The registry now owns dispatch, so intercept its compile entry rather
+    // than mocking a host index the server no longer imports.
+    const wired = descriptor as typeof descriptor & {
+      load: NonNullable<typeof descriptor.load>;
+    };
+    const compileModule: TargetCompiler["compileModule"] = () => {
+      // Give loc a position that disagrees with the message's own (12:7).
+      throw Object.assign(new Error("only position (12:7)"), {
+        loc: { line: 1, column: 3 },
+      });
+    };
+    vi.spyOn(wired, "load").mockReturnValue({ compileModule });
     expect(messageOf({ "page.mx": "<p>PLAIN-ERROR</p>\n" }, "page.mx")).toBe(
       "only position (12:7)",
     );
