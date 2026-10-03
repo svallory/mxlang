@@ -3,6 +3,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   unlinkSync,
   utimesSync,
   writeFileSync,
@@ -14,6 +15,7 @@ import {
   clearPackageJsonCache,
   positionOfOffset,
   readPackageJsonCached,
+  setPackageJsonStatForTests,
 } from "./package-json.ts";
 
 describe("positionOfOffset", () => {
@@ -85,6 +87,66 @@ describe("readPackageJsonCached", () => {
     utimesSync(file, pinned, pinned);
 
     expect(readPackageJsonCached(file)?.manifest).toEqual({ a: 2 });
+  });
+
+  describe("on a filesystem whose timestamps are too coarse to tell two writes apart", () => {
+    // Linux < 6.13 stamps ctime per jiffy (4 ms at HZ=250): a same-size rewrite
+    // in the same tick leaves mtime, ctime, size and ino identical. Freeze the
+    // stat the cache keys on to simulate that on any OS.
+    afterEach(() => setPackageJsonStatForTests());
+
+    function freezeStat(path: string): void {
+      const frozen = statSync(path);
+      setPackageJsonStatForTests(() => frozen);
+    }
+
+    it("sees a same-size rewrite whose stat is identical", () => {
+      writeFileSync(file, '{"a":1}');
+      expect(readPackageJsonCached(file)?.manifest).toEqual({ a: 1 });
+      freezeStat(file);
+      readPackageJsonCached(file);
+
+      writeFileSync(file, '{"a":2}');
+
+      expect(readPackageJsonCached(file)?.manifest).toEqual({ a: 2 });
+    });
+
+    it("sees a same-size rewrite to a broken file", () => {
+      writeFileSync(file, '{"a":1}');
+      freezeStat(file);
+      readPackageJsonCached(file);
+
+      writeFileSync(file, "{ bad!");
+
+      expect(readPackageJsonCached(file)?.error).toBeDefined();
+    });
+
+    it("still returns the cached entry itself when the stat and the text are unchanged", () => {
+      writeFileSync(file, '{"a":1}');
+      freezeStat(file);
+      const first = readPackageJsonCached(file);
+
+      expect(readPackageJsonCached(file)).toBe(first);
+    });
+
+    it("re-reads a broken file whose stat and text are unchanged only as the same entry", () => {
+      writeFileSync(file, "{ bad");
+      freezeStat(file);
+      const first = readPackageJsonCached(file);
+
+      expect(first?.error).toBeDefined();
+      expect(readPackageJsonCached(file)).toBe(first);
+    });
+
+    it("treats a file that became unreadable under an unchanged stat as changed", () => {
+      writeFileSync(file, '{"a":1}');
+      freezeStat(file);
+      readPackageJsonCached(file);
+
+      unlinkSync(file);
+
+      expect(readPackageJsonCached(file)?.error).toBeDefined();
+    });
   });
 
   it("sees a pinned-mtime rewrite to a broken file", () => {

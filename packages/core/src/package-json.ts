@@ -45,6 +45,15 @@ interface CacheEntry extends PackageJsonRead {
 
 const cache = new Map<string, CacheEntry>();
 
+let statFile: (path: string) => Stats = statSync;
+
+/** For tests: replaces the `stat` the cache keys on (coarse-timestamp filesystems); no argument restores it. */
+export function setPackageJsonStatForTests(
+  stat?: (path: string) => Stats,
+): void {
+  statFile = stat ?? statSync;
+}
+
 /** For tests: drops every cached `package.json` read. */
 export function clearPackageJsonCache(): void {
   cache.clear();
@@ -101,14 +110,30 @@ function positionOfParseError(
  * write and cannot be set by the user, `size` catches most of the rest, and
  * `ino` catches an atomic replace (write-temp-then-rename, which editors and
  * package managers use).
+ *
+ * The stamp is only a fast filter, never proof of "unchanged": Linux before
+ * 6.13 stamps ctime at jiffy granularity (4 ms at HZ=250), so a same-size
+ * rewrite in the same tick can leave all four fields identical.
+ * `readPackageJsonCached` therefore confirms a stamp hit against the bytes.
  */
 function stampOf(stats: Stats): string {
   return `${stats.mtimeMs}:${stats.ctimeMs}:${stats.size}:${stats.ino}`;
 }
 
+/** Whether `path` still reads as `entry.text`; an unreadable file is not "same". */
+function sameText(path: string, entry: CacheEntry): boolean {
+  try {
+    return readFileSync(path, "utf8") === entry.text;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Reads and parses `path`, reusing the last parse while its stamp
- * (mtime, ctime, size, inode) is unchanged. `undefined` means there is no such file (nothing is cached for
+ * (mtime, ctime, size, inode) is unchanged *and* the file's text still equals
+ * the cached text (a stamp hit costs one read plus a string compare, since the
+ * stamp cannot see a same-tick same-size rewrite on coarse-ctime kernels). `undefined` means there is no such file (nothing is cached for
  * it); a file that exists but cannot be read or parsed returns an `error`.
  */
 export function readPackageJsonCached(
@@ -116,14 +141,14 @@ export function readPackageJsonCached(
 ): PackageJsonRead | undefined {
   let stamp: string;
   try {
-    stamp = stampOf(statSync(path));
+    stamp = stampOf(statFile(path));
   } catch {
     cache.delete(path);
     return undefined;
   }
 
   const cached = cache.get(path);
-  if (cached && cached.stamp === stamp) return cached;
+  if (cached && cached.stamp === stamp && sameText(path, cached)) return cached;
 
   let text = "";
   let parsed: unknown;

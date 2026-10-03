@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: a same-tick, same-size `package.json` rewrite is no longer served stale (core-package-json-ctime-cache)
+
+`readPackageJsonCached` keyed its cache on `mtimeMs:ctimeMs:size:ino` alone. Linux before 6.13 stamps ctime at jiffy granularity (4 ms at HZ=250), so an edit that kept the size inside one tick, with the mtime pinned, left the key identical and the old `mx.host` / `mx.tags` kept winning. On a stamp hit the cache now also reads the file and compares its text with the cached text (one read plus a string compare per lookup of an unchanged file; a stamp miss costs what it did). `setPackageJsonStatForTests` lets tests freeze the stat to reproduce coarse timestamps on any OS. The other stat-keyed caches in core (`scan-cache`, `template-tag`, `callee-input`, `target-loader`) key on `mtimeMs` only by design and never depended on ctime.
+
 ### Added: allowed authored children for custom tags (contract-e2, decision 138)
 
 `CustomTag.children` is a closed record of `{ required?, repeatable? }` declarations; the reserved key `"#text"` allows non-whitespace text and interpolations. Whitespace, comments, `<const>` and `<define>` declarations do not count. Core validates authored child names before lowering, including transform children, template tags with declaration-only sidecars and contract-only delegated tags. `<if>` / `<else-if>` / `<else>` and `<for>` are transparent: requirements hold on every path and loops need repeatability. Dynamic children are rejected in a closed contract. Unknown children, text, dynamic children, repetitions and missing children report the first positioned error; repeat errors point at the second occurrence (or the sole loop occurrence). Registration rejects children with `parseOptions.text: true` or `openTagOnly: true` and unknown child-declaration keys. Optional `TagCall.childTree` and exported `ChildNode` / `CustomTagChild` expose authored structure to hooks without changing emitted IR. Spec §9.7/§9.8, sidecar docs and `divergences.md`; core and data-target regression tests.
