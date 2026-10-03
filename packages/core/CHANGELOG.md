@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: a mismatched closing tag names the opener's position (missing-close-tag-opener-position, audit item 12)
+
+`compileSource` appends ` at line:column` (1-based, UTF-16 columns, the `<` of the innermost unclosed tag) to Marko's `The closing "div" tag does not match the corresponding opening "p" tag` error, on `message` and on `label`. The error stays at the closer. Marko 6.3.51's error carries no second location, so core replays the source through `htmljs-parser` (new exact-pinned dependency, 5.15.0, the copy `@marko/compiler` already uses) and only annotates when the replay reproduces the same error at the same position; otherwise the message is untouched. Reaches every Marko-path host (html, preact, react, hono, astro, angular whole-file).
+
 ### Added: the target descriptor contract and a synchronous loader (target-descriptor, decisions 129 and 132)
 
 **Unstable; nothing consumes it yet.** New exports: `TargetDescriptor`, `TargetHost`, `TargetCompiler`, `TargetCompileOptions`, `TargetCompileResult`, `HostFileKind`, `HostRegionInput`, `HostRegionResult`, `TargetLookup`, `validateDescriptor`, `createTargetLookup`, `TargetDescriptorError`, `TargetLookupError`, `loadTargetDescriptor`, `clearTargetDescriptorCache`, `TargetLoadError`, `TargetLoadErrorCode`, `TargetLookupRule`. A descriptor is plain data plus a lazy `load(core)`; `createTargetLookup` enforces distinct target and host names, caller-supplied `reservedNames`, `packageName` uniqueness (shared only within one host), one `host.default` per multi-target host, and a single non-deprecated `legacyHostValues` entry as a hostless target's filter key. `loadTargetDescriptor` resolves from the project like `loadSidecar` does and caches by resolved path and the nearest `package.json` mtime. When that manifest belongs to the target package, a change re-evaluates the entry and the modules under the package directory (not a nested `node_modules`); when it is the project's own, only the entry file. No existing behaviour changes.

@@ -216,6 +216,7 @@
       "dependencies": {
         "@babel/parser": "7.29.8",
         "@marko/compiler": "5.42.5",
+        "htmljs-parser": "5.15.0",
       },
     },
     "packages/editors/tree-sitter-amx": {

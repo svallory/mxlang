@@ -1669,7 +1669,7 @@ export default () => <div />;
       // The message is the reason alone: Marko's embedded `at ../../x:4:1`
       // path and duplicate code frame are replaced by `loc` + `frame`.
       expect(error.message).toBe(
-        'The closing "div" tag does not match the corresponding opening "p" tag',
+        'The closing "div" tag does not match the corresponding opening "p" tag at 3:3',
       );
       expect(error.frame).toContain("</div>");
     });

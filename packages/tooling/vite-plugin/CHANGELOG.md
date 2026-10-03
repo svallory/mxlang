@@ -4,6 +4,8 @@
 
 - **Changed (amx-to-astro-mx, decision 134):** `x.astro.mx`, Astro's template kind, is declined by `mx()` (it joins the foreign-extension guard), so a registered `.mx` does not claim it.
 
+- A Marko mismatched-closing-tag error now reports the opener's position in its reason (`… opening "p" tag at 3:3`), through core. Test expectation updated; no plugin code changed.
+
 - **Fix (audit-05-vite-unresolved-import, audit cases h15, p10, s11):** an import in an authored `.mx` / `.solid.mx` file that nothing resolves (a missing `./card.mx`, a missing `./helper.ts`, a package that is not installed) now fails `vite build` and the dev server against the authored file and the import's own line:col, with a one-line code frame:
 
   ```

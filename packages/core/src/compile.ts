@@ -18,6 +18,7 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
+import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import {
   type Ctx,
   type MxWarning,
@@ -252,6 +253,7 @@ export function compileSource(
   } catch (error) {
     if (error instanceof TranslateError)
       error.dependencies = state.dependencies;
+    annotateCloseTagOpener(error, source);
     throw error;
   } finally {
     current = previous;
