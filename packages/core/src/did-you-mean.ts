@@ -9,8 +9,13 @@
  * unambiguously nearest, and counts a swapped pair of letters as one edit.
  */
 
-/** The HTML elements an author can mistype (no SVG/MathML, no obsolete tags). */
-const HTML_ELEMENTS = [
+/**
+ * The HTML elements an author can mistype (no SVG/MathML, no obsolete tags).
+ * Every entry compiles on `@mxlang/html`: `<search>` and `<slot>` are left out
+ * because that host cannot resolve them, and a suggestion that fails is worse
+ * than none (a test compiles each entry).
+ */
+export const HTML_ELEMENTS = [
   "a",
   "abbr",
   "address",
@@ -94,10 +99,8 @@ const HTML_ELEMENTS = [
   "s",
   "samp",
   "script",
-  "search",
   "section",
   "select",
-  "slot",
   "small",
   "source",
   "span",

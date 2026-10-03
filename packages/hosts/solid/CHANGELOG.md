@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (fix-hints-batch round 2):** the scriptlet hint now says to declare the value in the surrounding TypeScript module (`const y = …;`), since a `.solid.mx` region rejects `<const>`; it is declared through the new optional `scriptletReplacement` host declaration.
+
 - **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.`` (or ``Did you mean `<Badge>`?`` for a near-miss import), `(click)="go()"` ends ``; for an event handler write `onClick=go` ``, and a `$` scriptlet ends ``; declare a value with `<const/x=…/>` ``.
 
 - **Fix (solid-params-body-sole-component):** a tag-params body whose sole child rendered as a bare expression (`<for|item| of=input.items><Badge label=item/></for>`, a sole `${}`-dispatched dynamic tag, a render-prop or `<@catch>` body) was emitted as `(item) => {(() => { … })()}`. An arrow followed by `{` has a block body, so the callback returned `undefined` and the list rendered nothing while the output still compiled. The body is now wrapped in the `<>…</>` fragment the multi-child path already uses (every body already starting as JSX is byte-identical). Covers `<for of>`, `<for in>`, `<for to>` (plain and stepped), render-prop tag bodies, attribute-tag renderables, and the `<try>` fallback. Round 2: the same wrapper (`jsxValue`) now also covers the `<try>` `<@placeholder>` `fallback={…}` value and a `<define>` call's no-params body argument, where a `{`-led body was a syntax error (`fallback={{…}}`, `{$mx_DefineR1({$mx_DefineA1(1)})}`). preact/react/hono were checked and are unaffected. Pinned by executed SSR tests in `src/arrow-body.test.ts`.

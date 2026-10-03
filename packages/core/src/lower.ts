@@ -91,7 +91,7 @@ import type {
   Position,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
-import { declaredName, scriptletFix } from "./parse-error-hints.ts";
+import { declaredName, scriptletSentence } from "./parse-error-hints.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -413,7 +413,9 @@ const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
 function declaredVariable(scriptlet: Node): string | undefined {
   const first = scriptlet.body?.[0];
   if (typeof first?.source === "string") return declaredName(first.source);
-  const id = first?.declarations?.[0]?.id;
+  if (scriptlet.body?.length !== 1) return undefined;
+  const declarations = first?.declarations;
+  const id = declarations?.length === 1 ? declarations[0]?.id : undefined;
   return id?.type === "Identifier" ? id.name : undefined;
 }
 
@@ -2787,7 +2789,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
         break;
       case "MarkoScriptlet":
         fail(
-          `scriptlets (\`$ statement\`) are not supported in MX (decision 54); ${scriptletFix(declaredVariable(child))}`,
+          `scriptlets (\`$ statement\`) are not supported in MX (decision 54)${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
           child,
         );
         break;

@@ -275,7 +275,7 @@ export function compileSource(
       dropCompiledFilePrefix(error, filename);
     }
     annotateCloseTagOpener(error, source);
-    hintParseError(error, source);
+    hintParseError(error, source, policy);
     throw error;
   } finally {
     current = previous;

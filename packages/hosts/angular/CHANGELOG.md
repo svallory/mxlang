@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Added (fix-hints-batch, audit item 14):** three hints from `@mxlang/core` reach `.ng.mx`, same message and position otherwise: a tag attribute with `=` and no value (`<div id= class="a">`) says to write `id="…"`/`id=expr` or drop the `=`; a syntax error in a `$` line says scriptlets are not supported and to declare a value with `<const/x=…/>` (compiles here); `<button (click)="go()">` outside the Angular syntax path says to write `onClick=go`. A lowercase tag never reaches the unresolved-tag path on this host, so the element did-you-mean does not apply.
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `angular-template` target descriptor (host `angular`, `angularDeclarations`, file kind `ng` with language id `ngmx`, no `load`, `pending: "phase 2"`). Also built into `dist/descriptor.{js,d.ts}`. Nothing consumes it yet; see `@mxlang/target-registry`.
 
 - **Fix (dup-attr-last-wins-core, decision 135):** a repeated attribute now emits only the last; `x`, `[x]`, `(x)` and `#x` stay distinct names. Before, both were emitted as authored. The earlier occurrence gets a positioned warning naming the surviving one. See `@mxlang/core`.

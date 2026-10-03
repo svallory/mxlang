@@ -13,6 +13,8 @@
  * "Scriptlets are not supported when using the tags api.").
  */
 
+import type { HostDeclarations } from "./declarations.ts";
+
 // With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
 // run to the end of the line, so allow SGR sequences after the reason.
 const SGR = "(?:\\u001b\\[[0-9;]*m)*";
@@ -23,14 +25,63 @@ type Located = Error & {
   errors?: unknown[];
 };
 
-/** The scriptlet rule, shared with the lowering error for a *valid* `$` line. */
-export function scriptletFix(name?: string): string {
-  return `declare a value with \`<const/${name ?? "x"}=…/>\``;
+/** What to write instead of a scriptlet that declares `name`, core's default. */
+const DEFAULT_REPLACEMENT = (name: string) =>
+  `declare a value with \`<const/${name}=…/>\``;
+
+/**
+ * The scriptlet message tail: the sentence every host shares, plus the host's
+ * replacement when the statement declares exactly one variable. A call, an
+ * assignment, a class, an import or a destructuring declares no single value,
+ * so nothing is advised for them.
+ */
+export function scriptletSentence(
+  name: string | undefined,
+  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
+): string {
+  if (!name) return "";
+  return `; ${(declarations?.scriptletReplacement ?? DEFAULT_REPLACEMENT)(name)}`;
 }
 
-/** The variable a `const|let|var NAME =` statement line declares. */
-export const declaredName = (statement: string): string | undefined =>
-  statement.match(/^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/)?.[1];
+/**
+ * The variable a `const|let|var NAME =` statement declares, when it declares
+ * exactly that one (no second declarator after a top-level comma).
+ */
+export const declaredName = (statement: string): string | undefined => {
+  const found = statement.match(
+    /^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=([\s\S]*)$/,
+  );
+  if (!found) return undefined;
+  let depth = 0;
+  let quote = "";
+  for (const char of found[2] ?? "") {
+    if (quote) {
+      if (char === quote) quote = "";
+    } else if ("\"'`".includes(char)) quote = char;
+    else if ("([{".includes(char)) depth++;
+    else if (")]}".includes(char)) depth--;
+    else if (char === "," && depth === 0) return undefined;
+  }
+  return found[1];
+};
+
+/**
+ * Whether `offset` sits inside a `{…}` expression of the tag or placeholder
+ * being written (a multi-line attribute value, `${…}`), where a line starting
+ * with `$` is expression text, not a scriptlet.
+ */
+function insideBraces(source: string, offset: number): boolean {
+  const open = Math.max(
+    source.lastIndexOf("<", offset),
+    source.lastIndexOf("${", offset),
+  );
+  let depth = 0;
+  for (const char of source.slice(Math.max(open, 0), offset)) {
+    if (char === "{") depth++;
+    else if (char === "}") depth--;
+  }
+  return depth > 0;
+}
 
 /** Offset of a 1-based line and 0-based column in `source`. */
 function offsetOf(source: string, line: number, column: number): number {
@@ -47,6 +98,7 @@ function hintFor(
   reason: string,
   source: string,
   at: { line: number; column: number; index?: number },
+  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
 ): string | null {
   const offset = at.index ?? offsetOf(source, at.line, at.column);
   if (offset < 0) return null;
@@ -68,22 +120,33 @@ function hintFor(
   const lineEnd = source.indexOf("\n", offset);
   const text = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
   const scriptlet = text.match(/^\s*\$\s+(\S.*)$/);
-  if (scriptlet) {
-    return `scriptlets (\`$ …\`) are not supported; ${scriptletFix(declaredName(scriptlet[1] ?? ""))}`;
+  if (scriptlet && !insideBraces(source, lineStart)) {
+    return `scriptlets (\`$ …\`) are not supported${scriptletSentence(declaredName(scriptlet[1] ?? ""), declarations)}`;
   }
   return null;
 }
 
-/** Appends `hint` to the last line of `message` that ends with `reason`. */
-function appendToReason(message: string, reason: string, hint: string) {
+/**
+ * Appends `hint` to the first not-yet-hinted line of `message` that ends with
+ * `reason`, searching from the frame that names `at` (`:line:column`, 1-based)
+ * when the message has one. A hinted line no longer ends with the bare reason,
+ * so the entries of an aggregate land on their own frames in order, and an
+ * unhinted entry with the same reason cannot take another's hint.
+ */
+function appendToReason(
+  message: string,
+  reason: string,
+  hint: string,
+  at?: { line: number; column: number },
+) {
   const escaped = reason.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const ending = new RegExp(`${escaped}(${SGR})(?=\\r?\\n|$)`, "g");
-  let last: RegExpExecArray | undefined;
-  for (let found = ending.exec(message); found; found = ending.exec(message)) {
-    last = found;
-  }
-  if (!last) return message;
-  return `${message.slice(0, last.index)}${reason}; ${hint}${last[1]}${message.slice(last.index + last[0].length)}`;
+  const ending = new RegExp(`${escaped}(${SGR})(?=\\r?\\n|$)`);
+  const marker = at ? message.indexOf(`:${at.line}:${at.column + 1}\n`) : -1;
+  const from = Math.max(marker, 0);
+  const found = ending.exec(message.slice(from));
+  if (!found) return message;
+  const start = from + found.index;
+  return `${message.slice(0, start)}${reason}; ${hint}${found[1]}${message.slice(start + found[0].length)}`;
 }
 
 /** `CompileError.message` is an accessor whose setter can drop an assignment. */
@@ -96,13 +159,17 @@ function setMessage(error: Error, message: string): void {
   });
 }
 
-function hintOne(error: Located, source: string): string | null {
+function hintOne(
+  error: Located,
+  source: string,
+  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
+): string | null {
   const reason = typeof error.label === "string" ? error.label : null;
   const at = error.loc?.start;
   if (!reason || !at) return null;
-  const hint = hintFor(reason, source, at);
+  const hint = hintFor(reason, source, at, declarations);
   if (!hint) return null;
-  setMessage(error, appendToReason(error.message, reason, hint));
+  setMessage(error, appendToReason(error.message, reason, hint, at));
   error.label = `${reason}; ${hint}`;
   return hint;
 }
@@ -112,16 +179,28 @@ function hintOne(error: Located, source: string): string | null {
  * (message and `label`, the two places a caller reads it from). An aggregate
  * error is handled entry by entry, mirroring `annotateCloseTagOpener`.
  */
-export function hintParseError(error: unknown, source: string): void {
+export function hintParseError(
+  error: unknown,
+  source: string,
+  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
+): void {
   if (!(error instanceof Error)) return;
   const aggregate = error as Located;
-  hintOne(aggregate, source);
+  hintOne(aggregate, source, declarations);
   for (const entry of aggregate.errors ?? []) {
     if (typeof (entry as Located | null)?.message !== "string") continue;
     const reason = (entry as Located).label;
-    const hint = hintOne(entry as Located, source);
+    const hint = hintOne(entry as Located, source, declarations);
     if (hint && typeof reason === "string") {
-      setMessage(aggregate, appendToReason(aggregate.message, reason, hint));
+      setMessage(
+        aggregate,
+        appendToReason(
+          aggregate.message,
+          reason,
+          hint,
+          (entry as Located).loc?.start,
+        ),
+      );
     }
   }
 }

@@ -115,6 +115,14 @@ export interface HostDeclarations {
    * standalone-string diagnostic here.
    */
   rejectAttributeMethod?(attr: Node, on?: "element" | "component"): void;
+  /**
+   * How an author replaces a `$` scriptlet that declares a value, in this
+   * host's own words (`name` is the declared variable). Shown after "scriptlets
+   * are not supported". Defaults to `` declare a value with `<const/name=…/>` ``,
+   * right for a host whose templates accept `<const>`; a host that cannot
+   * declare a binding inside its template (Solid, Astro) names where it can.
+   */
+  scriptletReplacement?(name: string): string;
   /** Return true when this host carries an attribute method as a callable prop. */
   resolveAttributeMethod?(attr: Node, on?: "element" | "component"): boolean;
   /**

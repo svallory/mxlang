@@ -1,3 +1,4 @@
+import { HTML_ELEMENTS } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
@@ -106,5 +107,73 @@ describe("event binding syntax (html)", () => {
     expect(failure('<button (click)="go()">x</button>').message).toBe(
       "tag arguments `(...)` on `<button>` are not supported in a standalone template",
     );
+  });
+});
+
+describe("round 2 (html)", () => {
+  const frames = (message: string) =>
+    message
+      .split("\n")
+      .filter((line) => /\|\s+\^/.test(line))
+      .map((line) => line.replace(/^.*\^ /, ""));
+  const noValue = (name: string) =>
+    `Unexpected token, expected "{"; \`${name}=\` has no value; write \`${name}="…"\` or \`${name}=expr\`, or drop the \`=\``;
+
+  it("F1: each frame of a 2-error aggregate gets its own attribute's hint", () => {
+    const { message } = failure(
+      '<div id= class="a">a</div>\n<div title= class="b">b</div>',
+    );
+    expect(frames(message)).toEqual([noValue("id"), noValue("title")]);
+  });
+
+  it("F1: a 3-error aggregate keeps every frame on its own attribute", () => {
+    const { message } = failure(
+      '<div id= class="a">a</div>\n<div title= class="b">b</div>\n<div href= class="c">c</div>',
+    );
+    expect(frames(message)).toEqual([
+      noValue("id"),
+      noValue("title"),
+      noValue("href"),
+    ]);
+  });
+
+  it("F3: every element the did-you-mean can suggest compiles on this host", () => {
+    const broken: string[] = [];
+    for (const element of HTML_ELEMENTS) {
+      try {
+        compile(`<${element}/>`, "/fixtures/test.mx");
+      } catch {
+        broken.push(element);
+      }
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it.each([
+    ["a call", "$ doThing(;"],
+    ["an assignment", "$ x = ;"],
+    ["a destructuring", "$ const { a, b } = ;"],
+    ["a multi-declarator", "$ const x = 1, y = ;"],
+    ["a class", "$ class Foo {;"],
+    ["an import", "$ import Foo from ;"],
+  ])("F4: %s does not claim to declare a value", (_label, line) => {
+    const { message } = failure(`${line}\n<p>1</p>`);
+    const reason = reasonOf(message) ?? "";
+    expect(reason).toContain("scriptlets (`$ …`) are not supported");
+    expect(reason).not.toContain("declare");
+  });
+
+  it("F4: a valid non-declaring scriptlet gets the bare sentence", () => {
+    expect(failure("$ doThing();\n<p>1</p>").message).toBe(
+      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
+    );
+    expect(failure("$ const { a } = x;\n<p>1</p>").message).toBe(
+      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
+    );
+  });
+
+  it("F5: `$ …` text inside a multi-line attribute expression is not a scriptlet", () => {
+    const { message } = failure("<div class={\n  $ const x = ;\n}>x</div>");
+    expect(reasonOf(message)).not.toContain("scriptlet");
   });
 });

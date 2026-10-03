@@ -48,9 +48,17 @@ describe("event binding syntax (solid)", () => {
 });
 
 describe("scriptlets (solid)", () => {
+  it("the form it suggests compiles", () => {
+    expect(() =>
+      compileFile(
+        "const y = 1;\nexport function App() {\n  return (\n    <div>{y}</div>\n  );\n}\n",
+      ),
+    ).not.toThrow();
+  });
+
   it("s07: says what to write instead", () => {
     expect(message(file("<div>\n      $ const y = ;\n    </div>"))).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54); declare a value with `<const/y=…/>` (4:6)",
+      "scriptlets (`$ statement`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (`const y = …;`) (4:6)",
     );
   });
 });
