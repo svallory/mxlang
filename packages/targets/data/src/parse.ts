@@ -23,6 +23,7 @@ import { dataDeclarations } from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
 import type { DataDocument } from "./tree.ts";
 
+export { serializeDataDocument } from "./compile.ts";
 export { dataDeclarations, RESERVED_NAMES } from "./declarations.ts";
 export { DATA_TAGLIB_ID, dataTaglib, neutralizations } from "./taglib.ts";
 export type {
@@ -36,6 +37,7 @@ export type {
   DataNode,
   DataStatement,
   DataTag,
+  SerializedDataDocument,
 } from "./tree.ts";
 
 export interface ParseDataOptions {
@@ -50,6 +52,13 @@ export interface ParseDataOptions {
    * only and must not silently ignore an `<if>` its codegen never reads.
    */
   structural?: "pass" | "reject";
+  /**
+   * A sink for core's warnings, as on the other targets: they are pushed here
+   * as they are raised, so those raised before a later error stay in the
+   * caller's array. `diagnostics` still reports this call's warnings (not
+   * entries already in the array) when the parse succeeds.
+   */
+  warnings?: MxWarning[];
 }
 
 export interface DataDiagnostic {
@@ -183,7 +192,8 @@ export function parseData(
   options: ParseDataOptions = {},
 ): ParseDataResult {
   const lineStarts = lineStartsOf(source);
-  const warnings: MxWarning[] = [];
+  const warnings: MxWarning[] = options.warnings ?? [];
+  const firstWarning = warnings.length;
   let ir: Ir | null = null;
   // No source pre-scan here any more: a CDATA section and an XML declaration
   // are rejected by core itself, at the `<` of the construct (decision 139),
@@ -230,16 +240,18 @@ export function parseData(
     });
     return {
       tree,
-      diagnostics: warnings.map((warning) =>
-        toDiagnostic(
-          "warning",
-          warning.message,
-          warning,
-          lineStarts,
-          source,
-          filename,
+      diagnostics: warnings
+        .slice(firstWarning)
+        .map((warning) =>
+          toDiagnostic(
+            "warning",
+            warning.message,
+            warning,
+            lineStarts,
+            source,
+            filename,
+          ),
         ),
-      ),
     };
   } catch (error) {
     const diagnostic = toErrorDiagnostic(error);

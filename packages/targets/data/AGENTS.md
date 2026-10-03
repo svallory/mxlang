@@ -39,6 +39,28 @@ the first) decides what any tag or expression means. Design:
 - `src/parse.ts` — `parseData`/`parseDataFile` → `{ tree, diagnostics }`.
   Fail fast: one positioned error and `tree: undefined`, never a partial
   tree. Marko `CompileError`s report their `label`, not the framed `message`.
+- `src/descriptor.ts` + `src/compile.ts` — the `data` `TargetDescriptor`
+  (`./descriptor` export) and its `compileModule`, which emits
+  `export default <literal> as const`: the tree minus every Babel `node`
+  (`SerializedDataDocument` in `tree.ts` is the shape; the literal is
+  assignable to it). The module **imports nothing**, so it type-checks in a
+  consumer with no `@mxlang/*` package (this package is source-only and its
+  `tree.ts` pulls in `@babel/types` and core). Light import: the descriptor
+  imports `declarations.ts` only; `compile.ts` requires `./parse.ts` (and so
+  `@marko/compiler`) inside `compileModule`, on a relative path, so `load()`
+  loads no compiler. A source error throws one positioned `TranslateError`
+  (the `TargetCompiler` contract; no partial tree to emit); warnings go to the
+  caller's `options.warnings` as raised, so those before an error are kept.
+  No `translator`: only the mapping pass reads it. No `mappings` either: the
+  mapping mode is chosen in data PR 4, together with the TS plugin's guard for
+  a target that returns no `map` and no `mappings` (the plugin's merge path
+  dereferences both).
+- **`load()` needs Bun or a bundler.** A descriptor's `load()` is synchronous
+  by contract and reaches its compile module with a relative `require`. That
+  works under Bun and inside a bundle, but under plain Node ESM `require` is
+  not defined and `load()` throws. Tooling that loads the registry under plain
+  Node must bundle it (not mark it external). The seven hosts use the same
+  idiom; the language server bundles them today.
 
 Reserved names (no data tag may use them): core's structural names plus
 `else`, `else-if` and `try`. `<define>` and its calls, `<return>`, tag

@@ -2,6 +2,22 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added, unstable (data-pr3, decisions 129 and 132):** the `data` target
+  descriptor (`@mxlang/data/descriptor`: `name: "data"`, no host, the
+  delegate-everything declarations, no `translator`, no `mappings`; the mapping
+  mode is chosen in data PR 4) and `compileModule` (`src/compile.ts`).
+  `compileModule` emits a TypeScript module that imports nothing and whose
+  default export is the tree as a literal (`as const`) with every Babel `node`
+  removed and `code`, `shape` and `span` kept; it is assignable to the new
+  `SerializedDataDocument` (`@mxlang/data/tree`, arrays `readonly`). A source
+  error throws one positioned `TranslateError`; its message has no
+  `<filename>: ` prefix (a reporter that prints `file: message` does not
+  double up). `ParseDataOptions.warnings` is a sink core fills as it raises
+  warnings, so `compileModule` keeps the ones raised before an error in
+  `options.warnings` (or prints them with no sink). `serializeDataDocument`
+  does the strip. Importing the descriptor or calling `load()` loads no
+  `@marko/compiler`; compiling does. Nothing in the tools uses it yet
+  (`mx.target: "data"` end to end is data PR 4).
 - **Added (data-pr1, decisions 131/132 and the 131 addendum):** the hostless
   data target. `parseData(source, filename, options?)` (and `parseDataFile`)
   compile a `.mx` source through `@mxlang/core` and return `{ tree,

@@ -11,6 +11,7 @@
   "types": "src/parse.ts",
   "exports": {
     ".": "./src/parse.ts",
+    "./descriptor": "./src/descriptor.ts",
     "./tree": "./src/tree.ts"
   },
   "scripts": {

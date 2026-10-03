@@ -22,6 +22,7 @@ const NAMES = [
   "react-jsx",
   "hono-jsx",
   "angular-template",
+  "data",
 ];
 
 const byName = (name: string): TargetDescriptor => {
@@ -31,9 +32,9 @@ const byName = (name: string): TargetDescriptor => {
 };
 
 describe("builtinTargets", () => {
-  it("lists the seven targets in registration order, `data` not yet among them", () => {
+  it("lists the seven hosts in registration order, then the hostless `data`", () => {
     expect(builtinTargets.map((t) => t.name)).toEqual(NAMES);
-    expect(lookup.hasTarget("data")).toBe(false);
+    expect(lookup.hasTarget("data")).toBe(true);
   });
 
   it.each(NAMES)("%s passes validateDescriptor", (name) => {
@@ -146,13 +147,13 @@ describe("lookup: packages and host values", () => {
     ["@mxlang/react", "react-jsx"],
     ["@mxlang/hono", "hono-jsx"],
     ["@mxlang/angular", "angular-template"],
+    ["@mxlang/data", "data"],
   ])("fromPackage(%s) is %s", (pkg, name) => {
     expect(lookup.fromPackage(pkg)).toBe(name);
   });
 
   it("fromPackage ignores core, a target name and a stranger", () => {
     expect(lookup.fromPackage("@mxlang/core")).toBeUndefined();
-    expect(lookup.fromPackage("@mxlang/data")).toBeUndefined();
     expect(lookup.fromPackage("solid-jsx")).toBeUndefined();
     expect(lookup.fromPackage("left-pad")).toBeUndefined();
   });
@@ -213,11 +214,12 @@ describe("lookup: packages and host values", () => {
     expect(lookup.moduleSegments()).toEqual(["astro", "solid", "ng"]);
   });
 
-  it("attrTagSources are the seven host packages", () => {
+  it("attrTagSources are the seven host packages and @mxlang/data", () => {
     expect([...lookup.attrTagSources()].sort()).toEqual(
       [
         "@mxlang/angular",
         "@mxlang/astro",
+        "@mxlang/data",
         "@mxlang/hono",
         "@mxlang/html",
         "@mxlang/preact",
@@ -225,6 +227,47 @@ describe("lookup: packages and host values", () => {
         "@mxlang/solid",
       ].sort(),
     );
+  });
+});
+
+describe("the hostless `data` target", () => {
+  const data = byName("data");
+
+  it("has no host, no legacy host values and a data package of its own", () => {
+    expect(data.host).toBeUndefined();
+    expect(data.legacyHostValues).toBeUndefined();
+    expect(data.packageName).toBe("@mxlang/data");
+    expect(data.strict).toBeUndefined();
+    expect(data.declarations?.default.name).toBe("data");
+    expect(data.declarations?.strict).toBeUndefined();
+  });
+
+  it("adds no mx.host value, no file-kind segment and no filter key", () => {
+    expect(lookup.hostValues()).not.toContain("data");
+    expect(lookup.hostOf("data")).toBeUndefined();
+    expect(lookup.hostFilterKey("data")).toBeUndefined();
+    expect(builtinFileKinds.map((k) => k.segment)).toEqual([
+      "astro",
+      "solid",
+      "ng",
+    ]);
+    expect(lookup.moduleSegments()).toEqual(["astro", "solid", "ng"]);
+  });
+
+  it("is selected by its package (note 4.1 rule 2) and is not the default", () => {
+    expect(lookup.fromPackage("@mxlang/data")).toBe("data");
+    expect(lookup.defaultTarget()).toBe("html");
+  });
+
+  it("a registry without it still builds (it is one entry, not a dependency)", () => {
+    expect(() =>
+      createTargetLookup(
+        builtinTargets.filter((t) => t.name !== "data"),
+        {
+          reservedNames: ["astro-template"],
+        },
+      ),
+    ).not.toThrow();
   });
 });
 

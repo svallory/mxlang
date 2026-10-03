@@ -191,3 +191,26 @@ export interface DataDocument {
   statements: DataStatement[];
   children: DataNode[];
 }
+
+/**
+ * `T` with every Babel `node` removed, recursively. `node` is the one field
+ * of the tree that is not plain data (`DataExpr.node`, Marko's own Babel
+ * instance); everything else — `code`, `shape`, every `span` — is kept.
+ */
+export type WithoutBabelNodes<T> = T extends readonly (infer U)[]
+  ? readonly WithoutBabelNodes<U>[]
+  : T extends object
+    ? {
+        [K in keyof T as K extends "node" ? never : K]: WithoutBabelNodes<T[K]>;
+      }
+    : T;
+
+/**
+ * The data tree as a `.mx` data file's compiled module exports it: a
+ * `DataDocument` with the Babel `node` of every expression removed, leaving
+ * `code` (printed), `shape` and `span` (UTF-16 offsets into the authored
+ * source). It is plain JSON-compatible data, so the module needs no runtime
+ * import: the compiled module is a literal (`as const`) assignable to this
+ * type, and imports nothing itself. A consumer that needs the Babel nodes calls `parseData` instead.
+ */
+export type SerializedDataDocument = WithoutBabelNodes<DataDocument>;

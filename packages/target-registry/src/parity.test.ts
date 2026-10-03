@@ -37,6 +37,8 @@ import { solidDeclarations } from "@mxlang/solid";
 import { afterAll, describe, expect, it, vi } from "vitest";
 // core/src/host-policy.ts:71 (HOST_NAMES, exported)
 import { HOST_NAMES } from "../../core/src/host-policy.ts";
+// data/src/declarations.ts (the data target's own table; light, no compiler)
+import { dataDeclarations } from "../../targets/data/src/declarations.ts";
 // language-server/src/diagnose.ts:35 (SOLID_MX_LANGUAGE_IDS, exported)
 import { SOLID_MX_LANGUAGE_IDS } from "../../tooling/language-server/src/diagnose.ts";
 // typescript-plugin/src/amx-language.ts:32 (AMX_LANGUAGE_ID, exported)
@@ -66,6 +68,13 @@ function project(pkg: unknown): string {
   writeFileSync(join(dir, "package.json"), JSON.stringify(pkg));
   return join(dir, "a.mx");
 }
+
+/**
+ * The seven hosts today's closed lists know. `data` is not in any of them: it
+ * has no host, no file kind and no `mx.host` value, so it has no row in
+ * `HOST_NAMES`, `HOST_PACKAGES` or `MX_ATTR_TAG_SOURCES` to compare with.
+ */
+const hosted = builtinTargets.filter((t) => t.name !== "data");
 
 const target = (name: string) => {
   const found = builtinTargets.find((t) => t.name === name);
@@ -143,7 +152,7 @@ function expectSame(actual: unknown, expected: unknown, path = "declarations") {
 
 describe("host names (core/src/host-policy.ts:71 HOST_NAMES, :99 isKnownHost)", () => {
   it("the targets' hosts, with html as the hostless one, are HOST_NAMES in order", () => {
-    const hosts = builtinTargets.map((t) => t.host?.name ?? "html");
+    const hosts = hosted.map((t) => t.host?.name ?? "html");
     expect(hosts).toEqual([...HOST_NAMES]);
   });
 
@@ -189,7 +198,7 @@ describe("host names (core/src/host-policy.ts:71 HOST_NAMES, :99 isKnownHost)", 
 });
 
 describe("host packages (core/src/host-policy.ts:81 HOST_PACKAGES, rule 2 at :282)", () => {
-  it.each(builtinTargets.map((t) => [t.name, t.packageName] as const))(
+  it.each(hosted.map((t) => [t.name, t.packageName] as const))(
     "a project with only %s's package picks the same host through today's resolver",
     (name, pkg) => {
       const resolved = resolveHostPolicy(
@@ -201,8 +210,22 @@ describe("host packages (core/src/host-policy.ts:81 HOST_PACKAGES, rule 2 at :28
   );
 
   it("`@mxlang/<host>` for every HOST_NAMES entry is a registered package", () => {
-    const packages = builtinTargets.map((t) => t.packageName).sort();
+    const packages = hosted.map((t) => t.packageName).sort();
     expect(packages).toEqual(HOST_NAMES.map((h) => `@mxlang/${h}`).sort());
+  });
+
+  // TODO target-open-set-resolver: delete this tripwire when registration PR 3
+  // moves the resolver onto the registry; the two then agree on `data`.
+  it("`@mxlang/data` is the one package today's resolver does not know (rule 2 diverges on purpose)", () => {
+    // Today `HOST_PACKAGES` is closed: a project depending only on
+    // `@mxlang/data` falls through to the default `html` host. The lookup
+    // already answers `data`; the change that moves the resolver onto the
+    // registry (registration PR 3) makes the two agree.
+    const resolved = resolveHostPolicy(
+      project({ dependencies: { "@mxlang/data": "*" } }),
+    );
+    expect(resolved.host).toBe("html");
+    expect(lookup.fromPackage("@mxlang/data")).toBe("data");
   });
 });
 
@@ -211,7 +234,10 @@ describe("attr-tag sources (core/src/callee-input.ts:145 MX_ATTR_TAG_SOURCES)", 
     // The set the reader tests is `["@mxlang/core", ...HOST_NAMES.map(h => `@mxlang/${h}`)]`.
     // Core's own source is added by the reader, not by the lookup.
     const today = HOST_NAMES.map((host) => `@mxlang/${host}`);
-    expect([...lookup.attrTagSources()].sort()).toEqual(today.sort());
+    // `@mxlang/data` is the hostless target's package, which the closed list lacks.
+    expect([...lookup.attrTagSources()].sort()).toEqual(
+      [...today, "@mxlang/data"].sort(),
+    );
   });
 });
 
@@ -293,6 +319,12 @@ describe("declarations (typescript-plugin/src/mx-language.ts:253-280, createHtml
       expect(declared?.strict).toBeUndefined();
     },
   );
+
+  it("data lowers under its own delegate-everything declarations and has no translator", () => {
+    expectSame(target("data").declarations?.default, dataDeclarations);
+    expect(target("data").declarations?.strict).toBeUndefined();
+    expect(target("data").translator).toBeUndefined();
+  });
 
   it("html's translator is the one the mapping pass uses for every target (D3, mx-language.ts:21)", () => {
     const fromDescriptor = target("html").translator as Record<string, unknown>;

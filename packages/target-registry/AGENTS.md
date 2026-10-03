@@ -6,9 +6,10 @@ Private package (decisions 129 and 132; **unstable**, like the contract in
 `@mxlang/core`'s "Target contract" section). It statically imports each host
 package's `./descriptor` subpath and exports:
 
-- `builtinTargets`: the seven built-in `TargetDescriptor`s, in `mx.host` order
-  (`html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`,
-  `angular-template`). `data` joins when `@mxlang/data` exists.
+- `builtinTargets`: the eight built-in `TargetDescriptor`s: the seven hosts in
+  `mx.host` order (`html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`,
+  `hono-jsx`, `angular-template`), then the hostless `data` (no host, no file
+  kinds, no `mx.host` value, no `mx.tags[].hosts` filter key).
 - `builtinTargetLookup`: `createTargetLookup(builtinTargets, { reservedNames: ["astro-template"] })`.
   `astro-template` is reserved for the Astro template output, `.astro.mx` (design note §8 Q5; decision 134 made it a file kind of the `astro` host); the
   reservation lives here because core names no target.

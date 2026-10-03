@@ -19,6 +19,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
+import data from "@mxlang/data/descriptor";
 import hono from "@mxlang/hono/descriptor";
 import html from "@mxlang/html/descriptor";
 import preact from "@mxlang/preact/descriptor";
@@ -36,7 +37,7 @@ export interface BuiltinFileKind extends HostFileKind {
   readonly pipeline: "region" | "ng-template" | "astro-template";
 }
 
-/** The built-in targets, in registration order (the order `mx.host` values are listed in). */
+/** The built-in targets, in registration order (the order `mx.host` values are listed in; hostless `data` last, with no `mx.host` value). */
 export const builtinTargets: readonly TargetDescriptor[] = [
   html,
   astro,
@@ -45,6 +46,7 @@ export const builtinTargets: readonly TargetDescriptor[] = [
   react,
   hono,
   angular,
+  data,
 ];
 
 /**

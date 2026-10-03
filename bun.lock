@@ -411,6 +411,7 @@
         "@mxlang/angular": "workspace:*",
         "@mxlang/astro": "workspace:*",
         "@mxlang/core": "workspace:*",
+        "@mxlang/data": "workspace:*",
         "@mxlang/hono": "workspace:*",
         "@mxlang/html": "workspace:*",
         "@mxlang/preact": "workspace:*",
