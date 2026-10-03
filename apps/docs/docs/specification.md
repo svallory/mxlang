@@ -428,6 +428,12 @@ UTF-16 code units). Three occurrences give two warnings, each naming the last:
 | The same name on different tags | silent |
 | `<Card a=1 a=2/>`, `<@x a=1 a=2/>` | the callee receives one `a`, the last |
 
+Spreads follow the same rule on a string-concatenating target: `@mxlang/html`
+and `@mxlang/astro` make the object-merge precedence explicit (an explicit
+attribute written after a spread suppresses the spread's key, and a spread
+written after an explicit attribute suppresses that attribute), so a browser,
+which keeps the first duplicate, sees the survivor. This is tested by rendering.
+
 The warning is an mx-only lint beyond Marko (which accepts duplicates
 silently), recorded in `divergences.md`; decisions 133 and 135.
 

@@ -173,15 +173,6 @@ const declarations: HostDeclarations = {
   isComponent,
   rejectUnknownTag,
   keepComments: true,
-  orderAttrs: (name, attrs) => {
-    if (name !== "input") return attrs;
-    const index = attrs.findIndex(
-      (attr) => attr.kind !== "spread" && attr.name === "value",
-    );
-    if (index <= 0) return attrs;
-    const value = attrs[index] as Attr;
-    return [value, ...attrs.slice(0, index), ...attrs.slice(index + 1)];
-  },
   isDelegatedTag: (name) => name === DYNAMIC_TAG,
   resolveDelegatedTag: (name, node): DelegatedTagData => {
     if (name !== DYNAMIC_TAG) {
@@ -248,6 +239,91 @@ function escapeAttr(value: string): string {
 }
 
 type MappedWrite = (code: string, node: Node, generatedStart: number) => void;
+
+/**
+ * One element's attributes.
+ *
+ * Astro renders the attributes of a plain element one after another, and a
+ * `{...x}` beside `a={2}` is rendered as its own run, so `<div a=1 {...x}
+ * a=2>` printed `a` three times and a browser kept the first (x's). Marko
+ * merges them as one object, where the later write wins (decision 135). When
+ * the element has a spread, its attributes are therefore folded into ONE spread
+ * object in authored order, `{...{ "a": 1, ...x, "a": 2 }}`: a JS object merge
+ * gives Marko's precedence, and Astro renders the merged object's keys, one
+ * each. A component's props are already such an object, so components, and an
+ * element with no spread, keep the plain form.
+ *
+ * `<input>` writes `value` first (a browser may reset a value when `type`
+ * changes after it, as Marko's output orders it). That is applied here on the
+ * plain form only, replacing the host's former `orderAttrs` hook, which
+ * reordered the IR and so moved `value` across a spread it was written after.
+ */
+function emitElementAttrs(
+  name: string,
+  attrs: Attr[],
+  write: (code: string) => void,
+  writeMapped: (code: string, node: Node) => void,
+): void {
+  if (!attrs.some((attr) => attr.kind === "spread")) {
+    const value =
+      name === "input"
+        ? attrs.findIndex((attr) =>
+            attr.kind === "static" || attr.kind === "dynamic"
+              ? attr.name === "value"
+              : false,
+          )
+        : -1;
+    emitAttrs(
+      value > 0
+        ? [attrs[value] as Attr, ...attrs.filter((_, i) => i !== value)]
+        : attrs,
+      write,
+      writeMapped,
+    );
+    return;
+  }
+  if (attrs.length === 1) {
+    emitAttrs(attrs, write, writeMapped);
+    return;
+  }
+  write(" {...{ ");
+  attrs.forEach((attr, index) => {
+    if (index > 0) write(", ");
+    switch (attr.kind) {
+      case "spread":
+        write("...");
+        writeMapped(attr.value.code, attr.value.node);
+        return;
+      case "boolean":
+        write(`${JSON.stringify(attr.name)}: true`);
+        return;
+      case "static":
+        write(`${JSON.stringify(attr.name)}: ${JSON.stringify(attr.value)}`);
+        return;
+      case "bound":
+      case "event":
+        // Rejected with the same messages as the plain form.
+        emitAttrs(
+          [attr],
+          () => {},
+          () => {},
+        );
+        return;
+      case "dynamic": {
+        const structuredClass =
+          attr.name === "class" &&
+          (attr.value.shape === "object" || attr.value.shape === "array");
+        write(
+          `${JSON.stringify(structuredClass ? "class:list" : attr.name)}: (`,
+        );
+        writeMapped(attr.value.code, attr.value.node);
+        write(")");
+        return;
+      }
+    }
+  });
+  write(" }}");
+}
 
 function emitAttrs(
   attrs: Attr[],
@@ -459,7 +535,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
 
     element(node) {
       write(`<${node.name}`);
-      emitAttrs(node.attrs, write, writeMapped);
+      emitElementAttrs(node.name, node.attrs, write, writeMapped);
       if (node.void) {
         write(" />");
         return;

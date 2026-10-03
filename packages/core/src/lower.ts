@@ -597,10 +597,14 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
   for (const attr of attrs) {
     if (attr.kind !== "spread") survivor.set(attr.name, attr);
   }
-  return attrs.filter((attr) => {
-    if (attr.kind === "spread") return true;
-    const winner = survivor.get(attr.name);
-    if (!winner || winner === attr) return true;
+  const kept: Attr[] = [];
+  for (const attr of attrs) {
+    const winner = attr.kind === "spread" ? undefined : survivor.get(attr.name);
+    if (attr.kind === "spread" || !winner || winner === attr) {
+      kept.push(attr);
+      continue;
+    }
+    // A dropped occurrence: warn in document order, at its own name.
     const at = positionAtOffset(ctx, attr.nameSpan.sourceStart);
     const wins = positionAtOffset(ctx, winner.nameSpan.sourceStart);
     warn(ctx, {
@@ -609,8 +613,8 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
       column: at.column,
       file: ctx.filename,
     });
-    return false;
-  });
+  }
+  return kept;
 }
 
 /** The tag params of `<for|a, b|>` / `<@name|p|>`, as source text. */

@@ -768,16 +768,6 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
 }
 
 function renderAttrs(attrs: Attr[], mapNames = false): MappedCode {
-  const ids = attrs.filter(
-    (attr) => attr.kind !== "spread" && attr.name === "id",
-  );
-  if (ids.length > 1 && ids.some((attr) => attr.loc.line === 0)) {
-    fail(
-      "`#id` shorthand combined with an explicit `id=` attribute",
-      ids[0] as Attr,
-    );
-  }
-
   const classEntries = attrs
     .map((attr, index) => ({ attr, index }))
     .filter(({ attr }) => attr.kind !== "spread" && attr.name === "class");
@@ -805,18 +795,6 @@ function renderAttrs(attrs: Attr[], mapNames = false): MappedCode {
       (attr.value.shape === "object" || attr.value.shape === "array"),
   );
   if (!structured) {
-    if (
-      classEntries.length > 1 &&
-      classEntries.some(
-        ({ attr }) =>
-          attr.kind === "dynamic" && staticTemplateValue(attr.value) === null,
-      )
-    ) {
-      fail(
-        "`.class` shorthand combined with a non-string `class={...}` value (combine shorthand with a string class or use class={...})",
-        classEntries.at(-1)?.attr as Attr,
-      );
-    }
     return concatMapped(...attrs.map((attr) => renderAttr(attr, mapNames)));
   }
 

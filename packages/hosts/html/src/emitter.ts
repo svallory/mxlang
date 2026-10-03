@@ -470,10 +470,22 @@ export function createEmitter(): StringEmitter {
    * single-quoted `title='a" onerror="…'` cannot close the attribute early
    * (decision 42). A spread emits a runtime loop that validates each key.
    */
-  const attribute = (attr: Attr): void => {
+  const attribute = (
+    attr: Attr,
+    spreadTemp?: string,
+    shadowed: string[] = [],
+    laterSpreads: string[] = [],
+  ): void => {
     if (attr.kind === "spread") {
-      push(`for (const [key, value] of Object.entries(${attr.value.code})) {`);
+      push(
+        `for (const [key, value] of Object.entries(${spreadTemp ?? attr.value.code})) {`,
+      );
       state.indent++;
+      const skips = [
+        ...shadowed.map((name) => `key === ${JSON.stringify(name)}`),
+        ...laterSpreads.map((temp) => `Object.hasOwn(${temp}, key)`),
+      ];
+      if (skips.length > 0) push(`if (${skips.join(" || ")}) continue;`);
       push(
         "if (value === false || value === null || value === undefined) continue;",
       );
@@ -537,6 +549,90 @@ export function createEmitter(): StringEmitter {
     literal(` ${attr.name}="`);
     expression(attr.value.code, true);
     literal('"');
+  };
+
+  /** Serial for the temps an element binds its spread values to. */
+  let spreadSerial = 0;
+
+  /**
+   * An element's attributes, with JS object-merge precedence on a string target.
+   *
+   * Marko compiles `<div a=1 ...x a=2>` to an object merge, so the later write
+   * wins and the dropped name never reaches the output. This target concatenates
+   * into one string and a browser keeps the FIRST duplicate, so the same
+   * precedence is made explicit here, on the authored order:
+   *
+   * - a spread skips every key a later explicit attribute names (Marko passes
+   *   them to `_attrs_partial` as an exclusion set) and every key a later spread
+   *   also supplies;
+   * - an explicit attribute is skipped when a later spread has that key (own,
+   *   even if its value is `undefined`, as `{a: 1, ...x}` does).
+   *
+   * A spread is bound to a temp once when something precedes it, because the
+   * earlier attributes need to ask it about its keys. A lone leading spread is
+   * emitted exactly as before.
+   *
+   * The attributes after the last spread are written first, as Marko does.
+   *
+   * `<input>` writes `value` first, because a browser may reset a value when
+   * `type` changes after it (Marko does the same). That reorder is applied here,
+   * on emission only, so the precedence above still follows the authored order;
+   * it replaces the host's former `orderAttrs` hook, which reordered the IR and
+   * so moved `value` across a spread it was written after.
+   */
+  const elementAttributes = (name: string, attrs: Attr[]): void => {
+    const temps = new Map<number, string>();
+    attrs.forEach((attr, index) => {
+      if (attr.kind !== "spread" || index === 0) return;
+      const temp = `$mxSpread${spreadSerial++}`;
+      temps.set(index, temp);
+      push(`const ${temp} = Object.assign({}, ${attr.value.code});`);
+    });
+
+    // Marko writes the attributes that follow the last spread into the template
+    // text ahead of the spread's runtime keys (`<p a=2 id=p k=kx>` for `a=1
+    // ...x a=2 id=p`). Precedence is already decided by the guards, so only the
+    // order is at stake, and the strict html oracle compares it.
+    let lastSpread = -1;
+    attrs.forEach((attr, index) => {
+      if (attr.kind === "spread") lastSpread = index;
+    });
+    const order = attrs.map((_, index) => index);
+    if (lastSpread >= 0) order.unshift(...order.splice(lastSpread + 1));
+    if (name === "input") {
+      const value = attrs.findIndex(
+        (attr) => attr.kind !== "spread" && attr.name === "value",
+      );
+      if (value > 0) order.unshift(...order.splice(value, 1));
+    }
+
+    for (const index of order) {
+      const attr = attrs[index] as Attr;
+      const laterSpreads: string[] = [];
+      for (let later = index + 1; later < attrs.length; later++) {
+        const temp = temps.get(later);
+        if (temp) laterSpreads.push(temp);
+      }
+      if (attr.kind === "spread") {
+        const shadowed = attrs
+          .slice(index + 1)
+          .flatMap((later) => (later.kind === "spread" ? [] : [later.name]));
+        attribute(attr, temps.get(index), shadowed, laterSpreads);
+        continue;
+      }
+      if (laterSpreads.length === 0) {
+        attribute(attr);
+        continue;
+      }
+      const absent = laterSpreads
+        .map((temp) => `!Object.hasOwn(${temp}, ${JSON.stringify(attr.name)})`)
+        .join(" && ");
+      push(`if (${absent}) {`);
+      state.indent++;
+      attribute(attr);
+      state.indent--;
+      push("}");
+    }
   };
 
   /** A component's props, in Marko's own convention. */
@@ -626,7 +722,7 @@ export function createEmitter(): StringEmitter {
 
     element(node) {
       literal(`<${node.name}`);
-      for (const attr of node.attrs) attribute(attr);
+      elementAttributes(node.name, node.attrs);
       literal(">");
       if (node.void || VOID_TAGS.has(node.name)) return;
       drive(emitter, node.children);
