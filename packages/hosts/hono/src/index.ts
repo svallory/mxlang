@@ -27,7 +27,7 @@ export function compileHonoMx(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings"
+    "customTags" | "resolveImport" | "warnings" | "typeCheck"
   > = {},
 ): CompilePreactResult {
   return compilePreactMx(source, filename, {
@@ -36,6 +36,7 @@ export function compileHonoMx(
     customTags: options.customTags,
     resolveImport: options.resolveImport,
     warnings: options.warnings,
+    typeCheck: options.typeCheck,
   });
 }
 
@@ -44,7 +45,7 @@ export function compileHonoFile(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings"
+    "customTags" | "resolveImport" | "warnings" | "typeCheck"
   > = {},
 ): CompileResult {
   return compileHonoMx(readFileSync(filename, "utf8"), filename, options);

@@ -1,0 +1,1 @@
+<button onClick=((e: Event) => e.type)>x</button>

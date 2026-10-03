@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (jsx-handler-typing, decision 140):** `compileHonoMx` takes the internal, tooling-only `typeCheck` option (see `@mxlang/preact`); runtime output is unchanged with it unset. **Effect on users:** in the editor and `mx-tsc`, native event handlers are now checked against Hono's own JSX types (the DOM's events), as in plain TSX: a mistyped handler is an error at the authored handler, and the bodies of shorthand handlers are type-checked. Hono declares `onDoubleClick` only, so `onDblClick=` is reported as it is in plain TSX.
+
 - **Added (fix-hints-batch, audit item 14):** the unresolved-tag, event-binding, scriptlet and missing-attribute-value hints reach this host through the shared `@mxlang/preact` emitter and `@mxlang/core`.
 
 - **Changed (amx-to-astro-mx, decision 134):** the Bun loader's file filter also declines `x.astro.mx`, Astro's template kind, as it already declines `x.solid.mx`.

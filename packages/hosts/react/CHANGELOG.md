@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (jsx-handler-typing, decision 140):** `compileReactMx` takes the internal, tooling-only `typeCheck` option (see `@mxlang/preact`); runtime output is unchanged with it unset. **Effect on users (new errors on existing code):** in the editor and `mx-tsc`, native event handlers are now checked against `@types/react`, as in plain TSX. A handler annotated with a DOM event type (`onClick=((e: MouseEvent) => …)`, `(e: Event)`) is now an error, because React's synthetic events are not the DOM's; annotate with `React.MouseEvent<HTMLButtonElement>` or leave the parameter unannotated. Mistyped handlers, the bodies of shorthand handlers and valid `onDblClick`/`onKeyDown` handlers behave as described for `@mxlang/preact`.
+
 - **Added (fix-hints-batch, audit item 14):** the unresolved-tag, event-binding, scriptlet and missing-attribute-value hints reach this host through the shared `@mxlang/preact` emitter and `@mxlang/core`.
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `react-jsx` target descriptor (host `react`, `reactDeclarations`, `load()` returning `compileReactMx`). Adds `@mxlang/core` as a dependency for the descriptor's type. Nothing consumes it yet; see `@mxlang/target-registry`. The dialect now imports `createJsxDeclarations` through `@mxlang/preact/emitter` instead of the package root, so importing the descriptor stays free of preact's compile entry.

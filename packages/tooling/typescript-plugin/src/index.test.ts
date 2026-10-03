@@ -2607,18 +2607,17 @@ describe("MX language plugin", () => {
     expect(valueType).toBe("BinaryExpression");
   });
 
-  it("documents the one site that cannot keep type arguments: an attribute method's synthesized function wrapper", () => {
+  it("keeps the type arguments inside an attribute method's body in the type-check virtual code (decision 140)", () => {
     // Marko builds the attribute-method shorthand's `FunctionExpression` node
     // itself (there is no literal `function (…) { … }` in the source), so it
-    // carries no `start`/`end`/`loc` at all — confirmed by walking the parsed
-    // tree directly. `expr()` in packages/core/src/core.ts therefore takes its
-    // synthetic-node fallback (`ctx.generate(node)`) rather than the slice,
-    // and the underlying AST's `typeParameters` is already `null` (Marko's own
-    // `stripTypes` pass erases it before any host sees the tree — see
-    // packages/core/README.md and this task's report). There is no source
-    // range to slice and no AST field left to print: a generic call written
-    // inside an attribute-method body cannot keep its type arguments through
-    // this printer.
+    // carries no `start`/`end`/`loc`, and `expr()` in packages/core/src/core.ts
+    // prints it from the AST. Marko's `stripTypes` pass (the default for
+    // `output: "html"`) erases `typeParameters` and annotations from that AST
+    // before any host sees it — so a generic call inside an attribute-method
+    // body used to lose its type arguments. The virtual code is the one place
+    // that matters for type checking, and the preact host's `typeCheck` mode
+    // sets `stripTypes: false`, so here they survive; the runtime compile
+    // still erases them (`packages/hosts/preact/src/type-check.test.ts`).
     //
     // Preact accepts attribute methods (`resolveAttributeMethod: () => true`
     // in packages/hosts/preact/src/emitter.ts); the default host does not, so
@@ -2638,10 +2637,7 @@ describe("MX language plugin", () => {
     );
     if (!virtual) throw new Error("Expected MX virtual code");
     const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
-    // `pick(5)` still type-checks (`T` is inferred as `number`), so this test
-    // pins the printed output, not a diagnostic.
-    expect(generated).toContain("pick(5)");
-    expect(generated).not.toContain("pick<string>(5)");
+    expect(generated).toContain("pick<string>(5)");
   });
 });
 

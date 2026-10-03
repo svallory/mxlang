@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added: `mx-tsc` reports mistyped event handlers on preact, react and hono (jsx-handler-typing, decision 140)
+
+Through `@mxlang/typescript-plugin`: `<button onClick=((a: string) => a.length)>` is now `TS2345` at the authored handler (it was silent), the body of a shorthand handler is type-checked, and valid handlers no longer report `TS7006`. See `@mxlang/typescript-plugin` for the user-visible new errors.
+
 ### Fixed
 
 - **`TS80001` repeats neither the file nor the position (translate-error-no-repeated-path, audit item 17):** the message no longer opens with `<abs path>: ` (core) or an `    at <path>:L:C` line (typescript-plugin) after `file(L,C)`. The host-dispatch goldens drop exactly those repeats.

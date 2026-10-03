@@ -1,0 +1,1 @@
+<svg onClick=((e) => e.currentTarget.value)></svg>

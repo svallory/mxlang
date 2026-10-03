@@ -1,0 +1,5 @@
+<const/tag = "button"/>
+<div>
+  <my-el onClick=((a: string) => a.length)>x</my-el>
+  <${tag} onClick=((a: string) => a.length)>y</>
+</div>

@@ -12,14 +12,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "/** @jsxImportSource hono/jsx */\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
+        "generated": "/** @jsxImportSource hono/jsx */\nimport type { JSX as __MxJSX } from \"hono/jsx/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]-?: NonNullable<__MxJSX.IntrinsicElements[T][K]> } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\ndeclare function __mxOn<T extends string, E extends string>(handler: __MxH<T, E>): any;\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              34
+              554
             ],
             "lengths": [
               49
@@ -171,14 +171,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "/** @jsxImportSource hono/jsx */\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
+        "generated": "/** @jsxImportSource hono/jsx */\nimport type { JSX as __MxJSX } from \"hono/jsx/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]-?: NonNullable<__MxJSX.IntrinsicElements[T][K]> } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\ndeclare function __mxOn<T extends string, E extends string>(handler: __MxH<T, E>): any;\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              34
+              554
             ],
             "lengths": [
               28
@@ -195,7 +195,7 @@
               31
             ],
             "generatedOffsets": [
-              511
+              1031
             ],
             "lengths": [
               4
@@ -212,7 +212,7 @@
               38
             ],
             "generatedOffsets": [
-              516
+              1036
             ],
             "lengths": [
               3

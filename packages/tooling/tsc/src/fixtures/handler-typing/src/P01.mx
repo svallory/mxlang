@@ -1,0 +1,1 @@
+<button onClick(a: string, b: string) { a.length + b.length; }>x</button>

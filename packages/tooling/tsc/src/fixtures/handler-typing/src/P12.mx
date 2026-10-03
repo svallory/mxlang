@@ -1,0 +1,1 @@
+<button onClick=((a: string) => a.length)>x</button>

@@ -27,7 +27,7 @@ export function compileReactMx(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings"
+    "customTags" | "resolveImport" | "warnings" | "typeCheck"
   > = {},
 ): CompilePreactResult {
   return compilePreactMx(source, filename, {
@@ -36,6 +36,7 @@ export function compileReactMx(
     customTags: options.customTags,
     resolveImport: options.resolveImport,
     warnings: options.warnings,
+    typeCheck: options.typeCheck,
   });
 }
 
@@ -44,7 +45,7 @@ export function compileReactFile(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings"
+    "customTags" | "resolveImport" | "warnings" | "typeCheck"
   > = {},
 ): CompileResult {
   return compileReactMx(readFileSync(filename, "utf8"), filename, options);

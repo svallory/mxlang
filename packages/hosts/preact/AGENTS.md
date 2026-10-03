@@ -76,6 +76,19 @@ Six facts worth knowing before editing it:
   `mxClass`. This does not contradict decision 82: it is Preact code an author
   would otherwise write by hand, not an MX runtime, and a template that uses
   none of it imports none of it.
+- **`typeCheck` is a tooling-only mode (decision 140).** `compilePreactMx`
+  (and the react/hono entries) take `typeCheck: true` only from
+  `@mxlang/typescript-plugin`'s virtual code. It wraps every native element's
+  event handler as `on…={__mxOn<"tag", "event">(fn)}` (`emitter.ts`, the
+  `event` case; custom elements, dynamic tags and components are not wrapped)
+  and adds a type preamble (`index.ts`, `handlerTypePreamble`) that finds the
+  host's own handler type by case-insensitive key lookup on
+  `JSX.IntrinsicElements`, `any` on no hit. It also sets core's
+  `stripTypes: false` so shorthand handlers keep their annotations. The
+  wrapper exists to give TypeScript a contextual type and a *mapped* place to
+  report on (the recomposed prop name is deliberately unmapped); never emit it
+  for a build — `type-check.test.ts` asserts the unset output has no `__mx`.
+
 - **Preact-only vocabulary lives in `src/dialect.ts`.** The JSX import source,
   `class` versus `className`, the raw-HTML prop and the boundary module are a
   `JsxDialect` object so a React package can reuse this emitter. A knob that would

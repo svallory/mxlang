@@ -101,6 +101,13 @@ export interface HostOptions extends TranslatorOptions {
    * rewrites the module shape. Receives and returns the whole module text.
    */
   postEmit?: (code: string) => string;
+  /**
+   * Passed to Marko's compiler as `stripTypes`. Marko's `output: "html"`
+   * defaults it to true, which erases TypeScript annotations from any
+   * expression it has to reprint; type-checking tooling sets it to false to
+   * keep them. Leave unset for a build.
+   */
+  stripTypes?: boolean;
   /** Emits the module from the lowered IR (decision 79). */
   emitIr: (ir: Ir, ctx: Ctx) => string;
 }
@@ -267,6 +274,7 @@ export function compileSource(
     compiler.compileSync(source, filename, {
       translator,
       output: "html",
+      ...(host.stripTypes === undefined ? {} : { stripTypes: host.stripTypes }),
       writeVersionComment: false,
     });
   } catch (error) {

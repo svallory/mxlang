@@ -249,11 +249,23 @@ export function createMxLanguagePlugin(
       hostPolicy.host === "solid"
         ? compileSolidUnit(source, { filename: fileName, customTags, warnings })
         : hostPolicy.host === "preact"
-          ? compilePreactMx(source, fileName, { customTags, warnings })
+          ? compilePreactMx(source, fileName, {
+              customTags,
+              warnings,
+              typeCheck: true,
+            })
           : hostPolicy.host === "react"
-            ? compileReactMx(source, fileName, { customTags, warnings })
+            ? compileReactMx(source, fileName, {
+                customTags,
+                warnings,
+                typeCheck: true,
+              })
             : hostPolicy.host === "hono"
-              ? compileHonoMx(source, fileName, { customTags, warnings })
+              ? compileHonoMx(source, fileName, {
+                  customTags,
+                  warnings,
+                  typeCheck: true,
+                })
               : compile(source, fileName, { strict, customTags, warnings });
     const generated =
       hostPolicy.host === "astro"

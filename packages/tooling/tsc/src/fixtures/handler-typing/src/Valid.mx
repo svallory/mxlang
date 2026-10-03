@@ -1,0 +1,10 @@
+<div>
+  <input onKeyDown=((e) => e.key)/>
+  <input onInput=((e) => e.currentTarget.value)/>
+  <button onMouseDown(e) { e.clientX; }>a</button>
+  <button on-click(e) { e.currentTarget; }>b</button>
+  <button onClick=(() => 1)>c</button>
+  <form onSubmit=((e) => e.preventDefault())>d</form>
+  <button onDblClick=((e) => e.detail)>e</button>
+  <input type="checkbox" onChange=((e) => e.currentTarget.checked)/>
+</div>

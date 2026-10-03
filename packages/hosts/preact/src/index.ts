@@ -136,6 +136,15 @@ export interface CompilePreactOptions {
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
   warnings?: MxWarning[];
+  /**
+   * Internal, for tooling only (decision 140). Emits the module for type
+   * checking, not for running: every native element's event handler is
+   * wrapped in a type-only `__mxOn<"tag", "event">(fn)` call that resolves the
+   * host's own handler type, and Marko keeps the TypeScript annotations of
+   * shorthand handlers. The output is not meant to be executed. Leave unset
+   * for any build; the normal output is unchanged.
+   */
+  typeCheck?: boolean;
 }
 
 /**
@@ -266,11 +275,30 @@ function mxDynamic(target: any, payload: any, content?: any) {
  * `<const>` deeper in the tree stays an error (see the emitter), because
  * lifting one out of a `<for>` body would change which values it closes over.
  */
+/**
+ * The type-check-only preamble `__mxOn` needs (decision 140).
+ *
+ * `__mxOn<tag, event>(fn)` takes the host's own handler type for that element
+ * and event: the key of `JSX.IntrinsicElements[tag]` whose lowercased name is
+ * `on` + the lowercased event. Case-insensitive, because decision 101 emits
+ * the lowercase runtime spelling (`onKeydown`) while the host's types declare
+ * `onKeyDown`. No hit — an unknown element or prop — is `any`.
+ */
+function handlerTypePreamble(dialect: JsxDialect): string[] {
+  return [
+    `import type { JSX as __MxJSX } from "${dialect.jsxImportSource}/jsx-runtime";`,
+    `type __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends \`on\${E}\` ? K : never]-?: NonNullable<__MxJSX.IntrinsicElements[T][K]> } : {};`,
+    `type __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];`,
+    `declare function __mxOn<T extends string, E extends string>(handler: __MxH<T, E>): any;`,
+  ];
+}
+
 export function emitModuleWithMappings(
   ir: Ir,
   dialect: JsxDialect = preactDialect,
+  typeCheck = false,
 ): MappedCode {
-  const emitter = createEmitter(dialect);
+  const emitter = createEmitter(dialect, typeCheck);
 
   // Statements first, markup second. Splitting on the top level only: a
   // nested one is refused by the emitter rather than silently relocated.
@@ -280,7 +308,7 @@ export function emitModuleWithMappings(
     if (node.kind === "Const") {
       statements.push(concatMapped(`const ${node.name} = ${node.init.code};`));
     } else if (node.kind === "Define") {
-      const body = createEmitter(dialect);
+      const body = createEmitter(dialect, typeCheck);
       drive(body, node.children);
       const rendered = body.result();
       for (const name of body.runtimeImports) {
@@ -312,6 +340,7 @@ export function emitModuleWithMappings(
   const lines: string[] = [
     `/** @jsxImportSource ${dialect.jsxImportSource} */`,
   ];
+  if (typeCheck) lines.push(...handlerTypePreamble(dialect));
   if (ir.needsAttrTagImport) {
     lines.push(`import type { AttrTag } from "${dialect.attrTagModule}";`);
   }
@@ -534,8 +563,9 @@ export function compilePreactMx(
       customTags: options.customTags,
       resolveImport: options.resolveImport,
       warnings: options.warnings,
+      ...(options.typeCheck ? { stripTypes: false } : {}),
       emitIr: (ir) => {
-        const emitted = emitModuleWithMappings(ir, dialect);
+        const emitted = emitModuleWithMappings(ir, dialect, options.typeCheck);
         mappings = emitted.mappings;
         return emitted.code;
       },

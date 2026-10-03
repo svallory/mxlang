@@ -236,6 +236,9 @@ function escapeAttribute(value: string): string {
  * `this` lexical, which is what a Preact author writing the same handler by
  * hand would get.
  */
+/** A tag name the host's `JSX.IntrinsicElements` could declare. */
+const NATIVE_TAG = /^[a-z][a-z0-9]*$/;
+
 function methodExpression(expr: Expr): string | null {
   if (expr.node?.type !== "FunctionExpression") return null;
   const match = expr.code.match(
@@ -371,6 +374,13 @@ export class PreactEmitter implements Emitter<string> {
    */
   readonly #callbackScope: boolean;
 
+  /**
+   * Tooling-only (decision 140): wrap every native element's event handler as
+   * `__mxOn<"tag", "event">(fn)` so TypeScript checks it against the host's
+   * own handler type. Never set for a runtime compile.
+   */
+  readonly #typeCheck: boolean;
+
   constructor(
     dialect: JsxDialect = preactDialect,
     runtimeImports?: Set<string>,
@@ -378,8 +388,10 @@ export class PreactEmitter implements Emitter<string> {
     varStatements?: string[],
     varSerial?: { n: number },
     callbackScope = false,
+    typeCheck = false,
   ) {
     this.#dialect = dialect;
+    this.#typeCheck = typeCheck;
     this.#runtimeImports = runtimeImports ?? new Set();
     this.#aliases = aliases ?? new Set();
     this.#varStatements = varStatements ?? [];
@@ -411,6 +423,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#varStatements,
       this.#varSerial,
       callbackScope,
+      this.#typeCheck,
     );
   }
 
@@ -507,7 +520,12 @@ export class PreactEmitter implements Emitter<string> {
     }
   }
 
-  #attr(attr: Attr, mapName: boolean, isComponent: boolean): MappedCode {
+  #attr(
+    attr: Attr,
+    mapName: boolean,
+    isComponent: boolean,
+    tag?: string,
+  ): MappedCode {
     switch (attr.kind) {
       case "spread":
         return concatMapped(` {...${attr.value.code}}`);
@@ -543,12 +561,31 @@ export class PreactEmitter implements Emitter<string> {
       // `onDblclick`. The recomposed name is deliberately not span-mapped:
       // it is generated text, not source text, and a mapping whose texts
       // differ is worse than none.
+      //
+      // Under `typeCheck` (tooling only, decision 140) a native element's
+      // handler is wrapped as `__mxOn<"tag", "event">(fn)`: TypeScript then
+      // checks the argument against the host's own handler type, and the
+      // diagnostic lands on the argument — which is mapped — instead of on the
+      // unmapped prop name. A shorthand handler has no source span, so its
+      // generated function maps to the attribute name.
       case "event": {
         const name = this.#eventPropName(attr);
+        const method = methodExpression(attr.value);
+        if (this.#typeCheck && tag !== undefined && NATIVE_TAG.test(tag)) {
+          return concatMapped(
+            " ",
+            mapped(name, null),
+            `={__mxOn<"${tag}", "${name.slice(2).toLowerCase()}">(`,
+            method !== null && attr.value.node?.start === undefined
+              ? mapped(method, attr.nameSpan)
+              : concatMapped(method ?? attr.value.code),
+            ")}",
+          );
+        }
         return concatMapped(
           " ",
           mapped(name, null),
-          `={${methodExpression(attr.value) ?? attr.value.code}}`,
+          `={${method ?? attr.value.code}}`,
         );
       }
       case "dynamic": {
@@ -652,9 +689,14 @@ export class PreactEmitter implements Emitter<string> {
    * id and id attribute"* — so a check here would be unreachable code
    * pretending to be a guard.
    */
-  #attrs(attrs: Attr[], mapNames: boolean, isComponent: boolean): MappedCode {
+  #attrs(
+    attrs: Attr[],
+    mapNames: boolean,
+    isComponent: boolean,
+    tag?: string,
+  ): MappedCode {
     return concatMapped(
-      ...attrs.map((attr) => this.#attr(attr, mapNames, isComponent)),
+      ...attrs.map((attr) => this.#attr(attr, mapNames, isComponent, tag)),
     );
   }
 
@@ -1077,7 +1119,7 @@ export class PreactEmitter implements Emitter<string> {
         raw,
       );
     }
-    const attrs = this.#attrs(node.attrs, false, false);
+    const attrs = this.#attrs(node.attrs, false, false, node.name);
     const rawHtml = raw
       ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`
       : "";
@@ -1578,8 +1620,17 @@ export class PreactEmitter implements Emitter<string> {
 
 export function createEmitter(
   dialect: JsxDialect = preactDialect,
+  typeCheck = false,
 ): PreactEmitter {
-  return new PreactEmitter(dialect);
+  return new PreactEmitter(
+    dialect,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false,
+    typeCheck,
+  );
 }
 
 /** Emits the template body of a resolved IR as one JSX expression. */

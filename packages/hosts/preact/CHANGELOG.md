@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (jsx-handler-typing, decision 140):** `CompilePreactOptions.typeCheck`, an internal option for tooling (`@mxlang/typescript-plugin`/`mx-tsc` set it; leave it unset for any build). It emits the module for type checking: every native element's event handler becomes `on…={__mxOn<"tag", "event">(fn)}`, with a generated preamble that finds the host's own handler type by a case-insensitive key lookup on its `JSX.IntrinsicElements` (no hit, such as a custom element, a dynamic tag or an unknown prop, is `any`), and Marko keeps the annotations of shorthand handlers. Runtime output is byte-identical with the option unset. **Effect on users:** in the editor and in `mx-tsc`, a mistyped handler (`<button onClick=((a: string) => a.length)>`, `onClick(a: string, b: string) {…}`) is now an error at the authored handler, the body of a shorthand handler is type-checked, and valid handlers such as `onKeyDown=((e) => e.key)` no longer report an implicit-any error (156 of preact's 193 `on*` names did). Shared with `@mxlang/react` and `@mxlang/hono`.
+
 - **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.`` (or ``Did you mean `<Badge>`?`` for a near-miss import), and `(click)="go()"` ends ``; for an event handler write `onClick=go` `` (core). The emitter is shared with `@mxlang/react` and `@mxlang/hono`.
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `preact-jsx` target descriptor (host `preact`, `preactDeclarations`, `load()` returning `compilePreactMx`). Nothing consumes it yet; see `@mxlang/target-registry`.
