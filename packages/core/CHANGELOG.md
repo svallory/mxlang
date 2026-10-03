@@ -36,13 +36,13 @@ One short, positioned hint per error, appended to the reason; the error, its pos
 
 Core held a closed list of the seven built-in hosts (`HOST_NAMES`, `HOST_PACKAGES`, `isKnownHost`, `DEFAULT_POLICY`, `HOST_MODULE_SEGMENTS`, `MX_ATTR_TAG_SOURCES`); all are gone, replaced by a required `TargetLookup` (decision 126). Every entry point that needed one now takes it, so forgetting it is a type error rather than a silent loss of validation:
 
-- `resolveHostPolicy(filePath, lookup)` and `resolveHostPolicyDetailed(filePath, lookup)` — the lookup is a required second argument. `HostPolicy` gains `target: string` and `host?: string`; the default policy is `lookup.defaultTarget()`.
+- `resolveTargetPolicy(filePath, lookup)` and `resolveTargetPolicyDetailed(filePath, lookup)` — the lookup is a required second argument. `TargetPolicy` gains `target: string` and `host?: string`; the default policy is `lookup.defaultTarget()`.
 - `hostModuleSegment(entry, lookup)` — a required lookup instead of the `HOST_MODULE_SEGMENTS` array, which is no longer exported.
 - `ScanOptions` gains a required `targets`; `discoverProjectTagsOptions` likewise. The scan cache's key is deliberately unchanged (directory, `stopAt`, `host`): one process resolves one lookup, and folding it in would hand the same tag set a second identity per call.
 - `ScanResult` gains `hostRestrictions`, every `mx.tags[].hosts` value the scan read, and the scan no longer decides which of them are known. New export `hostRestrictionDiagnostics(restrictions, lookup)` produces the diagnostic for a bare unknown word — today's text, byte-identical — and stays silent for a package specifier, which may name a host package the project does not use.
 - `ResolveContext` gains a required `targets`, `Ctx` too, and `newCtx` takes it as a sixth argument. The `AttrTag` source set is now `@mxlang/core` plus `lookup.attrTagSources()` (every registered target's `packageName`), and the file-kind test in the callee reader asks `lookup.moduleSegments()`. The module-level reader registry (`registerCalleeInputReader`) is unchanged and still generic.
 
-The messages do not change: the unknown-`mx.host` list is every non-deprecated `mx.host` value in registration order with the deprecated one named apart (for the built-ins, the same string as before), the malformed-`package.json` clause reads the lookup's default target, and the deprecated-alias warning names the value and the target it selects. `HostPolicyDiagnosticCode` keeps `unknown-host` and `malformed-package-json` (decision 07 Q9).
+The messages do not change: the unknown-`mx.host` list is every non-deprecated `mx.host` value in registration order with the deprecated one named apart (for the built-ins, the same string as before), the malformed-`package.json` clause reads the lookup's default target, and the deprecated-alias warning names the value and the target it selects. `TargetPolicyDiagnosticCode` keeps `unknown-host` and `malformed-package-json` (decision 07 Q9).
 
 ### Added: `isTranslateError`, a brand check that survives two copies of core (refactor/target-open-set)
 
@@ -104,9 +104,9 @@ The extension probes are now derived from the readers registered through `regist
 
 A custom tag that declares only a contract (`attributes`, `attributeTags`, `parseOptions`, no `transform`, no template) is now valid on a name the active host claims (`claimsTag`). Core validates the call against the contract and lowers it to a `HostTag` with its attributes, attribute tags and children intact. On a host that does not claim the name the call still fails with "custom tag has neither a `transform` nor a template file, so a call has nothing to expand to". `ctx.build.hostTag(name, children, attributeTags, attrs?)` takes an optional fourth `attrs` argument; callers that omit it get the same node as before. No output change for any existing host. Spec §9.8. `TagCall` (public, exported from `@mxlang/core`) gains optional `span` and `nameSpan`, the UTF-16 spans of the call and of its tag name; the contract-only `HostTag` carries them like any claimed tag.
 
-### Added: `HostPolicyDiagnostic.code` (host-policy-diagnostics-tsc-tsserver)
+### Added: `TargetPolicyDiagnostic.code` (host-policy-diagnostics-tsc-tsserver)
 
-Additive: every diagnostic `resolveHostPolicyDetailed` returns now carries `code: "unknown-host" | "malformed-package-json"` (type `HostPolicyDiagnosticCode`, exported), so a caller can word or route one without matching the message text. Messages, positions and the resolved policy are unchanged.
+Additive: every diagnostic `resolveTargetPolicyDetailed` returns now carries `code: "unknown-host" | "malformed-package-json"` (type `TargetPolicyDiagnosticCode`, exported), so a caller can word or route one without matching the message text. Messages, positions and the resolved policy are unchanged.
 
 ### Fix: `<for by=>` that reads a loop param is a positioned error, not a silent pass (audit-02-for-by-parity)
 
@@ -116,7 +116,7 @@ Additive: every diagnostic `resolveHostPolicyDetailed` returns now carries `code
 
 **Behaviour change:** `<div [prop]="x">`, `<div #ref>`, `<div *ngIf="x">`, `<div [attr.x]="y">` and `<div @foo=1>` compiled silently on every non-Angular host (html passed every surface; preact then emitted invalid JSX that failed at a generated position). Marko 6.3.51 rejects them ("Invalid attribute name.", `runtime-tags` `normalizeTag`). `lowerAttr` now applies Marko's own name grammar (`[a-z_][a-z0-9._:-]*`, the same for elements and custom tags: Marko 6.3.51 also rejects `<foo $foo=1/>`) and fails at the authored name with a hint (`write \`prop=\``, `<if=cond>`, `class={ a: cond }`, …). `HostDeclarations.acceptsForeignAttrNames` opts a host out; only `@mxlang/angular` sets it.
 
-### Fix: `resolveHostPolicy` stops at a malformed `package.json` and at `node_modules`; unknown `mx.host` warns (host-policy-walk-edge-cases)
+### Fix: `resolveTargetPolicy` stops at a malformed `package.json` and at `node_modules`; unknown `mx.host` warns (host-policy-walk-edge-cases)
 
 Three silent failures in the upward walk that decides a file's host are closed. **Behaviour change:** the first two can change which host a file compiles under, only in setups that were already misconfigured.
 
@@ -125,7 +125,7 @@ Three silent failures in the upward walk that decides a file's host are closed. 
 - **An `mx.host` that is not a host now warns** (it was ignored silently and the dependency rule decided). The warning lists the valid hosts, suggests the nearest one within two edits (`"solidd"` → `"solid"`), and is positioned at the value in `package.json`. Resolution is unchanged: the value is still ignored.
 - **Unchanged, now written down and pinned by tests:** a directory with no `package.json` of its own (a monorepo member) inherits the nearest ancestor's host. Two or more host dependencies still mean `html`.
 
-New, additive API: `resolveHostPolicyDetailed(filePath)` returns `{ policy, diagnostics }` (`HostPolicyDiagnostic` has `ScanDiagnostic`'s shape: `file`, `message`, `line`, `column`); `resolveHostPolicy` is its `policy` and is otherwise unchanged. Every diagnostic is a warning; none can fail a build that worked. Only the Vite plugin and the language server surface them today — `mx-tsc` and the editor's TypeScript plugin get the new fallback behaviour (html for a malformed `package.json`, no climb out of `node_modules`) without a warning.
+New, additive API: `resolveTargetPolicyDetailed(filePath)` returns `{ policy, diagnostics }` (`TargetPolicyDiagnostic` has `ScanDiagnostic`'s shape: `file`, `message`, `line`, `column`); `resolveTargetPolicy` is its `policy` and is otherwise unchanged. Every diagnostic is a warning; none can fail a build that worked. Only the Vite plugin and the language server surface them today — `mx-tsc` and the editor's TypeScript plugin get the new fallback behaviour (html for a malformed `package.json`, no climb out of `node_modules`) without a warning.
 
 Internally `scan.ts` and `host-policy.ts` now read `package.json` through one cached reader keyed on mtime + ctime + size + inode (so an edit that pins the mtime or replaces the file atomically is still seen) (`src/package-json.ts`). `scanCustomTags` output is byte-identical (checked over every `.mx` in the repo plus broken/empty/`null`/`mx.tags`-typo trees).
 

@@ -2111,7 +2111,7 @@ Not merely in emitted syntax — in observable behavior:
 
 ### 13.5 Host selection
 
-Resolved by `@mxlang/core`'s `resolveHostPolicy`, walking upward for the nearest
+Resolved by `@mxlang/core`'s `resolveTargetPolicy`, walking upward for the nearest
 `package.json`:
 
 1. A `"mx": { "host": …, "strict"?: … }` field — authoritative. `"translator"`
@@ -2164,7 +2164,7 @@ does something else, silently.
 
 ### Host selection
 
-Resolved by `@mxlang/core`'s `resolveHostPolicy`, walking upward for the nearest
+Resolved by `@mxlang/core`'s `resolveTargetPolicy`, walking upward for the nearest
 `package.json`, in this order:
 
 1. A `"mx": { "host": …, "strict"?: … }` field — authoritative.

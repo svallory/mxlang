@@ -101,12 +101,12 @@ export {
   type RegionPosition,
 } from "./fragment.ts";
 export {
-  type HostPolicy,
-  type HostPolicyDiagnostic,
-  type HostPolicyDiagnosticCode,
-  type HostPolicyResolution,
-  resolveHostPolicy,
-  resolveHostPolicyDetailed,
+  type TargetPolicy,
+  type TargetPolicyDiagnostic,
+  type TargetPolicyDiagnosticCode,
+  type TargetPolicyResolution,
+  resolveTargetPolicy,
+  resolveTargetPolicyDetailed,
 } from "./host-policy.ts";
 export type {
   Attr,

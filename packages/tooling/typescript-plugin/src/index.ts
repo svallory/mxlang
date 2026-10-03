@@ -226,7 +226,7 @@ function withSyntaxDiagnostics(
         // position (the language server does the same).
         const hostPolicy =
           getLanguagePlugins()?.flatMap(
-            (plugin) => plugin.getHostPolicyDiagnostics?.(fileName) ?? [],
+            (plugin) => plugin.getTargetPolicyDiagnostics?.(fileName) ?? [],
           ) ?? [];
         if (compileDiagnostics.length === 0 && hostPolicy.length === 0) {
           return diagnostics;
@@ -280,7 +280,7 @@ function withSyntaxDiagnostics(
   });
 }
 
-export type { HostPolicyDiagnostic } from "@mxlang/core";
+export type { TargetPolicyDiagnostic } from "@mxlang/core";
 export {
   composeAmxMappings,
   createAmxLanguagePlugin,

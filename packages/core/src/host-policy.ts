@@ -75,14 +75,14 @@ import type { TargetLookup } from "./target-descriptor.ts";
  * the lookup (`hostFilterKey`) rather than off this field: for a hostless
  * target it is the target's legacy value, not the target name.
  */
-export interface HostPolicy {
+export interface TargetPolicy {
   target: string;
   host?: string;
   strict?: boolean;
 }
 
-/** Why a {@link HostPolicyDiagnostic} was raised. */
-export type HostPolicyDiagnosticCode =
+/** Why a {@link TargetPolicyDiagnostic} was raised. */
+export type TargetPolicyDiagnosticCode =
   | "unknown-host"
   | "malformed-package-json";
 
@@ -94,12 +94,12 @@ export type HostPolicyDiagnosticCode =
  * Every one is a *warning*: resolution always produces a policy, and nothing
  * here may fail a build that compiled before.
  */
-export interface HostPolicyDiagnostic {
+export interface TargetPolicyDiagnostic {
   /**
    * What went wrong, so a caller can word or route it without matching the
    * message text.
    */
-  code: HostPolicyDiagnosticCode;
+  code: TargetPolicyDiagnosticCode;
   /** The `package.json` to point an author at. */
   file: string;
   message: string;
@@ -110,9 +110,9 @@ export interface HostPolicyDiagnostic {
 }
 
 /** A resolved policy plus whatever the resolution had to say about it. */
-export interface HostPolicyResolution {
-  policy: HostPolicy;
-  diagnostics: HostPolicyDiagnostic[];
+export interface TargetPolicyResolution {
+  policy: TargetPolicy;
+  diagnostics: TargetPolicyDiagnostic[];
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -248,7 +248,7 @@ function policyOf(
   pkg: Record<string, unknown>,
   lookup: TargetLookup,
 ): {
-  policy: HostPolicy;
+  policy: TargetPolicy;
   ignoredHost?: unknown;
   /** The deprecated `mx.host` value used, which the caller warns about. */
   deprecatedValue?: string;
@@ -304,7 +304,7 @@ function policyOf(
 }
 
 /**
- * Resolves the `HostPolicy` for `filePath` by walking upward from its
+ * Resolves the `TargetPolicy` for `filePath` by walking upward from its
  * containing directory, together with the warnings the walk produced. See
  * the module doc for the rule and its edge cases.
  *
@@ -313,22 +313,22 @@ function policyOf(
  * caller answers (`@mxlang/target-registry` binds the built-in lookup, so a
  * tool imports its wrapper instead of passing one).
  *
- * `resolveHostPolicy` is this function's `policy`; call this one to also
+ * `resolveTargetPolicy` is this function's `policy`; call this one to also
  * learn that a `package.json` was malformed or named an unknown `mx.host`.
  * Nothing is cached beyond the mtime-keyed `package.json` reads, so calling
  * it per file is cheap, but the diagnostics come back on every call: dedupe
  * by `file` + `message` where they are reported.
  */
-export function resolveHostPolicyDetailed(
+export function resolveTargetPolicyDetailed(
   filePath: string,
   lookup: TargetLookup,
-): HostPolicyResolution {
-  const diagnostics: HostPolicyDiagnostic[] = [];
-  const defaultPolicy = (): HostPolicy => {
+): TargetPolicyResolution {
+  const diagnostics: TargetPolicyDiagnostic[] = [];
+  const defaultPolicy = (): TargetPolicy => {
     const target = lookup.defaultTarget();
     return { target, host: lookup.hostOf(target) };
   };
-  const finish = (policy: HostPolicy): HostPolicyResolution => ({
+  const finish = (policy: TargetPolicy): TargetPolicyResolution => ({
     policy,
     diagnostics,
   });
@@ -383,15 +383,15 @@ export function resolveHostPolicyDetailed(
 }
 
 /**
- * Resolves the `HostPolicy` for `filePath` by walking upward from its
+ * Resolves the `TargetPolicy` for `filePath` by walking upward from its
  * containing directory. See module doc for the three-branch rule. Use
- * `resolveHostPolicyDetailed` to also receive the walk's warnings.
+ * `resolveTargetPolicyDetailed` to also receive the walk's warnings.
  */
-export function resolveHostPolicy(
+export function resolveTargetPolicy(
   filePath: string,
   lookup: TargetLookup,
-): HostPolicy {
-  return resolveHostPolicyDetailed(filePath, lookup).policy;
+): TargetPolicy {
+  return resolveTargetPolicyDetailed(filePath, lookup).policy;
 }
 
 /**

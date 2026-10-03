@@ -112,14 +112,14 @@ const ALIASED = new Set(ROWS.filter((row) => row.startsWith("alias-")));
 // `@mxlang/target-registry` is the language server's dependency, not this
 // package's: resolve it from the server so both sides use the copy the server
 // runs. It is where the resolver now lives for a tool (decisions 129/132), and
-// its `resolveHostPolicyDetailed` is core's, bound to the built-in lookup.
+// its `resolveTargetPolicyDetailed` is core's, bound to the built-in lookup.
 const lsRequire = createRequire(
   join(here, "..", "..", "language-server", "package.json"),
 );
-const { hostFilterKey, resolveHostPolicyDetailed } = (await import(
+const { hostFilterKey, resolveTargetPolicyDetailed } = (await import(
   pathToFileURL(lsRequire.resolve("@mxlang/target-registry")).href
 )) as {
-  resolveHostPolicyDetailed(file: string): {
+  resolveTargetPolicyDetailed(file: string): {
     policy: Parameters<typeof diagnoseDocument>[2];
     diagnostics: NonNullable<Parameters<typeof diagnoseDocument>[8]>;
   };
@@ -179,7 +179,7 @@ type Plugin = MxDiagnosticLanguagePlugin & {
     snapshot: ts.IScriptSnapshot,
     ctx: unknown,
   ) => { snapshot: ts.IScriptSnapshot; languageId: string; mappings: unknown };
-  getHostPolicyDiagnostics?: (fileName?: string) => unknown;
+  getTargetPolicyDiagnostics?: (fileName?: string) => unknown;
 };
 
 /** The language plugin `mx-tsc` and tsserver pick for a file name. */
@@ -209,7 +209,7 @@ function pluginFor(file: string): { plugin: Plugin; languageId: string } {
 }
 
 function languageServerLeg(file: string, text: string, languageId: string) {
-  const { policy, diagnostics } = resolveHostPolicyDetailed(file);
+  const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
   const related: RelatedDiagnostics[] = [];
   const dependencies = new Set<string>();
   const unexpected: string[] = [];
@@ -235,7 +235,7 @@ function languageServerLeg(file: string, text: string, languageId: string) {
 
 /** An untitled buffer: no path, identified only by its language id. */
 function untitledLeg(file: string, text: string) {
-  const { policy } = resolveHostPolicyDetailed(file);
+  const { policy } = resolveTargetPolicyDetailed(file);
   const related: RelatedDiagnostics[] = [];
   const unexpected: string[] = [];
   const diagnostics = diagnoseDocument(
@@ -273,8 +273,8 @@ function tsPluginLeg(file: string, text: string) {
         : null,
       mappings: virtual?.mappings ?? null,
       compileDiagnostics,
-      hostPolicyDiagnostics: plugin.getHostPolicyDiagnostics
-        ? plugin.getHostPolicyDiagnostics(file)
+      hostPolicyDiagnostics: plugin.getTargetPolicyDiagnostics
+        ? plugin.getTargetPolicyDiagnostics(file)
         : "not offered by this plugin",
       logged,
     };
@@ -404,6 +404,7 @@ describe("dispatch goldens", () => {
           languageServer: lsLeg.diagnostics.filter((d) =>
             String(d.message).includes("package.json"),
           ),
+          // Keep the recorded JSON key byte-identical; it is not an API name.
           tsPluginHostPolicy: tsPluginLeg(file, text).hostPolicyDiagnostics,
         };
         continue;

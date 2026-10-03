@@ -19,7 +19,7 @@ It ships as `@mxlang/preact` (`packages/hosts/preact`), the fourth emitter over 
 }
 ```
 
-`mx.host` is read by `@mxlang/core`'s `resolveHostPolicy`, which the Vite plugin, the language server and `mx-tsc` all share — so an editor, a `tsc` run and a build cannot disagree about what a `.mx` file is. A project that depends on exactly one `@mxlang/*` host package gets that host without the field.
+`mx.host` is read by `@mxlang/core`'s `resolveTargetPolicy`, which the Vite plugin, the language server and `mx-tsc` all share — so an editor, a `tsc` run and a build cannot disagree about what a `.mx` file is. A project that depends on exactly one `@mxlang/*` host package gets that host without the field.
 
 ```ts
 // vite.config.ts — mx() first: both plugins are `enforce: "pre"`.

@@ -4,7 +4,7 @@
  * A closed list of the target descriptors the repo's own hosts export, a
  * lookup built over it, and the wrappers every tool imports instead of
  * threading a lookup through its own call sites: a tool that has the built-in
- * set in hand imports `resolveHostPolicy`, `hostModuleSegment`, `scanCached`
+ * set in hand imports `resolveTargetPolicy`, `hostModuleSegment`, `scanCached`
  * and the lookup's own questions from here, and core's closed lists stay
  * deleted (decision 126).
  *
@@ -20,13 +20,13 @@ import {
   createTargetLookup,
   type CustomTag,
   type HostFileKind,
-  type HostPolicy,
-  type HostPolicyResolution,
+  type TargetPolicy,
+  type TargetPolicyResolution,
   hostModuleSegment as coreHostModuleSegment,
   hostRestrictionDiagnostics,
   registerCalleeInputReader,
-  resolveHostPolicy as coreResolveHostPolicy,
-  resolveHostPolicyDetailed as coreResolveHostPolicyDetailed,
+  resolveTargetPolicy as coreResolveTargetPolicy,
+  resolveTargetPolicyDetailed as coreResolveTargetPolicyDetailed,
   type ScanDiagnostic,
   type ScanOptions,
   type ScanResult,
@@ -174,24 +174,24 @@ export const moduleSegments = (): readonly string[] =>
   builtinLookup().moduleSegments();
 
 /**
- * `resolveHostPolicy` over the built-in set: the policy a file compiles
+ * `resolveTargetPolicy` over the built-in set: the policy a file compiles
  * under, resolved from its nearest `package.json`. Core's own takes the
  * lookup as a required argument; this binds the built-in one, so a tool
  * changes its import specifier and not its call sites.
  */
-export function resolveHostPolicy(filePath: string): HostPolicy {
-  return coreResolveHostPolicy(filePath, builtinLookup());
+export function resolveTargetPolicy(filePath: string): TargetPolicy {
+  return coreResolveTargetPolicy(filePath, builtinLookup());
 }
 
 /**
- * `resolveHostPolicyDetailed` over the built-in set: the same policy plus
+ * `resolveTargetPolicyDetailed` over the built-in set: the same policy plus
  * whatever the walk had to say (an unknown `mx.host`, a malformed
  * `package.json`).
  */
-export function resolveHostPolicyDetailed(
+export function resolveTargetPolicyDetailed(
   filePath: string,
-): HostPolicyResolution {
-  return coreResolveHostPolicyDetailed(filePath, builtinLookup());
+): TargetPolicyResolution {
+  return coreResolveTargetPolicyDetailed(filePath, builtinLookup());
 }
 
 /**
