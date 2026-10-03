@@ -275,7 +275,7 @@ export function diagnoseDocument(
    * publishes whatever lands in it.
    */
   related?: RelatedDiagnostics[],
-  /** Receives every callee/type file read while compiling this document. */
+  /** Receives scan evidence files and callee/type files read for this document. */
   dependencies?: Set<string>,
   /**
    * What resolving `hostPolicy` had to say — the `diagnostics` of
@@ -319,6 +319,10 @@ export function diagnoseDocument(
     // null means no restricted entry matches; undefined would disable filtering.
     const host = hostFilterKey(hostPolicy.target) ?? null;
     const scan = scanCached(path, { host });
+    // Discovery reads contracts modules, sidecars and tag files independently
+    // of the compiler's callee-input dependencies. Record them before compiling
+    // so watcher-only edits reach callers even when compilation fails.
+    for (const file of scan.files) dependencies?.add(file.path);
     scanWarnings = [
       ...scanWarnings,
       ...scan.diagnostics.map((diagnostic) =>

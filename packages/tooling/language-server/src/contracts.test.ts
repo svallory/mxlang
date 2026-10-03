@@ -1,5 +1,11 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -54,29 +60,9 @@ function nextDiagnostics(
   });
 }
 
-// Real stdio and file:// URI. Core's walk needs a filesystem path, not a raw
-// URI; the server converts it before calling the registry scan. `style` is
-// host-delegated, so a declaration-only module needs no template/transform.
-it("reports a positioned mx.contracts error and reloads the edited module on Bun re-diagnosis", async () => {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-contracts-")));
-  directory = dir;
-  const module = join(dir, "contracts.ts");
-  const page = join(dir, "page.mx");
-  const uri = pathToFileURL(page).href;
-  const source = "<style>\n  .x { color: red }\n</style>\n";
-  const declaration = (name: string) =>
-    `export default { style: { attributes: { ${name}: { type: 'string', required: true } } } };\n`;
-  writeFileSync(
-    join(dir, "package.json"),
-    JSON.stringify({
-      mx: { host: "html", contracts: "./contracts.ts" },
-    }),
-  );
-  writeFileSync(module, declaration("nonce"));
-  writeFileSync(page, source);
-
-  // The built server runs on Bun; Node ESM/TS edits instead need restart
-  // (TODO sync-esm-reload-node). No server outlives this test.
+async function startClient(): Promise<MessageConnection> {
+  // Real built server on Bun. Long-lived Node ESM/TS loaders instead need
+  // restart (TODO sync-esm-reload-node). No server outlives its test.
   child = spawn(
     "bun",
     [join(import.meta.dirname, "../dist/bin.js"), "--stdio"],
@@ -97,31 +83,120 @@ it("reports a positioned mx.contracts error and reloads the edited module on Bun
     capabilities: {},
   });
   conn.sendNotification("initialized", {});
+  return conn;
+}
+
+const source = "<style>\n  .x { color: red }\n</style>\n";
+const declaration = (name: string) =>
+  `export default { style: { attributes: { ${name}: { type: 'string', required: true } } } };\n`;
+const sidecarDeclaration = (name: string) =>
+  `export default { attributes: { ${name}: { type: 'string', required: true } } };\n`;
+
+async function openPage(
+  conn: MessageConnection,
+  uri: string,
+): Promise<Published> {
   const initial = nextDiagnostics(conn, uri);
   conn.sendNotification("textDocument/didOpen", {
     textDocument: { uri, languageId: "mx", version: 1, text: source },
   });
-  const first = await initial;
-  expect(first.diagnostics).toHaveLength(1);
-  expect(first.diagnostics[0]).toMatchObject({
+  return initial;
+}
+
+async function editWatchedFile(
+  conn: MessageConnection,
+  pageUri: string,
+  file: string,
+  content: string,
+): Promise<Published> {
+  writeFileSync(file, content);
+  const updated = nextDiagnostics(conn, pageUri);
+  // Only a filesystem watcher notification: no page edit, didSave, reopen,
+  // or explicit cache clearing. The scan evidence must connect file to caller.
+  conn.sendNotification("workspace/didChangeWatchedFiles", {
+    changes: [{ uri: pathToFileURL(file).href, type: 2 /* Changed */ }],
+  });
+  return updated;
+}
+
+function expectRequired(params: Published, name: string): void {
+  expect(params.diagnostics).toHaveLength(1);
+  expect(params.diagnostics[0]).toMatchObject({
     severity: 1,
     source: "mxlang",
-    message: "`<style>`: missing required attribute `nonce`",
+    message: `\`<style>\`: missing required attribute \`${name}\``,
     range: { start: { line: 0, character: 0 } },
   });
+}
 
-  writeFileSync(module, declaration("media"));
-  const updated = nextDiagnostics(conn, uri);
-  // Module-only watcher re-diagnosis is the separately approved LS fix.
-  // Here a page re-diagnosis proves the contracts module reloads on Bun.
-  conn.sendNotification("textDocument/didChange", {
-    textDocument: { uri, version: 2 },
-    contentChanges: [{ text: source }],
-  });
-  const second = await updated;
-  expect(second.diagnostics).toHaveLength(1);
-  expect(second.diagnostics[0]).toMatchObject({
-    message: "`<style>`: missing required attribute `media`",
-    range: { start: { line: 0, character: 0 } },
-  });
-}, 15000);
+// Core's walk needs a filesystem path, not a raw URI; the server converts a
+// real file:// URI before its registry scan. `style` is host-delegated, so
+// the module declaration needs no template or transform.
+it("reports a positioned mx.contracts error and re-diagnoses its caller on module-only watcher edits (Bun)", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-contracts-")));
+  directory = dir;
+  const module = join(dir, "contracts.ts");
+  const page = join(dir, "page.mx");
+  const uri = pathToFileURL(page).href;
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      mx: { host: "html", contracts: "./contracts.ts" },
+    }),
+  );
+  writeFileSync(module, declaration("nonce"));
+  writeFileSync(page, source);
+  const conn = await startClient();
+  expectRequired(await openPage(conn, uri), "nonce");
+  expectRequired(
+    await editWatchedFile(conn, uri, module, declaration("media")),
+    "media",
+  );
+
+  // Dependency edges must survive failed compiles and later successful ones.
+  const cleared = await editWatchedFile(
+    conn,
+    uri,
+    module,
+    "export default { style: { attributes: {} } };\n",
+  );
+  expect(cleared.diagnostics).toEqual([]);
+  expectRequired(
+    await editWatchedFile(conn, uri, module, declaration("nonce")),
+    "nonce",
+  );
+}, 20000);
+
+it("re-diagnoses its caller on sidecar-only watcher edits, retaining scan dependencies after errors and success (Bun)", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-sidecar-")));
+  directory = dir;
+  const tags = join(dir, "tags");
+  mkdirSync(tags);
+  const sidecar = join(tags, "style.tag.ts");
+  const page = join(dir, "page.mx");
+  const uri = pathToFileURL(page).href;
+  // No mx.contracts: this regression depends only on the scanned sidecar.
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ mx: { host: "html" } }),
+  );
+  writeFileSync(sidecar, sidecarDeclaration("nonce"));
+  writeFileSync(page, source);
+  const conn = await startClient();
+  expectRequired(await openPage(conn, uri), "nonce");
+  expectRequired(
+    await editWatchedFile(conn, uri, sidecar, sidecarDeclaration("media")),
+    "media",
+  );
+  const cleared = await editWatchedFile(
+    conn,
+    uri,
+    sidecar,
+    "export default { attributes: {} };\n",
+  );
+  expect(cleared.diagnostics).toEqual([]);
+  expectRequired(
+    await editWatchedFile(conn, uri, sidecar, sidecarDeclaration("nonce")),
+    "nonce",
+  );
+}, 20000);

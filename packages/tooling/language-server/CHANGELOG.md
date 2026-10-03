@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed (mx.contracts PR 2, decision 142)
+
+- Scanned contracts modules, sidecars and tag files are now caller dependencies.
+  A watched-file edit re-diagnoses open callers without a page edit, including
+  after a failed compile. Bun reloads edited declarations; Node ESM/TS reload
+  still requires restart (`sync-esm-reload-node`).
+
 ### Added: target selection errors (target-select, decisions 129/132)
 
 `mx.target` selects its target's host behaviour. Invalid targets and
