@@ -561,44 +561,56 @@ function lowerAttrs(
   on: "element" | "component" = "element",
   isElement = false,
 ): Attr[] {
-  const attrs = (node.attributes ?? []).map((attr: Node) =>
-    lowerAttr(ctx, attr, on, isElement),
+  const attrs = resolveDuplicateAttrs(
+    ctx,
+    (node.attributes ?? []).map((attr: Node) =>
+      lowerAttr(ctx, attr, on, isElement),
+    ),
   );
-  warnOnDuplicateAttrs(ctx, attrs);
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
 }
 
 /**
- * Warns — without changing the output — when one tag writes the same attribute
- * name twice. Stock Marko 6.3.51 accepts it silently and its later value wins
- * (`class` and `style` are not merged); MX emits the attributes exactly as
- * authored, so which value wins is the target's: a browser reading HTML keeps
- * the first, a JSX object keeps the last. The message therefore names both
- * occurrences and does not claim a winner.
+ * Resolves a repeated attribute name to its last occurrence (decision 135).
+ * Stock Marko 6.3.51 is last-wins (`class` and `style` are not merged, and the
+ * dropped value is never evaluated), and `<div class="a" id="x" class="b">`
+ * compiles to `<div id=x class=b>`: the survivor keeps its own position. MX
+ * does the same once, here, so the IR carries one attribute per resolved name
+ * and no target or delegated-tag consumer ever sees a duplicate.
+ *
+ * Dropping the earlier occurrence is safe even with a spread between them:
+ * `<div a=1 ...x a=2>` already had `a=2` winning over `x.a`.
  *
  * Names compare case-sensitively, as Marko's do, on the resolved `Attr.name`,
- * so `on-click` twice is a duplicate and `onClick` next to `on-click` is not.
- * A spread (`...attrs`) has no static name, so it never counts. One warning
- * per repeated occurrence, positioned at that occurrence's name and naming the
- * occurrence before it. The text's `line:column` is 1-based for both, like
- * `mx-tsc` and editors; the structured warning position keeps core's 0-based
- * column.
+ * so `on-click` twice is a duplicate and `onClick` next to `on-click` is not
+ * (Marko registers both handlers). A default attribute (`<input="a" value="b">`)
+ * is already named `value`. A spread (`...attrs`) has no static name, so it
+ * never counts.
+ *
+ * Each dropped occurrence gets one decision-133 warning, positioned at its
+ * name and naming the survivor, so three occurrences warn twice. The text's
+ * `line:column` is 1-based, like `mx-tsc` and editors; the structured warning
+ * position keeps core's 0-based column. Never an error, `mx.strict` included.
  */
-function warnOnDuplicateAttrs(ctx: Ctx, attrs: Attr[]): void {
-  const previous = new Map<string, Position>();
+function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
+  const survivor = new Map<string, Exclude<Attr, { kind: "spread" }>>();
   for (const attr of attrs) {
-    if (attr.kind === "spread") continue;
+    if (attr.kind !== "spread") survivor.set(attr.name, attr);
+  }
+  return attrs.filter((attr) => {
+    if (attr.kind === "spread") return true;
+    const winner = survivor.get(attr.name);
+    if (!winner || winner === attr) return true;
     const at = positionAtOffset(ctx, attr.nameSpan.sourceStart);
-    const earlier = previous.get(attr.name);
-    previous.set(attr.name, at);
-    if (!earlier) continue;
+    const wins = positionAtOffset(ctx, winner.nameSpan.sourceStart);
     warn(ctx, {
-      message: `duplicate attribute \`${attr.name}\`: also written at ${earlier.line}:${earlier.column + 1}; keep one, because which value wins depends on the target`,
+      message: `duplicate attribute \`${attr.name}\`: the later one at ${wins.line}:${wins.column + 1} wins, so this one is dropped`,
       line: at.line,
       column: at.column,
       file: ctx.filename,
     });
-  }
+    return false;
+  });
 }
 
 /** The tag params of `<for|a, b|>` / `<@name|p|>`, as source text. */

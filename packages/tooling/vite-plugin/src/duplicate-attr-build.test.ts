@@ -64,10 +64,14 @@ describe("duplicate attribute in a vite build", () => {
       );
       const dup = lines.filter((line) => line.includes("duplicate attribute"));
       expect(dup).toHaveLength(1);
-      expect(dup[0]).toContain("page.mx:2:2:");
-      expect(dup[0]).toContain("`class`: also written at 1:6");
+      expect(dup[0]).toContain("page.mx:1:5:");
+      expect(dup[0]).toContain(
+        "`class`: the later one at 2:3 wins, so this one is dropped",
+      );
       const out = readFileSync(join(projectRoot, "dist", "entry.mjs"), "utf8");
-      expect(out).toContain('class=\\"a\\" class=\\"b\\"');
+      // Last-wins in core (decision 135): only the survivor is emitted.
+      expect(out).toContain('class=\\"b\\"');
+      expect(out).not.toContain('class=\\"a\\"');
     } finally {
       warn.mockRestore();
     }

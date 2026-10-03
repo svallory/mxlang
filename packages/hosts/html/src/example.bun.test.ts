@@ -37,26 +37,38 @@ async function runExample(name: string) {
 
 /**
  * Every fixture must run silent, except where it deliberately trips a warning.
- * `spread-between-props` writes `name` before and after a spread, and the
- * earlier one is dead on every host, so it is a real duplicate attribute.
+ * `spread-between-props` writes `name` before and after a spread: core resolves
+ * a repeated name last-wins (decision 135), so the earlier `name` is dropped
+ * and warned about, naming the surviving later one at 3:39 (1-based).
  * `src/example.ts` compiles each fixture twice (once to print the module,
  * line 19, and once in the Bun loader's onLoad, line 44), so the one warning
- * per compile shows up as two identical lines. Columns in the text are 1-based.
+ * per compile shows up as two identical lines.
+ *
+ * The `:line:col:` that prefixes each line is core's structured position,
+ * whose column is 0-based and falls back to a 0-based default in `warn()`; it
+ * is normalised to `:L:C:` here so no bare 0-based literal is pinned. The text
+ * after it carries the 1-based survivor position and is asserted exactly.
  */
 const DUPLICATE_NAME =
-  "fixtures-marko/spread-between-props/input.marko:3:38: duplicate attribute `name`: also written at 3:11; keep one, because which value wins depends on the target";
+  "fixtures-marko/spread-between-props/input.marko:L:C: duplicate attribute `name`: the later one at 3:39 wins, so this one is dropped";
 const EXPECTED_STDERR: Record<string, string> = {
   "spread-between-props": `${DUPLICATE_NAME}\n${DUPLICATE_NAME}`,
 };
 
-/** ANSI-stripped stderr with the machine-specific path prefix cut off each line. */
+/**
+ * ANSI-stripped stderr with the machine-specific path prefix cut off each line
+ * and the `:line:col:` position normalised. Blank lines are kept (only the one
+ * trailing newline is trimmed): a fixture that must print nothing has to fail on
+ * a stray blank line too.
+ */
 function normalizeStderr(stderr: string): string {
   return stripVTControlCharacters(stderr)
+    .replace(/\n$/, "")
     .split("\n")
-    .filter((line) => line !== "")
     .map((line) => {
       const at = line.indexOf("fixtures-marko/");
-      return at < 0 ? line : line.slice(at);
+      const trimmed = at < 0 ? line : line.slice(at);
+      return trimmed.replace(/(input\.marko):\d+:\d+:/, "$1:L:C:");
     })
     .join("\n");
 }

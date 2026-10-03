@@ -8,6 +8,8 @@
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `astro-html` target descriptor (host `astro`, `strict: "always"`, html's declarations, a `typeSurface`, and `load()` returning `@mxlang/html`'s `compile`). `src/type-surface.ts` holds a copy of `@mxlang/typescript-plugin`'s `createAstroTypeSurface`; the registry's parity test pins the two. The Astro template (`.astro.mx`) is a file kind of the `astro` host (decision 134): segment `astro`, language id `astromx`, diagnostic source `astromx`, no region compile and no callee reader. Nothing consumes it yet; see `@mxlang/target-registry`.
 
+- **Fix (dup-attr-last-wins-core, decision 135):** a repeated attribute now emits only the last; before, both were emitted as authored. The earlier occurrence gets a positioned warning naming the surviving one. See `@mxlang/core`.
+
 - **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.
 
 - **Fix (audit-02-for-by-parity):** `<for by=x.id>` (any read of a loop param in `by=`) is now a positioned error, as in Marko 6.3.51, instead of passing silently. See `@mxlang/core`.

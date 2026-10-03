@@ -87,11 +87,12 @@ describe("class shorthand", () => {
     );
   });
 
-  it("folds a static class into the array's string entry, emitting class once", () => {
-    // `<div.card class="x" class={c: on()}>` must be a single
-    // `class={["card x", {c: on()}]}`. Emitting both `class="card x"` and
-    // `class={[...]}` puts the name twice on one element and every backend
-    // keeps only the last, silently dropping the other half.
+  it("resolves a repeated `class` last-wins, emitting class once", () => {
+    // `<div.card class="x" class={c: on()}>`: core resolves the repeated name
+    // to its last occurrence (decision 135), as Marko 6.3.51 does: the earlier
+    // `class="x"` is dropped (with a warning) and so is the `.card` shorthand
+    // that merged into it, leaving `class={c: on()}` alone. Marko compiles it to
+    // `_attr_class({c: on()})`. Nothing is folded into an array.
     const attrs = attrsOf(
       `const el = <div.card class="x" class={c: on()}>y</div>;`,
     );
@@ -100,29 +101,21 @@ describe("class shorthand", () => {
     );
     expect(classAttrs).toHaveLength(1);
     const attr = classAttrs[0] as unknown as {
-      value: {
-        expression: {
-          type: string;
-          elements: [{ type: string; value: string }, { type: string }];
-        };
-      };
+      value: { expression: { type: string } };
     };
-    expect(attr.value.expression.type).toBe("ArrayExpression");
-    expect(attr.value.expression.elements[0].value).toBe("card x");
-    expect(attr.value.expression.elements[1].type).toBe("ObjectExpression");
+    expect(attr.value.expression.type).toBe("ObjectExpression");
   });
 
-  it("folds a static class into the array even without shorthand", () => {
+  it("resolves a repeated `class` last-wins even without shorthand", () => {
     const attrs = attrsOf(`const el = <div class="x" class={c: on()}>y</div>;`);
     const classAttrs = (attrs as { name: { name: string } }[]).filter(
       (a) => a.name.name === "class",
     );
     expect(classAttrs).toHaveLength(1);
     const attr = classAttrs[0] as unknown as {
-      value: { expression: { type: string; elements: [{ value: string }] } };
+      value: { expression: { type: string } };
     };
-    expect(attr.value.expression.type).toBe("ArrayExpression");
-    expect(attr.value.expression.elements[0].value).toBe("x");
+    expect(attr.value.expression.type).toBe("ObjectExpression");
   });
 
   it("merges shorthand with an object class into the array form", () => {

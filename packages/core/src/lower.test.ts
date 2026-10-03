@@ -3242,3 +3242,144 @@ describe("<for by=> loop-param scope", () => {
     ok('<for|x| of=xs by=(x) => x.id><for|x| of=x.ys by="id"><p/></for></for>');
   });
 });
+
+/**
+ * Decision 135: a repeated attribute name on one tag resolves to its LAST
+ * occurrence, in core, so the IR carries one attribute per resolved name and no
+ * host or delegated-tag consumer ever sees a duplicate. The earlier ones get a
+ * decision-133 warning each. Marko 6.3.51 is the reference: `class="a" id="x"
+ * class="b"` compiles to `<div id=x class=b>` (the survivor keeps its own
+ * position), the dropped value is never evaluated, and `class`/`style` do not
+ * merge.
+ */
+describe("duplicate attributes resolve last-wins (decision 135)", () => {
+  const panel = fakeDeclarations({
+    name: "TestHost",
+    attrTags: 2,
+    isComponent: (name) => name === "Panel",
+  });
+
+  it("keeps only the last occurrence, at its own position, with its own spans", () => {
+    const source = '<div class="a" id="x" class="b">hi</div>\n';
+    const { ir, warnings } = lowerWithWarnings(source);
+    const { attrs } = find(ir.body, "Element");
+    expect(attrs).toMatchObject([
+      { kind: "static", name: "id", value: "x" },
+      { kind: "static", name: "class", value: "b" },
+    ]);
+    const survivor = attrs[1];
+    if (survivor?.kind !== "static") throw new Error("expected a static attr");
+    expect(survivor.nameSpan.sourceStart).toBe(source.indexOf("class", 20));
+    expect(warnings).toEqual([
+      {
+        message:
+          "duplicate attribute `class`: the later one at 1:23 wins, so this one is dropped",
+        line: 1,
+        column: 5,
+        file: "test.mx",
+      },
+    ]);
+  });
+
+  it("warns once per dropped occurrence, each naming the survivor", () => {
+    const { ir, warnings } = lowerWithWarnings(
+      '<div a="1" a="2" a="3">x</div>\n',
+    );
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { name: "a", value: "3" },
+    ]);
+    expect(warnings.map((w) => [w.message, w.column])).toEqual([
+      [
+        "duplicate attribute `a`: the later one at 1:18 wins, so this one is dropped",
+        5,
+      ],
+      [
+        "duplicate attribute `a`: the later one at 1:18 wins, so this one is dropped",
+        11,
+      ],
+    ]);
+  });
+
+  it("does not merge or evaluate a dropped dynamic value", () => {
+    const { ir } = lowerWithWarnings("<div title=f() title=g()>x</div>\n");
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "dynamic", name: "title", value: { code: "g()" } },
+    ]);
+  });
+
+  it("drops an earlier attribute across a spread, and keeps a lone one before it", () => {
+    // Marko: `a=1 ...x a=2` -> `a=2` wins over `x.a`; `a=1 ...x` is no duplicate.
+    const dup = lowerWithWarnings("<div a=1 ...x a=2>x</div>\n");
+    expect(find(dup.ir.body, "Element").attrs).toMatchObject([
+      { kind: "spread" },
+      { kind: "dynamic", name: "a", value: { code: "2" } },
+    ]);
+    expect(dup.warnings).toHaveLength(1);
+    const lone = lowerWithWarnings("<div a=1 ...x>x</div>\n");
+    expect(find(lone.ir.body, "Element").attrs).toMatchObject([
+      { name: "a" },
+      { kind: "spread" },
+    ]);
+    expect(lone.warnings).toEqual([]);
+    const two = lowerWithWarnings("<div ...x a=1 ...y a=2>x</div>\n");
+    expect(find(two.ir.body, "Element").attrs).toMatchObject([
+      { kind: "spread" },
+      { kind: "spread" },
+      { name: "a", value: { code: "2" } },
+    ]);
+  });
+
+  it("resolves names case-sensitively: `class` and `Class` are distinct", () => {
+    const { ir, warnings } = lowerWithWarnings('<div class="a" Class="b"/>\n');
+    expect(
+      find(ir.body, "Element").attrs.map((a) => a.kind !== "spread" && a.name),
+    ).toEqual(["class", "Class"]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("resolves a handler written twice to the last; `onClick` and `on-click` are distinct", () => {
+    const twice = lowerWithWarnings(
+      "<button on-click=f on-click=g>x</button>\n",
+    );
+    expect(find(twice.ir.body, "Element").attrs).toMatchObject([
+      { kind: "event", name: "on-click", value: { code: "g" } },
+    ]);
+    expect(twice.warnings).toHaveLength(1);
+    // Marko registers both handlers here, so both survive.
+    const mixed = lowerWithWarnings(
+      "<button on-click=f onClick=g>x</button>\n",
+    );
+    expect(find(mixed.ir.body, "Element").attrs).toMatchObject([
+      { name: "on-click" },
+      { name: "onClick" },
+    ]);
+    expect(mixed.warnings).toEqual([]);
+  });
+
+  it("resolves a default attribute to `value`, so a later `value` wins", () => {
+    // Marko: `<input="a" value="b">` -> `<input value=b>`.
+    const { ir, warnings } = lowerWithWarnings('<input="a" value="b"/>\n');
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "static", name: "value", value: "b" },
+    ]);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("hands a component call and an attribute tag one attribute per name", () => {
+    // Marko: `<Card a=1 a=2/>` receives `{a: 2}`; `<@x a=1 a=2>` -> `{a: 2}`.
+    const { ir, warnings } = lowerWithWarnings(
+      'import Panel from "./panel.marko"\n<Panel a=1 a=2><@x b=1 b=2/></Panel>\n',
+      panel,
+    );
+    const component = find(ir.body, "Component");
+    expect(component.attrs).toMatchObject([
+      { name: "a", value: { code: "2" } },
+    ]);
+    expect(component.attributeTags[0]?.attrs).toMatchObject([
+      { name: "b", value: { code: "2" } },
+    ]);
+    expect(
+      warnings.filter((w) => w.message.startsWith("duplicate attribute")),
+    ).toHaveLength(2);
+  });
+});

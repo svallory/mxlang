@@ -6,6 +6,8 @@
 
 - **Added, unstable (target-registry, round 3):** `./emitter` and `./dialect` subpaths export the shared JSX emitter's declarations module and dialect type, so `@mxlang/react` and `@mxlang/hono` can build their dialects without importing this package's compile entry.
 
+- **Fix (dup-attr-last-wins-core, decision 135):** a repeated attribute now emits only the last (the JSX object already kept the last, so behavior is unchanged). The earlier occurrence gets a positioned warning naming the surviving one. See `@mxlang/core`.
+
 - **Breaking (jsx-dialect-rename, decision 132):** the shared JSX emitter's `Target` object is now `JsxDialect`, since "target" now means a registered output format. Renamed, no aliases: `Target` → `JsxDialect`, `preactTarget` → `preactDialect`, `reactTarget` → `reactDialect`, `honoTarget` → `honoDialect`, the `CompilePreactOptions.target` option → `dialect`, and `src/target.ts` → `src/dialect.ts`. No emitted-code change.
 
 - **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.

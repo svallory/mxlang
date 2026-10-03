@@ -6,6 +6,8 @@
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `html` target descriptor (`src/descriptor.ts`): no host, `legacyHostValues` `html` and the deprecated `translator`, the policy and strict policy as `declarations`, and a lazy `translator`. `load()` returns the existing `compile`. Also built into `dist/descriptor.{js,d.ts}`. Nothing consumes it yet; see `@mxlang/target-registry`.
 
+- **Fix (dup-attr-last-wins-core, decision 135):** `<div class="a" class="b">` now emits only `class="b"`; before, both were emitted and a browser kept the first. The earlier occurrence gets a positioned warning naming the surviving one. See `@mxlang/core`.
+
 - **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.
 
 - **Fix (audit-02-for-by-parity):** `<for by=x.id>` (any read of a loop param in `by=`) is now a positioned error, as in Marko 6.3.51, instead of passing silently. See `@mxlang/core`.

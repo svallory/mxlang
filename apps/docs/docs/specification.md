@@ -399,27 +399,37 @@ closing tag is a parse error (decision 13).
 
 ### Duplicate attributes
 
-Writing the same attribute name twice on one tag (`<div class="a" class="b">`,
-`on-click` twice) is a **positioned warning on every host**: never an error,
-and the build and `mx-tsc` exit codes are unchanged. The warning sits at the
-repeated attribute's name and names the earlier occurrence by `line:column`
-(1-based line and column in the text, like `mx-tsc` and editors; UTF-16 code units), one warning per repeat:
+Within one tag, the **last** occurrence of an attribute name wins, on every
+host and target (decision 135). `@mxlang/core` resolves it during lowering: the
+IR carries one attribute per resolved name, the last one with its own spans, so
+no host emitter or delegated-tag consumer ever sees a duplicate. This is
+stock Marko 6.3.51's behavior, probed: `<div class="a" id="x" class="b">`
+compiles to `<div id=x class=b>` (the survivor keeps **its own** position),
+the dropped value is never evaluated (`<div title=f() title=g()>` calls only
+`g`), and `class`/`style` are not merged.
 
-> `duplicate attribute \`class\`: also written at 1:6; keep one, because which value wins depends on the target`
+Each dropped occurrence is a **positioned warning**, never an error (`mx.strict`
+included), and the build and `mx-tsc` exit codes are unchanged. The warning sits
+at the dropped attribute's name and names the surviving later one by
+`line:column` (1-based line and column in the text, like `mx-tsc` and editors;
+UTF-16 code units). Three occurrences give two warnings, each naming the last:
 
-| Case | Warns? |
+> `duplicate attribute \`class\`: the later one at 1:16 wins, so this one is dropped`
+
+| Case | Result |
 |---|---|
-| Same name, case-sensitive (`class` twice, `on-click` twice) | yes |
-| `data-a` and `data-A` | no (names differ, as in Marko) |
-| `onClick` next to `on-click` | no (two names) |
-| `...attrs` next to an explicit attribute | no (a spread has no static name) |
-| The same name on different tags | no |
+| Same name, case-sensitive (`class` twice, `on-click` twice) | last wins; one warning per dropped occurrence |
+| `<input="a" value="b">` (a default attribute is named `value`) | `value="b"` wins; warns |
+| `<div a=1 ...x a=2>` | `a=2`, as `a=2` already won over `x.a`; warns |
+| `<div a=1 ...x>`, `<div ...x a=1>` | no duplicate; a spread has no static name; silent |
+| `class` and `Class`, `data-a` and `data-A` | distinct names, as in Marko; silent |
+| `onClick` next to `on-click` | distinct names (Marko registers both handlers); silent |
+| Angular `x`, `[x]`, `(x)`, `#x` | distinct names; silent |
+| The same name on different tags | silent |
+| `<Card a=1 a=2/>`, `<@x a=1 a=2/>` | the callee receives one `a`, the last |
 
-Output is unchanged: MX emits the attributes as authored. Stock Marko 6.3.51
-accepts duplicates silently and its later value wins (`class` and `style` are
-not merged), but a target may resolve them differently (a browser reading
-HTML keeps the first), so the warning does not name a winner. An mx-only lint
-beyond Marko, recorded in `divergences.md`; decision 133.
+The warning is an mx-only lint beyond Marko (which accepts duplicates
+silently), recorded in `divergences.md`; decisions 133 and 135.
 
 ### `class` and `style`
 
