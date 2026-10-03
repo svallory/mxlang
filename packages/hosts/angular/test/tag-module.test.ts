@@ -607,8 +607,9 @@ describe("compileTagModule: slot misuse (R-c)", () => {
   });
 
   it("prints both positions of a slot/bare conflict with 1-based columns", () => {
-    // `input.x` starts at column 3 (0-based) and `input.x()` at 13, so a reader
-    // (and `mx-tsc`, which prints 1-based) sees 1:4 and 1:14.
+    // The interpolation's `${` is at 0-based column 3 and 13 (the IR node's
+    // `loc` holds the `${`, not the `input.x` it opens), so a reader (and
+    // `mx-tsc`, which prints 1-based) sees 1:4 and 1:14.
     let message = "";
     try {
       compileTag("<i>${input.x}${input.x()}</i>\n");

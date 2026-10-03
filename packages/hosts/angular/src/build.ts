@@ -210,8 +210,13 @@ function applyOnError(
  * therefore took the unpositioned branch for every `.ng.mx` error, so the
  * CLI and watcher printed the message with no line or column at all.
  *
- * The suffix is stripped because the caller re-adds `file:line:column`
- * itself; leaving it would print the position twice, in two spellings.
+ * Babel also writes the compiled file's path into the message prefix and its
+ * 0-based parser position into a trailing `(L:C)` suffix. Both are stripped
+ * here, on every branch: the caller re-adds `file:line:column` itself (the
+ * README promises every printed position is 1-based), and an *unlocated*
+ * error keeps no 0-based suffix either — the reader would land one column
+ * left of the error. Leaving either in place would print the position twice,
+ * in two spellings.
  */
 function positionOf(
   err: unknown,
@@ -229,15 +234,26 @@ function positionOf(
   }
   const loc = (err as { loc?: { line?: number; column?: number } } | null)?.loc;
   const raw = err instanceof Error ? err.message : String(err);
+  // `compileTagModule`'s Babel run prefixes the message with the compiled
+  // file's absolute path; `fallbackFile` is that same file as the build
+  // knows it, so a matching prefix only repeats the path the caller prints.
+  const unprefixed = raw.startsWith(`${fallbackFile}: `)
+    ? raw.slice(fallbackFile.length + 2)
+    : raw;
+  // The suffix goes whether or not the error also carries a `loc`: when it
+  // does, the caller prints the position from `loc` (1-based via
+  // `positionSuffix`); when it does not, no position is printed at all —
+  // either way a raw 0-based column must not survive.
+  const message = unprefixed.replace(/ \(\d+:\d+\)$/, "");
   if (typeof loc?.line === "number" && typeof loc.column === "number") {
     return {
       file: fallbackFile,
       line: loc.line,
       column: loc.column,
-      message: raw.replace(/ \(\d+:\d+\)$/, ""),
+      message,
     };
   }
-  return { file: fallbackFile, message: raw };
+  return { file: fallbackFile, message };
 }
 
 function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
@@ -368,13 +384,15 @@ function compileTagFile(
       outputs: [outputPath],
     };
   } catch (err) {
-    const positioned = isTranslateError(err);
-    // A tag template's own error carries `file` pointing at the tag, not the
-    // caller, and is reported against that file (A5).
-    const errorFile = positioned && err.file ? err.file : mxPath;
-    const message = positioned
-      ? `${errorFile}${positionSuffix(err.line, err.column)} ${err.message}`
-      : `${mxPath}: ${err instanceof Error ? err.message : String(err)}`;
+    // Same shape as the `.ng.mx` catch below: a parse error is a Babel
+    // `SyntaxError` (never a `TranslateError`), but it carries its position
+    // on `err.loc` — `positionOf` reads it, strips Babel's path prefix and
+    // 0-based `(L:C)` suffix, and honours a tag template's own `file` (A5).
+    const at = positionOf(err, mxPath);
+    const message =
+      at.line !== undefined
+        ? `${at.file}${positionSuffix(at.line, at.column)} ${at.message}`
+        : `${at.file}: ${at.message}`;
     const applied = applyOnError(
       outputPath,
       header,
@@ -382,14 +400,10 @@ function compileTagFile(
       config.onError,
       knownOutputs,
     );
-    const error: PositionedMessage = positioned
-      ? {
-          file: errorFile,
-          line: err.line,
-          column: err.column,
-          message: err.message,
-        }
-      : { file: mxPath, message };
+    const error: PositionedMessage =
+      at.line !== undefined
+        ? { file: at.file, line: at.line, column: at.column, message: at.message }
+        : { file: at.file, message };
     return {
       ok: false,
       lines: [`${mxPath} error: ${message}`, applied.line],

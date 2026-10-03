@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { build, checkOverwriteGuard } from "../src/build.ts";
+import { build, checkOverwriteGuard, compileOne } from "../src/build.ts";
 import { runCli } from "../src/cli.ts";
 import { type AngularConfig, readAngularConfig } from "../src/config.ts";
 import { discoverFiles } from "../src/discover.ts";
@@ -1076,6 +1076,41 @@ describe("build: .ng.mx routing", () => {
     expect(readFileSync(join(projectDir, "src/x.component.ts"), "utf8")).toBe(
       "export class XComponent {}\n",
     );
+  });
+});
+
+describe("build: unlocated Babel suffix (angular-build-unlocated-babel-suffix)", () => {
+  it("prints a tag parse error once, at a 1-based position, with no 0-based (L:C)", () => {
+    // Babel parses a tag file's top-level TypeScript; the missing type after
+    // `label:` is an "Unexpected token" whose position rides in the message
+    // as Babel's own 0-based `(1:32)` suffix. The tag error printer used to
+    // pass non-`TranslateError` messages through verbatim, so the CLI printed
+    // `Chip.mx error: Chip.mx: /abs/Chip.mx: Unexpected token (1:32)` — the
+    // path twice and a 0-based column, where the README promises every
+    // printed position is 1-based.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/tags/Chip.mx": "export interface Input { label: }\n<div>${input.label}</div>\n",
+    });
+    const chip = join(projectDir, "src/tags/Chip.mx");
+
+    const result = build(projectDir);
+
+    expect(result.ok).toBe(false);
+    const [error] = result.errors;
+    expect(error?.file).toBe(chip);
+    expect(error?.line).toBe(1);
+    expect(error?.column).toBe(32);
+    expect(error?.message).toBe("Unexpected token");
+
+    const one = compileOne(
+      { path: chip, kind: "tag" },
+      readAngularConfig(projectDir),
+      new Set(),
+    );
+    expect(one.lines[0]).toBe(`${chip} error: ${chip}:1:33 Unexpected token`);
   });
 });
 

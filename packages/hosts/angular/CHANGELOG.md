@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (angular-build-unlocated-babel-suffix):** a tag file's parse error printed Babel's own 0-based `(L:C)` suffix (`Chip.mx error: …/Chip.mx: …/Chip.mx: Unexpected token (1:32)`) — the path twice, the column 0-based, and no usable position at all. The tag error path now goes through `positionOf` like the `.ng.mx` one: the position prints from `err.loc` as 1-based `file:line:column` (`Chip.mx:1:33`), Babel's path prefix and trailing 0-based suffix are stripped on every branch (located or not), so the README's "every printed position is 1-based" holds for these errors too.
+
 - **Fix (jsx-whitespace-body-parity, decision 141):** imported components and discovered `tags/*.mx` retain same-line whitespace-only bodies through core. The template emitter uses Angular's `&ngsp;` for a normalized lone-space text node so native whitespace removal cannot drop it. Newline indentation stays absent. Pinned by rendering generated components with Angular TestBed under its default whitespace policy.
 
 - **Fix (angular-fix-hints round 3):** SVG `<switch>` control-flow cases are detected through structural IR wrappers (`<for>`, `<if>`, and nested element bodies), producing one MX error at the authored switch on both CLIs. Resolved components and genuine SVG graphics switches remain exempt. Parameter-mismatch advice now offers concrete code only for simple member chains, replacing just the leading parameter reference; complex bodies (including shorthand objects, nested arrows, and the reviewed `y?.y` shape) get a plain rename instruction instead of an unsafe AST rewrite. Applied member-chain fixes compile on both CLIs and preserve the emitted `track` expression.
