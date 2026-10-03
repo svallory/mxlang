@@ -218,19 +218,18 @@ const TAG_EXT = ".marko";
  * plugin, which this one must decline rather than compile through the `.mx`
  * (`compile()` / string) branch.
  *
- * Empty today: AstroMX settled on the single-dot `.amx` (decision 78), whose
- * last extension segment differs from `.mx`, so it never collides. The guard
- * is kept because the collision is a property of the matching rule, not of
- * that one extension: it was measured while `.astro.mx` was the spelling —
- * `mx()` rewrote `x.astro.mx` to `x.astro.mx.ts`, the Astro plugin re-resolved
- * that to `x.astro.mx.ts.astro`, and the build failed inside `compileMarko`.
- * Any future multi-dot MX extension belonging to another host goes here.
+ * Today: `.astro.mx` (decision 134), the Astro template kind that
+ * `@mxlang/astro`'s own plugin lowers. A registered `.mx` would otherwise
+ * swallow it: `mx()` rewrote `x.astro.mx` to `x.astro.mx.ts`, the Astro plugin
+ * re-resolved that to `x.astro.mx.ts.astro`, and the build failed inside
+ * `compileMarko`. Any other multi-dot MX extension belonging to another host
+ * goes here.
  *
  * Declared as a list rather than inferred from the dot count so the rule is
  * stated where it can be read: a shorter extension never claims a file whose
  * name ends in one of these.
  */
-const FOREIGN_EXTENSIONS: string[] = [];
+const FOREIGN_EXTENSIONS: string[] = [".astro.mx"];
 
 /**
  * Appended to the resolved path so the rest of the pipeline sees a JS-family

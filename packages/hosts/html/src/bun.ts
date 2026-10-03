@@ -21,7 +21,8 @@ import { compile } from "./index.ts";
  * treating a real `.marko` file as MX would silently claim support it does
  * not have. `.solid.mx` is a different file kind (TSX with MX regions,
  * handled by `@mxlang/vite-plugin`) and must not match here — the negative
- * lookbehind excludes it despite ending in `.mx`.
+ * lookbehind excludes it, and `.astro.mx` (Astro's template kind), despite
+ * ending in `.mx`.
  *
  * Custom tags are discovered per loaded file (spec §4) rather than configured
  * on the plugin: which tags a template may call is a property of where that
@@ -29,7 +30,7 @@ import { compile } from "./index.ts";
  * answer in the wrong place. The scan is cached, so the repeated `onLoad`
  * calls a build makes over one directory cost one filesystem walk.
  */
-const MX_FILTER = /(?<!\.solid)\.mx$/;
+const MX_FILTER = /(?<!\.(?:solid|astro))\.mx$/;
 
 /** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
 const reportedScanDiagnostics = new Set<string>();

@@ -71,15 +71,14 @@ const TEMPLATE_SUFFIX = ".mx";
 /**
  * Host segments that make `<segment>.mx` a host module file — a TypeScript
  * (or similar) module carrying MX regions, compiled by that host directly —
- * rather than a tag template. Currently: `.solid.mx` (the Solid host) and
- * `.ng.mx` (the Angular host's per-region file kind).
+ * rather than a tag template. Currently: `.solid.mx` (the Solid host),
+ * `.ng.mx` (the Angular host's per-region file kind) and `.astro.mx` (the Astro
+ * host's template file kind, decision 134).
  *
  * A literal list, not "any second dotted segment before `.mx`": `TAG_NAME_RE`
  * allows dots in an ordinary tag name (`tags/my.icon.mx` is the valid tag
  * `<my.icon>`), so a segment-shaped rule with no allowlist would reject every
- * dotted tag name as a false positive. `.amx` is a separate three-letter
- * extension with no `.mx` suffix at all, so it never reaches this check (or
- * `TEMPLATE_SUFFIX`) in the first place.
+ * dotted tag name as a false positive.
  *
  * A segment is the file-extension spelling (`"ng"`), not the `HostPolicy`
  * name (`"angular"`) — the two happen to coincide for `"solid"` but not for
@@ -93,6 +92,7 @@ const TEMPLATE_SUFFIX = ".mx";
 export const HOST_MODULE_SEGMENTS = [
   "solid",
   "ng",
+  "astro",
 ] as const satisfies readonly string[];
 
 /**

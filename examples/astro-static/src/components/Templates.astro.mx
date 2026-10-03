@@ -1,13 +1,13 @@
 ---
-import Panel from "../components/Panel.amx";
-import Roster from "../components/Roster.amx";
-import BaseMx from "../layouts/BaseMx.amx";
+import Panel from "./Panel.astro.mx";
+import Roster from "./Roster.astro.mx";
+import BaseMx from "../layouts/BaseMx.astro.mx";
 
-// An AstroMX *page*: `.amx` is registered with `addPageExtension`, so this
-// file is a route (`/templates`) as well as an Astro component. That is why
-// the extension is single-dot (decision 78) — Astro's route collection reads
-// only the last extension segment, so a multi-dot `.astro.mx` could never be
-// a page. The components and the layout it uses are `.amx` too.
+// An AstroMX component, not a page: `.astro.mx` cannot be a page, because
+// Astro strips only the last extension of a route file and would route it to
+// `/templates.astro` (decision 134 addendum). `src/pages/templates.astro`
+// imports this component and is the route. The layout and the two components
+// used below are `.astro.mx` too.
 ---
 <BaseMx title="AstroMX templates">
   <h1>AstroMX templates</h1>

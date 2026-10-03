@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
 
 // Marko 6.3.51 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
-// ("Invalid attribute name."); Angular syntax is not Marko, so `.amx` fails
+// ("Invalid attribute name."); Angular syntax is not Marko, so `.astro.mx` fails
 // at the authored name too.
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colour
 const ANSI = /\x1b\[[0-9;]*m/g;
@@ -10,7 +10,7 @@ const FENCE = "---\nconst x = 1;\n---\n"; // 3 fence lines: template starts on l
 
 function failure(template: string) {
   try {
-    lowerAstroMx(`${FENCE}${template}`, "Test.amx");
+    lowerAstroMx(`${FENCE}${template}`, "Test.astro.mx");
   } catch (error) {
     const e = error as { message: string; line: number; column: number };
     return {
@@ -39,7 +39,9 @@ describe("invalid attribute names (astro)", () => {
 
   it("accepts the names Marko accepts", () => {
     for (const ok of ['<div data-x="1"/>', '<div a.b="1"/>', '<div _x="1"/>']) {
-      expect(() => lowerAstroMx(`${FENCE}${ok}`, "Test.amx")).not.toThrow();
+      expect(() =>
+        lowerAstroMx(`${FENCE}${ok}`, "Test.astro.mx"),
+      ).not.toThrow();
     }
   });
 });

@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "files": ["../src/env.d.ts", "astro-mx-wrong.astro.mx"],
+  "include": []
+}

@@ -18,7 +18,7 @@ function failure(source: string): {
   column: number;
 } {
   try {
-    lowerAstroMx(`${FENCE}${source}`, "Test.amx");
+    lowerAstroMx(`${FENCE}${source}`, "Test.astro.mx");
   } catch (error) {
     const e = error as { message: string; line: number; column: number };
     return {

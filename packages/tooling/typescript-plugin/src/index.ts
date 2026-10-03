@@ -78,7 +78,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
           fileName.endsWith(".solid.mx") ||
           isNgMx(fileName) ||
           fileName.endsWith(".mx") ||
-          fileName.endsWith(".amx") ||
+          fileName.endsWith(".astro.mx") ||
           fileName.endsWith(".astro"),
       );
     },
@@ -134,7 +134,7 @@ export function createConfiguredLanguagePlugins(
     ...mxPlugins,
     ...(astro &&
     !mxPlugins.some(
-      (plugin) => plugin.getLanguageId?.("component.amx") === "astromx",
+      (plugin) => plugin.getLanguageId?.("component.astro.mx") === "astromx",
     )
       ? [createAmxLanguagePlugin(typescript)]
       : []),
@@ -235,8 +235,8 @@ function withSyntaxDiagnostics(
           ? "solidmx"
           : isNgMx(fileName)
             ? "ngmx"
-            : fileName.endsWith(".amx")
-              ? "amx"
+            : fileName.endsWith(".astro.mx")
+              ? "astromx"
               : "mx";
 
         return [

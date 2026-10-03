@@ -42,6 +42,14 @@ function isNgMxDocument(filePath: string): boolean {
   return hostModuleSegment(basename(filePath).toLowerCase()) === "ng";
 }
 
+/**
+ * Whether `filePath` is an Astro template (`x.astro.mx`, decision 134).
+ * Case-insensitive, like `isNgMxDocument`.
+ */
+export function isAstroMxDocument(filePath: string): boolean {
+  return hostModuleSegment(basename(filePath).toLowerCase()) === "astro";
+}
+
 export function isSolidMxDocument(uri: string, languageId = ""): boolean {
   return uri.endsWith(".solid.mx") || SOLID_MX_LANGUAGE_IDS.has(languageId);
 }
@@ -310,7 +318,14 @@ export function diagnoseDocument(
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
 
-    if (isNgMxDocument(path)) {
+    if (isAstroMxDocument(path)) {
+      // Deliberately silent, and checked FIRST for the reason the `.ng.mx`
+      // branch below is: an `.astro.mx` file is an Astro component whatever
+      // `mx.host` says, so it must never reach the `.mx` compile (it ends in
+      // `.mx`, but its template is Astro syntax, not an html page). The
+      // lowering lives in `@mxlang/astro`, which the server does not load;
+      // `mx-tsc --astro` and the TS plugin report its diagnostics.
+    } else if (isNgMxDocument(path)) {
       // Deliberately silent, and checked FIRST: routed by file kind before
       // any host branch, as `mx-tsc`'s `isNgMx` does. A `.ng.mx` is an
       // Angular host module whatever `mx.host` says (an unknown host resolves

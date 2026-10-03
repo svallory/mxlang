@@ -1,5 +1,5 @@
 /**
- * The Vite plugin that feeds a lowered `.amx` file to Astro's own
+ * The Vite plugin that feeds a lowered `.astro.mx` file to Astro's own
  * compiler (decision 76c).
  *
  * ## The mechanism, and why it is the only one
@@ -24,7 +24,7 @@
  * ```
  *
  * Both gates require the id to end in `.astro`. So an `enforce: "pre"`
- * transform on the real `.amx` id cannot work — Astro's plugin never
+ * transform on the real `.astro.mx` id cannot work — Astro's plugin never
  * matches it, and the lowered source would simply be handed to rolldown as
  * plain JS. The only mechanism that reaches Astro's compiler is to make the
  * module id itself end in `.astro`: `resolveId` appends the suffix, and `load`
@@ -59,16 +59,16 @@ import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
  * A single constant, referenced everywhere this extension is matched (here and
  * in the Zed language definition), so a change of spelling is a one-line edit.
  *
- * **Single-dot, deliberately.** The obvious spelling was `.astro.mx`, and it
- * works for components — but not for pages: Astro's route collection keys on
- * `path.extname(basename)`, which returns only the **last** extension, so
- * `.astro.mx` can never be registered with `addPageExtension`. Measured against
- * `astro@7.3.2`: a `page.astro.mx` under `src/pages` is skipped entirely, or —
- * once `.mx` is registered as a page extension — routed to `/page.astro/`,
- * with a literal `.astro` in the URL. `.amx` has one extension segment, so
- * components, layouts and pages all work from the same spelling.
+ * **Components and layouts only, never pages** (decision 134 and its
+ * addendum). Astro's route collection keys on `path.extname(basename)`, which
+ * returns only the **last** extension, so `.astro.mx` can never be registered
+ * with `addPageExtension`. Measured against `astro@7.3.2`: a `page.astro.mx`
+ * under `src/pages` routes to `/page.astro`, with a literal `.astro` in the
+ * URL, and `injectRoute` cannot repair it. The integration reports such a file
+ * as an error (`pages-guard.ts`) and tells the author to write `page.astro`
+ * and import the component, or to write the page as `.mx`.
  */
-export const ASTRO_MX_EXT = ".amx";
+export const ASTRO_MX_EXT = ".astro.mx";
 
 /**
  * Appended to the resolved path so Astro's own plugin claims the module.
@@ -93,7 +93,7 @@ function splitId(id: string): [path: string, suffix: string] {
   return index === -1 ? [id, ""] : [id.slice(0, index), id.slice(index)];
 }
 
-/** `/a/Base.amx.astro` -> `/a/Base.amx`, or undefined. */
+/** `/a/Base.astro.mx.astro` -> `/a/Base.astro.mx`, or undefined. */
 function sourcePath(path: string): string | undefined {
   if (!path.endsWith(ASTRO_SUFFIX)) return undefined;
   const real = path.slice(0, -ASTRO_SUFFIX.length);
@@ -118,7 +118,7 @@ export function codeFrame(
 /**
  * Reads a tag template's current source so an `AstroTemplateError` raised
  * inside it (spec §2's third position rule) can build its Vite overlay
- * frame from the *template's* own text, not the `.amx` caller's.
+ * frame from the *template's* own text, not the `.astro.mx` caller's.
  *
  * The named file may no longer exist, or be unreadable, between the
  * original compile's own read and this one — a failure here must not
@@ -145,23 +145,23 @@ export function readTemplateSource(
 }
 
 /**
- * Lowers `.amx` files to Astro template syntax, ahead of Astro's own
+ * Lowers `.astro.mx` files to Astro template syntax, ahead of Astro's own
  * plugin.
  *
  * `enforce: "pre"` so `resolveId` runs before Vite's default resolution
  * settles the id. Astro's own plugin is also `enforce: "pre"`, but the two
- * never contend: this one owns `.amx`, and hands Astro an id ending in
+ * never contend: this one owns `.astro.mx`, and hands Astro an id ending in
  * `.astro`, which is the only thing Astro's plugin looks at.
  */
 export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
   /**
-   * The tags callable from one `.amx` file: everything discovered around it
+   * The tags callable from one `.astro.mx` file: everything discovered around it
    * (spec §4), with a caller-supplied definition winning over a discovered
    * one of the same name.
    *
    * `.mx` gets the same treatment one plugin over, inside
    * `@mxlang/vite-plugin`; doing it here keeps the two file kinds consistent
-   * rather than leaving `.amx` the one place a `tags/` directory is invisible.
+   * rather than leaving `.astro.mx` the one place a `tags/` directory is invisible.
    */
   const reportedScanDiagnostics = new Set<string>();
 
@@ -203,11 +203,11 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
     },
 
     /**
-     * Bridges the on-disk `.amx` file back to its virtual module.
+     * Bridges the on-disk `.astro.mx` file back to its virtual module.
      *
      * Vite keys its module graph by the *resolved* id, which for AstroMX is
-     * `<path>.amx.astro` — a path that does not exist on disk. An edit to the
-     * real `.amx` file therefore matches no module, so without this hook Vite
+     * `<path>.astro.mx.astro` — a path that does not exist on disk. An edit to the
+     * real `.astro.mx` file therefore matches no module, so without this hook Vite
      * finds nothing to invalidate and sends no update at all: `astro dev`
      * would serve the previously compiled output until a manual restart.
      *
@@ -232,9 +232,9 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
       const real = sourcePath(path);
       if (real === undefined) return null;
 
-      // A real `Foo.amx.astro` checked into a project is a different
+      // A real `Foo.astro.mx.astro` checked into a project is a different
       // module and must not be shadowed: only claim the id when the
-      // un-suffixed `.amx` file is the one that actually exists.
+      // un-suffixed `.astro.mx` file is the one that actually exists.
       if (!existsSync(real)) return null;
 
       const source = readFileSync(real, "utf8");
@@ -244,14 +244,14 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
         if (!(error instanceof AstroTemplateError)) throw error;
 
         // Re-raise with the shape Vite's overlay reads, so the reported
-        // position is the `.amx` source line rather than a position
+        // position is the `.astro.mx` source line rather than a position
         // inside text the author never wrote. `parseFragment` has already
         // shifted the position past the fence, so the line is the real one.
         //
         // `error.file` names a tag template (spec §2's third position rule)
-        // when the failure was raised inside one, not in this `.amx` file —
+        // when the failure was raised inside one, not in this `.astro.mx` file —
         // build the frame from *that* file's own source, or the position
-        // would be measured against `source` (the `.amx` text) while
+        // would be measured against `source` (the `.astro.mx` text) while
         // actually pointing somewhere in the template.
         const errorFile = error.file ?? real;
         const errorSource = error.file

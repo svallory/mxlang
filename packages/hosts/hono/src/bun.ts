@@ -16,14 +16,14 @@ import { compileHonoMx } from "./index.ts";
  * subset of Marko syntax, so treating a real `.marko` file as MX would
  * silently claim support it does not have. `.solid.mx` is a different file
  * kind (TSX with MX regions, handled by `@mxlang/vite-plugin`) and must not
- * match here, hence the negative lookbehind despite it also ending in
- * `.mx`.
+ * match here, nor does `.astro.mx` (Astro's template kind), hence the
+ * negative lookbehind despite both also ending in `.mx`.
  *
  * Custom tags are discovered per loaded file (spec §4), the same as
  * `@mxlang/html/bun`: which tags a template may call follows from where the
  * template lives, not from plugin configuration.
  */
-const MX_FILTER = /(?<!\.solid)\.mx$/;
+const MX_FILTER = /(?<!\.(?:solid|astro))\.mx$/;
 
 /** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
 const reportedScanDiagnostics = new Set<string>();

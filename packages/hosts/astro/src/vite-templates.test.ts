@@ -120,7 +120,7 @@ function writeAmx(name: string, source: string): string {
 
 describe("readTemplateSource", () => {
   it("returns the file's text via the default reader", () => {
-    const path = writeAmx("Card.amx", "---\n---\n<p>hi</p>\n");
+    const path = writeAmx("Card.astro.mx", "---\n---\n<p>hi</p>\n");
     expect(readTemplateSource(path)).toBe("---\n---\n<p>hi</p>\n");
   });
 
@@ -139,7 +139,7 @@ describe("readTemplateSource", () => {
       });
     };
     expect(
-      readTemplateSource("/nonexistent.amx", throwingReader),
+      readTemplateSource("/nonexistent.astro.mx", throwingReader),
     ).toBeUndefined();
   });
 });
@@ -152,13 +152,13 @@ describe("mxTemplates()", () => {
   });
 
   describe("resolveId", () => {
-    it("rewrites a relative .amx import to the virtual .astro id", async () => {
+    it("rewrites a relative .astro.mx import to the virtual .astro id", async () => {
       const context = makeContext();
       const resolveId = resolveIdOf(mxTemplates());
 
       const resolved = await resolveId.call(
         context,
-        "./Base.amx",
+        "./Base.astro.mx",
         "/root/src/pages/index.astro",
       );
 
@@ -173,17 +173,17 @@ describe("mxTemplates()", () => {
 
       const resolved = await resolveId.call(
         context,
-        "./A.amx?t=1712345",
+        "./A.astro.mx?t=1712345",
         "/root/src/index.astro",
       );
 
-      expect(resolved).toBe(`/root/src/A.amx${ASTRO_SUFFIX}?t=1712345`);
+      expect(resolved).toBe(`/root/src/A.astro.mx${ASTRO_SUFFIX}?t=1712345`);
     });
 
     it("returns an already-rewritten id unchanged", async () => {
       const context = makeContext();
       const resolveId = resolveIdOf(mxTemplates());
-      const id = `/root/src/A.amx${ASTRO_SUFFIX}`;
+      const id = `/root/src/A.astro.mx${ASTRO_SUFFIX}`;
 
       expect(await resolveId.call(context, id, undefined)).toBe(id);
       expect(context.calls).toHaveLength(0);
@@ -197,7 +197,7 @@ describe("mxTemplates()", () => {
         expect(
           await resolveId.call(
             context,
-            `./A.amx${query}`,
+            `./A.astro.mx${query}`,
             "/root/src/index.astro",
           ),
         ).toBeNull();
@@ -219,8 +219,8 @@ describe("mxTemplates()", () => {
   });
 
   describe("load", () => {
-    it("lowers the real .amx file behind the virtual id", () => {
-      const path = writeAmx("Base.amx", COMPONENT);
+    it("lowers the real .astro.mx file behind the virtual id", () => {
+      const path = writeAmx("Base.astro.mx", COMPONENT);
       const load = loadOf(mxTemplates());
 
       const code = load.call({}, path + ASTRO_SUFFIX);
@@ -230,8 +230,8 @@ describe("mxTemplates()", () => {
       expect(code).toContain("<h1>{title}</h1>");
     });
 
-    it("passes registered custom tags into .amx lowering", () => {
-      const path = writeAmx("Custom.amx", "<icon/>");
+    it("passes registered custom tags into .astro.mx lowering", () => {
+      const path = writeAmx("Custom.astro.mx", "<icon/>");
       const load = loadOf(
         mxTemplates({
           icon: {
@@ -243,17 +243,23 @@ describe("mxTemplates()", () => {
       expect(load.call({}, path + ASTRO_SUFFIX)).toBe("<svg></svg>");
     });
 
-    it("does not shadow a real .amx.astro file on disk", () => {
-      // `Shadow.amx.astro` exists but `Shadow.amx` does not: the id belongs to
+    it("does not shadow a real .astro.mx.astro file on disk", () => {
+      // `Shadow.astro.mx.astro` exists but `Shadow.astro.mx` does not: the id belongs to
       // the real file, so the hook must decline and let Vite read it.
-      const real = writeAmx(`Shadow.amx${ASTRO_SUFFIX}`, "---\n---\n<p>x</p>");
+      const real = writeAmx(
+        `Shadow.astro.mx${ASTRO_SUFFIX}`,
+        "---\n---\n<p>x</p>",
+      );
       const load = loadOf(mxTemplates());
 
       expect(load.call({}, real)).toBeNull();
     });
 
     it("raises a lowering error with a Vite-shaped loc and frame", () => {
-      const path = writeAmx("Bad.amx", "---\nconst a = 1;\n---\n<let/n=1/>");
+      const path = writeAmx(
+        "Bad.astro.mx",
+        "---\nconst a = 1;\n---\n<let/n=1/>",
+      );
       const load = loadOf(mxTemplates());
 
       try {
@@ -269,7 +275,7 @@ describe("mxTemplates()", () => {
         expect(wrapped.message).toMatch(
           /reactive state and requires a runtime/,
         );
-        // The position names the real `.amx` file, past the fence.
+        // The position names the real `.astro.mx` file, past the fence.
         expect(wrapped.id).toBe(path);
         expect(wrapped.loc?.file).toBe(path);
         expect(wrapped.loc?.line).toBe(4);
@@ -279,14 +285,14 @@ describe("mxTemplates()", () => {
   });
 
   describe("handleHotUpdate", () => {
-    // Vite keys its module graph by the *resolved* id (`X.amx.astro`), which
-    // does not exist on disk. An edit fires with the real `.amx` path, so
+    // Vite keys its module graph by the *resolved* id (`X.astro.mx.astro`), which
+    // does not exist on disk. An edit fires with the real `.astro.mx` path, so
     // without this hook nothing in the graph matches and `astro dev` sends no
     // update at all. No dev server is started here: a fake graph exercises the
     // whole contract.
 
-    it("invalidates the virtual module when the real .amx file changes", () => {
-      const file = "/root/src/components/Panel.amx";
+    it("invalidates the virtual module when the real .astro.mx file changes", () => {
+      const file = "/root/src/components/Panel.astro.mx";
       const virtualId = file + ASTRO_SUFFIX;
       const graph = makeGraph([virtualId]);
       const existing = { id: "/root/src/pages/index.astro" };
@@ -303,7 +309,7 @@ describe("mxTemplates()", () => {
       expect(result?.map((m) => m.id)).toEqual([existing.id, virtualId]);
     });
 
-    it("ignores a file that is not .amx", () => {
+    it("ignores a file that is not .astro.mx", () => {
       const graph = makeGraph(["/root/src/card.mx.ts"]);
 
       const result = handleHotUpdateOf(mxTemplates())({
@@ -317,12 +323,12 @@ describe("mxTemplates()", () => {
     });
 
     it("returns undefined when the virtual module is not in the graph", () => {
-      // An `.amx` file nothing has imported yet: there is no module to
+      // An `.astro.mx` file nothing has imported yet: there is no module to
       // invalidate, and returning an empty list would claim otherwise.
       const graph = makeGraph([]);
 
       const result = handleHotUpdateOf(mxTemplates())({
-        file: "/root/src/Unused.amx",
+        file: "/root/src/Unused.astro.mx",
         modules: [],
         server: { moduleGraph: graph },
       });
@@ -339,7 +345,7 @@ describe("mxTemplates()", () => {
 
     it("resolves a tag from a sibling tags/ directory with no import", () => {
       // The `.mx` half of this host reaches discovery through `mx()` inside
-      // `@mxlang/vite-plugin`; `.amx` has its own `load`, so without the scan
+      // `@mxlang/vite-plugin`; `.astro.mx` has its own `load`, so without the scan
       // wired in here it would be the one file kind where a `tags/` directory
       // is invisible.
       const dir = mkdtempSync(join(tmpdir(), "mx-amx-tags-"));
@@ -395,10 +401,10 @@ describe("mxTemplates()", () => {
       }
     });
 
-    it("raises a Vite-shaped error pointing at a broken *template* tag, not the .amx caller", () => {
+    it("raises a Vite-shaped error pointing at a broken *template* tag, not the .astro.mx caller", () => {
       // Round 2 fix: a TranslateError raised inside a discovered *template*
       // tag (tags/broken.mx) carried no `.file` through `AstroTemplateError`,
-      // and the frame was built from the .amx caller's own source — so the
+      // and the frame was built from the .astro.mx caller's own source — so the
       // error used to be reported at the template's line/column measured
       // against the wrong file's text.
       const dir = mkdtempSync(join(tmpdir(), "mx-amx-tags-"));

@@ -67,7 +67,7 @@ export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
   /**
    * What this plugin's host resolution reported (an unknown `mx.host`, a
    * malformed `package.json`). Every plugin that resolves a host implements
-   * it: `.mx`, `.solid.mx`, `.ng.mx` and `.amx`.
+   * it: `.mx`, `.solid.mx`, `.ng.mx` and `.astro.mx`.
    */
   getHostPolicyDiagnostics?(fileName?: string): HostPolicyDiagnostic[];
 }

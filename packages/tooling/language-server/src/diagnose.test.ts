@@ -330,6 +330,27 @@ describe("the Preact host", () => {
   });
 });
 
+describe("the Astro template file kind", () => {
+  it("routes x.astro.mx by kind, not through the .mx compile (decision 134)", () => {
+    // `<let/>` is rejected by the html host's strict compile, so the same
+    // text in a plain `.mx` file reports; in an `.astro.mx` file the server
+    // must not compile it as an html page.
+    const source = "<let/count=0/>\n<p>${count}</p>\n";
+    expect(
+      diagnoseDocument(source, "file:///app/card.mx", {
+        host: "html",
+        strict: true,
+      }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      diagnoseDocument(source, "file:///app/card.astro.mx", {
+        host: "html",
+        strict: true,
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe("the React host", () => {
   it("diagnoses a stateful tag through @mxlang/react", () => {
     const diagnostics = diagnoseDocument(

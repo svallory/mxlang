@@ -29,7 +29,7 @@ const FIXTURE_FENCE =
 /** Lowers a template with a fixture fence, returning just the template half. */
 function lower(template: string): string {
   const source = `${FIXTURE_FENCE}${template}`;
-  return lowerAstroMx(source, "Test.amx").code.replace(FIXTURE_FENCE, "");
+  return lowerAstroMx(source, "Test.astro.mx").code.replace(FIXTURE_FENCE, "");
 }
 
 /** The error a template raises, for the error-path tests. */
@@ -46,7 +46,7 @@ function errorFor(template: string): AstroTemplateError {
 describe("lowerAstroMx", () => {
   it("copies the fence through byte for byte", () => {
     const source = `---\nimport Card from "./Card.astro";\nconst n = 1;\n---\n<p>hi</p>`;
-    const { code } = lowerAstroMx(source, "Test.amx");
+    const { code } = lowerAstroMx(source, "Test.astro.mx");
 
     expect(
       code.startsWith(
@@ -56,13 +56,13 @@ describe("lowerAstroMx", () => {
   });
 
   it("lowers a file with no fence at all", () => {
-    const { code } = lowerAstroMx("<p>hi</p>", "Test.amx");
+    const { code } = lowerAstroMx("<p>hi</p>", "Test.astro.mx");
     expect(code).toBe("<p>hi</p>");
   });
 
   it("hoists a template static into the Astro fence", () => {
     const source = `---\nconst x = 1;\n---\nstatic const y = 2;\n<p>${"${x + y}"}</p>`;
-    expect(lowerAstroMx(source, "Test.amx").code).toBe(
+    expect(lowerAstroMx(source, "Test.astro.mx").code).toBe(
       `---\nconst x = 1;\nconst y = 2;\n---\n<p>{x + y}</p>`,
     );
   });
@@ -74,7 +74,7 @@ describe("lowerAstroMx", () => {
   });
 
   it("lowers registered custom tags before Astro emission", () => {
-    const result = lowerAstroMx("<icon/>", "Test.amx", {
+    const result = lowerAstroMx("<icon/>", "Test.astro.mx", {
       customTags: {
         icon: {
           transform: (_call, ctx) => [ctx.build.element("svg")],
@@ -89,7 +89,7 @@ describe("lowerAstroMx", () => {
 describe("source mappings", () => {
   it("maps the unchanged frontmatter fence as one identity span", () => {
     const source = `---\nconst title = "Hello";\n---\n<h1>${"${title}"}</h1>`;
-    const result = lowerAstroMx(source, "Test.amx");
+    const result = lowerAstroMx(source, "Test.astro.mx");
     const fenceEnd = source.indexOf("<h1>");
 
     expect(result.mappings[0]).toEqual({
@@ -109,7 +109,7 @@ describe("source mappings", () => {
   ])(
     "maps an emitted %s at its write offset",
     (_kind, template, expression) => {
-      const result = lowerAstroMx(template, "Test.amx");
+      const result = lowerAstroMx(template, "Test.astro.mx");
       const sourceStart = template.indexOf(expression);
       const mapping = result.mappings.find(
         (candidate) => candidate.sourceStart === sourceStart,
@@ -127,7 +127,7 @@ describe("source mappings", () => {
 
   it("maps a hoisted statement as a whole source block", () => {
     const source = "static const answer: number = 42;\n<p>${answer}</p>";
-    const result = lowerAstroMx(source, "Test.amx");
+    const result = lowerAstroMx(source, "Test.astro.mx");
     const generatedStatement = "const answer: number = 42;";
     const mapping = result.mappings.find(
       (candidate) =>
@@ -143,7 +143,7 @@ describe("source mappings", () => {
 
   it("maps an attribute name where TypeScript anchors prop diagnostics", () => {
     const source = `${FIXTURE_FENCE}<Card title=1/>`;
-    const result = lowerAstroMx(source, "Test.amx");
+    const result = lowerAstroMx(source, "Test.astro.mx");
     const sourceStart = source.indexOf("title");
     const mapping = result.mappings.find(
       (candidate) => candidate.sourceStart === sourceStart,
@@ -274,7 +274,7 @@ describe("<for>", () => {
     "emits JavaScript the real Astro compiler accepts (%s)",
     async (_name, template) => {
       const source = `---\nconst x = 1;\n---\n${template}`;
-      const { code } = lowerAstroMx(source, "Test.amx");
+      const { code } = lowerAstroMx(source, "Test.astro.mx");
       const diagnostics = await astroDiagnostics(code);
       expect(diagnostics).toEqual([]);
     },
@@ -368,7 +368,7 @@ describe("unresolved components (decision 114 parity)", () => {
   it("a type-only fence import does not resolve a capitalized tag (#151)", () => {
     const source = `---\nimport type Widget from "./widget.mx";\n---\n<Widget/>`;
     try {
-      lowerAstroMx(source, "Test.amx");
+      lowerAstroMx(source, "Test.astro.mx");
       throw new Error("expected the template to fail lowering");
     } catch (error) {
       if (!(error instanceof AstroTemplateError)) throw error;
@@ -388,15 +388,15 @@ describe("unresolved components (decision 114 parity)", () => {
     // never a lowered Component -- see `interpolation` in this file).
     const { code } = lowerAstroMx(
       "---\n---\n<Fragment><p>x</p></Fragment>",
-      "Test.amx",
+      "Test.astro.mx",
     );
     expect(code).toBe("<Fragment><p>x</p></Fragment>");
     expect(await astroDiagnostics(code)).toEqual([]);
   });
 
   it("resolves a fence import beside Astro.props destructuring and export interface Props", () => {
-    // A real .amx component's fence shape (see examples/astro-static's
-    // Panel.amx/Roster.amx): `sourceBindings` must not choke on
+    // A real .astro.mx component's fence shape (see examples/astro-static's
+    // Panel.astro.mx/Roster.astro.mx): `sourceBindings` must not choke on
     // `export interface Props` (a type, correctly not collected -- only
     // VariableDeclaration/FunctionDeclaration/ClassDeclaration are) or a
     // destructured `const { ... } = Astro.props as Props` (an
@@ -412,7 +412,7 @@ describe("unresolved components (decision 114 parity)", () => {
       "---",
       "<Card title=title/>",
     ].join("\n");
-    const { code } = lowerAstroMx(source, "Test.amx");
+    const { code } = lowerAstroMx(source, "Test.astro.mx");
     expect(code).toContain("<Card title={title} />");
   });
 
@@ -425,7 +425,7 @@ describe("unresolved components (decision 114 parity)", () => {
       "<Card><Widget/></Card>",
     ].join("\n");
     try {
-      lowerAstroMx(source, "Test.amx");
+      lowerAstroMx(source, "Test.astro.mx");
       throw new Error("expected the template to fail lowering");
     } catch (error) {
       if (!(error instanceof AstroTemplateError)) throw error;
@@ -449,7 +449,7 @@ describe("unresolved components (decision 114 parity)", () => {
       "<Card/>",
     ].join("\n");
     try {
-      lowerAstroMx(source, "Test.amx");
+      lowerAstroMx(source, "Test.astro.mx");
       throw new Error("expected the template to fail lowering");
     } catch (error) {
       if (!(error instanceof AstroTemplateError)) throw error;
@@ -506,7 +506,7 @@ describe("components and slots", () => {
     async (_name, template) => {
       const code = lowerAstroMx(
         `---\nimport Card from "./Card.astro";\nconst a = true;\nconst b = false;\n---\n${template}`,
-        "Test.amx",
+        "Test.astro.mx",
       ).code;
       expect(await astroDiagnostics(code)).toEqual([]);
     },
@@ -576,7 +576,7 @@ describe("components and slots", () => {
   it("rejects a declared AttrTag[] even when no occurrence is passed", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-astro-attr-tags-"));
     const card = join(dir, "Card.mx");
-    const caller = join(dir, "Caller.amx");
+    const caller = join(dir, "Caller.astro.mx");
     writeFileSync(
       card,
       "export interface Input { item?: AttrTag[] }\n<section/>\n",
@@ -593,7 +593,7 @@ describe("AttrTag type import", () => {
   it("auto-imports the Astro-specialized type into the frontmatter fence", () => {
     const result = lowerAstroMx(
       "export interface Input { header?: AttrTag }\n<p>x</p>",
-      "Test.amx",
+      "Test.astro.mx",
     );
 
     expect(result.code).toContain(
@@ -621,7 +621,7 @@ describe("unsupported constructs", () => {
 
   it("rejects <define>, pointing at a separate file", () => {
     expect(errorFor("<define/Row><p>x</p></define>").message).toMatch(
-      /extract it into its own `\.amx` file/,
+      /extract it into its own `\.astro.mx` file/,
     );
   });
 
@@ -655,7 +655,7 @@ describe("error positions", () => {
     // which is the whole reason this host uses that front door.
     const source = `---\nconst x = 1;\n---\n<let/count=1/>`;
     try {
-      lowerAstroMx(source, "Test.amx");
+      lowerAstroMx(source, "Test.astro.mx");
       throw new Error("expected a failure");
     } catch (error) {
       expect(error).toBeInstanceOf(AstroTemplateError);
@@ -665,10 +665,10 @@ describe("error positions", () => {
 });
 
 /**
- * Calling a returning tag from `.amx` (round 1, finding 5).
+ * Calling a returning tag from `.astro.mx` (round 1, finding 5).
  *
  * The `<return>` error disposition used to live in this host's table, which
- * refused a `.amx` file that merely *called* a returning `.mx` tag — the
+ * refused a `.astro.mx` file that merely *called* a returning `.mx` tag — the
  * table is consulted while compiling whichever file holds the tag. The call
  * is legal: the unit is a separate module, and Astro's renderer unwraps the
  * `{ value, output }` pair (`server.ts`). Only `/var` is refused: it is a
@@ -690,10 +690,10 @@ describe("a tag that returns a value", () => {
     },
   } as never;
 
-  it("can be called from .amx without /var", () => {
+  it("can be called from .astro.mx without /var", () => {
     const { code } = lowerAstroMx(
       "---\n---\n<div><counter start=1/></div>\n",
-      "/fixtures/page.amx",
+      "/fixtures/page.astro.mx",
       { customTags: { counter } },
     );
 
@@ -701,7 +701,7 @@ describe("a tag that returns a value", () => {
     expect(code).toContain('import $mx_Counter1 from "./tags/counter.mx"');
   });
 
-  it("rejects the .amx file's own <return>", () => {
+  it("rejects the .astro.mx file's own <return>", () => {
     // Removing the stale error disposition (round 1, finding 5) let the core
     // parse `<return>` here, and this emitter never reads `ir.returnValue` —
     // so the tag compiled clean with the value silently gone, which is worse
@@ -709,7 +709,7 @@ describe("a tag that returns a value", () => {
     expect(() =>
       lowerAstroMx(
         "---\n---\n<div>x</div>\n<return value=41 + 1/>\n",
-        "Test.amx",
+        "Test.astro.mx",
       ),
     ).toThrow(/`<return>` hands a value to whoever called this unit/);
   });
@@ -718,10 +718,10 @@ describe("a tag that returns a value", () => {
     expect(() =>
       lowerAstroMx(
         "---\n---\n<div><counter/n start=1/></div>\n",
-        "/fixtures/page.amx",
+        "/fixtures/page.astro.mx",
         { customTags: { counter } },
       ),
-    ).toThrow(/`\/var` on `<counter>` can't bind in `\.amx`/);
+    ).toThrow(/`\/var` on `<counter>` can't bind in `\.astro.mx`/);
   });
 
   it("explains why /var can't bind (fence-before-template ordering) and shows the fence-call workaround", () => {
@@ -733,7 +733,7 @@ describe("a tag that returns a value", () => {
     expect(() =>
       lowerAstroMx(
         "---\n---\n<div><counter/n start=1/></div>\n",
-        "/fixtures/page.amx",
+        "/fixtures/page.astro.mx",
         { customTags: { counter } },
       ),
     ).toThrow(
@@ -743,15 +743,15 @@ describe("a tag that returns a value", () => {
 });
 
 describe("event attributes (decision 101, phase B of dom-events)", () => {
-  it("rejects an expression-valued event handler: .amx has no runtime", () => {
+  it("rejects an expression-valued event handler: .astro.mx has no runtime", () => {
     expect(errorFor("<button onClick=handler>x</button>").message).toBe(
-      "`onClick` is an event handler and requires a runtime; .amx renders static markup at build time",
+      "`onClick` is an event handler and requires a runtime; .astro.mx renders static markup at build time",
     );
   });
 
   it("rejects a custom event name the same way", () => {
     expect(errorFor("<div on-my-event=fn>x</div>").message).toBe(
-      "`on-my-event` is an event handler and requires a runtime; .amx renders static markup at build time",
+      "`on-my-event` is an event handler and requires a runtime; .astro.mx renders static markup at build time",
     );
   });
 
@@ -759,7 +759,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
     // Spec §4: a string-valued `onClick` stays an ordinary static attribute;
     // MX does not invent a policy against inline handler strings.
     expect(
-      lowerAstroMx('<button onClick="alert(1)">x</button>', "T.amx").code,
+      lowerAstroMx('<button onClick="alert(1)">x</button>', "T.astro.mx").code,
     ).toBe('<button onClick="alert(1)">x</button>');
   });
 

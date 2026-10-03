@@ -324,6 +324,22 @@ describe("scanCustomTags", () => {
     );
   });
 
+  it("reports a .astro.mx in a tags/ directory as a host file kind", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"astrotag"}');
+    writeFileSync(join(dir, "tags", "card.astro.mx"), "---\n---\n<p/>\n");
+
+    // Decision 134: a known host file kind, so the dotted-name rule does not
+    // turn it into the tag `<card.astro>`; it is reported like `.solid.mx`.
+    const result = scanCustomTags(join(dir, "caller.mx"));
+    expect(Object.keys(result.customTags)).toEqual([]);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toMatch(
+      /`card\.astro\.mx` is a host module file/,
+    );
+  });
+
   it("reports a .ng.mx in a tags/ directory instead of ignoring it", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });

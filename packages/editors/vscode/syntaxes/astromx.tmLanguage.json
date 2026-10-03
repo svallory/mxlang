@@ -1,10 +1,10 @@
 {
-  "scopeName": "source.amx",
+  "scopeName": "source.astromx",
   "patterns": [
     {
       "begin": "\\A---$",
       "end": "^---$",
-      "name": "meta.embedded.block.frontmatter.amx",
+      "name": "meta.embedded.block.frontmatter.astromx",
       "contentName": "source.ts",
       "patterns": [
         {

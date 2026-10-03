@@ -59,7 +59,7 @@ async function renderConditional(
   declarations: string,
   template: string,
 ): Promise<string> {
-  const amxFile = join(dir, `${name}.amx`);
+  const amxFile = join(dir, `${name}.astro.mx`);
   const source = `---
 import Card from "./Card.mjs";
 ${declarations}
@@ -82,7 +82,7 @@ ${template}`;
 }
 
 async function renderPlain(name: string, template: string): Promise<string> {
-  const amxFile = join(dir, `${name}.amx`);
+  const amxFile = join(dir, `${name}.astro.mx`);
   const lowered = lowerAstroMx(`---\n---\n${template}`, amxFile).code;
   const result = await compiler.transform(lowered, {
     filename: join(dir, `${name}.astro`),
@@ -178,7 +178,7 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
     expect(() =>
       lowerAstroMx(
         '---\nconst Tag = "section";\n---\n<Tag data-x="1">body</Tag>',
-        "Test.amx",
+        "Test.astro.mx",
       ),
     ).toThrow(
       "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.",
@@ -197,7 +197,7 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
           "---",
           "<Tag/>",
         ].join("\n"),
-        "Test.amx",
+        "Test.astro.mx",
       ),
     ).toThrow(
       "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component",
@@ -214,7 +214,7 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
           "---",
           '<Tag data-x="1">body</Tag>',
         ].join("\n"),
-        "Test.amx",
+        "Test.astro.mx",
       ),
     ).toThrow(
       "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component",
@@ -225,14 +225,17 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
     // Same case as above, different tag name, proving the error is derived
     // from the actual authored tag rather than hardcoded.
     expect(() =>
-      lowerAstroMx('---\nconst Widget = "div";\n---\n<Widget/>', "Test.amx"),
+      lowerAstroMx(
+        '---\nconst Widget = "div";\n---\n<Widget/>',
+        "Test.astro.mx",
+      ),
     ).toThrow("`<Widget>` is bound in the frontmatter");
   });
 
   it("a fence arrow-function const stays a direct component call, unaffected", () => {
     const { code } = lowerAstroMx(
       "---\nconst Comp = (props: { n: number }) => `<em>${props.n}</em>`;\n---\n<Comp n=1/>",
-      "Test.amx",
+      "Test.astro.mx",
     );
     expect(code).toContain("<Comp n={1} />");
     expect(code).not.toContain("bound in the frontmatter");
@@ -248,7 +251,7 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
         "---",
         "<Comp n=1/>",
       ].join("\n"),
-      "Test.amx",
+      "Test.astro.mx",
     );
     expect(code).toContain("<Comp n={1} />");
   });
@@ -256,7 +259,7 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
   it("a fence import stays a direct component call, unaffected (decision 116 proper, not the local extension)", () => {
     const { code } = lowerAstroMx(
       '---\nimport Card from "./Card.astro";\n---\n<Card title="t"/>',
-      "Test.amx",
+      "Test.astro.mx",
     );
     expect(code).toContain('<Card title="t" />');
   });

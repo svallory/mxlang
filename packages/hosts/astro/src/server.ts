@@ -139,7 +139,7 @@ export async function renderToStaticMarkup(
 
   // A unit that declares `<return>` hands back `{ value, output }` rather
   // than the output alone (design §3.3). Astro renders the markup and has
-  // nowhere to put the value — an `.amx` template has no statement position
+  // nowhere to put the value — an `.astro.mx` template has no statement position
   // to bind one in, and `/var` there is refused for that reason — so the
   // output half is what renders. Unwrapped here rather than at the call
   // site, because Astro calls the component itself.

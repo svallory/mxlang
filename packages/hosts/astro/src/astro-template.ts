@@ -1,7 +1,7 @@
 /**
  * The MX → Astro-template emitter (decisions 76c, 78 and 79).
  *
- * An `.amx` file keeps Astro's TypeScript frontmatter byte-for-byte and uses
+ * An `.astro.mx` file keeps Astro's TypeScript frontmatter byte-for-byte and uses
  * MX for the template that follows it. The core parses that template,
  * resolves Marko nodes into its host-independent IR, and drives the emitter in
  * this file. No emission path here inspects a Marko node.
@@ -32,7 +32,7 @@ import {
 import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
 
 /**
- * A lowering failure positioned in the enclosing `.amx` file, or — when
+ * A lowering failure positioned in the enclosing `.astro.mx` file, or — when
  * `file` is set — in a tag template it called (spec §2's third position
  * rule, carried through from a `TranslateError`).
  */
@@ -61,42 +61,42 @@ const TAGS: HostDeclarations["tags"] = {
   let: {
     kind: "error",
     reason:
-      "`<let>` is reactive state and requires a runtime; `.amx` renders static markup at build time",
+      "`<let>` is reactive state and requires a runtime; `.astro.mx` renders static markup at build time",
   },
   effect: {
     kind: "error",
     reason:
-      "`<effect>` is a reactive effect and requires a runtime; `.amx` renders static markup at build time",
+      "`<effect>` is a reactive effect and requires a runtime; `.astro.mx` renders static markup at build time",
   },
   lifecycle: {
     kind: "error",
     reason:
-      "`<lifecycle>` is a reactive lifecycle hook and requires a runtime; `.amx` renders static markup at build time",
+      "`<lifecycle>` is a reactive lifecycle hook and requires a runtime; `.astro.mx` renders static markup at build time",
   },
   script: {
     kind: "error",
     reason:
-      "`<script>` as a Marko tag runs client code and requires a runtime; `.amx` renders static markup at build time",
+      "`<script>` as a Marko tag runs client code and requires a runtime; `.astro.mx` renders static markup at build time",
   },
   client: {
     kind: "error",
     reason:
-      "a `client` block is client-only and requires a runtime; `.amx` renders static markup at build time",
+      "a `client` block is client-only and requires a runtime; `.astro.mx` renders static markup at build time",
   },
   id: {
     kind: "error",
     reason:
-      "`<id>` allocates an identifier for the reactive runtime; `.amx` renders static markup at build time",
+      "`<id>` allocates an identifier for the reactive runtime; `.astro.mx` renders static markup at build time",
   },
   await: {
     kind: "error",
     reason:
-      "`<await>` needs a suspense-capable renderer; `.amx` renders static markup at build time",
+      "`<await>` needs a suspense-capable renderer; `.astro.mx` renders static markup at build time",
   },
-  // `<return>` is **not** listed. A `.amx` file cannot declare one — it is an
+  // `<return>` is **not** listed. A `.astro.mx` file cannot declare one — it is an
   // Astro component, whose output is its markup — but this table is consulted
   // while compiling whichever file contains the tag, so an entry here also
-  // refused a `.amx` file that merely *called* a returning `.mx` tag. That
+  // refused a `.astro.mx` file that merely *called* a returning `.mx` tag. That
   // call is legal: the unit is a separate module, and `component()` below
   // unwraps its `{ value, output }` pair.
   const: {
@@ -107,7 +107,7 @@ const TAGS: HostDeclarations["tags"] = {
   define: {
     kind: "error",
     reason:
-      "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.amx` file and import it",
+      "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.astro.mx` file and import it",
   },
   try: {
     kind: "error",
@@ -140,11 +140,11 @@ function isComponentName(name: string): boolean {
 const ASTRO_BUILTIN_TAG_NAMES = new Set(["Fragment"]);
 
 /**
- * Whether a capitalized tag resolves (decision 114, extended to `.amx`'s
+ * Whether a capitalized tag resolves (decision 114, extended to `.astro.mx`'s
  * larger scope like `.solid.mx`'s own extension): the `---` fence's own
  * value bindings (`ctx.imports`, fed from `sourceBindings` in
  * `lowerAstroMx`), or one of Astro's own built-ins (above). There is no
- * MX-level `import`/`<define>`/`<const>` inside an `.amx` template body the
+ * MX-level `import`/`<define>`/`<const>` inside an `.astro.mx` template body the
  * way there is for a whole-file `.mx` — Astro's local-component form *is* a
  * fence import. A name reaching this function has already failed every
  * MX-level route `lower.ts`'s precedence order checks first (structural
@@ -202,7 +202,7 @@ const declarations: HostDeclarations = {
   },
   rejectModifier: (attr) => {
     // Decision 101 (b): `on:`/`oncapture:` get the event fix-it naming
-    // `on-<exact>`, in `.amx` vocabulary (design note §4).
+    // `on-<exact>`, in `.astro.mx` vocabulary (design note §4).
     if (attr.name === "on" || attr.name === "oncapture") {
       const event =
         attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
@@ -212,13 +212,13 @@ const declarations: HostDeclarations = {
       );
     }
     fail(
-      `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in an \`.amx\` template`,
+      `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in an \`.astro.mx\` template`,
       attr,
     );
   },
   rejectAttributeMethod: (attr) => {
     fail(
-      `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; \`.amx\` renders static markup at build time`,
+      `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; \`.astro.mx\` renders static markup at build time`,
       attr,
     );
   },
@@ -283,18 +283,18 @@ function emitAttrs(
         break;
       case "bound":
         fail(
-          "`:=` is a two-way binding and requires a reactive runtime; `.amx` renders static markup at build time",
+          "`:=` is a two-way binding and requires a reactive runtime; `.astro.mx` renders static markup at build time",
           attr,
         );
         break;
       // Phase B of `dom-events` (decision 101, design note §8): an
-      // expression-valued event handler needs a runtime, and `.amx` renders
+      // expression-valued event handler needs a runtime, and `.astro.mx` renders
       // static markup at build time — so it is rejected rather than emitted
       // as dead markup. A *string*-valued handler (`onclick="…"`) is an
       // ordinary static attribute and passes through verbatim above.
       case "event":
         fail(
-          `\`${attr.name}\` is an event handler and requires a runtime; .amx renders static markup at build time`,
+          `\`${attr.name}\` is an event handler and requires a runtime; .astro.mx renders static markup at build time`,
           attr,
         );
         break;
@@ -473,7 +473,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
       if (node.target.kind !== "name") {
         if (node.target.kind === "define") {
           fail(
-            "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.amx` file and import it",
+            "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.astro.mx` file and import it",
             node,
           );
         }
@@ -507,7 +507,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
         // string — not a place any binding could land. Refused rather than
         // dropped.
         fail(
-          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.amx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; const { value } = ${name}({ ... });\`, and use \`value\` in the template.`,
+          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; const { value } = ${name}({ ... });\`, and use \`value\` in the template.`,
           node,
         );
       }
@@ -631,7 +631,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
 
     define(node) {
       fail(
-        "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.amx` file and import it",
+        "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.astro.mx` file and import it",
         node,
       );
     },
@@ -676,7 +676,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
   return emitter;
 }
 
-/** Emits the template half of a resolved `.amx` file. */
+/** Emits the template half of a resolved `.astro.mx` file. */
 export function emitTemplate(ir: Ir): string {
   return emit(createEmitter(), ir);
 }
@@ -785,7 +785,7 @@ function emitFence(
   return { code, mappings };
 }
 
-/** Splits an `.amx` file, resolves its MX template, and emits Astro syntax. */
+/** Splits an `.astro.mx` file, resolves its MX template, and emits Astro syntax. */
 export function lowerAstroMx(
   source: string,
   filename: string,
@@ -820,14 +820,14 @@ export function lowerAstroMx(
     );
     ctx.customTags = options.customTags;
     ctx.warnings = options.warnings;
-    // An `.amx` file is an Astro component module, so it has a declaration to
+    // An `.astro.mx` file is an Astro component module, so it has a declaration to
     // name and a tag may call itself without importing itself.
     ctx.emitsModule = true;
     // The `---` fence is the author's own TypeScript module scope: a
     // capitalized tag routes to a component only when the fence actually
     // binds it as a value (an import, or a top-level const/function/class —
     // the same operator-ruling extension decision 114 already gave
-    // `.solid.mx`'s surrounding module, since Marko has no `.amx` concept to
+    // `.solid.mx`'s surrounding module, since Marko has no `.astro.mx` concept to
     // measure against). Fed into `ctx.imports` before lowering, the same set
     // `isComponent` (below) and the file-local-binding check in `lower.ts`
     // already consult for an ordinary MX-level `import`.
@@ -866,7 +866,7 @@ export function lowerAstroMx(
       ctx.unknownLocalValue.add(name);
     }
     const ir = lower(ctx, body);
-    // The `.amx` emitter has nowhere to put a returned value — an Astro
+    // The `.astro.mx` emitter has nowhere to put a returned value — an Astro
     // component's output is its markup, and the `---` fence is the author's,
     // written before any of this runs. The core parses `<return>` for every
     // host, so leaving this unchecked dropped the tag silently: it emitted
@@ -876,7 +876,7 @@ export function lowerAstroMx(
     if (ir.returnValue) {
       const at = ir.returnValue.node?.loc?.start;
       throw new AstroTemplateError(
-        "`<return>` hands a value to whoever called this unit; an `.amx` file is an Astro component, whose output is its markup, so there is nothing to return it to — move the markup into a `.mx` tag file if the value is what you need",
+        "`<return>` hands a value to whoever called this unit; an `.astro.mx` file is an Astro component, whose output is its markup, so there is nothing to return it to — move the markup into a `.mx` tag file if the value is what you need",
         at?.line ?? 0,
         at?.column ?? 0,
       );

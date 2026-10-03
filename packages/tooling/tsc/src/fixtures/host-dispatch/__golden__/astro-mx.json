@@ -1,6 +1,6 @@
 {
   "files": {
-    "page.amx": {
+    "page.astro.mx": {
       "languageServer": "watched by the server, not diagnosed",
       "tsPlugin": {
         "languageId": "typescriptreact",
@@ -48,7 +48,7 @@
         "hostPolicyDiagnostics": [],
         "logged": []
       },
-      "vite": "not handled: no .amx in this plugin"
+      "vite": "not handled: no .astro.mx in this plugin"
     }
   },
   "mxTsc": []

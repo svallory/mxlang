@@ -176,22 +176,22 @@ describe("astro-static", () => {
     }
   });
 
-  it("/templates renders .amx components: MX template, Astro semantics", async () => {
-    // Decisions 76c/78. The page itself is `.amx`, as are its layout and both
-    // components: an Astro component whose template is MX, lowered to Astro
-    // template syntax and compiled by Astro itself. `.amx` is registered with
-    // `addPageExtension`, which is what makes this route exist at all. This
-    // asserts each construct the lowering table claims, on real rendered
-    // output rather than on emitted code.
+  it("/templates renders .astro.mx components: MX template, Astro semantics", async () => {
+    // Decisions 76c/78/134. The route is `templates.astro` (a page cannot be
+    // `.astro.mx`, decision 134 addendum); it imports `Templates.astro.mx`,
+    // and the layout and both components are `.astro.mx` too: an Astro
+    // component whose template is MX, lowered to Astro template syntax and
+    // compiled by Astro itself. This asserts each construct the lowering
+    // table claims, on real rendered output rather than on emitted code.
     const response = await page.goto(`${baseUrl}/templates`, {
       waitUntil: "networkidle",
     });
     expect(response?.status()).toBe(200);
     const html = (await response?.text()) ?? "";
 
-    // The `.amx` layout ran, and `${title}` reached its `<title>`: the
+    // The `.astro.mx` layout ran, and `${title}` reached its `<title>`: the
     // `---` fence kept Astro's own semantics (`Astro.props`).
-    expect(html).toContain("Rendered through BaseMx.amx");
+    expect(html).toContain("Rendered through BaseMx.astro.mx");
     expect(html).toContain("<title>AstroMX templates — astro-static</title>");
 
     // A structured `class` lowered to Astro's `class:list`, so the toggled
@@ -231,7 +231,7 @@ describe("astro-static", () => {
       "/no-layout",
       "/posts/first",
       "/posts/second",
-      // `.amx` components lower to Astro template syntax and are
+      // `.astro.mx` components lower to Astro template syntax and are
       // compiled by Astro itself, so they ship no client JS either.
       "/templates",
     ]) {

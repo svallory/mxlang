@@ -35,7 +35,7 @@ const EXTRA_SUPPORTED_EXTENSIONS = [".solid.mx", ".ng.mx", ".mx"];
 const ASTRO_SUPPORTED_EXTENSIONS = [
   ...EXTRA_SUPPORTED_EXTENSIONS,
   ".astro",
-  ".amx",
+  ".astro.mx",
 ];
 
 /**

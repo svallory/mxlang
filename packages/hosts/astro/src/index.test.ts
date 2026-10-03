@@ -14,7 +14,7 @@ describe("extensions guard", () => {
 });
 
 describe("addPageExtension guard", () => {
-  it("registers .mx and .amx when addPageExtension is present", () => {
+  it("registers .mx, and never .astro.mx, as a page extension", () => {
     const integration = mxAstro();
     const setupHook = integration.hooks["astro:config:setup"]!;
 
@@ -31,7 +31,9 @@ describe("addPageExtension guard", () => {
     });
 
     expect(extensions).toContain(".mx");
-    expect(extensions).toContain(".amx");
+    // Astro strips only the last extension, so a page `.astro.mx` would route
+    // to `/page.astro` (decision 134 addendum): it is an error, not a page.
+    expect(extensions).not.toContain(".astro.mx");
   });
 
   it("throws a clear error if addPageExtension is missing", () => {

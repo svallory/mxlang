@@ -501,6 +501,15 @@ describe("MX language plugin", () => {
     expect(plugin.getLanguageId("/src/card.mx")).toBe("mx");
     expect(plugin.getLanguageId("/src/card.marko")).toBeUndefined();
     expect(plugin.getLanguageId("/src/card.solid.mx")).toBeUndefined();
+    // Decision 134: `.astro.mx` ends in `.mx` but goes to the Astro template
+    // plugin, never to this one.
+    expect(plugin.getLanguageId("/src/card.astro.mx")).toBeUndefined();
+    expect(
+      createAmxLanguagePlugin(ts).getLanguageId("/src/card.astro.mx"),
+    ).toBe(AMX_LANGUAGE_ID);
+    expect(
+      createAmxLanguagePlugin(ts).getLanguageId("/src/card.mx"),
+    ).toBeUndefined();
     expect(plugin.getLanguageId("/src/card.ts")).toBeUndefined();
     if (!virtual) throw new Error("Expected MX virtual code");
     const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
@@ -763,7 +772,7 @@ describe("MX language plugin", () => {
       expect(plugin.getSyntaxError(caller)?.message).toBeDefined();
     });
 
-    it("resolves a discovered tag in an .amx page too", () => {
+    it("resolves a discovered tag in an .astro.mx page too", () => {
       // `createAmxLanguagePlugin` lowered with no options while
       // `@mxlang/astro`'s Vite plugin passed `{ customTags }`, so a tag that
       // compiled under `astro build` was an unknown tag in the editor and
@@ -781,7 +790,7 @@ describe("MX language plugin", () => {
         "export default { transform: (_c, ctx) => [ctx.build.text('stamped')] };\n",
       );
 
-      const amx = join(dir, "page.amx");
+      const amx = join(dir, "page.astro.mx");
       const source = "---\n---\n<stamp/>\n";
       const plugin = createAmxLanguagePlugin(ts);
       const virtual = plugin.createVirtualCode?.(
@@ -798,8 +807,8 @@ describe("MX language plugin", () => {
       ).toContain("stamped");
     });
 
-    it("does not resolve an mx.tags entry whose hosts excludes astro (.amx)", () => {
-      // Same fixture shape as the "resolves a discovered tag in an .amx
+    it("does not resolve an mx.tags entry whose hosts excludes astro (.astro.mx)", () => {
+      // Same fixture shape as the "resolves a discovered tag in an .astro.mx
       // page too" test above, but the entry restricts `hosts` to a
       // different host: `createAmxLanguagePlugin`'s scan must honor it
       // (decision 110(a)), rather than resolving `<stamp>` as it does with
@@ -822,7 +831,7 @@ describe("MX language plugin", () => {
         "export default { transform: (_c, ctx) => [ctx.build.text('stamped')] };\n",
       );
 
-      const amx = join(dir, "page.amx");
+      const amx = join(dir, "page.astro.mx");
       const source = "---\n---\n<stamp/>\n";
       const plugin = createAmxLanguagePlugin(ts);
       const virtual = plugin.createVirtualCode?.(
@@ -838,7 +847,7 @@ describe("MX language plugin", () => {
       ).not.toContain("stamped");
     });
 
-    it("warns about an unknown host name in mx.tags[].hosts (.amx; decision 110a; round 2 finding 2)", () => {
+    it("warns about an unknown host name in mx.tags[].hosts (.astro.mx; decision 110a; round 2 finding 2)", () => {
       // The scan diagnostic core records for a typo'd host name was
       // computed but dropped here: `createVirtualCode` used
       // `getCustomTags`, which returns only `.customTags`. It now uses
@@ -863,7 +872,7 @@ describe("MX language plugin", () => {
           "export default { transform: (_c, ctx) => [ctx.build.text('stamped')] };\n",
         );
 
-        const amx = join(dir, "page.amx");
+        const amx = join(dir, "page.astro.mx");
         const source = "---\n---\n<div>no call</div>\n";
         const plugin = createAmxLanguagePlugin(ts);
         plugin.createVirtualCode?.(
@@ -2386,8 +2395,8 @@ describe("MX language plugin", () => {
       expect(codes).not.toContain(2306);
     });
 
-    it("stubs a failed .amx too: valid module, no mappings, every import form resolves", () => {
-      const fileName = "/project/broken.amx";
+    it("stubs a failed .astro.mx too: valid module, no mappings, every import form resolves", () => {
+      const fileName = "/project/broken.astro.mx";
       const source =
         "---\nexport const helper = 1;\nexport interface Input { a: 1 }\n---\n<await=value>oops</await>\n";
       const plugin = createAmxLanguagePlugin(ts);
@@ -3268,7 +3277,7 @@ describe("Astro language plugin composition", () => {
     expect(
       plugins.some(
         (plugin) =>
-          plugin.getLanguageId?.("/project/src/page.amx") === "astromx",
+          plugin.getLanguageId?.("/project/src/page.astro.mx") === "astromx",
       ),
     ).toBe(true);
   });
@@ -3289,7 +3298,7 @@ describe("Astro language plugin composition", () => {
     expect(
       plugins.some(
         (plugin) =>
-          plugin.getLanguageId?.("/project/src/page.amx") === "astromx",
+          plugin.getLanguageId?.("/project/src/page.astro.mx") === "astromx",
       ),
     ).toBe(false);
   });
@@ -3322,7 +3331,7 @@ describe("Astro language plugin composition", () => {
 });
 
 describe("AstroMX language plugin", () => {
-  it("recognizes .amx and exposes composed TSX virtual code", () => {
+  it("recognizes .astro.mx and exposes composed TSX virtual code", () => {
     const source = [
       "---",
       "const items = [1, 2, 3];",
@@ -3332,13 +3341,13 @@ describe("AstroMX language plugin", () => {
     ].join("\n");
     const plugin = createAmxLanguagePlugin(ts);
     const virtual = plugin.createVirtualCode?.(
-      "/src/page.amx",
+      "/src/page.astro.mx",
       AMX_LANGUAGE_ID,
       ts.ScriptSnapshot.fromString(source),
       { getAssociatedScript: () => undefined },
     );
 
-    expect(plugin.getLanguageId("/src/page.amx")).toBe("astromx");
+    expect(plugin.getLanguageId("/src/page.astro.mx")).toBe("astromx");
     expect(plugin.getLanguageId("/src/page.astro")).toBeUndefined();
     if (!virtual) throw new Error("Expected AstroMX virtual code");
     expect(virtual.languageId).toBe("typescriptreact");
@@ -3348,7 +3357,7 @@ describe("AstroMX language plugin", () => {
     expect(virtual.mappings.length).toBeGreaterThan(0);
     expect(plugin.typescript?.extraFileExtensions).toEqual([
       {
-        extension: "amx",
+        extension: "astro.mx",
         isMixedContent: false,
         scriptKind: ts.ScriptKind.TSX,
       },
@@ -3365,7 +3374,7 @@ describe("AstroMX language plugin", () => {
     ].join("\n");
     const plugin = createAmxLanguagePlugin(ts);
     const virtual = plugin.createVirtualCode?.(
-      "/src/column.amx",
+      "/src/column.astro.mx",
       AMX_LANGUAGE_ID,
       ts.ScriptSnapshot.fromString(source),
       { getAssociatedScript: () => undefined },
@@ -3391,7 +3400,7 @@ describe("AstroMX language plugin", () => {
       "<p>answer</p>",
     ].join("\n");
     const converted = convertToTSX(astro, {
-      filename: "/src/partial.amx",
+      filename: "/src/partial.astro.mx",
       sourcemap: "external",
     });
     const generatedStart = astro.indexOf("const answer");

@@ -177,13 +177,13 @@ describe("mx-tsc", () => {
   );
 
   it(
-    "accepts a correctly typed .amx page in Astro mode",
+    "accepts a correctly typed .astro.mx page in Astro mode",
     () => {
       const result = run(mxTsc, [
         "--astro",
         "--noEmit",
         "-p",
-        join(astroStatic, "typecheck-fixtures", "amx-correct.json"),
+        join(astroStatic, "typecheck-fixtures", "astro-mx-correct.json"),
       ]);
 
       expect(result.output).toBe("");
@@ -193,18 +193,22 @@ describe("mx-tsc", () => {
   );
 
   it(
-    "reports .amx prop and interpolation errors at exact source columns",
+    "reports .astro.mx prop and interpolation errors at exact source columns",
     () => {
       const result = run(mxTsc, [
         "--astro",
         "--noEmit",
         "-p",
-        join(astroStatic, "typecheck-fixtures", "amx-wrong.json"),
+        join(astroStatic, "typecheck-fixtures", "astro-mx-wrong.json"),
       ]);
 
       expect(result.status).not.toBe(0);
-      expect(result.output).toContain("amx-wrong.amx(8,7): error TS2322");
-      expect(result.output).toContain("amx-wrong.amx(9,27): error TS2345");
+      expect(result.output).toContain(
+        "astro-mx-wrong.astro.mx(8,7): error TS2322",
+      );
+      expect(result.output).toContain(
+        "astro-mx-wrong.astro.mx(9,27): error TS2345",
+      );
       expect(result.output).toContain(
         "Type 'number' is not assignable to type 'string'",
       );
@@ -216,17 +220,19 @@ describe("mx-tsc", () => {
   );
 
   it(
-    "reports a .amx fence error at its exact source column",
+    "reports a .astro.mx fence error at its exact source column",
     () => {
       const result = run(mxTsc, [
         "--astro",
         "--noEmit",
         "-p",
-        join(astroStatic, "typecheck-fixtures", "amx-fence-wrong.json"),
+        join(astroStatic, "typecheck-fixtures", "astro-mx-fence-wrong.json"),
       ]);
 
       expect(result.status).not.toBe(0);
-      expect(result.output).toContain("amx-fence-wrong.amx(2,7): error TS2322");
+      expect(result.output).toContain(
+        "astro-mx-fence-wrong.astro.mx(2,7): error TS2322",
+      );
       expect(result.output).toContain(
         "Type 'string' is not assignable to type 'number'",
       );

@@ -603,7 +603,13 @@ function offsetAt(
 
 function isMx(fileName: string): boolean {
   const lower = fileName.toLowerCase();
-  if (lower.endsWith(".solid.mx") || isNgMx(fileName)) return false;
+  if (
+    lower.endsWith(".solid.mx") ||
+    lower.endsWith(".astro.mx") ||
+    isNgMx(fileName)
+  ) {
+    return false;
+  }
   return MX_EXTENSIONS.some((extension) => lower.endsWith(`.${extension}`));
 }
 

@@ -59,8 +59,8 @@ const goldens = join(root, "__golden__");
  *   TypeScript plugin and in Vite.
  * - astro: D5. The language server has no branch of its own for it; it takes
  *   the html compile.
- * - amx-html-host: D6. The `.amx` scan filter is the literal "astro", so a
- *   tag restricted to `hosts: ["astro"]` stays visible to an `.amx` page in a
+ * - astro-mx-html-host: D6. The `.astro.mx` scan filter is the literal "astro", so a
+ *   tag restricted to `hosts: ["astro"]` stays visible to an `.astro.mx` page in a
  *   package whose own target is html.
  * - tags-x-ng: changes in PR 3 (design note §5.1, rule (d), case 1: the
  *   message stays, now produced through the registry lookup).
@@ -89,8 +89,8 @@ const ROWS = [
   "angular",
   "solid-file",
   "ng-file",
-  "amx",
-  "amx-html-host",
+  "astro-mx",
+  "astro-mx-html-host",
   "alias-html",
   "alias-preact",
   "alias-react",
@@ -147,7 +147,7 @@ function normalise<T>(value: T): T {
 
 function mxFilesOf(row: string): string[] {
   return readdirSync(join(root, row))
-    .filter((name) => /\.(?:amx|mx)$/.test(name))
+    .filter((name) => /\.mx$/.test(name))
     .sort();
 }
 
@@ -163,7 +163,7 @@ type Plugin = MxDiagnosticLanguagePlugin & {
 
 /** The language plugin `mx-tsc` and tsserver pick for a file name. */
 function pluginFor(file: string): { plugin: Plugin; languageId: string } {
-  if (file.endsWith(".amx")) {
+  if (file.endsWith(".astro.mx")) {
     return {
       plugin: createAmxLanguagePlugin(ts) as Plugin,
       languageId: "astromx",
@@ -263,7 +263,8 @@ function tsPluginLeg(file: string, text: string) {
 }
 
 async function viteLeg(row: string, file: string, text: string) {
-  if (file.endsWith(".amx")) return "not handled: no .amx in this plugin";
+  if (file.endsWith(".astro.mx"))
+    return "not handled: no .astro.mx in this plugin";
   const plugin = mxVite() as unknown as {
     configResolved(config: unknown): void;
     transform(
@@ -387,7 +388,7 @@ describe("dispatch goldens", () => {
         continue;
       }
       const entry: Record<string, unknown> = {
-        languageServer: name.endsWith(".amx")
+        languageServer: name.endsWith(".astro.mx")
           ? "watched by the server, not diagnosed"
           : languageServerLeg(
               file,
@@ -422,5 +423,16 @@ describe("dispatch goldens", () => {
     await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(
       join(goldens, "_mx-tsc.json"),
     );
+  });
+});
+
+describe("x.astro.mx file kind (decision 134)", () => {
+  it("picks the Astro template plugin, never the plain .mx plugin", () => {
+    const astro = pluginFor("/p/card.astro.mx");
+    expect(astro.languageId).toBe("astromx");
+    expect(createMxLanguagePlugin(ts).getLanguageId("/p/card.astro.mx")).toBe(
+      undefined,
+    );
+    expect(pluginFor("/p/card.mx").languageId).toBe("mx");
   });
 });

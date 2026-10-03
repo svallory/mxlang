@@ -242,7 +242,6 @@ export function startServer(
     void connection.client.register(DidChangeWatchedFilesNotification.type, {
       watchers: [
         { globPattern: "**/*.mx" },
-        { globPattern: "**/*.amx" },
         { globPattern: "**/*.ts" },
         { globPattern: "**/*.tsx" },
         // A host-policy diagnostic is about a package.json, so fixing it must

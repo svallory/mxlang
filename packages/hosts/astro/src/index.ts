@@ -74,7 +74,7 @@ export interface MxIntegrationOptions {
    * silently claim support it does not have.
    */
   extensions?: string[];
-  /** Custom tags already discovered and loaded for `.mx` and `.amx` files. */
+  /** Custom tags already discovered and loaded for `.mx` and `.astro.mx` files. */
   customTags?: Record<string, CustomTag>;
 }
 
@@ -157,7 +157,7 @@ export default function mxAstro(
             astroVersion = require("astro/package.json").version;
           } catch (_e) {}
           throw new Error(
-            `Astro ${astroVersion} does not provide the 'addPageExtension' hook on the integration setup params. MX needs this non-semver hook to register the '.mx' and '.amx' page extensions.`,
+            `Astro ${astroVersion} does not provide the 'addPageExtension' hook on the integration setup params. MX needs this non-semver hook to register the '.mx' page extension.`,
           );
         }
 
@@ -167,13 +167,11 @@ export default function mxAstro(
         // `.marko` file anywhere in an Astro project is simply not MX's.
         addPageExtension(".mx");
 
-        // `.amx` files are AstroMX: an Astro component whose template is MX,
-        // lowered to Astro template syntax (decision 76c/78). Registered as a
-        // page extension too, so components, layouts and pages all share the
-        // one spelling — which is why the extension is single-dot: Astro's
-        // route collection reads only the last extension segment, so a
-        // multi-dot `.astro.mx` could never be a page.
-        addPageExtension(".amx");
+        // `.astro.mx` files are AstroMX: an Astro component whose template is
+        // MX, lowered to Astro template syntax (decision 76c/78/134). It is
+        // deliberately *not* registered as a page extension: Astro strips only
+        // the last extension of a route file, so a page `about.astro.mx` would
+        // route to `/about.astro`.
 
         updateConfig({
           vite: {

@@ -28,7 +28,7 @@ import {
 } from "./language.ts";
 import type { MxSyntaxError } from "./mx-language.ts";
 
-export const AMX_EXTENSION = "amx";
+export const AMX_EXTENSION = "astro.mx";
 export const AMX_LANGUAGE_ID = "astromx";
 
 export interface AmxLanguagePlugin extends MxDiagnosticLanguagePlugin {
@@ -172,7 +172,7 @@ export function createAmxLanguagePlugin(
 }
 
 /**
- * Composes `.amx` -> lowered `.astro` spans with Astro's `.astro` -> TSX map.
+ * Composes `.astro.mx` -> lowered `.astro` spans with Astro's `.astro` -> TSX map.
  * Only intersections represented by both stages survive.
  */
 export function composeAmxMappings(

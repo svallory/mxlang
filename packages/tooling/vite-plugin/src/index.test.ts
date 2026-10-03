@@ -328,27 +328,28 @@ describe("mx()", () => {
       ).toBeNull();
     });
 
-    it("leaves AstroMX's .amx alone: a different host's extension", async () => {
-      // `.amx` (decision 78) belongs to `@mxlang/astro`'s own plugin, which
-      // lowers it to Astro template syntax. Its last extension segment differs
-      // from `.mx`, so the plain `endsWith` match never claims it — this pins
-      // that, since the two plugins run in the same Vite instance.
+    it("leaves AstroMX's .astro.mx alone: a different host's extension", async () => {
+      // `.astro.mx` (decision 134) belongs to `@mxlang/astro`'s own plugin,
+      // which lowers it to Astro template syntax. It ends in `.mx`, so the
+      // plain `endsWith` match would claim it without the foreign-extension
+      // guard — this pins that, since the two plugins run in the same Vite
+      // instance.
       const context = makeContext();
       const resolveId = resolveIdOf(mx());
 
       expect(
-        await resolveId.call(context, "./Base.amx", "/root/src/index.tsx"),
+        await resolveId.call(context, "./Base.astro.mx", "/root/src/index.tsx"),
       ).toBeNull();
       expect(context.calls).toHaveLength(0);
     });
 
     it("declines a multi-dot extension owned by another host", async () => {
-      // The foreign-extension guard is empty today, but the collision it
-      // defends against is a property of the `endsWith` matching rule rather
-      // than of any one extension: a registered `.mx` matches `Base.any.mx`
-      // just as readily as `Base.mx`. Registering the longer extension is what
-      // makes the longest-first sort pick it, which is the same mechanism that
-      // keeps `.solid.mx` from being compiled as `.mx`.
+      // The collision the foreign-extension guard defends against is a
+      // property of the `endsWith` matching rule rather than of any one
+      // extension: a registered `.mx` matches `Base.any.mx` just as readily
+      // as `Base.mx`. Registering the longer extension is what makes the
+      // longest-first sort pick it, which is the same mechanism that keeps
+      // `.solid.mx` from being compiled as `.mx`.
       const context = makeContext();
       const resolveId = resolveIdOf(mx({ extensions: [".other.mx", ".mx"] }));
 

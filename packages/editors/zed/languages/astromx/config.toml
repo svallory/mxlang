@@ -1,8 +1,8 @@
 name = "AstroMX"
 grammar = "amx"
-path_suffixes = ["amx"]
+path_suffixes = ["astro.mx"]
 
-# AstroMX (`.amx`, decisions 76c/78): an Astro component whose *template* is
+# AstroMX (`.astro.mx`, decisions 76c/78): an Astro component whose *template* is
 # MX. The file is a `---` TypeScript fence followed by an MX template.
 #
 # We use the amx grammar which splits the file into `frontmatter` and `body`,

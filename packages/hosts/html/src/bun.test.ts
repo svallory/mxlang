@@ -66,6 +66,21 @@ describe("@mxlang/html/bun", () => {
     }
   });
 
+  test("does not claim a .astro.mx path", async () => {
+    Bun.plugin(markoPlugin);
+
+    // Astro's template kind (decision 134): an Astro component, lowered by
+    // `@mxlang/astro`. It ends in `.mx` but is not an MX page, and this
+    // source would fail the string translator. Bun's default loader returns
+    // the file's own path as the default export when no onLoad hook claims it.
+    const dir = mkdtempSync(join(tmpdir(), "mxlang-translator-bun-astro-"));
+    const path = join(dir, "Card.astro.mx");
+    writeFileSync(path, "---\nconst a = 1;\n---\n<p>{a}</p>\n");
+
+    const mod = await import(path);
+    expect(mod.default).toEndWith("Card.astro.mx");
+  });
+
   test("does not claim a .solid.mx path", async () => {
     Bun.plugin(markoPlugin);
 
