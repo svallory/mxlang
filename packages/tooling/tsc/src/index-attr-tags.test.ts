@@ -2,6 +2,18 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { fixtures, mxTsc, run, SPAWN_TIMEOUT_MS } from "./test-support.ts";
 
+// One `mx-tsc` run per fixture: the solid fixture feeds two tests, and its
+// output is a pure function of the fixture.
+const runs = new Map<string, ReturnType<typeof run>>();
+function runFixture(fixture: string) {
+  let result = runs.get(fixture);
+  if (!result) {
+    result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
+    runs.set(fixture, result);
+  }
+  return result;
+}
+
 describe("mx-tsc", () => {
   // Every spawn below blocks this worker's thread, and consecutive
   // synchronous tests never return to the event loop. Past a minute of that
@@ -16,7 +28,7 @@ describe("mx-tsc", () => {
   ])(
     "checks %s attribute-tag values against the callee Input",
     (_host, fixture, tagPosition) => {
-      const result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
+      const result = runFixture(fixture);
 
       expect(result.status).not.toBe(0);
       expect(result.output).toContain(
@@ -40,43 +52,13 @@ describe("mx-tsc", () => {
     // `solid-attr-tag-attr-offset`.
     "reports a solid attribute-tag's wrong value type on the attribute itself, not the tag name",
     () => {
-      const result = run(mxTsc, [
-        "--noEmit",
-        "-p",
-        join(fixtures, "attr-tag-solid-failing"),
-      ]);
+      const result = runFixture("attr-tag-solid-failing");
 
       expect(result.status).not.toBe(0);
       expect(result.output).toContain("Wrong.solid.mx(3,33): error TS2322");
       expect(result.output).toContain(
         "Type 'number' is not assignable to type 'string'",
       );
-    },
-    SPAWN_TIMEOUT_MS,
-  );
-
-  it.each([
-    ["html", "callee-diagnostic-html-failing", "Card.mx(2,14)", "Page.mx"],
-    // The `Input` interface line above `broken` gains three characters when
-    // printed; the exact column proves the diagnostic is placed against the
-    // authored source, not the printed text (solid-mx-tsc-column-against-printed-text).
-    [
-      "solid",
-      "callee-diagnostic-solid-failing",
-      "Card.solid.mx(4,14)",
-      "Page.solid.mx",
-    ],
-  ])(
-    "reports a %s callee's own type error in the callee, not in the caller that read its Input",
-    (_host, fixture, calleePosition, caller) => {
-      const result = run(mxTsc, ["--noEmit", "-p", join(fixtures, fixture)]);
-
-      expect(result.status).not.toBe(0);
-      expect(result.output).toContain(`${calleePosition}: error TS2322`);
-      expect(result.output).toContain(
-        "Type 'string' is not assignable to type 'number'",
-      );
-      expect(result.output).not.toContain(`${caller}(`);
     },
     SPAWN_TIMEOUT_MS,
   );

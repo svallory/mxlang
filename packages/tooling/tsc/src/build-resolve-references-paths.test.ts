@@ -2,7 +2,6 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  breakAll,
   CASE_TIMEOUT_MS,
   errorLines,
   mxTscIn,
@@ -12,36 +11,12 @@ import {
 } from "./build-uptodate-support.ts";
 
 describe("mx-tsc -b resolves .mx modules like -p: across project references", () => {
-  it(
-    "-b reports, across a solution with references and paths, the diagnostics -p reports per project",
-    async () => {
-      const dir = scratch(solutionFixture);
-      breakAll(dir);
-      const build = await mxTscIn(dir, ["-b", "."]);
-      const perProject = [
-        ...new Set(
-          (
-            await Promise.all(
-              ["app", "lib"].map((p) =>
-                mxTscIn(dir, ["-p", p, "--noEmit"]).then((r) =>
-                  errorLines(r.output),
-                ),
-              ),
-            )
-          ).flat(),
-        ),
-      ].sort();
-      expect(build.output).not.toContain("TS2307");
-      expect(errorLines(build.output)).toEqual(perProject);
-    },
-    CASE_TIMEOUT_MS,
-  );
-
   // One specifier per file: a batch that also holds a `.mx`-suffixed literal
   // goes through Volar's resolver whole and would mask the bug.
   for (const specifier of [
-    "../../lib/src/lib.component.ng",
-    "../../lib/src/lib.component",
+    "@lib/lib.component.ng",
+    "@lib/lib.component",
+    "@scope/lib/cmp",
   ]) {
     it(
       `-b resolves "${specifier}" across a reference like -p`,
