@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (solid-raw-body-tag-params-unbound):** a raw `$!{}` as the sole body of a component or dynamic tag with params (`<Row|item|>$!{item}</Row>`, `<${x}|item|>$!{item}</>`) was hoisted onto `innerHTML={item}` with the params unbound, so it compiled and threw `ReferenceError: item is not defined` at render. It is now a positioned compile error at the `$!{` saying why: Solid has no wrapper-free raw-HTML form; wrap it, e.g. `<div innerHTML=item/>`. A `<define>` call, `<for>`, `<if>` and attribute-tag body were already refused, but with the misleading "raw placeholder must be the only child"; they now get the same accurate message. Marko renders the raw HTML in the callback; recorded in `divergences.md`.
+
 - **Fix (fix-hints-batch round 2):** the scriptlet hint now says to declare the value in the surrounding TypeScript module (`const y = …;`), since a `.solid.mx` region rejects `<const>`; it is declared through the new optional `scriptletReplacement` host declaration.
 
 - **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.`` (or ``Did you mean `<Badge>`?`` for a near-miss import), `(click)="go()"` ends ``; for an event handler write `onClick=go` ``, and a `$` scriptlet ends ``; declare a value with `<const/x=…/>` ``.

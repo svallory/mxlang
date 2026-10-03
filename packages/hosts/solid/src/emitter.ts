@@ -874,6 +874,22 @@ function rejectMixedRaw(nodes: IrNode[]): void {
   }
 }
 
+/**
+ * A raw `$!{}` child normally rides an `innerHTML` prop, but a body with tag
+ * params is a callback and Solid has no wrapper-free raw-HTML form to return
+ * from one; Marko emits the raw HTML in place. Reject rather than hoist the
+ * child onto `innerHTML` with the params unbound.
+ */
+function rejectRawWithParams(
+  content: { hasParams: boolean } | null | undefined,
+  raw: Extract<IrNode, { kind: "Interpolation" }> | null,
+): void {
+  if (raw && content?.hasParams) fail(RAW_WITH_PARAMS_MESSAGE, raw);
+}
+
+const RAW_WITH_PARAMS_MESSAGE =
+  "`$!{...}` in a body with tag params is not supported on Solid: raw HTML needs an element to carry `innerHTML`; wrap it, e.g. `<div innerHTML=item/>`";
+
 function hasNamedAttr(attrs: Attr[], name: string): boolean {
   return attrs.some((attr) => attr.kind !== "spread" && attr.name === name);
 }
@@ -1462,7 +1478,12 @@ export class SolidEmitter implements Emitter<string> {
   }
 
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {
-    if (!node.escaped) fail("raw placeholder must be the only child", node);
+    if (!node.escaped) {
+      fail(
+        "`$!{...}` is only supported as the sole child of an element or a tag without params: raw HTML needs an element to carry `innerHTML`; wrap it, e.g. `<div innerHTML=x/>`",
+        node,
+      );
+    }
     this.#out.push(concatMapped(`{${node.expr.code}}`));
   }
 
@@ -1506,6 +1527,7 @@ export class SolidEmitter implements Emitter<string> {
     const contentNodes = node.content?.children ?? [];
     const raw = node.content ? rawChild(contentNodes) : null;
     rejectMixedRaw(contentNodes);
+    rejectRawWithParams(node.content, raw);
     if (raw && hasNamedAttr(node.attrs, "innerHTML")) {
       fail(
         "`$!{...}` sole child combined with an explicit `innerHTML=` attribute",
@@ -1592,6 +1614,7 @@ export class SolidEmitter implements Emitter<string> {
     const contentNodes = node.content?.children ?? [];
     const raw = node.content ? rawChild(contentNodes) : null;
     rejectMixedRaw(contentNodes);
+    rejectRawWithParams(node.content, raw);
     if (raw && hasNamedAttr(node.attrs, "innerHTML")) {
       fail(
         "`$!{...}` sole child combined with an explicit `innerHTML=` attribute",
@@ -1689,6 +1712,7 @@ export class SolidEmitter implements Emitter<string> {
     const contentNodes = node.content?.children ?? [];
     const raw = node.content ? rawChild(contentNodes) : null;
     rejectMixedRaw(contentNodes);
+    rejectRawWithParams(node.content, raw);
     if (raw && hasNamedAttr(node.attrs, "innerHTML")) {
       fail(
         "`$!{...}` sole child combined with an explicit `innerHTML=` attribute",

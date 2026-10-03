@@ -113,6 +113,13 @@ const CASES: Case[] = [
 `,
   },
   {
+    name: "RenderPropRawWrapper",
+    input: `{}`,
+    mx: `${PREAMBLE}export interface Input {}
+<Row|item|><div innerHTML=item/></Row>
+`,
+  },
+  {
     name: "TryFallbackSoleComponent",
     input: `{}`,
     mx: `${PREAMBLE}import Thrower from "./thrower.mjs";
@@ -261,6 +268,12 @@ describe("Solid: a tag-params body is an arrow EXPRESSION body", () => {
   it("renders every child of a multi-child `<for of>` body", () => {
     expect(html("ForOfTwoChildren")).toBe(
       "<li>a</li><b>a</b><li>b</li><b>b</b>",
+    );
+  });
+
+  it("renders the `<div innerHTML=item/>` wrapper a rejected `$!{item}` body suggests", () => {
+    expect(html("RenderPropRawWrapper")).toBe(
+      "<ul><div>a</div><div>b</div></ul>",
     );
   });
 

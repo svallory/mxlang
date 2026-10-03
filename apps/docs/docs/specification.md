@@ -252,7 +252,7 @@ string, not their names. It treats its input as **literal text**, so `&` becomes
 `$!{…}` is **not accepted inside an attribute value**; Marko's parser rejects it
 there before any host runs. Host handling of `$!{}` in content position varies
 (§13): the Solid host lowers a lone `$!{html}` child to `innerHTML` and errors on
-a mixed body; the Angular host emits `[innerHTML]` with a warning.
+a mixed body or a body with tag params (`<Row|item|>$!{item}</Row>`, `<for|item|>`: Marko renders it in the callback, Solid has no wrapper-free raw form; wrap in `<div innerHTML=item/>`); the Angular host emits `[innerHTML]` with a warning.
 
 Core raises no dedicated interpolation diagnostic — a `MarkoPlaceholder` lowers
 unconditionally with `escaped` taken from the node, so `$!{}` is simply
