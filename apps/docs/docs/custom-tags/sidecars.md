@@ -40,7 +40,32 @@ An attribute declaration supports:
 
 Declaring `attributes` makes a closed contract: undeclared attributes and spreads are errors. Omitting `attributes` leaves attributes open.
 
-`attributeTags` is a map from the name after `@` to `{ required?, repeatable? }`. Once present, it is also closed: undeclared names are errors, required names must occur, and a name repeats only when `repeatable: true`.
+`attributeTags` is a map from the name after `@` to `{ required?, repeatable?, attributes?, attributeTags?, children? }`. Once present, it is closed: undeclared names are errors, required names must occur on every path, and a name repeats only when `repeatable: true`.
+
+### Declare an attribute tag's own contract
+
+Use the same vocabulary recursively (decision 138 E4):
+
+```ts
+const card: CustomTag = {
+  attributeTags: {
+    group: {
+      children: {},
+      attributeTags: {
+        row: {
+          repeatable: true,
+          attributes: { n: { type: "number", required: true } },
+          children: { item: { required: true, repeatable: true } },
+        },
+      },
+    },
+  },
+};
+```
+
+This accepts `<card><@group><@row n=1><item/></@row></@group></card>` on a target that delegates `card`. Attributes use all the controls above, including `array`, `function` and `items`; **defaults on attribute-tag attributes are not applied**. Children use the same authored-body check, `#text` and transparent `<if>` / `<for>` paths described below. Attribute tags are not plain children. For a plain child's `parents` list, the attribute-tag parent is still spelled `"@row"`.
+
+Each present map is closed; an omitted map on an extended declaration is open. Omitting `attributeTags` accepts nested tags with attributes and further nesting recursively, such as `<@row><@x a=1><@y b=2/></@x></@row>` when `row` declares `attributes: {}` or `children: {}`. An attribute-tag declaration with none of these three maps keeps the no-template rejection of attributes, nested attribute tags and controlled occurrences. Template `Input` checks and host capability gates still apply. Errors stop at the first in check order, not source order: authored children are checked before attributes, with attribute-tag bodies visited depth first. An error in a nested child can precede an invalid attribute written earlier on its enclosing tag. Errors name every owner, for example `` `<card>`: `<@group>`: `<@row>`: unknown attribute `bogus` ``; registration checks declaration keys and E1 contradictions at every depth, even if unused.
 
 ### Restrict authored children
 
@@ -81,7 +106,7 @@ const attribute: CustomTag = {
 
 The reserved contract-vocabulary key `"#root"` permits the top level of a file or of a template's own unit. A recursive call at its template's top level also has parent `#root`. You can combine it with named parents. Omitting `parents` keeps placement open; `parents: []` permits none.
 
-Registration checks both directions for registered tags: it rejects `P.children` listing `C` when `C.parents` omits `P`, and `C.parents` naming `P` when `P.children` is closed and omits `C`. An omitted contract stays open; `#root` is not a tag. Both messages end with the fix: add the missing entry to one list, or remove the conflicting entry from the other. Placement errors point at the offending tag and name the expected and actual parent, for example: `` `<attribute>` must be inside `<attributes>`; found inside `<div>` ``. The same checks apply to transform, template-sidecar and contract-only tags, including data targets; compilation stops at the first error.
+Registration checks both directions for registered tags: it rejects `P.children` listing `C` when `C.parents` omits `P`, and `C.parents` naming `P` when `P.children` is closed and omits `C`. The same check covers attribute-tag parents at every depth: `C.parents: ["@row"]` requires every declared `row` with closed `children` to list `C`; a `row.children` listing `C` requires `"@row"` in `C.parents` if declared. An open or compatible `row` elsewhere does not exempt a conflicting declaration. Attribute-tag diagnostics include the complete owner chain. An omitted contract stays open; `#root` is not a tag. Both messages end with the fix: add the missing entry to one list, or remove the conflicting entry from the other. Placement errors point at the offending tag and name the expected and actual parent, for example: `` `<attribute>` must be inside `<attributes>`; found inside `<div>` ``. The same checks apply to transform, template-sidecar and contract-only tags, including data targets; compilation stops at the first error.
 
 ## Change how the caller parses
 

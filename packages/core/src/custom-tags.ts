@@ -61,6 +61,12 @@ export interface CustomTagAttribute {
 export interface CustomTagAttributeTag {
   repeatable?: boolean;
   required?: boolean;
+  /** Closed attributes; omitted attributes remain open on an extended declaration. Defaults are not applied. */
+  attributes?: Record<string, CustomTagAttribute>;
+  /** Recursive closed attribute-tag contract. */
+  attributeTags?: Record<string, CustomTagAttributeTag>;
+  /** Closed authored children, with the reserved `#text` class. */
+  children?: Record<string, CustomTagChild>;
 }
 
 /** Cardinality of an authored plain child (or the reserved `#text` class). */
@@ -486,12 +492,12 @@ function syntheticExpr(code: string): Expr {
  * position rule (`Position.file`) exists for exactly this case.
  */
 function failAt(tagName: string, message: string, at: Position): never {
-  throw new TranslateError(
-    `\`<${tagName}>\`: ${message}`,
-    at.line,
-    at.column,
-    at.file,
-  );
+  return failForOwner(`\`<${tagName}>\``, message, at);
+}
+
+/** An already formatted owner chain, shared by contracts at every depth. */
+function failForOwner(owner: string, message: string, at: Position): never {
+  throw new TranslateError(`${owner}: ${message}`, at.line, at.column, at.file);
 }
 
 function buildersFor(
@@ -747,14 +753,14 @@ function attrShape(attr: Attr): string | null {
  * non-literal element, a spread or a hole passes the same way.
  */
 function checkCompositeAttr(
-  call: TagCall,
+  owner: string,
   attr: Exclude<Attr, { kind: "spread" }>,
   declaration: CustomTagAttribute,
 ): void {
   const shape = attrShape(attr);
   if (shape && shape !== declaration.type) {
-    failAt(
-      call.name,
+    failForOwner(
+      owner,
       `attribute \`${attr.name}\` must be ${declaration.type}, got ${shape}`,
       attr.loc,
     );
@@ -772,8 +778,8 @@ function checkCompositeAttr(
     const got = nodeShape(element);
     if (!element || !got || got === declaration.items) continue;
     const start = element.loc?.start;
-    failAt(
-      call.name,
+    failForOwner(
+      owner,
       `attribute \`${attr.name}\` item ${index + 1} must be ${declaration.items}, got ${got}`,
       start
         ? { ...attr.loc, line: start.line, column: start.column }
@@ -889,8 +895,9 @@ export function validateCustomTagParents(
 
 /** Validates authored children before any plain child is lowered. */
 export function validateCustomTagChildren(
-  definition: CustomTag,
+  definition: Pick<CustomTag, "children">,
   call: Pick<TagCall, "name" | "loc" | "childTree">,
+  owner = `\`<${call.name}>\``,
 ): void {
   if (!definition.children) return;
   const declarations = definition.children;
@@ -907,16 +914,16 @@ export function validateCustomTagChildren(
       else if (node.kind === "ChildIf") {
         for (const branch of node.branches) collect(branch.nodes);
       } else if (node.kind === "ChildDynamic") {
-        failAt(
-          call.name,
+        failForOwner(
+          owner,
           `a dynamic tag \`<\${…}>\` cannot be checked against the declared children`,
           node.loc,
         );
       } else {
         const name = node.kind === "ChildTag" ? node.name : "#text";
         if (!Object.hasOwn(declarations, name)) {
-          failAt(
-            call.name,
+          failForOwner(
+            owner,
             node.kind === "ChildText"
               ? allowed === "none"
                 ? "text is not allowed here; it accepts no child tags"
@@ -936,14 +943,197 @@ export function validateCustomTagChildren(
       const occurrences = leaves.filter(
         (node) => (node.kind === "ChildTag" ? node.name : "#text") === name,
       );
-      failAt(
-        call.name,
+      failForOwner(
+        owner,
         `\`<${name}>\` may not be repeated`,
         occurrences[1]?.loc ?? occurrences[0]?.loc ?? call.loc,
       );
     }
     if (declaration.required && range.min === 0) {
-      failAt(call.name, `missing required child \`<${name}>\``, call.loc);
+      failForOwner(owner, `missing required child \`<${name}>\``, call.loc);
+    }
+  }
+}
+
+/** One attribute checker for top-level tags and every declared attribute tag. */
+function validateAttributes(
+  owner: string,
+  attributes: CustomTag["attributes"],
+  attrs: readonly Attr[],
+  loc: Position,
+): void {
+  if (!attributes) return;
+  // An empty closed contract rejects named and spread attributes identically.
+  const acceptsNone = Object.keys(attributes).length === 0;
+  const present = new Set<string>();
+  for (const attr of attrs) {
+    if (attr.kind === "spread") {
+      failForOwner(
+        owner,
+        acceptsNone
+          ? "accepts no attributes"
+          : "spread attributes cannot be checked against this tag's declared attributes",
+        attr.loc,
+      );
+    }
+    const declaration = Object.hasOwn(attributes, attr.name)
+      ? attributes[attr.name]
+      : undefined;
+    if (!declaration) {
+      failForOwner(
+        owner,
+        acceptsNone
+          ? "accepts no attributes"
+          : `unknown attribute \`${attr.name}\``,
+        attr.loc,
+      );
+    }
+    present.add(attr.name);
+    const literal = literalValue(attr);
+    if (declaration.literalOnly && !isLiteralAttr(attr)) {
+      failForOwner(
+        owner,
+        `attribute \`${attr.name}\` must be a literal`,
+        attr.loc,
+      );
+    }
+    if (declaration.type === "array" || declaration.type === "function") {
+      checkCompositeAttr(owner, attr, declaration);
+    } else if (
+      declaration.type &&
+      declaration.type !== "expression" &&
+      literal &&
+      declaration.type !== literal.type
+    ) {
+      failForOwner(
+        owner,
+        `attribute \`${attr.name}\` must be ${declaration.type}, got ${literal.type}`,
+        attr.loc,
+      );
+    }
+    if (
+      declaration.type === "expression" &&
+      (attr.kind === "static" || attr.kind === "boolean")
+    ) {
+      failForOwner(
+        owner,
+        `attribute \`${attr.name}\` must be an expression`,
+        attr.loc,
+      );
+    }
+    if (declaration.enum) {
+      if (!literal) {
+        failForOwner(
+          owner,
+          `attribute \`${attr.name}\` must be a static value from ${listEnum(declaration.enum)}`,
+          attr.loc,
+        );
+      }
+      // Enum members are strings: no coercion of booleans or numbers.
+      const enumType = declaration.type ?? "string";
+      if (
+        enumType !== "string" ||
+        literal.type !== "string" ||
+        typeof literal.value !== "string"
+      ) {
+        failForOwner(
+          owner,
+          `attribute \`${attr.name}\` must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
+          attr.loc,
+        );
+      }
+      if (!declaration.enum.includes(literal.value)) {
+        failForOwner(
+          owner,
+          `attribute \`${attr.name}\` must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
+          attr.loc,
+        );
+      }
+    }
+  }
+  for (const [name, declaration] of Object.entries(attributes)) {
+    if (declaration.required && !present.has(name)) {
+      failForOwner(owner, `missing required attribute \`${name}\``, loc);
+    }
+  }
+}
+
+/** Whether this declaration opts into recursive contracts rather than legacy body-only rules. */
+export function hasAttributeTagContract(
+  declaration: CustomTagAttributeTag | undefined,
+): boolean {
+  return (
+    declaration !== undefined &&
+    (declaration.attributes !== undefined ||
+      declaration.attributeTags !== undefined ||
+      declaration.children !== undefined)
+  );
+}
+
+function validateAttributeTags(
+  owner: string,
+  declaredTags: CustomTag["attributeTags"],
+  tags: readonly AttributeTag[],
+  tree: readonly AttributeTagNode[],
+  loc: Position,
+  allowUncontractedTags: boolean,
+): void {
+  for (const tag of tags) {
+    const declaration =
+      declaredTags && Object.hasOwn(declaredTags, tag.name)
+        ? declaredTags[tag.name]
+        : undefined;
+    const extended = hasAttributeTagContract(declaration);
+    if (!allowUncontractedTags && !extended) {
+      if (tag.attrs.length > 0) {
+        failForOwner(
+          owner,
+          `attribute tag \`<@${tag.name}>\` does not support attributes`,
+          tag.attrs[0]?.loc ?? tag.loc,
+        );
+      }
+      if (tag.attributeTags.length > 0) {
+        failForOwner(
+          owner,
+          `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
+          tag.attributeTags[0]?.loc ?? tag.loc,
+        );
+      }
+    }
+    if (declaredTags && !declaration) {
+      failForOwner(owner, `unknown attribute tag \`<@${tag.name}>\``, tag.loc);
+    }
+    if (declaration) {
+      const nestedOwner = `${owner}: \`<@${tag.name}>\``;
+      validateAttributes(
+        nestedOwner,
+        declaration.attributes,
+        tag.attrs,
+        tag.loc,
+      );
+      validateAttributeTags(
+        nestedOwner,
+        declaration.attributeTags,
+        tag.attributeTags,
+        tag.attributeTagTree,
+        tag.loc,
+        allowUncontractedTags ||
+          (extended && declaration.attributeTags === undefined),
+      );
+    }
+  }
+  for (const [name, declaration] of Object.entries(declaredTags ?? {})) {
+    const range = attributeTagOccurrenceRange(tree, name);
+    if (declaration.repeatable !== true && range.max > 1) {
+      const occurrences = tags.filter((tag) => tag.name === name);
+      failForOwner(
+        owner,
+        `attribute tag \`<@${name}>\` may not be repeated`,
+        occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
+      );
+    }
+    if (declaration.required && range.min === 0) {
+      failForOwner(owner, `missing required attribute tag \`<@${name}>\``, loc);
     }
   }
 }
@@ -957,161 +1147,16 @@ export function validateCustomTagCall(
   if (definition.parseOptions?.openTagOnly && call.content) {
     failAt(call.name, "does not accept content", call.loc);
   }
-  const attributes = definition.attributes;
-  if (attributes) {
-    // A tag declaring no attributes at all (`attributes: {}`) rejects a
-    // spread the same way it rejects a named one: "cannot be checked" is
-    // true of every declaration, so it describes the checker rather than the
-    // author's actual mistake — writing an attribute where the tag accepts
-    // none.
-    const acceptsNone = Object.keys(attributes).length === 0;
-    const present = new Set<string>();
-    for (const attr of call.attrs) {
-      if (attr.kind === "spread") {
-        failAt(
-          call.name,
-          acceptsNone
-            ? "accepts no attributes"
-            : "spread attributes cannot be checked against this tag's declared attributes",
-          attr.loc,
-        );
-      }
-      const declaration = Object.hasOwn(attributes, attr.name)
-        ? attributes[attr.name]
-        : undefined;
-      if (!declaration) {
-        failAt(
-          call.name,
-          acceptsNone
-            ? "accepts no attributes"
-            : `unknown attribute \`${attr.name}\``,
-          attr.loc,
-        );
-      }
-      present.add(attr.name);
-
-      const literal = literalValue(attr);
-      if (declaration.literalOnly && !isLiteralAttr(attr)) {
-        failAt(
-          call.name,
-          `attribute \`${attr.name}\` must be a literal`,
-          attr.loc,
-        );
-      }
-      if (declaration.type === "array" || declaration.type === "function") {
-        checkCompositeAttr(call, attr, declaration);
-      } else if (
-        declaration.type &&
-        declaration.type !== "expression" &&
-        literal &&
-        declaration.type !== literal.type
-      ) {
-        failAt(
-          call.name,
-          `attribute \`${attr.name}\` must be ${declaration.type}, got ${literal.type}`,
-          attr.loc,
-        );
-      }
-      if (
-        declaration.type === "expression" &&
-        (attr.kind === "static" || attr.kind === "boolean")
-      ) {
-        failAt(
-          call.name,
-          `attribute \`${attr.name}\` must be an expression`,
-          attr.loc,
-        );
-      }
-      if (declaration.enum) {
-        if (!literal) {
-          failAt(
-            call.name,
-            `attribute \`${attr.name}\` must be a static value from ${listEnum(declaration.enum)}`,
-            attr.loc,
-          );
-        }
-        // `enum` is `string[]`, so only a string literal can be a member.
-        // Comparing through `String()` would let `<t mode/>` (boolean `true`)
-        // satisfy `enum: ["true"]` and `mode=24` satisfy `enum: ["24"]`; the
-        // declared `type` is the value's real type, so require it to match.
-        const enumType = declaration.type ?? "string";
-        if (
-          enumType !== "string" ||
-          literal.type !== "string" ||
-          typeof literal.value !== "string"
-        ) {
-          failAt(
-            call.name,
-            `attribute \`${attr.name}\` must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
-            attr.loc,
-          );
-        }
-        if (!declaration.enum.includes(literal.value)) {
-          failAt(
-            call.name,
-            `attribute \`${attr.name}\` must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
-            attr.loc,
-          );
-        }
-      }
-    }
-
-    for (const [name, declaration] of Object.entries(attributes)) {
-      if (declaration.required && !present.has(name)) {
-        failAt(call.name, `missing required attribute \`${name}\``, call.loc);
-      }
-    }
-  }
-
-  const declaredTags = definition.attributeTags;
-  if (!hasTemplate(definition)) {
-    for (const tag of call.attributeTags) {
-      if (tag.attrs.length > 0) {
-        failAt(
-          call.name,
-          `attribute tag \`<@${tag.name}>\` does not support attributes`,
-          tag.attrs[0]?.loc ?? tag.loc,
-        );
-      }
-      if (tag.attributeTags.length > 0) {
-        failAt(
-          call.name,
-          `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
-          tag.attributeTags[0]?.loc ?? tag.loc,
-        );
-      }
-    }
-  }
-  if (!declaredTags) return;
-
-  const tree =
-    call.attributeTagTree ?? directAttributeTagTree(call.attributeTags);
-  for (const tag of call.attributeTags) {
-    const declaration = Object.hasOwn(declaredTags, tag.name)
-      ? declaredTags[tag.name]
-      : undefined;
-    if (!declaration) {
-      failAt(call.name, `unknown attribute tag \`<@${tag.name}>\``, tag.loc);
-    }
-  }
-  for (const [name, declaration] of Object.entries(declaredTags)) {
-    const range = attributeTagOccurrenceRange(tree, name);
-    if (declaration.repeatable !== true && range.max > 1) {
-      const occurrences = call.attributeTags.filter((tag) => tag.name === name);
-      failAt(
-        call.name,
-        `attribute tag \`<@${name}>\` may not be repeated`,
-        occurrences[1]?.loc ?? occurrences[0]?.loc ?? call.loc,
-      );
-    }
-    if (declaration.required && range.min === 0) {
-      failAt(
-        call.name,
-        `missing required attribute tag \`<@${name}>\``,
-        call.loc,
-      );
-    }
-  }
+  const owner = `\`<${call.name}>\``;
+  validateAttributes(owner, definition.attributes, call.attrs, call.loc);
+  validateAttributeTags(
+    owner,
+    definition.attributeTags,
+    call.attributeTags,
+    call.attributeTagTree ?? directAttributeTagTree(call.attributeTags),
+    call.loc,
+    hasTemplate(definition),
+  );
 }
 
 /**
@@ -1178,19 +1223,25 @@ const ATTRIBUTE_KEYS = [
   "default",
   "literalOnly",
 ] as const;
-const ATTRIBUTE_TAG_KEYS = ["repeatable", "required"] as const;
+const CHILD_KEYS = ["repeatable", "required"] as const;
+const ATTRIBUTE_TAG_KEYS = [
+  ...CHILD_KEYS,
+  "attributes",
+  "attributeTags",
+  "children",
+] as const;
 
 const ITEM_TYPES = ["string", "number", "boolean"] as const;
 
 /** Rejects a declaration whose keys contradict each other, at registration. */
 function rejectContradictoryAttribute(
-  tagName: string,
+  owner: string,
   attrName: string,
   declaration: CustomTagAttribute,
 ): void {
   const reject = (problem: string): never => {
     throw new TranslateError(
-      `Invalid "${attrName}" attribute declaration of tag "${tagName}": ${problem}`,
+      `Invalid "${attrName}" attribute declaration of ${owner}: ${problem}`,
       0,
       0,
     );
@@ -1253,9 +1304,9 @@ export function rejectUnknownDeclarationKeys(
           );
         }
         for (const key of Object.keys(declaration)) {
-          if (!(ATTRIBUTE_TAG_KEYS as readonly string[]).includes(key)) {
+          if (!(CHILD_KEYS as readonly string[]).includes(key)) {
             throw new TranslateError(
-              `Unknown key "${key}" in the "${childName}" child declaration of tag "${tagName}"; allowed: ${ATTRIBUTE_TAG_KEYS.join(", ")}`,
+              `Unknown key "${key}" in the "${childName}" child declaration of tag "${tagName}"; allowed: ${CHILD_KEYS.join(", ")}`,
               0,
               0,
             );
@@ -1279,37 +1330,105 @@ export function rejectUnknownDeclarationKeys(
         );
       }
     }
-    if (definition.attributes) {
-      for (const [attrName, declaration] of Object.entries(
-        definition.attributes,
-      )) {
-        for (const key of Object.keys(declaration)) {
-          if (!(ATTRIBUTE_KEYS as readonly string[]).includes(key)) {
-            throw new TranslateError(
-              `Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: ${ATTRIBUTE_KEYS.join(", ")}`,
-              0,
-              0,
-            );
-          }
+    rejectRecursiveContractKeys(`tag "${tagName}"`, definition);
+  }
+  for (const [tagName, definition] of Object.entries(customTags)) {
+    rejectAttributeTagParentConflicts(
+      customTags,
+      `\`<${tagName}>\``,
+      definition.attributeTags,
+    );
+  }
+}
+
+/** Cross-check every attribute-tag owner, including duplicate names at any depth. */
+function rejectAttributeTagParentConflicts(
+  customTags: Readonly<Record<string, CustomTag>>,
+  owner: string,
+  declarations: CustomTag["attributeTags"],
+): void {
+  for (const [name, declaration] of Object.entries(declarations ?? {})) {
+    const parentName = `@${name}`;
+    const parentLabel = `\`<${parentName}>\``;
+    const nestedOwner = `${owner}: ${parentLabel}`;
+    if (declaration.children !== undefined) {
+      for (const childName of Object.keys(declaration.children)) {
+        const child =
+          childName !== "#text" && Object.hasOwn(customTags, childName)
+            ? customTags[childName]
+            : undefined;
+        if (
+          child?.parents !== undefined &&
+          !child.parents.includes(parentName)
+        ) {
+          failForOwner(
+            nestedOwner,
+            `child \`<${childName}>\` declares \`parents\` without ${parentLabel}; add ${parentLabel} to \`<${childName}>\`'s \`parents\`, or remove \`<${childName}>\` from ${nestedOwner}'s \`children\``,
+            { line: 0, column: 0 },
+          );
         }
-        rejectContradictoryAttribute(tagName, attrName, declaration);
+      }
+      for (const [childName, child] of Object.entries(customTags)) {
+        if (
+          child.parents?.includes(parentName) &&
+          !Object.hasOwn(declaration.children, childName)
+        ) {
+          failAt(
+            childName,
+            `parent ${nestedOwner} declares \`children\` without \`<${childName}>\`; add \`<${childName}>\` to ${nestedOwner}'s \`children\`, or remove ${parentLabel} from \`<${childName}>\`'s \`parents\``,
+            { line: 0, column: 0 },
+          );
+        }
       }
     }
-    if (definition.attributeTags) {
-      for (const [tagAttrName, declaration] of Object.entries(
-        definition.attributeTags,
-      )) {
-        for (const key of Object.keys(declaration)) {
-          if (!(ATTRIBUTE_TAG_KEYS as readonly string[]).includes(key)) {
-            throw new TranslateError(
-              `Unknown key "${key}" in the "${tagAttrName}" attribute tag declaration of tag "${tagName}"; allowed: ${ATTRIBUTE_TAG_KEYS.join(", ")}`,
-              0,
-              0,
-            );
-          }
-        }
+    rejectAttributeTagParentConflicts(
+      customTags,
+      nestedOwner,
+      declaration.attributeTags,
+    );
+  }
+}
+
+/** Registration uses the same key vocabulary at every attribute-tag depth. */
+function rejectRecursiveContractKeys(
+  owner: string,
+  definition: Pick<CustomTag, "attributes" | "attributeTags" | "children">,
+): void {
+  const keys = (
+    declaration: CustomTagAttribute | CustomTagAttributeTag | CustomTagChild,
+    allowed: readonly string[],
+    description: string,
+  ): void => {
+    for (const key of Object.keys(declaration)) {
+      if (!allowed.includes(key)) {
+        throw new TranslateError(
+          `Unknown key "${key}" in the ${description} of ${owner}; allowed: ${allowed.join(", ")}`,
+          0,
+          0,
+        );
       }
     }
+  };
+  for (const [attrName, declaration] of Object.entries(
+    definition.attributes ?? {},
+  )) {
+    keys(declaration, ATTRIBUTE_KEYS, `"${attrName}" attribute declaration`);
+    rejectContradictoryAttribute(owner, attrName, declaration);
+  }
+  for (const [childName, declaration] of Object.entries(
+    definition.children ?? {},
+  )) {
+    keys(declaration, CHILD_KEYS, `"${childName}" child declaration`);
+  }
+  for (const [name, declaration] of Object.entries(
+    definition.attributeTags ?? {},
+  )) {
+    keys(
+      declaration,
+      ATTRIBUTE_TAG_KEYS,
+      `"${name}" attribute tag declaration`,
+    );
+    rejectRecursiveContractKeys(`${owner}: "<@${name}>"`, declaration);
   }
 }
 

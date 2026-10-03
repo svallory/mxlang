@@ -26,6 +26,14 @@ export interface CustomTagAttribute {
 export interface CustomTagAttributeTag {
   repeatable?: boolean;
   required?: boolean;
+  attributes?: Record<string, CustomTagAttribute>;
+  attributeTags?: Record<string, CustomTagAttributeTag>;
+  children?: Record<string, CustomTagChild>;
+}
+
+export interface CustomTagChild {
+  repeatable?: boolean;
+  required?: boolean;
 }
 
 export interface TagStore {
@@ -114,7 +122,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | --- | --- |
 | `parseOptions` | Static parser behavior that discovery reads before parsing the caller. |
 | `attributes` | Closed attribute contract, validated before hooks; omit it to leave attributes open. |
-| `attributeTags` | Closed `<@name>` contract with required/repeatable controls. |
+| `attributeTags` | Closed `<@name>` contract with required/repeatable controls and recursive `attributes`, `attributeTags` and `children` maps. |
 | `analyze` | Non-mutating pass over every call of this tag in one file, before transforms. |
 | `transform` | Expands one validated call into ordinary IR; optional only when a template exists. |
 | `finalize` | Adds nodes once per file after expansion; returned nodes are prepended. |
@@ -130,7 +138,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `items` | With `type: "array"`, checks each literal element as `"string"`, `"number"` or `"boolean"`. |
 | `required` | Requires the attribute or attribute tag. |
 | `enum` | Restricts an attribute to listed string literals. |
-| `default` | Supplies an omitted string, number, or boolean attribute after validation. |
+| `default` | Supplies an omitted string, number, or boolean attribute on the custom tag after validation; not applied to attribute-tag attributes (decision 138 E4). |
 | `literalOnly` | Requires a compile-time scalar, array, or object literal. |
 | `repeatable` | Allows an attribute tag name to appear more than once. |
 

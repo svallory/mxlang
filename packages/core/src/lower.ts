@@ -65,6 +65,7 @@ import {
 import {
   type ChildNode,
   type CustomTag,
+  hasAttributeTagContract,
   isContractOnlyDelegated,
   runAnalyzeHooks,
   runFinalizeHooks,
@@ -2086,47 +2087,94 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   return { kind: "Text", value: "", loc: posOf(node) };
 }
 
-function rejectCustomAttributeTagShapes(
-  ownerName: string,
+/** Check attribute-tag authored bodies before any child can transform away its name. */
+function validateCustomAttributeTagBodies(
+  owner: string,
   node: Node,
+  declarations: CustomTag["attributeTags"],
+  allowUncontractedTags: boolean,
   controlName?: string,
 ): void {
-  for (const tag of node.attributeTags ?? []) {
+  const children = node.body?.body ?? [];
+  const directTags = [
+    ...new Set<Node>([
+      ...(node.attributeTags ?? []),
+      ...children.filter((child: Node) =>
+        String(child.name?.value ?? "").startsWith("@"),
+      ),
+    ]),
+  ];
+  for (const tag of directTags) {
+    if (isControl(tag)) {
+      validateCustomAttributeTagBodies(
+        owner,
+        tag,
+        declarations,
+        allowUncontractedTags,
+        attrName(tag) === "for" ? "for" : "if",
+      );
+      continue;
+    }
     const name = attrName(tag);
-    if (controlName) {
-      fail(
-        `\`<${ownerName}>\`: attribute tag \`<@${name}>\` may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve attribute-tag control flow`,
-        tag.name ?? tag,
+    const declaration =
+      declarations && Object.hasOwn(declarations, name)
+        ? declarations[name]
+        : undefined;
+    const extended = hasAttributeTagContract(declaration);
+    if (!allowUncontractedTags && !extended) {
+      if (controlName) {
+        fail(
+          `${owner}: attribute tag \`<@${name}>\` may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve attribute-tag control flow`,
+          tag.name ?? tag,
+        );
+      }
+      const attrs = tag.attributes ?? [];
+      if (attrs.length > 0) {
+        fail(
+          `${owner}: attribute tag \`<@${name}>\` does not support attributes`,
+          attrs[0],
+        );
+      }
+      const nested = tag.attributeTags ?? [];
+      if (nested.length > 0) {
+        fail(
+          `${owner}: attribute tag \`<@${name}>\` does not support nested attribute tags`,
+          nested[0]?.name ?? nested[0],
+        );
+      }
+    }
+    const nestedOwner = `${owner}: \`<@${name}>\``;
+    if (declaration) {
+      validateCustomTagChildren(
+        declaration,
+        {
+          name: `@${name}`,
+          loc: posOf(tag),
+          childTree: authoredChildTree(tag.body?.body ?? []),
+        },
+        nestedOwner,
       );
     }
-    const attrs = tag.attributes ?? [];
-    if (attrs.length > 0) {
-      fail(
-        `\`<${ownerName}>\`: attribute tag \`<@${name}>\` does not support attributes`,
-        attrs[0],
-      );
-    }
-    const nested = tag.attributeTags ?? [];
-    if (nested.length > 0) {
-      fail(
-        `\`<${ownerName}>\`: attribute tag \`<@${name}>\` does not support nested attribute tags`,
-        nested[0]?.name ?? nested[0],
-      );
-    }
+    validateCustomAttributeTagBodies(
+      nestedOwner,
+      tag,
+      declaration?.attributeTags,
+      allowUncontractedTags ||
+        (extended && declaration?.attributeTags === undefined),
+    );
   }
-  for (const child of node.body?.body ?? []) {
-    const childName = child.name?.value;
+  for (const child of children) {
     if (
       child.type === "MarkoTag" &&
-      (childName === "if" ||
-        childName === "else-if" ||
-        childName === "else" ||
-        childName === "for")
+      ["if", "else-if", "else", "for"].includes(child.name?.value) &&
+      !directTags.includes(child)
     ) {
-      rejectCustomAttributeTagShapes(
-        ownerName,
+      validateCustomAttributeTagBodies(
+        owner,
         child,
-        childName === "for" ? "for" : "if",
+        declarations,
+        allowUncontractedTags,
+        child.name?.value === "for" ? "for" : "if",
       );
     }
   }
@@ -2242,9 +2290,12 @@ function lowerCustomTag(
       node,
     );
   }
-  if (!hasTemplate(definition)) {
-    rejectCustomAttributeTagShapes(name, node);
-  }
+  validateCustomAttributeTagBodies(
+    `\`<${name}>\``,
+    node,
+    definition.attributeTags,
+    hasTemplate(definition),
+  );
   const target: ComponentTarget | undefined = hasTemplate(definition)
     ? {
         kind: "name",
