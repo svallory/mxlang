@@ -11,12 +11,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
-import { type TargetPolicy, clearScanCache } from "@mxlang/core";
-import {
-  defaultTarget,
-  hostOf,
-  hostTarget,
-} from "@mxlang/target-registry";
+import { clearScanCache, type TargetPolicy } from "@mxlang/core";
+import { defaultTarget, hostOf, hostTarget } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
@@ -24,7 +20,6 @@ import {
   type RelatedDiagnostics,
   splitCodeFrame,
 } from "./diagnose.ts";
-
 
 /**
  * A policy for `host` as the built-in lookup resolves it: the target that host
@@ -45,7 +40,11 @@ function policy(host: string, strict?: boolean): TargetPolicy {
 describe("diagnoseDocument", () => {
   it("reports one Error diagnostic for <let> under a strict policy", () => {
     const source = "<let/count=1/>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", policy("html", true));
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html", true),
+    );
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(1); // DiagnosticSeverity.Error
@@ -57,7 +56,11 @@ describe("diagnoseDocument", () => {
 
   it("reports one Error diagnostic for <log> under a strict policy", () => {
     const source = "<log=1/>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", policy("html", true));
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html", true),
+    );
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(1); // DiagnosticSeverity.Error
@@ -71,7 +74,11 @@ describe("diagnoseDocument", () => {
     // not the region compiler `compileSolidMx` — before decision 115's
     // wiring this host was unreachable for a whole-file `.mx` at all here.
     const source = "export interface Input { }\n\n<div>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", policy("solid"));
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("solid"),
+    );
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(1); // DiagnosticSeverity.Error
@@ -94,7 +101,11 @@ describe("diagnoseDocument", () => {
 
   it("reports nothing for a valid file", () => {
     const source = "<p>hello</p>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", policy("html"));
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html"),
+    );
 
     expect(diagnostics).toEqual([]);
   });
@@ -198,7 +209,11 @@ describe("diagnoseDocument", () => {
     // string being compiled, not a JS template literal — biome's
     // noTemplateCurlyInString can't tell the two apart.
     const source = "<let/count=1/>\n<p>${count}</p>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", policy("html"));
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html"),
+    );
 
     expect(diagnostics).toEqual([]);
   });
@@ -347,10 +362,15 @@ describe("the Astro template file kind", () => {
     // must not compile it as an html page.
     const source = "<let/count=0/>\n<p>${count}</p>\n";
     expect(
-      diagnoseDocument(source, "file:///app/card.mx", policy("html", true)).length,
+      diagnoseDocument(source, "file:///app/card.mx", policy("html", true))
+        .length,
     ).toBeGreaterThan(0);
     expect(
-      diagnoseDocument(source, "file:///app/card.astro.mx", policy("html", true)),
+      diagnoseDocument(
+        source,
+        "file:///app/card.astro.mx",
+        policy("html", true),
+      ),
     ).toEqual([]);
   });
 });
@@ -444,7 +464,11 @@ describe("the Hono host", () => {
         ].join("\n"),
       );
 
-      const diagnostics = diagnoseDocument("<thing/>\n", caller, policy("html"));
+      const diagnostics = diagnoseDocument(
+        "<thing/>\n",
+        caller,
+        policy("html"),
+      );
 
       // One diagnostic, naming the file the author has to fix — not a crash,
       // and not silence that would leave the editor disagreeing with a build.
@@ -468,7 +492,11 @@ describe("the Hono host", () => {
       const when = new Date(Date.now() + 10_000);
       utimesSync(tagFile, when, when);
 
-      const diagnostics = diagnoseDocument("<thing/>\n", caller, policy("html"));
+      const diagnostics = diagnoseDocument(
+        "<thing/>\n",
+        caller,
+        policy("html"),
+      );
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.message).toContain("thing.tag.ts");
     });
@@ -507,7 +535,11 @@ describe("the Angular host", () => {
   // every file, clean ones included.
   it("reports nothing for a clean whole-file .mx page", () => {
     expect(
-      diagnoseDocument("<div>hi</div>\n", "file:///app/greeting.mx", policy("angular")),
+      diagnoseDocument(
+        "<div>hi</div>\n",
+        "file:///app/greeting.mx",
+        policy("angular"),
+      ),
     ).toEqual([]);
   });
 
@@ -928,7 +960,11 @@ describe("compiler code frame placement", () => {
   });
 
   it("leaves a message with no frame unchanged and adds no data", () => {
-    const [d] = diagnoseDocument("<let/count=1/>\n", "file:///project/App.mx", policy("html", true));
+    const [d] = diagnoseDocument(
+      "<let/count=1/>\n",
+      "file:///project/App.mx",
+      policy("html", true),
+    );
     expect(d?.message).toMatch(/let/i);
     expect(d?.message).not.toMatch(frameLine);
     expect(d?.data).toBeUndefined();
@@ -982,7 +1018,11 @@ describe("a tag template that fails to parse", () => {
   );
 
   it("keeps the document's own errors free of any `(in ...)` suffix", () => {
-    const [d] = diagnoseDocument("<div>\n", "file:///app/page.mx", policy("html"));
+    const [d] = diagnoseDocument(
+      "<div>\n",
+      "file:///app/page.mx",
+      policy("html"),
+    );
     expect(d?.message).toBe('Missing ending "div" tag');
     expect(d?.relatedInformation).toBeUndefined();
   });

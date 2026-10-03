@@ -186,4 +186,55 @@ describe("@mxlang/hono/bun", () => {
     const mod = await import(path);
     expect(mod.default).toEndWith("Counter.solid.mx");
   });
+
+  test("a dotted tag file name is rejected, not indexed (decision 137)", async () => {
+    Bun.plugin(honoPlugin);
+
+    // The loader is a direct entry: it resolves its targets from this
+    // package's own descriptor unless a caller passes a lookup, so a file
+    // kind of *another* host is not one it knows. Either way the file is
+    // rejected — through the second diagnostic, which says why it cannot be
+    // called and names the tag the shorthand form would resolve to.
+    const base = join(import.meta.dirname, "..");
+    const pkgDir = join(base, "dotted-fixture");
+    const tagsDir = join(pkgDir, "tags");
+    mkdirSync(tagsDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "hono-dotted-fixture" }),
+    );
+    // A foreign host's file kind, and a name no host declares at all.
+    writeFileSync(join(tagsDir, "x.ng.mx"), "<span>x</span>\n");
+    writeFileSync(join(tagsDir, "icon.small.mx"), "<span>icon</span>\n");
+    const page = join(pkgDir, "dotted-page.mx");
+    writeFileSync(page, "<div>no call</div>\n");
+
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await import(page);
+      const warned = warn.mock.calls.map((call) => String(call[0]));
+      // Neither file is indexed: calling `<x.ng>` is impossible, and the
+      // diagnostic says so with the tag it would parse as.
+      expect(
+        warned.some((message) =>
+          message.includes(
+            "`x.ng.mx` cannot be called as a tag: `<x.ng>` parses as tag `x` with class `ng`.",
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        warned.some((message) =>
+          message.includes(
+            "`icon.small.mx` cannot be called as a tag: `<icon.small>` parses as tag `icon` with class `small`.",
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        warned.some((message) => /is a host module file/.test(message)),
+      ).toBe(false);
+    } finally {
+      warn.mockRestore();
+      rmSync(pkgDir, { recursive: true, force: true });
+    }
+  });
 });

@@ -34,7 +34,7 @@ One short, positioned hint per error, appended to the reason; the error, its pos
 
 ### Changed: core resolves targets from a caller-supplied lookup, and names none (refactor/target-open-set, decisions 129 and 132)
 
-Core held a closed list of the seven built-in hosts (`HOST_NAMES`, `HOST_PACKAGES`, `isKnownHost`, `DEFAULT_POLICY`, `HOST_MODULE_SEGMENTS`, `MX_ATTR_TAG_SOURCES`); all are gone, replaced by a required `TargetLookup` (decision 126). Every entry point that needed one now takes it, so forgetting it is a type error rather than a silent loss of validation:
+**Behaviour-preserving refactor, except for the dotted-name rule below.** Core held a closed list of the seven built-in hosts (`HOST_NAMES`, `HOST_PACKAGES`, `isKnownHost`, `DEFAULT_POLICY`, `HOST_MODULE_SEGMENTS`, `MX_ATTR_TAG_SOURCES`); all are gone, replaced by a required `TargetLookup` (decision 126). Every entry point that needed one now takes it, so forgetting it is a type error rather than a silent loss of validation:
 
 - `resolveTargetPolicy(filePath, lookup)` and `resolveTargetPolicyDetailed(filePath, lookup)` — the lookup is a required second argument. `TargetPolicy` gains `target: string` and `host?: string`; the default policy is `lookup.defaultTarget()`.
 - `hostModuleSegment(entry, lookup)` — a required lookup instead of the `HOST_MODULE_SEGMENTS` array, which is no longer exported.
@@ -47,6 +47,12 @@ The messages do not change: the unknown-`mx.host` list is every non-deprecated `
 ### Added: `isTranslateError`, a brand check that survives two copies of core (refactor/target-open-set)
 
 A host resolved from a project brings its own `@mxlang/core`, so an error it throws is not the class a tool checks with `instanceof`; every positioned error from it degraded to a wrapped, positionless one. `TranslateError` now carries a `Symbol.for("mxTranslateError")` brand and core's own `instanceof TranslateError` checks read the new `isTranslateError(error)` export (design note §4.4, mitigation 2). No behaviour change within one copy.
+
+### Changed: a dotted tag file name is rejected, not indexed (refactor/target-open-set, decision 137)
+
+**Behaviour change.** A `<base>.<word>.mx` file under a `tags/` or `mx.tags` directory is no longer indexed as a tag. It could never be called: the tag form `<base.word/>` and the concise form `base.word` both parse as tag `base` with shorthand class `word` (measured on Marko 6.3.51 and on this parser), so the entry was a dead tag with no word to the author.
+
+Such a file is now excluded from the tag map with a positioned diagnostic, in one of two forms. When `<word>` is a file-kind segment a registered target declares (`ng`, `solid`, `astro` for the built-ins) the wording is unchanged — `` `${entry}` is a host module file, not a tag template; tag templates are `.mx` ``. Otherwise: `` `${entry}` cannot be called as a tag: `<${bare}>` parses as tag `${tag}` with class `${classes}`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot. `` Which form applies depends on the caller's lookup: a direct entry that knows only its own targets (a Bun loader, the Angular CLI) sees another host's file kind as the second case and still rejects the file. An mx-only lint beyond Marko, which indexes such a file silently; recorded in `divergences.md`, and spec §9.2 states the rule.
 
 ### Added: spans on Text, Comment and structural IR nodes (core-ir-spans)
 

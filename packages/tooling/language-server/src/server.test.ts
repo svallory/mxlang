@@ -9,11 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TargetPolicy } from "@mxlang/core";
-import {
-  defaultTarget,
-  hostOf,
-  hostTarget,
-} from "@mxlang/target-registry";
+import { defaultTarget, hostOf, hostTarget } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createMessageConnection,
@@ -89,7 +85,6 @@ function nextDiagnostics(
     );
   });
 }
-
 
 /**
  * A policy for `host` as the built-in lookup resolves it: the target that host
@@ -557,16 +552,8 @@ describe("stdio server (e2e)", () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-pkg-")));
     try {
       const pkgPath = join(dir, "package.json");
-      const bad = JSON.stringify(
-        { name: "t", mx: { host: "htmll" } },
-        null,
-        2,
-      );
-      const good = JSON.stringify(
-        { name: "t", mx: { host: "html" } },
-        null,
-        2,
-      );
+      const bad = JSON.stringify({ name: "t", mx: { host: "htmll" } }, null, 2);
+      const good = JSON.stringify({ name: "t", mx: { host: "html" } }, null, 2);
       writeFileSync(pkgPath, bad);
       const pkgUri = `file://${pkgPath}`;
       const uriA = `file://${join(dir, "a.mx")}`;

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Changed (refactor/target-open-set, decisions 129 and 132):** `mxTemplates()` takes an optional `targets` lookup (default: this package's own descriptor), reports an unknown bare word in `mx.tags[].hosts` (silent for a package specifier), and `lowerAstroMx` accepts `options.targets`.
+- **Changed (refactor/target-open-set, decision 137):** `mxTemplates()` excludes a dotted tag file name from the tag map with a positioned diagnostic and reports an unknown bare word in `mx.tags[].hosts`. It takes an optional `targets` lookup (default: this package's own descriptor), and `lowerAstroMx` accepts `options.targets`.
 
 - **Added (fix-hints-batch round 2):** a `$` scriptlet that declares a value now says to declare it in the `---` fence (`const y = …;`), since a template rejects `<const>` (new optional `scriptletReplacement` host declaration).
 

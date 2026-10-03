@@ -8,20 +8,20 @@ import {
   readAngularConfig,
 } from "@mxlang/angular";
 import {
-  type TargetPolicyDiagnostic,
   type MxWarning,
   reportScanDiagnostics,
+  type TargetPolicyDiagnostic,
   TranslateError,
   withCalleeInputSources,
 } from "@mxlang/core";
+import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
+import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
+import { compileSolidMx } from "@mxlang/solid";
 import {
   builtinLookup,
   hostModuleSegment,
   scanCached,
 } from "@mxlang/target-registry";
-import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
-import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
-import { compileSolidMx } from "@mxlang/solid";
 import type {
   CodeInformation,
   CodeMapping,

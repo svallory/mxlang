@@ -111,23 +111,51 @@ export function hostModuleSegment(
 }
 
 /**
- * Rejects `entry` if it is a host module file (`.solid.mx`, `.ng.mx`, ...)
- * rather than a tag template — a different file kind, silently skipping
- * which would leave an author wondering why their file is invisible.
- * Positioned at the file. Shared by `indexDirectory`, so `scanCustomTags`
- * and `discoverProjectTags` cannot drift on the rule.
+ * Excludes `entry` from the tag map when its name cannot be called as a tag,
+ * with a positioned diagnostic. Shared by `indexDirectory`, so
+ * `scanCustomTags` and `discoverProjectTags` cannot drift on the rule.
+ *
+ * A `<base>.<word>.mx` file name under `tags/` is never a callable tag
+ * (decision 137, design note §5.1 rule (d)): the concise syntax `x.ng` and
+ * the tag form `<x.ng/>` both parse as tag `x` with shorthand class `ng`, so
+ * no syntax can reach such an entry and indexing it would create a dead tag.
+ * Two messages, both positional at the file:
+ *
+ * 1. `<word>` is a file-kind segment the lookup knows (`.ng.mx`, `.solid.mx`,
+ *    `.astro.mx`): today's wording, unchanged — it is a host module file,
+ *    not a tag template.
+ * 2. Otherwise: the file is excluded with the reason it cannot be called, and
+ *    what to do about it (another host's module file does not belong here;
+ *    otherwise rename it without the dot).
  */
-function rejectHostModuleFile(
+function rejectUncallableTagFile(
   dir: string,
   entry: string,
   diagnostics: ScanDiagnostic[],
   targets: TargetLookup,
 ): boolean {
-  const segment = hostModuleSegment(entry, targets);
-  if (segment === undefined) return false;
+  if (!entry.endsWith(TEMPLATE_SUFFIX)) return false;
+  const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
+  const dot = bare.lastIndexOf(".");
+  if (dot === -1) return false;
+  const segment = bare.slice(dot + 1);
+  if (hostModuleSegment(entry, targets) === segment) {
+    diagnostics.push({
+      file: join(dir, entry),
+      message: `\`${entry}\` is a host module file, not a tag template; tag templates are \`.mx\``,
+      line: 1,
+      column: 0,
+    });
+    return true;
+  }
+  // The tag the shorthand form resolves to, and the classes it carries: the
+  // first segment is the tag, every later one is a shorthand class.
+  const first = bare.indexOf(".");
+  const tag = bare.slice(0, first);
+  const classes = bare.slice(first + 1).replaceAll(".", " ");
   diagnostics.push({
     file: join(dir, entry),
-    message: `\`${entry}\` is a host module file, not a tag template; tag templates are \`.mx\``,
+    message: `\`${entry}\` cannot be called as a tag: \`<${bare}>\` parses as tag \`${tag}\` with class \`${classes}\`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot.`,
     line: 1,
     column: 0,
   });
@@ -807,7 +835,7 @@ function indexDirectory(
 
     const isSidecar = entry.endsWith(SIDECAR_SUFFIX);
 
-    if (rejectHostModuleFile(dir, entry, diagnostics, targets)) continue;
+    if (rejectUncallableTagFile(dir, entry, diagnostics, targets)) continue;
     const isTemplate = entry.endsWith(TEMPLATE_SUFFIX);
 
     if (!isSidecar && !isTemplate) continue;
