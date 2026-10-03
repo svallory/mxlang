@@ -1,4 +1,3 @@
-import { HTML_ELEMENTS } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
@@ -137,16 +136,32 @@ describe("round 2 (html)", () => {
     ]);
   });
 
-  it("F3: every element the did-you-mean can suggest compiles on this host", () => {
-    const broken: string[] = [];
-    for (const element of HTML_ELEMENTS) {
-      try {
-        compile(`<${element}/>`, "/fixtures/test.mx");
-      } catch {
-        broken.push(element);
-      }
+  it.each([
+    ["serach", undefined],
+    ["saerch", undefined],
+    ["slto", undefined],
+    ["solt", undefined],
+    ["dvi", "div"],
+    ["buton", "button"],
+    ["sapn", "span"],
+    ["tabl", "table"],
+    ["labl", "label"],
+    ["nava", "nav"],
+    ["fromm", "form"],
+    ["buttun", "button"],
+    ["tabel", undefined], // tie: table / label
+    ["headr", undefined], // tie: header / head
+    ["sp", undefined],
+    ["my-widget", undefined],
+  ])("F3: <%s> suggests %s, and the suggestion compiles", (typo, expected) => {
+    const { message } = failure(`<${typo}/>`);
+    const suggested = /Did you mean `<([^>]+)>`\?/.exec(message)?.[1];
+    expect(suggested).toBe(expected);
+    if (suggested) {
+      expect(() =>
+        compile(`<${suggested}/>`, "/fixtures/test.mx"),
+      ).not.toThrow();
     }
-    expect(broken).toEqual([]);
   });
 
   it.each([
@@ -175,5 +190,24 @@ describe("round 2 (html)", () => {
   it("F5: `$ …` text inside a multi-line attribute expression is not a scriptlet", () => {
     const { message } = failure("<div class={\n  $ const x = ;\n}>x</div>");
     expect(reasonOf(message)).not.toContain("scriptlet");
+  });
+
+  it.each([
+    ["a quoted `{` before the line", '<div title="{">\n$ const x = ;\n</div>'],
+    ["a single-quoted `{`", "<div title='{'>\n$ const x = ;\n</div>"],
+    ["a backtick `{`", "<div title=`{`>\n$ const x = ;\n</div>"],
+  ])("R2-2: %s does not suppress the scriptlet hint", (_label, source) => {
+    expect(reasonOf(failure(source).message)).toContain(
+      "scriptlets (`$ …`) are not supported; declare a value with `<const/x=…/>`",
+    );
+  });
+
+  it("R2-2: a real open brace still suppresses it, quotes inside or not", () => {
+    for (const source of [
+      "<div class={\n  $ const x = ;\n}>x</div>",
+      '<div class={\n  "}" +\n  $ const x = ;\n}>x</div>',
+    ]) {
+      expect(reasonOf(failure(source).message)).not.toContain("scriptlet");
+    }
   });
 });

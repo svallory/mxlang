@@ -76,8 +76,12 @@ function insideBraces(source: string, offset: number): boolean {
     source.lastIndexOf("${", offset),
   );
   let depth = 0;
+  let quote = "";
   for (const char of source.slice(Math.max(open, 0), offset)) {
-    if (char === "{") depth++;
+    if (quote) {
+      if (char === quote) quote = "";
+    } else if ("\"'`".includes(char)) quote = char;
+    else if (char === "{") depth++;
     else if (char === "}") depth--;
   }
   return depth > 0;
