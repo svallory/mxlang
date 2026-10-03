@@ -402,7 +402,12 @@ function compileTagFile(
     );
     const error: PositionedMessage =
       at.line !== undefined
-        ? { file: at.file, line: at.line, column: at.column, message: at.message }
+        ? {
+            file: at.file,
+            line: at.line,
+            column: at.column,
+            message: at.message,
+          }
         : { file: at.file, message };
     return {
       ok: false,

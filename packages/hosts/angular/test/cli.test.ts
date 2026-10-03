@@ -1092,7 +1092,8 @@ describe("build: unlocated Babel suffix (angular-build-unlocated-babel-suffix)",
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
       }),
-      "src/tags/Chip.mx": "export interface Input { label: }\n<div>${input.label}</div>\n",
+      "src/tags/Chip.mx":
+        "export interface Input { label: }\n<div>${input.label}</div>\n",
     });
     const chip = join(projectDir, "src/tags/Chip.mx");
 

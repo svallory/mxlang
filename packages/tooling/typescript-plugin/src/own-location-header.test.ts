@@ -50,12 +50,12 @@ describe("dropOwnLocationHeader", () => {
       writeFileSync(real, "");
       const link = join(dir, "link.mx");
       symlinkSync(real, link);
-      expect(dropOwnLocationHeader(`\n    at ${real}:4:1\n${frame}`, link)).toBe(
-        `\n${frame}`,
-      );
-      expect(dropOwnLocationHeader(`\n    at ${link}:4:1\n${frame}`, real)).toBe(
-        `\n${frame}`,
-      );
+      expect(
+        dropOwnLocationHeader(`\n    at ${real}:4:1\n${frame}`, link),
+      ).toBe(`\n${frame}`);
+      expect(
+        dropOwnLocationHeader(`\n    at ${link}:4:1\n${frame}`, real),
+      ).toBe(`\n${frame}`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -50,7 +56,10 @@ describe("a TranslateError message does not repeat the compiled file's path", ()
     // prefix, so comparing the raw strings misses and the absolute machine
     // path stayed in the message. The comparison is resolve/realpath of
     // both sides (a missing file resolves only).
-    const error = failure('<input [value]="input.name"/>\n', "src/pages/page.mx");
+    const error = failure(
+      '<input [value]="input.name"/>\n',
+      "src/pages/page.mx",
+    );
     expect(error.name).toBe("TranslateError");
     expect(error.message.replace(ANSI, "")).toBe(
       "Invalid attribute name `[value]`; Marko rejects it too — write `value=` with the expression as the value",
