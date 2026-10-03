@@ -528,6 +528,17 @@ export class PreactEmitter implements Emitter<string> {
     isComponent: boolean,
     tag?: string,
   ): MappedCode {
+    if (!isComponent && attr.kind !== "spread") {
+      // Decision 140 (b): native non-event prop errors land on the name.
+      // Event-shaped names stay unmapped even for static/boolean values;
+      // recomposed handlers use their separate type-check projection. A
+      // default attribute has no authored name (zero-width span at `=`).
+      mapName =
+        mapName &&
+        !/^on[A-Z-]/.test(attr.name) &&
+        attr.nameSpan !== null &&
+        attr.nameSpan.sourceEnd > attr.nameSpan.sourceStart;
+    }
     switch (attr.kind) {
       case "spread":
         return concatMapped(` {...${attr.value.code}}`);
@@ -1134,7 +1145,14 @@ export class PreactEmitter implements Emitter<string> {
         raw,
       );
     }
-    const attrs = this.#attrs(node.attrs, false, false, node.name);
+    // IR elements include hyphenated custom elements, whose arbitrary
+    // props are not native contracts. CamelCase SVG tags are native too.
+    const attrs = this.#attrs(
+      node.attrs,
+      !node.name.includes("-"),
+      false,
+      node.name,
+    );
     const rawHtml = raw
       ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`
       : "";

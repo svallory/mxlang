@@ -421,6 +421,14 @@ closing tag is a parse error (decision 13).
 | Modifier | `class:active=on` | **Not Marko syntax** — see below |
 | Method | `onClick() { … }` | Event handler — host-defined, see below |
 
+On Preact, React and Hono, tooling checks named, non-event native-element
+props against the host's own JSX types and reports a mismatch at the authored
+attribute name (decision 140 (b)). This includes renamed `class`/`for` props
+and `key`/`ref`; event handlers use their separate type-check projection.
+Spreads have no authored prop name, default attributes have a zero-width name
+span, and custom elements do not acquire native-prop name diagnostics from
+this rule. Runtime output is unchanged.
+
 ### Duplicate attributes
 
 Within one tag, the **last** occurrence of an attribute name wins, on every
