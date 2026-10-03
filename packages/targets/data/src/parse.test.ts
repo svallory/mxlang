@@ -1,0 +1,1114 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
+import { describe, expect, it } from "vitest";
+import { type ParseDataResult, parseData, parseDataFile } from "./parse.ts";
+import type { DataAttr, DataNode, DataTag } from "./tree.ts";
+
+/**
+ * Every construct row of the design note's §3 table (pass-through, and
+ * reject with its positioned message), the `structural` option, the reserved
+ * names, contracts, duplicates, raw-text trade, and the fail-fast contract.
+ * Line and column are asserted on every diagnostic.
+ */
+
+const D = "${"; // keeps test sources free of TS interpolation
+
+function ok(source: string, options?: Parameters<typeof parseData>[2]) {
+  const result = parseData(source, "/t.mx", options);
+  expect(result.diagnostics).toEqual([]);
+  expect(result.tree).toBeDefined();
+  return result.tree as NonNullable<ParseDataResult["tree"]>;
+}
+
+function failWith(
+  source: string,
+  expected: { message: string; line: number; column: number },
+  options?: Parameters<typeof parseData>[2],
+) {
+  const result = parseData(source, "/t.mx", options);
+  expect(result.tree).toBeUndefined();
+  expect(result.diagnostics).toHaveLength(1);
+  const [diagnostic] = result.diagnostics;
+  expect(diagnostic?.severity).toBe("error");
+  expect(diagnostic?.message).toBe(expected.message);
+  expect(diagnostic?.line).toBe(expected.line);
+  expect(diagnostic?.column).toBe(expected.column);
+  return diagnostic;
+}
+
+function firstTag(tree: { children: DataNode[] }): DataTag {
+  expect(tree.children[0]?.kind).toBe("tag");
+  return tree.children[0] as DataTag;
+}
+
+function slice(
+  source: string,
+  span: { sourceStart: number; sourceEnd: number },
+) {
+  return source.slice(span.sourceStart, span.sourceEnd);
+}
+
+const RESERVED = (name: string) =>
+  `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
+
+const STATIC = (construct: string) =>
+  `the data tree is static; this file's consumer does not evaluate ${construct}`;
+
+describe("pass-through constructs (the §3 table)", () => {
+  it("text arrives with its value and start position", () => {
+    const tree = ok(`<x>hello</x>\n`);
+    expect(firstTag(tree).children).toEqual([
+      { kind: "text", value: "hello", start: { line: 1, column: 3 } },
+    ]);
+  });
+
+  it("`${}` and `$!{}` arrive as expressions with escaped flags and spans", () => {
+    const source = `<x>hi ${D}name} $!{raw}</x>\n`;
+    const tree = ok(source);
+    const children = firstTag(tree).children;
+    expect(children.map((node) => node.kind)).toEqual([
+      "text",
+      "expression",
+      "text",
+      "expression",
+    ]);
+    const escaped = children[1];
+    const raw = children[3];
+    if (escaped?.kind !== "expression" || raw?.kind !== "expression") {
+      throw new Error("expected expression nodes");
+    }
+    expect(escaped.escaped).toBe(true);
+    expect(escaped.value.code).toBe("name");
+    expect(slice(source, escaped.value.span)).toBe("name");
+    expect(raw.escaped).toBe(false);
+    expect(slice(source, raw.value.span)).toBe("raw");
+  });
+
+  it("an if-chain arrives with its branches, `<else>` as a null test", () => {
+    const tree = ok(`<if=a>t</if><else-if=b>u</else-if><else>v</else>\n`);
+    const node = tree.children[0];
+    expect(node?.kind).toBe("if");
+    if (node?.kind !== "if") throw new Error("expected if");
+    expect(node.start).toEqual({ line: 1, column: 0 });
+    expect(
+      node.branches.map((branch) => [branch.test?.code ?? null, branch.start]),
+    ).toEqual([
+      ["a", { line: 1, column: 0 }],
+      ["b", { line: 1, column: 12 }],
+      [null, { line: 1, column: 34 }],
+    ]);
+  });
+
+  it("`<for>` arrives as of, in and range heads, with params and key", () => {
+    const ofTree = ok(`<for|i| of=items>x</for>\n`);
+    const ofNode = ofTree.children[0];
+    if (ofNode?.kind !== "for") throw new Error("expected for");
+    expect(ofNode.head.source.kind).toBe("of");
+    expect(ofNode.head.params).toEqual(["i"]);
+    expect(ofNode.head.key).toBeNull();
+
+    const inTree = ok(`<for|k, v| in=obj>x</for>\n`);
+    const inNode = inTree.children[0];
+    if (inNode?.kind !== "for") throw new Error("expected for");
+    expect(inNode.head.source.kind).toBe("in");
+    expect(inNode.head.params).toEqual(["k", "v"]);
+
+    const rangeTree = ok(`<for|i| from=0 until=10 step=2 by="id">x</for>\n`);
+    const rangeNode = rangeTree.children[0];
+    if (rangeNode?.kind !== "for") throw new Error("expected for");
+    expect(rangeNode.head.source).toMatchObject({
+      kind: "range",
+      inclusive: false,
+    });
+    if (rangeNode.head.source.kind !== "range") throw new Error("range");
+    expect(rangeNode.head.source.from?.code).toBe("0");
+    expect(rangeNode.head.source.bound.code).toBe("10");
+    expect(rangeNode.head.source.step?.code).toBe("2");
+    expect(rangeNode.head.key?.code).toBe('"id"');
+  });
+
+  it("`<const>` arrives with its name and init expression", () => {
+    const source = `<const/n=count + 1/>\n`;
+    const tree = ok(source);
+    const node = tree.children[0];
+    if (node?.kind !== "const") throw new Error("expected const");
+    expect(node.name).toBe("n");
+    expect(node.init.code).toBe("count + 1");
+    expect(slice(source, node.init.span)).toBe("count + 1");
+    expect(node.start).toEqual({ line: 1, column: 0 });
+  });
+
+  it("import, static, export and `export interface Input` arrive as sorted statements", () => {
+    const tree = ok(
+      `import a from "b"\nstatic const s = 1\nexport const e = 2\nexport interface Input { a: string }\n<x/>\n`,
+    );
+    expect(tree.statements.map((stmt) => stmt.kind)).toEqual([
+      "import",
+      "static",
+      "export",
+      "export",
+    ]);
+    expect(tree.statements.map((stmt) => stmt.start.line)).toEqual([
+      1, 2, 3, 4,
+    ]);
+    expect(tree.statements[0]?.code).toBe(`import a from "b"`);
+    expect(tree.statements[0]?.end).toEqual({ line: 1, column: 17 });
+    // One tag in the body, and the statements are out of it.
+    expect(tree.children).toHaveLength(1);
+  });
+
+  it("tag params and tag args arrive", () => {
+    const tag = firstTag(ok(`<x(1, two)|a, b|/>\n`));
+    expect(tag.args.map((arg) => arg.code)).toEqual(["1", "two"]);
+    expect(tag.params).toEqual(["a", "b"]);
+  });
+
+  it("comments arrive, `html` distinguishing `<!-- -->` from `//`", () => {
+    const tree = ok(`// line\n<!-- html -->\n<x/>\n`);
+    expect(tree.children[0]).toEqual({
+      kind: "comment",
+      value: " line",
+      html: false,
+      start: { line: 1, column: 0 },
+    });
+    expect(tree.children[1]).toEqual({
+      kind: "comment",
+      value: " html ",
+      html: true,
+      start: { line: 2, column: 0 },
+    });
+  });
+
+  it("attribute tags arrive in tree form, `<if>` and `<for>` among them kept", () => {
+    const tree = ok(`<x><if=a><@y/></if><else><@z/></else></x>\n`);
+    const tag = firstTag(tree);
+    expect(tag.children).toEqual([]);
+    const ifNode = tag.attrTags[0];
+    if (ifNode?.kind !== "if") throw new Error("expected attr-tag if");
+    expect(ifNode.branches).toHaveLength(2);
+    expect(ifNode.branches[0]?.test?.code).toBe("a");
+    expect(ifNode.branches[0]?.start).toEqual({ line: 1, column: 3 });
+    expect(ifNode.branches[0]?.children[0]).toMatchObject({
+      kind: "attr-tag",
+      name: "y",
+    });
+    expect(ifNode.branches[1]?.test).toBeNull();
+    expect(ifNode.branches[1]?.children[0]).toMatchObject({
+      kind: "attr-tag",
+      name: "z",
+    });
+
+    const forTree = ok(`<x><for|i| of=items><@y n=i/></for></x>\n`);
+    const forNode = firstTag(forTree).attrTags[0];
+    if (forNode?.kind !== "for") throw new Error("expected attr-tag for");
+    expect(forNode.head.source.kind).toBe("of");
+    expect(forNode.head.params).toEqual(["i"]);
+    expect(forNode.children[0]).toMatchObject({
+      kind: "attr-tag",
+      name: "y",
+    });
+  });
+
+  it("an attribute method and the method shorthand arrive as expression attributes", () => {
+    const arrow = firstTag(ok(`<x change=({ post }) => { post.x = 1 }/>\n`));
+    expect(arrow.attrs[0]).toMatchObject({
+      kind: "expression",
+      name: "change",
+    });
+
+    // The method shorthand needs `resolveAttributeMethod` — without the hook
+    // core fails the file as an event handler requiring a runtime (note §3).
+    const source = `<x value({ post }) { return 1 }/>\n`;
+    const tag = firstTag(ok(source));
+    const attr = tag.attrs[0];
+    if (attr?.kind !== "expression") throw new Error("expected expression");
+    expect(attr.name).toBe("value");
+    // `code` is the printed form; `span` slices the authored text.
+    expect(attr.value.code).toBe("function ({ post }) { return 1; }");
+    expect(slice(source, attr.value.span)).toBe("({ post }) { return 1 }");
+  });
+
+  it("attribute shapes: string, boolean, expression, bound and spread", () => {
+    const source = `<x s="v" required n=1 v:=y ...rest/>\n`;
+    const tag = firstTag(ok(source));
+    const kinds = tag.attrs.map((attr: DataAttr) => attr.kind);
+    expect(kinds).toEqual([
+      "string",
+      "boolean",
+      "expression",
+      "expression",
+      "spread",
+    ]);
+    expect(tag.attrs[0]).toMatchObject({ name: "s", value: "v" });
+    expect(tag.attrs[1]).toMatchObject({ name: "required" });
+    expect(tag.attrs[2]).toMatchObject({ name: "n" });
+    expect(tag.attrs[3]).toMatchObject({ name: "v", bound: true });
+    const spread = tag.attrs[4];
+    if (spread?.kind !== "spread") throw new Error("expected spread");
+    expect(spread.value.code).toBe("rest");
+    expect(slice(source, spread.value.span)).toBe("rest");
+  });
+
+  it("a default attribute is named `value` with a zero-width name span at the `=`", () => {
+    const source = `<resource="post"/>\n`;
+    const tag = firstTag(ok(source));
+    const attr = tag.attrs[0];
+    if (attr?.kind !== "string") throw new Error("expected string attr");
+    expect(attr.name).toBe("value");
+    expect(attr.value).toBe("post");
+    // Authored (a default attribute has a name span, zero-width at the `=`);
+    // only the shorthand leaves it absent.
+    const nameSpan = attr.nameSpan;
+    if (!nameSpan) throw new Error("expected a name span");
+    expect(nameSpan.sourceStart).toBe(nameSpan.sourceEnd);
+    expect(slice(source, nameSpan)).toBe("");
+    expect(slice(source, attr.valueSpan)).toBe('"post"');
+  });
+
+  it("an `on*` attribute on a delegated tag stays a plain expression attribute", () => {
+    const tag = firstTag(ok(`<x onClick=fn/>\n`));
+    expect(tag.attrs[0]).toMatchObject({ kind: "expression", name: "onClick" });
+  });
+});
+
+describe("rejected constructs (the §3 table), each positioned", () => {
+  it("`<define>` is rejected as a render-time macro", () => {
+    failWith(`<define/R|a|>${D}a}</define>\n<R>y</R>\n`, {
+      message:
+        "`<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use",
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("`<return>` is rejected as the evaluated mode's channel", () => {
+    failWith(`<return=1/>\n`, {
+      message:
+        "`<return>` needs the evaluated mode: the data tree is static and has no value to return",
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("a tag variable is rejected", () => {
+    failWith(`<x/v/>\n`, {
+      message:
+        "tag variable `/v` on `<x>`: the data tree is static; a binding without evaluation means nothing",
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("a dynamic tag is rejected, in the `<${x}>` and bare `${x}` forms", () => {
+    const message =
+      "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one";
+    failWith(`<${D}d} a=1/>\n`, { message, line: 1, column: 0 });
+    failWith(`${D}d}\n`, { message, line: 1, column: 0 });
+  });
+
+  it("`<!doctype>` is rejected", () => {
+    failWith(`<!doctype html>\n<x/>\n`, {
+      message:
+        "`<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page",
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("a `tags/` template tag called from a data file is rejected", () => {
+    const badge: TemplateBackedTag = {
+      template: {
+        filename: "/t/tags/badge.mx",
+        source: "<div/>",
+      },
+    };
+    failWith(
+      `<badge/>\n`,
+      {
+        message:
+          "`<badge>` calls a template tag; a data file cannot call a template tag",
+        line: 1,
+        column: 0,
+      },
+      { customTags: { badge } },
+    );
+  });
+
+  it("a capitalized import call is rejected at the call, positioned", () => {
+    failWith(`import Badge from "./badge.mx"\n\n<Badge/>\n`, {
+      message:
+        "`<Badge>` calls a template tag; a data file cannot call a template tag",
+      line: 3,
+      column: 0,
+    });
+  });
+});
+
+describe("reserved names", () => {
+  it("`<try>` fails with the reserved-name message", () => {
+    failWith(`<try>x</try>\n`, {
+      message: RESERVED("try"),
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("`<else>` fails with the reserved-name message", () => {
+    failWith(`<else>x</else>\n`, {
+      message: RESERVED("else"),
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("`<else-if>` fails with the reserved-name message", () => {
+    failWith(`<else-if=a>x</else-if>\n`, {
+      message: RESERVED("else-if"),
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("the reserved-name error is positioned at the tag", () => {
+    failWith(`<x/>\n\n<try>x</try>\n`, {
+      message: RESERVED("try"),
+      line: 3,
+      column: 0,
+    });
+  });
+
+  it("an `<else>` inside a real `<if>` chain is fine", () => {
+    const tree = ok(`<if=a>t</if><else>v</else>\n`);
+    expect(tree.children[0]?.kind).toBe("if");
+  });
+});
+
+describe('structural: "reject"', () => {
+  it("a tags-and-attributes file builds the same under either option", () => {
+    const source = `<x a=1><y s="v"/></x>\n`;
+    const passTree = ok(source);
+    const rejectTree = ok(source, { structural: "reject" });
+    expect(rejectTree).toEqual(passTree);
+  });
+
+  it("`<if>` is the fixed positioned error", () => {
+    failWith(
+      `<if=a>t</if>\n`,
+      { message: STATIC("`<if>`"), line: 1, column: 0 },
+      { structural: "reject" },
+    );
+  });
+
+  it("`<for>` is the fixed positioned error", () => {
+    failWith(
+      `<for|i| of=items>t</for>\n`,
+      { message: STATIC("`<for>`"), line: 1, column: 0 },
+      { structural: "reject" },
+    );
+  });
+
+  it("`<const>` is the fixed positioned error", () => {
+    failWith(
+      `<const/x=1/>\n`,
+      { message: STATIC("`<const>`"), line: 1, column: 0 },
+      { structural: "reject" },
+    );
+  });
+
+  it("text is the fixed positioned error", () => {
+    failWith(
+      `<x>hello</x>\n`,
+      { message: STATIC("text"), line: 1, column: 3 },
+      { structural: "reject" },
+    );
+  });
+
+  it("an interpolation is the fixed positioned error", () => {
+    failWith(
+      `<x>${D}y}</x>\n`,
+      { message: STATIC("`${}`"), line: 1, column: 3 },
+      { structural: "reject" },
+    );
+  });
+
+  it("a comment is the fixed positioned error", () => {
+    failWith(
+      `// hi\n<x/>\n`,
+      { message: STATIC("comments"), line: 1, column: 0 },
+      { structural: "reject" },
+    );
+  });
+
+  it.each(["import", "export", "static"])(
+    "an `%s` statement is the fixed positioned error",
+    (kind) => {
+      const statement =
+        kind === "import"
+          ? `import a from "b"`
+          : kind === "export"
+            ? "export const e = 2"
+            : "static const s = 1";
+      failWith(
+        `${statement}\n<x/>\n`,
+        { message: STATIC(`\`${kind}\``), line: 1, column: 0 },
+        { structural: "reject" },
+      );
+    },
+  );
+
+  it("a structural construct nested in a tag is found, positioned", () => {
+    failWith(
+      `<x><if=a>t</if></x>\n`,
+      { message: STATIC("`<if>`"), line: 1, column: 3 },
+      { structural: "reject" },
+    );
+  });
+
+  it("a structural construct among attribute tags is found, positioned", () => {
+    failWith(
+      `<x><if=a><@y/></if></x>\n`,
+      { message: STATIC("`<if>`"), line: 1, column: 3 },
+      { structural: "reject" },
+    );
+  });
+
+  it("the earliest construct in document order is reported", () => {
+    failWith(
+      `<if=c>t</if>\nimport a from "b"\n`,
+      { message: STATIC("`<if>`"), line: 1, column: 0 },
+      { structural: "reject" },
+    );
+    failWith(
+      `import a from "b"\n<if=c>t</if>\n`,
+      { message: STATIC("`import`"), line: 1, column: 0 },
+      { structural: "reject" },
+    );
+  });
+
+  it("the same constructs pass by default", () => {
+    const tree = ok(
+      `// c\n<if=a>t${D}x}</if><else>u</else>\n<for|i| of=items>v</for>\n<const/n=1/>\n`,
+    );
+    expect(tree.children.map((node) => node.kind)).toEqual([
+      "comment",
+      "if",
+      "for",
+      "const",
+    ]);
+  });
+});
+
+describe("contract-only custom tags (decision 130)", () => {
+  const contract: Record<string, CustomTag> = {
+    attribute: {
+      attributes: {
+        value: { type: "string", required: true },
+        type: { type: "string", required: true },
+      },
+    },
+  };
+
+  it("a correct call builds, with the attributes carried", () => {
+    const tree = ok(`<attribute="title" type="string"/>\n`, {
+      customTags: contract,
+    });
+    const tag = firstTag(tree);
+    expect(tag.name).toBe("attribute");
+    expect(tag.attrs.map((attr) => (attr as { name: string }).name)).toEqual([
+      "value",
+      "type",
+    ]);
+  });
+
+  it("a missing required attribute is the contract's positioned error", () => {
+    failWith(
+      `<attribute="title"/>\n`,
+      {
+        message: "`<attribute>`: missing required attribute `type`",
+        line: 1,
+        column: 0,
+      },
+      { customTags: contract },
+    );
+  });
+
+  it("an unknown attribute is the contract's positioned error", () => {
+    failWith(
+      `<attribute="title" type="string" bogus=1/>\n`,
+      {
+        message: "`<attribute>`: unknown attribute `bogus`",
+        line: 1,
+        column: 33,
+      },
+      { customTags: contract },
+    );
+  });
+});
+
+describe("duplicate attributes", () => {
+  // Decision 135 (last-wins in core) merged, so this is the flip the test
+  // has been carrying since round 1: core drops the earlier occurrence and
+  // warns on **it**, naming the survivor. Before 135 both attributes reached
+  // the tree; after it exactly one does.
+  it("warns on the dropped occurrence and keeps only the survivor", () => {
+    const result = parseData(`<x b=1 b=2/>\n`, "/t.mx");
+    expect(result.tree).toBeDefined();
+    const tag = firstTag(result.tree as NonNullable<typeof result.tree>);
+    expect(tag.attrs).toHaveLength(1);
+    if (tag.attrs[0]?.kind !== "expression") {
+      throw new Error("expected an expression attribute");
+    }
+    expect(tag.attrs[0].value.code).toBe("2");
+    expect(result.diagnostics).toEqual([
+      {
+        severity: "warning",
+        message:
+          "duplicate attribute `b`: the later one at 1:8 wins, so this one is dropped",
+        line: 1,
+        column: 3,
+        offset: 3,
+        file: "/t.mx",
+      },
+    ]);
+  });
+});
+
+describe("the raw-text trade (the addendum's item 3)", () => {
+  it("a `<style>` body with tag-like content parses as tags, not text", () => {
+    const tree = ok(`<style>.a <b>bold</b></style>\n`);
+    const style = firstTag(tree);
+    expect(style.name).toBe("style");
+    expect(style.children[0]).toMatchObject({ kind: "text", value: ".a " });
+    expect(style.children[1]).toMatchObject({ kind: "tag", name: "b" });
+  });
+
+  it("a `<` that starts no tag stays text, in `style`, `script` and `title`", () => {
+    for (const name of ["style", "script", "title"]) {
+      const tree = ok(`<${name}>a < b {}</${name}>\n`);
+      expect(firstTag(tree).children).toEqual([
+        {
+          kind: "text",
+          value: "a < b {}",
+          start: { line: 1, column: name.length + 2 },
+        },
+      ]);
+    }
+  });
+});
+
+describe("UTF-16 spans (note §2.1's verified fixture)", () => {
+  it("spans count UTF-16 code units across an emoji in an attribute and in text", () => {
+    const source = `<a t="é😀" b=\`ñ\`/>\n<b c="x">😀 ok ${D}y}</b>\n`;
+    const tree = ok(source);
+    const [a, b] = tree.children as [DataTag, DataTag];
+
+    expect(slice(source, a.span)).toBe(`<a t="é😀" b=\`ñ\`/>`);
+    const t = a.attrs[0];
+    if (t?.kind !== "string" || !t.nameSpan) {
+      throw new Error("expected string attr with a name span");
+    }
+    expect(slice(source, t.nameSpan)).toBe("t");
+    expect(slice(source, t.valueSpan)).toBe(`"é😀"`);
+
+    // The text's start column counts the emoji as two UTF-16 code units:
+    // `<b c="x">` is 9 units plus the tag is on line 2.
+    const text = b.children[0];
+    expect(text).toMatchObject({ kind: "text", value: "😀 ok " });
+    if (text?.kind !== "text") throw new Error("expected text");
+    expect(text.start).toEqual({ line: 2, column: 9 });
+
+    const expr = b.children[1];
+    if (expr?.kind !== "expression") throw new Error("expected expression");
+    expect(slice(source, expr.value.span)).toBe("y");
+  });
+});
+
+describe("round 2 (rev-236)", () => {
+  describe("finding 1: the path prefix on a relative filename", () => {
+    const MESSAGE =
+      "`<return>` needs the evaluated mode: the data tree is static and has no value to return";
+
+    // Babel resolves the filename itself before prefixing the error, so the
+    // prefix is the absolute path whatever the caller passed.
+    it.each(["t.mx", "./t.mx", "../data/t.mx", "/abs/t.mx"])(
+      "`parseData` with the filename `%s` keeps the path out of the message",
+      (filename) => {
+        const result = parseData(`<return=1/>\n`, filename);
+        expect(result.tree).toBeUndefined();
+        expect(result.diagnostics).toEqual([
+          {
+            severity: "error",
+            message: MESSAGE,
+            line: 1,
+            column: 0,
+            offset: 0,
+          },
+        ]);
+        for (const diagnostic of result.diagnostics) {
+          expect(diagnostic.message).not.toMatch(/^(?:[/.]|\w:)/);
+        }
+      },
+    );
+
+    it("`parseDataFile` on a relative path leaks nothing either", () => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-data-r2-"));
+      const file = join(dir, "t.mx");
+      writeFileSync(file, `<return=1/>\n`);
+      const relativePath = relative(process.cwd(), file);
+      expect(relativePath.startsWith("/")).toBe(false);
+      const result = parseDataFile(relativePath);
+      expect(result.tree).toBeUndefined();
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]?.message).toBe(MESSAGE);
+    });
+
+    it("a Marko syntax error is unaffected", () => {
+      const result = parseData(`<x\n`, "t.mx");
+      expect(result.diagnostics).toEqual([
+        {
+          severity: "error",
+          message: "EOF reached while parsing open tag",
+          line: 1,
+          column: 0,
+          offset: 0,
+        },
+      ]);
+    });
+  });
+
+  describe("finding 2: shorthand `#id` / `.class` attributes", () => {
+    it("carry no name span, and never a null one", () => {
+      const source = `<a#myid.cls1.cls2 x=1/>\n`;
+      const tag = firstTag(ok(source));
+      // Core hands the synthesized attributes over after the authored ones,
+      // `class` before `id`; the authored order among themselves is kept.
+      expect(
+        tag.attrs.map((attr) => [attr.kind, "name" in attr ? attr.name : null]),
+      ).toEqual([
+        ["expression", "x"],
+        ["string", "class"],
+        ["string", "id"],
+      ]);
+      const [, cls, id] = tag.attrs;
+      if (cls?.kind !== "string" || id?.kind !== "string") {
+        throw new Error("expected shorthand attributes");
+      }
+      expect("nameSpan" in cls).toBe(false);
+      expect("nameSpan" in id).toBe(false);
+      // Core measures a shorthand's value span from *after* the sigil, so
+      // the slice is the class/id text itself — the `#`/`.` is not in it.
+      // Part of the same core-side TODO (`core-shorthand-attr-spans`).
+      expect(slice(source, cls.valueSpan)).toBe("cls1.cls2");
+      expect(slice(source, id.valueSpan)).toBe("myid");
+      expect(cls.value).toBe("cls1 cls2");
+      expect(id.value).toBe("myid");
+    });
+
+    it("`<div.foo/>` carries the one shorthand class with no name span", () => {
+      const source = `<div.foo/>\n`;
+      const attr = firstTag(ok(source)).attrs[0];
+      if (!attr) throw new Error("expected an attribute");
+      expect(attr).toMatchObject({
+        kind: "string",
+        name: "class",
+        value: "foo",
+      });
+      expect("nameSpan" in attr).toBe(false);
+      if (attr.kind !== "string") throw new Error("expected a string attr");
+      expect(slice(source, attr.valueSpan)).toBe("foo");
+    });
+
+    it("an authored attribute still carries its name span", () => {
+      const source = `<div#i.cls x=1/>\n`;
+      const attr = firstTag(ok(source)).attrs[0];
+      if (attr?.kind !== "expression") throw new Error("expected expression");
+      expect(slice(source, attr.nameSpan)).toBe("x");
+    });
+
+    it("no attribute anywhere in the tree carries a null offset", () => {
+      const source = `<a#myid.cls1 x=1 b ...rest/>\n<d.foo/>\n`;
+      const tree = ok(source);
+      expect(nonNumericSpanOffsets(tree)).toEqual([]);
+    });
+  });
+
+  describe("finding 3: nothing vanishes silently", () => {
+    // Decision 139 moved this to core, where it belongs: a CDATA section and
+    // an XML declaration are rejected by lowering, at the `<` of the
+    // construct, on every target. The messages below are **core's**, spelled
+    // out as literals rather than imported, so this test pins that the data
+    // target reports core's rule unchanged rather than substituting its own.
+    // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the message quotes core's MX placeholder syntax, not a JS template
+    const CORE_CDATA =
+      '`<![CDATA[…]]>` is not supported: write the text inline, as `${"…"}` when it must stay raw, or in an attribute value';
+    // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the message quotes core's MX placeholder syntax, not a JS template
+    const CORE_DECLARATION =
+      "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
+
+    it("a CDATA section is rejected by core, positioned, in either mode", () => {
+      const source = `<a>pre<![CDATA[ x ]]>post</a>\n`;
+      // 1:6 — the `<` of `<![CDATA[`, core's position for the node.
+      failWith(source, { message: CORE_CDATA, line: 1, column: 6 });
+      failWith(
+        source,
+        { message: CORE_CDATA, line: 1, column: 6 },
+        {
+          structural: "reject",
+        },
+      );
+    });
+
+    it("core rejects it on its own line, with the offset derived", () => {
+      const result = parseData(`<a>pre</a>\n<![CDATA[ x ]]>\n`, "/t.mx");
+      expect(result.tree).toBeUndefined();
+      expect(result.diagnostics).toEqual([
+        {
+          severity: "error",
+          message: CORE_CDATA,
+          line: 2,
+          column: 0,
+          offset: 11,
+        },
+      ]);
+    });
+
+    it("`<?xml …?>` is rejected by core, positioned, in either mode", () => {
+      for (const [source, column] of [
+        [`<?xml version="1.0"?>\n<a/>\n`, 0],
+        [`<a><?target data?></a>\n`, 3],
+      ] as const) {
+        failWith(source, { message: CORE_DECLARATION, line: 1, column });
+        failWith(
+          source,
+          { message: CORE_DECLARATION, line: 1, column },
+          { structural: "reject" },
+        );
+      }
+    });
+
+    it("no data-specific code decides this: core rejects it whatever the tree would be", () => {
+      // The same rejection reaches the consumer as any other core error —
+      // one positioned diagnostic and no partial tree, in both modes, with no
+      // branch in this package that knows the construct exists.
+      for (const structural of ["pass", "reject"] as const) {
+        const result = parseData(`<a><![CDATA[ x ]]></a>\n`, "/t.mx", {
+          structural,
+        });
+        expect(result.diagnostics).toEqual([
+          {
+            severity: "error",
+            message: CORE_CDATA,
+            line: 1,
+            column: 3,
+            offset: 3,
+          },
+        ]);
+      }
+    });
+
+    it("a construct inside a string, a comment or an interpolation is still text", () => {
+      // Marko's parser decides text vs node, and core's new rule only fires on
+      // the node — so none of these is a CDATA construct. This is now a
+      // property of the language rather than of a scanner in this package.
+      ok(`<x a="<?" b='<![CDATA[y]]>'/>\n`);
+      ok(`<x a="<?"/>\n`);
+      ok(`// <?xml\n<x/>\n`);
+      ok(`<!-- <![CDATA[y]] -->\n<x/>\n`);
+      ok(`<x>${D}a < b ? "<?" : "<![CDATA[y]]>"}</x>\n`);
+      ok(`<script>var a = 1 < 2;</script>\n`);
+    });
+  });
+
+  describe("finding 5: a tag name that is not usable", () => {
+    // The rule was narrowed in round 4 (rev-236-r2 finding 2): it rejects the
+    // `$…`/`!…`/placeholder shapes it was written for and accepts everything
+    // else, namespaced and non-ASCII names included. Round 4's block covers
+    // the accepted names; this keeps the rejected ones.
+    it("a bare concise raw-placeholder line is the dynamic-tag reject", () => {
+      const message = `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`;
+      failWith(`$!{x}\n`, { message, line: 1, column: 0 });
+      failWith(`$!{x} a=1\n`, { message, line: 1, column: 0 });
+    });
+
+    it("any other unusable tag name is rejected", () => {
+      const unusable = (name: string) =>
+        `\`${name}\` is not a tag name a data file can use: it must not start with \`$\` or \`!\`, or contain \`{\`, \`}\` or whitespace — those are a \`$…\` scriptlet or a \`\${…}\` placeholder, which a data file does not have`;
+      failWith(`$const x = 1\n`, {
+        message: unusable("$const"),
+        line: 1,
+        column: 0,
+      });
+      failWith(`$ref\n`, { message: unusable("$ref"), line: 1, column: 0 });
+      failWith(`<a><$x/></a>\n`, {
+        message: unusable("$x"),
+        line: 1,
+        column: 3,
+      });
+    });
+
+    it("ordinary tag names still pass", () => {
+      expect(
+        ok(`hello\na-b\na_b\n_x\n`).children.map((node) =>
+          "name" in node ? node.name : null,
+        ),
+      ).toEqual(["hello", "a-b", "a_b", "_x"]);
+    });
+  });
+});
+
+/** Every `sourceStart`/`sourceEnd` in the tree whose value is not a number. */
+function nonNumericSpanOffsets(value: unknown): string[] {
+  const out: string[] = [];
+  const walk = (node: unknown, path: string): void => {
+    if (Array.isArray(node)) {
+      for (const [index, item] of node.entries())
+        walk(item, `${path}[${index}]`);
+      return;
+    }
+    if (!node || typeof node !== "object") return;
+    for (const [key, item] of Object.entries(node)) {
+      // A Babel node carries its own offsets; only the tree's spans count.
+      if (key === "node") continue;
+      if (
+        (key === "sourceStart" || key === "sourceEnd") &&
+        typeof item !== "number"
+      ) {
+        out.push(`${path}.${key} = ${JSON.stringify(item)}`);
+      }
+      walk(item, `${path}.${key}`);
+    }
+  };
+  walk(value, "tree");
+  return out;
+}
+
+// biome-ignore-start lint/suspicious/noTemplateCurlyInString: the reject messages quote core's MX placeholder syntax, not JS templates
+describe("round 4 (rev-236-r2)", () => {
+  describe("finding 1: `parseData` must never throw on valid input", () => {
+    // A shorthand class next to an authored `class` is valid Marko. Core
+    // merges the two into one synthesized expression that has no span, and
+    // the tree builder used to raise its "core IR invariant broken" error —
+    // an exception with no position and no tree, where every other bad input
+    // gets one positioned diagnostic.
+    const MERGED =
+      "a shorthand class (`.a`) together with a `class` attribute is not supported in a data file: write every class in the `class` attribute";
+
+    it.each([
+      ["html syntax", `<x.a class="b"/>\n`, 1, 0],
+      ["concise syntax", `x.a class="b"\n`, 1, 0],
+      ["an expression value", `<x.a class=y/>\n`, 1, 0],
+      ["an array value", `<x.a class=["b"]/>\n`, 1, 0],
+      ["two shorthand classes", `<x.a.b class="c"/>\n`, 1, 0],
+    ])(
+      "rejects %s as one positioned diagnostic",
+      (_case, source, line, column) => {
+        failWith(source, { message: MERGED, line, column });
+      },
+    );
+
+    it("rejects it on an attribute tag too, at the attribute tag", () => {
+      failWith(`<a><@t.c class="d"/></a>\n`, {
+        message: MERGED,
+        line: 1,
+        column: 3,
+      });
+    });
+
+    it("a shorthand class alone is still fine", () => {
+      const tag = firstTag(ok(`<x.a.b/>\n`));
+      expect(tag.attrs).toEqual([
+        expect.objectContaining({
+          kind: "string",
+          name: "class",
+          value: "a b",
+        }),
+      ]);
+    });
+
+    it("an authored `class` alone is still fine", () => {
+      const tag = firstTag(ok(`<x class="b"/>\n`));
+      expect(tag.attrs).toEqual([
+        expect.objectContaining({ kind: "string", name: "class", value: "b" }),
+      ]);
+    });
+
+    it("never throws over a list of odd inputs", () => {
+      // The real contract: `parseData` returns a result for everything, and
+      // an internal error escaping is the failure mode. Each source here is
+      // either fine or a positioned diagnostic; none may throw.
+      const inputs = [
+        `<x.a class="b"/>\n`,
+        `x.a class="b"\n`,
+        `<x.a class=y/>\n`,
+        `<x.a class=["b"]/>\n`,
+        `<a><@t.c class="d"/></a>\n`,
+        `<a#myid.cls1.cls2 x=1/>\n`,
+        `<div.foo/>\n`,
+        `<x/v/>\n`,
+        `${D}d}\n`,
+        `$!{x}\n`,
+        `$const x = 1\n`,
+        `<define/R|a|>${D}a}</define>\n`,
+        `<return=1/>\n`,
+        `<try>x</try>\n`,
+        `<!doctype html>\n`,
+        `<a><![CDATA[ x ]]></a>\n`,
+        `<?xml version="1.0"?>\n`,
+        `<x\n`,
+        `<svg:rect/>\n`,
+        `<é/>\n`,
+        `",
+      <pre>  </pre>
+      <a>\t\tx</a>
+      `,
+        ``,
+        `\n\n\n`,
+      ];
+      for (const source of inputs) {
+        for (const structural of ["pass", "reject"] as const) {
+          let decided: ParseDataResult;
+          try {
+            decided = parseData(source, "/t.mx", { structural });
+          } catch (error) {
+            throw new Error(
+              `parseData threw on ${JSON.stringify(source)} under structural: "${structural}": ${(error as Error).message}`,
+            );
+          }
+          // Whatever it decided, it decided it in the documented shape: an
+          // error means no tree, and no error means one.
+          if (decided.diagnostics.some((d) => d.severity === "error")) {
+            expect(decided.tree).toBeUndefined();
+          } else {
+            expect(decided.tree).toBeDefined();
+          }
+        }
+      }
+    });
+  });
+
+  describe("finding 2: the tag-name rule is narrow", () => {
+    // It was written to catch a concise `$!{x}` line and a `$const x = 1`
+    // scriptlet, both of which Marko parses as a tag *name*. It must not
+    // refuse XML-style namespaced names (`svg:rect`, `soap:Envelope`) or a
+    // non-ASCII name (a data file in Portuguese or Japanese).
+    it.each([
+      ["a namespaced name", `<svg:rect/>\n`],
+      ["an xml: prefix", `<xml:lang/>\n`],
+      ["a namespaced dashed name", `<ns:tag-x/>\n`],
+      ["a non-ASCII name", `<é/>\n`],
+      ["a CJK name", `<日本/>\n`],
+      ["a namespaced name, concise", `svg:rect\n`],
+      ["a non-ASCII name, concise", `é\n`],
+      ["a close tag form", `<a:b></a:b>\n`],
+      ["a dollar inside a name", `<a$b/>\n`],
+      ["an underscore name", `<_x/>\n`],
+      ["a leading digit", `<1x/>\n`],
+    ])("accepts %s", (_case, source) => {
+      const tree = ok(source);
+      expect(tree.children[0]).toMatchObject({ kind: "tag" });
+    });
+
+    it("accepts the same names as attribute tags, so both agree", () => {
+      const tag = firstTag(ok(`<a><@svg:rect/><@é/><@ns:tag-x/></a>\n`));
+      expect(
+        tag.attrTags.map((node) =>
+          node.kind === "attr-tag" ? node.name : node.kind,
+        ),
+      ).toEqual(["svg:rect", "é", "ns:tag-x"]);
+    });
+
+    it("still rejects a bare `$!{x}` line as a dynamic tag", () => {
+      failWith(`$!{x}\n`, {
+        message:
+          "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+        line: 1,
+        column: 0,
+      });
+    });
+
+    it("still rejects a `$…` scriptlet line and a `!…` line", () => {
+      for (const [source, name] of [
+        [`$const x = 1\n`, "$const"],
+        [`$a\n`, "$a"],
+        [`!x\n`, "!x"],
+      ] as const) {
+        failWith(source, {
+          message: `\`${name}\` is not a tag name a data file can use: it must not start with \`$\` or \`!\`, or contain \`{\`, \`}\` or whitespace — those are a \`$…\` scriptlet or a \`\${…}\` placeholder, which a data file does not have`,
+          line: 1,
+          column: 0,
+        });
+      }
+    });
+
+    it("still rejects a name holding a placeholder", () => {
+      // A name with *whitespace* in it is unreachable — Marko reads `a b` as
+      // the tag `a` with an attribute `b` — so the whitespace arm of the rule
+      // is defensive. The placeholder arm is the reachable one.
+      const result = parseData(`$!{x} y\n`, "/t.mx");
+      expect(result.tree).toBeUndefined();
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]?.message).toBe(
+        "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+      );
+    });
+
+    it("applies the same rule to an attribute tag", () => {
+      // `<@$const/>` is rejected exactly as `<$const/>` is, at 1:3 — the
+      // attribute tag's own position, which is what the check reports.
+      failWith(`<a><@$const/></a>\n`, {
+        message:
+          "`$const` is not a tag name a data file can use: it must not start with `$` or `!`, or contain `{`, `}` or whitespace — those are a `$…` scriptlet or a `${…}` placeholder, which a data file does not have",
+        line: 1,
+        column: 3,
+      });
+    });
+
+    it("applies the dynamic-tag rule to an attribute tag too", () => {
+      failWith(`<a><@$!{x}/></a>\n`, {
+        message:
+          "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+        line: 1,
+        column: 3,
+      });
+    });
+  });
+});
+// biome-ignore-end lint/suspicious/noTemplateCurlyInString: the reject messages quote core's MX placeholder syntax, not JS templates
+
+describe("fail-fast parse (the addendum's item 8)", () => {
+  it("a syntax error returns `tree: undefined` and one positioned error", () => {
+    const result = parseData(`<x\n`, "/t.mx");
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      {
+        severity: "error",
+        message: "EOF reached while parsing open tag",
+        line: 1,
+        column: 0,
+        offset: 0,
+      },
+    ]);
+  });
+
+  it("the error is positioned on its own line, with the offset derived", () => {
+    const result = parseData(`import a from "b"\n<x a=/>\n`, "/t.mx");
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      {
+        severity: "error",
+        message: "Missing value for attribute",
+        line: 2,
+        column: 5,
+        offset: 23,
+      },
+    ]);
+  });
+
+  it("no partial tree accompanies a rejected construct", () => {
+    const result = parseData(`<good/>\n<return=1/>\n`, "/t.mx");
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+  });
+});

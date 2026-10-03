@@ -418,6 +418,17 @@
         "@mxlang/solid": "workspace:*",
       },
     },
+    "packages/targets/data": {
+      "name": "@mxlang/data",
+      "version": "0.0.0",
+      "dependencies": {
+        "@marko/compiler": "5.42.5",
+        "@mxlang/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@babel/types": "7.29.8",
+      },
+    },
     "packages/tooling/angular-checker": {
       "name": "@mxlang/angular-checker",
       "version": "0.1.0",
@@ -1016,6 +1027,8 @@
     "@mxlang/babel-plugin": ["@mxlang/babel-plugin@workspace:packages/tooling/babel-plugin"],
 
     "@mxlang/core": ["@mxlang/core@workspace:packages/core"],
+
+    "@mxlang/data": ["@mxlang/data@workspace:packages/targets/data"],
 
     "@mxlang/docs": ["@mxlang/docs@workspace:apps/docs"],
 

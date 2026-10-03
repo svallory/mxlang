@@ -9,6 +9,7 @@ export default defineConfig({
       "packages/parser",
       "packages/target-registry",
       "packages/hosts/*",
+      "packages/targets/*",
       "packages/tooling/*",
       "packages/editors/*",
     ],

@@ -7,6 +7,7 @@ projects:
   - "packages/oracle"
   - "packages/parser"
   - "packages/hosts/*"
+  - "packages/targets/*"
   - "packages/tooling/*"
   - "packages/editors/*"
   - "apps/*"

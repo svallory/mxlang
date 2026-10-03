@@ -119,12 +119,13 @@ decision entry that changes the language names the spec section it updates.
 
 ## Per-package instructions
 
-Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink):
+Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `targets/` holds hostless targets (decision 132), starting with `@mxlang/data`:
 
 | Path | Covers |
 |---|---|
 | `packages/parser/AGENTS.md` | `@mxlang/parser`; `.mx`/`.solid.mx`/`.astro.mx` extension identity; the four Marko facts |
 | `packages/core/AGENTS.md` | `@mxlang/core`: IR, lowering, custom tags, `<try>`, tag discovery |
+| `packages/targets/data/AGENTS.md` | `@mxlang/data`: the hostless data target; static tree, `parseData` |
 | `packages/hosts/html/AGENTS.md` | `@mxlang/html`: string target, policy table, Bun loader, `.mx` import typing |
 | `packages/hosts/solid/AGENTS.md` | `@mxlang/solid` |
 | `packages/hosts/preact/AGENTS.md` | `@mxlang/preact` |
