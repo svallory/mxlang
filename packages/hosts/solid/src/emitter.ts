@@ -942,21 +942,23 @@ function blockExpression(nodes: IrNode[]): MappedCode {
 }
 
 /**
- * An arrow function's body is a **block** the moment its first token is `{`,
- * so a body this emitter renders as a bare expression has to be wrapped for
- * the arrow to RETURN it. The inlined dispatch of a dynamic target
- * (`{(() => …)()}`) is exactly such a body, and it occurs whenever it is the
- * SOLE child of anything that becomes an arrow body — a `<for>` row, a
- * render-prop body, a `<try>` fallback, an attribute tag's renderable. Left
- * unwrapped the callback returns `undefined` and the row renders nothing,
- * silently: the output still compiles.
+ * Makes a rendered body safe to splice where a JSX *value* is required: an
+ * arrow body (`=> BODY`), a `fallback={BODY}` attribute value, or a call
+ * argument. A body this emitter renders as `{…}` (the inlined dispatch of a
+ * dynamic target, `{(() => …)()}`, or a `<define>` call, `{$mx_DefineR1(…)}`)
+ * is a JSX expression container, not a value: after `=>` the `{` opens a
+ * BLOCK body, so the callback returns `undefined` and the row renders nothing,
+ * and inside `fallback={…}` or an argument list it is an object literal, a
+ * syntax error. It happens whenever such a node is the SOLE child of a `<for>`
+ * row, a render-prop body, a `<try>` placeholder/catch, an attribute tag's
+ * renderable or a `<define>` call's body.
  *
  * The wrapper is the `<>…</>` fragment this emitter already uses for a
  * multi-child body (`blockExpression` above), and it is a no-op whenever the
  * body already starts as JSX (`<Tag>…`, `<>…`, `<Dynamic …`), so every
  * wrapped-element shape is byte-identical to what it was.
  */
-function arrowBody(body: MappedCode): MappedCode {
+function jsxValue(body: MappedCode): MappedCode {
   return body.code.trimStart().startsWith("<")
     ? body
     : concatMapped("<>", body, "</>");
@@ -1005,10 +1007,10 @@ function attributeTagAttrValue(
 function attributeTagRenderable(tag: AttributeTag): MappedCode {
   if (!tag.hasBody) return concatMapped("undefined");
   const body = blockExpression(tag.block.children);
-  if (!tag.block.hasParams) return concatMapped("() => ", arrowBody(body));
+  if (!tag.block.hasParams) return concatMapped("() => ", jsxValue(body));
   return concatMapped(
     `(${tag.block.params.join(", ")}) => () => `,
-    arrowBody(body),
+    jsxValue(body),
   );
 }
 
@@ -1559,7 +1561,7 @@ export class SolidEmitter implements Emitter<string> {
     const children = node.content.hasParams
       ? concatMapped(
           `{(${node.content.params.join(", ")}) => `,
-          arrowBody(body),
+          jsxValue(body),
           "}",
         )
       : inLazyScope(() => renderWithNewEmitter(contentNodes));
@@ -1632,9 +1634,9 @@ export class SolidEmitter implements Emitter<string> {
         node.content.hasParams
           ? concatMapped(
               `(${node.content.params.join(", ")}) => `,
-              arrowBody(body),
+              jsxValue(body),
             )
-          : body,
+          : jsxValue(body),
       );
     }
 
@@ -1809,7 +1811,7 @@ export class SolidEmitter implements Emitter<string> {
     const children = node.content.hasParams
       ? concatMapped(
           `{(${node.content.params.join(", ")}) => `,
-          arrowBody(body),
+          jsxValue(body),
           "}",
         )
       : inLazyScope(() => renderWithNewEmitter(contentNodes));
@@ -1916,7 +1918,7 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(
         concatMapped(
           `<For each={${node.source.list.code}}${keyed}>{(${params.join(", ")}) => `,
-          arrowBody(inLazyScope(() => blockExpression(node.children))),
+          jsxValue(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),
       );
@@ -1944,13 +1946,13 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(
         concatMapped(
           `<For each={Object.entries(${node.source.object.code} ?? {})} keyed={e => e[0]}>{(${entry}) => `,
-          arrowBody(inLazyScope(() => blockExpression(node.children))),
+          jsxValue(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),
       );
       return;
     }
-    const body = inLazyScope(() => arrowBody(blockExpression(node.children)));
+    const body = inLazyScope(() => jsxValue(blockExpression(node.children)));
 
     const from = node.source.from?.code ?? "0";
     const bound = node.source.bound.code;
@@ -2025,7 +2027,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const bodyCode = inLazyScope(() =>
-      arrowBody(blockExpression(node.children)),
+      jsxValue(blockExpression(node.children)),
     ).code;
     const bound = new Set(node.params);
     // A call to a sibling define reaches this text as the *gensym'd*
@@ -2097,7 +2099,7 @@ export class SolidEmitter implements Emitter<string> {
     const fallback = placeholder
       ? concatMapped(
           " fallback={",
-          blockExpression(placeholder.block.children),
+          jsxValue(blockExpression(placeholder.block.children)),
           "}",
         )
       : concatMapped();
@@ -2113,7 +2115,7 @@ export class SolidEmitter implements Emitter<string> {
       return;
     }
     const params = catchTag.block.params.join(", ");
-    const caught = arrowBody(blockExpression(catchTag.block.children));
+    const caught = jsxValue(blockExpression(catchTag.block.children));
     this.#out.push(
       concatMapped(
         `<Errored fallback={(${params}) => `,

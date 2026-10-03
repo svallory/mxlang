@@ -5,7 +5,7 @@ import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
-import { compileSolidUnit } from "./index.ts";
+import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
 /**
  * An arrow function body is a **block** the moment it starts with `{`, so a
@@ -294,5 +294,36 @@ describe("Solid: the emitted arrow body is never a bare block", () => {
 
   it("wraps a `<try>` fallback body in a fragment rather than a block", () => {
     expect(shape("TryFallbackSoleComponent")).toContain("fallback={(e) => <>");
+  });
+});
+
+/** Throws on a syntax error; the emitted module need not RUN to be checked. */
+const parses = (code: string) => transform(code, "parses.tsx");
+
+describe("Solid: a `{`-led body is a JSX value in every splice position", () => {
+  it("emits a `<try>` `<@placeholder>` sole dynamic tag as a fragment, not `fallback={{`", () => {
+    const code = compileSolidUnit(
+      `${PREAMBLE}export interface Input {}
+<try><@placeholder><\${Badge} label="p"/></@placeholder><Badge label="x"/></try>
+`,
+      { filename: "Placeholder.mx" },
+    ).code;
+    expect(code).not.toContain("fallback={{");
+    expect(code).toContain("fallback={<>");
+    expect(() => parses(code)).not.toThrow();
+  });
+
+  it("emits a sole `<define>` call in a `<define>` call's body as a fragment argument", () => {
+    const result = compileSolidMx(
+      `<define/A|n|>\${n}</define><define/R|content|>\${content}</define><R><A(1)/></R>`,
+      { filename: "fixture.solid.mx" },
+    );
+    const region = result.code;
+    expect(region).not.toMatch(/\(\{\$mx_Define/);
+    const module = [
+      ...result.hoistedDefines.map((d) => d.code),
+      `export const view = <div>${region}</div>;`,
+    ].join("\n");
+    expect(() => parses(module)).not.toThrow();
   });
 });

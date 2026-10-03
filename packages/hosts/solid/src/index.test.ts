@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { transformSync } from "@babel/core";
+import typescriptPreset from "@babel/preset-typescript";
 import { type CustomTag, readCalleeInput } from "@mxlang/core";
 import { parse as parseMxFile } from "@mxlang/parser";
 import { describe, expect, it } from "vitest";
@@ -759,6 +761,19 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     expect(result.code).toContain(`{${hoisted?.binding}(input.name`);
     expect(result.code).toContain("H");
     expect(result.code).toContain("body");
+    // Parse the region the way it is used (inside an element), so a
+    // syntactically invalid call argument cannot slip through a substring check.
+    expect(() =>
+      transformSync(
+        `${result.hoistedDefines.map((d) => d.code).join("\n")}\nexport const v = <div>${result.code}</div>;`,
+        {
+          filename: "region.tsx",
+          presets: [[typescriptPreset, {}]],
+          babelrc: false,
+          configFile: false,
+        },
+      ),
+    ).not.toThrow();
   });
 
   it("gensyms a fresh binding per <define>, never the author's own name", () => {
