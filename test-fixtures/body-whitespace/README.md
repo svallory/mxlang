@@ -1,5 +1,9 @@
 # Body whitespace parity — decision 141
 
+This shared matrix lives outside root `fixtures/`: that directory is reserved
+for Solid oracle pairs, and the parser's vendored-equivalence suite requires
+`input.solid.mx` / `twin.tsx` in each child directory.
+
 `cases.json` records the exact body HTML rendered by **Marko 6.3.51**, through
 `<wrap>BODY</wrap>` and a discovered `tags/wrap.marko` containing
 `<section><${input.content}/></section>`. The enclosing `<section>` is added

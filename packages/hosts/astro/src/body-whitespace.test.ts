@@ -15,7 +15,7 @@ import { getCustomTags } from "@mxlang/core";
 import { compile, htmlTargets } from "@mxlang/html";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import cases from "../../../../fixtures/body-whitespace/cases.json";
+import cases from "../../../../test-fixtures/body-whitespace/cases.json";
 import renderer from "./server.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "mx-astro-body-whitespace-"));

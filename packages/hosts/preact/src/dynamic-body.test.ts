@@ -12,7 +12,7 @@
 import { createTargetLookup } from "@mxlang/core";
 import { type FunctionComponent, h } from "preact";
 import { describe, expect, it } from "vitest";
-import cases from "../../../../fixtures/body-whitespace/cases.json";
+import cases from "../../../../test-fixtures/body-whitespace/cases.json";
 import descriptor from "./descriptor.ts";
 import { compilePreactMx, getCustomTags } from "./index.ts";
 

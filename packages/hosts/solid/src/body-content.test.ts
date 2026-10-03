@@ -7,7 +7,7 @@ import { createTargetLookup, getCustomTags } from "@mxlang/core";
 import { sourceBindings } from "@mxlang/parser";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
-import cases from "../../../../fixtures/body-whitespace/cases.json";
+import cases from "../../../../test-fixtures/body-whitespace/cases.json";
 import descriptor from "./descriptor.ts";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
 

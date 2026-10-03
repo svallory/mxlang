@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
 import ts from "typescript";
-import cases from "../../../../fixtures/body-whitespace/cases.json";
+import cases from "../../../../test-fixtures/body-whitespace/cases.json";
 import { angularOwnTargets } from "../src/own-targets.ts";
 import { compileTagModule } from "../src/tag-module.ts";
 

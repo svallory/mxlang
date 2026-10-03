@@ -10,7 +10,7 @@ import {
   platformBrowserTesting,
 } from "@angular/platform-browser/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import cases from "../../../../fixtures/body-whitespace/cases.json";
+import cases from "../../../../test-fixtures/body-whitespace/cases.json";
 
 const packageRoot = join(import.meta.dirname, "..");
 const dir = mkdtempSync(join(packageRoot, ".body-whitespace-"));

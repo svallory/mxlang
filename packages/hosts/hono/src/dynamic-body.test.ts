@@ -13,7 +13,7 @@ import { createTargetLookup } from "@mxlang/core";
 import { getCustomTags } from "@mxlang/preact";
 import { type Child, jsx } from "hono/jsx";
 import { describe, expect, it } from "vitest";
-import cases from "../../../../fixtures/body-whitespace/cases.json";
+import cases from "../../../../test-fixtures/body-whitespace/cases.json";
 import descriptor from "./descriptor.ts";
 import { compileHonoMx } from "./index.ts";
 

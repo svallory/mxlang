@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import cases from "../../../fixtures/body-whitespace/cases.json";
+import cases from "../../../test-fixtures/body-whitespace/cases.json";
 import { hasContent } from "./core.ts";
 import { parseFragment } from "./fragment.ts";
 

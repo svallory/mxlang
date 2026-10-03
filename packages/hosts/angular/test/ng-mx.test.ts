@@ -1384,8 +1384,8 @@ describe("compileNgMx: fragment regions (G9)", () => {
   /** [authored region, the template it lowers to]. */
   const lowered: Array<[string, string]> = [
     ["<></>", ""],
-    // Whitespace between the fragment's tags is text, as on a page template.
-    ["<>   </>", " "],
+    // Decision 141: retained text uses Angular's non-droppable space marker.
+    ["<>   </>", "&ngsp;"],
     ["<>hello</>", "hello"],
     ["<>hello ${name}</>", "hello {{ name }}"],
     ["<>${name}</>", "{{ name }}"],

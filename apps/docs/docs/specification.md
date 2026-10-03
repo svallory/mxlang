@@ -294,7 +294,7 @@ text when forwarding the body; Angular uses `&ngsp;` so its own template
 whitespace removal cannot discard the space. The data target's pass-through
 tree carries the same normalized text, and `structural: "reject"` rejects a
 retained space as text. The rendered parity matrix is
-`fixtures/body-whitespace/cases.json`.
+`test-fixtures/body-whitespace/cases.json`.
 
 ```mx
 <p>
