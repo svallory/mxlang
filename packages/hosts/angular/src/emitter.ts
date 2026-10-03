@@ -821,145 +821,95 @@ interface TagModuleRef {
   resolvedPath?: string;
 }
 
-/**
- * Collects the file-absolute character ranges of every `Identifier` named
- * `name` in a Babel expression subtree that a parameter rename would
- * rewrite: true references only. Object keys, non-computed member
- * properties, and identifiers shadowed by a nested function's own
- * parameter are skipped, so the rewritten text keeps its meaning.
- */
-function collectReferenceRanges(
-  node: unknown,
-  name: string,
-  ranges: Array<[number, number]>,
-  shadowed = false,
-): void {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) {
-    for (const item of node)
-      collectReferenceRanges(item, name, ranges, shadowed);
-    return;
-  }
-  const n = node as {
-    type?: string;
-    name?: string;
-    computed?: boolean;
-    params?: unknown[];
-    loc?: { start: { index: number }; end: { index: number } };
-    [key: string]: unknown;
-  };
-  if (typeof n.type !== "string") return;
-  switch (n.type) {
-    case "Identifier":
-      if (!shadowed && n.name === name && n.loc) {
-        ranges.push([n.loc.start.index, n.loc.end.index]);
-      }
-      return;
-    case "MemberExpression":
-      // `p.id`: the object is a reference; a non-computed property is a
-      // field name (`p.p` renames to `x.p`, not `x.x`).
-      collectReferenceRanges(n.object, name, ranges, shadowed);
-      if (n.computed) {
-        collectReferenceRanges(n.property, name, ranges, shadowed);
-      }
-      return;
-    case "ObjectProperty":
-      // `{ p }` is shorthand: key and value are the same node, visited as
-      // the value. A non-computed key that differs (`{ p: 1 }`) is a name.
-      if (n.computed) collectReferenceRanges(n.key, name, ranges, shadowed);
-      collectReferenceRanges(n.value, name, ranges, shadowed);
-      return;
-    case "ObjectMethod":
-    case "ClassMethod":
-    case "ClassPrivateMethod":
-    case "ArrowFunctionExpression":
-    case "FunctionExpression":
-    case "FunctionDeclaration": {
-      // A nested parameter with the same name shadows the outer one inside
-      // that function's body.
-      if (n.computed) collectReferenceRanges(n.key, name, ranges, shadowed);
-      const params = n.params ?? [];
-      const inner = shadowed || params.some((p) => patternBinds(p, name));
-      for (const p of params) collectReferenceRanges(p, name, ranges, shadowed);
-      collectReferenceRanges(n.body, name, ranges, inner);
-      return;
-    }
-    default:
-      // Every other node type (calls, conditionals, TS wrappers like
-      // TSAsExpression/TSNonNullExpression, templates, …) contributes its
-      // children unchanged.
-      for (const value of Object.values(n)) {
-        collectReferenceRanges(value, name, ranges, shadowed);
-      }
-  }
-}
-
-/** True when a binding pattern declares an identifier `name`. */
-function patternBinds(pattern: unknown, name: string): boolean {
-  if (!pattern || typeof pattern !== "object") return false;
-  if (Array.isArray(pattern)) {
-    return pattern.some((p) => patternBinds(p, name));
-  }
-  const n = pattern as {
-    type?: string;
-    name?: string;
-    properties?: unknown[];
-    elements?: unknown[];
-    [key: string]: unknown;
-  };
-  switch (n.type) {
-    case "Identifier":
-      return n.name === name;
-    case "ObjectPattern":
-      return (n.properties ?? []).some((p) => patternBinds(p, name));
-    case "ObjectProperty":
-      return patternBinds(n.value, name);
-    case "ArrayPattern":
-      return (n.elements ?? []).some((e) => patternBinds(e, name));
-    case "RestElement":
-      return patternBinds(n.argument, name);
-    case "AssignmentPattern":
-      return patternBinds(n.left, name);
-    default:
-      return false;
-  }
+/** The only AST shape for which the hint offers a concrete rename. */
+interface TrackingMember {
+  type: string;
+  name?: string;
+  computed?: boolean;
+  object?: TrackingMember;
+  property?: { type: string; name?: string };
+  loc?: { start: { index: number }; end: { index: number } };
 }
 
 /**
- * Rebuilds a keyed `by=` arrow's body with its parameter renamed to the
- * `<for>` row, for the corrective hint. Returns `null` when positions are
- * missing (a synthesized node) and no concrete form can be shown.
+ * Rename only the leading reference in a simple parameter member chain.
+ * Calls, binders, object literals and computed expressions get no code hint:
+ * this is intentionally not a general-purpose alpha-renamer.
  */
-function renamedArrowBody(
-  arrow: {
-    loc?: { start: { index: number } };
-    body: {
-      loc?: { start: { index: number }; end: { index: number } };
-    };
-  },
+function renamedMemberChain(
+  arrow: { loc?: { start: { index: number } }; body: TrackingMember },
   paramName: string,
   row: string,
   code: string,
 ): string | null {
-  if (!arrow.loc || !arrow.body.loc) return null;
-  const bodyStart = arrow.body.loc.start.index;
-  const bodyEnd = arrow.body.loc.end.index;
-  // `code` is the printed slice starting at `arrow.loc.start.index`, so the
-  // body's own file-absolute offsets translate directly into it.
-  const body = code.slice(
-    bodyStart - arrow.loc.start.index,
-    bodyEnd - arrow.loc.start.index,
-  );
-  const ranges: Array<[number, number]> = [];
-  collectReferenceRanges(arrow.body, paramName, ranges);
-  let renamed = body;
-  for (const [start, end] of ranges.sort((a, b) => b[0] - a[0])) {
-    renamed =
-      renamed.slice(0, start - bodyStart) +
-      row +
-      renamed.slice(end - bodyStart);
+  let reference = arrow.body;
+  if (
+    reference.type !== "MemberExpression" &&
+    reference.type !== "OptionalMemberExpression"
+  )
+    return null;
+  while (
+    reference.type === "MemberExpression" ||
+    reference.type === "OptionalMemberExpression"
+  ) {
+    if (!reference.object || !reference.property) return null;
+    if (reference.computed) {
+      if (reference.property.type !== "StringLiteral") return null;
+    } else {
+      if (reference.property.type !== "Identifier") return null;
+      // Be conservative for the reviewed `y?.y` shape: give an instruction,
+      // not code, when an optional member repeats the parameter's spelling.
+      if (
+        reference.type === "OptionalMemberExpression" &&
+        reference.property.name === paramName
+      )
+        return null;
+    }
+    reference = reference.object;
   }
-  return renamed;
+  if (
+    reference.type !== "Identifier" ||
+    reference.name !== paramName ||
+    !reference.loc ||
+    !arrow.loc ||
+    !arrow.body.loc
+  )
+    return null;
+  const bodyStart = arrow.body.loc.start.index - arrow.loc.start.index;
+  const bodyEnd = arrow.body.loc.end.index - arrow.loc.start.index;
+  const start = reference.loc.start.index - arrow.loc.start.index;
+  const end = reference.loc.end.index - arrow.loc.start.index;
+  if (
+    bodyStart < 0 ||
+    bodyEnd > code.length ||
+    start < bodyStart ||
+    end > bodyEnd ||
+    code.slice(start, end) !== paramName
+  )
+    return null;
+  return code.slice(bodyStart, start) + row + code.slice(end, bodyEnd);
+}
+
+/** Find control-flow cases through IR wrappers, never through a component. */
+function hasCaseDescendant(nodes: IrNode[]): boolean {
+  return nodes.some((node) => {
+    switch (node.kind) {
+      case "Element":
+        return node.name === "case" || hasCaseDescendant(node.children);
+      case "For":
+      case "Define":
+        return hasCaseDescendant(node.children);
+      case "IfChain":
+        return node.branches.some((branch) =>
+          hasCaseDescendant(branch.children),
+        );
+      case "DelegatedTag":
+        return hasCaseDescendant(node.tag.children);
+      default:
+        // In particular, resolved Component nodes are opaque, not <case>.
+        return false;
+    }
+  });
 }
 
 /**
@@ -1015,13 +965,7 @@ function deriveTrack(
         name?: string;
         loc?: { start?: Position };
       }>;
-      body: {
-        type: string;
-        name?: string;
-        computed?: boolean;
-        property?: { type: string; name?: string };
-        loc?: { start: { index: number }; end: { index: number } };
-      };
+      body: TrackingMember;
       loc?: { start: { index: number } };
     };
     const parameter = arrow.params[0];
@@ -1029,34 +973,30 @@ function deriveTrack(
       arrow.params.length === 1 &&
       parameter?.type === "Identifier" &&
       typeof parameter.name === "string" &&
-      parameter.name !== row &&
-      arrow.body.type !== "BlockStatement"
+      parameter.name !== row
     ) {
-      // The fix depends on what the arrow tracks. `by=(y => y)` tracks the
-      // row itself, so `by=identity` is its complete replacement. A keyed
-      // arrow (`by=(y => y.id)`) must keep its key expression: renaming the
-      // parameter to the row is the faithful fix, NOT `by=identity` —
-      // identity tracks object references, so a refetch that returns fresh
-      // objects with the same IDs would lose every row's DOM/component
-      // state. The row's type is unknown at emit time, so identity is named
-      // only as a DIFFERENT strategy for rows that have no such field
-      // (primitive rows) — never as the replacement for the key.
+      // Keyed tracking is not object identity. Only a simple member chain
+      // gets concrete code; everything else gets a plain rename instruction.
+      // The emitter has no row types, so identity is a different strategy for
+      // rows without the suggested field, never a replacement for the key.
       const tracksRowItself =
         arrow.body.type === "Identifier" && arrow.body.name === parameter.name;
       const renamed = tracksRowItself
         ? null
-        : renamedArrowBody(arrow, parameter.name, row, key.code);
+        : renamedMemberChain(arrow, parameter.name, row, key.code);
       const field =
         arrow.body.type === "MemberExpression" &&
         arrow.body.computed === false &&
         arrow.body.property?.type === "Identifier"
           ? arrow.body.property.name
           : undefined;
+      const prefix = `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; `;
+      const instruction = `rename the parameter \`${parameter.name}\` to \`${row}\` to keep the key expression.`;
       const message = tracksRowItself
-        ? `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; use \`by=identity\` to track the row itself.`
+        ? `${prefix}${instruction} Use \`by=identity\` to track the row itself.`
         : renamed === null
-          ? `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; rename the parameter to \`${row}\` to keep the key expression.`
-          : `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; rename it to keep the key expression: \`by=(${row} => ${renamed})\`. If the row has no ${field ? `\`${field}\` field` : "such field (primitive rows)"}, \`by=identity\` is a different strategy that tracks the row itself.`;
+          ? `${prefix}${instruction}`
+          : `${prefix}rename it to keep the key expression: \`by=(${row} => ${renamed})\`. If the row has no ${field ? `\`${field}\` field` : "such field (primitive rows)"}, \`by=identity\` is a different strategy that tracks the row itself.`;
       if (parameter.loc?.start) rawFail(message, parameter);
       fail(message, node);
     }
@@ -1478,7 +1418,8 @@ class AngularEmitter implements Emitter<string> {
     // before traversing descendants, as one MX error instead of Angular's
     // NG8001/NG8002 cascade. The same applies to a <switch> carrying a
     // default attribute (<switch=expr>, the attempted form even inside
-    // `<svg>`) or `<case>` children (the control-flow tell inside `<svg>`,
+    // `<svg>`) or `<case>` descendants through structural IR wrappers (the
+    // control-flow tell inside `<svg>`,
     // which has no case element either). A real `<svg><switch>` of graphics
     // elements stays untouched, as do resolved custom tags — those lower to
     // `component()`, never to this method.
@@ -1490,9 +1431,7 @@ class AngularEmitter implements Emitter<string> {
             attr.kind !== "spread" &&
             attr.nameSpan.sourceStart === attr.nameSpan.sourceEnd,
         ) ||
-        node.children.some(
-          (child) => child.kind === "Element" && child.name === "case",
-        ))
+        hasCaseDescendant(node.children))
     ) {
       const loc = node.nameSpan
         ? {

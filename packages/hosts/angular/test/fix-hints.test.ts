@@ -95,8 +95,36 @@ describe("Angular fix hints (a16)", () => {
     },
   );
 
-  it("does not reject an SVG switch of graphics elements", () => {
-    clean(moduleFor("<svg><switch><text>x</text></switch></svg>"));
+  it.each([
+    ["<for>", '<for|x| of=items by="id"><case="a"><text>x</text></case></for>'],
+    ["<if>", '<if=title><case="a"><text>x</text></case></if>'],
+    [
+      "nested wrappers",
+      '<if=title><for|x| of=items by="id"><g><case="a"><text>x</text></case></g></for></if>',
+    ],
+  ])("rejects SVG switch cases inside %s at the switch", (_label, children) => {
+    const source = moduleFor(
+      `<svg><switch>${children}</switch></svg>`,
+      'title = "hi"; items = [{ id: 1 }];',
+    );
+    expect(failure(source)).toEqual({
+      message: SWITCH_MESSAGE,
+      line: 5,
+      column: authoredColumn(source, "switch"),
+    });
+  });
+
+  it.each([
+    "<text>x</text>",
+    '<for|x| of=items by="id"><text>${x.id}</text></for>',
+    "<if=title><text>x</text></if>",
+  ])("does not reject an SVG graphics switch: %s", (children) => {
+    clean(
+      moduleFor(
+        `<svg><switch>${children}</switch></svg>`,
+        'title = "hi"; items = [{ id: 1 }];',
+      ),
+    );
   });
 
   it("rejects a case child of an SVG switch as attempted control flow", () => {
@@ -111,7 +139,10 @@ describe("Angular fix hints (a16)", () => {
     clean(moduleFor("<svg><switch><text>x</text></switch></svg>"));
   });
 
-  it("keeps a tags/-discovered switch component", () => {
+  it.each([
+    ["switch", "<switch label=title/>"],
+    ["case", "<svg><switch><if=title><case label=title/></if></switch></svg>"],
+  ])("keeps a tags/-discovered %s component", (name, template) => {
     const dir = mkdtempSync(join(tmpdir(), "mx-angular-switch-tag-"));
     try {
       writeFileSync(
@@ -124,14 +155,14 @@ describe("Angular fix hints (a16)", () => {
       const tag =
         "export interface Input { label: string }\n<p>${input.label}</p>";
       mkdirSync(join(dir, "src/app/tags"), { recursive: true });
-      writeFileSync(join(dir, "src/app/tags/switch.mx"), tag);
+      writeFileSync(join(dir, `src/app/tags/${name}.mx`), tag);
       writeFileSync(
         join(dir, "src/app/x.component.ng.mx"),
         [
           'import { Component } from "@angular/core";',
           "",
           '@Component({ selector: "app-x", imports: [],',
-          "  template: <switch label=title/>,",
+          `  template: ${template},`,
           "})",
           'export class XComponent { title = "hi"; }',
         ].join("\n"),
@@ -201,6 +232,49 @@ describe("Angular fix hints (a14)", () => {
     expect(compileNgMx(renamed, file).code).toContain("track x.id");
   });
 
+  it.each([
+    ["y.id", "x.id"],
+    ["y.a.b", "x.a.b"],
+    ["y?.id", "x?.id"],
+    ["y.a?.b", "x.a?.b"],
+    ['y["k"]', 'x["k"]'],
+    ["y.y", "x.y"],
+  ])("only renames the leading reference in %s", (body, renamedBody) => {
+    const source = moduleFor(
+      `<for|x| of=items by=(y => ${body})><p>row</p></for>`,
+      "items = [{ id: 1, a: { b: 2 }, k: 3, y: 4 }];",
+    );
+    expect(failure(source).message).toContain(
+      `keep the key expression: \`by=(x => ${renamedBody})\``,
+    );
+    const renamed = source.replace(
+      `by=(y => ${body})`,
+      `by=(x => ${renamedBody})`,
+    );
+    clean(renamed);
+    expect(compileNgMx(renamed, file).code).toContain(`track ${renamedBody})`);
+  });
+
+  it.each([
+    "({y})",
+    "f(y => y)",
+    "y?.y",
+    "y[y.id]",
+    "y.id + 1",
+    "{ return y.id; }",
+  ])("gives only a rename instruction for %s", (body) => {
+    const source = moduleFor(
+      `<for|x| of=items by=(y => ${body})><p>row</p></for>`,
+      objectRows,
+    );
+    expect(failure(source)).toEqual({
+      message:
+        "The `by=` arrow parameter `y` must match the `<for>` row `x`; rename the parameter `y` to `x` to keep the key expression.",
+      line: 5,
+      column: authoredColumn(source, "y =>"),
+    });
+  });
+
   it("keeps the numeric corpus case on the identity fallback, worded as a different strategy", () => {
     // The corpus row is numeric (`items = [1, 2]`), so the renamed key
     // `x.id` does not type-check; the message names `by=identity` as a
@@ -227,7 +301,7 @@ describe("Angular fix hints (a14)", () => {
     );
     expect(failure(source)).toEqual({
       message:
-        "The `by=` arrow parameter `y` must match the `<for>` row `x`; use `by=identity` to track the row itself.",
+        "The `by=` arrow parameter `y` must match the `<for>` row `x`; rename the parameter `y` to `x` to keep the key expression. Use `by=identity` to track the row itself.",
       line: 5,
       column: authoredColumn(source, "y=>"),
     });

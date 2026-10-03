@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { compileNgMx } from "../../../hosts/angular/src/ng-mx.ts";
 import {
   mxAngular,
   mxTsc,
@@ -22,8 +23,21 @@ const SWITCH_MESSAGE =
 const KEYED_MESSAGE =
   "The `by=` arrow parameter `y` must match the `<for>` row `x`; rename it to keep the key expression: `by=(x => x.id)`. If the row has no `id` field, `by=identity` is a different strategy that tracks the row itself.";
 const IDENTITY_MESSAGE =
-  "The `by=` arrow parameter `y` must match the `<for>` row `x`; use `by=identity` to track the row itself.";
-const cases = [
+  "The `by=` arrow parameter `y` must match the `<for>` row `x`; rename the parameter `y` to `x` to keep the key expression. Use `by=identity` to track the row itself.";
+const PLAIN_MESSAGE =
+  "The `by=` arrow parameter `y` must match the `<for>` row `x`; rename the parameter `y` to `x` to keep the key expression.";
+interface HintCase {
+  name: string;
+  template: string;
+  body?: string;
+  needle: string;
+  code: string;
+  message: string;
+  fixed: string | null;
+  build?: boolean;
+  track?: string;
+}
+const cases: HintCase[] = [
   {
     name: "a16 switch/case",
     template: '<div><switch=title><case="a"><p>a</p></case></switch></div>',
@@ -73,6 +87,8 @@ const cases = [
     // the message's fallback — identity, a different strategy — compiles
     // clean and tracks the row.
     fixed: "<ul><for|x| of=items by=identity><li>${x}</li></for></ul>",
+    build: true,
+    track: "x",
   },
   {
     name: "a14 keyed object row",
@@ -83,6 +99,8 @@ const cases = [
     message: KEYED_MESSAGE,
     // The faithful fix: rename the parameter, keeping the key expression.
     fixed: "<ul><for|x| of=items by=(x=>x.id)><li>${x}</li></for></ul>",
+    build: true,
+    track: "x.id",
   },
   {
     name: "a14 arrow tracking the parameter itself",
@@ -92,6 +110,8 @@ const cases = [
     code: "80001",
     message: IDENTITY_MESSAGE,
     fixed: "<ul><for|x| of=items by=identity><li>${x}</li></for></ul>",
+    build: true,
+    track: "x",
   },
   {
     name: "a26 bound input",
@@ -102,6 +122,59 @@ const cases = [
       "Can't bind to 'lable' since it isn't a known property of 'app-child'. Did you mean 'label'?",
     fixed: "<div><app-child label=title></app-child></div>",
   },
+  ...[
+    ["for", '<for|x| of=items by="id"><case="a"><text>x</text></case></for>'],
+    ["if", '<if=title><case="a"><text>x</text></case></if>'],
+  ].map(
+    ([label, children]): HintCase => ({
+      name: `a16 SVG switch with cases nested under ${label}`,
+      template: `<svg><switch>${children}</switch></svg>`,
+      body: "items = [{ id: 1 }];",
+      needle: "switch",
+      code: "80001",
+      message: SWITCH_MESSAGE,
+      fixed: "<svg><if=title><text>x</text></if></svg>",
+      build: true,
+    }),
+  ),
+  ...[
+    ["y.id", "x.id"],
+    ["y.a.b", "x.a.b"],
+    ["y?.id", "x?.id"],
+    ["y.a?.b", "x.a?.b"],
+    ['y["k"]', 'x["k"]'],
+    ["y.y", "x.y"],
+  ].map(
+    ([body, renamed]): HintCase => ({
+      name: `a14 conservative member-chain fix ${body}`,
+      template: `<for|x| of=items by=(y => ${body})><p>row</p></for>`,
+      body: "items = [{ id: 1, a: { b: 2 }, k: 3, y: 4 }];",
+      needle: "y =>",
+      code: "80001",
+      message: `keep the key expression: \`by=(x => ${renamed})\``,
+      fixed: `<for|x| of=items by=(x => ${renamed})><p>row</p></for>`,
+      build: true,
+      track: renamed,
+    }),
+  ),
+  ...[
+    "({y})",
+    "f(y => y)",
+    "y?.y",
+    "y[y.id]",
+    "y.id + 1",
+    "{ return y.id; }",
+  ].map(
+    (body): HintCase => ({
+      name: `a14 instruction only for ${body}`,
+      template: `<for|x| of=items by=(y => ${body})><p>row</p></for>`,
+      needle: "y =>",
+      code: "80001",
+      message: PLAIN_MESSAGE,
+      fixed: null,
+      build: true,
+    }),
+  ),
 ];
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: diagnostics may carry ANSI colour
@@ -124,8 +197,8 @@ function moduleFor(template: string, body?: string): string {
 describe("mx-tsc Angular fix hints", () => {
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
   it.each(cases)(
-    "$name is one positioned error and the offered fix is clean",
-    ({ template, body, needle, code, message, fixed, build }) => {
+    "$name is one positioned error and any concrete fix is clean",
+    ({ template, body, needle, code, message, fixed, build, track }) => {
       const dir = mkdtempSync(join(tmpdir(), "mx-tsc-angular-hints-"));
       try {
         mkdirSync(join(dir, "src"));
@@ -167,9 +240,9 @@ describe("mx-tsc Angular fix hints", () => {
         const result = run(mxTsc, ["--noEmit", "-p", dir]);
         expect(result.status).not.toBe(0);
         const text = strip(result.output).trim();
-        expect(text).toContain(
-          `x.ng.mx(${position}): error TS${code}: ${message}`,
-        );
+        expect(text).toContain(`x.ng.mx(${position}): error TS${code}: `);
+        expect(text).toContain(message);
+        if (fixed === null) expect(text).not.toContain("`by=(");
         expect(text.match(/error TS/g)).toHaveLength(1);
         expect(text).not.toContain("approximate location");
         if (build) {
@@ -179,12 +252,18 @@ describe("mx-tsc Angular fix hints", () => {
           expect(built.status).not.toBe(0);
           const buildText = strip(built.output).trim();
           const [line, column] = position.split(",");
-          expect(buildText).toContain(
-            `src/x.ng.mx:${line}:${column} error: ${message}`,
-          );
+          expect(buildText).toContain(`src/x.ng.mx:${line}:${column} error: `);
+          expect(buildText).toContain(message);
+          if (fixed === null) expect(buildText).not.toContain("`by=(");
           expect(buildText.match(/ error: /g)).toHaveLength(1);
         }
-        writeFileSync(file, moduleFor(fixed, body));
+        if (fixed === null) return;
+        const fixedSource = moduleFor(fixed, body);
+        if (track)
+          expect(compileNgMx(fixedSource, file).code).toContain(
+            `track ${track})`,
+          );
+        writeFileSync(file, fixedSource);
         expect(run(mxTsc, ["--noEmit", "-p", dir])).toEqual({
           status: 0,
           output: "",
