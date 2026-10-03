@@ -6,6 +6,12 @@
 
 `<![CDATA[…]]>` and `<?…?>` were dropped in lowering on every host — Marko's parser makes a `MarkoCDATA` and a `MarkoDeclaration`, and core's IR has no node for either, so both fell off the end of `lowerChildren`' switch. `<a><![CDATA[ x ]]></a>` compiled to `"<a></a>"` and `<?xml version="1.0"?>` to `"<a></a>"`: wrong output, green build. Lowering now raises a positioned `TranslateError` on both, at the `<` of the construct, with Marko 6.3.51's meaning and MX's wording: `` `<![CDATA[…]]>` is not supported: write the text inline, as `${"…"}` when it must stay raw, or in an attribute value `` and `` `<?…?>` (an XML declaration or processing instruction) is not supported: remove it ``. Marko rejects both (`runtime-tags/src/translator/visitors/cdata.ts`, `visitors/declaration.ts`). A **raw-text** body (`<script>`, `<style>`, `<textarea>`, `<title>`) is read by Marko's parser as one `MarkoText`, so the construct there is ordinary text and reaches the output verbatim — probed and pinned, not assumed. Output changes only for templates that contain either construct outside a raw-text body, where the change is from silently wrong to an error. Spec "CDATA sections and XML declarations"; `divergences.md` unchanged, because this matches Marko.
 
+### Added: did-you-mean and where-to-import hints on an unresolved tag (fix-hints-batch, audit item 14)
+
+One short, positioned hint appended to Marko's wording; the error, its position and its count are unchanged.
+
+- **Unresolved tag** (`unresolvedCustomTagMessage(name, { candidates?, hint? })`, additive options, `UnresolvedTagOptions` exported): a lowercase name gets Marko's own ``Did you mean `<div>`?`` wording when exactly one HTML element is nearest (`did-you-mean.ts`: swapped letters count as one edit, two edits only from five characters, ties and names under three characters say nothing; Marko's own pick for `<dvi>` is `<bdi>`); a capitalized name gets the nearest in-scope import or `<define>` the same way, otherwise the host's `hint` saying where the tag can come from.
+
 ### Fixed: a `TranslateError` message no longer starts with the compiled file's path (translate-error-no-repeated-path, audit item 17)
 
 `compileSource` drops the `<filename>: ` prefix Babel adds to a translator error's message. The error already carries `line`/`column` (and `file` for an error in another file), and every surface prints the file itself, so the prefix only repeated it, as an absolute path, in `mx-tsc`'s `TS80001` and the language server's message.

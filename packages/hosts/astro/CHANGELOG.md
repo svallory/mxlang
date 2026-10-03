@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it in the `---` fence (`import Card from "./Card.astro"`) or add `tags/Card.mx`.`` (or ``Did you mean `<Badge>`?`` for a near-miss fence import).
+
 - **Breaking (amx-to-astro-mx, decision 134):** the Astro template file kind is renamed from `.amx` to `.astro.mx`, like `.solid.mx` (`<name>.<host>.mx`). No `.amx` alias: a `.amx` file is no longer an MX file. `ASTRO_MX_EXT` is `.astro.mx`, the diagnostic and language id is `astromx`, and `.astro.mx` is no longer registered with `addPageExtension`.
 
 - **Added (amx-to-astro-mx, decision 134 addendum):** an `.astro.mx` file under the pages directory (`src/pages`, or the configured `srcDir`) is now an error from the integration, in `astro dev` and `astro build`, listing every offending file at `path:1:1`. Astro strips only the last extension, so `about.astro.mx` routes to `/about.astro`. The message gives the fix: write `about.astro` and import the `.astro.mx` component from it, or write the page as `about.mx`. `.mx` pages are unaffected. New: `findAstroMxPages`, `assertNoAstroMxPages` (`src/pages-guard.ts`).

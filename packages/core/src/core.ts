@@ -37,6 +37,7 @@ import { createRequire } from "node:module";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import type { Expr, IrNode, Position } from "./ir.ts";
 
 const require = createRequire(import.meta.url);
@@ -480,8 +481,27 @@ export function fail(message: string, node: Node, file?: string): never {
  * lives in one place instead of being hand-copied at each call site
  * (`source-bindings-silent-parse-failure`, filed from the PR #156 review).
  */
-export function unresolvedCustomTagMessage(name: string): string {
-  return `Unable to find entry point for custom tag \`<${name}>\`.`;
+export function unresolvedCustomTagMessage(
+  name: string,
+  options: UnresolvedTagOptions = {},
+): string {
+  const base = `Unable to find entry point for custom tag \`<${name}>\`.`;
+  // A capitalized name is a component call, so the nearest in-scope binding
+  // is the likeliest intent; a lowercase one is likeliest a mistyped element.
+  const isComponent = /^[A-Z]/.test(name);
+  const near = isComponent
+    ? nearestName(name, options.candidates ?? [])
+    : nearestHtmlElement(name);
+  if (near) return `${base} Did you mean \`<${near}>\`?`;
+  return options.hint && isComponent ? `${base} ${options.hint}` : base;
+}
+
+/** What `unresolvedCustomTagMessage` may add to Marko's wording. */
+export interface UnresolvedTagOptions {
+  /** In-scope component names (imports, `<define>`s) a capitalized tag may be a typo of. */
+  candidates?: Iterable<string>;
+  /** How the host resolves a component, shown when no candidate is near. */
+  hint?: string;
 }
 
 export function quote(text: string): string {

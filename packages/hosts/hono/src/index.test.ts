@@ -43,6 +43,12 @@ describe("Hono dialect", () => {
     ).toContain("Unable to find entry point for custom tag `<Widget>`.");
   });
 
+  it("tells an unresolved capitalized tag how to resolve it (shared emitter)", () => {
+    expect(errorOf('<Card title="x"/>')).toContain(
+      'Unable to find entry point for custom tag `<Card>`. Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.',
+    );
+  });
+
   it.each([
     ["self-closing", "<TotallyUndefined/>"],
     ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],

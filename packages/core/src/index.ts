@@ -68,6 +68,7 @@ export {
   rejectUnsupportedFields,
   sliceLoc,
   TranslateError,
+  type UnresolvedTagOptions,
   unresolvedCustomTagMessage,
   VOID_TAGS,
   warn,

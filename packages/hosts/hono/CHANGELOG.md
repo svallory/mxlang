@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (fix-hints-batch, audit item 14):** the unresolved-tag, event-binding, scriptlet and missing-attribute-value hints reach this host through the shared `@mxlang/preact` emitter and `@mxlang/core`.
+
 - **Changed (amx-to-astro-mx, decision 134):** the Bun loader's file filter also declines `x.astro.mx`, Astro's template kind, as it already declines `x.solid.mx`.
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `hono-jsx` target descriptor (host `hono`, `honoDeclarations`, `load()` returning `compileHonoMx`). Adds `@mxlang/core` as a dependency for the descriptor's type. Nothing consumes it yet; see `@mxlang/target-registry`. The dialect now imports `createJsxDeclarations` through `@mxlang/preact/emitter` instead of the package root, so importing the descriptor stays free of preact's compile entry.

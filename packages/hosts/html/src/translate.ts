@@ -356,8 +356,14 @@ function rejectComponentTag(name: string, node: Node, ctx: Ctx): void {
  * the core's generic "unknown tag", which is a dialect's vocabulary leaking
  * into a parity target.
  */
-function rejectUnknownTag(name: string, node: Node): void {
-  fail(unresolvedCustomTagMessage(name), node);
+function rejectUnknownTag(name: string, node: Node, ctx: Ctx): void {
+  fail(
+    unresolvedCustomTagMessage(name, {
+      candidates: [...ctx.imports, ...ctx.defines.keys()],
+      hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
+    }),
+    node,
+  );
 }
 
 /**

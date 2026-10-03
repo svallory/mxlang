@@ -5,6 +5,7 @@ import {
   type AttributeTagNode,
   type AttrTagProp,
   type ComponentTarget,
+  type Ctx,
   concatMapped,
   destructuredNames,
   drive,
@@ -594,8 +595,18 @@ function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
   return (ctx.imports?.has(name) ?? false) || SOLID_BUILTIN_TAG_NAMES.has(name);
 }
 
-function rejectUnknownTag(name: string, node: { loc: Position }): void {
-  fail(unresolvedCustomTagMessage(name), node);
+function rejectUnknownTag(
+  name: string,
+  node: { loc: Position },
+  ctx: Ctx,
+): void {
+  fail(
+    unresolvedCustomTagMessage(name, {
+      candidates: [...ctx.imports, ...ctx.defines.keys()],
+      hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
+    }),
+    node,
+  );
 }
 
 /** Resolve-time questions for Solid's JSX target. */

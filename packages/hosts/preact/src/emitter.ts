@@ -172,8 +172,14 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
       if (taglibId !== undefined) return !ELEMENT_TAGLIBS.has(taglibId);
       return false;
     },
-    rejectUnknownTag(name, node) {
-      rawFail(unresolvedCustomTagMessage(name), node);
+    rejectUnknownTag(name, node, ctx) {
+      rawFail(
+        unresolvedCustomTagMessage(name, {
+          candidates: [...ctx.imports, ...ctx.defines.keys()],
+          hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
+        }),
+        node,
+      );
     },
     isDelegatedTag: (name) => name === "try",
     // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):

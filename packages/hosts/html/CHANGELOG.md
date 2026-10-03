@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.``, or ``Did you mean `<Badge>`?`` when an import or `<define>` is one or two edits away; an unresolved lowercase tag near an HTML element ends ``Did you mean `<div>`?`` (`<dvi>`). Parse-error and scriptlet hints come from `@mxlang/core`. `(click)="…"` is unchanged: this host has no event handlers to suggest.
+
 - **Changed (amx-to-astro-mx, decision 134):** the Bun loader's file filter also declines `x.astro.mx`, Astro's template kind, as it already declines `x.solid.mx`.
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `html` target descriptor (`src/descriptor.ts`): no host, `legacyHostValues` `html` and the deprecated `translator`, the policy and strict policy as `declarations`, and a lazy `translator`. `load()` returns the existing `compile`. Also built into `dist/descriptor.{js,d.ts}`. Nothing consumes it yet; see `@mxlang/target-registry`.

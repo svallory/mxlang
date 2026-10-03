@@ -12,6 +12,7 @@ import {
   type AttributeTag,
   type AttributeTagNode,
   type AttrTagProp,
+  type Ctx,
   type CustomTag,
   DYNAMIC_TAG,
   drive,
@@ -158,8 +159,14 @@ function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
   return (ctx.imports?.has(name) ?? false) || ASTRO_BUILTIN_TAG_NAMES.has(name);
 }
 
-function rejectUnknownTag(name: string, node: Node): void {
-  fail(unresolvedCustomTagMessage(name), node);
+function rejectUnknownTag(name: string, node: Node, ctx: Ctx): void {
+  fail(
+    unresolvedCustomTagMessage(name, {
+      candidates: [...ctx.imports, ...ctx.defines.keys()],
+      hint: `Import it in the \`---\` fence (\`import ${name} from "./${name}.astro"\`) or add \`tags/${name}.mx\`.`,
+    }),
+    node,
+  );
 }
 
 type DelegatedTagData = { kind: "interpolation"; expr: Expr };
