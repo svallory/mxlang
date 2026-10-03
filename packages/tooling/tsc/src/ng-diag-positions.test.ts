@@ -37,7 +37,7 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
       expect(result.output).toContain(
         at("lable=title", "-998002: Can't bind to 'lable'"),
       );
-      // A default attribute (`<switch=title>`) has no spelled name: its
+      // A default attribute (`<widget=title>`) has no spelled name: its
       // value is where the diagnostic lands.
       expect(result.output).toContain(
         at("title><case", "-998002: Can't bind to 'value'"),

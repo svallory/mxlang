@@ -53,6 +53,21 @@ export const plainTsc = join(
   "tsc",
 );
 
+/**
+ * `mx-angular build`, the second CLI surface the Angular fix hints must
+ * behave on: same authored error, one error, no NG cascade. Run through its
+ * built entry point with `--project` for the same fresh-`dist` reason as
+ * `mxTsc` above.
+ */
+export const mxAngular = join(
+  repoRoot,
+  "packages",
+  "hosts",
+  "angular",
+  "dist",
+  "bin.js",
+);
+
 export interface Run {
   status: number;
   output: string;

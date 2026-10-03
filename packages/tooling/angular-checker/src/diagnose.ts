@@ -33,7 +33,7 @@ export interface NgMxDiagnostic {
   length: number;
   /** Angular's diagnostic code; negative for template parse errors. */
   code: number;
-  /** Angular's message, unchanged. */
+  /** Angular's message, with compact MX-specific fix advice when known. */
   message: string;
   category: DiagnosticCategory;
   source: "angular";
@@ -114,6 +114,35 @@ function locate(
 }
 
 /**
+ * A concrete numeric-argument example is safe only for a reference whose
+ * rejected signature actually takes two numbers. Keep other event type
+ * errors verbatim rather than inventing arguments that would not compile.
+ */
+function eventHandlerHint(
+  compiled: CompileNgMxResult,
+  diagnostic: Diagnostic,
+): string {
+  if (
+    diagnostic.code !== 2345 ||
+    compiled.code.slice(diagnostic.start - 7, diagnostic.start) !== "__mxOn(" ||
+    !/^Argument of type '\([^:]+: number, [^:]+: number\) =>/.test(
+      diagnostic.message,
+    ) ||
+    !diagnostic.message.includes("element: EventTarget | null")
+  )
+    return diagnostic.message;
+  const source = compiled.map.sourcesContent?.[0];
+  const anchor = anchorFor(compiled.anchors, diagnostic.start);
+  if (typeof source !== "string" || !anchor) return diagnostic.message;
+  const attribute = source.slice(anchor.sourceStart, anchor.sourceEnd);
+  const match =
+    /^(on(?:-[\w-]+|[A-Z]\w*|click))\s*=\s*([A-Za-z_$][\w$]*)$/.exec(attribute);
+  if (!match) return diagnostic.message;
+  const [, name, handler] = match;
+  return `Handler \`${handler}\` expects \`(number, number)\`; MX passes \`(event, element)\`. Use \`${name}=(() => ${handler}(1, 2))\`.`;
+}
+
+/**
  * Map checker records for a compiled `.ng.mx` to positions in the `.ng.mx`.
  *
  * Only `source: "ngtsc"` records are kept. The `"ts"` records (errors in the
@@ -132,7 +161,7 @@ export function mapNgMxDiagnostics(
     .map((d) => ({
       ...locate(compiled, d.start),
       code: d.code,
-      message: d.message,
+      message: eventHandlerHint(compiled, d),
       category: d.category,
       source: "angular" as const,
     }));

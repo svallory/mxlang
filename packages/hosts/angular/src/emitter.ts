@@ -36,6 +36,7 @@ import {
 import { literalSyntaxWarnings } from "./literal-syntax-hint.ts";
 import {
   type AngularMapping,
+  lineColumnAt,
   type NodeAnchor,
   TemplateWriter,
 } from "./mapping.ts";
@@ -79,6 +80,14 @@ function rawPosition(node: { loc?: { start?: Position } }): Position {
 function rawFail(message: string, node: { loc?: { start?: Position } }): never {
   const { line, column, file } = rawPosition(node);
   throw new TranslateError(message, line, column, file);
+}
+
+/** Keep the shared unresolved-tag wording, with Angular's control-flow fix. */
+function unknownTagMessage(name: string): string {
+  const base = unresolvedCustomTagMessage(name);
+  return name === "switch" || name === "case"
+    ? `${base} MX has no switch; use \`<if=…>\` / \`<else if=…>\`.`
+    : base;
 }
 
 const MODULE_LEVEL_MESSAGE =
@@ -189,7 +198,7 @@ export const angularDeclarations: HostDeclarations = {
   // host's old casing-only fallback. The message is core's own constant,
   // shared verbatim with every other Marko-parity host.
   rejectUnknownTag(name, node) {
-    rawFail(unresolvedCustomTagMessage(name), node);
+    rawFail(unknownTagMessage(name), node);
   },
   isDelegatedTag: (name) =>
     name === "try" || name === "html-comment" || name === DYNAMIC_TAG,
@@ -225,8 +234,11 @@ export const angularDeclarations: HostDeclarations = {
   // follows the colon (measured: `attr:aria-label=l` gives
   // `{ name: "attr", modifier: "aria-label" }`).
   rejectModifier(attr): void {
-    const prefix = (attr as unknown as { name: string }).name;
-    const target = (attr as unknown as { modifier?: string }).modifier;
+    // SAFETY: core passes a raw Marko attribute whose name/modifier are strings.
+    const { name: prefix, modifier: target } = attr as unknown as {
+      name: string;
+      modifier?: string;
+    };
     if (prefix === "on" || prefix === "oncapture") {
       // Decision 101 (b): core gives `on:`/`oncapture:` no meaning; each
       // host rejects with a fix-it naming `on-<exact>` (design note §4's
@@ -809,6 +821,97 @@ interface TagModuleRef {
   resolvedPath?: string;
 }
 
+/** The only AST shape for which the hint offers a concrete rename. */
+interface TrackingMember {
+  type: string;
+  name?: string;
+  computed?: boolean;
+  object?: TrackingMember;
+  property?: { type: string; name?: string };
+  loc?: { start: { index: number }; end: { index: number } };
+}
+
+/**
+ * Rename only the leading reference in a simple parameter member chain.
+ * Calls, binders, object literals and computed expressions get no code hint:
+ * this is intentionally not a general-purpose alpha-renamer.
+ */
+function renamedMemberChain(
+  arrow: { loc?: { start: { index: number } }; body: TrackingMember },
+  paramName: string,
+  row: string,
+  code: string,
+): string | null {
+  let reference = arrow.body;
+  if (
+    reference.type !== "MemberExpression" &&
+    reference.type !== "OptionalMemberExpression"
+  )
+    return null;
+  while (
+    reference.type === "MemberExpression" ||
+    reference.type === "OptionalMemberExpression"
+  ) {
+    if (!reference.object || !reference.property) return null;
+    if (reference.computed) {
+      if (reference.property.type !== "StringLiteral") return null;
+    } else {
+      if (reference.property.type !== "Identifier") return null;
+      // Be conservative for the reviewed `y?.y` shape: give an instruction,
+      // not code, when an optional member repeats the parameter's spelling.
+      if (
+        reference.type === "OptionalMemberExpression" &&
+        reference.property.name === paramName
+      )
+        return null;
+    }
+    reference = reference.object;
+  }
+  if (
+    reference.type !== "Identifier" ||
+    reference.name !== paramName ||
+    !reference.loc ||
+    !arrow.loc ||
+    !arrow.body.loc
+  )
+    return null;
+  const bodyStart = arrow.body.loc.start.index - arrow.loc.start.index;
+  const bodyEnd = arrow.body.loc.end.index - arrow.loc.start.index;
+  const start = reference.loc.start.index - arrow.loc.start.index;
+  const end = reference.loc.end.index - arrow.loc.start.index;
+  if (
+    bodyStart < 0 ||
+    bodyEnd > code.length ||
+    start < bodyStart ||
+    end > bodyEnd ||
+    code.slice(start, end) !== paramName
+  )
+    return null;
+  return code.slice(bodyStart, start) + row + code.slice(end, bodyEnd);
+}
+
+/** Find control-flow cases through IR wrappers, never through a component. */
+function hasCaseDescendant(nodes: IrNode[]): boolean {
+  return nodes.some((node) => {
+    switch (node.kind) {
+      case "Element":
+        return node.name === "case" || hasCaseDescendant(node.children);
+      case "For":
+      case "Define":
+        return hasCaseDescendant(node.children);
+      case "IfChain":
+        return node.branches.some((branch) =>
+          hasCaseDescendant(branch.children),
+        );
+      case "DelegatedTag":
+        return hasCaseDescendant(node.tag.children);
+      default:
+        // In particular, resolved Component nodes are opaque, not <case>.
+        return false;
+    }
+  });
+}
+
 /**
  * Derives Angular's `track` expression from `by=`, per the design note's
  * shape table (mirrors `packages/hosts/solid/src/emitter.ts:679-686`).
@@ -822,9 +925,11 @@ function deriveTrack(
   if (!key) return null;
   if (key.shape === "string") {
     if (key.node?.type === "StringLiteral") {
+      // SAFETY: a Babel StringLiteral has a string value; the discriminant is checked above.
       return `${row}.${(key.node as unknown as { value: string }).value}`;
     }
     if (key.node?.type === "TemplateLiteral") {
+      // SAFETY: Babel TemplateLiteral nodes have quasis and expressions arrays.
       const template = key.node as unknown as {
         quasis: Array<{ value: { cooked: string | null } }>;
         expressions: unknown[];
@@ -853,14 +958,48 @@ function deriveTrack(
   }
   if (key.code.trim() === "identity") return row;
   if (key.node?.type === "ArrowFunctionExpression") {
+    // SAFETY: the Babel arrow discriminant guarantees params/body; source positions remain optional.
     const arrow = key.node as unknown as {
-      params: Array<{ type: string; name?: string }>;
-      body: {
+      params: Array<{
         type: string;
-        loc?: { start: { index: number }; end: { index: number } };
-      };
+        name?: string;
+        loc?: { start?: Position };
+      }>;
+      body: TrackingMember;
       loc?: { start: { index: number } };
     };
+    const parameter = arrow.params[0];
+    if (
+      arrow.params.length === 1 &&
+      parameter?.type === "Identifier" &&
+      typeof parameter.name === "string" &&
+      parameter.name !== row
+    ) {
+      // Keyed tracking is not object identity. Only a simple member chain
+      // gets concrete code; everything else gets a plain rename instruction.
+      // The emitter has no row types, so identity is a different strategy for
+      // rows without the suggested field, never a replacement for the key.
+      const tracksRowItself =
+        arrow.body.type === "Identifier" && arrow.body.name === parameter.name;
+      const renamed = tracksRowItself
+        ? null
+        : renamedMemberChain(arrow, parameter.name, row, key.code);
+      const field =
+        arrow.body.type === "MemberExpression" &&
+        arrow.body.computed === false &&
+        arrow.body.property?.type === "Identifier"
+          ? arrow.body.property.name
+          : undefined;
+      const prefix = `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; `;
+      const instruction = `rename the parameter \`${parameter.name}\` to \`${row}\` to keep the key expression.`;
+      const message = tracksRowItself
+        ? `${prefix}${instruction} Use \`by=identity\` to track the row itself.`
+        : renamed === null
+          ? `${prefix}${instruction}`
+          : `${prefix}rename it to keep the key expression: \`by=(${row} => ${renamed})\`. If the row has no ${field ? `\`${field}\` field` : "such field (primitive rows)"}, \`by=identity\` is a different strategy that tracks the row itself.`;
+      if (parameter.loc?.start) rawFail(message, parameter);
+      fail(message, node);
+    }
     // A block-bodied arrow (`p => { return p.id }`) has no single expression
     // to slice out — Angular's `track` must be one expression, not a
     // statement list — so it falls through to the same rejection as any
@@ -903,19 +1042,21 @@ function bakeRange(
   const literalNumber = (expr: Expr | null, fallback: number): number => {
     if (!expr) return fallback;
     if (expr.node?.type === "NumericLiteral") {
+      // SAFETY: Babel's NumericLiteral discriminant guarantees a numeric value.
       return (expr.node as unknown as { value: number }).value;
     }
     // A unary minus over a numeric literal (`step=-1`) parses as a
     // UnaryExpression, not a NumericLiteral — Babel's own shape for a
     // negative literal.
-    if (
-      expr.node?.type === "UnaryExpression" &&
-      (expr.node as unknown as { operator: string }).operator === "-" &&
-      (expr.node as unknown as { argument: { type: string } }).argument.type ===
-        "NumericLiteral"
-    ) {
-      return -(expr.node as unknown as { argument: { value: number } }).argument
-        .value;
+    if (expr.node?.type === "UnaryExpression") {
+      // SAFETY: Babel UnaryExpression has operator/argument; value is read only after the NumericLiteral guard.
+      const unary = expr.node as unknown as {
+        operator: string;
+        argument: { type: string; value: number };
+      };
+      if (unary.operator === "-" && unary.argument.type === "NumericLiteral") {
+        return -unary.argument.value;
+      }
     }
     fail(
       "a `<for>` range with a non-literal bound cannot be emitted into an Angular template, because Angular has no range loop and MX ships no runtime (decision 79). Compute the array in the component and iterate it with `of=`.",
@@ -1185,6 +1326,13 @@ class AngularEmitter implements Emitter<string> {
 
   /** Nesting depth inside `<style>`/`<script>` (and `<html-style>`/`<html-script>`), whose text the literal-syntax lint skips. */
   private codeDepth = 0;
+  /**
+   * Depth of open `<svg>` elements. Marko's taglib resolves `<switch>` to
+   * the SVG element regardless of context, but Angular's HTML template has
+   * no `<switch>` outside `<svg>` — `element()` uses this to tell a real
+   * SVG switch from an attempted control-flow one.
+   */
+  private svgDepth = 0;
 
   /**
    * A name guaranteed not to collide with any identifier the compiled
@@ -1264,6 +1412,35 @@ class AngularEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
+    // Marko recognizes SVG <switch>, not a control-flow switch. Angular's
+    // HTML template has no <switch> at all, so outside an `<svg>` context the
+    // name can only be an attempted control-flow switch — reject it here,
+    // before traversing descendants, as one MX error instead of Angular's
+    // NG8001/NG8002 cascade. The same applies to a <switch> carrying a
+    // default attribute (<switch=expr>, the attempted form even inside
+    // `<svg>`) or `<case>` descendants through structural IR wrappers (the
+    // control-flow tell inside `<svg>`,
+    // which has no case element either). A real `<svg><switch>` of graphics
+    // elements stays untouched, as do resolved custom tags — those lower to
+    // `component()`, never to this method.
+    if (
+      node.name === "switch" &&
+      (this.svgDepth === 0 ||
+        node.attrs.some(
+          (attr) =>
+            attr.kind !== "spread" &&
+            attr.nameSpan.sourceStart === attr.nameSpan.sourceEnd,
+        ) ||
+        hasCaseDescendant(node.children))
+    ) {
+      const loc = node.nameSpan
+        ? {
+            ...node.loc,
+            ...lineColumnAt(this.ctx.source, node.nameSpan.sourceStart),
+          }
+        : node.loc;
+      fail(unknownTagMessage(node.name), { loc });
+    }
     // The tag name stays unmapped (its generated text is the source name
     // verbatim, but a diagnostic lands on the `<`, not the name), so the
     // whole start tag is anchored to the authored name instead.
@@ -1299,7 +1476,9 @@ class AngularEmitter implements Emitter<string> {
       node.name === "html-style" ||
       node.name === "html-script";
     if (code) this.codeDepth++;
+    if (node.name === "svg") this.svgDepth++;
     for (const child of node.children) this.emitNode(child);
+    if (node.name === "svg") this.svgDepth--;
     if (code) this.codeDepth--;
     this.out.write(`</${node.name}>`);
   }

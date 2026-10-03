@@ -26,6 +26,7 @@ import {
   resolveTypescript,
   type TypescriptModule,
 } from "./compiler-cli.ts";
+import { addInputHints } from "./input-hint.ts";
 import type {
   AngularChecker,
   AngularCheckerOptions,
@@ -117,7 +118,7 @@ function buildOptions(
     moduleResolution: tsModule.ModuleResolutionKind.Bundler,
     skipLibCheck: true,
     noEmit: true,
-  } as ts.CompilerOptions;
+  };
 
   if (options.tsconfigPath) {
     const configPath = resolve(options.tsconfigPath);
@@ -295,8 +296,32 @@ export function createAngularChecker(
       // `source` is what separates the two classes for a consumer. Angular's
       // own diagnostics already carry "ngtsc"; plain TypeScript ones carry
       // nothing, so they are tagged "ts" here rather than left undefined.
+      let ngRecords = ngRaw.map((d) =>
+        toRecord(tsModule, d, virtualPath, "ngtsc"),
+      );
+      if (ngRecords.some((d) => d.code === -998002 && d.file === virtualPath)) {
+        // Tooling mode cannot be enabled on the diagnostic program: it forbids
+        // inline type-check blocks and can reject valid non-exported classes.
+        // Analyze a separate program only to read matched input metadata. Never
+        // collect its diagnostics or replace the retained incremental program.
+        const metadataProgram = new Program(
+          [virtualPath],
+          { ...compilerOptions, _enableTemplateTypeChecker: true },
+          host,
+        );
+        const metadataEntry = metadataProgram
+          .getTsProgram()
+          .getSourceFile(virtualPath);
+        if (metadataEntry)
+          ngRecords = addInputHints(
+            metadataProgram,
+            metadataEntry,
+            ngRecords,
+            tsModule,
+          );
+      }
       return [
-        ...ngRaw.map((d) => toRecord(tsModule, d, virtualPath, "ngtsc")),
+        ...ngRecords,
         ...tsRaw.map((d) => toRecord(tsModule, d, virtualPath, "ts")),
       ];
     },

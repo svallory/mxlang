@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: authored MX template source
 import path from "node:path";
 import { compileNgMx } from "@mxlang/angular";
 import { describe, expect, it } from "vitest";
@@ -292,12 +293,13 @@ describe("diagnoseNgMx element and attribute diagnostics (real ngtsc)", () => {
 
   it("a default attribute has no spelled name, so it lands on its value", () => {
     const { source, diagnostics } = check(
-      '<div><switch=title><case="a">a</case></switch></div>',
+      '<div><widget=title><case="a">a</case></widget></div>',
     );
     const starts = diagnostics.map((d) => d.start);
-    // `<switch>` and `<case>` (NG8001) point at their names; the `value`
-    // input Angular finds on `<switch>` (NG8002) at the default value.
-    expect(starts).toContain(source.indexOf("switch"));
+    // `<widget>` and `<case>` (NG8001) point at their names; the `value`
+    // input Angular finds on `<widget>` (NG8002) at the default value.
+    // <switch=…> is now an MX error, tested in fix-hints.test.ts.
+    expect(starts).toContain(source.indexOf("widget"));
     expect(starts).toContain(source.indexOf("case"));
     const bound = diagnostics.find((x) => x.code === -998002);
     expect(bound?.start).toBe(source.indexOf("title"));

@@ -54,9 +54,9 @@ describe("compileNgMx anchors", () => {
   });
 
   it("anchors a default attribute at its value, since it has no spelled name", () => {
-    expect(pairs(ngMx("<switch=title></switch>"))).toEqual([
+    expect(pairs(ngMx("<widget=title></widget>"))).toEqual([
       ['[value]="title"', "title"],
-      ['<switch [value]="title">', "switch"],
+      ['<widget [value]="title">', "widget"],
     ]);
   });
 
