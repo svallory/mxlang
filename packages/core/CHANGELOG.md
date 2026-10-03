@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: `dropOwnParserPosition(error, message)` (ts-plugin-ts80001-babel-suffix)
+
+Drops Babel's trailing 0-based ` (line:column)` from a parse error's message only when it provably repeats the error's own parser `loc`; a `TranslateError`, a plain `Error` or a suffix that differs from `loc` keeps its text. Generic; used by `@mxlang/typescript-plugin` and `@mxlang/language-server` so every surface prints the same `TS80001` text.
+
 ### Fixed: a same-tick, same-size `package.json` rewrite is no longer served stale (core-package-json-ctime-cache)
 
 `readPackageJsonCached` keyed its cache on `mtimeMs:ctimeMs:size:ino` alone. Linux before 6.13 stamps ctime at jiffy granularity (4 ms at HZ=250), so an edit that kept the size inside one tick, with the mtime pinned, left the key identical and the old `mx.host` / `mx.tags` kept winning. On a stamp hit the cache now also reads the file and compares its text with the cached text (one read plus a string compare per lookup of an unchanged file; a stamp miss costs what it did). `setPackageJsonStatForTests` lets tests freeze the stat to reproduce coarse timestamps on any OS. The other stat-keyed caches in core (`scan-cache`, `template-tag`, `callee-input`, `target-loader`) key on `mtimeMs` only by design and never depended on ctime.
