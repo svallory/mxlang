@@ -61,6 +61,22 @@ describe("dropOwnLocationHeader", () => {
     }
   });
 
+  it("drops it when the header is SGR-coloured (kleur under FORCE_COLOR)", () => {
+    // Kleur wraps the path, line and column each in their own SGR runs; the
+    // match runs on a VT-stripped copy, so the own header still goes.
+    expect(
+      dropOwnLocationHeader(
+        `\n    at \u001b[36msrc/pages/page.mx\u001b[39m:\u001b[33m4\u001b[39m:\u001b[33m1\u001b[39m\n${frame}`,
+        file,
+      ),
+    ).toBe(`\n${frame}`);
+  });
+
+  it("keeps a coloured header that names a different file, original text intact", () => {
+    const message = `\n    at \u001b[36msrc/tags/card.mx\u001b[39m:\u001b[33m2\u001b[39m:\u001b[33m3\u001b[39m\n${frame}`;
+    expect(dropOwnLocationHeader(message, file)).toBe(message);
+  });
+
   it("keeps a header that names a different file: it is the only location", () => {
     const message = `\n    at src/tags/card.mx:2:3\n${frame}`;
     expect(dropOwnLocationHeader(message, file)).toBe(message);

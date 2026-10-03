@@ -248,33 +248,53 @@ export function createTranslator(host: TranslatorOptions): Translator {
  * about another file), so the prefix only repeats the compiled file, often as
  * an absolute path.
  *
- * Babel writes the *resolved* spelling of `filename` into the prefix, so the
- * comparison is `resolve`/`realpathSync` of both sides, never the raw
- * strings: a relative `filename`, or one through a symlinked directory,
- * still matches. A file that does not exist on disk (a probe compiles source
- * text under a name nothing wrote) has no realpath and falls back to the
- * lexical resolve. Generic path logic only (decision 126).
+ * The comparison is two-sided: the leading path is *extracted* from the
+ * message, then both sides are compared by `resolve`/`realpathSync`
+ * identities (a file missing on disk resolves only) — never by raw strings.
+ * Babel may spell the file differently from the caller (a relative
+ * `filename`, a symlinked directory, a different alias of the same dir), and
+ * any spelling of the same file repeats it. A prefix naming a *different*
+ * file is the only place that file is named and stays. Generic path logic
+ * only (decision 126).
+ *
+ * @internal Exported for the path-identity regression tests only.
  */
-function dropCompiledFilePrefix(error: TranslateError, filename: string): void {
-  const resolved = resolve(filename);
-  let real = resolved;
+export function dropCompiledFilePrefix(
+  error: TranslateError,
+  filename: string,
+): void {
+  // The prefix is `<path>: ` at the very start of the message. Taking
+  // everything before the first ": " keeps spaces-in-pathnames intact and
+  // fails safe: a reason that merely contains ": " yields a non-path head
+  // whose identities match nothing.
+  const separator = error.message.indexOf(": ");
+  if (separator < 0) return;
+  const head = error.message.slice(0, separator);
+  if (!sameFilePath(head, filename)) return;
+  // `CompileError.message`-style accessors can swallow a plain assignment.
+  Object.defineProperty(error, "message", {
+    value: error.message.slice(separator + 2),
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+}
+
+/** Every spelling of `p` that can name the same file: its lexical resolve, plus its realpath when the path exists. */
+function pathIdentities(p: string): string[] {
+  const resolved = resolve(p);
   try {
-    real = realpathSync(resolved);
+    return [...new Set([resolved, realpathSync(resolved)])];
   } catch {
     // Missing file: the lexical resolve is the only spelling it has.
+    return [resolved];
   }
-  for (const spelling of new Set([filename, resolved, real])) {
-    const prefix = `${spelling}: `;
-    if (!error.message.startsWith(prefix)) continue;
-    // `CompileError.message`-style accessors can swallow a plain assignment.
-    Object.defineProperty(error, "message", {
-      value: error.message.slice(prefix.length),
-      enumerable: false,
-      writable: true,
-      configurable: true,
-    });
-    return;
-  }
+}
+
+/** Whether two path spellings name the same file: an identity of one side appears on the other. */
+function sameFilePath(a: string, b: string): boolean {
+  const identities = new Set(pathIdentities(a));
+  return pathIdentities(b).some((identity) => identities.has(identity));
 }
 
 /**

@@ -217,8 +217,9 @@ function applyOnError(
  * error keeps no 0-based suffix either — the reader would land one column
  * left of the error. Leaving either in place would print the position twice,
  * in two spellings.
+ * @internal Exported for the position-hygiene regression tests only.
  */
-function positionOf(
+export function positionOf(
   err: unknown,
   fallbackFile: string,
 ): { file: string; line?: number; column?: number; message: string } {
@@ -389,14 +390,16 @@ function compileTagFile(
     // on `err.loc` — `positionOf` reads it, strips Babel's path prefix and
     // 0-based `(L:C)` suffix, and honours a tag template's own `file` (A5).
     const at = positionOf(err, mxPath);
-    const message =
-      at.line !== undefined
-        ? `${at.file}${positionSuffix(at.line, at.column)} ${at.message}`
-        : `${at.file}: ${at.message}`;
+    const position = positionSuffix(at.line, at.column);
+    // The on-page error template lands in a `<pre>` without the build log
+    // around it, so it keeps the filename-bearing display message; the log
+    // line and the structured error stay compact — `file:line:col error:`
+    // with the reason alone, the path printed once.
+    const display = `${at.file}${position} ${at.message}`;
     const applied = applyOnError(
       outputPath,
       header,
-      message,
+      display,
       config.onError,
       knownOutputs,
     );
@@ -408,10 +411,10 @@ function compileTagFile(
             column: at.column,
             message: at.message,
           }
-        : { file: at.file, message };
+        : { file: at.file, message: at.message };
     return {
       ok: false,
-      lines: [`${mxPath} error: ${message}`, applied.line],
+      lines: [`${at.file}${position} error: ${at.message}`, applied.line],
       errors: applied.error
         ? [{ file: mxPath, line: 1, column: 0, message: applied.error }]
         : [error],

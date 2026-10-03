@@ -84,7 +84,7 @@ One short, positioned hint per error, appended to the reason; the error, its pos
 
 ### Fixed: a `TranslateError` message no longer starts with the compiled file's path (translate-error-no-repeated-path, audit item 17; no-repeat-path-relative-spellings)
 
-`compileSource` drops the `<filename>: ` prefix Babel adds to a translator error's message. The error already carries `line`/`column` (and `file` for an error in another file), and every surface prints the file itself, so the prefix only repeated it, as an absolute path, in `mx-tsc`'s `TS80001` and the language server's message. The prefix is recognised by comparing `resolve`/`realpathSync` of both sides (a file missing on disk resolves only), so the strip holds for absolute, relative and symlinked `filename` spellings; a prefix spelling that matches none of them is kept rather than risk dropping a real path.
+`compileSource` drops the `<filename>: ` prefix Babel adds to a translator error's message. The error already carries `line`/`column` (and `file` for an error in another file), and every surface prints the file itself, so the prefix only repeated it, as an absolute path, in `mx-tsc`'s `TS80001` and the language server's message. The comparison is two-sided: the leading path is extracted from the message and both sides are compared by `resolve`/`realpathSync` identities (a file missing on disk resolves only), so the strip holds however Babel and the caller each spell the file — absolute, relative, symlinked, or two independent aliases of one directory; a prefix naming a different file is kept, never stripped.
 
 ### Changed: core resolves targets from a caller-supplied lookup, and names none (refactor/target-open-set, decisions 129 and 132)
 

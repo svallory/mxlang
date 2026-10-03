@@ -12,7 +12,12 @@ import {
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { build, checkOverwriteGuard, compileOne } from "../src/build.ts";
+import {
+  build,
+  checkOverwriteGuard,
+  compileOne,
+  positionOf,
+} from "../src/build.ts";
 import { runCli } from "../src/cli.ts";
 import { type AngularConfig, readAngularConfig } from "../src/config.ts";
 import { discoverFiles } from "../src/discover.ts";
@@ -1111,7 +1116,22 @@ describe("build: unlocated Babel suffix (angular-build-unlocated-babel-suffix)",
       readAngularConfig(projectDir),
       new Set(),
     );
-    expect(one.lines[0]).toBe(`${chip} error: ${chip}:1:33 Unexpected token`);
+    expect(one.lines[0]).toBe(`${chip}:1:33 error: Unexpected token`);
+  });
+
+  it("strips the prefix and 0-based suffix from a genuinely loc-less tag error", () => {
+    // The Chip.mx error above is located (Babel attaches `loc`); this error
+    // has none — a raw message carrying Babel's absolute path prefix and
+    // 0-based `(L:C)` suffix. `positionOf` must strip both on the unlocated
+    // branch too, and the caller prints `file: message` with no position.
+    const chip = join(projectDir, "src/tags/Chip.mx");
+    const at = positionOf(new Error(`${chip}: Unexpected token (1:32)`), chip);
+    expect(at).toEqual({
+      file: chip,
+      line: undefined,
+      column: undefined,
+      message: "Unexpected token",
+    });
   });
 });
 

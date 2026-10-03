@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 // `\r?` before the end: a CRLF message keeps its `\r` on every line once
 // split on "\n", and the `\r` defeated the match (the header was kept).
@@ -32,7 +33,10 @@ function sameFile(a: string, b: string): boolean {
  * error inside a callee tag) is the only place that file is named and stays.
  * Marko prints the path relative to the cwd, so both spellings are resolved
  * before comparing — and realpath'd as well, so a relative or symlinked
- * `fileName` still matches. Generic path logic only (decision 126).
+ * `fileName` still matches. Kleur colourises the line under `FORCE_COLOR`
+ * (path, line and column each wrapped in SGR runs), so the match runs on a
+ * VT-stripped copy; lines that stay keep their original text. Generic path
+ * logic only (decision 126).
  */
 export function dropOwnLocationHeader(
   message: string,
@@ -41,7 +45,10 @@ export function dropOwnLocationHeader(
   return message
     .split("\n")
     .filter((line) => {
-      const found = AT_LINE.exec(line);
+      // The `at` line is matched on a VT-stripped copy: kleur colours the
+      // path and numbers under FORCE_COLOR, and the raw line would never
+      // reach the identity comparison. Kept lines return untouched.
+      const found = AT_LINE.exec(stripVTControlCharacters(line));
       return !(found && sameFile(found[1] as string, fileName));
     })
     .join("\n");

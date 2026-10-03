@@ -81,7 +81,10 @@ describe("a TranslateError message does not repeat the compiled file's path", ()
         '<input [value]="input.name"/>\n',
         join(linkRoot, "page.mx"),
       );
-      expect(error.message.replace(ANSI, "")).not.toContain(dir);
+      expect(error.name).toBe("TranslateError");
+      expect(error.message.replace(ANSI, "")).toBe(
+        "Invalid attribute name `[value]`; Marko rejects it too — write `value=` with the expression as the value",
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
