@@ -15,8 +15,9 @@
  * over the emitted code differ, and those arrive as arguments.
  */
 
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import {
@@ -246,17 +247,34 @@ export function createTranslator(host: TranslatorOptions): Translator {
  * `TranslateError` already carries `line`/`column` (and `file` when it is
  * about another file), so the prefix only repeats the compiled file, often as
  * an absolute path.
+ *
+ * Babel writes the *resolved* spelling of `filename` into the prefix, so the
+ * comparison is `resolve`/`realpathSync` of both sides, never the raw
+ * strings: a relative `filename`, or one through a symlinked directory,
+ * still matches. A file that does not exist on disk (a probe compiles source
+ * text under a name nothing wrote) has no realpath and falls back to the
+ * lexical resolve. Generic path logic only (decision 126).
  */
 function dropCompiledFilePrefix(error: TranslateError, filename: string): void {
-  const prefix = `${filename}: `;
-  if (!error.message.startsWith(prefix)) return;
-  // `CompileError.message`-style accessors can swallow a plain assignment.
-  Object.defineProperty(error, "message", {
-    value: error.message.slice(prefix.length),
-    enumerable: false,
-    writable: true,
-    configurable: true,
-  });
+  const resolved = resolve(filename);
+  let real = resolved;
+  try {
+    real = realpathSync(resolved);
+  } catch {
+    // Missing file: the lexical resolve is the only spelling it has.
+  }
+  for (const spelling of new Set([filename, resolved, real])) {
+    const prefix = `${spelling}: `;
+    if (!error.message.startsWith(prefix)) continue;
+    // `CompileError.message`-style accessors can swallow a plain assignment.
+    Object.defineProperty(error, "message", {
+      value: error.message.slice(prefix.length),
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+    return;
+  }
 }
 
 /**

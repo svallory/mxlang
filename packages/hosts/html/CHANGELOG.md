@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Test (no-repeat-path-relative-spellings):** `error-no-repeated-path.test.ts` pins that a `TranslateError` message drops the compiled-file prefix for a *relative* `filename` and a filename under a symlinked directory, not only the exact absolute spelling. The fix is in `@mxlang/core`'s `dropCompiledFilePrefix` (resolve/realpath comparison); no html code changes.
+
 - **Fix (jsx-whitespace-body-parity, decision 141):** imported components and discovered `tags/*.mx` now forward same-line whitespace-only bodies as one space, matching Marko 6.3.51 through the shared core body-presence fix. Newline indentation remains absent. Pinned by rendered output, including tabs, CRLF and comments beside whitespace.
 
 - **Changed (refactor/target-open-set, decision 137):** the Bun loader excludes a dotted tag file name from the tag map with a positioned diagnostic, as `@mxlang/core`'s scan does. The loader is a direct entry, so it resolves its targets from this package's own descriptor unless a caller passes a lookup (`createHtmlBunPlugin(targets)`); either way a foreign `tags/x.ng.mx` is rejected. Only full-registry tooling validates unknown bare words in `mx.tags[].hosts`; this direct loader leaves peer restrictions unresolved without a warning (PR 3 round-2 ruling). Package specifiers stay silent.

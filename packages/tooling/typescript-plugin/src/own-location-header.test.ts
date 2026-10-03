@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { createMxLanguagePlugin } from "./mx-language.ts";
@@ -28,6 +30,35 @@ describe("dropOwnLocationHeader", () => {
     expect(dropOwnLocationHeader(`\n    at ${file}:4:1\n${frame}`, file)).toBe(
       `\n${frame}`,
     );
+  });
+
+  it("drops it when the message has CRLF line endings", () => {
+    // A `\r` before the newline defeated the line regex, so the header was
+    // kept (the repeat this helper exists to drop).
+    expect(
+      dropOwnLocationHeader(`\n    at src/pages/page.mx:4:1\r\n${frame}`, file),
+    ).toBe(`\n${frame}`);
+  });
+
+  it("drops it when one side is a symlinked spelling of the file", () => {
+    // `resolve` is lexical, so the realpath'd spelling Marko prints and a
+    // symlinked `fileName` never matched; both sides are realpath'd now
+    // (guarding a missing file).
+    const dir = mkdtempSync(join(tmpdir(), "mx-own-loc-"));
+    try {
+      const real = join(dir, "page.mx");
+      writeFileSync(real, "");
+      const link = join(dir, "link.mx");
+      symlinkSync(real, link);
+      expect(dropOwnLocationHeader(`\n    at ${real}:4:1\n${frame}`, link)).toBe(
+        `\n${frame}`,
+      );
+      expect(dropOwnLocationHeader(`\n    at ${link}:4:1\n${frame}`, real)).toBe(
+        `\n${frame}`,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("keeps a header that names a different file: it is the only location", () => {

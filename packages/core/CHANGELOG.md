@@ -82,9 +82,9 @@ One short, positioned hint per error, appended to the reason; the error, its pos
 - **A valid `$` scriptlet** (lowering error, decision 54) carries the same ``declare a value with `<const/x=…/>` `` fix.
 - **`(click)="go()"` on an element** now ends ``; for an event handler write `onClick=go` `` on a host that renders handlers (it declares `resolveAttributeMethod`); `go()`/`go` give `go`, anything else `handler`, and only a lone identifier argument qualifies. A host that renders once to a string (`@mxlang/html`) has no handler form to suggest, so its message is unchanged.
 
-### Fixed: a `TranslateError` message no longer starts with the compiled file's path (translate-error-no-repeated-path, audit item 17)
+### Fixed: a `TranslateError` message no longer starts with the compiled file's path (translate-error-no-repeated-path, audit item 17; no-repeat-path-relative-spellings)
 
-`compileSource` drops the `<filename>: ` prefix Babel adds to a translator error's message. The error already carries `line`/`column` (and `file` for an error in another file), and every surface prints the file itself, so the prefix only repeated it, as an absolute path, in `mx-tsc`'s `TS80001` and the language server's message.
+`compileSource` drops the `<filename>: ` prefix Babel adds to a translator error's message. The error already carries `line`/`column` (and `file` for an error in another file), and every surface prints the file itself, so the prefix only repeated it, as an absolute path, in `mx-tsc`'s `TS80001` and the language server's message. The prefix is recognised by comparing `resolve`/`realpathSync` of both sides (a file missing on disk resolves only), so the strip holds for absolute, relative and symlinked `filename` spellings; a prefix spelling that matches none of them is kept rather than risk dropping a real path.
 
 ### Changed: core resolves targets from a caller-supplied lookup, and names none (refactor/target-open-set, decisions 129 and 132)
 

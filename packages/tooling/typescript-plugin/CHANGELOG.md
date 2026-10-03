@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: `dropOwnLocationHeader` recognises relative, symlinked and CRLF spellings (no-repeat-path-relative-spellings)
+
+The `at <path>:L:C` line is dropped when it names the diagnosed file. The comparison used to be lexical `resolve` of both strings, so a relative `fileName` spelled differently from Marko's cwd-relative path, a symlinked spelling on either side, or a CRLF message (the trailing `\r` defeated the line regex) kept the repeat. Both sides are now compared by `resolve` and `realpathSync` (guarding a missing file), and the line regex tolerates a trailing `\r`. Generic path logic only (decision 126); still fail-safe — a spelling that matches nothing is kept, never dropped falsely.
+
 ### Added: target selection errors (target-select, decisions 129/132)
 
 `mx.target` selects its host behaviour. Policy errors surface as TS80003
