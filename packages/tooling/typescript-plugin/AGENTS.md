@@ -58,6 +58,13 @@ entry.
   `readAngularConfig`, which throws on a bad config: the plugin reports that as
   an error diagnostic at offset 0 and emits empty virtual code, never defaults.
   The host-policy "angular not wired" guard still covers Angular `.mx` pages.
+  Discovered Angular tag templates bypass page dispatch and project the existing
+  `compileTagModule` component as TS (not TSX). `createVirtualTagModuleReader`
+  in the Angular host shares discovery and compilation with the checker's
+  in-memory `.ts` sibling reader, so a tag call no longer aborts the caller's
+  Angular template check with `TS-991010`. The TypeScript projection reads
+  unsaved tag buffers; the forked Angular checker reads disk, so template
+  diagnostics against a changed tag require saving it and rechecking the caller.
   `retainCompiled` (off by default) keeps each file's latest successful compile
   for `getCompiledNgMx()`: `mx-tsc` uses it to run Angular template diagnostics
   over the compiles its type-check used; an editor must not hold them all.

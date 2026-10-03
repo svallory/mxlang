@@ -5,6 +5,7 @@ import { Component } from "@angular/core";
   template: <div>
     <user-card title=title/>
     <input lable=title/>
+    <p>${title.nmae}</p>
   </div>,
 })
 export class XComponent { title = "hi"; }

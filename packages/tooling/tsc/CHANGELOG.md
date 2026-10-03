@@ -4,6 +4,10 @@
 
 - **Test fix (vite-plugin-colored-marko-header):** "catches what plain tsc cannot even see" asserts on `stripVTControlCharacters(output)`: TypeScript colourises its pretty diagnostics when `FORCE_COLOR` reaches the spawned `tsc` (TypeScript ≥ 5.9), so the plain-text `error TS2307` substring no longer matched.
 
+### Fixed: calling Angular tags preserves template diagnostics (ng-mx-tags-call-ts991010)
+
+A `.ng.mx` component calling a `tags/` component now reports its real template errors at authored positions, without `TS-991010` at `(1,1)` or the tag's phase-2 `TS80001`. The shared plugin and Angular checker resolve the tag's generated component module in memory; no prior `mx-angular build` is required. Page dispatch and dispatch goldens are unchanged.
+
 ### Added: target selection errors (target-select, decisions 129/132)
 
 Invalid `mx.target` values and host/target mismatches print positioned

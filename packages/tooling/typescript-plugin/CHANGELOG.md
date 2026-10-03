@@ -6,6 +6,10 @@
 
 The `at <path>:L:C` line is dropped when it names the diagnosed file. The comparison used to be lexical `resolve` of both strings, so a relative `fileName` spelled differently from Marko's cwd-relative path, a symlinked spelling on either side, or a CRLF message (the trailing `\r` defeated the line regex) kept the repeat. Both sides are now compared by `resolve` and `realpathSync` (guarding a missing file), and the line regex tolerates a trailing `\r`. Round 2: the `at` line is matched on a VT-stripped copy, so a kleur-coloured header under `FORCE_COLOR` reaches the identity comparison too; kept lines retain their original text. Generic path logic only (decision 126); still fail-safe — a spelling that matches nothing is kept, never dropped falsely.
 
+### Fixed: Angular tag calls no longer disable template diagnostics (ng-mx-tags-call-ts991010)
+
+Discovered Angular tag templates are projected as the existing generated TypeScript component module, rather than rejected as unwired pages. The editor's Angular worker also serves their generated `.ts` siblings in memory, so a caller keeps its positioned template diagnostics instead of only a misleading `TS-991010` at `(1,1)`. Angular `.mx` pages remain pending; target dispatch tables, registry descriptors and dispatch goldens are unchanged. The worker reads tag files from disk, so unsaved tag changes still require saving and rechecking the caller for Angular template diagnostics.
+
 ### Added: target selection errors (target-select, decisions 129/132)
 
 `mx.target` selects its host behaviour. Policy errors surface as TS80003

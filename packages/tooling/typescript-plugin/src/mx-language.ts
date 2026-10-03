@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
+import { createVirtualTagModuleReader } from "@mxlang/angular";
 import {
   type CustomTag,
   dropOwnParserPosition,
@@ -43,6 +44,7 @@ import {
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
   mergeMappings,
+  nearestPackageDir,
   warningDiagnostic,
 } from "./language.ts";
 import { dropOwnLocationHeader } from "./own-location-header.ts";
@@ -107,7 +109,10 @@ export function createMxLanguagePlugin(
    */
   const reported = new Set<string>();
 
-  const tagsFor = (fileName: string): Record<string, CustomTag> | undefined => {
+  const tagsFor = (
+    fileName: string,
+    target: string,
+  ): Record<string, CustomTag> | undefined => {
     // A misconfigured `mx.tags` is not fatal — the local `tags/` directories
     // still resolve — but silence is worse than a warning here: a tag simply
     // fails to resolve with nothing saying why. There is no diagnostic
@@ -117,7 +122,7 @@ export function createMxLanguagePlugin(
     // The filter value `mx.tags[].hosts` is matched against: the target's own
     // host name, or a hostless target's legacy `mx.host` value (`html`),
     // which is what every existing `hosts: ["html"]` entry matches.
-    const host = hostFilterKey(resolveHost(fileName).target) ?? null;
+    const host = hostFilterKey(target) ?? null;
     for (const diagnostic of scanCached(fileName, { host }).diagnostics) {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
@@ -148,7 +153,17 @@ export function createMxLanguagePlugin(
         const result = compileWithDependencies(
           options.readSource,
           dependencies.get(fileName) ?? [],
-          () => compileMxVirtual(fileName, source, tagsFor(fileName)),
+          () => {
+            const hostPolicy = resolveHost(fileName);
+            const customTags = tagsFor(fileName, hostPolicy.target);
+            // Reuse discovery's policy resolution: resolving it again would
+            // repeat deprecation warnings on unchanged non-Angular files.
+            const tag =
+              hostPolicy.host === "angular"
+                ? compileAngularTagVirtual(fileName, source, customTags)
+                : undefined;
+            return tag ?? compileMxVirtual(fileName, source, customTags);
+          },
         );
         const { generated, mappings, warnings } = result;
         dependencies.set(fileName, result.dependencies);
@@ -159,7 +174,12 @@ export function createMxLanguagePlugin(
             warningDiagnostic(fileName, source, warning),
           ),
         );
-        return createVirtualCode(typescript, generated, mappings);
+        return createVirtualCode(
+          typescript,
+          generated,
+          mappings,
+          result.angularTag,
+        );
       } catch (cause) {
         const foreign = foreignTemplateError(
           cause,
@@ -215,7 +235,14 @@ export function createMxLanguagePlugin(
         scriptKind: typescript.ScriptKind.TSX,
       })),
       getServiceScript(root) {
-        // TSX, not TS, and for every host: the Preact host emits a component
+        if (root.id === "angular-tag") {
+          return {
+            code: root,
+            extension: ".ts",
+            scriptKind: typescript.ScriptKind.TS,
+          };
+        }
+        // TSX, not TS, and for every other host: the Preact host emits a component
         // module whose body is JSX, and parsed as plain TS its `return (<>…)`
         // is a syntax error — which surfaced as the module having no exports
         // at all ("File '…/Counter.mx' is not a module"), not as a parse
@@ -239,6 +266,38 @@ export function createMxLanguagePlugin(
     },
   };
 
+  // Tag modules are already a build-supported output kind. Present only those
+  // as TypeScript; leave page dispatch (including Angular's pending guard) alone.
+  function compileAngularTagVirtual(
+    fileName: string,
+    source: string,
+    customTags: Record<string, CustomTag> | undefined,
+  ) {
+    const projectDir = nearestPackageDir(dirname(fileName));
+    if (!projectDir) return undefined;
+    const result = createVirtualTagModuleReader(projectDir, {
+      customTags,
+      targets: builtinLookup(),
+      ...(options.readSource ? { readSource: options.readSource } : {}),
+    })(fileName, source);
+    if (!result) return undefined;
+    return {
+      generated: result.code,
+      mappings: result.mappings.map(
+        (mapping): CodeMapping => ({
+          sourceOffsets: [mapping.sourceStart],
+          generatedOffsets: [mapping.generatedStart],
+          lengths: [mapping.sourceEnd - mapping.sourceStart],
+          generatedLengths: [mapping.generatedEnd - mapping.generatedStart],
+          data: codeInformation,
+        }),
+      ),
+      dependencies: result.dependencies,
+      warnings: result.warnings,
+      angularTag: true,
+    };
+  }
+
   function compileMxVirtual(
     fileName: string,
     source: string,
@@ -248,6 +307,7 @@ export function createMxLanguagePlugin(
     mappings: CodeMapping[];
     dependencies: string[];
     warnings: MxWarning[];
+    angularTag?: boolean;
   } {
     const hostPolicy = resolveHost(fileName);
     const strict = hostPolicy.host === "astro" || hostPolicy.strict === true;
@@ -382,9 +442,10 @@ function createVirtualCode(
   typescript: typeof ts,
   generated: string,
   mappings: CodeMapping[],
+  angularTag = false,
 ): VirtualCode {
   return {
-    id: "root",
+    id: angularTag ? "angular-tag" : "root",
     languageId: "typescript",
     snapshot: typescript.ScriptSnapshot.fromString(generated),
     mappings,

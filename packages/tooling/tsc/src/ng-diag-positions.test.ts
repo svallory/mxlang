@@ -54,16 +54,22 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
     () => {
       const dir = join(fixtures, "ng-diag-tag-import");
       const result = run(mxTsc, ["--noEmit", "-p", dir]);
-      // The run still fails, and still prints `TS-991010` ('imports' must be
-      // an array of components…): the called tag's class is not resolvable
-      // as an Angular component yet (its `.mx` module hits `TS80001`, the
-      // Angular host is not wired into the plugin), so the compiler cannot
-      // read `imports: [UserCard]` statically and drops the template
-      // diagnostics for the component. That is a separate, pre-existing
-      // problem; what this test pins is only that the decorator is not cut
-      // in two by the hoisted import.
+      const source = readFileSync(
+        join(dir, "src", "x.component.ng.mx"),
+        "utf8",
+      );
+      expect(result.status).not.toBe(0);
       expect(result.output).not.toContain("TS1206");
       expect(result.output).not.toContain("TS2304");
+      expect(result.output).not.toContain("TS-991010");
+      expect(result.output).not.toContain("TS80001");
+      expect(result.output).toContain(
+        `x.component.ng.mx(${printed(source, "title.nmae")}): error TS2339`,
+      );
+      expect(result.output).toContain(
+        `x.component.ng.mx(${printed(source, "lable=title")}): error TS-998002`,
+      );
+      expect(result.output).not.toContain("approximate location");
     },
     SPAWN_TIMEOUT_MS,
   );

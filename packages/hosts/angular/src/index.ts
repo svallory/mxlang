@@ -76,6 +76,11 @@ export {
   compileTagModuleFile,
 } from "./tag-module.ts";
 
+export {
+  createVirtualTagModuleReader,
+  type VirtualTagModuleOptions,
+} from "./virtual-tags.ts";
+
 export interface CompileOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;

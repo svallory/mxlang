@@ -3913,6 +3913,60 @@ describe(".ng.mx language plugin", () => {
       }
     }, 90_000);
 
+    it("keeps positioned template errors when a .ng.mx calls a tags/ component", async () => {
+      const fixture = join(
+        here,
+        "..",
+        "..",
+        "tsc",
+        "src",
+        "fixtures",
+        "ng-diag-tag-import",
+      );
+      const file = join(fixture, "src", "x.component.ng.mx");
+      const tag = join(fixture, "tags", "user-card.mx");
+      const consumer = join(fixture, "consumer.ts");
+      const source = readFileSync(file, "utf8");
+      let refreshed = 0;
+      const { service, project } = createMutablePluginService(
+        {
+          [file]: source,
+          [tag]: readFileSync(tag, "utf8"),
+          [consumer]:
+            'import "./src/x.component.ng.mx";\nimport "./tags/user-card.mx";\n',
+        },
+        [consumer],
+        {
+          refreshDiagnostics: () => {
+            refreshed += 1;
+          },
+          inferredProject: true,
+        },
+      );
+      try {
+        service.getSemanticDiagnostics(file);
+        await until(() => refreshed > 0);
+        const found = service.getSemanticDiagnostics(file);
+        expect(
+          found.map((d) => ({ code: d.code, message: d.messageText })),
+        ).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ code: -991010 })]),
+        );
+        const typeError = found.find(
+          (d) => d.source === "angular" && d.code === 2339,
+        );
+        expect(typeError).toBeDefined();
+        expect(typeError?.start).toBe(source.indexOf("title.nmae"));
+        const attributeError = found.find(
+          (d) => d.source === "angular" && d.code === -998002,
+        );
+        expect(attributeError?.start).toBe(source.indexOf("lable=title"));
+        expect(service.getSyntacticDiagnostics(tag)).toEqual([]);
+      } finally {
+        project.close();
+      }
+    }, 90_000);
+
     it("checks a .ng.mx that was compiled while closed once the editor asks about it", async () => {
       const file = `${ngDir}/x.component.ng.mx`;
       const consumer = `${ngDir}/consumer.ts`;

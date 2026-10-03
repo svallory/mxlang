@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (ng-mx-tags-call-ts991010):** the compiler host serves in-memory Angular tag modules when a component imports their generated siblings, even before `mx-angular build` has written them. Calling a `tags/` component no longer produces misleading `TS-991010` and hides all the caller's template diagnostics. Tag sources are reread on each check; ordinary TS files keep their own contents.
+
 - **Fix (angular-checker-dist-before-typecheck, the #182/#192 pattern):** `typecheck` now runs `tsc -p tsconfig.typecheck.json`, which resolves `@mxlang/core`, `@mxlang/parser` and `@mxlang/angular` from their src via `paths` (the parser to its hand-written `public.d.ts`), so the typecheck passes in a fresh checkout with no built `dist/` anywhere and can never read stale dependency types. The mapping lives outside `tsconfig.json` because Bun's bundler honours it and the typescript-plugin VSIX bundle inlines this package's src. `tsconfig.json`/`tsconfig.build.json` are unchanged, so the tarball's declarations still resolve the deps through their published dist types. No emitted or runtime change.
 
 - **Fix (angular-fix-hints, audit item 14):** NG8002 for a misspelled component input now suggests its uniquely nearest declared input, using Angular's matched metadata (including aliases, inherited inputs and signal inputs), not unrelated classes. When a suggestion exists, it replaces the generic schema-suppression advice. A bare event-handler reference taking two numbers now gets the concrete inline-arrow fix (`on-click=(() => two(1, 2))`) instead of TS assignability prose; other type errors are preserved. Codes, counts and authored positions stay unchanged, and tests apply each suggested fix and check the full emitted module clean.

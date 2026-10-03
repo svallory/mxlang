@@ -18,6 +18,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { NgtscProgram } from "@angular/compiler-cli";
+import { createVirtualTagModuleReader } from "@mxlang/angular";
 import type ts from "typescript";
 import {
   type CompilerCliModule,
@@ -174,10 +175,16 @@ function buildHost(
   const base = tsModule.createCompilerHost(options, true);
   const host: ts.CompilerHost = Object.create(base);
 
-  host.fileExists = (f) => files.has(f) || base.fileExists(f);
-  host.readFile = (f) => (files.has(f) ? files.get(f) : base.readFile(f));
+  // compiler-cli has its own TS program, not Volar's. Serve the same tag
+  // modules there too, at the .ts sibling paths the Angular emitter imports.
+  // A fresh reader per host/check also refreshes an edited on-disk tag.
+  const readTag = createVirtualTagModuleReader(projectDir);
+  const virtualSource = (f: string) => files.get(f) ?? readTag(f)?.code;
+  host.fileExists = (f) =>
+    files.has(f) || base.fileExists(f) || readTag(f) !== undefined;
+  host.readFile = (f) => virtualSource(f) ?? base.readFile(f);
   host.getSourceFile = (f, languageVersion, onError, shouldCreate) => {
-    const virtual = files.get(f);
+    const virtual = virtualSource(f);
     return virtual === undefined
       ? base.getSourceFile(f, languageVersion, onError, shouldCreate)
       : tsModule.createSourceFile(f, virtual, languageVersion, true);

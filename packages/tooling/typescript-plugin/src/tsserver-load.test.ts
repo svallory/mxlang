@@ -1,10 +1,12 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -211,6 +213,124 @@ describe.skipIf(!built)("tsserver loads the built plugin", () => {
       [{ name: "@mxlang/typescript-plugin" }],
     );
   }, 50_000);
+});
+
+describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
+  it("keeps authored template diagnostics without a static imports error", async () => {
+    const root = realpathSync(makePluginInstall());
+    let server: ReturnType<typeof startTsserver> | undefined;
+    try {
+      const require = createRequire(import.meta.url);
+      mkdirSync(path.join(root, "node_modules", "@angular"));
+      for (const name of ["core", "compiler-cli"]) {
+        symlinkSync(
+          path.dirname(require.resolve(`@angular/${name}/package.json`)),
+          path.join(root, "node_modules", "@angular", name),
+          "dir",
+        );
+      }
+      symlinkSync(
+        path.dirname(require.resolve("typescript/package.json")),
+        path.join(root, "node_modules", "typescript"),
+        "dir",
+      );
+      writeFileSync(
+        path.join(root, "package.json"),
+        JSON.stringify({ mx: { host: "angular" } }),
+      );
+      writeFileSync(
+        path.join(root, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            target: "es2022",
+            module: "esnext",
+            moduleResolution: "bundler",
+            experimentalDecorators: true,
+            skipLibCheck: true,
+            types: [],
+            plugins: [{ name: "@mxlang/typescript-plugin" }],
+          },
+          angularCompilerOptions: { strictTemplates: true },
+          include: ["src", "tags"],
+        }),
+      );
+      mkdirSync(path.join(root, "src"));
+      mkdirSync(path.join(root, "tags"));
+      const fixture = path.resolve(
+        import.meta.dirname,
+        "../../tsc/src/fixtures/ng-diag-tag-import",
+      );
+      const source = readFileSync(
+        path.join(fixture, "src", "x.component.ng.mx"),
+        "utf8",
+      );
+      const file = path.join(root, "src", "x.component.ng.mx");
+      const tag = path.join(root, "tags", "user-card.mx");
+      writeFileSync(file, source);
+      writeFileSync(
+        tag,
+        readFileSync(path.join(fixture, "tags", "user-card.mx"), "utf8"),
+      );
+      const log = path.join(root, "tsserver.log");
+      server = startTsserver(
+        [
+          "--pluginProbeLocations",
+          root,
+          "--logVerbosity",
+          "verbose",
+          "--logFile",
+          log,
+          "--disableAutomaticTypingAcquisition",
+        ],
+        root,
+        log,
+      );
+      await server.request("configure", {
+        extraFileExtensions: [
+          { extension: ".mx", isMixedContent: false, scriptKind: 7 },
+        ],
+      });
+      await server.request("open", { file });
+      type ProtocolDiagnostic = {
+        code: number;
+        text: string;
+        start: { line: number; offset: number };
+      };
+      let found: ProtocolDiagnostic[] = [];
+      const deadline = Date.now() + 30_000;
+      do {
+        found = (await server.request("semanticDiagnosticsSync", {
+          file,
+        })) as ProtocolDiagnostic[];
+        if (found.some((d) => d.code === 2339 || d.code === -991010)) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } while (Date.now() < deadline);
+      expect(found.map((d) => d.code)).not.toContain(-991010);
+      const before = (needle: string) => {
+        const lines = source.slice(0, source.indexOf(needle)).split("\n");
+        return { line: lines.length, offset: (lines.at(-1) ?? "").length + 1 };
+      };
+      expect(found.find((d) => d.code === 2339)?.start).toEqual(
+        before("title.nmae"),
+      );
+      expect(found.find((d) => d.code === -998002)?.start).toEqual(
+        before("lable=title"),
+      );
+      expect(found.some((d) => d.text.includes("approximate location"))).toBe(
+        false,
+      );
+      await server.request("open", { file: tag });
+      expect(
+        await server.request("syntacticDiagnosticsSync", { file: tag }),
+      ).toEqual([]);
+      expect(existsSync(path.join(root, "tags", "user-card.ts"))).toBe(false);
+    } finally {
+      // Angular workers exit when the parent's IPC channel disconnects.
+      server?.kill();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 90_000);
 });
 
 // The same load, against the plugin an installed VS Code extension ships:
