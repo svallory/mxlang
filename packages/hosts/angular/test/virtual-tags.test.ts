@@ -71,6 +71,45 @@ describe("virtual Angular tag modules", () => {
     expect(read(join(dir, "tags/outer.ts"))?.code).toBe(expected.code);
   });
 
+  it("uses package contracts from the build's scan for code and positioned errors", () => {
+    const { dir, put } = project({
+      mx: { contracts: { module: "./contracts.cjs", hosts: ["angular"] } },
+    });
+    put(
+      "contracts.cjs",
+      "exports.default = { 'html-comment': { attributes: {} } };",
+    );
+    const source = "<html-comment/>";
+    const tag = put("tags/card.mx", source);
+    const scan = core.scanCached(tag, {
+      host: "angular",
+      targets: angularOwnTargets,
+    });
+    expect(scan.customTags["html-comment"]?.attributes).toEqual({});
+    const read = createVirtualTagModuleReader(dir);
+    expect(read(tag)?.code).toBe(
+      compileTagModule(source, tag, { customTags: scan.customTags }).code,
+    );
+    const badSource = "\n<html-comment bogus=true/>";
+    for (const compile of [
+      () => compileTagModule(badSource, tag, { customTags: scan.customTags }),
+      () => read(tag, badSource),
+    ]) {
+      let failure: unknown;
+      try {
+        compile();
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(core.TranslateError);
+      expect(failure).toMatchObject({
+        message: expect.stringContaining("accepts no attributes"),
+        line: 2,
+        column: 14,
+      });
+    }
+  });
+
   it("reuses scanCached across fresh readers without a project discovery walk", () => {
     const { dir, put } = project();
     const tag = put("tags/card.mx", tagSource);
