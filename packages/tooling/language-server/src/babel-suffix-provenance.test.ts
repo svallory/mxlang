@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
+import type { TargetPolicy } from "@mxlang/core";
+import { defaultTarget, hostOf } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { diagnoseDocument } from "./diagnose.ts";
 
@@ -30,6 +32,12 @@ vi.mock("@mxlang/html", async (importOriginal) => {
   };
 });
 
+// The built-in html target, as the registry resolves it.
+const html = (): TargetPolicy => {
+  const target = defaultTarget();
+  return { target, host: hostOf(target) };
+};
+
 const dirs: string[] = [];
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true });
@@ -49,7 +57,7 @@ function messageOf(files: Record<string, string>, page: string): string {
   const [d] = diagnoseDocument(
     files[page] ?? "",
     pathToFileURL(join(dir, page)).href,
-    { host: "html" },
+    html(),
   );
   return stripVTControlCharacters(String(d?.message ?? ""));
 }

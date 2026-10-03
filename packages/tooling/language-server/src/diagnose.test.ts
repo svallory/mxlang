@@ -1054,7 +1054,7 @@ describe("Babel's 0-based (L:C) suffix", () => {
     const [d] = diagnoseDocument(
       "export const A = <div><span>oops</div>;\n",
       "file:///project/Broken.solid.mx",
-      { host: "solid" },
+      policy("solid"),
     );
     expect(d?.message).toMatch(OPENER);
     expect(d?.message).not.toMatch(/\(\d+:\d+\)/);
@@ -1064,7 +1064,7 @@ describe("Babel's 0-based (L:C) suffix", () => {
     const [d] = diagnoseDocument(
       "<div><span>oops</div>\n",
       "file:///project/page.mx",
-      { host: "html" },
+      policy("html"),
     );
     expect(d?.message).toMatch(OPENER);
     expect(d?.message).not.toMatch(/\(\d+:\d+\)/);
