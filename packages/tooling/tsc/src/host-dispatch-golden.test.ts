@@ -62,14 +62,17 @@ const goldens = join(root, "__golden__");
  * - astro-mx-html-host: D6. The `.astro.mx` scan filter is the literal "astro", so a
  *   tag restricted to `hosts: ["astro"]` stays visible to an `.astro.mx` page in a
  *   package whose own target is html.
- * - tags-x-ng: changes in PR 3 (design note §5.1, rule (d), case 1: the
- *   message stays, now produced through the registry lookup).
- * - tags-icon-small: changes in PR 3 (§5.1, rule (d), case 2: a dotted tag
- *   name that cannot be called is rejected with a diagnostic; today it is
- *   indexed silently).
- * - tags-hosts-package: changes in PR 3 (§5: `mx.tags[].hosts` naming a
- *   package specifier must not warn; the scan's warning for an unknown
- *   target name stays for a bare word, as tags-hosts-bogus pins).
+ * - tags-x-ng: PR 3 (design note §5.1, rule (d), case 1) produced **no**
+ *   change to these bytes: the host-module message is worded the same and is
+ *   now produced through the registry lookup, so the row still passes as it
+ *   stood.
+ * - tags-icon-small: changed in PR 3 (§5.1, rule (d), case 2: a dotted tag
+ *   name that cannot be called is rejected with a diagnostic; it was indexed
+ *   silently). Regenerated.
+ * - tags-hosts-package: changed in PR 3 (§5, condition 5: `mx.tags[].hosts`
+ *   naming a package specifier must not warn, and the specifier is still not a
+ *   filter value this project can match). Regenerated. The bare-word warning
+ *   stays, as tags-hosts-bogus pins.
  * - html-with-solid-dep: `mx.host: "html"` beats rule 2 (a lone `@mxlang/solid`
  *   dependency would otherwise pick solid). PR 3 rewrites rule 2.
  * - translator: the deprecated alias for html and its warning.

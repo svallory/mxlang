@@ -21,6 +21,7 @@ import {
   type TemplateBackedTag,
 } from "@mxlang/core";
 import { print } from "@mxlang/parser";
+import { builtinLookup } from "@mxlang/target-registry";
 import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -40,7 +41,6 @@ import {
   SOLID_MX_LANGUAGE_ID,
   solidRegionCompile,
 } from "./language.ts";
-import { builtinLookup } from "@mxlang/target-registry";
 import {
   createAstroTypeSurface,
   createHtmlMappings,

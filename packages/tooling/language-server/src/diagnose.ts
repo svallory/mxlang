@@ -11,11 +11,17 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import {
   type CustomTag,
-  type TargetPolicy,
+  isTranslateError,
   type MxWarning,
   type ScanDiagnostic,
-  isTranslateError,
+  type TargetPolicy,
 } from "@mxlang/core";
+import { compileHonoMx } from "@mxlang/hono";
+import { compile } from "@mxlang/html";
+import { print } from "@mxlang/parser";
+import { compilePreactMx } from "@mxlang/preact";
+import { compileReactMx } from "@mxlang/react";
+import { compileSolidMx, compileSolidUnit } from "@mxlang/solid";
 import {
   builtinLookup,
   getCustomTags,
@@ -23,12 +29,6 @@ import {
   hostModuleSegment,
   scanCached,
 } from "@mxlang/target-registry";
-import { compileHonoMx } from "@mxlang/hono";
-import { compile } from "@mxlang/html";
-import { print } from "@mxlang/parser";
-import { compilePreactMx } from "@mxlang/preact";
-import { compileReactMx } from "@mxlang/react";
-import { compileSolidMx, compileSolidUnit } from "@mxlang/solid";
 import {
   type Diagnostic,
   DiagnosticSeverity,
@@ -323,8 +323,7 @@ export function diagnoseDocument(
     // (a test, or an integration that scanned once for a batch of documents)
     // has already decided what this file sees, and re-scanning would either
     // overwrite that or silently merge two answers to one question.
-    const discovered =
-      explicitTags ?? getCustomTags(path, { host });
+    const discovered = explicitTags ?? getCustomTags(path, { host });
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
 

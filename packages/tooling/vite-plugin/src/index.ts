@@ -1,15 +1,19 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { CompileResult } from "@mxlang/core";
-import { type CustomTag, isTranslateError, type TargetLookup } from "@mxlang/core";
+import {
+  type CustomTag,
+  isTranslateError,
+  type TargetLookup,
+} from "@mxlang/core";
+import type { MxRegionCompile } from "@mxlang/parser";
+import { print } from "@mxlang/parser";
 import {
   builtinLookup,
   hostFilterKey,
   resolveTargetPolicyDetailed,
   scanCached,
 } from "@mxlang/target-registry";
-import type { MxRegionCompile } from "@mxlang/parser";
-import { print } from "@mxlang/parser";
 import type { Plugin } from "vite";
 
 /**

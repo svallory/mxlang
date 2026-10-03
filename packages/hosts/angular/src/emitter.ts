@@ -23,6 +23,7 @@ import {
   hostModuleSegment,
   type Ir,
   type IrNode,
+  isTranslateError,
   type MxWarning,
   metadataForTemplate,
   type Position,
@@ -30,7 +31,6 @@ import {
   type SourceSpan,
   type TemplateMetadata,
   TranslateError,
-  isTranslateError,
   unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";

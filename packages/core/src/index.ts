@@ -103,12 +103,12 @@ export {
   type RegionPosition,
 } from "./fragment.ts";
 export {
+  resolveTargetPolicy,
+  resolveTargetPolicyDetailed,
   type TargetPolicy,
   type TargetPolicyDiagnostic,
   type TargetPolicyDiagnosticCode,
   type TargetPolicyResolution,
-  resolveTargetPolicy,
-  resolveTargetPolicyDetailed,
 } from "./host-policy.ts";
 export type {
   Attr,
@@ -141,9 +141,9 @@ export {
   type DiscoveredTag,
   type DiscoverProjectTagsOptions,
   discoverProjectTags,
+  type HostRestriction,
   hostModuleSegment,
   hostRestrictionDiagnostics,
-  type HostRestriction,
   loadSidecar,
   type MxTagsEntry,
   normalizeMxTags,

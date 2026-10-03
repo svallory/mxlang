@@ -1466,9 +1466,32 @@ an editor, a `tsc` run and a build from resolving different tags for one file.
 **A tag's name is its filename, case included**: `tags/Icon.tag.ts` is `<Icon>`.
 Names must match `/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/`; dotfiles are skipped.
 
+**A dotted file name is rejected, not indexed** (decision 137). Under a `tags/`
+or `mx.tags` directory, a file `<base>.<word>.mx` is never callable as a tag:
+the tag form `<base.word/>` and the concise form `base.word` both parse as tag
+`base` with shorthand class `word`, so no syntax reaches such an entry and
+indexing it would create a dead tag (measured on Marko 6.3.51, which indexes
+`tags/my.icon.marko` silently under the name `my.icon` — an mx-only lint, see
+`divergences.md`). Such a file is excluded from the tag map with a positioned
+diagnostic, in one of two forms:
+
+- `<word>` is a file-kind segment a registered target declares (`.ng.mx`,
+  `.solid.mx`, `.astro.mx`): `` `${entry}` is a host module file, not a tag
+  template; tag templates are `.mx` ``.
+- otherwise: `` `${entry}` cannot be called as a tag: `<${bare}>` parses as tag
+  `${tag}` with class `${classes}`. If it is another host's module file it does
+  not belong under this host; otherwise rename it without the dot. ``
+
+Which form applies depends on the caller's registered targets: a direct entry
+that knows only its own (a Bun loader, the Angular CLI) sees another host's file
+kind as the second case and still rejects the file. The rule names no host or
+target, so the core holds no reserved-segment list.
+
 | Message | When |
 |---|---|
 | `tag templates are \`.mx\`; \`.solid.mx\` is not supported as a tag` | A `.solid.mx` in a tags directory. |
+| `` `${entry}` is a host module file, not a tag template; tag templates are `.mx` `` | A `<base>.<word>.mx` whose `<word>` is a registered file-kind segment. |
+| `` `${entry}` cannot be called as a tag: `<${bare}>` parses as tag `${tag}` with class `${classes}`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot. `` | Any other `<base>.<word>.mx`.
 | `` `${bare}` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots `` | Name fails the pattern. |
 | *(diagnostic, recorded not thrown)* `` `<${name}>` is a core-owned custom tag and cannot be redefined by a tag file; rename this file `` | A tag file resolves to a builtin name. Recorded rather than thrown so one misnamed file does not break every file in the package. |
 | *(diagnostic, recorded)* `` `mx.tags` names a directory that does not exist: ${entry.dir} `` | A missing `mx.tags` directory. |
@@ -1488,8 +1511,15 @@ is silent everywhere — which is worse than either a throw or an error.
 | `` `mx.tags[${index}].hosts` must be an array of strings `` |
 
 An unknown host *name* inside an otherwise well-shaped `hosts` array is not a
-shape error — it does not throw — but is still worth a diagnostic, recorded
-against the `package.json`:
+shape error — it does not throw. **Only full-registry tooling validates host
+names**, recording the warning against `package.json`. Own-only HTML/Hono Bun
+loaders, Astro templates, and Angular build/watch/discover leave peer names
+unresolved without a warning; they cannot establish that a peer is unknown.
+Filtering, shape validation, and other scan diagnostics still apply. A
+package-shaped restriction remains silent. Registry wrappers perform this
+validation at their call sites; direct loaders do not. Shared Angular discovery
+has an explicit internal `validateHostNames` option, false by default and
+true for full-registry callers. Core's public lookup contract is unchanged.
 
 | Message | When |
 |---|---|
@@ -1498,7 +1528,9 @@ against the `package.json`:
 **`hosts` restricts a `mx.tags` entry to the host names it lists** (decision
 110a). Every integration passes its own host name into the scan —
 `getCustomTags`/`scanCustomTags`/`scanCached`/`discoverProjectTags` all take
-an optional `host` option — and a tag whose entry declared `hosts` excluding
+an optional `host` option (`null` excludes all restricted entries for a target
+with no host filter key; `undefined` intentionally disables filtering) — and a
+tag whose entry declared `hosts` excluding
 that name is left out of the scan's result entirely, not merely hidden from
 the compiled `customTags` map: a name a different host owns must stay
 resolvable from *that* host's own scan of the same file. No `hosts` on the

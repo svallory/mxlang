@@ -6,7 +6,7 @@
 
 - **Added (jsx-handler-typing, decision 140):** `compileHonoMx` takes the internal, tooling-only `typeCheck` option (see `@mxlang/preact`); runtime output is unchanged with it unset. **Effect on users:** in the editor and `mx-tsc`, native event handlers are now checked against Hono's own JSX types (the DOM's events), as in plain TSX: a mistyped handler is an error at the authored handler, and the bodies of shorthand handlers are type-checked. Hono declares `onDoubleClick` only, so `onDblClick=` is reported as it is in plain TSX.
 
-- **Changed (refactor/target-open-set, decisions 129 and 132):** the Bun loader resolves its targets from this package's own descriptor unless a caller passes a lookup (`createHonoBunPlugin(targets)`), and reports an unknown bare word in `mx.tags[].hosts` (silent for a package specifier).
+- **Changed (refactor/target-open-set, decision 137):** the Bun loader excludes a dotted tag file name from the tag map with a positioned diagnostic, but leaves peer `mx.tags[].hosts` restrictions unresolved without a warning; only full-registry tooling validates host names (PR 3 round-2 ruling); package specifiers stay silent. The loader resolves its targets from this package's own descriptor unless a caller passes a lookup (`createHonoBunPlugin(targets)`).
 - **Changed (refactor/target-open-set, decisions 129 and 132):** `compileHonoMx`/`compileHonoFile` accept `options.targets`, defaulting to this package's own descriptor (`honoTargets`).
 
 - **Added (fix-hints-batch, audit item 14):** the unresolved-tag, event-binding, scriptlet and missing-attribute-value hints reach this host through the shared `@mxlang/preact` emitter and `@mxlang/core`.

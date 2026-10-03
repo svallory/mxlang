@@ -4,8 +4,8 @@ import {
   lowerAstroMx,
 } from "@mxlang/astro/template";
 import { type MxWarning, reportScanDiagnostics } from "@mxlang/core";
-import { builtinLookup, scanCached } from "@mxlang/target-registry";
 import type { RawSourceMap } from "@mxlang/parser";
+import { builtinLookup, scanCached } from "@mxlang/target-registry";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";

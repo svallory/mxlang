@@ -4,6 +4,7 @@
 // AttrTag sources. Tooling is imported by relative path here: the registry
 // must not depend on tooling, which now depends on the registry.
 
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -13,12 +14,11 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { angularDeclarations } from "@mxlang/angular";
-import { type CalleeInput, type HostDeclarations } from "@mxlang/core";
+import type { CalleeInput, HostDeclarations } from "@mxlang/core";
 import { honoDeclarations } from "@mxlang/hono";
 import { policy, strictPolicy, translator } from "@mxlang/html";
 import { preactDeclarations } from "@mxlang/preact";
@@ -39,8 +39,8 @@ import {
 import { createAstroTypeSurface } from "../../tooling/typescript-plugin/src/mx-language.ts";
 import {
   builtinFileKinds,
-  builtinTargets,
   builtinLookup,
+  builtinTargets,
   defaultTarget,
   hostFilterKey,
   hostModuleSegment,
@@ -147,7 +147,9 @@ describe("mx.host values", () => {
     // each target, and the one target that has none (named by its own
     // non-deprecated legacy `mx.host` value).
     expect(hostValues().filter((value) => value !== "translator")).toEqual(
-      builtinTargets.filter((t) => t.name !== "data").map((t) => t.host?.name ?? "html"),
+      builtinTargets
+        .filter((t) => t.name !== "data")
+        .map((t) => t.host?.name ?? "html"),
     );
   });
 
@@ -162,9 +164,9 @@ describe("mx.host values", () => {
       "hono",
       "angular",
     ]);
-    expect(hostValues().filter((v) => lookup.hostTarget(v)?.deprecated === true)).toEqual([
-      "translator",
-    ]);
+    expect(
+      hostValues().filter((v) => lookup.hostTarget(v)?.deprecated === true),
+    ).toEqual(["translator"]);
   });
 
   it("every accepted mx.host value resolves through the policy resolver", () => {
@@ -201,7 +203,9 @@ describe("mx.host values", () => {
     expect(diagnostics[0]?.message).toBe(
       `unknown mx.host "bogus"; valid hosts: ${hostValues()
         .filter((v) => lookup.hostTarget(v)?.deprecated !== true)
-        .join(", ")} ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.`,
+        .join(
+          ", ",
+        )} ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.`,
     );
     expect(diagnostics[0]?.message).toContain(
       "valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html)",
@@ -236,9 +240,7 @@ describe("packages and rule 2 (the single target dependency)", () => {
   });
 
   it("every built-in target declares a distinct package", () => {
-    expect(
-      builtinTargets.map((t) => t.packageName).sort(),
-    ).toEqual([
+    expect(builtinTargets.map((t) => t.packageName).sort()).toEqual([
       "@mxlang/angular",
       "@mxlang/astro",
       "@mxlang/data",
@@ -345,7 +347,9 @@ describe("scanCached over the built-in set", () => {
     const scan = scanCached(join(dir, "page.mx"));
     expect([...scan.tags.keys()]).toEqual(["thing"]);
     expect(
-      scan.diagnostics.filter((d) => /unknown host/.test(d.message)).map((d) => d.message),
+      scan.diagnostics
+        .filter((d) => /unknown host/.test(d.message))
+        .map((d) => d.message),
     ).toEqual(["`mx.tags` names an unknown host in `hosts`: bogus"]);
   });
 });
@@ -367,23 +371,23 @@ describe("callee readers are installed from the table at registry creation", () 
         'import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";',
         'import { tmpdir } from "node:os";',
         'import { join } from "node:path";',
-        '// The registry only: no `@mxlang/solid` import anywhere in this file.',
+        "// The registry only: no `@mxlang/solid` import anywhere in this file.",
         'import { builtinLookup } from "@mxlang/target-registry";',
         'import { readCalleeInput } from "@mxlang/core";',
         'const dir = mkdtempSync(join(tmpdir(), "mx-probe-"));',
-        'mkdirSync(dir, { recursive: true });',
+        "mkdirSync(dir, { recursive: true });",
         'writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p" }));',
         'writeFileSync(join(dir, "caller.mx"), "<c/>\\n");',
         'writeFileSync(join(dir, "card.solid.mx"), "export class C {}\\n");',
-        'const result = readCalleeInput(',
+        "const result = readCalleeInput(",
         '  { kind: "name", name: "Card" },',
-        '  {',
+        "  {",
         '    importer: join(dir, "caller.mx"),',
         '    imports: new Map([["Card", "./card"]]),',
         "    targets: builtinLookup(),",
-        '  },',
-        ');',
-        'console.log(JSON.stringify(result.input));',
+        "  },",
+        ");",
+        "console.log(JSON.stringify(result.input));",
       ].join("\n"),
     );
     try {

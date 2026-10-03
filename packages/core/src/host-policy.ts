@@ -260,9 +260,7 @@ function policyOf(
 
   if (mx) {
     const selected =
-      typeof mx.host === "string"
-        ? lookup.hostTarget(mx.host)
-        : undefined;
+      typeof mx.host === "string" ? lookup.hostTarget(mx.host) : undefined;
     if (selected) {
       return {
         policy: {

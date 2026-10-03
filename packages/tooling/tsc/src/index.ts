@@ -10,10 +10,10 @@ import {
   createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
   HOST_POLICY_DIAGNOSTIC_CODE,
-  type TargetPolicyDiagnostic,
   hostPolicyText,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
+  type TargetPolicyDiagnostic,
 } from "@mxlang/typescript-plugin";
 import type { Language, LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";

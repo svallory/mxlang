@@ -34,6 +34,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import type { CustomTag } from "./custom-tags.ts";
 import {
+  dottedTagFileDiagnostics,
   type ScanDiagnostic,
   type ScanOptions,
   type ScanResult,
@@ -238,14 +239,31 @@ export function reportScanDiagnostics(
  */
 export function scanCached(filePath: string, options: ScanOptions): ScanResult {
   // The key is deliberately unchanged by `options.targets`: the lookup is
-  // which file-kind segments exist, not which files are found, and one
-  // process resolves one lookup — the registry's — for every scan it runs.
+  // which file-kind segments exist, not which files are found. Diagnostic
+  // wording is derived per caller from cached filename evidence.
   // Folding it in would hand the same tag set a second identity per call,
   // which is the exact leak the tag-map cache below exists to prevent.
-  const filter = options.host === undefined ? "unfiltered" : options.host === null ? "no-host-key" : `host:${options.host}`;
+  const filter =
+    options.host === undefined
+      ? "unfiltered"
+      : options.host === null
+        ? "no-host-key"
+        : `host:${options.host}`;
   const key = `${dirname(resolve(filePath))}\0${options.stopAt ?? ""}\0${filter}`;
   const cached = scans.get(key);
-  if (cached && isFresh(cached)) return cached.result;
+  if (cached && isFresh(cached)) {
+    const evidence = cached.result.dottedTagFiles ?? [];
+    return evidence.length === 0
+      ? cached.result
+      : {
+          ...cached.result,
+          diagnostics: dottedTagFileDiagnostics(
+            evidence,
+            options.targets,
+            cached.result.diagnostics,
+          ),
+        };
+  }
 
   const result = scanCustomTags(filePath, options);
   const loadedSignature = loadedSignatureOf(result);
@@ -273,7 +291,23 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
     liveSignature = parserSignature;
   }
 
-  scans.set(key, snapshot(result));
+  // Do not cache the first caller's dotted-filename wording.
+  const dottedPositions = new Set(
+    result.dottedTagFiles?.map((file) => file.diagnosticIndex),
+  );
+  scans.set(
+    key,
+    snapshot(
+      dottedPositions.size === 0
+        ? result
+        : {
+            ...result,
+            diagnostics: result.diagnostics.filter(
+              (_, index) => !dottedPositions.has(index),
+            ),
+          },
+    ),
+  );
   return result;
 }
 

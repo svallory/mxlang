@@ -17,21 +17,21 @@
 import angular from "@mxlang/angular/descriptor";
 import astro from "@mxlang/astro/descriptor";
 import {
-  createTargetLookup,
   type CustomTag,
-  type HostFileKind,
-  type TargetPolicy,
-  type TargetPolicyResolution,
   hostModuleSegment as coreHostModuleSegment,
+  resolveTargetPolicyDetailed as coreResolveTargetPolicyDetailed,
+  scanCached as coreScanCached,
+  createTargetLookup,
+  type HostFileKind,
   hostRestrictionDiagnostics,
   registerCalleeInputReader,
-  resolveTargetPolicyDetailed as coreResolveTargetPolicyDetailed,
   type ScanDiagnostic,
   type ScanOptions,
   type ScanResult,
-  scanCached as coreScanCached,
   type TargetDescriptor,
   type TargetLookup,
+  type TargetPolicy,
+  type TargetPolicyResolution,
 } from "@mxlang/core";
 import data from "@mxlang/data/descriptor";
 import hono from "@mxlang/hono/descriptor";
@@ -132,8 +132,11 @@ export const builtinFileKinds: readonly BuiltinFileKind[] = builtinTargets
  * compile entry to the import graph.
  */
 function registerBuiltinCalleeReaders(): void {
-  for (const kind of builtinTargets.flatMap((target) => target.host?.fileKinds ?? [])) {
-    if (kind.readCalleeInput) registerCalleeInputReader(`.${kind.segment}.mx`, kind.readCalleeInput);
+  for (const kind of builtinTargets.flatMap(
+    (target) => target.host?.fileKinds ?? [],
+  )) {
+    if (kind.readCalleeInput)
+      registerCalleeInputReader(`.${kind.segment}.mx`, kind.readCalleeInput);
   }
 }
 registerBuiltinCalleeReaders();
@@ -141,9 +144,11 @@ registerBuiltinCalleeReaders();
 // ---- the lookup's own questions, bound to the built-in set ----
 
 /** Is `name` a registered built-in target? */
-export const hasTarget = (name: string): boolean => builtinLookup().hasTarget(name);
+export const hasTarget = (name: string): boolean =>
+  builtinLookup().hasTarget(name);
 /** The registered built-in target names, in registration order. */
-export const targetNames = (): readonly string[] => builtinLookup().targetNames();
+export const targetNames = (): readonly string[] =>
+  builtinLookup().targetNames();
 /** One registered built-in target's descriptor, if any. */
 export const target = (name: string): TargetDescriptor | undefined =>
   builtinLookup().target(name);
@@ -230,7 +235,10 @@ export function scanCached(
   filePath: string,
   options: Omit<ScanOptions, "targets"> = {},
 ): ScanResult {
-  const result = coreScanCached(filePath, { ...options, targets: builtinLookup() });
+  const result = coreScanCached(filePath, {
+    ...options,
+    targets: builtinLookup(),
+  });
   const extra = restrictionWarnings(result);
   return extra.length === 0
     ? result

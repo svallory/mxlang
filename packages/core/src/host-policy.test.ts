@@ -9,7 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveTargetPolicy, resolveTargetPolicyDetailed } from "./host-policy.ts";
+import {
+  resolveTargetPolicy,
+  resolveTargetPolicyDetailed,
+} from "./host-policy.ts";
 import { scanCustomTags } from "./scan.ts";
 import {
   createTargetLookup,
@@ -79,7 +82,11 @@ describe("resolveTargetPolicy", () => {
   it("uses the package.json#mx field when present, walking up past a subdirectory with no package.json of its own", () => {
     const filePath = join(FIXTURES, "explicit-field/nested/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "view-jsx", host: "view", strict: true });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "view-jsx",
+      host: "view",
+      strict: true,
+    });
   });
 
   it("falls back to the sole @mxlang/* host dependency when no #mx field is present", () => {
@@ -91,7 +98,10 @@ describe("resolveTargetPolicy", () => {
   it("resolves @t/unit as the Solid host dependency", () => {
     const filePath = join(FIXTURES, "solid-dependency/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "unit-jsx", host: "unit" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "unit-jsx",
+      host: "unit",
+    });
   });
 
   it("falls back to the html default policy when neither signal is present", () => {
@@ -121,37 +131,58 @@ describe("resolveTargetPolicy", () => {
     // falls through to the default host rather than failing loudly.
     const filePath = join(FIXTURES, "preact-explicit/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "atom-jsx", host: "atom", strict: undefined });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "atom-jsx",
+      host: "atom",
+      strict: undefined,
+    });
   });
 
   it("resolves the Preact host from a lone @t/atom dependency", () => {
     const filePath = join(FIXTURES, "preact-dependency/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "atom-jsx", host: "atom" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "atom-jsx",
+      host: "atom",
+    });
   });
 
   it("resolves the React host from an explicit mx.host field", () => {
     const filePath = join(FIXTURES, "react-explicit/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "vue-jsx", host: "vue", strict: undefined });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "vue-jsx",
+      host: "vue",
+      strict: undefined,
+    });
   });
 
   it("resolves the React host from a lone @t/vue dependency", () => {
     const filePath = join(FIXTURES, "react-dependency/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "vue-jsx", host: "vue" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "vue-jsx",
+      host: "vue",
+    });
   });
 
   it("resolves the Hono host from an explicit mx.host field", () => {
     const filePath = join(FIXTURES, "hono-explicit/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "edge-jsx", host: "edge", strict: undefined });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "edge-jsx",
+      host: "edge",
+      strict: undefined,
+    });
   });
 
   it("resolves the Hono host from a lone @t/edge dependency", () => {
     const filePath = join(FIXTURES, "hono-dependency/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "edge-jsx", host: "edge" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "edge-jsx",
+      host: "edge",
+    });
   });
 
   it("falls back to the default policy when two host dependencies are present", () => {
@@ -173,14 +204,19 @@ describe("resolveTargetPolicy", () => {
     // A counted peer would make two hosts and collapse to html.
     const filePath = join(FIXTURES, "peer-and-dependency/App.mx");
 
-    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "unit-jsx", host: "unit" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "unit-jsx",
+      host: "unit",
+    });
   });
 
   it("falls back to the default policy when the walk reaches the filesystem root with no package.json", () => {
     // The walk must terminate at the root rather than looping forever on
     // `dirname("/") === "/"`. A path with no `package.json` anywhere above it
     // is the case that proves the stop condition fires.
-    expect(resolveTargetPolicy("/nonexistent-mx-root/App.mx", lookup)).toEqual({ target: "page" });
+    expect(resolveTargetPolicy("/nonexistent-mx-root/App.mx", lookup)).toEqual({
+      target: "page",
+    });
   });
 });
 
@@ -221,7 +257,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "app/src/a.mx"),
         lookup,
-);
+      );
 
       expect(policy).toEqual({ target: "page" });
       expect(diagnostics).toHaveLength(1);
@@ -235,7 +271,10 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       });
       const file = join(root, "app/src/a.mx");
 
-      const [diagnostic] = resolveTargetPolicyDetailed(file, lookup).diagnostics;
+      const [diagnostic] = resolveTargetPolicyDetailed(
+        file,
+        lookup,
+      ).diagnostics;
 
       expect(diagnostic?.file).toBe(join(root, "app/package.json"));
       expect(diagnostic?.message).toContain("could not be parsed as JSON");
@@ -255,7 +294,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
         lookup,
-).diagnostics;
+      ).diagnostics;
 
       expect(diagnostic?.file).toBe(join(root, "package.json"));
       expect(diagnostic?.message).not.toContain("before, its host");
@@ -272,7 +311,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "mid/app/a.mx"),
         lookup,
-).diagnostics;
+      ).diagnostics;
 
       expect(diagnostic?.file).toBe(join(root, "mid/app/package.json"));
       expect(diagnostic?.message).toContain(join(root, "package.json"));
@@ -294,7 +333,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "app/a.mx"),
         lookup,
-);
+      );
 
       expect(policy).toEqual({ target: "page" });
       expect(diagnostics).toHaveLength(1);
@@ -307,7 +346,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
         lookup,
-).diagnostics;
+      ).diagnostics;
 
       expect(diagnostic?.message).toContain("must contain a JSON object");
     });
@@ -319,7 +358,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
         lookup,
-).diagnostics;
+      ).diagnostics;
 
       // V8 names the position, JavaScriptCore does not; nothing may rely on it.
       if (/position|line \d+ column/.test(diagnostic?.message ?? "")) {
@@ -333,7 +372,9 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
     it("recovers as soon as the file is fixed (the read is mtime-keyed)", () => {
       const root = tree({ "package.json": "{", "a.mx": "" });
       const file = join(root, "a.mx");
-      expect(resolveTargetPolicyDetailed(file, lookup).diagnostics).toHaveLength(1);
+      expect(
+        resolveTargetPolicyDetailed(file, lookup).diagnostics,
+      ).toHaveLength(1);
 
       writeFileSync(join(root, "package.json"), ANGULAR);
       const later = new Date(Date.now() + 5000);
@@ -360,7 +401,9 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
 
       writeFileSync(manifest, "{ bad");
       utimesSync(manifest, pinned, pinned);
-      expect(resolveTargetPolicyDetailed(file, lookup).diagnostics).toHaveLength(1);
+      expect(
+        resolveTargetPolicyDetailed(file, lookup).diagnostics,
+      ).toHaveLength(1);
     });
 
     it("agrees with scanCustomTags about which package.json is nearest", () => {
@@ -372,7 +415,10 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const file = join(root, "app/a.mx");
 
       const scan = scanCustomTags(file, { targets: lookup });
-      const [diagnostic] = resolveTargetPolicyDetailed(file, lookup).diagnostics;
+      const [diagnostic] = resolveTargetPolicyDetailed(
+        file,
+        lookup,
+      ).diagnostics;
 
       expect(scan.packageFiles).toEqual([join(root, "app/package.json")]);
       expect(scan.diagnostics[0]?.file).toBe(diagnostic?.file);
@@ -387,8 +433,8 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       });
 
       const message = (name: string) =>
-        resolveTargetPolicyDetailed(join(root, "app", name), lookup).diagnostics[0]
-          ?.message;
+        resolveTargetPolicyDetailed(join(root, "app", name), lookup)
+          .diagnostics[0]?.message;
 
       expect(message("a.mx")).toBe(message("b.mx"));
     });
@@ -414,8 +460,14 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       });
 
       expect(
-        resolveTargetPolicyDetailed(join(root, "packages/web/src/a.mx"), lookup),
-      ).toEqual({ policy: { target: "unit-jsx", host: "unit" }, diagnostics: [] });
+        resolveTargetPolicyDetailed(
+          join(root, "packages/web/src/a.mx"),
+          lookup,
+        ),
+      ).toEqual({
+        policy: { target: "unit-jsx", host: "unit" },
+        diagnostics: [],
+      });
     });
 
     it("lets a member opt out by having its own package.json", () => {
@@ -430,8 +482,12 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
         "packages/docs/src/b.mx": "",
       });
 
-      expect(resolveTargetPolicy(join(root, "packages/web/src/a.mx"), lookup)).toEqual({ target: "vue-jsx", host: "vue" });
-      expect(resolveTargetPolicy(join(root, "packages/docs/src/b.mx"), lookup)).toEqual({ target: "unit-jsx", host: "unit" });
+      expect(
+        resolveTargetPolicy(join(root, "packages/web/src/a.mx"), lookup),
+      ).toEqual({ target: "vue-jsx", host: "vue" });
+      expect(
+        resolveTargetPolicy(join(root, "packages/docs/src/b.mx"), lookup),
+      ).toEqual({ target: "unit-jsx", host: "unit" });
     });
 
     it("lets a member pin a host with mx.host and an empty-deps package.json", () => {
@@ -441,7 +497,9 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
         "packages/web/a.mx": "",
       });
 
-      expect(resolveTargetPolicy(join(root, "packages/web/a.mx"), lookup)).toEqual({ target: "page", strict: undefined });
+      expect(
+        resolveTargetPolicy(join(root, "packages/web/a.mx"), lookup),
+      ).toEqual({ target: "page", strict: undefined });
     });
   });
 
@@ -453,7 +511,10 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       });
 
       expect(
-        resolveTargetPolicyDetailed(join(root, "node_modules/lib/dist/a.mx"), lookup),
+        resolveTargetPolicyDetailed(
+          join(root, "node_modules/lib/dist/a.mx"),
+          lookup,
+        ),
       ).toEqual({ policy: { target: "page" }, diagnostics: [] });
     });
 
@@ -464,7 +525,10 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       });
 
       expect(
-        resolveTargetPolicyDetailed(join(root, "node_modules/@scope/lib/a.mx"), lookup),
+        resolveTargetPolicyDetailed(
+          join(root, "node_modules/@scope/lib/a.mx"),
+          lookup,
+        ),
       ).toEqual({ policy: { target: "page" }, diagnostics: [] });
     });
 
@@ -503,7 +567,10 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
         "src/a.mx": "",
       });
 
-      expect(resolveTargetPolicy(join(root, "src/a.mx"), lookup)).toEqual({ target: "grid-jsx", host: "grid" });
+      expect(resolveTargetPolicy(join(root, "src/a.mx"), lookup)).toEqual({
+        target: "grid-jsx",
+        host: "grid",
+      });
     });
   });
 
@@ -522,7 +589,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
         lookup,
-);
+      );
 
       expect(policy).toEqual({ target: "unit-jsx", host: "unit" });
       expect(diagnostics).toHaveLength(1);
@@ -545,7 +612,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
         lookup,
-);
+      );
 
       expect(policy).toEqual({ target: "page" });
       expect(diagnostics[0]?.message).toContain('unknown mx.host "banana"');
@@ -584,7 +651,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
         lookup,
-).diagnostics;
+      ).diagnostics;
 
       // The nested `angular.host` also says "solidd"; the first `host` key
       // whose value matches is the nested one, which is what text search can
@@ -602,7 +669,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
       const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
         lookup,
-).diagnostics;
+      ).diagnostics;
 
       expect(diagnostic?.message).toContain("unknown mx.host 5");
       expect(diagnostic?.message).not.toContain("Did you mean");
@@ -631,7 +698,10 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
 
     it("leaves the two-host-dependencies fallback exactly as it was", () => {
       expect(
-        resolveTargetPolicyDetailed(join(FIXTURES, "two-dependencies/App.mx"), lookup),
+        resolveTargetPolicyDetailed(
+          join(FIXTURES, "two-dependencies/App.mx"),
+          lookup,
+        ),
       ).toEqual({ policy: { target: "page" }, diagnostics: [] });
     });
   });
@@ -675,7 +745,7 @@ describe("TargetPolicyDiagnostic code", () => {
     const { diagnostics } = resolveTargetPolicyDetailed(
       project(JSON.stringify({ mx: { target: "page" } })),
       lookup,
-);
+    );
 
     expect(diagnostics).toEqual([]);
   });

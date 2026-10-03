@@ -5,7 +5,6 @@ import {
   type Expr,
   type GeneratedMapping,
   type HostDeclarations,
-  type TargetPolicyDiagnostic,
   type Ir,
   type IrNode,
   type Lookup,
@@ -14,18 +13,19 @@ import {
   newCtx,
   parseFragment,
   printExpression,
+  type TargetPolicyDiagnostic,
 } from "@mxlang/core";
+import { compileHonoMx, honoDeclarations } from "@mxlang/hono";
+import { compile, policy, strictPolicy, translator } from "@mxlang/html";
+import { compilePreactMx, preactDeclarations } from "@mxlang/preact";
+import { compileReactMx, reactDeclarations } from "@mxlang/react";
+import { compileSolidUnit } from "@mxlang/solid";
 import {
   builtinLookup,
   getCustomTags,
   hostFilterKey,
   scanCached,
 } from "@mxlang/target-registry";
-import { compileHonoMx, honoDeclarations } from "@mxlang/hono";
-import { compile, policy, strictPolicy, translator } from "@mxlang/html";
-import { compilePreactMx, preactDeclarations } from "@mxlang/preact";
-import { compileReactMx, reactDeclarations } from "@mxlang/react";
-import { compileSolidUnit } from "@mxlang/solid";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
