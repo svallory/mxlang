@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (ng-mx-tag-import-in-decorator):** the statements `parse` synthesizes and splices into `program.body` (the hoisted tag imports, the `/var` `let`, the hoisted defines) no longer carry `start`/`end`/`loc`/`range`. They were parsed from a snippet of their own, so those were snippet offsets read as source positions: a host taking the last import's `end` inserted inside a decorator, and `print`'s source map put their tokens at (0, 0). The location is removed rather than repaired, as for a generated `satisfies` type; the printed code is unchanged.
+
 - **Fix:** the opener position for a fragment region's own `<>` (`.ng.mx`, `mxRegionFragment`) is now its real column; it was 4 too small because the synthetic root sat in the shifted prefix.
 
 - **A mismatched closing tag in an MX region names the opener's position** (audit item 12). `walkMxRegion` appends ` at line:column` (1-based, UTF-16) of the innermost unclosed tag's `<` to htmljs-parser's `The closing "x" tag does not match the corresponding opening "y" tag`, for `.solid.mx` and `.ng.mx` regions. The error stays at the closer.

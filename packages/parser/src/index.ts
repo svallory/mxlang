@@ -294,7 +294,7 @@ function hoistRegionImports(file: File, filename: string): void {
     program.body.splice(
       authoredImportsOf(program.body).lastImportIndex + 1,
       0,
-      declaration.program.body[0] as Record<string, unknown>,
+      detachLocations(declaration.program.body[0]),
     );
   }
 
@@ -333,7 +333,7 @@ function hoistRegionImports(file: File, filename: string): void {
       program.body.splice(
         lastImportIndex + 1,
         0,
-        ...parsed.map((one) => one.program.body[0] as Record<string, unknown>),
+        ...parsed.map((one) => detachLocations(one.program.body[0])),
       );
     }
   }
@@ -400,10 +400,39 @@ function hoistRegionImports(file: File, filename: string): void {
   program.body.splice(
     defineInsertIndex + 1,
     0,
-    ...parsedDefines.map(
-      (one) => one.program.body[0] as Record<string, unknown>,
-    ),
+    ...parsedDefines.map((one) => detachLocations(one.program.body[0])),
   );
+}
+
+/**
+ * Removes the source locations from a node this pass synthesizes.
+ *
+ * Each such node is parsed from a snippet of its own, so its `start`/`end`/
+ * `loc`/`range` are offsets into that snippet, not into the module it is
+ * spliced into. Left in place they read as positions in the authored file:
+ * they put source-map tokens at (0, 0) and made a host that reads `end` to
+ * find "after the last import" insert inside a decorator. The location is
+ * removed rather than repaired, as for a generated `satisfies` type in
+ * `bridge.ts`: a node without one is printed where the text already is.
+ */
+function detachLocations(value: unknown): Record<string, unknown> {
+  const visit = (node: unknown) => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    delete record.start;
+    delete record.end;
+    delete record.loc;
+    delete record.range;
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "extra") visit(child);
+    }
+  };
+  visit(value);
+  return value as Record<string, unknown>;
 }
 
 /**

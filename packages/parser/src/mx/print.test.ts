@@ -104,6 +104,31 @@ describe("print", () => {
     expect(originalLines(map.mappings)).toContain(mxLine);
   });
 
+  it("maps no token of a synthesized import, `let`, or define to (1, 0)", () => {
+    // Each synthesized statement is parsed from a snippet of its own; its
+    // offsets used to be spliced in as if they were source positions, so its
+    // tokens mapped to the top of the file.
+    // Nothing authored sits at (1, 0): the first token is on line 3.
+    const source = ["", "", "export const view = <div/>;", ""].join("\n");
+    const { map, code } = print(source, "x.solid.mx", {
+      mxRegionCompile: () => ({
+        code: "null",
+        hoistedImports: [
+          {
+            code: 'import $mx_Icon1 from "./icon.mx";',
+            binding: "$mx_Icon1",
+            specifier: "./icon.mx",
+            resolvedPath: "/abs/icon.mx",
+          },
+        ],
+        returnVars: ["total"],
+      }),
+    });
+
+    expect(code).toContain("import $mx_Icon1");
+    expect(originalPositions(map.mappings)).not.toContainEqual([1, 0]);
+  });
+
   it("round-trips plain .tsx to an equal AST", () => {
     const plain = 'export const A = () => <div class="x">{1}</div>;\n';
 
@@ -168,4 +193,37 @@ function originalLines(mappings: string): number[] {
   }
 
   return [...lines];
+}
+
+/** `[line, column]` (1-based line, 0-based column) of every mapped segment. */
+function originalPositions(mappings: string): Array<[number, number]> {
+  const CHARS =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const out: Array<[number, number]> = [];
+  let line = 0;
+  let column = 0;
+  for (const group of mappings.split(";")) {
+    for (const segment of group.split(",")) {
+      if (!segment) continue;
+      const fields: number[] = [];
+      let value = 0;
+      let shift = 0;
+      for (const char of segment) {
+        const digit = CHARS.indexOf(char);
+        value += (digit & 31) << shift;
+        if (digit & 32) {
+          shift += 5;
+          continue;
+        }
+        fields.push(value & 1 ? -(value >> 1) : value >> 1);
+        value = 0;
+        shift = 0;
+      }
+      if (fields.length < 4) continue;
+      line += fields[2] as number;
+      column += fields[3] as number;
+      out.push([line + 1, column]);
+    }
+  }
+  return out;
 }
