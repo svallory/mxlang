@@ -11,7 +11,7 @@ The examples here are copied from passing custom-tag fixtures and core tests.
 
 ## Declare the call contract
 
-The core checks `attributes`, `attributeTags` and `children` before any hook runs. The fixture `<icon>` declares all five attribute controls:
+The core checks `attributes`, `attributeTags`, `children` and `parents` before any hook runs. The fixture `<icon>` declares all five attribute controls:
 
 ```ts
 const icon: CustomTag = {
@@ -63,6 +63,25 @@ The reserved contract-vocabulary key `"#text"` permits non-whitespace text and `
 `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent. A required child must appear on every branch, including the implicit empty branch when there is no final `<else>`. A child inside `<for>` needs `repeatable: true` and cannot alone satisfy `required`, because a loop may run zero times. Ordinary child tags count by their written names without inspecting their bodies, even if their transforms output different tags.
 
 Dynamic children (`<${input.tag}/>`), unlisted names, disallowed text, repetitions and missing required children produce positioned errors; compilation stops at the first. The rule runs before children lower and applies equally to transform tags, template tags with declaration-only sidecars and contract-only tags on a target that delegates their names. `children` cannot be combined with `parseOptions.text: true` or `parseOptions.openTagOnly: true`.
+
+### Restrict direct parents
+
+Use `parents` when a tag must appear only in particular containers. A parent's `children` list alone does not restrict where its children may appear elsewhere.
+
+```ts
+const attribute: CustomTag = {
+  parents: ["attributes"],
+  transform(call) {
+    return call.content?.children ?? [];
+  },
+};
+```
+
+`<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent; any other authored tag breaks the chain. Thus `<attributes><div><attribute/></div></attributes>` is rejected: the direct parent is `div`. Inside `<@row>`, use `parents: ["@row"]`, not the name of the tag receiving that prop. `<define>` is not transparent: a tag in a `<define>` body has parent `define`. A dynamic parent reads `<${…}>` in diagnostics and never matches a `parents` list, even one spelling that diagnostic placeholder.
+
+The reserved contract-vocabulary key `"#root"` permits the top level of a file or of a template's own unit. A recursive call at its template's top level also has parent `#root`. You can combine it with named parents. Omitting `parents` keeps placement open; `parents: []` permits none.
+
+Registration checks both directions for registered tags: it rejects `P.children` listing `C` when `C.parents` omits `P`, and `C.parents` naming `P` when `P.children` is closed and omits `C`. An omitted contract stays open; `#root` is not a tag. Both messages end with the fix: add the missing entry to one list, or remove the conflicting entry from the other. Placement errors point at the offending tag and name the expected and actual parent, for example: `` `<attribute>` must be inside `<attributes>`; found inside `<div>` ``. The same checks apply to transform, template-sidecar and contract-only tags, including data targets; compilation stops at the first error.
 
 ## Change how the caller parses
 

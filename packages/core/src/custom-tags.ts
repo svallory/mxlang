@@ -345,6 +345,8 @@ export interface CustomTag {
   attributeTags?: Record<string, CustomTagAttributeTag>;
   /** Closed allowed authored children; `#text` permits non-whitespace text and interpolations. */
   children?: Record<string, CustomTagChild>;
+  /** Allowed authored direct parents; `#root` is a unit's top level and `@name` an attribute tag. */
+  parents?: string[];
   analyze?(calls: readonly TagCall[], ctx: AnalyzeContext): void;
   transform?(call: TagCall, ctx: TransformContext): IrNode[] | TagCall;
   finalize?(ctx: FinalizeContext): IrNode[];
@@ -848,6 +850,33 @@ export function applyCustomTagDefaults(
   return defaulted.length === 0 ? call.attrs : [...call.attrs, ...defaulted];
 }
 
+/** Validates the authored direct parent before the call's body is lowered. */
+export function validateCustomTagParents(
+  definition: CustomTag,
+  name: string,
+  loc: Position,
+  parent: string,
+): void {
+  const parents = definition.parents;
+  // A dynamic parent's diagnostic placeholder is not an authored name.
+  if (!parents || (parent !== `\${…}` && parents.includes(parent))) return;
+  const named = parents.filter((allowed) => allowed !== "#root");
+  const inside = named.map((allowed) => `\`<${allowed}>\``).join(", ");
+  const required = inside
+    ? `inside ${inside}${parents.includes("#root") ? " or at the top level" : ""}`
+    : parents.includes("#root")
+      ? "at the top level"
+      : "inside an allowed parent (none declared)";
+  const found =
+    parent === "#root" ? "at the top level" : `inside \`<${parent}>\``;
+  throw new TranslateError(
+    `\`<${name}>\` must be ${required}; found ${found}`,
+    loc.line,
+    loc.column,
+    loc.file,
+  );
+}
+
 /** Validates authored children before any plain child is lowered. */
 export function validateCustomTagChildren(
   definition: CustomTag,
@@ -1202,6 +1231,17 @@ export function rejectUnknownDeclarationKeys(
       for (const [childName, declaration] of Object.entries(
         definition.children,
       )) {
+        const child =
+          childName !== "#text" && Object.hasOwn(customTags, childName)
+            ? customTags[childName]
+            : undefined;
+        if (child?.parents !== undefined && !child.parents.includes(tagName)) {
+          failAt(
+            tagName,
+            `child \`<${childName}>\` declares \`parents\` without \`<${tagName}>\`; add \`<${tagName}>\` to \`<${childName}>\`'s \`parents\`, or remove \`<${childName}>\` from \`<${tagName}>\`'s \`children\``,
+            { line: 0, column: 0 },
+          );
+        }
         for (const key of Object.keys(declaration)) {
           if (!(ATTRIBUTE_TAG_KEYS as readonly string[]).includes(key)) {
             throw new TranslateError(
@@ -1211,6 +1251,22 @@ export function rejectUnknownDeclarationKeys(
             );
           }
         }
+      }
+    }
+    for (const parentName of definition.parents ?? []) {
+      const parent =
+        parentName !== "#root" && Object.hasOwn(customTags, parentName)
+          ? customTags[parentName]
+          : undefined;
+      if (
+        parent?.children !== undefined &&
+        !Object.hasOwn(parent.children, tagName)
+      ) {
+        failAt(
+          tagName,
+          `parent \`<${parentName}>\` declares \`children\` without \`<${tagName}>\`; add \`<${tagName}>\` to \`<${parentName}>\`'s \`children\`, or remove \`<${parentName}>\` from \`<${tagName}>\`'s \`parents\``,
+          { line: 0, column: 0 },
+        );
       }
     }
     if (definition.attributes) {
@@ -1383,7 +1439,7 @@ function observedCall(call: TagCall): {
  * Whether a call of this definition hands its validated call to the host.
  *
  * The definition must be contract-only: it declares at least one of
- * `attributes`, `attributeTags`, `children` or `parseOptions`, and has neither a
+ * `attributes`, `attributeTags`, `children`, `parents` or `parseOptions`, and has neither a
  * `transform` nor a template. `{}` or a hooks-only definition declares no
  * contract, so it keeps the "neither a `transform` nor a template" error. The
  * one question core asks the host is the generic `isDelegatedTag`.
@@ -1399,6 +1455,7 @@ export function isContractOnlyDelegated(
     (definition.attributes !== undefined ||
       definition.attributeTags !== undefined ||
       definition.children !== undefined ||
+      definition.parents !== undefined ||
       definition.parseOptions !== undefined) &&
     ctx.declarations.isDelegatedTag?.(name, ctx) === true
   );

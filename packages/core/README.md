@@ -225,8 +225,9 @@ tags itself. The ordinary route is discovery (see below), which fills the same
 map. Either way the core remains synchronous: it injects only each
 definition's `parseOptions` (`text`,
 `preserveWhitespace`, `openTagOnly`) into `@marko/compiler` before parsing,
-then validates declared `attributes`, `attributeTags` and `children` before `transform`.
+then validates declared `attributes`, `attributeTags`, `children` and `parents` before `transform`.
 `children` closes authored plain child names with `{ required?, repeatable? }` cardinality; the reserved `#text` key permits non-whitespace text and interpolations. Control flow is transparent, declarations and comments are ignored, and dynamic children are errors in a closed contract. The check runs before plain children lower, so transform output cannot change their counted names; `TagCall.childTree` exposes that authored shape to hooks. Children cannot be combined with raw-text or open-tag-only parse options (decision 138 E2).
+`parents?: string[]` restricts authored direct parents: control flow is transparent, any other authored tag breaks the chain, and an attribute-tag body has parent `@name`. The reserved `#root` key means a file/template unit's own top level, including recursion, not its caller's parent. Omitted parents are open; an empty list permits none. Registration cross-checks both directions for registered tags: a parent's closed `children` list and each child's declared `parents` must agree on their shared entry. Both contradiction messages end with the alternative list edits. `<define>` is not transparent, and a dynamic parent never matches a `parents` list. Core checks placement before lowering the call's body, equally for transform, template-sidecar and parents-only delegated contracts (decision 138 E3).
 An unknown key in an `attributes`/`attributeTags`/`children` declaration (a typo, or a
 retired name such as `staticOnly`/`repeated`) is rejected at registration,
 before any file is parsed, since neither key is checked against a runtime

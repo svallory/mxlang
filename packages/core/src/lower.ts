@@ -72,6 +72,7 @@ import {
   type TagCall,
   transformCustomTag,
   validateCustomTagChildren,
+  validateCustomTagParents,
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { exportNameFor } from "./export-name.ts";
@@ -1115,6 +1116,19 @@ function planAttributeTags(
 }
 
 function lowerOneAttributeTag(
+  ctx: Ctx,
+  node: Node,
+  schema: AttrSchema,
+): AttributeTag {
+  const pop = pushAuthoredAncestor(ctx, `@${attrName(node)}`);
+  try {
+    return lowerAuthoredAttributeTag(ctx, node, schema);
+  } finally {
+    pop();
+  }
+}
+
+function lowerAuthoredAttributeTag(
   ctx: Ctx,
   node: Node,
   schema: AttrSchema,
@@ -2199,6 +2213,12 @@ function lowerCustomTag(
   definition: CustomTag,
   isBuiltin = false,
 ): IrNode[] {
+  validateCustomTagParents(
+    definition,
+    name,
+    posOf(node),
+    ctx.authoredAncestors?.at(-2) ?? "#root",
+  );
   rejectUnsupportedFields(ctx, node, `\`<${name}>\``, {
     attributeTags: true,
     params: true,
@@ -2455,7 +2475,30 @@ function rejectUncalledParameterizedAttributeTag(
   );
 }
 
+/** Stack authored names only, never synthesized transform output; unwind even on errors. */
+function pushAuthoredAncestor(ctx: Ctx, name: string): () => void {
+  ctx.authoredAncestors ??= [];
+  const ancestors = ctx.authoredAncestors;
+  ancestors.push(name);
+  return () => {
+    ancestors.pop();
+  };
+}
+
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
+  const name =
+    node.name?.type === "StringLiteral" ? String(node.name.value) : `\${…}`;
+  // If/else branches lower through lowerIfChain; for lowers through this entry.
+  if (name === "for") return lowerAuthoredTag(ctx, node);
+  const pop = pushAuthoredAncestor(ctx, name);
+  try {
+    return lowerAuthoredTag(ctx, node);
+  } finally {
+    pop();
+  }
+}
+
+function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
   // *name* is the expression — Marko's concise mode has no other shape for
   // a bare one (see the "four Marko facts" in AGENTS.md). Both are dynamic
@@ -2904,6 +2947,8 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
  * filtering the tree for statement nodes.
  */
 export function lower(ctx: Ctx, body: Node[]): Ir {
+  // Each file/template is its own authored root, including recursive units.
+  ctx.authoredAncestors = [];
   const ownInputCode: string[] = [];
   const ownInputAux: string[] = [];
   for (const node of body) {

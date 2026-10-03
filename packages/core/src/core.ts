@@ -197,6 +197,8 @@ export interface BindingRegistry {
 }
 
 export interface Ctx {
+  /** Authored tag ancestors, innermost last; control flow is transparent and units start empty. */
+  authoredAncestors?: string[];
   source: string;
   /** Absolute or caller-supplied filename used to resolve injected imports. */
   filename: string;
