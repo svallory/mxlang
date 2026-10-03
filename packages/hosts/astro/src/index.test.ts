@@ -1,4 +1,7 @@
-import { fileURLToPath } from "node:url";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "astro";
 import { describe, expect, it } from "vitest";
 import mxAstro from "./index.ts";
@@ -34,6 +37,39 @@ describe("addPageExtension guard", () => {
     // Astro strips only the last extension, so a page `.astro.mx` would route
     // to `/page.astro` (decision 134 addendum): it is an error, not a page.
     expect(extensions).not.toContain(".astro.mx");
+  });
+
+  it("errors on every .astro.mx file under the pages directory, and still accepts .mx pages", () => {
+    const root = mkdtempSync(join(tmpdir(), "mx-astro-integration-pages-"));
+    try {
+      const srcDir = pathToFileURL(join(root, "src") + "/");
+      const write = (file: string) => {
+        const path = join(root, "src", file);
+        mkdirSync(join(path, ".."), { recursive: true });
+        writeFileSync(path, "---\n---\n<p/>\n");
+      };
+      const run = () =>
+        mxAstro().hooks["astro:config:setup"]!({
+          config: { srcDir },
+          addRenderer: () => {},
+          addPageExtension: () => {},
+          updateConfig: () => {},
+        });
+
+      write("pages/index.mx");
+      write("components/Card.astro.mx");
+      expect(run).not.toThrow();
+
+      write("pages/about.astro.mx");
+      write("pages/blog/post.astro.mx");
+      expect(run).toThrowError(
+        /about\.astro\.mx:1:1:[\s\S]*post\.astro\.mx:1:1:/,
+      );
+      expect(run).toThrowError(/routes it to \/about\.astro, not \/about/);
+      expect(run).toThrowError(/import the `\.astro\.mx` component from it/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("throws a clear error if addPageExtension is missing", () => {

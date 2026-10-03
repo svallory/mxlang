@@ -23,6 +23,7 @@ import type {
   CustomTag,
 } from "@mxlang/core";
 import mx from "@mxlang/vite-plugin";
+import { assertNoAstroMxPages } from "./pages-guard.ts";
 import { mxPages } from "./vite-pages.ts";
 import { mxTemplates } from "./vite-templates.ts";
 
@@ -171,7 +172,10 @@ export default function mxAstro(
         // MX, lowered to Astro template syntax (decision 76c/78/134). It is
         // deliberately *not* registered as a page extension: Astro strips only
         // the last extension of a route file, so a page `about.astro.mx` would
-        // route to `/about.astro`.
+        // route to `/about.astro`. One under the pages directory is an error
+        // instead (decision 134 addendum), raised here so both `astro dev` and
+        // `astro build` stop on it.
+        assertNoAstroMxPages(config.srcDir);
 
         updateConfig({
           vite: {
