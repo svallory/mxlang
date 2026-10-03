@@ -6,8 +6,6 @@
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `solid-jsx` target descriptor (host `solid`, `mappings: "merge-recorded"`, file kind `solid` with its language ids, `compileRegion` and `readCalleeInput`). The `.solid.mx` callee reader moved, unchanged, from `src/index.ts` into `src/callee-reader.ts` so the descriptor can reach it lazily; `index.ts` still registers it on import. No behavior change. Nothing consumes it yet; see `@mxlang/target-registry`.
 
-||||||| parent of dd51ef64 (fix(html,astro): honour last-wins next to a spread; stock oracle fixtures for duplicates)
-
 - **Cleanup (dup-attr-last-wins-core round 2):** removed the `#id`-with-`id=` and repeated-`class` guards in `renderAttrs`, unreachable now that core resolves duplicates; no behavior change.
 
 - **Fix (dup-attr-last-wins-core, decision 135):** a repeated attribute now emits only the last. One visible change: Solid used to fold a static `class="x"` and a later `class={c: on()}` into one array (`.card` shorthand included); core now keeps only the later one, as Marko does (`<div.card class="x" class={c: on()}>` is `_attr_class({c: on()})`), with a warning. The earlier occurrence gets a positioned warning naming the surviving one. See `@mxlang/core`.
