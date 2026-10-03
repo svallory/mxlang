@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import type { CompileResult } from "@mxlang/core";
 import {
   type CustomTag,
@@ -566,11 +567,17 @@ function isMarkoCompileError(err: unknown): err is Error & {
  * with (1-based column, path relative to the cwd and so not worth printing).
  * Anchored to a whole line so a `:L:C` inside the quoted code frame below it
  * cannot match first. `undefined` when the message has no such line.
+ *
+ * kleur colourises that header under `FORCE_COLOR` — path, line and column
+ * each wrapped in their own SGR runs — so the position is parsed out of a
+ * stripped copy; the raw message is left untouched.
  */
 function markoPosition(
   err: Error,
 ): { line: number; column: number } | undefined {
-  const match = /^[ \t]*at[ \t]+.+:(\d+):(\d+)[ \t]*$/m.exec(err.message);
+  const match = /^[ \t]*at[ \t]+.+:(\d+):(\d+)[ \t]*$/m.exec(
+    stripVTControlCharacters(err.message),
+  );
   if (!match) return undefined;
   return { line: Number(match[1]), column: Math.max(0, Number(match[2]) - 1) };
 }
@@ -1150,8 +1157,13 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             ...position,
             source: errorFile === source ? code : readTemplateSource(errorFile),
             // Marko's own message is `\n    at <path>:L:C` plus a code frame;
-            // `label` is the reason alone, and `loc` + `frame` replace the rest.
-            message: typeof err.label === "string" ? err.label : undefined,
+            // `label` is the reason alone, and `loc` + `frame` replace the
+            // rest. Both carry kleur's SGR runs under FORCE_COLOR, and the
+            // build log prints `message` verbatim, so the label is stripped.
+            message:
+              typeof err.label === "string"
+                ? stripVTControlCharacters(err.label)
+                : undefined,
           });
         }
 

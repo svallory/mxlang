@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   astroStatic,
@@ -31,8 +32,11 @@ describe("mx-tsc", () => {
 
       // Plain `tsc` never opens the file: it fails at the *import* instead, and
       // so reports nothing about the type error the module actually contains.
-      expect(result.output).toContain("error TS2307");
-      expect(result.output).not.toContain("TS2345");
+      // TypeScript colourises its pretty output when FORCE_COLOR reaches the
+      // spawned process, so assert on the stripped text.
+      const output = stripVTControlCharacters(result.output);
+      expect(output).toContain("error TS2307");
+      expect(output).not.toContain("TS2345");
     },
     SPAWN_TIMEOUT_MS,
   );

@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (vite-plugin-colored-marko-header):** under `FORCE_COLOR=1` kleur colourises Marko's `at <path>:L:C` header (and the reason `label`), so the position regex missed the header and a Marko `CompileError` printed `page.mx.tsx:undefined:undefined` with ANSI still in the message. SGR runs are stripped before the position is parsed (`markoPosition`) and before `label` becomes the printed message, matching what `@mxlang/language-server`'s `splitCodeFrame` already does.
+
 - **Added (target-select, decisions 129/132):** `mx.target` selects its host
   behaviour. Invalid targets and host/target mismatches fail transforms via
   `this.error`, with the manifest's value position and a code frame; repeat

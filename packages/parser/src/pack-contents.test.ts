@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
@@ -20,7 +21,10 @@ function packedFiles(): string[] {
     cwd: pkgDir,
     encoding: "utf8",
   });
-  return [...out.matchAll(/^packed\s+\S+\s+(.+)$/gm)].map((m) =>
+  // bun colourises the report under FORCE_COLOR (the filename column
+  // included), and the line regex wants plain text.
+  const plain = stripVTControlCharacters(out);
+  return [...plain.matchAll(/^packed\s+\S+\s+(.+)$/gm)].map((m) =>
     (m[1] ?? "").trim(),
   );
 }

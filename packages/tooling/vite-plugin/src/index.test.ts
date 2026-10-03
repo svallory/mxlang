@@ -1694,6 +1694,54 @@ $ const x = ;
       expect(rendered(error)).not.toContain("undefined");
     });
 
+    it("positions a coloured Marko CompileError (kleur header under FORCE_COLOR)", async () => {
+      // Under FORCE_COLOR=1 kleur colourises the `at <path>:L:C` header —
+      // path, line and column each wrapped in their own SGR runs — and the
+      // `label` too, so the position regex missed the header (printing
+      // `page.mx.tsx:undefined:undefined`) and the message kept its ANSI.
+      // The SGR runs are stripped before the position is parsed and before
+      // the label becomes the message.
+      const COLORED = Object.assign(
+        new Error(
+          "\n    at \u001b[36m../../x.mx\u001b[39m:\u001b[33m4\u001b[39m:\u001b[33m1\u001b[39m\n    \u001b[0m \u001b[90m 3 |\u001b[39m <div>\n",
+        ),
+        {
+          name: "CompileError",
+          label:
+            '\u001b[31m\u001b[1mThe closing "div" tag does not match the corresponding opening "p" tag at 3:3\u001b[22m\u001b[39m',
+          loc: { file: undefined },
+        },
+      );
+      const SOURCE = "export function A() {\n  return <div/>;\n}\n";
+      const path = writeMx("Colored.solid.mx", SOURCE);
+      const transform = transformOf(
+        mx({
+          customTags: new Proxy(
+            {},
+            {
+              ownKeys() {
+                throw COLORED;
+              },
+            },
+          ),
+        }),
+      );
+
+      const caught = (await transform
+        .call({}, SOURCE, path + MX_SUFFIX)
+        .catch((err: unknown) => err)) as Wrapped;
+
+      // `locate` reshapes the error in place: same identity, but `loc`, a
+      // stripped `message`, a one-line stack and no ANSI anywhere.
+      expect(caught.loc?.line).toBe(4);
+      expect(caught.loc?.column).toBe(0);
+      expect(caught.message).toBe(
+        'The closing "div" tag does not match the corresponding opening "p" tag at 3:3',
+      );
+      expect(caught.message).not.toContain("\u001b[");
+      expect(rendered(caught)).not.toMatch(STACK_FRAME);
+    });
+
     it("a TranslateError drops its stack and keeps its position", async () => {
       const FOR = `export interface Input { name: string }
 <for|x|>

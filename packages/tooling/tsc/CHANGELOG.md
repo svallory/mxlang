@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Test fix (vite-plugin-colored-marko-header):** "catches what plain tsc cannot even see" asserts on `stripVTControlCharacters(output)`: TypeScript colourises its pretty diagnostics when `FORCE_COLOR` reaches the spawned `tsc` (TypeScript ≥ 5.9), so the plain-text `error TS2307` substring no longer matched.
+
 ### Added: target selection errors (target-select, decisions 129/132)
 
 Invalid `mx.target` values and host/target mismatches print positioned

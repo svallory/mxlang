@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Test fix (vite-plugin-colored-marko-header):** the tarball test's `bun pm pack --dry-run` parser strips VT control characters first; bun colourises the report (filename column included) under `FORCE_COLOR`, and the plain-text line regex then matched nothing.
+
 - **Fix (ng-mx-tag-import-in-decorator):** the statements `parse` synthesizes and splices into `program.body` (the hoisted tag imports, the `/var` `let`, the hoisted defines) no longer carry `start`/`end`/`loc`/`range`. They were parsed from a snippet of their own, so those were snippet offsets read as source positions: a host taking the last import's `end` inserted inside a decorator, and `print`'s source map put their tokens at (0, 0). The location is removed rather than repaired, as for a generated `satisfies` type; the printed code is unchanged.
 
 - **Fix:** the opener position for a fragment region's own `<>` (`.ng.mx`, `mxRegionFragment`) is now its real column; it was 4 too small because the synthetic root sat in the shifted prefix.
