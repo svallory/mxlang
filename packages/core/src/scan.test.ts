@@ -32,6 +32,7 @@ import {
   getCustomTags,
   liveTagMapCount,
   scanCached,
+  scanCacheStampsForTests,
 } from "./scan-cache.ts";
 import {
   testTargetLookup,
@@ -1067,6 +1068,37 @@ describe("readParseOptions", () => {
 });
 
 describe("the scan cache", () => {
+  it("retains only hashes, not file text, in sibling-directory snapshots", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"));
+    const marker = "snapshot-text-must-not-be-retained";
+    const template = `<div>${marker.repeat(128)}</div>\n`;
+    const sidecar = `// ${marker.repeat(128)}\nexport default {};\n`;
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: marker }));
+    writeFileSync(join(dir, "tags", "thing.mx"), template);
+    writeFileSync(join(dir, "tags", "thing.tag.ts"), sidecar);
+    for (let index = 0; index < 20; index++) {
+      const sibling = join(dir, `sibling-${index}`);
+      mkdirSync(sibling);
+      const caller = join(sibling, "caller.mx");
+      const first = scanCached(caller, { targets: lookup });
+      expect(scanCached(caller, { targets: lookup })).toBe(first);
+    }
+    const stamps = scanCacheStampsForTests();
+    expect(stamps).toHaveLength(60); // Two tag files and one manifest per key.
+    for (const stamp of stamps) {
+      expect(stamp).not.toHaveProperty("text");
+      expect(stamp).toEqual({
+        mtimeMs: expect.any(Number),
+        hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      });
+    }
+    expect(JSON.stringify(stamps)).not.toContain(marker);
+    expect(liveTagMapCount()).toBe(1);
+    clearScanCache();
+    expect(scanCacheStampsForTests()).toEqual([]);
+  });
+
   it("returns one map object while the tag set is unchanged", () => {
     const first = getCustomTags(fixture("parse-options", "caller.mx"), {
       targets: lookup,
@@ -1145,18 +1177,18 @@ describe("the scan cache", () => {
       writeFileSync(path, before);
       utimesSync(path, pinned, pinned);
       const original = statSync(path);
-      const first = scanCached(caller);
+      const first = scanCached(caller, { targets: lookup });
       if (before.includes("transform")) {
         // Force the old lazy definition to memoize its module before editing.
         expect(first.customTags.thing?.transform).toBeTypeOf("function");
       }
-      expect(scanCached(caller)).toBe(first);
+      expect(scanCached(caller, { targets: lookup })).toBe(first);
 
       writeFileSync(path, after);
       utimesSync(path, pinned, pinned);
       expect(statSync(path).mtimeMs).toBe(original.mtimeMs);
       expect(statSync(path).size).toBe(original.size);
-      const second = scanCached(caller);
+      const second = scanCached(caller, { targets: lookup });
       expect(second).not.toBe(first);
       // Freshness alone is insufficient: interning by mtime must not hand back
       // a lazy CustomTag that has already memoized the old sidecar's hooks.
@@ -1170,7 +1202,7 @@ describe("the scan cache", () => {
         expect(first.customTags.thing?.parseOptions).toEqual({ text: true });
         expect(second.customTags.thing?.parseOptions).toEqual({ text: false });
       }
-      expect(scanCached(caller)).toBe(second);
+      expect(scanCached(caller, { targets: lookup })).toBe(second);
       // Only a parser-facing change keeps a distinct parser-set map alive.
       expect(liveTagMapCount()).toBe(before.includes("parseOptions") ? 2 : 1);
     },
@@ -1185,18 +1217,24 @@ describe("the scan cache", () => {
     utimesSync(tagsDir, pinned, pinned);
     const original = statSync(tagsDir).mtimeMs;
     const caller = join(dir, "caller.mx");
-    expect(Object.keys(scanCached(caller).customTags)).toEqual([]);
+    expect(
+      Object.keys(scanCached(caller, { targets: lookup }).customTags),
+    ).toEqual([]);
 
     const path = join(tagsDir, "one.mx");
     writeFileSync(path, "<div/>\n");
     utimesSync(tagsDir, pinned, pinned);
     expect(statSync(tagsDir).mtimeMs).toBe(original);
-    expect(Object.keys(scanCached(caller).customTags)).toEqual(["one"]);
+    expect(
+      Object.keys(scanCached(caller, { targets: lookup }).customTags),
+    ).toEqual(["one"]);
 
     rmSync(path);
     utimesSync(tagsDir, pinned, pinned);
     expect(statSync(tagsDir).mtimeMs).toBe(original);
-    expect(Object.keys(scanCached(caller).customTags)).toEqual([]);
+    expect(
+      Object.keys(scanCached(caller, { targets: lookup }).customTags),
+    ).toEqual([]);
   });
 
   it("invalidates when a tag file is added to a scanned directory", () => {

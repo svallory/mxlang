@@ -1,6 +1,8 @@
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -315,6 +317,85 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
       const second = loadTargetDescriptor("pkg", project);
       expect(second).toBe(first);
       expect(loads()).toBe(1);
+    });
+
+    it.skipIf(process.platform === "win32")(
+      "keeps an unreadable manifest stable and reloads when readability or mtime changes",
+      (context) => {
+        const entry = install("pkg", counting("one"));
+        const manifest = join(dirname(entry), "package.json");
+        const cjs = join(dirname(entry), "index.cjs");
+        writeFileSync(cjs, counting("one"));
+        const spec = "./node_modules/pkg/index.cjs";
+        const pinned = new Date("2020-01-01T00:00:00Z");
+        utimesSync(manifest, pinned, pinned);
+        const original = statSync(manifest).mtimeMs;
+        try {
+          chmodSync(manifest, 0o000);
+          // Root/CAP_DAC_OVERRIDE can still read chmod-000 files.
+          let unreadable = false;
+          try {
+            readFileSync(manifest, "utf8");
+          } catch {
+            unreadable = true;
+          }
+          if (!unreadable) context.skip();
+          expect(statSync(manifest).mtimeMs).toBe(original);
+          const first = loadTargetDescriptor(spec, project);
+          expect(loadTargetDescriptor(spec, project)).toBe(first);
+          expect(loads()).toBe(1);
+
+          const later = new Date("2020-01-02T00:00:00Z");
+          utimesSync(manifest, later, later);
+          const second = loadTargetDescriptor(spec, project);
+          expect(second).not.toBe(first);
+          expect(loadTargetDescriptor(spec, project)).toBe(second);
+          expect(loads()).toBe(2);
+
+          // Readability alone must invalidate, even with unchanged mtime.
+          chmodSync(manifest, 0o644);
+          const third = loadTargetDescriptor(spec, project);
+          expect(third).not.toBe(second);
+          expect(loadTargetDescriptor(spec, project)).toBe(third);
+          expect(loads()).toBe(3);
+          chmodSync(manifest, 0o000);
+          const fourth = loadTargetDescriptor(spec, project);
+          expect(fourth).not.toBe(third);
+          expect(loadTargetDescriptor(spec, project)).toBe(fourth);
+          expect(loads()).toBe(4);
+        } finally {
+          chmodSync(manifest, 0o644);
+        }
+      },
+    );
+
+    it("keeps a directory named package.json stable and reloads when its mtime or readability changes", () => {
+      const dir = join(project, "targets");
+      mkdirSync(dir);
+      const manifest = join(dir, "package.json");
+      mkdirSync(manifest);
+      writeFileSync(join(dir, "index.cjs"), counting("one"));
+      const spec = "./targets/index.cjs";
+      const pinned = new Date("2020-01-01T00:00:00Z");
+      utimesSync(manifest, pinned, pinned);
+      const first = loadTargetDescriptor(spec, project);
+      expect(loadTargetDescriptor(spec, project)).toBe(first);
+      expect(loads()).toBe(1);
+
+      const later = new Date("2020-01-02T00:00:00Z");
+      utimesSync(manifest, later, later);
+      const second = loadTargetDescriptor(spec, project);
+      expect(second).not.toBe(first);
+      expect(loadTargetDescriptor(spec, project)).toBe(second);
+      expect(loads()).toBe(2);
+
+      rmSync(manifest, { recursive: true });
+      writeFileSync(manifest, "{}");
+      utimesSync(manifest, later, later);
+      const third = loadTargetDescriptor(spec, project);
+      expect(third).not.toBe(second);
+      expect(loadTargetDescriptor(spec, project)).toBe(third);
+      expect(loads()).toBe(3);
     });
 
     it("shares one entry between two fromDirs that resolve to the same file", () => {

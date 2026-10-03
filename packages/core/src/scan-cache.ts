@@ -9,7 +9,7 @@
  *    directory, so an uncached scan would re-read every `tags/` directory and
  *    re-parse every sidecar per file. Invalidation is by the evidence the
  *    scan itself recorded (spec §4): a directory's entry list, every tag
- *    file's mtime and text, and the `package.json` that supplied `mx.tags`. A stale
+ *    file's mtime and content hash, and the `package.json` that supplied `mx.tags`. A stale
  *    entry is *detected*, not merely expired, so an editor that never restarts
  *    still recompiles against the tag an author just saved.
  *
@@ -49,8 +49,8 @@ interface CacheEntry {
   /** Directory entry lists as they were when scanned, for add/remove. */
   listings: Map<string, string>;
   /**
-   * `package.json` mtime and text, for an `mx.tags` change. The text is what
-   * makes a hit trustworthy: mtime alone misses an edit that pins the mtime
+   * `package.json` mtime and content hash, for an `mx.tags` change. Content is
+   * what makes a hit trustworthy: mtime alone misses an edit that pins the mtime
    * or lands in the same filesystem tick (Linux < 6.13 stamps at jiffy
    * granularity).
    */
@@ -62,7 +62,7 @@ interface CacheEntry {
 interface FileStamp {
   mtimeMs: number;
   /** `undefined` when the file could not be read. */
-  text: string | undefined;
+  hash: string | undefined;
 }
 
 /** A listing value no real directory can produce, so "absent" is a state. */
@@ -97,9 +97,9 @@ function mtimeOf(path: string): number {
   }
 }
 
-function textOf(path: string): string | undefined {
+function hashOf(path: string): string | undefined {
   try {
-    return readFileSync(path, "utf8");
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
   } catch {
     return undefined;
   }
@@ -110,14 +110,14 @@ function snapshot(result: ScanResult): CacheEntry {
   for (const dir of result.directories) listings.set(dir, listingOf(dir));
   const manifests = new Map<string, FileStamp>();
   for (const file of result.packageFiles) {
-    // mtime before text: a write racing this snapshot then reads as stale.
-    manifests.set(file, { mtimeMs: mtimeOf(file), text: textOf(file) });
+    // mtime before content: a write racing this snapshot then reads as stale.
+    manifests.set(file, { mtimeMs: mtimeOf(file), hash: hashOf(file) });
   }
   const files = new Map<string, FileStamp>();
   for (const file of result.files) {
     // The scan recorded mtime before reading sidecar options; keep that stamp
     // rather than a later stat that could hide an intervening edit.
-    files.set(file.path, { mtimeMs: file.mtimeMs, text: textOf(file.path) });
+    files.set(file.path, { mtimeMs: file.mtimeMs, hash: hashOf(file.path) });
   }
   return { result, listings, manifests, files };
 }
@@ -128,8 +128,9 @@ function snapshot(result: ScanResult): CacheEntry {
  * Checks exactly the three things the spec names as invalidating: an add or
  * remove in a scanned directory (its entries, not its mtime), a tag file,
  * and a `package.json` carrying `mx.tags` (both files checked by mtime and
- * text). An unchanged hit adds one text read per tracked tag file; manifest
- * reads and directory listings were already content-aware.
+ * content hash). An unchanged hit reads and hashes each tracked tag file and
+ * manifest once; directory listings were already content-aware. Snapshots
+ * retain only fixed-size hashes, not file contents duplicated per directory.
  */
 function isFresh(entry: CacheEntry): boolean {
   for (const [dir, listing] of entry.listings) {
@@ -137,11 +138,11 @@ function isFresh(entry: CacheEntry): boolean {
   }
   for (const [file, stamp] of entry.manifests) {
     if (mtimeOf(file) !== stamp.mtimeMs) return false;
-    if (textOf(file) !== stamp.text) return false;
+    if (hashOf(file) !== stamp.hash) return false;
   }
   for (const [file, stamp] of entry.files) {
     if (mtimeOf(file) !== stamp.mtimeMs) return false;
-    if (textOf(file) !== stamp.text) return false;
+    if (hashOf(file) !== stamp.hash) return false;
   }
   return true;
 }
@@ -166,8 +167,8 @@ function parserSignatureOf(result: ScanResult): string {
 
 /**
  * The identity of one *loaded* tag set: the above, plus every tag file's
- * mtime and a hash of its text. Hashing happens only on a fresh scan, using
- * the text already read for its snapshot, not on an unchanged cache hit.
+ * mtime and content hash. Reuse the hashes computed by the snapshot rather
+ * than reading or hashing the files a second time to build this signature.
  *
  * Two different questions hide behind "is this the same tag set", and
  * conflating them is a real bug rather than a nicety. Marko's taglib only
@@ -182,13 +183,7 @@ function loadedSignatureOf(entry: CacheEntry): string {
   const files = [...entry.files]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([path, stamp]) =>
-      JSON.stringify([
-        path,
-        stamp.mtimeMs,
-        stamp.text === undefined
-          ? null
-          : createHash("sha256").update(stamp.text).digest("hex"),
-      ]),
+      JSON.stringify([path, stamp.mtimeMs, stamp.hash ?? null]),
     )
     .join("\n");
   return `${parserSignatureOf(entry.result)}\n--\n${files}`;
@@ -336,6 +331,15 @@ export function clearScanCache(): void {
   scans.clear();
   maps.clear();
   liveSignature = undefined;
+}
+
+/** Copies of file evidence only, for testing snapshot retention (not public API). */
+export function scanCacheStampsForTests(): object[] {
+  return [...scans.values()].flatMap((entry) =>
+    [...entry.files.values(), ...entry.manifests.values()].map((stamp) => ({
+      ...stamp,
+    })),
+  );
 }
 
 /** How many distinct tag-set maps are live. A test asserts this stays bounded. */

@@ -25,6 +25,7 @@
  * `@mxlang/core`; this module never calls `load`.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, parse, resolve, sep } from "node:path";
@@ -77,7 +78,7 @@ interface PackageStamp {
   manifest: string;
   mtimeMs: number;
   /** `undefined` when the manifest exists but cannot be read. */
-  text: string | undefined;
+  hash: string | undefined;
 }
 
 interface CacheEntry {
@@ -101,7 +102,7 @@ export function clearTargetDescriptorCache(): void {
   descriptors.clear();
 }
 
-/** The nearest `package.json` at or above `file`, with its mtime and text. */
+/** The nearest `package.json` at or above `file`, with its mtime and content hash. */
 function packageStamp(file: string): PackageStamp | undefined {
   let dir = dirname(file);
   const root = parse(dir).root;
@@ -114,13 +115,15 @@ function packageStamp(file: string): PackageStamp | undefined {
       // keep walking
     }
     if (mtimeMs !== undefined) {
-      let text: string | undefined;
+      let hash: string | undefined;
       try {
-        text = readFileSync(manifest, "utf8");
+        hash = createHash("sha256")
+          .update(readFileSync(manifest))
+          .digest("hex");
       } catch {
         // Do not mistake an unreadable nearest manifest for an absent one.
       }
-      return { manifest, mtimeMs, text };
+      return { manifest, mtimeMs, hash };
     }
     if (dir === root) return undefined;
     dir = dirname(dir);
@@ -203,8 +206,10 @@ function isPackageManifest(manifest: string, fromDir: string): boolean {
  * A relative `fromDir` is resolved against the cwd.
  *
  * Cached per resolved path and the target package's `package.json` mtime and
- * text (one manifest read per hit, so a same-tick edit is detected). When
- * either changes, every module under the package's directory (nested
+ * content hash (one manifest read/hash per hit, without retaining text, so a
+ * same-tick edit is detected). An unreadable manifest is a stable state while
+ * its path, mtime and readability are unchanged. When any changes, every
+ * module under the package's directory (nested
  * `node_modules` excepted) is evicted and re-evaluated, not only the entry
  * file; when the manifest is the project's own (it is in `fromDir` or above
  * it) only the entry file is. A stale entry is dropped when its reload fails
@@ -240,10 +245,9 @@ export function loadTargetDescriptor(
     hit &&
     hit.stamp?.manifest === stamped?.manifest &&
     hit.stamp?.mtimeMs === stamped?.mtimeMs &&
-    hit.stamp?.text === stamped?.text &&
-    // Missing manifests are a stable state; unreadable ones cannot justify
-    // a hit, since there is no content evidence to confirm.
-    (!stamped || stamped.text !== undefined)
+    // Equal undefined hashes mean both observations were unreadable (or
+    // absent), a stable state; a readability change still invalidates.
+    hit.stamp?.hash === stamped?.hash
   ) {
     return hit.descriptor;
   }
