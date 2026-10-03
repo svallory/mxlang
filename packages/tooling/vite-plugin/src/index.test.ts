@@ -1686,7 +1686,10 @@ $ const x = ;
 
       expect(error.loc?.line).toBe(2);
       expect(error.loc?.column).toBe(12);
-      expect(error.message).toBe("Unexpected token");
+      // The fix hint (audit item 14, h12) rides on the reason, same position.
+      expect(error.message).toBe(
+        "Unexpected token; scriptlets (`$ …`) are not supported; declare a value with `<const/x=…/>`",
+      );
       expect(rendered(error)).not.toMatch(STACK_FRAME);
       expect(rendered(error)).not.toContain("undefined");
     });

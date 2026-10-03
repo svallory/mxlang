@@ -956,6 +956,37 @@ export function hasContent(children: Node[]): boolean {
 }
 
 /**
+ * `<button (click)="go()">`: Angular's event binding reads, in Marko, as tag
+ * arguments `(click)` plus a default attribute value. A host that renders
+ * event handlers (the one that declares `resolveAttributeMethod`) takes the
+ * Marko spelling `onClick=go`; one that does not (`@mxlang/html`) has no form
+ * to suggest, so the message stays as it was.
+ */
+function eventHandlerHint(ctx: Ctx, node: Node): string {
+  const args: Node[] | undefined = node.arguments;
+  const event =
+    args?.length === 1 && args[0]?.type === "Identifier"
+      ? args[0].name
+      : undefined;
+  if (
+    !event ||
+    ctx.declarations.resolveAttributeMethod?.(node, "element") !== true
+  ) {
+    return "";
+  }
+  const value: Node | undefined = node.attributes?.find(
+    (attr: Node) => attr.default,
+  )?.value;
+  const handler =
+    value?.type === "Identifier"
+      ? value.name
+      : value?.type === "StringLiteral"
+        ? /^\s*([A-Za-z_$][\w$]*)\s*\(\s*\)\s*$/.exec(value.value)?.[1]
+        : undefined;
+  return `; for an event handler write \`on${event[0].toUpperCase()}${event.slice(1)}=${handler ?? "handler"}\``;
+}
+
+/**
  * Rejects the node fields this translator does not read.
  *
  * Marko's parser fills in more than the string target lowers: attribute tags,
@@ -997,7 +1028,7 @@ export function rejectUnsupportedFields(
   }
   if (!allow.args && node.arguments) {
     fail(
-      `tag arguments \`(...)\` on ${what} are not supported in a standalone template`,
+      `tag arguments \`(...)\` on ${what} are not supported in a standalone template${eventHandlerHint(ctx, node)}`,
       node,
     );
   }

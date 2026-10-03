@@ -2,7 +2,7 @@
 
 ## 0.1.0 (unreleased)
 
-- **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.`` (or ``Did you mean `<Badge>`?`` for a near-miss import). The emitter is shared with `@mxlang/react` and `@mxlang/hono`.
+- **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.`` (or ``Did you mean `<Badge>`?`` for a near-miss import), and `(click)="go()"` ends ``; for an event handler write `onClick=go` `` (core). The emitter is shared with `@mxlang/react` and `@mxlang/hono`.
 
 - **Added, unstable (target-registry, decisions 129 and 132):** `./descriptor` subpath exports the `preact-jsx` target descriptor (host `preact`, `preactDeclarations`, `load()` returning `compilePreactMx`). Nothing consumes it yet; see `@mxlang/target-registry`.
 

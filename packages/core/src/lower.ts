@@ -91,6 +91,7 @@ import type {
   Position,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { declaredName, scriptletFix } from "./parse-error-hints.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -404,6 +405,17 @@ const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
       "`*…` structural directives have no meaning in MX; use `<if=cond>` / `<for|item| of=list>`",
   ],
 ];
+
+/**
+ * The variable a scriptlet's first statement declares, when it declares one.
+ * A scriptlet that does not parse is kept as its source text.
+ */
+function declaredVariable(scriptlet: Node): string | undefined {
+  const first = scriptlet.body?.[0];
+  if (typeof first?.source === "string") return declaredName(first.source);
+  const id = first?.declarations?.[0]?.id;
+  return id?.type === "Identifier" ? id.name : undefined;
+}
 
 function foreignAttrHint(name: string): string {
   for (const [pattern, hint] of FOREIGN_ATTR_HINTS) {
@@ -2775,7 +2787,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
         break;
       case "MarkoScriptlet":
         fail(
-          "scriptlets (`$ statement`) are not supported in MX (decision 54)",
+          `scriptlets (\`$ statement\`) are not supported in MX (decision 54); ${scriptletFix(declaredVariable(child))}`,
           child,
         );
         break;

@@ -35,6 +35,7 @@ import {
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
 import { lower } from "./lower.ts";
+import { hintParseError } from "./parse-error-hints.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -274,6 +275,7 @@ export function compileSource(
       dropCompiledFilePrefix(error, filename);
     }
     annotateCloseTagOpener(error, source);
+    hintParseError(error, source);
     throw error;
   } finally {
     current = previous;
