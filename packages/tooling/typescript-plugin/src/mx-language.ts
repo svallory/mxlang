@@ -158,8 +158,11 @@ export function createMxLanguagePlugin(
             const customTags = tagsFor(fileName, hostPolicy.target);
             // Reuse discovery's policy resolution: resolving it again would
             // repeat deprecation warnings on unchanged non-Angular files.
+            // Keyed on the target registry (the target's host), not on
+            // `hostPolicy.host`, so table dispatch can fold this hook in.
             const tag =
-              hostPolicy.host === "angular"
+              builtinLookup().target(hostPolicy.target)?.host?.name ===
+              "angular"
                 ? compileAngularTagVirtual(fileName, source, customTags)
                 : undefined;
             return tag ?? compileMxVirtual(fileName, source, customTags);
