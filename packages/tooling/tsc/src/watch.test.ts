@@ -27,17 +27,23 @@ import {
  */
 const WAIT_MS = 60_000;
 /**
- * How long tsc gets to arm its watchers after printing the first summary. Under
- * load (several tsc processes at once) that took ~58 s, so it is generous.
- */
-/**
  * Gap between touches while waiting for the watchers to arm. tsc debounces a
  * burst of changes by resetting a 250 ms timer on each one, and its dynamic
  * polling can lag a touch by up to 2 s, so touching faster than that can keep
  * resetting the rebuild forever and the touches never produce a rebuild.
  */
 const TOUCH_EVERY_MS = 2_500;
+/**
+ * How long tsc gets to arm its watchers after printing the first summary. Under
+ * load (several tsc processes at once) that took ~58 s, so it is generous.
+ */
 const ARM_WAIT_MS = 150_000;
+/**
+ * Vitest timeout of the `-b -w` late-install case: first build (`WAIT_MS`) +
+ * arming (`ARM_WAIT_MS`) + recovery (`WAIT_MS`) + 30 s slack = 300 s, so a
+ * slow but correct run fails with "watch never armed", not a test timeout.
+ */
+const LATE_INSTALL_TIMEOUT_MS = 2 * WAIT_MS + ARM_WAIT_MS + 30_000;
 /** How long a late install gets to be noticed before it counts as never. */
 const PARITY_WAIT_MS = 15_000;
 const plainTsc = createRequire(import.meta.url).resolve(
@@ -156,7 +162,7 @@ describe("mx-tsc watch modes", () => {
       installLatePackage(dir);
       await run.until(/Found 0 errors/, mark);
     },
-    CASE_TIMEOUT_MS,
+    LATE_INSTALL_TIMEOUT_MS,
   );
 
   // Plain `tsc -w -p` (TypeScript 6.0.3) does not recover from a module
