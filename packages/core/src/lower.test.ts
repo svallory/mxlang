@@ -2140,6 +2140,130 @@ describe("errors keep their message and position", () => {
   });
 });
 
+describe("CDATA sections and XML declarations (decision 139)", () => {
+  /**
+   * Marko's parser makes two node kinds out of `<![CDATA[…]]>` and `<?…?>`:
+   * `MarkoCDATA` and `MarkoDeclaration`. Core's IR has no node for either, so
+   * `lowerChildren`' switch fell through both of them and dropped them on the
+   * floor — wrong output and a green build, on every target. Marko 6.3.51
+   * rejects both (`runtime-tags/src/translator/visitors/cdata.ts`,
+   * `visitors/declaration.ts`, fixture `__tests__/fixtures/cdata` snapshots
+   * the error at 1:31 — the `<`), and so does MX, in MX's wording.
+   */
+  // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
+  const CDATA_MESSAGE =
+    '`<![CDATA[…]]>` is not supported: write the text inline, as `${"…"}` when it must stay raw, or in an attribute value';
+  const DECLARATION_MESSAGE =
+    "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
+  // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
+
+  /** The error, so the message *and* the position can be asserted. */
+  function lowerError(source: string, policy = fakeDeclarations()) {
+    try {
+      lowerSource(source, policy);
+    } catch (error) {
+      return error as { message?: string; line?: number; column?: number };
+    }
+    throw new Error(`expected \`${source}\` to be rejected`);
+  }
+
+  it.each([
+    ["at top level", "<![CDATA[ x ]]>\n"],
+    ["inside an element", "<div><![CDATA[ x ]]></div>\n"],
+    [
+      "inside an element body with siblings",
+      "<div>\n  a<![CDATA[ x ]]>b\n</div>\n",
+    ],
+    ["inside an `<if>` branch", "<if=input.ok><![CDATA[ x ]]></if>\n"],
+    ["inside a `<for>` body", "<for|i| of=input.xs><![CDATA[ x ]]></for>\n"],
+  ])("rejects a CDATA section %s", (_where, source) => {
+    expect(() => lowerSource(source)).toThrowError(CDATA_MESSAGE);
+  });
+
+  it.each([
+    ["at top level", '<?xml version="1.0"?>\n'],
+    ["inside an element", "<div><?target data?></div>\n"],
+    ["inside an `<if>` branch", "<if=input.ok><?target data?></if>\n"],
+  ])("rejects an XML declaration %s", (_where, source) => {
+    expect(() => lowerSource(source)).toThrowError(DECLARATION_MESSAGE);
+  });
+
+  it("rejects one inside an attribute tag body", () => {
+    const component = fakeDeclarations({
+      name: "TestHost",
+      attrTags: 2,
+      isComponent: (name) => name === "Panel",
+    });
+    expect(() =>
+      lowerSource("<Panel><@x><![CDATA[ y ]]></@x></Panel>\n", component),
+    ).toThrowError(CDATA_MESSAGE);
+  });
+
+  it("rejects one in concise mode", () => {
+    // Concise: the CDATA is a child of the indented body, not a tag.
+    expect(() => lowerSource("div\n  <![CDATA[ x ]]>\n")).toThrowError(
+      CDATA_MESSAGE,
+    );
+    expect(() => lowerSource("div\n  <?target data?>\n")).toThrowError(
+      DECLARATION_MESSAGE,
+    );
+  });
+
+  it("stops at the first one, like every other core error", () => {
+    expect(() =>
+      lowerSource("<div><![CDATA[ a ]]><![CDATA[ b ]]></div>\n"),
+    ).toThrowError(CDATA_MESSAGE);
+  });
+
+  it("reports the position of the construct's `<`", () => {
+    // Second line, after the element's own text: the `<` of `<![CDATA[`.
+    const error = lowerError("<div>\n  a<![CDATA[ x ]]>b\n</div>\n");
+    expect(error.message).toBe(CDATA_MESSAGE);
+    expect(error.line).toBe(2);
+    expect(error.column).toBe(3);
+  });
+
+  it("counts a preceding emoji as two UTF-16 code units", () => {
+    // `<div>` is five, `😀` is two, the space is one: the `<` sits at
+    // column 8 — a byte or code-point count would say 7 or 6.
+    const error = lowerError("<div>😀 <![CDATA[ x ]]></div>\n");
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(8);
+  });
+
+  it("counts a CRLF line break as one line", () => {
+    const error = lowerError("<div>\r\n  <![CDATA[ x ]]>\r\n</div>\r\n");
+    expect(error.line).toBe(2);
+    expect(error.column).toBe(2);
+  });
+
+  it("rejects a declaration at its own position", () => {
+    const error = lowerError("<div>\n  a<?target data?>b\n</div>\n");
+    expect(error.message).toBe(DECLARATION_MESSAGE);
+    expect(error.line).toBe(2);
+    expect(error.column).toBe(3);
+  });
+
+  it("leaves the same text alone inside a raw-text body", () => {
+    // Marko's parser reads a raw-text element's body as `MarkoText`, so there
+    // is no CDATA node to reject: `<script>`/`<style>` bodies are the one
+    // place `<![CDATA[…]]>` means plain text. Probed, not assumed — see
+    // `cdata.test.ts` in the html host, which pins the output.
+    const ir = lowerSource("<script>if (a < b) { x() }</script>\n");
+    const script = ir.body[0];
+    expect(script?.kind).toBe("Element");
+    if (script?.kind !== "Element") throw new Error("expected an element");
+    expect(script.children).toEqual([
+      expect.objectContaining({ kind: "Text", value: "if (a < b) { x() }" }),
+    ]);
+  });
+
+  it("does not reject a CDATA-looking string in an attribute value", () => {
+    const ir = lowerSource('<div a="<![CDATA[ x ]]>"/>\n');
+    expect(ir.body[0]?.kind).toBe("Element");
+  });
+});
+
 describe("the lowerer runs under the real front door", () => {
   it("requires and drives a host emitter after resolving", () => {
     const { code } = compileSource(

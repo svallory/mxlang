@@ -367,7 +367,31 @@ Template mode's output *is* linear, so scriptlets would be sound there — but
 admitting them only there would fork the language. Revisit when the reactive
 mode is built or killed.
 
-**Decisions:** 12 (superseded), 33 (both entries), 45, 54, 14, 96.
+### CDATA sections and XML declarations
+
+`<![CDATA[…]]>` and `<?…?>` are **rejected on every host**:
+
+| Message | When |
+|---|---|
+| `` `<![CDATA[…]]>` is not supported: write the text inline, as `${"…"}` when it must stay raw, or in an attribute value `` | A `MarkoCDATA` appears in any child list. |
+| `` `<?…?>` (an XML declaration or processing instruction) is not supported: remove it `` | A `MarkoDeclaration` appears in any child list. |
+
+Marko 6.3.51 rejects both (`runtime-tags/src/translator/visitors/cdata.ts`,
+`visitors/declaration.ts`); its `__tests__/fixtures/cdata` snapshot puts the
+error on the `<` of the construct, which is where MX puts it too. MX keeps
+Marko's meaning and names the fix in the message.
+
+The IR has no node for either construct, so this is a rejection in lowering
+rather than a pass-through kind — the alternative would be two new IR node
+types that every host would then have to decide what to emit.
+
+One exception, and it is the parser's, not lowering's: a **raw-text** body
+(`<script>`, `<style>`, `<textarea>`, `<title>`) is read by Marko's parser as a
+single `MarkoText`, so the construct there is ordinary text: it stays text, as the
+body's other text does (the html target does not emit a `<script>` body). `<style>a <![CDATA[ b < c ]]></style>` is a stylesheet holding
+the literal text `<![CDATA[ b < c ]]>`, not a CDATA section.
+
+**Decisions:** 12 (superseded), 33 (both entries), 45, 54, 14, 96, 139.
 
 ---
 

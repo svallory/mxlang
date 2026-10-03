@@ -2624,6 +2624,21 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   };
 }
 
+/**
+ * Decision 139's two messages. Marko 6.3.51 rejects both constructs
+ * ("CDATA sections are not supported in Marko." / "XML declarations sections
+ * are not supported in Marko."); MX keeps Marko's meaning and adds the fix,
+ * because a rejection that does not say what to write instead just moves the
+ * question. Module-private: a host has no reason to match on them, and the
+ * tests assert the literal rather than importing the thing under test.
+ */
+// biome-ignore-start lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
+const CDATA_MESSAGE =
+  '`<![CDATA[…]]>` is not supported: write the text inline, as `${"…"}` when it must stay raw, or in an attribute value';
+// biome-ignore-end lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
+const DECLARATION_MESSAGE =
+  "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
+
 export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
   // Every call but the template body's own (`lower`, which resets it to 0
   // around its walk) is lowering the children of *some* container, so
@@ -2763,6 +2778,21 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
           "scriptlets (`$ statement`) are not supported in MX (decision 54)",
           child,
         );
+        break;
+      // Decision 139. The IR has no node for either construct, so before this
+      // arm existed both fell off the end of this switch: wrong output and a
+      // green build, on every target. `fail` reports `node.loc.start`, which
+      // is the `<` — the same place Marko's code frame underlines.
+      //
+      // A *raw-text* body (`<script>`, `<style>`, `<textarea>`, `<title>`)
+      // never reaches here: Marko's parser reads those as one `MarkoText`, so
+      // the construct there is text and stays text. That is the parser's call,
+      // not this switch's, which is why nothing here has to special-case them.
+      case "MarkoCDATA":
+        fail(CDATA_MESSAGE, child);
+        break;
+      case "MarkoDeclaration":
+        fail(DECLARATION_MESSAGE, child);
         break;
     }
     index++;
