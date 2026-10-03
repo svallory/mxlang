@@ -562,7 +562,8 @@ interface NgMxNode {
   property?: NgMxNode;
   id?: NgMxNode | null;
   body?: NgMxNode[] | NgMxNode;
-  program?: { body?: NgMxNode[] };
+  program?: { body?: NgMxNode[]; directives?: NgMxNode[] };
+  comments?: NgMxNode[];
   source?: { value?: string };
 }
 
@@ -1294,10 +1295,8 @@ function decoratorForRegion(
 /**
  * Writes a region's hoisted module-level statements into the module.
  *
- * Inserted after the module's last import, or at the top when it has none —
- * the same placement rule `packages/parser`'s `planHoistedImports` uses for
- * `.solid.mx`, so an injected statement never precedes an import the
- * author's own ordering depends on.
+ * Inserted after the module's last import. Without an authored import,
+ * preserve its directive prologue and any detached leading comment block.
  */
 function hoistModuleStatements(
   rewritten: MagicString,
@@ -1359,7 +1358,30 @@ function hoistModuleStatements(
       insertAt = Math.max(insertAt, node.end);
     }
   });
-  // After the last import's own newline, or at offset 0 when there is none.
+  if (insertAt === 0) {
+    const module = file as NgMxNode;
+    const program = module.program;
+    for (const directive of program?.directives ?? []) {
+      insertAt = Math.max(insertAt, directive.end ?? 0);
+    }
+    // Comments belong to the original module, as do MagicString's offsets.
+    // Keep detached header blocks, but leave a comment attached to the first
+    // declaration beside that declaration. Only module-level directives count.
+    const firstCode =
+      program?.directives?.[0]?.start ??
+      program?.body?.find((node) => node.start !== undefined)?.start ??
+      0;
+    const leading = (module.comments ?? []).filter(
+      (comment) => comment.end !== undefined && comment.end <= firstCode,
+    );
+    for (let index = 0; index < leading.length; index++) {
+      const end = leading[index]?.end ?? 0;
+      const next = leading[index + 1]?.start ?? firstCode;
+      if (/\r?\n[\t ]*\r?\n/.test(rewritten.original.slice(end, next))) {
+        insertAt = Math.max(insertAt, end);
+      }
+    }
+  }
   const text = `${lines.join("\n")}\n`;
   rewritten.appendLeft(insertAt, insertAt === 0 ? text : `\n${text.trimEnd()}`);
 }

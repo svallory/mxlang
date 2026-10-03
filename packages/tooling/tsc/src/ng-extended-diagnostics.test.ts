@@ -17,9 +17,9 @@ const dir = join(fixtures, "ng-diag-ngif");
 
 const MESSAGE =
   "NG8103: The `*ngIf` directive was used in the template, but neither the `NgIf` directive nor the `CommonModule` was imported.";
-// Line 5, column 18: the `*ngIf` attribute in `template: <div *ngIf="title">x</div>,`.
+// Line 5, column 19: `ngIf`, after the structural `*`, in the template.
 const FILE = "src/x.component.ng.mx(";
-const POSITION = "src/x.component.ng.mx(5,18)";
+const POSITION = "src/x.component.ng.mx(5,19)";
 
 /**
  * The run's output as lines, each cut to start at the fixture's `src/x.component.ng.mx(` path (tsc prints
@@ -45,6 +45,22 @@ function onlyLine(lines: string[], expected: string): string {
 }
 
 describe("NG8103 extendedDiagnostics", () => {
+  it(
+    "a25: prints NG8103 at ngFor (5,22), not the structural *",
+    () => {
+      const result = runInProcess(
+        ["--noEmit", "-p", "tsconfig.json"],
+        join(fixtures, "ng-diag-ngfor"),
+      );
+      const text = stripVTControlCharacters(result.stdout + result.stderr);
+      expect(text).toContain(
+        "x.component.ng.mx(5,22): warning TS-998103: NG8103: The `*ngFor` directive",
+      );
+      expect(text).not.toContain("approximate location");
+      expect(result.status).toBe(0);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
   it(

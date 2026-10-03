@@ -50,6 +50,30 @@ function record(over: Partial<Diagnostic>): Diagnostic {
 }
 
 describe("diagnoseNgMx (real ngtsc)", () => {
+  it.each(["ngFor", "ngIf"])(
+    "locates NG8103 at the %s name, after its structural *",
+    (name) => {
+      const attribute =
+        name === "ngFor" ? '*ngFor="let i of items"' : '*ngIf="items"';
+      const source = ngMx(
+        `<ul><li ${attribute}>x</li></ul>`,
+        "items = [1, 2];",
+      );
+      const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+      const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+      try {
+        const diagnostic = diagnoseNgMx(compiled, checker, VIRTUAL).find(
+          (d) => d.code === -998103,
+        );
+        expect(diagnostic).toBeDefined();
+        expect(diagnostic?.start).toBe(source.indexOf(name));
+        expect(diagnostic?.length).toBe(name.length);
+        expect(diagnostic?.mapped).toBe("exact");
+      } finally {
+        checker.dispose();
+      }
+    },
+  );
   it("reports a bad property at the expression start in the .ng.mx", () => {
     const source = ngMx("<p>${user.nmae}</p>");
     const compiled = compileNgMx(source, "/p/x.component.ng.mx");

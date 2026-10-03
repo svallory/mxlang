@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Test fix (tsc-host-policy-test-macos-tmp):** host-policy diagnostic tests normalise the unique temporary directory name rather than requiring its absolute spelling to survive TypeScript's cwd-relative formatting. This also works for macOS review checkouts under `/private/tmp`, where the shared `/private` prefix cancels. Production code is unchanged.
+
 - **Test fix (vite-plugin-colored-marko-header):** "catches what plain tsc cannot even see" asserts on `stripVTControlCharacters(output)`: TypeScript colourises its pretty diagnostics when `FORCE_COLOR` reaches the spawned `tsc` (TypeScript ≥ 5.9), so the plain-text `error TS2307` substring no longer matched.
 
 ### Fixed: calling Angular tags preserves template diagnostics (ng-mx-tags-call-ts991010)

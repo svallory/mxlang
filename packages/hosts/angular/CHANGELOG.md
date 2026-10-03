@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Fix (ng-mx-hoist-before-directive):** without authored imports, `.ng.mx` hoisted imports now follow the leading directive prologue and detached header comments. Directives remain directives, attached declaration comments stay attached, and template/module diagnostic mappings retain their authored positions.
+
+- **Fix (ng-ngfor-attr-column):** structural attribute mappings separate the `*` prefix from the directive name. NG8103 now points at `ngFor` (a25: line 5, column 22), and likewise at `ngIf`, without changing emitted template text or adjusting the printed column.
+
 - **Fix (scriptlet-hint-let-var):** `$ let`/`$ var` no longer suggest an immutable `<const>` rewrite. Angular rejects `<let>`, so its host declaration omits keyword advice for mutable scriptlets; `$ const` advice is unchanged.
 
 - **Fix (angular-build-unlocated-babel-suffix):** a tag file's parse error printed Babel's own 0-based `(L:C)` suffix (`Chip.mx error: …/Chip.mx: …/Chip.mx: Unexpected token (1:32)`) — the path twice, the column 0-based, and no usable position at all. The tag error path now goes through `positionOf` like the `.ng.mx` one: the position prints from `err.loc` as 1-based `file:line:column` (`Chip.mx:1:33`), Babel's path prefix and trailing 0-based suffix are stripped on every branch (located or not), so the README's "every printed position is 1-based" holds for these errors too. The log line and `errors[].message` are compact — `file:line:col error: reason` with the reason alone — while the on-page error template keeps the filename-bearing display message; `positionOf` is exported `@internal` for the position-hygiene regressions.

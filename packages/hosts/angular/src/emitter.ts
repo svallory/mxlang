@@ -535,15 +535,38 @@ function attrSourceSpan(attr: Attr): SourceSpan | undefined {
   return { sourceStart: name.sourceStart, sourceEnd: value.sourceEnd };
 }
 
+/** Angular diagnoses the directive identifier separately from its structural `*`. */
+function writeAttributeName(
+  out: TemplateWriter,
+  name: string,
+  span: SourceSpan | undefined,
+): void {
+  if (
+    name.startsWith("*") &&
+    name.length > 1 &&
+    span &&
+    span.sourceEnd - span.sourceStart === name.length
+  ) {
+    out.writeMapped("*", {
+      sourceStart: span.sourceStart,
+      sourceEnd: span.sourceStart + 1,
+    });
+    out.writeMapped(name.slice(1), {
+      sourceStart: span.sourceStart + 1,
+      sourceEnd: span.sourceEnd,
+    });
+  } else {
+    out.writeMapped(name, span);
+  }
+}
+
 /**
  * Writes an attribute list into `out`.
  *
  * Attribute *names* and expression *values* are mapped to the source text
  * they came from; the syntax around them (` [`, `]="`, `"`) is generated
- * punctuation and stays unmapped. A `static` attribute's value is an
- * author-written literal whose `esc()`-escaped form would map whole-to-whole
- * onto the source literal, per `mapping.ts`'s escaping rule — but the IR
- * carries no span for it, so only the name is mapped there.
+ * punctuation and stays unmapped. Structural `*` prefixes get their own
+ * mapped run, so a diagnostic on the directive name lands after the prefix.
  */
 function emitAttrs(
   out: TemplateWriter,
@@ -563,14 +586,14 @@ function emitAttrs(
     switch (attr.kind) {
       case "static":
         out.write(" ");
-        out.writeMapped(attr.name, attr.nameSpan);
+        writeAttributeName(out, attr.name, attr.nameSpan);
         // The value is a plain string literal in the IR with no span of its
         // own, so only the name is mapped here.
         out.write(`="${esc(attr.value)}"`);
         break;
       case "boolean":
         out.write(" ");
-        out.writeMapped(attr.name, attr.nameSpan);
+        writeAttributeName(out, attr.name, attr.nameSpan);
         break;
       // Phase B of `dom-events` (decision 101): Angular's `(x)` binds a real
       // DOM event name, and core resolved it — `on<Name>` lowercased,

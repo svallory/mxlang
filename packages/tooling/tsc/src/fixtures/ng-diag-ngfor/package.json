@@ -1,0 +1,6 @@
+{
+  "name": "ng-diag-ngfor",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

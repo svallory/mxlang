@@ -1,0 +1,7 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-x",
+  template: <ul><li *ngFor="let i of items"><if=i>@for (j of items; track j) { x }</if></li></ul>,
+})
+export class XComponent { title = "hi"; items = [1, 2]; go() {}; two(a: number, b: number) {} }

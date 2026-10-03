@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { runInProcess } from "./in-process.ts";
@@ -80,9 +80,13 @@ function check(dir: string, spawn = false): { status: number; text: string } {
     : runInProcess(["--noEmit", "-p", "tsconfig.json"], dir);
   return {
     status: run.status,
-    // tsc prints paths relative to the cwd (`../../..<dir>/…` from a temp dir).
+    // tsc prints paths relative to the process cwd, and `path.relative`
+    // cancels any directory the two share: a repo checked out under
+    // `/private/tmp` makes the printed form of the (realpath'd) temp dir
+    // drop its `/private` prefix (`../../../../../../var/folders/…`). Anchor
+    // the normalisation on the unique mkdtemp name, not the absolute spelling.
     text: stripVTControlCharacters(run.stdout + run.stderr).replace(
-      new RegExp(`(?:\\.\\./)*${dir.replaceAll("/", "\\/")}`, "g"),
+      new RegExp(`(?:[^\\s()/]+/)*${basename(dir)}`, "g"),
       "<dir>",
     ),
   };
