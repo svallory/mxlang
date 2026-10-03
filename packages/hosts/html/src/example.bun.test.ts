@@ -49,10 +49,27 @@ async function runExample(name: string) {
  * is normalised to `:L:C:` here so no bare 0-based literal is pinned. The text
  * after it carries the 1-based survivor position and is asserted exactly.
  */
-const DUPLICATE_NAME =
-  "fixtures-marko/spread-between-props/input.marko:L:C: duplicate attribute `name`: the later one at 3:39 wins, so this one is dropped";
+/** The warning lines one compile prints, as the example runner prints them twice. */
+const twice = (...lines: string[]): string => [...lines, ...lines].join("\n");
+const warning = (fixture: string, name: string, survivor: string): string =>
+  `fixtures-marko/${fixture}/input.marko:L:C: duplicate attribute \`${name}\`: the later one at ${survivor} wins, so this one is dropped`;
 const EXPECTED_STDERR: Record<string, string> = {
-  "spread-between-props": `${DUPLICATE_NAME}\n${DUPLICATE_NAME}`,
+  "spread-between-props": twice(
+    warning("spread-between-props", "name", "3:39"),
+  ),
+  // The `duplicate-attrs*` fixtures exist to lock decision 135 against Marko
+  // in the oracles, so each prints its dropped-attribute warnings.
+  "duplicate-attrs": twice(
+    warning("duplicate-attrs", "class", "1:23"),
+    warning("duplicate-attrs", "title", "2:23"),
+    warning("duplicate-attrs", "value", "3:12"),
+  ),
+  "duplicate-attrs-spread-between": twice(
+    warning("duplicate-attrs-spread-between", "a", "1:19"),
+  ),
+  "duplicate-attrs-two-spreads": twice(
+    warning("duplicate-attrs-two-spreads", "b", "1:30"),
+  ),
 };
 
 /**
