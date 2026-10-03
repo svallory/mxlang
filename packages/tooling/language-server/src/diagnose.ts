@@ -16,6 +16,7 @@ import {
   type MxWarning,
   type ScanDiagnostic,
   type TargetPolicy,
+  type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import { compileHonoMx } from "@mxlang/hono";
 import { compile } from "@mxlang/html";
@@ -534,21 +535,46 @@ export function diagnoseDocument(
  * (1-based, like `mx-tsc`'s `file(line,col)`) and whose `relatedInformation`
  * points at the real spot. The same problem is also pushed onto `related`, so
  * the server publishes it against the `package.json` URI at its real range,
- * for clients that show diagnostics on that file. A warning rather than an
- * error, because the scan carried on and everything else in the package still
- * compiles; the author has a misconfigured entry, not a broken file.
+ * for clients that show diagnostics on that file. Scan problems and existing
+ * host diagnostics remain warnings; invalid targets and mismatches are errors,
+ * with value lengths and the mismatch's related host position.
  */
 function scanDiagnosticToLsp(
-  diagnostic: ScanDiagnostic,
+  diagnostic: ScanDiagnostic | TargetPolicyDiagnostic,
   related?: RelatedDiagnostics[],
 ): Diagnostic {
   const line = Math.max(0, diagnostic.line - 1);
   const column = Math.max(0, diagnostic.column);
   const range = {
     start: { line, character: column },
-    end: { line, character: column + 1 },
+    end: {
+      line,
+      character:
+        column +
+        (("length" in diagnostic ? diagnostic.length : undefined) ?? 1),
+    },
   };
   const uri = uriOf(diagnostic.file);
+  const severity =
+    "severity" in diagnostic && diagnostic.severity === "error"
+      ? DiagnosticSeverity.Error
+      : DiagnosticSeverity.Warning;
+  const information =
+    "relatedInformation" in diagnostic
+      ? (diagnostic.relatedInformation?.map((entry) => ({
+          location: {
+            uri: uriOf(entry.file),
+            range: {
+              start: { line: entry.line - 1, character: entry.column },
+              end: {
+                line: entry.line - 1,
+                character: entry.column + entry.length,
+              },
+            },
+          },
+          message: entry.message,
+        })) ?? [])
+      : [];
   // Core's message usually opens with the file's own path, which the prefix
   // below already states: keep one.
   const own = `${diagnostic.file} `;
@@ -559,21 +585,25 @@ function scanDiagnosticToLsp(
     uri,
     diagnostics: [
       {
-        severity: DiagnosticSeverity.Warning,
+        severity,
         source: "mxlang",
         message: diagnostic.message,
         range,
+        ...(information.length ? { relatedInformation: information } : {}),
       },
     ],
   });
   return {
-    severity: DiagnosticSeverity.Warning,
+    severity,
     source: "mxlang",
     message: `${diagnostic.file}:${line + 1}:${column + 1}: ${text}`,
     range: {
       start: { line: 0, character: 0 },
       end: { line: 0, character: 1 },
     },
-    relatedInformation: [{ location: { uri, range }, message: text }],
+    relatedInformation: [
+      { location: { uri, range }, message: text },
+      ...information,
+    ],
   };
 }

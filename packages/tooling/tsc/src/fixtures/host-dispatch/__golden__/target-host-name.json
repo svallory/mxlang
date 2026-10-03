@@ -1,0 +1,114 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/target-host-name/package.json:3:15: unknown mx.target \"solid\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. \"solid\" is a host, not a target: its default target is \"solid-jsx\" (use mx.host \"solid\" or mx.target \"solid-jsx\"). Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/target-host-name/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 14
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 21
+                    }
+                  }
+                },
+                "message": "unknown mx.target \"solid\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. \"solid\" is a host, not a target: its default target is \"solid-jsx\" (use mx.host \"solid\" or mx.target \"solid-jsx\"). Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/target-host-name/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "unknown mx.target \"solid\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. \"solid\" is a host, not a target: its default target is \"solid-jsx\" (use mx.host \"solid\" or mx.target \"solid-jsx\"). Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 14
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 21
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<p>ok</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/target-host-name/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not loaded: see <root>/target-host-name/package.json(3,15)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "unknown-target",
+            "severity": "error",
+            "value": "solid",
+            "file": "<root>/target-host-name/package.json",
+            "message": "unknown mx.target \"solid\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. \"solid\" is a host, not a target: its default target is \"solid-jsx\" (use mx.host \"solid\" or mx.target \"solid-jsx\"). Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
+            "line": 3,
+            "column": 14,
+            "length": 7
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/target-host-name/package.json:3:15: unknown mx.target \"solid\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. \"solid\" is a host, not a target: its default target is \"solid-jsx\" (use mx.host \"solid\" or mx.target \"solid-jsx\"). Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
+          "id": "<root>/target-host-name/package.json",
+          "loc": {
+            "file": "<root>/target-host-name/package.json",
+            "line": 3,
+            "column": 14
+          },
+          "frame": "3 |     \"target\": \"solid\"\n                  ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/target-host-name/page.mx(1,1): error TS80001: target not loaded: see <root>/target-host-name/package.json(3,15)",
+    "<root>/target-host-name/package.json(3,15): error TS80003: unknown mx.target \"solid\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. \"solid\" is a host, not a target: its default target is \"solid-jsx\" (use mx.host \"solid\" or mx.target \"solid-jsx\"). Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned."
+  ]
+}

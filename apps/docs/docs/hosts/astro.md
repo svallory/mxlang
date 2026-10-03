@@ -7,6 +7,15 @@ description: "Render .mx components and pages, and .astro.mx templates, to stati
 
 `@mxlang/astro` renders `.mx` components inside an Astro project as static markup at build time. An MX component compiles to a runtime-free `(input) => string` function, is called during Astro's build, and never reaches a browser. No islands, no hydration, no client JavaScript from this renderer.
 
+## Selecting the host
+
+`mx.host: "astro"` selects `astro-html`; `mx.target: "astro-html"` alone
+selects Astro behaviour too. The target uses Astro's strict policy in the
+editor and `mx-tsc`. If both keys are given, the target must belong to Astro;
+disagreement is a positioned `target-host-mismatch` error (decisions 129/132;
+[spec §13.5](/specification/#135-host-and-target-selection)). `.astro.mx`
+remains its own extension-selected template pipeline, not an `mx.target` name.
+
 ## Install
 
 ```bash

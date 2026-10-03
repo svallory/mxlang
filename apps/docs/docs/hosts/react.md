@@ -10,6 +10,14 @@ module. Structural MX becomes ordinary React TSX: `<if>` becomes a ternary,
 `<for>` becomes `.map()` with a `key`, component children are JSX children,
 and attribute tags become props.
 
+## Selecting the host
+
+`mx.host: "react"` selects `react-jsx`; `mx.target: "react-jsx"` alone selects
+React behaviour too. These are `package.json` keys, separate from TypeScript's
+`compilerOptions.jsx`. If both MX keys are given, the target must belong to
+React; disagreement is a positioned `target-host-mismatch` error (decisions
+129/132; [spec §13.5](/specification/#135-host-and-target-selection)).
+
 ## Setup
 
 ```jsonc

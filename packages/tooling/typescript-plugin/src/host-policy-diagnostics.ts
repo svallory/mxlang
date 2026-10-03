@@ -1,10 +1,11 @@
 import type { TargetPolicy, TargetPolicyDiagnostic } from "@mxlang/core";
 import { resolveTargetPolicyDetailed } from "@mxlang/target-registry";
+import type { MxCompileDiagnostic } from "./language.ts";
 
 /**
- * The TS code of a host-policy diagnostic (an unknown `mx.host`, a malformed
- * `package.json`). Next to `TS80001` (compile error) and `TS80002` (compile
- * warning). Always a warning: nothing that built before may start failing.
+ * The TS code of a policy diagnostic. Existing host/manifest problems are
+ * warnings; invalid targets and mismatches are errors. Next to `TS80001`
+ * (compile error/policy pointer) and `TS80002` (compile warning).
  */
 export const HOST_POLICY_DIAGNOSTIC_CODE = 80003;
 
@@ -40,18 +41,44 @@ export interface TargetPolicyRecorder {
    * what an earlier compile of the same file recorded (a fixed `package.json`
    * stops being reported).
    */
-  resolve(fileName: string): TargetPolicy;
+  resolve(fileName: string, source?: string): TargetPolicy;
+  /** Store authored text without re-resolving (or repeating alias warnings). */
+  source(fileName: string, source: string): void;
   /** One file's diagnostics, or every recorded file's. */
   get(fileName?: string): TargetPolicyDiagnostic[];
+  /** TS80001 pointers to policy errors, at the document's start. */
+  errors(fileName?: string): MxCompileDiagnostic[];
 }
 
 export function createTargetPolicyRecorder(): TargetPolicyRecorder {
   const byFile = new Map<string, TargetPolicyDiagnostic[]>();
+  const sources = new Map<string, string>();
   return {
-    resolve(fileName) {
+    source(fileName, source) {
+      sources.set(fileName, source);
+    },
+    resolve(fileName, source) {
       const { policy, diagnostics } = resolveTargetPolicyDetailed(fileName);
       byFile.set(fileName, diagnostics);
+      if (source !== undefined) sources.set(fileName, source);
       return policy;
+    },
+    errors(fileName) {
+      const entries =
+        fileName === undefined
+          ? [...byFile]
+          : [[fileName, byFile.get(fileName) ?? []] as const];
+      return entries.flatMap(([name, diagnostics]) =>
+        diagnostics
+          .filter((diagnostic) => diagnostic.severity === "error")
+          .map((diagnostic) => ({
+            fileName: name,
+            source: sources.get(name) ?? "",
+            offset: 0,
+            category: "error" as const,
+            message: `target ${diagnostic.code === "target-host-mismatch" ? "not resolved" : "not loaded"}: see ${diagnostic.file}(${diagnostic.line},${diagnostic.column + 1})`,
+          })),
+      );
     },
     get(fileName) {
       return fileName === undefined

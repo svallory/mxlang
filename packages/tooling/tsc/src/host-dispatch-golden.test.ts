@@ -107,6 +107,22 @@ const ROWS = [
   "html-with-solid-dep",
   "translator",
   "tags-hosts-html",
+  // PR 3b (§6.2): additive rows only; all earlier goldens stay unchanged.
+  "target-html",
+  "target-html-solid-dep",
+  "target-solid",
+  "target-agree-solid",
+  "target-agree-html",
+  "target-mismatch-host",
+  "target-mismatch-hostless",
+  "target-mismatch-legacy",
+  "target-host-name",
+  "target-unknown",
+  "target-typo",
+  "target-package",
+  "target-data",
+  "target-unknown-host",
+  "tags-hosts-target",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
@@ -305,7 +321,12 @@ async function viteLeg(row: string, file: string, text: string) {
   const warnings: string[] = [];
   try {
     const result = await plugin.transform.call(
-      { warn: (message: string) => warnings.push(message) },
+      {
+        warn: (message: string) => warnings.push(message),
+        error: (error: Error) => {
+          throw error;
+        },
+      },
       text,
       file + MX_SUFFIX,
     );

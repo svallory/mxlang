@@ -16,6 +16,16 @@ Round 2: scan snapshots now retain SHA-256 hashes instead of template, sidecar o
 
 `CustomTagAttributeTag` gains recursive `attributes`, `attributeTags` and `children` maps (including the lead's 16:50 children ruling). The shared attribute validator checks the full vocabulary, E1's `array` / `function` / `items` included, at every depth; defaults on attribute-tag attributes are not applied. The E2 checker validates authored plain children before lowering, with `#text`, required/repeatable paths through `<if>` / `<for>` and complete owner-chain diagnostics such as `` `<card>`: `<@row>`: unknown attribute `bogus` ``. Nested attribute-tag cardinality uses the preserved control-flow tree. No-map declarations keep the prior no-template shape and control-flow rejections. Unknown declaration keys and E1 contradictions are checked recursively at registration; plain child declarations remain cardinality-only. Spec §9.7/§9.8, sidecar/reference docs, `divergences.md`, and core/data tests; no host-specific core code (decision 126).
 
+### Added: explicit target selection (target-select, decisions 129/132)
+
+`mx.target` selects a registered target, including its host behaviour. When
+`mx.host` also resolves, they must agree: `target-host-mismatch` is an error,
+positioned at the target value with related information at the host. Unknown
+targets and package specifiers are positioned `unknown-target` errors; package
+loading is not supported yet. Diagnostic ranges carry the JSON value length.
+Core remains open-set. Target names in `mx.tags[].hosts` warn with a host hint.
+Existing configurations without `mx.target` resolve unchanged.
+
 ### Fixed: a same-tick, same-size `package.json` rewrite is no longer served stale (core-package-json-ctime-cache)
 
 `readPackageJsonCached` keyed its cache on `mtimeMs:ctimeMs:size:ino` alone. Linux before 6.13 stamps ctime at jiffy granularity (4 ms at HZ=250), so an edit that kept the size inside one tick, with the mtime pinned, left the key identical and the old `mx.host` / `mx.tags` kept winning. On a stamp hit the cache now also reads the file and compares its text with the cached text (one read plus a string compare per lookup of an unchanged file; a stamp miss costs what it did). `setPackageJsonStatForTests` lets tests freeze the stat to reproduce coarse timestamps on any OS. The other stat-keyed caches in core (`scan-cache`, `template-tag`, `callee-input`, `target-loader`) key on `mtimeMs` only by design and never depended on ctime.

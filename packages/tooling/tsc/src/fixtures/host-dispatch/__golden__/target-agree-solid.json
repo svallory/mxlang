@@ -1,0 +1,260 @@
+{
+  "files": {
+    "Card.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "export interface Input { [key: string]: unknown }\nexport default function Card(input: Input) { return <><div></div></>; }",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              0
+            ],
+            "lengths": [
+              50
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              50
+            ],
+            "lengths": [
+              7
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "export interface Input { [key: string]: unknown }\nexport default function Card(input: Input) { return <><div></div></>; }",
+        "map": null,
+        "warnings": []
+      }
+    },
+    "broken.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "Missing ending \"div\" tag",
+            "data": {
+              "codeFrame": "  1 | export interface Input {}\n  2 |\n> 3 | <div>\n    | ^^^^^ Missing ending \"div\" tag\n  4 |"
+            },
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 1
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/target-agree-solid/broken.mx",
+            "message": "\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+            "offset": 27,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "CompileError",
+          "message": "Missing ending \"div\" tag",
+          "id": "<root>/target-agree-solid/broken.mx",
+          "loc": {
+            "file": "<root>/target-agree-solid/broken.mx",
+            "line": 3,
+            "column": 0
+          },
+          "frame": "3 | <div>\n    ^"
+        },
+        "warnings": []
+      }
+    },
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module",
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 1
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/target-agree-solid/page.mx",
+            "message": "`<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module",
+            "offset": 30,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "`<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module",
+          "id": "<root>/target-agree-solid/page.mx",
+          "loc": {
+            "file": "<root>/target-agree-solid/page.mx",
+            "line": 3,
+            "column": 0
+          },
+          "frame": "3 | <let/count=0/>\n    ^"
+        },
+        "warnings": []
+      }
+    },
+    "plain.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [
+          "<root>/target-agree-solid/Card.mx"
+        ],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import Card from \"./Card.mx\"\nexport interface Input {}\nexport default function Plain(input: Input) { return <><Card tab={undefined} /><p>plain</p></>; }",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              0
+            ],
+            "lengths": [
+              29
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              31
+            ],
+            "generatedOffsets": [
+              111
+            ],
+            "lengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              38
+            ],
+            "generatedOffsets": [
+              116
+            ],
+            "lengths": [
+              3
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "import Card from \"./Card.mx\"\nexport interface Input {}\nexport default function Plain(input: Input) { return <><Card tab={undefined} /><p>plain</p></>; }",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/target-agree-solid/broken.mx(3,1): error TS80001: \n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+    "<root>/target-agree-solid/page.mx(3,1): error TS80001: `<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module"
+  ]
+}

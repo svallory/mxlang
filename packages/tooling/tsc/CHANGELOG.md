@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added: target selection errors (target-select, decisions 129/132)
+
+Invalid `mx.target` values and host/target mismatches print positioned
+`error TS80003` diagnostics and fail the run. TS80001 points from the MX
+file to its manifest; existing warnings do not change exit status. Added
+four-tool dispatch golden rows without regenerating existing rows, including
+the explicit `data` tooling restriction (decision 131 addendum).
+
 ### Added: `mx-tsc` reports mistyped event handlers on preact, react and hono (jsx-handler-typing, decision 140)
 
 Through `@mxlang/typescript-plugin`: `<button onClick=((a: string) => a.length)>` is now `TS2345` at the authored handler (it was silent), the body of a shorthand handler is type-checked, and valid handlers no longer report `TS7006`. See `@mxlang/typescript-plugin` for the user-visible new errors.

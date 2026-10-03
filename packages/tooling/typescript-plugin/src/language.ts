@@ -120,7 +120,7 @@ export function createSolidMxLanguagePlugin(
 
       const source = snapshot.getText(0, snapshot.getLength());
       // Only for what it reports: this file's host is fixed by its extension.
-      hostPolicies.resolve(fileName);
+      hostPolicies.resolve(fileName, source);
       try {
         // The tags this file can call, discovered the same way every other
         // integration discovers them. Without this the editor would know
@@ -217,7 +217,10 @@ export function createSolidMxLanguagePlugin(
     },
 
     getCompileDiagnostics(fileName) {
-      return diagnosticsFrom(compileDiagnostics, fileName);
+      return [
+        ...diagnosticsFrom(compileDiagnostics, fileName),
+        ...hostPolicies.errors(fileName),
+      ];
     },
 
     getTargetPolicyDiagnostics(fileName) {
@@ -329,7 +332,7 @@ export function createNgMxLanguagePlugin(
 
       const source = snapshot.getText(0, snapshot.getLength());
       // Only for what it reports: this file's host is fixed by its extension.
-      hostPolicies.resolve(fileName);
+      hostPolicies.resolve(fileName, source);
       compiled.delete(fileName);
       const fail = (error: SolidMxSyntaxError) => {
         syntaxErrors.set(fileName, error);
@@ -427,7 +430,10 @@ export function createNgMxLanguagePlugin(
     },
 
     getCompileDiagnostics(fileName) {
-      return diagnosticsFrom(compileDiagnostics, fileName);
+      return [
+        ...diagnosticsFrom(compileDiagnostics, fileName),
+        ...hostPolicies.errors(fileName),
+      ];
     },
 
     getTargetPolicyDiagnostics(fileName) {

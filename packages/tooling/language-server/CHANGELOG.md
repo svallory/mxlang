@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added: target selection errors (target-select, decisions 129/132)
+
+`mx.target` selects its target's host behaviour. Invalid targets and
+host/target mismatches are errors on the document and `package.json`, with
+full value ranges; mismatches link back to `mx.host`. Existing host warnings
+are unchanged. Explicit `data` reports the registry's decision 131 addendum
+error naming `parseData` and `TODO data-target-tooling-dispatch`.
+
 ### Changed (refactor/target-open-set, decisions 129 and 132)
 
 The server resolves host policy and scans through `@mxlang/target-registry`'s wrappers over the built-in lookup, so it no longer depends on core's deleted closed lists; `diagnoseDocument` takes a policy whose `target` names the target and whose `host` is set only for a target that has one, and matches `mx.tags[].hosts` on `hostFilterKey(policy.target)` — the same string as before for every built-in. Compiles carry the built-in lookup, so a callee importing `AttrTag` from any registered target's package still reads. `isTranslateError` replaces `instanceof TranslateError`, so a positioned error from another copy of core keeps its position and dependencies. No change in the diagnostics published for any document.

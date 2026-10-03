@@ -1,0 +1,156 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "react"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/target-mismatch-host/package.json:4:15: mx.target \"react-jsx\" belongs to host \"react\", but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"react-jsx\" selects host \"react\".",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/target-mismatch-host/package.json",
+                  "range": {
+                    "start": {
+                      "line": 3,
+                      "character": 14
+                    },
+                    "end": {
+                      "line": 3,
+                      "character": 25
+                    }
+                  }
+                },
+                "message": "mx.target \"react-jsx\" belongs to host \"react\", but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"react-jsx\" selects host \"react\"."
+              },
+              {
+                "location": {
+                  "uri": "file://<root>/target-mismatch-host/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 19
+                    }
+                  }
+                },
+                "message": "mx.host \"solid\" selects target \"solid-jsx\"."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/target-mismatch-host/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "mx.target \"react-jsx\" belongs to host \"react\", but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"react-jsx\" selects host \"react\".",
+                "range": {
+                  "start": {
+                    "line": 3,
+                    "character": 14
+                  },
+                  "end": {
+                    "line": 3,
+                    "character": 25
+                  }
+                },
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file://<root>/target-mismatch-host/package.json",
+                      "range": {
+                        "start": {
+                          "line": 2,
+                          "character": 12
+                        },
+                        "end": {
+                          "line": 2,
+                          "character": 19
+                        }
+                      }
+                    },
+                    "message": "mx.host \"solid\" selects target \"solid-jsx\"."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "/** @jsxImportSource react */\nimport type { JSX as __MxJSX } from \"react/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><p>ok</p></>);\n}\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/target-mismatch-host/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not resolved: see <root>/target-mismatch-host/package.json(4,15)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "target-host-mismatch",
+            "severity": "error",
+            "file": "<root>/target-mismatch-host/package.json",
+            "message": "mx.target \"react-jsx\" belongs to host \"react\", but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"react-jsx\" selects host \"react\".",
+            "line": 4,
+            "column": 14,
+            "length": 11,
+            "relatedInformation": [
+              {
+                "file": "<root>/target-mismatch-host/package.json",
+                "message": "mx.host \"solid\" selects target \"solid-jsx\".",
+                "line": 3,
+                "column": 12,
+                "length": 7
+              }
+            ]
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/target-mismatch-host/package.json:4:15: mx.target \"react-jsx\" belongs to host \"react\", but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"react-jsx\" selects host \"react\".",
+          "id": "<root>/target-mismatch-host/package.json",
+          "loc": {
+            "file": "<root>/target-mismatch-host/package.json",
+            "line": 4,
+            "column": 14
+          },
+          "frame": "4 |     \"target\": \"react-jsx\"\n                  ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/target-mismatch-host/page.mx(1,1): error TS80001: target not resolved: see <root>/target-mismatch-host/package.json(4,15)",
+    "<root>/target-mismatch-host/package.json(4,15): error TS80003: mx.target \"react-jsx\" belongs to host \"react\", but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"react-jsx\" selects host \"react\"."
+  ]
+}

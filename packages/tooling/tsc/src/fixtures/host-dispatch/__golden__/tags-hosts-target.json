@@ -1,0 +1,121 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "<root>/tags-hosts-target/package.json:1:1: `mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/tags-hosts-target/package.json",
+                  "range": {
+                    "start": {
+                      "line": 0,
+                      "character": 0
+                    },
+                    "end": {
+                      "line": 0,
+                      "character": 1
+                    }
+                  }
+                },
+                "message": "`mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")"
+              }
+            ]
+          },
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "Unable to find entry point for custom tag `<thing>`.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            }
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/tags-hosts-target/package.json",
+            "diagnostics": [
+              {
+                "severity": 2,
+                "source": "mxlang",
+                "message": "`mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")",
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 0
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 1
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/tags-hosts-target/page.mx",
+            "message": "Unable to find entry point for custom tag `<thing>`.",
+            "offset": 0,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": [
+          "@mxlang/typescript-plugin: <root>/tags-hosts-target/package.json: `mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")"
+        ]
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "Unable to find entry point for custom tag `<thing>`.",
+          "id": "<root>/tags-hosts-target/page.mx",
+          "loc": {
+            "file": "<root>/tags-hosts-target/page.mx",
+            "line": 1,
+            "column": 0
+          },
+          "frame": "1 | <thing/>\n    ^"
+        },
+        "warnings": [
+          "@mxlang/vite-plugin: <root>/tags-hosts-target/package.json: `mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")"
+        ]
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/tags-hosts-target/page.mx(1,1): error TS80001: Unable to find entry point for custom tag `<thing>`."
+  ]
+}

@@ -9,6 +9,20 @@ The HTML host (`@mxlang/html`) is the vanilla MX host. It compiles an `.mx` file
 
 The generic half of the work — consuming Marko's AST, applying the structural lowerings, the string-emit model — lives in the shared core. This host supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
 
+## Selecting the host
+
+HTML is a **hostless target**. Select it with `"mx": { "target": "html" }`
+in `package.json`. `mx.host: "html"` remains a silent legacy alias;
+`mx.host: "translator"` retains its deprecation warning. An explicit HTML
+target beats dependency inference, and combining it with `mx.host: "solid"`
+is a positioned `target-host-mismatch` error (decisions 129/132;
+[spec §13.5](/specification/#135-host-and-target-selection)).
+
+The other hostless target, `data`, is not wired into editor/build dispatch yet:
+explicit `mx.target: "data"` errors at its value and names
+`TODO data-target-tooling-dispatch`. Call `parseData` from `@mxlang/data` instead
+(decision 131 addendum).
+
 ## Attribute-tag values
 
 Import `AttrTag` from `@mxlang/html` in hand-written TypeScript. A renderable

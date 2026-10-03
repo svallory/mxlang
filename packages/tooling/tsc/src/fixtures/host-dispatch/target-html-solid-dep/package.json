@@ -1,0 +1,8 @@
+{
+  "mx": {
+    "target": "html"
+  },
+  "dependencies": {
+    "@mxlang/solid": "1"
+  }
+}

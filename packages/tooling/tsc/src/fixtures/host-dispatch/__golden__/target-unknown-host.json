@@ -1,0 +1,96 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "solid"
+        },
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "<root>/target-unknown-host/package.json:3:13: unknown mx.host \"bogus\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/target-unknown-host/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 13
+                    }
+                  }
+                },
+                "message": "unknown mx.host \"bogus\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/target-unknown-host/package.json",
+            "diagnostics": [
+              {
+                "severity": 2,
+                "source": "mxlang",
+                "message": "unknown mx.host \"bogus\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 12
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 13
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "export interface Input {}\nexport default function Page(input: Input) { return <><p>ok</p></>; }",
+        "mappings": [],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "unknown-host",
+            "file": "<root>/target-unknown-host/package.json",
+            "message": "unknown mx.host \"bogus\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+            "line": 3,
+            "column": 12
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "code": "export interface Input {}\nexport default function Page(input: Input) { return <><p>ok</p></>; }",
+        "map": null,
+        "warnings": [
+          "@mxlang/vite-plugin: <root>/target-unknown-host/package.json:3:13: unknown mx.host \"bogus\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+        ]
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/target-unknown-host/package.json(3,13): warning TS80003: unknown mx.host \"bogus\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
+  ]
+}

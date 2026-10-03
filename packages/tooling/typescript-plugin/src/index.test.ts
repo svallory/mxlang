@@ -4254,6 +4254,38 @@ describe("host-policy diagnostics through tsserver", () => {
   const UNKNOWN = '{\n  "mx": {\n    "host": "vue"\n  }\n}\n';
   const FIXED = '{ "mx": { "host": "html" } }';
 
+  it.each(Object.keys(SOURCES))(
+    "reports target mismatch as TS80003 plus a TS80001 pointer on %s",
+    (fileName) => {
+      const dir = packageDir(
+        JSON.stringify({ mx: { host: "solid", target: "html" } }),
+      );
+      const diagnostics = hostPolicyDiagnostics(dir, fileName);
+      expect(diagnostics.find((d) => d.code === 80003)).toMatchObject({
+        start: 0,
+        category: ts.DiagnosticCategory.Error,
+      });
+      expect(
+        diagnostics.some(
+          (d) =>
+            d.code === 80001 &&
+            String(d.messageText).startsWith("target not resolved: see "),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it("unknown-target errors clear when the same-service file recompiles", () => {
+    const dir = packageDir('{ "mx": { "target": "bogus" } }');
+    const p = project(dir, "page.mx");
+    expect(p.diagnostics().find((d) => d.code === 80003)?.category).toBe(
+      ts.DiagnosticCategory.Error,
+    );
+    writeFileSync(join(dir, "package.json"), '{ "mx": { "target": "html" } }');
+    p.touch();
+    expect(p.diagnostics()).toEqual([]);
+  });
+
   it("puts an unknown mx.host on the .mx file at 1:1, as a warning in the LS's text", () => {
     const dir = packageDir(UNKNOWN);
 

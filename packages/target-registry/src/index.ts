@@ -196,9 +196,22 @@ export function resolveTargetPolicyDetailed(
   filePath: string,
 ): TargetPolicyResolution {
   const lookup = builtinLookup();
-  const resolution = coreResolveTargetPolicyDetailed(filePath, lookup);
-  // Stage rule-2 data inference until data PR 4 adds dispatch to all four
-  // tools. Remove this registry-private shim there; core remains open-set.
+  // Decision 131 addendum: explicit data is not yet wired into tooling.
+  // Mask selection and suggestions, not registration or package inference,
+  // so core's generic unknown-target path positions it and hands on the
+  // same fallback without advertising a target that tools cannot use.
+  const resolution = coreResolveTargetPolicyDetailed(filePath, {
+    ...lookup,
+    hasTarget: (name) => name !== "data" && lookup.hasTarget(name),
+    targetNames: () => lookup.targetNames().filter((name) => name !== "data"),
+  });
+  for (const diagnostic of resolution.diagnostics) {
+    if (diagnostic.code === "unknown-target" && diagnostic.value === "data") {
+      diagnostic.message =
+        'mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead';
+    }
+  }
+  // Preserve the pre-3b staging of rule-2 data inference as well.
   if (resolution.policy.target !== "data") return resolution;
   const target = lookup.defaultTarget();
   return { ...resolution, policy: { target, host: lookup.hostOf(target) } };

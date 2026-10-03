@@ -2,6 +2,13 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (target-select, decisions 129/132):** `mx.target` selects its host
+  behaviour. Invalid targets and host/target mismatches fail transforms via
+  `this.error`, with the manifest's value position and a code frame; repeat
+  transforms cannot turn an error into a warning or a silent pass. Existing
+  host warnings remain unchanged. Explicit `data` reports the registry's
+  decision 131 addendum restriction naming `parseData` and the tooling TODO.
+
 - **Changed (refactor/target-open-set, decisions 129 and 132):** host policy and scanning go through `@mxlang/target-registry`'s wrappers over the built-in lookup (a dynamic import, so the plugin's config-loading discipline is unchanged), and `mx.tags[].hosts` is matched on `hostFilterKey(policy.target)` — the same string as before for every built-in. Every compile carries the built-in lookup. An unknown bare word in `mx.tags[].hosts` still warns through `warn()`; a package specifier no longer does.
 
 - **Changed (amx-to-astro-mx, decision 134):** `x.astro.mx`, Astro's template kind, is declined by `mx()` (it joins the foreign-extension guard), so a registered `.mx` does not claim it.

@@ -2,24 +2,22 @@
  * Policy resolution (brief §2, `host-diagnostics.md` §3): which target a file
  * compiles through, plus that target's strictness.
  *
- * **Unstable contract (decisions 129 and 132).** `mx.target` lands with
- * registration PR 3b; until it does, this module answers the `mx.host` half
- * of §4.1's rule only.
+ * **Unstable contract (decisions 129 and 132).** `mx.target` selects a
+ * registered target directly; `mx.host` selects its host's default target.
+ * If both resolve, they must agree. A mismatch is an error, with the
+ * explicit target handed on so later diagnostics are not drowned.
  *
  * Rule, in order:
  *
- * 1. Walk upward from the file's directory looking for the nearest
- *    `package.json`. If it has an `"mx"` field, that field *is* the
- *    answer: `{ host: "<a registered host value>", strict?: boolean }`,
- *    where a host value is a host name or a target's legacy `mx.host`
- *    spelling.
- * 2. Otherwise, if that same `package.json` depends (in `dependencies` or
- *    `devDependencies`) on exactly one package some registered target
- *    declares as its `packageName` (`@mxlang/html`, `@mxlang/astro`,
- *    `@mxlang/solid`, `@mxlang/preact`, `@mxlang/react`, `@mxlang/hono`,
- *    `@mxlang/angular`; `@mxlang/core` itself declares no target and does
- *    not count, since every target package depends on it too), use the
- *    target that package selects.
+ * 1. Walk upward to the nearest `package.json`. `mx.target` names a
+ *    registered target; `mx.host` names a host (its default target) or a
+ *    target's legacy spelling. If both resolve, they must agree; a mismatch
+ *    is an error with the explicit target handed on. Exactly one resolved
+ *    key selects that target and carries `mx.strict`. Unknown targets are
+ *    errors; unknown hosts retain their existing warning.
+ * 2. If neither resolves, exactly one registered target package in that
+ *    manifest's `dependencies` or `devDependencies` selects its target.
+ *    The lookup answers which packages count; peers do not count.
  * 3. Otherwise, fall back to the lookup's default target, non-strict.
  *
  * Edge cases of the walk (each pinned in `host-policy.test.ts`):
@@ -84,15 +82,17 @@ export interface TargetPolicy {
 /** Why a {@link TargetPolicyDiagnostic} was raised. */
 export type TargetPolicyDiagnosticCode =
   | "unknown-host"
-  | "malformed-package-json";
+  | "malformed-package-json"
+  | "unknown-target"
+  | "target-host-mismatch";
 
 /**
  * One problem found while resolving a target, positioned in the
  * `package.json` that caused it. Same shape as `ScanDiagnostic` so a caller
  * can merge the two into the stream it already reports.
  *
- * Every one is a *warning*: resolution always produces a policy, and nothing
- * here may fail a build that compiled before.
+ * Existing host diagnostics remain warnings. Invalid `mx.target` values
+ * and contradictions are errors; resolution still hands on a policy.
  */
 export interface TargetPolicyDiagnostic {
   /**
@@ -107,6 +107,19 @@ export interface TargetPolicyDiagnostic {
   line: number;
   /** 0-based. */
   column: number;
+  /** Absent means warning, preserving existing diagnostics byte-for-byte. */
+  severity?: "error" | "warning";
+  /** Rejected string value, when an unknown target was authored as a string. */
+  value?: string;
+  /** UTF-16 length of the authored JSON value, quotes included. */
+  length?: number;
+  relatedInformation?: readonly {
+    file: string;
+    message: string;
+    line: number;
+    column: number;
+    length: number;
+  }[];
 }
 
 /** A resolved policy plus whatever the resolution had to say about it. */
@@ -220,24 +233,74 @@ function validHostsClause(lookup: TargetLookup): string {
     : current.join(", ");
 }
 
-/** Where `"mx": { "host": <value> }` sits in `text`, else `1:0`. */
-function locateMxHost(
+/**
+ * The direct `mx[key]` value. `legacyValue` retains the old text-matching
+ * positions for existing unknown-host warnings, byte-for-byte; new errors
+ * use the actual member's range, including escaped spelling.
+ */
+function locateMxValue(
   text: string,
-  value: unknown,
-): { line: number; column: number } {
-  const key = /"mx"\s*:/.exec(text);
-  if (key) {
-    const wanted = JSON.stringify(value);
-    const hostKey = /"host"\s*:\s*/g;
-    hostKey.lastIndex = key.index + key[0].length;
-    for (let m = hostKey.exec(text); m; m = hostKey.exec(text)) {
-      const at = m.index + m[0].length;
-      if (wanted === undefined || text.startsWith(wanted, at)) {
-        return positionOfOffset(text, at);
+  key: "host" | "target",
+  legacyValue?: unknown,
+): { line: number; column: number; length: number } {
+  if (legacyValue !== undefined) {
+    const mxKey = /"mx"\s*:/.exec(text);
+    if (mxKey) {
+      const wanted = JSON.stringify(legacyValue);
+      const member = new RegExp(`"${key}"\\s*:\\s*`, "g");
+      member.lastIndex = mxKey.index + mxKey[0].length;
+      for (let match = member.exec(text); match; match = member.exec(text)) {
+        const at = match.index + match[0].length;
+        if (wanted === undefined || text.startsWith(wanted, at)) {
+          return { ...positionOfOffset(text, at), length: wanted?.length ?? 1 };
+        }
       }
     }
+    return { line: 1, column: 0, length: 1 };
   }
-  return { line: 1, column: 0 };
+  const tokens = [
+    ...text.matchAll(
+      /"(?:\\.|[^"\\])*"|[{}[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g,
+    ),
+  ];
+  let cursor = 0;
+  let found: { line: number; column: number; length: number } | undefined;
+  const value = (path: string[]): void => {
+    const start = tokens[cursor];
+    if (!start) return;
+    cursor++;
+    if (start[0] === "{") {
+      while (tokens[cursor] && tokens[cursor]?.[0] !== "}") {
+        let name: string;
+        try {
+          name = JSON.parse(tokens[cursor++]?.[0] ?? '""') as string;
+        } catch {
+          // Positioning is best-effort if the token stream is incomplete.
+          return;
+        }
+        cursor++; // colon
+        value([...path, name]);
+        if (tokens[cursor]?.[0] === ",") cursor++;
+      }
+      cursor++;
+    } else if (start[0] === "[") {
+      while (tokens[cursor] && tokens[cursor]?.[0] !== "]") {
+        value([...path, "[]"]);
+        if (tokens[cursor]?.[0] === ",") cursor++;
+      }
+      cursor++;
+    }
+    if (path.length === 2 && path[0] === "mx" && path[1] === key) {
+      const end = tokens[cursor - 1];
+      found = {
+        ...positionOfOffset(text, start.index),
+        length:
+          (end?.index ?? start.index) + (end?.[0].length ?? 0) - start.index,
+      };
+    }
+  };
+  value([]);
+  return found ?? { line: 1, column: 0, length: 1 };
 }
 
 /**
@@ -250,30 +313,52 @@ function policyOf(
 ): {
   policy: TargetPolicy;
   ignoredHost?: unknown;
+  ignoredTarget?: unknown;
+  mismatch?: { host: string; hostTarget: string; target: string };
   /** The deprecated `mx.host` value used, which the caller warns about. */
   deprecatedValue?: string;
 } {
   const mx = isObject(pkg.mx)
-    ? (pkg.mx as { host?: unknown; strict?: unknown })
+    ? (pkg.mx as { host?: unknown; target?: unknown; strict?: unknown })
     : undefined;
   let ignoredHost: unknown;
+  let ignoredTarget: unknown;
 
   if (mx) {
-    const selected =
+    const selectedHost =
       typeof mx.host === "string" ? lookup.hostTarget(mx.host) : undefined;
-    if (selected) {
+    const selectedTarget =
+      typeof mx.target === "string" && lookup.hasTarget(mx.target)
+        ? mx.target
+        : undefined;
+    if (mx.host !== undefined && !selectedHost) ignoredHost = mx.host;
+    if (mx.target !== undefined && !selectedTarget) ignoredTarget = mx.target;
+    const target = selectedTarget ?? selectedHost?.target;
+    if (target !== undefined) {
+      const host = lookup.hostOf(target);
+      const agrees =
+        selectedHost &&
+        (lookup.hostOf(selectedHost.target) === mx.host
+          ? host === mx.host
+          : selectedHost.target === target);
       return {
-        policy: {
-          target: selected.target,
-          host: lookup.hostOf(selected.target),
-          strict: mx.strict as boolean | undefined,
-        },
-        ...(selected.deprecated === true
+        policy: { target, host, strict: mx.strict as boolean | undefined },
+        ignoredHost,
+        ignoredTarget,
+        ...(selectedTarget && selectedHost && !agrees
+          ? {
+              mismatch: {
+                host: mx.host as string,
+                hostTarget: selectedHost.target,
+                target,
+              },
+            }
+          : {}),
+        ...(selectedHost?.deprecated === true
           ? { deprecatedValue: mx.host as string }
           : {}),
       };
     }
-    if (mx.host !== undefined) ignoredHost = mx.host;
   }
 
   const deps = {
@@ -289,6 +374,7 @@ function policyOf(
     return {
       policy: { target, host: lookup.hostOf(target) },
       ignoredHost,
+      ignoredTarget,
     };
   }
 
@@ -298,12 +384,13 @@ function policyOf(
       host: lookup.hostOf(lookup.defaultTarget()),
     },
     ignoredHost,
+    ignoredTarget,
   };
 }
 
 /**
  * Resolves the `TargetPolicy` for `filePath` by walking upward from its
- * containing directory, together with the warnings the walk produced. See
+ * containing directory, together with the diagnostics the walk produced. See
  * the module doc for the rule and its edge cases.
  *
  * `lookup` is required: which values `mx.host` accepts, which package selects
@@ -312,7 +399,7 @@ function policyOf(
  * tool imports its wrapper instead of passing one).
  *
  * `resolveTargetPolicy` is this function's `policy`; call this one to also
- * learn that a `package.json` was malformed or named an unknown `mx.host`.
+ * learn about an invalid key, a mismatch, or a malformed `package.json`.
  * Nothing is cached beyond the mtime-keyed `package.json` reads, so calling
  * it per file is cheap, but the diagnostics come back on every call: dedupe
  * by `file` + `message` where they are reported.
@@ -374,7 +461,61 @@ export function resolveTargetPolicyDetailed(
       code: "unknown-host",
       file,
       message: `unknown mx.host ${shown}; valid hosts: ${validHostsClause(lookup)}.${hint ? ` Did you mean "${hint}"?` : ""} Ignoring it; the host is taken from the @mxlang dependencies instead.`,
-      ...locateMxHost(read.text, resolved.ignoredHost),
+      ...(() => {
+        const { line, column } = locateMxValue(
+          read.text,
+          "host",
+          resolved.ignoredHost,
+        );
+        return { line, column };
+      })(),
+    });
+  }
+  if (resolved.ignoredTarget !== undefined) {
+    const value = resolved.ignoredTarget;
+    const shown = JSON.stringify(value);
+    const host =
+      typeof value === "string" ? lookup.hostTarget(value) : undefined;
+    const isHost = host && lookup.hostOf(host.target) === value;
+    const hint =
+      typeof value === "string"
+        ? nearestHostValue(value, lookup.targetNames())
+        : undefined;
+    const packageSpecifier =
+      typeof value === "string" &&
+      (value.includes("/") || /^[@./]/.test(value));
+    diagnostics.push({
+      code: "unknown-target",
+      severity: "error",
+      ...(typeof value === "string" ? { value } : {}),
+      file,
+      message: packageSpecifier
+        ? `mx.target ${shown}: loading a target package is not supported yet.`
+        : `unknown mx.target ${shown}; valid targets: ${lookup.targetNames().join(", ")}.${isHost ? ` ${shown} is a host, not a target: its default target is "${host.target}" (use mx.host ${shown} or mx.target "${host.target}").` : hint ? ` Did you mean "${hint}"?` : ""} Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.`,
+      ...locateMxValue(read.text, "target"),
+    });
+  }
+  if (resolved.mismatch) {
+    const { host, hostTarget, target } = resolved.mismatch;
+    const targetHost = lookup.hostOf(target);
+    const legacy = lookup.hostOf(hostTarget) !== host;
+    diagnostics.push({
+      code: "target-host-mismatch",
+      severity: "error",
+      file,
+      message: legacy
+        ? `mx.host "${host}" is the legacy spelling of mx.target "${hostTarget}", but mx.target is "${target}"${targetHost ? ` (host "${targetHost}")` : ""}. Remove mx.host: mx.target alone selects the target.`
+        : targetHost
+          ? `mx.target "${target}" belongs to host "${targetHost}", but mx.host is "${host}". Remove one of them: mx.host "${host}" selects target "${hostTarget}"; mx.target "${target}" selects host "${targetHost}".`
+          : `mx.target "${target}" has no host, but mx.host is "${host}". Remove one of them: mx.host "${host}" selects target "${hostTarget}"; mx.target "${target}" needs no mx.host.`,
+      ...locateMxValue(read.text, "target"),
+      relatedInformation: [
+        {
+          file,
+          message: `mx.host "${host}" selects target "${hostTarget}".`,
+          ...locateMxValue(read.text, "host"),
+        },
+      ],
     });
   }
   return finish(resolved.policy);
@@ -382,8 +523,8 @@ export function resolveTargetPolicyDetailed(
 
 /**
  * Resolves the `TargetPolicy` for `filePath` by walking upward from its
- * containing directory. See module doc for the three-branch rule. Use
- * `resolveTargetPolicyDetailed` to also receive the walk's warnings.
+ * containing directory. See module doc for the resolution rule. Use
+ * `resolveTargetPolicyDetailed` to also receive the walk's diagnostics.
  */
 export function resolveTargetPolicy(
   filePath: string,

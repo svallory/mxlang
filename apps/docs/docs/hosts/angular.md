@@ -20,6 +20,16 @@ string: no MX runtime, no Angular dependency in the compiled output. The
 emitted string is exactly what a hand-written `x.component.ts` points its
 `templateUrl` at — Angular itself never sees MX.
 
+## Selecting the host
+
+`mx.host: "angular"` selects `angular-template`;
+`mx.target: "angular-template"` alone selects Angular behaviour too. If both
+keys are given, the target must belong to Angular; disagreement is a positioned
+`target-host-mismatch` error (decisions 129/132;
+[spec §13.5](/specification/#135-host-and-target-selection)). This selection does
+not wire the preview `.mx` page path into tools that do not yet support it;
+`.ng.mx` keeps its extension-selected pipeline.
+
 ## Install
 
 ```bash

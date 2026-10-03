@@ -11,6 +11,12 @@ It ships as `@mxlang/preact` (`packages/hosts/preact`), the fourth emitter over 
 
 ## Selecting the host
 
+`mx.host: "preact"` selects the `preact-jsx` target. You can instead write
+`mx.target: "preact-jsx"` alone; it selects Preact behaviour too. If both keys
+are given, the target must belong to Preact, otherwise the tools report a
+positioned `target-host-mismatch` error. See [spec §13.5](/specification/#135-host-and-target-selection)
+(decisions 129/132).
+
 ```jsonc
 // package.json
 {

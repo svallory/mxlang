@@ -1,0 +1,13 @@
+{
+  "mx": {
+    "host": "html",
+    "tags": [
+      {
+        "dir": "extra-tags",
+        "hosts": [
+          "solid-jsx"
+        ]
+      }
+    ]
+  }
+}

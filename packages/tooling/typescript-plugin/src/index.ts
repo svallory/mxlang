@@ -269,7 +269,10 @@ function withSyntaxDiagnostics(
             ),
             start: 0,
             length: 0,
-            category: typescript.DiagnosticCategory.Warning,
+            category:
+              diagnostic.severity === "error"
+                ? typescript.DiagnosticCategory.Error
+                : typescript.DiagnosticCategory.Warning,
             code: HOST_POLICY_DIAGNOSTIC_CODE,
             source,
             messageText: hostPolicyMessage(diagnostic),

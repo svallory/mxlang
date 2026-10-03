@@ -1,0 +1,114 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/target-package/package.json:3:15: mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/target-package/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 14
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 29
+                    }
+                  }
+                },
+                "message": "mx.target \"@acme/mx-view\": loading a target package is not supported yet."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/target-package/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 14
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 29
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<p>ok</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/target-package/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not loaded: see <root>/target-package/package.json(3,15)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "unknown-target",
+            "severity": "error",
+            "value": "@acme/mx-view",
+            "file": "<root>/target-package/package.json",
+            "message": "mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+            "line": 3,
+            "column": 14,
+            "length": 15
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/target-package/package.json:3:15: mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+          "id": "<root>/target-package/package.json",
+          "loc": {
+            "file": "<root>/target-package/package.json",
+            "line": 3,
+            "column": 14
+          },
+          "frame": "3 |     \"target\": \"@acme/mx-view\"\n                  ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/target-package/page.mx(1,1): error TS80001: target not loaded: see <root>/target-package/package.json(3,15)",
+    "<root>/target-package/package.json(3,15): error TS80003: mx.target \"@acme/mx-view\": loading a target package is not supported yet."
+  ]
+}

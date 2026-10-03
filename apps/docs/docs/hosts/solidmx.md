@@ -9,6 +9,15 @@ SolidMX (`.solid.mx`) is MX markup written directly inside a Solid component fil
 
 SolidMX ships as `@mxlang/solid`, the third emitter over `@mxlang/core`'s shared IR alongside the HTML and Astro hosts. The MX parser's vendored Babel fork finds each MX region inside a `.solid.mx` file and hands it to `compileSolidMx`, which resolves the region through the same Marko-syntax core every host shares and emits Solid JSX text back into the surrounding TypeScript module, at the same span — so positions and source maps stay anchored to the original file.
 
+## Selecting the host
+
+For whole-file `.mx`, `mx.host: "solid"` selects `solid-jsx`.
+`mx.target: "solid-jsx"` alone selects Solid behaviour too. If both keys are
+given, the target must belong to Solid; disagreement is a positioned
+`target-host-mismatch` error (decisions 129/132;
+[spec §13.5](/specification/#135-host-and-target-selection)). `.solid.mx` keeps
+its extension-selected region pipeline.
+
 ## Install
 
 ```bash

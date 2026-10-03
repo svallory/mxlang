@@ -2180,21 +2180,48 @@ Not merely in emitted syntax — in observable behavior:
    (was silently dropped, bug 8).
 7. **Comments** are stripped on html/Solid/JSX and kept on `.astro.mx`/Angular.
 
-### 13.5 Host selection
+### 13.5 Host and target selection
 
-Resolved by `@mxlang/core`'s `resolveTargetPolicy`, walking upward for the nearest
-`package.json`:
+A **host** is a framework; a **target** is an output format (decisions 129/132).
+`@mxlang/core` resolves the nearest `package.json` through a required open-set
+lookup; tools use `@mxlang/target-registry`'s built-in wrapper.
 
-1. A `"mx": { "host": …, "strict"?: … }` field — authoritative. `"translator"`
-   is a **deprecated alias** for `"html"` and warns.
-2. Failing that, **exactly one** `@mxlang/*` host dependency (in `dependencies`
-   or `devDependencies`; `@mxlang/core` does not count) → that host at its
-   default policy. Two or more distinct hosts → no match, so `html`; none → `html`.
-   **`peerDependencies` are not counted** (decision 124; Marko counts them, see
-   `divergences.md`): a host listed only as a peer does not select that host. Counting
-   peers could silently flip a package's host (one host in `dependencies`, another in
-   `peerDependencies` would collapse to `html`); the `dependencies` + `devDependencies` rule stays predictable.
-3. Otherwise `html`, non-strict.
+1. `mx.target` names a registered target directly: `html`, `astro-html`,
+   `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`, `angular-template`, or
+   `data` (subject to the tooling limit below). A host name here is an
+   `unknown-target` **error** with its default target in the hint; other unknown
+   names get a nearest-target suggestion when within two edits. Package
+   specifiers (containing `/` or starting with `@`, `.` or `/`) are positioned
+   errors: loading a target package is not supported yet.
+2. `mx.host` selects that host's default target. `mx.host: "html"` is accepted
+   silently, the legacy spelling of `mx.target: "html"`. `"translator"` remains
+   a deprecated alias with its existing warning. Unknown hosts remain warnings.
+3. If both keys resolve, they must agree: the target belongs to the named host,
+   or the legacy host value selects that same target. Otherwise
+   `target-host-mismatch` is an **error** at the `mx.target` value, quotes
+   included, with related information at `mx.host`. The diagnostic explains
+   whether this is another host's target, a hostless target, or a legacy-value
+   conflict, and asks the author to remove one key. Tools retain the explicit
+   target for subsequent diagnostics, never silently replace it.
+4. If exactly one key resolves, it selects the target. A hosted target alone
+   also selects its host's behaviour. `mx.target: "html"` beats a dependency on
+   `@mxlang/solid`; it needs no `mx.host`.
+5. If neither resolves, exactly one registered target package in `dependencies`
+   or `devDependencies` selects its target; otherwise the default is `html`,
+   non-strict. `@mxlang/core` and `peerDependencies` do not count (decision 124).
+   An invalid target still hands on this fallback (or a resolved `mx.host`) so
+   later diagnostics are not drowned, but it cannot produce a green build.
+
+`mx.strict` accompanies an explicitly selected target as it did an explicit
+host. `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
+warns that it is a target and suggests `solid`.
+
+**Tooling limit (decision 131 addendum).** Explicit `mx.target: "data"` is a
+positioned error raised by the registry wrapper, never by core:
+`mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
+Tools continue with the same fallback as `unknown-target`; dependency-only
+`data` inference keeps its existing staging to `html`. The direct
+`parseData` API is available independently of editor/build dispatch.
 
 **Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
 a malformed one (or one that is not a JSON object) ends the walk with the
@@ -2235,13 +2262,8 @@ does something else, silently.
 
 ### Host selection
 
-Resolved by `@mxlang/core`'s `resolveTargetPolicy`, walking upward for the nearest
-`package.json`, in this order:
-
-1. A `"mx": { "host": …, "strict"?: … }` field — authoritative.
-2. Failing that, **exactly one** `@mxlang/*` host dependency → that host at its
-   default policy.
-3. Otherwise the translator's default (non-strict) policy.
+See §13.5 for `mx.host`, `mx.target`, their agreement rule and positioned errors
+(decisions 129/132 and decision 131 addendum).
 
 **Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
 a malformed one (or one that is not a JSON object) ends the walk with the

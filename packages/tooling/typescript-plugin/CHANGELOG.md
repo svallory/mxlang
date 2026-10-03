@@ -2,6 +2,15 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: target selection errors (target-select, decisions 129/132)
+
+`mx.target` selects its host behaviour. Policy errors surface as TS80003
+errors plus TS80001 pointers at the document's start, naming the package
+position, while compilation keeps the selected or fallback target for later
+diagnostics. All four file-kind plugins report them. Existing host warnings
+remain warnings; fixing a manifest still requires recompilation or reload.
+Explicit `data` reports the registry's decision 131 addendum restriction.
+
 ### Added: native event handlers are type-checked on preact, react and hono (jsx-handler-typing, decision 140)
 
 The virtual code for these three hosts is now compiled with the hosts' `typeCheck` option, so a native element's event handler is checked against the host's own handler type and diagnostics land on the authored handler. Before, a mistyped handler was silently dropped (TypeScript reported it on the unmapped attribute name) and a valid `onKeyDown=((e) => e.key)` reported an implicit-any error. New errors on existing code are the ones plain TSX reports, including DOM-typed `(e: MouseEvent)` handlers on react. Runtime output (build, Vite, oracles) is unchanged; only the virtual code carries the wrapper.

@@ -143,6 +143,7 @@ export function createMxLanguagePlugin(
       if (languageId !== MX_LANGUAGE_ID && !isMx(fileName)) return undefined;
 
       const source = snapshot.getText(0, snapshot.getLength());
+      hostPolicies.source(fileName, source);
       try {
         const result = compileWithDependencies(
           options.readSource,
@@ -200,7 +201,10 @@ export function createMxLanguagePlugin(
     },
 
     getCompileDiagnostics(fileName) {
-      return diagnosticsFrom(compileDiagnostics, fileName);
+      return [
+        ...diagnosticsFrom(compileDiagnostics, fileName),
+        ...hostPolicies.errors(fileName),
+      ];
     },
 
     typescript: {

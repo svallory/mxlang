@@ -1,0 +1,156 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "astro"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/target-mismatch-legacy/package.json:4:15: mx.host \"html\" is the legacy spelling of mx.target \"html\", but mx.target is \"astro-html\" (host \"astro\"). Remove mx.host: mx.target alone selects the target.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/target-mismatch-legacy/package.json",
+                  "range": {
+                    "start": {
+                      "line": 3,
+                      "character": 14
+                    },
+                    "end": {
+                      "line": 3,
+                      "character": 26
+                    }
+                  }
+                },
+                "message": "mx.host \"html\" is the legacy spelling of mx.target \"html\", but mx.target is \"astro-html\" (host \"astro\"). Remove mx.host: mx.target alone selects the target."
+              },
+              {
+                "location": {
+                  "uri": "file://<root>/target-mismatch-legacy/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 18
+                    }
+                  }
+                },
+                "message": "mx.host \"html\" selects target \"html\"."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/target-mismatch-legacy/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "mx.host \"html\" is the legacy spelling of mx.target \"html\", but mx.target is \"astro-html\" (host \"astro\"). Remove mx.host: mx.target alone selects the target.",
+                "range": {
+                  "start": {
+                    "line": 3,
+                    "character": 14
+                  },
+                  "end": {
+                    "line": 3,
+                    "character": 26
+                  }
+                },
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file://<root>/target-mismatch-legacy/package.json",
+                      "range": {
+                        "start": {
+                          "line": 2,
+                          "character": 12
+                        },
+                        "end": {
+                          "line": 2,
+                          "character": 18
+                        }
+                      }
+                    },
+                    "message": "mx.host \"html\" selects target \"html\"."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<p>ok</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\ntype MxAstroInput = \"content\" extends keyof Input\n  ? Omit<Input, \"content\"> & { children?: unknown }\n  : Input;\nconst mxAstroRender = Page as unknown as (input: MxAstroInput) => string;\nexport default mxAstroRender;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/target-mismatch-legacy/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not resolved: see <root>/target-mismatch-legacy/package.json(4,15)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "target-host-mismatch",
+            "severity": "error",
+            "file": "<root>/target-mismatch-legacy/package.json",
+            "message": "mx.host \"html\" is the legacy spelling of mx.target \"html\", but mx.target is \"astro-html\" (host \"astro\"). Remove mx.host: mx.target alone selects the target.",
+            "line": 4,
+            "column": 14,
+            "length": 12,
+            "relatedInformation": [
+              {
+                "file": "<root>/target-mismatch-legacy/package.json",
+                "message": "mx.host \"html\" selects target \"html\".",
+                "line": 3,
+                "column": 12,
+                "length": 6
+              }
+            ]
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/target-mismatch-legacy/package.json:4:15: mx.host \"html\" is the legacy spelling of mx.target \"html\", but mx.target is \"astro-html\" (host \"astro\"). Remove mx.host: mx.target alone selects the target.",
+          "id": "<root>/target-mismatch-legacy/package.json",
+          "loc": {
+            "file": "<root>/target-mismatch-legacy/package.json",
+            "line": 4,
+            "column": 14
+          },
+          "frame": "4 |     \"target\": \"astro-html\"\n                  ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/target-mismatch-legacy/page.mx(1,1): error TS80001: target not resolved: see <root>/target-mismatch-legacy/package.json(4,15)",
+    "<root>/target-mismatch-legacy/package.json(4,15): error TS80003: mx.host \"html\" is the legacy spelling of mx.target \"html\", but mx.target is \"astro-html\" (host \"astro\"). Remove mx.host: mx.target alone selects the target."
+  ]
+}

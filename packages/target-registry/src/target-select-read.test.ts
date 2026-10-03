@@ -1,0 +1,56 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, it, vi } from "vitest";
+
+// Permit the real core read, then make the manifest unavailable. Isolated in
+// this file so the I/O fault cannot affect other registry/tooling suites.
+const state = vi.hoisted(() => ({ resolved: false, secondReads: 0 }));
+vi.mock("node:fs", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...original,
+    readFileSync: (...args: Parameters<typeof original.readFileSync>) => {
+      if (state.resolved) {
+        state.secondReads++;
+        throw new Error("manifest unavailable after core resolution");
+      }
+      return original.readFileSync(...args);
+    },
+  };
+});
+vi.mock("@mxlang/core", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@mxlang/core")>();
+  return {
+    ...original,
+    resolveTargetPolicyDetailed: (
+      ...args: Parameters<typeof original.resolveTargetPolicyDetailed>
+    ) => {
+      const resolution = original.resolveTargetPolicyDetailed(...args);
+      state.resolved = true;
+      return resolution;
+    },
+  };
+});
+
+import { resolveTargetPolicyDetailed } from "./index.ts";
+
+it("preserves the data error without a second manifest read", () => {
+  const root = mkdtempSync(join(tmpdir(), "mx-registry-no-reread-"));
+  try {
+    writeFileSync(join(root, "package.json"), '{"mx":{"target":"data"}}');
+    const { diagnostics } = resolveTargetPolicyDetailed(join(root, "a.mx"));
+    expect(diagnostics[0]).toMatchObject({
+      code: "unknown-target",
+      severity: "error",
+      value: "data",
+      length: 6,
+      message:
+        'mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead',
+    });
+    expect(state.secondReads).toBe(0);
+  } finally {
+    state.resolved = false;
+    rmSync(root, { recursive: true, force: true });
+  }
+});

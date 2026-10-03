@@ -458,16 +458,17 @@ function runMxTscChecks(): number {
     ).values(),
   ];
   reportCompileDiagnostics(diagnostics);
-  // Host-policy problems (an unknown `mx.host`, a malformed package.json):
-  // warnings, so the exit code is what it was before they were printed. A
-  // file two programs both compiled is reported once.
-  reportTargetPolicyDiagnostics([
+  // Existing host warnings are non-fatal; invalid targets and mismatches
+  // fail the run. A file two programs both compiled is reported once.
+  const policyDiagnostics = [
     ...new Map(
       diagnosticPlugins
         .flatMap((plugin) => plugin.getTargetPolicyDiagnostics?.() ?? [])
         .map((d) => [`${d.file}\0${d.message}`, d] as const),
     ).values(),
-  ]);
+  ];
+  reportTargetPolicyDiagnostics(policyDiagnostics);
+  const hasPolicyError = policyDiagnostics.some((d) => d.severity === "error");
   const hasCompileError = diagnostics.some(
     (diagnostic) => diagnostic.category === "error",
   );
@@ -488,7 +489,7 @@ function runMxTscChecks(): number {
       report.diagnostics.some((d) => d.category === "error"),
     );
 
-  return hasCompileError || hasAngularError ? 1 : tscExitCode;
+  return hasCompileError || hasPolicyError || hasAngularError ? 1 : tscExitCode;
 }
 
 /**
@@ -596,8 +597,8 @@ export function reportCompileDiagnostics(
 }
 
 /**
- * Prints host-policy diagnostics as warnings in `tsc`'s shape, positioned in
- * the `package.json` that caused them: `package.json(5,13): warning TS80003`.
+ * Prints policy diagnostics in `tsc`'s shape, positioned in the manifest:
+ * `package.json(5,13): warning|error TS80003`, with the authored value length.
  */
 export function reportTargetPolicyDiagnostics(
   diagnostics: readonly TargetPolicyDiagnostic[],
@@ -628,8 +629,11 @@ export function reportTargetPolicyDiagnostics(
       return {
         file: text === "" ? undefined : file,
         start: (file.getLineStarts()[line] ?? 0) + diagnostic.column,
-        length: 0,
-        category: typescript.DiagnosticCategory.Warning,
+        length: diagnostic.length ?? 0,
+        category:
+          diagnostic.severity === "error"
+            ? typescript.DiagnosticCategory.Error
+            : typescript.DiagnosticCategory.Warning,
         code: HOST_POLICY_DIAGNOSTIC_CODE,
         source: "mxlang",
         messageText: hostPolicyText(diagnostic),

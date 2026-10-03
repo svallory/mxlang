@@ -1,0 +1,156 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/target-mismatch-hostless/package.json:4:15: mx.target \"html\" has no host, but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"html\" needs no mx.host.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/target-mismatch-hostless/package.json",
+                  "range": {
+                    "start": {
+                      "line": 3,
+                      "character": 14
+                    },
+                    "end": {
+                      "line": 3,
+                      "character": 20
+                    }
+                  }
+                },
+                "message": "mx.target \"html\" has no host, but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"html\" needs no mx.host."
+              },
+              {
+                "location": {
+                  "uri": "file://<root>/target-mismatch-hostless/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 19
+                    }
+                  }
+                },
+                "message": "mx.host \"solid\" selects target \"solid-jsx\"."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/target-mismatch-hostless/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "mx.target \"html\" has no host, but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"html\" needs no mx.host.",
+                "range": {
+                  "start": {
+                    "line": 3,
+                    "character": 14
+                  },
+                  "end": {
+                    "line": 3,
+                    "character": 20
+                  }
+                },
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file://<root>/target-mismatch-hostless/package.json",
+                      "range": {
+                        "start": {
+                          "line": 2,
+                          "character": 12
+                        },
+                        "end": {
+                          "line": 2,
+                          "character": 19
+                        }
+                      }
+                    },
+                    "message": "mx.host \"solid\" selects target \"solid-jsx\"."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<p>ok</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/target-mismatch-hostless/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not resolved: see <root>/target-mismatch-hostless/package.json(4,15)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "target-host-mismatch",
+            "severity": "error",
+            "file": "<root>/target-mismatch-hostless/package.json",
+            "message": "mx.target \"html\" has no host, but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"html\" needs no mx.host.",
+            "line": 4,
+            "column": 14,
+            "length": 6,
+            "relatedInformation": [
+              {
+                "file": "<root>/target-mismatch-hostless/package.json",
+                "message": "mx.host \"solid\" selects target \"solid-jsx\".",
+                "line": 3,
+                "column": 12,
+                "length": 7
+              }
+            ]
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/target-mismatch-hostless/package.json:4:15: mx.target \"html\" has no host, but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"html\" needs no mx.host.",
+          "id": "<root>/target-mismatch-hostless/package.json",
+          "loc": {
+            "file": "<root>/target-mismatch-hostless/package.json",
+            "line": 4,
+            "column": 14
+          },
+          "frame": "4 |     \"target\": \"html\"\n                  ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/target-mismatch-hostless/page.mx(1,1): error TS80001: target not resolved: see <root>/target-mismatch-hostless/package.json(4,15)",
+    "<root>/target-mismatch-hostless/package.json(4,15): error TS80003: mx.target \"html\" has no host, but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"html\" needs no mx.host."
+  ]
+}

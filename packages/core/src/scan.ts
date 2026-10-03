@@ -352,9 +352,13 @@ export function hostRestrictionDiagnostics(
   for (const restriction of restrictions) {
     if (known.has(restriction.host)) continue;
     if (isPackageSpecifier(restriction.host)) continue;
+    const targetHost = lookup.hostOf(restriction.host);
+    const hint = lookup.hasTarget(restriction.host)
+      ? ` ("${restriction.host}" is a target; hosts filters by host${targetHost ? `: use "${targetHost}"` : "; this target has no host"})`
+      : "";
     diagnostics.push({
       file: restriction.file,
-      message: `\`mx.tags\` names an unknown host in \`hosts\`: ${restriction.host}`,
+      message: `\`mx.tags\` names an unknown host in \`hosts\`: ${restriction.host}${hint}`,
       line: restriction.line,
       column: restriction.column,
     });

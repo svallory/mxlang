@@ -5,6 +5,7 @@ import {
   type CustomTag,
   isTranslateError,
   type TargetLookup,
+  type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import type { MxRegionCompile } from "@mxlang/parser";
 import { print } from "@mxlang/parser";
@@ -727,18 +728,21 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   const tagsFor = (
     file: string,
     warn: (message: string) => void,
+    error: (diagnostic: TargetPolicyDiagnostic) => never,
   ): Record<string, CustomTag> | undefined => {
     const resolution = resolveTargetPolicyDetailed(file);
+    for (const diagnostic of resolution.diagnostics) {
+      if (diagnostic.severity === "error") error(diagnostic);
+    }
     // The filter value `mx.tags[].hosts` is matched against, read off the
     // target: for a hostless target (`html`) it is the target's legacy
     // `mx.host` value, which is the string existing entries already match.
     const host = hostFilterKey(resolution.policy.target) ?? null;
     const scan = scanCached(file, { host });
 
-    // A malformed `package.json` or an unknown `mx.host` never fails the
-    // build — the file still compiles under the policy the resolver fell back
-    // to — but silently compiling under the wrong host is worse than a
-    // warning. Positioned at the `package.json`, deduped like the scan's.
+    // Errors were raised above, before warning dedupe: repeating a transform
+    // cannot make a bad target pass. Existing malformed-manifest/unknown-host
+    // warnings remain non-fatal and are deduped like the scan's.
     for (const diagnostic of resolution.diagnostics) {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
@@ -1039,10 +1043,31 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       // runs below inside a `try`.
       // SAFETY: Rollup invokes transform with its PluginContext; direct test
       // callers may omit warn, which is checked before it is invoked.
-      const context = this as unknown as { warn?: (message: string) => void };
+      const context = this as unknown as {
+        warn?: (message: string) => void;
+        error?: (error: LocatedError) => never;
+      };
       const warn = (message: string): void => {
         if (context.warn) context.warn(`@mxlang/vite-plugin: ${message}`);
         else console.warn(`@mxlang/vite-plugin: ${message}`);
+      };
+
+      let policyErrorRaised = false;
+      const policyError = (diagnostic: TargetPolicyDiagnostic): never => {
+        const error = locate(
+          new Error(
+            `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.message}`,
+          ),
+          {
+            file: diagnostic.file,
+            line: diagnostic.line,
+            column: diagnostic.column,
+            source: readTemplateSource(diagnostic.file),
+          },
+        );
+        policyErrorRaised = true;
+        if (context.error) return context.error(error);
+        throw error;
       };
 
       // Print/compile against the real MX path so the source map and any
@@ -1062,7 +1087,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             code,
             source,
             options.strict ?? false,
-            tagsFor(source, warn),
+            tagsFor(source, warn, policyError),
             resolveImport,
           );
           recordDependencies(source, dependencies);
@@ -1076,12 +1101,15 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // explicitly here, the same as every other `.solid.mx` caller.
         const dependencies = new Set<string>();
         const { code: printed, map } = print(code, source, {
-          customTags: tagsFor(source, warn),
+          customTags: tagsFor(source, warn, policyError),
           mxRegionCompile: await loadSolidRegionCompile(dependencies),
         });
         recordDependencies(source, [...dependencies]);
         return { code: printed, map };
       } catch (err) {
+        // Policy errors already carry package.json coordinates (this.error
+        // may wrap them). Other scan/compile errors need the locator below.
+        if (policyErrorRaised) throw err;
         // A `TranslateError` raised while compiling a tag template
         // (`tags/x.mx`) carries `.file`, the template's own path (spec §2's
         // third position rule), never a `.loc` — so `isSyntaxError` is

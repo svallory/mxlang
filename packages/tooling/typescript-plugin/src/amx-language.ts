@@ -53,7 +53,7 @@ export function createAmxLanguagePlugin(
 
       const source = snapshot.getText(0, snapshot.getLength());
       // Only for what it reports: this file's host is fixed by its extension.
-      hostPolicies.resolve(fileName);
+      hostPolicies.resolve(fileName, source);
       try {
         // The same tags `@mxlang/astro`'s own Vite plugin discovers for this
         // file. Without them a tag that compiles under `astro build` is an
@@ -140,7 +140,10 @@ export function createAmxLanguagePlugin(
     },
 
     getCompileDiagnostics(fileName) {
-      return diagnosticsFrom(compileDiagnostics, fileName);
+      return [
+        ...diagnosticsFrom(compileDiagnostics, fileName),
+        ...hostPolicies.errors(fileName),
+      ];
     },
 
     getTargetPolicyDiagnostics(fileName) {
