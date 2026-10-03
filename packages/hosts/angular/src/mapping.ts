@@ -77,6 +77,27 @@ export interface AngularMapping extends GeneratedMapping {
 }
 
 /**
+ * The generated extent of a start tag or an attribute, tied to where its
+ * authored name (or attribute) sits in the source.
+ *
+ * Angular reports element- and attribute-level diagnostics (NG8001, NG8002)
+ * against the whole start tag or attribute, which starts at generated
+ * punctuation (`<`, a `[`) no {@link AngularMapping} covers. An anchor covers
+ * that whole extent so such an offset resolves to the node the author wrote.
+ *
+ * Anchors are kept apart from `mappings` on purpose: they claim *punctuation*
+ * and wide spans, which the source map and `mx-angular map` must keep
+ * reporting as "maps to nothing", and which the oracle's copy-or-derive
+ * alignment check does not apply to.
+ */
+export interface NodeAnchor {
+  generatedStart: number;
+  generatedEnd: number;
+  sourceStart: number;
+  sourceEnd: number;
+}
+
+/**
  * Accumulates emitted template text and the mappings into it.
  *
  * Text is appended either unmapped (`write`) or mapped to a source span
@@ -87,6 +108,7 @@ export interface AngularMapping extends GeneratedMapping {
 export class TemplateWriter {
   #out = "";
   readonly #mappings: AngularMapping[] = [];
+  readonly #anchors: NodeAnchor[] = [];
 
   /** The text written so far. */
   get code(): string {
@@ -134,6 +156,30 @@ export class TemplateWriter {
         ...(deriveContext === undefined ? {} : { deriveContext }),
       });
     }
+  }
+
+  /**
+   * Records the generated extent `[generatedStart, generatedEnd)` as a node
+   * anchored to `span`. A null span (a synthesized node) or an empty extent
+   * records nothing, never a position the author did not write.
+   */
+  anchor(
+    generatedStart: number,
+    generatedEnd: number,
+    span: SourceSpan | null | undefined,
+  ): void {
+    if (!span || generatedEnd <= generatedStart) return;
+    this.#anchors.push({
+      generatedStart,
+      generatedEnd,
+      sourceStart: span.sourceStart,
+      sourceEnd: span.sourceEnd,
+    });
+  }
+
+  /** The node anchors recorded so far, in the order they were closed. */
+  get anchors(): readonly NodeAnchor[] {
+    return this.#anchors;
   }
 
   /** The mappings recorded so far, in the order they were written. */
@@ -363,6 +409,74 @@ export function rebaseThroughEscaping(
     });
   }
   return out;
+}
+
+/**
+ * Rebases template-relative anchors onto text that embeds the template under
+ * `escapeChar`, as {@link rebaseThroughEscaping} does for mappings.
+ *
+ * Unlike a mapping, an anchor is *not* dropped when its extent contains an
+ * escaped character: it only needs both ends to land on the right bytes, and
+ * the accumulated escaped length of the prefix gives exactly that.
+ */
+export function rebaseAnchorsThroughEscaping(
+  template: string,
+  anchors: readonly NodeAnchor[],
+  embeddedStart: number,
+  escapeChar: (char: string, next: string | undefined) => string,
+): NodeAnchor[] {
+  const escapedUpTo = new Int32Array(template.length + 1);
+  for (let i = 0; i < template.length; i += 1) {
+    escapedUpTo[i + 1] =
+      (escapedUpTo[i] as number) +
+      escapeChar(template[i] as string, template[i + 1]).length;
+  }
+  return anchors.map((anchor) => ({
+    ...anchor,
+    generatedStart:
+      embeddedStart + (escapedUpTo[anchor.generatedStart] as number),
+    generatedEnd: embeddedStart + (escapedUpTo[anchor.generatedEnd] as number),
+  }));
+}
+
+/** Shifts anchors by `offset`, as {@link offsetMappings} does for mappings. */
+export function offsetAnchors(
+  anchors: readonly NodeAnchor[],
+  offset: number,
+): NodeAnchor[] {
+  return anchors.map((anchor) => ({
+    ...anchor,
+    generatedStart: anchor.generatedStart + offset,
+    generatedEnd: anchor.generatedEnd + offset,
+  }));
+}
+
+/**
+ * The anchor an emitted-module offset falls in, innermost (narrowest
+ * generated extent) first, or `null`. An attribute anchor lies inside its
+ * element's, so the attribute wins for an offset in it.
+ */
+export function anchorFor(
+  anchors: readonly NodeAnchor[],
+  generatedOffset: number,
+): NodeAnchor | null {
+  let best: NodeAnchor | null = null;
+  for (const anchor of anchors) {
+    if (
+      generatedOffset < anchor.generatedStart ||
+      generatedOffset >= anchor.generatedEnd
+    ) {
+      continue;
+    }
+    if (
+      !best ||
+      anchor.generatedEnd - anchor.generatedStart <
+        best.generatedEnd - best.generatedStart
+    ) {
+      best = anchor;
+    }
+  }
+  return best;
 }
 
 /**

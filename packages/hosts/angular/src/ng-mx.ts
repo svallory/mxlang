@@ -43,7 +43,10 @@ import {
 } from "./emitter.ts";
 import {
   type AngularMapping,
+  type NodeAnchor,
+  offsetAnchors,
   offsetMappings,
+  rebaseAnchorsThroughEscaping,
   rebaseThroughEscaping,
 } from "./mapping.ts";
 import { withStructuralAttrHint } from "./structural-attr-hint.ts";
@@ -150,6 +153,8 @@ export interface NgMxRegion {
   usedTags: UsedTag[];
   /** Identifier-level mappings from the emitted template back to the source. */
   mappings: AngularMapping[];
+  /** Start-tag and attribute anchors; see {@link NodeAnchor}. */
+  anchors: NodeAnchor[];
   /** Warnings the emitter produced while lowering this region. */
   warnings: MxWarning[];
 }
@@ -179,6 +184,13 @@ export interface CompileNgMxResult {
    * {@link CompileNgMxResult.map}.
    */
   mappings: AngularMapping[];
+  /**
+   * Module-absolute start-tag and attribute anchors, flattened across
+   * regions: where an element- or attribute-level Angular diagnostic (NG8001,
+   * NG8002), which starts at generated punctuation no mapping covers,
+   * resolves to in the source.
+   */
+  anchors: NodeAnchor[];
   /** Every warning, across every region. */
   warnings: MxWarning[];
   /** Every tag called, across every region. */
@@ -399,6 +411,7 @@ function lowerRegion(
   }
 
   const templateMappings: AngularMapping[] = [];
+  const templateAnchors: NodeAnchor[] = [];
   const template = emitTemplate(
     {
       ...ir,
@@ -420,6 +433,7 @@ function lowerRegion(
     // which is exactly what a `.solid.mx` region cannot say.
     true,
     templateMappings,
+    templateAnchors,
   );
 
   // An authored import called as a tag is referenced by its own local name
@@ -464,14 +478,29 @@ function lowerRegion(
       template,
       templateMappings,
       1,
-      (char, next) =>
-        char === "$" && next === "{" ? "\\$" : escapeTemplateLiteral(char),
+      escapeForLiteral,
+    ),
+    // Anchors take the same literal-relative offsets and escaping as the
+    // mappings, but are kept when their extent contains an escaped character.
+    anchors: rebaseAnchorsThroughEscaping(
+      template,
+      templateAnchors,
+      1,
+      escapeForLiteral,
     ),
     warnings,
     hoistedImports,
     authoredTagImports,
   };
 }
+
+/**
+ * One character's form inside the emitted backtick literal. `$` is escaped
+ * only when `{` follows, so the escaper is given the lookahead rather than
+ * `escapeTemplateLiteral` per character.
+ */
+const escapeForLiteral = (char: string, next: string | undefined): string =>
+  char === "$" && next === "{" ? "\\$" : escapeTemplateLiteral(char);
 
 /** One entry per tag, first occurrence winning, keyed by emitted class. */
 function dedupeTags(tags: UsedTag[]): UsedTag[] {
@@ -1603,6 +1632,9 @@ export function compileNgMx(
   const code = rewritten.toString();
   const moduleMappings = rebaseRegionMappings(code, lowered, filename);
   const literalOffsets = locateRegionLiterals(code, lowered, filename);
+  const moduleAnchors = lowered.flatMap((region, i) =>
+    offsetAnchors(region.anchors, literalOffsets[i] as number),
+  );
 
   return {
     code,
@@ -1613,6 +1645,7 @@ export function compileNgMx(
       hires: true,
     }),
     mappings: moduleMappings,
+    anchors: moduleAnchors,
     warnings,
     usedTags,
     regions: lowered.map(
@@ -1623,6 +1656,7 @@ export function compileNgMx(
           literal,
           usedTags: tags,
           mappings,
+          anchors,
           warnings: regionWarnings,
         },
         i,
@@ -1633,6 +1667,7 @@ export function compileNgMx(
         generatedEnd: (literalOffsets[i] as number) + literal.length,
         usedTags: tags,
         mappings,
+        anchors,
         warnings: regionWarnings,
       }),
     ),

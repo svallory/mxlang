@@ -47,10 +47,12 @@ export {
 } from "./emitter.ts";
 export {
   type AngularMapping,
+  anchorFor,
   type LineColumn,
   lineColumnAt,
   lookupMapping,
   type MappingDerive,
+  type NodeAnchor,
   offsetAt,
   offsetMappings,
   resolveLineColumn,

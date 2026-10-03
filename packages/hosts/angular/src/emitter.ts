@@ -34,7 +34,11 @@ import {
   warn,
 } from "@mxlang/core";
 import { literalSyntaxWarnings } from "./literal-syntax-hint.ts";
-import { type AngularMapping, TemplateWriter } from "./mapping.ts";
+import {
+  type AngularMapping,
+  type NodeAnchor,
+  TemplateWriter,
+} from "./mapping.ts";
 
 type TryData = { kind: "try" };
 type HtmlCommentData = { kind: "html-comment" };
@@ -497,6 +501,26 @@ function writeHandlerCall(
 }
 
 /**
+ * The authored extent of an attribute, name through value, for the node
+ * anchors Angular's attribute-level diagnostics resolve through.
+ *
+ * A default attribute (`<x="post">`, `<switch=title>`) has no spelled name:
+ * its name span is zero-width, so the extent starts at the value. `undefined`
+ * for an attribute synthesized with no source.
+ */
+function attrSourceSpan(attr: Attr): SourceSpan | undefined {
+  if (attr.kind === "spread") return undefined;
+  const name = attr.nameSpan;
+  let value: SourceSpan | undefined;
+  if (attr.kind === "static") value = attr.valueSpan;
+  else if (attr.kind !== "boolean") value = attr.value.span;
+  const hasName = name.sourceEnd > name.sourceStart;
+  if (!hasName) return value;
+  if (!value || value.sourceEnd < name.sourceEnd) return name;
+  return { sourceStart: name.sourceStart, sourceEnd: value.sourceEnd };
+}
+
+/**
  * Writes an attribute list into `out`.
  *
  * Attribute *names* and expression *values* are mapped to the source text
@@ -518,6 +542,9 @@ function emitAttrs(
   onHandler?: () => string,
 ): void {
   for (const attr of attrs) {
+    // Every case but `spread` (which fails) opens with one space, so the
+    // attribute's generated extent starts one past `before`.
+    const before = out.length;
     switch (attr.kind) {
       case "static":
         out.write(" ");
@@ -612,6 +639,7 @@ function emitAttrs(
           attr,
         );
     }
+    out.anchor(before + 1, out.length, attrSourceSpan(attr));
   }
 }
 
@@ -1236,8 +1264,10 @@ class AngularEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
-    // An `Element`'s name carries no span in the IR (only a `Component`'s
-    // does), so the tag name itself is unmapped; its attributes are not.
+    // The tag name stays unmapped (its generated text is the source name
+    // verbatim, but a diagnostic lands on the `<`, not the name), so the
+    // whole start tag is anchored to the authored name instead.
+    const tagStart = this.out.length;
     this.out.write(`<${node.name}`);
     emitAttrs(
       this.out,
@@ -1259,6 +1289,7 @@ class AngularEmitter implements Emitter<string> {
       },
     );
     this.out.write(">");
+    this.out.anchor(tagStart, this.out.length, node.nameSpan);
     if (node.void) return;
     // `<style>`/`<script>` bodies are code, not template text: braces and
     // `@` there are CSS/JS, so the literal-syntax lint skips them.
@@ -1355,6 +1386,7 @@ class AngularEmitter implements Emitter<string> {
     // The selector is derived from the tag name (`UserCard` becomes
     // `mx-user-card`), so it maps whole-to-whole back to the name the author
     // wrote — the spellings differ, which is exactly what the mapping is for.
+    const tagStart = this.out.length;
     this.out.write("<");
     // A resolved tag module's selector is exact: its own `export const
     // selector`, else prefix + kebab(file basename). Either way it is a fact
@@ -1378,6 +1410,7 @@ class AngularEmitter implements Emitter<string> {
       this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
     });
     this.out.write(">");
+    this.out.anchor(tagStart, this.out.length, node.nameSpan);
     for (const prop of node.attrTagProps) {
       this.validateAttributeTagProp(prop, node);
       this.emitAttributeTagNodes(prop.source);
@@ -1899,6 +1932,11 @@ class AngularEmitter implements Emitter<string> {
     return [...this.out.mappings];
   }
 
+  /** The node anchors recorded during the walk; see {@link NodeAnchor}. */
+  anchors(): NodeAnchor[] {
+    return [...this.out.anchors];
+  }
+
   /**
    * Every MX tag this template called, in source order, as the call site must
    * reference it: the class its emitted module exports and that module's
@@ -2000,6 +2038,11 @@ export function emitTemplate(
    * return channel of its own.
    */
   mappingsOut?: AngularMapping[],
+  /**
+   * Filled, when given, with the node anchors (start tags and attributes),
+   * generated offsets relative to the returned string.
+   */
+  anchorsOut?: NodeAnchor[],
 ): string {
   // A *synthesized* import is not a module-level statement the author wrote:
   // the core minted it for a discovered tag the template calls, and there is
@@ -2030,6 +2073,7 @@ export function emitTemplate(
   const code = emitter.done();
   if (usedTagsOut) usedTagsOut.push(...emitter.usedTagRefs());
   if (mappingsOut) mappingsOut.push(...emitter.mappings());
+  if (anchorsOut) anchorsOut.push(...emitter.anchors());
   return code;
 }
 

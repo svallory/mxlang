@@ -168,7 +168,16 @@ rejection tests). Only a *synthesized* discovered-tag import hoists, via
 `MxRegionCompileResult.hoistedImports`. `result.mappings` carries the real
 per-region spans (task 2.2b): each region's expressions and names are mapped
 against their own literal, then rebased onto the finished module by where
-that literal landed.
+that literal landed. `result.anchors` (`NodeAnchor`, `src/mapping.ts`) is a second,
+separate list: the generated extent of every start tag (anchored to the
+authored name) and attribute (name through value; value alone for a default
+attribute), recorded by the emitter (`TemplateWriter.anchor`). Kept apart from
+`mappings` because it claims punctuation (`<`, `[`) that the source map and
+`mx-angular map` must keep reporting as unmapped, and because the oracle's
+copy-or-derive alignment check does not apply to it. `@mxlang/angular-checker`
+resolves NG8001/NG8002 through it (`anchorFor`, innermost wins). Unlike a
+mapping, an anchor survives an escaped character inside its extent
+(`rebaseAnchorsThroughEscaping`).
 
 **The emitted `.html` (and, once 1.7 lands, tag `.ts`) files are generated
 artifacts**: `.gitignore` them, and run `mx-angular build` (or `mx-angular

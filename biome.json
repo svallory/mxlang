@@ -87,6 +87,7 @@
         "packages/hosts/angular/test/define.test.ts",
         "packages/hosts/angular/test/for.test.ts",
         "packages/hosts/angular/test/literal-syntax-hint.test.ts",
+        "packages/hosts/angular/test/ng-mx-anchors.test.ts",
         "packages/hosts/angular/test/tag-module.test.ts",
         "packages/hosts/angular/test/text-interpolation.test.ts"
       ],
