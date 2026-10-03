@@ -81,7 +81,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/translator/broken.mx",
-            "message": "\n    at <root>/translator/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+            "message": "\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
             "offset": 27,
             "category": "error"
           }
@@ -305,6 +305,6 @@
     }
   },
   "mxTsc": [
-    "<root>/translator/broken.mx(3,1): error TS80001: \n    at <root>/translator/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |"
+    "<root>/translator/broken.mx(3,1): error TS80001: \n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |"
   ]
 }

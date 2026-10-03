@@ -205,6 +205,24 @@ export function createTranslator(host: TranslatorOptions = {}) {
 }
 
 /**
+ * Babel prefixes a translator error's message with `<filename>: `. A
+ * `TranslateError` already carries `line`/`column` (and `file` when it is
+ * about another file), so the prefix only repeats the compiled file, often as
+ * an absolute path.
+ */
+function dropCompiledFilePrefix(error: TranslateError, filename: string): void {
+  const prefix = `${filename}: `;
+  if (!error.message.startsWith(prefix)) return;
+  // `CompileError.message`-style accessors can swallow a plain assignment.
+  Object.defineProperty(error, "message", {
+    value: error.message.slice(prefix.length),
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+}
+
+/**
  * Compiles one Marko template under `policy`.
  *
  * The returned map is a placeholder identity map: the emitter builds text
@@ -251,8 +269,10 @@ export function compileSource(
       writeVersionComment: false,
     });
   } catch (error) {
-    if (error instanceof TranslateError)
+    if (error instanceof TranslateError) {
       error.dependencies = state.dependencies;
+      dropCompiledFilePrefix(error, filename);
+    }
     annotateCloseTagOpener(error, source);
     throw error;
   } finally {

@@ -42,7 +42,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/tags-hosts-package/page.mx: Unable to find entry point for custom tag `<thing>`.",
+            "message": "Unable to find entry point for custom tag `<thing>`.",
             "range": {
               "start": {
                 "line": 0,
@@ -87,7 +87,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/tags-hosts-package/page.mx",
-            "message": "<root>/tags-hosts-package/page.mx: Unable to find entry point for custom tag `<thing>`.",
+            "message": "Unable to find entry point for custom tag `<thing>`.",
             "offset": 0,
             "category": "error"
           }
@@ -116,6 +116,6 @@
     }
   },
   "mxTsc": [
-    "<root>/tags-hosts-package/page.mx(1,1): error TS80001: <root>/tags-hosts-package/page.mx: Unable to find entry point for custom tag `<thing>`."
+    "<root>/tags-hosts-package/page.mx(1,1): error TS80001: Unable to find entry point for custom tag `<thing>`."
   ]
 }

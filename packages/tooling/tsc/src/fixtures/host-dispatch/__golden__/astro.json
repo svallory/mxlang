@@ -78,7 +78,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/astro/broken.mx",
-            "message": "\n    at <root>/astro/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+            "message": "\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
             "offset": 27,
             "category": "error"
           }
@@ -110,7 +110,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/astro/page.mx: `<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
+            "message": "`<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
             "range": {
               "start": {
                 "line": 2,
@@ -134,7 +134,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/astro/page.mx",
-            "message": "<root>/astro/page.mx: `<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
+            "message": "`<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
             "offset": 30,
             "category": "error"
           }
@@ -228,7 +228,7 @@
     }
   },
   "mxTsc": [
-    "<root>/astro/broken.mx(3,1): error TS80001: \n    at <root>/astro/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
-    "<root>/astro/page.mx(3,1): error TS80001: <root>/astro/page.mx: `<let>` is reactive state and requires a runtime; this strict policy has no reactive target"
+    "<root>/astro/broken.mx(3,1): error TS80001: \n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+    "<root>/astro/page.mx(3,1): error TS80001: `<let>` is reactive state and requires a runtime; this strict policy has no reactive target"
   ]
 }

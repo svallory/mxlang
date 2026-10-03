@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: a `TranslateError` message no longer starts with the compiled file's path (translate-error-no-repeated-path, audit item 17)
+
+`compileSource` drops the `<filename>: ` prefix Babel adds to a translator error's message. The error already carries `line`/`column` (and `file` for an error in another file), and every surface prints the file itself, so the prefix only repeated it, as an absolute path, in `mx-tsc`'s `TS80001` and the language server's message.
+
 ### Fixed: opener position on statement tags with TypeScript generics and on aggregate errors (missing-close-tag-opener-position, round 2)
 
 The replay now declares Marko 6.3.51's core taglib parse options (statement: `class client export import server static`; openTagOnly: `const debug id let lifecycle log return`; text: `html-comment html-script html-style script style textarea`), so `export interface Input<T = string>` or `static const xs: Array<string>` above the mismatch no longer defeats it. An aggregate error (several parse errors, no `loc`) has each entry annotated and the same suffix written into the aggregate message. The message is written with `defineProperty` because `CompileError.message`'s setter discards the first assignment.

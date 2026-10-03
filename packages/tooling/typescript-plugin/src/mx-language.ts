@@ -40,6 +40,7 @@ import {
   mergeMappings,
   warningDiagnostic,
 } from "./language.ts";
+import { dropOwnLocationHeader } from "./own-location-header.ts";
 
 export const MX_LANGUAGE_ID = "mx";
 export const MX_EXTENSIONS = ["mx"] as const;
@@ -639,7 +640,10 @@ function toSyntaxError(
   const offset = (lineOffsets(source)[line - 1] ?? source.length) + column;
   return {
     fileName,
-    message: error.message ?? "Invalid MX source.",
+    message: dropOwnLocationHeader(
+      error.message ?? "Invalid MX source.",
+      fileName,
+    ),
     offset: Math.min(source.length, offset),
     source,
   };

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **`TS80001` repeats neither the file nor the position (translate-error-no-repeated-path, audit item 17):** the message no longer opens with `<abs path>: ` (core) or an `    at <path>:L:C` line (typescript-plugin) after `file(L,C)`. The host-dispatch goldens drop exactly those repeats.
+
 ### Changed
 
 - **`.amx` is now `.astro.mx`** (amx-to-astro-mx, decision 134): `mx-tsc --astro` checks `.astro.mx` files; `.amx` is no longer recognised. The `host-dispatch` fixtures and goldens `amx`, `amx-html-host` are renamed `astro-mx`, `astro-mx-html-host`, and the typecheck fixtures `amx-*` become `astro-mx-*`. The only golden change is the file name and extension strings.

@@ -78,7 +78,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/react/broken.mx",
-            "message": "\n    at <root>/react/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+            "message": "\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
             "offset": 27,
             "category": "error"
           }
@@ -110,7 +110,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/react/page.mx: `<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+            "message": "`<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
             "range": {
               "start": {
                 "line": 2,
@@ -134,7 +134,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/react/page.mx",
-            "message": "<root>/react/page.mx: `<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+            "message": "`<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
             "offset": 30,
             "category": "error"
           }
@@ -237,7 +237,7 @@
     }
   },
   "mxTsc": [
-    "<root>/react/broken.mx(3,1): error TS80001: \n    at <root>/react/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
-    "<root>/react/page.mx(3,1): error TS80001: <root>/react/page.mx: `<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module"
+    "<root>/react/broken.mx(3,1): error TS80001: \n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+    "<root>/react/page.mx(3,1): error TS80001: `<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module"
   ]
 }

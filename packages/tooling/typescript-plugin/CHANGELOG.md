@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: `TS80001` no longer repeats the file and position in its message (translate-error-no-repeated-path, audit item 17)
+
+A parse error's message used to open with Marko's `    at <path>:L:C` line, which `mx-tsc` printed right after `file(L,C)` and an editor showed beside the range. The line is dropped when it names the diagnosed file; one naming another file (an error inside a callee tag) stays, since it is the only place that file is named. The code frame is unchanged.
+
 ### Changed: `.amx` is now `.astro.mx` (amx-to-astro-mx, decision 134)
 
 The AstroMX language plugin claims `.astro.mx` instead of `.amx`, with no alias, and the `.mx` plugin declines `x.astro.mx` as it declines `.solid.mx` and `.ng.mx`. The diagnostic `source` string for these files is `astromx` (it was `amx`). `createAmxLanguagePlugin` and the module name keep `amx`.

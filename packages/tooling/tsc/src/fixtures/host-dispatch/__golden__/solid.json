@@ -95,7 +95,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/solid/broken.mx",
-            "message": "\n    at <root>/solid/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+            "message": "\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
             "offset": 27,
             "category": "error"
           }
@@ -254,7 +254,7 @@
     }
   },
   "mxTsc": [
-    "<root>/solid/broken.mx(3,1): error TS80001: \n    at <root>/solid/broken.mx:3:1\n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
+    "<root>/solid/broken.mx(3,1): error TS80001: \n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
     "<root>/solid/page.mx(3,1): error TS80001: `<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module"
   ]
 }
