@@ -4,6 +4,7 @@ import {
   type AttrTagOf,
   type CustomTag,
   concatMapped,
+  createTargetLookup,
   type GeneratedMapping,
   lower,
   type MxWarning,
@@ -14,11 +15,13 @@ import {
   positionRegionSource,
   printExpression,
   registerCalleeInputReader,
+  type TargetLookup,
   TranslateError,
 } from "@mxlang/core";
 import MagicString from "magic-string";
 import type { Element as SolidElement } from "solid-js";
 import { readSolidCalleeInput } from "./callee-reader.ts";
+import descriptor from "./descriptor.ts";
 import {
   collectReturnVars,
   createEmitter,
@@ -52,6 +55,22 @@ export type AttrTag<
 > = AttrTagOf<C, () => SolidElement>;
 
 registerCalleeInputReader(".solid.mx", readSolidCalleeInput);
+
+/**
+ * This package's own target table (decisions 129 and 132): the one descriptor
+ * it exports, defaulting for a caller that names no lookup of its own (design
+ * note §5.1, rule (c)). A tool compiling several targets passes the built-in
+ * registry's lookup through `options.targets` instead.
+ */
+const ownTargets: TargetLookup = createTargetLookup([descriptor]);
+
+/**
+ * This package's own target lookup, for a caller that needs one and has no
+ * registry to hand: the default behind `options.targets` (design note §5.1,
+ * rule (c)). Exported so this package's own tests resolve a callee under the
+ * same set a direct entry compiles under.
+ */
+export const solidTargets = ownTargets;
 
 export interface CompileSolidMxOptions {
   filename: string;
@@ -93,6 +112,14 @@ export interface CompileSolidMxOptions {
   unknownModuleBindings?: ReadonlySet<string>;
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
   warnings?: MxWarning[];
+  /**
+   * The registered targets this compile runs under (decisions 129 and 132).
+   * Defaults to this package's own descriptor, which is right for a direct
+   * entry; a tool compiling several targets passes the built-in registry's
+   * lookup, so a callee importing `AttrTag` from another registered target's
+   * package reads the same as it does today.
+   */
+  targets?: TargetLookup;
 }
 
 export interface RawSourceMap {
@@ -244,6 +271,7 @@ export function compileSolidMx(
     solidDeclarations,
     undefined,
     options.filename,
+    options.targets ?? ownTargets,
   );
   ctx.customTags = options.customTags;
   ctx.warnings = options.warnings;
@@ -389,6 +417,7 @@ export function compileSolidUnit(
     solidDeclarations,
     undefined,
     options.filename,
+    options.targets ?? ownTargets,
   );
   ctx.customTags = options.customTags;
   ctx.warnings = options.warnings;

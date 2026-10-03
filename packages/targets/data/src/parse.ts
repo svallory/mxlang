@@ -14,12 +14,14 @@ import { resolve } from "node:path";
 import {
   type CustomTag,
   compileSource,
+  createTargetLookup,
   type Ir,
   type MxWarning,
   TranslateError,
 } from "@mxlang/core";
 import { buildDataDocument, lineStartsOf } from "./build.ts";
 import { dataDeclarations } from "./declarations.ts";
+import descriptor from "./descriptor.ts";
 import { dataTaglib } from "./taglib.ts";
 import type { DataDocument } from "./tree.ts";
 
@@ -39,6 +41,8 @@ export type {
   DataTag,
   SerializedDataDocument,
 } from "./tree.ts";
+
+const dataTargets = createTargetLookup([descriptor]);
 
 export interface ParseDataOptions {
   /** Contract-only custom tags (decision 130), by call name. */
@@ -214,6 +218,7 @@ export function parseData(
   };
   try {
     compileSource(source, filename, dataDeclarations, {
+      targets: dataTargets,
       taglibs: [dataTaglib()],
       tagDiscoveryDirs: [],
       customTags: options.customTags,

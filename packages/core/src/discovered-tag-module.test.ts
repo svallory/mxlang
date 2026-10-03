@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
+import { lookup } from "./test-targets.ts";
 
 const CALLER = "/tmp/mx-discovered/pages/page.mx";
 
@@ -17,6 +18,7 @@ function policy(resolve?: Policy["resolveDiscoveredTagModule"]): Policy {
 function lower(source: string, declarations: Policy): Ir {
   let ir: Ir | null = null;
   compileSource(source, CALLER, declarations, {
+    targets: lookup,
     tagDiscoveryDirs: [],
     emitIr(lowered) {
       ir = lowered;

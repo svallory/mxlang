@@ -8,6 +8,7 @@ import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Attr, AttributeTag, Ir, IrNode } from "./ir.ts";
 import { resetTemplateCache } from "./template-tag.ts";
+import { lookup } from "./test-targets.ts";
 
 function fakeDeclarations(overrides: Partial<Policy> = {}): Policy {
   return {
@@ -26,6 +27,7 @@ function lowerWithTags(
   let ir: Ir | null = null;
   compileSource(source, "/tmp/mx-core-test/custom-tags.mx", policy, {
     customTags,
+    targets: lookup,
     tagDiscoveryDirs: [],
     emitIr(lowered) {
       ir = lowered;

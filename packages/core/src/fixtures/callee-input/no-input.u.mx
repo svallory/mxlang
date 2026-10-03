@@ -1,0 +1,5 @@
+// A host module file: an ordinary TypeScript module carrying MX regions,
+// with no declared `Input`. The reader must not Marko-parse it.
+export class Card {
+  template = "<div/>";
+}

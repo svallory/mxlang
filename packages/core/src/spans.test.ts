@@ -3,6 +3,7 @@ import { compileSource } from "./compile.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import type { Attr, DelegatedTag, Ir, IrNode } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { lookup } from "./test-targets.ts";
 
 /**
  * UTF-16 code-unit offset contracts (the unit of every span in the IR) for the spans lowering records: attribute name spans,
@@ -33,6 +34,7 @@ const elements: HostDeclarations = {
 function irOf(source: string, policy: HostDeclarations): Ir {
   let captured: Ir | undefined;
   compileSource(source, "/tmp/spans.mx", policy, {
+    targets: lookup,
     emitIr: (ir) => {
       captured = ir;
       return "";

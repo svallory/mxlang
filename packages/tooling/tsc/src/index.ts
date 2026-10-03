@@ -10,10 +10,10 @@ import {
   createNgMxLanguagePlugin,
   createSolidMxLanguagePlugin,
   HOST_POLICY_DIAGNOSTIC_CODE,
-  type HostPolicyDiagnostic,
   hostPolicyText,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
+  type TargetPolicyDiagnostic,
 } from "@mxlang/typescript-plugin";
 import type { Language, LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
@@ -461,10 +461,10 @@ function runMxTscChecks(): number {
   // Host-policy problems (an unknown `mx.host`, a malformed package.json):
   // warnings, so the exit code is what it was before they were printed. A
   // file two programs both compiled is reported once.
-  reportHostPolicyDiagnostics([
+  reportTargetPolicyDiagnostics([
     ...new Map(
       diagnosticPlugins
-        .flatMap((plugin) => plugin.getHostPolicyDiagnostics?.() ?? [])
+        .flatMap((plugin) => plugin.getTargetPolicyDiagnostics?.() ?? [])
         .map((d) => [`${d.file}\0${d.message}`, d] as const),
     ).values(),
   ]);
@@ -598,8 +598,8 @@ export function reportCompileDiagnostics(
  * Prints host-policy diagnostics as warnings in `tsc`'s shape, positioned in
  * the `package.json` that caused them: `package.json(5,13): warning TS80003`.
  */
-export function reportHostPolicyDiagnostics(
-  diagnostics: readonly HostPolicyDiagnostic[],
+export function reportTargetPolicyDiagnostics(
+  diagnostics: readonly TargetPolicyDiagnostic[],
 ): void {
   if (diagnostics.length === 0) return;
   const require = createRequire(import.meta.url);

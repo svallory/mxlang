@@ -17,7 +17,8 @@
     "@mxlang/parser": "workspace:*",
     "@mxlang/preact": "workspace:*",
     "@mxlang/react": "workspace:*",
-    "@mxlang/solid": "workspace:*"
+    "@mxlang/solid": "workspace:*",
+    "@mxlang/target-registry": "workspace:*"
   },
   "devDependencies": {
     "@angular/common": "22.1.7",

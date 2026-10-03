@@ -8,11 +8,9 @@ import {
   validateDescriptor,
 } from "@mxlang/core";
 import { afterAll, describe, expect, it } from "vitest";
-import {
-  builtinFileKinds,
-  builtinTargets,
-  builtinTargetLookup as lookup,
-} from "./index.ts";
+import { builtinFileKinds, builtinLookup, builtinTargets } from "./index.ts";
+
+const lookup = builtinLookup();
 
 const NAMES = [
   "html",
@@ -48,7 +46,7 @@ describe("builtinTargets", () => {
     }
   });
 
-  it("builds a lookup over exactly those targets", () => {
+  it("builds a builtinLookup over exactly those targets", () => {
     expect(lookup.targetNames()).toEqual(NAMES);
     for (const name of NAMES) expect(lookup.target(name)).toBe(byName(name));
     expect(lookup.target("solid")).toBeUndefined();
@@ -138,7 +136,7 @@ describe("shape of each descriptor", () => {
   });
 });
 
-describe("lookup: packages and host values", () => {
+describe("builtinLookup: packages and host values", () => {
   it.each([
     ["@mxlang/html", "html"],
     ["@mxlang/astro", "astro-html"],
@@ -302,7 +300,7 @@ describe("the reserved `astro-template` name", () => {
     expect((error as TargetLookupError).rule).toBe("segment-conflict");
   });
 
-  it("a lookup built the registry's way refuses a third party that takes it", () => {
+  it("a builtinLookup built the registry's way refuses a third party that takes it", () => {
     let error: unknown;
     try {
       createTargetLookup([...builtinTargets, impostor], {

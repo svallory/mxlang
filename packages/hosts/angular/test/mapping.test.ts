@@ -24,6 +24,7 @@ import {
   templateMappingsToModule,
 } from "../src/mapping.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 
 /**
  * Compiles `source` and returns the pairs each mapping slices to.
@@ -125,7 +126,7 @@ describe("mappings: names", () => {
     const page = "<div><icon/></div>\n";
     writeFileSync(path, page);
     const result = compile(page, path, {
-      customTags: getCustomTags(path) as never,
+      customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
     });
     // The selector is emitted correctly; it simply carries no mapping.
     expect(result.code).toContain("<mx-icon>");
@@ -149,7 +150,7 @@ describe("mappings: names", () => {
     const page = "<div><icon size=big/></div>\n";
     writeFileSync(path, page);
     const result = compile(page, path, {
-      customTags: getCustomTags(path) as never,
+      customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
     });
     const pairs = result.mappings.map((mapping) => ({
       generated: result.code.slice(

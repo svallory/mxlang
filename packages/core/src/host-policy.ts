@@ -1,26 +1,32 @@
 /**
- * Policy resolution (brief §2, `host-diagnostics.md` §3): which host policy
- * applies to a given file.
+ * Policy resolution (brief §2, `host-diagnostics.md` §3): which target a file
+ * compiles through, plus that target's strictness.
+ *
+ * **Unstable contract (decisions 129 and 132).** `mx.target` lands with
+ * registration PR 3b; until it does, this module answers the `mx.host` half
+ * of §4.1's rule only.
  *
  * Rule, in order:
  *
  * 1. Walk upward from the file's directory looking for the nearest
  *    `package.json`. If it has an `"mx"` field, that field *is* the
- *    answer: `{ host: "html" | "astro" | "solid" | "preact" | "react" | "hono", strict?: boolean }`
- *    (with "translator" accepted as a deprecated alias for "html").
+ *    answer: `{ host: "<a registered host value>", strict?: boolean }`,
+ *    where a host value is a host name or a target's legacy `mx.host`
+ *    spelling.
  * 2. Otherwise, if that same `package.json` depends (in `dependencies` or
- *    `devDependencies`) on exactly one `@mxlang/*` host package
- *    (`@mxlang/html`, `@mxlang/astro`, `@mxlang/solid`, `@mxlang/preact`,
- *    `@mxlang/react`, `@mxlang/hono`;
- *    `@mxlang/core` itself does not count, since every host depends on it
- *    too), use that host.
- * 3. Otherwise, fall back to the translator's default (non-strict) policy.
+ *    `devDependencies`) on exactly one package some registered target
+ *    declares as its `packageName` (`@mxlang/html`, `@mxlang/astro`,
+ *    `@mxlang/solid`, `@mxlang/preact`, `@mxlang/react`, `@mxlang/hono`,
+ *    `@mxlang/angular`; `@mxlang/core` itself declares no target and does
+ *    not count, since every target package depends on it too), use the
+ *    target that package selects.
+ * 3. Otherwise, fall back to the lookup's default target, non-strict.
  *
  * Edge cases of the walk (each pinned in `host-policy.test.ts`):
  *
  * - The nearest `package.json` is the one that *exists*, parseable or not. A
  *   malformed one (or one that is not a JSON object) ends the walk with the
- *   default `html` policy plus a warning; it does not fall through to an
+ *   default policy plus a warning; it does not fall through to an
  *   unrelated ancestor. Node, TypeScript and `scan.ts` all stop there too.
  * - A directory with no `package.json` of its own belongs to the nearest
  *   ancestor's project, a monorepo root included. That is how `src/` inside a
@@ -30,7 +36,7 @@
  * - The walk stops at a `node_modules` directory (Node's package-scope rule):
  *   a file in an installed package that ships no `package.json` gets the
  *   default policy, not the consumer's host.
- * - An `mx.host` that names no host is ignored with a warning (with a
+ * - An `mx.host` that names no known value is ignored with a warning (with a
  *   nearest-match hint), and resolution continues with the dependency rule.
  *
  * This mirrors `Project.loadMeta`'s own `createRequire` + upward
@@ -40,11 +46,15 @@
  * It lives in `@mxlang/core` rather than in either consumer because two
  * entry points ask this same question: `@mxlang/language-server` (to pick the
  * policy a document is diagnosed under) and `@mxlang/typescript-plugin` (to
- * pick the host a `.mx` file's virtual TypeScript is compiled through). An
- * editor and a `tsc` run disagreeing about which host owns a file is exactly
- * the drift a second copy invites, so there is one implementation and one
- * set of branch tests. Unlike the rest of this package it touches `node:fs`,
- * which is why it is its own module rather than part of `core.ts`.
+ * pick the target a `.mx` file's virtual TypeScript is compiled through). An
+ * editor and a `tsc` run disagreeing about which target owns a file is
+ * exactly the drift a second copy invites, so there is one implementation and
+ * one set of branch tests. Unlike the rest of this package it touches
+ * `node:fs`, which is why it is its own module rather than part of `core.ts`.
+ *
+ * **No target and no host is named here** (decision 126). The lookup is a
+ * required parameter on every entry point: a caller that forgot it gets a
+ * type error, not a silently closed-over list.
  */
 
 import { basename, dirname, join } from "node:path";
@@ -53,83 +63,43 @@ import {
   positionOfOffset,
   readPackageJsonCached,
 } from "./package-json.ts";
+import type { TargetLookup } from "./target-descriptor.ts";
 
-/** The host a file compiles through, plus that host's strictness. */
-export interface HostPolicy {
-  host: "html" | "astro" | "solid" | "preact" | "react" | "hono" | "angular";
+/**
+ * The target a file compiles through, plus that target's host (when it has
+ * one) and the `mx.strict` setting of the nearest `package.json`.
+ *
+ * `host` is what `mx.host: "<name>"` selects and what `mx.tags[].hosts`
+ * filters by; a target with no host (the `html` target, which a legacy
+ * `mx.host: "html"` names) has none. Read the filter value for a target off
+ * the lookup (`hostFilterKey`) rather than off this field: for a hostless
+ * target it is the target's legacy value, not the target name.
+ */
+export interface TargetPolicy {
+  target: string;
+  host?: string;
   strict?: boolean;
 }
 
-/**
- * Every real host name `HostPolicy["host"]` admits — exported so a second
- * caller (`scan.ts`'s `hosts` validation) checks a string against the same
- * runtime list this module already checks `mx.host` against, rather than
- * hand-maintaining a second copy of these seven names. Deliberately excludes
- * `"translator"`: that string is only a deprecated alias for `"html"` on
- * `mx.host`, not a real host `mx.tags[].hosts` could ever filter to.
- */
-export const HOST_NAMES: readonly HostPolicy["host"][] = [
-  "html",
-  "astro",
-  "solid",
-  "preact",
-  "react",
-  "hono",
-  "angular",
-];
-
-const HOST_PACKAGES: Record<string, HostPolicy["host"]> = {
-  "@mxlang/html": "html",
-  "@mxlang/astro": "astro",
-  "@mxlang/solid": "solid",
-  "@mxlang/preact": "preact",
-  "@mxlang/react": "react",
-  "@mxlang/hono": "hono",
-  "@mxlang/angular": "angular",
-};
-
-const DEFAULT_POLICY: HostPolicy = { host: "html" };
-
-interface PackageJsonShape {
-  mx?: { host?: string; strict?: boolean };
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-}
-
-function isKnownHost(
-  value: unknown,
-): value is HostPolicy["host"] | "translator" {
-  return (
-    value === "html" ||
-    value === "translator" ||
-    value === "astro" ||
-    value === "solid" ||
-    value === "preact" ||
-    value === "react" ||
-    value === "hono" ||
-    value === "angular"
-  );
-}
-
-/** Why a {@link HostPolicyDiagnostic} was raised. */
-export type HostPolicyDiagnosticCode =
+/** Why a {@link TargetPolicyDiagnostic} was raised. */
+export type TargetPolicyDiagnosticCode =
   | "unknown-host"
   | "malformed-package-json";
 
 /**
- * One problem found while resolving a host, positioned in the `package.json`
- * that caused it. Same shape as `ScanDiagnostic` so a caller can merge the
- * two into the stream it already reports.
+ * One problem found while resolving a target, positioned in the
+ * `package.json` that caused it. Same shape as `ScanDiagnostic` so a caller
+ * can merge the two into the stream it already reports.
  *
  * Every one is a *warning*: resolution always produces a policy, and nothing
  * here may fail a build that compiled before.
  */
-export interface HostPolicyDiagnostic {
+export interface TargetPolicyDiagnostic {
   /**
    * What went wrong, so a caller can word or route it without matching the
    * message text.
    */
-  code: HostPolicyDiagnosticCode;
+  code: TargetPolicyDiagnosticCode;
   /** The `package.json` to point an author at. */
   file: string;
   message: string;
@@ -140,9 +110,9 @@ export interface HostPolicyDiagnostic {
 }
 
 /** A resolved policy plus whatever the resolution had to say about it. */
-export interface HostPolicyResolution {
-  policy: HostPolicy;
-  diagnostics: HostPolicyDiagnostic[];
+export interface TargetPolicyResolution {
+  policy: TargetPolicy;
+  diagnostics: TargetPolicyDiagnostic[];
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -177,26 +147,6 @@ function findNearestPackageJson(fileDir: string): Found | undefined {
   }
 }
 
-/**
- * What the walk used to answer for a broken `package.json`: the host of the
- * first ancestor that does parse. Only used to tell the author what changed.
- */
-function formerAncestorPolicy(
-  startDir: string,
-): { file: string; host: HostPolicy["host"] } | undefined {
-  let dir = startDir;
-  for (;;) {
-    const file = join(dir, "package.json");
-    const read = readPackageJsonCached(file);
-    if (read && !read.error && isObject(read.manifest)) {
-      return { file, host: policyOf(read.manifest).policy.host };
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
-}
-
 /** Levenshtein distance, for the "did you mean" hint. Inputs are tiny. */
 function distance(a: string, b: string): number {
   let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -214,11 +164,35 @@ function distance(a: string, b: string): number {
   return previous[b.length] as number;
 }
 
-/** The nearest real host name within two edits of `value`, if any. */
-function nearestHost(value: string): string | undefined {
+/**
+ * The `mx.host` values the lookup offers today, split by whether they are
+ * deprecated. A deprecated value is an old spelling of a target (`the
+ * 'translator' alias`) and is listed apart: an author who typed one needs to
+ * be told so, and a did-you-mean must never suggest one.
+ */
+function hostValuesByDeprecation(lookup: TargetLookup): {
+  current: string[];
+  deprecated: string[];
+} {
+  const current: string[] = [];
+  const deprecated: string[] = [];
+  for (const value of lookup.hostValues()) {
+    if (lookup.hostTarget(value)?.deprecated === true) deprecated.push(value);
+    else current.push(value);
+  }
+  return { current, deprecated };
+}
+
+/**
+ * The nearest current host value within two edits of `value`, if any.
+ */
+function nearestHostValue(
+  value: string,
+  candidates: readonly string[],
+): string | undefined {
   let best: string | undefined;
   let bestDistance = 3;
-  for (const name of HOST_NAMES) {
+  for (const name of candidates) {
     const d = distance(value.toLowerCase(), name);
     if (d < bestDistance) {
       best = name;
@@ -226,6 +200,24 @@ function nearestHost(value: string): string | undefined {
     }
   }
   return best;
+}
+
+/**
+ * `valid hosts: …` for the unknown-`mx.host` warning: every current value
+ * the lookup accepts, plus one clause per deprecated value naming the target
+ * it spells. For the built-in lookup this reproduces the closed list the
+ * resolver used to hold, in the same order, so the message text is unchanged
+ * (decision 07 Q9).
+ */
+function validHostsClause(lookup: TargetLookup): string {
+  const { current, deprecated } = hostValuesByDeprecation(lookup);
+  const clauses = deprecated.map(
+    (value) =>
+      `'${value}' is a deprecated alias for ${lookup.hostTarget(value)?.target}`,
+  );
+  return clauses.length
+    ? `${current.join(", ")} (${clauses.join(", ")})`
+    : current.join(", ");
 }
 
 /** Where `"mx": { "host": <value> }` sits in `text`, else `1:0`. */
@@ -252,24 +244,33 @@ function locateMxHost(
  * The policy one parsed `package.json` answers with, plus the `mx.host` it
  * had to ignore, if any. Pure: no I/O, no warnings printed.
  */
-function policyOf(pkg: Record<string, unknown>): {
-  policy: HostPolicy;
+function policyOf(
+  pkg: Record<string, unknown>,
+  lookup: TargetLookup,
+): {
+  policy: TargetPolicy;
   ignoredHost?: unknown;
-  translator?: boolean;
+  /** The deprecated `mx.host` value used, which the caller warns about. */
+  deprecatedValue?: string;
 } {
-  const mx = isObject(pkg.mx) ? (pkg.mx as PackageJsonShape["mx"]) : undefined;
+  const mx = isObject(pkg.mx)
+    ? (pkg.mx as { host?: unknown; strict?: unknown })
+    : undefined;
   let ignoredHost: unknown;
 
   if (mx) {
-    if (isKnownHost(mx.host)) {
-      if (mx.host === "translator") {
-        return {
-          policy: { host: "html", strict: mx.strict },
-          translator: true,
-        };
-      }
+    const selected =
+      typeof mx.host === "string" ? lookup.hostTarget(mx.host) : undefined;
+    if (selected) {
       return {
-        policy: { host: mx.host as HostPolicy["host"], strict: mx.strict },
+        policy: {
+          target: selected.target,
+          host: lookup.hostOf(selected.target),
+          strict: mx.strict as boolean | undefined,
+        },
+        ...(selected.deprecated === true
+          ? { deprecatedValue: mx.host as string }
+          : {}),
       };
     }
     if (mx.host !== undefined) ignoredHost = mx.host;
@@ -279,37 +280,59 @@ function policyOf(pkg: Record<string, unknown>): {
     ...(isObject(pkg.dependencies) ? pkg.dependencies : undefined),
     ...(isObject(pkg.devDependencies) ? pkg.devDependencies : undefined),
   };
-  const hostDeps = Object.keys(HOST_PACKAGES).filter((name) => name in deps);
-  if (hostDeps.length === 1) {
-    const host = HOST_PACKAGES[hostDeps[0] as string];
-    if (host) return { policy: { host }, ignoredHost };
+  const targetDeps = Object.keys(deps).flatMap((name) => {
+    const target = lookup.fromPackage(name);
+    return target ? [target] : [];
+  });
+  if (targetDeps.length === 1) {
+    const target = targetDeps[0] as string;
+    return {
+      policy: { target, host: lookup.hostOf(target) },
+      ignoredHost,
+    };
   }
 
-  return { policy: DEFAULT_POLICY, ignoredHost };
+  return {
+    policy: {
+      target: lookup.defaultTarget(),
+      host: lookup.hostOf(lookup.defaultTarget()),
+    },
+    ignoredHost,
+  };
 }
 
 /**
- * Resolves the `HostPolicy` for `filePath` by walking upward from its
+ * Resolves the `TargetPolicy` for `filePath` by walking upward from its
  * containing directory, together with the warnings the walk produced. See
  * the module doc for the rule and its edge cases.
  *
- * `resolveHostPolicy` is this function's `policy`; call this one to also
+ * `lookup` is required: which values `mx.host` accepts, which package selects
+ * which target, and which target is the default are open-set questions the
+ * caller answers (`@mxlang/target-registry` binds the built-in lookup, so a
+ * tool imports its wrapper instead of passing one).
+ *
+ * `resolveTargetPolicy` is this function's `policy`; call this one to also
  * learn that a `package.json` was malformed or named an unknown `mx.host`.
  * Nothing is cached beyond the mtime-keyed `package.json` reads, so calling
  * it per file is cheap, but the diagnostics come back on every call: dedupe
  * by `file` + `message` where they are reported.
  */
-export function resolveHostPolicyDetailed(
+export function resolveTargetPolicyDetailed(
   filePath: string,
-): HostPolicyResolution {
-  const diagnostics: HostPolicyDiagnostic[] = [];
-  const finish = (policy: HostPolicy): HostPolicyResolution => ({
+  lookup: TargetLookup,
+): TargetPolicyResolution {
+  const diagnostics: TargetPolicyDiagnostic[] = [];
+  const defaultPolicy = (): TargetPolicy => {
+    const target = lookup.defaultTarget();
+    return { target, host: lookup.hostOf(target) };
+  };
+  const finish = (policy: TargetPolicy): TargetPolicyResolution => ({
     policy,
     diagnostics,
   });
 
   const found = findNearestPackageJson(dirname(filePath));
-  if (!found) return finish(DEFAULT_POLICY);
+  if (!found) return finish(defaultPolicy());
 
   const { file, dir, read } = found;
 
@@ -317,36 +340,40 @@ export function resolveHostPolicyDetailed(
     const reason = read.error
       ? `could not be parsed as JSON: ${read.error.message}`
       : "must contain a JSON object";
-    const former = formerAncestorPolicy(dirname(dir));
+    const former = formerAncestorPolicy(dirname(dir), lookup);
     const before = former
       ? `; before, its host was taken from ${former.file} ("${former.host}")`
       : "";
     diagnostics.push({
       code: "malformed-package-json",
       file,
-      message: `${file} ${reason}; using the default "${DEFAULT_POLICY.host}" host for the files under ${dir}${before}`,
+      message: `${file} ${reason}; using the default "${lookup.defaultTarget()}" host for the files under ${dir}${before}`,
       line: read.error?.line ?? 1,
       column: read.error?.column ?? 0,
     });
-    return finish(DEFAULT_POLICY);
+    return finish(defaultPolicy());
   }
 
-  const resolved = policyOf(read.manifest);
-  if (resolved.translator) {
+  const resolved = policyOf(read.manifest, lookup);
+  if (resolved.deprecatedValue !== undefined) {
+    const target = lookup.hostTarget(resolved.deprecatedValue)?.target;
     console.warn(
-      "Warning: The 'translator' mx.host alias is deprecated and will be removed in a future release. Use 'html' instead.",
+      `Warning: The '${resolved.deprecatedValue}' mx.host alias is deprecated and will be removed in a future release. Use '${target}' instead.`,
     );
   }
   if (resolved.ignoredHost !== undefined) {
     const shown = JSON.stringify(resolved.ignoredHost);
     const hint =
       typeof resolved.ignoredHost === "string"
-        ? nearestHost(resolved.ignoredHost)
+        ? nearestHostValue(
+            resolved.ignoredHost,
+            hostValuesByDeprecation(lookup).current,
+          )
         : undefined;
     diagnostics.push({
       code: "unknown-host",
       file,
-      message: `unknown mx.host ${shown}; valid hosts: ${HOST_NAMES.join(", ")} ('translator' is a deprecated alias for html).${hint ? ` Did you mean "${hint}"?` : ""} Ignoring it; the host is taken from the @mxlang dependencies instead.`,
+      message: `unknown mx.host ${shown}; valid hosts: ${validHostsClause(lookup)}.${hint ? ` Did you mean "${hint}"?` : ""} Ignoring it; the host is taken from the @mxlang dependencies instead.`,
       ...locateMxHost(read.text, resolved.ignoredHost),
     });
   }
@@ -354,10 +381,37 @@ export function resolveHostPolicyDetailed(
 }
 
 /**
- * Resolves the `HostPolicy` for `filePath` by walking upward from its
+ * Resolves the `TargetPolicy` for `filePath` by walking upward from its
  * containing directory. See module doc for the three-branch rule. Use
- * `resolveHostPolicyDetailed` to also receive the walk's warnings.
+ * `resolveTargetPolicyDetailed` to also receive the walk's warnings.
  */
-export function resolveHostPolicy(filePath: string): HostPolicy {
-  return resolveHostPolicyDetailed(filePath).policy;
+export function resolveTargetPolicy(
+  filePath: string,
+  lookup: TargetLookup,
+): TargetPolicy {
+  return resolveTargetPolicyDetailed(filePath, lookup).policy;
+}
+
+/**
+ * What the walk used to answer for a broken `package.json`: the host of the
+ * first ancestor that does parse. Only used to tell the author what changed.
+ * A hostless target is named by its own filter value, so the clause reads
+ * the same as it did when every target had a host.
+ */
+function formerAncestorPolicy(
+  startDir: string,
+  lookup: TargetLookup,
+): { file: string; host: string } | undefined {
+  let dir = startDir;
+  for (;;) {
+    const file = join(dir, "package.json");
+    const read = readPackageJsonCached(file);
+    if (read && !read.error && isObject(read.manifest)) {
+      const { target, host } = policyOf(read.manifest, lookup).policy;
+      return { file, host: host ?? (lookup.hostFilterKey(target) as string) };
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
 }

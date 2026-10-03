@@ -1,6 +1,6 @@
 {
   "name": "preact-dependency-fixture",
   "dependencies": {
-    "@mxlang/preact": "0.1.0"
+    "@t/atom": "0.1.0"
   }
 }

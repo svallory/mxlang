@@ -11,7 +11,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
-import { clearScanCache } from "@mxlang/core";
+import { clearScanCache, type TargetPolicy } from "@mxlang/core";
+import { defaultTarget, hostOf, hostTarget } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
@@ -20,13 +21,30 @@ import {
   splitCodeFrame,
 } from "./diagnose.ts";
 
+/**
+ * A policy for `host` as the built-in lookup resolves it: the target that host
+ * selects, its host name when it has one, and the `strict` flag. Written
+ * through the registry rather than as a literal `{ host }`, because the policy
+ * names a target first (decisions 129/132) and `html` is a target with no
+ * host — its legacy `mx.host` value is what selects it.
+ */
+function policy(host: string, strict?: boolean): TargetPolicy {
+  const target = hostTarget(host)?.target ?? defaultTarget();
+  return {
+    target,
+    host: hostOf(target),
+    ...(strict === undefined ? {} : { strict }),
+  };
+}
+
 describe("diagnoseDocument", () => {
   it("reports one Error diagnostic for <let> under a strict policy", () => {
     const source = "<let/count=1/>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
-      host: "html",
-      strict: true,
-    });
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html", true),
+    );
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(1); // DiagnosticSeverity.Error
@@ -38,10 +56,11 @@ describe("diagnoseDocument", () => {
 
   it("reports one Error diagnostic for <log> under a strict policy", () => {
     const source = "<log=1/>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
-      host: "html",
-      strict: true,
-    });
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html", true),
+    );
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(1); // DiagnosticSeverity.Error
@@ -55,9 +74,11 @@ describe("diagnoseDocument", () => {
     // not the region compiler `compileSolidMx` — before decision 115's
     // wiring this host was unreachable for a whole-file `.mx` at all here.
     const source = "export interface Input { }\n\n<div>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
-      host: "solid",
-    });
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("solid"),
+    );
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(1); // DiagnosticSeverity.Error
@@ -74,15 +95,17 @@ describe("diagnoseDocument", () => {
     const source =
       "export interface Input { title: string; count?: number }\n<div>${input.title}${input.count ?? 0}</div>\n";
     expect(
-      diagnoseDocument(source, "file:///project/Card.mx", { host: "solid" }),
+      diagnoseDocument(source, "file:///project/Card.mx", policy("solid")),
     ).toEqual([]);
   });
 
   it("reports nothing for a valid file", () => {
     const source = "<p>hello</p>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
-      host: "html",
-    });
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html"),
+    );
 
     expect(diagnostics).toEqual([]);
   });
@@ -100,7 +123,7 @@ describe("diagnoseDocument", () => {
     const diagnostics = diagnoseDocument(
       '<icon/x name="star"/>\n',
       pathToFileURL(page).href,
-      { host: "html" },
+      policy("html"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -119,7 +142,7 @@ describe("diagnoseDocument", () => {
     const diagnostics = diagnoseDocument(
       "<if=true><counter/n start=1/></if>\n<p>${n}</p>\n",
       pathToFileURL(page).href,
-      { host: "html" },
+      policy("html"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -137,7 +160,7 @@ describe("diagnoseDocument", () => {
     const diagnostics = diagnoseDocument(
       "<p>${n}</p>\n<counter/n start=1/>\n",
       pathToFileURL(page).href,
-      { host: "html" },
+      policy("html"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -154,7 +177,7 @@ describe("diagnoseDocument", () => {
     const diagnostics = diagnoseDocument(
       "<counter/n start=1/>\n<p>${n}</p>\n",
       pathToFileURL(page).href,
-      { host: "html" },
+      policy("html"),
     );
 
     expect(diagnostics).toEqual([]);
@@ -175,7 +198,7 @@ describe("diagnoseDocument", () => {
     const diagnostics = diagnoseDocument(
       '<div><icon name="star"/></div>\n',
       `file://${page}`,
-      { host: "html" },
+      policy("html"),
     );
 
     expect(diagnostics).toEqual([]);
@@ -186,9 +209,11 @@ describe("diagnoseDocument", () => {
     // string being compiled, not a JS template literal — biome's
     // noTemplateCurlyInString can't tell the two apart.
     const source = "<let/count=1/>\n<p>${count}</p>\n";
-    const diagnostics = diagnoseDocument(source, "file:///project/App.mx", {
-      host: "html",
-    });
+    const diagnostics = diagnoseDocument(
+      source,
+      "file:///project/App.mx",
+      policy("html"),
+    );
 
     expect(diagnostics).toEqual([]);
   });
@@ -202,7 +227,7 @@ describe("diagnoseDocument", () => {
     const diagnostics = diagnoseDocument(
       null as unknown as string,
       "file:///project/App.solid.mx",
-      { host: "html" },
+      policy("html"),
       onUnexpectedError,
     );
 
@@ -222,7 +247,7 @@ export const view = () => (
     const diagnostics = diagnoseDocument(
       source,
       "file:///project/App.solid.mx",
-      { host: "solid" },
+      policy("solid"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -242,7 +267,7 @@ export const view = () => (
     const diagnostics = diagnoseDocument(
       source,
       "file:///project/App.solid.mx",
-      { host: "solid" },
+      policy("solid"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -258,7 +283,7 @@ export const view = () => (
     const diagnostics = diagnoseDocument(
       source,
       "file:///project/App.solid.mx",
-      { host: "solid" },
+      policy("solid"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -272,7 +297,7 @@ export const view = () => (
     const diagnostics = diagnoseDocument(
       "export const view = () => <p>hello</p>;\n",
       "file:///project/App.solid.mx",
-      { host: "solid" },
+      policy("solid"),
     );
 
     expect(diagnostics).toEqual([]);
@@ -282,7 +307,7 @@ export const view = () => (
     const diagnostics = diagnoseDocument(
       "<let/count=1/>\n",
       "file:///project/App.mx",
-      { host: "solid" },
+      policy("solid"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -299,7 +324,7 @@ describe("the Preact host", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=0/>\n<p>${count}</p>\n",
       "file:///app/greeting.mx",
-      { host: "preact" },
+      policy("preact"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -310,7 +335,7 @@ describe("the Preact host", () => {
     const diagnostics = diagnoseDocument(
       "export interface Input { name: string }\n<h1>${input.name}</h1>\n",
       "file:///app/greeting.mx",
-      { host: "preact" },
+      policy("preact"),
     );
 
     expect(diagnostics).toEqual([]);
@@ -323,7 +348,7 @@ describe("the Preact host", () => {
       const diagnostics = diagnoseDocument(
         "<let/count=0/>\n<p>${count}</p>\n",
         "file:///app/greeting.mx",
-        { host: "preact", strict },
+        policy("preact", strict),
       );
       expect(diagnostics).toHaveLength(1);
     }
@@ -337,16 +362,15 @@ describe("the Astro template file kind", () => {
     // must not compile it as an html page.
     const source = "<let/count=0/>\n<p>${count}</p>\n";
     expect(
-      diagnoseDocument(source, "file:///app/card.mx", {
-        host: "html",
-        strict: true,
-      }).length,
+      diagnoseDocument(source, "file:///app/card.mx", policy("html", true))
+        .length,
     ).toBeGreaterThan(0);
     expect(
-      diagnoseDocument(source, "file:///app/card.astro.mx", {
-        host: "html",
-        strict: true,
-      }),
+      diagnoseDocument(
+        source,
+        "file:///app/card.astro.mx",
+        policy("html", true),
+      ),
     ).toEqual([]);
   });
 });
@@ -356,7 +380,7 @@ describe("the React host", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=0/>\n<p>${count}</p>\n",
       "file:///app/greeting.mx",
-      { host: "react" },
+      policy("react"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -367,7 +391,7 @@ describe("the React host", () => {
     const diagnostics = diagnoseDocument(
       "export interface Input { name: string }\n<h1>${input.name}</h1>\n",
       "file:///app/greeting.mx",
-      { host: "react" },
+      policy("react"),
     );
 
     expect(diagnostics).toEqual([]);
@@ -379,7 +403,7 @@ describe("the Hono host", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=0/>\n<p>${count}</p>\n",
       "file:///app/greeting.mx",
-      { host: "hono" },
+      policy("hono"),
     );
 
     expect(diagnostics).toHaveLength(1);
@@ -390,7 +414,7 @@ describe("the Hono host", () => {
     const diagnostics = diagnoseDocument(
       "export interface Input { name: string }\n<h1>${input.name}</h1>\n",
       "file:///app/greeting.mx",
-      { host: "hono" },
+      policy("hono"),
     );
 
     expect(diagnostics).toEqual([]);
@@ -427,7 +451,7 @@ describe("the Hono host", () => {
       // Without discovery this would be a compile error naming `<thing>`, so
       // an empty result is the assertion: the editor resolves the same tag a
       // build does.
-      expect(diagnoseDocument("<thing/>\n", caller, { host: "html" })).toEqual(
+      expect(diagnoseDocument("<thing/>\n", caller, policy("html"))).toEqual(
         [],
       );
     });
@@ -440,9 +464,11 @@ describe("the Hono host", () => {
         ].join("\n"),
       );
 
-      const diagnostics = diagnoseDocument("<thing/>\n", caller, {
-        host: "html",
-      });
+      const diagnostics = diagnoseDocument(
+        "<thing/>\n",
+        caller,
+        policy("html"),
+      );
 
       // One diagnostic, naming the file the author has to fix — not a crash,
       // and not silence that would leave the editor disagreeing with a build.
@@ -455,7 +481,7 @@ describe("the Hono host", () => {
       const { tagFile, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('ok')] };\n",
       );
-      expect(diagnoseDocument("<thing/>\n", caller, { host: "html" })).toEqual(
+      expect(diagnoseDocument("<thing/>\n", caller, policy("html"))).toEqual(
         [],
       );
 
@@ -466,9 +492,11 @@ describe("the Hono host", () => {
       const when = new Date(Date.now() + 10_000);
       utimesSync(tagFile, when, when);
 
-      const diagnostics = diagnoseDocument("<thing/>\n", caller, {
-        host: "html",
-      });
+      const diagnostics = diagnoseDocument(
+        "<thing/>\n",
+        caller,
+        policy("html"),
+      );
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.message).toContain("thing.tag.ts");
     });
@@ -477,7 +505,7 @@ describe("the Hono host", () => {
       const { dir, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('ok')] };\n",
       );
-      expect(diagnoseDocument("<thing/>\n", caller, { host: "html" })).toEqual(
+      expect(diagnoseDocument("<thing/>\n", caller, policy("html"))).toEqual(
         [],
       );
 
@@ -487,16 +515,14 @@ describe("the Hono host", () => {
       // invalidates the cached scan. Before P3 this asserted the
       // template-expansion gate instead, which is what a hookless discovered
       // tag used to report; now a template tag is complete on its own.
-      expect(diagnoseDocument("<added/>\n", caller, { host: "html" })).toEqual(
+      expect(diagnoseDocument("<added/>\n", caller, policy("html"))).toEqual(
         [],
       );
 
       // The negative half the old assertion carried: an *undiscovered* name is
       // still an error, so the clean result above is the scan working rather
       // than every unknown tag being accepted.
-      const unknown = diagnoseDocument("<missing/>\n", caller, {
-        host: "html",
-      });
+      const unknown = diagnoseDocument("<missing/>\n", caller, policy("html"));
       expect(unknown).toHaveLength(1);
       expect(unknown[0]?.message).toContain("missing");
     });
@@ -509,9 +535,11 @@ describe("the Angular host", () => {
   // every file, clean ones included.
   it("reports nothing for a clean whole-file .mx page", () => {
     expect(
-      diagnoseDocument("<div>hi</div>\n", "file:///app/greeting.mx", {
-        host: "angular",
-      }),
+      diagnoseDocument(
+        "<div>hi</div>\n",
+        "file:///app/greeting.mx",
+        policy("angular"),
+      ),
     ).toEqual([]);
   });
 
@@ -520,7 +548,7 @@ describe("the Angular host", () => {
       diagnoseDocument(
         "<div>hi</div>\n",
         "file:///app/greeting.component.ng.mx",
-        { host: "angular" },
+        policy("angular"),
       ),
     ).toEqual([]);
   });
@@ -529,7 +557,7 @@ describe("the Angular host", () => {
     const diagnostics = diagnoseDocument(
       "<div>unclosed\n",
       "file:///app/broken.component.ng.mx",
-      { host: "angular" },
+      policy("angular"),
     );
     expect(
       diagnostics.filter((d) => d.severity === DiagnosticSeverity.Error),
@@ -540,20 +568,20 @@ describe("the Angular host", () => {
     "never compiles a .ng.mx under the %s host (file kind wins)",
     (host) => {
       expect(
-        diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", { host }),
+        diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", policy(host)),
       ).toEqual([]);
     },
   );
 
   it("matches .NG.mx case-insensitively, like the TS plugin", () => {
     expect(
-      diagnoseDocument("<@tags/>\n", "file:///app/X.NG.mx", { host: "html" }),
+      diagnoseDocument("<@tags/>\n", "file:///app/X.NG.mx", policy("html")),
     ).toEqual([]);
   });
 
   it("raises no Error for an unknown-host .ng.mx with a react dependency's policy", () => {
     expect(
-      diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", { host: "react" }),
+      diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", policy("react")),
     ).toEqual([]);
   });
 
@@ -561,7 +589,7 @@ describe("the Angular host", () => {
     const diagnostics = diagnoseDocument(
       "<div>hi</div>\n",
       "file:///app/greeting.mx",
-      { host: "angular" },
+      policy("angular"),
       undefined,
       "",
       undefined,
@@ -598,7 +626,7 @@ describe("an unknown mx.host", () => {
     const diagnostics = diagnoseDocument(
       "<@tags/>\n",
       "file:///app/x.component.ng.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       undefined,
@@ -615,7 +643,7 @@ describe("an unknown mx.host", () => {
     const diagnostics = diagnoseDocument(
       "<div>\n",
       "file:///app/page.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       undefined,
@@ -642,7 +670,7 @@ describe("custom tag template positions", () => {
     const diagnostics = diagnoseDocument(
       "<div>\n  <box/>\n</div>\n",
       "file:///app/page.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       // `<else>` with no preceding `<if>`: raised on the template's line 3.
@@ -664,7 +692,7 @@ describe("custom tag template positions", () => {
     diagnoseDocument(
       "<div>\n  <box/>\n</div>\n",
       "file:///app/page.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       template("<div>\n</div>\n<else>oops</else>\n"),
@@ -686,7 +714,7 @@ describe("custom tag template positions", () => {
     const diagnostics = diagnoseDocument(
       "<div>\n  <box>dropped</box>\n</div>\n",
       "file:///app/page.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       // No `<${input.content}/>`: the body the caller wrote goes nowhere.
@@ -711,7 +739,7 @@ describe("custom tag template positions", () => {
     const diagnostics = diagnoseDocument(
       "<div>\n  <box bad=1/>\n</div>\n",
       "file:///app/page.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       declared,
@@ -729,7 +757,7 @@ describe("custom tag template positions", () => {
       diagnoseDocument(
         "<div><box/></div>\n",
         "file:///app/page.mx",
-        { host: "html" },
+        policy("html"),
         undefined,
         "",
         template("<span>fine</span>"),
@@ -742,7 +770,7 @@ describe("custom tag template positions", () => {
     const diagnostics = diagnoseDocument(
       "<div>ok</div>\n",
       "file:///app/page.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       undefined,
@@ -803,7 +831,7 @@ describe("custom tag template positions", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=1/>\n",
       "file:///app/page.mx",
-      { host: "html", strict: true },
+      policy("html", true),
       undefined,
       "",
       undefined,
@@ -820,7 +848,7 @@ describe("custom tag template positions", () => {
       (diagnoseDocument as unknown as (...args: unknown[]) => unknown)(
         "<let/count=1/>\n",
         "file:///app/page.mx",
-        { host: "html", strict: true },
+        policy("html", true),
         undefined,
         "",
         undefined,
@@ -846,7 +874,7 @@ describe("diagnoseDocument given a file:// URI", () => {
         const diagnostics = diagnoseDocument(
           "<div>\n",
           pathToFileURL(path).href,
-          { host },
+          policy(host),
         );
         const error = diagnostics.find((d) => d.severity === 1);
         expect(error, JSON.stringify(diagnostics)).toBeDefined();
@@ -874,7 +902,7 @@ describe("host-policy message wording", () => {
     const diagnostics = diagnoseDocument(
       "<div>ok</div>\n",
       "file:///app/page.mx",
-      { host: "html" },
+      policy("html"),
       undefined,
       "",
       undefined,
@@ -902,7 +930,7 @@ describe("compiler code frame placement", () => {
     const [d] = diagnoseDocument(
       "<div>\n  <p>hi</p>\n",
       "file:///project/page.mx",
-      { host: "html" },
+      policy("html"),
     );
     expect(d?.message).toBe('Missing ending "div" tag');
     expect(d?.message).not.toMatch(frameLine);
@@ -932,10 +960,11 @@ describe("compiler code frame placement", () => {
   });
 
   it("leaves a message with no frame unchanged and adds no data", () => {
-    const [d] = diagnoseDocument("<let/count=1/>\n", "file:///project/App.mx", {
-      host: "html",
-      strict: true,
-    });
+    const [d] = diagnoseDocument(
+      "<let/count=1/>\n",
+      "file:///project/App.mx",
+      policy("html", true),
+    );
     expect(d?.message).toMatch(/let/i);
     expect(d?.message).not.toMatch(frameLine);
     expect(d?.data).toBeUndefined();
@@ -960,7 +989,7 @@ describe("a tag template that fails to parse", () => {
       const [d] = diagnoseDocument(
         page,
         "file:///app/page.mx",
-        { host },
+        policy(host),
         undefined,
         "",
         box(),
@@ -989,9 +1018,11 @@ describe("a tag template that fails to parse", () => {
   );
 
   it("keeps the document's own errors free of any `(in ...)` suffix", () => {
-    const [d] = diagnoseDocument("<div>\n", "file:///app/page.mx", {
-      host: "html",
-    });
+    const [d] = diagnoseDocument(
+      "<div>\n",
+      "file:///app/page.mx",
+      policy("html"),
+    );
     expect(d?.message).toBe('Missing ending "div" tag');
     expect(d?.relatedInformation).toBeUndefined();
   });

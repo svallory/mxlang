@@ -9,10 +9,68 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveHostPolicy, resolveHostPolicyDetailed } from "./host-policy.ts";
+import {
+  resolveTargetPolicy,
+  resolveTargetPolicyDetailed,
+} from "./host-policy.ts";
 import { scanCustomTags } from "./scan.ts";
+import {
+  createTargetLookup,
+  type TargetDescriptor,
+  type TargetLookup,
+} from "./target-descriptor.ts";
 
 const FIXTURES = join(import.meta.dirname, "fixtures/host-policy");
+
+/** One fixture descriptor, with whatever else the case needs. */
+function fixtureTarget(
+  name: string,
+  packageName: string,
+  extra: Partial<TargetDescriptor> = {},
+): TargetDescriptor {
+  return { descriptorVersion: 0, name, packageName, ...extra };
+}
+
+/**
+ * The fixture lookup every test in this file resolves through: seven targets
+ * shaped like the built-in set — a hostless one carrying two legacy
+ * `mx.host` values (one deprecated), six hosted ones, two with a file kind —
+ * and named so that nothing in this file can be mistaken for a real host.
+ *
+ * Core names no target and no host (decision 126), so a test that pinned the
+ * resolver against the repo's own seven would either reintroduce that list
+ * here or assert nothing. A fixture set of invented names says the stronger
+ * thing: the resolver answers for *whatever* is registered. The built-in set
+ * is pinned against these same rules in `@mxlang/target-registry`'s tests,
+ * where the real descriptors live.
+ */
+const lookup: TargetLookup = createTargetLookup(
+  [
+    fixtureTarget("page", "@t/page", {
+      legacyHostValues: [
+        { value: "page" },
+        { value: "oldpage", deprecated: true },
+      ],
+    }),
+    fixtureTarget("view-jsx", "@t/view", { host: { name: "view" } }),
+    fixtureTarget("unit-jsx", "@t/unit", {
+      host: {
+        name: "unit",
+        fileKinds: [{ segment: "u", diagnosticSource: "umx" }],
+      },
+    }),
+    fixtureTarget("atom-jsx", "@t/atom", { host: { name: "atom" } }),
+    fixtureTarget("vue-jsx", "@t/vue", { host: { name: "vue" } }),
+    fixtureTarget("edge-jsx", "@t/edge", { host: { name: "edge" } }),
+    fixtureTarget("grid-jsx", "@t/grid", {
+      host: {
+        name: "grid",
+        fileKinds: [{ segment: "g", diagnosticSource: "gmx" }],
+      },
+    }),
+  ],
+  { defaultTarget: "page" },
+);
 
 /**
  * One set of branch tests for the resolver, living with the resolver itself.
@@ -20,12 +78,13 @@ const FIXTURES = join(import.meta.dirname, "fixtures/host-policy");
  * function, and an editor and a `tsc` run disagreeing about which host owns a
  * file is the drift a second copy of these cases would invite.
  */
-describe("resolveHostPolicy", () => {
+describe("resolveTargetPolicy", () => {
   it("uses the package.json#mx field when present, walking up past a subdirectory with no package.json of its own", () => {
     const filePath = join(FIXTURES, "explicit-field/nested/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({
-      host: "astro",
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "view-jsx",
+      host: "view",
       strict: true,
     });
   });
@@ -33,28 +92,33 @@ describe("resolveHostPolicy", () => {
   it("falls back to the sole @mxlang/* host dependency when no #mx field is present", () => {
     const filePath = join(FIXTURES, "single-dependency/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "html" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "page" });
   });
 
-  it("resolves @mxlang/solid as the Solid host dependency", () => {
+  it("resolves @t/unit as the Solid host dependency", () => {
     const filePath = join(FIXTURES, "solid-dependency/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "solid" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "unit-jsx",
+      host: "unit",
+    });
   });
 
   it("falls back to the html default policy when neither signal is present", () => {
     const filePath = join(FIXTURES, "no-signal/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "html" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "page" });
   });
 
-  it("accepts 'translator' as a deprecated alias for 'html' and warns", () => {
+  it("accepts a deprecated legacy value as an alias for its target and warns", () => {
     const filePath = join(FIXTURES, "deprecated-alias/App.mx");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "html" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "page" });
+    // The warning names the deprecated value and the target it selects, both
+    // read off the lookup rather than written here.
     expect(warnSpy).toHaveBeenCalledWith(
-      "Warning: The 'translator' mx.host alias is deprecated and will be removed in a future release. Use 'html' instead.",
+      "Warning: The 'oldpage' mx.host alias is deprecated and will be removed in a future release. Use 'page' instead.",
     );
 
     warnSpy.mockRestore();
@@ -67,46 +131,58 @@ describe("resolveHostPolicy", () => {
     // falls through to the default host rather than failing loudly.
     const filePath = join(FIXTURES, "preact-explicit/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({
-      host: "preact",
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "atom-jsx",
+      host: "atom",
       strict: undefined,
     });
   });
 
-  it("resolves the Preact host from a lone @mxlang/preact dependency", () => {
+  it("resolves the Preact host from a lone @t/atom dependency", () => {
     const filePath = join(FIXTURES, "preact-dependency/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "preact" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "atom-jsx",
+      host: "atom",
+    });
   });
 
   it("resolves the React host from an explicit mx.host field", () => {
     const filePath = join(FIXTURES, "react-explicit/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({
-      host: "react",
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "vue-jsx",
+      host: "vue",
       strict: undefined,
     });
   });
 
-  it("resolves the React host from a lone @mxlang/react dependency", () => {
+  it("resolves the React host from a lone @t/vue dependency", () => {
     const filePath = join(FIXTURES, "react-dependency/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "react" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "vue-jsx",
+      host: "vue",
+    });
   });
 
   it("resolves the Hono host from an explicit mx.host field", () => {
     const filePath = join(FIXTURES, "hono-explicit/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({
-      host: "hono",
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "edge-jsx",
+      host: "edge",
       strict: undefined,
     });
   });
 
-  it("resolves the Hono host from a lone @mxlang/hono dependency", () => {
+  it("resolves the Hono host from a lone @t/edge dependency", () => {
     const filePath = join(FIXTURES, "hono-dependency/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "hono" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "edge-jsx",
+      host: "edge",
+    });
   });
 
   it("falls back to the default policy when two host dependencies are present", () => {
@@ -115,28 +191,31 @@ describe("resolveHostPolicy", () => {
     // default applies. An explicit `mx.host` is the way to disambiguate.
     const filePath = join(FIXTURES, "two-dependencies/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "html" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "page" });
   });
 
   it("ignores a host listed only in peerDependencies (decision 124)", () => {
     const filePath = join(FIXTURES, "peer-only/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "html" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "page" });
   });
 
   it("takes the host from dependencies when another host is only a peer (decision 124)", () => {
     // A counted peer would make two hosts and collapse to html.
     const filePath = join(FIXTURES, "peer-and-dependency/App.mx");
 
-    expect(resolveHostPolicy(filePath)).toEqual({ host: "solid" });
+    expect(resolveTargetPolicy(filePath, lookup)).toEqual({
+      target: "unit-jsx",
+      host: "unit",
+    });
   });
 
   it("falls back to the default policy when the walk reaches the filesystem root with no package.json", () => {
     // The walk must terminate at the root rather than looping forever on
     // `dirname("/") === "/"`. A path with no `package.json` anywhere above it
     // is the case that proves the stop condition fires.
-    expect(resolveHostPolicy("/nonexistent-mx-root/App.mx")).toEqual({
-      host: "html",
+    expect(resolveTargetPolicy("/nonexistent-mx-root/App.mx", lookup)).toEqual({
+      target: "page",
     });
   });
 });
@@ -146,7 +225,7 @@ describe("resolveHostPolicy", () => {
  * builds its tree in a temp dir: a committed malformed `package.json` would
  * trip every tool that globs the repo, and `node_modules` is not committable.
  */
-describe("resolveHostPolicyDetailed walk edge cases", () => {
+describe("resolveTargetPolicyDetailed walk edge cases", () => {
   const roots: string[] = [];
   afterEach(() => {
     for (const root of roots.splice(0)) {
@@ -165,21 +244,22 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
     return root;
   }
 
-  const ANGULAR = JSON.stringify({ dependencies: { "@mxlang/angular": "1" } });
+  const ANGULAR = JSON.stringify({ dependencies: { "@t/grid": "1" } });
 
   describe("malformed package.json", () => {
     it("stops at it with the html default instead of climbing into an unrelated ancestor", () => {
       const root = tree({
         "package.json": ANGULAR,
-        "app/package.json": '{ "dependencies": { "@mxlang/solid": "1", }}',
+        "app/package.json": '{ "dependencies": { "@t/unit": "1", }}',
         "app/src/a.mx": "",
       });
 
-      const { policy, diagnostics } = resolveHostPolicyDetailed(
+      const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "app/src/a.mx"),
+        lookup,
       );
 
-      expect(policy).toEqual({ host: "html" });
+      expect(policy).toEqual({ target: "page" });
       expect(diagnostics).toHaveLength(1);
     });
 
@@ -191,7 +271,10 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       });
       const file = join(root, "app/src/a.mx");
 
-      const [diagnostic] = resolveHostPolicyDetailed(file).diagnostics;
+      const [diagnostic] = resolveTargetPolicyDetailed(
+        file,
+        lookup,
+      ).diagnostics;
 
       expect(diagnostic?.file).toBe(join(root, "app/package.json"));
       expect(diagnostic?.message).toContain("could not be parsed as JSON");
@@ -200,16 +283,17 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
         diagnostic?.message.startsWith(join(root, "app/package.json")),
       ).toBe(true);
       expect(diagnostic?.message).toContain(
-        `before, its host was taken from ${join(root, "package.json")} ("angular")`,
+        `before, its host was taken from ${join(root, "package.json")} ("grid")`,
       );
-      expect(diagnostic?.message).toContain('default "html" host');
+      expect(diagnostic?.message).toContain('default "page" host');
     });
 
     it("omits the ancestor clause when there is no ancestor package.json", () => {
       const root = tree({ "package.json": "{", "a.mx": "" });
 
-      const [diagnostic] = resolveHostPolicyDetailed(
+      const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
+        lookup,
       ).diagnostics;
 
       expect(diagnostic?.file).toBe(join(root, "package.json"));
@@ -224,8 +308,9 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
         "mid/app/a.mx": "",
       });
 
-      const [diagnostic] = resolveHostPolicyDetailed(
+      const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "mid/app/a.mx"),
+        lookup,
       ).diagnostics;
 
       expect(diagnostic?.file).toBe(join(root, "mid/app/package.json"));
@@ -237,7 +322,7 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       ["empty", ""],
       ["null", "null"],
       ["an array", "[]"],
-      ["a string", '"solid"'],
+      ["a string", '"unit"'],
     ])("treats %s contents as broken", (_name, text) => {
       const root = tree({
         "package.json": ANGULAR,
@@ -245,11 +330,12 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
         "app/a.mx": "",
       });
 
-      const { policy, diagnostics } = resolveHostPolicyDetailed(
+      const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "app/a.mx"),
+        lookup,
       );
 
-      expect(policy).toEqual({ host: "html" });
+      expect(policy).toEqual({ target: "page" });
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.file).toBe(join(root, "app/package.json"));
     });
@@ -257,8 +343,9 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
     it("says a non-object must be a JSON object, not that it failed to parse", () => {
       const root = tree({ "package.json": "[]", "a.mx": "" });
 
-      const [diagnostic] = resolveHostPolicyDetailed(
+      const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
+        lookup,
       ).diagnostics;
 
       expect(diagnostic?.message).toContain("must contain a JSON object");
@@ -268,8 +355,9 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       const text = '{\n  "a": 1,\n}\n';
       const root = tree({ "package.json": text, "a.mx": "" });
 
-      const [diagnostic] = resolveHostPolicyDetailed(
+      const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
+        lookup,
       ).diagnostics;
 
       // V8 names the position, JavaScriptCore does not; nothing may rely on it.
@@ -284,14 +372,16 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
     it("recovers as soon as the file is fixed (the read is mtime-keyed)", () => {
       const root = tree({ "package.json": "{", "a.mx": "" });
       const file = join(root, "a.mx");
-      expect(resolveHostPolicyDetailed(file).diagnostics).toHaveLength(1);
+      expect(
+        resolveTargetPolicyDetailed(file, lookup).diagnostics,
+      ).toHaveLength(1);
 
       writeFileSync(join(root, "package.json"), ANGULAR);
       const later = new Date(Date.now() + 5000);
       utimesSync(join(root, "package.json"), later, later);
 
-      expect(resolveHostPolicyDetailed(file)).toEqual({
-        policy: { host: "angular" },
+      expect(resolveTargetPolicyDetailed(file, lookup)).toEqual({
+        policy: { target: "grid-jsx", host: "grid" },
         diagnostics: [],
       });
     });
@@ -299,19 +389,21 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
     it("sees an edit that pins the mtime: a pinned-mtime rewrite to another host, and to broken JSON", () => {
       const pinned = new Date("2020-01-01T00:00:00Z");
       const pkg = (host: string) => JSON.stringify({ mx: { host } });
-      const root = tree({ "package.json": pkg("solid"), "a.mx": "" });
+      const root = tree({ "package.json": pkg("unit"), "a.mx": "" });
       const manifest = join(root, "package.json");
       const file = join(root, "a.mx");
       utimesSync(manifest, pinned, pinned);
-      expect(resolveHostPolicy(file).host).toBe("solid");
+      expect(resolveTargetPolicy(file, lookup).target).toBe("unit-jsx");
 
-      writeFileSync(manifest, pkg("react"));
+      writeFileSync(manifest, pkg("vue"));
       utimesSync(manifest, pinned, pinned);
-      expect(resolveHostPolicy(file).host).toBe("react");
+      expect(resolveTargetPolicy(file, lookup).target).toBe("vue-jsx");
 
       writeFileSync(manifest, "{ bad");
       utimesSync(manifest, pinned, pinned);
-      expect(resolveHostPolicyDetailed(file).diagnostics).toHaveLength(1);
+      expect(
+        resolveTargetPolicyDetailed(file, lookup).diagnostics,
+      ).toHaveLength(1);
     });
 
     it("agrees with scanCustomTags about which package.json is nearest", () => {
@@ -322,8 +414,11 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       });
       const file = join(root, "app/a.mx");
 
-      const scan = scanCustomTags(file);
-      const [diagnostic] = resolveHostPolicyDetailed(file).diagnostics;
+      const scan = scanCustomTags(file, { targets: lookup });
+      const [diagnostic] = resolveTargetPolicyDetailed(
+        file,
+        lookup,
+      ).diagnostics;
 
       expect(scan.packageFiles).toEqual([join(root, "app/package.json")]);
       expect(scan.diagnostics[0]?.file).toBe(diagnostic?.file);
@@ -338,18 +433,18 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       });
 
       const message = (name: string) =>
-        resolveHostPolicyDetailed(join(root, "app", name)).diagnostics[0]
-          ?.message;
+        resolveTargetPolicyDetailed(join(root, "app", name), lookup)
+          .diagnostics[0]?.message;
 
       expect(message("a.mx")).toBe(message("b.mx"));
     });
 
-    it("keeps resolveHostPolicy API-compatible: same policy, nothing thrown", () => {
+    it("keeps resolveTargetPolicy API-compatible: same policy, nothing thrown", () => {
       const root = tree({ "package.json": ANGULAR, "app/package.json": "{" });
       const file = join(root, "app/a.mx");
 
-      expect(resolveHostPolicy(file)).toEqual(
-        resolveHostPolicyDetailed(file).policy,
+      expect(resolveTargetPolicy(file, lookup)).toEqual(
+        resolveTargetPolicyDetailed(file, lookup).policy,
       );
     });
   });
@@ -359,47 +454,52 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       const root = tree({
         "package.json": JSON.stringify({
           workspaces: ["packages/*"],
-          devDependencies: { "@mxlang/solid": "1" },
+          devDependencies: { "@t/unit": "1" },
         }),
         "packages/web/src/a.mx": "",
       });
 
       expect(
-        resolveHostPolicyDetailed(join(root, "packages/web/src/a.mx")),
-      ).toEqual({ policy: { host: "solid" }, diagnostics: [] });
+        resolveTargetPolicyDetailed(
+          join(root, "packages/web/src/a.mx"),
+          lookup,
+        ),
+      ).toEqual({
+        policy: { target: "unit-jsx", host: "unit" },
+        diagnostics: [],
+      });
     });
 
     it("lets a member opt out by having its own package.json", () => {
       const root = tree({
         "package.json": JSON.stringify({
-          devDependencies: { "@mxlang/solid": "1" },
+          devDependencies: { "@t/unit": "1" },
         }),
         "packages/web/package.json": JSON.stringify({
-          dependencies: { "@mxlang/react": "1" },
+          dependencies: { "@t/vue": "1" },
         }),
         "packages/web/src/a.mx": "",
         "packages/docs/src/b.mx": "",
       });
 
-      expect(resolveHostPolicy(join(root, "packages/web/src/a.mx"))).toEqual({
-        host: "react",
-      });
-      expect(resolveHostPolicy(join(root, "packages/docs/src/b.mx"))).toEqual({
-        host: "solid",
-      });
+      expect(
+        resolveTargetPolicy(join(root, "packages/web/src/a.mx"), lookup),
+      ).toEqual({ target: "vue-jsx", host: "vue" });
+      expect(
+        resolveTargetPolicy(join(root, "packages/docs/src/b.mx"), lookup),
+      ).toEqual({ target: "unit-jsx", host: "unit" });
     });
 
     it("lets a member pin a host with mx.host and an empty-deps package.json", () => {
       const root = tree({
         "package.json": ANGULAR,
-        "packages/web/package.json": JSON.stringify({ mx: { host: "html" } }),
+        "packages/web/package.json": JSON.stringify({ mx: { target: "page" } }),
         "packages/web/a.mx": "",
       });
 
-      expect(resolveHostPolicy(join(root, "packages/web/a.mx"))).toEqual({
-        host: "html",
-        strict: undefined,
-      });
+      expect(
+        resolveTargetPolicy(join(root, "packages/web/a.mx"), lookup),
+      ).toEqual({ target: "page", strict: undefined });
     });
   });
 
@@ -411,8 +511,11 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       });
 
       expect(
-        resolveHostPolicyDetailed(join(root, "node_modules/lib/dist/a.mx")),
-      ).toEqual({ policy: { host: "html" }, diagnostics: [] });
+        resolveTargetPolicyDetailed(
+          join(root, "node_modules/lib/dist/a.mx"),
+          lookup,
+        ),
+      ).toEqual({ policy: { target: "page" }, diagnostics: [] });
     });
 
     it("stops at node_modules for a scoped package too", () => {
@@ -422,36 +525,39 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       });
 
       expect(
-        resolveHostPolicyDetailed(join(root, "node_modules/@scope/lib/a.mx")),
-      ).toEqual({ policy: { host: "html" }, diagnostics: [] });
+        resolveTargetPolicyDetailed(
+          join(root, "node_modules/@scope/lib/a.mx"),
+          lookup,
+        ),
+      ).toEqual({ policy: { target: "page" }, diagnostics: [] });
     });
 
     it("still reads the installed package's own package.json when it has one", () => {
       const root = tree({
         "package.json": ANGULAR,
         "node_modules/lib/package.json": JSON.stringify({
-          dependencies: { "@mxlang/solid": "1" },
+          dependencies: { "@t/unit": "1" },
         }),
         "node_modules/lib/src/a.mx": "",
       });
 
       expect(
-        resolveHostPolicy(join(root, "node_modules/lib/src/a.mx")),
-      ).toEqual({ host: "solid" });
+        resolveTargetPolicy(join(root, "node_modules/lib/src/a.mx"), lookup),
+      ).toEqual({ target: "unit-jsx", host: "unit" });
     });
 
     it("finds a package.json below a node_modules ancestor before reaching the boundary", () => {
       const root = tree({
         "package.json": ANGULAR,
         "node_modules/host/app/package.json": JSON.stringify({
-          dependencies: { "@mxlang/preact": "1" },
+          dependencies: { "@t/atom": "1" },
         }),
         "node_modules/host/app/a.mx": "",
       });
 
       expect(
-        resolveHostPolicy(join(root, "node_modules/host/app/a.mx")),
-      ).toEqual({ host: "preact" });
+        resolveTargetPolicy(join(root, "node_modules/host/app/a.mx"), lookup),
+      ).toEqual({ target: "atom-jsx", host: "atom" });
     });
 
     it("does not affect a project that merely has node_modules next to its package.json", () => {
@@ -461,36 +567,40 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
         "src/a.mx": "",
       });
 
-      expect(resolveHostPolicy(join(root, "src/a.mx"))).toEqual({
-        host: "angular",
+      expect(resolveTargetPolicy(join(root, "src/a.mx"), lookup)).toEqual({
+        target: "grid-jsx",
+        host: "grid",
       });
     });
   });
 
   describe("unknown mx.host", () => {
-    const SOLID_DEP = { "@mxlang/solid": "1" };
+    const SOLID_DEP = { "@t/unit": "1" };
 
     it("warns with the valid hosts and a did-you-mean, then falls back to the dependency rule", () => {
       const root = tree({
         "package.json": JSON.stringify({
-          mx: { host: "solidd" },
+          mx: { host: "unitt" },
           dependencies: SOLID_DEP,
         }),
         "a.mx": "",
       });
 
-      const { policy, diagnostics } = resolveHostPolicyDetailed(
+      const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
+        lookup,
       );
 
-      expect(policy).toEqual({ host: "solid" });
+      expect(policy).toEqual({ target: "unit-jsx", host: "unit" });
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.file).toBe(join(root, "package.json"));
-      expect(diagnostics[0]?.message).toContain('unknown mx.host "solidd"');
+      expect(diagnostics[0]?.message).toContain('unknown mx.host "unitt"');
+      // Every value `mx.host` accepts but the deprecated one, in registration
+      // order, then the deprecated one named apart.
       expect(diagnostics[0]?.message).toContain(
-        "html, astro, solid, preact, react, hono, angular",
+        "valid hosts: page, view, unit, atom, vue, edge, grid ('oldpage' is a deprecated alias for page)",
       );
-      expect(diagnostics[0]?.message).toContain('Did you mean "solid"?');
+      expect(diagnostics[0]?.message).toContain('Did you mean "unit"?');
     });
 
     it("offers no suggestion when nothing is within two edits", () => {
@@ -499,18 +609,19 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
         "a.mx": "",
       });
 
-      const { policy, diagnostics } = resolveHostPolicyDetailed(
+      const { policy, diagnostics } = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
+        lookup,
       );
 
-      expect(policy).toEqual({ host: "html" });
+      expect(policy).toEqual({ target: "page" });
       expect(diagnostics[0]?.message).toContain('unknown mx.host "banana"');
       expect(diagnostics[0]?.message).not.toContain("Did you mean");
     });
 
-    it("suggests across case (Solid -> solid) and at the edit-distance limit", () => {
+    it("suggests across case (Unit -> unit) and at the edit-distance limit", () => {
       const at = (value: string) =>
-        resolveHostPolicyDetailed(
+        resolveTargetPolicyDetailed(
           join(
             tree({
               "package.json": JSON.stringify({ mx: { host: value } }),
@@ -518,26 +629,28 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
             }),
             "a.mx",
           ),
+          lookup,
         ).diagnostics[0]?.message;
 
-      expect(at("Solid")).toContain('Did you mean "solid"?');
-      expect(at("reakt")).toContain('Did you mean "react"?');
-      expect(at("reaktion")).not.toContain("Did you mean");
+      expect(at("Unit")).toContain('Did you mean "unit"?');
+      expect(at("edgg")).toContain('Did you mean "edge"?');
+      expect(at("reaction")).not.toContain("Did you mean");
     });
 
     it("positions the diagnostic at the host value, skipping an earlier nested host key", () => {
       const text = [
         "{",
         '  "mx": {',
-        '    "angular": { "host": "solidd" },',
+        '    "angular": { "host": "unitt" },',
         '    "host": "solidd"',
         "  }",
         "}",
       ].join("\n");
       const root = tree({ "package.json": text, "a.mx": "" });
 
-      const [diagnostic] = resolveHostPolicyDetailed(
+      const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
+        lookup,
       ).diagnostics;
 
       // The nested `angular.host` also says "solidd"; the first `host` key
@@ -553,8 +666,9 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
         "a.mx": "",
       });
 
-      const [diagnostic] = resolveHostPolicyDetailed(
+      const [diagnostic] = resolveTargetPolicyDetailed(
         join(root, "a.mx"),
+        lookup,
       ).diagnostics;
 
       expect(diagnostic?.message).toContain("unknown mx.host 5");
@@ -565,8 +679,8 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {
         for (const mx of [
-          { host: "react" },
-          { host: "translator" },
+          { target: "vue-jsx", host: "vue" },
+          { target: "page" },
           { strict: true },
         ]) {
           const root = tree({
@@ -574,7 +688,7 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
             "a.mx": "",
           });
           expect(
-            resolveHostPolicyDetailed(join(root, "a.mx")).diagnostics,
+            resolveTargetPolicyDetailed(join(root, "a.mx"), lookup).diagnostics,
           ).toEqual([]);
         }
       } finally {
@@ -584,13 +698,16 @@ describe("resolveHostPolicyDetailed walk edge cases", () => {
 
     it("leaves the two-host-dependencies fallback exactly as it was", () => {
       expect(
-        resolveHostPolicyDetailed(join(FIXTURES, "two-dependencies/App.mx")),
-      ).toEqual({ policy: { host: "html" }, diagnostics: [] });
+        resolveTargetPolicyDetailed(
+          join(FIXTURES, "two-dependencies/App.mx"),
+          lookup,
+        ),
+      ).toEqual({ policy: { target: "page" }, diagnostics: [] });
     });
   });
 });
 
-describe("HostPolicyDiagnostic code", () => {
+describe("TargetPolicyDiagnostic code", () => {
   const roots: string[] = [];
   afterEach(() => {
     for (const root of roots.splice(0)) {
@@ -607,8 +724,9 @@ describe("HostPolicyDiagnostic code", () => {
   }
 
   it('is "unknown-host" for an mx.host naming no host', () => {
-    const { diagnostics } = resolveHostPolicyDetailed(
-      project(JSON.stringify({ mx: { host: "vue" } })),
+    const { diagnostics } = resolveTargetPolicyDetailed(
+      project(JSON.stringify({ mx: { host: "nonesuch" } })),
+      lookup,
     );
 
     expect(diagnostics.map((d) => d.code)).toEqual(["unknown-host"]);
@@ -618,14 +736,15 @@ describe("HostPolicyDiagnostic code", () => {
     ["unparseable JSON", "{ not json"],
     ["a non-object manifest", "[]"],
   ])('is "malformed-package-json" for %s', (_name, text) => {
-    const { diagnostics } = resolveHostPolicyDetailed(project(text));
+    const { diagnostics } = resolveTargetPolicyDetailed(project(text), lookup);
 
     expect(diagnostics.map((d) => d.code)).toEqual(["malformed-package-json"]);
   });
 
   it("raises none for a valid host", () => {
-    const { diagnostics } = resolveHostPolicyDetailed(
-      project(JSON.stringify({ mx: { host: "html" } })),
+    const { diagnostics } = resolveTargetPolicyDetailed(
+      project(JSON.stringify({ mx: { target: "page" } })),
+      lookup,
     );
 
     expect(diagnostics).toEqual([]);

@@ -1,6 +1,6 @@
 {
   "name": "hono-explicit-fixture",
   "mx": {
-    "host": "hono"
+    "host": "edge"
   }
 }

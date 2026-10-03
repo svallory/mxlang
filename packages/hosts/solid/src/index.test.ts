@@ -15,7 +15,7 @@ import typescriptPreset from "@babel/preset-typescript";
 import { type CustomTag, readCalleeInput } from "@mxlang/core";
 import { parse as parseMxFile } from "@mxlang/parser";
 import { describe, expect, it } from "vitest";
-import { compileSolidMx, compileSolidUnit } from "./index.ts";
+import { compileSolidMx, compileSolidUnit, solidTargets } from "./index.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TAGS = join(HERE, "fixtures", "tags");
@@ -267,7 +267,7 @@ describe("Solid callee Input reader", () => {
     expect(
       readCalleeInput(
         { kind: "name", name: "NoInputControl", resolvedPath: path },
-        { importer: join(HERE, "fixture.mx") },
+        { importer: join(HERE, "fixture.mx"), targets: solidTargets },
       ),
     ).toEqual({
       input: { kind: "none", path },
@@ -283,7 +283,7 @@ describe("Solid callee Input reader", () => {
     expect(
       readCalleeInput(
         { kind: "name", name: "TypedInput", resolvedPath: path },
-        { importer: join(HERE, "fixture.mx") },
+        { importer: join(HERE, "fixture.mx"), targets: solidTargets },
       ),
     ).toEqual({
       input: {
@@ -321,7 +321,7 @@ describe("Solid callee Input reader", () => {
       expect(
         readCalleeInput(
           { kind: "name", name: "Card", resolvedPath: path },
-          { importer: join(HERE, "fixture.mx") },
+          { importer: join(HERE, "fixture.mx"), targets: solidTargets },
         ),
       ).toEqual({
         input: { kind: "none", path },
@@ -338,7 +338,7 @@ describe("Solid callee Input reader", () => {
     expect(
       readCalleeInput(
         { kind: "name", name: "Card", resolvedPath: path },
-        { importer: join(HERE, "fixture.mx") },
+        { importer: join(HERE, "fixture.mx"), targets: solidTargets },
       ),
     ).toEqual({
       input: {
@@ -392,7 +392,7 @@ describe("Solid callee Input reader", () => {
       expect(
         readCalleeInput(
           { kind: "name", name: "Card", resolvedPath: path },
-          { importer: join(HERE, "fixture.mx") },
+          { importer: join(HERE, "fixture.mx"), targets: solidTargets },
         ),
       ).toEqual({
         input: {

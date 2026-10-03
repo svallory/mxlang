@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (refactor/target-open-set, decisions 129 and 132):** host policy and scanning go through `@mxlang/target-registry`'s wrappers over the built-in lookup (a dynamic import, so the plugin's config-loading discipline is unchanged), and `mx.tags[].hosts` is matched on `hostFilterKey(policy.target)` — the same string as before for every built-in. Every compile carries the built-in lookup. An unknown bare word in `mx.tags[].hosts` still warns through `warn()`; a package specifier no longer does.
+
 - **Changed (amx-to-astro-mx, decision 134):** `x.astro.mx`, Astro's template kind, is declined by `mx()` (it joins the foreign-extension guard), so a registered `.mx` does not claim it.
 
 - A Marko mismatched-closing-tag error now reports the opener's position in its reason (`… opening "p" tag at 3:3`), through core. Test expectation updated; no plugin code changed.

@@ -8,6 +8,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TargetPolicy } from "@mxlang/core";
+import { defaultTarget, hostOf, hostTarget } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createMessageConnection,
@@ -82,6 +84,22 @@ function nextDiagnostics(
       },
     );
   });
+}
+
+/**
+ * A policy for `host` as the built-in lookup resolves it: the target that host
+ * selects, its host name when it has one, and the `strict` flag. Written
+ * through the registry rather than as a literal `{ host }`, because the policy
+ * names a target first (decisions 129/132) and `html` is a target with no
+ * host — its legacy `mx.host` value is what selects it.
+ */
+function policy(host: string, strict?: boolean): TargetPolicy {
+  const target = hostTarget(host)?.target ?? defaultTarget();
+  return {
+    target,
+    host: hostOf(target),
+    ...(strict === undefined ? {} : { strict }),
+  };
 }
 
 describe("stdio server (e2e)", () => {

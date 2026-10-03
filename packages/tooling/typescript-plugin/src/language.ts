@@ -8,17 +8,20 @@ import {
   readAngularConfig,
 } from "@mxlang/angular";
 import {
-  type HostPolicyDiagnostic,
-  hostModuleSegment,
   type MxWarning,
   reportScanDiagnostics,
-  scanCached,
+  type TargetPolicyDiagnostic,
   TranslateError,
   withCalleeInputSources,
 } from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
 import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
 import { compileSolidMx } from "@mxlang/solid";
+import {
+  builtinLookup,
+  hostModuleSegment,
+  scanCached,
+} from "@mxlang/target-registry";
 import type {
   CodeInformation,
   CodeMapping,
@@ -28,7 +31,7 @@ import type {
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
-import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
+import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 
 /**
  * Adapts `compileSolidMx`'s own `(source, options)` signature to the
@@ -36,7 +39,7 @@ import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
  * this host, so every `.solid.mx` caller supplies it explicitly.
  */
 export const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
-  compileSolidMx(source, rest);
+  compileSolidMx(source, { ...rest, targets: builtinLookup() });
 
 export const SOLID_MX_EXTENSION = "solid.mx";
 export const SOLID_MX_LANGUAGE_ID = "solidmx";
@@ -69,7 +72,7 @@ export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
    * malformed `package.json`). Every plugin that resolves a host implements
    * it: `.mx`, `.solid.mx`, `.ng.mx` and `.astro.mx`.
    */
-  getHostPolicyDiagnostics?(fileName?: string): HostPolicyDiagnostic[];
+  getTargetPolicyDiagnostics?(fileName?: string): TargetPolicyDiagnostic[];
 }
 
 export interface SolidMxLanguagePlugin extends MxDiagnosticLanguagePlugin {
@@ -102,7 +105,7 @@ export function createSolidMxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
   const reportedScanDiagnostics = new Set<string>();
-  const hostPolicies = createHostPolicyRecorder();
+  const hostPolicies = createTargetPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -141,7 +144,11 @@ export function createSolidMxLanguagePlugin(
             const warnings: MxWarning[] = [];
             const printed = print(source, fileName, {
               mxRegionCompile: (input) =>
-                compileSolidMx(input.source, { ...input, warnings }),
+                compileSolidMx(input.source, {
+                  ...input,
+                  warnings,
+                  targets: builtinLookup(),
+                }),
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
                 : undefined),
@@ -212,7 +219,7 @@ export function createSolidMxLanguagePlugin(
       return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
-    getHostPolicyDiagnostics(fileName) {
+    getTargetPolicyDiagnostics(fileName) {
       return hostPolicies.get(fileName);
     },
 
@@ -307,7 +314,7 @@ export function createNgMxLanguagePlugin(
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const reportedScanDiagnostics = new Set<string>();
-  const hostPolicies = createHostPolicyRecorder();
+  const hostPolicies = createTargetPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -362,6 +369,7 @@ export function createNgMxLanguagePlugin(
         const result = compileNgMx(source, fileName, {
           customTags: scan.customTags,
           tagSelectorPrefix,
+          targets: builtinLookup(),
         });
         syntaxErrors.delete(fileName);
         if (options.retainCompiled || options.onCompiled) {
@@ -421,7 +429,7 @@ export function createNgMxLanguagePlugin(
       return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
-    getHostPolicyDiagnostics(fileName) {
+    getTargetPolicyDiagnostics(fileName) {
       return hostPolicies.get(fileName);
     },
 
@@ -1245,7 +1253,7 @@ function equalLength(
   return length;
 }
 
-/** `.ng.mx` by file kind (core's `hostModuleSegment`), case-insensitively. */
+/** `.ng.mx` by file kind (core's `hostModuleSegment`, over the built-in set), case-insensitively. */
 export function isNgMx(fileName: string): boolean {
   return hostModuleSegment(basename(fileName).toLowerCase()) === "ng";
 }

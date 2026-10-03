@@ -14,6 +14,7 @@ import { getCustomTags } from "@mxlang/core";
 import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import { compileNgMx } from "../src/ng-mx.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -40,7 +41,10 @@ function compile(source: string) {
   mkdirSync(join(dir, "src"));
   const file = join(dir, "src", "x.component.ng.mx");
   writeFileSync(file, source);
-  const customTags = getCustomTags(file, { host: "angular" });
+  const customTags = getCustomTags(file, {
+    host: "angular",
+    targets: angularOwnTargets,
+  });
   return compileNgMx(source, file, { customTags });
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "react-dependency-fixture",
   "dependencies": {
-    "@mxlang/react": "0.1.0"
+    "@t/vue": "0.1.0"
   }
 }

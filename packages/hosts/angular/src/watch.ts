@@ -17,7 +17,7 @@ import {
   statSync,
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { scanCached } from "@mxlang/core";
+import { scanCached, type TargetLookup } from "@mxlang/core";
 import {
   compileOne,
   outputPathFor,
@@ -26,6 +26,7 @@ import {
 } from "./build.ts";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { discoverFiles, isInside, type RoutedFile } from "./discover.ts";
+import { angularOwnTargets } from "./own-targets.ts";
 import { positionSuffix } from "./position.ts";
 
 export interface WatchHandle {
@@ -47,6 +48,15 @@ export interface WatchOptions {
   debounceMs?: number;
   /** Called once per write/skip/error line, in the exact text `mx-angular watch`'s terminal output uses. */
   onLine?: (line: string) => void;
+  /**
+   * The registered targets this watcher scans and compiles under (decisions
+   * 129 and 132). Defaults to this package's own descriptor, which is what a
+   * plain `mx-angular watch` wants; a caller that already holds the built-in
+   * registry's lookup passes it, so a foreign file kind under `tags/` is
+   * recognised as such rather than as an uncallable dotted name (design note
+   * §5.1, rule (c)).
+   */
+  targets?: TargetLookup;
 }
 
 const DEBOUNCE_MS_DEFAULT = 50;
@@ -75,6 +85,7 @@ export function startWatch(
 ): WatchHandle {
   const debounceMs = options.debounceMs ?? DEBOUNCE_MS_DEFAULT;
   const onLine = options.onLine ?? (() => {});
+  const targets = options.targets ?? angularOwnTargets;
   const resolvedProjectDir = resolve(projectDir);
 
   // Every output path this watcher itself has written (round 1 R-b): an
@@ -198,7 +209,7 @@ export function startWatch(
    * serves stale output).
    */
   function recordDeps(pagePath: string, usedTagNames: string[]): void {
-    const scan = scanCached(pagePath, { host: "angular" });
+    const scan = scanCached(pagePath, { host: "angular", targets });
     const tagPaths = new Set<string>();
     const visited = new Set<string>();
 
@@ -247,7 +258,7 @@ export function startWatch(
   }
 
   function rebuildOne(routed: RoutedFile, config: AngularConfig): void {
-    const result = compileOne(routed, config, knownOutputs);
+    const result = compileOne(routed, config, knownOutputs, targets);
     for (const line of result.lines) onLine(line);
     recordDeps(routed.path, result.usedTags);
   }
@@ -287,7 +298,7 @@ export function startWatch(
     const config = readConfigOrKeepLast();
     if (!config) return; // package.json has never read cleanly; nothing to rebuild yet.
     const { files, overlapWarnings, diagnostics, tagDirectories } =
-      discoverFiles(projectDir, config);
+      discoverFiles(projectDir, config, targets);
     for (const path of overlapWarnings) {
       onLine(
         formatMessage("warning", {
@@ -330,7 +341,7 @@ export function startWatch(
             : routed.kind === "tag"
               ? config.tagExtension
               : config.pageExtension;
-        const outputPath = outputPathFor(path, extension);
+        const outputPath = outputPathFor(path, extension, targets);
         onLine(
           `${outputPath} warning: output for ${path} is orphaned (source removed; onError=${config.onError} leaves it in place)`,
         );
@@ -342,7 +353,7 @@ export function startWatch(
     dependents.clear();
     for (const f of files) {
       if (f.kind === "tag") {
-        const result = compileOne(f, config, knownOutputs);
+        const result = compileOne(f, config, knownOutputs, targets);
         for (const line of result.lines) onLine(line);
         continue;
       }

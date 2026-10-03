@@ -5,8 +5,63 @@
         "policy": {
           "host": "html"
         },
-        "diagnostics": [],
-        "related": [],
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "<root>/tags-icon-small/tags/icon.small.mx:1:1: `icon.small.mx` cannot be called as a tag: `<icon.small>` parses as tag `icon` with class `small`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/tags-icon-small/tags/icon.small.mx",
+                  "range": {
+                    "start": {
+                      "line": 0,
+                      "character": 0
+                    },
+                    "end": {
+                      "line": 0,
+                      "character": 1
+                    }
+                  }
+                },
+                "message": "`icon.small.mx` cannot be called as a tag: `<icon.small>` parses as tag `icon` with class `small`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/tags-icon-small/tags/icon.small.mx",
+            "diagnostics": [
+              {
+                "severity": 2,
+                "source": "mxlang",
+                "message": "`icon.small.mx` cannot be called as a tag: `<icon.small>` parses as tag `icon` with class `small`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot.",
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 0
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 1
+                  }
+                }
+              }
+            ]
+          }
+        ],
         "dependencies": [],
         "unexpected": []
       },
@@ -16,12 +71,16 @@
         "mappings": [],
         "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
-        "logged": []
+        "logged": [
+          "@mxlang/typescript-plugin: <root>/tags-icon-small/tags/icon.small.mx: `icon.small.mx` cannot be called as a tag: `<icon.small>` parses as tag `icon` with class `small`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+        ]
       },
       "vite": {
         "code": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "map": null,
-        "warnings": []
+        "warnings": [
+          "@mxlang/vite-plugin: <root>/tags-icon-small/tags/icon.small.mx: `icon.small.mx` cannot be called as a tag: `<icon.small>` parses as tag `icon` with class `small`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+        ]
       }
     }
   },

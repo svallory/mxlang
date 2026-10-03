@@ -21,10 +21,11 @@ import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import {
   type Ctx,
+  isTranslateError,
   type MxWarning,
   type Node,
   newCtx,
-  TranslateError,
+  type TranslateError,
 } from "./core.ts";
 import {
   type CustomTag,
@@ -36,6 +37,7 @@ import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
 import { lower } from "./lower.ts";
 import { hintParseError } from "./parse-error-hints.ts";
+import type { TargetLookup } from "./target-descriptor.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -93,6 +95,15 @@ export interface TranslatorOptions {
    * bundler sees instead of falling back with a stale-shape warning.
    */
   resolveImport?: (specifier: string, importer: string) => string | undefined;
+  /**
+   * The registered targets this compile runs under (decisions 129 and 132).
+   * Required: lowering asks it which packages export the `AttrTag` type and
+   * which file-kind segments exist, and core holds no list to fall back on —
+   * a compile without one would silently accept a foreign `AttrTag` import
+   * and misjudge a host module file. A host's own descriptor is what its
+   * compile entry defaults to (design note §5.1, rule (c)).
+   */
+  targets: TargetLookup;
 }
 
 export interface HostOptions extends TranslatorOptions {
@@ -103,6 +114,22 @@ export interface HostOptions extends TranslatorOptions {
   postEmit?: (code: string) => string;
   /** Emits the module from the lowered IR (decision 79). */
   emitIr: (ir: Ir, ctx: Ctx) => string;
+}
+
+/**
+ * The `config.translator` object `@marko/compiler` is given: the taglibs this
+ * host registers plus the visitor that runs the lowering. Exported for the
+ * hosts and tools that hand one to `compile` themselves (the mapping pass,
+ * the oracle's stock-Marko comparison).
+ */
+export interface Translator {
+  taglibs: Array<[string, unknown]>;
+  tagDiscoveryDirs: string[];
+  translate: {
+    Program: {
+      exit(path: { node: { body: Node[] } }): void;
+    };
+  };
 }
 
 /**
@@ -126,6 +153,7 @@ let current: {
   customTags?: Readonly<Record<string, CustomTag>>;
   warnings?: MxWarning[];
   resolveImport?: (specifier: string, importer: string) => string | undefined;
+  targets: TargetLookup;
   dependencies: string[];
 } | null = null;
 
@@ -154,7 +182,7 @@ export function printExpression(node: Node): string {
  * resolution) has to hand the compiler the same object it later passes to
  * `compileSync`.
  */
-export function createTranslator(host: TranslatorOptions = {}) {
+export function createTranslator(host: TranslatorOptions): Translator {
   rejectShadowedRegistration(host.customTags);
   rejectUnknownDeclarationKeys(host.customTags);
   rejectUnreachableHooks(host.customTags);
@@ -174,6 +202,7 @@ export function createTranslator(host: TranslatorOptions = {}) {
             state.policy,
             state.lookup,
             state.filename,
+            state.targets,
           );
           ctx.customTags = state.customTags;
           ctx.warnings = state.warnings;
@@ -252,6 +281,7 @@ export function compileSource(
     customTags: host.customTags,
     warnings: host.warnings,
     resolveImport: host.resolveImport,
+    targets: host.targets,
     dependencies: [] as string[],
     // The lookup is keyed on the translator object, so asking for it here gets
     // exactly the taglibs this host registers plus Marko's own element
@@ -270,7 +300,7 @@ export function compileSource(
       writeVersionComment: false,
     });
   } catch (error) {
-    if (error instanceof TranslateError) {
+    if (isTranslateError(error)) {
       error.dependencies = state.dependencies;
       dropCompiledFilePrefix(error, filename);
     }

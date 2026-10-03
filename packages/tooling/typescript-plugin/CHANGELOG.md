@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Changed: host policy and dispatch read the built-in lookup (refactor/target-open-set, decisions 129 and 132)
+
+The plugin resolves each file's policy through `@mxlang/target-registry` and scans with the built-in lookup, matching `mx.tags[].hosts` on `hostFilterKey(policy.target)` (unchanged for every built-in). Each compile carries the lookup, so a callee importing `AttrTag` from another registered target's package is recognised as before. The dependency rule for `.solid.mx`/`.ng.mx` callees now reads the same lookup rather than a closed list in core. `isTranslateError` replaces `instanceof TranslateError`. No change to generated text, mappings or diagnostics; the dispatch goldens are unchanged.
+
 ### Fixed: `TS80001` no longer repeats the file and position in its message (translate-error-no-repeated-path, audit item 17)
 
 A parse error's message used to open with Marko's `    at <path>:L:C` line, which `mx-tsc` printed right after `file(L,C)` and an editor showed beside the range. The line is dropped when it names the diagnosed file; one naming another file (an error inside a callee tag) stays, since it is the only place that file is named. The code frame is unchanged.
@@ -12,7 +16,7 @@ The AstroMX language plugin claims `.astro.mx` instead of `.amx`, with no alias,
 
 ### Added: host-policy diagnostics (host-policy-diagnostics-tsc-tsserver)
 
-An unknown `mx.host` or a malformed `package.json` was silent in tsserver (the file just got the fallback host). Every language plugin now records what `resolveHostPolicyDetailed` said for each file it compiles, per plugin instance (`getHostPolicyDiagnostics(fileName?)`), and tsserver reports it as a `TS80003` warning on that file at 1:1, naming `package.json:line:col` (tsserver reports no diagnostics on a `package.json`). `mx-tsc` prints the same records positioned in the `package.json`. New exports: `HOST_POLICY_DIAGNOSTIC_CODE`, `hostPolicyMessage`, type `HostPolicyDiagnostic`. The text is the language server's (`<package.json>:line:col: <message>`, the path said once; `hostPolicyText` is the message without core's leading path), and `source` follows the file kind (`mx`, `solidmx`, `ngmx`, `amx`). Known limit: the plugin does not watch `package.json`, so a fixed manifest clears the warning only once the `.mx` is edited or the project reloads.
+An unknown `mx.host` or a malformed `package.json` was silent in tsserver (the file just got the fallback host). Every language plugin now records what `resolveTargetPolicyDetailed` said for each file it compiles, per plugin instance (`getTargetPolicyDiagnostics(fileName?)`), and tsserver reports it as a `TS80003` warning on that file at 1:1, naming `package.json:line:col` (tsserver reports no diagnostics on a `package.json`). `mx-tsc` prints the same records positioned in the `package.json`. New exports: `HOST_POLICY_DIAGNOSTIC_CODE`, `hostPolicyMessage`, type `TargetPolicyDiagnostic`. The text is the language server's (`<package.json>:line:col: <message>`, the path said once; `hostPolicyText` is the message without core's leading path), and `source` follows the file kind (`mx`, `solidmx`, `ngmx`, `amx`). Known limit: the plugin does not watch `package.json`, so a fixed manifest clears the warning only once the `.mx` is edited or the project reloads.
 
 ### Fixed: a failed `.mx` compile no longer cascades `TS2306 … is not a module` into every importer
 

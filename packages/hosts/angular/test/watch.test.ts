@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startWatch, type WatchHandle } from "../src/watch.ts";
+import { testTargetLookupWithSegments } from "./test-targets.ts";
 
 let projectDir: string;
 let handle: WatchHandle | undefined;
@@ -60,6 +61,10 @@ describe("startWatch --once", () => {
     handle = startWatch(projectDir, {
       once: true,
       onLine: (line) => lines.push(line),
+      // A direct entry routes by the lookup it is given; this one holds the
+      // foreign file kind so the test sees the host-module branch (design note
+      // §5.1, rule (c)).
+      targets: testTargetLookupWithSegments("ng", "solid"),
     });
     await handle.onIdle;
 

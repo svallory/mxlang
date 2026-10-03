@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+- **Changed (refactor/target-open-set, decision 137):** `mxTemplates()` excludes a dotted tag file name from the tag map with a positioned diagnostic and reports an unknown bare word in `mx.tags[].hosts`. It takes an optional `targets` lookup (default: this package's own descriptor), and `lowerAstroMx` accepts `options.targets`.
+
 - **Added (fix-hints-batch round 2):** a `$` scriptlet that declares a value now says to declare it in the `---` fence (`const y = …;`), since a template rejects `<const>` (new optional `scriptletReplacement` host declaration).
 
 - **Added (fix-hints-batch, audit item 14):** an unresolved capitalized tag now ends ``Import it in the `---` fence (`import Card from "./Card.astro"`) or add `tags/Card.mx`.`` (or ``Did you mean `<Badge>`?`` for a near-miss fence import).
+
 
 - **Breaking (amx-to-astro-mx, decision 134):** the Astro template file kind is renamed from `.amx` to `.astro.mx`, like `.solid.mx` (`<name>.<host>.mx`). No `.amx` alias: a `.amx` file is no longer an MX file. `ASTRO_MX_EXT` is `.astro.mx`, the diagnostic and language id is `astromx`, and `.astro.mx` is no longer registered with `addPageExtension`.
 

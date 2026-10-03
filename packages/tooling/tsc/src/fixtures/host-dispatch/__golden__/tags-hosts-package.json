@@ -7,39 +7,6 @@
         },
         "diagnostics": [
           {
-            "severity": 2,
-            "source": "mxlang",
-            "message": "<root>/tags-hosts-package/package.json:1:1: `mx.tags` names an unknown host in `hosts`: @acme/mx-vue",
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 0
-              },
-              "end": {
-                "line": 0,
-                "character": 1
-              }
-            },
-            "relatedInformation": [
-              {
-                "location": {
-                  "uri": "file://<root>/tags-hosts-package/package.json",
-                  "range": {
-                    "start": {
-                      "line": 0,
-                      "character": 0
-                    },
-                    "end": {
-                      "line": 0,
-                      "character": 1
-                    }
-                  }
-                },
-                "message": "`mx.tags` names an unknown host in `hosts`: @acme/mx-vue"
-              }
-            ]
-          },
-          {
             "severity": 1,
             "source": "mxlang",
             "message": "Unable to find entry point for custom tag `<thing>`.",
@@ -55,28 +22,7 @@
             }
           }
         ],
-        "related": [
-          {
-            "uri": "file://<root>/tags-hosts-package/package.json",
-            "diagnostics": [
-              {
-                "severity": 2,
-                "source": "mxlang",
-                "message": "`mx.tags` names an unknown host in `hosts`: @acme/mx-vue",
-                "range": {
-                  "start": {
-                    "line": 0,
-                    "character": 0
-                  },
-                  "end": {
-                    "line": 0,
-                    "character": 1
-                  }
-                }
-              }
-            ]
-          }
-        ],
+        "related": [],
         "dependencies": [],
         "unexpected": []
       },
@@ -93,9 +39,7 @@
           }
         ],
         "hostPolicyDiagnostics": [],
-        "logged": [
-          "@mxlang/typescript-plugin: <root>/tags-hosts-package/package.json: `mx.tags` names an unknown host in `hosts`: @acme/mx-vue"
-        ]
+        "logged": []
       },
       "vite": {
         "threw": {
@@ -109,9 +53,7 @@
           },
           "frame": "1 | <thing/>\n    ^"
         },
-        "warnings": [
-          "@mxlang/vite-plugin: <root>/tags-hosts-package/package.json: `mx.tags` names an unknown host in `hosts`: @acme/mx-vue"
-        ]
+        "warnings": []
       }
     }
   },

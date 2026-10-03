@@ -366,8 +366,8 @@ Five facts worth knowing before editing it:
   `host` unset included. Every call site that scans passes its own host name
   — the Bun loaders (`"html"`, `"hono"`), `@mxlang/astro`'s `.astro.mx` plugin
   (`"astro"`), the SolidMX and whole-file `.mx` typescript-plugin paths
-  (`"solid"`, resolved per file via `resolveHostPolicy`), the language
-  server (`hostPolicy.host`), the Vite plugin (`resolveHostPolicyDetailed(file)`
+  (`"solid"`, resolved per file via `resolveTargetPolicy`), the language
+  server (`hostPolicy.host`), the Vite plugin (`resolveTargetPolicyDetailed(file)`
   per compiled file), and the Angular build/oracle (`"angular"`) — so a
   scan's cache key (`scanCached`) now also includes the host, since two hosts
   scanning the same directory can get different filtered results.

@@ -32,7 +32,7 @@ whether a file compiles.
 
 `createMxLanguagePlugin(ts)` does the same job for whole-file `.mx`
 templates. It resolves the host with `@mxlang/core`'s
-`resolveHostPolicy` — the same resolver `@mxlang/language-server` uses, so an
+`resolveTargetPolicy` — the same resolver `@mxlang/language-server` uses, so an
 editor, this plugin and a `tsc` run cannot disagree about which host owns a
 file — applying the nearest `package.json`'s `mx.host` (`html`, `astro`, or
 `solid`; default `html`) and strictness, then serves the compiled module as

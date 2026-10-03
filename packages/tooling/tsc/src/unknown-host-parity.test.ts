@@ -26,15 +26,16 @@ afterEach(() => {
   for (const dir of created.splice(0)) rmSync(dir, { recursive: true });
 });
 
-// `@mxlang/core` is the language server's dependency, not this package's:
-// resolve it from the server so both sides use the copy the server runs.
+// `@mxlang/target-registry` is the language server's dependency, not this
+// package's: resolve it from the server so both sides use the copy the server
+// runs. It is where a tool resolves a policy now (decisions 129/132).
 const lsRequire = createRequire(
   join(import.meta.dirname, "../../language-server/package.json"),
 );
-const { resolveHostPolicyDetailed } = (await import(
-  pathToFileURL(lsRequire.resolve("@mxlang/core")).href
+const { resolveTargetPolicyDetailed } = (await import(
+  pathToFileURL(lsRequire.resolve("@mxlang/target-registry")).href
 )) as {
-  resolveHostPolicyDetailed(file: string): {
+  resolveTargetPolicyDetailed(file: string): {
     policy: Parameters<typeof diagnoseDocument>[2];
     diagnostics: NonNullable<
       Parameters<typeof diagnoseDocument>[8]
@@ -92,7 +93,7 @@ describe("unknown mx.host: language server and mx-tsc agree", () => {
     );
 
     const { policy, diagnostics: policyDiagnostics } =
-      resolveHostPolicyDetailed(page);
+      resolveTargetPolicyDetailed(page);
     const ls = diagnoseDocument(
       source,
       pathToFileURL(page).href,
@@ -172,7 +173,7 @@ describe("host-policy diagnostics: language server, tsserver plugin and mx-tsc p
         'import render from "./page.mx";\nconsole.log(render({}));\n',
       );
 
-      const { policy, diagnostics } = resolveHostPolicyDetailed(page);
+      const { policy, diagnostics } = resolveTargetPolicyDetailed(page);
       expect(diagnostics).toHaveLength(1);
       const [policyDiagnostic] = diagnostics;
       const ls = diagnoseDocument(

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type CustomTag, getCustomTags } from "@mxlang/core";
 import { parse as parseMxFile } from "@mxlang/parser";
 import { afterAll, describe, expect, it } from "vitest";
-import { compileSolidMx } from "./index.ts";
+import { compileSolidMx, solidTargets } from "./index.ts";
 
 /**
  * Marko 6.3.51 says only "Unable to find entry point for custom tag `<X>`."
@@ -79,7 +79,10 @@ describe("unresolved tag hints (solid)", () => {
     );
     const page = join(dir, "page.solid.mx");
     const source = file('<Card title="x"/>');
-    const customTags = getCustomTags(page, { host: "solid" });
+    const customTags = getCustomTags(page, {
+      host: "solid",
+      targets: solidTargets,
+    });
     expect(() => parseFile(source, page, customTags)).not.toThrow();
     expect(failure(source, page).message).toContain("or add `tags/Card.mx`.");
   });

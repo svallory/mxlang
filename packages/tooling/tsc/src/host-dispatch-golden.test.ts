@@ -62,14 +62,17 @@ const goldens = join(root, "__golden__");
  * - astro-mx-html-host: D6. The `.astro.mx` scan filter is the literal "astro", so a
  *   tag restricted to `hosts: ["astro"]` stays visible to an `.astro.mx` page in a
  *   package whose own target is html.
- * - tags-x-ng: changes in PR 3 (design note §5.1, rule (d), case 1: the
- *   message stays, now produced through the registry lookup).
- * - tags-icon-small: changes in PR 3 (§5.1, rule (d), case 2: a dotted tag
- *   name that cannot be called is rejected with a diagnostic; today it is
- *   indexed silently).
- * - tags-hosts-package: changes in PR 3 (§5: `mx.tags[].hosts` naming a
- *   package specifier must not warn; the scan's warning for an unknown
- *   target name stays for a bare word, as tags-hosts-bogus pins).
+ * - tags-x-ng: PR 3 (design note §5.1, rule (d), case 1) produced **no**
+ *   change to these bytes: the host-module message is worded the same and is
+ *   now produced through the registry lookup, so the row still passes as it
+ *   stood.
+ * - tags-icon-small: changed in PR 3 (§5.1, rule (d), case 2: a dotted tag
+ *   name that cannot be called is rejected with a diagnostic; it was indexed
+ *   silently). Regenerated.
+ * - tags-hosts-package: changed in PR 3 (§5, condition 5: `mx.tags[].hosts`
+ *   naming a package specifier must not warn, and the specifier is still not a
+ *   filter value this project can match). Regenerated. The bare-word warning
+ *   stays, as tags-hosts-bogus pins.
  * - html-with-solid-dep: `mx.host: "html"` beats rule 2 (a lone `@mxlang/solid`
  *   dependency would otherwise pick solid). PR 3 rewrites rule 2.
  * - translator: the deprecated alias for html and its warning.
@@ -109,19 +112,40 @@ const ROWS = [
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
 const ALIASED = new Set(ROWS.filter((row) => row.startsWith("alias-")));
 
-// `@mxlang/core` is the language server's dependency, not this package's:
-// resolve it from the server so both sides use the copy the server runs.
+// `@mxlang/target-registry` is the language server's dependency, not this
+// package's: resolve it from the server so both sides use the copy the server
+// runs. It is where the resolver now lives for a tool (decisions 129/132), and
+// its `resolveTargetPolicyDetailed` is core's, bound to the built-in lookup.
 const lsRequire = createRequire(
   join(here, "..", "..", "language-server", "package.json"),
 );
-const { resolveHostPolicyDetailed } = (await import(
-  pathToFileURL(lsRequire.resolve("@mxlang/core")).href
+const { hostFilterKey, resolveTargetPolicyDetailed } = (await import(
+  pathToFileURL(lsRequire.resolve("@mxlang/target-registry")).href
 )) as {
-  resolveHostPolicyDetailed(file: string): {
+  resolveTargetPolicyDetailed(file: string): {
     policy: Parameters<typeof diagnoseDocument>[2];
     diagnostics: NonNullable<Parameters<typeof diagnoseDocument>[8]>;
   };
+  hostFilterKey(target: string): string | undefined;
 };
+
+/**
+ * The resolved policy as the golden records it: the value `mx.tags[].hosts` is
+ * matched against, which is the host name for a hosted target and a hostless
+ * target's legacy `mx.host` value (`html`). It is the same string the policy
+ * carried before the policy named a target first (decisions 129/132), so every
+ * row that does not change behaviour keeps its recorded bytes; the tools get
+ * the real policy.
+ */
+function recordedPolicy(policy: Parameters<typeof diagnoseDocument>[2]): {
+  host: string;
+  strict?: boolean;
+} {
+  return {
+    host: hostFilterKey(policy.target) as string,
+    ...(policy.strict === undefined ? {} : { strict: policy.strict }),
+  };
+}
 
 /**
  * Makes a value comparable across machines and shells: absolute paths become
@@ -158,7 +182,7 @@ type Plugin = MxDiagnosticLanguagePlugin & {
     snapshot: ts.IScriptSnapshot,
     ctx: unknown,
   ) => { snapshot: ts.IScriptSnapshot; languageId: string; mappings: unknown };
-  getHostPolicyDiagnostics?: (fileName?: string) => unknown;
+  getTargetPolicyDiagnostics?: (fileName?: string) => unknown;
 };
 
 /** The language plugin `mx-tsc` and tsserver pick for a file name. */
@@ -188,7 +212,7 @@ function pluginFor(file: string): { plugin: Plugin; languageId: string } {
 }
 
 function languageServerLeg(file: string, text: string, languageId: string) {
-  const { policy, diagnostics } = resolveHostPolicyDetailed(file);
+  const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
   const related: RelatedDiagnostics[] = [];
   const dependencies = new Set<string>();
   const unexpected: string[] = [];
@@ -204,7 +228,7 @@ function languageServerLeg(file: string, text: string, languageId: string) {
     diagnostics,
   );
   return {
-    policy,
+    policy: recordedPolicy(policy),
     diagnostics: reported,
     related,
     dependencies: [...dependencies].sort(),
@@ -214,7 +238,7 @@ function languageServerLeg(file: string, text: string, languageId: string) {
 
 /** An untitled buffer: no path, identified only by its language id. */
 function untitledLeg(file: string, text: string) {
-  const { policy } = resolveHostPolicyDetailed(file);
+  const { policy } = resolveTargetPolicyDetailed(file);
   const related: RelatedDiagnostics[] = [];
   const unexpected: string[] = [];
   const diagnostics = diagnoseDocument(
@@ -226,7 +250,7 @@ function untitledLeg(file: string, text: string) {
     undefined,
     related,
   );
-  return { policy, diagnostics, related, unexpected };
+  return { policy: recordedPolicy(policy), diagnostics, related, unexpected };
 }
 
 function tsPluginLeg(file: string, text: string) {
@@ -252,8 +276,8 @@ function tsPluginLeg(file: string, text: string) {
         : null,
       mappings: virtual?.mappings ?? null,
       compileDiagnostics,
-      hostPolicyDiagnostics: plugin.getHostPolicyDiagnostics
-        ? plugin.getHostPolicyDiagnostics(file)
+      hostPolicyDiagnostics: plugin.getTargetPolicyDiagnostics
+        ? plugin.getTargetPolicyDiagnostics(file)
         : "not offered by this plugin",
       logged,
     };
@@ -383,6 +407,7 @@ describe("dispatch goldens", () => {
           languageServer: lsLeg.diagnostics.filter((d) =>
             String(d.message).includes("package.json"),
           ),
+          // Keep the recorded JSON key byte-identical; it is not an API name.
           tsPluginHostPolicy: tsPluginLeg(file, text).hostPolicyDiagnostics,
         };
         continue;

@@ -42,6 +42,7 @@ export {
   type Lookup,
   printExpression,
   type RawSourceMap,
+  type Translator,
   type TranslatorOptions,
 } from "./compile.ts";
 export {
@@ -60,6 +61,7 @@ export {
   importedNames,
   isFunctionLikeValue,
   isMarkoOrMxSpecifier,
+  isTranslateError,
   type MxWarning,
   type Node,
   newCtx,
@@ -99,12 +101,12 @@ export {
   type RegionPosition,
 } from "./fragment.ts";
 export {
-  type HostPolicy,
-  type HostPolicyDiagnostic,
-  type HostPolicyDiagnosticCode,
-  type HostPolicyResolution,
-  resolveHostPolicy,
-  resolveHostPolicyDetailed,
+  resolveTargetPolicy,
+  resolveTargetPolicyDetailed,
+  type TargetPolicy,
+  type TargetPolicyDiagnostic,
+  type TargetPolicyDiagnosticCode,
+  type TargetPolicyResolution,
 } from "./host-policy.ts";
 export type {
   Attr,
@@ -137,8 +139,9 @@ export {
   type DiscoveredTag,
   type DiscoverProjectTagsOptions,
   discoverProjectTags,
-  HOST_MODULE_SEGMENTS,
+  type HostRestriction,
   hostModuleSegment,
+  hostRestrictionDiagnostics,
   loadSidecar,
   type MxTagsEntry,
   normalizeMxTags,

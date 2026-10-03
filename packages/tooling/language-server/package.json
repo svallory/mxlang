@@ -42,6 +42,7 @@
     "build": "rm -rf dist && bun build src/index.ts src/bin.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/hono --external @mxlang/html --external @mxlang/parser --external @mxlang/preact --external @mxlang/react --external @mxlang/solid --external vscode-languageserver --external vscode-languageserver-textdocument && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
+    "@marko/compiler": "5.42.5",
     "@mxlang/core": "workspace:*",
     "@mxlang/hono": "workspace:*",
     "@mxlang/html": "workspace:*",
@@ -49,6 +50,7 @@
     "@mxlang/preact": "workspace:*",
     "@mxlang/react": "workspace:*",
     "@mxlang/solid": "workspace:*",
+    "@mxlang/target-registry": "workspace:*",
     "vscode-languageserver": "10.1.1",
     "vscode-languageserver-textdocument": "1.0.14"
   },

@@ -3,12 +3,17 @@ import { dirname } from "node:path";
 import type { CompileResult } from "@mxlang/core";
 import {
   type CustomTag,
-  resolveHostPolicyDetailed,
-  scanCached,
+  type TargetLookup,
   TranslateError,
 } from "@mxlang/core";
 import type { MxRegionCompile } from "@mxlang/parser";
 import { print } from "@mxlang/parser";
+import {
+  builtinLookup,
+  hostFilterKey,
+  resolveTargetPolicyDetailed,
+  scanCached,
+} from "@mxlang/target-registry";
 import type { Plugin } from "vite";
 
 /**
@@ -86,8 +91,8 @@ async function compileMarko(
   // Which host owns this file is the nearest `package.json`'s answer, the
   // same resolver the language server and `mx-tsc` use — so an editor, a
   // `tsc` run and a `vite build` cannot disagree about what a `.mx` file is.
-  const { resolveHostPolicy } = await import("@mxlang/core");
-  const host = resolveHostPolicy(filename).host;
+  const { resolveTargetPolicy } = await import("@mxlang/target-registry");
+  const host = resolveTargetPolicy(filename).host;
   if (host === "preact") {
     const { compilePreactMx } = (await import("@mxlang/preact")) as {
       compilePreactMx: (
@@ -96,10 +101,15 @@ async function compileMarko(
         options?: {
           customTags?: Record<string, CustomTag>;
           resolveImport?: typeof resolveImport;
+          targets?: TargetLookup;
         },
       ) => { code: string };
     };
-    return compilePreactMx(source, filename, { customTags, resolveImport });
+    return compilePreactMx(source, filename, {
+      customTags,
+      resolveImport,
+      targets: builtinLookup(),
+    });
   }
   if (host === "react") {
     const { compileReactMx } = (await import("@mxlang/react")) as {
@@ -109,10 +119,15 @@ async function compileMarko(
         options?: {
           customTags?: Record<string, CustomTag>;
           resolveImport?: typeof resolveImport;
+          targets?: TargetLookup;
         },
       ) => { code: string };
     };
-    return compileReactMx(source, filename, { customTags, resolveImport });
+    return compileReactMx(source, filename, {
+      customTags,
+      resolveImport,
+      targets: builtinLookup(),
+    });
   }
   if (host === "hono") {
     const { compileHonoMx } = (await import("@mxlang/hono")) as {
@@ -122,10 +137,15 @@ async function compileMarko(
         options?: {
           customTags?: Record<string, CustomTag>;
           resolveImport?: typeof resolveImport;
+          targets?: TargetLookup;
         },
       ) => { code: string };
     };
-    return compileHonoMx(source, filename, { customTags, resolveImport });
+    return compileHonoMx(source, filename, {
+      customTags,
+      resolveImport,
+      targets: builtinLookup(),
+    });
   }
   if (host === "solid") {
     // A whole-file `.mx` document routed to the Solid host goes through
@@ -141,10 +161,15 @@ async function compileMarko(
         options: {
           filename: string;
           customTags?: Record<string, CustomTag>;
+          targets?: TargetLookup;
         },
       ) => Pick<CompileResult, "code" | "dependencies">;
     };
-    return compileSolidUnit(source, { filename, customTags });
+    return compileSolidUnit(source, {
+      filename,
+      customTags,
+      targets: builtinLookup(),
+    });
   }
   if (host === "angular") {
     // `@mxlang/angular` exists (phase 1) but is not wired into this plugin
@@ -163,10 +188,16 @@ async function compileMarko(
         strict?: boolean;
         customTags?: Record<string, CustomTag>;
         resolveImport?: typeof resolveImport;
+        targets?: TargetLookup;
       },
     ) => { code: string };
   };
-  return compile(source, filename, { strict, customTags, resolveImport });
+  return compile(source, filename, {
+    strict,
+    customTags,
+    resolveImport,
+    targets: builtinLookup(),
+  });
 }
 
 export interface MxPluginOptions {
@@ -714,8 +745,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     file: string,
     warn: (message: string) => void,
   ): Record<string, CustomTag> | undefined => {
-    const resolution = resolveHostPolicyDetailed(file);
-    const host = resolution.policy.host;
+    const resolution = resolveTargetPolicyDetailed(file);
+    // The filter value `mx.tags[].hosts` is matched against, read off the
+    // target: for a hostless target (`html`) it is the target's legacy
+    // `mx.host` value, which is the string existing entries already match.
+    const host = hostFilterKey(resolution.policy.target);
     const scan = scanCached(file, { host });
 
     // A malformed `package.json` or an unknown `mx.host` never fails the

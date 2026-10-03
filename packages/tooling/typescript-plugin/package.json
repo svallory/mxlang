@@ -32,6 +32,7 @@
     "@mxlang/preact": "workspace:*",
     "@mxlang/react": "workspace:*",
     "@mxlang/solid": "workspace:*",
+    "@mxlang/target-registry": "workspace:*",
     "@volar/language-core": "2.4.28",
     "@volar/typescript": "2.4.28"
   },

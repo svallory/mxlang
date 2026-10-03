@@ -1,6 +1,6 @@
 {
   "name": "solid-dependency-fixture",
   "dependencies": {
-    "@mxlang/solid": "0.1.0"
+    "@t/unit": "0.1.0"
   }
 }
