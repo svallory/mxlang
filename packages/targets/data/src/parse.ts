@@ -34,7 +34,6 @@ export type {
   DataExpr,
   DataForHead,
   DataNode,
-  DataPosition,
   DataStatement,
   DataTag,
 } from "./tree.ts";

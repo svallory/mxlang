@@ -97,10 +97,12 @@ describe("the Ash resource fixture", () => {
       // includes its indented body.
       expect(slice(tag.span).startsWith(tag.name)).toBe(true);
     }
-    // The root tag's span covers the whole file, final newline included.
+    // The root tag's span covers the whole file, final newline excluded —
+    // a tag's span is the tag, and the line terminator after it is not part
+    // of it (the concise-mode trim, round 2 finding 6).
     const root = tree.children[0];
     if (root?.kind !== "tag") throw new Error("expected root tag");
-    expect(slice(root.span)).toBe(source);
+    expect(slice(root.span)).toBe(source.replace(/\r?\n$/, ""));
   });
 
   it("every attribute's spans slice the authored source", () => {

@@ -16,8 +16,9 @@ the first) decides what any tag or expression means. Design:
 - `src/tree.ts` — the tree types. Expressions are Marko's Babel nodes plus
   printed `code` and a UTF-16 `span` (slice the source by `span` for the
   authored text; `code` is generated). `Text` and the structural nodes carry
-  only `start` until the core spans PR lands; a later change swaps `start`
-  for `span`.
+  the spans core adds at `feat(core): spans on Text, Comment and structural
+  IR nodes` (#234, the 131 addendum's item 7); a text node's `value` is
+  Marko-normalized while its `span` slices the text as authored.
 - `src/taglib.ts` — the data taglib. The 19 HTML parse-rule neutralizations
   (`openTagOnly`/`text`/`preserveWhitespace` to `false`) are **derived from
   Marko's own lookup**, not hand-listed; `taglib.test.ts` pins the measured

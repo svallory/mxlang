@@ -38,7 +38,7 @@ describe("readCalleeInput-per-tag cost (note §10)", () => {
     const tree = result.tree;
     if (!tree) throw new Error("expected a tree");
     expect(countTags(tree.children)).toBe(1000);
-    // biome-ignore lint/suspicious/noConsole: the measurement is the point
+    // The measurement is the point of the test; it is printed, not gated.
     console.log(
       `[data-pr1 timing] parseData over 1,000 generated tags: ${elapsedMs.toFixed(1)}ms`,
     );

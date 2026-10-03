@@ -8,22 +8,17 @@
  * serializable shape — deliberately smaller than core's IR, whose types it
  * does not reuse.
  *
- * Positions and spans share core's vocabulary: a `SourceSpan` is a pair of
- * UTF-16 code-unit offsets from file start, and a `DataPosition` is core's
- * `Position` (1-based line, 0-based column). `Text` and the structural nodes
- * carry only `start` until the core spans PR (the 131 addendum's item 7)
- * lands spans on `Text`, `Comment`, `Interpolation` and the structural IR
- * nodes; a later change of this package swaps `start` for `span`.
+ * Every span is core's `SourceSpan`: a pair of UTF-16 code-unit offsets from
+ * file start. `Text`, `Comment`, `Interpolation` and the structural nodes
+ * carry the spans core adds at `feat(core): spans on Text, Comment and
+ * structural IR nodes` (#234) — the "swap `start` for `span`" the 131
+ * addendum's item 7 scheduled. A text node's `value` is Marko-normalized
+ * while its `span` slices the text exactly as authored; the two deliberately
+ * differ on collapsed whitespace.
  */
 
 import type { Expression } from "@babel/types";
 import type { SourceSpan } from "@mxlang/core";
-
-/** Line 1-based, column 0-based, like core's `Position`. */
-export interface DataPosition {
-  line: number;
-  column: number;
-}
 
 /**
  * An expression, as Marko's Babel instance parsed it plus its source.
@@ -138,26 +133,25 @@ export type DataAttrTagNode =
 
 export type DataNode =
   | DataTag
-  // `start` stands in for `span` until the core spans PR lands (file header).
-  | { kind: "text"; value: string; start: DataPosition }
-  /** `${x}` / `$!{x}`; `escaped` is false for the raw form. */
-  | { kind: "expression"; value: DataExpr; escaped: boolean }
+  // `value` is Marko-normalized; `span` slices the text as authored.
+  | { kind: "text"; value: string; span: SourceSpan }
+  /**
+   * `${x}` / `$!{x}`; `escaped` is false for the raw form. `span` covers the
+   * whole `${…}`, delimiters included; `value.span` the expression only.
+   */
+  | { kind: "expression"; value: DataExpr; escaped: boolean; span: SourceSpan }
   /** `html` distinguishes `<!-- -->` from a `//` line comment. */
-  | { kind: "comment"; value: string; html: boolean; start: DataPosition }
-  | { kind: "if"; branches: DataBranch<DataNode>[]; start: DataPosition }
-  | {
-      kind: "for";
-      head: DataForHead;
-      children: DataNode[];
-      start: DataPosition;
-    }
-  | { kind: "const"; name: string; init: DataExpr; start: DataPosition };
+  | { kind: "comment"; value: string; html: boolean; span: SourceSpan }
+  | { kind: "if"; branches: DataBranch<DataNode>[]; span: SourceSpan }
+  | { kind: "for"; head: DataForHead; children: DataNode[]; span: SourceSpan }
+  | { kind: "const"; name: string; init: DataExpr; span: SourceSpan };
 
 export interface DataBranch<N> {
   /** `null` for the trailing `<else>`. */
   test: DataExpr | null;
   children: N[];
-  start: DataPosition;
+  /** The branch's own tag: opening tag, body and closing tag included. */
+  span: SourceSpan;
 }
 
 export interface DataForHead {
@@ -178,14 +172,17 @@ export interface DataForHead {
 
 /**
  * `import`, `export`, `static`, `export interface Input`: the code text, as
- * authored. Core splits statements out of the body and loses their order
- * relative to one another, so a document's `statements` are sorted by `start`.
+ * authored. `span` slices the authored statement (the trailing line
+ * terminator excluded) — for `export interface Input`, the one statement
+ * kind core carries no span on, it is derived from the statement's positions
+ * through the source's line table. Core splits statements out of the body
+ * and loses their order relative to one another, so a document's
+ * `statements` are sorted by `span`.
  */
 export interface DataStatement {
   kind: "import" | "export" | "static";
   code: string;
-  start: DataPosition;
-  end: DataPosition;
+  span: SourceSpan;
 }
 
 export interface DataDocument {

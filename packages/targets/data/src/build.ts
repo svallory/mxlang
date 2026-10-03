@@ -42,7 +42,6 @@ import type {
   DataExpr,
   DataForHead,
   DataNode,
-  DataPosition,
   DataStatement,
   DataTag,
 } from "./tree.ts";
@@ -274,7 +273,9 @@ function dataTag(tag: DelegatedTag<unknown>): DataTag {
     kind: "tag",
     name: tag.name,
     nameSpan: requiredSpan(tag.nameSpan, `tag \`<${tag.name}>\`'s name`),
-    span: requiredSpan(tag.span, `tag \`<${tag.name}>\``),
+    span: withoutTrailingNewline(
+      requiredSpan(tag.span, `tag \`<${tag.name}>\``),
+    ),
     attrs: tag.attrs.map(dataAttr),
     args: (tag.args ?? []).map((arg, i) =>
       dataExpr(arg, `argument ${i + 1} of \`<${tag.name}>\``),
@@ -292,24 +293,14 @@ function dataAttrTag(tag: AttributeTag): DataAttrTagNode {
     kind: "attr-tag",
     name: tag.name,
     nameSpan: tag.nameSpan,
-    span: requiredSpan(tag.span, `attribute tag \`<@${tag.name}>\``),
+    span: withoutTrailingNewline(
+      requiredSpan(tag.span, `attribute tag \`<@${tag.name}>\``),
+    ),
     attrs: tag.attrs.map(dataAttr),
     params: tag.block.params,
     attrTags: tag.attributeTagTree.map(dataAttrTagNode),
     children: dataNodes(tag.block.children),
   };
-}
-
-function positionOfOffset(lineStarts: number[], offset: number): DataPosition {
-  // Binary search for the last line start <= offset.
-  let low = 0;
-  let high = lineStarts.length - 1;
-  while (low < high) {
-    const mid = (low + high + 1) >> 1;
-    if ((lineStarts[mid] as number) <= offset) low = mid;
-    else high = mid - 1;
-  }
-  return { line: low + 1, column: offset - (lineStarts[low] as number) };
 }
 
 export function lineStartsOf(source: string): number[] {
@@ -332,7 +323,7 @@ function dataAttrTagNode(node: AttributeTagNode): DataAttrTagNode {
             ? dataExpr(branch.test, "attribute-tag `<if>` condition")
             : null,
           children: branch.nodes.map(dataAttrTagNode),
-          start: positionOfOffset(activeLineStarts, branch.span.sourceStart),
+          span: branch.span,
         })),
       };
     case "AttributeTagFor":
@@ -344,10 +335,78 @@ function dataAttrTagNode(node: AttributeTagNode): DataAttrTagNode {
   }
 }
 
-// `AttributeTagIf` branches carry a span but no position; the active line
-// table converts. Set per `buildDataDocument` call (compiles are synchronous
-// and single-threaded, same as core's own `current` handle).
+// Line tables convert between offsets and positions: an `export interface
+// Input` statement's span is derived from its positions (core carries no
+// span on `InputInterface`), and a statement's structural-reject position is
+// derived from its span. Set per `buildDataDocument` call (compiles are
+// synchronous and single-threaded, same as core's own `current` handle).
 let activeLineStarts: number[] = [0];
+let activeSourceLength = 0;
+/** The source itself, for the two span adjustments that need its text. */
+let activeSource = "";
+
+function positionOfOffset(offset: number): { line: number; column: number } {
+  let low = 0;
+  let high = activeLineStarts.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if ((activeLineStarts[mid] as number) <= offset) low = mid;
+    else high = mid - 1;
+  }
+  return { line: low + 1, column: offset - (activeLineStarts[low] as number) };
+}
+
+function offsetOfPosition(line: number, column: number): number {
+  const start = activeLineStarts[line - 1];
+  if (start === undefined) return activeSourceLength;
+  return Math.min(start + column, activeSourceLength);
+}
+
+/**
+ * A tag's span without the line terminator that follows it.
+ *
+ * In concise mode core measures a tag through the end of the line it ends
+ * on, so `b` + `  c` arrives as `"b\\n  c\\n"`. A `<tag/>` span never carries
+ * the terminator, and `DataTag.span` is documented as "opening tag, body and
+ * closing tag" — the line terminator is neither. Every trailing `\r`/`\n`
+ * goes; a blank line between the tag and the next one is not part of it
+ * either way, and trimming is idempotent.
+ */
+function withoutTrailingNewline(span: SourceSpan): SourceSpan {
+  let end = span.sourceEnd;
+  while (end > span.sourceStart) {
+    const code = activeSource.charCodeAt(end - 1);
+    if (code !== 10 && code !== 13) break;
+    end -= 1;
+  }
+  return end === span.sourceEnd
+    ? span
+    : { sourceStart: span.sourceStart, sourceEnd: end };
+}
+
+/**
+ * The position a `structural: "reject"` reports for a text node.
+ *
+ * `Text.loc` points at the *end of the line above* whenever the node carries
+ * leading whitespace, because Marko keeps the line terminator and the
+ * indentation inside the text (`"\\n  text"` for the value `" text"`). An
+ * agent following that line number lands on the previous tag. The position
+ * comes from the span instead — advanced past the leading whitespace the
+ * span itself carries, so it is the first character of the text itself.
+ */
+function textPosition(span: SourceSpan | undefined, fallback: Position) {
+  if (!span) return fallback;
+  let start = span.sourceStart;
+  while (start < span.sourceEnd) {
+    const code = activeSource.charCodeAt(start);
+    if (code !== 32 && code !== 9 && code !== 10 && code !== 13) break;
+    start += 1;
+  }
+  // A text node that is *only* whitespace ran the loop to `sourceEnd`, which
+  // is the character after the text — the `<` of the close tag for
+  // `<pre>  </pre>`. Report where the text starts instead.
+  return positionOfOffset(start === span.sourceEnd ? span.sourceStart : start);
+}
 
 function dataBranch(branch: Branch): DataBranch<DataNode> {
   return {
@@ -355,7 +414,7 @@ function dataBranch(branch: Branch): DataBranch<DataNode> {
       ? dataExpr(branch.condition, "`<if>` condition")
       : null,
     children: dataNodes(branch.children),
-    start: { line: branch.loc.line, column: branch.loc.column },
+    span: requiredSpan(branch.span, "an `<if>` branch"),
   };
 }
 
@@ -367,40 +426,41 @@ function dataNode(node: IrNode): DataNode {
       return {
         kind: "text",
         value: node.value,
-        start: { line: node.loc.line, column: node.loc.column },
+        span: requiredSpan(node.span, "text"),
       };
     case "Interpolation":
       return {
         kind: "expression",
         value: dataExpr(node.expr, "interpolation"),
         escaped: node.escaped,
+        span: requiredSpan(node.span, "interpolation"),
       };
     case "Comment":
       return {
         kind: "comment",
         value: node.value,
         html: node.html,
-        start: { line: node.loc.line, column: node.loc.column },
+        span: requiredSpan(node.span, "comment"),
       };
     case "IfChain":
       return {
         kind: "if",
         branches: node.branches.map(dataBranch),
-        start: { line: node.loc.line, column: node.loc.column },
+        span: requiredSpan(node.span, "`<if>`"),
       };
     case "For":
       return {
         kind: "for",
         head: dataForHead(node, "`<for>`"),
         children: dataNodes(node.children),
-        start: { line: node.loc.line, column: node.loc.column },
+        span: requiredSpan(node.span, "`<for>`"),
       };
     case "Const":
       return {
         kind: "const",
         name: node.name,
         init: dataExpr(node.init, "`<const>`"),
-        start: { line: node.loc.line, column: node.loc.column },
+        span: requiredSpan(node.span, "`<const>`"),
       };
     case "Component":
       if (node.target.kind === "dynamic") {
@@ -441,91 +501,101 @@ function statements(ir: Ir): DataStatement[] {
     out.push({
       kind: "import",
       code: node.code,
-      start: { line: node.loc.line, column: node.loc.column },
-      end: { line: node.end.line, column: node.end.column },
+      span: requiredSpan(node.span, "`import` statement"),
     });
   }
   for (const node of ir.hoisted) {
     out.push({
       kind: node.kind === "Static" ? "static" : "export",
       code: node.code,
-      start: { line: node.loc.line, column: node.loc.column },
-      end: { line: node.end.line, column: node.end.column },
+      span: requiredSpan(node.span, `\`${node.kind.toLowerCase()}\` statement`),
     });
   }
   if (ir.inputInterface) {
+    // The one statement kind core carries no span on: derive it from the
+    // statement's positions through the line table (documented in tree.ts).
     out.push({
       kind: "export",
       code: ir.inputInterface.code,
-      start: {
-        line: ir.inputInterface.loc.line,
-        column: ir.inputInterface.loc.column,
-      },
-      end: {
-        line: ir.inputInterface.end.line,
-        column: ir.inputInterface.end.column,
+      span: {
+        sourceStart: offsetOfPosition(
+          ir.inputInterface.loc.line,
+          ir.inputInterface.loc.column,
+        ),
+        sourceEnd: offsetOfPosition(
+          ir.inputInterface.end.line,
+          ir.inputInterface.end.column,
+        ),
       },
     });
   }
   // Core splits statements out of the body into separate lists and loses
-  // their cross-list order; the document order is recovered by position.
-  out.sort(
-    (a, b) => a.start.line - b.start.line || a.start.column - b.start.column,
-  );
+  // their cross-list order; the document order is recovered by span.
+  out.sort((a, b) => a.span.sourceStart - b.span.sourceStart);
   return out;
 }
 
 /** The earliest structural construct, for `structural: "reject"`. */
 interface StructuralHit {
   construct: string;
+  /** UTF-16 offset, for picking the earliest across body and statements. */
+  offset: number;
   at: Position;
+}
+
+function hit(construct: string, at: Position): StructuralHit {
+  return {
+    construct,
+    offset: offsetOfPosition(at.line, at.column),
+    at,
+  };
 }
 
 function structuralInAttrTagNodes(
   nodes: AttributeTagNode[],
 ): StructuralHit | null {
   for (const node of nodes) {
-    const hit =
+    const found =
       node.kind === "AttributeTagIf"
-        ? { construct: "`<if>`", at: node.loc }
+        ? hit("`<if>`", node.loc)
         : node.kind === "AttributeTagFor"
-          ? { construct: "`<for>`", at: node.loc }
+          ? hit("`<for>`", node.loc)
           : structuralInAttrTagNodes(node.tag.attributeTagTree) ||
             structuralInNodes(node.tag.block.children);
-    if (hit) return hit;
+    if (found) return found;
   }
   return null;
 }
 
 function structuralInNodes(nodes: IrNode[]): StructuralHit | null {
   for (const node of nodes) {
-    let hit: StructuralHit | null = null;
+    let found: StructuralHit | null = null;
     switch (node.kind) {
       case "Text":
-        hit = { construct: "text", at: node.loc };
+        found = hit("text", textPosition(node.span, node.loc));
         break;
       case "Interpolation":
-        hit = { construct: `\`\${}\``, at: node.loc };
+        found = hit(`\`\${}\``, node.loc);
         break;
       case "Comment":
-        hit = { construct: "comments", at: node.loc };
+        found = hit("comments", node.loc);
         break;
       case "IfChain":
-        hit = { construct: "`<if>`", at: node.loc };
+        found = hit("`<if>`", node.loc);
         break;
       case "For":
-        hit = { construct: "`<for>`", at: node.loc };
+        found = hit("`<for>`", node.loc);
         break;
       case "Const":
-        hit = { construct: "`<const>`", at: node.loc };
+        found = hit("`<const>`", node.loc);
         break;
       case "DelegatedTag":
-        hit =
+        found =
           structuralInAttrTagNodes(node.tag.attributeTagTree) ||
           structuralInNodes(node.tag.children);
         break;
     }
-    if (hit) return hit;
+    if (found) return found;
   }
   return null;
 }
@@ -533,13 +603,12 @@ function structuralInNodes(nodes: IrNode[]): StructuralHit | null {
 function rejectStructural(ir: Ir, stmts: DataStatement[]): never {
   let best: StructuralHit | null = structuralInNodes(ir.body);
   for (const stmt of stmts) {
-    const at: Position = { line: stmt.start.line, column: stmt.start.column };
-    if (
-      !best ||
-      at.line < best.at.line ||
-      (at.line === best.at.line && at.column < best.at.column)
-    ) {
-      best = { construct: `\`${stmt.kind}\``, at };
+    if (!best || stmt.span.sourceStart < best.offset) {
+      best = {
+        construct: `\`${stmt.kind}\``,
+        offset: stmt.span.sourceStart,
+        at: positionOfOffset(stmt.span.sourceStart),
+      };
     }
   }
   if (best) fail(structuralMessage(best.construct), best.at);
@@ -558,6 +627,8 @@ export function buildDataDocument(
   options: BuildOptions,
 ): DataDocument {
   activeLineStarts = lineStartsOf(source);
+  activeSource = source;
+  activeSourceLength = source.length;
   const stmts = statements(ir);
   if (options.structural === "reject") {
     // Only reject when a structural construct exists; a tags-and-attributes

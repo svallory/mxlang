@@ -9,7 +9,9 @@
   text, `${}`, `<if>`/`<for>`/`<const>`, comments,
   `import`/`export`/`static`), fail-fast with one positioned error and no
   partial tree. Expressions are Marko's Babel nodes plus printed `code` and a
-  UTF-16 `span`. The data taglib neutralizes Marko's HTML parse rules on the
+  UTF-16 `span`; text, comments, interpolations and the structural nodes
+  carry the IR spans of #234 (a text node's `span` slices the authored text,
+  its `value` is Marko-normalized). The data taglib neutralizes Marko's HTML parse rules on the
   19 names derived from Marko's own lookup
   (`openTagOnly`/`text`/`preserveWhitespace` to `false`), so any name may
   have child tags. `structural: "reject"` turns every structural construct
