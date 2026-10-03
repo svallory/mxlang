@@ -26,9 +26,11 @@ tasks:
         "--tsconfig-override=../../../tsconfig.base.json",
         "test",
         "src/bun.test.ts",
+        "src/contracts.bun.test.ts",
       ]
     inputs:
       - "src/bun.ts"
       - "src/bun.test.ts"
+      - "src/contracts.bun.test.ts"
       - "src/index.ts"
       - "fixtures-marko/attributes/**/*"

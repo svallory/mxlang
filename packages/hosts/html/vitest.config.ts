@@ -6,7 +6,10 @@ import { defineConfig } from "vitest/config";
 // is the same shape for `mx`/`loadMx`'s own Bun branch (a `require` of a
 // `data:` URL): vitest's own worker process has no `Bun` global even when
 // invoked via `bunx` (measured), so it would only ever exercise the Node
-// `registerHooks` branch if left in this project.
+// `registerHooks` branch if left in this project. `contracts.bun.test.ts`
+// joins them for the same reason: it asserts an edited `mx.contracts`
+// module reloads, which only Bun's runtime reproduces (TODO
+// `sync-esm-reload-node`).
 export default defineConfig({
   test: {
     exclude: [
@@ -15,6 +18,7 @@ export default defineConfig({
       "src/helpers.bun.test.ts",
       "src/example.bun.test.ts",
       "src/marko-tags.bun.test.ts",
+      "src/contracts.bun.test.ts",
     ],
   },
 });

@@ -64,6 +64,10 @@
         { "title": "Template tags", "path": "/custom-tags/templates/" },
         { "title": "Sidecars", "path": "/custom-tags/sidecars/" },
         { "title": "Discovery", "path": "/custom-tags/discovery/" },
+        {
+          "title": "Writing a dialect package",
+          "path": "/custom-tags/dialect-package/"
+        },
         { "title": "Reference", "path": "/custom-tags/reference/" }
       ]
     },
