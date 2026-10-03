@@ -13,87 +13,201 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  # Independent runners rebuild dist/ (about 10s) rather than serializing
+  # every lane behind a build/artifact job. Local bun run verify is unchanged.
+  lint-typecheck-build:
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth: 0 (full history, not the default shallow depth-1): moon's
-      # changed-files/merge-base resolution (used by `moon run
-      # tree-sitter-solidmx:test`, below) needs real git history to diff
-      # against origin/main (see .moon/workspace.yml's vcs.defaultBranch) —
-      # a shallow clone has no such history and moon fails with "fatal:
-      # ambiguous argument 'main': unknown revision".
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
-      # consumer-check packs with `npm pack` (bun pm pack hangs, PR #51); pin
-      # the node/npm toolchain like every other tool instead of taking the
-      # runner image's.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "26.7.0"
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
           bun-version: "1.3.14"
       - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run typecheck
+      - run: bun run lint
 
-      # verify's test:grammar step runs tree-sitter-solidmx's real test
-      # (scripts/test.sh) via `moon run tree-sitter-solidmx:test` — moon
-      # itself isn't bundled with setup-bun, so install the pinned version.
-      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+  test:
+    # Run 37142689080: Vitest alone took 448s. Two complete file shards
+    # avoid leaving an eight-minute critical path after the job split.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "26.7.0"
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
+        with:
+          bun-version: "1.3.14"
+      - run: bun install --frozen-lockfile
+      - run: bun run scripts/pre-verify.ts
+      - run: bun run build
+      - run: bun run test -- --shard=${{ matrix.shard }}/2
+      - name: Collect fresh Vitest evidence
+        run: >-
+          bun run scripts/verify-coverage.ts --collect
+          coverage-test-${{ matrix.shard }}.json test-${{ matrix.shard }} vitest
+      # actions/upload-artifact v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coverage-test-${{ matrix.shard }}
+          path: coverage-test-${{ matrix.shard }}.json
+          if-no-files-found: error
+      # All seven strict oracles run once, after shard 1's tests. The final
+      # verify check requires both shards, so neither can mask the other.
+      - if: matrix.shard == 1
+        run: bun run oracle -- --strict
+      - if: matrix.shard == 1
+        run: bun run oracle:marko -- --strict
+      - if: matrix.shard == 1
+        run: bun run oracle:preact -- --strict
+      - if: matrix.shard == 1
+        run: bun run oracle:react -- --strict
+      - if: matrix.shard == 1
+        run: bun run oracle:hono -- --strict
+      # These two always fail on mismatches; --strict is uniformity only.
+      - if: matrix.shard == 1
+        run: bun run oracle:angular -- --strict
+      - if: matrix.shard == 1
+        run: bun run oracle:custom-tags -- --strict
+
+  test-bun-grammar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # moon's merge-base resolution needs origin/main's full history.
+          fetch-depth: 0
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "26.7.0"
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
+        with:
+          bun-version: "1.3.14"
+      - run: bun install --frozen-lockfile
+      # moonrepo/setup-toolchain v0.6.4
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095
         with:
           auto-install: false
-
-      # test:grammar (via tree-sitter-solidmx's scripts/test.sh) needs
-      # vendor/tree-sitter-typescript populated before generate/parse/the
-      # Zed-compile-check step can run — vendor/ is gitignored (a build
-      # input, not committed), so nothing else in this job creates it.
       - name: vendor tree-sitter-typescript
         working-directory: packages/editors/tree-sitter-solidmx
         run: ./scripts/vendor.sh
+      - run: bun run scripts/pre-verify.ts
+      - run: bun run build
+      - run: bun run test:bun
+      # Includes --force for both moon tasks: cached results are not evidence.
+      - run: bun run test:grammar
+      - name: Collect fresh grammar evidence
+        run: >-
+          bun run scripts/verify-coverage.ts --collect
+          coverage-grammar.json test-bun-grammar grammar
+      # actions/upload-artifact v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coverage-grammar
+          path: coverage-grammar.json
+          if-no-files-found: error
 
-      # bun run verify includes a final step (scripts/verify-coverage.ts) that
-      # lists every package and its test wiring, and exits non-zero if any
-      # package has no fresh evidence its tests ran in this invocation.
-      - run: bun run verify
+  pack-probe-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # consumer-check and pack-probe use npm pack; keep the pinned toolchain.
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "26.7.0"
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
+        with:
+          bun-version: "1.3.14"
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run consumer-check:html
+      - run: bun run pack-probe
+      - run: bun run --cwd apps/docs build
 
-      - run: bun run oracle -- --strict
-      - run: bun run oracle:marko -- --strict
-      - run: bun run oracle:preact -- --strict
-      - run: bun run oracle:react -- --strict
-      - run: bun run oracle:hono -- --strict
-      # oracle:angular and oracle:custom-tags ignore --strict: they always exit
-      # nonzero on any mismatch. The flag is passed for uniformity only.
-      - run: bun run oracle:angular -- --strict
-      - run: bun run oracle:custom-tags -- --strict
+  coverage:
+    runs-on: ubuntu-latest
+    needs: [test, test-bun-grammar]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
+        with:
+          bun-version: "1.3.14"
+      # actions/download-artifact v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: coverage-*
+          path: coverage-evidence
+          merge-multiple: true
+      - name: Verify every package ran across this run's jobs
+        run: >-
+          bun run scripts/verify-coverage.ts --merge coverage-evidence
+          test-1,test-2,test-bun-grammar
+
+  verify:
+    # Preserve the status-check name. always() is essential: a failed or
+    # skipped dependency must produce a failed check, not a skipped green.
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - lint-typecheck-build
+      - test
+      - test-bun-grammar
+      - pack-probe-docs
+      - coverage
+    steps:
+      - name: Require every verify lane to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS_JSON"
+          echo "$NEEDS_JSON" | jq -e 'all(.[]; .result == "success")'
 
   zed-compile-check:
     # Reproduces Zed's own grammar compile step against a clean clone of
-    # HEAD (see packages/editors/tree-sitter-solidmx/scripts/zed-compile-check.sh).
-    # This is its own job, not folded into `verify` above, so a missing wasm
-    # toolchain here can never be masked by `bun run test`'s own success —
+    # HEAD (packages/editors/tree-sitter-solidmx/scripts/zed-compile-check.sh).
+    # This is its own job, not folded into verify above, so a missing wasm
+    # toolchain here can never be masked by bun run test's own success —
     # see the ZED_COMPILE_CHECK_FORCE_FALLBACK note below for why runners
     # need the fallback path forced rather than relying on Zed's wasi-sdk
     # simply not being found.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
           bun-version: "1.3.14"
       - run: bun install --frozen-lockfile
 
       # GitHub's ubuntu-latest runners ship Docker (not Podman — this
-      # diverges from the operator's local machine, where `tree-sitter build
-      # --wasm`'s emscripten-via-docker fallback failed for lack of a running
-      # Podman machine). `--docker` is `tree-sitter build --wasm`'s own flag
+      # diverges from the operator's local machine, where tree-sitter build
+      # --wasm's emscripten-via-docker fallback failed for lack of a running
+      # Podman machine). --docker is tree-sitter build --wasm's own flag
       # to run emscripten in a container rather than requiring a local
       # emsdk install.
       #
       # ZED_COMPILE_CHECK_FORCE_FALLBACK=1 skips the wasi-sdk clang lookup
       # unconditionally — runners never have Zed installed, so without this
       # the script would take the fallback path anyway by omission, which is
-      # indistinguishable from "nobody checked whether the fallback path
-      # itself works". Forcing it makes CI exercise the exact branch every
+      # indistinguishable from nobody checking whether the fallback path
+      # itself works. Forcing it makes CI exercise the exact branch every
       # contributor without a local Zed install is also on.
       #
       # If this step ever reports the wasm toolchain missing rather than a
@@ -101,14 +215,18 @@ jobs:
       # patch it to skip green. See UPSTREAM.md and the task report for why:
       # a gate that goes silently green when its toolchain is missing is
       # exactly the defect class this whole check exists to catch.
-      - name: "solidmx: zed-compile-check.sh (forced fallback: tree-sitter build --wasm --docker)"
+      - name: >-
+          solidmx: zed-compile-check.sh
+          (forced fallback: tree-sitter build --wasm --docker)
         working-directory: packages/editors/tree-sitter-solidmx
         env:
           ZED_COMPILE_CHECK_FORCE_FALLBACK: "1"
           ZED_COMPILE_CHECK_WASM_BUILD_ARGS: "--docker"
         run: ./scripts/zed-compile-check.sh
 
-      - name: "amx: zed-compile-check.sh (forced fallback: tree-sitter build --wasm --docker)"
+      - name: >-
+          amx: zed-compile-check.sh
+          (forced fallback: tree-sitter build --wasm --docker)
         working-directory: packages/editors/tree-sitter-amx
         env:
           ZED_COMPILE_CHECK_FORCE_FALLBACK: "1"
@@ -135,25 +253,28 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       # The bundled server runs on VS Code's own Node, whose floor is the
-      # Electron Node of `engines.vscode` (^1.90.0: Node 20.9.0), not the repo's
-      # `node >=22.18`. Install that floor first and keep its path for the
+      # Electron Node of engines.vscode (^1.90.0: Node 20.9.0), not the repo's
+      # node >=22.18. Install that floor first and keep its path for the
       # second smoke run.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20.9.0"
       - name: Remember the floor Node
         run: echo "MX_LS_NODE_FLOOR=$(command -v node)" >> "$GITHUB_ENV"
-      # The LS smoke harness runs `node` (not bun) so nothing Bun-only can hide
+      # The LS smoke harness runs node (not bun) so nothing Bun-only can hide
       # in the shipped server; same pin as the other jobs.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "26.7.0"
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
         with:
           bun-version: "1.3.14"
       - run: bun install --frozen-lockfile
-      # `package` runs the plugin's own self-contained build (build:bundled),
-      # which bundles the workspace packages' built dist/, then stages the VSIX.
+      # package runs the plugin's self-contained build (build:bundled),
+      # bundling the workspace packages' built dist/, then staging the VSIX.
       - run: bun run build
       - name: Package VSIX
         run: bun run --cwd packages/editors/vscode package
@@ -162,16 +283,21 @@ jobs:
       - name: Load the shipped plugin in a real tsserver
         run: bun run --cwd packages/editors/vscode tsserver-load
       - name: Start the shipped language server from the unpacked VSIX
-        run: node packages/editors/vscode/scripts/ls-smoke.mts packages/editors/vscode/mxlang.vsix
+        run: >-
+          node packages/editors/vscode/scripts/ls-smoke.mts
+          packages/editors/vscode/mxlang.vsix
         timeout-minutes: 2
       - name: Start the shipped language server on VS Code 1.90's Node (20.9.0)
-        run: node packages/editors/vscode/scripts/ls-smoke.mts packages/editors/vscode/mxlang.vsix
+        run: >-
+          node packages/editors/vscode/scripts/ls-smoke.mts
+          packages/editors/vscode/mxlang.vsix
         env:
           MX_LS_NODE: ${{ env.MX_LS_NODE_FLOOR }}
           MX_LS_NODE_EXPECT: v20.9.0
         timeout-minutes: 2
       - name: Upload VSIX
-        uses: actions/upload-artifact@v4
+        # actions/upload-artifact v4 (same release as coverage uploads)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: vscode-extension
           path: packages/editors/vscode/mxlang.vsix
