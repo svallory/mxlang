@@ -136,6 +136,7 @@ export {
   replaceMapped,
   type SourceSpan,
 } from "./mapping.ts";
+export { dropOwnParserPosition } from "./parse-error-position.ts";
 export {
   checkParseOptions,
   type DiscoveredTag,

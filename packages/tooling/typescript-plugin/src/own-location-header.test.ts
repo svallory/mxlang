@@ -2,10 +2,7 @@ import { resolve } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { createMxLanguagePlugin } from "./mx-language.ts";
-import {
-  dropBabelPositionSuffix,
-  dropOwnLocationHeader,
-} from "./own-location-header.ts";
+import { dropOwnLocationHeader } from "./own-location-header.ts";
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI strip
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -71,18 +68,5 @@ describe("a parse error's message carries no second copy of the location", () =>
     expect(message).toContain('The closing "div" tag does not match');
     expect(message).not.toMatch(/^\s*at .+:\d+:\d+\s*$/m);
     expect(message).not.toContain("page.mx");
-  });
-});
-
-describe("dropBabelPositionSuffix", () => {
-  it("drops a trailing 0-based (L:C), through SGR codes and whitespace", () => {
-    expect(dropBabelPositionSuffix("boom at 1:23 (1:32)")).toBe("boom at 1:23");
-    expect(dropBabelPositionSuffix("boom (1:32)\u001b[0m \n")).toBe("boom");
-  });
-
-  it("leaves other endings and a mid-message (L:C) alone", () => {
-    for (const text of ["call (foo)", "call (1)", "a (1:2) b", "plain"]) {
-      expect(dropBabelPositionSuffix(text)).toBe(text);
-    }
   });
 });

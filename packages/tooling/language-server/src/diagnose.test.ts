@@ -17,7 +17,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
   diagnoseDocument,
-  dropBabelPositionSuffix,
   type RelatedDiagnostics,
   splitCodeFrame,
 } from "./diagnose.ts";
@@ -1069,16 +1068,5 @@ describe("Babel's 0-based (L:C) suffix", () => {
     );
     expect(d?.message).toMatch(OPENER);
     expect(d?.message).not.toMatch(/\(\d+:\d+\)/);
-  });
-
-  it("matches only a trailing (L:C), through SGR codes too", () => {
-    expect(dropBabelPositionSuffix("boom (1:32)")).toBe("boom");
-    expect(dropBabelPositionSuffix("boom (1:32)\u001b[0m")).toBe("boom");
-    expect(dropBabelPositionSuffix("boom \u001b[31m(1:32)\u001b[39m")).toBe(
-      "boom \u001b[31m",
-    );
-    expect(dropBabelPositionSuffix("call (foo)")).toBe("call (foo)");
-    expect(dropBabelPositionSuffix("call (1)")).toBe("call (1)");
-    expect(dropBabelPositionSuffix("a (1:2) b")).toBe("a (1:2) b");
   });
 });

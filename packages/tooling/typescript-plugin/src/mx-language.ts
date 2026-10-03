@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
   type CustomTag,
+  dropOwnParserPosition,
   type Expr,
   type GeneratedMapping,
   type HostDeclarations,
@@ -44,10 +45,7 @@ import {
   mergeMappings,
   warningDiagnostic,
 } from "./language.ts";
-import {
-  dropBabelPositionSuffix,
-  dropOwnLocationHeader,
-} from "./own-location-header.ts";
+import { dropOwnLocationHeader } from "./own-location-header.ts";
 
 export const MX_LANGUAGE_ID = "mx";
 export const MX_EXTENSIONS = ["mx"] as const;
@@ -672,8 +670,10 @@ function toSyntaxError(
       start?: { line?: number; column?: number };
     };
   };
-  const authoredLine = error.line ?? error.loc?.line ?? error.loc?.start?.line;
-  const line = Math.max(1, authoredLine ?? 1);
+  const line = Math.max(
+    1,
+    error.line ?? error.loc?.line ?? error.loc?.start?.line ?? 1,
+  );
   const column = Math.max(
     0,
     error.column ?? error.loc?.column ?? error.loc?.start?.column ?? 0,
@@ -685,9 +685,8 @@ function toSyntaxError(
   );
   return {
     fileName,
-    // Babel's `(L:C)` repeats the position the offset already carries.
-    message:
-      authoredLine === undefined ? message : dropBabelPositionSuffix(message),
+    // Babel's `(L:C)` is dropped only when it repeats this position.
+    message: dropOwnParserPosition(cause, message),
     offset: Math.min(source.length, offset),
     source,
   };

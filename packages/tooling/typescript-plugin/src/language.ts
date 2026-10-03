@@ -8,6 +8,7 @@ import {
   readAngularConfig,
 } from "@mxlang/angular";
 import {
+  dropOwnParserPosition,
   isTranslateError,
   type MxWarning,
   reportScanDiagnostics,
@@ -32,7 +33,6 @@ import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
 import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
-import { dropBabelPositionSuffix } from "./own-location-header.ts";
 
 /**
  * Adapts `compileSolidMx`'s own `(source, options)` signature to the
@@ -1279,11 +1279,8 @@ function toSyntaxError(
   const message = error.message ?? "Invalid SolidMX source.";
   return {
     fileName,
-    // Babel's `(L:C)` repeats the position the offset already carries.
-    message:
-      error.loc?.line === undefined
-        ? message
-        : dropBabelPositionSuffix(message),
+    // Babel's `(L:C)` is dropped only when it repeats this position.
+    message: dropOwnParserPosition(cause, message),
     offset: Math.min(source.length, error.loc?.index ?? lineStart + column),
     source,
   };

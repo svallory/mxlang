@@ -12,7 +12,7 @@ The plugin resolves each file's policy through `@mxlang/target-registry` and sca
 
 ### Fixed: `TS80001` drops Babel's 0-based `(L:C)` in every surface (ts-plugin-ts80001-babel-suffix)
 
-The language plugin's compile-diagnostic producer now removes the trailing ` (line:column)` Babel appends to a syntax error, so tsserver, the language server and `mx-tsc` print the same text. Since the missing-close-tag opener position, an editor showed two bases in one sentence (`… opening "span" tag at 1:23 (1:32)`); it now reads `… opening "span" tag at 1:23`. Only a trailing, anchored `(digits:digits)` goes (SGR codes tolerated), and only when the diagnostic carries its own position.
+The language plugin's compile-diagnostic producer now removes the trailing ` (line:column)` Babel appends to a syntax error, so tsserver, the language server and `mx-tsc` print the same text. Since the missing-close-tag opener position, an editor showed two bases in one sentence (`… opening "span" tag at 1:23 (1:32)`); it now reads `… opening "span" tag at 1:23`. Only a trailing, anchored `(digits:digits)` goes (SGR codes tolerated), and only when it equals the parser error's own `loc` (Babel line, 0-based column); a wrapped custom-tag error, a `TranslateError` or a plain `Error` keeps its text, since its `(L:C)` may be the only copy of a foreign source's position.
 
 ### Fixed: `TS80001` no longer repeats the file and position in its message (translate-error-no-repeated-path, audit item 17)
 
