@@ -5,7 +5,7 @@ import {
   type Expr,
   type GeneratedMapping,
   type HostDeclarations,
-  type HostPolicyDiagnostic,
+  type TargetPolicyDiagnostic,
   type Ir,
   type IrNode,
   type Lookup,
@@ -30,7 +30,7 @@ import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
-import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
+import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 import {
   codeInformation,
   compileWithDependencies,
@@ -61,12 +61,12 @@ export interface MxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   /**
    * What resolving the host of each `.mx` file this plugin compiled had to say
    * (an unknown `mx.host`, a malformed `package.json`), as
-   * `resolveHostPolicyDetailed` reported it. Kept per plugin instance, never
+   * `resolveTargetPolicyDetailed` reported it. Kept per plugin instance, never
    * process-global: tsserver hosts several projects per process, and each
    * has its own plugin. One file's entries are replaced whenever it is
    * compiled again, so a fixed `package.json` stops being reported.
    */
-  getHostPolicyDiagnostics(fileName?: string): HostPolicyDiagnostic[];
+  getTargetPolicyDiagnostics(fileName?: string): TargetPolicyDiagnostic[];
 }
 
 export interface MxLanguagePluginOptions
@@ -91,7 +91,7 @@ export function createMxLanguagePlugin(
   const syntaxErrors = new Map<string, MxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
-  const hostPolicies = createHostPolicyRecorder();
+  const hostPolicies = createTargetPolicyRecorder();
   const resolveHost = (fileName: string) => hostPolicies.resolve(fileName);
 
   /**
@@ -194,7 +194,7 @@ export function createMxLanguagePlugin(
       return syntaxErrors.get(fileName);
     },
 
-    getHostPolicyDiagnostics(fileName) {
+    getTargetPolicyDiagnostics(fileName) {
       return hostPolicies.get(fileName);
     },
 

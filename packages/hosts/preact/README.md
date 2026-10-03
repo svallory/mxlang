@@ -29,7 +29,7 @@ Preact-specific code.
 ```
 
 The `mx.host` field is what routes `.mx` files here. It is read by
-`@mxlang/core`'s `resolveHostPolicy`, which the Vite plugin, the language
+`@mxlang/core`'s `resolveTargetPolicy`, which the Vite plugin, the language
 server and `mx-tsc` all share — so an editor, a `tsc` run and a build cannot
 disagree about what a `.mx` file is. A project depending on exactly one
 `@mxlang/*` host package gets that host without the field.

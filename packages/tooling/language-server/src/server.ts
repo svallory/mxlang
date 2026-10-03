@@ -1,6 +1,6 @@
 /**
  * The stdio transport: wires `diagnoseDocument` (see `diagnose.ts`) and
- * `resolveHostPolicy` (see `/core`'s `host-policy.ts`) into a `vscode-languageserver`
+ * `resolveTargetPolicy` (see `/core`'s `host-policy.ts`) into a `vscode-languageserver`
  * connection.
  *
  * Diagnostics only (decision 71/72): `textDocumentSync` is the one
@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withCalleeInputSources } from "@mxlang/core";
-import { resolveHostPolicyDetailed } from "@mxlang/target-registry";
+import { resolveTargetPolicyDetailed } from "@mxlang/target-registry";
 import {
   createConnection,
   type Diagnostic,
@@ -152,7 +152,7 @@ export function startServer(
       }
 
       const { policy: hostPolicy, diagnostics: hostPolicyDiagnostics } =
-        resolveHostPolicyDetailed(filePath);
+        resolveTargetPolicyDetailed(filePath);
       // Diagnostics raised inside a tag template belong to that file, not to
       // this one, and are published against its own URI below.
       const related: RelatedDiagnostics[] = [];

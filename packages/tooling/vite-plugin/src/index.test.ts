@@ -792,7 +792,7 @@ export default () => <div />;
     });
 
     it("does not resolve an mx.tags entry whose hosts excludes this host", async () => {
-      // `resolveHostPolicy(file).host` (`"html"`, from this fixture's
+      // `resolveTargetPolicy(file).host` (`"html"`, from this fixture's
       // package.json) is passed into `scanCached`; an entry restricted to
       // `hosts: ["solid"]` must stay invisible to the html scan —
       // decision 110(a).

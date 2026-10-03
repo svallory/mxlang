@@ -489,7 +489,7 @@ routes the call to the template as an L1-only tag does, now validated.
 
 ## Host-policy resolution
 
-**`resolveHostPolicy(filePath)`** (`src/host-policy.ts`) answers which host a
+**`resolveTargetPolicy(filePath)`** (`src/host-policy.ts`) answers which host a
 file compiles through, and whether strictly: walk up to the nearest
 `package.json`, take its `"mx"` field if present (`{ host, strict? }`, with
 `"translator"` accepted as a deprecated alias for `"html"`); failing that, use
@@ -523,8 +523,8 @@ Edge cases of the walk, each pinned by tests:
 - Two or more host dependencies still mean `html`.
 - `peerDependencies` are never counted: a host listed only as a peer does not select that host (decision 124).
 
-`resolveHostPolicyDetailed(filePath)` returns `{ policy, diagnostics }`;
-`resolveHostPolicy` is its `policy`. All diagnostics are warnings
+`resolveTargetPolicyDetailed(filePath)` returns `{ policy, diagnostics }`;
+`resolveTargetPolicy` is its `policy`. All diagnostics are warnings
 (`{ file, message, line, column }`, positioned in the `package.json`). Today
 only the Vite plugin (`this.warn`) and the language server (a warning on the
 open document) surface them; `mx-tsc` and the editor's TypeScript plugin get

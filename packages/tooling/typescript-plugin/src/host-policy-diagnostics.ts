@@ -1,5 +1,5 @@
-import type { HostPolicy, HostPolicyDiagnostic } from "@mxlang/core";
-import { resolveHostPolicyDetailed } from "@mxlang/target-registry";
+import type { TargetPolicy, TargetPolicyDiagnostic } from "@mxlang/core";
+import { resolveTargetPolicyDetailed } from "@mxlang/target-registry";
 
 /**
  * The TS code of a host-policy diagnostic (an unknown `mx.host`, a malformed
@@ -12,7 +12,7 @@ export const HOST_POLICY_DIAGNOSTIC_CODE = 80003;
  * Core's message with its own leading `<package.json> ` removed: wherever a
  * diagnostic is printed, the path is already its location, so it is said once.
  */
-export function hostPolicyText(diagnostic: HostPolicyDiagnostic): string {
+export function hostPolicyText(diagnostic: TargetPolicyDiagnostic): string {
   const own = `${diagnostic.file} `;
   return diagnostic.message.startsWith(own)
     ? diagnostic.message.slice(own.length)
@@ -25,7 +25,7 @@ export function hostPolicyText(diagnostic: HostPolicyDiagnostic): string {
  * every editor and `tsc` shows a position. The language server prints the
  * same text.
  */
-export function hostPolicyMessage(diagnostic: HostPolicyDiagnostic): string {
+export function hostPolicyMessage(diagnostic: TargetPolicyDiagnostic): string {
   return `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${hostPolicyText(diagnostic)}`;
 }
 
@@ -34,22 +34,22 @@ export function hostPolicyMessage(diagnostic: HostPolicyDiagnostic): string {
  * per-instance state (tsserver hosts several projects per process, each with
  * its own plugin), never a process-global listener.
  */
-export interface HostPolicyRecorder {
+export interface TargetPolicyRecorder {
   /**
    * Resolves `fileName`'s host policy and keeps what that said, replacing
    * what an earlier compile of the same file recorded (a fixed `package.json`
    * stops being reported).
    */
-  resolve(fileName: string): HostPolicy;
+  resolve(fileName: string): TargetPolicy;
   /** One file's diagnostics, or every recorded file's. */
-  get(fileName?: string): HostPolicyDiagnostic[];
+  get(fileName?: string): TargetPolicyDiagnostic[];
 }
 
-export function createHostPolicyRecorder(): HostPolicyRecorder {
-  const byFile = new Map<string, HostPolicyDiagnostic[]>();
+export function createTargetPolicyRecorder(): TargetPolicyRecorder {
+  const byFile = new Map<string, TargetPolicyDiagnostic[]>();
   return {
     resolve(fileName) {
-      const { policy, diagnostics } = resolveHostPolicyDetailed(fileName);
+      const { policy, diagnostics } = resolveTargetPolicyDetailed(fileName);
       byFile.set(fileName, diagnostics);
       return policy;
     },

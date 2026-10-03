@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
-import { type HostPolicy, clearScanCache } from "@mxlang/core";
+import { type TargetPolicy, clearScanCache } from "@mxlang/core";
 import {
   defaultTarget,
   hostOf,
@@ -33,7 +33,7 @@ import {
  * names a target first (decisions 129/132) and `html` is a target with no
  * host — its legacy `mx.host` value is what selects it.
  */
-function policy(host: string, strict?: boolean): HostPolicy {
+function policy(host: string, strict?: boolean): TargetPolicy {
   const target = hostTarget(host)?.target ?? defaultTarget();
   return {
     target,

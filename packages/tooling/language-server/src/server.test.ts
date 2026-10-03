@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostPolicy } from "@mxlang/core";
+import type { TargetPolicy } from "@mxlang/core";
 import {
   defaultTarget,
   hostOf,
@@ -98,7 +98,7 @@ function nextDiagnostics(
  * names a target first (decisions 129/132) and `html` is a target with no
  * host — its legacy `mx.host` value is what selects it.
  */
-function policy(host: string, strict?: boolean): HostPolicy {
+function policy(host: string, strict?: boolean): TargetPolicy {
   const target = hostTarget(host)?.target ?? defaultTarget();
   return {
     target,

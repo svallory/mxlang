@@ -8,7 +8,7 @@ import {
   readAngularConfig,
 } from "@mxlang/angular";
 import {
-  type HostPolicyDiagnostic,
+  type TargetPolicyDiagnostic,
   isTranslateError,
   type MxWarning,
   reportScanDiagnostics,
@@ -31,7 +31,7 @@ import type {
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
-import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
+import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 
 /**
  * Adapts `compileSolidMx`'s own `(source, options)` signature to the
@@ -72,7 +72,7 @@ export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
    * malformed `package.json`). Every plugin that resolves a host implements
    * it: `.mx`, `.solid.mx`, `.ng.mx` and `.astro.mx`.
    */
-  getHostPolicyDiagnostics?(fileName?: string): HostPolicyDiagnostic[];
+  getTargetPolicyDiagnostics?(fileName?: string): TargetPolicyDiagnostic[];
 }
 
 export interface SolidMxLanguagePlugin extends MxDiagnosticLanguagePlugin {
@@ -105,7 +105,7 @@ export function createSolidMxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
   const reportedScanDiagnostics = new Set<string>();
-  const hostPolicies = createHostPolicyRecorder();
+  const hostPolicies = createTargetPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -219,7 +219,7 @@ export function createSolidMxLanguagePlugin(
       return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
-    getHostPolicyDiagnostics(fileName) {
+    getTargetPolicyDiagnostics(fileName) {
       return hostPolicies.get(fileName);
     },
 
@@ -314,7 +314,7 @@ export function createNgMxLanguagePlugin(
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const reportedScanDiagnostics = new Set<string>();
-  const hostPolicies = createHostPolicyRecorder();
+  const hostPolicies = createTargetPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -429,7 +429,7 @@ export function createNgMxLanguagePlugin(
       return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
-    getHostPolicyDiagnostics(fileName) {
+    getTargetPolicyDiagnostics(fileName) {
       return hostPolicies.get(fileName);
     },
 

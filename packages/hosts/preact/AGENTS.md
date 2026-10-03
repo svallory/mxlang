@@ -10,7 +10,7 @@ table, the `key` rule, the error list and the `<try>` helper; this is the
 package-map entry.
 
 Selected by `package.json`'s `"mx": { "host": "preact" }` (or a lone
-`@mxlang/preact` dependency) through `@mxlang/core`'s `resolveHostPolicy` —
+`@mxlang/preact` dependency) through `@mxlang/core`'s `resolveTargetPolicy` —
 the same resolver the Vite plugin, the language server and `mx-tsc` share, so
 an editor, a `tsc` run and a build cannot disagree about a `.mx` file.
 

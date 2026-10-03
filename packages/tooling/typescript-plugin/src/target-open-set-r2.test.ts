@@ -33,7 +33,7 @@ function compile(file: string, source: string) {
   return {
     code: code.snapshot.getText(0, code.snapshot.getLength()),
     diagnostics: plugin.getCompileDiagnostics(file),
-    policy: registry.resolveHostPolicy(file),
+    policy: registry.resolveTargetPolicy(file),
   };
 }
 afterEach(() => {

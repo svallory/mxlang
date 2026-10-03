@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import {
   type CustomTag,
-  type HostPolicy,
+  type TargetPolicy,
   type MxWarning,
   type ScanDiagnostic,
   isTranslateError,
@@ -34,7 +34,7 @@ import {
   DiagnosticSeverity,
 } from "vscode-languageserver/node";
 
-export type { HostPolicy };
+export type { TargetPolicy };
 
 export const SOLID_MX_LANGUAGE_IDS = new Set(["solidmx", "SolidMX"]);
 
@@ -191,13 +191,13 @@ export function splitCodeFrame(
 }
 
 /**
- * Resolves a `HostPolicy` to the `strict` flag the translator compiles under.
+ * Resolves a `TargetPolicy` to the `strict` flag the translator compiles under.
  *
  * Solid, Preact and React documents take their own compiler path before this
  * function is called. Astro is always strict; HTML follows the resolved
  * policy.
  */
-function resolveStrict(hostPolicy: HostPolicy): boolean {
+function resolveStrict(hostPolicy: TargetPolicy): boolean {
   if (hostPolicy.host === "astro") return true;
   return hostPolicy.strict ?? false;
 }
@@ -254,7 +254,7 @@ function documentPath(uri: string): string {
 export function diagnoseDocument(
   text: string,
   uri: string,
-  hostPolicy: HostPolicy,
+  hostPolicy: TargetPolicy,
   onUnexpectedError?: (error: unknown) => void,
   languageId = "",
   /**
@@ -272,7 +272,7 @@ export function diagnoseDocument(
   dependencies?: Set<string>,
   /**
    * What resolving `hostPolicy` had to say — the `diagnostics` of
-   * `resolveHostPolicyDetailed` (`@mxlang/core`): a malformed `package.json`,
+   * `resolveTargetPolicyDetailed` (`@mxlang/core`): a malformed `package.json`,
    * an unknown `mx.host`. Each becomes a Warning on this document at 1:1,
    * worded `<package.json>:<line>:<col>: <message>` like the scan's (with
    * `relatedInformation` at the real range, and a copy pushed onto `related`

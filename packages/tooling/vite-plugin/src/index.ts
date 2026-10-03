@@ -5,7 +5,7 @@ import { type CustomTag, isTranslateError, type TargetLookup } from "@mxlang/cor
 import {
   builtinLookup,
   hostFilterKey,
-  resolveHostPolicyDetailed,
+  resolveTargetPolicyDetailed,
   scanCached,
 } from "@mxlang/target-registry";
 import type { MxRegionCompile } from "@mxlang/parser";
@@ -87,8 +87,8 @@ async function compileMarko(
   // Which host owns this file is the nearest `package.json`'s answer, the
   // same resolver the language server and `mx-tsc` use — so an editor, a
   // `tsc` run and a `vite build` cannot disagree about what a `.mx` file is.
-  const { resolveHostPolicy } = await import("@mxlang/target-registry");
-  const host = resolveHostPolicy(filename).host;
+  const { resolveTargetPolicy } = await import("@mxlang/target-registry");
+  const host = resolveTargetPolicy(filename).host;
   if (host === "preact") {
     const { compilePreactMx } = (await import("@mxlang/preact")) as {
       compilePreactMx: (
@@ -724,7 +724,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     file: string,
     warn: (message: string) => void,
   ): Record<string, CustomTag> | undefined => {
-    const resolution = resolveHostPolicyDetailed(file);
+    const resolution = resolveTargetPolicyDetailed(file);
     // The filter value `mx.tags[].hosts` is matched against, read off the
     // target: for a hostless target (`html`) it is the target's legacy
     // `mx.host` value, which is the string existing entries already match.

@@ -738,7 +738,7 @@ describe("MX language plugin", () => {
 
     it("does not resolve an mx.tags entry whose hosts excludes this host (whole-file .mx, html)", () => {
       // `createMxLanguagePlugin` resolves its host through
-      // `resolveHostPolicy`, which reads this fixture's `package.json` as
+      // `resolveTargetPolicy`, which reads this fixture's `package.json` as
       // `"html"` — an entry restricted to `hosts: ["solid"]` must stay
       // invisible here, decision 110(a).
       const dir = mkdtempSync(join(tmpdir(), "mx-tsplugin-hosts-"));

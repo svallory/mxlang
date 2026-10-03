@@ -10,7 +10,7 @@ import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
-import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
+import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 import {
   codeInformation,
   compileWithDependencies,
@@ -41,7 +41,7 @@ export function createAmxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
   const reportedScanDiagnostics = new Set<string>();
-  const hostPolicies = createHostPolicyRecorder();
+  const hostPolicies = createTargetPolicyRecorder();
 
   return {
     getLanguageId(fileName) {
@@ -143,7 +143,7 @@ export function createAmxLanguagePlugin(
       return diagnosticsFrom(compileDiagnostics, fileName);
     },
 
-    getHostPolicyDiagnostics(fileName) {
+    getTargetPolicyDiagnostics(fileName) {
       return hostPolicies.get(fileName);
     },
 

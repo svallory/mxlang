@@ -46,8 +46,8 @@ import {
   hostModuleSegment,
   hostValues,
   moduleSegments,
-  resolveHostPolicy,
-  resolveHostPolicyDetailed,
+  resolveTargetPolicy,
+  resolveTargetPolicyDetailed,
   scanCached,
 } from "./index.ts";
 
@@ -172,7 +172,7 @@ describe("mx.host values", () => {
     for (const value of hostValues()) {
       const selected = lookup.hostTarget(value);
       const expectedHost = selected && lookup.hostOf(selected.target);
-      const resolved = resolveHostPolicy(project({ mx: { host: value } }));
+      const resolved = resolveTargetPolicy(project({ mx: { host: value } }));
       expect(resolved.host, value).toBe(expectedHost);
       expect(resolved.target, value).toBe(selected?.target);
     }
@@ -183,7 +183,7 @@ describe("mx.host values", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     for (const value of hostValues()) {
       warn.mockClear();
-      resolveHostPolicy(project({ mx: { host: value } }));
+      resolveTargetPolicy(project({ mx: { host: value } }));
       const deprecated = lookup.hostTarget(value)?.deprecated === true;
       expect(warn.mock.calls.length > 0, value).toBe(deprecated);
     }
@@ -195,7 +195,7 @@ describe("mx.host values", () => {
     // value the lookup accepts, in registration order, with the deprecated one
     // named apart — which is exactly what the closed list produced (decision 07
     // Q9: the wording does not change).
-    const { diagnostics } = resolveHostPolicyDetailed(
+    const { diagnostics } = resolveTargetPolicyDetailed(
       project({ mx: { host: "bogus" } }),
     );
     expect(diagnostics[0]?.message).toBe(
@@ -212,7 +212,7 @@ describe("mx.host values", () => {
     const dir = join(work, "broken");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "package.json"), "{ not json");
-    const { diagnostics } = resolveHostPolicyDetailed(join(dir, "a.mx"));
+    const { diagnostics } = resolveTargetPolicyDetailed(join(dir, "a.mx"));
     expect(diagnostics[0]?.code).toBe("malformed-package-json");
     expect(diagnostics[0]?.message).toContain(
       'using the default "html" host for the files under',
@@ -228,7 +228,7 @@ describe("packages and rule 2 (the single target dependency)", () => {
       .map((t) => [t.name, t.packageName] as const),
   )("a project with only %s's package picks that target", (name, pkg) => {
     expect(lookup.fromPackage(pkg)).toBe(name);
-    const resolved = resolveHostPolicy(
+    const resolved = resolveTargetPolicy(
       project({ dependencies: { [pkg]: "*" } }),
     );
     expect(resolved.target).toBe(name);
@@ -253,7 +253,7 @@ describe("packages and rule 2 (the single target dependency)", () => {
   // target-open-set-resolver: stage inference until data PR 4 adds dispatch
   // to all tools. Core still selects data; the registry preserves base output.
   it("a lone @mxlang/data dependency retains the default until data PR 4", () => {
-    const resolved = resolveHostPolicy(
+    const resolved = resolveTargetPolicy(
       project({ dependencies: { "@mxlang/data": "*" } }),
     );
     expect(lookup.fromPackage("@mxlang/data")).toBe("data");
@@ -266,14 +266,14 @@ describe("packages and rule 2 (the single target dependency)", () => {
     // target itself; a project's own package does the same.
     expect(lookup.fromPackage("@mxlang/core")).toBeUndefined();
     expect(lookup.fromPackage("@mxlang/parser")).toBeUndefined();
-    const resolved = resolveHostPolicy(
+    const resolved = resolveTargetPolicy(
       project({ dependencies: { "@mxlang/core": "*" } }),
     );
     expect(resolved.target).toBe(defaultTarget());
   });
 
   it("two target packages are ambiguous and fall back to the default", () => {
-    const resolved = resolveHostPolicy(
+    const resolved = resolveTargetPolicy(
       project({ dependencies: { "@mxlang/solid": "*", "@mxlang/react": "*" } }),
     );
     expect(resolved.target).toBe(defaultTarget());
