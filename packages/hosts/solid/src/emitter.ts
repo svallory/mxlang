@@ -941,6 +941,27 @@ function blockExpression(nodes: IrNode[]): MappedCode {
   );
 }
 
+/**
+ * An arrow function's body is a **block** the moment its first token is `{`,
+ * so a body this emitter renders as a bare expression has to be wrapped for
+ * the arrow to RETURN it. The inlined dispatch of a dynamic target
+ * (`{(() => …)()}`) is exactly such a body, and it occurs whenever it is the
+ * SOLE child of anything that becomes an arrow body — a `<for>` row, a
+ * render-prop body, a `<try>` fallback, an attribute tag's renderable. Left
+ * unwrapped the callback returns `undefined` and the row renders nothing,
+ * silently: the output still compiles.
+ *
+ * The wrapper is the `<>…</>` fragment this emitter already uses for a
+ * multi-child body (`blockExpression` above), and it is a no-op whenever the
+ * body already starts as JSX (`<Tag>…`, `<>…`, `<Dynamic …`), so every
+ * wrapped-element shape is byte-identical to what it was.
+ */
+function arrowBody(body: MappedCode): MappedCode {
+  return body.code.trimStart().startsWith("<")
+    ? body
+    : concatMapped("<>", body, "</>");
+}
+
 function attributeTagAttrValue(
   attr: Exclude<Attr, { kind: "spread" }>,
 ): MappedCode {
@@ -984,8 +1005,11 @@ function attributeTagAttrValue(
 function attributeTagRenderable(tag: AttributeTag): MappedCode {
   if (!tag.hasBody) return concatMapped("undefined");
   const body = blockExpression(tag.block.children);
-  if (!tag.block.hasParams) return concatMapped("() => ", body);
-  return concatMapped(`(${tag.block.params.join(", ")}) => () => `, body);
+  if (!tag.block.hasParams) return concatMapped("() => ", arrowBody(body));
+  return concatMapped(
+    `(${tag.block.params.join(", ")}) => () => `,
+    arrowBody(body),
+  );
 }
 
 /**
@@ -1533,7 +1557,11 @@ export class SolidEmitter implements Emitter<string> {
 
     const body = inLazyScope(() => blockExpression(contentNodes));
     const children = node.content.hasParams
-      ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
+      ? concatMapped(
+          `{(${node.content.params.join(", ")}) => `,
+          arrowBody(body),
+          "}",
+        )
       : inLazyScope(() => renderWithNewEmitter(contentNodes));
     this.#out.push(
       concatMapped(
@@ -1602,7 +1630,10 @@ export class SolidEmitter implements Emitter<string> {
       named.set(
         "content",
         node.content.hasParams
-          ? concatMapped(`(${node.content.params.join(", ")}) => `, body)
+          ? concatMapped(
+              `(${node.content.params.join(", ")}) => `,
+              arrowBody(body),
+            )
           : body,
       );
     }
@@ -1776,7 +1807,11 @@ export class SolidEmitter implements Emitter<string> {
 
     const body = inLazyScope(() => blockExpression(contentNodes));
     const children = node.content.hasParams
-      ? concatMapped(`{(${node.content.params.join(", ")}) => `, body, "}")
+      ? concatMapped(
+          `{(${node.content.params.join(", ")}) => `,
+          arrowBody(body),
+          "}",
+        )
       : inLazyScope(() => renderWithNewEmitter(contentNodes));
     // The fallback body must not itself declare tag params: those are
     // meaningful only to the resolved component/renderer, which does not
@@ -1881,7 +1916,7 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(
         concatMapped(
           `<For each={${node.source.list.code}}${keyed}>{(${params.join(", ")}) => `,
-          inLazyScope(() => blockExpression(node.children)),
+          arrowBody(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),
       );
@@ -1909,13 +1944,13 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(
         concatMapped(
           `<For each={Object.entries(${node.source.object.code} ?? {})} keyed={e => e[0]}>{(${entry}) => `,
-          inLazyScope(() => blockExpression(node.children)),
+          arrowBody(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),
       );
       return;
     }
-    const body = inLazyScope(() => blockExpression(node.children));
+    const body = inLazyScope(() => arrowBody(blockExpression(node.children)));
 
     const from = node.source.from?.code ?? "0";
     const bound = node.source.bound.code;
@@ -1989,7 +2024,9 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
 
-    const bodyCode = inLazyScope(() => blockExpression(node.children)).code;
+    const bodyCode = inLazyScope(() =>
+      arrowBody(blockExpression(node.children)),
+    ).code;
     const bound = new Set(node.params);
     // A call to a sibling define reaches this text as the *gensym'd*
     // binding, not the author's name: `blockExpression` drove the child
@@ -2076,7 +2113,7 @@ export class SolidEmitter implements Emitter<string> {
       return;
     }
     const params = catchTag.block.params.join(", ");
-    const caught = blockExpression(catchTag.block.children);
+    const caught = arrowBody(blockExpression(catchTag.block.children));
     this.#out.push(
       concatMapped(
         `<Errored fallback={(${params}) => `,
