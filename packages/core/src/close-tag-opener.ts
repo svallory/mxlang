@@ -27,8 +27,45 @@ const VOID = new Set([
   "wbr",
 ]);
 
-/** Tags whose body is raw text, so a `<` inside is not markup. */
-const TEXT = new Set(["script", "style", "textarea", "html-comment"]);
+/**
+ * Marko 6.3.51's core taglib parse options, which `@marko/compiler` turns into
+ * htmljs-parser tag types (data/marko `packages/compiler/src/babel-plugin/parser.js:341-352`:
+ * `statement` -> `TagType.statement`, `openTagOnly` -> `void`, `text` -> `text`).
+ * Without them a TypeScript generic in `export interface Input<T = string>` is
+ * read as attribute type parameters and the replay dies before the closer.
+ * - statement: `class.ts:13`, `export.ts:38`, `import.ts:27`, and
+ *   `util/statement-tag.ts:28` (`client`, `server`, `static`)
+ * - openTagOnly: `const.ts:115`, `debug.ts:61`, `id.ts:131`, `let.ts:196`,
+ *   `lifecycle.ts:97`, `log.ts:70`, `return.ts:173`
+ * - text: `html-comment.ts:180`, `html-script.ts:9`, `html-style.ts:9`,
+ *   `script.ts:164`, `style.ts:114`; `textarea` is HTML's own text element.
+ * All under `packages/runtime-tags/src/translator/core/` in data/marko.
+ */
+const STATEMENT = new Set([
+  "class",
+  "client",
+  "export",
+  "import",
+  "server",
+  "static",
+]);
+const OPEN_TAG_ONLY = new Set([
+  "const",
+  "debug",
+  "id",
+  "let",
+  "lifecycle",
+  "log",
+  "return",
+]);
+const TEXT = new Set([
+  "html-comment",
+  "html-script",
+  "html-style",
+  "script",
+  "style",
+  "textarea",
+]);
 
 class Found extends Error {}
 
@@ -52,12 +89,18 @@ function findOpener(
     onOpenTagName(range) {
       const name = parser.read(range) || "div";
       if (pending) pending.name = name;
-      if (VOID.has(name)) return TagType.void;
+      if (STATEMENT.has(name)) return TagType.statement;
+      if (VOID.has(name) || OPEN_TAG_ONLY.has(name)) return TagType.void;
       if (TEXT.has(name)) return TagType.text;
       return undefined;
     },
     onOpenTagEnd(range) {
-      if (pending && !range.selfClosed && !VOID.has(pending.name)) {
+      if (
+        pending &&
+        !range.selfClosed &&
+        !VOID.has(pending.name) &&
+        !OPEN_TAG_ONLY.has(pending.name)
+      ) {
         stack.push(pending);
       }
       pending = null;
@@ -66,9 +109,10 @@ function findOpener(
       stack.pop();
     },
     onError(range) {
-      if (range.start === closerStart && range.message === message) {
-        opener = stack[stack.length - 1]?.start ?? null;
-      }
+      // Marko throws on the first error, but an aggregate error can carry
+      // others before this one; keep replaying past them.
+      if (range.start !== closerStart || range.message !== message) return;
+      opener = stack[stack.length - 1]?.start ?? null;
       throw new Found();
     },
   });
@@ -81,33 +125,70 @@ function findOpener(
 }
 
 /**
- * Adds ` at line:column` (1-based, UTF-16 columns) of the unclosed opener to a
- * mismatched-closing-tag compile error's message, in place. Any other error,
- * or one the replay cannot reproduce, is left untouched.
+ * `@marko/compiler`'s `CompileError.message` is an accessor whose setter
+ * discards the first assignment (it only swaps itself for a data property), so
+ * a plain `error.message = …` can silently do nothing.
  */
-export function annotateCloseTagOpener(error: unknown, source: string): void {
-  if (!(error instanceof Error)) return;
+function setMessage(error: Error, message: string): void {
+  Object.defineProperty(error, "message", {
+    value: message,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
+type Located = Error & {
+  loc?: { start?: { line: number; column: number } };
+  label?: unknown;
+  errors?: unknown[];
+};
+
+/** Annotates one error; returns the ` at line:column` it added, or null. */
+function annotateOne(error: Located, source: string): string | null {
   const found = MISMATCH.exec(error.message);
-  const loc = (error as { loc?: { start?: { line: number; column: number } } })
-    .loc?.start;
-  if (!found || !loc) return;
+  const loc = error.loc?.start;
+  if (!found || !loc) return null;
   let closerStart = 0;
   for (let line = 1; line < loc.line; line++) {
     const next = source.indexOf("\n", closerStart);
-    if (next === -1) return;
+    if (next === -1) return null;
     closerStart = next + 1;
   }
   closerStart += loc.column;
   const opener = findOpener(source, found[1] as string, closerStart);
-  if (opener === null) return;
+  if (opener === null) return null;
   const lineStart = source.lastIndexOf("\n", opener - 1) + 1;
   const line = source.slice(0, opener).split("\n").length;
   const suffix = ` at ${line}:${opener - lineStart + 1}`;
-  error.message = error.message.replace(MISMATCH, `$1${suffix}`);
+  setMessage(error, error.message.replace(MISMATCH, `$1${suffix}`));
   // `@marko/compiler`'s `CompileError` also keeps the reason alone as `label`,
-  // which the Vite plugin reports in place of the message.
-  const labelled = error as { label?: unknown };
-  if (typeof labelled.label === "string" && labelled.label === found[1]) {
-    labelled.label += suffix;
+  // which the Vite plugin reports instead of the message.
+  if (typeof error.label === "string" && error.label === found[1]) {
+    error.label += suffix;
+  }
+  return suffix;
+}
+
+/**
+ * Adds ` at line:column` (1-based, UTF-16 columns) of the unclosed opener to a
+ * mismatched-closing-tag compile error's message, in place. When Marko reports
+ * several parse errors it throws an aggregate with no `loc` of its own, whose
+ * message concatenates its `errors[]`: each entry is annotated, and the same
+ * suffix is written into the aggregate message. Any other error, or one the
+ * replay cannot reproduce, is left untouched.
+ */
+export function annotateCloseTagOpener(error: unknown, source: string): void {
+  if (!(error instanceof Error)) return;
+  const aggregate = error as Located;
+  annotateOne(aggregate, source);
+  for (const entry of aggregate.errors ?? []) {
+    if (typeof (entry as Located | null)?.message !== "string") continue;
+    const suffix = annotateOne(entry as Located, source);
+    // An annotated line no longer matches `MISMATCH`, so this rewrites the
+    // aggregate's next un-annotated mismatch line.
+    if (suffix) {
+      setMessage(aggregate, aggregate.message.replace(MISMATCH, `$1${suffix}`));
+    }
   }
 }

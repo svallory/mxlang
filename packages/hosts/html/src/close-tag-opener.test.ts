@@ -28,4 +28,25 @@ describe("html: a missing close tag names the opener's position", () => {
       'opening "p" tag at 1:15',
     );
   });
+
+  // Statement tags (`export`, `static`, …) are parsed as JS by Marko's core
+  // taglib, so TypeScript generics in them must not stop the replay.
+  it.each([
+    [
+      "export interface with a generic",
+      "export interface Input<T = string> { v: T }",
+    ],
+    [
+      "export interface with extends",
+      "export interface Input extends Base<string> { v: number }",
+    ],
+    [
+      "static const with a generic annotation",
+      "static const xs: Array<string> = []",
+    ],
+  ])("replays past %s", (_name, header) => {
+    expect(reasonLine(`${header}\n<div>\n  <p>x\n</div>\n`)).toContain(
+      'opening "p" tag at 3:3',
+    );
+  });
 });

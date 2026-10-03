@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: opener position on statement tags with TypeScript generics and on aggregate errors (missing-close-tag-opener-position, round 2)
+
+The replay now declares Marko 6.3.51's core taglib parse options (statement: `class client export import server static`; openTagOnly: `const debug id let lifecycle log return`; text: `html-comment html-script html-style script style textarea`), so `export interface Input<T = string>` or `static const xs: Array<string>` above the mismatch no longer defeats it. An aggregate error (several parse errors, no `loc`) has each entry annotated and the same suffix written into the aggregate message. The message is written with `defineProperty` because `CompileError.message`'s setter discards the first assignment.
+
 ### Added: a mismatched closing tag names the opener's position (missing-close-tag-opener-position, audit item 12)
 
 `compileSource` appends ` at line:column` (1-based, UTF-16 columns, the `<` of the innermost unclosed tag) to Marko's `The closing "div" tag does not match the corresponding opening "p" tag` error, on `message` and on `label`. The error stays at the closer. Marko 6.3.51's error carries no second location, so core replays the source through `htmljs-parser` (new exact-pinned dependency, 5.15.0, the copy `@marko/compiler` already uses) and only annotates when the replay reproduces the same error at the same position; otherwise the message is untouched. Reaches every Marko-path host (html, preact, react, hono, astro, angular whole-file).

@@ -54,4 +54,32 @@ describe("a mismatched closing tag names the opener's position", () => {
     const message = failure("<div>x\n");
     expect(message).not.toMatch(/ at \d+:\d+\s*$/m);
   });
+
+  it("annotates an aggregate error that has no loc of its own", () => {
+    // A generic arrow in an attribute is a second parse error, so Marko
+    // throws an aggregate (`errors[]`, no `loc`/`label`).
+    const source =
+      "<div>\n  <p onClick=<T,>(x: T) => x>a</p>\n  <section>\n    <p>x\n</div>\n";
+    let thrown: (Error & { errors?: Error[] }) | undefined;
+    try {
+      (compileSource as (...args: unknown[]) => unknown)(
+        source,
+        "/fixtures/x.mx",
+        {},
+        {},
+      );
+    } catch (error) {
+      thrown = error as Error & { errors?: Error[] };
+    }
+    expect(thrown?.errors?.length).toBe(2);
+    const strip = (text: string) =>
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI strip
+      text.replace(/\u001b\[[0-9;]*m/g, "");
+    expect(markerLine(strip(thrown?.message ?? ""))).toContain(
+      'opening "p" tag at 4:5',
+    );
+    expect(markerLine(strip(thrown?.errors?.[1]?.message ?? ""))).toContain(
+      'opening "p" tag at 4:5',
+    );
+  });
 });
