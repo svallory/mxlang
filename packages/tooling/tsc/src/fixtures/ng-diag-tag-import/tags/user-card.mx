@@ -1,0 +1,2 @@
+export interface Input { title: string }
+<span>${input.title}</span>

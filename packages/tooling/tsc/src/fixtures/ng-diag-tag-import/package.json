@@ -1,0 +1,6 @@
+{
+  "name": "ng-diag-tag-import",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

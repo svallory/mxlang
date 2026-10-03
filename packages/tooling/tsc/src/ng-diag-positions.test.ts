@@ -48,4 +48,23 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
     },
     SPAWN_TIMEOUT_MS,
   );
+
+  it(
+    "no longer splices a hoisted tags/ import into the decorator (TS1206/TS2304)",
+    () => {
+      const dir = join(fixtures, "ng-diag-tag-import");
+      const result = run(mxTsc, ["--noEmit", "-p", dir]);
+      // The run still fails, and still prints `TS-991010` ('imports' must be
+      // an array of components…): the called tag's class is not resolvable
+      // as an Angular component yet (its `.mx` module hits `TS80001`, the
+      // Angular host is not wired into the plugin), so the compiler cannot
+      // read `imports: [UserCard]` statically and drops the template
+      // diagnostics for the component. That is a separate, pre-existing
+      // problem; what this test pins is only that the decorator is not cut
+      // in two by the hoisted import.
+      expect(result.output).not.toContain("TS1206");
+      expect(result.output).not.toContain("TS2304");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 });
