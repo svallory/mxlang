@@ -44,7 +44,10 @@ import {
   mergeMappings,
   warningDiagnostic,
 } from "./language.ts";
-import { dropOwnLocationHeader } from "./own-location-header.ts";
+import {
+  dropBabelPositionSuffix,
+  dropOwnLocationHeader,
+} from "./own-location-header.ts";
 
 export const MX_LANGUAGE_ID = "mx";
 export const MX_EXTENSIONS = ["mx"] as const;
@@ -669,21 +672,22 @@ function toSyntaxError(
       start?: { line?: number; column?: number };
     };
   };
-  const line = Math.max(
-    1,
-    error.line ?? error.loc?.line ?? error.loc?.start?.line ?? 1,
-  );
+  const authoredLine = error.line ?? error.loc?.line ?? error.loc?.start?.line;
+  const line = Math.max(1, authoredLine ?? 1);
   const column = Math.max(
     0,
     error.column ?? error.loc?.column ?? error.loc?.start?.column ?? 0,
   );
   const offset = (lineOffsets(source)[line - 1] ?? source.length) + column;
+  const message = dropOwnLocationHeader(
+    error.message ?? "Invalid MX source.",
+    fileName,
+  );
   return {
     fileName,
-    message: dropOwnLocationHeader(
-      error.message ?? "Invalid MX source.",
-      fileName,
-    ),
+    // Babel's `(L:C)` repeats the position the offset already carries.
+    message:
+      authoredLine === undefined ? message : dropBabelPositionSuffix(message),
     offset: Math.min(source.length, offset),
     source,
   };

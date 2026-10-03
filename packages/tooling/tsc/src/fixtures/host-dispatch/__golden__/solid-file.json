@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "The closing \"div\" tag does not match the corresponding opening \"span\" tag at 1:23 (1:32)",
+            "message": "The closing \"div\" tag does not match the corresponding opening \"span\" tag at 1:23",
             "range": {
               "start": {
                 "line": 0,
@@ -33,7 +33,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/solid-file/broken.solid.mx",
-            "message": "The closing \"div\" tag does not match the corresponding opening \"span\" tag at 1:23 (1:32)",
+            "message": "The closing \"div\" tag does not match the corresponding opening \"span\" tag at 1:23",
             "offset": 32,
             "category": "error"
           }

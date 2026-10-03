@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
   diagnoseDocument,
+  dropBabelPositionSuffix,
   type RelatedDiagnostics,
   splitCodeFrame,
 } from "./diagnose.ts";
@@ -1044,5 +1045,40 @@ describe("splitCodeFrame headers", () => {
     const own =
       "\n    at /app/page.mx:1:1\n    > 1 | <div>\n        | ^^^^^ boom";
     expect(splitCodeFrame(own, "/app/page.mx").at).toBeUndefined();
+  });
+});
+
+describe("Babel's 0-based (L:C) suffix", () => {
+  const OPENER = /opening "span" tag at \d+:\d+$/;
+
+  it("is dropped from a .solid.mx mismatch, keeping the ` at L:C` opener", () => {
+    const [d] = diagnoseDocument(
+      "export const A = <div><span>oops</div>;\n",
+      "file:///project/Broken.solid.mx",
+      { host: "solid" },
+    );
+    expect(d?.message).toMatch(OPENER);
+    expect(d?.message).not.toMatch(/\(\d+:\d+\)/);
+  });
+
+  it("is dropped from a whole-file .mx mismatch", () => {
+    const [d] = diagnoseDocument(
+      "<div><span>oops</div>\n",
+      "file:///project/page.mx",
+      { host: "html" },
+    );
+    expect(d?.message).toMatch(OPENER);
+    expect(d?.message).not.toMatch(/\(\d+:\d+\)/);
+  });
+
+  it("matches only a trailing (L:C), through SGR codes too", () => {
+    expect(dropBabelPositionSuffix("boom (1:32)")).toBe("boom");
+    expect(dropBabelPositionSuffix("boom (1:32)\u001b[0m")).toBe("boom");
+    expect(dropBabelPositionSuffix("boom \u001b[31m(1:32)\u001b[39m")).toBe(
+      "boom \u001b[31m",
+    );
+    expect(dropBabelPositionSuffix("call (foo)")).toBe("call (foo)");
+    expect(dropBabelPositionSuffix("call (1)")).toBe("call (1)");
+    expect(dropBabelPositionSuffix("a (1:2) b")).toBe("a (1:2) b");
   });
 });

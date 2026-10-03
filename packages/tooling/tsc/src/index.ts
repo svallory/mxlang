@@ -580,9 +580,10 @@ export function reportCompileDiagnostics(
           : typescript.DiagnosticCategory.Warning,
       code: diagnostic.category === "error" ? 80001 : 80002,
       source: "mxlang",
-      // Babel appends its own 0-based `(line:column)` to a syntax error's
-      // message; tsc already prints `file(line,column)` (1-based), so the
-      // suffix is a second, different spelling of the same position.
+      // The language plugin already drops Babel's 0-based `(line:column)` at
+      // its source (`dropBabelPositionSuffix`), so every surface agrees. Kept
+      // as a harmless guard for a diagnostic that did not come from a
+      // `toSyntaxError` (tsc prints `file(line,column)`, 1-based).
       messageText: diagnostic.message.replace(/\s*\(\d+:\d+\)\s*$/, ""),
     })),
     {

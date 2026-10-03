@@ -32,6 +32,7 @@ import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
 import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
+import { dropBabelPositionSuffix } from "./own-location-header.ts";
 
 /**
  * Adapts `compileSolidMx`'s own `(source, options)` signature to the
@@ -1275,9 +1276,14 @@ function toSyntaxError(
   const column = Math.max(0, error.loc?.column ?? 0);
   const lineStart = lineOffsets(source)[line - 1] ?? source.length;
 
+  const message = error.message ?? "Invalid SolidMX source.";
   return {
     fileName,
-    message: error.message ?? "Invalid SolidMX source.",
+    // Babel's `(L:C)` repeats the position the offset already carries.
+    message:
+      error.loc?.line === undefined
+        ? message
+        : dropBabelPositionSuffix(message),
     offset: Math.min(source.length, error.loc?.index ?? lineStart + column),
     source,
   };

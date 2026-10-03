@@ -121,6 +121,18 @@ function warningDiagnostics(
   return own;
 }
 
+// With colours on, Marko wraps the tail of a message in SGR codes.
+const SGR = "(?:\\u001b\\[[0-9;]*m)*";
+const BABEL_POSITION_SUFFIX = new RegExp(`\\s*\\(\\d+:\\d+\\)${SGR}\\s*$`);
+
+/**
+ * Drops Babel's trailing 0-based ` (line:column)`. Same anchored match as the
+ * TypeScript plugin's `dropBabelPositionSuffix`: `(foo)` and `(1)` endings stay.
+ */
+export function dropBabelPositionSuffix(message: string): string {
+  return message.replace(BABEL_POSITION_SUFFIX, "");
+}
+
 /**
  * Splits a compiler error into its compact text and its code frame.
  *
@@ -450,6 +462,9 @@ export function diagnoseDocument(
         filePathOf(uri),
       );
       const { codeFrame, at } = split;
+      // Babel's 0-based `(L:C)` repeats the position the range carries; the
+      // TypeScript plugin drops it at its source, so the two surfaces agree.
+      split.message = dropBabelPositionSuffix(split.message);
       // A wrapped callee parse error has no `file` of its own: its real
       // location lives only in the frame's `at` line. Name it, and link it.
       const callee = at && !position.file ? at : undefined;

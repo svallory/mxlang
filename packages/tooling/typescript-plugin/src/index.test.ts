@@ -4363,3 +4363,70 @@ describe("host-policy diagnostics through tsserver", () => {
     expect(p.diagnostics()).toHaveLength(1);
   });
 });
+
+describe("TS80001 text carries one position base", () => {
+  const dir = `${here}/fixtures/angular-ngmx`;
+  const BABEL_SUFFIX = /\s*\(\d+:\d+\)\s*$/;
+  const OPENER = /opening "span" tag at \d+:\d+$/;
+
+  function ts80001(fileName: string, source: string): string[] {
+    const consumer = `${dirname(fileName)}/consumer.ts`;
+    const service = createPluginService(
+      {
+        [fileName]: source,
+        [`${dir}/stub.ts`]:
+          "export function Component(_: object): ClassDecorator { return () => undefined; }",
+        [consumer]: `import "./${fileName.split("/").pop()}";\n`,
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+    return service
+      .getSyntacticDiagnostics(fileName)
+      .filter((diagnostic) => diagnostic.code === 80001)
+      .map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      );
+  }
+
+  it("a .solid.mx mismatch keeps ` at L:C` and drops Babel's ` (L:C)`", () => {
+    const [message, ...rest] = ts80001(
+      `${dir}/broken.solid.mx`,
+      "export const A = <div><span>oops</div>;\n",
+    );
+    expect(rest).toEqual([]);
+    expect(message).toMatch(OPENER);
+    expect(message).not.toMatch(BABEL_SUFFIX);
+  });
+
+  it("a .ng.mx region error keeps ` at L:C` and drops Babel's ` (L:C)`", () => {
+    const [message, ...rest] = ts80001(
+      `${dir}/x.component.ng.mx`,
+      [
+        'import { Component } from "./stub.ts";',
+        "@Component({",
+        '  selector: "app-x",',
+        "  template: <div><span>oops</div>,",
+        "})",
+        "export class XComponent {}",
+      ].join("\n"),
+    );
+    expect(rest).toEqual([]);
+    expect(message).toMatch(OPENER);
+    expect(message).not.toMatch(BABEL_SUFFIX);
+  });
+
+  it("the language plugin's own diagnostic is already stripped", () => {
+    const fileName = `${dir}/broken.solid.mx`;
+    const plugin = createSolidMxLanguagePlugin(ts);
+    plugin.createVirtualCode?.(
+      fileName,
+      SOLID_MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString("export const A = <div><span>oops</div>;\n"),
+      { getAssociatedScript: () => undefined },
+    );
+    const [diagnostic] = plugin.getCompileDiagnostics(fileName);
+    expect(diagnostic?.message).toMatch(OPENER);
+    expect(plugin.getSyntaxError(fileName)?.message).not.toMatch(BABEL_SUFFIX);
+  });
+});
