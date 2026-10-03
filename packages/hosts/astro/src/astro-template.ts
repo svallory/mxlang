@@ -197,8 +197,8 @@ const declarations: HostDeclarations = {
   isElement: (name) => !isComponentName(name),
   isComponent,
   rejectUnknownTag,
-  scriptletReplacement: (name) =>
-    `declare it in the \`---\` fence (\`const ${name} = …;\`)`,
+  scriptletReplacement: (name, keyword) =>
+    `declare it in the \`---\` fence (\`${keyword} ${name} = …;\`)`,
   keepComments: true,
   isDelegatedTag: (name) => name === DYNAMIC_TAG,
   resolveDelegatedTag: (name, node): DelegatedTagData => {

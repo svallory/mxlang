@@ -95,7 +95,11 @@ import type {
   Position,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
-import { declaredName, scriptletSentence } from "./parse-error-hints.ts";
+import {
+  declaredBinding,
+  type ScriptletDeclaration,
+  scriptletSentence,
+} from "./parse-error-hints.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -414,13 +418,16 @@ const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
  * The variable a scriptlet's first statement declares, when it declares one.
  * A scriptlet that does not parse is kept as its source text.
  */
-function declaredVariable(scriptlet: Node): string | undefined {
+function declaredVariable(scriptlet: Node): ScriptletDeclaration | undefined {
   const first = scriptlet.body?.[0];
-  if (typeof first?.source === "string") return declaredName(first.source);
+  if (typeof first?.source === "string") return declaredBinding(first.source);
   if (scriptlet.body?.length !== 1) return undefined;
   const declarations = first?.declarations;
   const id = declarations?.length === 1 ? declarations[0]?.id : undefined;
-  return id?.type === "Identifier" ? id.name : undefined;
+  return id?.type === "Identifier" &&
+    ["const", "let", "var"].includes(first.kind)
+    ? { name: id.name, keyword: first.kind }
+    : undefined;
 }
 
 function foreignAttrHint(name: string): string {

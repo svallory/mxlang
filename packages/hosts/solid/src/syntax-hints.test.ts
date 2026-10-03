@@ -56,6 +56,20 @@ describe("scriptlets (solid)", () => {
     ).not.toThrow();
   });
 
+  it.each(["let", "var"])(
+    "preserves the %s keyword in the module advice",
+    (keyword) => {
+      expect(
+        message(file(`<div>\n      $ ${keyword} y = 1;\n    </div>`)),
+      ).toBe(
+        `scriptlets (\`$ statement\`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (\`${keyword} y = …;\`) (4:6)`,
+      );
+      expect(() =>
+        compileFile(`${keyword} y = 1;\ny = 2;\n${file(`<p>\${y}</p>`)}`),
+      ).not.toThrow();
+    },
+  );
+
   it("s07: says what to write instead", () => {
     expect(message(file("<div>\n      $ const y = ;\n    </div>"))).toBe(
       "scriptlets (`$ statement`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (`const y = …;`) (4:6)",

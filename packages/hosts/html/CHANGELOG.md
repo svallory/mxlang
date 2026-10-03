@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (scriptlet-hint-let-var):** `$ let`/`$ var` now suggest `<let/name=…/>` on the default initial-value target, not `<const>`. Strict mode rejects `<let>` and omits keyword advice for mutable declarations. `$ const` advice is unchanged; no rendering semantics changed.
+
 - **Test (no-repeat-path-relative-spellings):** `error-no-repeated-path.test.ts` pins that a `TranslateError` message drops the compiled-file prefix for a *relative* `filename` and a filename under a symlinked directory, not only the exact absolute spelling. The fix is in `@mxlang/core`'s `dropCompiledFilePrefix` (resolve/realpath comparison); no html code changes.
 
 - **Fix (jsx-whitespace-body-parity, decision 141):** imported components and discovered `tags/*.mx` now forward same-line whitespace-only bodies as one space, matching Marko 6.3.51 through the shared core body-presence fix. Newline indentation remains absent. Pinned by rendered output, including tabs, CRLF and comments beside whitespace.

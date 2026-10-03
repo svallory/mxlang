@@ -26,8 +26,13 @@ type Located = Error & {
 };
 
 /** What to write instead of a scriptlet that declares `name`, core's default. */
-const DEFAULT_REPLACEMENT = (name: string) =>
-  `declare a value with \`<const/${name}=…/>\``;
+const DEFAULT_REPLACEMENT = (name: string, keyword: "const" | "let" | "var") =>
+  `declare a value with \`<${keyword === "const" ? "const" : "let"}/${name}=…/>\``;
+
+export type ScriptletDeclaration = {
+  name: string;
+  keyword: "const" | "let" | "var";
+};
 
 /**
  * The scriptlet message tail: the sentence every host shares, plus the host's
@@ -36,25 +41,30 @@ const DEFAULT_REPLACEMENT = (name: string) =>
  * so nothing is advised for them.
  */
 export function scriptletSentence(
-  name: string | undefined,
+  binding: ScriptletDeclaration | undefined,
   declarations?: Pick<HostDeclarations, "scriptletReplacement">,
 ): string {
-  if (!name) return "";
-  return `; ${(declarations?.scriptletReplacement ?? DEFAULT_REPLACEMENT)(name)}`;
+  if (!binding) return "";
+  const replacement = (
+    declarations?.scriptletReplacement ?? DEFAULT_REPLACEMENT
+  )(binding.name, binding.keyword);
+  return replacement ? `; ${replacement}` : "";
 }
 
 /**
  * The variable a `const|let|var NAME =` statement declares, when it declares
  * exactly that one (no second declarator after a top-level comma).
  */
-export const declaredName = (statement: string): string | undefined => {
+export const declaredBinding = (
+  statement: string,
+): ScriptletDeclaration | undefined => {
   const found = statement.match(
-    /^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=([\s\S]*)$/,
+    /^\s*(const|let|var)\s+([A-Za-z_$][\w$]*)\s*=([\s\S]*)$/,
   );
   if (!found) return undefined;
   let depth = 0;
   let quote = "";
-  for (const char of found[2] ?? "") {
+  for (const char of found[3] ?? "") {
     if (quote) {
       if (char === quote) quote = "";
     } else if ("\"'`".includes(char)) quote = char;
@@ -62,7 +72,10 @@ export const declaredName = (statement: string): string | undefined => {
     else if (")]}".includes(char)) depth--;
     else if (char === "," && depth === 0) return undefined;
   }
-  return found[1];
+  return {
+    name: found[2] as string,
+    keyword: found[1] as ScriptletDeclaration["keyword"],
+  };
 };
 
 /**
@@ -125,7 +138,7 @@ function hintFor(
   const text = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
   const scriptlet = text.match(/^\s*\$\s+(\S.*)$/);
   if (scriptlet && !insideBraces(source, lineStart)) {
-    return `scriptlets (\`$ …\`) are not supported${scriptletSentence(declaredName(scriptlet[1] ?? ""), declarations)}`;
+    return `scriptlets (\`$ …\`) are not supported${scriptletSentence(declaredBinding(scriptlet[1] ?? ""), declarations)}`;
   }
   return null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { declaredName, hintParseError } from "./parse-error-hints.ts";
+import { declaredBinding, hintParseError } from "./parse-error-hints.ts";
 
 const REASON = 'Unexpected token, expected "{"';
 
@@ -39,7 +39,17 @@ describe("hintParseError on an aggregate", () => {
   });
 });
 
-describe("declaredName", () => {
+describe("declaredBinding", () => {
+  it.each(["const", "let", "var"])(
+    "retains the %s keyword with the single variable",
+    (keyword) => {
+      expect(declaredBinding(`${keyword} count = f(a, b);`)).toEqual({
+        name: "count",
+        keyword,
+      });
+    },
+  );
+
   it.each([
     ["const x = 1;", "x"],
     ["let n = f(a, b);", "n"],
@@ -52,6 +62,6 @@ describe("declaredName", () => {
     ["class Foo {}", undefined],
     ['import Foo from "./Foo.mx";', undefined],
   ])("%s -> %s", (statement, expected) => {
-    expect(declaredName(statement)).toBe(expected);
+    expect(declaredBinding(statement)?.name).toBe(expected);
   });
 });

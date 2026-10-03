@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (scriptlet-hint-let-var):** mutable `$ let`/`$ var` declarations no longer get an immutable `<const>` replacement. This host rejects `<let>`, so its declaration omits keyword advice; `$ const` advice is unchanged. Shared with React and Hono.
+
 - **Fix (jsx-whitespace-body-parity, decision 141):** a same-line whitespace-only body forwarded through `<${input.content}/>` now renders one space, through imports and discovered `tags/*.mx`, rather than disappearing in core. Tabs normalize to one space; newline indentation stays absent. Rendered parity tests cover preact/react/hono; the existing text-body dispatch fix is unchanged.
 
 - **Fix (jsx-intrinsic-prop-errors, decision 140 (b)):** tooling now reports native-element non-event prop type errors (`maxLength="x"`, `foo=1`, `tabIndex="a"`, `class=5`) at the authored attribute name, using the host's own JSX types. Includes boolean props, `key`/`ref`, structured class/style and SVG props; event-prop names, spreads, custom elements and zero-width default-attribute names remain unmapped. Runtime code and Vite source maps are unchanged. Shared with `@mxlang/react` and `@mxlang/hono`.

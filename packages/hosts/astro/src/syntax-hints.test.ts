@@ -25,6 +25,21 @@ describe("scriptlets (astro)", () => {
     );
   });
 
+  it.each(["let", "var"])(
+    "preserves %s mutability in fence advice",
+    (keyword) => {
+      expect(message(`---\n---\n$ ${keyword} y = 1;\n<p>\${y}</p>`)).toBe(
+        `scriptlets (\`$ statement\`) are not supported in MX (decision 54); declare it in the \`---\` fence (\`${keyword} y = …;\`)`,
+      );
+      expect(() =>
+        lowerAstroMx(
+          `---\n${keyword} y = 1;\ny = 2;\n---\n<p>\${y}</p>`,
+          "Test.astro.mx",
+        ),
+      ).not.toThrow();
+    },
+  );
+
   it("the form it suggests compiles", () => {
     expect(() =>
       lowerAstroMx("---\nconst y = 1;\n---\n<p>${y}</p>", "Test.astro.mx"),

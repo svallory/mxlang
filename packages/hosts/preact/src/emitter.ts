@@ -147,6 +147,10 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
     name: declarationName,
     attrTags: 2,
     tags: statefulErrors(dialectName),
+    // `<let>` is not this host's state model. Never turn a mutable JS
+    // declaration into an immutable `<const>` just to offer a fix.
+    scriptletReplacement: (name, keyword) =>
+      keyword === "const" ? `declare a value with \`<const/${name}=…/>\`` : "",
     // Element-vs-component follows Marko's own rule — what the taglib lookup
     // and the template's own bindings resolve the name to — not JSX's casing
     // rule, so a `tags/`-discovered `<badge/>` is the component it is in Marko.

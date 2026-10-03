@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: mutable scriptlet replacement advice (scriptlet-hint-let-var)
+
+Both the parse-error and lowering paths preserve the declared `const`/`let`/`var` keyword through `HostDeclarations.scriptletReplacement(name, keyword)`. The default suggests `<const>` only for `const`, and `<let>` for `let`/`var`; hosts that reject `<let>` override the advice or omit it by returning an empty string. Host choices remain outside core (decision 126); scriptlets are still rejected (decision 54).
+
 ### Fixed: preserve normalized whitespace-only bodies (jsx-whitespace-body-parity, decision 141)
 
 `hasContent` now tests Marko-normalized text for nonemptiness rather than trimming it again. Same-line spaces/tabs supply one-space content through imported components, discovered template tags and attribute-tag bodies; newline indentation already removed by Marko stays absent. Host-independent, with no second normalization pass. `openTagOnly` consequently rejects retained same-line spaces on transform tags too; dropped newline indentation stays accepted. Rendered regressions cover all seven hosts; the data target retains the same text and still rejects it under `structural: "reject"`.

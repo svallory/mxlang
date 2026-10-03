@@ -652,8 +652,8 @@ export const solidDeclarations: HostDeclarations = {
     );
   },
   resolveAttributeMethod: () => true,
-  scriptletReplacement: (name) =>
-    `declare it in the surrounding TypeScript module (\`const ${name} = …;\`)`,
+  scriptletReplacement: (name, keyword) =>
+    `declare it in the surrounding TypeScript module (\`${keyword} ${name} = …;\`)`,
 };
 
 function escapeText(value: string): string {

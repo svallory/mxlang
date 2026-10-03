@@ -610,6 +610,8 @@ const STRICT_TAGS: Record<string, Disposition> = {
 export const strictPolicy: Policy = {
   ...policy,
   tags: STRICT_TAGS,
+  scriptletReplacement: (name, keyword) =>
+    keyword === "const" ? `declare a value with \`<const/${name}=…/>\`` : "",
 };
 
 /**

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (scriptlet-hint-let-var):** `$ let`/`$ var` no longer suggest an immutable `<const>` rewrite. Angular rejects `<let>`, so its host declaration omits keyword advice for mutable scriptlets; `$ const` advice is unchanged.
+
 - **Fix (angular-build-unlocated-babel-suffix):** a tag file's parse error printed Babel's own 0-based `(L:C)` suffix (`Chip.mx error: …/Chip.mx: …/Chip.mx: Unexpected token (1:32)`) — the path twice, the column 0-based, and no usable position at all. The tag error path now goes through `positionOf` like the `.ng.mx` one: the position prints from `err.loc` as 1-based `file:line:column` (`Chip.mx:1:33`), Babel's path prefix and trailing 0-based suffix are stripped on every branch (located or not), so the README's "every printed position is 1-based" holds for these errors too. The log line and `errors[].message` are compact — `file:line:col error: reason` with the reason alone — while the on-page error template keeps the filename-bearing display message; `positionOf` is exported `@internal` for the position-hygiene regressions.
 
 - **Fix (ng-mx-tags-call-ts991010 round 2):** virtual tag modules default to the same cached per-file custom-tag discovery as the build, preserving nested component imports. Readers reuse `scanCached` rather than walking the whole project on every compile/check. The reader API is marked tooling-only, unstable and `@internal`; the README now tells authors to save a changed tag and recheck its caller because Angular workers read disk.

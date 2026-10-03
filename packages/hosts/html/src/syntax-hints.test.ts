@@ -79,9 +79,30 @@ describe("scriptlets (html)", () => {
   it("p09-shaped: an unterminated expression names the declared variable", () => {
     const { message } = failure("$ let count = {;\n<p>1</p>");
     expect(reasonOf(message)).toBe(
-      "EOF reached while parsing expression; scriptlets (`$ …`) are not supported; declare a value with `<const/count=…/>`",
+      "EOF reached while parsing expression; scriptlets (`$ …`) are not supported; declare a value with `<let/count=…/>`",
     );
   });
+
+  it.each(["let", "var"])(
+    "preserves %s mutability, but strict mode offers no immutable rewrite",
+    (keyword) => {
+      const source = `$ ${keyword} x = 1;\n<p>\${x}</p>`;
+      expect(failure(source).message).toBe(
+        "scriptlets (`$ statement`) are not supported in MX (decision 54); declare a value with `<let/x=…/>`",
+      );
+      expect(() =>
+        compile(`<let/x=1/><p>\${x}</p>`, "/fixtures/test.mx"),
+      ).not.toThrow();
+      expect(() =>
+        compile(source, "/fixtures/test.mx", { strict: true }),
+      ).toThrow(
+        /^scriptlets \(`\$ statement`\) are not supported in MX \(decision 54\)$/,
+      );
+      expect(() =>
+        compile("<let/x=1/>", "/fixtures/test.mx", { strict: true }),
+      ).toThrow("`<let>` is reactive state");
+    },
+  );
 
   it("a valid scriptlet carries the same fix", () => {
     expect(failure(`$ const x = 1;\n<p>\${x}</p>`).message).toBe(

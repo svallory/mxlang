@@ -85,6 +85,7 @@ export interface HostDeclarations {
    * compile-time meaning hands its resolved form to every host through this
    * channel, since the core cannot know what the macro decided.
    */
+  // pi-lens-ignore: no-unknown-returns
   resolveDelegatedTag?(name: string, node: Node, ctx: Ctx): unknown;
   /**
    * Rejects an attribute modifier (`class:active`) in this host's own words.
@@ -117,12 +118,13 @@ export interface HostDeclarations {
   rejectAttributeMethod?(attr: Node, on?: "element" | "component"): void;
   /**
    * How an author replaces a `$` scriptlet that declares a value, in this
-   * host's own words (`name` is the declared variable). Shown after "scriptlets
-   * are not supported". Defaults to `` declare a value with `<const/name=…/>` ``,
-   * right for a host whose templates accept `<const>`; a host that cannot
-   * declare a binding inside its template (Solid, Astro) names where it can.
+   * host's own words (`name` is the variable, `keyword` preserves mutability).
+   * Shown after "scriptlets are not supported". Defaults to `<const/name=…/>`
+   * for const and `<let/name=…/>` for let/var. A host that rejects `<let>` must
+   * override this: name a mutable alternative, or return "" to omit advice.
+   * A host without template bindings (Solid, Astro) names their module/fence.
    */
-  scriptletReplacement?(name: string): string;
+  scriptletReplacement?(name: string, keyword: "const" | "let" | "var"): string;
   /** Return true when this host carries an attribute method as a callable prop. */
   resolveAttributeMethod?(attr: Node, on?: "element" | "component"): boolean;
   /**

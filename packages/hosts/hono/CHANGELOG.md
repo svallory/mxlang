@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (scriptlet-hint-let-var):** the shared JSX declarations omit immutable `<const>` advice for `$ let`/`$ var`; Hono rejects `<let>`. `$ const` advice is unchanged.
+
 - **Fix (jsx-whitespace-body-parity, decision 141):** same-line whitespace-only bodies now render one space when forwarded, through both imported components and discovered `tags/*.mx`. Uses core's host-independent body-presence correction; newline indentation stays absent. Pinned by Hono's rendered output.
 
 - **Fix (jsx-intrinsic-prop-errors, decision 140 (b)):** native-element non-event prop errors now surface at the authored attribute name through the shared JSX emitter, checked against Hono's own JSX types. On the pinned Hono 4.6.20, lowercase `maxlength`/`tabindex` are typed; camelCase `maxLength`/`tabIndex`, unknown props such as `foo`, and `key`/`ref` remain accepted by its `any` attribute index signature, exactly as in plain TSX (lead ruling: host-native parity, not stricter MX types). Invalid `class`, `disabled` and `value` props now report. Event handlers and runtime output are unchanged. See `@mxlang/preact`.
