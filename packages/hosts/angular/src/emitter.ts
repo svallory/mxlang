@@ -822,6 +822,147 @@ interface TagModuleRef {
 }
 
 /**
+ * Collects the file-absolute character ranges of every `Identifier` named
+ * `name` in a Babel expression subtree that a parameter rename would
+ * rewrite: true references only. Object keys, non-computed member
+ * properties, and identifiers shadowed by a nested function's own
+ * parameter are skipped, so the rewritten text keeps its meaning.
+ */
+function collectReferenceRanges(
+  node: unknown,
+  name: string,
+  ranges: Array<[number, number]>,
+  shadowed = false,
+): void {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const item of node)
+      collectReferenceRanges(item, name, ranges, shadowed);
+    return;
+  }
+  const n = node as {
+    type?: string;
+    name?: string;
+    computed?: boolean;
+    params?: unknown[];
+    loc?: { start: { index: number }; end: { index: number } };
+    [key: string]: unknown;
+  };
+  if (typeof n.type !== "string") return;
+  switch (n.type) {
+    case "Identifier":
+      if (!shadowed && n.name === name && n.loc) {
+        ranges.push([n.loc.start.index, n.loc.end.index]);
+      }
+      return;
+    case "MemberExpression":
+      // `p.id`: the object is a reference; a non-computed property is a
+      // field name (`p.p` renames to `x.p`, not `x.x`).
+      collectReferenceRanges(n.object, name, ranges, shadowed);
+      if (n.computed) {
+        collectReferenceRanges(n.property, name, ranges, shadowed);
+      }
+      return;
+    case "ObjectProperty":
+      // `{ p }` is shorthand: key and value are the same node, visited as
+      // the value. A non-computed key that differs (`{ p: 1 }`) is a name.
+      if (n.computed) collectReferenceRanges(n.key, name, ranges, shadowed);
+      collectReferenceRanges(n.value, name, ranges, shadowed);
+      return;
+    case "ObjectMethod":
+    case "ClassMethod":
+    case "ClassPrivateMethod":
+    case "ArrowFunctionExpression":
+    case "FunctionExpression":
+    case "FunctionDeclaration": {
+      // A nested parameter with the same name shadows the outer one inside
+      // that function's body.
+      if (n.computed) collectReferenceRanges(n.key, name, ranges, shadowed);
+      const params = n.params ?? [];
+      const inner = shadowed || params.some((p) => patternBinds(p, name));
+      for (const p of params) collectReferenceRanges(p, name, ranges, shadowed);
+      collectReferenceRanges(n.body, name, ranges, inner);
+      return;
+    }
+    default:
+      // Every other node type (calls, conditionals, TS wrappers like
+      // TSAsExpression/TSNonNullExpression, templates, …) contributes its
+      // children unchanged.
+      for (const value of Object.values(n)) {
+        collectReferenceRanges(value, name, ranges, shadowed);
+      }
+  }
+}
+
+/** True when a binding pattern declares an identifier `name`. */
+function patternBinds(pattern: unknown, name: string): boolean {
+  if (!pattern || typeof pattern !== "object") return false;
+  if (Array.isArray(pattern)) {
+    return pattern.some((p) => patternBinds(p, name));
+  }
+  const n = pattern as {
+    type?: string;
+    name?: string;
+    properties?: unknown[];
+    elements?: unknown[];
+    [key: string]: unknown;
+  };
+  switch (n.type) {
+    case "Identifier":
+      return n.name === name;
+    case "ObjectPattern":
+      return (n.properties ?? []).some((p) => patternBinds(p, name));
+    case "ObjectProperty":
+      return patternBinds(n.value, name);
+    case "ArrayPattern":
+      return (n.elements ?? []).some((e) => patternBinds(e, name));
+    case "RestElement":
+      return patternBinds(n.argument, name);
+    case "AssignmentPattern":
+      return patternBinds(n.left, name);
+    default:
+      return false;
+  }
+}
+
+/**
+ * Rebuilds a keyed `by=` arrow's body with its parameter renamed to the
+ * `<for>` row, for the corrective hint. Returns `null` when positions are
+ * missing (a synthesized node) and no concrete form can be shown.
+ */
+function renamedArrowBody(
+  arrow: {
+    loc?: { start: { index: number } };
+    body: {
+      loc?: { start: { index: number }; end: { index: number } };
+    };
+  },
+  paramName: string,
+  row: string,
+  code: string,
+): string | null {
+  if (!arrow.loc || !arrow.body.loc) return null;
+  const bodyStart = arrow.body.loc.start.index;
+  const bodyEnd = arrow.body.loc.end.index;
+  // `code` is the printed slice starting at `arrow.loc.start.index`, so the
+  // body's own file-absolute offsets translate directly into it.
+  const body = code.slice(
+    bodyStart - arrow.loc.start.index,
+    bodyEnd - arrow.loc.start.index,
+  );
+  const ranges: Array<[number, number]> = [];
+  collectReferenceRanges(arrow.body, paramName, ranges);
+  let renamed = body;
+  for (const [start, end] of ranges.sort((a, b) => b[0] - a[0])) {
+    renamed =
+      renamed.slice(0, start - bodyStart) +
+      row +
+      renamed.slice(end - bodyStart);
+  }
+  return renamed;
+}
+
+/**
  * Derives Angular's `track` expression from `by=`, per the design note's
  * shape table (mirrors `packages/hosts/solid/src/emitter.ts:679-686`).
  * `null` means `by=` was omitted — the caller supplies `$index` and warns.
@@ -876,6 +1017,9 @@ function deriveTrack(
       }>;
       body: {
         type: string;
+        name?: string;
+        computed?: boolean;
+        property?: { type: string; name?: string };
         loc?: { start: { index: number }; end: { index: number } };
       };
       loc?: { start: { index: number } };
@@ -884,10 +1028,35 @@ function deriveTrack(
     if (
       arrow.params.length === 1 &&
       parameter?.type === "Identifier" &&
+      typeof parameter.name === "string" &&
       parameter.name !== row &&
       arrow.body.type !== "BlockStatement"
     ) {
-      const message = `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; use \`by=identity\` to track the row itself.`;
+      // The fix depends on what the arrow tracks. `by=(y => y)` tracks the
+      // row itself, so `by=identity` is its complete replacement. A keyed
+      // arrow (`by=(y => y.id)`) must keep its key expression: renaming the
+      // parameter to the row is the faithful fix, NOT `by=identity` —
+      // identity tracks object references, so a refetch that returns fresh
+      // objects with the same IDs would lose every row's DOM/component
+      // state. The row's type is unknown at emit time, so identity is named
+      // only as a DIFFERENT strategy for rows that have no such field
+      // (primitive rows) — never as the replacement for the key.
+      const tracksRowItself =
+        arrow.body.type === "Identifier" && arrow.body.name === parameter.name;
+      const renamed = tracksRowItself
+        ? null
+        : renamedArrowBody(arrow, parameter.name, row, key.code);
+      const field =
+        arrow.body.type === "MemberExpression" &&
+        arrow.body.computed === false &&
+        arrow.body.property?.type === "Identifier"
+          ? arrow.body.property.name
+          : undefined;
+      const message = tracksRowItself
+        ? `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; use \`by=identity\` to track the row itself.`
+        : renamed === null
+          ? `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; rename the parameter to \`${row}\` to keep the key expression.`
+          : `The \`by=\` arrow parameter \`${parameter.name}\` must match the \`<for>\` row \`${row}\`; rename it to keep the key expression: \`by=(${row} => ${renamed})\`. If the row has no ${field ? `\`${field}\` field` : "such field (primitive rows)"}, \`by=identity\` is a different strategy that tracks the row itself.`;
       if (parameter.loc?.start) rawFail(message, parameter);
       fail(message, node);
     }
@@ -1217,6 +1386,13 @@ class AngularEmitter implements Emitter<string> {
 
   /** Nesting depth inside `<style>`/`<script>` (and `<html-style>`/`<html-script>`), whose text the literal-syntax lint skips. */
   private codeDepth = 0;
+  /**
+   * Depth of open `<svg>` elements. Marko's taglib resolves `<switch>` to
+   * the SVG element regardless of context, but Angular's HTML template has
+   * no `<switch>` outside `<svg>` — `element()` uses this to tell a real
+   * SVG switch from an attempted control-flow one.
+   */
+  private svgDepth = 0;
 
   /**
    * A name guaranteed not to collide with any identifier the compiled
@@ -1296,17 +1472,27 @@ class AngularEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
-    // Marko recognizes SVG <switch>, not a control-flow switch. A default
-    // attribute (<switch=expr>) is the attempted control-flow form; reject
-    // it here before emitting either it or its <case> children. Keep a real
-    // SVG <switch> (and resolved custom tags) unchanged.
+    // Marko recognizes SVG <switch>, not a control-flow switch. Angular's
+    // HTML template has no <switch> at all, so outside an `<svg>` context the
+    // name can only be an attempted control-flow switch — reject it here,
+    // before traversing descendants, as one MX error instead of Angular's
+    // NG8001/NG8002 cascade. The same applies to a <switch> carrying a
+    // default attribute (<switch=expr>, the attempted form even inside
+    // `<svg>`) or `<case>` children (the control-flow tell inside `<svg>`,
+    // which has no case element either). A real `<svg><switch>` of graphics
+    // elements stays untouched, as do resolved custom tags — those lower to
+    // `component()`, never to this method.
     if (
       node.name === "switch" &&
-      node.attrs.some(
-        (attr) =>
-          attr.kind !== "spread" &&
-          attr.nameSpan.sourceStart === attr.nameSpan.sourceEnd,
-      )
+      (this.svgDepth === 0 ||
+        node.attrs.some(
+          (attr) =>
+            attr.kind !== "spread" &&
+            attr.nameSpan.sourceStart === attr.nameSpan.sourceEnd,
+        ) ||
+        node.children.some(
+          (child) => child.kind === "Element" && child.name === "case",
+        ))
     ) {
       const loc = node.nameSpan
         ? {
@@ -1351,7 +1537,9 @@ class AngularEmitter implements Emitter<string> {
       node.name === "html-style" ||
       node.name === "html-script";
     if (code) this.codeDepth++;
+    if (node.name === "svg") this.svgDepth++;
     for (const child of node.children) this.emitNode(child);
+    if (node.name === "svg") this.svgDepth--;
     if (code) this.codeDepth--;
     this.out.write(`</${node.name}>`);
   }
