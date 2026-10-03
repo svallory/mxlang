@@ -113,6 +113,8 @@ CI and tests) both build on.
 export class XComponent { people = []; }
 ```
 
+**Tooling limitation:** the Angular worker reads tags from disk: save the tag, then recheck the caller.
+
 Five things are worth knowing before editing `src/ng-mx.ts`:
 
 - **A region is legal in exactly one position** — the direct value of

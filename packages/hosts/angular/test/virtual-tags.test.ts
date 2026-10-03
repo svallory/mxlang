@@ -9,13 +9,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import * as core from "@mxlang/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildHeader } from "../src/header.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 import { compileTagModule } from "../src/tag-module.ts";
 import { createVirtualTagModuleReader } from "../src/virtual-tags.ts";
 
 const directories: string[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const dir of directories.splice(0))
     rmSync(dir, { recursive: true, force: true });
 });
@@ -48,6 +51,58 @@ describe("virtual Angular tag modules", () => {
     expect(existsSync(sibling)).toBe(false);
     expect(read(put("page.mx", "<p>page</p>"))).toBeUndefined();
     expect(read(join(dir, "page.ts"))).toBeUndefined();
+  });
+
+  it("defaults nested-tag discovery to the same cached customTags as the build", () => {
+    const { dir, put } = project();
+    const source = "<leaf/>";
+    const outer = put("tags/outer.mx", source);
+    put("tags/leaf.mx", "<span/>");
+    const scan = core.scanCached(outer, {
+      host: "angular",
+      targets: angularOwnTargets,
+    });
+    const expected = compileTagModule(source, outer, {
+      customTags: scan.customTags,
+    });
+    expect(expected.code).toContain("imports: [Leaf]");
+    const read = createVirtualTagModuleReader(dir);
+    expect(read(outer)?.code).toBe(expected.code);
+    expect(read(join(dir, "tags/outer.ts"))?.code).toBe(expected.code);
+  });
+
+  it("reuses scanCached across fresh readers without a project discovery walk", () => {
+    const { dir, put } = project();
+    const tag = put("tags/card.mx", tagSource);
+    const scan = core.scanCached(tag, {
+      host: "angular",
+      targets: angularOwnTargets,
+    });
+    const walk = vi.spyOn(core, "discoverProjectTags");
+    const cached = vi.spyOn(core, "scanCached");
+    expect(createVirtualTagModuleReader(dir)(tag)?.className).toBe("Card");
+    expect(createVirtualTagModuleReader(dir)(tag)?.className).toBe("Card");
+    expect(walk).not.toHaveBeenCalled();
+    expect(cached).toHaveBeenCalledWith(tag, {
+      host: "angular",
+      targets: angularOwnTargets,
+    });
+    expect(
+      cached.mock.results.every(
+        (result) => result.type === "return" && result.value === scan,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not cross a nested package boundary, or serve a host-module tag", () => {
+    const { dir, put } = project();
+    const nested = put("nested/tags/card.mx", tagSource);
+    put("nested/package.json", "{}");
+    const hostModule = put("tags/hostvar.ng.mx", "export const value = 1;");
+    const read = createVirtualTagModuleReader(dir);
+    expect(read(nested)).toBeUndefined();
+    expect(read(join(dir, "nested/tags/card.ts"))).toBeUndefined();
+    expect(read(hostModule)).toBeUndefined();
   });
 
   it("uses the build's configured tag index, selector prefix and extension", () => {

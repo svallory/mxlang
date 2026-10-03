@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { resolve } from "node:path";
-import { discoverProjectTags, type TargetLookup } from "@mxlang/core";
-import { readAngularConfig } from "./config.ts";
+import { dirname, join, resolve } from "node:path";
+import { scanCached } from "@mxlang/core";
+import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { isInside } from "./discover.ts";
 import { hasGeneratedHeader } from "./header.ts";
 import { angularOwnTargets } from "./own-targets.ts";
@@ -11,6 +11,10 @@ import {
   compileTagModule,
 } from "./tag-module.ts";
 
+/**
+ * Tooling-only options for the unstable virtual tag reader.
+ * @internal
+ */
 export interface VirtualTagModuleOptions extends CompileTagModuleOptions {
   /** The editor's unsaved source, if it holds this tag. */
   readSource?: (filename: string) => string | undefined;
@@ -21,59 +25,54 @@ export interface VirtualTagModuleOptions extends CompileTagModuleOptions {
  * them. Only discovered tag templates belong here; pages and ordinary TS files
  * must keep their existing tooling routes. Create a reader per check so disk
  * edits cannot leave a stale module in an incremental Angular program.
+ *
+ * Tooling-only and unstable.
+ * @internal
  */
 export function createVirtualTagModuleReader(
   projectDir: string,
   options: VirtualTagModuleOptions = {},
 ): (filename: string, source?: string) => CompileTagModuleResult | undefined {
-  let sources: Map<string, string> | undefined;
-  let prefix: string;
+  const project = resolve(projectDir);
+  let config: AngularConfig | undefined;
   const compiled = new Map<
     string,
     { source: string; result: CompileTagModuleResult }
   >();
-  const targets: TargetLookup = options.targets ?? angularOwnTargets;
-
-  function index(): Map<string, string> {
-    if (sources) return sources;
-    const indexed = new Map<string, string>();
-    const discovered = discoverProjectTags(projectDir, {
-      host: "angular",
-      targets,
-    });
-    if (![...discovered.tags.values()].some((tag) => tag.template)) {
-      sources = indexed;
-      return sources;
-    }
-    const root = realpathSync(projectDir);
-    const config = readAngularConfig(projectDir);
-    prefix = config.tagSelectorPrefix;
-    for (const tag of discovered.tags.values()) {
-      if (!tag.template) continue;
-      const filename = resolve(tag.template);
-      // Match the build's containment rule, including symlink escapes.
-      if (!isInside(root, realpathSync(filename))) continue;
-      indexed.set(filename, filename);
-      indexed.set(
-        filename.slice(0, -".mx".length) + config.tagExtension,
-        filename,
-      );
-    }
-    sources = indexed;
-    return sources;
-  }
+  const targets = options.targets ?? angularOwnTargets;
 
   return (filename, source) => {
     if (!filename.endsWith(".mx") && !filename.endsWith(".ts"))
       return undefined;
-    const template = index().get(resolve(filename));
-    if (!template) return undefined;
+    const path = resolve(filename);
+    if (!isInside(project, path) || !existsSync(join(project, "package.json")))
+      return undefined;
+    config ??= readAngularConfig(project);
+    const template = path.endsWith(".mx")
+      ? path
+      : path.endsWith(config.tagExtension)
+        ? `${path.slice(0, -config.tagExtension.length)}.mx`
+        : undefined;
+    if (!template || !existsSync(template)) return undefined;
+    const root = realpathSync(project);
+    // Match the build's containment and nested-package boundaries. Probe only
+    // the requested source, not every directory in the project on each compile.
+    if (!isInside(root, realpathSync(template))) return undefined;
+    const scan = scanCached(template, { host: "angular", targets });
+    if (!scan.packageFiles.some((file) => realpathSync(dirname(file)) === root))
+      return undefined;
+    if (
+      ![...scan.tags.values()].some(
+        (tag) => tag.template && resolve(tag.template) === template,
+      )
+    )
+      return undefined;
     // A real authored TS sibling wins; only MX-generated artifacts may be
     // refreshed from source, just like the build's overwrite guard.
     if (
-      resolve(filename) !== template &&
-      existsSync(filename) &&
-      !hasGeneratedHeader(readFileSync(filename, "utf8"))
+      path !== template &&
+      existsSync(path) &&
+      !hasGeneratedHeader(readFileSync(path, "utf8"))
     )
       return undefined;
     const text =
@@ -85,7 +84,10 @@ export function createVirtualTagModuleReader(
     const result = compileTagModule(text, template, {
       ...options,
       targets,
-      tagSelectorPrefix: options.tagSelectorPrefix ?? prefix,
+      // The build's customTagsFor uses this same per-file cached scan. In
+      // particular, nested calls must not fall through to native elements.
+      customTags: options.customTags ?? scan.customTags,
+      tagSelectorPrefix: options.tagSelectorPrefix ?? config.tagSelectorPrefix,
       // The caller owns warning delivery. Never log while resolving a module.
       warnings: options.warnings ?? [],
     });
