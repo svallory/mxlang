@@ -29,15 +29,17 @@ describe("mx-tsc -b resolves .mx modules like -p: specifiers that name a .ng.mx 
           dir,
           `import { AppComponent } from "${specifier}";\nexport const c = AppComponent;\n`,
         );
-        // One run for both: `--listFilesOnly` still reports the diagnostics, and
-        // the file list holds no `error TS` line, so `errorLines` is unaffected.
         const project = await mxTscIn(dir, [
           "-p",
           "tsconfig.app.json",
           "--noEmit",
+        ]);
+        const listed = await mxTscIn(dir, [
+          "-p",
+          "tsconfig.app.json",
           "--listFilesOnly",
         ]);
-        expect(project.stdout).toContain("app.component.ng.mx");
+        expect(listed.stdout).toContain("app.component.ng.mx");
         expect(project.output).not.toContain("TS2307");
 
         const build = await mxTscIn(dir, ["-b", "."]);
