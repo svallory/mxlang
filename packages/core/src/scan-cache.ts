@@ -9,7 +9,7 @@
  *    directory, so an uncached scan would re-read every `tags/` directory and
  *    re-parse every sidecar per file. Invalidation is by the evidence the
  *    scan itself recorded (spec §4): a directory's entry list, every tag
- *    file's mtime, and the `package.json` that supplied `mx.tags`. A stale
+ *    file's mtime and text, and the `package.json` that supplied `mx.tags`. A stale
  *    entry is *detected*, not merely expired, so an editor that never restarts
  *    still recompiles against the tag an author just saved.
  *
@@ -29,6 +29,7 @@
  * process; a per-call cache would be no cache at all.
  */
 
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
@@ -53,10 +54,12 @@ interface CacheEntry {
    * or lands in the same filesystem tick (Linux < 6.13 stamps at jiffy
    * granularity).
    */
-  manifests: Map<string, ManifestStamp>;
+  manifests: Map<string, FileStamp>;
+  /** Only the tag files the scan already tracks, including sidecars. */
+  files: Map<string, FileStamp>;
 }
 
-interface ManifestStamp {
+interface FileStamp {
   mtimeMs: number;
   /** `undefined` when the file could not be read. */
   text: string | undefined;
@@ -105,20 +108,28 @@ function textOf(path: string): string | undefined {
 function snapshot(result: ScanResult): CacheEntry {
   const listings = new Map<string, string>();
   for (const dir of result.directories) listings.set(dir, listingOf(dir));
-  const manifests = new Map<string, ManifestStamp>();
+  const manifests = new Map<string, FileStamp>();
   for (const file of result.packageFiles) {
     // mtime before text: a write racing this snapshot then reads as stale.
     manifests.set(file, { mtimeMs: mtimeOf(file), text: textOf(file) });
   }
-  return { result, listings, manifests };
+  const files = new Map<string, FileStamp>();
+  for (const file of result.files) {
+    // The scan recorded mtime before reading sidecar options; keep that stamp
+    // rather than a later stat that could hide an intervening edit.
+    files.set(file.path, { mtimeMs: file.mtimeMs, text: textOf(file.path) });
+  }
+  return { result, listings, manifests, files };
 }
 
 /**
  * Whether `entry` still describes the filesystem.
  *
  * Checks exactly the three things the spec names as invalidating: an add or
- * remove in a scanned directory, a tag file's mtime, and a `package.json`
- * carrying `mx.tags` (mtime and text).
+ * remove in a scanned directory (its entries, not its mtime), a tag file,
+ * and a `package.json` carrying `mx.tags` (both files checked by mtime and
+ * text). An unchanged hit adds one text read per tracked tag file; manifest
+ * reads and directory listings were already content-aware.
  */
 function isFresh(entry: CacheEntry): boolean {
   for (const [dir, listing] of entry.listings) {
@@ -128,8 +139,9 @@ function isFresh(entry: CacheEntry): boolean {
     if (mtimeOf(file) !== stamp.mtimeMs) return false;
     if (textOf(file) !== stamp.text) return false;
   }
-  for (const file of entry.result.files) {
-    if (mtimeOf(file.path) !== file.mtimeMs) return false;
+  for (const [file, stamp] of entry.files) {
+    if (mtimeOf(file) !== stamp.mtimeMs) return false;
+    if (textOf(file) !== stamp.text) return false;
   }
   return true;
 }
@@ -140,7 +152,7 @@ function isFresh(entry: CacheEntry): boolean {
  *
  * This is what Marko's taglib id is derived from, so two scans agreeing here
  * may share one lookup. It deliberately excludes the sidecars' *contents*,
- * which are loaded lazily and may never be read at all.
+ * whose hooks are evaluated lazily.
  */
 function parserSignatureOf(result: ScanResult): string {
   return [...result.tags.keys()]
@@ -154,7 +166,8 @@ function parserSignatureOf(result: ScanResult): string {
 
 /**
  * The identity of one *loaded* tag set: the above, plus every tag file's
- * mtime.
+ * mtime and a hash of its text. Hashing happens only on a fresh scan, using
+ * the text already read for its snapshot, not on an unchanged cache hit.
  *
  * Two different questions hide behind "is this the same tag set", and
  * conflating them is a real bug rather than a nicety. Marko's taglib only
@@ -162,14 +175,23 @@ function parserSignatureOf(result: ScanResult): string {
  * keep its lookup. But a memoized `CustomTag` also holds the sidecar module
  * it already loaded, so reusing that object after an edit serves the *old*
  * hooks — measured: editing a `transform` changed nothing about the compiled
- * output until this key gained the mtimes.
+ * output until this key gained the mtimes. Text hashes also distinguish an
+ * edit within one mtime tick, even when parser-facing options do not change.
  */
-function loadedSignatureOf(result: ScanResult): string {
-  const files = [...result.files]
-    .sort((left, right) => left.path.localeCompare(right.path))
-    .map((file) => `${file.path}@${file.mtimeMs}`)
+function loadedSignatureOf(entry: CacheEntry): string {
+  const files = [...entry.files]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([path, stamp]) =>
+      JSON.stringify([
+        path,
+        stamp.mtimeMs,
+        stamp.text === undefined
+          ? null
+          : createHash("sha256").update(stamp.text).digest("hex"),
+      ]),
+    )
     .join("\n");
-  return `${parserSignatureOf(result)}\n--\n${files}`;
+  return `${parserSignatureOf(entry.result)}\n--\n${files}`;
 }
 
 /**
@@ -266,7 +288,8 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
   }
 
   const result = scanCustomTags(filePath, options);
-  const loadedSignature = loadedSignatureOf(result);
+  const entry = snapshot(result);
+  const loadedSignature = loadedSignatureOf(entry);
   const parserSignature = parserSignatureOf(result);
 
   // Reuse the previously handed-out map only when the tag files are byte-for-
@@ -291,23 +314,20 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
     liveSignature = parserSignature;
   }
 
-  // Do not cache the first caller's dotted-filename wording.
+  // Do not cache the first caller's dotted-filename wording. Keep the file
+  // evidence already captured above, without reading the snapshot twice.
   const dottedPositions = new Set(
     result.dottedTagFiles?.map((file) => file.diagnosticIndex),
   );
-  scans.set(
-    key,
-    snapshot(
-      dottedPositions.size === 0
-        ? result
-        : {
-            ...result,
-            diagnostics: result.diagnostics.filter(
-              (_, index) => !dottedPositions.has(index),
-            ),
-          },
-    ),
-  );
+  if (dottedPositions.size > 0) {
+    entry.result = {
+      ...result,
+      diagnostics: result.diagnostics.filter(
+        (_, index) => !dottedPositions.has(index),
+      ),
+    };
+  }
+  scans.set(key, entry);
   return result;
 }
 

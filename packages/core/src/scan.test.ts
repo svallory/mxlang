@@ -4,6 +4,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   utimesSync,
   writeFileSync,
@@ -1115,6 +1116,87 @@ describe("the scan cache", () => {
 
     const after = getCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(after.thing?.parseOptions).toEqual({ text: false });
+  });
+
+  it.each([
+    ["template", "thing.mx", "<div/>\n", "<p  />\n"],
+    [
+      "sidecar parseOptions",
+      "thing.tag.ts",
+      "export default { parseOptions: { text: true  } };\n",
+      "export default { parseOptions: { text: false } };\n",
+    ],
+    [
+      "sidecar hooks only",
+      "thing.tag.ts",
+      'export default { transform: () => [{ kind: "Text", value: "one" }] };\n',
+      'export default { transform: () => [{ kind: "Text", value: "two" }] };\n',
+    ],
+  ])(
+    "rescans a same-size %s rewrite with a pinned mtime",
+    (_, name, before, after) => {
+      const dir = scratch();
+      const tagsDir = join(dir, "tags");
+      mkdirSync(tagsDir);
+      writeFileSync(join(dir, "package.json"), "{}");
+      const path = join(tagsDir, name);
+      const caller = join(dir, "caller.mx");
+      const pinned = new Date("2020-01-01T00:00:00Z");
+      writeFileSync(path, before);
+      utimesSync(path, pinned, pinned);
+      const original = statSync(path);
+      const first = scanCached(caller);
+      if (before.includes("transform")) {
+        // Force the old lazy definition to memoize its module before editing.
+        expect(first.customTags.thing?.transform).toBeTypeOf("function");
+      }
+      expect(scanCached(caller)).toBe(first);
+
+      writeFileSync(path, after);
+      utimesSync(path, pinned, pinned);
+      expect(statSync(path).mtimeMs).toBe(original.mtimeMs);
+      expect(statSync(path).size).toBe(original.size);
+      const second = scanCached(caller);
+      expect(second).not.toBe(first);
+      // Freshness alone is insufficient: interning by mtime must not hand back
+      // a lazy CustomTag that has already memoized the old sidecar's hooks.
+      expect(second.customTags).not.toBe(first.customTags);
+      if (name.endsWith(".mx")) {
+        const template = (
+          second.customTags.thing as { template?: { source: string } }
+        ).template;
+        expect(template?.source).toBe(after);
+      } else if (before.includes("parseOptions")) {
+        expect(first.customTags.thing?.parseOptions).toEqual({ text: true });
+        expect(second.customTags.thing?.parseOptions).toEqual({ text: false });
+      }
+      expect(scanCached(caller)).toBe(second);
+      // Only a parser-facing change keeps a distinct parser-set map alive.
+      expect(liveTagMapCount()).toBe(before.includes("parseOptions") ? 2 : 1);
+    },
+  );
+
+  it("checks directory entries even when the directory mtime is pinned", () => {
+    const dir = scratch();
+    const tagsDir = join(dir, "tags");
+    mkdirSync(tagsDir);
+    writeFileSync(join(dir, "package.json"), "{}");
+    const pinned = new Date("2020-01-01T00:00:00Z");
+    utimesSync(tagsDir, pinned, pinned);
+    const original = statSync(tagsDir).mtimeMs;
+    const caller = join(dir, "caller.mx");
+    expect(Object.keys(scanCached(caller).customTags)).toEqual([]);
+
+    const path = join(tagsDir, "one.mx");
+    writeFileSync(path, "<div/>\n");
+    utimesSync(tagsDir, pinned, pinned);
+    expect(statSync(tagsDir).mtimeMs).toBe(original);
+    expect(Object.keys(scanCached(caller).customTags)).toEqual(["one"]);
+
+    rmSync(path);
+    utimesSync(tagsDir, pinned, pinned);
+    expect(statSync(tagsDir).mtimeMs).toBe(original);
+    expect(Object.keys(scanCached(caller).customTags)).toEqual([]);
   });
 
   it("invalidates when a tag file is added to a scanned directory", () => {

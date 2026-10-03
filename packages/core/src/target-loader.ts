@@ -9,7 +9,7 @@
  * work. And it does not evict `require.cache` per call: a sidecar is edited
  * constantly, an installed target package is not, and evicting would hand back
  * a new descriptor object on every call. The package is re-evaluated only
- * when the target package's own `package.json` mtime changes, which is what
+ * when the target package's own `package.json` mtime or text changes, which is what
  * an install or upgrade does. Then its entry and every module under its
  * directory are re-evaluated, except modules under a nested `node_modules`
  * (other packages). A target without a manifest of its own (a project-local
@@ -25,7 +25,7 @@
  * `@mxlang/core`; this module never calls `load`.
  */
 
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, parse, resolve, sep } from "node:path";
 import {
@@ -73,9 +73,16 @@ export class TargetLoadError extends Error {
   }
 }
 
+interface PackageStamp {
+  manifest: string;
+  mtimeMs: number;
+  /** `undefined` when the manifest exists but cannot be read. */
+  text: string | undefined;
+}
+
 interface CacheEntry {
-  /** `mtimeMs` of the target package's `package.json`; `undefined` when none was found. */
-  stamp: number | undefined;
+  /** Evidence from the nearest manifest; `undefined` when none was found. */
+  stamp: PackageStamp | undefined;
   descriptor: TargetDescriptor;
 }
 
@@ -94,18 +101,26 @@ export function clearTargetDescriptorCache(): void {
   descriptors.clear();
 }
 
-/** The nearest `package.json` at or above `file`, with its mtime. */
-function packageStamp(
-  file: string,
-): { manifest: string; stamp: number } | undefined {
+/** The nearest `package.json` at or above `file`, with its mtime and text. */
+function packageStamp(file: string): PackageStamp | undefined {
   let dir = dirname(file);
   const root = parse(dir).root;
   for (;;) {
     const manifest = join(dir, "package.json");
+    let mtimeMs: number | undefined;
     try {
-      return { manifest, stamp: statSync(manifest).mtimeMs };
+      mtimeMs = statSync(manifest).mtimeMs;
     } catch {
       // keep walking
+    }
+    if (mtimeMs !== undefined) {
+      let text: string | undefined;
+      try {
+        text = readFileSync(manifest, "utf8");
+      } catch {
+        // Do not mistake an unreadable nearest manifest for an absent one.
+      }
+      return { manifest, mtimeMs, text };
     }
     if (dir === root) return undefined;
     dir = dirname(dir);
@@ -187,8 +202,9 @@ function isPackageManifest(manifest: string, fromDir: string): boolean {
  *
  * A relative `fromDir` is resolved against the cwd.
  *
- * Cached per resolved path and the target package's `package.json` mtime. When
- * that mtime changes, every module under the package's directory (nested
+ * Cached per resolved path and the target package's `package.json` mtime and
+ * text (one manifest read per hit, so a same-tick edit is detected). When
+ * either changes, every module under the package's directory (nested
  * `node_modules` excepted) is evicted and re-evaluated, not only the entry
  * file; when the manifest is the project's own (it is in `fromDir` or above
  * it) only the entry file is. A stale entry is dropped when its reload fails
@@ -220,7 +236,17 @@ export function loadTargetDescriptor(
 
   const stamped = packageStamp(resolved);
   const hit = descriptors.get(resolved);
-  if (hit && hit.stamp === stamped?.stamp) return hit.descriptor;
+  if (
+    hit &&
+    hit.stamp?.manifest === stamped?.manifest &&
+    hit.stamp?.mtimeMs === stamped?.mtimeMs &&
+    hit.stamp?.text === stamped?.text &&
+    // Missing manifests are a stable state; unreadable ones cannot justify
+    // a hit, since there is no content evidence to confirm.
+    (!stamped || stamped.text !== undefined)
+  ) {
+    return hit.descriptor;
+  }
   if (hit) {
     // The entry is stale whether or not the reload succeeds: a failure must
     // not leave it behind to drive another eviction on the next call.
@@ -282,6 +308,6 @@ export function loadTargetDescriptor(
     });
   }
 
-  descriptors.set(resolved, { stamp: stamped?.stamp, descriptor });
+  descriptors.set(resolved, { stamp: stamped, descriptor });
   return descriptor;
 }

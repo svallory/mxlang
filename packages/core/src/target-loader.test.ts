@@ -370,6 +370,42 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
       expect(loadTargetDescriptor("pkg", project)).toBe(second);
     });
 
+    it("reloads a package edit with a same-size manifest rewrite and pinned mtime", () => {
+      const entry = install("pkg", `require("./v.js"); ${counting("one")}`, {
+        version: "1.0.0",
+      });
+      const dir = dirname(entry);
+      const internal = join(dir, "v.js");
+      const manifest = join(dir, "package.json");
+      const pinned = new Date("2020-01-01T00:00:00Z");
+      writeFileSync(internal, 'module.exports = "v1";');
+      utimesSync(manifest, pinned, pinned);
+      const original = statSync(manifest);
+      const first = loadTargetDescriptor("pkg", project);
+      expect(loadTargetDescriptor("pkg", project)).toBe(first);
+
+      // Source changes alone remain outside the installed-package contract.
+      writeFileSync(
+        entry,
+        `const v = require("./v.js"); ${counting("two")}
+        module.exports.default.pending = v;`,
+      );
+      writeFileSync(internal, 'module.exports = "v2";');
+      expect(loadTargetDescriptor("pkg", project)).toBe(first);
+      writeFileSync(
+        manifest,
+        JSON.stringify({ name: "pkg", main: "index.js", version: "2.0.0" }),
+      );
+      utimesSync(manifest, pinned, pinned);
+      expect(statSync(manifest).mtimeMs).toBe(original.mtimeMs);
+      expect(statSync(manifest).size).toBe(original.size);
+      const second = loadTargetDescriptor("pkg", project);
+      expect(second).not.toBe(first);
+      expect(second.pending).toBe("v2");
+      expect(loads()).toBe(2);
+      expect(loadTargetDescriptor("pkg", project)).toBe(second);
+    });
+
     it("on a manifest mtime change, re-evaluates the package's internal modules too", () => {
       const entry = install(
         "pkg",
