@@ -2676,7 +2676,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       // SAFETY: a named binding is synthetic expression code, not an authored Babel expression; consumers allow no node.
       return lowerComponent(ctx, node, {
         kind: "dynamic",
-        expr: { code: name, shape: "other", node: null as unknown as Node },
+        expr: {
+          code: name,
+          shape: "other",
+          node: null as unknown as Node,
+        },
         valueImportBinding: name,
       });
     }
@@ -2695,7 +2699,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       // SAFETY: a named binding is synthetic expression code, not an authored Babel expression; consumers allow no node.
       return lowerComponent(ctx, node, {
         kind: "dynamic",
-        expr: { code: name, shape: "other", node: null as unknown as Node },
+        expr: {
+          code: name,
+          shape: "other",
+          node: null as unknown as Node,
+        },
         valueImportBinding: name,
       });
     }
@@ -3130,6 +3138,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
     ctx.declarations,
     ctx.lookup,
     ctx.filename,
+    ctx.targets,
   );
   scratch.customTags = customTags;
   // Mirrors the parent: this walk is the same file, so whether it emits a
@@ -3168,6 +3177,7 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
     ctx.declarations,
     ctx.lookup,
     tag.filename,
+    ctx.targets,
   );
   templateCtx.customTags = ctx.customTags;
   // A tag unit is a file that compiles to a module of its own, whatever the

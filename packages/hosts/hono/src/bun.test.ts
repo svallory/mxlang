@@ -114,15 +114,11 @@ describe("@mxlang/hono/bun", () => {
     }
   });
 
-  test("an unknown host name in mx.tags[].hosts is a console warning, not silently dropped", async () => {
+  test("an own-only lookup leaves an unmatched mx.tags host unresolved without warning", async () => {
     Bun.plugin(honoPlugin);
 
-    // Round 2 finding 2: the scan diagnostic core records for a typo'd
-    // host name (decision 110a) is computed but was dropped at every
-    // `getCustomTags` call site, this loader included, because
-    // `getCustomTags` returns only `.customTags`. This loader now uses
-    // `scanCached` directly and reports `.diagnostics` through
-    // `console.warn`.
+    // PR 3 round-2 ruling: only a full registry can validate host names.
+    // Filtering and other scan diagnostics remain active with an own lookup.
     const base = join(import.meta.dirname, "..");
     const pkgDir = join(base, "hosts-warning-fixture");
     const tagsDir = join(pkgDir, "widgets");
@@ -147,7 +143,7 @@ describe("@mxlang/hono/bun", () => {
       await import(page);
       expect(
         warn.mock.calls.some((call) => String(call[0]).includes("bogus")),
-      ).toBe(true);
+      ).toBe(false);
     } finally {
       warn.mockRestore();
       rmSync(pkgDir, { recursive: true, force: true });

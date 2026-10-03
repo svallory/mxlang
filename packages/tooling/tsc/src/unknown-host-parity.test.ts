@@ -26,13 +26,14 @@ afterEach(() => {
   for (const dir of created.splice(0)) rmSync(dir, { recursive: true });
 });
 
-// `@mxlang/core` is the language server's dependency, not this package's:
-// resolve it from the server so both sides use the copy the server runs.
+// `@mxlang/target-registry` is the language server's dependency, not this
+// package's: resolve it from the server so both sides use the copy the server
+// runs. It is where a tool resolves a policy now (decisions 129/132).
 const lsRequire = createRequire(
   join(import.meta.dirname, "../../language-server/package.json"),
 );
 const { resolveHostPolicyDetailed } = (await import(
-  pathToFileURL(lsRequire.resolve("@mxlang/core")).href
+  pathToFileURL(lsRequire.resolve("@mxlang/target-registry")).href
 )) as {
   resolveHostPolicyDetailed(file: string): {
     policy: Parameters<typeof diagnoseDocument>[2];

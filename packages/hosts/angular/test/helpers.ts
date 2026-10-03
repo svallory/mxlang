@@ -6,6 +6,7 @@ import type { MxWarning } from "@mxlang/core";
 import { getCustomTags } from "@mxlang/core";
 import ts from "typescript";
 import { compile } from "../src/index.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 
 /** Compiles a `.mx` source string, returning both the template and any warnings. */
 export function compileMx(
@@ -66,7 +67,10 @@ export function compileWithTags(
   const filePath = join(dir, filename);
   mkdirSync(dirname(filePath), { recursive: true });
   const result = compile(source, filePath, {
-    customTags: getCustomTags(filePath, { host: "angular" }),
+    customTags: getCustomTags(filePath, {
+      host: "angular",
+      targets: angularOwnTargets,
+    }),
   });
   return { code: result.code, warnings: result.warnings, dir };
 }

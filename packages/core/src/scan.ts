@@ -49,12 +49,12 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import { TranslateError } from "./core.ts";
 import type { CustomTag, CustomTagParseOptions } from "./custom-tags.ts";
-import { HOST_NAMES } from "./host-policy.ts";
 import {
   clearPackageJsonCache,
   type PackageJsonParseError,
   readPackageJsonCached,
 } from "./package-json.ts";
+import type { TargetLookup } from "./target-descriptor.ts";
 import type { TemplateTag } from "./template-tag.ts";
 
 const require = createRequire(import.meta.url);
@@ -69,41 +69,28 @@ const SIDECAR_SUFFIX = ".tag.ts";
 const TEMPLATE_SUFFIX = ".mx";
 
 /**
- * Host segments that make `<segment>.mx` a host module file — a TypeScript
- * (or similar) module carrying MX regions, compiled by that host directly —
- * rather than a tag template. Currently: `.solid.mx` (the Solid host),
- * `.ng.mx` (the Angular host's per-region file kind) and `.astro.mx` (the Astro
- * host's template file kind, decision 134).
- *
- * A literal list, not "any second dotted segment before `.mx`": `TAG_NAME_RE`
- * allows dots in an ordinary tag name (`tags/my.icon.mx` is the valid tag
- * `<my.icon>`), so a segment-shaped rule with no allowlist would reject every
- * dotted tag name as a false positive.
- *
- * A segment is the file-extension spelling (`"ng"`), not the `HostPolicy`
- * name (`"angular"`) — the two happen to coincide for `"solid"` but not for
- * `"ng"`.
- *
- * Part of the documented host-authoring API of `@mxlang/core`: a host's
- * discovery code reads this list (or, more usually, {@link hostModuleSegment})
- * instead of hard-coding `.ng.mx`/`.solid.mx` suffix checks, so it follows
- * core's rule when a segment is added.
+ * A file-kind segment is known to a lookup when a registered target declares
+ * a host module file kind with that segment: `.solid.mx` (the Solid host),
+ * `.ng.mx` (the Angular host's per-region file kind) and `.astro.mx` (the
+ * Astro host's template file kind, decision 134) for the built-in lookup.
+ * The closed list core used to hold is gone (decision 126): the lookup
+ * answers, and core holds no segment of any host's name.
  */
-export const HOST_MODULE_SEGMENTS = [
-  "solid",
-  "ng",
-  "astro",
-] as const satisfies readonly string[];
 
 /**
  * The host segment a `.mx` file name carries — the `ng` in `card.ng.mx`, the
- * `solid` in `card.solid.mx` — or `undefined` when the name carries none.
+ * `solid` in `card.solid.mx` — or `undefined` when the name carries none the
+ * lookup knows.
  *
  * `entry` is a file name (a basename), not a path. It returns `undefined`
  * for anything that is not a host module file: a name without the `.mx`
  * suffix, a plain `.mx` template (`card.mx`), and a dotted tag name whose
- * second segment is not in {@link HOST_MODULE_SEGMENTS} (`my.icon.mx` is the
- * ordinary tag `<my.icon>`).
+ * second segment is not a file-kind segment the lookup knows (`my.icon.mx`
+ * is the ordinary tag `<my.icon>`).
+ *
+ * `targets` is required: which segments exist is an open-set question (a
+ * third party registers its own file kinds), so a caller that forgot it gets
+ * a type error rather than a silently closed-over list.
  *
  * Part of the documented host-authoring API of `@mxlang/core`. A host uses it
  * to route a host module file to its own module compiler (`=== "ng"` for the
@@ -111,15 +98,16 @@ export const HOST_MODULE_SEGMENTS = [
  * page and tag compilation with a positioned diagnostic, rather than
  * silently skipping it.
  */
-export function hostModuleSegment(entry: string): string | undefined {
+export function hostModuleSegment(
+  entry: string,
+  targets: TargetLookup,
+): string | undefined {
   if (!entry.endsWith(TEMPLATE_SUFFIX)) return undefined;
   const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
   const dot = bare.lastIndexOf(".");
   if (dot === -1) return undefined;
   const segment = bare.slice(dot + 1);
-  return (HOST_MODULE_SEGMENTS as readonly string[]).includes(segment)
-    ? segment
-    : undefined;
+  return targets.moduleSegments().includes(segment) ? segment : undefined;
 }
 
 /**
@@ -133,8 +121,9 @@ function rejectHostModuleFile(
   dir: string,
   entry: string,
   diagnostics: ScanDiagnostic[],
+  targets: TargetLookup,
 ): boolean {
-  const segment = hostModuleSegment(entry);
+  const segment = hostModuleSegment(entry, targets);
   if (segment === undefined) return false;
   diagnostics.push({
     file: join(dir, entry),
@@ -230,6 +219,15 @@ export interface ScanResult {
    * how they surface anything else; the scan itself carries on.
    */
   diagnostics: ScanDiagnostic[];
+  /**
+   * Every `mx.tags` entry's `hosts` value the scan read, in the order the
+   * entries were indexed. Whether a name is a host anything can match is the
+   * caller's lookup's answer, so the scan records rather than decides (see
+   * `hostRestrictionDiagnostics`): a warning here would name no target it
+   * knows, and a lookup that gains a host later would not get to tell the
+   * author their `hosts` entry was fine all along.
+   */
+  hostRestrictions: HostRestriction[];
 }
 
 /** One non-fatal configuration problem, positioned in the file that caused it. */
@@ -255,8 +253,63 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** The host names a `hosts` restriction may legally name. */
-const KNOWN_HOSTS = new Set<string>(HOST_NAMES);
+/**
+ * One `mx.tags` entry's `hosts` restriction: a value the entry named, with
+ * the position in the `package.json` that declared it. The scan records
+ * what it read and decides nothing about it — whether a name is a known host
+ * is an open-set question the caller's lookup answers (see
+ * {@link hostRestrictionDiagnostics}).
+ */
+export interface HostRestriction {
+  /** The `package.json` that declared the `hosts` entry. */
+  file: string;
+  /** The `hosts` value, as written. */
+  host: string;
+  line: number;
+  column: number;
+}
+
+/**
+ * Whether `value` is written like a package specifier rather than a bare
+ * host name: it contains a `/` or starts with `@`, `.` or `/`. Such a value
+ * names a host by package, which this project may not use; the scan stays
+ * silent about it (design note §5, condition 5).
+ */
+function isPackageSpecifier(value: string): boolean {
+  return value.includes("/") || /^[@./]/.test(value);
+}
+
+/**
+ * The diagnostics a set of recorded `hosts` restrictions deserves under
+ * `lookup` (decisions 129/132; design note §5). A value that is neither a
+ * host value the lookup accepts nor shaped like a package specifier is a
+ * bare unknown word and gets today's warning, byte-identical; a package
+ * specifier is silent, since a project may name a host package it does not
+ * depend on.
+ *
+ * Only a full registry may validate host names: an own-descriptor subset
+ * cannot know whether a peer restriction is valid. Call sites with an
+ * own-descriptor lookup do not call this helper; registry wrappers do.
+ * Filtering and structural validation are independent of name validation.
+ */
+export function hostRestrictionDiagnostics(
+  restrictions: readonly HostRestriction[],
+  lookup: TargetLookup,
+): ScanDiagnostic[] {
+  const known = new Set(lookup.hostValues());
+  const diagnostics: ScanDiagnostic[] = [];
+  for (const restriction of restrictions) {
+    if (known.has(restriction.host)) continue;
+    if (isPackageSpecifier(restriction.host)) continue;
+    diagnostics.push({
+      file: restriction.file,
+      message: `\`mx.tags\` names an unknown host in \`hosts\`: ${restriction.host}`,
+      line: restriction.line,
+      column: restriction.column,
+    });
+  }
+  return diagnostics;
+}
 
 /**
  * Validates and normalizes `package.json#mx.tags`.
@@ -739,6 +792,7 @@ function indexDirectory(
   into: Map<string, DiscoveredTag>,
   files: Array<{ path: string; mtimeMs: number }>,
   diagnostics: ScanDiagnostic[],
+  targets: TargetLookup,
   options: IndexOptions = {},
 ): void {
   let entries: string[];
@@ -758,7 +812,7 @@ function indexDirectory(
 
     const isSidecar = entry.endsWith(SIDECAR_SUFFIX);
 
-    if (rejectHostModuleFile(dir, entry, diagnostics)) continue;
+    if (rejectHostModuleFile(dir, entry, diagnostics, targets)) continue;
     const isTemplate = entry.endsWith(TEMPLATE_SUFFIX);
 
     if (!isSidecar && !isTemplate) continue;
@@ -828,22 +882,37 @@ function indexDirectory(
 
 export interface ScanOptions {
   /**
+   * The registered targets this scan runs under (decisions 129 and 132).
+   * Required, never defaulted: which file-kind segments exist is an open-set
+   * question — the scan needs it to tell a host module file from a tag
+   * template, and core holds no list to fall back on, so a scan without one
+   * would silently index a `<x.ng>.mx` a caller had every reason to reject.
+   * It is deliberately not part of the cached scan's identity (see
+   * `scan-cache.ts`): one process holds one lookup, the registry's, and a
+   * second copy of core in the same process would only confuse the taglib
+   * cache it exists to protect.
+   */
+  targets: TargetLookup;
+  /**
    * Stops the upward walk at this directory, for a test that must not reach
    * the real repository above its fixture. Defaults to the package root (the
    * nearest `package.json`), as the spec describes.
    */
   stopAt?: string;
   /**
-   * The calling integration's host name (`"html"`, `"solid"`, `"preact"`,
-   * `"react"`, `"hono"`, `"astro"`, `"angular"`). A tag whose `mx.tags`
-   * entry declared `hosts` excluding this name is left out of `tags` and
-   * `customTags` entirely — not merely hidden, since a name a different
-   * host owns must stay callable from that host's own scan of the same
-   * file. A tag with no `hosts` restriction (every local `tags/` directory,
-   * and any `mx.tags` entry that did not declare `hosts`) is visible to
-   * every host, `host` unset included.
+   * The value `mx.tags[].hosts` is matched against for the target this file
+   * compiles under (`host.name`, or a hostless target's legacy `mx.host`
+   * value — read it off the caller's lookup with `hostFilterKey`, not guessed
+   * from the target name). A tag whose `mx.tags` entry declared `hosts`
+   * excluding this value is left out of `tags` and `customTags` entirely —
+   * not merely hidden, since a name a different host owns must stay callable
+   * from that host's own scan of the same file. A tag with no `hosts`
+   * restriction (every local `tags/` directory, and any `mx.tags` entry that
+   * did not declare `hosts`) is visible to every host, `host` unset included.
+   * null excludes every restricted entry: this target has no host filter key.
+   * undefined intentionally disables filtering for project-wide discovery.
    */
-  host?: string;
+  host?: string | null;
 }
 
 /**
@@ -855,9 +924,9 @@ export interface ScanOptions {
  * no map entry backing it. Shared by `scanCustomTags` and
  * `discoverProjectTags`, so the rule cannot drift between the two.
  */
-function applyHostFilter(tags: Map<string, DiscoveredTag>, host: string): void {
+function applyHostFilter(tags: Map<string, DiscoveredTag>, host: string | null): void {
   for (const [name, tag] of tags) {
-    if (tag.hosts && !tag.hosts.includes(host)) tags.delete(name);
+    if (tag.hosts && (host === null || !tag.hosts.includes(host))) tags.delete(name);
   }
 }
 
@@ -884,6 +953,8 @@ function indexMxTagsEntries(
   files: Array<{ path: string; mtimeMs: number }>,
   diagnostics: ScanDiagnostic[],
   directories: string[],
+  targets: TargetLookup,
+  hostRestrictions: HostRestriction[],
 ): void {
   const manifest = readManifest(packageJson, diagnostics);
   const entries = normalizeMxTags(manifest?.mx?.tags, packageDir, packageJson);
@@ -900,22 +971,16 @@ function indexMxTagsEntries(
       continue;
     }
     if (entry.hosts) {
+      // Recorded, not decided: an unknown host name must not silently drop
+      // the tag from every host's discovery (see `applyHostFilter`) with
+      // nothing said — the entry still indexes, just under a name nothing
+      // will ever match. Whether the name is known is the caller's lookup's
+      // answer (`hostRestrictionDiagnostics`), so the scan only records it.
       for (const host of entry.hosts) {
-        if (!KNOWN_HOSTS.has(host)) {
-          // Recorded, not thrown: an unknown host name should not silently
-          // drop the tag from every host's discovery (see `applyHostFilter`)
-          // with nothing said — the entry still indexes, just under a host
-          // name nothing will ever match.
-          diagnostics.push({
-            file: packageJson,
-            message: `\`mx.tags\` names an unknown host in \`hosts\`: ${host}`,
-            line: 1,
-            column: 0,
-          });
-        }
+        hostRestrictions.push({ file: packageJson, host, line: 1, column: 0 });
       }
     }
-    indexDirectory(entry.dir, tags, files, diagnostics, {
+    indexDirectory(entry.dir, tags, files, diagnostics, targets, {
       prefix: entry.prefix,
       parseOptions: entry.parseOptions,
       hosts: entry.hosts,
@@ -933,13 +998,14 @@ function indexMxTagsEntries(
  */
 export function scanCustomTags(
   filePath: string,
-  options: ScanOptions = {},
+  options: ScanOptions,
 ): ScanResult {
   const tags = new Map<string, DiscoveredTag>();
   const directories: string[] = [];
   const packageFiles: string[] = [];
   const files: Array<{ path: string; mtimeMs: number }> = [];
   const diagnostics: ScanDiagnostic[] = [];
+  const hostRestrictions: HostRestriction[] = [];
 
   let dir = dirname(resolve(filePath));
   let packageDir: string | undefined;
@@ -949,7 +1015,7 @@ export function scanCustomTags(
     const candidate = join(dir, TAGS_DIR);
     directories.push(candidate);
     if (existsSync(candidate)) {
-      indexDirectory(candidate, tags, files, diagnostics);
+      indexDirectory(candidate, tags, files, diagnostics, options.targets);
     }
 
     const manifest = join(dir, "package.json");
@@ -973,6 +1039,8 @@ export function scanCustomTags(
       files,
       diagnostics,
       directories,
+      options.targets,
+      hostRestrictions,
     );
   }
 
@@ -985,6 +1053,7 @@ export function scanCustomTags(
     packageFiles,
     files,
     diagnostics,
+    hostRestrictions,
   };
 }
 
@@ -1075,8 +1144,10 @@ export function walkProjectDirectories(
 }
 
 export interface DiscoverProjectTagsOptions {
+  /** Same meaning as `ScanOptions.targets`: the registered targets in hand. */
+  targets: TargetLookup;
   /** Same meaning as `ScanOptions.host`: filters the returned tags by host. */
-  host?: string;
+  host?: string | null;
 }
 
 /**
@@ -1103,7 +1174,7 @@ export interface DiscoverProjectTagsOptions {
  */
 export function discoverProjectTags(
   projectDir: string,
-  options: DiscoverProjectTagsOptions = {},
+  options: DiscoverProjectTagsOptions,
 ): ScanResult {
   const root = resolve(projectDir);
   const tags = new Map<string, DiscoveredTag>();
@@ -1111,6 +1182,7 @@ export function discoverProjectTags(
   const packageFiles: string[] = [];
   const files: Array<{ path: string; mtimeMs: number }> = [];
   const diagnostics: ScanDiagnostic[] = [];
+  const hostRestrictions: HostRestriction[] = [];
 
   const tagsDirs: string[] = [];
   walkProjectDirectories(root, (dir) => {
@@ -1126,7 +1198,7 @@ export function discoverProjectTags(
 
   for (const dir of tagsDirs) {
     directories.push(dir);
-    indexDirectory(dir, tags, files, diagnostics);
+    indexDirectory(dir, tags, files, diagnostics, options.targets);
   }
 
   const packageJson = join(root, "package.json");
@@ -1139,6 +1211,8 @@ export function discoverProjectTags(
       files,
       diagnostics,
       directories,
+      options.targets,
+      hostRestrictions,
     );
   }
 
@@ -1151,5 +1225,6 @@ export function discoverProjectTags(
     packageFiles,
     files,
     diagnostics,
+    hostRestrictions,
   };
 }

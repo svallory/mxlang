@@ -549,6 +549,8 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
 
   if (value.host !== undefined) validateHost(value.host);
 
+  // SAFETY: the checks above validate the descriptor's version-zero boundary
+  // schema; declarations retain their target-owned typed implementation.
   return value as unknown as TargetDescriptor;
 }
 

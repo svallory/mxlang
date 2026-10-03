@@ -37,6 +37,7 @@ import type { CustomTag } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import { newCtx, printExpression } from "./index.ts";
 import type { ComponentTarget, Ir } from "./ir.ts";
+import { lookup } from "./test-targets.ts";
 import "./lower.ts";
 import { resetTemplateCache } from "./template-tag.ts";
 
@@ -100,7 +101,10 @@ function namedTarget(name: string): { kind: "name"; name: string } {
 }
 
 function context(extra: Partial<ResolveContext> = {}): ResolveContext {
-  return { importer: CALLER, ...extra };
+  // Every read runs under the test's own registered set: the reader asks it
+  // which packages export `AttrTag` and which file-kind segments exist, so it
+  // is part of the context rather than something the tests leave out.
+  return { importer: CALLER, targets: lookup, ...extra };
 }
 
 afterEach(() => {
@@ -239,6 +243,8 @@ describe("readCalleeInput", () => {
       declarations(),
       undefined,
       CALLER,
+
+      lookup,
     );
     const { input, dependencies } = readCalleeInput(
       namedTarget("Row"),
@@ -282,6 +288,8 @@ describe("readCalleeInput", () => {
       declarations(),
       undefined,
       CALLER,
+
+      lookup,
     );
     const { input, dependencies } = readCalleeInput(
       namedTarget("Icon"),
@@ -566,41 +574,42 @@ describe("readCalleeInput", () => {
     expect(
       resolveSpecifier("virtual-core", {
         importer: CALLER,
+        targets: lookup,
         resolveImport: (specifier) =>
           specifier === "virtual-core" ? "@mxlang/core" : undefined,
       }),
     ).toBe(fileURLToPath(new URL("../dist/index.js", import.meta.url)));
   });
 
-  it("returns none for an unregistered .solid.mx callee", () => {
+  it("returns none for a callee whose file kind has no reader", () => {
     expect(
       readCalleeInput(
         namedTarget("NoInput"),
-        context({ imports: new Map([["NoInput", "./no-input.solid.mx"]]) }),
+        context({ imports: new Map([["NoInput", "./no-input.v.mx"]]) }),
       ),
     ).toEqual({
-      input: { kind: "none", path: fixture("no-input.solid.mx") },
-      dependencies: [fixture("no-input.solid.mx")],
+      input: { kind: "none", path: fixture("no-input.v.mx") },
+      dependencies: [fixture("no-input.v.mx")],
     } satisfies CalleeInputResult);
   });
 
-  it("returns none for an unregistered .ng.mx callee instead of Marko-parsing it", () => {
+  it("returns none for an unregistered file-kind callee instead of Marko-parsing it", () => {
     // A host module is a TypeScript module with a template region, never a
     // Marko template. With no reader registered for the extension the callee
     // must fall back to an untyped `none`, not through the plain `.mx` branch.
     for (const withCtx of [false, true]) {
       resetCalleeInputCache();
       const ctx = withCtx
-        ? newCtx("", printExpression, declarations(), undefined, CALLER)
+        ? newCtx("", printExpression, declarations(), undefined, CALLER, lookup)
         : undefined;
       expect(
         readCalleeInput(
           namedTarget("Card"),
-          context({ imports: new Map([["Card", "./no-input.ng.mx"]]), ctx }),
+          context({ imports: new Map([["Card", "./no-input.u.mx"]]), ctx }),
         ),
       ).toEqual({
-        input: { kind: "none", path: fixture("no-input.ng.mx") },
-        dependencies: [fixture("no-input.ng.mx")],
+        input: { kind: "none", path: fixture("no-input.u.mx") },
+        dependencies: [fixture("no-input.u.mx")],
       } satisfies CalleeInputResult);
     }
   });
@@ -707,7 +716,10 @@ describe("readCalleeInput", () => {
     const path = join(directory, "cache.ts");
     writeFileSync(path, fixtureSource("cache.ts"));
     const target = { kind: "name", name: "Card", resolvedPath: path } as const;
-    const ctx = () => ({ importer: join(directory, "caller.mx") });
+    const ctx = () => ({
+      importer: join(directory, "caller.mx"),
+      targets: lookup,
+    });
     const first = readCalleeInput(target, ctx());
     const loweringCtx = newCtx(
       "",
@@ -715,6 +727,7 @@ describe("readCalleeInput", () => {
       declarations(),
       undefined,
       join(directory, "caller.mx"),
+      lookup,
     );
     const hit = readCalleeInput(
       target,
@@ -770,7 +783,10 @@ describe("readCalleeInput", () => {
     writeFileSync(dependency, 'export type Cfg = { as: "data" };\n');
     const target = { kind: "name", name: "Card", resolvedPath: main } as const;
     const read = () =>
-      readCalleeInput(target, { importer: join(directory, "caller.mx") });
+      readCalleeInput(target, {
+        importer: join(directory, "caller.mx"),
+        targets: lookup,
+      });
     try {
       const first = read();
       writeFileSync(dependency, 'export type Cfg = { as: "renderable" };\n');
@@ -799,7 +815,10 @@ describe("readCalleeInput", () => {
     );
     const target = { kind: "name", name: "Card", resolvedPath: main } as const;
     const read = () =>
-      readCalleeInput(target, { importer: join(directory, "caller.mx") });
+      readCalleeInput(target, {
+        importer: join(directory, "caller.mx"),
+        targets: lookup,
+      });
     try {
       const first = read();
       expect(first.dependencies).toContain(dependency);
@@ -1270,6 +1289,8 @@ describe("readCalleeInput", () => {
       declarations(),
       undefined,
       CALLER,
+
+      lookup,
     );
     expect(
       readCalleeInput(
@@ -1589,6 +1610,7 @@ describe("readCalleeInput", () => {
 
   it("compile results carry an empty dependency list when no callee is read", () => {
     const result = compileSource("<div/>\n", CALLER, declarations(), {
+      targets: lookup,
       emitIr: () => "",
     });
     expect(result.dependencies).toEqual([]);
@@ -1601,6 +1623,7 @@ describe("readCalleeInput", () => {
       CALLER,
       { ...declarations(), attrTags: 2 },
       {
+        targets: lookup,
         emitIr: (ir) => {
           lowered = ir;
           return "";
@@ -1621,7 +1644,7 @@ describe("readCalleeInput", () => {
         'import Card from "./compile-callee"\n<Card><@header/><@header/></Card>\n',
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).toThrowError("`<@header>` may appear at most once");
   });
@@ -1632,7 +1655,7 @@ describe("readCalleeInput", () => {
         'import Card from "./parse-error"\n<Card><@x/></Card>\n',
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).toThrowError(fixture("parse-error.ts"));
 
@@ -1641,7 +1664,7 @@ describe("readCalleeInput", () => {
       'import Card from "./missing-callee"\n<Card><@x/></Card>\n',
       CALLER,
       { ...declarations(), attrTags: 2 },
-      { emitIr: () => "", warnings },
+      { targets: lookup, emitIr: () => "", warnings },
     );
     expect(warnings).toEqual([
       expect.objectContaining({
@@ -1656,7 +1679,7 @@ describe("readCalleeInput", () => {
         'import Multi from "./multi-invalid"\n<Multi><@y/></Multi>\n',
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).not.toThrow();
     expect(() =>
@@ -1664,7 +1687,7 @@ describe("readCalleeInput", () => {
         'import Multi from "./multi-invalid"\n<Multi><@x/></Multi>\n',
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).toThrowError(
       `can't read \`<Multi>\`'s declaration of \`x\` (${fixture("multi-invalid.ts")}:3); declare this attribute tag's config literally`,
@@ -1677,7 +1700,7 @@ describe("readCalleeInput", () => {
         'import Card from "./parse-error"\n<Card><@x/></Card>\n',
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).toThrowError(
       `can't read \`<Card>\`'s Input (${fixture("parse-error.ts")}:2:23): Unexpected token`,
@@ -1697,7 +1720,7 @@ describe("readCalleeInput", () => {
         'import Card from "./compile-callee"\n<Card><@header/></Card>\n',
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).not.toThrow();
   });
@@ -1712,7 +1735,7 @@ describe("readCalleeInput", () => {
         'import Card from "./compile-callee"\n<Card><@header/><@header/></Card>\n',
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).toThrowError("`<@header>` may appear at most once");
   });
@@ -1736,6 +1759,7 @@ describe("readCalleeInput", () => {
         CALLER,
         { ...declarations(), attrTags: 2 },
         {
+          targets: lookup,
           emitIr: (ir) => {
             lowered = ir;
             return "";
@@ -1762,6 +1786,7 @@ describe("readCalleeInput", () => {
           attrTags: 2,
         },
         {
+          targets: lookup,
           emitIr: () => "",
           customTags: {
             "bad-cfg": {
@@ -1789,7 +1814,7 @@ describe("readCalleeInput", () => {
         ].join("\n"),
         CALLER,
         { ...declarations(), attrTags: 2 },
-        { emitIr: () => "" },
+        { targets: lookup, emitIr: () => "" },
       ),
     ).toThrowError(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko syntax.

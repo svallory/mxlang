@@ -2,9 +2,9 @@
   "name": "peer-and-dependency",
   "private": true,
   "dependencies": {
-    "@mxlang/solid": "*"
+    "@t/unit": "*"
   },
   "peerDependencies": {
-    "@mxlang/react": "*"
+    "@t/vue": "*"
   }
 }

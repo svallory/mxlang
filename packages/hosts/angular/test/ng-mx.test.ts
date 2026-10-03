@@ -12,6 +12,7 @@ import {
   ngMxPositionCheck,
   rebaseRegionMappings,
 } from "../src/ng-mx.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 import { assertModuleTypechecks } from "./helpers.ts";
 
 /** A `.ng.mx` module around one region, as an author would write it. */
@@ -234,7 +235,10 @@ describe("compileNgMx", () => {
         writeFileSync(filePath, source);
 
         const result = compileNgMx(source, filePath, {
-          customTags: getCustomTags(filePath, { host: "angular" }),
+          customTags: getCustomTags(filePath, {
+            host: "angular",
+            targets: angularOwnTargets,
+          }),
         });
 
         // The tag reached the emitter…
@@ -477,7 +481,10 @@ describe("compileNgMx: round 2 review", () => {
       writeFileSync(filePath, source);
 
       const result = compileNgMx(source, filePath, {
-        customTags: getCustomTags(filePath, { host: "angular" }),
+        customTags: getCustomTags(filePath, {
+          host: "angular",
+          targets: angularOwnTargets,
+        }),
       });
 
       // Declared *and* imported, or the module does not compile.
@@ -652,7 +659,10 @@ describe("compileNgMx: standalone: false", () => {
       const source = ngModuleFile("<div><badge/></div>");
       writeFileSync(filePath, source);
       const result = compileNgMx(source, filePath, {
-        customTags: getCustomTags(filePath, { host: "angular" }),
+        customTags: getCustomTags(filePath, {
+          host: "angular",
+          targets: angularOwnTargets,
+        }),
       });
       expect(result.code).not.toMatch(/imports:/);
       const warning = result.warnings.find((w) => /NgModule/.test(w.message));

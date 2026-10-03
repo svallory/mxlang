@@ -39,6 +39,7 @@ import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import type { Expr, IrNode, Position } from "./ir.ts";
+import type { TargetLookup } from "./target-descriptor.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -79,6 +80,14 @@ export class TranslateError extends Error {
   readonly line: number;
   readonly column: number;
   /**
+   * The cross-copy brand (decisions 129/132 §4.4, mitigation 2). Set through
+   * `Symbol.for`, so two copies of `@mxlang/core` in one process — a bundled
+   * tool and a project-resolved host, or the published `dist` beside a
+   * different core — agree on the same symbol and {@link isTranslateError}
+   * recognises each other's errors, where `instanceof` silently would not.
+   */
+  declare readonly [TRANSLATE_ERROR_BRAND]: true;
+  /**
    * The file `line`/`column` are measured in, when it is not the file being
    * compiled — a diagnostic raised inside an inlined tag template.
    *
@@ -105,7 +114,44 @@ export class TranslateError extends Error {
     this.line = line;
     this.column = column;
     this.file = file;
+    Object.defineProperty(this, TRANSLATE_ERROR_BRAND, {
+      value: true,
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
   }
+}
+
+/**
+ * The brand a `TranslateError` carries, from the global symbol registry so
+ * every copy of core uses one key. Never exported by name: it is the value
+ * `Symbol.for` returns, and the only way to test an error for it is
+ * {@link isTranslateError}.
+ */
+const TRANSLATE_ERROR_BRAND: unique symbol = Symbol.for(
+  "mxTranslateError",
+) as typeof TRANSLATE_ERROR_BRAND;
+
+/**
+ * Whether `error` is a `TranslateError`, whoever raised it.
+ *
+ * `instanceof` alone is wrong across a copy boundary (design note §4.4): a
+ * host resolved from the project brings its own `@mxlang/core`, so the
+ * `TranslateError` it throws is not the class the tool checks against, and
+ * every positioned error from it degrades to a wrapped, positionless one.
+ * The brand is a `Symbol.for` (shared registry) plus the name, so a foreign
+ * copy's error passes and an unrelated error that merely carries a position
+ * does not.
+ */
+export function isTranslateError(error: unknown): error is TranslateError {
+  return (
+    error instanceof TranslateError ||
+    (typeof error === "object" &&
+      error !== null &&
+      (error as Record<symbol, unknown>)[TRANSLATE_ERROR_BRAND] === true &&
+      (error as { name?: unknown }).name === "TranslateError")
+  );
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -442,6 +488,17 @@ export interface Ctx {
    * for every integration that has no aliases to contribute.
    */
   resolveImport?: (specifier: string, importer: string) => string | undefined;
+  /**
+   * The set of registered targets this compile runs under (decisions 129 and
+   * 132). Required, never defaulted: core names no target and no host, so the
+   * open-set questions lowering asks — which packages export the `AttrTag`
+   * type, which file-kind segments exist — are answered by the caller's
+   * lookup, and a missing one would silently skip a validation (accept a
+   * foreign `AttrTag` import, misjudge a `.ng.mx` callee). Passed through
+   * `TranslatorOptions.targets`; a host's own descriptor is the fallback its
+   * compile entries default to (design note §5.1, rule (c)).
+   */
+  targets: TargetLookup;
 }
 
 /** One positioned warning: a compile that succeeded while dropping something. */
@@ -1168,6 +1225,7 @@ export function newCtx(
   declarations: HostDeclarations,
   lookup: Ctx["lookup"] | undefined,
   filename: string,
+  targets: TargetLookup,
 ): Ctx {
   // Required, never defaulted: `filename` is what an injected custom-tag
   // import is made relative to. A placeholder would not fail — it would emit a
@@ -1217,6 +1275,7 @@ export function newCtx(
     generate,
     declarations,
     lookup,
+    targets,
     customTagGensym: { n: 0 },
   };
   return ctx;

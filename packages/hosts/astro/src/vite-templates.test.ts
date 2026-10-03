@@ -368,11 +368,8 @@ describe("mxTemplates()", () => {
       expect(lowered).toContain("stamped");
     });
 
-    it("warns about an unknown host name in mx.tags[].hosts (decision 110a; round 2 finding 2)", () => {
-      // The scan diagnostic core records for a typo'd host name was
-      // computed but dropped here, because `tagsFor` used `getCustomTags`,
-      // which returns only `.customTags`. It now uses `scanCached` and
-      // reports `.diagnostics` through `console.warn`.
+    it("leaves an unmatched mx.tags host unresolved under its own-only lookup", () => {
+      // PR 3 round-2 ruling: own-only lookups cannot validate peer names.
       const dir = mkdtempSync(join(tmpdir(), "mx-amx-hosts-warning-"));
       writeFileSync(
         join(dir, "package.json"),
@@ -395,7 +392,7 @@ describe("mxTemplates()", () => {
         load.call({}, amx + ASTRO_SUFFIX);
         expect(
           warn.mock.calls.some((call) => String(call[0]).includes("bogus")),
-        ).toBe(true);
+        ).toBe(false);
       } finally {
         warn.mockRestore();
       }

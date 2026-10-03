@@ -1,13 +1,8 @@
-// Parity between the built-in descriptors and the closed lists and constants the
-// tooling and core hold today. A later change deletes those constants and reads
-// the descriptors instead; this file is the proof they agree, one row per
-// constant. Each constant's `file:line` is cited where it is read, at the base
-// commit this change was cut from.
-//
-// Constants that are not exported (`HOST_PACKAGES`, `MX_ATTR_TAG_SOURCES`) are
-// read through the behavior they drive. The imports reach into sibling
-// packages' sources by relative path, on purpose: the registry must not depend
-// on the tooling, and the tooling will depend on the registry.
+// Parity between the built-in descriptors and the resolution, scanning and
+// tooling rules that core's former closed lists encoded. The eighth target,
+// data, has no host or file kind but participates in package selection and
+// AttrTag sources. Tooling is imported by relative path here: the registry
+// must not depend on tooling, which now depends on the registry.
 
 import {
   existsSync,
@@ -18,26 +13,18 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { angularDeclarations } from "@mxlang/angular";
-import {
-  type CalleeInput,
-  HOST_MODULE_SEGMENTS,
-  type HostDeclarations,
-  resolveHostPolicy,
-  resolveHostPolicyDetailed,
-} from "@mxlang/core";
+import { type CalleeInput, type HostDeclarations } from "@mxlang/core";
 import { honoDeclarations } from "@mxlang/hono";
 import { policy, strictPolicy, translator } from "@mxlang/html";
 import { preactDeclarations } from "@mxlang/preact";
 import { reactDeclarations } from "@mxlang/react";
 import { solidDeclarations } from "@mxlang/solid";
 import { afterAll, describe, expect, it, vi } from "vitest";
-// core/src/host-policy.ts:71 (HOST_NAMES, exported)
-import { HOST_NAMES } from "../../core/src/host-policy.ts";
-// data/src/declarations.ts (the data target's own table; light, no compiler)
 import { dataDeclarations } from "../../targets/data/src/declarations.ts";
 // language-server/src/diagnose.ts:35 (SOLID_MX_LANGUAGE_IDS, exported)
 import { SOLID_MX_LANGUAGE_IDS } from "../../tooling/language-server/src/diagnose.ts";
@@ -53,10 +40,21 @@ import { createAstroTypeSurface } from "../../tooling/typescript-plugin/src/mx-l
 import {
   builtinFileKinds,
   builtinTargets,
-  builtinTargetLookup as lookup,
+  builtinLookup,
+  defaultTarget,
+  hostFilterKey,
+  hostModuleSegment,
+  hostValues,
+  moduleSegments,
+  resolveHostPolicy,
+  resolveHostPolicyDetailed,
+  scanCached,
 } from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+/** The built-in lookup, built once for this file. */
+const lookup = builtinLookup();
 const work = mkdtempSync(join(tmpdir(), "mx-registry-parity-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
@@ -68,13 +66,6 @@ function project(pkg: unknown): string {
   writeFileSync(join(dir, "package.json"), JSON.stringify(pkg));
   return join(dir, "a.mx");
 }
-
-/**
- * The seven hosts today's closed lists know. `data` is not in any of them: it
- * has no host, no file kind and no `mx.host` value, so it has no row in
- * `HOST_NAMES`, `HOST_PACKAGES` or `MX_ATTR_TAG_SOURCES` to compare with.
- */
-const hosted = builtinTargets.filter((t) => t.name !== "data");
 
 const target = (name: string) => {
   const found = builtinTargets.find((t) => t.name === name);
@@ -150,35 +141,47 @@ function expectSame(actual: unknown, expected: unknown, path = "declarations") {
   expect(actual, path).toEqual(expected);
 }
 
-describe("host names (core/src/host-policy.ts:71 HOST_NAMES, :99 isKnownHost)", () => {
-  it("the targets' hosts, with html as the hostless one, are HOST_NAMES in order", () => {
-    const hosts = hosted.map((t) => t.host?.name ?? "html");
-    expect(hosts).toEqual([...HOST_NAMES]);
+describe("mx.host values", () => {
+  it("are the targets' hosts, with the hostless target named by its legacy value", () => {
+    // What `HOST_NAMES` used to list, read off the table instead: the host of
+    // each target, and the one target that has none (named by its own
+    // non-deprecated legacy `mx.host` value).
+    expect(hostValues().filter((value) => value !== "translator")).toEqual(
+      builtinTargets.filter((t) => t.name !== "data").map((t) => t.host?.name ?? "html"),
+    );
   });
 
-  it("mx.host accepts HOST_NAMES plus the deprecated `translator`", () => {
-    expect(lookup.hostValues()).toEqual([
-      ...HOST_NAMES.slice(0, 1),
+  it("mx.host accepts the hosts plus the one deprecated legacy value", () => {
+    expect(hostValues()).toEqual([
+      "html",
       "translator",
-      ...HOST_NAMES.slice(1),
+      "astro",
+      "solid",
+      "preact",
+      "react",
+      "hono",
+      "angular",
+    ]);
+    expect(hostValues().filter((v) => lookup.hostTarget(v)?.deprecated === true)).toEqual([
+      "translator",
     ]);
   });
 
-  it("every accepted mx.host value resolves to the same host through today's resolver", () => {
+  it("every accepted mx.host value resolves through the policy resolver", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    for (const value of lookup.hostValues()) {
+    for (const value of hostValues()) {
       const selected = lookup.hostTarget(value);
-      const expectedHost =
-        selected && (lookup.hostOf(selected.target) ?? "html");
+      const expectedHost = selected && lookup.hostOf(selected.target);
       const resolved = resolveHostPolicy(project({ mx: { host: value } }));
       expect(resolved.host, value).toBe(expectedHost);
+      expect(resolved.target, value).toBe(selected?.target);
     }
     vi.restoreAllMocks();
   });
 
-  it("`translator` is the one deprecated value, and the resolver warns for exactly it", () => {
+  it("warns for exactly the deprecated value, and for nothing else", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    for (const value of lookup.hostValues()) {
+    for (const value of hostValues()) {
       warn.mockClear();
       resolveHostPolicy(project({ mx: { host: value } }));
       const deprecated = lookup.hostTarget(value)?.deprecated === true;
@@ -187,82 +190,228 @@ describe("host names (core/src/host-policy.ts:71 HOST_NAMES, :99 isKnownHost)", 
     vi.restoreAllMocks();
   });
 
-  it("the unknown-host message lists the same values (host-policy.ts:349)", () => {
+  it("the unknown-host message lists the same values, byte-identically", () => {
+    // The text every existing project sees. The list is every non-deprecated
+    // value the lookup accepts, in registration order, with the deprecated one
+    // named apart — which is exactly what the closed list produced (decision 07
+    // Q9: the wording does not change).
     const { diagnostics } = resolveHostPolicyDetailed(
       project({ mx: { host: "bogus" } }),
     );
-    const message = diagnostics[0]?.message ?? "";
-    const listed = /valid hosts: ([^(]*) \(/.exec(message)?.[1]?.split(", ");
-    expect(listed).toEqual([...HOST_NAMES]);
+    expect(diagnostics[0]?.message).toBe(
+      `unknown mx.host "bogus"; valid hosts: ${hostValues()
+        .filter((v) => lookup.hostTarget(v)?.deprecated !== true)
+        .join(", ")} ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.`,
+    );
+    expect(diagnostics[0]?.message).toContain(
+      "valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html)",
+    );
+  });
+
+  it("the malformed-package.json message still names the default target", () => {
+    const dir = join(work, "broken");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), "{ not json");
+    const { diagnostics } = resolveHostPolicyDetailed(join(dir, "a.mx"));
+    expect(diagnostics[0]?.code).toBe("malformed-package-json");
+    expect(diagnostics[0]?.message).toContain(
+      'using the default "html" host for the files under',
+    );
+    expect(defaultTarget()).toBe("html");
   });
 });
 
-describe("host packages (core/src/host-policy.ts:81 HOST_PACKAGES, rule 2 at :282)", () => {
-  it.each(hosted.map((t) => [t.name, t.packageName] as const))(
-    "a project with only %s's package picks the same host through today's resolver",
-    (name, pkg) => {
-      const resolved = resolveHostPolicy(
-        project({ dependencies: { [pkg]: "*" } }),
-      );
-      expect(lookup.fromPackage(pkg)).toBe(name);
-      expect(resolved.host).toBe(lookup.hostOf(name) ?? "html");
-    },
-  );
-
-  it("`@mxlang/<host>` for every HOST_NAMES entry is a registered package", () => {
-    const packages = hosted.map((t) => t.packageName).sort();
-    expect(packages).toEqual(HOST_NAMES.map((h) => `@mxlang/${h}`).sort());
+describe("packages and rule 2 (the single target dependency)", () => {
+  it.each(
+    builtinTargets
+      .filter((t) => t.name !== "data")
+      .map((t) => [t.name, t.packageName] as const),
+  )("a project with only %s's package picks that target", (name, pkg) => {
+    expect(lookup.fromPackage(pkg)).toBe(name);
+    const resolved = resolveHostPolicy(
+      project({ dependencies: { [pkg]: "*" } }),
+    );
+    expect(resolved.target).toBe(name);
+    expect(resolved.host).toBe(lookup.hostOf(name));
   });
 
-  // TODO target-open-set-resolver: delete this tripwire when registration PR 3
-  // moves the resolver onto the registry; the two then agree on `data`.
-  it("`@mxlang/data` is the one package today's resolver does not know (rule 2 diverges on purpose)", () => {
-    // Today `HOST_PACKAGES` is closed: a project depending only on
-    // `@mxlang/data` falls through to the default `html` host. The lookup
-    // already answers `data`; the change that moves the resolver onto the
-    // registry (registration PR 3) makes the two agree.
+  it("every built-in target declares a distinct package", () => {
+    expect(
+      builtinTargets.map((t) => t.packageName).sort(),
+    ).toEqual([
+      "@mxlang/angular",
+      "@mxlang/astro",
+      "@mxlang/data",
+      "@mxlang/hono",
+      "@mxlang/html",
+      "@mxlang/preact",
+      "@mxlang/react",
+      "@mxlang/solid",
+    ]);
+  });
+
+  // target-open-set-resolver: stage inference until data PR 4 adds dispatch
+  // to all tools. Core still selects data; the registry preserves base output.
+  it("a lone @mxlang/data dependency retains the default until data PR 4", () => {
     const resolved = resolveHostPolicy(
       project({ dependencies: { "@mxlang/data": "*" } }),
     );
-    expect(resolved.host).toBe("html");
     expect(lookup.fromPackage("@mxlang/data")).toBe("data");
+    expect(resolved.target).toBe(defaultTarget());
+    expect(resolved.host).toBeUndefined();
+  });
+
+  it("a package no target declares picks nothing, so the default applies", () => {
+    // `@mxlang/core` is a dependency of every target package and declares no
+    // target itself; a project's own package does the same.
+    expect(lookup.fromPackage("@mxlang/core")).toBeUndefined();
+    expect(lookup.fromPackage("@mxlang/parser")).toBeUndefined();
+    const resolved = resolveHostPolicy(
+      project({ dependencies: { "@mxlang/core": "*" } }),
+    );
+    expect(resolved.target).toBe(defaultTarget());
+  });
+
+  it("two target packages are ambiguous and fall back to the default", () => {
+    const resolved = resolveHostPolicy(
+      project({ dependencies: { "@mxlang/solid": "*", "@mxlang/react": "*" } }),
+    );
+    expect(resolved.target).toBe(defaultTarget());
+  });
+
+  it("the filter key is the host name, or a hostless target's legacy value", () => {
+    for (const t of builtinTargets) {
+      expect(hostFilterKey(t.name), t.name).toBe(
+        t.host?.name ?? (t.name === "html" ? "html" : undefined),
+      );
+    }
+    // The value every existing `mx.tags[].hosts: ["html"]` entry matches.
+    expect(hostFilterKey("html")).toBe("html");
   });
 });
 
-describe("attr-tag sources (core/src/callee-input.ts:145 MX_ATTR_TAG_SOURCES)", () => {
-  it("is @mxlang/core plus @mxlang/<host> for every HOST_NAMES entry", () => {
-    // The set the reader tests is `["@mxlang/core", ...HOST_NAMES.map(h => `@mxlang/${h}`)]`.
-    // Core's own source is added by the reader, not by the lookup.
-    const today = HOST_NAMES.map((host) => `@mxlang/${host}`);
-    // `@mxlang/data` is the hostless target's package, which the closed list lacks.
+describe("attr-tag sources (what the callee reader asks the lookup)", () => {
+  it("is every registered target's package, deduped", () => {
+    // The reader adds `@mxlang/core` itself; the lookup reports the packages a
+    // target declares, which is the set the closed list produced.
     expect([...lookup.attrTagSources()].sort()).toEqual(
-      [...today, "@mxlang/data"].sort(),
+      [
+        "@mxlang/angular",
+        "@mxlang/astro",
+        "@mxlang/data",
+        "@mxlang/hono",
+        "@mxlang/html",
+        "@mxlang/preact",
+        "@mxlang/react",
+        "@mxlang/solid",
+      ].sort(),
     );
   });
 });
 
-describe("module segments (core/src/scan.ts:93 HOST_MODULE_SEGMENTS)", () => {
-  it("are the file-kind segments of the targets (same set; order follows target registration, not the constant's)", () => {
-    expect([...lookup.moduleSegments()].sort()).toEqual(
-      [...HOST_MODULE_SEGMENTS].sort(),
-    );
-    expect(HOST_MODULE_SEGMENTS).toContain("astro");
+describe("module segments (the file kinds the lookup holds)", () => {
+  it("are the file-kind segments of the targets, in registration order", () => {
+    expect([...moduleSegments()].sort()).toEqual(["astro", "ng", "solid"]);
+  });
+
+  it("hostModuleSegment over the built-in set answers for a file kind only", () => {
+    expect(hostModuleSegment("card.ng.mx")).toBe("ng");
+    expect(hostModuleSegment("card.solid.mx")).toBe("solid");
+    expect(hostModuleSegment("card.astro.mx")).toBe("astro");
+    // A dotted name whose segment no target declares is not a module file.
+    expect(hostModuleSegment("card.icon.mx")).toBeUndefined();
+    expect(hostModuleSegment("card.mx")).toBeUndefined();
+    expect(hostModuleSegment("card.ts")).toBeUndefined();
   });
 });
 
-describe("language ids and diagnostic sources", () => {
-  it("solid: languageIds are language-server/src/diagnose.ts:35 SOLID_MX_LANGUAGE_IDS", () => {
+describe("scanCached over the built-in set", () => {
+  it("reports a bare unknown word in mx.tags[].hosts and stays quiet for a package specifier", () => {
+    const dir = join(work, "restrictions");
+    mkdirSync(join(dir, "extra-tags"), { recursive: true });
+    writeFileSync(join(dir, "extra-tags", "thing.mx"), "<p/>\n");
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        mx: {
+          tags: [
+            { dir: "extra-tags", hosts: ["html"] },
+            { dir: "extra-tags", hosts: ["bogus"] },
+            { dir: "extra-tags", hosts: ["@acme/mx-vue"] },
+          ],
+        },
+      }),
+    );
+    const scan = scanCached(join(dir, "page.mx"));
+    expect([...scan.tags.keys()]).toEqual(["thing"]);
+    expect(
+      scan.diagnostics.filter((d) => /unknown host/.test(d.message)).map((d) => d.message),
+    ).toEqual(["`mx.tags` names an unknown host in `hosts`: bogus"]);
+  });
+});
+
+describe("callee readers are installed from the table at registry creation", () => {
+  it("a callee probe reaches a file kind's extension without importing its host", () => {
+    // The #216 ordering hazard: `.solid.mx` was probed only once
+    // `@mxlang/solid` had been imported for its side effect, so a second copy
+    // of core in the process never saw the reader. The registry registers every
+    // file kind's reader into its own core at creation, so importing *only* the
+    // registry is enough. Proven in a fresh process, because the reader
+    // registry is module state this test file has already populated.
+    // Beside the package, not in the temp dir: a file outside the
+    // workspace cannot resolve `@mxlang/*` at all.
+    const probe = join(here, `.probe-${process.pid}.ts`);
+    writeFileSync(
+      probe,
+      [
+        'import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";',
+        'import { tmpdir } from "node:os";',
+        'import { join } from "node:path";',
+        '// The registry only: no `@mxlang/solid` import anywhere in this file.',
+        'import { builtinLookup } from "@mxlang/target-registry";',
+        'import { readCalleeInput } from "@mxlang/core";',
+        'const dir = mkdtempSync(join(tmpdir(), "mx-probe-"));',
+        'mkdirSync(dir, { recursive: true });',
+        'writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p" }));',
+        'writeFileSync(join(dir, "caller.mx"), "<c/>\\n");',
+        'writeFileSync(join(dir, "card.solid.mx"), "export class C {}\\n");',
+        'const result = readCalleeInput(',
+        '  { kind: "name", name: "Card" },',
+        '  {',
+        '    importer: join(dir, "caller.mx"),',
+        '    imports: new Map([["Card", "./card"]]),',
+        "    targets: builtinLookup(),",
+        '  },',
+        ');',
+        'console.log(JSON.stringify(result.input));',
+      ].join("\n"),
+    );
+    try {
+      const run = spawnSync("bun", [probe], { encoding: "utf8", cwd: here });
+      expect(run.status, run.stderr).toBe(0);
+      // Probed and read: the `.solid.mx` candidate resolved, so the extension
+      // is in core's probe list without the host package having been imported.
+      expect(run.stdout.trim()).not.toContain('"kind":"unresolved"');
+      expect(run.stdout.trim()).toContain("card.solid.mx");
+    } finally {
+      rmSync(probe, { force: true });
+    }
+  });
+});
+
+describe("registered file-kind language ids and diagnostic sources", () => {
+  it("solid's ids match the language server and TS plugin", () => {
     const [kind] = target("solid-jsx").host?.fileKinds ?? [];
     expect(new Set(kind?.languageIds)).toEqual(SOLID_MX_LANGUAGE_IDS);
     expect(kind?.languageIds).toContain(SOLID_MX_LANGUAGE_ID);
   });
 
-  it("ng: languageIds are typescript-plugin/src/language.ts:45 NG_MX_LANGUAGE_ID", () => {
+  it("angular's id matches the TS plugin", () => {
     const [kind] = target("angular-template").host?.fileKinds ?? [];
     expect(kind?.languageIds).toEqual([NG_MX_LANGUAGE_ID]);
   });
 
-  it("astro: languageIds are typescript-plugin/src/amx-language.ts:32 AMX_LANGUAGE_ID, VS Code's `astromx` (decision 134)", () => {
+  it("astro's id matches the TS plugin and VS Code", () => {
     const [kind] = target("astro-html").host?.fileKinds ?? [];
     expect(kind?.languageIds).toEqual([AMX_LANGUAGE_ID]);
     expect(kind?.languageIds).toEqual(["astromx"]);
@@ -273,13 +422,12 @@ describe("language ids and diagnostic sources", () => {
     expect(vscode?.id).toBe(kind?.languageIds?.[0]);
   });
 
-  it("diagnosticSource is the label typescript-plugin/src/index.ts:235-241 puts on TS80001/2", () => {
-    // `.solid.mx` -> "solidmx", `.ng.mx` -> "ngmx", `.astro.mx` -> "astromx".
-    // The fallback "mx" is not a file kind.
-    const sources = Object.fromEntries(
-      builtinFileKinds.map((k) => [k.segment, k.diagnosticSource]),
-    );
-    expect(sources).toEqual({
+  it("the registry exposes the diagnostic source for each file kind", () => {
+    expect(
+      Object.fromEntries(
+        builtinFileKinds.map((k) => [k.segment, k.diagnosticSource]),
+      ),
+    ).toEqual({
       solid: "solidmx",
       ng: "ngmx",
       astro: "astromx",
@@ -290,8 +438,7 @@ describe("language ids and diagnostic sources", () => {
 describe("strict (language-server/src/diagnose.ts:188 resolveStrict, typescript-plugin/src/mx-language.ts:240)", () => {
   it("only astro is always strict", () => {
     for (const t of builtinTargets) {
-      const host = t.host?.name ?? "html";
-      expect(t.strict === "always", host).toBe(host === "astro");
+      expect(t.strict === "always", t.name).toBe(t.name === "astro-html");
     }
   });
 });
@@ -320,7 +467,7 @@ describe("declarations (typescript-plugin/src/mx-language.ts:253-280, createHtml
     },
   );
 
-  it("data lowers under its own delegate-everything declarations and has no translator", () => {
+  it("data lowers under its own declarations and has no translator", () => {
     expectSame(target("data").declarations?.default, dataDeclarations);
     expect(target("data").declarations?.strict).toBeUndefined();
     expect(target("data").translator).toBeUndefined();

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CustomTag, getCustomTags } from "@mxlang/core";
 import { afterAll, describe, expect, it } from "vitest";
-import { lowerAstroMx } from "./astro-template.ts";
+import { astroTargets, lowerAstroMx } from "./astro-template.ts";
 
 /**
  * Marko 6.3.51 says only "Unable to find entry point for custom tag `<X>`."
@@ -66,7 +66,10 @@ describe("unresolved tag hints (astro)", () => {
     );
     const page = join(dir, "page.astro.mx");
     const source = `${FENCE}<Card title="x"/>`;
-    const customTags = getCustomTags(page, { host: "astro" });
+    const customTags = getCustomTags(page, {
+      host: "astro",
+      targets: astroTargets,
+    });
     expect(() => lowerAstroMx(source, page, { customTags })).not.toThrow();
     expect(failure(source, page).message).toContain("or add `tags/Card.mx`.");
   });

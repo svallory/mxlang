@@ -14,6 +14,7 @@ import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -103,7 +104,10 @@ function run(dir: string, source: string) {
   const path = join(dir, "x.component.ng.mx");
   writeFileSync(path, source);
   return compileNgMx(source, path, {
-    customTags: getCustomTags(path, { host: "angular" }),
+    customTags: getCustomTags(path, {
+      host: "angular",
+      targets: angularOwnTargets,
+    }),
   });
 }
 
@@ -653,7 +657,10 @@ describe("plain Angular page .mx", () => {
     writeFileSync(path, source);
     expect(() =>
       compile(source, path, {
-        customTags: getCustomTags(path, { host: "angular" }) as never,
+        customTags: getCustomTags(path, {
+          host: "angular",
+          targets: angularOwnTargets,
+        }) as never,
       }),
     ).toThrow(/an Angular template has no module scope/);
   });

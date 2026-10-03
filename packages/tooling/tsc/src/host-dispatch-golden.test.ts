@@ -109,19 +109,40 @@ const ROWS = [
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
 const ALIASED = new Set(ROWS.filter((row) => row.startsWith("alias-")));
 
-// `@mxlang/core` is the language server's dependency, not this package's:
-// resolve it from the server so both sides use the copy the server runs.
+// `@mxlang/target-registry` is the language server's dependency, not this
+// package's: resolve it from the server so both sides use the copy the server
+// runs. It is where the resolver now lives for a tool (decisions 129/132), and
+// its `resolveHostPolicyDetailed` is core's, bound to the built-in lookup.
 const lsRequire = createRequire(
   join(here, "..", "..", "language-server", "package.json"),
 );
-const { resolveHostPolicyDetailed } = (await import(
-  pathToFileURL(lsRequire.resolve("@mxlang/core")).href
+const { hostFilterKey, resolveHostPolicyDetailed } = (await import(
+  pathToFileURL(lsRequire.resolve("@mxlang/target-registry")).href
 )) as {
   resolveHostPolicyDetailed(file: string): {
     policy: Parameters<typeof diagnoseDocument>[2];
     diagnostics: NonNullable<Parameters<typeof diagnoseDocument>[8]>;
   };
+  hostFilterKey(target: string): string | undefined;
 };
+
+/**
+ * The resolved policy as the golden records it: the value `mx.tags[].hosts` is
+ * matched against, which is the host name for a hosted target and a hostless
+ * target's legacy `mx.host` value (`html`). It is the same string the policy
+ * carried before the policy named a target first (decisions 129/132), so every
+ * row that does not change behaviour keeps its recorded bytes; the tools get
+ * the real policy.
+ */
+function recordedPolicy(policy: Parameters<typeof diagnoseDocument>[2]): {
+  host: string;
+  strict?: boolean;
+} {
+  return {
+    host: hostFilterKey(policy.target) as string,
+    ...(policy.strict === undefined ? {} : { strict: policy.strict }),
+  };
+}
 
 /**
  * Makes a value comparable across machines and shells: absolute paths become
@@ -204,7 +225,7 @@ function languageServerLeg(file: string, text: string, languageId: string) {
     diagnostics,
   );
   return {
-    policy,
+    policy: recordedPolicy(policy),
     diagnostics: reported,
     related,
     dependencies: [...dependencies].sort(),
@@ -226,7 +247,7 @@ function untitledLeg(file: string, text: string) {
     undefined,
     related,
   );
-  return { policy, diagnostics, related, unexpected };
+  return { policy: recordedPolicy(policy), diagnostics, related, unexpected };
 }
 
 function tsPluginLeg(file: string, text: string) {

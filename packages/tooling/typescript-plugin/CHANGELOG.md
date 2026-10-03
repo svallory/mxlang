@@ -6,6 +6,10 @@
 
 The virtual code for these three hosts is now compiled with the hosts' `typeCheck` option, so a native element's event handler is checked against the host's own handler type and diagnostics land on the authored handler. Before, a mistyped handler was silently dropped (TypeScript reported it on the unmapped attribute name) and a valid `onKeyDown=((e) => e.key)` reported an implicit-any error. New errors on existing code are the ones plain TSX reports, including DOM-typed `(e: MouseEvent)` handlers on react. Runtime output (build, Vite, oracles) is unchanged; only the virtual code carries the wrapper.
 
+### Changed: host policy and dispatch read the built-in lookup (refactor/target-open-set, decisions 129 and 132)
+
+The plugin resolves each file's policy through `@mxlang/target-registry` and scans with the built-in lookup, matching `mx.tags[].hosts` on `hostFilterKey(policy.target)` (unchanged for every built-in). Each compile carries the lookup, so a callee importing `AttrTag` from another registered target's package is recognised as before. The dependency rule for `.solid.mx`/`.ng.mx` callees now reads the same lookup rather than a closed list in core. `isTranslateError` replaces `instanceof TranslateError`. No change to generated text, mappings or diagnostics; the dispatch goldens are unchanged.
+
 ### Fixed: `TS80001` no longer repeats the file and position in its message (translate-error-no-repeated-path, audit item 17)
 
 A parse error's message used to open with Marko's `    at <path>:L:C` line, which `mx-tsc` printed right after `file(L,C)` and an editor showed beside the range. The line is dropped when it names the diagnosed file; one naming another file (an error inside a callee tag) stays, since it is the only place that file is named. The code frame is unchanged.

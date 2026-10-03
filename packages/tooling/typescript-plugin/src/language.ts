@@ -9,13 +9,16 @@ import {
 } from "@mxlang/angular";
 import {
   type HostPolicyDiagnostic,
-  hostModuleSegment,
+  isTranslateError,
   type MxWarning,
   reportScanDiagnostics,
-  scanCached,
-  TranslateError,
   withCalleeInputSources,
 } from "@mxlang/core";
+import {
+  builtinLookup,
+  hostModuleSegment,
+  scanCached,
+} from "@mxlang/target-registry";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
 import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
 import { compileSolidMx } from "@mxlang/solid";
@@ -36,7 +39,7 @@ import { createHostPolicyRecorder } from "./host-policy-diagnostics.ts";
  * this host, so every `.solid.mx` caller supplies it explicitly.
  */
 export const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
-  compileSolidMx(source, rest);
+  compileSolidMx(source, { ...rest, targets: builtinLookup() });
 
 export const SOLID_MX_EXTENSION = "solid.mx";
 export const SOLID_MX_LANGUAGE_ID = "solidmx";
@@ -141,7 +144,11 @@ export function createSolidMxLanguagePlugin(
             const warnings: MxWarning[] = [];
             const printed = print(source, fileName, {
               mxRegionCompile: (input) =>
-                compileSolidMx(input.source, { ...input, warnings }),
+                compileSolidMx(input.source, {
+                  ...input,
+                  warnings,
+                  targets: builtinLookup(),
+                }),
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
                 : undefined),
@@ -362,6 +369,7 @@ export function createNgMxLanguagePlugin(
         const result = compileNgMx(source, fileName, {
           customTags: scan.customTags,
           tagSelectorPrefix,
+          targets: builtinLookup(),
         });
         syntaxErrors.delete(fileName);
         if (options.retainCompiled || options.onCompiled) {
@@ -457,7 +465,7 @@ export function createNgMxLanguagePlugin(
  */
 function configErrorMessage(cause: unknown): string {
   if (!(cause instanceof Error)) return String(cause);
-  const file = cause instanceof TranslateError ? cause.file : undefined;
+  const file = isTranslateError(cause) ? cause.file : undefined;
   return file && !cause.message.includes(file)
     ? `${file}: ${cause.message}`
     : cause.message;
@@ -565,7 +573,7 @@ export function foreignTemplateError(
   callerSource: string,
   readSource?: (fileName: string) => string | undefined,
 ): ForeignTemplateError | undefined {
-  if (!(cause instanceof TranslateError)) return undefined;
+  if (!isTranslateError(cause)) return undefined;
   if (!cause.file || cause.file === callerFileName) return undefined;
 
   const templateFileName = cause.file;
@@ -1245,7 +1253,7 @@ function equalLength(
   return length;
 }
 
-/** `.ng.mx` by file kind (core's `hostModuleSegment`), case-insensitively. */
+/** `.ng.mx` by file kind (core's `hostModuleSegment`, over the built-in set), case-insensitively. */
 export function isNgMx(fileName: string): boolean {
   return hostModuleSegment(basename(fileName).toLowerCase()) === "ng";
 }

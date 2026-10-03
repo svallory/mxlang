@@ -72,6 +72,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     distFiles: [
       "dist/bun.d.ts",
       "dist/bun.js",
+      "dist/compiler.d.ts",
       "dist/descriptor.d.ts",
       "dist/descriptor.js",
       "dist/emitter.d.ts",
@@ -177,6 +178,13 @@ export function entryTargets(pkg: PackageJson): string[] {
   add(pkg.bin);
   add(pkg.exports);
   return [...new Set(targets)];
+}
+
+/** Missing JS entry artifacts: a successful bundler exit alone proves nothing. */
+export function missingRuntimeEntries(dir: string, pkg: PackageJson): string[] {
+  return entryTargets(pkg).filter(
+    (entry) => /\.(?:m|c)?js$/.test(entry) && !existsSync(join(dir, entry)),
+  );
 }
 
 /** The `exports` subpaths as import specifiers (`@mxlang/html`, `@mxlang/html/bun`). */

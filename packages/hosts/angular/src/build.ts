@@ -19,10 +19,11 @@ import {
 import { basename, dirname, join } from "node:path";
 import {
   hostModuleSegment,
+  isTranslateError,
   type MxWarning,
   reportScanDiagnostics,
   scanCached,
-  TranslateError,
+  type TargetLookup,
 } from "@mxlang/core";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { discoverFiles, isInside } from "./discover.ts";
@@ -37,6 +38,7 @@ import { compileFile } from "./index.ts";
 import { buildMap, writeMap } from "./map-file.ts";
 import { encodeMappings } from "./mapping.ts";
 import { compileNgMx } from "./ng-mx.ts";
+import { angularOwnTargets } from "./own-targets.ts";
 import { inspectPageClass } from "./page-class.ts";
 import { positionSuffix } from "./position.ts";
 import { compileTagModuleFile } from "./tag-module.ts";
@@ -69,13 +71,17 @@ export interface BuildResult {
   warnings: PositionedMessage[];
 }
 
-export function outputPathFor(mxPath: string, extension: string): string {
+export function outputPathFor(
+  mxPath: string,
+  extension: string,
+  targets: TargetLookup = angularOwnTargets,
+): string {
   // Both extension segments come off a `.ng.mx`: `basename(…, ".mx")` alone
   // leaves `x.component.ng`, so the emitted module would be
   // `x.component.ng.ts` rather than the `x.component.ts` Angular expects
   // beside it.
   const base =
-    hostModuleSegment(basename(mxPath)) === "ng"
+    hostModuleSegment(basename(mxPath), targets) === "ng"
       ? basename(mxPath, ".ng.mx")
       : basename(mxPath, ".mx");
   return join(dirname(mxPath), `${base}${extension}`);
@@ -211,7 +217,7 @@ function positionOf(
   err: unknown,
   fallbackFile: string,
 ): { file: string; line?: number; column?: number; message: string } {
-  if (err instanceof TranslateError) {
+  if (isTranslateError(err)) {
     // A tag template's own error carries `file` pointing at the tag, not the
     // caller, and is reported against that file (A5).
     return {
@@ -246,12 +252,15 @@ function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
 /** De-dup key per distinct scan diagnostic, shared across every file one `build()`/`watch` process compiles, so a misconfigured `mx.tags` warns once per problem, not once per compiled file. */
 const reportedScanDiagnostics = new Set<string>();
 
-/** The custom tags callable from `mxPath`, surfacing any scan diagnostic (e.g. an unknown `hosts` name) as an ordinary build warning, same channel as a compile warning. */
-function customTagsFor(mxPath: string): {
+/** The custom tags callable from `mxPath`, surfacing structural scan diagnostics as build warnings. Host-name validation belongs to full-registry discovery, not this own-only compile path. */
+function customTagsFor(
+  mxPath: string,
+  targets: TargetLookup,
+): {
   customTags: ReturnType<typeof scanCached>["customTags"];
   scanWarnings: PositionedMessage[];
 } {
-  const scan = scanCached(mxPath, { host: "angular" });
+  const scan = scanCached(mxPath, { host: "angular", targets });
   const scanWarnings: PositionedMessage[] = [];
   reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
     scanWarnings.push({
@@ -301,8 +310,9 @@ function compileTagFile(
   mxPath: string,
   config: AngularConfig,
   knownOutputs: Set<string>,
+  targets: TargetLookup,
 ): CompileOneResult {
-  const outputPath = outputPathFor(mxPath, config.tagExtension);
+  const outputPath = outputPathFor(mxPath, config.tagExtension, targets);
   const sourceBasename = basename(mxPath);
   // The header's second line names the `imports:` a *page*'s own TypeScript
   // needs; a tag module writes its own `imports:` array, so there is nothing
@@ -310,10 +320,11 @@ function compileTagFile(
   const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
 
   try {
-    const { customTags, scanWarnings } = customTagsFor(mxPath);
+    const { customTags, scanWarnings } = customTagsFor(mxPath, targets);
     const result = compileTagModuleFile(mxPath, {
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
+      targets,
     });
     const content = header + result.code;
 
@@ -357,7 +368,7 @@ function compileTagFile(
       outputs: [outputPath],
     };
   } catch (err) {
-    const positioned = err instanceof TranslateError;
+    const positioned = isTranslateError(err);
     // A tag template's own error carries `file` pointing at the tag, not the
     // caller, and is reported against that file (A5).
     const errorFile = positioned && err.file ? err.file : mxPath;
@@ -409,8 +420,9 @@ function compileNgMxFile(
   mxPath: string,
   config: AngularConfig,
   knownOutputs: Set<string>,
+  targets: TargetLookup,
 ): CompileOneResult {
-  const outputPath = outputPathFor(mxPath, config.ngExtension);
+  const outputPath = outputPathFor(mxPath, config.ngExtension, targets);
   const mapPath = `${outputPath}.map`;
   const sourceBasename = basename(mxPath);
   // Nothing for the author to add: `compileNgMx` writes the `imports:` array
@@ -418,8 +430,9 @@ function compileNgMxFile(
   const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
 
   try {
-    const { customTags, scanWarnings } = customTagsFor(mxPath);
+    const { customTags, scanWarnings } = customTagsFor(mxPath, targets);
     const result = compileNgMx(readFileSync(mxPath, "utf8"), mxPath, {
+      targets,
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
     });
@@ -533,33 +546,35 @@ export function compileOne(
   routed: { path: string; kind: "page" | "tag" | "ngmx" },
   config: AngularConfig,
   knownOutputs: Set<string>,
+  targets: TargetLookup = angularOwnTargets,
 ): CompileOneResult {
   // A tag file routes through this same entry point (so the watcher, the
   // build and the error policy all share one path) but emits a different
   // artifact: a `.ts` component module, not a template. See the comment on
   // `compileTagFile`.
   if (routed.kind === "tag") {
-    return compileTagFile(routed.path, config, knownOutputs);
+    return compileTagFile(routed.path, config, knownOutputs, targets);
   }
   if (routed.kind === "ngmx") {
-    return compileNgMxFile(routed.path, config, knownOutputs);
+    return compileNgMxFile(routed.path, config, knownOutputs, targets);
   }
 
   const mxPath = routed.path;
-  const outputPath = outputPathFor(mxPath, config.pageExtension);
+  const outputPath = outputPathFor(mxPath, config.pageExtension, targets);
   const mapPath = `${outputPath}.map`;
   const sourceBasename = basename(mxPath);
   const tsFilename =
-    hostModuleSegment(sourceBasename) === "ng"
+    hostModuleSegment(sourceBasename, targets) === "ng"
       ? sourceBasename.replace(/\.ng\.mx$/, ".ts")
       : sourceBasename.replace(/\.mx$/, ".ts");
   const outputs = [outputPath, mapPath];
 
   try {
-    const { customTags, scanWarnings } = customTagsFor(mxPath);
+    const { customTags, scanWarnings } = customTagsFor(mxPath, targets);
     const result = compileFile(mxPath, {
       customTags,
       tagSelectorPrefix: config.tagSelectorPrefix,
+      targets,
     });
     // The page's own class may already carry the invoker: then neither the
     // warning nor the header's paste advice applies, and when it carries one
@@ -668,7 +683,7 @@ export function compileOne(
       outputs,
     };
   } catch (err) {
-    const positioned = err instanceof TranslateError;
+    const positioned = isTranslateError(err);
     // A tag template's own error carries `file` (A5) — a call site inside
     // a discovered tag's sidecar `transform`, for instance — and must be
     // reported against that file, not the page that called it.
@@ -774,11 +789,18 @@ export function removeOutputsFor(
   return { line: `${outputPath} skipped (deleted; source removed)` };
 }
 
-export function build(projectDir: string): BuildResult {
+export function build(
+  projectDir: string,
+  targets: TargetLookup = angularOwnTargets,
+  /** @internal Only full-registry tooling enables host-name validation. */
+  validateHostNames = false,
+): BuildResult {
   const config = readAngularConfig(projectDir);
   const { files, overlapWarnings, diagnostics } = discoverFiles(
     projectDir,
     config,
+    targets,
+    validateHostNames,
   );
 
   const errors: PositionedMessage[] = [];
@@ -806,7 +828,7 @@ export function build(projectDir: string): BuildResult {
       });
       continue;
     }
-    const result = compileOne(routed, config, knownOutputs);
+    const result = compileOne(routed, config, knownOutputs, targets);
     errors.push(...result.errors);
     warnings.push(...result.warnings);
   }

@@ -49,9 +49,14 @@ import {
   type CustomTag,
   reportScanDiagnostics,
   scanCached,
+  type TargetLookup,
 } from "@mxlang/core";
 import type { Plugin } from "vite";
-import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
+import {
+  AstroTemplateError,
+  astroTargets,
+  lowerAstroMx,
+} from "./astro-template.ts";
 
 /**
  * The extension an MX-templated Astro component is written with (decision 78).
@@ -153,7 +158,10 @@ export function readTemplateSource(
  * never contend: this one owns `.astro.mx`, and hands Astro an id ending in
  * `.astro`, which is the only thing Astro's plugin looks at.
  */
-export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
+export function mxTemplates(
+  customTags?: Record<string, CustomTag>,
+  targets: TargetLookup = astroTargets,
+): Plugin {
   /**
    * The tags callable from one `.astro.mx` file: everything discovered around it
    * (spec §4), with a caller-supplied definition winning over a discovered
@@ -166,9 +174,12 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
   const reportedScanDiagnostics = new Set<string>();
 
   const tagsFor = (file: string): Record<string, CustomTag> | undefined => {
-    const scan = scanCached(file, { host: "astro" });
-    reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
-      console.warn(`@mxlang/astro: ${d.file}: ${d.message}`),
+    const scan = scanCached(file, { host: "astro", targets });
+    reportScanDiagnostics(
+      // Own-only loaders cannot establish that a peer host is unknown.
+      scan.diagnostics,
+      reportedScanDiagnostics,
+      (d) => console.warn(`@mxlang/astro: ${d.file}: ${d.message}`),
     );
     const discovered = scan.customTags;
     const merged = customTags ? { ...discovered, ...customTags } : discovered;
@@ -239,7 +250,10 @@ export function mxTemplates(customTags?: Record<string, CustomTag>): Plugin {
 
       const source = readFileSync(real, "utf8");
       try {
-        return lowerAstroMx(source, real, { customTags: tagsFor(real) }).code;
+        return lowerAstroMx(source, real, {
+          customTags: tagsFor(real),
+          targets,
+        }).code;
       } catch (error) {
         if (!(error instanceof AstroTemplateError)) throw error;
 

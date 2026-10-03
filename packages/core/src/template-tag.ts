@@ -14,7 +14,7 @@
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
-import { markoBabel, TranslateError, warn } from "./core.ts";
+import { isTranslateError, markoBabel, TranslateError, warn } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Ir, IrNode } from "./ir.ts";
 
@@ -237,7 +237,7 @@ export function metadataForTemplate(
     return metadata;
   } catch (error) {
     templateCache.delete(tag.filename);
-    if (error instanceof TranslateError && error.file === undefined) {
+    if (isTranslateError(error) && error.file === undefined) {
       const positioned = new TranslateError(
         error.message,
         error.line,

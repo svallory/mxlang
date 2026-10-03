@@ -11,6 +11,7 @@ import { getCustomTags, type MxWarning } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile, compileTagModuleFile } from "../src/index.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 
 describe("discovered tags called from a `.ng.mx`", () => {
   it("emits the callee's exported selector, and prefix + kebab without one", () => {
@@ -36,7 +37,10 @@ describe("discovered tags called from a `.ng.mx`", () => {
       writeFileSync(filePath, source);
 
       const result = compileNgMx(source, filePath, {
-        customTags: getCustomTags(filePath, { host: "angular" }),
+        customTags: getCustomTags(filePath, {
+          host: "angular",
+          targets: angularOwnTargets,
+        }),
       });
 
       expect(result.code).toContain(
@@ -65,7 +69,10 @@ function callSite(dir: string, page = "<badge/>\n") {
   writeFileSync(path, page);
   const warnings: MxWarning[] = [];
   const result = compile(page, path, {
-    customTags: getCustomTags(path, { host: "angular" }) as never,
+    customTags: getCustomTags(path, {
+      host: "angular",
+      targets: angularOwnTargets,
+    }) as never,
     warnings,
   });
   return { code: result.code, warnings };
@@ -75,7 +82,10 @@ function tagModule(dir: string, name = "badge.mx") {
   const path = join(dir, "tags", name);
   const warnings: MxWarning[] = [];
   const result = compileTagModuleFile(path, {
-    customTags: getCustomTags(path, { host: "angular" }) as never,
+    customTags: getCustomTags(path, {
+      host: "angular",
+      targets: angularOwnTargets,
+    }) as never,
     warnings,
   });
   return { selector: result.selector, warnings };
@@ -167,6 +177,7 @@ describe("authored `.mx` imports inside a tag module (LOW-4)", () => {
       const { code } = compileTagModuleFile(join(dir, "tags", "card.mx"), {
         customTags: getCustomTags(join(dir, "tags", "card.mx"), {
           host: "angular",
+          targets: angularOwnTargets,
         }) as never,
       });
       expect(code).toContain("<liuna-badge></liuna-badge>");
@@ -185,6 +196,7 @@ describe("authored `.mx` imports inside a tag module (LOW-4)", () => {
         compileTagModuleFile(join(dir, "tags", "card.mx"), {
           customTags: getCustomTags(join(dir, "tags", "card.mx"), {
             host: "angular",
+            targets: angularOwnTargets,
           }) as never,
         }),
       ).toThrow(/cannot resolve .*gone\.mx/);

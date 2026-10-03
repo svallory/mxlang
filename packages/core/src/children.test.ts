@@ -13,7 +13,9 @@ import type {
 import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Ir, IrNode } from "./ir.ts";
+import { testTargetLookup } from "./test-targets.ts";
 
+const targets = testTargetLookup();
 const declarations: HostDeclarations = {
   tags: {},
   isElement: () => true,
@@ -27,6 +29,7 @@ function compile(
 ): Ir {
   let result: Ir | undefined;
   compileSource(source, "/tmp/mx-children-test/page.mx", policy, {
+    targets,
     customTags: tags,
     tagDiscoveryDirs: [],
     emitIr(ir) {

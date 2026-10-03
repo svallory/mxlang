@@ -1,9 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getCustomTags } from "@mxlang/core";
+import { createTargetLookup, getCustomTags } from "@mxlang/core";
 import { afterAll, describe, expect, it } from "vitest";
+import descriptor from "./descriptor.ts";
 import { compilePreactMx } from "./index.ts";
+
+const preactTargets = createTargetLookup([descriptor]);
 
 /**
  * Marko 6.3.51 says only "Unable to find entry point for custom tag `<X>`."
@@ -65,7 +68,10 @@ describe("unresolved tag hints (preact)", () => {
     );
     const page = join(dir, "page.mx");
     const source = '<Card title="x"/>';
-    const customTags = getCustomTags(page, { host: "preact" });
+    const customTags = getCustomTags(page, {
+      host: "preact",
+      targets: preactTargets,
+    });
     expect(() => compilePreactMx(source, page, { customTags })).not.toThrow();
     expect(failure(source, page).message).toContain("or add `tags/Card.mx`.");
   });

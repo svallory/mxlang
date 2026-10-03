@@ -6,36 +6,39 @@
  * the Marko-node consumer, the `config.translator` seam, the emit model —
  * lives in `@mxlang/core`; this package supplies the *policy* (`translate.ts`)
  * and the integrations (the Bun loader, the `escape` runtime, the taglib).
+ *
+ * The compile entry itself lives in `./compiler.ts`, a descriptor-free leaf:
+ * this module composes the package's own target lookup over `./descriptor.ts`
+ * and defaults a direct entry to it, while the descriptor — a bundler entry
+ * itself — reaches the compile entry through the leaf instead of through
+ * here, keeping the entry graph acyclic (rev-245 BUG 1).
  */
 
-import { readFileSync } from "node:fs";
-import {
-  type AttrTagAttrs,
-  type AttrTagConfig,
-  type AttrTagParams,
-  type CompileResult,
-  type CustomTag,
-  compileSource,
-  createTranslator,
-  type GeneratedMapping,
-  type MappedCode,
-  type MxWarning,
-  type RawSourceMap,
+import type {
+  AttrTagAttrs,
+  AttrTagConfig,
+  AttrTagParams,
+  CompileResult,
 } from "@mxlang/core";
-import markoTaglib from "../taglib/marko.json" with { type: "json" };
-import { emitModuleWithMappings } from "./emitter.ts";
 import {
-  escapeFrom,
-  finalizeModule,
-  finalizeModuleWithMappings,
-  policy,
-  strictPolicy,
-} from "./translate.ts";
+  createTargetLookup,
+  type RawSourceMap,
+  type TargetLookup,
+} from "@mxlang/core";
+import {
+  type CompileHtmlResult,
+  type CompileOptions,
+  compileHtml,
+  compileHtmlBuild,
+  compileHtmlFile,
+  createHtmlTranslator,
+} from "./compiler.ts";
+import descriptor from "./descriptor.ts";
 
 export { escape } from "@mxlang/core";
 export { loadMx, type MxOptions, type MxRenderer, mx } from "./helpers.ts";
 export { policy, strictPolicy, TranslateError } from "./translate.ts";
-export type { CompileResult, RawSourceMap };
+export type { CompileHtmlResult, CompileOptions, CompileResult, RawSourceMap };
 
 /** Attribute-tag value received by an `@mxlang/html` component. */
 export type AttrTag<
@@ -48,26 +51,23 @@ export type AttrTag<
     };
 
 /**
- * This host's options for the core's whole-file front door.
- *
- * `tagDiscoveryDirs: ["tags"]` is Marko's own convention: `@marko/compiler`'s
- * `scanTagsDir` only auto-discovers files whose extension is literally
- * `.marko` (measured in `@marko/compiler` 5.42.5's `loadTaglibFromDir.js`,
- * `ext === ".marko"`) — a `.mx` file in a `tags/` directory is not
- * discovered as a tag at all. This host still accepts only `.mx` at the
- * loader boundary; a `tags/*.marko` file is real Marko syntax read by
- * `@marko/compiler` itself during discovery, not a second entry point this
- * host advertises.
- *
- * `postEmit` is `translate.ts`'s `finalizeModule` wrapper, which appends the
- * `classValue`/`styleValue`/`escapeComment`/`renderDynamic` helpers a template
- * actually calls. It reaches the core as a hook rather than being folded into
- * the core's emitter because *which* helpers exist is this host's business.
+ * This package's own target lookup (decisions 129 and 132): the one
+ * descriptor it exports, bound by `createTargetLookup`. What a direct entry
+ * compiles under when the caller names no lookup of its own (design note
+ * §5.1, rule (c)) — the loader, `loadMx`, `example.ts`. A tool that compiles
+ * for several targets at once passes the full registry's lookup through
+ * `options.targets` instead, since core asks the lookup which packages
+ * export `AttrTag` and which file-kind segments exist, and this table holds
+ * only this package's answers.
  */
-const host = {
-  taglibs: [["mx-translator-core", markoTaglib]] as Array<[string, unknown]>,
-  tagDiscoveryDirs: ["tags"],
-};
+const ownTargets: TargetLookup = createTargetLookup([descriptor]);
+
+/**
+ * Exported so the Bun loader, `mx()`, `loadMx()` and `example.ts` share one
+ * instance rather than one per call, and so a host composing its own
+ * many-target lookup can recognise this package's own table by identity.
+ */
+export const htmlTargets = ownTargets;
 
 /**
  * The Marko translator object, for `compile(src, file, { translator })`.
@@ -76,81 +76,23 @@ const host = {
  * stock-Marko comparison does). Built by the core, since the seam is the
  * core's.
  */
-export const translator = createTranslator(host);
-
-export interface CompileOptions {
-  /** Custom tags already discovered and loaded by the calling integration. */
-  customTags?: Record<string, CustomTag>;
-  /**
-   * Rejects reactive constructs (`<let>`, `<effect>`, `<lifecycle>`,
-   * `<script>`, `client` blocks, `<id>`) by name instead of rendering their
-   * initial value or treating them as inert. Folded from `.mx`'s dialect
-   * (decision 68) as an opt-in stance for an author who wants those
-   * constructs to be a compile error rather than silently accepted.
-   */
-  strict?: boolean;
-  /**
-   * Collects positioned warnings — constructs that compile while dropping
-   * something the author wrote (content a tag template never placed, an
-   * attribute tag a transform never read).
-   *
-   * Unset, they print to `console.warn` exactly as before. The language server
-   * passes an array so they reach the editor as diagnostics, which is the one
-   * place a silent-drop report is worth anything.
-   */
-  warnings?: MxWarning[];
-  resolveImport?: (specifier: string, importer: string) => string | undefined;
-}
-
-export interface CompileHtmlResult extends CompileResult {
-  mappings: GeneratedMapping[];
-}
+export const translator = createHtmlTranslator(ownTargets);
 
 /**
  * Compiles a `.mx` template to a runtime-free TypeScript module.
  *
- * The emitted module imports `escape` and default-exports
- * `(input: Input) => string` — nothing else is required at run time. This is
- * the "expressions-only" output mode of `notes/marko-runtime-modes.md`,
- * implemented as a translator rather than a fork.
- *
- * The returned map is a placeholder identity map: the emitter builds text
- * directly rather than printing a Babel AST, so there are no node positions to
- * derive real mappings from yet.
+ * `options.targets` defaults to this package's own lookup; see
+ * {@link CompileOptions.targets}.
  */
 export function compile(
   source: string,
   filename: string,
   options: CompileOptions = {},
 ): CompileHtmlResult {
-  let emitted: MappedCode | null = null;
-  let mappings: GeneratedMapping[] = [];
-  const result = compileSource(
-    source,
-    filename,
-    options.strict ? strictPolicy : policy,
-    {
-      ...host,
-      customTags: options.customTags,
-      warnings: options.warnings,
-      resolveImport: options.resolveImport,
-      // Decision 79: this host emits from the core's IR. `postEmit` still
-      // appends the helpers a template actually calls and brands the default
-      // export, both of which are properties of this target rather than of
-      // the core.
-      emitIr: (ir) => {
-        emitted = emitModuleWithMappings(ir, escapeFrom);
-        return emitted.code;
-      },
-      postEmit: (code) => {
-        if (!emitted || emitted.code !== code) return finalizeModule(code);
-        const finalized = finalizeModuleWithMappings(emitted);
-        mappings = finalized.mappings;
-        return finalized.code;
-      },
-    },
-  );
-  return { ...result, mappings };
+  return compileHtml(source, filename, {
+    ...options,
+    targets: options.targets ?? ownTargets,
+  });
 }
 
 /** `compile()` over a file on disk. */
@@ -158,7 +100,10 @@ export function compileFile(
   filename: string,
   options: CompileOptions = {},
 ): CompileResult {
-  return compile(readFileSync(filename, "utf8"), filename, options);
+  return compileHtmlFile(filename, {
+    ...options,
+    targets: options.targets ?? ownTargets,
+  });
 }
 
 /**
@@ -171,9 +116,8 @@ export function build(
   filenames: string[],
   options: CompileOptions = {},
 ): Map<string, CompileResult> {
-  const results = new Map<string, CompileResult>();
-  for (const filename of filenames) {
-    results.set(filename, compileFile(filename, options));
-  }
-  return results;
+  return compileHtmlBuild(filenames, {
+    ...options,
+    targets: options.targets ?? ownTargets,
+  });
 }

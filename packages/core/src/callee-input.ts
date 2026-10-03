@@ -33,10 +33,10 @@ import {
 import { parse } from "@babel/parser";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
-import { HOST_NAMES } from "./host-policy.ts";
 import type { ComponentTarget } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { hostModuleSegment } from "./scan.ts";
+import type { TargetLookup } from "./target-descriptor.ts";
 import { metadataForTemplate, touchAndEvict } from "./template-tag.ts";
 
 const require = createRequire(import.meta.url);
@@ -109,6 +109,14 @@ export type CalleeInput =
 export interface ResolveContext {
   /** The file making the call, for relative resolution and `require.resolve`. */
   importer: string;
+  /**
+   * The registered targets in hand (decisions 129 and 132). Required: the
+   * reader asks it which packages export the `AttrTag` type and which
+   * file-kind segments exist, and core holds no list to fall back on — a
+   * caller that forgot it would accept a foreign `AttrTag` import and read a
+   * host module file as a Marko template, both silently.
+   */
+  targets: TargetLookup;
   /** A tool-supplied resolver (tsconfig paths, vite alias), tried first. */
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   /** Local binding -> import specifier, for explicit-import targets. */
@@ -139,16 +147,27 @@ export type CalleeInputReader = (request: {
 }) => CalleeInput;
 
 /**
- * The packages `AttrTag` may be imported from as the ambient type: core and
- * every host, derived from `HOST_NAMES` so a new host is registered once.
+ * The packages `AttrTag` may be imported from as the ambient type: this
+ * package plus every registered target's own package, asked of the caller's
+ * lookup rather than kept here (decisions 126 and 129): core names no
+ * package. A third-party target that re-exports `AttrTag` from
+ * `@mxlang/core` needs no descriptor entry; one that ships its own declares
+ * it as its `packageName`, which `attrTagSources` reports. Targets of one
+ * host may share a package, so the set is deduped.
  */
-const MX_ATTR_TAG_SOURCES: ReadonlySet<string> = new Set([
-  "@mxlang/core",
-  ...HOST_NAMES.map((host) => `@mxlang/${host}`),
-]);
+const attrTagSourceSets = new WeakMap<TargetLookup, ReadonlySet<string>>();
 
-function isMxAttrTagSource(specifier: string): boolean {
-  return MX_ATTR_TAG_SOURCES.has(specifier);
+function attrTagSourcesOf(targets: TargetLookup): ReadonlySet<string> {
+  let sources = attrTagSourceSets.get(targets);
+  if (!sources) {
+    sources = new Set(["@mxlang/core", ...targets.attrTagSources()]);
+    attrTagSourceSets.set(targets, sources);
+  }
+  return sources;
+}
+
+function isMxAttrTagSource(specifier: string, targets: TargetLookup): boolean {
+  return attrTagSourcesOf(targets).has(specifier);
 }
 
 const MAX_ALIAS_DEPTH = 4;
@@ -160,18 +179,27 @@ const resolverIds = new WeakMap<
 >();
 let nextResolverId = 1;
 
-const calleeCache = new Map<
-  string,
-  {
-    mtimeMs: number | undefined;
-    source: string;
-    result: CalleeInputResult;
-    dependencySnapshots: Map<
-      string,
-      { mtimeMs: number | undefined; source: string }
-    >;
+interface CalleeCacheEntry {
+  mtimeMs: number | undefined;
+  source: string;
+  result: CalleeInputResult;
+  dependencySnapshots: Map<
+    string,
+    { mtimeMs: number | undefined; source: string }
+  >;
+}
+
+// Recognised AttrTag packages depend on this exact lookup. Keep the existing
+// path/resolver/snapshot key inside each partition; scan caches stay lookup-free.
+let calleeCaches = new WeakMap<TargetLookup, Map<string, CalleeCacheEntry>>();
+function cacheFor(targets: TargetLookup): Map<string, CalleeCacheEntry> {
+  let cache = calleeCaches.get(targets);
+  if (!cache) {
+    cache = new Map();
+    calleeCaches.set(targets, cache);
   }
->();
+  return cache;
+}
 
 /**
  * Source snapshots supplied by an editor while one synchronous compile runs.
@@ -211,7 +239,7 @@ function sourceSnapshot(path: string): {
 
 /** Clears the callee-input cache. Test-only: production reads are mtime-keyed. */
 export function resetCalleeInputCache(): void {
-  calleeCache.clear();
+  calleeCaches = new WeakMap();
 }
 
 /** Registers the Input reader for one compound extension (longest match wins). */
@@ -255,6 +283,7 @@ export function readCalleeInput(
           resolveImport: value.resolveImport,
           imports: value.importSpecifiers,
           ctx: value,
+          targets: value.targets,
         }
       : value;
   if (
@@ -289,6 +318,7 @@ export function readCalleeInput(
   }
 
   const key = cacheKey(resolved.path, context.resolveImport);
+  const calleeCache = cacheFor(context.targets);
   const cached = calleeCache.get(key);
   if (
     cached &&
@@ -626,7 +656,7 @@ function readInputAt(
   // TypeScript module with a template region, not a Marko template. Until its
   // host package registers a reader, an absent schema is the safe fallback and
   // must never become an invalid Marko parse.
-  if (hostModuleSegment(basename(path)) !== undefined) {
+  if (hostModuleSegment(basename(path), context.targets) !== undefined) {
     return {
       input: { kind: "none", path },
       dependencies: [path],
@@ -753,6 +783,7 @@ export function readOwnInput(
       resolveImport: ctx.resolveImport,
       imports: ctx.importSpecifiers,
       ctx,
+      targets: ctx.targets,
     },
     new Map([[ctx.filename, ctx.source]]),
   );
@@ -878,7 +909,10 @@ class InputAnalyzer {
       }
       case "ImportDeclaration": {
         const specifier = node.source.value as string;
-        const mxAttrTagSource = isMxAttrTagSource(specifier);
+        const mxAttrTagSource = isMxAttrTagSource(
+          specifier,
+          this.context.targets,
+        );
         for (const specifierNode of node.specifiers ?? []) {
           const local = specifierNode.local.name as string;
           const imported =

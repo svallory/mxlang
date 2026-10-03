@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { scanCached } from "@mxlang/core";
 import markoPlugin from "./bun.ts";
-import { compileFile } from "./index.ts";
+import { compileFile, htmlTargets } from "./index.ts";
 
 /**
  * A `.mx` page calling a tag from `tags/*.marko`, compiled and run for real.
@@ -48,7 +48,8 @@ beforeAll(() => {
         { filter: /\.tmp-marko-tags-[^/]+\/.*\.marko$/ },
         ({ path }) => ({
           contents: compileFile(path, {
-            customTags: scanCached(path, { host: "html" }).customTags,
+            customTags: scanCached(path, { host: "html", targets: htmlTargets })
+              .customTags,
           }).code,
           loader: "ts",
         }),

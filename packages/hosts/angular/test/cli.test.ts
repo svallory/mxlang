@@ -17,6 +17,7 @@ import { runCli } from "../src/cli.ts";
 import { type AngularConfig, readAngularConfig } from "../src/config.ts";
 import { discoverFiles } from "../src/discover.ts";
 import { EVENT_HELPER_MEMBERS } from "../src/emitter.ts";
+import { testTargetLookupWithSegments } from "./test-targets.ts";
 
 let projectDir: string;
 
@@ -343,13 +344,9 @@ describe("build: tag routing", () => {
     expect(existsSync(join(projectDir, "widgets/gadget.html"))).toBe(false);
   });
 
-  it("warns about an unknown host name in mx.tags[].hosts (decision 110a; round 2 finding 2)", () => {
-    // The scan diagnostic core records for a typo'd host name was computed
-    // but dropped at every `getCustomTags` call site in this package
-    // (`compileTagFile`/`compileNgMxFile`/`compilePageFile`, all three),
-    // because `getCustomTags` returns only `.customTags`. `build.ts` now
-    // routes it through `customTagsFor`'s `scanCached` + `reportScanDiagnostics`
-    // into the same `warnings` array a compile warning already uses.
+  it("leaves an unmatched mx.tags host unresolved under its own-only lookup", () => {
+    // PR 3 round-2 ruling: own-only lookups cannot validate peer names.
+    // The full-registry discovery/build/watch paths are pinned separately.
     writeProject({
       "package.json": JSON.stringify({
         mx: {
@@ -368,7 +365,7 @@ describe("build: tag routing", () => {
       result.warnings.some(
         (w) => /bogus/.test(w.message) && /package\.json$/.test(w.file),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("claims an mx.tags entry scoped to angular, or with no hosts restriction at all", () => {
@@ -1324,12 +1321,14 @@ describe("build: .ng.mx round 2 review", () => {
     expect(existsSync(join(projectDir, "src/other-tags/fine.ts"))).toBe(true);
   });
 
-  it("treats a .solid.mx under tags/ as core's rejection, never as .ng.mx", () => {
-    // Core's `rejectHostModuleFile` skips *any* host-module file with a scan
-    // diagnostic. A `.solid.mx` in an Angular project gets that same core
-    // behavior — the file is skipped and core's own message reported — and
-    // must never be rewritten into this host's `.ng.mx` wording, which would
-    // tell the author the wrong thing about a file this host does not own.
+  it("treats a .solid.mx under tags/ as a rejection, never as .ng.mx", () => {
+    // `build()` is a direct entry, so it resolves its targets from this
+    // package's own descriptor unless the caller passes a lookup of its own
+    // (design note §5.1, rule (c)). `solid` is not a file kind that default
+    // knows, so this test passes a lookup that holds it and gets core's
+    // host-module rejection. What must not happen either way is the `.ng.mx`
+    // wording, which would tell the author the wrong thing about a file this
+    // host does not own.
     writeProject({
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
@@ -1340,16 +1339,22 @@ describe("build: .ng.mx round 2 review", () => {
       ].join("\n"),
     });
 
-    const result = build(projectDir);
+    // A caller holding the built-in lookup gets core's host-module rejection:
+    // the file is skipped, warned about in core's own words, and nothing is
+    // written beside it.
+    const built = build(
+      projectDir,
+      testTargetLookupWithSegments("ng", "solid"),
+    );
 
-    expect(result.errors).toEqual([]);
+    expect(built.errors).toEqual([]);
     expect(
-      result.warnings.some((w) =>
+      built.warnings.some((w) =>
         /is a host module file, not a tag template/.test(w.message),
       ),
     ).toBe(true);
     expect(
-      result.warnings.some((w) =>
+      built.warnings.some((w) =>
         /a `\.ng\.mx` file is a component module, not a tag/.test(w.message),
       ),
     ).toBe(false);
@@ -1378,7 +1383,12 @@ describe("discovery: core's host-module extension rule", () => {
     expect(routed?.kind).toBe("ngmx");
   });
 
-  it("excludes a `.solid.mx` page from page compilation with a positioned diagnostic", () => {
+  it("excludes another host's file kind from page compilation when the caller passes its lookup", () => {
+    // `discoverFiles` takes the registered targets to route by. With the
+    // built-in lookup (what the oracle and a tool with the registry in hand
+    // pass) `solid` is a known file kind and the file is excluded with core's
+    // host-module diagnostic. With this package's own descriptor it is not a
+    // kind it knows — see the next test.
     writeProject({
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
@@ -1386,7 +1396,11 @@ describe("discovery: core's host-module extension rule", () => {
       "src/x.solid.mx": "const x = () => <p>hi</p>;",
     });
 
-    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+    const result = discoverFiles(
+      projectDir,
+      readAngularConfig(projectDir),
+      testTargetLookupWithSegments("ng", "solid"),
+    );
 
     expect(result.files.some((f) => f.path.endsWith(".solid.mx"))).toBe(false);
     expect(
@@ -1396,6 +1410,22 @@ describe("discovery: core's host-module extension rule", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("compiles a foreign file kind as a page when it knows only its own targets", () => {
+    // The other half of the same fact: `discoverFiles` decides by the lookup it
+    // is given, and this package's own descriptor knows only `ng`. A caller
+    // that wants foreign kinds routed must pass a lookup that holds them.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/x.solid.mx": "const x = () => <p>hi</p>;",
+    });
+
+    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+
+    expect(result.files.some((f) => f.path.endsWith(".solid.mx"))).toBe(true);
   });
 
   it("reports a positioned diagnostic for a `.ng.mx` under tags/ and never routes it", () => {
@@ -1421,7 +1451,7 @@ describe("discovery: core's host-module extension rule", () => {
     expect(diagnostics[0]?.message).toMatch(/component module, not a tag/);
   });
 
-  it("keeps core's own message for a `.solid.mx` under tags/", () => {
+  it("keeps core's own message for a `.solid.mx` under tags/ when the lookup knows it", () => {
     writeProject({
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
@@ -1429,7 +1459,11 @@ describe("discovery: core's host-module extension rule", () => {
       "src/tags/bad.solid.mx": "const x = () => <p>x</p>;",
     });
 
-    const result = discoverFiles(projectDir, readAngularConfig(projectDir));
+    const result = discoverFiles(
+      projectDir,
+      readAngularConfig(projectDir),
+      testTargetLookupWithSegments("ng", "solid"),
+    );
 
     expect(result.files.some((f) => f.path.endsWith(".solid.mx"))).toBe(false);
     expect(
@@ -1461,6 +1495,7 @@ describe("discovery: core's host-module extension rule", () => {
     const { diagnostics } = discoverFiles(
       projectDir,
       readAngularConfig(projectDir),
+      testTargetLookupWithSegments("ng", "solid"),
     );
 
     for (const name of [

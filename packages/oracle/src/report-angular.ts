@@ -21,6 +21,7 @@ import {
   type MappingDerive,
 } from "@mxlang/angular";
 import { getCustomTags, type MxWarning } from "@mxlang/core";
+import { builtinLookup } from "@mxlang/target-registry";
 import ts from "typescript";
 
 /**
@@ -484,7 +485,10 @@ export function runAngularTable(update: boolean): {
       const result = compile(input, compilePath, {
         warnings,
         customTags: hasTagsDir
-          ? (getCustomTags(compilePath, { host: "angular" }) as never)
+          ? (getCustomTags(compilePath, {
+              host: "angular",
+              targets: builtinLookup(),
+            }) as never)
           : undefined,
       });
       code = result.code;
@@ -670,7 +674,10 @@ export function runAngularTable(update: boolean): {
     let code: string;
     try {
       code = compileTagModuleFile(inputPath, {
-        customTags: getCustomTags(inputPath, { host: "angular" }) as never,
+        customTags: getCustomTags(inputPath, {
+          host: "angular",
+          targets: builtinLookup(),
+        }) as never,
       }).code;
     } catch (err) {
       rows.push({
@@ -761,7 +768,10 @@ export function runAngularTable(update: boolean): {
     try {
       compile(input, compilePath, {
         customTags: hasTagsDir
-          ? (getCustomTags(compilePath, { host: "angular" }) as never)
+          ? (getCustomTags(compilePath, {
+              host: "angular",
+              targets: builtinLookup(),
+            }) as never)
           : undefined,
       });
     } catch (err) {
@@ -815,7 +825,9 @@ export function runAngularTable(update: boolean): {
     let thrown: string | null = null;
     try {
       compileTagModuleFile(inputPath, {
-        customTags: getCustomTags(inputPath) as never,
+        customTags: getCustomTags(inputPath, {
+          targets: builtinLookup(),
+        }) as never,
       });
     } catch (err) {
       thrown = stripStagedDir(
@@ -866,7 +878,10 @@ export function runAngularTable(update: boolean): {
     let code: string;
     try {
       code = compileNgMx(readFileSync(inputPath, "utf8"), inputPath, {
-        customTags: getCustomTags(inputPath, { host: "angular" }) as never,
+        customTags: getCustomTags(inputPath, {
+          host: "angular",
+          targets: builtinLookup(),
+        }) as never,
       }).code;
     } catch (err) {
       rows.push({
@@ -929,7 +944,10 @@ export function runAngularTable(update: boolean): {
         const tagPath = join(dirname(inputPath), "tags", entry);
         siblings[`tags/${entry.replace(/\.mx$/, ".ts")}`] =
           compileTagModuleFile(tagPath, {
-            customTags: getCustomTags(tagPath, { host: "angular" }) as never,
+            customTags: getCustomTags(tagPath, {
+              host: "angular",
+              targets: builtinLookup(),
+            }) as never,
           }).code;
       }
     }
@@ -959,7 +977,10 @@ export function runAngularTable(update: boolean): {
     let thrown: string | null = null;
     try {
       compileNgMx(readFileSync(inputPath, "utf8"), inputPath, {
-        customTags: getCustomTags(inputPath, { host: "angular" }) as never,
+        customTags: getCustomTags(inputPath, {
+          host: "angular",
+          targets: builtinLookup(),
+        }) as never,
       });
     } catch (err) {
       thrown = stripPathPrefix((err as Error).message);

@@ -11,14 +11,18 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import {
   type CustomTag,
-  getCustomTags,
   type HostPolicy,
-  hostModuleSegment,
   type MxWarning,
   type ScanDiagnostic,
-  scanCached,
-  TranslateError,
+  isTranslateError,
 } from "@mxlang/core";
+import {
+  builtinLookup,
+  getCustomTags,
+  hostFilterKey,
+  hostModuleSegment,
+  scanCached,
+} from "@mxlang/target-registry";
 import { compileHonoMx } from "@mxlang/hono";
 import { compile } from "@mxlang/html";
 import { print } from "@mxlang/parser";
@@ -201,7 +205,7 @@ function resolveStrict(hostPolicy: HostPolicy): boolean {
 function errorPosition(
   error: unknown,
 ): { line: number; column: number; file?: string } | null {
-  if (error instanceof TranslateError) {
+  if (isTranslateError(error)) {
     return { line: error.line, column: error.column, file: error.file };
   }
   if (!error || typeof error !== "object") return null;
@@ -301,7 +305,13 @@ export function diagnoseDocument(
     // no path at all; the walk then finds no `package.json` and returns an
     // empty map, which is correct.
     const path = documentPath(uri);
-    const scan = scanCached(path, { host: hostPolicy.host });
+    // The filter value `mx.tags[].hosts` is matched against, read off the
+    // target rather than taken from the policy's host: for a hostless target
+    // (`html`) it is the target's legacy `mx.host` value, which is the string
+    // every existing `hosts: ["html"]` entry already matches.
+    // null means no restricted entry matches; undefined would disable filtering.
+    const host = hostFilterKey(hostPolicy.target) ?? null;
+    const scan = scanCached(path, { host });
     scanWarnings = [
       ...scanWarnings,
       ...scan.diagnostics.map((diagnostic) =>
@@ -314,7 +324,7 @@ export function diagnoseDocument(
     // has already decided what this file sees, and re-scanning would either
     // overwrite that or silently merge two answers to one question.
     const discovered =
-      explicitTags ?? getCustomTags(path, { host: hostPolicy.host });
+      explicitTags ?? getCustomTags(path, { host });
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
 
@@ -345,7 +355,11 @@ export function diagnoseDocument(
       const result = print(text, filename, {
         customTags,
         mxRegionCompile: (input) =>
-          compileSolidMx(input.source, { ...input, warnings }),
+          compileSolidMx(input.source, {
+            ...input,
+            warnings,
+            targets: builtinLookup(),
+          }),
       });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
@@ -361,6 +375,7 @@ export function diagnoseDocument(
         filename: path,
         customTags,
         warnings,
+        targets: builtinLookup(),
       });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
@@ -369,15 +384,27 @@ export function diagnoseDocument(
       // declarations reject Marko's stateful tags outright, so like Solid's
       // there is no looser policy to select — the `strict` flag has no
       // meaning for this host and is not consulted.
-      const result = compilePreactMx(text, path, { customTags, warnings });
+      const result = compilePreactMx(text, path, {
+        customTags,
+        warnings,
+        targets: builtinLookup(),
+      });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else if (hostPolicy.host === "react") {
-      const result = compileReactMx(text, path, { customTags, warnings });
+      const result = compileReactMx(text, path, {
+        customTags,
+        warnings,
+        targets: builtinLookup(),
+      });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else if (hostPolicy.host === "hono") {
-      const result = compileHonoMx(text, path, { customTags, warnings });
+      const result = compileHonoMx(text, path, {
+        customTags,
+        warnings,
+        targets: builtinLookup(),
+      });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else if (hostPolicy.host === "angular") {
@@ -389,6 +416,7 @@ export function diagnoseDocument(
         strict: resolveStrict(hostPolicy),
         customTags,
         warnings,
+        targets: builtinLookup(),
       });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
@@ -404,7 +432,7 @@ export function diagnoseDocument(
     // reachable after reading the callee's declaration) — those are still
     // this document's dependencies, and the re-diagnosis graph must keep the
     // edge even though this compile produced no `CompileResult`.
-    if (error instanceof TranslateError) {
+    if (isTranslateError(error)) {
       for (const dependency of error.dependencies ?? [])
         dependencies?.add(dependency);
     }

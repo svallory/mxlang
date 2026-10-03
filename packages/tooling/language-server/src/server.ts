@@ -14,10 +14,8 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  resolveHostPolicyDetailed,
-  withCalleeInputSources,
-} from "@mxlang/core";
+import { withCalleeInputSources } from "@mxlang/core";
+import { resolveHostPolicyDetailed } from "@mxlang/target-registry";
 import {
   createConnection,
   type Diagnostic,

@@ -1,8 +1,5 @@
-import {
-  type HostPolicy,
-  type HostPolicyDiagnostic,
-  resolveHostPolicyDetailed,
-} from "@mxlang/core";
+import type { HostPolicy, HostPolicyDiagnostic } from "@mxlang/core";
+import { resolveHostPolicyDetailed } from "@mxlang/target-registry";
 
 /**
  * The TS code of a host-policy diagnostic (an unknown `mx.host`, a malformed

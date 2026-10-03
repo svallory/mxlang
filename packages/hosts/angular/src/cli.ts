@@ -4,7 +4,7 @@
  */
 
 import { resolve } from "node:path";
-import { TranslateError } from "@mxlang/core";
+import { isTranslateError } from "@mxlang/core";
 import { build } from "./build.ts";
 import { readMap, resolvePosition } from "./map-file.ts";
 import { positionSuffix } from "./position.ts";
@@ -190,7 +190,7 @@ function runMap(args: string[]): number {
 }
 
 function handleCliError(err: unknown): number {
-  if (err instanceof TranslateError) {
+  if (isTranslateError(err)) {
     console.error(
       formatMessage("error", {
         file: err.file ?? "<unknown>",

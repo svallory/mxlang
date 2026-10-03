@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
+import type { TargetLookup } from "@mxlang/core";
 import { reportScanDiagnostics, scanCached } from "@mxlang/preact";
 import type { BunPlugin } from "bun";
-import { compileHonoMx } from "./index.ts";
+import { compileHonoMx, honoTargets } from "./index.ts";
 
 /**
  * Registers an `onLoad` for `.mx` files: `compileHonoMx()`'s output
@@ -25,25 +26,42 @@ import { compileHonoMx } from "./index.ts";
  */
 const MX_FILTER = /(?<!\.(?:solid|astro))\.mx$/;
 
-/** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
-const reportedScanDiagnostics = new Set<string>();
+/**
+ * Builds the loader over `targets`: the registered targets it scans and
+ * compiles under (decisions 129 and 132). It defaults to this package's own
+ * descriptor, which is what a plain `import "@mxlang/hono/bun"` wants; a
+ * caller compiling for several targets passes the built-in registry's lookup
+ * instead (design note §5.1, rule (c)).
+ */
+export function createHonoBunPlugin(
+  targets: TargetLookup = honoTargets,
+): BunPlugin {
+  /** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
+  const reportedScanDiagnostics = new Set<string>();
 
-const honoPlugin: BunPlugin = {
-  name: "mxlang-hono",
-  setup(build) {
-    build.onLoad({ filter: MX_FILTER }, ({ path }) => {
-      const source = readFileSync(path, "utf8");
-      const scan = scanCached(path, { host: "hono" });
-      reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
-        console.warn(`@mxlang/hono: ${d.file}: ${d.message}`),
-      );
-      const { code } = compileHonoMx(source, path, {
-        customTags: scan.customTags,
+  return {
+    name: "mxlang-hono",
+    setup(build) {
+      build.onLoad({ filter: MX_FILTER }, ({ path }) => {
+        const source = readFileSync(path, "utf8");
+        const scan = scanCached(path, { host: "hono", targets });
+        reportScanDiagnostics(
+          // Own-only loaders cannot establish that a peer host is unknown.
+          scan.diagnostics,
+          reportedScanDiagnostics,
+          (d) => console.warn(`@mxlang/hono: ${d.file}: ${d.message}`),
+        );
+        const { code } = compileHonoMx(source, path, {
+          customTags: scan.customTags,
+          targets,
+        });
+        return { contents: code, loader: "tsx" };
       });
-      return { contents: code, loader: "tsx" };
-    });
-  },
-};
+    },
+  };
+}
+
+const honoPlugin: BunPlugin = createHonoBunPlugin();
 
 Bun.plugin(honoPlugin);
 

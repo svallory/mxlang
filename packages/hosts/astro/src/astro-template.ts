@@ -14,6 +14,7 @@ import {
   type AttrTagProp,
   type Ctx,
   type CustomTag,
+  createTargetLookup,
   DYNAMIC_TAG,
   drive,
   type Emitter,
@@ -22,15 +23,32 @@ import {
   type HostDeclarations,
   type Ir,
   type IrNode,
+  isTranslateError,
   lower,
   type MxWarning,
   type Node,
   newCtx,
   parseFragment,
-  TranslateError,
+  type TargetLookup,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
 import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
+import descriptor from "./descriptor.ts";
+
+/**
+ * This package's own target table (decisions 129 and 132): the one descriptor
+ * it exports, defaulting for a direct entry that names no lookup of its own
+ * (`mxTemplates()`; design note §5.1, rule (c)). A tool compiling several
+ * targets passes the built-in registry's lookup through `options.targets`.
+ */
+const ownTargets: TargetLookup = createTargetLookup([descriptor]);
+
+/**
+ * This package's own target lookup, for a direct entry that needs one and has
+ * no registry to hand (`mxTemplates()`; design note §5.1, rule (c)). Exported
+ * so those entry points share one instance rather than one per call.
+ */
+export const astroTargets = ownTargets;
 
 /**
  * A lowering failure positioned in the enclosing `.astro.mx` file, or — when
@@ -887,6 +905,13 @@ export function lowerAstroMx(
     customTags?: Record<string, CustomTag>;
     /** Positioned non-fatal diagnostics collected by editor/build tooling. */
     warnings?: MxWarning[];
+    /**
+     * The registered targets this lowering runs under (decisions 129 and
+     * 132). Defaults to this package's own descriptor (right for a direct
+     * entry); a tool compiling several targets passes the built-in registry's
+     * lookup.
+     */
+    targets?: TargetLookup;
   } = {},
 ): LowerResult {
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---[^\S\r\n]*\r?\n?/);
@@ -910,6 +935,7 @@ export function lowerAstroMx(
       declarations,
       undefined,
       filename,
+      options.targets ?? ownTargets,
     );
     ctx.customTags = options.customTags;
     ctx.warnings = options.warnings;
@@ -1005,7 +1031,7 @@ export function lowerAstroMx(
     };
   } catch (error) {
     if (error instanceof AstroTemplateError) throw error;
-    if (error instanceof TranslateError) {
+    if (isTranslateError(error)) {
       throw new AstroTemplateError(
         error.message,
         error.line,

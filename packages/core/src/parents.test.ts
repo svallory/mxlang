@@ -17,6 +17,7 @@ import type { Ir } from "./ir.ts";
 import { lowerChildren } from "./lower.ts";
 import { getCustomTags } from "./scan-cache.ts";
 import type { TemplateBackedTag } from "./template-tag.ts";
+import { lookup } from "./test-targets.ts";
 
 const declarations: HostDeclarations = {
   tags: {},
@@ -108,6 +109,7 @@ describe("authored parents step 0 measurement (decision 138 E3)", () => {
       };
       try {
         compileSource(source, filename, declarations, {
+          targets: lookup,
           customTags: {
             attributes: { ...passthrough, attributeTags: { row: {} } },
             attribute,
@@ -141,6 +143,7 @@ function compile(
 ): Ir {
   let result: Ir | undefined;
   compileSource(source, filename, policy, {
+    targets: lookup,
     customTags: tags,
     tagDiscoveryDirs: [],
     warnings: [],
@@ -495,7 +498,7 @@ describe("allowed authored parents (decision 138 E3)", () => {
         'export default { parents: ["attributes"] };',
       );
       const filename = join(directory, "page.mx");
-      const tags = getCustomTags(filename);
+      const tags = getCustomTags(filename, { targets: lookup });
       expect(tags.attribute?.parents).toEqual(["attributes"]);
       expect(() =>
         compile("<attributes><attribute/></attributes>", tags, filename),
@@ -581,6 +584,7 @@ describe("allowed authored parents (decision 138 E3)", () => {
       declarations,
       undefined,
       "/tmp/mx-parents-test/page.mx",
+      lookup,
     );
     ctx.customTags = restricted;
     expect(() => lowerChildren(ctx, parseFragment(source).body)).toThrowError(

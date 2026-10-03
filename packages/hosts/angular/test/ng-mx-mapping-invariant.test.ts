@@ -5,6 +5,7 @@ import { getCustomTags } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { isDerivedFrom } from "../../../oracle/src/report-angular.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = join(here, "../../../oracle/fixtures/angular");
@@ -123,7 +124,7 @@ describe("compileNgMx mapping invariant", () => {
         bad = misalignedMappings(
           source,
           path,
-          getCustomTags(path, { host: "angular" }),
+          getCustomTags(path, { host: "angular", targets: angularOwnTargets }),
         );
       } catch {
         continue; // an error fixture: it is meant not to compile

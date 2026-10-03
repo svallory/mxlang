@@ -1,15 +1,27 @@
-import { readFileSync } from "node:fs";
-import {
-  type AttrTagConfig,
-  type AttrTagOf,
-  type CompilePreactOptions,
-  type CompilePreactResult,
-  type CompileResult,
-  compilePreactMx,
-  type RawSourceMap,
-} from "@mxlang/preact";
+import type {
+  AttrTagConfig,
+  AttrTagOf,
+  CompileResult,
+  RawSourceMap,
+} from "@mxlang/core";
+import { createTargetLookup, type TargetLookup } from "@mxlang/core";
+import type { CompilePreactOptions, CompilePreactResult } from "@mxlang/preact";
 import type { ReactNode } from "react";
-import { reactDeclarations, reactDialect } from "./dialect.ts";
+import {
+  compileReactFile as compileReactFileWith,
+  compileReactMx as compileReactMxWith,
+} from "./compile.ts";
+import descriptor from "./descriptor.ts";
+
+/**
+ * This package's own target table (decisions 129 and 132): the one descriptor
+ * it exports, defaulting for a direct entry that names no lookup of its own
+ * (design note §5.1, rule (c)). The compile itself runs through
+ * `@mxlang/preact`'s shared emitter, but the lookup a caller gets by default
+ * is React's, so a callee importing `AttrTag` from `@mxlang/react` is
+ * recognised the same as one from `@mxlang/preact`.
+ */
+const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 
 export { TranslateError } from "@mxlang/preact";
 export { reactDeclarations, reactDialect } from "./dialect.ts";
@@ -21,22 +33,23 @@ export type AttrTag<
   C extends AttrTagConfig = {},
 > = AttrTagOf<C, ReactNode>;
 
-/** Compiles a whole-file MX template to a React component module. */
+/**
+ * Compiles a whole-file MX template to a React component module.
+ *
+ * `options.targets` defaults to this package's own lookup; see
+ * `@mxlang/preact`'s `CompilePreactOptions.targets`.
+ */
 export function compileReactMx(
   source: string,
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings" | "typeCheck"
+    "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
   > = {},
 ): CompilePreactResult {
-  return compilePreactMx(source, filename, {
-    dialect: reactDialect,
-    declarations: reactDeclarations,
-    customTags: options.customTags,
-    resolveImport: options.resolveImport,
-    warnings: options.warnings,
-    typeCheck: options.typeCheck,
+  return compileReactMxWith(source, filename, {
+    ...options,
+    targets: options.targets ?? ownTargets,
   });
 }
 
@@ -45,8 +58,11 @@ export function compileReactFile(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings" | "typeCheck"
+    "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
   > = {},
 ): CompileResult {
-  return compileReactMx(readFileSync(filename, "utf8"), filename, options);
+  return compileReactFileWith(filename, {
+    ...options,
+    targets: options.targets ?? ownTargets,
+  });
 }

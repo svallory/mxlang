@@ -42,6 +42,7 @@ export {
   type Lookup,
   printExpression,
   type RawSourceMap,
+  type Translator,
   type TranslatorOptions,
 } from "./compile.ts";
 export {
@@ -60,6 +61,7 @@ export {
   importedNames,
   isFunctionLikeValue,
   isMarkoOrMxSpecifier,
+  isTranslateError,
   type MxWarning,
   type Node,
   newCtx,
@@ -139,8 +141,9 @@ export {
   type DiscoveredTag,
   type DiscoverProjectTagsOptions,
   discoverProjectTags,
-  HOST_MODULE_SEGMENTS,
   hostModuleSegment,
+  hostRestrictionDiagnostics,
+  type HostRestriction,
   loadSidecar,
   type MxTagsEntry,
   normalizeMxTags,

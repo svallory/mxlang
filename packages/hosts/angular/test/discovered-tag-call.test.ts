@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
+import { angularOwnTargets } from "../src/own-targets.ts";
 import { assertAngularParses } from "./helpers.ts";
 
 /** Compiles `page` in a project whose `tags/` holds `tags`. */
@@ -30,7 +31,7 @@ function compilePage(
   const path = join(dir, "page.mx");
   writeFileSync(path, page);
   return compile(page, path, {
-    customTags: getCustomTags(path) as never,
+    customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
     ...options,
   });
 }
