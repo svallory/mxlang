@@ -126,16 +126,17 @@ function fragmentMessage(message: string): string {
  * htmljs-parser's mismatched-close message names both tags but reports only
  * the closer's position. The innermost unclosed element is the "corresponding
  * opening" tag it names, so append where that element's `<` is, as 1-based
- * `line:column` (UTF-16 units). A fragment's synthetic root starts at the
- * region's `<>`, so it is positioned correctly too.
+ * `line:column` (UTF-16 units). `openerStart` is the offset of that `<` in
+ * `source`; the caller supplies it because a fragment's synthetic root sits in
+ * the shifted prefix and really starts at the region's `<>`.
  */
 function withOpenerPosition(
   message: string,
   source: string,
-  opener: MxElement | null,
+  openerStart: number | null,
 ): string {
   if (
-    !opener ||
+    openerStart === null ||
     !/^The closing ".*" tag does not match the corresponding opening ".*" tag$/.test(
       message,
     )
@@ -144,13 +145,13 @@ function withOpenerPosition(
   }
   let line = 1;
   let lineStart = 0;
-  for (let i = 0; i < opener.range.start; i++) {
+  for (let i = 0; i < openerStart; i++) {
     if (source.charCodeAt(i) === 10) {
       line++;
       lineStart = i + 1;
     }
   }
-  return `${message} at ${line}:${opener.range.start - lineStart + 1}`;
+  return `${message} at ${line}:${openerStart - lineStart + 1}`;
 }
 
 /** Thrown from a handler to stop htmljs-parser once the root tag closes. */
@@ -214,6 +215,18 @@ export function walkMxRegion(
 
   const top = (): MxElement | null =>
     stack.length > 0 ? (stack[stack.length - 1] as MxElement) : null;
+
+  /**
+   * Source offset of the innermost unclosed element's `<`. The fragment's
+   * synthetic root is the stack's bottom entry and its range lies in the
+   * shifted prefix; its real start is the region's `<>` (as for the returned
+   * tree below).
+   */
+  const openerOffset = (): number | null => {
+    const el = top();
+    if (el === null) return null;
+    return fragment && el === stack[0] ? start : el.range.start;
+  };
 
   /** Flushes a name-only attribute as a boolean attribute. */
   const flushAttrName = () => {
@@ -433,7 +446,7 @@ export function walkMxRegion(
       // fragment's own `<>`.
       const message = fragment ? fragmentMessage(range.message) : range.message;
       errors.push({
-        message: withOpenerPosition(message, source, top()),
+        message: withOpenerPosition(message, source, openerOffset()),
         start: Math.max(range.start + base, start),
         end: Math.max(range.end + base, start),
       });

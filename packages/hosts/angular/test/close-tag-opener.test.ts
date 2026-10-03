@@ -28,4 +28,25 @@ describe(".ng.mx: a missing close tag names the opener's position", () => {
       'The closing "div" tag does not match the corresponding opening "section" tag at 6:5',
     );
   });
+
+  it("positions a fragment region's `<>` opener at its real column", () => {
+    const source = `import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-x",
+  template: <>
+    hello
+  </div>,
+})
+export class XComponent {}
+`;
+    let message = "";
+    try {
+      compileNgMx(source, "/fixtures/x.component.ng.mx");
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    // `  template: <>`: the `<>` is at line 5, column 13 (1-based).
+    expect(message).toContain('opening "<>" tag at 5:13');
+  });
 });

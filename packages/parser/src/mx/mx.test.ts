@@ -666,4 +666,16 @@ describe("mismatched closing tag names the opener's position", () => {
     const col = prefix.length + 1;
     expect(message(source)).toContain(`opening "p" tag at 1:${col}`);
   });
+
+  it("positions a fragment region's own `<>` as the opener, not the shifted prefix", () => {
+    const source = "const el = <>\n  hello\n</div>;\n";
+    let first = "";
+    try {
+      parseSolid(source, "test.solid.mx", { mxRegionFragment: true });
+    } catch (err) {
+      first = (err as Error).message.split("\n")[0] ?? "";
+    }
+    // The `<>` is at line 1, column 12 (1-based).
+    expect(first).toContain('opening "<>" tag at 1:12');
+  });
 });
