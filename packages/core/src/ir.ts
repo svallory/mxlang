@@ -228,6 +228,11 @@ export interface Branch extends IrBase {
   /** `null` for the trailing `<else>`. */
   condition: Expr | null;
   children: IrNode[];
+  /**
+   * File-absolute UTF-16 code-unit span of this branch's own tag — opening
+   * tag, body and closing tag included; `undefined` for a synthesized branch.
+   */
+  span?: SourceSpan;
 }
 
 /**
@@ -374,10 +379,33 @@ export type ComponentTarget =
   | { kind: "dynamic"; expr: Expr; valueImportBinding?: string };
 
 export type IrNode =
-  /** A literal run of text. Already normalized by Marko's own `onText`. */
-  | ({ kind: "Text"; value: string } & IrBase)
+  /**
+   * A literal run of text. `value` is Marko-normalized (newline-bearing
+   * whitespace runs dropped, the rest collapsed) while `span` slices the
+   * text exactly as authored — the two deliberately differ on e.g.
+   * `<div>line one\n  line two</div>`.
+   */
+  | ({
+      kind: "Text";
+      value: string;
+      /**
+       * File-absolute UTF-16 code-unit span of the authored text.
+       * `undefined` for a synthesized Text — the empty placeholder an inert
+       * disposition or `<return>` leaves behind, or a builder-produced node.
+       */
+      span?: SourceSpan;
+    } & IrBase)
   /** `${expr}` / `$!{expr}`; `escaped` is false for the raw form. */
-  | ({ kind: "Interpolation"; expr: Expr; escaped: boolean } & IrBase)
+  | ({
+      kind: "Interpolation";
+      expr: Expr;
+      escaped: boolean;
+      /**
+       * File-absolute UTF-16 code-unit span of the whole `${…}` / `$!{…}`,
+       * delimiters included. `expr.span` covers the expression only.
+       */
+      span?: SourceSpan;
+    } & IrBase)
   | ({
       kind: "Element";
       name: string;
@@ -433,7 +461,16 @@ export type IrNode =
        */
       authoredName?: string;
     } & IrBase)
-  | ({ kind: "IfChain"; branches: Branch[] } & IrBase)
+  | ({
+      kind: "IfChain";
+      branches: Branch[];
+      /**
+       * File-absolute UTF-16 code-unit span of the whole chain: from the
+       * `<if>`'s `<` through the last branch's closing tag, so layout
+       * whitespace and comments between branches are inside it.
+       */
+      span?: SourceSpan;
+    } & IrBase)
   | ({
       kind: "For";
       source: ForSource;
@@ -443,6 +480,11 @@ export type IrNode =
       paramNodes: Node[];
       /** Every name the params bind, for a host that tracks scopes. */
       bindings: string[];
+      /**
+       * File-absolute UTF-16 code-unit span of the whole tag — opening tag,
+       * body and closing tag included.
+       */
+      span?: SourceSpan;
       /**
        * File-absolute byte spans of each param, same convention as
        * `Expr.span` — one per `params`/`paramNodes` entry, `undefined` for a
@@ -463,6 +505,11 @@ export type IrNode =
       name: string;
       /** File-absolute byte span of the `<define>`'s own name, e.g. `Row`. */
       nameSpan?: SourceSpan;
+      /**
+       * File-absolute UTF-16 code-unit span of the whole tag — opening tag,
+       * body and closing tag included.
+       */
+      span?: SourceSpan;
       params: string[];
       /**
        * File-absolute byte spans of each param, same convention as
@@ -472,14 +519,35 @@ export type IrNode =
       paramSpans?: Array<SourceSpan | undefined>;
       children: IrNode[];
     } & IrBase)
-  | ({ kind: "Const"; name: string; init: Expr } & IrBase)
+  | ({
+      kind: "Const";
+      name: string;
+      init: Expr;
+      /** File-absolute UTF-16 code-unit span of the whole `<const/…/>` tag. */
+      span?: SourceSpan;
+    } & IrBase)
   /** A `static` block, or a host statement block that hoists like one. */
-  | ({ kind: "Static"; code: string; end: Position } & IrBase)
+  | ({
+      kind: "Static";
+      code: string;
+      end: Position;
+      /**
+       * File-absolute UTF-16 code-unit span of the authored statement,
+       * `static` keyword included, trailing line terminator excluded.
+       */
+      span?: SourceSpan;
+    } & IrBase)
   | ({
       kind: "Import";
       code: string;
       bindings: string[];
       end: Position;
+      /**
+       * File-absolute UTF-16 code-unit span of the authored statement,
+       * trailing line terminator excluded. `undefined` for a synthesized
+       * (`synthesized: true`) import, which has no authored source.
+       */
+      span?: SourceSpan;
       /**
        * True when the compiler minted this import for a discovered template
        * tag, rather than the author writing it.
@@ -512,7 +580,16 @@ export type IrNode =
       resolvedPath?: string;
     } & IrBase)
   /** Any other top-level `export`, hoisted verbatim to module scope. */
-  | ({ kind: "Export"; code: string; end: Position } & IrBase)
+  | ({
+      kind: "Export";
+      code: string;
+      end: Position;
+      /**
+       * File-absolute UTF-16 code-unit span of the authored statement,
+       * trailing line terminator excluded.
+       */
+      span?: SourceSpan;
+    } & IrBase)
   /** `export interface Input`, lifted so a host can place it. */
   | ({ kind: "InputInterface"; code: string; end: Position } & IrBase)
   /** A statement lifted by decision 70's `hoist` hook. */
@@ -524,7 +601,16 @@ export type IrNode =
    * A comment. `html` distinguishes `<!-- -->` from a `//` line comment —
    * Marko strips the delimiters, so only the source can tell them apart.
    */
-  | ({ kind: "Comment"; value: string; html: boolean } & IrBase);
+  | ({
+      kind: "Comment";
+      value: string;
+      html: boolean;
+      /**
+       * File-absolute UTF-16 code-unit span of the whole comment, delimiters
+       * included (`<!-- … -->`, or the `//` line).
+       */
+      span?: SourceSpan;
+    } & IrBase);
 
 /** The resolved template: its module-level parts, and its body. */
 export interface Ir {

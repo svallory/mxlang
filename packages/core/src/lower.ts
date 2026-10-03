@@ -1440,11 +1440,13 @@ function lowerIfChain(
     {
       condition: exprOf(ctx, cond.value),
       children: branchChildren(node),
+      span: exprSpan(ctx, node),
       loc: posOf(node),
     },
   ];
 
   let i = index + 1;
+  let lastBranch: Node = node;
   while (i < children.length) {
     const child = children[i];
     // Whitespace and comments between branches are layout, not content.
@@ -1474,13 +1476,30 @@ function lowerIfChain(
     branches.push({
       condition: ifAttr ? exprOf(ctx, ifAttr.value) : null,
       children: branchChildren(child),
+      span: exprSpan(ctx, child),
       loc: posOf(child),
     });
+    lastBranch = child;
     i++;
     if (!ifAttr) break;
   }
 
-  return [{ kind: "IfChain", branches, loc: posOf(node) }, i];
+  const startSpan = exprSpan(ctx, node);
+  const endSpan = exprSpan(ctx, lastBranch);
+  return [
+    {
+      kind: "IfChain",
+      branches,
+      // Marko has no single node spanning the chain; it is the `<if>`'s
+      // start through the last branch's end.
+      span:
+        startSpan && endSpan
+          ? { sourceStart: startSpan.sourceStart, sourceEnd: endSpan.sourceEnd }
+          : undefined,
+      loc: posOf(node),
+    },
+    i,
+  ];
 }
 
 /**
@@ -1655,6 +1674,7 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
     kind: "For",
     ...head,
     children,
+    span: exprSpan(ctx, node),
     loc: posOf(node),
   };
 }
@@ -1691,7 +1711,13 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   }
   shadowBindings(ctx, bindingIdentifiers(node.var));
 
-  return { kind: "Const", name, init, loc: posOf(node) };
+  return {
+    kind: "Const",
+    name,
+    init,
+    span: exprSpan(ctx, node),
+    loc: posOf(node),
+  };
 }
 
 /** `<define/name|params|>...</define>` — a reusable block. */
@@ -1735,6 +1761,7 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
     kind: "Define",
     name,
     nameSpan: exprSpan(ctx, node.var),
+    span: exprSpan(ctx, node),
     params,
     paramSpans: paramSpansOf(ctx, node),
     children: [...hoisted, ...children],
@@ -1800,10 +1827,32 @@ function registerStaticBindings(ctx: Ctx, code: string): void {
  * interface Input` is lifted so a host can place it above the render function;
  * any other `export` hoists verbatim as a real module export.
  */
+/**
+ * The authored range of a statement tag (`import` / `static` / `export`).
+ *
+ * Marko's statement `loc.end` sits on the next line's column 0 — the raw
+ * span would end with the line terminator — so trailing whitespace is
+ * trimmed, leaving exactly the authored statement: slicing the source with
+ * the result yields the statement text (for `static`, keyword included).
+ */
+function statementSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
+  const span = exprSpan(ctx, node);
+  if (!span) return undefined;
+  let sourceEnd = span.sourceEnd;
+  while (
+    sourceEnd > span.sourceStart &&
+    /\s/.test(ctx.source[sourceEnd - 1] as string)
+  ) {
+    sourceEnd--;
+  }
+  return { sourceStart: span.sourceStart, sourceEnd };
+}
+
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   const line = sliceLoc(ctx, node.loc).trim();
   const loc = posOf(node);
   const end = endPosOf(node);
+  const span = statementSpan(ctx, node);
 
   if (name === "import") {
     const bindings = importBindings(line);
@@ -1836,7 +1885,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       }
     }
     registerAuthoredTemplateImport(ctx, line);
-    return { kind: "Import", code: line, bindings, loc, end };
+    return { kind: "Import", code: line, bindings, loc, end, span };
   }
   if (name === "static") {
     const code = line.replace(/^static\s+/, "");
@@ -1846,13 +1895,14 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       code,
       loc,
       end,
+      span,
     };
   }
   if (/^export\s+interface\s+Input\b/.test(line)) {
     return { kind: "InputInterface", code: line, loc, end };
   }
   if (name === "export") {
-    return { kind: "Export", code: line, loc, end };
+    return { kind: "Export", code: line, loc, end, span };
   }
   fail(
     `unrecognized statement tag \`${name}\`; expected \`import\`, \`static\`, or \`export\``,
@@ -2637,8 +2687,14 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
     switch (child.type) {
       case "MarkoText":
         // Already decision 33: Marko's own `onText` dropped newline-bearing
-        // whitespace runs and collapsed the rest before we saw them.
-        out.push({ kind: "Text", value: child.value, loc: posOf(child) });
+        // whitespace runs and collapsed the rest before we saw them. `value`
+        // carries that normalized text; `span` covers the authored range.
+        out.push({
+          kind: "Text",
+          value: child.value,
+          span: exprSpan(ctx, child),
+          loc: posOf(child),
+        });
         break;
       case "MarkoPlaceholder": {
         const interpolation = exprOf(ctx, child.value);
@@ -2651,6 +2707,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
           kind: "Interpolation",
           expr: interpolation,
           escaped: child.escape,
+          span: exprSpan(ctx, child),
           loc: posOf(child),
         });
         break;
@@ -2681,6 +2738,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
           kind: "Comment",
           value: child.value,
           html: sliceLoc(ctx, child.loc).startsWith("<!--"),
+          span: exprSpan(ctx, child),
           loc: posOf(child),
         });
         break;

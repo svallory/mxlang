@@ -191,6 +191,176 @@ describe("attribute tag spans", () => {
   });
 });
 
+function firstOfKind<K extends IrNode["kind"]>(
+  ir: Ir,
+  kind: K,
+): Extract<IrNode, { kind: K }> {
+  const node = ir.body.find((n) => n.kind === kind);
+  if (!node) throw new Error(`no ${kind} in the body`);
+  return node as Extract<IrNode, { kind: K }>;
+}
+
+function elementChildren(source: string): IrNode[] {
+  const el = firstOfKind(irOf(source, elements), "Element");
+  return el.children;
+}
+
+describe("text, interpolation and comment spans", () => {
+  it("Text: span slices the authored text, which `value` has normalized", () => {
+    const source = "<div>line one\n  line two</div>\n";
+    const text = elementChildren(source)[0];
+    if (text?.kind !== "Text") throw new Error("expected a Text");
+    expect(text.value).toBe("line one line two");
+    expect(slice(source, text.span)).toBe("line one\n  line two");
+  });
+
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+  it("Interpolation: span covers the whole `${...}`, delimiters included", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const source = "<div>before ${name} after</div>\n";
+    const interp = elementChildren(source).find(
+      (n) => n.kind === "Interpolation",
+    );
+    if (interp?.kind !== "Interpolation") {
+      throw new Error("expected an Interpolation");
+    }
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    expect(slice(source, interp.span)).toBe("${name}");
+    // `expr.span` stays as it is: the expression only, no delimiters.
+    expect(slice(source, interp.expr.span)).toBe("name");
+  });
+
+  it("Interpolation: the raw form's span includes the `!`", () => {
+    const source = "<div>$!{raw}</div>\n";
+    const interp = elementChildren(source)[0];
+    if (interp?.kind !== "Interpolation") throw new Error("expected one");
+    expect(interp.escaped).toBe(false);
+    expect(slice(source, interp.span)).toBe("$!{raw}");
+  });
+
+  it("Comment: span covers an HTML comment with its delimiters", () => {
+    const source = "<div><!-- a comment --></div>\n";
+    const comment = elementChildren(source)[0];
+    if (comment?.kind !== "Comment") throw new Error("expected a Comment");
+    expect(comment.html).toBe(true);
+    expect(slice(source, comment.span)).toBe("<!-- a comment -->");
+  });
+
+  it("Comment: span covers a `//` line comment", () => {
+    const source = "<div>\n  // line comment\n</div>\n";
+    const comment = elementChildren(source).find((n) => n.kind === "Comment");
+    if (comment?.kind !== "Comment") throw new Error("expected a Comment");
+    expect(comment.html).toBe(false);
+    expect(slice(source, comment.span)).toBe("// line comment");
+  });
+});
+
+describe("structural node spans", () => {
+  it("IfChain: the chain spans `<if>` through the last branch's closing tag; each branch spans its own tag", () => {
+    const source =
+      "<if=a>\n  x\n</if>\n<else-if=b>\n  y\n</else-if>\n<else>\n  z\n</else>\n";
+    const chain = firstOfKind(irOf(source, elements), "IfChain");
+    expect(slice(source, chain.span)).toBe(
+      "<if=a>\n  x\n</if>\n<else-if=b>\n  y\n</else-if>\n<else>\n  z\n</else>",
+    );
+    expect(chain.branches).toHaveLength(3);
+    expect(slice(source, chain.branches[0]?.span)).toBe("<if=a>\n  x\n</if>");
+    expect(slice(source, chain.branches[1]?.span)).toBe(
+      "<else-if=b>\n  y\n</else-if>",
+    );
+    expect(slice(source, chain.branches[2]?.span)).toBe("<else>\n  z\n</else>");
+  });
+
+  it("For: span covers the whole tag, body and closing tag included", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const source = "<for|item| of=list>\n  ${item}\n</for>\n";
+    const loop = firstOfKind(irOf(source, elements), "For");
+    expect(slice(source, loop.span)).toBe(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+      "<for|item| of=list>\n  ${item}\n</for>",
+    );
+  });
+
+  it("Const: span covers the whole tag", () => {
+    const source = "<const/n=1+2/>\n";
+    const constant = firstOfKind(irOf(source, elements), "Const");
+    expect(slice(source, constant.span)).toBe("<const/n=1+2/>");
+  });
+
+  it("Define: span covers the whole tag, body and closing tag included", () => {
+    const source = "<define/Row|a|>\n  <b>text</b>\n</define>\n";
+    const define = firstOfKind(irOf(source, elements), "Define");
+    expect(slice(source, define.span)).toBe(
+      "<define/Row|a|>\n  <b>text</b>\n</define>",
+    );
+  });
+
+  it("Import, Static and Export: span covers the authored statement, line terminator excluded", () => {
+    const source =
+      'import x from "./y";\nstatic const A = 1;\nexport const B = 2;\n<div/>\n';
+    const ir = irOf(source, elements);
+    expect(slice(source, ir.imports[0]?.span)).toBe('import x from "./y";');
+    const [stat, exp] = ir.hoisted;
+    if (stat?.kind !== "Static") throw new Error("expected a Static");
+    if (exp?.kind !== "Export") throw new Error("expected an Export");
+    expect(slice(source, stat.span)).toBe("static const A = 1;");
+    expect(slice(source, exp.span)).toBe("export const B = 2;");
+  });
+});
+
+describe("spans under UTF-16 and CRLF", () => {
+  it("an emoji counts two code units before every span after it", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const source = "<div>😀 ${x} tail</div>\n";
+    const children = elementChildren(source);
+    const [lead, interp, tail] = children;
+    if (lead?.kind !== "Text") throw new Error("expected a Text");
+    if (interp?.kind !== "Interpolation") {
+      throw new Error("expected an Interpolation");
+    }
+    if (tail?.kind !== "Text") throw new Error("expected a Text");
+    expect(slice(source, lead.span)).toBe("😀 ");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    expect(slice(source, interp.span)).toBe("${x}");
+    expect(slice(source, tail.span)).toBe(" tail");
+    const el = firstOfKind(irOf(source, elements), "Element");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    expect(slice(source, el.span)).toBe("<div>😀 ${x} tail</div>");
+  });
+
+  it("CRLF line endings slice correctly (the \r belongs to its line)", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const source = "<div>\r\n  x ${y}\r\n</div>\r\n";
+    const children = elementChildren(source);
+    const text = children.find((n) => n.kind === "Text");
+    const interp = children.find((n) => n.kind === "Interpolation");
+    if (text?.kind !== "Text") throw new Error("expected a Text");
+    if (interp?.kind !== "Interpolation") {
+      throw new Error("expected an Interpolation");
+    }
+    expect(slice(source, text.span)).toBe("x ");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    expect(slice(source, interp.span)).toBe("${y}");
+    const el = firstOfKind(irOf(source, elements), "Element");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    expect(slice(source, el.span)).toBe("<div>\r\n  x ${y}\r\n</div>");
+
+    const ifSource = "<if=a>\r\n  x\r\n</if>\r\n<else>\r\n  y\r\n</else>\r\n";
+    const chain = firstOfKind(irOf(ifSource, elements), "IfChain");
+    expect(slice(ifSource, chain.span)).toBe(
+      "<if=a>\r\n  x\r\n</if>\r\n<else>\r\n  y\r\n</else>",
+    );
+    expect(slice(ifSource, chain.branches[0]?.span)).toBe(
+      "<if=a>\r\n  x\r\n</if>",
+    );
+
+    const statements = irOf('import x from "./y";\r\n<div/>\r\n', elements);
+    expect(
+      slice('import x from "./y";\r\n<div/>\r\n', statements.imports[0]?.span),
+    ).toBe('import x from "./y";');
+  });
+});
+
 describe("non-ASCII source", () => {
   it("every span is a UTF-16 code-unit offset into the source string", () => {
     const source = '<p title="ção"/><x a="é">ção</x>\n';

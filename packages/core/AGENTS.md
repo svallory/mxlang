@@ -683,6 +683,26 @@ Five facts worth knowing before editing it:
   `input.class` must receive `class` whatever the target calls the DOM
   property. Renaming on a component call silently dropped the value; it only
   became reachable once a template tag became a real component call.
+- **Which IR nodes carry spans** (all `span?: SourceSpan`, UTF-16 code-unit
+  offsets into the file being compiled, always optional and absent on
+  synthesized nodes): `Expr.span` (the expression's authored text); `Attr`
+  `nameSpan` (zero-width at the `=` for a default attribute) and a static
+  attr's `valueSpan` (quotes included); `DelegatedTag`, `Element`,
+  `Component` and `AttributeTag` `nameSpan` + whole-tag `span` (opening tag,
+  body and closing tag); `For`/`Define` `paramSpans`; `Define.nameSpan`;
+  and — added by core-ir-spans — `Text.span` (the authored text, which
+  `value` has Marko-normalized), `Interpolation.span` (the whole
+  `${…}`/`$!{…}`, delimiters included), `Comment.span` (delimiters included),
+  `IfChain.span` (the `<if>` through the last branch's closing tag, layout
+  between branches included) and per-`Branch.span` (that branch's own tag),
+  `For.span`, `Const.span`, `Define.span` (whole tag), and `Import`/`Export`/
+  `Static.span` (the authored statement with the trailing line terminator
+  trimmed — Marko's statement `loc` ends on the next line's column 0; a
+  trailing same-line comment is included, as in the statement's `code`).
+  `InputInterface`, `Hoisted`, `DocumentType` and a synthesized (`synthesized:
+  true`) `Import` carry none. Slicing the source with a span yields the
+  authored text; tests in `src/spans.test.ts` assert exactly that, including
+  under emoji (UTF-16) and CRLF.
 - **Positions get a third rule** (spec §2): material from a tag template keeps
   that file's line and column, tagged through the optional `Position.file` (and
   `Expr.file`, since an `Expr` carries no `loc` of its own — only the optional
