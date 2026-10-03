@@ -120,6 +120,34 @@ describe("scanCustomTags", () => {
     expect(globals.mxScanLoadCount).toBe(1);
   });
 
+  it("loads and enforces children from a discovered declaration-only sidecar (decision 138 E2)", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"));
+    writeFileSync(join(dir, "package.json"), '{"name":"child-contract"}');
+    writeFileSync(join(dir, "tags", "box.mx"), "<div/>");
+    writeFileSync(
+      join(dir, "tags", "box.tag.ts"),
+      "export default { children: { item: { required: true } } };",
+    );
+    const filename = join(dir, "caller.mx");
+    const tags = scanCustomTags(filename).customTags;
+    expect(tags.box?.children).toEqual({ item: { required: true } });
+    const policy: Policy = {
+      tags: {},
+      isElement: () => true,
+      isComponent: () => false,
+    };
+    expect(() =>
+      compileSource("<box><bad/></box>", filename, policy, {
+        customTags: tags,
+        tagDiscoveryDirs: [],
+        emitIr: () => "",
+      }),
+    ).toThrowError(
+      "`<box>`: `<bad>` is not allowed here; allowed children: `<item>`",
+    );
+  });
+
   it("lets the nearest tags/ directory win a shared name", () => {
     const deep = scanCustomTags(fixture("nearest", "deep", "caller.mx"));
     const shallow = scanCustomTags(fixture("nearest", "caller.mx"));

@@ -75,9 +75,11 @@ export {
 } from "./core.ts";
 export type {
   AnalyzeContext,
+  ChildNode,
   CustomTag,
   CustomTagAttribute,
   CustomTagAttributeTag,
+  CustomTagChild,
   CustomTagParseOptions,
   FinalizeContext,
   IrBuilders,

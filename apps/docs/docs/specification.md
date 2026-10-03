@@ -1593,7 +1593,7 @@ report is worth anything.
 
 ### 9.5 Hooks
 
-A sidecar may declare `parseOptions`, `attributes`, `attributeTags`, `analyze`,
+A sidecar may declare `parseOptions`, `attributes`, `attributeTags`, `children`, `analyze`,
 `transform` and `finalize`. The hook is named **`transform`, not `resolve`** —
 `resolve` is **reserved for an MX 2 Vite-style hook** (decision 87c), and
 `migrate` is **reserved** for a source-printing mode.
@@ -1670,12 +1670,19 @@ walk, because a self-recursive call resolves during that walk.
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` must be one of string, number, boolean `` | An `items` value outside the three literal element types. |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `enum` cannot be combined with `type: "array"` `` | `enum` with `type: "array"` or `type: "function"` (the message names the type). |
 | `` Unknown key "${key}" in the "${tagAttrName}" attribute tag declaration of tag "${tagName}"; allowed: repeatable, required `` | Unknown attribute-tag-declaration key. |
+| `` Unknown key "${key}" in the "${childName}" child declaration of tag "${tagName}"; allowed: repeatable, required `` | Unknown child-declaration key (decision 138 E2). |
+| `` `<${name}>`: `children` cannot be combined with `parseOptions.text: true` `` | A children contract on a raw-text tag. |
+| `` `<${name}>`: `children` cannot be combined with `parseOptions.openTagOnly: true` `` | A children contract on a tag that cannot have a body. |
 
 ### 9.8 Call-site validation
 
 Naming (decision 132): the host hook that claims a tag is `HostDeclarations.isDelegatedTag`, its resolver is `resolveDelegatedTag`, and the IR node a claimed tag lowers to is `DelegatedTag` (built with `ctx.build.delegatedTag`). These replace `claimsTag`, `resolveHostTag` and `HostTag`, with no aliases.
 
-**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only when it declares at least one of `attributes`, `attributeTags` or `parseOptions`; `{}` and a hooks-only definition keep the "neither a `transform` nor a template" error. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` tag arguments `(...)` on `<tag>` are not supported in a standalone template ``; and `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags `` (the contract-extensions item lifts the last). Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a whitespace-only body is rejected with a positioned "does not accept content" error on this path, while a `transform` tag accepts it; this is intentional and stricter. A tag that has a `transform` or a template is unaffected. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
+**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only when it declares at least one of `attributes`, `attributeTags`, `children` or `parseOptions`; `{}` and a hooks-only definition keep the "neither a `transform` nor a template" error. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` tag arguments `(...)` on `<tag>` are not supported in a standalone template ``; and `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags `` (the contract-extensions item lifts the last). Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a whitespace-only body is rejected with a positioned "does not accept content" error on this path, while a `transform` tag accepts it; this is intentional and stricter. A tag that has a `transform` or a template is unaffected. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
+
+**Allowed authored children (MX addition, decision 138 E2).** `CustomTag.children` is a record of `{ required?, repeatable? }`, closed once present; omitted, children remain open. The reserved contract-vocabulary key `"#text"` allows non-whitespace text and `${…}` / `$!{…}`. Each non-whitespace text node or interpolation is one occurrence; whitespace-only text never counts. `required` means at least one occurrence on every path; `repeatable: true` permits more than one, including inside a loop. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent: the minimum is the minimum over branches (an absent final `<else>` supplies an empty branch), and a child inside `<for>` has minimum 0 and maximum infinity. Comments, `<const>` and `<define>` declarations are ignored; a `<define>` call counts by its authored name. Ordinary child tags count once by name, without descending into their own bodies (`<script>` and `<style>` count by name as well).
+
+Core checks authored children before lowering them, so a child's transform output does not change its name or count. The rule applies to transform tags, template tags with declaration-only sidecars, and contract-only delegated tags on every target. A dynamic child is an error in a closed contract. `TagCall.childTree?: ChildNode[]` exposes this authored shape to `analyze` and `transform`: named `ChildTag`, `ChildText`, `ChildDynamic`, `ChildFor.nodes`, and `ChildIf.branches` (each branch has `unconditional` and `nodes`), each node positioned with `loc`. It is syntax metadata, not emitted IR. Contracts report the first error only.
 
 All carry the `` `<tag>`:  `` prefix:
 
@@ -1697,6 +1704,11 @@ All carry the `` `<tag>`:  `` prefix:
 | `unknown attribute tag \`<@${tag.name}>\`` | Not declared. |
 | `attribute tag \`<@${tag.name}>\` may not be repeated` | Second occurrence without `repeatable`. |
 | `missing required attribute tag \`<@${name}>\`` | Required attribute tag absent. |
+| `` `<${name}>` is not allowed here; allowed children: `<a>`, `<b>` `` | Unlisted authored child, positioned at the child's `<`; an empty allowed list reads `none`. |
+| `` text is not allowed here; it accepts only the child tags `<a>`, `<b>` `` | Non-whitespace text or interpolation without `#text`, positioned at the text/interpolation. With an empty `children` declaration the message ends `it accepts no child tags`. |
+| `` a dynamic tag `<${…}>` cannot be checked against the declared children `` | Dynamic child, positioned at its `<`. |
+| `` `<${name}>` may not be repeated `` | Maximum occurrence count exceeds 1 without `repeatable: true`; positioned at the second occurrence, or the sole loop occurrence. |
+| `` missing required child `<${name}>` `` | Minimum occurrence count is 0 for a required child; positioned at the parent call. |
 
 Transform-time:
 
@@ -1707,7 +1719,7 @@ Transform-time:
 | `custom tag transform must return an array of IR nodes or a TagCall for its template` | Bad return value. |
 | *(warning)* `` `<${call.name}>`: custom tag transform did not read its attributeTags; authored attribute tags were dropped `` | A macro `transform` never touched `call.attributeTags` while the call had some. Detected with a `Proxy`. |
 
-**Decisions:** 80, 85, 87, 89, 90, 91, 93, 94a, 94d, 95, 97, 98, 130.
+**Decisions:** 80, 85, 87, 89, 90, 91, 93, 94a, 94d, 95, 97, 98, 130, 138.
 
 ---
 

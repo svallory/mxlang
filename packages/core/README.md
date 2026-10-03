@@ -225,8 +225,9 @@ tags itself. The ordinary route is discovery (see below), which fills the same
 map. Either way the core remains synchronous: it injects only each
 definition's `parseOptions` (`text`,
 `preserveWhitespace`, `openTagOnly`) into `@marko/compiler` before parsing,
-then validates declared `attributes` and `attributeTags` before `transform`.
-An unknown key in an `attributes`/`attributeTags` declaration (a typo, or a
+then validates declared `attributes`, `attributeTags` and `children` before `transform`.
+`children` closes authored plain child names with `{ required?, repeatable? }` cardinality; the reserved `#text` key permits non-whitespace text and interpolations. Control flow is transparent, declarations and comments are ignored, and dynamic children are errors in a closed contract. The check runs before plain children lower, so transform output cannot change their counted names; `TagCall.childTree` exposes that authored shape to hooks. Children cannot be combined with raw-text or open-tag-only parse options (decision 138 E2).
+An unknown key in an `attributes`/`attributeTags`/`children` declaration (a typo, or a
 retired name such as `staticOnly`/`repeated`) is rejected at registration,
 before any file is parsed, since neither key is checked against a runtime
 schema anywhere else. Transforms receive resolved author material and return ordinary IR. Builder

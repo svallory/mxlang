@@ -63,6 +63,24 @@ export interface CustomTagAttributeTag {
   required?: boolean;
 }
 
+/** Cardinality of an authored plain child (or the reserved `#text` class). */
+export interface CustomTagChild {
+  repeatable?: boolean;
+  required?: boolean;
+}
+
+/** Authored direct children, before transforms or host lowering change them. */
+export type ChildNode =
+  | { kind: "ChildTag"; name: string; loc: Position }
+  | { kind: "ChildText"; loc: Position }
+  | { kind: "ChildDynamic"; loc: Position }
+  | { kind: "ChildFor"; nodes: ChildNode[]; loc: Position }
+  | {
+      kind: "ChildIf";
+      branches: Array<{ unconditional: boolean; nodes: ChildNode[] }>;
+      loc: Position;
+    };
+
 /**
  * One tag's private, per-file scratch space.
  *
@@ -90,7 +108,7 @@ export interface FinalizeContext {
   gensym(hint?: string): string;
 }
 
-/** One call site, with every author-written part already lowered to IR. */
+/** One call site: resolved IR plus optional authored-child syntax metadata. */
 export interface TagCall {
   name: string;
   loc: Position;
@@ -100,6 +118,8 @@ export interface TagCall {
   /** UTF-16 span of the whole call, body and closing tag included. */
   span?: SourceSpan;
   content: Block | null;
+  /** Authored child names/text and transparent control flow; not emitted IR. */
+  childTree?: ChildNode[];
   attributeTags: AttributeTag[];
   /** Preserved control-flow shape for a template-backed component call. */
   attributeTagTree?: AttributeTagNode[];
@@ -164,22 +184,34 @@ function filterAttributeTagTree(
   return filtered;
 }
 
+/** Shared path cardinality for attribute tags and authored plain children. */
 function attributeTagOccurrenceRange(
-  nodes: readonly AttributeTagNode[],
+  nodes: readonly (AttributeTagNode | ChildNode)[],
   name: string,
 ): { min: number; max: number; inFor: boolean } {
   let min = 0;
   let max = 0;
   let inFor = false;
   for (const node of nodes) {
-    if (node.kind === "AttributeTag") {
-      if (node.tag.name === name) {
+    if (
+      node.kind === "AttributeTag" ||
+      node.kind === "ChildTag" ||
+      node.kind === "ChildText"
+    ) {
+      const childName =
+        node.kind === "AttributeTag"
+          ? node.tag.name
+          : node.kind === "ChildTag"
+            ? node.name
+            : "#text";
+      if (childName === name) {
         min++;
         max++;
       }
       continue;
     }
-    if (node.kind === "AttributeTagFor") {
+    if (node.kind === "ChildDynamic") continue;
+    if (node.kind === "AttributeTagFor" || node.kind === "ChildFor") {
       const inner = attributeTagOccurrenceRange(node.nodes, name);
       if (inner.max > 0) {
         inFor = true;
@@ -190,9 +222,11 @@ function attributeTagOccurrenceRange(
     const ranges = node.branches.map((branch) =>
       attributeTagOccurrenceRange(branch.nodes, name),
     );
-    if (!node.branches.some((branch) => branch.test === undefined)) {
-      ranges.push({ min: 0, max: 0, inFor: false });
-    }
+    const exhaustive =
+      node.kind === "AttributeTagIf"
+        ? node.branches.some((branch) => branch.test === undefined)
+        : node.branches.some((branch) => branch.unconditional);
+    if (!exhaustive) ranges.push({ min: 0, max: 0, inFor: false });
     min += Math.min(...ranges.map((range) => range.min));
     max += Math.max(...ranges.map((range) => range.max));
     inFor ||= ranges.some((range) => range.inFor);
@@ -309,6 +343,8 @@ export interface CustomTag {
   parseOptions?: CustomTagParseOptions;
   attributes?: Record<string, CustomTagAttribute>;
   attributeTags?: Record<string, CustomTagAttributeTag>;
+  /** Closed allowed authored children; `#text` permits non-whitespace text and interpolations. */
+  children?: Record<string, CustomTagChild>;
   analyze?(calls: readonly TagCall[], ctx: AnalyzeContext): void;
   transform?(call: TagCall, ctx: TransformContext): IrNode[] | TagCall;
   finalize?(ctx: FinalizeContext): IrNode[];
@@ -427,6 +463,7 @@ export function customTagTaglib(
 }
 
 function syntheticExpr(code: string): Expr {
+  // SAFETY: synthetic expressions have printed code but no authored Babel node; consumers already handle that absence.
   return { code, shape: "other", node: null as unknown as Node };
 }
 
@@ -765,6 +802,7 @@ function defaultAttr(
   }
   if (typeof value === "number" || typeof value === "boolean") {
     const code = String(value);
+    // SAFETY: the value was narrowed above; this minimal Babel literal is used only for contract shape checks.
     const node = {
       type: typeof value === "number" ? "NumericLiteral" : "BooleanLiteral",
       value,
@@ -810,11 +848,73 @@ export function applyCustomTagDefaults(
   return defaulted.length === 0 ? call.attrs : [...call.attrs, ...defaulted];
 }
 
-/** Enforces a tag's closed attribute contract before its transform runs. */
+/** Validates authored children before any plain child is lowered. */
+export function validateCustomTagChildren(
+  definition: CustomTag,
+  call: Pick<TagCall, "name" | "loc" | "childTree">,
+): void {
+  if (!definition.children) return;
+  const declarations = definition.children;
+  const tree = call.childTree ?? [];
+  const leaves: Array<Extract<ChildNode, { kind: "ChildTag" | "ChildText" }>> =
+    [];
+  const allowed =
+    Object.keys(declarations)
+      .map((name) => `\`<${name}>\``)
+      .join(", ") || "none";
+  const collect = (nodes: readonly ChildNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === "ChildFor") collect(node.nodes);
+      else if (node.kind === "ChildIf") {
+        for (const branch of node.branches) collect(branch.nodes);
+      } else if (node.kind === "ChildDynamic") {
+        failAt(
+          call.name,
+          `a dynamic tag \`<\${…}>\` cannot be checked against the declared children`,
+          node.loc,
+        );
+      } else {
+        const name = node.kind === "ChildTag" ? node.name : "#text";
+        if (!Object.hasOwn(declarations, name)) {
+          failAt(
+            call.name,
+            node.kind === "ChildText"
+              ? allowed === "none"
+                ? "text is not allowed here; it accepts no child tags"
+                : `text is not allowed here; it accepts only the child tags ${allowed}`
+              : `\`<${name}>\` is not allowed here; allowed children: ${allowed}`,
+            node.loc,
+          );
+        }
+        leaves.push(node);
+      }
+    }
+  };
+  collect(tree);
+  for (const [name, declaration] of Object.entries(declarations)) {
+    const range = attributeTagOccurrenceRange(tree, name);
+    if (declaration.repeatable !== true && range.max > 1) {
+      const occurrences = leaves.filter(
+        (node) => (node.kind === "ChildTag" ? node.name : "#text") === name,
+      );
+      failAt(
+        call.name,
+        `\`<${name}>\` may not be repeated`,
+        occurrences[1]?.loc ?? occurrences[0]?.loc ?? call.loc,
+      );
+    }
+    if (declaration.required && range.min === 0) {
+      failAt(call.name, `missing required child \`<${name}>\``, call.loc);
+    }
+  }
+}
+
+/** Enforces a tag's declared contracts before its transform runs. */
 export function validateCustomTagCall(
   definition: CustomTag,
   call: TagCall,
 ): void {
+  validateCustomTagChildren(definition, call);
   if (definition.parseOptions?.openTagOnly && call.content) {
     failAt(call.name, "does not accept content", call.loc);
   }
@@ -1073,7 +1173,7 @@ function rejectContradictoryAttribute(
 }
 
 /**
- * Rejects an unknown key in a registered tag's `attributes`/`attributeTags`
+ * Rejects an unknown key in a registered tag's attribute, attribute-tag or child
  * declarations, at registration time, before any file is parsed.
  *
  * These declaration objects are read directly at runtime (`literalOnly`,
@@ -1089,6 +1189,30 @@ export function rejectUnknownDeclarationKeys(
 ): void {
   if (!customTags) return;
   for (const [tagName, definition] of Object.entries(customTags)) {
+    if (definition.children !== undefined) {
+      for (const option of ["text", "openTagOnly"] as const) {
+        if (definition.parseOptions?.[option] === true) {
+          failAt(
+            tagName,
+            `\`children\` cannot be combined with \`parseOptions.${option}: true\``,
+            { line: 0, column: 0 },
+          );
+        }
+      }
+      for (const [childName, declaration] of Object.entries(
+        definition.children,
+      )) {
+        for (const key of Object.keys(declaration)) {
+          if (!(ATTRIBUTE_TAG_KEYS as readonly string[]).includes(key)) {
+            throw new TranslateError(
+              `Unknown key "${key}" in the "${childName}" child declaration of tag "${tagName}"; allowed: ${ATTRIBUTE_TAG_KEYS.join(", ")}`,
+              0,
+              0,
+            );
+          }
+        }
+      }
+    }
     if (definition.attributes) {
       for (const [attrName, declaration] of Object.entries(
         definition.attributes,
@@ -1221,7 +1345,7 @@ function wrapHookError(
   tagName: string,
   hook: string,
   loc: Position,
-): unknown {
+): TranslateError {
   if (error instanceof TranslateError) return error;
   return new TranslateError(
     `\`<${tagName}>\`: custom tag \`${hook}\` threw: ${error instanceof Error ? error.message : String(error)}`,
@@ -1259,7 +1383,7 @@ function observedCall(call: TagCall): {
  * Whether a call of this definition hands its validated call to the host.
  *
  * The definition must be contract-only: it declares at least one of
- * `attributes`, `attributeTags` or `parseOptions`, and has neither a
+ * `attributes`, `attributeTags`, `children` or `parseOptions`, and has neither a
  * `transform` nor a template. `{}` or a hooks-only definition declares no
  * contract, so it keeps the "neither a `transform` nor a template" error. The
  * one question core asks the host is the generic `isDelegatedTag`.
@@ -1274,6 +1398,7 @@ export function isContractOnlyDelegated(
     !hasTemplate(definition) &&
     (definition.attributes !== undefined ||
       definition.attributeTags !== undefined ||
+      definition.children !== undefined ||
       definition.parseOptions !== undefined) &&
     ctx.declarations.isDelegatedTag?.(name, ctx) === true
   );

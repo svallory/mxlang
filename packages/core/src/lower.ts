@@ -63,6 +63,7 @@ import {
   warn,
 } from "./core.ts";
 import {
+  type ChildNode,
   type CustomTag,
   isContractOnlyDelegated,
   runAnalyzeHooks,
@@ -70,6 +71,7 @@ import {
   shadowedBuiltinMessage,
   type TagCall,
   transformCustomTag,
+  validateCustomTagChildren,
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { exportNameFor } from "./export-name.ts";
@@ -2116,6 +2118,80 @@ function rejectCustomAttributeTagShapes(
   }
 }
 
+/** Retains authored names and groups transparent control flow without lowering its contents. */
+function authoredChildTree(children: readonly Node[]): ChildNode[] {
+  const tree: ChildNode[] = [];
+  for (let index = 0; index < children.length; index++) {
+    const node = children[index];
+    const loc = posOf(node);
+    if (node.type === "MarkoText") {
+      if (node.value.trim() !== "") tree.push({ kind: "ChildText", loc });
+    } else if (node.type === "MarkoPlaceholder") {
+      tree.push({ kind: "ChildText", loc });
+    } else if (node.type === "MarkoTag") {
+      if (node.name?.type !== "StringLiteral") {
+        tree.push({ kind: "ChildDynamic", loc });
+        continue;
+      }
+      const name = node.name.value;
+      if (name === "const" || name === "define" || name.startsWith("@"))
+        continue;
+      if (name === "for") {
+        tree.push({
+          kind: "ChildFor",
+          nodes: authoredChildTree(node.body?.body ?? []),
+          loc,
+        });
+      } else if (name === "if") {
+        const branches = [
+          {
+            unconditional: false,
+            nodes: authoredChildTree(node.body?.body ?? []),
+          },
+        ];
+        let cursor = index + 1;
+        while (cursor < children.length) {
+          const branch = children[cursor];
+          if (isLayout(branch)) {
+            cursor++;
+            continue;
+          }
+          const branchName = branch.name?.value;
+          if (
+            branch.type !== "MarkoTag" ||
+            (branchName !== "else" && branchName !== "else-if")
+          )
+            break;
+          const unconditional =
+            branchName === "else" && !attrByName(branch, "if");
+          branches.push({
+            unconditional,
+            nodes: authoredChildTree(branch.body?.body ?? []),
+          });
+          index = cursor++;
+          if (unconditional) break;
+        }
+        tree.push({ kind: "ChildIf", branches, loc });
+      } else if (name === "else" || name === "else-if") {
+        // An orphan branch still gets the usual positioned lowerer error.
+        tree.push({
+          kind: "ChildIf",
+          branches: [
+            {
+              unconditional: false,
+              nodes: authoredChildTree(node.body?.body ?? []),
+            },
+          ],
+          loc,
+        });
+      } else {
+        tree.push({ kind: "ChildTag", name, loc });
+      }
+    }
+  }
+  return tree;
+}
+
 function lowerCustomTag(
   ctx: Ctx,
   node: Node,
@@ -2162,6 +2238,8 @@ function lowerCustomTag(
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, name));
   raiseInvalidCalleeInput(ctx, input, name, loweredTags.flat);
   const children = loweredTags.contentChildren;
+  const childTree = authoredChildTree(children);
+  validateCustomTagChildren(definition, { name, loc: posOf(node), childTree });
   const handsToHost =
     !isBuiltin &&
     !definition.transform &&
@@ -2183,6 +2261,7 @@ function lowerCustomTag(
       isBuiltin || (handsToHost && children.length > 0) || hasContent(children)
         ? lowerBlock(ctx, node, children)
         : null,
+    childTree,
     attributeTags: loweredTags.flat,
     attributeTagTree: loweredTags.tree,
     attrTagProps: loweredTags.props,
@@ -2551,6 +2630,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx.importSpecifiers.has(name) &&
       !ctx.importDefaultFromMarkoOrMx.has(name)
     ) {
+      // SAFETY: a named binding is synthetic expression code, not an authored Babel expression; consumers allow no node.
       return lowerComponent(ctx, node, {
         kind: "dynamic",
         expr: { code: name, shape: "other", node: null as unknown as Node },
@@ -2569,6 +2649,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // here instead. Same `valueImportBinding` provenance channel decision
     // 116 already built, so typed attribute-tag checking is unaffected.
     if (ctx.unknownLocalValue.has(name)) {
+      // SAFETY: a named binding is synthetic expression code, not an authored Babel expression; consumers allow no node.
       return lowerComponent(ctx, node, {
         kind: "dynamic",
         expr: { code: name, shape: "other", node: null as unknown as Node },

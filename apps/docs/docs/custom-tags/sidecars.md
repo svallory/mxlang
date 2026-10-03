@@ -11,7 +11,7 @@ The examples here are copied from passing custom-tag fixtures and core tests.
 
 ## Declare the call contract
 
-The core checks `attributes` and `attributeTags` before any hook runs. The fixture `<icon>` declares all five attribute controls:
+The core checks `attributes`, `attributeTags` and `children` before any hook runs. The fixture `<icon>` declares all five attribute controls:
 
 ```ts
 const icon: CustomTag = {
@@ -41,6 +41,28 @@ An attribute declaration supports:
 Declaring `attributes` makes a closed contract: undeclared attributes and spreads are errors. Omitting `attributes` leaves attributes open.
 
 `attributeTags` is a map from the name after `@` to `{ required?, repeatable? }`. Once present, it is also closed: undeclared names are errors, required names must occur, and a name repeats only when `repeatable: true`.
+
+### Restrict authored children
+
+`children` uses the same `{ required?, repeatable? }` cardinality shape. Once present, only listed plain child names are allowed; omitting it keeps children open.
+
+```ts
+const resource: CustomTag = {
+  children: {
+    item: { required: true, repeatable: true },
+    "#text": { repeatable: true },
+  },
+  transform(call) {
+    return call.content?.children ?? [];
+  },
+};
+```
+
+The reserved contract-vocabulary key `"#text"` permits non-whitespace text and `${…}` / `$!{…}`. Each text node or interpolation counts once; whitespace-only text never counts. Comments, `<const>` and `<define>` declarations are ignored, while a `<define>` call counts by its written name.
+
+`<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent. A required child must appear on every branch, including the implicit empty branch when there is no final `<else>`. A child inside `<for>` needs `repeatable: true` and cannot alone satisfy `required`, because a loop may run zero times. Ordinary child tags count by their written names without inspecting their bodies, even if their transforms output different tags.
+
+Dynamic children (`<${input.tag}/>`), unlisted names, disallowed text, repetitions and missing required children produce positioned errors; compilation stops at the first. The rule runs before children lower and applies equally to transform tags, template tags with declaration-only sidecars and contract-only tags on a target that delegates their names. `children` cannot be combined with `parseOptions.text: true` or `parseOptions.openTagOnly: true`.
 
 ## Change how the caller parses
 
@@ -79,6 +101,7 @@ Discovery reads `parseOptions` without executing the module. Keep the default ex
 | `loc` | The call-site position and the default position for synthetic nodes. |
 | `attrs` | Resolved attributes in source order, including declared defaults. |
 | `content` | The ordinary body as a `Block`, or `null` for no body. |
+| `childTree` | Optional authored-child metadata, also available to `analyze`: `ChildTag` (name), `ChildText`, `ChildDynamic`, `ChildFor` (nodes), and `ChildIf` (branches with `unconditional` and `nodes`); every node has `loc`. Not emitted IR. |
 | `attributeTags` | Resolved `<@name>` blocks; repeats stay as separate entries. |
 | `params` | Tag params as source text. |
 | `var` | The `/var` binding as source text, or `null`. |

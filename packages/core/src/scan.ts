@@ -644,7 +644,7 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
     return loaded;
   };
 
-  for (const key of ["attributes", "attributeTags"] as const) {
+  for (const key of ["attributes", "attributeTags", "children"] as const) {
     Object.defineProperty(definition, key, {
       enumerable: true,
       configurable: true,
