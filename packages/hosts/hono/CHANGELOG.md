@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (jsx-intrinsic-prop-errors, decision 140 (b)):** native-element non-event prop errors now surface at the authored attribute name through the shared JSX emitter, checked against Hono's own JSX types. On the pinned Hono 4.6.20, lowercase `maxlength`/`tabindex` are typed; camelCase `maxLength`/`tabIndex`, unknown props such as `foo`, and `key`/`ref` remain accepted by its `any` attribute index signature, exactly as in plain TSX (lead ruling: host-native parity, not stricter MX types). Invalid `class`, `disabled` and `value` props now report. Event handlers and runtime output are unchanged. See `@mxlang/preact`.
+
 - **Added (jsx-handler-typing, decision 140):** `compileHonoMx` takes the internal, tooling-only `typeCheck` option (see `@mxlang/preact`); runtime output is unchanged with it unset. **Effect on users:** in the editor and `mx-tsc`, native event handlers are now checked against Hono's own JSX types (the DOM's events), as in plain TSX: a mistyped handler is an error at the authored handler, and the bodies of shorthand handlers are type-checked. Hono declares `onDoubleClick` only, so `onDblClick=` is reported as it is in plain TSX.
 
 - **Added (fix-hints-batch, audit item 14):** the unresolved-tag, event-binding, scriptlet and missing-attribute-value hints reach this host through the shared `@mxlang/preact` emitter and `@mxlang/core`.
