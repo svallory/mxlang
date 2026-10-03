@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **A mismatched closing tag in an MX region names the opener's position** (audit item 12). `walkMxRegion` appends ` at line:column` (1-based, UTF-16) of the innermost unclosed tag's `<` to htmljs-parser's `The closing "x" tag does not match the corresponding opening "y" tag`, for `.solid.mx` and `.ng.mx` regions. The error stays at the closer.
+
 - **`mxRegionFragment` parser option, and the `MultipleRoots` error** (TODO
   `angular-ngmx-multi-root`, decision 120). Default off: `<>` stays a TSX
   fragment, so `.solid.mx` is unchanged. On (`@mxlang/angular` sets it for

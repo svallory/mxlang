@@ -633,3 +633,37 @@ describe("decision 114: module-scope resolution through the real parse() pipelin
     expect((error as Error).message).toMatch(/Unexpected token/);
   });
 });
+
+describe("mismatched closing tag names the opener's position", () => {
+  const message = (source: string): string => {
+    try {
+      parseMx(source);
+    } catch (err) {
+      return (err as Error).message.split("\n")[0] ?? "";
+    }
+    throw new Error("expected a parse error");
+  };
+
+  it("appends the 1-based line:column of the unclosed `<`", () => {
+    const source = "const el = <div>\n  <p>x\n</div>;\n";
+    // `<p>` is at line 2, column 3 (1-based).
+    expect(message(source)).toContain(
+      'The closing "div" tag does not match the corresponding opening "p" tag at 2:3',
+    );
+  });
+
+  it("names the innermost unclosed opener in a nested case", () => {
+    const source = "const el = <div><section><p>x</div>;\n";
+    expect(message(source)).toContain(
+      'does not match the corresponding opening "p" tag at 1:26',
+    );
+  });
+
+  it("counts columns in UTF-16 code units after a non-ASCII prefix", () => {
+    // "é" is one unit, "😀" two: `<p>` starts after `const s = "é😀"; const el = <div>`.
+    const prefix = 'const s = "é😀"; const el = <div>';
+    const source = `${prefix}<p>x</div>;\n`;
+    const col = prefix.length + 1;
+    expect(message(source)).toContain(`opening "p" tag at 1:${col}`);
+  });
+});

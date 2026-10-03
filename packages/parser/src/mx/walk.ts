@@ -122,6 +122,37 @@ function fragmentMessage(message: string): string {
   return message.replaceAll(`"\${_}"`, '"<>"');
 }
 
+/**
+ * htmljs-parser's mismatched-close message names both tags but reports only
+ * the closer's position. The innermost unclosed element is the "corresponding
+ * opening" tag it names, so append where that element's `<` is, as 1-based
+ * `line:column` (UTF-16 units). A fragment's synthetic root starts at the
+ * region's `<>`, so it is positioned correctly too.
+ */
+function withOpenerPosition(
+  message: string,
+  source: string,
+  opener: MxElement | null,
+): string {
+  if (
+    !opener ||
+    !/^The closing ".*" tag does not match the corresponding opening ".*" tag$/.test(
+      message,
+    )
+  ) {
+    return message;
+  }
+  let line = 1;
+  let lineStart = 0;
+  for (let i = 0; i < opener.range.start; i++) {
+    if (source.charCodeAt(i) === 10) {
+      line++;
+      lineStart = i + 1;
+    }
+  }
+  return `${message} at ${line}:${opener.range.start - lineStart + 1}`;
+}
+
 /** Thrown from a handler to stop htmljs-parser once the root tag closes. */
 class StopWalk extends Error {}
 
@@ -400,8 +431,9 @@ export function walkMxRegion(
       if (done) return;
       // An error that lands on the synthetic open tag is about the
       // fragment's own `<>`.
+      const message = fragment ? fragmentMessage(range.message) : range.message;
       errors.push({
-        message: fragment ? fragmentMessage(range.message) : range.message,
+        message: withOpenerPosition(message, source, top()),
         start: Math.max(range.start + base, start),
         end: Math.max(range.end + base, start),
       });
