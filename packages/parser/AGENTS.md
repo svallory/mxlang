@@ -58,7 +58,7 @@ Marko file with the same meaning for the structural core.
 no product path of MX accepts or advertises `.marko` any more — MX only
 supports the MX 1.0 subset of Marko syntax, so treating an arbitrary
 `.marko` file as MX would silently claim support it does not have. `.mx`
-(plus `.solid.mx` and `.amx`, different file kinds) is the only template
+(plus `.solid.mx` and `.astro.mx`, different file kinds) is the only template
 extension across every host loader (`@mxlang/html/bun`, `@mxlang/hono/bun`,
 `@mxlang/vite-plugin`), the language server, the TypeScript plugin/`mx-tsc`,
 and the VS Code/Zed extensions. Porting a Marko component that stays within

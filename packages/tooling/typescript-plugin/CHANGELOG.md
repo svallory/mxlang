@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Changed: `.amx` is now `.astro.mx` (amx-to-astro-mx, decision 134)
+
+The AstroMX language plugin claims `.astro.mx` instead of `.amx`, with no alias, and the `.mx` plugin declines `x.astro.mx` as it declines `.solid.mx` and `.ng.mx`. The diagnostic `source` string for these files is `astromx` (it was `amx`). `createAmxLanguagePlugin` and the module name keep `amx`.
+
 ### Added: host-policy diagnostics (host-policy-diagnostics-tsc-tsserver)
 
 An unknown `mx.host` or a malformed `package.json` was silent in tsserver (the file just got the fallback host). Every language plugin now records what `resolveHostPolicyDetailed` said for each file it compiles, per plugin instance (`getHostPolicyDiagnostics(fileName?)`), and tsserver reports it as a `TS80003` warning on that file at 1:1, naming `package.json:line:col` (tsserver reports no diagnostics on a `package.json`). `mx-tsc` prints the same records positioned in the `package.json`. New exports: `HOST_POLICY_DIAGNOSTIC_CODE`, `hostPolicyMessage`, type `HostPolicyDiagnostic`. The text is the language server's (`<package.json>:line:col: <message>`, the path said once; `hostPolicyText` is the message without core's leading path), and `source` follows the file kind (`mx`, `solidmx`, `ngmx`, `amx`). Known limit: the plugin does not watch `package.json`, so a fixed manifest clears the warning only once the `.mx` is edited or the project reloads.

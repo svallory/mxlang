@@ -98,7 +98,7 @@ verify`) cannot exercise, because they need a real Zed window:
   reports it in Zed's Problems panel / inline diagnostics, alongside
   Marko's own language server's output for the same file (see README.md
   "Language server" for the dual-server setup this depends on).
-- **`.amx` highlighting**: open an `.amx` file and confirm the `---` fence
+- **`.astro.mx` highlighting**: open an `.astro.mx` file and confirm the `---` fence
   highlights as TypeScript and the body highlights as Marko/MX, per
   README.md "What you get in Zed today". This is injection-based and has no
   automated test today (`highlight-smoke.sh` only covers `.solid.mx`).

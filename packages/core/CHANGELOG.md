@@ -10,6 +10,10 @@
 
 `<div class="a" class="b">` (or `on-click` twice) now raises one `MxWarning` per repeated attribute, positioned at the repeat's name and naming the earlier occurrence as a 1-based `line:column` (decision 133). Never an error; emitted output is byte-identical to before. Marko 6.3.51 accepts duplicates silently. Names compare case-sensitively on the resolved attribute name; a spread and `onClick` beside `on-click` do not count. The warning reaches `mx-tsc` and the host compile APIs' `warnings` lists through the existing channel, and a Vite build through core's `console.warn` fallback (build still succeeds). An mx-only lint recorded in `divergences.md`; spec §4 "Duplicate attributes".
 
+### Changed: `astro` joins `HOST_MODULE_SEGMENTS` (amx-to-astro-mx, decision 134)
+
+The Astro template kind is renamed from `.amx` to `.astro.mx`, so `hostModuleSegment("card.astro.mx")` is now `"astro"` and a file of that kind under `tags/` is reported as a host module file instead of being silently skipped (it was `.amx`, without the `.mx` suffix). No other core change.
+
 ### Breaking: `claimsTag`/`HostTag` renamed to `isDelegatedTag`/`DelegatedTag` (delegated-tag-rename, decision 132)
 
 **Breaking, no aliases.** `HostDeclarations.claimsTag` is now `isDelegatedTag`, `HostDeclarations.resolveHostTag` is now `resolveDelegatedTag`, the IR kind `HostTag` (the `kind` literal and the type) is now `DelegatedTag`, and the `ctx.build.hostTag` builder is now `ctx.build.delegatedTag`. `Emitter.hostTag` is now `Emitter.delegatedTag`; the exported helper `isContractOnlyClaimed` is now `isContractOnlyDelegated`. Hosts must rename these; behaviour, output and diagnostics are unchanged. Earlier entries below keep the names they shipped with. Spec §9.8.

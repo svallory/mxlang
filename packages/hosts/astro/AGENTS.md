@@ -57,7 +57,7 @@ Four facts worth knowing before editing it:
   else decision 114/115 applies) and feeds them into `ctx.imports` before
   lowering — the same operator-ruling extension `.solid.mx`'s
   `moduleBindings` already gave decision 114, since Astro's local-component
-  form *is* a fence import and a `.amx` template body has no MX-level
+  form *is* a fence import and a `.astro.mx` template body has no MX-level
   `import`/`<define>`/`<const>` of its own. `isComponent` used to be a bare
   `/^[A-Z]/` test, so `<TotallyUndefined/>` (no fence import) silently
   emitted a JSX reference to nothing; `rejectUnknownTag` now reports Marko's
@@ -96,32 +96,39 @@ Four facts worth knowing before editing it:
   component). `examples/astro-static/e2e/build-errors.spec.ts` asserts the
   failing build.
 
-### `.amx`: AstroMX templates (decisions 76c, 78)
+### `.astro.mx`: AstroMX templates (decisions 76c, 78)
 
-An `.amx` file is an **Astro component whose template is MX** — a different
+An `.astro.mx` file is an **Astro component whose template is MX** — a different
 file kind from `.mx`, not a variant of it. A `.mx` component compiles to a
 runtime-free `(input) => string` and is called *through* this package's
-renderer; an `.amx` component **becomes** an Astro component: the `---` fence
+renderer; an `.astro.mx` component **becomes** an Astro component: the `---` fence
 passes through byte for byte with Astro's own semantics (`Astro.props`,
 imports, `getStaticPaths`), the MX template after it is lowered to Astro
-template syntax, and the whole file goes to Astro's compiler. Components,
-layouts and pages, all from one extension (`addPageExtension(".amx")`).
+template syntax, and the whole file goes to Astro's compiler. Components and
+layouts only: an `.astro.mx` file is **not** a page extension (see the next
+list).
 
 Four facts worth knowing before editing `src/astro-template.ts` or
 `src/vite-templates.ts`:
 
-- **The extension is single-dot because of Astro's router, not taste.**
-  `.astro.mx` was the first spelling and works for components, but Astro's
-  route collection keys on `path.extname(basename)`, which returns only the
+- **An `.astro.mx` file cannot be a page, because of Astro's router**
+  (decision 134 and its addendum). Astro's route collection keys on `path.extname(basename)`, which returns only the
   **last** extension segment (`create-manifest.js`; `parse-route.js` does the
   same through `@astrojs/internal-helpers`' `fileExtension`, which is
   `path.split(".").pop()`). Measured against astro@7.3.2: a `page.astro.mx`
-  under `src/pages` is `continue`d as an unsupported file type, and once `.mx`
-  is also registered it is routed to `/page.astro/` — a literal `.astro` in
-  the URL. Note `dist/core/util.js`'s `endsWithPageExt` *does* use `endsWith`,
-  so `isPage()` accepts what route collection rejects: two code paths in one
-  version disagree. `.amx` sidesteps all of it.
-- **This is `Emitter<string>` over core's IR.** `.amx` uses `parseFragment` for
+  under `src/pages` is routed to `/page.astro` (`.mx` is a registered page
+  extension) — a literal `.astro` in the URL — and `injectRoute` cannot repair
+  it. Note `dist/core/util.js`'s `endsWithPageExt` *does* use `endsWith`, so
+  `isPage()` accepts what route collection rejects: two code paths in one
+  version disagree. So `.astro.mx` is never registered with
+  `addPageExtension`, and `src/pages-guard.ts` (called from `astro:config:setup`)
+  throws a positioned error listing every `.astro.mx` file under
+  `<srcDir>/pages` (it mirrors Astro's walk, `create-manifest.js:88-96`: a name
+  starting with `_` and a dot-name other than `.well-known` are skipped, and
+  symlinked directories are entered, with real paths tracked against cycles), with the fix: write `about.astro` and import
+  the component, or write the page as `.mx`. When Astro matches the longest
+  registered page extension, pages can follow with no language change.
+- **This is `Emitter<string>` over core's IR.** `.astro.mx` uses `parseFragment` for
   fence-relative positions, then `lower()` and the shared `drive`/`emit`
   traversal. Astro-specific decisions happen in `HostDeclarations`; the
   emitter consumes IR and opaque `DelegatedTag.data`, never Marko nodes. `static`
@@ -129,13 +136,13 @@ Four facts worth knowing before editing `src/astro-template.ts` or
 - **Typing composes two maps.** The emitter records the unchanged fence,
   expressions, attribute names, `<for>` params, and whole hoisted blocks at
   their generated write offsets. `createAmxLanguagePlugin` composes those
-  `.amx`-to-Astro spans with `@astrojs/compiler/sync`'s `convertToTSX` map;
+  `.astro.mx`-to-Astro spans with `@astrojs/compiler/sync`'s `convertToTSX` map;
   only intersections surviving both stages become Volar `CodeMapping`s.
-  `.amx` is registered only by `{ astro: true }` and `mx-tsc --astro`.
+  `.astro.mx` is registered only by `{ astro: true }` and `mx-tsc --astro`.
 - **The Vite mechanism is forced.** Astro's `astro:build` `transform` filters
   `include: [/\.astro$/, /\.astro\?/]` **and** re-checks
   `if (!parsedId.filename.endsWith(".astro")) return;`, so an `enforce: "pre"`
-  transform on the real `.amx` id can never reach Astro's compiler. The module
+  transform on the real `.astro.mx` id can never reach Astro's compiler. The module
   id itself must end in `.astro`: `resolveId` appends that suffix to whatever
   Vite's own resolver returns, `load` returns the lowered source. Same shape
   `@mxlang/vite-plugin` already uses for `.solid.mx`.
@@ -155,16 +162,16 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   Astro's own render pass, long after the fence ran. This is not the same gap
   as the JSX-host/Solid `/var`-in-callback-scope restriction (spec's `/var`
   section, MX 2 `tag-var-in-callback-scope`) — that one is liftable by giving
-  a callback scope a statement position; `.amx` has no callback scope to give
+  a callback scope a statement position; `.astro.mx` has no callback scope to give
   one to. The error message explains the ordering and points at the
   workaround: call the unit directly from the fence's own TypeScript, an
   ordinary function call since a `.mx` unit compiled for this host still
   exports the plain `{ value, output }` shape.
 
 The lowering table and the full error list live in
-`packages/hosts/astro/README.md` "AstroMX templates (`.amx`)". Nothing silently
+`packages/hosts/astro/README.md` "AstroMX templates (`.astro.mx`)". Nothing silently
 degrades: every construct this target cannot express is a build error naming
-the construct, the reason and the `.amx` line.
+the construct, the reason and the `.astro.mx` line.
 
 Astro projects get per-file `.mx` types from
 `@mxlang/typescript-plugin`, not an ambient wildcard. The old
@@ -173,12 +180,12 @@ deleted: they erased every component's real `Input`. Configure one Volar
 plugin entry, `{ "name": "@mxlang/typescript-plugin", "astro": true }`; do
 not also list `@astrojs/ts-plugin`, because the second Volar tsserver plugin is
 silently skipped. Command-line checks use `mx-tsc --astro --noEmit`.
-Both paths also type-check `.amx` itself through the composed AstroMX plugin;
-without Astro mode, `.amx` files are ignored.
+Both paths also type-check `.astro.mx` itself through the composed AstroMX plugin;
+without Astro mode, `.astro.mx` files are ignored.
 
 ### Attribute tags (decisions 106–107)
 
-This host declares `attrTags: 2`; `.amx` emits only core's resolved
+This host declares `attrTags: 2`; `.astro.mx` emits only core's resolved
 `attrTagProps` plan. A singular tag is a `<Fragment slot="name">`, and a
 singular plan under `<if>`/`<else if>`/`<else>` becomes a conditional named
 slot so Astro receives only the taken branch, including nested conditionals
@@ -192,11 +199,11 @@ Astro's renderer gives a named slot one observable payload, `() => string`.
 `renderToStaticMarkup` also installs that same thunk as its own `.content`
 property, so the default data declaration and `as: "renderable"` are two views
 of the same slot; no attribute data is invented. `@mxlang/astro` exports the
-matching `AttrTag<C>` and `.amx` inserts its type-only import when core sets
+matching `AttrTag<C>` and `.astro.mx` inserts its type-only import when core sets
 `needsAttrTagImport`.
 
 **Fixed: `custom-tags-template-error-positions` (round 2).** A `TranslateError`
-raised while compiling a tag template (`tags/x.mx`) called from an `.amx`
+raised while compiling a tag template (`tags/x.mx`) called from an `.astro.mx`
 file carries `.file`, the template's own path (spec §2's third position
 rule) — and both conversion sites here dropped it. `lowerAstroMx`'s catch
 (`astro-template.ts`) converted every `TranslateError` to
@@ -204,16 +211,16 @@ rule) — and both conversion sites here dropped it. `lowerAstroMx`'s catch
 all, so the information was lost one layer before it could reach Vite.
 `AstroTemplateError` now carries an optional `file`, filled from
 `error.file` at that same conversion. `vite-templates.ts`'s `load` catch
-then built its `.frame` from the **`.amx` file's own source** unconditionally
+then built its `.frame` from the **`.astro.mx` file's own source** unconditionally
 — so a compile error raised inside a tag template was reported at build
-time against the `.amx` file's text at the template's line/column: a
+time against the `.astro.mx` file's text at the template's line/column: a
 line/column that means something in a different file, read against the
 wrong one (the same "coincidence, not a mapping" failure class the
 TS-plugin/language-server fix was built to close, see
 `packages/tooling/typescript-plugin/AGENTS.md`). It now reads the named
 `.file`'s own source through `readTemplateSource` (`vite-templates.ts`,
 round 3/4) to build `.id`/`.loc`/`.frame` when one is set, falling back to
-the `.amx` source exactly as before when it is not. That helper guards its
+the `.astro.mx` source exactly as before when it is not. That helper guards its
 own read (the named file may have vanished since the compile's own earlier
 read) and takes an injectable reader for exactly that reason — see
 `@mxlang/vite-plugin`'s `AGENTS.md` for the full rationale and the

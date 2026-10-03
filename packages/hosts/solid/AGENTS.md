@@ -104,7 +104,7 @@ Three facts worth knowing before touching it:
   `packages/tooling/typescript-plugin/src/index.test.ts`), named so a future
   fix flips the assertion.
 - **It is an `Emitter<string>`, same shape as `@mxlang/astro`'s
-  `.amx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
+  `.astro.mx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or
   `<Repeat count from>` (`from=`/`to=`/`until=`, with `step` folded into a
   per-row callback when present); `<try>` is a `DelegatedTag` (`isDelegatedTag`/

@@ -2,6 +2,10 @@
 
 ## 0.0.0 (unreleased)
 
+### Changed: `.amx` is now `.astro.mx` (amx-to-astro-mx, decision 134)
+
+The `astromx` language is associated with `.astro.mx` (it was `.amx`), with no alias. Its TextMate scope is `source.astromx` (it was `source.amx`), following `source.solidmx` and `source.ngmx`.
+
 ### Fixed: shipped bundles resolve their own dependencies, not the build tree's
 
 Bun's CJS output baked `import.meta.url` as the build machine's absolute path, so the LS and plugin bundles loaded `@marko/compiler` through `createRequire("file:///<build tree>/...")`: the workspace copy where they were built, nothing on a user's machine. The bundled build now relocates them (`scripts/bundled-build.ts`), `check-vsix` fails on a `file:///` literal or the build root in a shipped bundle, and `ls-smoke` runs with the server's cwd outside the repo, no `NODE_PATH`, waits for a clean `exit` before any kill, and runs `pgrep` on failure too. CI also runs the smoke with the server on Node 20.9.0 (VS Code 1.90's).

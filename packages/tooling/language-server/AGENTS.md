@@ -69,8 +69,11 @@ unknown `mx.host` that resolved to the html default. An unknown host on an
 test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`. Real Angular
 wiring is TODO `ls-angular-host-wiring`. The `.ng.mx` check is the first
 branch, ahead of every host branch and case-insensitive (like the TS plugin's
-`isNgMx`). Known gap, pre-existing: an `.amx` file is not routed by kind in the
-LS, so it compiles under whatever host policy resolves.
+`isNgMx`). An `.astro.mx` file (decision 134) is routed by kind too, before the
+`.ng.mx` check, and is deliberately silent: the server does not load
+`@mxlang/astro`, so Astro-template diagnostics come from `mx-tsc --astro` and
+the TS plugin, and the file must never reach the `.mx` compile (it ends in
+`.mx`). Test: `diagnose.test.ts`, "the Astro template file kind".
 
 **Zed finding** (brief item 4): there is **no zero-Rust path** to register a
 second `[language_servers.*]` entry in Zed's `extension.toml`. Reading

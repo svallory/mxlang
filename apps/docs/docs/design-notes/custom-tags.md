@@ -296,7 +296,7 @@ emits an import plus a call.*
   hoisting the call out of it reads bindings that do not exist there and runs
   once for a body rendered N times. Invariant §7.5-8 applies: the escape is a
   positioned error, never emitted. The call itself, without `/var`, works
-  everywhere. html and Astro `.mx` support the nested case; `/var` in a `.amx`
+  everywhere. html and Astro `.mx` support the nested case; `/var` in a `.astro.mx`
   template is refused outright, since it has no statement position at all.
   Lifting the restriction means a declaration per callback scope — MX 2.
 

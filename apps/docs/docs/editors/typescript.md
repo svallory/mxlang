@@ -6,7 +6,7 @@ description: "Type-check SolidMX, whole-file MX, and AstroMX in editors and CI."
 # TypeScript
 
 TypeScript cannot parse a `.solid.mx` module, a whole-file `.mx` / `.marko`
-template, or an AstroMX `.amx` file. Without help, an editor cannot derive
+template, or an AstroMX `.astro.mx` file. Without help, an editor cannot derive
 their exports and an import is unresolved. MX projects the source to the
 host's generated TypeScript and keeps diagnostics mapped to the original file.
 
@@ -113,9 +113,9 @@ skipped. Configure only MX's plugin and let it compose Astro's language plugin:
 
 Do not also list `@astrojs/ts-plugin`. Install the optional
 `@astrojs/language-server@2.16.16` peer when enabling `astro: true`.
-That flag also enables `.amx`: MX first lowers its template to Astro syntax,
+That flag also enables `.astro.mx`: MX first lowers its template to Astro syntax,
 then composes the emitter spans with Astro's TSX source map. Without
-`astro: true`, `.amx` files are intentionally ignored.
+`astro: true`, `.astro.mx` files are intentionally ignored.
 
 ## In CI
 
@@ -128,7 +128,7 @@ command-line typecheck would silently miss what the editor reports. Use
 { "scripts": { "typecheck": "mx-tsc --noEmit" } }
 ```
 
-Astro projects use `mx-tsc --astro --noEmit` so `.astro` and `.amx` files and
+Astro projects use `mx-tsc --astro --noEmit` so `.astro` and `.astro.mx` files and
 the MX components they import enter the same check.
 
 The difference is total rather than partial — plain `tsc` never opens a
@@ -167,4 +167,4 @@ The TypeScript plugin provides robust position mapping back to your original sou
 
 ## Composed Plugin and `astro: true`
 
-When using the Astro host, the TypeScript plugin acts as a composed plugin. It maps `.mx` components to their underlying `.astro` JSX mappings. The command `mx-tsc --astro` runs type checking across the workspace with the Astro extensions enabled, ensuring that both `.mx` and `.amx` files are correctly typed alongside `.astro` components.
+When using the Astro host, the TypeScript plugin acts as a composed plugin. It maps `.mx` components to their underlying `.astro` JSX mappings. The command `mx-tsc --astro` runs type checking across the workspace with the Astro extensions enabled, ensuring that both `.mx` and `.astro.mx` files are correctly typed alongside `.astro` components.

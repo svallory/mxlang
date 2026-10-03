@@ -6,7 +6,7 @@ The plugin and the language server, each as a self-contained build copied into `
 
 ### How the TS plugin is shipped
 
-`contributes.typescriptServerPlugins` names `@mxlang/typescript-plugin`, and VS Code's TypeScript extension loads it from `<extension dir>/node_modules`. The plugin is a private workspace package and not a dependency of the extension, and `vsce package --no-dependencies` never ships `node_modules` (vsce globs with `ignore: node_modules/**`), so a plain `vsce package` produced a VSIX with no plugin and every TS-plugin feature (`.mx`, `.solid.mx`, `.ng.mx`, `.amx`) dead in an installed extension.
+`contributes.typescriptServerPlugins` names `@mxlang/typescript-plugin`, and VS Code's TypeScript extension loads it from `<extension dir>/node_modules`. The plugin is a private workspace package and not a dependency of the extension, and `vsce package --no-dependencies` never ships `node_modules` (vsce globs with `ignore: node_modules/**`), so a plain `vsce package` produced a VSIX with no plugin and every TS-plugin feature (`.mx`, `.solid.mx`, `.ng.mx`, `.astro.mx`) dead in an installed extension.
 
 `bun run package` therefore (1) builds the extension, (2) runs the plugin package's own **self-contained build** (`bun run build:bundled` in `packages/tooling/typescript-plugin`, output `bundle/`, gitignored and outside the plugin's `files`), and (3) `scripts/stage-vsix.ts` copies that output into a stage, `.vsix-stage/` (gitignored), and packs it:
 
@@ -23,7 +23,7 @@ vsce must walk dependencies itself (`npm list --production`, a vsce internal, no
 
 `bun run tsserver-load` (`scripts/tsserver-load.ts`, also a CI step) is the real proof: it unpacks the VSIX and runs the plugin's `src/tsserver-load.test.ts` against `extension/` (`MX_VSIX_EXTENSION_DIR`), starting ONE real tsserver the way VS Code does (`--globalPlugins @mxlang/typescript-plugin --pluginProbeLocations <extension dir>`), with a request timeout and a kill on hang or exit. It needs no VS Code and no installed VSIX.
 
-Known limitation: `{ astro: true }` composition for `.amx` does not work from the VSIX, because the plugin's `createRequire(import.meta.url)("@astrojs/language-server/...")` resolves from the plugin's location and the optional peer is not shipped. Fixing it means resolving the peer from the project.
+Known limitation: `{ astro: true }` composition for `.astro.mx` does not work from the VSIX, because the plugin's `createRequire(import.meta.url)("@astrojs/language-server/...")` resolves from the plugin's location and the optional peer is not shipped. Fixing it means resolving the peer from the project.
 
 ### The language server
 

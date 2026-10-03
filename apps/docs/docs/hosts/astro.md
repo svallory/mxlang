@@ -1,6 +1,6 @@
 ---
 title: "Astro host"
-description: "Render .mx components and pages, and .amx templates, to static markup inside an Astro project — no islands, no client JS."
+description: "Render .mx components and pages, and .astro.mx templates, to static markup inside an Astro project — no islands, no client JS."
 ---
 
 # Astro host
@@ -119,9 +119,9 @@ export const prerender = true;
 
 Pages compile under the same strict policy as components, and have no `Astro.slots` — nothing renders a page inside another component's slot.
 
-## `.amx` templates
+## `.astro.mx` templates
 
-An `.amx` file is an Astro component whose template is written in MX instead of JSX. This is a different kind of file from `.mx`: a `.mx` component compiles to a runtime-free function and is *called through* this host's renderer, while an `.amx` component *becomes* a real Astro component. Its `---` frontmatter fence passes through untouched, with ordinary Astro semantics — `Astro.props`, imports, `getStaticPaths` — and only the markup after the fence is MX.
+An `.astro.mx` file is an Astro component whose template is written in MX instead of JSX. This is a different kind of file from `.mx`: a `.mx` component compiles to a runtime-free function and is *called through* this host's renderer, while an `.astro.mx` component *becomes* a real Astro component. Its `---` frontmatter fence passes through untouched, with ordinary Astro semantics — `Astro.props`, imports, `getStaticPaths` — and only the markup after the fence is MX.
 
 ```astro
 ---
@@ -141,7 +141,7 @@ const { title, members } = Astro.props as Props;
 </else>
 ```
 
-Components, layouts and pages all come from this one extension — `src/pages/about.amx` routes to `/about`.
+`.astro.mx` is for components and layouts. **A page cannot be `.astro.mx`**: Astro strips only the last extension of a route file, so `src/pages/about.astro.mx` would route to `/about.astro`, not `/about`. The integration reports every `.astro.mx` file under `src/pages` as an error, in `astro dev` and `astro build` (decision 134, addendum). Write `about.astro` and import the `.astro.mx` component from it, or write the page as `about.mx`.
 
 ### Lowering
 
@@ -173,12 +173,12 @@ Nothing silently degrades: every construct this target cannot express is a build
 - `<await>` — needs a suspense-capable renderer.
 - `<return>` — hands a value to a parent template; an Astro component has none.
 - `<const>` — declare the value in the `---` fence instead.
-- `<define>` — Astro has no local component form; extract it into its own `.amx` file.
+- `<define>` — Astro has no local component form; extract it into its own `.astro.mx` file.
 - `<try>` — needs an error boundary; Astro renders statically.
 - Tag params, and attribute-tag params — these lower to a render prop, and Astro passes markup through slots, not functions.
 - Attribute tags on a plain HTML element — named slots exist only on a component.
 - Attribute methods (`onClick() { … }`) — an event handler needs a runtime.
-- Expression-valued event attributes (`onClick=fn`, `on-my-event=fn`) — same reason: `.amx` renders static markup at build time and has no runtime to bind a handler to. A *string*-valued `onclick="alert(1)"` is an ordinary static attribute and passes through verbatim; MX does not invent a policy against inline handler strings.
+- Expression-valued event attributes (`onClick=fn`, `on-my-event=fn`) — same reason: `.astro.mx` renders static markup at build time and has no runtime to bind a handler to. A *string*-valued `onclick="alert(1)"` is an ordinary static attribute and passes through verbatim; MX does not invent a policy against inline handler strings.
 - `:=` — a two-way binding needs a reactive runtime.
 - A dynamic tag name (`<${expr}>`) — Astro resolves component names statically.
 
@@ -187,7 +187,7 @@ Nothing silently degrades: every construct this target cannot express is a build
 The event rule is the MX-wide one — an element's `on<Name>` lowercases to the
 DOM event name, `on-<exact>` is verbatim — but on this host every
 expression-valued form is a compile error: an event handler requires a
-runtime, and an `.amx` template renders static markup at build time. The
+runtime, and an `.astro.mx` template renders static markup at build time. The
 error names the attribute and the host. `on:` / `oncapture:` are rejected
 with a fix-it naming `on-<exact>`; a string-valued `onclick="…"` stays an
 ordinary attribute; an `on*` attribute on a component is an ordinary prop.
@@ -206,7 +206,7 @@ Each `.mx` file gets **its own** `Input` type, derived from the file, through th
 }
 ```
 
-Do not also list `@astrojs/ts-plugin`: a second Volar tsserver plugin is silently skipped, so adding it would disable this one. `astro: true` composes Astro's own language plugin, which is what also type-checks `.amx` itself; without it, `.amx` files are ignored.
+Do not also list `@astrojs/ts-plugin`: a second Volar tsserver plugin is silently skipped, so adding it would disable this one. `astro: true` composes Astro's own language plugin, which is what also type-checks `.astro.mx` itself; without it, `.astro.mx` files are ignored.
 
 Command-line checks use `mx-tsc --astro --noEmit`, not `tsc --noEmit` — `tsc` ignores `compilerOptions.plugins` entirely, so a plain `tsc` run would miss every error inside an MX file.
 
@@ -214,4 +214,4 @@ There is deliberately no ambient `declare module "*.mx"` shim. A shim asserts on
 
 ## Example
 
-`examples/astro-static` is a full static Astro site built on this host: `.mx` components with props and named slots, `.mx` pages with `getStaticPaths` and a layout, an `.amx` template, and an e2e suite that asserts no page contains a `<script>` — the host's whole claim. It also asserts the two builds that *must* fail: `<let>` in a component, and `client:load` on one.
+`examples/astro-static` is a full static Astro site built on this host: `.mx` components with props and named slots, `.mx` pages with `getStaticPaths` and a layout, an `.astro.mx` template, and an e2e suite that asserts no page contains a `<script>` — the host's whole claim. It also asserts the two builds that *must* fail: `<let>` in a component, and `client:load` on one.

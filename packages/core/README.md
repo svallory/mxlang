@@ -25,7 +25,7 @@ It depends on `@marko/compiler` and nothing else.
 | `escape` | Its own integration: a Vite plugin, a Bun loader, a TypeScript plugin |
 
 `@mxlang/html` is the first host (vanilla HTML strings); `@mxlang/astro`
-(`.amx`, expression-shaped Astro syntax) and `@mxlang/solid` (SolidMX's
+(`.astro.mx`, expression-shaped Astro syntax) and `@mxlang/solid` (SolidMX's
 `.solid.mx` bridge, Solid JSX text) are the other two.
 
 ## The HostDeclarations contract
@@ -634,12 +634,12 @@ one to read, because it reproduces its predecessor's output byte for byte —
 including two details that look accidental and are not: literals merge across
 node boundaries into a single `out +=`, and `$forN` names a loop temporary from
 the emitted-line count rather than a loop counter. The expression-shaped
-example is `@mxlang/astro`'s `.amx` emitter: an `Emitter<string>` producing
+example is `@mxlang/astro`'s `.astro.mx` emitter: an `Emitter<string>` producing
 ternaries, `.map` expressions, `class:list` and Astro named slots.
 
 Statement tags lower into `Ir.imports`, `Ir.hoisted` and
 `Ir.inputInterface`; each host places them in its own module shape. This is
-also how `.amx` moves a template `static` statement into Astro frontmatter.
+also how `.astro.mx` moves a template `static` statement into Astro frontmatter.
 
 ## Tests
 

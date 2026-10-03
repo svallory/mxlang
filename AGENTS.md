@@ -83,13 +83,13 @@ Conventional commits: `type(scope): summary`.
 
 ## Architecture
 
-A `.mx`/`.solid.mx`/`.ng.mx`/`.amx` template flows through the system as follows:
+A `.mx`/`.solid.mx`/`.ng.mx`/`.astro.mx` template flows through the system as follows:
 
-1. **Parse.** For whole-file `.mx`, `@marko/compiler` parses the Marko AST directly. For `.solid.mx` and `.ng.mx`, `@mxlang/parser` (a vendored `@babel/parser` fork) finds MX regions inside a TypeScript module. For `.amx`, `@mxlang/astro`'s `lowerAstroMx` (`packages/hosts/astro/src/astro-template.ts`) splits the file's `---` fence from its MX template body itself — no tree-sitter on this path; `packages/editors/tree-sitter-amx` is a separate, editor-only grammar for Zed syntax highlighting.
+1. **Parse.** For whole-file `.mx`, `@marko/compiler` parses the Marko AST directly. For `.solid.mx` and `.ng.mx`, `@mxlang/parser` (a vendored `@babel/parser` fork) finds MX regions inside a TypeScript module. For `.astro.mx`, `@mxlang/astro`'s `lowerAstroMx` (`packages/hosts/astro/src/astro-template.ts`) splits the file's `---` fence from its MX template body itself — no tree-sitter on this path; `packages/editors/tree-sitter-amx` is a separate, editor-only grammar for Zed syntax highlighting.
 2. **Lower.** `@mxlang/core` (`packages/core/src/lower.ts`) consumes the Marko AST and resolves it into a host-independent IR (`packages/core/src/ir.ts`) — structural constructs (`<if>`, every `<for>` form, `<define>`, custom tags, `<try>`) become IR nodes, never host-specific code.
 3. **Emit.** Each host implements `Emitter<Out>` over that IR: `@mxlang/html` emits plain strings; a shared JSX emitter (`@mxlang/preact`) is reused by `@mxlang/react` and `@mxlang/hono`; `@mxlang/solid` emits Solid 2 JSX text; `@mxlang/astro` emits Astro template syntax; `@mxlang/angular` emits Angular template strings.
 4. **`.solid.mx` path.** `@mxlang/parser` finds each MX region and hands it to `@mxlang/solid`'s `compileSolidMx`, which runs it through `@mxlang/core`'s `parseFragment` and splices the emitted JSX text back into the surrounding TypeScript AST at the same span.
-5. **Tooling.** `@mxlang/vite-plugin` is the primary dev integration; `@mxlang/typescript-plugin`/`mx-tsc` type-check `.mx`/`.solid.mx`/`.ng.mx`/`.amx` (`.ng.mx` gets TypeScript semantics in editors and `mx-tsc`, plus Angular template diagnostics in `mx-tsc` only via `@mxlang/angular-checker` with `@angular/compiler-cli` resolved from the user's project; the editor path and the language server land later) via a Volar virtual-file projection; `@mxlang/language-server` publishes host-policy diagnostics Marko's own LS can't see; editor support lives in `packages/editors/{vscode,zed}`.
+5. **Tooling.** `@mxlang/vite-plugin` is the primary dev integration; `@mxlang/typescript-plugin`/`mx-tsc` type-check `.mx`/`.solid.mx`/`.ng.mx`/`.astro.mx` (`.ng.mx` gets TypeScript semantics in editors and `mx-tsc`, plus Angular template diagnostics in `mx-tsc` only via `@mxlang/angular-checker` with `@angular/compiler-cli` resolved from the user's project; the editor path and the language server land later) via a Volar virtual-file projection; `@mxlang/language-server` publishes host-policy diagnostics Marko's own LS can't see; editor support lives in `packages/editors/{vscode,zed}`.
 6. **Oracle.** `packages/oracle` is the byte/semantic-parity gate — compares MX output against Marko's own render (`oracle:marko`), the JSX hosts' own renderers (`oracle:preact`/`oracle:react`/`oracle:hono`), Solid's compiler (`oracle`), and Angular's compiler (`oracle:angular`).
 
 See `README.md`'s package table for the npm-name-to-dir mapping and each package's own `AGENTS.md` (indexed below) for its internals.
@@ -123,14 +123,14 @@ Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md`
 
 | Path | Covers |
 |---|---|
-| `packages/parser/AGENTS.md` | `@mxlang/parser`; `.mx`/`.solid.mx`/`.amx` extension identity; the four Marko facts |
+| `packages/parser/AGENTS.md` | `@mxlang/parser`; `.mx`/`.solid.mx`/`.astro.mx` extension identity; the four Marko facts |
 | `packages/core/AGENTS.md` | `@mxlang/core`: IR, lowering, custom tags, `<try>`, tag discovery |
 | `packages/hosts/html/AGENTS.md` | `@mxlang/html`: string target, policy table, Bun loader, `.mx` import typing |
 | `packages/hosts/solid/AGENTS.md` | `@mxlang/solid` |
 | `packages/hosts/preact/AGENTS.md` | `@mxlang/preact` |
 | `packages/hosts/react/AGENTS.md` | `@mxlang/react` |
 | `packages/hosts/hono/AGENTS.md` | `@mxlang/hono` |
-| `packages/hosts/astro/AGENTS.md` | `@mxlang/astro`; `.amx` AstroMX templates |
+| `packages/hosts/astro/AGENTS.md` | `@mxlang/astro`; `.astro.mx` AstroMX templates |
 | `packages/hosts/angular/AGENTS.md` | `@mxlang/angular` (in progress) |
 | `packages/tooling/vite-plugin/AGENTS.md` | `@mxlang/vite-plugin` |
 | `packages/tooling/typescript-plugin/AGENTS.md` | `@mxlang/typescript-plugin` and `@mxlang/tsc` |

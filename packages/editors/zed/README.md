@@ -20,7 +20,7 @@ Ships four languages:
   neither Solid- nor Angular-specific, so `languages/ngmx/config.toml`
   declares `grammar = "solidmx"` directly rather than this extension
   compiling a second, identical grammar.
-- `AstroMX` (`.amx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
+- `AstroMX` (`.astro.mx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
 
 Also registers a language server: `src/lib.rs` (a minimal Rust extension,
 `Cargo.toml`) implements `zed::Extension::language_server_command` for
@@ -139,7 +139,7 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
   Marko's own grammar and queries — plus MX host diagnostics from
   `@mxlang/language-server`. Marko's own server still supplies its broader
   language features for files associated with its `Marko` language.
-- `AstroMX` (`.amx`): syntax highlighting, brackets, outline, via injections mapping the `---` fence to TypeScript and the body to Marko. The fence properly highlights as TypeScript. No language server yet.
+- `AstroMX` (`.astro.mx`): syntax highlighting, brackets, outline, via injections mapping the `---` fence to TypeScript and the body to Marko. The fence properly highlights as TypeScript. No language server yet.
 - `SolidMX` (`.solid.mx`): syntax highlighting, brackets, outline, syntax
   highlighting inside `mx_element` regions via the official Marko extension's
   injection (see "Prerequisite" below), and Solid host diagnostics from
@@ -153,9 +153,9 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
   yet — `@mxlang/language-server` does not compile `.ng.mx` (see
   `AGENTS.md`'s Zed extension section).
 
-`.amx` needs no precedence rule of its own: Zed's matcher reads the text after
-the last dot, and `amx` is not `mx`, so `AstroMX` and `MX` never contend the
-way `MX` and `SolidMX`/`AngularMX` do above.
+`.astro.mx` follows the same rule as `.solid.mx` and `.ng.mx` (decision 134):
+it also matches `MX`'s `.mx` suffix, and Zed's longest-suffix match picks
+`AstroMX`.
 
 ## Prerequisite: install the official Marko extension too
 
@@ -262,7 +262,7 @@ package if `git subtree --help` reports "not a git command").
 See `PUBLISHING.md` for the full publish checklist: this split, the
 `repository`/`rev` swap for both grammars, the Zed extensions registry
 submission procedure, verifying the `.mx`/`.solid.mx` suffix precedence in a
-running Zed, and the manual `.mx`/`.amx` editor checks still owed.
+running Zed, and the manual `.mx`/`.astro.mx` editor checks still owed.
 
 **Publish-time URL swap.** Both the dev-install steps above and
 `extension.toml`'s `[grammars.solidmx]` comment describe the `file://` form

@@ -133,7 +133,7 @@ bind it at the top level of the template
 
 Calling the tag *without* `/var` works everywhere; only the binding is restricted. Lifting the restriction is planned for MX 2.
 
-`/var` is not supported in a `.amx` (AstroMX) file at all — an Astro template has no statement position of its own. Calling a returning tag from `.amx` works, and renders its output.
+`/var` is not supported in a `.astro.mx` (AstroMX) file at all — an Astro template has no statement position of its own. Calling a returning tag from `.astro.mx` works, and renders its output.
 
 ### A returning unit on a JSX host cannot use hooks
 

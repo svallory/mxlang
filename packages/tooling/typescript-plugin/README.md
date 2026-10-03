@@ -1,7 +1,7 @@
 # `@mxlang/typescript-plugin`
 
 A [Volar](https://volarjs.dev) language plugin and tsserver plugin that types
-`.solid.mx`, whole-file `.mx`, plus AstroMX `.amx`
+`.solid.mx`, whole-file `.mx`, plus AstroMX `.astro.mx`
 when Astro composition is enabled. Editors report errors inside templates and
 type imports from the file's real exported `Input` interface.
 
@@ -17,7 +17,7 @@ whether a file compiles.
 | `.solid.mx` | always | Solid JSX as TSX |
 | `.mx` | always | host-selected generated TypeScript |
 | `.astro` | `astro: true` | Astro's TSX |
-| `.amx` | `astro: true` | MX-to-Astro output composed into Astro's TSX |
+| `.astro.mx` | `astro: true` | MX-to-Astro output composed into Astro's TSX |
 
 `createSolidMxLanguagePlugin(ts)` builds a `LanguagePlugin<string>`:
 
@@ -43,7 +43,7 @@ TypeScript. Astro always uses strict HTML lowering and projects MX's runtime
 `@mxlang/astro`, passes that Astro text to
 `@astrojs/compiler/sync`'s `convertToTSX`, and composes the two maps into one
 set of Volar `CodeMapping`s. It is registered only with `astro: true`; without
-Astro composition this plugin deliberately ignores `.amx` files.
+Astro composition this plugin deliberately ignores `.astro.mx` files.
 
 When `print` throws — a syntax error in an MX region, raised by the parser
 bridge with a `loc` — the virtual code is empty and the error is recorded
@@ -73,7 +73,7 @@ mappings therefore come from the positioned nodes in the core IR that the HTML
 emitter already consumes; unchanged code text is mapped directly into the
 generated TypeScript.
 
-AstroMX mapping is two-stage. The `.amx` emitter records the unchanged fence,
+AstroMX mapping is two-stage. The `.astro.mx` emitter records the unchanged fence,
 each emitted expression and attribute name at write time, tag params, and
 whole hoisted blocks. Those offsets are intersected with the source map from
 Astro's `convertToTSX`; only text represented by both maps is exposed to
@@ -180,9 +180,9 @@ optional peer `@astrojs/language-server@2.16.16`; a project that enables
 
 Two behaviours of the composed Astro plugin are worth knowing:
 
-- **`.amx` is opt-in with Astro composition.** Its frontmatter, component
+- **`.astro.mx` is opt-in with Astro composition.** Its frontmatter, component
   props, and template expressions are checked through the composed map. With
-  `astro: false` (the default), `.amx` is not claimed.
+  `astro: false` (the default), `.astro.mx` is not claimed.
 
 - **`.astro` files under `node_modules` are associated-only.** They are
   Astro's own package-owned component sources, not the consumer's code, so

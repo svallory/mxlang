@@ -2,7 +2,7 @@
 
 `mx-tsc` — `tsc` with `.solid.mx` and `.mx` files type-checked as
 the TypeScript they lower to. `--astro` additionally composes Astro's language
-plugin and the AstroMX plugin, so `.astro` and `.amx` files and their MX
+plugin and the AstroMX plugin, so `.astro` and `.astro.mx` files and their MX
 imports are checked together.
 
 This is the CI half of decision 81. `tsc` ignores `compilerOptions.plugins`, so
@@ -49,7 +49,7 @@ still wins over everything but an explicit `pretty` option.
 
 `--astro` is an `mx-tsc` flag, removed before TypeScript parses the rest of the
 command line. It lazily loads the same optional
-`@astrojs/language-server@2.16.16` peer as the tsserver plugin. `.amx` is an
+`@astrojs/language-server@2.16.16` peer as the tsserver plugin. `.astro.mx` is an
 Astro-only format and is intentionally ignored unless this flag is present.
 
 ## Angular template diagnostics (`.ng.mx`)
@@ -134,7 +134,7 @@ server and the tsserver plugin print the same text as
 
 Both are warnings: the exit code is exactly what it was before they were
 printed. Each is printed once per run, however many `.mx`, `.solid.mx`,
-`.ng.mx` or `.amx` files sit under that `package.json`.
+`.ng.mx` or `.astro.mx` files sit under that `package.json`.
 
 ## Known limitations
 
@@ -174,18 +174,18 @@ Plain `tsc` never opens the `.solid.mx` file at all — it fails at the import,
 and reports nothing about the type error the module actually contains. `mx-tsc`
 reports it at the offending argument's own line and column.
 
-Astro mode also proves both halves of an `.amx` page are mapped precisely:
+Astro mode also proves both halves of an `.astro.mx` page are mapped precisely:
 
 ```
-$ mx-tsc --astro --noEmit -p examples/astro-static/typecheck-fixtures/amx-wrong.json
-amx-wrong.amx(8,7): error TS2322: Type 'number' is not assignable to type 'string'.
-amx-wrong.amx(9,27): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+$ mx-tsc --astro --noEmit -p examples/astro-static/typecheck-fixtures/astro-mx-wrong.json
+astro-mx-wrong.astro.mx(8,7): error TS2322: Type 'number' is not assignable to type 'string'.
+astro-mx-wrong.astro.mx(9,27): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
 ```
 
 ## How it works
 
 `runMxTsc()` calls `runTsc` with `.solid.mx` and `.mx`; `--astro`
-adds `.astro`, `.amx`, Astro's language plugin, and the AstroMX language
+adds `.astro`, `.astro.mx`, Astro's language plugin, and the AstroMX language
 plugin:
 
 - **`tscPath`** is `typescript/lib/tsc.js`, resolved relative to this package.
@@ -213,7 +213,7 @@ and `__filename`, none of which exist in an ES module.
 ## Tests
 
 `src/index*.test.ts` (split by scenario family so vitest spreads them over workers; shared helpers in `src/test-support.ts`) run the built binary against the SolidMX fixtures and the
-Astro example's `.astro` and `.amx` correct/wrong fixtures, asserting exact
+Astro example's `.astro` and `.astro.mx` correct/wrong fixtures, asserting exact
 diagnostics and exit codes (plus that plain `tsc` does *not* catch the SolidMX
 error). It needs
 `bun run build` to have produced `dist/bin.cjs` first —

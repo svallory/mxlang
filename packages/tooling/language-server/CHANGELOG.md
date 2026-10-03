@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **`x.astro.mx` is routed by kind** (amx-to-astro-mx, decision 134): the server watches `**/*.astro.mx` (it watched `**/*.amx`), and an `.astro.mx` document no longer reaches the `.mx` compile; it is silent, like `.ng.mx`, since Astro-template diagnostics come from `mx-tsc --astro` and the TS plugin.
+
 ### Added
 
 - **`data.codeFrame` on compile-error diagnostics**: the compiler's code frame (ANSI-free, dedented to its `> 1 |` marker) moves out of `message`, which now holds only the error text (about 38 tokens down to 6 on a simple case). Messages with no frame are unchanged. A callee-template parse error keeps its "custom tag threw" header, names the callee as `(in <path>:L:C)` and gets `relatedInformation` there.

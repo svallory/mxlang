@@ -35,7 +35,7 @@ A host is small because most of the work — parsing, structural lowering, guard
 
 **`compileSource(source, filename, policy, host?)`** compiles a whole file through `@marko/compiler`'s translator seam. This is what a host uses when the entire file is MX — the HTML host's `.mx` files, for example.
 
-**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** parses a Marko *substring* embedded inside a larger file, with every position shifted so error locations and source maps point at the right place in the outer file. This is what a host uses when MX syntax sits inside something else — Astro's `.amx` templates (MX after a frontmatter fence) and SolidMX's `.solid.mx` files (MX in JSX's position inside a TSX file) both use this door.
+**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** parses a Marko *substring* embedded inside a larger file, with every position shifted so error locations and source maps point at the right place in the outer file. This is what a host uses when MX syntax sits inside something else — Astro's `.astro.mx` templates (MX after a frontmatter fence) and SolidMX's `.solid.mx` files (MX in JSX's position inside a TSX file) both use this door.
 
 ## Statement-shaped and expression-shaped hosts
 
@@ -43,7 +43,7 @@ Every host emits from the same IR, but targets fall into two shapes, and the dif
 
 **Statement-shaped.** The HTML host builds a string by appending: `out += "..."`, one block per function, ending in a conventional module (an `escape` import, the author's hoisted statements, one branded default-exported render function). An `<if>` becomes a real `if` statement.
 
-**Expression-shaped.** JSX has no equivalent of `out += "..."`, so the Solid, Preact, React, Hono and `.amx` emitters produce a single expression instead. An `<if>` becomes a ternary, a `<Show>`, or a `<Switch>` — whatever that target's own author would have written.
+**Expression-shaped.** JSX has no equivalent of `out += "..."`, so the Solid, Preact, React, Hono and `.astro.mx` emitters produce a single expression instead. An `<if>` becomes a ternary, a `<Show>`, or a `<Switch>` — whatever that target's own author would have written.
 
 Both walk the same IR through the same `drive()`. What differs is only what each method writes, which is why adding a target to an existing emitter can be as small as a vocabulary object: the React and Hono hosts are both the Preact emitter plus a `JsxDialect` naming the JSX import source, the class/for attribute spelling, and the runtime module.
 

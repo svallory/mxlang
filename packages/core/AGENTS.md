@@ -21,7 +21,7 @@ required: there is no pre-IR string-walk fallback.
 
 Both current hosts are on the driver. `@mxlang/html` uses
 `packages/hosts/html/src/emitter.ts` for vanilla HTML strings;
-`@mxlang/astro` uses `packages/hosts/astro/src/astro-template.ts` for `.amx`'s
+`@mxlang/astro` uses `packages/hosts/astro/src/astro-template.ts` for `.astro.mx`'s
 expression-shaped Astro syntax. Neither emitter reads a Marko node; a
 host-specific resolve-time decision goes in `DelegatedTag.data` through
 `isDelegatedTag`/`resolveDelegatedTag` (decision 132 renamed these from `claimsTag`/`resolveHostTag`; `HostTag` is now `DelegatedTag`).
@@ -349,7 +349,7 @@ Five facts worth knowing before editing it:
   `{ dir, prefix?, hosts?, parseOptions? }` supplying directory-level defaults
   a sidecar may override). Nearest `tags/` directory wins; `mx.tags` entries
   come last, in array order. Every integration the spec lists calls it per
-  compiled file — the Bun loaders, the Vite plugin, the Astro `.amx` plugin,
+  compiled file — the Bun loaders, the Vite plugin, the Astro `.astro.mx` plugin,
   the TypeScript plugin, the language server, and `mx-tsc` through the same
   language plugin — because which tags a template may call follows from where
   the template lives. An explicitly passed `customTags` still wins over a
@@ -364,7 +364,7 @@ Five facts worth knowing before editing it:
   the same file. No `hosts` on the entry (and every local `tags/` directory,
   which has no `mx.tags` entry to carry one) means visible to every host,
   `host` unset included. Every call site that scans passes its own host name
-  — the Bun loaders (`"html"`, `"hono"`), `@mxlang/astro`'s `.amx` plugin
+  — the Bun loaders (`"html"`, `"hono"`), `@mxlang/astro`'s `.astro.mx` plugin
   (`"astro"`), the SolidMX and whole-file `.mx` typescript-plugin paths
   (`"solid"`, resolved per file via `resolveHostPolicy`), the language
   server (`hostPolicy.host`), the Vite plugin (`resolveHostPolicyDetailed(file)`
@@ -523,16 +523,14 @@ Five facts worth knowing before editing it:
   This is a guard with teeth: `tags/.mx` has an empty basename, and an empty
   tag name makes `@marko/compiler` throw `"tag.name" is required`, which fails
   *every* file in the package rather than only a caller. A host module file
-  under `tags/` — `<name>.solid.mx` (the Solid host) or `<name>.ng.mx` (the
-  Angular host) — is reported rather than ignored, naming the file: a
+  under `tags/` — `<name>.solid.mx` (the Solid host), `<name>.ng.mx` (the
+  Angular host) or `<name>.astro.mx` (the Astro host, decision 134) — is reported rather than ignored, naming the file: a
   different file kind, not a tag template. The check is a closed allowlist of
-  host segments (`solid`, `ng`), not "any second dotted segment before
+  host segments (`solid`, `ng`, `astro`), not "any second dotted segment before
   `.mx`" — `TAG_NAME_RE` allows dots in an ordinary tag name, so
   `tags/my.icon.mx` is the valid tag `<my.icon>` and stays indexed; only a
-  listed segment is rejected. `.amx` has no `.mx` suffix at all (a separate
-  three-letter extension), so it never reaches this check either — it is
-  silently ignored under `tags/`, the same as any other non-tag file (a
-  README, a `.css`). `scanCustomTags` and `discoverProjectTags` share the
+  listed segment is rejected, `.astro.mx` included (it was `.amx`, with no `.mx`
+  suffix, and silently ignored here before decision 134). `scanCustomTags` and `discoverProjectTags` share the
   rule through `indexDirectory`, so it cannot drift between the two. Note the
   mtime cache assumes sub-second mtime granularity — true on every platform MX
   targets, but two writes inside one tick can look like one.
@@ -641,9 +639,9 @@ Five facts worth knowing before editing it:
   not reactive** (design §2.4, risk 4) — a tag wanting reactivity returns an
   accessor.
   **Astro** renders an MX component through its own renderer rather than a
-  call site, so `server.ts` unwraps the pair there; a `.amx` template may
+  call site, so `server.ts` unwraps the pair there; a `.astro.mx` template may
   *call* a returning tag but cannot bind one, since it has no statement
-  position of its own (`/var` in `.amx` is a positioned error).
+  position of its own (`/var` in `.astro.mx` is a positioned error).
   **`/var` is top-level-only on the JSX hosts and Solid.** Every structural
   kind lowers to an expression there — a ternary, a `.map` callback, a `<For>`
   render prop — so a callback scope has no statement position for the binding.

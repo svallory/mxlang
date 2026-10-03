@@ -79,12 +79,12 @@ extension selects a compilation model, not a flavour of one language.
 |---|---|---|---|
 | `.mx` | A whole-file MX template | The host's module (`(input) => string`, a JSX component, an Angular template) | Shipped |
 | `.solid.mx` | A TypeScript module with **MX regions** in expression position | Solid 2 JSX text | Shipped |
-| `.amx` | An Astro component whose template is MX | An `.astro` module | Shipped |
+| `.astro.mx` | An Astro component whose template is MX | An `.astro` module | Shipped |
 | `.ng.mx` | An Angular region file | `.ts` with an inline `template` | **Not built** (decisions 96, 99) |
 
 ### Whole files vs region files
 
-A **whole file** (`.mx`, `.amx`) is parsed by `@marko/compiler` from the first
+A **whole file** (`.mx`, `.astro.mx`) is parsed by `@marko/compiler` from the first
 byte. Its module level is real module scope, so `import`/`static`/`export`
 place statements there (§2).
 
@@ -106,7 +106,7 @@ that makes region files behave differently everywhere it matters:
 **`.mx` is the only template extension.** No product path accepts or advertises
 `.marko` (decision 86, superseding decision 72's alias). Every loader — the Bun
 loaders, `@mxlang/vite-plugin`, the language server, the TypeScript plugin,
-`mx-tsc`, the editor extensions — accepts `.mx`, `.solid.mx` and `.amx` only,
+`mx-tsc`, the editor extensions — accepts `.mx`, `.solid.mx` and `.astro.mx` only,
 and `mx()`/`mxAstro()` **reject** `.marko` in their `extensions` option.
 
 Porting a Marko component that stays inside the MX 1 subset is therefore a
@@ -123,15 +123,20 @@ Two narrow exceptions, both outside the product path:
   such a directory is not discovered at all. This is Marko's own behavior during
   a whole-file compile, not an MX entry point.
 
-### Why `.amx` is single-dot
+### Why an `.astro.mx` file cannot be a page
 
-`.astro.mx` was the first spelling (decision 76c) and works for components, but
-Astro's route collection keys on `path.extname(basename)` — the **last**
-extension segment only. Measured against astro@7.3.2: a `page.astro.mx` under
-`src/pages` is skipped as an unsupported file type, and once `.mx` is also
-registered it routes to `/page.astro/`, with a literal `.astro` in the URL.
-Decision 78 settled on `.amx`. `.solid.mx` keeps two dots because nothing
-routes on it.
+Decision 134 spells the Astro template kind `.astro.mx`, like `.solid.mx`
+(`<name>.<host>.mx`); it replaces the single-dot `.amx` of decisions 76c and 78.
+It is for components and layouts. Astro's route collection keys on
+`path.extname(basename)` — the **last** extension segment only. Measured
+against astro@7.3.2: a `page.astro.mx` under `src/pages` routes to
+`/page.astro`, with a literal `.astro` in the URL, and `injectRoute` cannot
+repair it. Per the decision 134 addendum, an `.astro.mx` file under the pages
+directory is an error from the Astro integration, in `astro dev` and
+`astro build`. The message names every offending file and gives the fix: write
+`about.astro` and import the `.astro.mx` component from it, or write the page
+as `about.mx`. Pages written as `.mx` are unaffected. When Astro matches the
+longest registered page extension, pages follow with no language change.
 
 > **Open question.** `.solid.mx` was left "for now" by decisions 69, 70 and 72;
 > no ruling ever finalized it. It is shipped and stable in practice.
@@ -930,13 +935,13 @@ each supplying `rejectUnknownTag` (Marko's own wording) for the fallthrough:
   `lower.ts`'s own `lowerStatement`/`fileLocalBinding` for an MX-level
   binding — or a taglib entry. No new binding source; the fallback simply
   changed from `isComponentName(name)` to `false`.
-- **Astro** (`.amx`): a `.amx` template body has no MX-level
+- **Astro** (`.astro.mx`): a `.astro.mx` template body has no MX-level
   `import`/`<define>`/`<const>` of its own — Astro's local-component form
   *is* a `---` fence import — so `lowerAstroMx` now parses the fence's own
   top-level value bindings (`@mxlang/parser`'s `sourceBindings`, the same
   reader `.solid.mx`'s `moduleBindings` extension above uses) and feeds them
   into `ctx.imports` before lowering, the operator-ruling extension pattern
-  decision 114 already established for `.solid.mx`'s larger scope. A `.amx`
+  decision 114 already established for `.solid.mx`'s larger scope. A `.astro.mx`
   file previously had no way to resolve a component at all through core's
   precedence order (no taglib, no MX-level binding), so every capitalized tag
   used to resolve purely by casing; a discovered/registered custom tag is
@@ -1451,8 +1456,8 @@ the compiled `customTags` map: a name a different host owns must stay
 resolvable from *that* host's own scan of the same file. No `hosts` on the
 entry (and every local `tags/` directory, which has no `mx.tags` entry to
 carry one) means visible to every host, `host` unset included. The Bun
-loaders, the Vite plugin, the Astro `.amx` plugin, the TypeScript plugin
-(whole-file `.mx`, `.solid.mx`, and `.amx`), the language server, and
+loaders, the Vite plugin, the Astro `.astro.mx` plugin, the TypeScript plugin
+(whole-file `.mx`, `.solid.mx`, and `.astro.mx`), the language server, and
 `mx-tsc` (through the same TypeScript-plugin language plugin) all pass their
 own host name.
 
@@ -1716,14 +1721,14 @@ times), so the escape is rejected rather than silently relocated. **html** keeps
 supporting the nested case, where the temp lands inside the emitted `for`/`if`
 block. **Angular** rejects `/var` entirely.
 
-**`.amx` rejects `/var` entirely too, and for a different, structural reason**
+**`.astro.mx` rejects `/var` entirely too, and for a different, structural reason**
 (host-cannot, ruled 2026-09-28 on TODO `amx-tag-var`): Astro runs the `---`
 fence to completion *before* Astro's own compiler ever lowers or calls the
 template's tags, so by the time a returning tag is actually called there is no
 statement position left anywhere — not in the fence (already finished), and
 not in the template (markup, not statements) — to bind a value into. This is
 unlike the JSX-host/Solid restriction above, which is a real MX 2 gap
-(`tag-var-in-callback-scope`); `.amx`'s case cannot be lifted by giving a
+(`tag-var-in-callback-scope`); `.astro.mx`'s case cannot be lifted by giving a
 callback scope a statement position, because there is no callback scope here
 at all. The workaround is to call the unit directly from the fence's own
 TypeScript instead of from the template — an ordinary function call, since a
@@ -1976,11 +1981,11 @@ listed in §16.
 
 Hosts: **html** (default policy), **html-strict** (which is also how
 **Astro `.mx`** compiles), **Solid**, **Preact/React/Hono** (one shared emitter,
-differences noted), **Astro `.amx`**, **Angular**.
+differences noted), **Astro `.astro.mx`**, **Angular**.
 
 ### 13.1 Structural core
 
-| Construct | html | html-strict / Astro `.mx` | Solid | Preact / React / Hono | Astro `.amx` | Angular |
+| Construct | html | html-strict / Astro `.mx` | Solid | Preact / React / Hono | Astro `.astro.mx` | Angular |
 |---|---|---|---|---|---|---|
 | `if`/`else-if`/`else` | `if`/`else if`/`else` statements | same | ≤2 branches → `<Show when fallback>`; 3+ → `<Switch>`/`<Match>` | ternary chain, `null` arm when no `<else>` | ternary chain over `<Fragment>` | `@if`/`@else if`/`@else` |
 | `for of` | `for (const p of …)` | same | `<For each>` (no `keyed`) | `.map`, key = item identity | `.map`, **no key** | `@for (… track $index)` + warning |
@@ -1988,7 +1993,7 @@ differences noted), **Astro `.amx`**, **Angular**.
 | `for in` | `Object.entries` loop | same | `<For each={Object.entries(o)} keyed={e=>e[0]}>`, reads via `mxEntry()` | `.map(([k,v])=>…)`, `key={k}` | `.map(([k,v])=>…)` | `\| keyvalue: null` + warning |
 | `for` range | `for (let i=a; i<=b; i++)` | same | `<Repeat count from>` | `Array.from({length}).map` | `Array.from({length}).map` | folded literal array |
 | `for` range + `step=` | **error** | error | `<Repeat>` with `i = from + k*step` | `Array.from` with computed length | error | folded literal array |
-| `define` | local render function | same | **error** — no local component form in a JSX expression | `const R = (p) => (<>…</>)` hoisted | **error** — extract to its own `.amx` | `<ng-template #R let-p>` |
+| `define` | local render function | same | **error** — no local component form in a JSX expression | `const R = (p) => (<>…</>)` hoisted | **error** — extract to its own `.astro.mx` | `<ng-template #R let-p>` |
 | `const` | `const x = …` | same | **error** in a region | `const` at component-body top | **error** — declare it in the fence | `@let x = …;` |
 | `let` | initial value only | **error** (strict) | **error** — use `createSignal` | **error** — use `useState` | **error** | error — fixed 2026-09-17, `<let>`-specific message; was **the wrong error** (bug 1, only the generic `/var` field guard fired) |
 | `try` | `try`/`catch` | same | `<Loading>` | body inline | **error** | **error** |
@@ -1998,7 +2003,7 @@ differences noted), **Astro `.amx`**, **Angular**.
 
 ### 13.2 Markup and attributes
 
-| Construct | html | Solid | Preact | React | Hono | Astro `.amx` | Angular |
+| Construct | html | Solid | Preact | React | Hono | Astro `.astro.mx` | Angular |
 |---|---|---|---|---|---|---|---|
 | `${}` | `escape(x)` | `{x}` | `{x}` | `{x}` | `{x}` | `{x}` | `{{ x }}` |
 | `$!{}` | raw append | sole child → `innerHTML` | `dangerouslySetInnerHTML` | same | same | `<Fragment set:html>` | `<span [innerHTML]>` + warning |
@@ -2017,7 +2022,7 @@ differences noted), **Astro `.amx`**, **Angular**.
 
 ### 13.3 Stateful tags
 
-| Tag | html | html-strict / Astro `.mx` | Solid | Preact/React/Hono | Astro `.amx` | Angular |
+| Tag | html | html-strict / Astro `.mx` | Solid | Preact/React/Hono | Astro `.astro.mx` | Angular |
 |---|---|---|---|---|---|---|
 | `<effect>` | inert | error | error | error | error | error — fixed, was **literal element** (bug 1) |
 | `<lifecycle>` | inert | error | error | error | error | error — fixed, was **literal element** |
@@ -2042,22 +2047,22 @@ the S8 silent-wrong-render class the field guard exists to close.
 
 Not merely in emitted syntax — in observable behavior:
 
-1. **`by=`** is ignored on html and `.amx`, item identity on the JSX hosts,
+1. **`by=`** is ignored on html and `.astro.mx`, item identity on the JSX hosts,
    reconciliation identity on Solid, `track` on Angular. Ignoring it is
-   defensible on html (a one-shot render reconciles nothing) but `.amx` is a
+   defensible on html (a one-shot render reconciles nothing) but `.astro.mx` is a
    client-visible target and drops it with no diagnostic.
 2. **The default `<for>` key.** Four different reconciliation behaviors from one
    MX source: item identity (JSX hosts), `$index` (Angular, warned), none
-   (`.amx`), reference (Solid).
+   (`.astro.mx`), reference (Solid).
 3. **`:=`** is genuinely two-way only on Angular; renders one-way with no error
    on html; rejected everywhere else.
 4. **`server` blocks** execute on html and become junk markup everywhere else.
 5. **`<let>`** binds an initial value on html and errors everywhere else,
    Angular included (fixed 2026-09-17; was the wrong error, bug 1).
 6. **`<return>`** is a real value channel on html and the JSX hosts, a callback
-   prop on Solid, an error on `.amx` and, since 2026-09-17, on Angular too
+   prop on Solid, an error on `.astro.mx` and, since 2026-09-17, on Angular too
    (was silently dropped, bug 8).
-7. **Comments** are stripped on html/Solid/JSX and kept on `.amx`/Angular.
+7. **Comments** are stripped on html/Solid/JSX and kept on `.astro.mx`/Angular.
 
 ### 13.5 Host selection
 
@@ -2104,12 +2109,12 @@ does something else, silently.
 |---|---|---|
 | 1 | Angular | **FIXED 2026-09-17** (task `angular-spec-gaps`). Was: no stateful-tag policy at all — the emitter declared only `try`. `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `client`/`server` all emitted **literal elements** (`<effect [value]="…">`); `<let>`/`<id>`/`<await>` failed only incidentally, via the generic field guard, so `<let x=1/>` with no `/var` also emitted a literal element. Now every one of these is its own positioned error (`STATEFUL_ERRORS`, `packages/hosts/angular/src/emitter.ts`), same wording family as `@mxlang/preact`'s `statefulErrors`. |
 | 2 | html, Preact | **`<return>` is documented as a compile error and is not.** Both READMEs list it under "Errors"; the code reverses this under decision 95 and both hosts emit `{ value, output }`. |
-| 3 | Astro `.amx` | **FIXED 2026-09-28.** Every range `<for>` emitted invalid JavaScript: `Math.max(0, (` opened two parens and only one closed: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserted only a substring (`toContain("(3) - (1) + 1")`), which passed regardless; now the tests assert the exact emitted code and that the real Astro compiler (`@astrojs/compiler-rs`) reports zero diagnostics for `from`/`to`, `until`, no-`from`, descending, and expression-bound ranges. |
+| 3 | Astro `.astro.mx` | **FIXED 2026-09-28.** Every range `<for>` emitted invalid JavaScript: `Math.max(0, (` opened two parens and only one closed: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserted only a substring (`toContain("(3) - (1) + 1")`), which passed regardless; now the tests assert the exact emitted code and that the real Astro compiler (`@astrojs/compiler-rs`) reports zero diagnostics for `from`/`to`, `until`, no-`from`, descending, and expression-bound ranges. |
 | 4 | Solid | **FIXED 2026-09-27**, decision 106. Repeated attribute tags now emit real arrays. |
 | 5 | html-strict | **FIXED 2026-09-28** (decision 111, task `strict-policy-log-debug`). Was: `<log>`/`<debug>` survived `strict` — `STRICT_TAGS` overrode six names but not these two, so they stayed inert under strict, and therefore under the Astro `.mx` host too, whose README claimed all stateful tags were build errors. Both are now `STRICT_TAGS` error rows, same as the other six. |
 | 6 | Preact | README claims a non-object `style=` is an error; `<div style="color:red"/>` compiles. |
 | 7 | Angular | **FIXED 2026-09-17**, decision 86. Was: silently accepted `class:`/`style:`/`attr:` modifiers, lowering `class:active=c` to `[class.active]="c"`. Every other host errors, on the grounds that this is **not Marko syntax at all** (§4). Now rejected the same way, naming the replacement (an object/array `class=`/`style=` value, or a plain dynamic attribute — the emitter itself decides `[attr.x]` vs `[x]` for a dynamic `data-*`/`aria-*` attribute). |
-| 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.amx` does. |
+| 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.astro.mx` does. |
 | 9 | html | **FIXED 2026-09-26**, decision 104. Dynamic tags receive attribute-tag props. |
 
 ### Host selection

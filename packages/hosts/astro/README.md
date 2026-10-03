@@ -134,7 +134,7 @@ So `renderToStaticMarkup` throws when Astro's `metadata.hydrate` is set.
 
 ## Astro hooks dependency
 
-This integration relies on Astro's undocumented and non-semver `addPageExtension` hook (passed to `astro:config:setup`) to register `.mx` and `.amx` as routable page extensions. Astro notes this hook is intended for internal integrations and may change outside of major versions. If an Astro update removes or changes this hook, pages under `src/pages` will stop routing, and the build will fail immediately with a clear error until the integration is updated.
+This integration relies on Astro's undocumented and non-semver `addPageExtension` hook (passed to `astro:config:setup`) to register `.mx` as a routable page extension. Astro notes this hook is intended for internal integrations and may change outside of major versions. If an Astro update removes or changes this hook, pages under `src/pages` will stop routing, and the build will fail immediately with a clear error until the integration is updated.
 
 ## Pages
 
@@ -204,9 +204,9 @@ component.
 another component's slot — and, like components, `client:*` on a page-mode
 MX file fails the build for the same reason (nothing to hydrate).
 
-## AstroMX templates (`.amx`)
+## AstroMX templates (`.astro.mx`)
 
-Decisions 76c/78. An `.amx` file is an **Astro component whose template is
+Decisions 76c/78. An `.astro.mx` file is an **Astro component whose template is
 MX**: a TypeScript frontmatter fence with Astro's own semantics, followed by
 an MX template instead of Astro's JSX-shaped markup. The template is lowered
 to Astro template syntax and the whole file is handed to Astro's compiler, so
@@ -234,28 +234,31 @@ const { title, members } = Astro.props as Props;
 
 This is a different file kind from `.mx`. An `.mx` component compiles to a
 runtime-free `(input) => string` function and is called *through* this
-package's renderer; an `.amx` component **becomes** an Astro component. Use
-`.amx` when you want Astro's own component semantics with MX's syntax, and
+package's renderer; an `.astro.mx` component **becomes** an Astro component. Use
+`.astro.mx` when you want Astro's own component semantics with MX's syntax, and
 `.mx` when you want a portable MX component that happens to render in Astro.
 
-**Components, layouts and pages**, all from the one extension — `.amx` is
-registered with `addPageExtension`, so `src/pages/about.amx` routes to
-`/about`.
+**Components and layouts, not pages.** A page cannot be `.astro.mx`: Astro
+strips only the last extension of a route file, so `src/pages/about.astro.mx`
+would route to `/about.astro`, not `/about`. The integration reports every
+`.astro.mx` file under `src/pages` (or your configured `srcDir`) as an error in
+`astro dev` and `astro build`, with the fix: write `about.astro` and import the
+`.astro.mx` component from it, or write the page as `about.mx` (decision 134,
+addendum).
 
 For TypeScript, enable Astro composition in `@mxlang/typescript-plugin` or run
-`mx-tsc --astro`. The `.amx` emitter records source spans while it writes the
+`mx-tsc --astro`. The `.astro.mx` emitter records source spans while it writes the
 lowered Astro template; the TypeScript plugin composes those spans with
 Astro's `convertToTSX` map, so frontmatter, prop, and interpolation diagnostics
-land on the original `.amx` line and column. Without Astro mode, `.amx` is
+land on the original `.astro.mx` line and column. Without Astro mode, `.astro.mx` is
 deliberately ignored.
 
-**Why the single dot.** The obvious spelling was `.astro.mx`, and it works for
-components. It cannot work for pages: Astro's route collection keys on
-`path.extname(basename)`, which returns only the **last** extension segment,
-so `.astro.mx` can never be registered as a page extension. Measured against
-`astro@7.3.2`, a `page.astro.mx` under `src/pages` is skipped entirely; and
-once `.mx` is also registered, it is routed to `/page.astro/` — a literal
-`.astro` in the URL. `.amx` has one segment, so every file kind works.
+**Why not pages.** Astro's route collection keys on `path.extname(basename)`,
+which returns only the **last** extension segment, so `.astro.mx` can never be
+registered as a page extension. Measured against `astro@7.3.2`, a
+`page.astro.mx` under `src/pages` routes to `/page.astro` — a literal `.astro`
+in the URL — and `injectRoute` cannot repair it. When Astro matches the longest
+registered page extension, pages follow with no language change.
 
 ### The lowering table
 
@@ -280,7 +283,7 @@ once `.mx` is also registered, it is routed to `/page.astro/` — a literal
 ### Errors
 
 Nothing silently degrades: every construct this target cannot express is a
-build error naming the construct, the reason, and the line in the `.amx` file.
+build error naming the construct, the reason, and the line in the `.astro.mx` file.
 
 - **Stateful tags** — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
   blocks, `<id>`. Same stance as `.mx` under this host (decision 71): static
@@ -308,7 +311,7 @@ build error naming the construct, the reason, and the line in the `.amx` file.
 - **`<const>`** — a template expression cannot introduce a binding. Declare it
   in the `---` fence, which is where an Astro component declares values.
 - **`<define>`** — Astro has no local component form. Extract it into its own
-  `.amx` file and import it.
+  `.astro.mx` file and import it.
 - **`<try>`** — needs an error boundary; Astro renders statically.
 - **Tag params** (`<Comp|x|>`) — these lower to a render prop, and Astro
   passes markup through slots, not functions. The same applies to an attribute
@@ -334,8 +337,8 @@ views on this host. Slots never carry authored attribute data.
 ### Dev notes and known limits
 
 **HMR works in `astro dev`.** The plugin gives Vite a virtual module id
-(`Base.amx` → `Base.amx.astro`), and Vite keys its module graph by that
-resolved id — a path that does not exist on disk. An edit to the real `.amx`
+(`Base.astro.mx` → `Base.astro.mx.astro`), and Vite keys its module graph by that
+resolved id — a path that does not exist on disk. An edit to the real `.astro.mx`
 file would therefore match nothing in the graph, so the plugin carries a
 `handleHotUpdate` hook mapping the changed file back to its virtual module and
 invalidating it. Without that hook the dev server serves the previously
@@ -351,7 +354,7 @@ template rather than at the stray `---`.
 
 ### How it works
 
-`.amx` uses `@mxlang/core`'s fragment door, whose base-offset shifting places
+`.astro.mx` uses `@mxlang/core`'s fragment door, whose base-offset shifting places
 every diagnostic after the frontmatter fence. The core resolves that Marko AST
 into its host-independent IR, consulting Astro's `HostDeclarations` for
 host-specific rejections, then drives this package's `Emitter<string>`. The
@@ -363,12 +366,12 @@ ternaries, `.map` calls, attributes and slots below it.
 The Vite mechanism is forced rather than chosen. Astro's `astro:build`
 `transform` filters `include: [/\.astro$/, /\.astro\?/]` and then re-checks
 `if (!parsedId.filename.endsWith(".astro")) return;`, so a transform on the
-real `.amx` id can never reach Astro's compiler — the module id itself has to
+real `.astro.mx` id can never reach Astro's compiler — the module id itself has to
 end in `.astro`. `resolveId` appends that suffix to whatever Vite's own
 resolver returns and `load` returns the lowered source, the same shape
 `@mxlang/vite-plugin` already uses for `.solid.mx`.
 
-## Typing `.mx` imports and `.amx` templates
+## Typing `.mx` imports and `.astro.mx` templates
 
 Use `@mxlang/typescript-plugin`; it compiles each `.mx` file to a
 virtual TypeScript module and derives component props from that file's real
@@ -389,7 +392,7 @@ List only `@mxlang/typescript-plugin`; a separate `@astrojs/ts-plugin` entry is
 silently skipped because two Volar tsserver plugins cannot decorate one
 project. Enabling `astro: true` lazily loads the optional
 `@astrojs/language-server@2.16.16` peer and composes its Astro language plugin.
-It also enables `.amx` virtual TSX through the emitter-to-Astro source-map
+It also enables `.astro.mx` virtual TSX through the emitter-to-Astro source-map
 composition; this format is not claimed when `astro` is omitted.
 
 Do not add an ambient `declare module "*.mx"` shim or reference

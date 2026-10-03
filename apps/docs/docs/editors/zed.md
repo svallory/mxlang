@@ -10,22 +10,22 @@ The `mxlang` extension ships four languages:
 - **MX** (`.mx`, and its `.marko` alias) — rides Marko's own tree-sitter grammar and queries unmodified. No overlay: MX 1.0 is a strict subset of Marko syntax, so Marko's own highlighting, brackets, and outline already apply.
 - **SolidMX** (`.solid.mx`) — its own grammar, a patched TypeScript/TSX grammar with MX recognized in expression position.
 - **AngularMX** (`.ng.mx`) — an ordinary TypeScript module whose `@Component` template is MX. Reuses SolidMX's grammar unchanged: the grammar's only MX-specific addition is an opaque `mx_element` token in expression position, which is neither Solid- nor Angular-specific.
-- **AstroMX** (`.amx`) — its own small grammar to separate the TypeScript fence from the MX body, with injected highlighting for both.
+- **AstroMX** (`.astro.mx`) — its own small grammar to separate the TypeScript fence from the MX body, with injected highlighting for both.
 
 ## Install the official Marko extension too
 
-`.mx`/`.amx` files render correctly on their own, but the region of a `.solid.mx` or `.ng.mx` file that contains embedded MX is highlighted through an *injection* — Zed asks for a language named `marko` to highlight that region, and only Zed's official Marko extension provides a language by that name. Install it from Zed's extension registry (Command Palette → "zed: extensions" → search "Marko") before or alongside `mxlang`. Without it, those regions still parse and match brackets correctly — they just render as plain, unhighlighted text.
+`.mx`/`.astro.mx` files render correctly on their own, but the region of a `.solid.mx` or `.ng.mx` file that contains embedded MX is highlighted through an *injection* — Zed asks for a language named `marko` to highlight that region, and only Zed's official Marko extension provides a language by that name. Install it from Zed's extension registry (Command Palette → "zed: extensions" → search "Marko") before or alongside `mxlang`. Without it, those regions still parse and match brackets correctly — they just render as plain, unhighlighted text.
 
-## `.mx` vs `.solid.mx` vs `.ng.mx`
+## `.mx` vs `.solid.mx`, `.ng.mx` and `.astro.mx`
 
-Every one of these can match the same file's `.mx` suffix at once: `Counter.solid.mx` matches `MX`'s `.mx` suffix and `SolidMX`'s `.solid.mx` suffix, and `Counter.ng.mx` matches `MX`'s `.mx` suffix and `AngularMX`'s `.ng.mx` suffix. Zed resolves this by picking the *longest* matching suffix, so `.solid.mx`/`.ng.mx` always win over plain `.mx`, regardless of which extension you installed first. `.amx` never contends with any of them, since `amx` and `mx` are different suffixes.
+Every one of these can match the same file's `.mx` suffix at once: `Counter.solid.mx` matches `MX`'s `.mx` suffix and `SolidMX`'s `.solid.mx` suffix, `Counter.ng.mx` matches `MX`'s `.mx` suffix and `AngularMX`'s `.ng.mx` suffix, and `Card.astro.mx` matches `MX`'s `.mx` suffix and `AstroMX`'s `.astro.mx` suffix. Zed resolves this by picking the *longest* matching suffix, so `.solid.mx`/`.ng.mx`/`.astro.mx` always win over plain `.mx`, regardless of which extension you installed first.
 
 ## What each language gets today
 
 | Language | Highlighting | Language server |
 | --- | --- | --- |
 | MX (`.mx`) | Yes, from Marko's grammar | Yes — see below |
-| AstroMX (`.amx`) | Yes, from Marko's grammar (the frontmatter fence itself highlights as Marko markup, a known limitation) | No |
+| AstroMX (`.astro.mx`) | Yes, from Marko's grammar (the frontmatter fence itself highlights as Marko markup, a known limitation) | No |
 | SolidMX (`.solid.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
 | AngularMX (`.ng.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | No — not registered for this language yet |
 

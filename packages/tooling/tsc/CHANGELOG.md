@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **`.amx` is now `.astro.mx`** (amx-to-astro-mx, decision 134): `mx-tsc --astro` checks `.astro.mx` files; `.amx` is no longer recognised. The `host-dispatch` fixtures and goldens `amx`, `amx-html-host` are renamed `astro-mx`, `astro-mx-html-host`, and the typecheck fixtures `amx-*` become `astro-mx-*`. The only golden change is the file name and extension strings.
+
 ### Added
 
 - **`mx-tsc` prints host-policy diagnostics** (host-policy-diagnostics-tsc-tsserver): an unknown `mx.host` and a malformed `package.json` (audit cases h23, h24, a24) were silent in `mx-tsc`, and the malformed one exited 0 with nothing printed. They are now printed as `package.json(line,col): warning TS80003: …`, once per run. Warnings only: no exit code changes. They come from the language plugins' per-instance record of `resolveHostPolicyDetailed` (no process-global listener), for `.mx`, `.solid.mx`, `.ng.mx` and `.amx` files alike.
