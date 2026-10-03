@@ -114,13 +114,16 @@ Two traps, both pinned by tests:
   it never defines; the build still reports success. `src/dist.test.ts` asserts
   the field stays absent and that the built entry has a real body.
 
-**Typecheck hygiene (angular-checker-dist-before-typecheck):** `tsc --noEmit`
-(typecheck) maps `@mxlang/core`/`@mxlang/parser`/`@mxlang/angular` to their src
-via `paths` in `tsconfig.json` (the #182/#192 pattern, same comment as
-`packages/hosts/angular/tsconfig.json`), so no typecheck needs a prebuilt or
-fresh dep `dist`; `tsconfig.build.json` pins `rootDir: src` and clears `paths`
-so the tarball's declarations resolve the deps through their published dist
-types.
+**Typecheck hygiene (angular-checker-dist-before-typecheck):** `typecheck`
+runs `tsc -p tsconfig.typecheck.json`, which maps
+`@mxlang/core`/`@mxlang/parser`/`@mxlang/angular` to their src via `paths`
+(the #182/#192 pattern), so no typecheck needs a prebuilt or fresh dep `dist`.
+The mapping must NOT move into `tsconfig.json`: Bun's bundler honours the
+nearest tsconfig's `paths`, and the typescript-plugin VSIX bundle inlines this
+package's src, so it would follow `@mxlang/angular` into the Angular host's src
+and fail on that package's parser -> `public.d.ts` mapping (`vscode-extension`
+CI job, `No matching export … for import "parse"`). `tsconfig.json` and
+`tsconfig.build.json` resolve the deps through their published dist types.
 
 Diagnostic offsets are **1:1 with the template text**, because templates are
 emitted as backtick literals (ruling c) — no escape-aware inverse, even across
