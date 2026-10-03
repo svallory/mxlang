@@ -67,6 +67,12 @@ export class TsconfigError extends Error {
  * reuse rather than merely that two calls happened.
  */
 let programReuseCount = 0;
+let metadataProgramCount = 0;
+
+/** Read the metadata construction counter (test-only, not a package export). */
+export function getMetadataProgramCount(): number {
+  return metadataProgramCount;
+}
 
 /** Read the reuse counter (test-only). */
 export function getProgramReuseCount(): number {
@@ -157,6 +163,37 @@ function buildOptions(
   return base;
 }
 
+/** Every input the metadata host observed, including resolution misses. */
+type MetadataEvidence = {
+  reads: Map<string, string | undefined>;
+  exists: Map<string, boolean>;
+  realpaths: Map<string, string>;
+  directories: Map<string, boolean>;
+  listings: Map<string, string>;
+};
+
+function evidenceIsCurrent(
+  evidence: MetadataEvidence,
+  host: ts.CompilerHost,
+): boolean {
+  return (
+    [...evidence.reads].every(([path, text]) => host.readFile(path) === text) &&
+    [...evidence.exists].every(
+      ([path, exists]) => host.fileExists(path) === exists,
+    ) &&
+    [...evidence.realpaths].every(
+      ([path, realpath]) => host.realpath?.(path) === realpath,
+    ) &&
+    [...evidence.directories].every(
+      ([path, exists]) => host.directoryExists?.(path) === exists,
+    ) &&
+    [...evidence.listings].every(
+      ([path, names]) =>
+        JSON.stringify(host.getDirectories?.(path).sort()) === names,
+    )
+  );
+}
+
 /**
  * Build a compiler host that serves the virtual files from memory.
  *
@@ -171,6 +208,7 @@ function buildHost(
   files: ReadonlyMap<string, string>,
   projectDir: string,
   options: ts.CompilerOptions,
+  evidence?: MetadataEvidence,
 ): ts.CompilerHost {
   const base = tsModule.createCompilerHost(options, true);
   const host: ts.CompilerHost = Object.create(base);
@@ -192,6 +230,50 @@ function buildHost(
   host.writeFile = () => {};
   host.getCurrentDirectory = () => projectDir;
 
+  if (evidence) {
+    const exists = host.fileExists;
+    host.fileExists = (path) => {
+      const result = exists(path);
+      evidence.exists.set(path, result);
+      return result;
+    };
+    const read = host.readFile;
+    host.readFile = (path) => {
+      const result = read(path);
+      evidence.reads.set(path, result);
+      return result;
+    };
+    const getSource = host.getSourceFile;
+    host.getSourceFile = (path, ...args) => {
+      const result = getSource(path, ...args);
+      // Angular's generated TCB shim changes after the first pass. It has no
+      // input declarations and is derived solely from sources/options.
+      if (!path.endsWith(".ngtypecheck.ts"))
+        evidence.reads.set(path, result?.text);
+      return result;
+    };
+    const directoryExists = host.directoryExists;
+    if (directoryExists)
+      host.directoryExists = (path) => {
+        const result = directoryExists(path);
+        evidence.directories.set(path, result);
+        return result;
+      };
+    const getDirectories = host.getDirectories;
+    if (getDirectories)
+      host.getDirectories = (path) => {
+        const result = getDirectories(path);
+        evidence.listings.set(path, JSON.stringify([...result].sort()));
+        return result;
+      };
+    const realpath = host.realpath;
+    if (realpath)
+      host.realpath = (path) => {
+        const result = realpath(path);
+        evidence.realpaths.set(path, result);
+        return result;
+      };
+  }
   return host;
 }
 
@@ -232,6 +314,17 @@ export function createAngularChecker(
 
   const files = new Map<string, string>();
   let program: NgtscProgram | undefined;
+  // Revalidate content and resolution evidence, never just entry text/mtime.
+  // Even an identical source graph can have different import edges after a
+  // package.json exports edit. Options (including inherited config) are reread.
+  let metadataCache:
+    | {
+        entry: string;
+        options: string;
+        evidence: MetadataEvidence;
+        program: NgtscProgram;
+      }
+    | undefined;
   let disposed = false;
 
   /** How many compilations actually ran -- the incrementality test reads this. */
@@ -311,11 +404,45 @@ export function createAngularChecker(
         // inline type-check blocks and can reject valid non-exported classes.
         // Analyze a separate program only to read matched input metadata. Never
         // collect its diagnostics or replace the retained incremental program.
-        const metadataProgram = new Program(
-          [virtualPath],
-          { ...compilerOptions, _enableTemplateTypeChecker: true },
-          host,
-        );
+        const optionsKey = JSON.stringify(compilerOptions);
+        let cached = metadataCache;
+        if (
+          !cached ||
+          cached.entry !== virtualPath ||
+          cached.options !== optionsKey ||
+          !evidenceIsCurrent(cached.evidence, host)
+        ) {
+          metadataProgramCount += 1;
+          const evidence: MetadataEvidence = {
+            reads: new Map(),
+            exists: new Map(),
+            realpaths: new Map(),
+            directories: new Map(),
+            listings: new Map(),
+          };
+          const metadataOptions = {
+            ...compilerOptions,
+            _enableTemplateTypeChecker: true,
+          };
+          cached = {
+            entry: virtualPath,
+            options: optionsKey,
+            evidence,
+            program: new Program(
+              [virtualPath],
+              metadataOptions,
+              buildHost(
+                tsModule,
+                files,
+                options.projectDir,
+                metadataOptions,
+                evidence,
+              ),
+            ),
+          };
+          metadataCache = cached;
+        }
+        const metadataProgram = cached.program;
         const metadataEntry = metadataProgram
           .getTsProgram()
           .getSourceFile(virtualPath);
@@ -383,6 +510,7 @@ export function createAngularChecker(
       disposed = true;
       files.clear();
       program = undefined;
+      metadataCache = undefined;
     },
 
     // Not part of the public `AngularChecker` interface: test-only
