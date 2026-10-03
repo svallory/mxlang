@@ -1,0 +1,2 @@
+export interface Input { handler?: (e: any) => void }
+<button onClick=(input.handler)>x</button>

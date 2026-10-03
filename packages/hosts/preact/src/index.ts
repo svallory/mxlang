@@ -325,7 +325,9 @@ function handlerTypeNames(source: string): HandlerTypeNames {
  * `JSX.IntrinsicElements[tag]` whose lowercased name is `on` + the lowercased
  * event. Case-insensitive, because decision 101 emits the lowercase runtime
  * spelling (`onKeydown`) while the host's types declare `onKeyDown`. No hit —
- * an unknown element or prop — is `any`.
+ * an unknown element or prop — is `any`. The prop's complete declared type is
+ * kept, optionality and `undefined`/`null` included, so forwarding an optional
+ * callback checks as it does in plain TSX.
  */
 function handlerTypePreamble(
   dialect: JsxDialect,
@@ -333,7 +335,7 @@ function handlerTypePreamble(
 ): string[] {
   return [
     `import type { JSX as ${jsx} } from "${dialect.jsxImportSource}/jsx-runtime";`,
-    `type ${map}<T extends string, E extends string> = T extends keyof ${jsx}.IntrinsicElements ? { [K in keyof ${jsx}.IntrinsicElements[T] as Lowercase<K & string> extends \`on\${E}\` ? K : never]-?: NonNullable<${jsx}.IntrinsicElements[T][K]> } : {};`,
+    `type ${map}<T extends string, E extends string> = T extends keyof ${jsx}.IntrinsicElements ? { [K in keyof ${jsx}.IntrinsicElements[T] as Lowercase<K & string> extends \`on\${E}\` ? K : never]: ${jsx}.IntrinsicElements[T][K] } : {};`,
     `type ${handler}<T extends string, E extends string> = [keyof ${map}<T, E>] extends [never] ? any : ${map}<T, E>[keyof ${map}<T, E>];`,
   ];
 }

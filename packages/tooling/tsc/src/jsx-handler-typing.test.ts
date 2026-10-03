@@ -173,6 +173,19 @@ describe.each(HOSTS)(
       ]);
     });
 
+    it("accepts forwarding an optional callback and an explicit undefined", () => {
+      // The host's prop type allows `undefined`; the check must too.
+      expect(errorsIn(host, "OptionalForward")).toEqual([]);
+      expect(errorsIn(host, "ExplicitUndefined")).toEqual([]);
+    });
+
+    it("still rejects a non-function handler value", () => {
+      const found = errorsIn(host, "NonFunction");
+      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+        [1, 18, "TS1360"],
+      ]);
+    });
+
     it("keeps the annotations of a shorthand handler and checks them", () => {
       const found = errorsIn(host, "ShorthandTyped");
       expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
