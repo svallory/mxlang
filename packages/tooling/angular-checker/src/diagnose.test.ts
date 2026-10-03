@@ -249,6 +249,106 @@ describe("diagnoseNgMx `mapped` flag (how exact the position is)", () => {
   });
 });
 
+describe("diagnoseNgMx element and attribute diagnostics (real ngtsc)", () => {
+  /** Check `template` against real ngtsc and return the `.ng.mx` source and results. */
+  function check(template: string) {
+    const source = ngMx(template, "title = 'hi';");
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    const diagnostics = diagnoseNgMx(compiled, checker, VIRTUAL);
+    checker.dispose();
+    return { source, diagnostics };
+  }
+
+  /** The source text a diagnostic flags. */
+  const flagged = (
+    source: string,
+    d: { start: number; length: number } | undefined,
+  ) => source.slice(d?.start, (d?.start ?? 0) + (d?.length ?? 0));
+
+  it("NG8001 on an unknown element points at its authored name", () => {
+    const { source, diagnostics } = check("<div><app-chld></app-chld></div>");
+    const d = diagnostics.find((x) => x.code === -998001);
+    expect(d?.mapped).toBe("node");
+    expect(d?.start).toBe(source.indexOf("app-chld"));
+    expect(flagged(source, d)).toBe("app-chld");
+  });
+
+  it("NG8002 on a dynamic attribute points at the authored attribute", () => {
+    const { source, diagnostics } = check("<div><input lable=title/></div>");
+    const d = diagnostics.find((x) => x.code === -998002);
+    expect(d?.mapped).toBe("node");
+    expect(d?.start).toBe(source.indexOf("lable"));
+    expect(flagged(source, d)).toBe("lable=title");
+  });
+
+  it("NG8002 on a bracket-named attribute starts at its `[`, not the emitted wrapper", () => {
+    const { source, diagnostics } = check("<div><input [value]=title/></div>");
+    const d = diagnostics.find((x) => x.code === -998002);
+    expect(d?.mapped).toBe("node");
+    expect(d?.start).toBe(source.indexOf("[value]"));
+    expect(flagged(source, d)).toBe("[value]=title");
+  });
+
+  it("a default attribute has no spelled name, so it lands on its value", () => {
+    const { source, diagnostics } = check(
+      '<div><switch=title><case="a">a</case></switch></div>',
+    );
+    const starts = diagnostics.map((d) => d.start);
+    // `<switch>` and `<case>` (NG8001) point at their names; the `value`
+    // input Angular finds on `<switch>` (NG8002) at the default value.
+    expect(starts).toContain(source.indexOf("switch"));
+    expect(starts).toContain(source.indexOf("case"));
+    const bound = diagnostics.find((x) => x.code === -998002);
+    expect(bound?.start).toBe(source.indexOf("title"));
+    expect(bound?.mapped).toBe("node");
+  });
+
+  it("an attribute whose value needs template-literal escaping still resolves", () => {
+    // The backtick and `${` are escaped in the emitted literal, shifting every
+    // offset after them; the anchor must still land on the attribute.
+    const { source, diagnostics } = check(
+      "<div><input lable=`a${title}`/><p>${title.nmae}</p></div>",
+    );
+    const attr = diagnostics.find((x) => x.code === -998002);
+    expect(attr?.mapped).toBe("node");
+    expect(attr?.start).toBe(source.indexOf("lable"));
+    // And an expression after it is still exact.
+    const expr = diagnostics.find((x) => x.code === 2339);
+    expect(expr?.mapped).toBe("exact");
+    expect(expr?.start).toBe(source.indexOf("title.nmae"));
+  });
+
+  it("an offset in generated punctuation with no anchor keeps the region fallback, never a guessed position", () => {
+    const source = ngMx("<div><p>x</p></div>");
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    // The `</p>` closer is emitted punctuation: no mapping, no anchor.
+    const at = compiled.code.indexOf("</p>");
+    const [d] = diagnoseNgMx(
+      compiled,
+      stubChecker([record({ start: at, length: 4 })]),
+      VIRTUAL,
+    );
+    expect(d?.mapped).toBe("region");
+    expect(d?.start).toBe(compiled.regions[0]?.start);
+  });
+
+  it("an unanchored node (a synthesized element) keeps the region fallback", () => {
+    const source = ngMx("<p>x</p>");
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    // Strip the anchors, as for a node the IR gave no span: the same offset
+    // must degrade rather than land on a neighbour.
+    const bare = { ...compiled, anchors: [] };
+    const at = compiled.code.indexOf("<p>");
+    const [d] = diagnoseNgMx(
+      bare,
+      stubChecker([record({ start: at, length: 3 })]),
+      VIRTUAL,
+    );
+    expect(d?.mapped).toBe("region");
+  });
+});
+
 describe("decorator-analysis diagnostics", () => {
   it("reports a misused @Component decorator exactly once, via the semantic phase", () => {
     // getNgStructuralDiagnostics is deliberately not collected: probed on

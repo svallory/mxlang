@@ -535,7 +535,7 @@ export function reportNgDiagnostics(result: NgDiagnosticsResult): void {
           code: d.code,
           source: d.source,
           messageText:
-            d.mapped === "exact"
+            d.mapped === "exact" || d.mapped === "node"
               ? d.message
               : `${d.message} (approximate location)`,
         }));

@@ -38,11 +38,19 @@ length is the whole mapped expression), else the enclosing region's start
 (`NgMxRegion.generatedStart/End`), else the module source map, else offset 0 —
 a diagnostic is never dropped. Output is `source: "angular"`. `virtualPath` must
 sit in the project so `@angular/core` resolves; `mx-tsc` uses
-`<file>.ng.mx.ts`. Each result carries `mapped` (`exact` / `region` /
-`sourcemap` / `none`): element- and attribute-level ngtsc diagnostics (NG8001,
-NG8002) have no expression mapping and land on the region start (`region`),
-which mx-tsc marks "(approximate location)"; mapping them to the tag is
-2.3b-2 work. `tsconfigPath` is parsed against the tsconfig's own directory and
+`<file>.ng.mx.ts`. Each result carries `mapped` (`exact` / `node` / `region` /
+`sourcemap` / `none`): `exact` is inside a mapped expression; `node` is a start
+tag or attribute (NG8001/NG8002 start at generated punctuation, a `<` or `[`,
+that no mapping covers), resolved through `CompileNgMxResult.anchors` to the
+authored element name, or the attribute from name through value (a default
+attribute `<switch=title>` has no spelled name and lands on its value). Both
+are precise; `region`/`sourcemap`/`none` are degraded and mx-tsc and the TS
+plugin mark them "(approximate location)". An offset with no anchor keeps the
+fallback, never a guessed position. Not covered: a position *inside* an
+expression resolves to the whole expression's start (whole-to-whole, see
+`packages/hosts/angular/src/mapping.ts`). `mx-angular build` runs no Angular
+template check, so these diagnostics appear on `mx-tsc` and in the editor only.
+`tsconfigPath` is parsed against the tsconfig's own directory and
 a read/parse error throws `TsconfigError` — never a silent fallback to
 defaults. `getNgStructuralDiagnostics` is not collected: decorator errors
 already arrive via the semantic phase (see README, Known gaps).

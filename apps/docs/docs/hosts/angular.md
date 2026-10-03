@@ -662,8 +662,10 @@ files that are open in the editor are checked, so a project's closed files cost
 nothing. Compiler option errors and warnings (for example `extendedDiagnostics`
 with `strictTemplates: false`) are shown the same way, prefixed with the
 tsconfig they come from; warnings never fail anything. An error in the
-element or attribute itself (NG8001, NG8002) is marked "(approximate location)",
-as in `mx-tsc`.
+element or attribute itself (NG8001, NG8002) is located at the element name
+or the attribute you wrote, as in `mx-tsc`. A diagnostic that falls on markup
+MX generated rather than copied from your source is marked "(approximate
+location)" and points at the start of the template.
 
 ## Errors
 

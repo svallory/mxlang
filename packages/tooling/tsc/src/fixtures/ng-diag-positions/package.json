@@ -1,0 +1,6 @@
+{
+  "name": "ng-diag-positions",
+  "dependencies": {
+    "@mxlang/angular": "workspace:*"
+  }
+}

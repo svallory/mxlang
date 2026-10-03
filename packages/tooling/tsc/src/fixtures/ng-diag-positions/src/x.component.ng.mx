@@ -1,0 +1,12 @@
+import { Component } from "@angular/core";
+
+@Component({
+  selector: "app-x",
+  template: <div>
+    <app-chld></app-chld>
+    <input [value]=title/>
+    <input lable=title/>
+    <switch=title><case="a">a</case></switch>
+  </div>,
+})
+export class XComponent { title = "hi"; }

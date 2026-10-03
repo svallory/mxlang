@@ -334,7 +334,7 @@ export function angularDiagnostics(
         code: d.code,
         source: "angular",
         messageText:
-          d.mapped === "exact"
+          d.mapped === "exact" || d.mapped === "node"
             ? d.message
             : `${d.message} (approximate location)`,
       });

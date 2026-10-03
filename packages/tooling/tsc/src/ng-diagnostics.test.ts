@@ -510,7 +510,7 @@ describe("checkNgMxFiles when the checker cannot be created", () => {
 });
 
 describe("reportNgDiagnostics", () => {
-  it("marks a degraded position as approximate, and leaves an exact one alone", () => {
+  it("marks a degraded position as approximate, and leaves an exact or node one alone", () => {
     const writes: string[] = [];
     const orig = process.stderr.write;
     process.stderr.write = ((chunk: string) => {
@@ -533,6 +533,7 @@ describe("reportNgDiagnostics", () => {
             source: "abc\ndef\n",
             diagnostics: [
               { ...base, start: 0, message: "exact one", mapped: "exact" },
+              { ...base, start: 4, message: "node one", mapped: "node" },
               { ...base, start: 4, message: "region one", mapped: "region" },
               { ...base, start: 4, message: "map one", mapped: "sourcemap" },
               { ...base, start: 0, message: "none one", mapped: "none" },
@@ -545,6 +546,7 @@ describe("reportNgDiagnostics", () => {
     }
     const out = writes.join("");
     expect(out).toContain("exact one\n");
+    expect(out).toContain("node one\n");
     for (const m of ["region one", "map one", "none one"]) {
       expect(out).toContain(`${m} (approximate location)`);
     }

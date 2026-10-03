@@ -8,6 +8,7 @@
  */
 
 import {
+  anchorFor,
   type CompileNgMxResult,
   lineColumnAt,
   lookupMapping,
@@ -38,19 +39,22 @@ export interface NgMxDiagnostic {
   source: "angular";
   /**
    * How exactly `start` locates the problem. `"exact"`: inside a mapped
-   * expression (the whole expression's start). Degraded, so tooling can say
-   * the location is approximate: `"region"` the start of the enclosing
+   * expression (the whole expression's start). `"node"`: on the start tag or
+   * attribute the author wrote (`length` covers its name, or the attribute
+   * name through value) — what NG8001/NG8002 report against. Degraded, so
+   * tooling can say the location is approximate: `"region"` the start of the enclosing
    * `template:` region; `"sourcemap"` the module source map's nearest
    * position; `"none"` nothing located it and `start` is 0.
    */
   mapped: NgMxMapped;
 }
 
-export type NgMxMapped = "exact" | "region" | "sourcemap" | "none";
+export type NgMxMapped = "exact" | "node" | "region" | "sourcemap" | "none";
 
 /**
  * Resolve an offset in the emitted module to a `.ng.mx` position, never
- * failing: a mapped expression, else the enclosing region's start, else the
+ * failing: a mapped expression, else the start tag or attribute it falls in,
+ * else the enclosing region's start, else the
  * module source map, else the top of the file. A diagnostic must not vanish
  * because its position is awkward, or a broken file would read as clean.
  */
@@ -75,6 +79,15 @@ function locate(
       }
     }
     return { start, length, mapped: "exact" };
+  }
+
+  const anchor = anchorFor(compiled.anchors, generatedOffset);
+  if (anchor) {
+    return {
+      start: anchor.sourceStart,
+      length: anchor.sourceEnd - anchor.sourceStart,
+      mapped: "node",
+    };
   }
 
   const region = compiled.regions.find(
