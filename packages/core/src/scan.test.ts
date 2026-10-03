@@ -775,6 +775,38 @@ describe("tolerant, cached manifest reads", () => {
     expect(fixed.diagnostics).toHaveLength(0);
   });
 
+  it("rescans when the manifest is rewritten with the same size and a pinned mtime", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "a"), { recursive: true });
+    mkdirSync(join(dir, "b"), { recursive: true });
+    writeFileSync(join(dir, "a", "one.tag.ts"), "export default {};\n");
+    writeFileSync(join(dir, "b", "two.tag.ts"), "export default {};\n");
+    const packageJson = join(dir, "package.json");
+    const caller = join(dir, "caller.mx");
+    writeFileSync(caller, "<div/>\n");
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ name: "pin", mx: { tags: ["a"] } }),
+    );
+    const pinned = new Date(Date.now() - 60_000);
+    utimesSync(packageJson, pinned, pinned);
+
+    const first = scanCached(caller);
+    expect([...first.tags.keys()]).toEqual(["one"]);
+
+    // Same byte length, mtime restored: what a same-tick rewrite looks like to
+    // a coarse-timestamp filesystem (and what `touch -r` does on any OS).
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ name: "pin", mx: { tags: ["b"] } }),
+    );
+    utimesSync(packageJson, pinned, pinned);
+
+    const second = scanCached(caller);
+    expect(second).not.toBe(first);
+    expect([...second.tags.keys()]).toEqual(["two"]);
+  });
+
   it("never throws on a broken manifest", () => {
     const dir = scratch();
     writeFileSync(join(dir, "package.json"), "not json at all");

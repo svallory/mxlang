@@ -15,7 +15,7 @@
  * manifest (`host-policy.ts`) ignores `manifest` when `error` is set.
  */
 
-import { readFileSync, type Stats, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
 /** Why a `package.json` revision could not be parsed, positioned in it. */
 export interface PackageJsonParseError {
@@ -43,13 +43,24 @@ interface CacheEntry extends PackageJsonRead {
   stamp: string;
 }
 
+/**
+ * The fields of a `stat` result the revision stamp reads. Structural, so the
+ * emitted declarations name no `node:fs` type.
+ */
+export interface PackageJsonStat {
+  mtimeMs: number;
+  ctimeMs: number;
+  size: number;
+  ino: number;
+}
+
 const cache = new Map<string, CacheEntry>();
 
-let statFile: (path: string) => Stats = statSync;
+let statFile: (path: string) => PackageJsonStat = statSync;
 
 /** For tests: replaces the `stat` the cache keys on (coarse-timestamp filesystems); no argument restores it. */
 export function setPackageJsonStatForTests(
-  stat?: (path: string) => Stats,
+  stat?: (path: string) => PackageJsonStat,
 ): void {
   statFile = stat ?? statSync;
 }
@@ -116,7 +127,7 @@ function positionOfParseError(
  * rewrite in the same tick can leave all four fields identical.
  * `readPackageJsonCached` therefore confirms a stamp hit against the bytes.
  */
-function stampOf(stats: Stats): string {
+function stampOf(stats: PackageJsonStat): string {
   return `${stats.mtimeMs}:${stats.ctimeMs}:${stats.size}:${stats.ino}`;
 }
 

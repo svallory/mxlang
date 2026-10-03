@@ -29,7 +29,7 @@
  * process; a per-call cache would be no cache at all.
  */
 
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import type { CustomTag } from "./custom-tags.ts";
@@ -46,8 +46,19 @@ interface CacheEntry {
   result: ScanResult;
   /** Directory entry lists as they were when scanned, for add/remove. */
   listings: Map<string, string>;
-  /** `package.json` mtimes, for an `mx.tags` change. */
-  manifests: Map<string, number>;
+  /**
+   * `package.json` mtime and text, for an `mx.tags` change. The text is what
+   * makes a hit trustworthy: mtime alone misses an edit that pins the mtime
+   * or lands in the same filesystem tick (Linux < 6.13 stamps at jiffy
+   * granularity).
+   */
+  manifests: Map<string, ManifestStamp>;
+}
+
+interface ManifestStamp {
+  mtimeMs: number;
+  /** `undefined` when the file could not be read. */
+  text: string | undefined;
 }
 
 /** A listing value no real directory can produce, so "absent" is a state. */
@@ -82,11 +93,22 @@ function mtimeOf(path: string): number {
   }
 }
 
+function textOf(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 function snapshot(result: ScanResult): CacheEntry {
   const listings = new Map<string, string>();
   for (const dir of result.directories) listings.set(dir, listingOf(dir));
-  const manifests = new Map<string, number>();
-  for (const file of result.packageFiles) manifests.set(file, mtimeOf(file));
+  const manifests = new Map<string, ManifestStamp>();
+  for (const file of result.packageFiles) {
+    // mtime before text: a write racing this snapshot then reads as stale.
+    manifests.set(file, { mtimeMs: mtimeOf(file), text: textOf(file) });
+  }
   return { result, listings, manifests };
 }
 
@@ -95,14 +117,15 @@ function snapshot(result: ScanResult): CacheEntry {
  *
  * Checks exactly the three things the spec names as invalidating: an add or
  * remove in a scanned directory, a tag file's mtime, and a `package.json`
- * carrying `mx.tags`.
+ * carrying `mx.tags` (mtime and text).
  */
 function isFresh(entry: CacheEntry): boolean {
   for (const [dir, listing] of entry.listings) {
     if (listingOf(dir) !== listing) return false;
   }
-  for (const [file, mtimeMs] of entry.manifests) {
-    if (mtimeOf(file) !== mtimeMs) return false;
+  for (const [file, stamp] of entry.manifests) {
+    if (mtimeOf(file) !== stamp.mtimeMs) return false;
+    if (textOf(file) !== stamp.text) return false;
   }
   for (const file of entry.result.files) {
     if (mtimeOf(file.path) !== file.mtimeMs) return false;
