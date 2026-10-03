@@ -564,7 +564,7 @@ export function createEmitter(): StringEmitter {
    * wins: the attributes written AFTER the last spread are written first (into
    * the template text, evaluated first) and their names are excluded from the
    * spreads; everything before and between is ONE object built in authored order
-   * (`Object.assign({}, {a: f()}, x, {b: g()}, y)`), so an attribute's expression
+   * (`{ ...{a: f()}, ...x, ...{b: g()}, ...y }`), so an attribute's expression
    * runs before the spread that follows it, a key keeps its first slot when a
    * later spread overwrites it, and a `null`/`undefined` spread is ignored. A
    * browser keeps the FIRST duplicate of a concatenated string, so the same
@@ -614,10 +614,13 @@ export function createEmitter(): StringEmitter {
       push("const $raw = Symbol();");
       const parts = head.map((attr) =>
         attr.kind === "spread"
-          ? attr.value.code
-          : `{ ${JSON.stringify(attr.name)}: { [$raw]: ${attributeText(attr)} } }`,
+          ? `...${attr.value.code}`
+          : `...{ ${JSON.stringify(attr.name)}: { [$raw]: ${attributeText(attr)} } }`,
       );
-      push(`const $attrs = Object.assign({}, ${parts.join(", ")});`);
+      // One object literal with spread syntax, not `Object.assign`: a spread
+      // key such as an own enumerable `__proto__` is then defined as data, as in
+      // Marko's own merge, instead of hitting the `[[Set]]` setter.
+      push(`const $attrs = { ${parts.join(", ")} };`);
       entries = "Object.entries($attrs)";
     }
     push(`for (const [key, value] of ${entries}) {`);

@@ -246,6 +246,43 @@ describe("duplicate attributes next to a spread (html, rendered)", () => {
   });
 });
 
+describe("a spread's own __proto__ key (html, rendered)", () => {
+  const withProto = (value: unknown) =>
+    Object.defineProperty({}, "__proto__", { value, enumerable: true });
+
+  it("keeps an own enumerable __proto__ key as an attribute, like Marko's object merge", () => {
+    expect(
+      render("<div a=1 ...input.x>hi</div>", { x: withProto("pv") }).kept,
+    ).toEqual({ a: "1", __proto__: "pv" });
+    // The lone-spread path agrees.
+    expect(
+      render("<div ...input.x>hi</div>", { x: withProto("pv") }).names,
+    ).toEqual(["__proto__"]);
+    // And a spread after other attributes with a later explicit one.
+    expect(
+      render('<div a=1 ...input.x id="p">hi</div>', { x: withProto("pv") })
+        .names,
+    ).toEqual(["id", "a", "__proto__"]);
+  });
+
+  it("an object-valued __proto__ from JSON.parse does not become the merge object's prototype", () => {
+    const x = JSON.parse('{"__proto__": {"polluted": "yes"}, "b": "2"}');
+    const out = render("<div a=1 ...input.x>hi</div>", { x });
+    expect(out.kept.b).toBe("2");
+    expect(out.kept.polluted).toBeUndefined();
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    // Marko's merge keeps the key as data, so it is an attribute here too.
+    expect(out.names).toContain("__proto__");
+  });
+
+  it("an explicit attribute named __proto__ is dropped on a tag with a spread, as before", () => {
+    const out = render('<div __proto__="1" a=2 ...input.x>hi</div>', {
+      x: { k: "v" },
+    });
+    expect(out.names).toEqual(["a", "k"]);
+  });
+});
+
 /**
  * Evaluation order, which Marko decides: the attributes after the last spread
  * are evaluated first, then everything before it in authored order.

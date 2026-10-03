@@ -61,6 +61,7 @@ async function render(template: string) {
   const source = `---
 import Echo from "./Echo.mjs";
 const x = { a: "from-x", b: "bx", id: "x-id", class: "from-x" };
+const p = Object.defineProperty({}, "__proto__", { value: "pv", enumerable: true });
 const y = { a: "from-y", b: "by", c: "cy" };
 ---
 ${template}`;
@@ -133,5 +134,11 @@ describe("duplicate attributes next to a spread (astro, rendered)", () => {
     const before = await render("<div class={a: true, b: false} ...x>hi</div>");
     expect(before.kept.class).toBe("from-x");
     expect(before.names.filter((n) => n === "class")).toHaveLength(1);
+  });
+
+  it("keeps a spread's own __proto__ key in the folded object, as a literal spread does", async () => {
+    const out = await render("<div a=1 ...p>hi</div>");
+    expect(out.kept).toMatchObject({ a: "1" });
+    expect(out.names).toContain("__proto__");
   });
 });
