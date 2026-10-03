@@ -8,5 +8,12 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/fixtures/**"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/fixtures/**",
+    // The forked worker entry: bundled as `dist/ng-worker.cjs`, never imported
+    // by the plugin, so its declaration must not be emitted (the build strips
+    // `ng-diagnostics.d.ts` the same way — see build/strip-ng-declarations.ts).
+    "src/ng-worker.ts"
+  ]
 }

@@ -533,10 +533,12 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
+        "@angular/compiler-cli": ">=22.0.0 <23.0.0",
         "@astrojs/language-server": "2.16.16",
         "typescript": ">=5.9.0 <7",
       },
       "optionalPeers": [
+        "@angular/compiler-cli",
         "@astrojs/language-server",
       ],
     },

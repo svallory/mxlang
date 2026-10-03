@@ -26,6 +26,7 @@ tasks:
     args: ["run", "build"]
     inputs:
       - "src/**/*"
+      - "build/**/*"
       - "tsconfig.json"
       - "tsconfig.build.json"
       - "package.json"

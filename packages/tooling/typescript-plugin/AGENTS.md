@@ -71,10 +71,12 @@ entry.
   process** (`@mxlang/angular-checker`'s `createCheckerWorker`; one per nearest
   `package.json`; superseded runs are never delivered, and a stale run still
   going after 5 s is SIGKILLed and restarted; the worker ends when tsserver's
-  IPC channel closes). `@mxlang/angular-checker` is a **devDependency**: the bundle inlines it (no bare import of it in `dist/*.cjs`), and the build deletes `dist/ng-diagnostics.d.ts` and `dist/ng-worker.d.ts`, so no packed declaration reaches the checker or the optional `@angular/compiler-cli` peer (pack-probe's `skipLibCheck:false` node16 typecheck failed with TS2307 otherwise). `angularDiagnostics` is not exported from the entry. The build emits `dist/ng-worker.cjs` beside
+  IPC channel closes). `@mxlang/angular-checker` is a **devDependency**: the bundle inlines it (no bare import of it in `dist/*.cjs`). No packed declaration reaches the checker or `@angular/compiler-cli`: `tsconfig.build.json` excludes `src/ng-worker.ts` from the declaration emit, and `build/strip-ng-declarations.ts` removes the still-emitted `dist/ng-diagnostics.d.ts` (the entry imports the module, so tsc always emits it) — failing the build before deleting anything when a shipped d.ts references a stripped module: it parses every module reference (`import`/`export … from`, bare `import`, `import()`/`require()`, `/// <reference path>`) and resolves each relative form (this repo's emit retains `.ts` specifiers; `.js`, extensionless and `../` resolve to the same file). `src/strip-ng-declarations.test.ts` pins the guard with a real tsc-emitted `.ts` re-export plus negative controls (pack-probe's `skipLibCheck:false` node16 typecheck failed with TS2307 otherwise, and `scripts/pack-hygiene.test.ts` pins the exact dist contents). `angularDiagnostics` is not exported from the entry. The build emits `dist/ng-worker.cjs` beside
   `dist/index.cjs` (`src/ng-worker.ts`, resolved via `__dirname`) and keeps
   `@angular/compiler-cli` external: the worker resolves it from the user's
-  project. Delivery hook: the `getSemanticDiagnostics` branch of the same Proxy
+  project — it is an **optional peer** (`>=22.0.0 <23.0.0`, same declaration as
+  `@mxlang/angular-checker`, with the exact devDependency for CI), never
+  installed by the plugin itself. Delivery hook: the `getSemanticDiagnostics` branch of the same Proxy
   that injects compile diagnostics into `getSyntacticDiagnostics`
   (`index.ts`, `angularDiagnostics`); the async refresh is
   `Project.refreshDiagnostics()` (public in TS 6.0, emits

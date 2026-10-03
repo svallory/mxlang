@@ -105,6 +105,23 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     name: "@mxlang/typescript-plugin",
     dir: "packages/tooling/typescript-plugin",
     extraTopLevel: [],
+    distFiles: [
+      // The Angular worker declarations must never ship: ng-worker.ts is
+      // excluded from the declaration emit and build/strip-ng-declarations.ts
+      // removes ng-diagnostics.d.ts (its types reach the devDependency
+      // @mxlang/angular-checker and @angular/compiler-cli). A stray
+      // ng-*.d.ts here means the strip stopped running.
+      "dist/amx-language.d.ts",
+      "dist/astro-language.d.ts",
+      "dist/failed-module-stub.d.ts",
+      "dist/host-policy-diagnostics.d.ts",
+      "dist/index.cjs",
+      "dist/index.d.ts",
+      "dist/language.d.ts",
+      "dist/mx-language.d.ts",
+      "dist/ng-worker.cjs",
+      "dist/own-location-header.d.ts",
+    ],
     declarations: true,
   },
   {
