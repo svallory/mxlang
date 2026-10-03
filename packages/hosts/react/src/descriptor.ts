@@ -50,6 +50,7 @@ const descriptor: TargetDescriptor = {
         compileReactMx(source, filename, {
           customTags: options.customTags,
           warnings: options.warnings,
+          typeCheck: options.typeCheck,
           resolveImport: options.resolveImport,
           targets: options.targets ?? targets(),
         }),

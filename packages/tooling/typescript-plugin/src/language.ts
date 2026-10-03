@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
   type AngularMapping,
@@ -17,12 +17,7 @@ import {
 } from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
 import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
-import { compileSolidMx } from "@mxlang/solid";
-import {
-  builtinLookup,
-  hostModuleSegment,
-  scanCached,
-} from "@mxlang/target-registry";
+import { builtinLookup, scanCached } from "@mxlang/target-registry";
 import type {
   CodeInformation,
   CodeMapping,
@@ -32,6 +27,11 @@ import type {
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
+import {
+  fileKindForPipeline,
+  fileKindHostFilter,
+  fileKindOf,
+} from "./file-kinds.ts";
 import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 
 /**
@@ -39,14 +39,30 @@ import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
  * `MxRegionCompile` shape `print` calls — the parser no longer defaults to
  * this host, so every `.solid.mx` caller supplies it explicitly.
  */
-export const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
-  compileSolidMx(source, { ...rest, targets: builtinLookup() });
+export const solidRegionCompile = ({
+  source,
+  ...rest
+}: Parameters<MxRegionCompile>[0] & {
+  warnings?: MxWarning[];
+}): ReturnType<MxRegionCompile> => {
+  const compileRegion = fileKindForPipeline("region").compileRegion;
+  if (!compileRegion) throw new Error("missing region compiler");
+  return compileRegion(source, {
+    source,
+    ...rest,
+    targets: builtinLookup(),
+  }) as ReturnType<MxRegionCompile>;
+};
 
-export const SOLID_MX_EXTENSION = "solid.mx";
-export const SOLID_MX_LANGUAGE_ID = "solidmx";
+export const SOLID_MX_EXTENSION = `${fileKindForPipeline("region").segment}.mx`;
+export const SOLID_MX_LANGUAGE_ID =
+  fileKindForPipeline("region").languageIds?.[0] ??
+  fileKindForPipeline("region").diagnosticSource;
 
-export const NG_MX_EXTENSION = "ng.mx";
-export const NG_MX_LANGUAGE_ID = "ngmx";
+export const NG_MX_EXTENSION = `${fileKindForPipeline("ng-template").segment}.mx`;
+export const NG_MX_LANGUAGE_ID =
+  fileKindForPipeline("ng-template").languageIds?.[0] ??
+  fileKindForPipeline("ng-template").diagnosticSource;
 
 export const codeInformation: CodeInformation = {
   verification: true,
@@ -133,7 +149,9 @@ export function createSolidMxLanguagePlugin(
         // cannot become a `MxCompileDiagnostic` positioned in this file;
         // logged the same way `mx-language.ts` already does for this exact
         // case (tsserver's own log in an editor, stderr under `mx-tsc`).
-        const scan = scanCached(fileName, { host: "solid" });
+        const scan = scanCached(fileName, {
+          host: fileKindHostFilter(fileKindForPipeline("region")),
+        });
         reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
           console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
         );
@@ -145,11 +163,7 @@ export function createSolidMxLanguagePlugin(
             const warnings: MxWarning[] = [];
             const printed = print(source, fileName, {
               mxRegionCompile: (input) =>
-                compileSolidMx(input.source, {
-                  ...input,
-                  warnings,
-                  targets: builtinLookup(),
-                }),
+                solidRegionCompile({ ...input, warnings }),
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
                 : undefined),
@@ -366,7 +380,9 @@ export function createNgMxLanguagePlugin(
       }
 
       try {
-        const scan = scanCached(fileName, { host: "angular" });
+        const scan = scanCached(fileName, {
+          host: fileKindHostFilter(fileKindForPipeline("ng-template")),
+        });
         reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
           console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
         );
@@ -1260,13 +1276,13 @@ function equalLength(
   return length;
 }
 
-/** `.ng.mx` by file kind (core's `hostModuleSegment`, over the built-in set), case-insensitively. */
+/** Angular module recognition follows the registered pipeline, case-insensitively. */
 export function isNgMx(fileName: string): boolean {
-  return hostModuleSegment(basename(fileName).toLowerCase()) === "ng";
+  return fileKindOf(fileName)?.pipeline === "ng-template";
 }
 
 function isSolidMx(fileName: string): boolean {
-  return fileName.toLowerCase().endsWith(`.${SOLID_MX_EXTENSION}`);
+  return fileKindOf(fileName)?.pipeline === "region";
 }
 
 function toSyntaxError(

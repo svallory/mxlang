@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { createVirtualTagModuleReader } from "@mxlang/angular";
+import * as core from "@mxlang/core";
 import {
   type CustomTag,
   dropOwnParserPosition,
@@ -17,13 +18,10 @@ import {
   printExpression,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import { compileHonoMx, honoDeclarations } from "@mxlang/hono";
-import { compile, policy, strictPolicy, translator } from "@mxlang/html";
-import { compilePreactMx, preactDeclarations } from "@mxlang/preact";
-import { compileReactMx, reactDeclarations } from "@mxlang/react";
-import { compileSolidUnit } from "@mxlang/solid";
 import {
+  builtinFileKinds,
   builtinLookup,
+  builtinTargets,
   getCustomTags,
   hostFilterKey,
   scanCached,
@@ -32,6 +30,7 @@ import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
+import { fileKindOf } from "./file-kinds.ts";
 import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 import {
   codeInformation,
@@ -40,7 +39,6 @@ import {
   decodeMappings,
   diagnosticsFrom,
   foreignTemplateError,
-  isNgMx,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
   mergeMappings,
@@ -158,13 +156,19 @@ export function createMxLanguagePlugin(
             const customTags = tagsFor(fileName, hostPolicy.target);
             // Reuse discovery's policy resolution: resolving it again would
             // repeat deprecation warnings on unchanged non-Angular files.
-            // Keyed on the target registry (the target's host), not on
-            // `hostPolicy.host`, so table dispatch can fold this hook in.
-            const tag =
-              builtinLookup().target(hostPolicy.target)?.host?.name ===
-              "angular"
-                ? compileAngularTagVirtual(fileName, source, customTags)
-                : undefined;
+            // Tag projection belongs to the target's registered template
+            // pipeline, not a host-name comparison. Pages still hit pending.
+            const descriptor = builtinLookup().target(hostPolicy.target);
+            const hasTagPipeline = descriptor?.host?.fileKinds?.some((kind) =>
+              builtinFileKinds.some(
+                (builtin) =>
+                  builtin.segment === kind.segment &&
+                  builtin.pipeline === "ng-template",
+              ),
+            );
+            const tag = hasTagPipeline
+              ? compileAngularTagVirtual(fileName, source, customTags)
+              : undefined;
             return tag ?? compileMxVirtual(fileName, source, customTags);
           },
         );
@@ -313,63 +317,39 @@ export function createMxLanguagePlugin(
     angularTag?: boolean;
   } {
     const hostPolicy = resolveHost(fileName);
-    const strict = hostPolicy.host === "astro" || hostPolicy.strict === true;
-    const warnings: MxWarning[] = [];
-    if (hostPolicy.host === "angular") {
+    const descriptor = builtinLookup().target(hostPolicy.target);
+    const load = descriptor?.load;
+    if (!load) {
+      const identity = descriptor?.host
+        ? `${descriptor.host.name} host`
+        : `${hostPolicy.target} target`;
       throw new Error(
-        "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
+        `the ${identity} is not wired into @mxlang/typescript-plugin yet${descriptor?.pending ? ` (${descriptor.pending})` : ""}`,
       );
     }
+    const strict = descriptor.strict === "always" || hostPolicy.strict === true;
+    const warnings: MxWarning[] = [];
     // Every compile carries the built-in lookup: core asks it which packages
     // export `AttrTag` and which file-kind segments exist, and the answer must
     // be the whole registered set, not one target's own descriptor, or a
     // callee importing `AttrTag` from another registered target's package
     // would stop being recognised.
-    const compiled =
-      hostPolicy.host === "solid"
-        ? compileSolidUnit(source, {
-            filename: fileName,
-            customTags,
-            warnings,
-            targets: builtinLookup(),
-          })
-        : hostPolicy.host === "preact"
-          ? compilePreactMx(source, fileName, {
-              customTags,
-              warnings,
-              typeCheck: true,
-              targets: builtinLookup(),
-            })
-          : hostPolicy.host === "react"
-            ? compileReactMx(source, fileName, {
-                customTags,
-                warnings,
-                typeCheck: true,
-                targets: builtinLookup(),
-              })
-            : hostPolicy.host === "hono"
-              ? compileHonoMx(source, fileName, {
-                  customTags,
-                  warnings,
-                  typeCheck: true,
-                  targets: builtinLookup(),
-                })
-              : compile(source, fileName, {
-                  strict,
-                  customTags,
-                  warnings,
-                  targets: builtinLookup(),
-                });
-    const generated =
-      hostPolicy.host === "astro"
-        ? createAstroTypeSurface(compiled.code)
-        : compiled.code;
+    const compiled = load(core).compileModule(source, fileName, {
+      strict,
+      customTags,
+      warnings,
+      typeCheck: true,
+      targets: builtinLookup(),
+    });
+    const generated = descriptor.typeSurface?.(compiled.code) ?? compiled.code;
     const mappings =
-      hostPolicy.host === "solid"
+      descriptor.mappings === "merge-recorded"
         ? mergeMappings(
             [
-              ...decodeMappings(compiled.map, generated, source),
-              ...recordedMappings(compiled.mappings),
+              ...(compiled.map
+                ? decodeMappings(compiled.map, generated, source)
+                : []),
+              ...recordedMappings(compiled.mappings ?? []),
             ].sort(
               (left, right) =>
                 (left.generatedOffsets[0] ?? 0) -
@@ -381,13 +361,8 @@ export function createMxLanguagePlugin(
             fileName,
             generated,
             strict,
-            hostPolicy.host === "preact"
-              ? preactDeclarations
-              : hostPolicy.host === "react"
-                ? reactDeclarations
-                : hostPolicy.host === "hono"
-                  ? honoDeclarations
-                  : undefined,
+            (strict ? descriptor.declarations?.strict : undefined) ??
+              descriptor.declarations?.default,
             compiled.mappings,
             customTags,
             // The mapping pass lowers the same source a second time. It
@@ -419,26 +394,14 @@ export function createMxLanguagePlugin(
  * renderer's own parameter name and never something an Astro caller passes.
  */
 export function createAstroTypeSurface(code: string): string {
-  // The export is named after the file (`card.mx` -> `Card`), so this matches
-  // the statement's shape and reads the name back rather than pinning a fixed
-  // `render`.
-  const match = code.match(/export default ([A-Za-z_$][\w$]*);/);
-  if (!match?.[1]) {
-    throw new Error(
-      "@mxlang/typescript-plugin: the Astro host could not find the compiled MX default export.",
-    );
-  }
-  const name = match[1];
-  return code.replace(
-    match[0],
-    [
-      'type MxAstroInput = "content" extends keyof Input',
-      '  ? Omit<Input, "content"> & { children?: unknown }',
-      "  : Input;",
-      `const mxAstroRender = ${name} as unknown as (input: MxAstroInput) => string;`,
-      "export default mxAstroRender;",
-    ].join("\n"),
+  // Compatibility export; the owning pipeline's target now supplies it.
+  const kind = builtinFileKinds.find(
+    (kind) => kind.pipeline === "astro-template",
   );
+  const descriptor = builtinTargets.find((target) =>
+    target.host?.fileKinds?.some((entry) => entry.segment === kind?.segment),
+  );
+  return descriptor?.typeSurface?.(code) ?? code;
 }
 
 function createVirtualCode(
@@ -472,7 +435,7 @@ export function createHtmlMappings(
   generated: string,
   strict: boolean,
   declarations?: HostDeclarations,
-  emittedMappings: GeneratedMapping[] = [],
+  emittedMappings: readonly GeneratedMapping[] = [],
   customTags?: Record<string, CustomTag>,
   warnings?: MxWarning[],
 ): CodeMapping[] {
@@ -486,11 +449,19 @@ export function createHtmlMappings(
     filename: fileName,
     customTags,
   });
+  // D3: the mapping pass still uses the default HTML target's translator,
+  // even when the compile target is JSX. Do not change this disagreement.
+  const fallback = builtinLookup().target(builtinLookup().defaultTarget());
+  const mappingDeclarations =
+    declarations ??
+    (strict ? fallback?.declarations?.strict : undefined) ??
+    fallback?.declarations?.default;
+  if (!mappingDeclarations) throw new Error("missing mapping declarations");
   const ctx = newCtx(
     source,
     printExpression,
-    declarations ?? (strict ? strictPolicy : policy),
-    compiler.taglib.buildLookup(dirname(fileName), translator),
+    mappingDeclarations,
+    compiler.taglib.buildLookup(dirname(fileName), fallback?.translator),
     fileName,
     builtinLookup(),
   );
@@ -536,7 +507,9 @@ export function createHtmlMappings(
   );
 }
 
-function recordedMappings(mappings: GeneratedMapping[]): CodeMapping[] {
+function recordedMappings(
+  mappings: readonly GeneratedMapping[],
+): CodeMapping[] {
   return mappings
     .filter(
       (mapping) =>
@@ -713,11 +686,7 @@ function offsetAt(
 
 function isMx(fileName: string): boolean {
   const lower = fileName.toLowerCase();
-  if (
-    lower.endsWith(".solid.mx") ||
-    lower.endsWith(".astro.mx") ||
-    isNgMx(fileName)
-  ) {
+  if (fileKindOf(fileName)) {
     return false;
   }
   return MX_EXTENSIONS.some((extension) => lower.endsWith(`.${extension}`));

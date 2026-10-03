@@ -14,6 +14,9 @@
     // The forked worker entry: bundled as `dist/ng-worker.cjs`, never imported
     // by the plugin, so its declaration must not be emitted (the build strips
     // `ng-diagnostics.d.ts` the same way — see build/strip-ng-declarations.ts).
-    "src/ng-worker.ts"
+    "src/ng-worker.ts",
+    // Internal registry-typed glue, not a public API. Imports can still pull
+    // it into tsc's program despite exclude; the guarded strip removes it.
+    "src/file-kinds.ts"
   ]
 }

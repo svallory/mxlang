@@ -1,5 +1,5 @@
 /**
- * A dedicated file so `vi.mock` of `@mxlang/html` cannot leak into other
+ * A dedicated file so a descriptor-load spy cannot leak into other
  * suites. Babel's trailing `(L:C)` is dropped only when it repeats the
  * diagnostic's own parser position; these cases must keep their text.
  */
@@ -7,29 +7,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { builtinLookup } from "@mxlang/target-registry";
 import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMxLanguagePlugin, MX_LANGUAGE_ID } from "./mx-language.ts";
 
-vi.mock("@mxlang/html", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@mxlang/html")>();
-  return {
-    ...actual,
-    compile: (source: string, ...rest: unknown[]) => {
-      if (source.includes("PLAIN-ERROR")) {
-        // Bun gives every Error numeric line/column (its construction site).
-        throw Object.assign(new Error("only position (12:7)"), {
-          line: 1,
-          column: 3,
-        });
-      }
-      return (actual.compile as (...a: unknown[]) => unknown)(source, ...rest);
-    },
-  };
-});
-
 const dirs: string[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true });
 });
 
@@ -70,6 +55,20 @@ describe("Babel's (L:C) is kept unless it repeats the diagnostic's own position"
   });
 
   it("keeps a plain Error's own (L:C) although it has numeric line/column", () => {
+    const descriptor = builtinLookup().target("html");
+    if (!descriptor?.load) throw new Error("missing html compiler");
+    const wired = descriptor as typeof descriptor & {
+      load: NonNullable<typeof descriptor.load>;
+    };
+    vi.spyOn(wired, "load").mockReturnValue({
+      compileModule() {
+        // Bun gives every Error numeric line/column (its construction site).
+        throw Object.assign(new Error("only position (12:7)"), {
+          line: 1,
+          column: 3,
+        });
+      },
+    });
     const message = messageOf({ "page.mx": "<p>PLAIN-ERROR</p>\n" }, "page.mx");
     expect(message).toBe("only position (12:7)");
   });

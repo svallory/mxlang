@@ -1,15 +1,21 @@
 import { convertToTSX } from "@astrojs/compiler/sync";
+import { lowerAstroMx } from "@mxlang/astro/template";
 import {
-  type AstroTemplateMapping,
-  lowerAstroMx,
-} from "@mxlang/astro/template";
-import { type MxWarning, reportScanDiagnostics } from "@mxlang/core";
+  type GeneratedMapping,
+  type MxWarning,
+  reportScanDiagnostics,
+} from "@mxlang/core";
 import type { RawSourceMap } from "@mxlang/parser";
 import { builtinLookup, scanCached } from "@mxlang/target-registry";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
+import {
+  fileKindForPipeline,
+  fileKindHostFilter,
+  fileKindOf,
+} from "./file-kinds.ts";
 import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 import {
   codeInformation,
@@ -25,8 +31,10 @@ import {
 } from "./language.ts";
 import type { MxSyntaxError } from "./mx-language.ts";
 
-export const AMX_EXTENSION = "astro.mx";
-export const AMX_LANGUAGE_ID = "astromx";
+export const AMX_EXTENSION = `${fileKindForPipeline("astro-template").segment}.mx`;
+export const AMX_LANGUAGE_ID =
+  fileKindForPipeline("astro-template").languageIds?.[0] ??
+  fileKindForPipeline("astro-template").diagnosticSource;
 
 export interface AmxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): MxSyntaxError | undefined;
@@ -63,7 +71,9 @@ export function createAmxLanguagePlugin(
         // A scan diagnostic names a different file (the `package.json`), so
         // it cannot become a positioned `MxCompileDiagnostic` here — logged
         // the same way `mx-language.ts`/`language.ts` already do.
-        const scan = scanCached(fileName, { host: "astro" });
+        const scan = scanCached(fileName, {
+          host: fileKindHostFilter(fileKindForPipeline("astro-template")),
+        });
         reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
           console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
         );
@@ -177,7 +187,7 @@ export function createAmxLanguagePlugin(
  * Only intersections represented by both stages survive.
  */
 export function composeAmxMappings(
-  amxToAstro: AstroTemplateMapping[],
+  amxToAstro: GeneratedMapping[],
   astroToTsxMap: { mappings: string },
   tsx: string,
   astro: string,
@@ -263,7 +273,7 @@ function createVirtualCode(
 }
 
 function isAmx(fileName: string): boolean {
-  return fileName.toLowerCase().endsWith(`.${AMX_EXTENSION}`);
+  return fileKindOf(fileName)?.pipeline === "astro-template";
 }
 
 function toSyntaxError(

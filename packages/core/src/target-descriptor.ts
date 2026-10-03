@@ -38,6 +38,8 @@ export interface TargetCompileOptions {
   warnings?: MxWarning[];
   /** The `mx.strict` setting the caller resolved. A target may force it on (`strict: "always"`). */
   strict?: boolean;
+  /** Type-only projection checks; build callers leave this unset (decision 140). */
+  typeCheck?: boolean;
   /** A synchronous import resolver (decision 107), tried before the built-in resolution. */
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   /** Caller-owned target set for cross-file resolution; unset uses the descriptor's own lookup. */

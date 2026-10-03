@@ -141,7 +141,6 @@ workspaceDirs["@mxlang/typescript-plugin"] = join(
  * no real types; each entry names the one type the importing `.d.ts` uses.
  */
 const STUB_TYPES: Record<string, string> = {
-  // `typescript-plugin/dist/amx-language.d.ts` imports it from `@mxlang/astro/template`.
   "@mxlang/astro": "export type AstroTemplateMapping = unknown;\n",
 };
 
@@ -425,6 +424,44 @@ try {
     if (r.ok) console.log(`[pack-probe] PASS ${p.name}`);
     else
       problems.push(`${p.name}: skipLibCheck:false typecheck failed\n${r.out}`);
+    if (p.name === "@mxlang/typescript-plugin") {
+      // The registry is stubbed in this consumer. Only an actually bundled
+      // registry/descriptor graph can compile all targets under plain Node.
+      const smoke = run(
+        "node",
+        [
+          "-e",
+          `
+        const { mkdtempSync, writeFileSync, rmSync } = require("node:fs");
+        const { tmpdir } = require("node:os");
+        const { join } = require("node:path");
+        const ts = require("typescript");
+        const plugin = require("@mxlang/typescript-plugin");
+        if (typeof plugin !== "function") throw new Error("not a plugin factory");
+        for (const target of ["html", "astro-html", "solid-jsx", "preact-jsx", "react-jsx", "hono-jsx"]) {
+          const project = mkdtempSync(join(tmpdir(), "packed-plugin-dispatch-"));
+          try {
+            writeFileSync(join(project, "package.json"), JSON.stringify({ mx: { target } }));
+            const file = join(project, "page.mx");
+            const language = plugin.createMxLanguagePlugin(ts);
+            const virtual = language.createVirtualCode(file, "mx", ts.ScriptSnapshot.fromString("<p/>"), { getAssociatedScript: () => undefined });
+            const diagnostics = language.getCompileDiagnostics(file);
+            if (!virtual || diagnostics.length) throw new Error(target + ": " + JSON.stringify(diagnostics));
+            if (!virtual.snapshot.getText(0, virtual.snapshot.getLength()).includes("export default")) throw new Error(target + " missing output");
+          } finally { rmSync(project, { recursive: true, force: true }); }
+        }
+        console.log("packed Node target dispatch passed");
+      `,
+        ],
+        dir,
+      );
+      if (smoke.status === 0)
+        console.log("[pack-probe] PASS packed plugin Node target dispatch");
+      else
+        problems.push(
+          `packed plugin Node target dispatch failed\n${smoke.out}`,
+        );
+    }
   }
 
   // 2. Negative case: html without its optional `@types/bun` must fail on bun.d.ts.

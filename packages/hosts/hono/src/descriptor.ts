@@ -50,6 +50,8 @@ const descriptor: TargetDescriptor = {
         compileHonoMx(source, filename, {
           customTags: options.customTags,
           warnings: options.warnings,
+          // Preserve the editor-only checks; ordinary builds leave this unset.
+          typeCheck: options.typeCheck,
           resolveImport: options.resolveImport,
           targets: options.targets ?? targets(),
         }),

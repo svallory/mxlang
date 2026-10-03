@@ -1,5 +1,5 @@
 /**
- * A dedicated file (not `index.test.ts`) so `vi.mock` on `@mxlang/preact`
+ * A dedicated file (not `index.test.ts`) so a descriptor-load spy
  * cannot leak into any other suite in this package.
  *
  * `readCalleeInput`'s own `MAX_ALIAS_DEPTH` (4) bounds how many hops a real
@@ -11,8 +11,8 @@
  * codebase has. To still prove the real wiring — `compileWithDependencies`
  * itself, plus `mx-language.ts`'s `warnings.map(...)` into
  * `compileDiagnostics` → `getCompileDiagnostics` — carries a cap warning
- * through end to end, this mocks only the host compile function
- * `mx-language.ts` calls for the "preact" host policy (`compilePreactMx`),
+ * through end to end, this mocks only the descriptor's compileModule entry
+ * selected by the "preact" host policy,
  * so every pass genuinely goes through `compileWithDependencies`'s real
  * loop and the caller's real diagnostic plumbing; only the dependency
  * *discovery* itself (normally `readCalleeInput`, walled off by
@@ -21,53 +21,35 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MxWarning } from "@mxlang/core";
+import { builtinLookup } from "@mxlang/target-registry";
 import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@mxlang/preact", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@mxlang/preact")>();
-  let compiles = 0;
-  return {
-    ...actual,
-    compilePreactMx: (
-      _source: string,
-      _filename: string,
-      options: { warnings?: MxWarning[] } = {},
-    ) => {
-      compiles++;
-      // Every pass reports one more dependency than the last, so the
-      // dependency set is never stable and `compileWithDependencies`'s
-      // loop only stops at `MAX_COMPILE_PASSES`.
-      const dependencies = Array.from(
-        { length: compiles },
-        (_, index) => `/project/Dep${index}.mx`,
-      );
-      // The real `compilePreactMx` pushes onto the caller-supplied
-      // `options.warnings` array by reference; this stand-in never itself
-      // hits the cap (that is `compileWithDependencies`'s job), so it
-      // leaves that array untouched.
-      void options;
-      return {
-        code: "<div/>",
-        map: { version: 3, sources: [], names: [], mappings: "" },
-        mappings: [],
-        dependencies,
-      };
-    },
-  };
-});
-
-const { createMxLanguagePlugin, MX_LANGUAGE_ID } = await import(
-  "./mx-language.ts"
-);
+import { createMxLanguagePlugin, MX_LANGUAGE_ID } from "./mx-language.ts";
 
 describe("compileWithDependencies cap warning through a real caller (mocked dependency discovery)", () => {
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("surfaces exactly one cap diagnostic, with the chain text, through getCompileDiagnostics", () => {
+    const descriptor = builtinLookup().target("preact-jsx");
+    if (!descriptor?.load) throw new Error("missing preact compiler");
+    let compiles = 0;
+    const wired = descriptor as typeof descriptor & {
+      load: NonNullable<typeof descriptor.load>;
+    };
+    vi.spyOn(wired, "load").mockReturnValue({
+      compileModule() {
+        compiles++;
+        return {
+          code: "<div/>",
+          dependencies: Array.from(
+            { length: compiles },
+            (_, index) => `/project/Dep${index}.mx`,
+          ),
+        };
+      },
+    });
     const dir = mkdtempSync(join(tmpdir(), "mx-cap-real-caller-"));
     try {
       writeFileSync(join(dir, "package.json"), '{"mx":{"host":"preact"}}\n');
@@ -78,7 +60,7 @@ describe("compileWithDependencies cap warning through a real caller (mocked depe
       // A dependency set that keeps growing needs a host reader present at
       // all -- `compileWithDependencies` returns immediately with no
       // `readSource` (see its own doc comment). The reader's actual answers
-      // are irrelevant here: the mocked `compilePreactMx` above is what
+      // are irrelevant here: the mocked `compileModule` above is what
       // grows the dependency set every pass, not the freshness of any
       // dependency's own text.
       const readSource = (fileName: string) => `stub-text-for-${fileName}`;

@@ -16,7 +16,10 @@ describe.skipIf(!built)("the built ng-worker bundle", () => {
     // Resolved at run time from the user's project (createRequire), never inlined.
     expect(code).not.toMatch(/require\(["']@angular\/compiler-cli["']\)/);
     expect(code).not.toContain("class NgtscProgram");
-    expect(code.length).toBeLessThan(200_000);
+    // The published worker now bundles Angular's host glue too, instead of
+    // relying on a per-host runtime dependency. The explicit compiler-cli
+    // guards above remain the proof; retain a separate gross-size tripwire.
+    expect(code.length).toBeLessThan(2_000_000);
     // ...and it is the worker, not a tree-shaken shell.
     expect(code).toContain("runCheckerWorker");
   });

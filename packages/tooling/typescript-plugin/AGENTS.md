@@ -1,5 +1,38 @@
 # typescript-plugin — agent instructions
 
+## Current target dispatch (decisions 129/132)
+
+Page compilation selects `builtinLookup().target(policy.target)` and calls
+`load(core).compileModule` with the full lookup and `typeCheck: true` (decision
+140). Strictness, type surface, pending text, declarations and mapping mode
+come from the descriptor. A merge-recorded target may omit both map and
+mappings; those contribute no mappings. The second lowering still uses the
+default target's translator (D3), regardless of the selected target.
+
+File recognition, diagnostic labels and region compilation use
+`builtinFileKinds` and its pipeline. Discovery for fixed file kinds uses the
+owning target's host filter, including Astro's D6 filter. Angular/Astro template
+compilation and compiler services remain built-in tool glue, not page compilers.
+The compatibility `createAstroTypeSurface` export forwards to the descriptor.
+The Angular tag projection (`createVirtualTagModuleReader`, PR #264) runs
+before page dispatch when the selected target owns a `ng-template` pipeline.
+It never compares host names, and ordinary pages keep the pending diagnostic.
+Data selection remains staged out by the registry's policy wrapper.
+
+Both published dist and VSIX inline the registry, descriptors and host glue;
+dist keeps core/parser external, while VSIX inlines them too. The source
+imports Angular/Astro glue directly, so both packages remain declared workspace
+dependencies even though their runtime code is bundled. Public types use the
+declared Angular package and core's generic mapping type, never the private
+registry. `file-kinds.ts` is excluded from declaration roots and stripped with
+a dangling-reference guard (tsc still follows imports despite `exclude`).
+`dist-dispatch.test.ts` and pack-probe's consumer Node smoke pin lazy loads;
+check-vsix pins the shipped closure. The test project externalizes core/dist:
+a native lazy require and a Vite-transformed second core otherwise split the
+unsaved-buffer overrides (`core-identity.test.ts` pins that boundary).
+
+Historical implementation details below predate this table dispatch.
+
 ## Exact-pin policy detail (typescript peer)
 
 **A published package's `peerDependencies` is the one exception to the root exact-pin policy, and `typescript` is the case.** `@mxlang/tsc` and `@mxlang/typescript-plugin` declare `peerDependencies.typescript: ">=5.9.0 <7"`, because a peer is resolved from the *consumer's* project and an exact peer makes the package uninstallable for anyone on a different patch. The exact-pin policy still holds for every `devDependencies`/`dependencies` entry, including those packages' own exact `devDependencies.typescript` — the range is what a consumer may satisfy, the pin is what CI and local builds actually run (`typescript@6.0.3` today, bumped from `5.9.3`).
@@ -10,11 +43,11 @@ TypeScript must resolve to **one** copy: the TS plugin is handed the `ts` object
 
 **A package that emits declarations sets `rootDir` explicitly in its `tsconfig.build.json`.** TS 6 stopped inferring a common source directory when a build config and the `tsconfig.json` it extends disagree about one (`TS5011`) — which they do whenever `include` covers `test` and the build config excludes it, as `packages/hosts/angular` does. It belongs in the *build* config: putting `rootDir: "src"` in the base `tsconfig.json` instead makes the ordinary typecheck fail with `TS6059` for every file under `test/`.
 
-**`@mxlang/typescript-plugin` ships `dist/index.d.ts`; `@mxlang/tsc` typechecks against the plugin's `src`** (ts-plugin-declarations). `tsc` imports the plugin as a TS module (`createMxLanguagePlugin`, …), so the packed `types` must be real declarations, not `src/index.ts`. The build is `bun build` (CJS) then `tsc -p tsconfig.build.json --emitDeclarationOnly`; `tsconfig.build.json` sets `types: ["node"]` because excluding the tests drops the `vitest` import that pulled `@types/node` in for the plain typecheck. `packages/tooling/tsc/tsconfig.json` maps `@mxlang/typescript-plugin` to `../typescript-plugin/src/index.ts` (`paths`) with `rootDir: "../.."` (TS6059 otherwise; tsc's bundle is built by `bun build`, so `rootDir` only matters to the typecheck). Why not the dist types: they made every typecheck path (root `typecheck`, moon, the per-edit hook) need a prebuilt plugin, failed with TS2307 on a fresh worktree, and gave false results on a stale dist (a new src export was TS2614, a removed one still passed). The published `types` stay on dist. The emitted declarations keep `.ts` relative specifiers (`allowImportingTsExtensions`), like the other packages; `pack-probe` reports the `node16` result and typechecks the packed tarball against them. Its declarations import `@mxlang/astro/template`, a private package with no `dist`; `pack-probe` stubs it with the one type used (D5).
+**`@mxlang/typescript-plugin` ships `dist/index.d.ts`; `@mxlang/tsc` typechecks against the plugin's `src`** (ts-plugin-declarations). `tsc` imports the plugin as a TS module (`createMxLanguagePlugin`, …), so the packed `types` must be real declarations, not `src/index.ts`. The build is `bun build` (CJS) then `tsc -p tsconfig.build.json --emitDeclarationOnly`; `tsconfig.build.json` sets `types: ["node"]` because excluding the tests drops the `vitest` import that pulled `@types/node` in for the plain typecheck. `packages/tooling/tsc/tsconfig.json` maps `@mxlang/typescript-plugin` to `../typescript-plugin/src/index.ts` (`paths`) with `rootDir: "../.."` (TS6059 otherwise; tsc's bundle is built by `bun build`, so `rootDir` only matters to the typecheck). Why not the dist types: they made every typecheck path (root `typecheck`, moon, the per-edit hook) need a prebuilt plugin, failed with TS2307 on a fresh worktree, and gave false results on a stale dist (a new src export was TS2614, a removed one still passed). The published `types` stay on dist. The emitted declarations keep `.ts` relative specifiers (`allowImportingTsExtensions`), like the other packages; `pack-probe` reports the `node16` result and typechecks the packed tarball against them. Its Angular pipeline declarations import the declared `@mxlang/angular` dependency; Astro spans use core's generic mapping type. No published declaration may reference `@mxlang/target-registry`. The registry's pack-probe stub has no type surface, so it cannot hide a private-type leak.
 
 **`dist/index.cjs`'s `module.exports` must be the plugin factory function, not an object.** tsserver loads a plugin with `sys.require` (a plain `require()`), does not unwrap `.default`, and skips the plugin with "did not expose a proper factory function" unless `typeof module === "function"`. `bun build --format cjs` emits the namespace object, so the build runs `build/cjs-factory.ts` after it, appending `module.exports = Object.assign(module.exports.default, module.exports)` (guarded by `typeof module.exports.default === "function"`, because vite-node's shimmed `module`, used by `@mxlang/tsc`'s tests, hands the bundle a non-function `.default`, where the bare assign throws): the factory carries `default` (itself) and every named export, so nothing is removed. Do not drop that step or "simplify" the export back to an object; `src/cjs-factory.test.ts` and `src/tsserver-load.test.ts` (a real tsserver) fail if it regresses. The ESM entry (`src/index.ts`, `export default pluginFactory` plus named exports) and `dist/index.d.ts` keep their shape.
 
-**The plugin also has a VSIX-only self-contained build, `bun run build:bundled`** (`build/bundled.ts`, output `bundle/`, gitignored and outside `files`). It inlines `@mxlang/*`, volar and babel, applies `build/cjs-factory.ts` to `index.cjs` (`applyCjsFactory(entry)`), and builds the entries `index` and `ng-worker`. `build/bundled-config.ts` is the one list of entries and externals (`@marko/compiler`, `@astrojs/compiler`, `typescript`, `@angular/compiler-cli`, `@astrojs/language-server`), read by `packages/editors/vscode/scripts/*` too. The VS Code extension's `bun run package` copies `bundle/` into the VSIX; the npm tarball (`build` -> `dist/`, `files`) is unchanged. It is not the answer to `publish-plan-private-deps`.
+**The plugin also has a VSIX-only self-contained build, `bun run build:bundled`** (`build/bundled.ts`, output `bundle/`, gitignored and outside `files`). It inlines `@mxlang/*`, volar and babel, applies `build/cjs-factory.ts` to `index.cjs` (`applyCjsFactory(entry)`), and builds the entries `index` and `ng-worker`. `build/bundled-config.ts` is the one list of entries and externals (`@marko/compiler`, `@astrojs/compiler`, `typescript`, `@angular/compiler-cli`, `@astrojs/language-server`), read by `packages/editors/vscode/scripts/*` too. The VS Code extension's `bun run package` copies `bundle/` into the VSIX; the npm tarball keeps `files` unchanged but also bundles the registry/descriptors and host glue in `dist/`. It is not the answer to `publish-plan-private-deps`.
 
 ## `@mxlang/typescript-plugin` and `@mxlang/tsc`: TypeScript for MX files (decision 81)
 

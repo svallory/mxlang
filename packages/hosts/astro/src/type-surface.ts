@@ -12,10 +12,9 @@
  * their `Input` — and `Omit` still removes `content` itself, which is the
  * renderer's own parameter name and never something an Astro caller passes.
  *
- * This is the same function as `createAstroTypeSurface` in
- * `@mxlang/typescript-plugin` (`src/mx-language.ts`); a later change deletes
- * that copy once the plugin reads `typeSurface` from the descriptor. The
- * registry's parity test pins the two together until then.
+ * The descriptor supplies this function to tooling as `typeSurface`.
+ * `@mxlang/typescript-plugin` keeps its historical compatibility export,
+ * forwarding to this descriptor-owned implementation.
  */
 export function createAstroTypeSurface(code: string): string {
   // The export is named after the file (`card.mx` -> `Card`), so this matches

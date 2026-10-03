@@ -36,7 +36,7 @@ function strip(dir: string): number {
       stderr: Buffer;
     };
     expect(stderr.toString()).toContain(
-      "reference a stripped Angular worker module",
+      "reference a stripped private tooling module",
     );
     return status ?? 1;
   }
@@ -124,6 +124,28 @@ describe("strip-ng-declarations guard", () => {
     expect(existsSync(path.join(dist, "plain.d.ts"))).toBe(true);
   });
 
+  it("strips file-kinds even when runtime imports pulled it into the declaration emit", () => {
+    const dist = emitDeclarations("file-kind-clean", {
+      "index.ts":
+        'import { extension } from "./file-kinds.ts";\nexport const suffix: string = extension;\n',
+      "file-kinds.ts": 'export const extension = "template.mx";\n',
+    });
+    expect(existsSync(path.join(dist, "file-kinds.d.ts"))).toBe(true);
+    expect(strip(dist)).toBe(0);
+    expect(existsSync(path.join(dist, "file-kinds.d.ts"))).toBe(false);
+    expect(existsSync(path.join(dist, "index.d.ts"))).toBe(true);
+  });
+
+  it("refuses to strip file-kinds when a public declaration references it", () => {
+    const dist = emitDeclarations("file-kind-leak", {
+      "index.ts": 'export type { InternalKind } from "./file-kinds.ts";\n',
+      "file-kinds.ts": 'export interface InternalKind { pipeline: "region" }\n',
+    });
+    expect(strip(dist)).toBe(1);
+    expect(existsSync(path.join(dist, "file-kinds.d.ts"))).toBe(true);
+    expect(existsSync(path.join(dist, "index.d.ts"))).toBe(true);
+  });
+
   it("fails on every relative reference form (.js, extensionless, nested, import(), reference path)", () => {
     const service =
       "export interface NgDiagnosticsService { dispose(): void }\n";
@@ -182,5 +204,11 @@ describe("strip-ng-declarations guard", () => {
     const copy = path.join(scratch, "built-dist");
     execFileSync("cp", ["-R", dist, copy]);
     expect(strip(copy)).toBe(0);
+    expect(existsSync(path.join(dist, "file-kinds.d.ts"))).toBe(false);
+    for (const file of ts.sys.readDirectory(dist, [".d.ts"])) {
+      expect(readFileSync(file, "utf8"), file).not.toContain(
+        "@mxlang/target-registry",
+      );
+    }
   });
 });

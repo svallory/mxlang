@@ -25,6 +25,10 @@ package's `./descriptor` subpath and exports:
 compares every descriptor field with those constants (each `file:line` is in a
 comment), so the change that switches the consumers can delete them with proof.
 
+The language server and TypeScript plugin now dispatch through the table.
+Published tooling declarations must not reference this private package; keep
+registry-typed helpers internal to each tool's build.
+
 ## Light import
 
 Importing the registry or any descriptor must load no `@marko/compiler` and no

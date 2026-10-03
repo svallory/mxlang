@@ -908,6 +908,10 @@ stable version.
   into its compile entry's `HostOptions`, defaulting to its own lookup only
   when none was supplied. This preserves the caller's full cross-file
   resolution scope without naming any host or target in core.
+- **Type-check projections (decision 140).** `TargetCompileOptions.typeCheck`
+  is optional and generic. The editor passes it to request type-only checks;
+  descriptors forward it to compile entries that support them. Ordinary build
+  callers leave it unset, so emitted runtime code is unchanged.
 - **`load(core)`** takes the **tool's** core (`typeof import("./index.ts")` in
   core's source, which emits as the same relative type), so a third-party
   target shares its registry, caches, editor buffer overrides and one

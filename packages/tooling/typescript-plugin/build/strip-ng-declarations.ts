@@ -1,10 +1,13 @@
 /**
- * Strip the Angular worker-client declarations from `dist/` after tsc emits
+ * Strip private tooling declarations from `dist/` after tsc emits
  * them. `src/ng-diagnostics.ts` is imported by the entry, so tsc always emits
  * its declaration even though the tarball must not ship it: its types reach
  * `@mxlang/angular-checker` (a devDependency the tarball does not declare) and,
  * through it, `@angular/compiler-cli`. `src/ng-worker.ts` is excluded from the
  * declaration emit in `tsconfig.build.json` and normally produces nothing.
+ * `file-kinds.ts` is excluded too, but tsc follows runtime imports even when
+ * excluded: strip its registry-private pipeline types after proving no public
+ * declaration refers to it.
  *
  * The strip fails the build loudly if any declaration that would keep shipping
  * references a stripped module — parsed as module references (`import`/`export
@@ -21,7 +24,7 @@ import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 
 /** Modules whose `.d.ts` must not ship (see the package's AGENTS.md). */
-export const STRIPPED = ["ng-diagnostics", "ng-worker"];
+export const STRIPPED = ["ng-diagnostics", "ng-worker", "file-kinds"];
 
 /**
  * Module-reference syntaxes a declaration file can use to reach another
@@ -100,7 +103,7 @@ if (import.meta.main) {
   const dangling = findDanglingReferences(dist);
   if (dangling.length > 0) {
     console.error(
-      "dist declarations reference a stripped Angular worker module; the " +
+      "dist declarations reference a stripped private tooling module; the " +
         "tarball would ship a dangling import (nothing was deleted):\n" +
         dangling.join("\n"),
     );

@@ -110,7 +110,8 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       // excluded from the declaration emit and build/strip-ng-declarations.ts
       // removes ng-diagnostics.d.ts (its types reach the devDependency
       // @mxlang/angular-checker and @angular/compiler-cli). A stray
-      // ng-*.d.ts here means the strip stopped running.
+      // ng-*.d.ts here means the strip stopped running. file-kinds.d.ts is
+      // stripped too: its registry-private pipeline types must not ship.
       "dist/amx-language.d.ts",
       "dist/astro-language.d.ts",
       "dist/failed-module-stub.d.ts",

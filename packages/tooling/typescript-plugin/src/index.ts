@@ -1,8 +1,11 @@
 import { join } from "node:path";
+import { builtinFileKinds } from "@mxlang/target-registry";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
 import type * as ts from "typescript";
 import {
+  AMX_EXTENSION,
+  AMX_LANGUAGE_ID,
   type AmxLanguagePlugin,
   createAmxLanguagePlugin,
 } from "./amx-language.ts";
@@ -33,6 +36,31 @@ import {
   type NgDiagnosticsService,
 } from "./ng-diagnostics.ts";
 
+function createBuiltinLanguagePlugins(
+  typescript: typeof ts,
+  readSource?: DependencySourceReader,
+  onCompiled?: import("./language.ts").NgMxLanguagePluginOptions["onCompiled"],
+): Array<AnyMxLanguagePlugin> {
+  const plugins: Array<AnyMxLanguagePlugin> = [];
+  for (const kind of builtinFileKinds) {
+    switch (kind.pipeline) {
+      case "region":
+        plugins.push(createSolidMxLanguagePlugin(typescript, { readSource }));
+        break;
+      case "ng-template":
+        plugins.push(
+          createNgMxLanguagePlugin(typescript, { readSource, onCompiled }),
+        );
+        break;
+      case "astro-template":
+        // Opt-in composition is handled by createConfiguredLanguagePlugins.
+        break;
+    }
+  }
+  plugins.push(createMxLanguagePlugin(typescript, { readSource }));
+  return plugins;
+}
+
 type AnyMxLanguagePlugin =
   | SolidMxLanguagePlugin
   | NgMxLanguagePlugin
@@ -44,16 +72,12 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
   let ngDiagnostics: NgDiagnosticsService | undefined;
   const volarFactory = createLanguageServicePlugin((typescript, info) => {
     const readSource = createProjectSourceReader(info);
-    const solidMxPlugin = createSolidMxLanguagePlugin(typescript, {
-      readSource,
-    });
-    const mxPlugin = createMxLanguagePlugin(typescript, { readSource });
     ngDiagnostics = createEditorNgDiagnostics(typescript, info);
-    const ngMxPlugin = createNgMxLanguagePlugin(typescript, {
+    languagePlugins = createBuiltinLanguagePlugins(
+      typescript,
       readSource,
-      onCompiled: (entry) => ngDiagnostics?.notifyCompiled(entry),
-    });
-    languagePlugins = [solidMxPlugin, ngMxPlugin, mxPlugin];
+      (entry) => ngDiagnostics?.notifyCompiled(entry),
+    );
     if (info.config?.astro === true) {
       languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
     }
@@ -75,10 +99,8 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         pluginModule.getExternalFiles?.(project, updateLevel) ?? []
       ).filter(
         (fileName) =>
-          fileName.endsWith(".solid.mx") ||
-          isNgMx(fileName) ||
           fileName.endsWith(".mx") ||
-          fileName.endsWith(".astro.mx") ||
+          isNgMx(fileName) ||
           fileName.endsWith(".astro"),
       );
     },
@@ -124,17 +146,17 @@ export function createConfiguredLanguagePlugins(
   typescript: typeof ts,
   astro: boolean,
   loadAstro?: AstroLanguagePluginLoader,
-  mxPlugins: Array<AnyMxLanguagePlugin> = [
-    createSolidMxLanguagePlugin(typescript),
-    createNgMxLanguagePlugin(typescript),
-    createMxLanguagePlugin(typescript),
-  ],
+  mxPlugins: Array<AnyMxLanguagePlugin> = createBuiltinLanguagePlugins(
+    typescript,
+  ),
 ) {
   return [
     ...mxPlugins,
     ...(astro &&
     !mxPlugins.some(
-      (plugin) => plugin.getLanguageId?.("component.astro.mx") === "astromx",
+      (plugin) =>
+        plugin.getLanguageId?.(`component.${AMX_EXTENSION}`) ===
+        AMX_LANGUAGE_ID,
     )
       ? [createAmxLanguagePlugin(typescript)]
       : []),
@@ -231,13 +253,15 @@ function withSyntaxDiagnostics(
         if (compileDiagnostics.length === 0 && hostPolicy.length === 0) {
           return diagnostics;
         }
-        const source = fileName.endsWith(".solid.mx")
-          ? "solidmx"
-          : isNgMx(fileName)
-            ? "ngmx"
-            : fileName.endsWith(".astro.mx")
-              ? "astromx"
-              : "mx";
+        // Keep the historical diagnostic suffix casing: template modules
+        // are insensitive only for the ng pipeline; other kinds are exact.
+        const source =
+          builtinFileKinds.find((kind) =>
+            (kind.pipeline === "ng-template"
+              ? fileName.toLowerCase()
+              : fileName
+            ).endsWith(`.${kind.segment}.mx`),
+          )?.diagnosticSource ?? "mx";
 
         return [
           ...diagnostics,
