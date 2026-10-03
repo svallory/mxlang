@@ -470,33 +470,9 @@ export function createEmitter(): StringEmitter {
    * single-quoted `title='a" onerror="…'` cannot close the attribute early
    * (decision 42). A spread emits a runtime loop that validates each key.
    */
-  const attribute = (
-    attr: Attr,
-    spreadTemp?: string,
-    shadowed: string[] = [],
-    laterSpreads: string[] = [],
-  ): void => {
-    if (attr.kind === "spread") {
-      push(
-        `for (const [key, value] of Object.entries(${spreadTemp ?? attr.value.code})) {`,
-      );
-      state.indent++;
-      const skips = [
-        ...shadowed.map((name) => `key === ${JSON.stringify(name)}`),
-        ...laterSpreads.map((temp) => `Object.hasOwn(${temp}, key)`),
-      ];
-      if (skips.length > 0) push(`if (${skips.join(" || ")}) continue;`);
-      push(
-        "if (value === false || value === null || value === undefined) continue;",
-      );
-      push(`if (!${ATTR_NAME_PATTERN}.test(key)) continue;`);
-      push(
-        'out += value === true ? " " + key : " " + key + "=\\"" + escape(value) + "\\"";',
-      );
-      state.indent--;
-      push("}");
-      return;
-    }
+  const attribute = (attr: Attr): void => {
+    // Spreads are written by `elementAttributes`, never one at a time.
+    if (attr.kind === "spread") return;
 
     if (attr.kind === "boolean") {
       literal(` ${attr.name}`);
@@ -551,88 +527,122 @@ export function createEmitter(): StringEmitter {
     literal('"');
   };
 
-  /** Serial for the temps an element binds its spread values to. */
-  let spreadSerial = 0;
+  /**
+   * An explicit attribute as a JS expression for its rendered text, for the
+   * merged-object form below. Same rendering as `attribute`, evaluated where the
+   * object is built, so an attribute's expression runs in authored order.
+   */
+  const attributeText = (attr: Exclude<Attr, { kind: "spread" }>): string => {
+    switch (attr.kind) {
+      case "boolean":
+        return quote(` ${attr.name}`);
+      case "static":
+        return quote(` ${attr.name}="${escape(attr.value)}"`);
+      case "bound": {
+        const source = structured(attr.name, attr.value.code);
+        return `${quote(` ${attr.name}="`)} + escape(${source ?? attr.value.code}) + "\\""`;
+      }
+      case "event":
+        return fail(
+          `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
+          attr,
+        );
+      default: {
+        const source = structured(attr.name, attr.value.code);
+        if (source) {
+          return `((value) => value === "" ? "" : ${quote(` ${attr.name}="`)} + value + "\\"")(${source})`;
+        }
+        return `${quote(` ${attr.name}="`)} + escape(${attr.value.code}) + "\\""`;
+      }
+    }
+  };
 
   /**
-   * An element's attributes, with JS object-merge precedence on a string target.
+   * An element's attributes, with Marko's precedence and evaluation order.
    *
-   * Marko compiles `<div a=1 ...x a=2>` to an object merge, so the later write
-   * wins and the dropped name never reaches the output. This target concatenates
-   * into one string and a browser keeps the FIRST duplicate, so the same
-   * precedence is made explicit here, on the authored order:
+   * Marko compiles a tag with a spread to an object merge where the later write
+   * wins: the attributes written AFTER the last spread are written first (into
+   * the template text, evaluated first) and their names are excluded from the
+   * spreads; everything before and between is ONE object built in authored order
+   * (`Object.assign({}, {a: f()}, x, {b: g()}, y)`), so an attribute's expression
+   * runs before the spread that follows it, a key keeps its first slot when a
+   * later spread overwrites it, and a `null`/`undefined` spread is ignored. A
+   * browser keeps the FIRST duplicate of a concatenated string, so the same
+   * result is built explicitly here (decision 135 and its addendum).
    *
-   * - a spread skips every key a later explicit attribute names (Marko passes
-   *   them to `_attrs_partial` as an exclusion set) and every key a later spread
-   *   also supplies;
-   * - an explicit attribute is skipped when a later spread has that key (own,
-   *   even if its value is `undefined`, as `{a: 1, ...x}` does).
+   * `<input>` is the exception, as it is in Marko: its attributes are one merge
+   * in authored order, nothing written first, because a controlled `value` is
+   * resolved at run time. An `<input>` without a spread writes `value` first (a
+   * browser may reset a value when `type` changes after it); that replaces the
+   * host's former `orderAttrs` hook, which reordered the IR across spreads.
    *
-   * A spread is bound to a temp once when something precedes it, because the
-   * earlier attributes need to ask it about its keys. A lone leading spread is
-   * emitted exactly as before.
-   *
-   * The attributes after the last spread are written first, as Marko does.
-   *
-   * `<input>` writes `value` first, because a browser may reset a value when
-   * `type` changes after it (Marko does the same). That reorder is applied here,
-   * on emission only, so the precedence above still follows the authored order;
-   * it replaces the host's former `orderAttrs` hook, which reordered the IR and
-   * so moved `value` across a spread it was written after.
+   * Cost: a tag with a spread builds one object per render. A tag with a single
+   * spread and nothing before it iterates the spread directly.
    */
   const elementAttributes = (name: string, attrs: Attr[]): void => {
-    const temps = new Map<number, string>();
-    attrs.forEach((attr, index) => {
-      if (attr.kind !== "spread" || index === 0) return;
-      const temp = `$mxSpread${spreadSerial++}`;
-      temps.set(index, temp);
-      push(`const ${temp} = Object.assign({}, ${attr.value.code});`);
-    });
-
-    // Marko writes the attributes that follow the last spread into the template
-    // text ahead of the spread's runtime keys (`<p a=2 id=p k=kx>` for `a=1
-    // ...x a=2 id=p`). Precedence is already decided by the guards, so only the
-    // order is at stake, and the strict html oracle compares it.
     let lastSpread = -1;
     attrs.forEach((attr, index) => {
       if (attr.kind === "spread") lastSpread = index;
     });
-    const order = attrs.map((_, index) => index);
-    if (lastSpread >= 0) order.unshift(...order.splice(lastSpread + 1));
-    if (name === "input") {
-      const value = attrs.findIndex(
-        (attr) => attr.kind !== "spread" && attr.name === "value",
-      );
-      if (value > 0) order.unshift(...order.splice(value, 1));
+    if (lastSpread < 0) {
+      const value =
+        name === "input"
+          ? attrs.find(
+              (attr) => attr.kind !== "spread" && attr.name === "value",
+            )
+          : undefined;
+      if (value) attribute(value);
+      for (const attr of attrs) if (attr !== value) attribute(attr);
+      return;
     }
 
-    for (const index of order) {
-      const attr = attrs[index] as Attr;
-      const laterSpreads: string[] = [];
-      for (let later = index + 1; later < attrs.length; later++) {
-        const temp = temps.get(later);
-        if (temp) laterSpreads.push(temp);
-      }
-      if (attr.kind === "spread") {
-        const shadowed = attrs
-          .slice(index + 1)
-          .flatMap((later) => (later.kind === "spread" ? [] : [later.name]));
-        attribute(attr, temps.get(index), shadowed, laterSpreads);
-        continue;
-      }
-      if (laterSpreads.length === 0) {
-        attribute(attr);
-        continue;
-      }
-      const absent = laterSpreads
-        .map((temp) => `!Object.hasOwn(${temp}, ${JSON.stringify(attr.name)})`)
-        .join(" && ");
-      push(`if (${absent}) {`);
-      state.indent++;
-      attribute(attr);
-      state.indent--;
-      push("}");
+    const isInput = name === "input";
+    const tail = isInput ? [] : attrs.slice(lastSpread + 1);
+    const head = isInput ? attrs : attrs.slice(0, lastSpread + 1);
+    for (const attr of tail) attribute(attr);
+    const written = tail.flatMap((attr) =>
+      attr.kind === "spread" ? [] : [attr.name],
+    );
+
+    push("{");
+    state.indent++;
+    let entries: string;
+    const only = head.length === 1 ? head[0] : undefined;
+    if (only?.kind === "spread") {
+      entries = `Object.entries(${only.value.code} ?? {})`;
+    } else {
+      push("const $raw = Symbol();");
+      const parts = head.map((attr) =>
+        attr.kind === "spread"
+          ? attr.value.code
+          : `{ ${JSON.stringify(attr.name)}: { [$raw]: ${attributeText(attr)} } }`,
+      );
+      push(`const $attrs = Object.assign({}, ${parts.join(", ")});`);
+      entries = "Object.entries($attrs)";
     }
+    push(`for (const [key, value] of ${entries}) {`);
+    state.indent++;
+    if (written.length > 0) {
+      push(
+        `if (${written.map((n) => `key === ${JSON.stringify(n)}`).join(" || ")}) continue;`,
+      );
+    }
+    if (only?.kind !== "spread") {
+      push(
+        'if (value !== null && typeof value === "object" && $raw in value) { out += value[$raw]; continue; }',
+      );
+    }
+    push(
+      "if (value === false || value === null || value === undefined) continue;",
+    );
+    push(`if (!${ATTR_NAME_PATTERN}.test(key)) continue;`);
+    push(
+      'out += value === true ? " " + key : " " + key + "=\\"" + escape(value) + "\\"";',
+    );
+    state.indent--;
+    push("}");
+    state.indent--;
+    push("}");
   };
 
   /** A component's props, in Marko's own convention. */

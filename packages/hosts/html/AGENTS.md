@@ -106,8 +106,13 @@ than assumed:
 - **Marko hoists `value` first on `<input>`**, so
   `<input type="text" value=x>` emits `<input value=… type=text>`. A browser
   applies `type` before `value`, and some types reinterpret a later `value`.
-  `orderAttrs` in the policy reproduces it; `htmlEquals` compares attribute
-  order, so getting this wrong fails the oracle.
+  The emitter's `elementAttributes` does it at emission (html no longer
+  implements the core `orderAttrs` hook, which reordered the IR across
+  spreads); `htmlEquals` compares attribute order, so getting this wrong fails
+  the oracle. With a spread on the tag, Marko's own shape is followed instead:
+  attributes after the last spread are written first, the rest is one merged
+  object in authored order, and `<input>` keeps authored order (decision 135
+  addendum).
 - **`class`/`style` take structured values**: `class={a: true, b: false}` →
   `class="a"`, `class=["x", {y: true}]` → `class="x y"`,
   `style={color: "red", top: 0}` → `style="color:red;top:0"`. These lower to

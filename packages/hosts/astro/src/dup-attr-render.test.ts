@@ -124,4 +124,14 @@ describe("duplicate attributes next to a spread (astro, rendered)", () => {
     );
     expect(JSON.parse(text).a).toBe(2);
   });
+
+  it("a structured class beats an earlier spread class, and a later spread class beats it", async () => {
+    // Marko: `<div ...x class={a:true,b:false}>` is class=a; `<div class={...} ...x>` is class=from-x.
+    const after = await render("<div ...x class={a: true, b: false}>hi</div>");
+    expect(after.kept.class).toBe("a");
+    expect(after.names.filter((n) => n === "class")).toHaveLength(1);
+    const before = await render("<div class={a: true, b: false} ...x>hi</div>");
+    expect(before.kept.class).toBe("from-x");
+    expect(before.names.filter((n) => n === "class")).toHaveLength(1);
+  });
 });

@@ -20,7 +20,7 @@ A host supplies one `HostDeclarations` object to `@mxlang/core`. Every member an
 | `resolveAttributeMethod?(…)` | Accepts an attribute method a host can express, instead of rejecting it. |
 | `rejectElementAttributeTags?(…)` | Rejects an attribute tag on a native element. |
 | `rejectComponentTag?(…)` / `rejectUnknownTag?(…)` | This host's wording for an unresolvable tag. |
-| `orderAttrs?(tagName, attrs)` | Reorders an element's attributes, for a target that must emit them in an order other than the author wrote them — this is what reproduces Marko hoisting `value` before `type` on an `<input>`. |
+| `orderAttrs?(tagName, attrs)` | Reorders an element's attributes, for a target that must emit them in an order other than the author wrote them — no shipped host implements it now: `@mxlang/html` and `@mxlang/astro` reproduce Marko's `<input>` `value`-first and spread ordering at emission, because a reordered IR moves an attribute across a spread it was written after. |
 | `checkBinding?(target, what)` | Inspects a name a construct is about to bind at render scope — not called for tag params, which open their own nested scope. |
 | `keepComments?` | Whether an HTML comment reaches the compiled output. |
 

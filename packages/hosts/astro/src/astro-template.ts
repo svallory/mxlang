@@ -230,6 +230,10 @@ const declarations: HostDeclarations = {
   },
 };
 
+/** Renders a structured `class` value (object, array, string) as `class:list` does. */
+const CLASS_LIST =
+  '(v) => { const out = []; const walk = (x) => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === "object") { for (const k in x) if (x[k]) out.push(k); } else if (x) out.push(String(x)); }; walk(v); return out.join(" "); }';
+
 function escapeText(text: string): string {
   return text.replace(/[{}]/g, (char) => `&#${char.charCodeAt(0)};`);
 }
@@ -313,8 +317,12 @@ function emitElementAttrs(
         const structuredClass =
           attr.name === "class" &&
           (attr.value.shape === "object" || attr.value.shape === "array");
+        // A structured class folds into the plain `class` key as the string
+        // `class:list` would render, so a spread's `class` and this one are the
+        // same key and the merge is real (as in Marko). `class:list` stays for
+        // an element with no spread.
         write(
-          `${JSON.stringify(structuredClass ? "class:list" : attr.name)}: (`,
+          `${JSON.stringify(attr.name)}: ${structuredClass ? `(${CLASS_LIST})(` : "("}`,
         );
         writeMapped(attr.value.code, attr.value.node);
         write(")");

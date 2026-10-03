@@ -194,22 +194,110 @@ describe("duplicate attributes next to a spread (html, rendered)", () => {
     expect(out.names).toHaveLength(1);
   });
 
-  it("an input writes value first, yet a later spread still decides it", () => {
-    // `value` hoists ahead of `type` for the browser; the spread was written
-    // after it, so the spread's `value` wins and the explicit one is dropped.
-    const out = render('<input type="text" value="a" ...input.x/>', {
-      x: { value: "from-x" },
-    });
-    expect(out.names).toEqual(["type", "value"]);
-    expect(out.kept.value).toBe("from-x");
-    // Without a competing spread key the hoist still happens.
+  it("an input keeps authored order with a spread, and Marko's value last for `<input zz ...x value>`", () => {
+    // Marko: `<input zz=1 id=i value=a>`; nothing is hoisted ahead of the spread.
     expect(
-      render('<input type="text" value="a" ...input.x/>', { x: { id: "i" } })
-        .names,
-    ).toEqual(["value", "type", "id"]);
+      render('<input zz="1" ...input.x value="a"/>', { x: { id: "i" } }).names,
+    ).toEqual(["zz", "id", "value"]);
     expect(
-      render('<input type="text" ...input.x value="a"/>', { x: { value: "x" } })
-        .kept.value,
+      render('<input ...input.x value="a"/>', { x: { id: "i" } }).names,
+    ).toEqual(["id", "value"]);
+    // The later explicit value beats the spread's, whichever side.
+    expect(
+      render('<input type="text" ...input.x value="a"/>', {
+        x: { value: "x" },
+      }).kept.value,
     ).toBe("a");
+    expect(
+      render('<input type="text" value="a" ...input.x/>', {
+        x: { value: "x" },
+      }).kept.value,
+    ).toBe("x");
+  });
+
+  it("an input without a spread still writes value first", () => {
+    expect(render('<input type="text" value="a" id="i"/>', {}).names).toEqual([
+      "value",
+      "type",
+      "id",
+    ]);
+  });
+
+  it("ignores a null or undefined spread, leading or not", () => {
+    expect(render("<div ...input.x>hi</div>", { x: null }).names).toEqual([]);
+    expect(render("<div ...input.x>hi</div>", {}).names).toEqual([]);
+    expect(render("<div a=1 ...input.x>hi</div>", { x: null }).kept).toEqual({
+      a: "1",
+    });
+    expect(render('<div ...input.x id="p">hi</div>', { x: null }).kept).toEqual(
+      {
+        id: "p",
+      },
+    );
+  });
+
+  it("a key keeps its earlier slot when a later spread overwrites it, like an object merge", () => {
+    // Marko: `<div id=x-id a=from-x>`.
+    const out = render('<div id="q" a=1 ...input.x>hi</div>', {
+      x: { a: "from-x", id: "x-id" },
+    });
+    expect(out.names).toEqual(["id", "a"]);
+    expect(out.kept).toEqual({ id: "x-id", a: "from-x" });
+  });
+});
+
+/**
+ * Evaluation order, which Marko decides: the attributes after the last spread
+ * are evaluated first, then everything before it in authored order.
+ */
+function order(source: string): string[] {
+  const log: string[] = [];
+  const f = (n: string) => {
+    log.push(n);
+    return n;
+  };
+  const o = (n: string) => {
+    log.push(`spread:${n}`);
+    return { [`k${n}`]: n };
+  };
+  mx(source)({ f, o });
+  return log;
+}
+
+describe("evaluation order of attributes and spreads (html)", () => {
+  it("evaluates the attributes after the last spread first", () => {
+    expect(
+      order(
+        '<div a=input.f("a") ...input.o("x") b=input.f("b") c=input.f("c")>x</div>',
+      ),
+    ).toEqual(["b", "c", "a", "spread:x"]);
+  });
+
+  it("with two spreads: the tail, then authored order", () => {
+    expect(
+      order(
+        '<div a=input.f("a") ...input.o("x") b=input.f("b") ...input.o("y") c=input.f("c")>x</div>',
+      ),
+    ).toEqual(["c", "a", "spread:x", "b", "spread:y"]);
+  });
+
+  it("a leading spread evaluates after the attributes that follow it", () => {
+    expect(
+      order('<div ...input.o("x") a=input.f("a") b=input.f("b")>x</div>'),
+    ).toEqual(["a", "b", "spread:x"]);
+  });
+
+  it("an attribute before a spread runs before it, so the spread sees the mutation", () => {
+    // Marko: `<div title=t k=k2>`.
+    const box = { k: "k1" };
+    const setk = () => {
+      box.k = "k2";
+      return "t";
+    };
+    const html = mx("<div title=input.setk() ...input.box>hi</div>")({
+      setk,
+      box,
+    });
+    expect(browserAttrs(html).kept).toEqual({ title: "t", k: "k2" });
   });
 });
