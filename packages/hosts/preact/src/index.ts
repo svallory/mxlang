@@ -139,10 +139,11 @@ export interface CompilePreactOptions {
   /**
    * Internal, for tooling only (decision 140). Emits the module for type
    * checking, not for running: every native element's event handler is
-   * wrapped in a type-only `__mxOn<"tag", "event">(fn)` call that resolves the
-   * host's own handler type, and Marko keeps the TypeScript annotations of
-   * shorthand handlers. The output is not meant to be executed. Leave unset
-   * for any build; the normal output is unchanged.
+   * checked with `(fn) satisfies Handler<"tag", "event">`, a type-only
+   * expression that resolves the host's own handler type, and Marko keeps the
+   * TypeScript annotations of shorthand handlers. The wrapper and its
+   * type-only preamble are erased by TypeScript's emit, so `mx-tsc` output
+   * stays runnable. Leave unset for any build; the normal output is unchanged.
    */
   typeCheck?: boolean;
 }
@@ -275,21 +276,52 @@ function mxDynamic(target: any, payload: any, content?: any) {
  * `<const>` deeper in the tree stays an error (see the emitter), because
  * lifting one out of a `<for>` body would change which values it closes over.
  */
+/** The identifiers the type-check preamble declares in the user's module. */
+interface HandlerTypeNames {
+  jsx: string;
+  map: string;
+  handler: string;
+}
+
 /**
- * The type-check-only preamble `__mxOn` needs (decision 140).
- *
- * `__mxOn<tag, event>(fn)` takes the host's own handler type for that element
- * and event: the key of `JSX.IntrinsicElements[tag]` whose lowercased name is
- * `on` + the lowercased event. Case-insensitive, because decision 101 emits
- * the lowercase runtime spelling (`onKeydown`) while the host's types declare
- * `onKeyDown`. No hit — an unknown element or prop — is `any`.
+ * Names for the preamble that collide with nothing in the template: a
+ * candidate that appears anywhere in the source text gets a numeric suffix,
+ * the same conservative rule core's template-tag gensyms use. Checked against
+ * the whole source, so a user `static`, `import`, `type` or plain mention of
+ * the name is avoided.
  */
-function handlerTypePreamble(dialect: JsxDialect): string[] {
+function handlerTypeNames(source: string): HandlerTypeNames {
+  const fresh = (base: string): string => {
+    let name = base;
+    for (let n = 1; source.includes(name); n++) name = `${base}${n}`;
+    return name;
+  };
+  return {
+    jsx: fresh("__MxJSX"),
+    map: fresh("__MxM"),
+    handler: fresh("__MxH"),
+  };
+}
+
+/**
+ * The type-check-only preamble the handler wrapper needs (decision 140).
+ *
+ * Types only — an `import type` and two aliases — so nothing in it survives
+ * emit and it declares no value. `Handler<tag, event>` is the host's own
+ * handler type for that element and event: the key of
+ * `JSX.IntrinsicElements[tag]` whose lowercased name is `on` + the lowercased
+ * event. Case-insensitive, because decision 101 emits the lowercase runtime
+ * spelling (`onKeydown`) while the host's types declare `onKeyDown`. No hit —
+ * an unknown element or prop — is `any`.
+ */
+function handlerTypePreamble(
+  dialect: JsxDialect,
+  { jsx, map, handler }: HandlerTypeNames,
+): string[] {
   return [
-    `import type { JSX as __MxJSX } from "${dialect.jsxImportSource}/jsx-runtime";`,
-    `type __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends \`on\${E}\` ? K : never]-?: NonNullable<__MxJSX.IntrinsicElements[T][K]> } : {};`,
-    `type __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];`,
-    `declare function __mxOn<T extends string, E extends string>(handler: __MxH<T, E>): any;`,
+    `import type { JSX as ${jsx} } from "${dialect.jsxImportSource}/jsx-runtime";`,
+    `type ${map}<T extends string, E extends string> = T extends keyof ${jsx}.IntrinsicElements ? { [K in keyof ${jsx}.IntrinsicElements[T] as Lowercase<K & string> extends \`on\${E}\` ? K : never]-?: NonNullable<${jsx}.IntrinsicElements[T][K]> } : {};`,
+    `type ${handler}<T extends string, E extends string> = [keyof ${map}<T, E>] extends [never] ? any : ${map}<T, E>[keyof ${map}<T, E>];`,
   ];
 }
 
@@ -297,8 +329,10 @@ export function emitModuleWithMappings(
   ir: Ir,
   dialect: JsxDialect = preactDialect,
   typeCheck = false,
+  source = "",
 ): MappedCode {
-  const emitter = createEmitter(dialect, typeCheck);
+  const names = typeCheck ? handlerTypeNames(source) : undefined;
+  const emitter = createEmitter(dialect, names?.handler);
 
   // Statements first, markup second. Splitting on the top level only: a
   // nested one is refused by the emitter rather than silently relocated.
@@ -308,7 +342,7 @@ export function emitModuleWithMappings(
     if (node.kind === "Const") {
       statements.push(concatMapped(`const ${node.name} = ${node.init.code};`));
     } else if (node.kind === "Define") {
-      const body = createEmitter(dialect, typeCheck);
+      const body = createEmitter(dialect, names?.handler);
       drive(body, node.children);
       const rendered = body.result();
       for (const name of body.runtimeImports) {
@@ -340,7 +374,7 @@ export function emitModuleWithMappings(
   const lines: string[] = [
     `/** @jsxImportSource ${dialect.jsxImportSource} */`,
   ];
-  if (typeCheck) lines.push(...handlerTypePreamble(dialect));
+  if (names) lines.push(...handlerTypePreamble(dialect, names));
   if (ir.needsAttrTagImport) {
     lines.push(`import type { AttrTag } from "${dialect.attrTagModule}";`);
   }
@@ -565,7 +599,12 @@ export function compilePreactMx(
       warnings: options.warnings,
       ...(options.typeCheck ? { stripTypes: false } : {}),
       emitIr: (ir) => {
-        const emitted = emitModuleWithMappings(ir, dialect, options.typeCheck);
+        const emitted = emitModuleWithMappings(
+          ir,
+          dialect,
+          options.typeCheck,
+          source,
+        );
         mappings = emitted.mappings;
         return emitted.code;
       },

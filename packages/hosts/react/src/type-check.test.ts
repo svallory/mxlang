@@ -20,6 +20,6 @@ it("wraps handlers against React's JSX types only under typeCheck", () => {
   );
   // React's own spelling (`onDoubleClick`) is what the lookup lowercases.
   expect(code).toContain(
-    'onDoubleClick={__mxOn<"button", "doubleclick">((e) => e.detail)}',
+    'onDoubleClick={((e) => e.detail) satisfies __MxH<"button", "doubleclick">}',
   );
 });

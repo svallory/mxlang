@@ -4,7 +4,8 @@ import { compilePreactMx } from "./index.ts";
 /**
  * Decision 140: `typeCheck` is a tooling-only mode. Unset, the output is the
  * runtime output, byte for byte; set, every native element's event handler is
- * wrapped in the type-only `__mxOn<"tag", "event">(fn)` call.
+ * checked with the type-only `(fn) satisfies __MxH<"tag", "event">` (erased on
+ * emit, so it can never reach a running module).
  */
 const compile = (source: string, typeCheck?: boolean) =>
   compilePreactMx(source, "/fixtures/test.mx", { typeCheck });
@@ -37,7 +38,7 @@ describe("typeCheck set", () => {
   it("wraps a native element's handler and names the recomposed event", () => {
     const { code } = compile("<input onKeyDown=((e) => e.key)/>", true);
     expect(code).toContain(
-      'onKeydown={__mxOn<"input", "keydown">((e) => e.key)}',
+      'onKeydown={((e) => e.key) satisfies __MxH<"input", "keydown">}',
     );
   });
 
@@ -47,7 +48,7 @@ describe("typeCheck set", () => {
       true,
     );
     expect(code).toContain(
-      'onClick={__mxOn<"button", "click">((e: Event) => { e.type; })}',
+      'onClick={((e: Event) => { e.type; }) satisfies __MxH<"button", "click">}',
     );
   });
 
@@ -56,7 +57,7 @@ describe("typeCheck set", () => {
       "<button on-dblclick(e) { e.detail; }>x</button>",
       true,
     );
-    expect(code).toContain('__mxOn<"button", "dblclick">(');
+    expect(code).toContain('satisfies __MxH<"button", "dblclick">');
   });
 
   it("declares the host's own handler types in a preamble", () => {
@@ -64,7 +65,8 @@ describe("typeCheck set", () => {
     expect(code).toContain(
       'import type { JSX as __MxJSX } from "preact/jsx-runtime";',
     );
-    expect(code).toContain("declare function __mxOn<");
+    expect(code).not.toMatch(/declare function|__mxOn/);
+    expect(code).toContain("type __MxH<");
   });
 
   it("maps a shorthand handler to the attribute name and an arrow to nothing of its own", () => {
@@ -85,12 +87,12 @@ describe("typeCheck set", () => {
     `<const/tag = "button"/><\${tag} onClick=((e) => e)>x</>`,
   ])("leaves a custom element or dynamic tag unwrapped: %s", (source) => {
     const { code } = compile(source, true);
-    expect(code).not.toMatch(/__mxOn<"/);
+    expect(code).not.toContain("satisfies");
   });
 
   it("leaves non-event attributes alone", () => {
     const { code } = compile('<div class="a" data-x=1>x</div>', true);
-    expect(code).not.toMatch(/__mxOn<"/);
+    expect(code).not.toContain("satisfies");
   });
 
   it("wraps handlers in nested elements, loops and defines", () => {
@@ -98,6 +100,32 @@ describe("typeCheck set", () => {
       "<for|i| of=[1]><li onClick=((e) => i)>x</li></for><define/Row|a|><b onClick=((e) => a)>y</b></define><Row(1)/>",
       true,
     );
-    expect(code.match(/__mxOn<"(li|b)", "click">/g)).toHaveLength(2);
+    expect(code.match(/satisfies __MxH<"(li|b)", "click">/g)).toHaveLength(2);
+  });
+});
+
+describe("typeCheck helper names never collide with the template (decision 140)", () => {
+  const handler = "<button onClick=((e) => e.type)>x</button>";
+  const helpers = ["__MxJSX", "__MxM", "__MxH"];
+
+  it.each([
+    ["a static const", (n: string) => `static const ${n} = 1`],
+    ["an import", (n: string) => `import { x as ${n} } from "./x.ts"`],
+    ["a type", (n: string) => `export type ${n} = number`],
+  ])("avoids a user binding named like a helper (%s)", (_kind, declare) => {
+    for (const helper of helpers) {
+      const { code } = compile(`${declare(helper)}\n${handler}`, true);
+      // The user's own declaration is the only occurrence of the bare name:
+      // every generated identifier moved to a suffixed one.
+      const bare = code.match(new RegExp(`\\b${helper}\\b`, "g")) ?? [];
+      expect(bare).toHaveLength(1);
+      expect(code).toMatch(new RegExp(`${helper}1\\b`));
+    }
+  });
+
+  it("keeps the plain names when nothing collides", () => {
+    const { code } = compile(handler, true);
+    expect(code).toContain("type __MxH<");
+    expect(code).not.toContain("__MxH1");
   });
 });

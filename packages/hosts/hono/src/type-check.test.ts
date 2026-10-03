@@ -18,5 +18,7 @@ it("wraps handlers against Hono's JSX types only under typeCheck", () => {
   expect(code).toContain(
     'import type { JSX as __MxJSX } from "hono/jsx/jsx-runtime";',
   );
-  expect(code).toContain('__mxOn<"button", "click">((e) => e.detail)');
+  expect(code).toContain(
+    '((e) => e.detail) satisfies __MxH<"button", "click">',
+  );
 });

@@ -1,0 +1,5 @@
+static const __MxH = 1
+static const __MxJSX = 2
+export type __MxM = number
+<button onClick=((e) => e.type)>x</button>
+<p>${__MxH + __MxJSX}</p>

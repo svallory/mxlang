@@ -13,7 +13,7 @@ import {
  * Decision 140 (audit item 3): on the three hosts that share the JSX emitter
  * (preact, react, hono) a native element's event handler is type-checked
  * against the host's own handler type, through a type-check-only
- * `__mxOn<tag, event>(fn)` wrapper in the tooling's virtual code.
+ * `(fn) satisfies Handler<tag, event>` wrapper in the tooling's virtual code.
  *
  * The sources are shared (`fixtures/handler-typing/src`) and copied into one
  * throwaway project per host: the host and `jsxImportSource` differ, nothing
@@ -134,14 +134,14 @@ describe.each(HOSTS)(
       // span of its own, so the error lands on the attribute name.
       const found = errorsIn(host, "P01");
       expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 9, "TS2345"],
+        [1, 9, "TS1360"],
       ]);
     });
 
     it("reports a mistyped arrow handler at the authored arrow (p12)", () => {
       const found = errorsIn(host, "P12");
       expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 18, "TS2345"],
+        [1, 18, "TS1360"],
       ]);
     });
 
@@ -166,8 +166,14 @@ describe.each(HOSTS)(
     it("keeps the annotations of a shorthand handler and checks them", () => {
       const found = errorsIn(host, "ShorthandTyped");
       expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 9, "TS2345"],
+        [1, 9, "TS1360"],
       ]);
+    });
+
+    it("allocates preamble names that collide with no user binding", () => {
+      // `static const __MxH`, `static const __MxJSX` and `type __MxM` are the
+      // preamble's base names; its own identifiers move aside.
+      expect(errorsIn(host, "Collision")).toEqual([]);
     });
 
     it("leaves custom elements and dynamic tags unchecked", () => {
@@ -203,10 +209,10 @@ describe("mx-tsc DOM-typed handlers (decision 140 (a))", () => {
     // React's synthetic `MouseEvent<…>` is not the DOM's `MouseEvent`.
     const found = errorsIn("react", "DomTyped");
     expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-      [1, 18, "TS2345"],
+      [1, 18, "TS1360"],
     ]);
     expect(errorsIn("react", "ValidDomEvent").map((d) => d.code)).toEqual([
-      "TS2345",
+      "TS1360",
     ]);
   });
 });

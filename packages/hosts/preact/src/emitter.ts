@@ -375,11 +375,13 @@ export class PreactEmitter implements Emitter<string> {
   readonly #callbackScope: boolean;
 
   /**
-   * Tooling-only (decision 140): wrap every native element's event handler as
-   * `__mxOn<"tag", "event">(fn)` so TypeScript checks it against the host's
-   * own handler type. Never set for a runtime compile.
+   * Tooling-only (decision 140): the name of the preamble's handler-type
+   * alias. When set, every native element's event handler becomes
+   * `(fn) satisfies Alias<"tag", "event">`, so TypeScript checks it against
+   * the host's own handler type; `satisfies` is erased on emit, so the
+   * wrapper never reaches emitted JavaScript. Never set for a runtime compile.
    */
-  readonly #typeCheck: boolean;
+  readonly #typeCheck: string | undefined;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -388,7 +390,7 @@ export class PreactEmitter implements Emitter<string> {
     varStatements?: string[],
     varSerial?: { n: number },
     callbackScope = false,
-    typeCheck = false,
+    typeCheck?: string,
   ) {
     this.#dialect = dialect;
     this.#typeCheck = typeCheck;
@@ -563,23 +565,34 @@ export class PreactEmitter implements Emitter<string> {
       // differ is worse than none.
       //
       // Under `typeCheck` (tooling only, decision 140) a native element's
-      // handler is wrapped as `__mxOn<"tag", "event">(fn)`: TypeScript then
-      // checks the argument against the host's own handler type, and the
-      // diagnostic lands on the argument — which is mapped — instead of on the
-      // unmapped prop name. A shorthand handler has no source span, so its
+      // handler is wrapped as `(fn) satisfies Handler<"tag", "event">`:
+      // TypeScript then checks the value against the host's own handler type
+      // (and contextually types its parameters), and the diagnostic lands on
+      // the value — which is mapped — instead of on the unmapped prop name.
+      // `satisfies` is erased on emit, so `mx-tsc` output stays runnable. A shorthand handler has no source span, so its
       // generated function maps to the attribute name.
       case "event": {
         const name = this.#eventPropName(attr);
         const method = methodExpression(attr.value);
         if (this.#typeCheck && tag !== undefined && NATIVE_TAG.test(tag)) {
+          // TypeScript reports a mismatch on the `satisfies` keyword, and a
+          // body error inside the parenthesized value; an unmapped range would
+          // drop the diagnostic, so the value and the keyword both map to the
+          // handler's source span. A shorthand handler has no span of its own
+          // and maps to the attribute name.
+          const code = method ?? attr.value.code;
+          const span =
+            method !== null && attr.value.node?.start === undefined
+              ? attr.nameSpan
+              : (attr.value.span ?? null);
           return concatMapped(
             " ",
             mapped(name, null),
-            `={__mxOn<"${tag}", "${name.slice(2).toLowerCase()}">(`,
-            method !== null && attr.value.node?.start === undefined
-              ? mapped(method, attr.nameSpan)
-              : concatMapped(method ?? attr.value.code),
-            ")}",
+            "={",
+            mapped(`(${code})`, span),
+            " ",
+            mapped("satisfies", span),
+            ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}">}`,
           );
         }
         return concatMapped(
@@ -1620,7 +1633,7 @@ export class PreactEmitter implements Emitter<string> {
 
 export function createEmitter(
   dialect: JsxDialect = preactDialect,
-  typeCheck = false,
+  typeCheck?: string,
 ): PreactEmitter {
   return new PreactEmitter(
     dialect,

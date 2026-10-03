@@ -79,11 +79,11 @@ Six facts worth knowing before editing it:
 - **`typeCheck` is a tooling-only mode (decision 140).** `compilePreactMx`
   (and the react/hono entries) take `typeCheck: true` only from
   `@mxlang/typescript-plugin`'s virtual code. It wraps every native element's
-  event handler as `on…={__mxOn<"tag", "event">(fn)}` (`emitter.ts`, the
+  event handler as `on…={(fn) satisfies Handler<"tag", "event">}` (`emitter.ts`, the
   `event` case; custom elements, dynamic tags and components are not wrapped)
-  and adds a type preamble (`index.ts`, `handlerTypePreamble`) that finds the
+  and adds a *types-only* preamble (`index.ts`, `handlerTypePreamble`; `satisfies` and types are erased by `mx-tsc`'s emit, so no helper value may ever exist — it would throw at run time) that finds the
   host's own handler type by case-insensitive key lookup on
-  `JSX.IntrinsicElements`, `any` on no hit. It also sets core's
+  `JSX.IntrinsicElements`, `any` on no hit. Its identifiers are allocated against the template source (`handlerTypeNames`) so a user binding can never collide. It also sets core's
   `stripTypes: false` so shorthand handlers keep their annotations. The
   wrapper exists to give TypeScript a contextual type and a *mapped* place to
   report on (the recomposed prop name is deliberately unmapped); never emit it
