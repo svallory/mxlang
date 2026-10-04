@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (ng-mx-hoist-before-directive round 2):** detached headers after the directive prologue also stay before hoisted imports. A directive's trailing inline comment stays on its original statement, while the final attached declaration comment stays with its declaration. Template and later module positions remain mapped correctly.
+
 - **Fix (ng-mx-hoist-before-directive):** without authored imports, `.ng.mx` hoisted imports now follow the leading directive prologue and detached header comments. Directives remain directives, attached declaration comments stay attached, and template/module diagnostic mappings retain their authored positions.
 
 - **Fix (ng-ngfor-attr-column):** structural attribute mappings separate the `*` prefix from the directive name. NG8103 now points at `ngFor` (a25: line 5, column 22), and likewise at `ngIf`, without changing emitted template text or adjusting the printed column.

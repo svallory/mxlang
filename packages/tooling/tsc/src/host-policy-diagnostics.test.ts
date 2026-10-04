@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { runInProcess } from "./in-process.ts";
@@ -56,6 +56,53 @@ function project(files: Record<string, string>): string {
   return dir;
 }
 
+/** Normalise a printed manifest location after verifying its path identity. */
+function normalizePolicyOutput(text: string, dir: string, cwd: string): string {
+  return text.replace(
+    /^([^\r\n]+?)(\(\d+,\d+\): (?:warning|error) TS80003:)/gm,
+    (_match, filename: string, location: string) => {
+      // Formatting is relative to the actual run cwd, not necessarily dir.
+      // Validate before replacing: a missing ../ must not disappear in a
+      // basename-only normalisation and falsely make a wrong location pass.
+      expect(resolve(cwd, filename)).toBe(join(dir, "package.json"));
+      const shown =
+        resolve(cwd) === dir ? "package.json" : "<dir>/package.json";
+      return `${shown}${location}`;
+    },
+  );
+}
+
+describe("host-policy filename normalization", () => {
+  const cwd = "/private/tmp/review";
+  const dir = "/private/var/folders/example/T/mx-hp-diag-ABC123";
+  const suffix = '(5,13): warning TS80003: unknown mx.host "vue"';
+  const good = `${relative(cwd, join(dir, "package.json"))}${suffix}`;
+
+  it("accepts the exact cwd-relative manifest location", () => {
+    expect(normalizePolicyOutput(good, dir, cwd)).toBe(
+      `<dir>/package.json${suffix}`,
+    );
+  });
+
+  it("accepts a spawned run's filename relative to dir", () => {
+    const printed = `package.json${suffix}`;
+    expect(normalizePolicyOutput(printed, dir, dir)).toBe(printed);
+  });
+
+  it("accepts an absolute manifest location with spaces and parentheses", () => {
+    const spaced = `${dir} (project)`;
+    const printed = `${join(spaced, "package.json")}${suffix}`;
+    expect(normalizePolicyOutput(printed, spaced, cwd)).toBe(
+      `<dir>/package.json${suffix}`,
+    );
+  });
+
+  it("rejects a filename missing one parent traversal", () => {
+    const wrong = good.replace("../", "");
+    expect(() => normalizePolicyOutput(wrong, dir, cwd)).toThrow();
+  });
+});
+
 /**
  * `mx-tsc --noEmit -p tsconfig.json` in `dir`: ANSI-stripped output and exit.
  * `spawn` runs the built binary with `dir` as its cwd. An exit code that
@@ -80,14 +127,10 @@ function check(dir: string, spawn = false): { status: number; text: string } {
     : runInProcess(["--noEmit", "-p", "tsconfig.json"], dir);
   return {
     status: run.status,
-    // tsc prints paths relative to the process cwd, and `path.relative`
-    // cancels any directory the two share: a repo checked out under
-    // `/private/tmp` makes the printed form of the (realpath'd) temp dir
-    // drop its `/private` prefix (`../../../../../../var/folders/…`). Anchor
-    // the normalisation on the unique mkdtemp name, not the absolute spelling.
-    text: stripVTControlCharacters(run.stdout + run.stderr).replace(
-      new RegExp(`(?:[^\\s()/]+/)*${basename(dir)}`, "g"),
-      "<dir>",
+    text: normalizePolicyOutput(
+      stripVTControlCharacters(run.stdout + run.stderr),
+      dir,
+      spawn ? dir : process.cwd(),
     ),
   };
 }

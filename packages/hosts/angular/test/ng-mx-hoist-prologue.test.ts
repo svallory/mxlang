@@ -21,6 +21,11 @@ describe("hoisted imports without an authored import", () => {
     "/* header one */\n/* header two */\n\n",
     '/* detached header */\r\n\r\n"use client";\r\n',
     '// detached header\n\n"use client"\n',
+    '"use strict";\n/* detached header after prologue */\n\n',
+    '"use strict";\n// detached header after prologue\n\n',
+    '"use strict"; // trailing directive comment\n',
+    '"use strict"; /* trailing directive comment */\r\n',
+    '"use client";\n"use strict"; // trailing comment\n/* detached header */\n\n',
   ])(
     "keeps the header and directive prologue before the import: %j",
     (prefix) => {
@@ -46,11 +51,8 @@ describe("hoisted imports without an authored import", () => {
           ts.ScriptTarget.Latest,
           true,
         );
-        const directiveCount = prefix.includes("use strict")
-          ? 2
-          : prefix.includes("use client")
-            ? 1
-            : 0;
+        const directiveCount = (prefix.match(/"use (?:client|strict)"/g) ?? [])
+          .length;
         for (const statement of parsed.statements.slice(0, directiveCount)) {
           expect(
             ts.isExpressionStatement(statement) &&

@@ -1365,19 +1365,27 @@ function hoistModuleStatements(
       insertAt = Math.max(insertAt, directive.end ?? 0);
     }
     // Comments belong to the original module, as do MagicString's offsets.
-    // Keep detached header blocks, but leave a comment attached to the first
-    // declaration beside that declaration. Only module-level directives count.
+    // Scan through the prologue to the first authored non-directive statement
+    // (bridge imports have no start). A detached header may follow directives;
+    // the last attached declaration comment must still stay with its declaration.
     const firstCode =
-      program?.directives?.[0]?.start ??
       program?.body?.find((node) => node.start !== undefined)?.start ??
-      0;
+      rewritten.original.length;
     const leading = (module.comments ?? []).filter(
       (comment) => comment.end !== undefined && comment.end <= firstCode,
     );
     for (let index = 0; index < leading.length; index++) {
       const end = leading[index]?.end ?? 0;
       const next = leading[index + 1]?.start ?? firstCode;
-      if (/\r?\n[\t ]*\r?\n/.test(rewritten.original.slice(end, next))) {
+      const start = leading[index]?.start ?? 0;
+      const trailingInline =
+        insertAt > 0 &&
+        start >= insertAt &&
+        /^[\t ]*$/.test(rewritten.original.slice(insertAt, start));
+      if (
+        trailingInline ||
+        /\r?\n[\t ]*\r?\n/.test(rewritten.original.slice(end, next))
+      ) {
         insertAt = Math.max(insertAt, end);
       }
     }
