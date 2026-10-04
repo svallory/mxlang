@@ -1,4 +1,4 @@
-import { parse } from "@babel/parser";
+import { type ParserOptions, parse } from "@babel/parser";
 import { type Ctx, type Node, sliceLoc, TranslateError } from "./core.ts";
 
 /** Shared diagnostic for authored bindings, including host-only code regions. */
@@ -16,8 +16,7 @@ export function checkReservedBindings(tree: unknown): void {
   const check = (pattern: Node): void => {
     if (!pattern) return;
     switch (pattern.type) {
-      case "Identifier":
-      case "TSTypeParameter": {
+      case "Identifier": {
         const name = pattern.name;
         if (typeof name === "string" && name.startsWith("__mx")) {
           const at = pattern.loc?.start;
@@ -54,11 +53,17 @@ export function checkReservedBindings(tree: unknown): void {
       return;
     }
     const node = value as Node;
+    // A type-only name cannot collide with emitted code: the type-check
+    // preamble's generated families use a capital `__Mx…`, and no value
+    // binding is minted from a type parameter. `declare function f(__mxA)`
+    // is the same case: its parameters exist only in the type.
+    const skipParams = node.type === "TSDeclareFunction";
     // The parser stamps lowered MX regions. Core already checks their authored
     // bindings; walking the generated replacement would reject our own helpers.
     if (node.extra?.mx) return;
     if (node.type === "MarkoTag") check(node.var);
-    if (Array.isArray(node.params)) for (const p of node.params) check(p);
+    if (Array.isArray(node.params) && !skipParams)
+      for (const p of node.params) check(p);
     if (
       node.type === "VariableDeclarator" ||
       node.type === "FunctionDeclaration" ||
@@ -80,19 +85,34 @@ export function checkReservedBindings(tree: unknown): void {
       node.type === "ImportNamespaceSpecifier"
     )
       check(node.local);
-    if (node.type === "TSTypeParameter") check(node);
     for (const [key, child] of Object.entries(node)) {
       if (
         key !== "loc" &&
         key !== "extra" &&
         key !== "comments" &&
-        key !== "tokens"
+        key !== "tokens" &&
+        !(skipParams && key === "params")
       )
         visit(child);
     }
   };
   visit(tree);
 }
+
+/**
+ * Marko 6.3.51's own `parserOpts.plugins` (`babel-plugin/index.js`'s
+ * `manipulateOptions`), so a statement this host's parser accepts is a
+ * statement this checker can also read. `decorators` is what a decorated
+ * `static @d() class C {}` or `@d() m() {}` needs: Marko accepts both through
+ * its own Babel 8 build, and without the plugin here the reparse threw and
+ * the tag was skipped — a silent false negative, never a false reject.
+ */
+const MARKO_PLUGINS = [
+  "objectRestSpread",
+  "classProperties",
+  "decorators",
+  ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
+] as const satisfies NonNullable<ParserOptions["plugins"]>;
 
 // TS permits angle assertions that TSX does not. Check either valid grammar,
 // rather than silently skipping a TS statement because the JSX parse failed.
@@ -103,9 +123,12 @@ function parseAuthoredSource(source: string, line: number, column: number) {
     startColumn: column,
   };
   try {
-    return parse(source, { ...position, plugins: ["typescript", "jsx"] });
+    return parse(source, {
+      ...position,
+      plugins: [...MARKO_PLUGINS, "jsx"],
+    });
   } catch {
-    return parse(source, { ...position, plugins: ["typescript"] });
+    return parse(source, { ...position, plugins: [...MARKO_PLUGINS] });
   }
 }
 
@@ -144,12 +167,18 @@ export function checkReservedTemplate(ctx: Ctx, body: Node[]): void {
   visit(body);
 }
 
-/** Checks TypeScript source with its file-relative starting position. */
+/**
+ * Checks TypeScript source with its file-relative starting position.
+ *
+ * The one caller outside core is the Astro fence check, whose frontmatter is
+ * authored text rather than an already-parsed tree: it needs the file's real
+ * starting line, and reparsing with core's own grammar keeps one plugin list
+ * (and therefore one reservation) across every authored region.
+ */
 export function checkReservedSource(
   source: string,
   line = 1,
   column = 0,
 ): void {
-  const file = parseAuthoredSource(source, line, column);
-  checkReservedBindings(file);
+  checkReservedBindings(parseAuthoredSource(source, line, column));
 }

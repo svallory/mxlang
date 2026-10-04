@@ -70,6 +70,18 @@ and `$mxX` bindings (tag variables and `static` declarations). It is an
 MX-only safety restriction (reserve-mx-identifiers; decision 72's explicit
 stricter-validation policy), not a `$`- or `_`-prefix reservation.
 
+Type-only names stay legal: a type parameter (`infer __mxU`, `[__mxK in keyof
+T]`) and a `declare function`'s parameters cannot collide with an emitted
+binding, so they are not rejected.
+
+**Known gaps.** The reservation protects the `__mx` prefix only. Some generated
+names outside it are still source-allocated rather than reserved, and two
+families are known to still collide with an authored name: the Solid
+whole-unit `$mxProps`/`$mxBody`/`$mxValue` helpers and hoisted `$mx_Define*`
+tags, and the range mapper's `_` and `mxIndex` temporaries in the JSX and Solid
+hosts (`<const/_=5/>` with `<for|i| from=_ to=_+2>` renders wrong today).
+Those are tracked as follow-ups; reserving `__mx` does not claim to fix them.
+
 ### The governing rule
 
 > **MX 1.0 is a strict subset of Marko syntax.** Every MX 1.0 file is a valid

@@ -6,7 +6,7 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
-- **Fix (reserve-mx-identifiers):** reject authored `__mx*` bindings, including destructuring, tag parameters and parsed statements, at the authored identifier. Host code regions share the check and actionable diagnostic; property keys and references remain legal. This is intentionally stricter than Marko 6.3.51.
+- **Fix (reserve-mx-identifiers):** reject authored `__mx*` bindings, including destructuring, tag parameters and parsed statements, at the authored identifier. Host code regions share the check and actionable diagnostic; property keys and references remain legal. New exports: `checkReservedBindings`, `checkReservedSource` and `reservedBindingMessage`. Statement tags are reparsed with Marko 6.3.51's own plugin list (decorators included), so a decorated `static @d() class C {}` is checked rather than skipped; a tag that still fails to parse is skipped, never rejected. Type-only names — type parameters and `declare function` parameters — stay legal, since no emitted binding can collide with them. This is intentionally stricter than Marko 6.3.51.
 
 - **Fix (attr-value-parity review):** classify builtin value syntax independently of host rendering disposition, including HTML's delegated `<let>`. Native guards reject functions/symbols with Marko debug text; spread guards reference the once-per-module value helper. Remove the unused public guard-body export.
 

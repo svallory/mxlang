@@ -16,7 +16,7 @@ import {
   type AttrTagProp,
   type Ctx,
   type CustomTag,
-  checkReservedBindings,
+  checkReservedSource,
   createTargetLookup,
   DYNAMIC_TAG,
   drive,
@@ -35,11 +35,7 @@ import {
   type TargetLookup,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
-import {
-  parseBabel,
-  sourceBindings,
-  unknownSourceBindings,
-} from "@mxlang/parser";
+import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
 import descriptor from "./descriptor.ts";
 
 /**
@@ -1078,13 +1074,7 @@ export function lowerAstroMx(
         fenceBindings.error.column,
       );
     }
-    checkReservedBindings(
-      parseBabel(match?.[1] ?? "", {
-        sourceType: "module",
-        plugins: ["typescript", "jsx"],
-        startLine: 2,
-      }),
-    );
+    checkReservedSource(match?.[1] ?? "", 2);
     for (const name of fenceBindings.bindings) ctx.imports.add(name);
     // Local extension of decision 116 (firstmate's ruling): a fence
     // binding's own non-import value — a top-level `const`/`function`/

@@ -1,5 +1,7 @@
 # @mxlang/typescript-plugin
 
+- **Fix (reserve-mx-identifiers):** a `TranslateError` carrying a position but no Babel `loc` — the Solid and Angular module-binding paths, including the reserved-`__mx` diagnostic — now lands at its real line and column instead of offset 0. Errors that already carry a Babel `loc` are unchanged.
+
 ## 0.1.0 (unreleased)
 
 ### Test: offsets after an escaped text character map to the shifted generated positions (jsx-text-lt-unescaped)
