@@ -1,0 +1,1 @@
+<div x:foo="y" data:x=input.x prop:x=v attr:aria-label=l bool:open=o use:tooltip=opts a:b:c=z oncapture:click="s">y</div>

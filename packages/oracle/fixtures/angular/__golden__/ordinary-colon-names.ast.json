@@ -1,0 +1,102 @@
+[
+  {
+    "name": "div",
+    "attributes": [
+      {
+        "name": ":x:foo",
+        "value": "y"
+      },
+      {
+        "name": ":oncapture:click",
+        "value": "s"
+      }
+    ],
+    "inputs": [
+      {
+        "name": ":data:x",
+        "type": 1,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {
+              "receiver": {},
+              "name": "input"
+            },
+            "name": "x"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": ":prop:x",
+        "type": 1,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "v"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": ":attr:aria-label",
+        "type": 1,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "l"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": ":bool:open",
+        "type": 1,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "o"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": ":use:tooltip",
+        "type": 1,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "opts"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": ":a:b:c",
+        "type": 1,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "z"
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [
+      {
+        "value": "y"
+      }
+    ],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

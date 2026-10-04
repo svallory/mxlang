@@ -98,7 +98,7 @@ describe("a default attribute's nameSpan", () => {
     expect(slice(source, span)).toBe("change");
   });
 
-  it("leaves a modifier attribute spelled `name:modifier`", () => {
+  it("keeps a non-native colon prop's complete name and authored span", () => {
     const source = "<x class:a=1>\n</x>\n";
     const tag = delegatedTag(
       irOf(source, {
@@ -107,9 +107,22 @@ describe("a default attribute's nameSpan", () => {
           `${a.name}-${a.modifier}`,
       } as HostDeclarations).body[0],
     );
-    expect(slice(source, nameSpanOf(attr(tag.attrs, "class-a")))).toBe(
+    expect(slice(source, nameSpanOf(attr(tag.attrs, "class:a")))).toBe(
       "class:a",
     );
+  });
+
+  it("maps a host-resolved native modifier to its complete authored name", () => {
+    const source = "<div class:a=1/>";
+    const el = irOf(source, {
+      ...elements,
+      resolveModifier: (a: { name: string; modifier: string }) =>
+        `${a.name}-${a.modifier}`,
+    } as HostDeclarations).body[0];
+    if (el?.kind !== "Element") throw new Error("expected an Element");
+    const span = nameSpanOf(attr(el.attrs, "class-a"));
+    expect(span).toEqual({ sourceStart: 5, sourceEnd: 12 });
+    expect(slice(source, span)).toBe("class:a");
   });
 });
 
