@@ -1,6 +1,6 @@
 # html — agent instructions
 
-`packages/hosts/html` (`@mxlang/html`) holds the string target:
+`packages/targets/html` (`@mxlang/html`) holds the string target:
 
 - `escape(value)` — the *entire* runtime. Escapes `& < > " '`; `null` and
   `undefined` render as `""`, not their names.
@@ -26,14 +26,14 @@ sees a `MarkoText` node (see the four Marko facts in `packages/parser/AGENTS.md`
 separate SolidMX-specific whitespace pass to keep in sync; a second
 implementation on any host's path would collapse whitespace twice.
 
-Goldens live at `packages/hosts/html/fixtures-marko/<name>/` with
+Goldens live at `packages/targets/html/fixtures-marko/<name>/` with
 `input.marko`, `input.json` and `expected.html`, and are asserted on
 **rendered HTML**, not on emitted code, so the emitter stays free to improve.
 `biome.json` ignores `**/fixtures-marko`.
 
 ## `@mxlang/html`: the vanilla html target on `@mxlang/core`
 
-`packages/hosts/html` (`@mxlang/html`, decisions 66, 68) compiles an
+`packages/targets/html` (`@mxlang/html`, decisions 66, 68) compiles an
 **ordinary Marko template** to a runtime-free `(input) => string` module. Not
 a dialect: tag discovery through taglibs and `tags/` directories, Marko's own
 HTML/SVG/MathML element registry, Marko's attribute-tag and component
@@ -42,7 +42,7 @@ dead end, since 5.42.5 scans only `@marko/runtime-*`.
 
 The generic half now lives in `packages/core` (`@mxlang/core`) — see
 "`@mxlang/core`: the Marko-node consumer" in `packages/core/AGENTS.md`.
-`packages/hosts/html` keeps
+`packages/targets/html` keeps
 `translate.ts` (the policy rows, `strictPolicy`), `bun.ts`, `types/`,
 `example.ts`, the taglib and the fixtures; its `index.ts` is a thin wrapper
 over the core's `compileSource`, and its own `emitProgram` is now a
@@ -121,7 +121,7 @@ than assumed:
   alone.
 
 `bun run oracle:marko` prints one table, for
-`packages/hosts/html/fixtures-marko` — see the "oracle:marko" section in
+`packages/targets/html/fixtures-marko` — see the "oracle:marko" section in
 `packages/oracle/AGENTS.md` for the current fixture count and pass/skip/bug totals. Fixture
 `expected.html` files are generated from real Marko, never hand-written.
 
@@ -188,7 +188,7 @@ author binding (the same rule applies to ordinary content loops).
 
 ## Bun loader
 
-`packages/hosts/html/src/bun.ts` (`@mxlang/html/bun`) is the Bun-side
+`packages/targets/html/src/bun.ts` (`@mxlang/html/bun`) is the Bun-side
 `.mx` integration, decision 58 roadmap item 2, half A (moved here from the
 retired `@mxlang/html/bun` by decision 68). It exports a `BunPlugin` that
 registers `build.onLoad({ filter: MX_FILTER }, ...)` — `MX_FILTER` is
@@ -220,9 +220,9 @@ an emit bug") lives in the e2e suite's own content assertions
 build — there is no separate golden-file diff, since the rendered HTML
 itself is the golden.
 
-`packages/hosts/html/src/bun.test.ts` is a `bun:test` file (not vitest — it
+`packages/targets/html/src/bun.test.ts` is a `bun:test` file (not vitest — it
 exercises `Bun.plugin` and Bun's own dynamic `import()`, both Bun-runtime
-only), run via `bun run test:bun` in that package. `packages/hosts/html`'s
+only), run via `bun run test:bun` in that package. `packages/targets/html`'s
 own `vitest.config.ts` excludes it from the vitest project so the root
 `bun run test` does not try to load `bun:test` under Node/Vite.
 
@@ -236,7 +236,7 @@ under the pinned Bun (`PATH=~/.proto/tools/bun/1.3.14:$PATH`); a shell whose
 
 ## `.mx` import typing
 
-`packages/hosts/html/types/marko.d.ts` declares `declare module "*.mx"`,
+`packages/targets/html/types/marko.d.ts` declares `declare module "*.mx"`,
 typing the import as `(input: any) => string`. `any`, not each file's real
 `Input` interface: per-file typing
 needs a virtual-file projection of the compiled module (the same shape

@@ -1416,7 +1416,7 @@ describe("core-owned custom tags", () => {
 // registered custom tag of the same name, not the other way around.
 // Real-host coverage (an imported/`<define>`d PascalCase component winning
 // over a registered custom tag, and a lowercase import *not* shadowing one)
-// lives in `packages/hosts/html/src/translate.test.ts`'s "import precedence
+// lives in `packages/targets/html/src/translate.test.ts`'s "import precedence
 // over registered custom tags" describe block, against the real `compile()`
 // entry point rather than a synthetic policy — see item 2 of round 1's
 // review. What's left here is IR-level coverage a host-level test can't

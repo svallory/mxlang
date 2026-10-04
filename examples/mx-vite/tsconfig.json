@@ -9,6 +9,6 @@
     "src",
     "e2e",
     "vite.config.ts",
-    "../../packages/hosts/html/types/marko.d.ts"
+    "../../packages/targets/html/types/marko.d.ts"
   ]
 }

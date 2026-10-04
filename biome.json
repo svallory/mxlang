@@ -75,7 +75,7 @@
         "packages/core/src/hooks.test.ts",
         "packages/hosts/preact/src/emitter.ts",
         "packages/hosts/preact/src/index.test.ts",
-        "packages/hosts/html/scripts/consumer-check.ts",
+        "packages/targets/html/scripts/consumer-check.ts",
         "packages/tooling/language-server/src/diagnose.test.ts",
         "packages/core/src/template-tag.ts",
         "packages/core/src/template-tag.test.ts",
@@ -107,7 +107,7 @@
       }
     },
     {
-      "includes": ["packages/hosts/html/src/translate.test.ts"],
+      "includes": ["packages/targets/html/src/translate.test.ts"],
       "linter": {
         "rules": {
           "suspicious": { "noTemplateCurlyInString": "info" }

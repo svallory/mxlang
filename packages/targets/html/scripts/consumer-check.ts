@@ -12,7 +12,7 @@
 // scratch project. It must be able to fail: run it with `dist/` missing (or
 // pass `--simulate-missing-dist`) and it fails loud, not silent.
 //
-// Run from anywhere: `bun run packages/hosts/html/scripts/consumer-check.ts`.
+// Run from anywhere: `bun run packages/targets/html/scripts/consumer-check.ts`.
 // Wired into `bun run verify` at the root.
 
 import { execFileSync } from "node:child_process";
@@ -31,7 +31,7 @@ const simulateMissingDist = process.argv.includes("--simulate-missing-dist");
  * script must be able to fail, and a hang is a silent, unbounded pass).
  * `bun pm pack` hangs: first observed inside `packages/parser` (before
  * `core-extract` removed the translator's dependency on it), then again
- * on `packages/hosts/html` and `packages/core` with bun 1.3.14 on macOS,
+ * on `packages/targets/html` and `packages/core` with bun 1.3.14 on macOS,
  * spinning at 100% CPU (`kevent64`/`unlinkat` in `sample`), both when
  * spawned from a bun parent and from a plain shell. Root cause not
  * determined; this script packs with `npm pack` instead (PR #51), which
@@ -80,7 +80,7 @@ if (simulateMissingDist) {
   }
 } else if (!existsSync(distDir)) {
   fail(
-    `dist/ is missing at ${distDir} — run \`bun run build\` in packages/hosts/html first. (This is exactly the failure --simulate-missing-dist demonstrates.)`,
+    `dist/ is missing at ${distDir} — run \`bun run build\` in packages/targets/html first. (This is exactly the failure --simulate-missing-dist demonstrates.)`,
   );
 }
 

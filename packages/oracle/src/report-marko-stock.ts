@@ -54,7 +54,14 @@ interface Row {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturesRoot = join(here, "..", "..", "hosts", "html", "fixtures-marko");
+const fixturesRoot = join(
+  here,
+  "..",
+  "..",
+  "targets",
+  "html",
+  "fixtures-marko",
+);
 
 export async function runStockTable(): Promise<{
   rows: Row[];

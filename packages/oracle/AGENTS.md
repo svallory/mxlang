@@ -36,7 +36,7 @@ Decision 51: the parity target for Marko-syntax constructs is Marko itself,
 not Solid. Decision 68 retired `.mx`/`@mxlang/html`, so there is one dialect
 and one table: `bun run oracle:marko` (`packages/oracle/src/report-marko.ts`,
 delegating to `report-marko-stock.ts`) renders every fixture under
-`packages/hosts/html/fixtures-marko/<name>/{input.marko,input.json,expected.html}`
+`packages/targets/html/fixtures-marko/<name>/{input.marko,input.json,expected.html}`
 two ways — through the real Marko 6 toolchain (`@marko/compiler` 5.42.5 +
 `marko/translator`, exactly matching `marko@6.3.51`'s own dependency) and
 through `@mxlang/html`'s `compile()` — and compares both against

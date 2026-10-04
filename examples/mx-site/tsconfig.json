@@ -5,5 +5,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src", "e2e", "../../packages/hosts/html/types/marko.d.ts"]
+  "include": ["src", "e2e", "../../packages/targets/html/types/marko.d.ts"]
 }

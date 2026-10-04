@@ -70,7 +70,7 @@ call, same source map, and it keeps precedence over `.mx` regardless of
 `extensions` order (`.mx` is a literal string suffix of `.solid.mx`, so the
 longest-first sort at `index.ts`'s `matchExt`/`isMxModule` setup matters
 here). The `.mx` path returns `map: null` from `transform` — `compile()`'s
-map is presently an identity placeholder (see `packages/hosts/html`'s own
+map is presently an identity placeholder (see `packages/targets/html`'s own
 doc comment: no AST is printed on that path), so there is nothing real to
 hand Vite yet.
 
@@ -151,7 +151,7 @@ of the tag's own `package.json`. `.marko` is deliberately *not* in `extensions`
 import from plain TS must stay untouched, and `@marko/vite` is no substitute
 (its output is a Marko runtime template, not the function the emitted call
 expects; same shape the Bun loader's test gives `.marko` tags,
-`packages/hosts/html/src/marko-tags.bun.test.ts`). `sourceExt()` is the
+`packages/targets/html/src/marko-tags.bun.test.ts`). `sourceExt()` is the
 extension lookup for HMR (an edited tag invalidates its own module and the
 callers recorded against it). Tests: `marko-tags-build.test.ts` (real
 `vite build` + `createServer().ssrLoadModule`, output executed).

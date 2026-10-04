@@ -13,7 +13,7 @@ The repository is a Bun workspace with two workspace globs, `packages/*` and `ex
 |---|---|
 | `packages/parser` | A `@babel/parser` fork: MX in expression position lowers to JSX, for the SolidMX host. |
 | `packages/core` | The Marko-node consumer every MX host is built on: structural lowerings, the IR, `HostDeclarations`, `Emitter<Out>`, three stateful-tag hooks, two front doors. |
-| `packages/hosts/html` | The html target: `.mx`/`.marko` compile to a pure `(input) => string` function. |
+| `packages/targets/html` | The html target: `.mx`/`.marko` compile to a pure `(input) => string` function. |
 | `packages/hosts/astro` | The Astro host: components, pages, and `.astro.mx` templates, all rendered to static markup. |
 | `packages/tooling/language-server` | A diagnostics-only LSP server for MX hosts. |
 | `packages/editors/zed` | The Zed editor extension (three languages plus the language server registration). |

@@ -16,7 +16,7 @@ Custom tags let a project define its own portable markup vocabulary in `tags/x.m
 | `packages/tooling/eslint-plugin` | `@mxlang/eslint-plugin` | MX-specific lint rules (parser is `@babel/eslint-parser` + `babel-plugin-mx`) |
 | `packages/tooling/vite-plugin` | `@mxlang/vite-plugin` | Vite transform: prints `.solid.mx` to JSX text ahead of `@solidjs/vite-plugin` (the primary integration) |
 | `packages/core` | `@mxlang/core` | The Marko-node consumer every MX host is built on: structural and custom-tag lowering, the host declarations contract, stateful-tag hooks, and the `compileSource`/`parseFragment` front doors. Depends on `@marko/compiler` alone. |
-| `packages/hosts/html` | `@mxlang/html` | The vanilla MX host on `@mxlang/core`: `.mx` files compile to a pure `(input) => string` function, no runtime beyond an `escape` helper, as a `config.translator` for `@marko/compiler`. MX 1.0 is a strict subset of Marko syntax (decision 72), so this is Marko syntax, unmodified — no fork. |
+| `packages/targets/html` | `@mxlang/html` | The vanilla MX host on `@mxlang/core`: `.mx` files compile to a pure `(input) => string` function, no runtime beyond an `escape` helper, as a `config.translator` for `@marko/compiler`. MX 1.0 is a strict subset of Marko syntax (decision 72), so this is Marko syntax, unmodified — no fork. |
 | `packages/hosts/astro` | `@mxlang/astro` | The Astro host: an integration plus a renderer that renders `.mx` components to static markup at build time, with no islands and no client JS. Astro's slots (already-rendered HTML strings) map to MX's `content`/attribute-tag thunks; stateful tags are compile errors, since this host has no reactive target (decision 71). |
 | `packages/hosts/preact` | `@mxlang/preact` | The Preact host: a `.mx` template compiles to a Preact component module in JSX text. The first host whose target has no control-flow components at all — `<if>` becomes a ternary chain and `<for>` a `.map` with a `key`, exactly as a Preact author would write them. Ships `MxErrorBoundary`/`MxPlaceholder` for `<try>` (Preact has no built-in error boundary) and a `Target` object so a React host can reuse the emitter rather than fork it. |
 | `packages/hosts/react` | `@mxlang/react` | The React target on the shared Preact/React JSX emitter: `className`/`htmlFor`, native React Fragment and Suspense, and a React class error boundary for `<try>`—no Preact compat layer. |
@@ -132,8 +132,8 @@ showing the stock `.marko` template, the compiled runtime-free module, and
 the HTML it produces:
 
 ```
-cd packages/hosts/html && bun run example
-cd packages/hosts/html && bun run example nested-layout
+cd packages/targets/html && bun run example
+cd packages/targets/html && bun run example nested-layout
 ```
 
 ```

@@ -73,7 +73,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
   },
   {
     name: "@mxlang/html",
-    dir: "packages/hosts/html",
+    dir: "packages/targets/html",
     extraTopLevel: ["types"],
     distFiles: [
       "dist/bun.d.ts",

@@ -238,7 +238,7 @@ bunx vitest run --root ../../.. --project @mxlang/preact
 ```
 
 `oracle:preact` compiles every fixture in the stock `.marko` set
-(`packages/hosts/html/fixtures-marko/`, the same 45 `oracle:marko` uses),
+(`packages/targets/html/fixtures-marko/`, the same 45 `oracle:marko` uses),
 renders it with `preact-render-to-string`, and compares against the fixture's
 own `expected.html` — which was generated from real Marko, so a pass means
 this host agrees with Marko transitively. **32 pass, 13 skipped (each naming

@@ -36,7 +36,7 @@ interface HostBuild {
 
 const HOST_BUILDS: HostBuild[] = [
   {
-    dir: "packages/hosts/html",
+    dir: "packages/targets/html",
     entries: ["src/index.ts", "src/bun.ts", "src/descriptor.ts"],
     artifacts: ["index.js", "bun.js", "descriptor.js"],
   },
@@ -73,7 +73,7 @@ describe.each(HOST_BUILDS)("$dir entry graph builds completely", (host) => {
     const outDir = mkdtempSync(join(tmpdir(), "mx-bundle-smoke-"));
     tempDirs.push(outDir);
     // The same shape as the packed hosts' real build scripts
-    // (`packages/hosts/html/package.json`): node-targeted ESM, the compiler
+    // (`packages/targets/html/package.json`): node-targeted ESM, the compiler
     // and core external. Exit 0 is NOT the pin — the silent-omission bug
     // exits 0 — the artifacts are.
     execFileSync(

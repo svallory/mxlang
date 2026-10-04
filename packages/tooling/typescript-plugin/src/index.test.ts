@@ -3649,7 +3649,7 @@ function createMutablePluginService(
     baseUrl: repoRoot,
     paths: {
       "@mxlang/core": [join(repoRoot, "packages/core/src/index.ts")],
-      "@mxlang/html": [join(repoRoot, "packages/hosts/html/src/index.ts")],
+      "@mxlang/html": [join(repoRoot, "packages/targets/html/src/index.ts")],
       "@mxlang/preact": [join(repoRoot, "packages/hosts/preact/src/index.ts")],
       "@mxlang/solid": [join(repoRoot, "packages/hosts/solid/src/index.ts")],
       "@mxlang/parser": [join(repoRoot, "packages/parser/src/public.d.ts")],

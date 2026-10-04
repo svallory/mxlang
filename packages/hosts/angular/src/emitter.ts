@@ -2099,7 +2099,7 @@ class AngularEmitter implements Emitter<string> {
       return;
     }
     // html-comment: text-only. `@mxlang/html`'s own emitter accepts an
-    // `Interpolation` child too (`packages/hosts/html/src/emitter.ts:604-606`)
+    // `Interpolation` child too (`packages/targets/html/src/emitter.ts:604-606`)
     // because that host evaluates it server-side into static comment text —
     // Angular has no such evaluation inside a comment (probed: `<!-- {{ x
     // }} -->` renders the literal text `{{ x }}`, never `x`'s value), so an

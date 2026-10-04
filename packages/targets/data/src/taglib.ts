@@ -41,7 +41,7 @@ interface ParseOptionsOverride {
 
 /**
  * The structural entries, copied from
- * `packages/hosts/html/taglib/marko.json`. Keep in sync until
+ * `packages/targets/html/taglib/marko.json`. Keep in sync until
  * `core-export-structural-taglib` gives both packages one source.
  */
 const STRUCTURAL_ENTRIES: Record<string, unknown> = {

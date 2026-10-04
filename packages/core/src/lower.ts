@@ -8,7 +8,7 @@
  * instead of text. A host then emits from the IR and never sees a Marko node.
  *
  * Error messages and positions are preserved **byte for byte** from the
- * emitting walk: `packages/hosts/html`'s error fixtures and the oracle's error
+ * emitting walk: `packages/targets/html`'s error fixtures and the oracle's error
  * class both assert them, and a reworded message is a behaviour change even
  * when the construct is still rejected.
  *

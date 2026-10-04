@@ -1265,7 +1265,7 @@ describe("local scope bindings shadow a registered custom tag (executed)", () =>
   // restore already reverts `tagVarShadowed` on its own, independent of the
   // enclosing `<if>`'s `scopeBindings` — so there is nothing to leak. The
   // round-2 regression and its fix are executed-render tested on html
-  // (`packages/hosts/html/src/translate.test.ts`), the host that can
+  // (`packages/targets/html/src/translate.test.ts`), the host that can
   // actually compile the repro; IR-level coverage for `<if>`/`<else>`/nested
   // `<for>` is in `packages/core/src/custom-tags.test.ts`.
 });

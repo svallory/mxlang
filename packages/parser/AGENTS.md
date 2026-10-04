@@ -71,7 +71,7 @@ convention (`tagDiscoveryDirs: ["tags"]`, used by `@mxlang/html` and
 discovered at all. This is Marko's own compiler behavior during a whole-file
 `.mx` compile, not a second entry point MX advertises.
 
-The oracle (`packages/oracle`, `packages/hosts/html/fixtures-marko/*`) still
+The oracle (`packages/oracle`, `packages/targets/html/fixtures-marko/*`) still
 keeps its 43 stock fixtures as real `.marko` files, because Marko's own
 compiler and its `tags/` scan only accept `.marko` — but it feeds them to MX
 by reading the file content and compiling under a virtual sibling `.mx`
@@ -92,8 +92,8 @@ covered by the `.marko` alias in the first place.
 - `compile(source, filename)` in `@mxlang/html` — a whole-file MX
   template (`.mx`, stock Marko syntax with no dialect layered on top).
   `@marko/compiler` parses, validates and supplies the tag registry; the
-  package supplies only a translator (`packages/hosts/html/src/translate.ts`)
-  and its own taglib (`packages/hosts/html/taglib/marko.json`).
+  package supplies only a translator (`packages/targets/html/src/translate.ts`)
+  and its own taglib (`packages/targets/html/taglib/marko.json`).
   `@mxlang/parser` is not on this path at all. `compile()`/`compileFile()`
   themselves do not gate on the filename extension (it is inert in
   `@mxlang/core`'s `compileSource` too — the extension check lives at the
@@ -122,7 +122,7 @@ Four Marko facts that are easy to get wrong (all measured against
   claiming host's `DelegatedTag` (`shape` "bare"/"tagged"), or, when no host
   claims `DYNAMIC_TAG`, to a `Component` with a dynamic target. Marko's own
   fixture `error-dynamic-tag-name`
-  (`packages/hosts/html/fixtures-marko/error-dynamic-tag-name/`) is the
+  (`packages/targets/html/fixtures-marko/error-dynamic-tag-name/`) is the
   proof: `static const tagName = "hello world"` then `${tagName}` at column 0
   fails at render with "Invalid tag name" — it compiled to a dynamic tag, not
   a placeholder. Text on its own line needs the escape hatch, `-- ${x}`. A

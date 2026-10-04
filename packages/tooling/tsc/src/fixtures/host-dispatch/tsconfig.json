@@ -10,7 +10,7 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
-      "@mxlang/html": ["../../../../../hosts/html/src/index.ts"],
+      "@mxlang/html": ["../../../../../targets/html/src/index.ts"],
       "@mxlang/astro": ["../../../../../hosts/astro/src/index.ts"],
       "@mxlang/solid": ["../../../../../hosts/solid/src/index.ts"],
       "@mxlang/preact": ["../../../../../hosts/preact/src/index.ts"],

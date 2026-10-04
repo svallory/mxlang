@@ -328,7 +328,7 @@ and no body — the grammar has no other shape for it. Real Marko does not treat
 that as a text placeholder: a bare `${expr}` line and the tagged `<${expr}
 .../>` form parse to the identical node and are **the same dynamic-tag
 construct** (§11/§7). Marko's own fixture
-(`packages/hosts/html/fixtures-marko/error-dynamic-tag-name/`) proves it: a
+(`packages/targets/html/fixtures-marko/error-dynamic-tag-name/`) proves it: a
 bare `${tagName}` at column 0 fails at render with "Invalid tag name" — it
 compiled to a dynamic tag, not a placeholder.
 

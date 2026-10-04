@@ -236,7 +236,7 @@ No packages ship for these — MX 1.0 being a strict Marko subset (decision
 
   Verified manually (2026-09-11, scratch dir, `prettier@3.6.2` +
   `prettier-plugin-marko@4.1.0`): copied
-  `packages/hosts/html/fixtures-marko/attributes/input.marko` to a scratch
+  `packages/targets/html/fixtures-marko/attributes/input.marko` to a scratch
   `input.mx` and ran
 
   ```

@@ -5,7 +5,7 @@
  * requires `parse.ts`; a `parse.ts` that imported the descriptor back would
  * close an entry-point cycle, which Bun's multi-entry build answers by
  * silently dropping `dist/parse.js` with exit 0 (the html target hit the same
- * with `dist/index.js`, see `hosts/html/src/descriptor.ts`).
+ * with `dist/index.js`, see `targets/html/src/descriptor.ts`).
  */
 import type { TargetDescriptor } from "@mxlang/core";
 import { dataDeclarations } from "./declarations.ts";

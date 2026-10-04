@@ -180,7 +180,7 @@ Decision 68 retired the `.mx` dialect and `@mxlang/html`, so there is one
 dialect (stock Marko) and one table. `bun run oracle:marko`
 (`packages/oracle/src/report-marko.ts`, delegating to
 `report-marko-stock.ts`) renders every fixture under
-`packages/hosts/html/fixtures-marko/<name>/` (`input.marko`, `input.json`,
+`packages/targets/html/fixtures-marko/<name>/` (`input.marko`, `input.json`,
 `expected.html`, plus any sibling component or `tags/` directory) two ways —
 through the real Marko 6 toolchain (`@marko/compiler` + `marko/translator`)
 and through `@mxlang/html`'s own `compile()` — and compares both
@@ -217,7 +217,7 @@ This asks a narrow, strict question: for a template an ordinary Marko user
 would write, does the expressions-only translator emit what Marko's own
 server render emits? **Every fixture is expected to pass**, and a skip needs a
 decision-65 reason — *this target cannot*, never *my code cannot*. See
-`packages/hosts/html/README.md`'s policy table (decision 65) for what "this
+`packages/targets/html/README.md`'s policy table (decision 65) for what "this
 target cannot" means in practice, and the script's own footer for the current
 pass/skip/bug count — the authoritative number, not one retyped here.
 

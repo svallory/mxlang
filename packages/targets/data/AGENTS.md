@@ -24,7 +24,7 @@ the first) decides what any tag or expression means. Design:
   Marko's own lookup**, not hand-listed; `taglib.test.ts` pins the measured
   19 names and compiles a child tag under each, so a Marko change fails
   loudly. The structural entries (`if`…`export`) are copied from
-  `packages/hosts/html/taglib/marko.json`; host-owned entries (`let`, `id`,
+  `packages/targets/html/taglib/marko.json`; host-owned entries (`let`, `id`,
   `class`, …) are deliberately omitted so they stay data tag names. TODO
   `core-export-structural-taglib` would give both packages one copy.
 - `src/declarations.ts` — delegate-everything `HostDeclarations`

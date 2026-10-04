@@ -2,7 +2,7 @@
 
 ## Package manager
 
-bun (bun workspaces). Do not use npm/pnpm/yarn, with two exceptions. (1) `packages/hosts/html/scripts/consumer-check.ts` and `scripts/pack-probe.ts` pack tarballs with `npm pack`, because `bun pm pack` hangs on macOS with bun 1.3.14 (it also hangs from a plain shell; PR #51). (2) `packages/editors/vscode/scripts/stage-vsix.ts` runs `vsce package` in its dependency mode, which shells out to `npm list --production` (`--no-dependencies` cannot ship `node_modules`, so the plugin would be missing from the VSIX). In both, npm is only that tool's packer, never the project's package manager; the node/npm toolchain is pinned in `.prototools` (`node`) and in CI. Toolchain versions are pinned in `.prototools` (`bun`, `moon`, `node`); root `package.json` `packageManager` matches the pinned bun version.
+bun (bun workspaces). Do not use npm/pnpm/yarn, with two exceptions. (1) `packages/targets/html/scripts/consumer-check.ts` and `scripts/pack-probe.ts` pack tarballs with `npm pack`, because `bun pm pack` hangs on macOS with bun 1.3.14 (it also hangs from a plain shell; PR #51). (2) `packages/editors/vscode/scripts/stage-vsix.ts` runs `vsce package` in its dependency mode, which shells out to `npm list --production` (`--no-dependencies` cannot ship `node_modules`, so the plugin would be missing from the VSIX). In both, npm is only that tool's packer, never the project's package manager; the node/npm toolchain is pinned in `.prototools` (`node`) and in CI. Toolchain versions are pinned in `.prototools` (`bun`, `moon`, `node`); root `package.json` `packageManager` matches the pinned bun version.
 
 ## Scripts
 
@@ -57,7 +57,7 @@ Exception packages (no unit test wiring required; verified elsewhere; keyed by w
   translator source/test files listed in `biome.json`. Those strings
   intentionally contain Marko `${...}` syntax or generated JavaScript
   template source and must remain ordinary string literals.
-- `packages/hosts/html/src/translate.test.ts` keeps
+- `packages/targets/html/src/translate.test.ts` keeps
   `noTemplateCurlyInString` enabled at info severity because its existing
   occurrence-level suppressions would become stale if the rule were disabled.
   Biome 2.5.12 does not expose `suppressions/unused` as a configurable rule.
@@ -119,14 +119,14 @@ decision entry that changes the language names the spec section it updates.
 
 ## Per-package instructions
 
-Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `targets/` holds hostless targets (decision 132), starting with `@mxlang/data`:
+Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `packages/targets/` holds the hostless targets (decision 132): `@mxlang/html` and `@mxlang/data`:
 
 | Path | Covers |
 |---|---|
 | `packages/parser/AGENTS.md` | `@mxlang/parser`; `.mx`/`.solid.mx`/`.astro.mx` extension identity; the four Marko facts |
 | `packages/core/AGENTS.md` | `@mxlang/core`: IR, lowering, custom tags, `<try>`, tag discovery |
 | `packages/targets/data/AGENTS.md` | `@mxlang/data`: the hostless data target; static tree, `parseData` |
-| `packages/hosts/html/AGENTS.md` | `@mxlang/html`: string target, policy table, Bun loader, `.mx` import typing |
+| `packages/targets/html/AGENTS.md` | `@mxlang/html`: string target, policy table, Bun loader, `.mx` import typing |
 | `packages/hosts/solid/AGENTS.md` | `@mxlang/solid` |
 | `packages/hosts/preact/AGENTS.md` | `@mxlang/preact` |
 | `packages/hosts/react/AGENTS.md` | `@mxlang/react` |

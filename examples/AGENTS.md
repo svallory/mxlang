@@ -54,12 +54,12 @@ each file's real exports and every error inside the file. Each example's
 
 `examples/mx-site` is a plain-string example: a Hono-on-Bun server and a
 static build both rendering MX (`.mx`) templates via
-`@mxlang/html/bun` (the Bun loader — see `packages/hosts/html/AGENTS.md`), no
+`@mxlang/html/bun` (the Bun loader — see `packages/targets/html/AGENTS.md`), no
 Solid, no client runtime, no prebuild step. `src/server.ts` and
 `src/build.ts` `import renderX from "./pages/x.mx"` directly, exactly like
 any other module; `bunfig.toml` preloads the loader.
 
-`packages/hosts/html/tsconfig.json` maps `@mxlang/parser` to
+`packages/targets/html/tsconfig.json` maps `@mxlang/parser` to
 `../parser/src/public.d.ts` in its `paths`, for typechecking against the
 parser's public types without requiring `dist/` to be built first. Bun's
 `bun run` also honours `tsconfig.json` `paths` at runtime, and does so per
@@ -67,7 +67,7 @@ imported file's own directory, not just the entry point's — so a plain `bun
 run` of any script that imports `@mxlang/html` (which imports
 `@mxlang/parser`) fails with `Export named 'X' not found in module
 ".../public.d.ts"`, because Bun resolves the bare `@mxlang/parser` specifier
-against `packages/hosts/html/tsconfig.json`'s `paths` regardless of where the
+against `packages/targets/html/tsconfig.json`'s `paths` regardless of where the
 importing file lives. Work around it with `bun run
 --tsconfig-override=<path to a tsconfig with no such paths>`; `examples/mx-site`'s
 `dev` and `build` scripts do this against the root `tsconfig.base.json`. This

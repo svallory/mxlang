@@ -45,7 +45,7 @@ const expected = readFileSync(join(project, "expected.html"), "utf8").trim();
  * The Bun loaders are deliberately absent: a row here can only call a host's
  * `compile*` with a map it fetched itself, which stays green even with
  * `getCustomTags` deleted from `bun.ts`. They are covered where they can
- * actually be driven — `packages/hosts/{html,hono}/src/bun.test.ts`, which
+ * actually be driven — `packages/{targets/html,hosts/hono}/src/bun.test.ts`, which
  * import a page *through* `Bun.plugin` under `bun test` (verified to fail
  * when the loader's own call is removed). The count gate must reflect real
  * integrations, so it counts only the rows below.

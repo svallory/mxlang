@@ -20,7 +20,7 @@ compatibility alias of `HostDeclarations` only. `HostOptions.emitIr` is
 required: there is no pre-IR string-walk fallback.
 
 Both current hosts are on the driver. `@mxlang/html` uses
-`packages/hosts/html/src/emitter.ts` for vanilla HTML strings;
+`packages/targets/html/src/emitter.ts` for vanilla HTML strings;
 `@mxlang/astro` uses `packages/hosts/astro/src/astro-template.ts` for `.astro.mx`'s
 expression-shaped Astro syntax. Neither emitter reads a Marko node; a
 host-specific resolve-time decision goes in `DelegatedTag.data` through
@@ -482,7 +482,7 @@ Five facts worth knowing before editing it:
   branch handlers) already did. `<try>` needed no change — its content
   already routes through `lowerBlock`. Executed-render regression tests
   (`<const>` inside `<if>`, inside `<else>`, inside an `<if>` nested in a
-  `<for>`) are in `packages/hosts/html/src/translate.test.ts`; IR-level
+  `<for>`) are in `packages/targets/html/src/translate.test.ts`; IR-level
   coverage for the same three cases is in `custom-tags.test.ts`. Preact
   cannot express a `<const>`/`<define>` nested inside `<if>`/`<for>` markup at
   all (every structural kind there lowers to an expression with no statement
@@ -604,7 +604,7 @@ Five facts worth knowing before editing it:
   two caches agree without needing to know about each other.
 - **Anything that must run the scan is tested where it can be driven.** The
   Bun loaders are exercised through `Bun.plugin` under `bun test`
-  (`packages/hosts/{html,hono}/src/bun.test.ts`, both wired into the root
+  (`packages/{targets/html,hosts/hono}/src/bun.test.ts`, both wired into the root
   `test:bun`); a row that calls a host's `compile*` with a map it fetched
   itself stays green with `getCustomTags` deleted from `bun.ts` and therefore
   proves nothing. The language server is driven over stdio with a real

@@ -53,7 +53,7 @@ function createService(
     baseUrl: repoRoot,
     paths: {
       "@mxlang/core": [join(repoRoot, "packages/core/src/index.ts")],
-      "@mxlang/html": [join(repoRoot, "packages/hosts/html/src/index.ts")],
+      "@mxlang/html": [join(repoRoot, "packages/targets/html/src/index.ts")],
       "@mxlang/parser": [join(repoRoot, "packages/parser/src/public.d.ts")],
     },
     ignoreDeprecations: "6.0",
