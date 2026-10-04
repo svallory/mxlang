@@ -924,6 +924,25 @@ describe("attribute-tag v2 values (executed)", () => {
 });
 
 describe("dynamic tags", () => {
+  it.each([
+    ["input", "<input title>"],
+    ["keygen", "<keygen title></keygen>"],
+    ["menuitem", "<menuitem title></menuitem>"],
+    ["INPUT", "<INPUT title></INPUT>"],
+  ])(
+    "uses Marko 6.3.51's exact dynamic void list for %s",
+    async (tag, expected) => {
+      // Measured with Marko 6.3.51: deprecated keygen/menuitem and uppercase
+      // names are not matched by its case-sensitive voidElementsReg.
+      const html = await renderModules(
+        { "entry.mx": `<\${input.tag} title=input.v/>` },
+        "entry.mx",
+        { tag, v: true },
+      );
+      expect(html).toBe(expected);
+    },
+  );
+
   it("rejects arguments combined with a plain attribute (Marko's own rule, MX's own wording)", () => {
     expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
       "Tag does not support arguments when attributes present.",

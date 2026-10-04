@@ -464,7 +464,8 @@ spreads, computed spread keys and string-valued dynamic tags, including
 `class`/`style` omit falsy primitive values and stringify `true` as `"true"`.
 A direct or bound `<input checked=…>` emits presence for any value other
 than `null`, `undefined` or `false`; with spreads or a dynamic tag, `checked`
-uses the ordinary value writer. Expressions are evaluated exactly once.
+uses the ordinary value writer. Dynamic native void tags emit no closing tag.
+Expressions are evaluated exactly once.
 These are measured Marko parity rules (decisions 65 and 67), not changes to
 core's host-independent attribute IR. Other hosts retain their native
 framework serializers; boolean, class/style and controlled-value differences

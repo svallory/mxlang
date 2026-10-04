@@ -696,7 +696,8 @@ const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string
     }
     out += ">";
     if (props.content) out += props.content();
-    return /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(target) ? out : out + "</" + target + ">";
+    // Marko 6.3.51's html/dynamic-tag.ts voidElementsReg, case-sensitive.
+    return /^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(target) ? out : out + "</" + target + ">";
   }
   if (typeof target === "object") {
     throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
