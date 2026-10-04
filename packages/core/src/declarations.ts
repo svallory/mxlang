@@ -24,13 +24,6 @@ import type { Attr, DelegatedTag } from "./ir.ts";
 
 export type { Disposition };
 
-/**
- * The questions `lower()` asks a host about a template.
- *
- * Every member is side-effect free by contract. A member that wanted to emit
- * would have nowhere to emit *to*: lower builds an IR, and the buffer does
- * not exist yet.
- */
 /** One authored ancestor of an unnamed tag, as `resolveDefaultTag` receives it. */
 export interface DefaultTagParent {
   /** The authored tag name; an attribute tag keeps its `@`. */
@@ -41,6 +34,13 @@ export interface DefaultTagParent {
   readonly node: Node;
 }
 
+/**
+ * The questions `lower()` asks a host about a template.
+ *
+ * Every member is side-effect free by contract. A member that wanted to emit
+ * would have nowhere to emit *to*: lower builds an IR, and the buffer does
+ * not exist yet.
+ */
 export interface HostDeclarations {
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;

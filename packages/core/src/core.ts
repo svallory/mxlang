@@ -394,6 +394,12 @@ export interface Ctx {
    */
   returnDepth?: number;
   /**
+   * True while every unnamed tag of the tree being lowered has already been
+   * resolved through `resolveDefaultTag`. `lower` sets it; an external
+   * `lowerChildren` call finds it unset and resolves first.
+   */
+  unnamedTagsResolved?: boolean;
+  /**
    * Every `/var` a tag call has bound so far, and where.
    *
    * `/var` binds in the call site's own scope only (invariant §7.5-8): MX

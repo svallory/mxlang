@@ -2,13 +2,15 @@ import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { printExpression } from "./compile.ts";
 import { type Ctx, type Node, newCtx, TranslateError } from "./core.ts";
+import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type {
   DefaultTagParent,
   HostDeclarations,
   Policy,
 } from "./declarations.ts";
+import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
-import { lower } from "./lower.ts";
+import { lower, lowerChildren } from "./lower.ts";
 import { lookup } from "./test-targets.ts";
 
 type Resolver = NonNullable<HostDeclarations["resolveDefaultTag"]>;
@@ -24,11 +26,17 @@ function declarations(resolveDefaultTag?: Resolver): Policy {
 }
 
 /** Lowers through the node core really receives: Marko's parse, then `lower`. */
-function lowerSource(source: string, policy: Policy): Ir {
+function lowerSource(
+  source: string,
+  policy: Policy,
+  customTags?: Readonly<Record<string, CustomTag>>,
+): Ir {
   let ir: Ir | null = null;
   let thrown: unknown = null;
   const translator = {
-    taglibs: [] as Array<[string, unknown]>,
+    taglibs: [...(customTags ? [customTagTaglib(customTags)] : [])].filter(
+      (entry): entry is [string, unknown] => entry !== null,
+    ),
     tagDiscoveryDirs: [] as string[],
     translate: {
       Program: {
@@ -41,6 +49,7 @@ function lowerSource(source: string, policy: Policy): Ir {
             "test.mx",
             lookup,
           );
+          ctx.customTags = customTags;
           try {
             ir = lower(ctx, path.node.body);
           } catch (error) {
@@ -146,16 +155,25 @@ describe("unnamed tag resolves through resolveDefaultTag", () => {
   });
 
   it("a resolver returning a custom tag name lowers to that custom tag", () => {
-    const ir = lowerSource("<.a/>", {
+    const ir = lowerSource('<#x.a class="b"/>', {
       ...declarations(() => "my-card"),
       isElement: (name) => name !== "my-card",
       isComponent: (name) => name === "my-card",
     });
-    const call = ir.body.find((n) => n.kind === "Component") as
-      | { target: { name?: string } }
-      | undefined;
-    expect(call).toBeDefined();
-    expect(JSON.stringify(call)).toContain("my-card");
+    const [node] = ir.body;
+    expect(node?.kind).toBe("Component");
+    const target = (node as { target: { kind: string; name?: string } }).target;
+    expect(target.name).toBe("my-card");
+    const authored = lowerSource('<my-card#x.a class="b"/>', {
+      ...declarations(() => "unused"),
+      isElement: (name) => name !== "my-card",
+      isComponent: (name) => name === "my-card",
+    });
+    const bare = (value: unknown) =>
+      JSON.stringify(value, (key, v) =>
+        /span|loc/i.test(key) ? undefined : v,
+      );
+    expect(bare(ir.body)).toBe(bare(authored.body));
   });
 
   it("gives the parent chain, nearest first", () => {
@@ -240,6 +258,81 @@ describe("no resolver", () => {
 
   it("compiles as before when no shorthand is used", () => {
     const ir = lowerSource('<div#a class="b"/><${x}.c/>', declarations());
-    expect(elements(ir.body).length).toBeGreaterThan(0);
+    const [first, second] = ir.body;
+    expect(first?.kind).toBe("Element");
+    expect((first as { name: string }).name).toBe("div");
+    const names = (first as { attrs: Attr[] }).attrs.map(
+      (a) => (a as { name?: string }).name,
+    );
+    expect(names).toEqual(expect.arrayContaining(["id", "class"]));
+    expect(second?.kind).toBe("Component");
+  });
+});
+
+describe("lowerChildren as an external entry", () => {
+  function childrenCtx(policy: Policy, source: string): Ctx {
+    const ctx = newCtx(
+      source,
+      printExpression,
+      policy,
+      undefined,
+      "/tmp/mx-core-test/dt.mx",
+      lookup,
+    );
+    return ctx;
+  }
+
+  it("with no resolver and a shorthand gives the positioned error", () => {
+    const source = "<p>\n  <.a/>\n</p>";
+    let error: unknown;
+    try {
+      lowerChildren(
+        childrenCtx(declarations(), source),
+        parseFragment(source).body,
+      );
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(TranslateError);
+    expect((error as TranslateError).message).toMatch(/no default tag/i);
+    expect((error as TranslateError).line).toBe(2);
+  });
+
+  it("with a resolver calls it once per unnamed tag", () => {
+    const { resolver, calls } = recording("section");
+    const source = "<#a><.b/></>\n<p><#c/></p>";
+    const nodes = lowerChildren(
+      childrenCtx(declarations(resolver), source),
+      parseFragment(source).body,
+    );
+    expect(calls).toHaveLength(3);
+    expect(elements(nodes).map((e) => e.name)).toEqual([
+      "section",
+      "section",
+      "p",
+      "section",
+    ]);
+  });
+});
+
+describe("lower() calls the resolver once per unnamed tag", () => {
+  it("in a plain file", () => {
+    const { resolver, calls } = recording();
+    lowerSource("<#a><.b><#c/></></>", declarations(resolver));
+    expect(calls).toHaveLength(3);
+  });
+
+  it("including under a custom tag with an analyze hook", () => {
+    const { resolver, calls } = recording();
+    const tag: CustomTag = {
+      analyze() {},
+      transform: (call) => call.content?.children ?? [],
+    };
+    lowerSource(
+      "<marker><#a><.b/></></marker>\n<.c/>",
+      declarations(resolver),
+      { marker: tag },
+    );
+    expect(calls).toHaveLength(3);
   });
 });

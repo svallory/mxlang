@@ -3080,6 +3080,17 @@ const DECLARATION_MESSAGE =
   "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
 
 export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
+  // An external call (not from `lower`) has unresolved unnamed tags; the
+  // walk starts with no parents, right for a body lowered on its own.
+  if (!ctx.unnamedTagsResolved) {
+    resolveUnnamedTags(ctx, children);
+    ctx.unnamedTagsResolved = true;
+    try {
+      return lowerChildren(ctx, children);
+    } finally {
+      ctx.unnamedTagsResolved = false;
+    }
+  }
   // Every call but the template body's own (`lower`, which resets it to 0
   // around its walk) is lowering the children of *some* container, so
   // counting here rather than at each of the eight call sites is what keeps
@@ -3249,9 +3260,21 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
  * filtering the tree for statement nodes.
  */
 export function lower(ctx: Ctx, body: Node[]): Ir {
-  checkReservedTemplate(ctx, body);
-  // Before anything reads a tag name: an unnamed tag has none yet.
+  // Before anything reads a tag name: an unnamed tag has none yet. The flag
+  // tells `lowerChildren` the whole tree is already resolved, so only a call
+  // from outside this walk resolves (and never re-walks a subtree).
   resolveUnnamedTags(ctx, body);
+  const wasResolved = ctx.unnamedTagsResolved;
+  ctx.unnamedTagsResolved = true;
+  try {
+    return lowerTemplate(ctx, body);
+  } finally {
+    ctx.unnamedTagsResolved = wasResolved;
+  }
+}
+
+function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
+  checkReservedTemplate(ctx, body);
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
   const ownInputCode: string[] = [];
@@ -3441,6 +3464,8 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
   // Mirrors the parent: this walk is the same file, so whether it emits a
   // module is the same answer.
   scratch.emitsModule = ctx.emitsModule;
+  // `lower` already resolved this tree; the scratch walk must not redo it.
+  scratch.unnamedTagsResolved = true;
   scratch.customTagStores = ctx.customTagStores;
   scratch.customTagGensym = ctx.customTagGensym;
   // -1, exactly as `lower` sets it, because this walk enters through
