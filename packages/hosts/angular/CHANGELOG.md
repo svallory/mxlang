@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (colon-attr-followups):** core preserves ordinary empty-suffix attribute names such as `x:`, so the existing Angular refusal now reports their authored name position for static, dynamic and valueless forms instead of emitting a different attribute with the colon dropped. Reserved empty modifiers remain errors.
+
 - **Fix (marko-parity-trio review, empty colon):** `<div :/>` is Marko's attribute `value:`, but Angular's template parser cannot tokenize that empty namespace suffix. The emitter now gives a positioned error at the authored `:` instead of returning an unparseable `<div value:="">` template. Explicit multi-colon names such as `value:foo:bar` remain accepted, statically and through `[attr.value:foo:bar]`.
 
 - **Fix (angular-attr-interpolation-literal round 3, review L1):** the static `class`/`style` brace-binding check now matches the attribute name case-insensitively (HTML attribute names are case-insensitive): an authored `CLASS="{{ x }}"`/`STYLE=…` takes the `[attr.class]`/`[attr.style]` path too, emitted lowercase, instead of falling through to a static attribute Angular's styling pipeline drops.

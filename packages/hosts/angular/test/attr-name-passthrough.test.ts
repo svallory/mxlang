@@ -46,15 +46,18 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
   });
 
   it.each([
-    ["<div :/>", 1, 5],
-    ["<div\n  :/>", 2, 2],
+    ["<div :/>", "value:", 1, 5],
+    ["<div\n  :/>", "value:", 2, 2],
+    ["<div x:/>", "x:", 1, 5],
+    ['<div x: = "s"/>', "x:", 1, 5],
+    ["<div x: = input.x/>", "x:", 1, 5],
+    ["<div\n  x:/>", "x:", 2, 2],
   ])(
     "rejects an empty namespace suffix at the authored name: %s",
-    (source, line, column) => {
+    (source, name, line, column) => {
       expect(() => emit(source, "x.ng.mx")).toThrow(
         expect.objectContaining({
-          message:
-            "attribute `value:` has an empty namespace suffix that Angular templates cannot express",
+          message: `attribute \`${name}\` has an empty namespace suffix that Angular templates cannot express`,
           line,
           column,
         }),
@@ -70,6 +73,22 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
       expect(parseTemplate(template, "x.html").errors).toBeNull();
     },
   );
+
+  it.each(["class", "style"])("refuses an empty %s modifier", (name) => {
+    expect(() => emit(`<div ${name}:/>`, "x.ng.mx")).toThrow(
+      `attribute modifier \`${name}:\``,
+    );
+  });
+
+  it("rejects reserved on: with Marko's error", () => {
+    expect(() => emit("<div on:/>", "x.ng.mx")).toThrow(
+      expect.objectContaining({
+        message: "`on:` is not a valid attribute, did you mean `on`?",
+        line: 1,
+        column: 5,
+      }),
+    );
+  });
 
   it("still refuses a real modifier, in this host's words", () => {
     expect(() => emit(`<div class:active="x"/>`, "x.ng.mx")).toThrow(

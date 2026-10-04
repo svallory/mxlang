@@ -209,7 +209,7 @@ function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
 }
 
 /**
- * Is this the `value:<modifier>` attribute rather than a real modifier?
+ * Is this an ordinary colon-named attribute rather than a real modifier?
  *
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its LAST `:`; an empty head is filled with `"value"`, so
@@ -220,12 +220,16 @@ function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
  * modifier is still present (`:` becomes `value:`), and a head already starting
  * with `value:` keeps its earlier colons (`value:foo:bar` splits into
  * `name: "value:foo", modifier: "bar"`). Marko joins them again on emission.
- * Other modifier families such as `class:active` still reach the host hook.
+ * An empty modifier on any ordinary name also keeps its colon (`x:`).
+ * On native elements, reserved `class:`, `style:` and `on:` still reject;
+ * component props have no such reservation. Events retain their suffix too.
  */
-function isValueModifier(attr: Node): boolean {
+function isOrdinaryColonName(attr: Node, isElement: boolean): boolean {
   return (
     attr?.modifier != null &&
     (attr.default === true ||
+      (attr.modifier === "" &&
+        (!isElement || !["class", "style", "on"].includes(attr.name))) ||
       attr.name === "value" ||
       (typeof attr.name === "string" && attr.name.startsWith("value:")))
   );
@@ -469,6 +473,26 @@ function foreignAttrHint(name: string): string {
   return "an attribute name may use letters, digits and `._:-`";
 }
 
+/** Marko normalizes bindings before tag-specific validation or lowering. */
+function validateBoundAttributes(node: Node): void {
+  for (const attr of node.attributes ?? []) {
+    if (
+      attr.bound &&
+      attr.value?.type !== "Identifier" &&
+      !(
+        (attr.value?.type === "MemberExpression" ||
+          attr.value?.type === "OptionalMemberExpression") &&
+        attr.value.property?.type !== "PrivateName"
+      )
+    ) {
+      fail(
+        "Attributes may only be bound to identifiers or member expressions",
+        attr.value,
+      );
+    }
+  }
+}
+
 /** Resolves one attribute of an element or component call. */
 function lowerAttr(
   ctx: Ctx,
@@ -501,32 +525,22 @@ function lowerAttr(
   // Bound attributes retain the base name: Marko uses the modifier as a value
   // conversion there, not as part of the rendered attribute name.
   const name =
-    !attr.bound && isValueModifier(attr)
+    !attr.bound && isOrdinaryColonName(attr, isElement)
       ? `${attr.name}:${attr.modifier}`
       : attr.name;
 
-  // Native binding targets are references. Custom-tag and attribute-tag
-  // contracts consume their own bound-value vocabulary (decision 138, E1),
-  // including literal arrays; do not replace their shape/item diagnostics.
-  if (
-    isElement &&
-    attr.bound &&
-    attr.value?.type !== "Identifier" &&
-    !(
-      (attr.value?.type === "MemberExpression" ||
-        attr.value?.type === "OptionalMemberExpression") &&
-      attr.value.property?.type !== "PrivateName"
-    )
-  ) {
-    fail(
-      "Attributes may only be bound to identifiers or member expressions",
-      attr.value,
-    );
+  if (isElement && attr.modifier === "" && attr.name === "on") {
+    fail("`on:` is not a valid attribute, did you mean `on`?", attr);
   }
 
   // This is an ordinary colon-named attribute, not a handler method. Reject
   // its arguments in Marko's vocabulary before a host can rename or accept it.
-  if (isValueModifier(attr) && attr.arguments) {
+  if (
+    isElement &&
+    isOrdinaryColonName(attr, isElement) &&
+    attr.arguments &&
+    !EVENT_ATTR.test(String(name))
+  ) {
     fail(`Unsupported arguments on the \`${name}\` attribute.`, attr);
   }
 
@@ -555,7 +569,7 @@ function lowerAttr(
   // a *wrong* attribute, which is worse. The host gets first refusal so the
   // diagnostic is in its own vocabulary (a Marko-parity target quotes Marko's
   // own fix-it); the core's wording is only the fallback.
-  if (attr.modifier && name === attr.name) {
+  if (attr.modifier != null && name === attr.name) {
     const resolvedName = ctx.declarations.resolveModifier?.(attr, on);
     if (resolvedName !== undefined) {
       return {
@@ -805,6 +819,8 @@ interface AttrSchema {
   open: boolean;
   owner: string;
   collisionOwner?: Node;
+  /** Decision 138: a registered tag owns recursive bound-literal checks. */
+  customTagContract?: boolean;
 }
 
 interface LoweredAttributeTags {
@@ -1230,6 +1246,7 @@ function lowerAuthoredAttributeTag(
   schema: AttrSchema,
 ): AttributeTag {
   const name = attrName(node);
+  if (!schema.customTagContract) validateBoundAttributes(node);
   const declaration = declarationFor(schema, name, node);
   validateParentCollision(node, schema);
   const attrs = node.attributes ?? [];
@@ -1274,6 +1291,7 @@ function lowerAuthoredAttributeTag(
         owner: `@${name}`,
       }
     : { open: true, owner: `@${name}` };
+  nestedSchema.customTagContract = schema.customTagContract;
 
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(ctx, node));
@@ -1355,6 +1373,7 @@ function lowerAttributeIf(
     const branch = siblings[cursor];
     const name = String(branch.name?.value ?? "").replace(/^@/, "");
     if (cursor > index && name !== "else" && name !== "else-if") break;
+    validateBoundAttributes(branch);
     const conditionAttr =
       name === "if"
         ? (attrByName(branch, "value") ?? branch.attributes?.[0])
@@ -1588,6 +1607,7 @@ function lowerIfChain(
   index: number,
 ): [IrNode, number] {
   const node = children[index];
+  validateBoundAttributes(node);
   rejectUnsupportedFields(ctx, node, "`<if>`");
   const cond = attrByName(node, "value") ?? node.attributes?.[0];
   if (!cond?.value) fail("`<if>` without a condition", node);
@@ -1631,6 +1651,7 @@ function lowerIfChain(
       break;
     }
 
+    validateBoundAttributes(child);
     rejectUnsupportedFields(ctx, child, `\`<${childName}>\``);
     // `<else if=cond>` spells the condition as an `if` attribute; Marko's own
     // `<else-if=cond>` spells it as the tag's first (value) attribute.
@@ -1741,6 +1762,7 @@ function lowerForHead(
   node: Node,
   allowAttributeTags = false,
 ): ForHead {
+  validateBoundAttributes(node);
   rejectUnsupportedFields(ctx, node, "`<for>`", {
     params: true,
     attributeTags: allowAttributeTags,
@@ -2454,7 +2476,10 @@ function lowerCustomTag(
   const input = target
     ? (ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input)
     : ({ kind: "none" } as const);
-  const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, name));
+  const loweredTags = lowerAttributeTags(ctx, node, {
+    ...schemaFor(input, name),
+    customTagContract: !isBuiltin,
+  });
   raiseInvalidCalleeInput(ctx, input, name, loweredTags.flat);
   const children = loweredTags.contentChildren;
   const childTree = authoredChildTree(children);
@@ -2707,6 +2732,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // or "tagged", as before); otherwise core lowers a `Component` with a
   // dynamic target, resolved at run time like any other host.
   if (node.name && node.name.type !== "StringLiteral") {
+    validateBoundAttributes(node);
     rejectArgsWithProps(node);
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
@@ -2739,6 +2765,35 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   }
 
   const name = String(node.name.value);
+  const fileLocalBinding =
+    /^[A-Z]/.test(name) &&
+    (ctx.defines.has(name) ||
+      ctx.imports.has(name) ||
+      (ctx.tagVarShadowed?.has(name) ?? false));
+
+  // Only a call actually routed through a registered custom-tag contract is
+  // exempt (decision 138, E1). Built-ins and shadowing local bindings are not.
+  // Attribute-tag contracts retain their separate bound-value checks too.
+  if (
+    fileLocalBinding ||
+    !ctx.customTags ||
+    !Object.hasOwn(ctx.customTags, name) ||
+    Object.hasOwn(BUILTIN_CUSTOM_TAGS, name) ||
+    Object.hasOwn(ctx.declarations.tags, name) ||
+    [
+      "import",
+      "static",
+      "export",
+      "for",
+      "const",
+      "define",
+      "return",
+      "else",
+      "else-if",
+    ].includes(name)
+  ) {
+    validateBoundAttributes(node);
+  }
 
   const disposition = Object.hasOwn(ctx.declarations.tags, name)
     ? ctx.declarations.tags[name]
@@ -2825,11 +2880,6 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // `<style>`): the file-local binding existed but was never meant to be a
   // component call, so it must not shadow the custom tag or the host claim
   // either.
-  const fileLocalBinding =
-    /^[A-Z]/.test(name) &&
-    (ctx.defines.has(name) ||
-      ctx.imports.has(name) ||
-      (ctx.tagVarShadowed?.has(name) ?? false));
 
   // Registered custom tags take precedence over host claims so a shared tag
   // may be expressed in terms of `ctx.build.delegatedTag(...)`. Structural tags

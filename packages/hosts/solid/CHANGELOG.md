@@ -6,6 +6,8 @@
 
 - **Fix (jsx-text-lt-unescaped):** authored text containing `<` or `>` no longer breaks the generated JSX a `.solid.mx` region splices into the surrounding TypeScript. Text children now escape `<`, `>`, `{`, and `}` as numeric character references, which JSX decodes back to the original characters, so rendered text equals Marko 6.3.51's; authored entities decode the same as in a browser only for `;`-terminated numeric references and the HTML4 named set — HTML5-only names and unterminated legacy forms stay literal (known divergence, tracked separately). Pinned by executed Solid SSR output.
 
+- **Fix/test (colon-attr-followups):** ordinary empty-suffix attributes (`x:`) use the existing string-keyed JSX spread instead of losing the colon, pinned through a real DOM render. A mapping regression pins both the string key and expression value of `value:foo:bar=x` to their authored spans.
+
 - **Fix (scriptlet-hint-let-var):** the surrounding-TypeScript-module advice preserves the original `let`/`var` keyword, instead of changing a mutable scriptlet to `const`. Solid still rejects `<let>`; `$ const` advice is unchanged.
 
 - **Fix (jsx-whitespace-body-parity, decision 141):** the body channel now receives same-line whitespace-only content from imported components and discovered `tags/*.mx`, rendering one space rather than nothing. Core retains Marko-normalized text; newline indentation stays absent. Pinned by executed Solid SSR output.

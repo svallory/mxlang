@@ -199,9 +199,11 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
     rejectModifier(attr) {
       // `on:`/`oncapture:` get the event fix-it rather than the class-shaped
       // default — decision 101 (b), design note §4's per-prefix wording.
+      const event =
+        attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
       const eventFixIts: Record<string, string> = {
-        on: `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${attr.modifier[0].toUpperCase()}${attr.modifier.slice(1)}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
-        oncapture: `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${attr.modifier[0].toUpperCase()}${attr.modifier.slice(1)}=fn\` — MX has no capture spelling in the name, so use a \`ref\` callback calling \`addEventListener("${attr.modifier}", fn, { capture: true })\` if you need capture (Marko rejects this form too)`,
+        on: `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
+        oncapture: `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${event}=fn\` — MX has no capture spelling in the name, so use a \`ref\` callback calling \`addEventListener("${attr.modifier}", fn, { capture: true })\` if you need capture (Marko rejects this form too)`,
       };
       rawFail(
         eventFixIts[attr.name] ??

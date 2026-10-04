@@ -751,7 +751,9 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
           : undefined;
     return concatMapped(
       " {...{",
-      mapped(JSON.stringify(attr.name), mapName ? attr.nameSpan : null),
+      // Unlike an ordinary intrinsic prop, this authored string key must
+      // retain its name mapping even when native prop-name mapping is off.
+      mapped(JSON.stringify(attr.name), attr.nameSpan ?? null),
       ": (",
       mapped(value, valueSpan ?? null),
       ")}}",

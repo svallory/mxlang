@@ -97,6 +97,9 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
 
   it.each([
     ["<div :/>", "value:", '""'],
+    ["<div x:/>", "x:", '""'],
+    ['<div x: = "s"/>', "x:", '"s"'],
+    ["<div x: = input.x/>", "x:", "input.x"],
     ['<div value:foo:bar="y"/>', "value:foo:bar", '"y"'],
     ["<div value:foo:bar=y/>", "value:foo:bar", "y"],
   ])(
@@ -107,6 +110,52 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
       ).toContain(` {...{${JSON.stringify(name)}: (${value})}}`);
     },
   );
+
+  it("maps the string-keyed spread's name and value to their authored tokens", () => {
+    const source = '<div id="a" value:foo:bar=x class="c"/>';
+    const { code, mappings } = compileSolidMx(source, {
+      filename: "fixture.solid.mx",
+    });
+    for (const [generated, authored] of [
+      ['"value:foo:bar"', "value:foo:bar"],
+      ["(x)", "x"],
+    ] as const) {
+      const generatedStart =
+        code.indexOf(generated) + (generated === "(x)" ? 1 : 0);
+      const sourceStart = source.indexOf(
+        authored,
+        source.indexOf("value:foo:bar"),
+      );
+      expect(mappings).toContainEqual({
+        generatedStart,
+        generatedEnd:
+          generatedStart + (generated === "(x)" ? 1 : generated.length),
+        sourceStart,
+        sourceEnd: sourceStart + authored.length,
+      });
+    }
+  });
+
+  it.each(["class", "style"])(
+    "refuses an empty %s modifier rather than dropping its colon",
+    (name) => {
+      expect(failure(`<div ${name}:/>`).message).toContain(
+        `attribute modifier \`${name}:\``,
+      );
+    },
+  );
+
+  it("rejects reserved on: with Marko's error", () => {
+    expect(failure("<div on:/>")).toEqual({
+      message: "`on:` is not a valid attribute, did you mean `on`?",
+      line: 1,
+      column: 5,
+    });
+  });
+
+  it("does not turn an empty-suffixed event into a string-keyed attribute spread", () => {
+    expect(failure("<div onClick: = fn/>").message).toContain("click:");
+  });
 
   it("still refuses a real modifier, in this host's words", () => {
     expect(failure(`<div class:active=c/>`).message).toContain(

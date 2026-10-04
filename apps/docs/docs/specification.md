@@ -531,27 +531,44 @@ is not a modifier at all: it is one attribute literally named `value:foo`,
 which Marko compiles and renders as `<div value:foo=y>`. The long spelling
 (`<div value:foo="y"/>`) is the same attribute, and `<div :foo:a="y"/>` is a
 parse error in both. An empty modifier still contributes its colon: `<div :/>`
-means an attribute named `value:` with an empty value. An explicit head can
+means an attribute named `value:` with an empty value. The same preservation
+applies to any ordinary name: `<div x:/>` means `x:` with an empty value,
+`<div x: = "s"/>` means `x:` with value `"s"`, and `<div x: = expr/>`
+means `x:` with the expression's value (decision 65, Marko parity). The space
+before `=` matters: `x:=expr` is a binding, not an empty-modifier attribute.
+On native elements, reserved `class:`, `style:` and `on:` forms still reject,
+including their empty suffixes (decision 67b); component props have no such
+reservation, so `<Card class: = expr/>` forwards a prop named `class:`.
+An expression-valued native event such as `onClick: = fn` keeps its event name
+`click:`, not an ordinary spread key (decision 101). Authored spread expressions
+and their keys are not rewritten. An explicit head can
 already contain colons: `<div value:foo:bar="y"/>` splits into the head
 `value:foo` and modifier `bar`, then emits the complete name `value:foo:bar`.
 JSX cannot spell an empty namespace suffix or multiple colons as an attribute;
 preact/react/hono and Solid carry these names through string-keyed object
 spreads instead, without changing the prop name or value. Angular's template
 parser cannot tokenize a literal attribute with an empty namespace suffix;
-`<div :/>` therefore gives a positioned error at the authored `:` on Angular
-(structured line 1, column 5), rather than emitting an unparseable template.
+`<div :/>` and `<div x:/>` therefore give a positioned error at the authored
+attribute name on Angular (printed 1:6), as do static and dynamic values of
+`x:`, rather than emitting an unparseable template.
 Explicit multi-colon names such as `value:foo:bar` remain supported there.
 
-Arguments on these ordinary attributes are rejected at the authored name:
+Arguments on these ordinary native-element attributes are rejected at the authored name:
 `<div :foo()="y"/>` reports `Unsupported arguments on the \`value:foo\` attribute.`
-A binding (`:=`) is a different form and keeps the base name. On a native
-element its target must be an identifier or a member expression (including
-optional members, excluding private members); otherwise core reports Marko's
+A binding (`:=`) is a different form and keeps the base name. On native
+elements, dynamic tags, ordinary component calls and built-in control tags,
+its target must be an identifier or a member expression (including optional
+members, excluding private members); otherwise core reports Marko's
 `Attributes may only be bound to identifiers or member expressions` at the
 value. For example, `<div :="x"/>` errors at structured line 1, column 7
 (printed 1:8), rather than silently rendering `value="x"`. Host-specific binding
-support is unchanged. Custom-tag and attribute-tag contracts retain their own
-bound-value shape/item checks (decision 138, E1), including literal arrays.
+support is unchanged. Validation precedes control-flow lowering, including
+controls containing attribute tags, so an invalid binding cannot be discarded.
+Uncontracted attribute tags follow the same binding-reference rule. Calls
+resolved through registered custom-tag contracts, including their recursive
+attribute-tag contracts, retain their own bound-value shape/item checks
+(decision 138, E1/E4), including literal arrays. A local binding shadowing a registered tag is an
+ordinary component call, not a contract-backed exemption.
 
 | Authored | Meaning | html | preact/react/hono | solid | `.astro.mx` | angular |
 |---|---|---|---|---|---|---|
@@ -568,9 +585,9 @@ binding (`[value:foo]` binds a property no element has, NG8002), so it takes
 the same `[attr.name]` route as a dynamic `data-*`/`aria-*` attribute; a static
 one is carried through verbatim.
 
-`prop:` is the one namespace that passes through on the Solid host. `on:`,
-`oncapture:`, `attr:`, `bool:` and `use:` are parse errors there with fix-it
-hints (decision 10) — Solid 2 removed them, and MX does not keep syntax with no
+For **nonempty modifiers**, `prop:` is the one namespace that passes through
+on the Solid host. `on:`, `oncapture:`, `attr:`, `bool:` and `use:` modifiers are
+parse errors there with fix-it hints (decision 10) — Solid 2 removed them, and MX does not keep syntax with no
 target. Decision 10 records itself as "the most reversible call".
 
 ### Event attributes

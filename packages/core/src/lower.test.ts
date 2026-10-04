@@ -3664,6 +3664,8 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
 
   it.each([
     ["<div :/>", "value:", 5, 6],
+    ["<div x:/>", "x:", 5, 7],
+    ['<div x: = "s"/>', "x:", 5, 7],
     ['<div value:foo:bar="y"/>', "value:foo:bar", 5, 18],
     ["<div value:foo:bar/>", "value:foo:bar", 5, 18],
     ['<div value:foo="y"/>', "value:foo", 5, 14],
@@ -3695,6 +3697,129 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
         column,
       }),
     );
+  });
+
+  it.each([
+    ['<${t} value:="x"/>', 1, 13],
+    ['<for|i| of=o value:="x">y</for>', 1, 20],
+    ['<for|k| in=o value:="x">y</for>', 1, 20],
+    ['<for|i| to=3 value:="x">y</for>', 1, 20],
+    ['<if=c value:="x">y</if>', 1, 13],
+    ['<if=c>y</if><else value:="x">n</else>', 1, 25],
+    ['<if=c>y</if><else if=d value:="x">n</else>', 1, 30],
+    ['<if=c>y</if><else-if=d value:="x">n</else-if>', 1, 30],
+    ['<define/Row value:="x">y</define>', 1, 19],
+    ['<define/Row|value|>${value}</define><Row value:="x"/>', 1, 48],
+    ['<const/c=1 value:="x"/>', 1, 18],
+    ['<return value:="x"/>', 1, 15],
+    ['<try value:="x">y</try>', 1, 12],
+    ['import Child from "./child.marko"\n<Child value:="x"/>', 2, 14],
+    ['<${t}\n  value:="x"/>', 2, 9],
+    ['<${t}><for|i| of=o value:="x"><@item/></for></>', 1, 26],
+    ['<${t}><if=c value:="x"><@item/></if></>', 1, 19],
+    ['<${t}><if=c><@item/></if><else value:="x"><@item/></else></>', 1, 38],
+    ['<${t}><@item value:="x"/></>', 1, 20],
+    ['<${t}><@item><@nested value:="x"/></@item></>', 1, 29],
+  ])(
+    "rejects a non-contract binding before it can be discarded: %s",
+    (source, line, column) => {
+      expect(() =>
+        lowerSource(source, fakeDeclarations({ attrTags: 2 })),
+      ).toThrow(
+        expect.objectContaining({
+          message:
+            "Attributes may only be bound to identifiers or member expressions",
+          line,
+          column,
+        }),
+      );
+    },
+  );
+
+  it("exempts only the registered contract, not an import shadowing its name", () => {
+    const customTags: Record<string, CustomTag> = {
+      Card: { attributes: { value: { type: "string" } }, transform: () => [] },
+    };
+    expect(() =>
+      lowerSource(
+        '<Card value:="x"/>',
+        fakeDeclarations(),
+        undefined,
+        undefined,
+        customTags,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      lowerSource(
+        'import Card from "./card.marko"\n<Card value:="x"/>',
+        fakeDeclarations(),
+        undefined,
+        undefined,
+        customTags,
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "Attributes may only be bound to identifiers or member expressions",
+        line: 2,
+        column: 13,
+      }),
+    );
+  });
+
+  it("preserves an empty modifier's dynamic value and does not rewrite a spread", () => {
+    expect(
+      find(lowerSource('<div x: = input.x ...{"x:": "s"}/>').body, "Element")
+        .attrs,
+    ).toMatchObject([
+      { kind: "dynamic", name: "x:", value: { code: "input.x" } },
+      { kind: "spread" },
+    ]);
+  });
+
+  it.each(["x", "class", "style", "on"])(
+    "preserves empty-suffix %s: as a component prop, including methods",
+    (name) => {
+      for (const authored of [`${name}: = input.x`, `${name}:() {}`]) {
+        const ir = lowerSource(
+          `import Card from "./card.marko"\n<Card ${authored}/>`,
+          fakeDeclarations({ resolveAttributeMethod: () => true }),
+        );
+        expect(find(ir.body, "Component").attrs).toMatchObject([
+          { kind: "dynamic", name: `${name}:` },
+        ]);
+      }
+    },
+  );
+
+  it.each(["class", "style"])("keeps %s: on the modifier hook", (name) => {
+    expect(() => lowerSource(`<div ${name}:/>`)).toThrow(
+      `attribute modifier \`${name}:\``,
+    );
+  });
+
+  it("rejects reserved on: with Marko's positioned error", () => {
+    expect(() => lowerSource("<div on:/>")).toThrow(
+      expect.objectContaining({
+        message: "`on:` is not a valid attribute, did you mean `on`?",
+        line: 1,
+        column: 5,
+      }),
+    );
+  });
+
+  it("keeps an empty suffix on an event, including a handler method", () => {
+    for (const source of ["<div onClick: = fn/>", "<div onClick:() {} />"]) {
+      expect(
+        find(
+          lowerSource(
+            source,
+            fakeDeclarations({ resolveAttributeMethod: () => true }),
+          ).body,
+          "Element",
+        ).attrs,
+      ).toMatchObject([{ kind: "event", name: "onClick:", event: "click:" }]);
+    }
   });
 
   it.each(["x", "input.x", "input?.x", "input[key]"])(

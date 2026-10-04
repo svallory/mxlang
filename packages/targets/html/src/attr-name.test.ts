@@ -96,6 +96,8 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
 
   it.each([
     ["<div :/>", 'out += "<div value:=\\"\\"></div>";'],
+    ["<div x:/>", 'out += "<div x:=\\"\\"></div>";'],
+    ['<div x: = "s"/>', 'out += "<div x:=\\"s\\"></div>";'],
     ['<div value:foo:bar="y"/>', 'out += "<div value:foo:bar=\\"y\\"></div>";'],
     ["<div value:foo:bar/>", 'out += "<div value:foo:bar=\\"\\"></div>";'],
   ])("renders the full colon name: %s", (source, output) => {
@@ -133,6 +135,14 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
       expect(failure(source)).toEqual({ message, line, column });
     },
   );
+
+  it("keeps an empty suffix on a dynamic attribute", () => {
+    expect(rendered("<div x: = input.x/>")).toContain("x:");
+  });
+
+  it.each(["class", "style", "on"])("refuses an empty %s modifier", (name) => {
+    expect(failure(`<div ${name}:/>`).message).toContain(`\`${name}:`);
+  });
 
   it("still refuses a real modifier, in Marko's words", () => {
     const error = failure(`<div class:active="x"/>`);

@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (colon-attr-followups):** ordinary empty-suffix names such as `x:` retain their colon for static, dynamic and valueless attributes. The stock-Marko oracle fixture pins rendered parity. Invalid literal bindings on dynamic tags and controls now fail through core rather than compiling silently.
+
 - **Fix (proto-names): a tag named after an `Object.prototype` member (`<toString/>`, `<constructor/>`, …) no longer crashes the compile with a raw `TypeError`.** It is treated like any other tag name; the fix is in core, html has no code change.
 
 - **Fix (hint-followups round 2):** the default target's `$ let`/`$ var` hint still suggests `<let/name=…/>`, now explicitly followed by `(initial value only on this target)`. The qualifier is declared by html, not core; const advice and strict-policy behaviour are unchanged.
