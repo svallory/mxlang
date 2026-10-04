@@ -88,6 +88,43 @@ interface CacheEntry {
 }
 
 const descriptors = new Map<string, CacheEntry>();
+
+/**
+ * A load that failed (it threw, or exported no descriptor), kept under the
+ * same evidence as a success plus the entry file's own mtime and size, so a
+ * throwing module is not re-evaluated per file per edit, yet a fixed one
+ * reloads: a reinstall changes the manifest, and a hand edit of a local
+ * target changes the entry. `not-found` is never kept: resolving is cheap
+ * and is exactly what a fresh install changes.
+ */
+const failures = new Map<
+  string,
+  {
+    stamp: PackageStamp | undefined;
+    entry: string;
+    error: TargetLoadError;
+  }
+>();
+
+/** Keeps `error` for the next call under the current evidence; returns it. */
+function remember(
+  resolved: string,
+  stamp: PackageStamp | undefined,
+  error: TargetLoadError,
+): TargetLoadError {
+  failures.set(resolved, { stamp, entry: entryStamp(resolved), error });
+  return error;
+}
+
+/** The entry file's own mtime and size, `""` if it cannot be read. */
+function entryStamp(file: string): string {
+  try {
+    const stat = statSync(file);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return "";
+  }
+}
 const moduleCache = createRequire(import.meta.url).cache;
 
 /**
@@ -99,7 +136,9 @@ const moduleCache = createRequire(import.meta.url).cache;
  */
 export function clearTargetDescriptorCache(): void {
   for (const resolved of descriptors.keys()) delete moduleCache[resolved];
+  for (const resolved of failures.keys()) delete moduleCache[resolved];
   descriptors.clear();
+  failures.clear();
 }
 
 /** The nearest `package.json` at or above `file`, with its mtime and content hash. */
@@ -240,6 +279,23 @@ export function loadTargetDescriptor(
   }
 
   const stamped = packageStamp(resolved);
+  const failed = failures.get(resolved);
+  if (failed) {
+    if (
+      failed.error.spec === spec &&
+      failed.stamp?.manifest === stamped?.manifest &&
+      failed.stamp?.mtimeMs === stamped?.mtimeMs &&
+      failed.stamp?.hash === stamped?.hash &&
+      failed.entry === entryStamp(resolved)
+    ) {
+      throw failed.error;
+    }
+    failures.delete(resolved);
+    delete req.cache[resolved];
+    if (stamped && isPackageManifest(stamped.manifest, fromDir)) {
+      evictDirectory(req.cache, dirname(stamped.manifest));
+    }
+  }
   const hit = descriptors.get(resolved);
   if (
     hit &&
@@ -269,15 +325,19 @@ export function loadTargetDescriptor(
     // it after the file is fixed; Node forgets it. Drop it on both.
     delete req.cache[resolved];
     const message = messageOf(cause);
-    throw new TargetLoadError(
-      "load-failed",
-      `"${spec}" failed to load: ${summary(message)}${loadHint(message)}. (${resolved})`,
-      {
-        spec,
-        fromDir,
-        path: resolved,
-        cause,
-      },
+    throw remember(
+      resolved,
+      stamped,
+      new TargetLoadError(
+        "load-failed",
+        `"${spec}" failed to load: ${summary(message)}${loadHint(message)}. (${resolved})`,
+        {
+          spec,
+          fromDir,
+          path: resolved,
+          cause,
+        },
+      ),
     );
   }
 
@@ -304,12 +364,16 @@ export function loadTargetDescriptor(
       cause.kind === "version"
         ? `"${spec}" targets descriptor version ${cause.found}; this mx supports 0.`
         : `"${spec}" must export a target descriptor (default export or "mxTarget"): ${cause.message}. See the TargetDescriptor contract (unstable).`;
-    throw new TargetLoadError("invalid-descriptor", message, {
-      spec,
-      fromDir,
-      path: resolved,
-      cause,
-    });
+    throw remember(
+      resolved,
+      stamped,
+      new TargetLoadError("invalid-descriptor", message, {
+        spec,
+        fromDir,
+        path: resolved,
+        cause,
+      }),
+    );
   }
 
   descriptors.set(resolved, { stamp: stamped, descriptor });

@@ -357,3 +357,124 @@ describe("agreement of a loaded target with the other key (§4.1 rule 3)", () =>
     expect(policy.target).toBe("fake-ok");
   });
 });
+
+describe("round 2: rule 3 compares host names, not the specifier", () => {
+  it("a bare mx.host naming the loaded target's host selects and agrees (no unknown-host)", () => {
+    const { diagnostics, policy } = resolve(
+      { host: "fake-host", target: specifier("ok") },
+      ["ok"],
+    );
+    expect(diagnostics).toEqual([]);
+    expect(policy).toMatchObject({ target: "fake-ok", host: "fake-host" });
+  });
+
+  it("a bare mx.host naming another host than the loaded target's is still an unknown host", () => {
+    const { diagnostics } = resolve(
+      { host: "other", target: specifier("ok") },
+      ["ok"],
+    );
+    expect(diagnostics.map((d) => d.code)).toEqual(["unknown-host"]);
+  });
+
+  it("two loaded specifiers of the same host agree", () => {
+    const { diagnostics, policy } = resolve(
+      { host: specifier("ok"), target: specifier("ok-ssr") },
+      ["ok", "ok-ssr"],
+    );
+    expect(diagnostics).toEqual([]);
+    expect(policy).toMatchObject({ target: "fake-ok-ssr", host: "fake-host" });
+  });
+
+  it("two loaded specifiers of different hosts mismatch", () => {
+    const { diagnostics } = resolve(
+      { host: specifier("ok"), target: specifier("own-core") },
+      ["ok", "own-core"],
+    );
+    expect(diagnostics.map((d) => d.code)).toEqual(["target-host-mismatch"]);
+  });
+});
+
+describe("round 2: what a loaded descriptor may not declare", () => {
+  it("host.fileKinds is rejected", () => {
+    const { diagnostics, policy } = resolve(
+      { target: specifier("file-kinds") },
+      ["file-kinds"],
+    );
+    expect(policy.target).toBe("page");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      code: "target-invalid-descriptor",
+      severity: "error",
+      message:
+        'mx.target "@fake/mx-file-kinds" cannot be registered next to the built-in targets: file kinds are supported for built-in targets only (for now). See the TargetDescriptor contract (unstable).',
+    });
+  });
+
+  it("a built-in host name cannot be joined", () => {
+    const withSolid = createTargetLookup([
+      { descriptorVersion: 0, name: "page", packageName: "@t/page" },
+      {
+        descriptorVersion: 0,
+        name: "solid-jsx",
+        packageName: "@t/solid",
+        host: { name: "solid" },
+      },
+    ]);
+    const project = fakeProject({
+      mx: { target: specifier("join-solid") },
+      install: ["join-solid"],
+    });
+    const { diagnostics, policy } = resolveTargetPolicyDetailed(
+      project.path("a.mx"),
+      withSolid,
+    );
+    expect(policy.target).toBe("page");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      code: "target-invalid-descriptor",
+      severity: "error",
+      message:
+        'mx.target "@fake/mx-join-solid" cannot be registered next to the built-in targets: host "solid" belongs to the built-in targets; a third-party target cannot join it (for now). See the TargetDescriptor contract (unstable).',
+    });
+  });
+});
+
+describe("round 2: validation and failures are cached", () => {
+  it("a throwing package is evaluated once while its manifest is unchanged, and reloads once fixed", async () => {
+    const project = fakeProject({
+      mx: { target: specifier("throws") },
+      install: ["throws"],
+    });
+    const entry = join(project.root, "node_modules/@fake/mx-throws/index.cjs");
+    const { writeFileSync, readFileSync } = await import("node:fs");
+    writeFileSync(
+      entry,
+      'globalThis.__throwsRuns = (globalThis.__throwsRuns ?? 0) + 1;\nthrow new Error("boom");\n',
+    );
+    (globalThis as { __throwsRuns?: number }).__throwsRuns = 0;
+    for (let i = 0; i < 3; i++)
+      expect(
+        resolveTargetPolicyDetailed(project.path("a.mx"), lookup).diagnostics[0]
+          ?.code,
+      ).toBe("target-load-failed");
+    expect((globalThis as { __throwsRuns?: number }).__throwsRuns).toBe(1);
+    // A fix is a reinstall: the package's manifest changes, so it reloads.
+    writeFileSync(
+      entry,
+      readFileSync(
+        join(
+          import.meta.dirname,
+          "../../../test-fixtures/third-party-targets/ok/index.cjs",
+        ),
+        "utf8",
+      ),
+    );
+    const manifest = join(
+      project.root,
+      "node_modules/@fake/mx-throws/package.json",
+    );
+    writeFileSync(manifest, `${readFileSync(manifest, "utf8")}\n`);
+    const fixed = resolveTargetPolicyDetailed(project.path("a.mx"), lookup);
+    expect(fixed.diagnostics[0]?.code).not.toBe("target-load-failed");
+  });
+});

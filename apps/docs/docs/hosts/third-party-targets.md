@@ -57,7 +57,20 @@ A specifier that resolves and then fails is an error with no fallback: the build
 |---|---|
 | `target-not-found` | the specifier does not resolve from the project |
 | `target-load-failed` | the module threw while it was evaluated |
-| `target-invalid-descriptor` | the export is not a descriptor (the first failing field is named), its `descriptorVersion` is unsupported, or its name, package, host or file-kind segment is already owned by a built-in target |
+| `target-invalid-descriptor` | the export is not a descriptor (the first failing field is named), its `descriptorVersion` is unsupported, or it cannot be registered next to the built-in targets (see below) |
 | `host-invalid-descriptor` | the package is under `mx.host` but its descriptor has no `host` part: use `mx.target`, or add the part |
 
 The language server shows them on the document, linked to the key in `package.json`. `mx-tsc` and the TypeScript plugin report `TS80003` at the key and `TS80001` on each page, and exit non-zero. See [Host and target selection](/specification/#135-host-and-target-selection) for the whole resolution order.
+
+### What a third-party target cannot do yet
+
+- **No file kinds.** A descriptor with `host.fileKinds` is rejected: `mx.target "@acme/mx-vue" cannot be registered next to the built-in targets: file kinds are supported for built-in targets only (for now).` Reader registration, `hostModuleSegment` and editor wiring exist only for built-ins (TODO `third-party-file-kinds`). Page `.mx` files are fully supported.
+- **No joining a built-in host.** A descriptor naming `solid`, `react`, or any other built-in host is rejected: `host "solid" belongs to the built-in targets; a third-party target cannot join it (for now)`. Pick your own host name (TODO `third-party-join-builtin-host`).
+
+Two loaded packages that name the same host agree under `mx.host` / `mx.target`, and a bare `mx.host: "vue"` beside `mx.target: "@acme/mx-vue"` (whose host is `vue`) selects it without an unknown-host warning.
+
+A target with no `declarations` has no lowering policy of its own, so the TypeScript plugin does not re-lower its pages under html's rules: it maps from the mappings and source map the target's `compileModule` returns, or none.
+
+## Trust
+
+The editor and the build `require` the module you name when a `.mx` file is opened or compiled, so name only packages you trust. Sidecars and `mx.contracts` modules are the same class. The VS Code extension declares that it does not support untrusted workspaces; other editors and language-server clients have no such gate.

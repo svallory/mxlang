@@ -34,6 +34,14 @@ import {
 
 export type { TargetPolicy };
 
+/** Policy diagnostics that say the selected target could not be loaded. */
+const LOAD_FAILURE_CODES: ReadonlySet<string> = new Set([
+  "target-not-found",
+  "target-load-failed",
+  "target-invalid-descriptor",
+  "host-invalid-descriptor",
+]);
+
 export const SOLID_MX_LANGUAGE_IDS = new Set(
   builtinFileKinds
     .filter((kind) => kind.pipeline === "region")
@@ -340,6 +348,17 @@ export function diagnoseDocument(
       explicitTags ?? getCustomTags(path, { host, targets: lookup });
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
+
+    // A target that failed to load leaves the page under the fallback target.
+    // That target's verdict on a page written for another one would only bury
+    // the real error (§4.1), so report the policy and scan diagnostics alone.
+    if (
+      (hostPolicyDiagnostics ?? []).some((diagnostic) =>
+        LOAD_FAILURE_CODES.has((diagnostic as { code?: string }).code ?? ""),
+      )
+    ) {
+      return scanWarnings;
+    }
 
     const kind = fileKindOf(path, languageId);
     if (

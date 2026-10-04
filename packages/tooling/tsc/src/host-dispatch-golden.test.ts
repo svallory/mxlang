@@ -135,6 +135,10 @@ const ROWS = [
   "third-party-invalid",
   "third-party-version",
   "third-party-hostless-under-host",
+  // Round 2: a page html would reject (no html second lowering for a loaded
+  // target without declarations), and a bare mx.host naming the loaded host.
+  "third-party-ok-let",
+  "third-party-host-name",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */

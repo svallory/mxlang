@@ -26,6 +26,12 @@
     "@types/vscode": "1.90.0",
     "@vscode/vsce": "3.9.2"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "MX loads the target, sidecar and contracts modules that a project's package.json names (require) when a .mx file is opened or compiled, which runs project code. Trust the workspace to enable it."
+    }
+  },
   "activationEvents": [
     "onLanguage:mx",
     "onLanguage:solidmx",

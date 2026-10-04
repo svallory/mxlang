@@ -3,8 +3,9 @@
 ## Current target dispatch (decisions 129/132)
 
 Whole-file `.mx`/claimed `.marko` compilation selects
-`builtinLookup().target(policy.target)` and calls its lazy
-`load(core).compileModule` with `targets: builtinLookup()`. No host-name
+`lookupFor(policy).target(policy.target)` (a descriptor loaded from a package
+specifier included) and calls its lazy `load(core).compileModule` with
+`targets: lookupFor(policy)`. No host-name
 compiler branches remain. The registry itself is cached behind a dynamic
 import; config evaluation loads no registry or heavy compiler. Build startup
 installs the registry's lazy callee readers, not a host index for its side

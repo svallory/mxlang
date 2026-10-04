@@ -17,6 +17,9 @@ import { join } from "node:path";
  * project and nothing else.
  *
  * - `ok`        uses the injected core (OQ10)
+ * - `ok-ssr`    a second target of `ok`'s host (`fake-host`)
+ * - `file-kinds` declares `host.fileKinds` (rejected for loaded targets)
+ * - `join-solid` names the built-in host `solid` (rejected)
  * - `own-core`  imports its own `@mxlang/core` copy (pins the brand check)
  * - `hostless`  valid target with no `host` part (an error under `mx.host`)
  * - `throws`    its module throws on evaluation
@@ -27,6 +30,9 @@ import { join } from "node:path";
  */
 export type FakeTarget =
   | "ok"
+  | "ok-ssr"
+  | "file-kinds"
+  | "join-solid"
   | "own-core"
   | "hostless"
   | "throws"
@@ -51,6 +57,29 @@ export interface FakeProject {
   path(name: string): string;
   /** The `package.json`. */
   manifest: string;
+}
+
+/**
+ * A **copy** of core (`package.json` and the built `dist/index.js`) under the
+ * project's `node_modules/@mxlang/core`, so its realpath differs from the
+ * tool's and `require` gives a second module record, hence a second
+ * `TranslateError` class. A symlink would resolve to the very file the tools
+ * import and share its classes. Core's own runtime dependencies are linked
+ * (they are not what is under test).
+ */
+function installSecondCore(root: string): void {
+  const nm = join(root, "node_modules");
+  const copy = join(nm, "@mxlang", "core");
+  mkdirSync(join(copy, "dist"), { recursive: true });
+  cpSync(join(repoCore, "package.json"), join(copy, "package.json"));
+  cpSync(join(repoCore, "dist", "index.js"), join(copy, "dist", "index.js"));
+  for (const dep of ["@marko", "@babel", "htmljs-parser"]) {
+    symlinkSync(
+      realpathSync(join(repoCore, "node_modules", dep)),
+      join(nm, dep),
+      "dir",
+    );
+  }
 }
 
 /** An empty temp directory that holds several projects (a workspace). */
@@ -99,10 +128,7 @@ export function fakeProject(options: {
       },
     );
   }
-  if (options.install?.includes("own-core")) {
-    mkdirSync(join(root, "node_modules", "@mxlang"), { recursive: true });
-    symlinkSync(repoCore, join(root, "node_modules", "@mxlang", "core"), "dir");
-  }
+  if (options.install?.includes("own-core")) installSecondCore(root);
   for (const [name, text] of Object.entries(options.files ?? {})) {
     writeFileSync(join(root, name), text);
   }

@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: no html second lowering for a loaded target without declarations (registration PR 7 round 2)
+
+A target loaded from a package specifier that declares no `declarations` maps from the mappings and source map its `compileModule` returns (or none) instead of being re-lowered under html's rules, which rejected pages the target accepts (an event handler, `<let>`). Built-in targets are unchanged.
+
 ### Added: third-party targets (registration PR 7)
 
 The page compile, the mapping pass and tag discovery use the project's lookup (`lookupFor(policy)`), so a target a package specifier under `mx.target` / `mx.host` loaded compiles like a built-in one. A failed load is `TS80003` at the key's value plus the existing `TS80001` pointer `target not loaded: see package.json(line,col)` on the page. `createHtmlMappings` takes an optional trailing `targets` lookup (default: the built-in one).

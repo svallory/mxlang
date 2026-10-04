@@ -395,7 +395,11 @@ function policyOf(
       loaded.host
         ? { target: loaded.host.descriptor.name }
         : typeof mx.host === "string"
-          ? lookup.hostTarget(mx.host)
+          ? (lookup.hostTarget(mx.host) ??
+            // A bare word naming the loaded `mx.target`'s own host selects it.
+            (loaded.target?.descriptor.host?.name === mx.host
+              ? { target: loaded.target.descriptor.name }
+              : undefined))
           : undefined;
     const selectedTarget = loaded.target
       ? loaded.target.descriptor.name
@@ -410,11 +414,16 @@ function policyOf(
     const target = selectedTarget ?? selectedHost?.target;
     if (target !== undefined) {
       const host = hostOf(target);
+      const selectedHostName = selectedHost && hostOf(selectedHost.target);
+      // Rule 3 compares host names. A loaded `mx.host` is a specifier, never
+      // equal to the name it stands for, so it is compared by that name.
       const agrees =
         selectedHost &&
-        (hostOf(selectedHost.target) === mx.host
-          ? host === mx.host
-          : selectedHost.target === target);
+        (loaded.host
+          ? host !== undefined && host === selectedHostName
+          : selectedHostName === mx.host
+            ? host === mx.host
+            : selectedHost.target === target);
       const descriptor = descriptorOf(target);
       return {
         policy: {
@@ -469,6 +478,56 @@ function policyOf(
     ignoredHost,
     ignoredTarget,
   };
+}
+
+const verdicts = new WeakMap<TargetDescriptor, Map<string, string | null>>();
+
+/**
+ * Why `descriptor` cannot join `lookup`, or `undefined` if it can. File kinds
+ * and a built-in host are refused for now (TODOs `third-party-file-kinds`,
+ * `third-party-join-builtin-host`): neither is wired for a loaded target, and
+ * silently accepting them would be a silent no-op. The rest is the set rules
+ * of `createTargetLookup`. The verdict is cached per descriptor and per shape
+ * of lookup, as resolution runs per file and per keystroke.
+ */
+function registrationVerdict(
+  lookup: TargetLookup,
+  descriptor: TargetDescriptor,
+): string | undefined {
+  const names = lookup.targetNames();
+  const shape = `${names.join(",")}|${lookup.defaultTarget()}|${(lookup.reservedNames?.() ?? []).join(",")}`;
+  const byShape = verdicts.get(descriptor) ?? new Map<string, string | null>();
+  verdicts.set(descriptor, byShape);
+  const known = byShape.get(shape);
+  if (known !== undefined) return known ?? undefined;
+  let verdict: string | undefined;
+  const host = descriptor.host?.name;
+  if (descriptor.host?.fileKinds?.length) {
+    verdict = "file kinds are supported for built-in targets only (for now)";
+  } else if (
+    host !== undefined &&
+    names.some((n) => lookup.hostOf(n) === host)
+  ) {
+    verdict = `host "${host}" belongs to the built-in targets; a third-party target cannot join it (for now)`;
+  } else {
+    try {
+      createTargetLookup(
+        [
+          ...names.map((name) => lookup.target(name) as TargetDescriptor),
+          descriptor,
+        ],
+        {
+          defaultTarget: lookup.defaultTarget(),
+          reservedNames: lookup.reservedNames?.() ?? [],
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      verdict = error.message;
+    }
+  }
+  byShape.set(shape, verdict ?? null);
+  return verdict;
 }
 
 /**
@@ -532,24 +591,11 @@ function loadSpecifiers(
       );
       continue;
     }
-    try {
-      createTargetLookup(
-        [
-          ...lookup
-            .targetNames()
-            .map((name) => lookup.target(name) as TargetDescriptor),
-          descriptor,
-        ],
-        {
-          defaultTarget: lookup.defaultTarget(),
-          reservedNames: lookup.reservedNames?.() ?? [],
-        },
-      );
-    } catch (error) {
-      if (!(error instanceof Error)) throw error;
+    const unregistrable = registrationVerdict(lookup, descriptor);
+    if (unregistrable !== undefined) {
       fail(
         "target-invalid-descriptor",
-        `mx.${key} "${spec}" cannot be registered next to the built-in targets: ${error.message}. See the TargetDescriptor contract (unstable).`,
+        `mx.${key} "${spec}" cannot be registered next to the built-in targets: ${unregistrable}. See the TargetDescriptor contract (unstable).`,
       );
       continue;
     }

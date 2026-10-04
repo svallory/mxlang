@@ -2370,11 +2370,25 @@ the key's value (quotes included, with `length`):
 |---|---|---|
 | `target-not-found` | the specifier does not resolve from the project | `mx.target "@acme/mx-vue" cannot be resolved from /p/app: <first line of the resolver's message>. Install it (bun add -d @acme/mx-vue) or use a built-in target: html, …` (a relative or absolute path says `Check the path` instead of `Install it`) |
 | `target-load-failed` | evaluating the module throws | `mx.target "@acme/mx-vue" failed to load: <message>. (/p/app/node_modules/@acme/mx-vue/dist/index.js)`; a top-level `await`, or a relative import without its extension, adds the reason (the load is synchronous) |
-| `target-invalid-descriptor` | the export is not a descriptor: the **first** failing field only, an unsupported `descriptorVersion`, or a name, package, host or file-kind segment a built-in target already owns | `mx.target "@acme/mx-vue" must export a target descriptor (default export or "mxTarget"): "name" is missing, expected a string. See the TargetDescriptor contract (unstable).` and `… targets descriptor version 1; this mx supports 0.` |
+| `target-invalid-descriptor` | the export is not a descriptor: the **first** failing field only; an unsupported `descriptorVersion`; or it cannot be registered next to the built-in targets (below) | `mx.target "@acme/mx-vue" must export a target descriptor (default export or "mxTarget"): "name" is missing, expected a string. See the TargetDescriptor contract (unstable).`; `… targets descriptor version 1; this mx supports 0.`; `mx.target "@acme/mx-vue" cannot be registered next to the built-in targets: <reason>. See the TargetDescriptor contract (unstable).` |
 | `host-invalid-descriptor` | a specifier under `mx.host` exports a descriptor with no `host` part | `mx.host "@acme/mx-vue" exports a target with no host. Use mx.target "@acme/mx-vue", or give the descriptor a "host" part.` |
 
+A descriptor cannot be registered when the built-in targets already own what it
+claims. The `<reason>` is the first of: `file kinds are supported for built-in
+targets only (for now)` (a loaded descriptor may not declare `host.fileKinds`;
+TODO `third-party-file-kinds`); `host "solid" belongs to the built-in targets; a
+third-party target cannot join it (for now)` (a loaded target may not name a
+built-in host; TODO `third-party-join-builtin-host`); or the set rule
+`createTargetLookup` enforces (a target registered twice, a name that is a host
+name, a reserved name, a package, `mx.host` value or file-kind segment already
+taken).
+
 `mx.host` and `mx.target` agree under rule 3 with a loaded descriptor exactly as
-with a built-in one (its `host.name` is the host it belongs to). The language
+with a built-in one: they agree when the target's `host.name` is the host the
+other key names. `mx.host` may be a specifier of the same package, of another
+package whose descriptor has the same `host.name`, or the bare host name itself
+(`mx.host: "vue"` beside `mx.target: "@acme/mx-vue"` whose host is `vue`); none
+of these warns about an unknown host. The language
 server shows the error on the document, linked to the key in `package.json`;
 the TypeScript plugin and `mx-tsc` report `TS80003` at the key and `TS80001`
 `target not loaded: see package.json(line,col)` on the page, and exit non-zero;
@@ -2388,6 +2402,11 @@ own copy still works: `TranslateError`s are recognised across copies by a
 `Symbol.for` brand, so a positioned error stays positioned. Such a package
 declares `@mxlang/core` as a **peer** dependency. The descriptor contract is
 **unstable** until `@mxlang/core` is published under a stable version.
+
+**Trust.** The editor and the build `require` the named module when a `.mx`
+file is opened or compiled, so name only packages you trust. Sidecars and
+`mx.contracts` modules are the same class. The VS Code extension therefore
+declares that it does not support untrusted workspaces.
 
 A loaded host's name is a valid `mx.tags[].hosts` value for files compiled under
 that target, and its `mx.tags` entries filter by it; no unknown-host warning

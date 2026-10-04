@@ -4,14 +4,14 @@
 
 ### Current dispatch (decisions 129/132)
 
-`diagnoseDocument` selects `builtinLookup().target(policy.target)`, calls its
+`diagnoseDocument` selects `lookupFor(policy).target(policy.target)` (the built-in set plus a descriptor loaded from a package specifier), calls its
 lazy `load(core).compileModule`, and takes strictness from
 `descriptor.strict === "always" || policy.strict === true`. No host-name
 compiler branches remain. The registry supplies tag discovery/policy wrappers
 and file kinds; `fileKindOf` matches suffixes and region language ids only.
 The `ng-template` and `astro-template` pipelines are silent by suffix, never
 by language id alone. A `region` pipeline uses its `compileRegion` through
-parser `print`. Both page and region calls pass `targets: builtinLookup()`;
+parser `print`. Both page and region calls pass `targets: lookupFor(policy)`;
 the descriptors forward it rather than narrowing cross-file `AttrTag` sources
 to their own package (decision 126 addendum). A descriptor without `load`
 stays silent for page compilation too. The registry policy wrapper continues

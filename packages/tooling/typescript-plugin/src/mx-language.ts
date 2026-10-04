@@ -349,35 +349,40 @@ export function createMxLanguagePlugin(
       targets,
     });
     const generated = descriptor.typeSurface?.(compiled.code) ?? compiled.code;
-    const mappings =
-      descriptor.mappings === "merge-recorded"
-        ? mergeMappings(
-            [
-              ...(compiled.map
-                ? decodeMappings(compiled.map, generated, source)
-                : []),
-              ...recordedMappings(compiled.mappings ?? []),
-            ].sort(
-              (left, right) =>
-                (left.generatedOffsets[0] ?? 0) -
-                (right.generatedOffsets[0] ?? 0),
-            ),
-          )
-        : createHtmlMappings(
-            source,
-            fileName,
-            generated,
-            strict,
-            (strict ? descriptor.declarations?.strict : undefined) ??
-              descriptor.declarations?.default,
-            compiled.mappings,
-            customTags,
-            // The mapping pass lowers the same source a second time. It
-            // needs somewhere to put its warnings, but they are the ones the
-            // compile already reported, so they are not reported again.
-            [],
-            targets,
-          );
+    // A loaded descriptor with no `declarations` has no lowering policy of its
+    // own: html's second lowering would judge its pages under html's rules and
+    // fail on what the target accepts. It maps from what it recorded.
+    const recordedOnly =
+      descriptor.mappings === "merge-recorded" ||
+      (hostPolicy.descriptor !== undefined && !descriptor.declarations);
+    const mappings = recordedOnly
+      ? mergeMappings(
+          [
+            ...(compiled.map
+              ? decodeMappings(compiled.map, generated, source)
+              : []),
+            ...recordedMappings(compiled.mappings ?? []),
+          ].sort(
+            (left, right) =>
+              (left.generatedOffsets[0] ?? 0) -
+              (right.generatedOffsets[0] ?? 0),
+          ),
+        )
+      : createHtmlMappings(
+          source,
+          fileName,
+          generated,
+          strict,
+          (strict ? descriptor.declarations?.strict : undefined) ??
+            descriptor.declarations?.default,
+          compiled.mappings,
+          customTags,
+          // The mapping pass lowers the same source a second time. It
+          // needs somewhere to put its warnings, but they are the ones the
+          // compile already reported, so they are not reported again.
+          [],
+          targets,
+        );
     return {
       generated,
       mappings,

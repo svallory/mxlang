@@ -1,0 +1,6 @@
+{
+  "mx": {
+    "host": "fake-host",
+    "target": "./target.cjs"
+  }
+}

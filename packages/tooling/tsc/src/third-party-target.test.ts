@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
@@ -36,8 +37,16 @@ interface Case {
 }
 
 const OK = { target: specifier("ok") };
+/** A page html rejects (an event handler needs a runtime) that a third-party target may accept. */
+const STATEFUL = "<let/x=1/>\n<button onClick() { x++ }>${x}</button>\n";
 const CASES: readonly Case[] = [
   { name: "ok", mx: OK, install: ["ok"] },
+  { name: "ok-let", mx: OK, install: ["ok"], source: STATEFUL },
+  {
+    name: "missing-rejected",
+    mx: { target: specifier("missing") },
+    source: STATEFUL,
+  },
   { name: "ok-host", mx: { host: specifier("ok") }, install: ["ok"] },
   { name: "ok-fail", mx: OK, install: ["ok"], source: "<p>FAIL</p>\n" },
   {
@@ -329,4 +338,40 @@ it("mx-tsc: no output belongs to no case", () => {
     .filter((line) => line.trim() !== "")
     .filter((line) => !CASES.some((c) => line.includes(`<ws>/${c.name}/`)));
   expect(unowned).toEqual([]);
+});
+
+describe("round 2", () => {
+  it("TS plugin and mx-tsc: a page html would reject compiles through the loaded target (no html second lowering)", () => {
+    const { generated, compileDiagnostics } = pluginLeg("ok-let");
+    expect(generated).toContain("export default function Page(): string");
+    expect(generated).not.toContain("__mx$failed$");
+    expect(
+      compileDiagnostics.map(({ message, category }) => [message, category]),
+    ).toEqual([["fake target compiled a.mx", "warning"]]);
+    expect(norm(tscOutput)).toContain(
+      "<ws>/ok-let/a.mx(1,1): warning TS80002: fake target compiled a.mx",
+    );
+    expect(norm(tscOutput)).not.toContain("<ws>/ok-let/a.mx(1,1): error");
+    expect(norm(tscOutput)).not.toMatch(/ok-let\/a\.mx\(\d+,\d+\): error/);
+  });
+
+  it("language server: after a load failure only the policy error is reported, not html's verdict on the page", () => {
+    const { reported } = lsLeg("missing-rejected");
+    expect(reported).toHaveLength(1);
+    expect(String(reported[0]?.message)).toContain(
+      "target-not-found".slice(0, 0) +
+        'mx.target "@fake/mx-missing" cannot be resolved',
+    );
+  });
+
+  it("own-core is a real second copy of core, not the tool's", () => {
+    const project = fakeProject({ install: ["own-core"] });
+    const own = createRequire(join(project.root, "package.json"))(
+      "@mxlang/core",
+    ) as { TranslateError: unknown };
+    const tool = createRequire(import.meta.url)(
+      "../../../core/dist/index.js",
+    ) as { TranslateError: unknown };
+    expect(own.TranslateError).not.toBe(tool.TranslateError);
+  });
 });

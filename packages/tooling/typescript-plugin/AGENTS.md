@@ -2,12 +2,14 @@
 
 ## Current target dispatch (decisions 129/132)
 
-Page compilation selects `builtinLookup().target(policy.target)` and calls
+Page compilation selects `lookupFor(policy).target(policy.target)` (a descriptor loaded from a package specifier included) and calls
 `load(core).compileModule` with the full lookup and `typeCheck: true` (decision
 140). Strictness, type surface, pending text, declarations and mapping mode
 come from the descriptor. A merge-recorded target may omit both map and
 mappings; those contribute no mappings. The second lowering still uses the
-default target's translator (D3), regardless of the selected target.
+default target's translator (D3), regardless of the selected target, except
+for a loaded descriptor with no `declarations`: it has no lowering policy of its
+own, so the plugin maps from what it recorded and never re-lowers under html.
 
 File recognition, diagnostic labels and region compilation use
 `builtinFileKinds` and its pipeline. Discovery for fixed file kinds uses the

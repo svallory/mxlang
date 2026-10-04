@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed: no page compile after a target load failure (registration PR 7 round 2)
+
+When the policy carries `target-not-found`, `target-load-failed`, `target-invalid-descriptor` or `host-invalid-descriptor`, the server reports the policy and scan diagnostics only. The fallback target's verdict on a page written for the missing one no longer buries the real error.
+
 ### Added: third-party targets (registration PR 7)
 
 `diagnoseDocument` compiles through the descriptor a package specifier under `mx.target` / `mx.host` loaded (`policy.descriptor`), with that project's lookup. The new `target-not-found`, `target-load-failed`, `target-invalid-descriptor` and `host-invalid-descriptor` errors reach the document, linked to the key in `package.json`, through the existing policy-diagnostics path. The language server finds a target the project installed even when it runs as the VSIX-bundled copy: the specifier is resolved from the project, never from the bundle.

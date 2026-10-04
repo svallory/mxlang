@@ -78,6 +78,9 @@ export const builtinTargets: readonly TargetDescriptor[] = [
   data,
 ].filter(resolved);
 
+/** Names no descriptor may take: outputs a built-in host may add later (07 Q5). */
+const RESERVED_NAMES: readonly string[] = ["astro-template"];
+
 let cachedLookup: TargetLookup | undefined;
 
 /**
@@ -94,7 +97,7 @@ let cachedLookup: TargetLookup | undefined;
  */
 export function builtinLookup(): TargetLookup {
   cachedLookup ??= createTargetLookup(builtinTargets, {
-    reservedNames: ["astro-template"],
+    reservedNames: RESERVED_NAMES,
   });
   return cachedLookup;
 }
@@ -117,7 +120,7 @@ export function lookupFor(policy: TargetPolicy): TargetLookup {
   let lookup = projectLookups.get(descriptor);
   if (!lookup) {
     lookup = createTargetLookup([...builtinTargets, descriptor], {
-      reservedNames: ["astro-template"],
+      reservedNames: RESERVED_NAMES,
     });
     projectLookups.set(descriptor, lookup);
   }
