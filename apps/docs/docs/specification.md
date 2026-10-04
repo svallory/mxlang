@@ -2520,23 +2520,27 @@ an internal failure and is rethrown.
 | `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`, not by this option. |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
-**Error order under `unknownTags: "reject"` (main today).**
+**Error order under `unknownTags: "reject"`** (decision 131 addendum 3; the
+unknown-tag check runs on a tag before anything inside it, so the first error is
+the root cause). Exactly one error is reported:
 
-1. Everything core raises while compiling comes first, wherever it sits in the
-   file: a Marko parse error, a reserved name, `<define>`, `<return>`, and every
-   `customTags` contract error (attribute shape, closed `children`, `parents`).
-   So a typo'd parent whose child violates a contract reports the child's
-   contract error, not the unknown parent.
-2. Then `structural: "reject"`: if any structural construct exists anywhere, the
-   error is the earliest one in document order, even when an unknown tag opens
-   earlier in the file.
-3. Then the tree is built depth-first and the first failing node wins. Within
-   one tag the order is: its name, the unknown-tag check, the shorthand-class
-   and tag-variable checks, its attributes, its arguments, its attribute tags
-   (`<@name>`, whatever their position), then its children. An unknown tag's own body is never walked, so
-   there is one error per unknown call.
-
-<!-- TODO(unknown-order): data-unknown-tag-order is not on main yet. It changes rules 1 to 3 (an unknown parent is reported before its children's contract errors; the unknown-tag check and the structural reject compete by position). The lead rewrites this list before merge. -->
+1. A source that does not parse reports its Marko parse error.
+2. An error core raises while compiling (a reserved name, `<define>`,
+   `<return>`, a `customTags` contract error: attribute shape, closed
+   `children`, `parents`, a tag variable on a contract tag) is reported, **unless**
+   an unknown authored tag opens strictly earlier in the file, in which case the
+   unknown tag is reported. An ancestor always opens earlier, so a typo'd parent
+   (`resourse` holding an `<attributes>`) is reported with its `did you mean`
+   hint, not the contract error of the child under it. A core error at or before
+   the unknown tag's position wins, so a known parent's closed-`children` error
+   positioned at the unknown child itself is the reported one.
+3. When compiling succeeds, the tree is built. The `structural: "reject"` hit,
+   the unknown-tag check and the build rejects (dynamic tag, `<!doctype>`, tag
+   variable, merged shorthand class, unusable tag name) compete **by position in
+   the file**: the earliest wins, wherever it sits in the tree, with attribute
+   tags and children interleaved in document order. At the same position the
+   build reject wins. An unknown tag's own body is never walked, so there is one
+   error per unknown call.
 
 #### 13.7.2 The tree
 
