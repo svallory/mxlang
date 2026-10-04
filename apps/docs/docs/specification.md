@@ -50,6 +50,18 @@ answer genuinely is not settled.
   is **not monotonic** and has **two entries numbered 33**; this file cites them
   as *33 (retarget finding)* and *33 (lead ruling)*.
 
+### Reserved generated identifiers
+
+Identifiers beginning with `__mx` are reserved for generated code. Authors
+must not declare bindings with that prefix, including tag variables, imports,
+module statements, surrounding TypeScript bindings and Astro frontmatter.
+For example, `__mxAttrValue` and `__mxAttrSpread` name generated runtime helpers.
+
+**Known enforcement gap:** the compiler does not yet reject every authored
+`__mx*` binding. Such a binding can shadow a helper or cause a duplicate
+declaration. A clear rejection diagnostic is tracked separately; this
+reservation documents the contract, not a newly implemented check.
+
 ### The governing rule
 
 > **MX 1.0 is a strict subset of Marko syntax.** Every MX 1.0 file is a valid
