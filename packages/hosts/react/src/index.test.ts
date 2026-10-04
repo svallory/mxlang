@@ -586,4 +586,25 @@ describe("text with JSX-significant characters (rendered, react runtime)", () =>
       "<div>&lt;a&gt; &amp; b</div>",
     );
   });
+
+  it("renders HTML5-only and unterminated legacy entities like Marko's browser parse", async () => {
+    // jsx-text-entities: the shared emitter HTML5-decodes authored text and
+    // re-emits numeric references, so entities outside JSX's narrower named
+    // set still render as the browser decodes them.
+    expect(await renderEntry("<div>&copy 2026</div>")).toBe(
+      "<div>© 2026</div>",
+    );
+    expect(await renderEntry("<div>&check; &lt &#123</div>")).toBe(
+      "<div>✓ &lt; {</div>",
+    );
+  });
+
+  it("rejects <html-comment> instead of emitting a literal element", () => {
+    // JSX has no comment node; before the claim, the tag fell through to
+    // the native-element path and silently rendered `<html-comment>` where
+    // Marko renders `<!--…-->`.
+    expect(() => markup("<html-comment>hi</html-comment>")).toThrow(
+      /cannot appear in a React component/,
+    );
+  });
 });

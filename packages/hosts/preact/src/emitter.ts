@@ -39,6 +39,7 @@ import {
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
+import { decodeHTML } from "entities";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 
 /**
@@ -190,13 +191,25 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
         node,
       );
     },
-    isDelegatedTag: (name) => name === "try",
+    isDelegatedTag: (name) => name === "try" || name === "html-comment",
     // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):
     // the shape checks that used to live here — no params, no `/var`, one
     // `<@catch>`, one `<@placeholder>` with no params of its own — are the
     // core's `attributeTags` declaration and the tag's own `transform`. This
     // host only decides how the claimed primitive renders.
+    //
+    // `<html-comment>` is claimed to be *rejected*, not rendered: JSX has no
+    // comment node, so the unclaimed tag fell through to the native-element
+    // path and silently rendered a literal `<html-comment>` element where
+    // Marko renders `<!--…-->` (jsx-text-entities review, 2026-10-04). A
+    // positioned refusal matches the `<!doctype>` policy below.
     resolveDelegatedTag(name, node): DelegatedTagData {
+      if (name === "html-comment") {
+        rawFail(
+          `an HTML comment (<html-comment>) cannot appear in a ${dialectName} component: JSX has no comment node, so it cannot render Marko's <!--…-->; write the comment in the HTML shell that mounts the app`,
+          node,
+        );
+      }
       if (name !== "try")
         rawFail(`unknown ${dialectName} host tag ${name}`, node);
       return { kind: "try" };
@@ -228,25 +241,54 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
 export const preactDeclarations = createJsxDeclarations("Preact");
 
 /**
- * Escapes text for a JSX child position.
- *
- * `{` and `}` open and close an expression container, and `<` starts a JSX
- * element (a lone `>` is legal JSX text but is escaped with the rest so the
- * whole run stays uniform), so these characters become numeric character
- * references; left raw they would be parsed as markup and either fail to
- * compile or silently swallow the text. JSX decodes character references in
- * text children, so the rendered text is unchanged. `&` is deliberately left
- * raw: Marko passes authored entities through verbatim, and JSX decodes
- * `;`-terminated numeric references and the HTML4 named set the same way a
- * browser does. HTML5-only names (`&check;`) and unterminated legacy forms
- * (`&copy x`, `&lt`) are a known divergence — JSX keeps them literal where a
- * browser would decode them.
- * TODO(jsx-text-entities): decode authored text with an HTML5 entity decoder
- * and re-emit the decoded characters as numeric refs, so JSX text equals the
- * browser's text for every input.
+ * HTML raw-text elements: the tokenizer reads these bodies without emitting
+ * character references, so the browser shows authored `&…` literally and
+ * entity decoding must be skipped inside them (the `style` body is the only
+ * reachable one — core rejects `<script>` as a client-runtime tag).
  */
-function escapeText(value: string): string {
-  return value.replace(/[{}<>]/g, (char) => `&#${char.charCodeAt(0)};`);
+const RAW_TEXT_ELEMENTS = new Set(["script", "style"]);
+
+/**
+ * Escapes text for a JSX child position, decoding authored HTML entities
+ * first so the JSX render equals Marko's browser-decoded text.
+ *
+ * Marko passes authored `&…` through verbatim and the browser decodes it
+ * with the HTML5 rules — legacy no-semicolon names (`&copy 2026`),
+ * HTML5-only names (`&check;`), and unterminated numeric refs (`&#123`) —
+ * while the JSX transform decodes only `;`-terminated numeric refs and the
+ * HTML4 named set. Decoding with `entities`' spec-exact `decodeHTML` (the
+ * tokenizer's "character reference in data" state) and re-emitting every
+ * JSX-significant or non-ASCII character as a numeric reference makes the
+ * two agree for every input: JSX's decoder always honours a `;`-terminated
+ * numeric reference, and the serializer then writes exactly the decoded
+ * characters back out.
+ *
+ * `&` is always re-emitted as `&#38;`: a decoded literal ampersand followed
+ * by letters (`&amp;copy;` decodes to the text `&copy;`) would otherwise be
+ * read by the JSX transform as a fresh entity. A decoded carriage return
+ * becomes `&#13;` because a raw `\r` in the serialized HTML would be
+ * normalized to `\n` by the HTML parser, where a character reference is
+ * not. Astral characters and multi-code-point entities are escaped per
+ * code point (`&#128512;`, `&#8810;&#824;`).
+ *
+ * In a raw-text element (`<style>`) entity decoding is skipped entirely:
+ * the browser applies no character references there, so the text keeps
+ * today's verbatim passthrough with only the JSX-significant characters
+ * (`{`, `}`, `<`, `>`) escaped.
+ */
+function escapeText(value: string, decodeEntities = true): string {
+  if (!decodeEntities) {
+    return value.replace(/[{}<>]/g, (char) => `&#${char.charCodeAt(0)};`);
+  }
+  let out = "";
+  for (const char of decodeHTML(value)) {
+    const code = char.codePointAt(0) ?? 0;
+    out +=
+      code > 0x7f || char === "\r" || "&<>{}".includes(char)
+        ? `&#${code};`
+        : char;
+  }
+  return out;
 }
 
 function escapeAttribute(value: string): string {
@@ -398,6 +440,13 @@ export class PreactEmitter implements Emitter<string> {
    * IIFE), which is filed as MX 2 work.
    */
   readonly #callbackScope: boolean;
+  /**
+   * The text being emitted is a child of an HTML raw-text element
+   * (`<style>`), whose authored entities the browser does not decode.
+   * Threaded through `#child` so a nested element resets it from its own
+   * name.
+   */
+  readonly #decodeText: boolean;
 
   /**
    * Tooling-only (decision 140): the name of the preamble's handler-type
@@ -416,6 +465,7 @@ export class PreactEmitter implements Emitter<string> {
     varSerial?: { n: number },
     callbackScope = false,
     typeCheck?: string,
+    decodeText = true,
   ) {
     this.#dialect = dialect;
     this.#typeCheck = typeCheck;
@@ -424,6 +474,7 @@ export class PreactEmitter implements Emitter<string> {
     this.#varStatements = varStatements ?? [];
     this.#varSerial = varSerial ?? { n: 0 };
     this.#callbackScope = callbackScope;
+    this.#decodeText = decodeText;
   }
 
   /** Statements a `/var` call site needs above the component's `return`. */
@@ -442,7 +493,10 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /** A child emitter sharing this one's dialect and import collection. */
-  #child(callbackScope = this.#callbackScope): PreactEmitter {
+  #child(
+    callbackScope = this.#callbackScope,
+    decodeText = true,
+  ): PreactEmitter {
     return new PreactEmitter(
       this.#dialect,
       this.#runtimeImports,
@@ -451,11 +505,16 @@ export class PreactEmitter implements Emitter<string> {
       this.#varSerial,
       callbackScope,
       this.#typeCheck,
+      decodeText,
     );
   }
 
-  #render(nodes: IrNode[], callbackScope?: boolean): MappedCode {
-    const child = this.#child(callbackScope);
+  #render(
+    nodes: IrNode[],
+    callbackScope?: boolean,
+    decodeText = true,
+  ): MappedCode {
+    const child = this.#child(callbackScope, decodeText);
     drive(child, nodes);
     return child.result();
   }
@@ -1294,7 +1353,7 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   text(node: Extract<IrNode, { kind: "Text" }>): void {
-    this.#out.push(concatMapped(escapeText(node.value)));
+    this.#out.push(concatMapped(escapeText(node.value, this.#decodeText)));
   }
 
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {
@@ -1328,7 +1387,15 @@ export class PreactEmitter implements Emitter<string> {
       this.#out.push(concatMapped(`<${node.name}`, attrs, `${rawHtml} />`));
       return;
     }
-    const children = raw ? concatMapped() : this.#render(node.children);
+    // Raw-text elements (`<style>`) keep authored `&…` literal: the browser
+    // applies no character references inside them, unlike the JSX decoder.
+    const children = raw
+      ? concatMapped()
+      : this.#render(
+          node.children,
+          undefined,
+          !RAW_TEXT_ELEMENTS.has(node.name),
+        );
     if (children.code === "") {
       this.#out.push(concatMapped(`<${node.name}`, attrs, `${rawHtml} />`));
       return;

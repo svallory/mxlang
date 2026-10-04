@@ -2,6 +2,10 @@
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to `value:foo={y}`, which both Solid 2 backends lower to `setAttribute(el, "value:foo", …)`; MX previously rejected the form as a malformed namespaced attribute.
 
+- **Fix (jsx-text-entities):** verified at parity, no decode change. Solid's pipeline already applies Marko's own model to authored `&…`: `@solidjs/babel-plugin` passes JSX text through unaltered, and the SSR string (or the DOM template, which the browser parses with full HTML5 rules) carries the authored spelling to the browser, so legacy no-semicolon names (`&copy 2026`), HTML5-only names (`&check;`), unterminated numeric references (`&#123`), and surrogate references all render exactly as Marko 6.3.51's browser parse — unlike the Preact/React/Hono JSX transforms, which decode only `;`-terminated numeric references and the HTML4 named set and now compensate in the emitter. Probed case-by-case against Marko + parse5; the emitter comment now documents the deliberate passthrough (the stale TODO is removed).
+
+- **Fix (preact-html-comment-literal-element):** `<html-comment>` is now a positioned compile error — `an HTML comment (<html-comment>) cannot appear in a Solid component: JSX has no comment node…` — instead of silently emitting a literal `<html-comment>` element where Marko renders `<!--…-->`.
+
 ## Unreleased
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

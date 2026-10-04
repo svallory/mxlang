@@ -565,6 +565,24 @@ describe("text with JSX-significant characters (rendered, hono runtime)", () => 
     expect(markup("<div>a > b</div>")).toBe("<div>a &#62; b</div>");
   });
 
+  it("decodes authored entities to numeric references the JSX transform decodes", () => {
+    // jsx-text-entities: HTML5-only and unterminated legacy entities must
+    // render as Marko's browser-decoded text, not slip past the JSX decoder.
+    expect(markup("<div>&copy 2026</div>")).toBe("<div>&#169; 2026</div>");
+    expect(markup("<div>&check; &lt &#123</div>")).toBe(
+      "<div>&#10003; &#60; &#123;</div>",
+    );
+  });
+
+  it("rejects <html-comment> instead of emitting a literal element", () => {
+    // JSX has no comment node; before the claim, the tag fell through to
+    // the native-element path and silently rendered `<html-comment>` where
+    // Marko renders `<!--…-->`.
+    expect(() => markup("<html-comment>hi</html-comment>")).toThrow(
+      /cannot appear in a Hono component/,
+    );
+  });
+
   it("renders a bare `<` in text as text, like Marko", async () => {
     const { renderToString } = await import("hono/jsx/dom/server");
     const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(

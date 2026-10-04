@@ -488,6 +488,11 @@ describe("Solid host errors", () => {
       "on `<@placeholder>`",
     ],
     [
+      "html-comment (jsx-text-entities)",
+      `<html-comment>hi</html-comment>`,
+      "cannot appear in a Solid component",
+    ],
+    [
       "unresolved capitalized tag (decision 114)",
       `<TotallyUndefined/>`,
       "Unable to find entry point for custom tag `<TotallyUndefined>`",

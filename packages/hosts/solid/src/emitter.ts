@@ -619,13 +619,26 @@ export const solidDeclarations: HostDeclarations = {
   isElement: (name) => !/^[A-Z]/.test(name),
   isComponent,
   rejectUnknownTag,
-  isDelegatedTag: (name) => name === "try",
+  isDelegatedTag: (name) => name === "try" || name === "html-comment",
   // `<try>` is a core-owned custom tag (`packages/core/src/builtin-tags.ts`):
   // the shape checks that used to live here — no params, no `/var`, one
   // `<@catch>`, one `<@placeholder>` with no params of its own — are the
   // core's `attributeTags` declaration and the tag's own `transform`. This
   // host only decides how the claimed primitive renders.
+  //
+  // `<html-comment>` is claimed to be *rejected*, not rendered: JSX has no
+  // comment node, so the unclaimed tag fell through to the native-element
+  // path and silently rendered a literal `<html-comment>` element where
+  // Marko renders `<!--…-->` (jsx-text-entities review, 2026-10-04). Solid's
+  // pipeline can no more express a bare comment than Preact's; a positioned
+  // refusal replaces the silent wrong render.
   resolveDelegatedTag(name, node): TryData {
+    if (name === "html-comment") {
+      rawFail(
+        "an HTML comment (<html-comment>) cannot appear in a Solid component: JSX has no comment node, so it cannot render Marko's <!--…-->; write the comment in the HTML shell that mounts the app",
+        node,
+      );
+    }
     if (name !== "try") rawFail(`unknown Solid host tag ${name}`, node);
     return { kind: "try" };
   },
@@ -651,16 +664,14 @@ export const solidDeclarations: HostDeclarations = {
  * element (a lone `>` is legal JSX text but is escaped with the rest so the
  * whole run stays uniform), so these characters become numeric character
  * references; left raw they would be parsed as markup and either fail to
- * compile or silently swallow the text. JSX decodes character references in
- * text children, so the rendered text is unchanged. `&` is deliberately left
- * raw: Marko passes authored entities through verbatim, and JSX decodes
- * `;`-terminated numeric references and the HTML4 named set the same way a
- * browser does. HTML5-only names (`&check;`) and unterminated legacy forms
- * (`&copy x`, `&lt`) are a known divergence — JSX keeps them literal where a
- * browser would decode them.
- * TODO(jsx-text-entities): decode authored text with an HTML5 entity decoder
- * and re-emit the decoded characters as numeric refs, so JSX text equals the
- * browser's text for every input.
+ * compile or silently swallow the text. Unlike the Preact/React pipeline's
+ * transform, `@solidjs/babel-plugin` does not decode character references in
+ * JSX text: the authored spelling is preserved into the SSR string (or the
+ * DOM template), and the browser decodes it with full HTML5 rules — exactly
+ * Marko's own model, so authored entities (`&copy 2026`, `&check;`, `&#123`,
+ * surrogate references) already render as the browser decodes them. No
+ * compile-time entity decoding happens here; that is deliberate, and the
+ * numeric references this function emits round-trip the same way.
  */
 function escapeText(value: string): string {
   return value.replace(/[{}<>]/g, (char) => `&#${char.charCodeAt(0)};`);

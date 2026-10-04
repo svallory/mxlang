@@ -2,6 +2,10 @@
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to the JSX attribute `value:foo={y}`, Marko's own attribute (MX previously rejected it).
 
+- **Fix (jsx-text-entities):** authored `&…` in text is now HTML5-decoded in the emitter and re-emitted as numeric character references, so JSX output equals Marko 6.3.51's browser-decoded text for every input. The decoder is `entities`' spec-exact `decodeHTML` (the tokenizer's "character reference in data" state), covering legacy no-semicolon names (`&copy 2026` → `© 2026`), HTML5-only names (`&check;`), and unterminated numeric references (`&#123`), which the JSX transform's narrower named-entity set used to leave literal. Every JSX-significant or non-ASCII character — including a decoded `&`, carriage returns, and multi-code-point entities, escaped per code point — becomes a `;`-terminated numeric reference the JSX transform always decodes back. `<style>` bodies are exempt: the HTML tokenizer applies no character references in raw-text elements. Adds `entities` 6.0.1 as a dependency. Shared with `@mxlang/react` and `@mxlang/hono`. Pinned by rendered parity tests against Marko + parse5 and by a `@mxlang/typescript-plugin` mapping test.
+
+- **Fix (preact-html-comment-literal-element):** `<html-comment>` is now a positioned compile error — `an HTML comment (<html-comment>) cannot appear in a Preact component: JSX has no comment node…` — instead of silently emitting a literal `<html-comment>` element where Marko renders `<!--…-->`. Shared with `@mxlang/react` and `@mxlang/hono`.
+
 ## 0.1.0 (unreleased)
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

@@ -455,6 +455,43 @@ describe("SolidMX language plugin", () => {
 });
 
 describe("MX language plugin", () => {
+  it("maps offsets past entity-decoded text to the shifted generated positions", () => {
+    // jsx-text-entities: the Preact emitter HTML5-decodes authored text and
+    // re-emits `&copy;` as `&#169;`, one character longer than the source. An
+    // expression after the decoded text must still map to its shifted
+    // generated offset, so a diagnostic on it lands on the authored text
+    // instead of a column late. The control expression in plain text pins
+    // the baseline delta against the module's type-surface preamble.
+    const plugin = createMxLanguagePlugin(ts);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    const source = "<div>&copy; ${input.zed} and ${input.two}</div>\n";
+    const virtual = plugin.createVirtualCode?.(
+      `${here}/fixtures/preact-policy/component.mx`,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    if (!virtual) throw new Error("Expected MX virtual code");
+    const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    expect(generated).toContain("&#169;");
+    const find = (text: string) => {
+      const mapping = virtual.mappings.find(
+        (candidate) => candidate.sourceOffsets[0] === source.indexOf(text),
+      );
+      expect(mapping, text).toBeDefined();
+      const generatedOffset = mapping?.generatedOffsets[0] ?? 0;
+      const length = mapping?.generatedLengths?.[0] ?? mapping?.lengths[0] ?? 0;
+      expect(generated.slice(generatedOffset, generatedOffset + length)).toBe(
+        text,
+      );
+      return generatedOffset - source.indexOf(text);
+    };
+    // `&copy;` is 6 source characters and `&#169;` is 7 generated ones, so the
+    // expression after the entity carries one extra character of drift over
+    // the expression in plain text.
+    expect(find("input.zed") - find("input.two")).toBe(1);
+  });
+
   it("keeps the Astro composed panel a module after reading Card's attribute-tag Input", () => {
     const fileName = join(
       here,

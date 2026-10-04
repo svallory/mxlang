@@ -397,6 +397,13 @@ quotes pass through raw, matching Marko's `_escape_comment`. Filtering the
 placeholders out instead (an early bug) turned
 `<html-comment>build ${input.sha}</html-comment>` into `<!--build -->`.
 
+On the JSX hosts (Preact, React, Hono, Solid) `<html-comment>` is instead a
+positioned compile error — JSX has no comment node, so the tag would silently
+render as a literal `<html-comment>` element, which is a wrong render rather
+than a loud one (jsx-text-entities review, 2026-10-04; the same policy as
+`<!doctype>` on those hosts). Write the comment in the HTML shell that mounts
+the app.
+
 ### Scriptlets
 
 `$ statement` is **rejected on every host**:

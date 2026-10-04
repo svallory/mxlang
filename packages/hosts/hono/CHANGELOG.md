@@ -2,6 +2,10 @@
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to the JSX attribute `value:foo={y}`, Marko's own attribute (MX previously rejected it).
 
+- **Fix (jsx-text-entities):** authored entities in text render as Marko 6.3.51's browser-decoded text (`&copy 2026` → `© 2026`, `&check;`, `&lt`, `&#123`), through the shared emitter's HTML5 decode-and-re-emit; see `@mxlang/preact`.
+
+- **Fix (preact-html-comment-literal-element):** `<html-comment>` is now a positioned compile error (JSX has no comment node) instead of silently emitting a literal `<html-comment>` element. See `@mxlang/preact`.
+
 ## 0.1.0 (unreleased)
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

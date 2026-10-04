@@ -136,11 +136,16 @@ describe("elements and text", () => {
     expect(markup("<p>a > b</p>")).toBe("<p>a &#62; b</p>");
   });
 
-  it("passes authored entities through text verbatim, matching Marko", () => {
+  it("decodes authored entities to numeric references the JSX transform decodes", () => {
     // Marko's parser keeps `&lt;`/`&amp;` raw and the browser decodes them
-    // at parse; JSX decodes the same references at compile, so escaping the
-    // `&` would double-encode and render the entity spelling literally.
-    expect(markup("<p>&lt;a&gt; &amp; b</p>")).toBe("<p>&lt;a&gt; &amp; b</p>");
+    // at parse. The emitter instead decodes authored text with HTML5 rules
+    // and re-emits each JSX-significant or non-ASCII character as a numeric
+    // reference, which every JSX transform decodes back to the same
+    // character — so a browser's HTML5-only or unterminated legacy entity
+    // cannot slip past the narrower JSX named-entity set.
+    expect(markup("<p>&lt;a&gt; &amp; b</p>")).toBe(
+      "<p>&#60;a&#62; &#38; b</p>",
+    );
   });
 
   it("emits an escaped placeholder as an expression container", () => {
@@ -1662,8 +1667,50 @@ describe("text with JSX-significant characters (rendered)", () => {
   });
 
   it("renders authored entities as the decoded character, like Marko's browser parse", async () => {
+    // Preact's serializer escapes `<` and `&` but leaves `>` bare in text, so
+    // the byte form differs from Marko's while the parsed DOM is equal.
     expect(await renderCompiled("<div>&lt;a&gt; &amp; b</div>")).toBe(
       "<div>&lt;a> &amp; b</div>",
+    );
+  });
+
+  it("renders HTML5-only and unterminated legacy entities like Marko's browser parse", async () => {
+    // jsx-text-entities: JSX transforms decode only `;`-terminated numeric
+    // references and the HTML4 named set, where the browser applies the
+    // HTML5 rules. The emitter decodes authored text with `entities`' spec-
+    // exact decoder, so these render as Marko + parse5 does.
+    expect(await renderCompiled("<div>&copy 2026</div>")).toBe(
+      "<div>© 2026</div>",
+    );
+    expect(await renderCompiled("<div>&amp y</div>")).toBe(
+      "<div>&amp; y</div>",
+    );
+    expect(await renderCompiled("<div>&check; &lt &#123</div>")).toBe(
+      "<div>✓ &lt; {</div>",
+    );
+    expect(await renderCompiled("<div>&nLt; &#xD800;</div>")).toBe(
+      "<div>≪⃒ �</div>",
+    );
+  });
+
+  it("keeps authored entities undecoded inside a raw-text <style> body", () => {
+    // The HTML tokenizer applies no character references inside raw-text
+    // elements, so the emitter must not HTML5-decode a <style> body even
+    // though the same text outside would decode. (The JSX transform itself
+    // may still decode `;`-terminated references it recognises — raw-text
+    // parity for a `&` inside <style> is impossible once the host serializer
+    // re-escapes it — so this pins the emitter, which is what MX controls.)
+    expect(markup("<style>a { color: red; } /* &copy; stays */</style>")).toBe(
+      "<style>a &#123; color: red; &#125; /* &copy; stays */</style>",
+    );
+  });
+
+  it("rejects <html-comment> instead of emitting a literal element", () => {
+    // JSX has no comment node; before the claim, the tag fell through to
+    // the native-element path and silently rendered `<html-comment>` where
+    // Marko renders `<!--…-->`.
+    expect(() => markup("<html-comment>hi</html-comment>")).toThrow(
+      /cannot appear in a Preact component/,
     );
   });
 
