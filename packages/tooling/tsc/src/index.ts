@@ -24,6 +24,7 @@ import {
   parseBuildMode,
   resolveBuildProjects,
 } from "./build-templates.ts";
+import { dataProjectDir, runDataCheck } from "./data-check.ts";
 import {
   checkNgMxGroups,
   checkNgMxProjects,
@@ -476,6 +477,11 @@ function runMxTscBody(): number {
 
 function runMxTscChecks(): number {
   const astro = consumeAstroFlag(process.argv);
+  // A package that compiles as `data` is not a TypeScript program: its
+  // `.mx` files go to `@mxlang/data` and nothing else runs (decision 131,
+  // addendum 4).
+  const dataDir = dataProjectDir(process.argv.slice(2), process.cwd());
+  if (dataDir !== undefined) return runDataCheck(dataDir);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
   // One language plugin per program: `tsc -b` creates one for each project,
   // and every one of them holds compiles the Angular pass has to see.

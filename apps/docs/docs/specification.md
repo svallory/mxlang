@@ -2484,14 +2484,18 @@ package has two matches under rule 5 and falls to `html`; it must set
 `mx.target` to the target its tool-compiled files use, and its data files go
 through `parseData`.
 
-Editor and tool dispatch for data files is deferred (TODO
+Editor dispatch for data files is deferred (TODO
 `data-target-tooling-dispatch`): **the language server, the TypeScript plugin,
-`mx-tsc`, Vite and the Bun loader do not compile data files yet.** Until it
-lands, an explicit `mx.target: "data"` is a positioned error raised by the
-registry wrapper, never by core, at the key's value (code `unknown-target`):
+Vite and the Bun loader do not compile data files yet; `mx-tsc` does** (§13.7.4,
+decision 131 addendum 4). Until editor dispatch lands, an explicit
+`mx.target: "data"` is a positioned error raised by the registry wrapper, never
+by core, at the key's value (code `unknown-target`):
 `mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
-The language server, TypeScript plugin and `mx-tsc` report it as a policy
-error and the Vite plugin fails the transform with it. The tools still hand on
+The language server and the TypeScript plugin report it as a policy
+error and the Vite plugin fails the transform with it. `mx-tsc` asks the wrapper
+for the unmasked policy when it is run on a data package (§13.7.4); under a
+tsconfig program that spans packages, or under `-b`/`-w`, it still reports the
+error like the editor tools. The tools still hand on
 the same fallback as any `unknown-target` (rule 5, else `html`), so later
 diagnostics are not drowned, but the error means no green build. The Bun loader
 does not read `mx.target` at all: `@mxlang/html/bun` always compiles as `html`.
@@ -2547,11 +2551,12 @@ any tag or expression means. A later *evaluated mode* (the file compiles to a
 module exporting a value) is TODO `data-host-evaluated-mode` and is not part of
 this section.
 
-**Tooling status.** The language server, the TypeScript plugin, `mx-tsc`, Vite
-and the Bun loader do **not** compile data files yet (TODO
-`data-target-tooling-dispatch`); `mx.target: "data"` in a project is the
-positioned error quoted in §13.5. **`parseData` is the supported entry point
-today.** Nothing in this section depends on tool dispatch.
+**Tooling status.** `mx-tsc` checks a data package (§13.7.4). The language
+server, the TypeScript plugin, Vite and the Bun loader do **not** compile data
+files yet (TODO `data-target-tooling-dispatch`); for them `mx.target: "data"` in
+a project is the positioned error quoted in §13.5. **`parseData` is the
+supported entry point for a program.** Nothing in this section depends on tool
+dispatch.
 
 #### 13.7.1 `parseData`
 
@@ -2704,6 +2709,34 @@ a `script`, `style`, `textarea` or `title` body parses as a tag, not text; a dat
 file writes text through `${"…"}` or an attribute. This is the one place a data
 file is not a Marko file: Marko rejects `<source><input/></source>`, data
 accepts it.
+
+#### 13.7.4 `mx-tsc` on a data package
+
+**Decision 131, addendum 4.** `mx-tsc` run on a project whose policy resolves
+to `data` (§13.5: `mx.target: "data"`, or rule 5) does not build a TypeScript
+program. With no tsconfig it parses every `.mx` file under the project
+directory whose nearest `package.json` resolves to `data`, in path order
+(skipping `node_modules` and dot directories), with `parseData` and the
+package's own tag map (`getCustomTags(file, { host: null })`: `tags/` sidecars
+and `mx.contracts`). The command is `mx-tsc` in the package directory, or
+`mx-tsc -p <dir>`; `-p` also accepts a tsconfig path (only its directory is
+used), and `--pretty` and `--noEmit` are accepted and ignored. Any other
+argument (`-b`, `-w`, `--version`, a file list) is an ordinary `tsc` run.
+
+Each diagnostic prints as `file(line,column): error TS80001: message` (a
+warning is `TS80002`): the compile diagnostic a host `.mx` file gets, so one
+search finds every `.mx` problem. Positions are 1-based, converted from the
+diagnostic's 1-based `line` and 0-based `column`. A problem in the
+configuring `package.json` (a scan diagnostic, an invalid `mx.data` value) is
+`TS80003` at its position. The exit code is 1 when any diagnostic is an error
+and 0 otherwise; a clean package prints nothing.
+
+`package.json#mx.data` is `{ "structural"?: "pass" | "reject", "unknownTags"?:
+"allow" | "reject" }`. Both default to `"reject"` here; `parseData`'s own
+defaults stay `"pass"` and `"allow"`, and only `mx-tsc` reads the key. An
+invalid value is an error at the value and the strict default applies. The
+language server, the TypeScript plugin and Vite keep the staged error of §13.5
+until `data-target-tooling-dispatch` lands.
 
 ### Host selection
 

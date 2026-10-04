@@ -120,6 +120,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       // stripped too: its registry-private pipeline types must not ship.
       "dist/amx-language.d.ts",
       "dist/astro-language.d.ts",
+      "dist/data-check.d.ts",
       "dist/failed-module-stub.d.ts",
       "dist/host-policy-diagnostics.d.ts",
       "dist/index.cjs",

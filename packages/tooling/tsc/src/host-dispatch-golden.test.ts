@@ -123,6 +123,12 @@ const ROWS = [
   "target-data",
   "target-unknown-host",
   "tags-hosts-target",
+  // mx-tsc checks a data package (decision 131, addendum 4). The tool legs
+  // keep the staged error (TODO data-target-tooling-dispatch); the row's
+  // `mxTscDataCheck` is `mx-tsc -p <row>` run on its own, where the data
+  // check answers. The shared program's `mxTsc` leg is still the staged
+  // error, since a program that spans packages is not a data project.
+  "data-check",
   // Registration PR 7 (§6.2): a package specifier under mx.target / mx.host
   // loads a third-party target. Additive rows. Each target is a local
   // `./target.cjs` re-exporting the shared fake package of
@@ -398,6 +404,17 @@ function splitByRow(output: string): Pick<TscRun, "byRow" | "unattributed"> {
 
 let tsc: TscRun;
 
+/** `mx-tsc -p <row>` alone: for a data package it is the data check, not a program. */
+function dataCheckLeg(row: string): { status: number; output: string[] } {
+  const run = runInProcess(["-p", join(root, row)], here);
+  return {
+    status: run.status,
+    output: String(normalise(`${run.stdout}\n${run.stderr}`))
+      .split("\n")
+      .filter((line) => line !== ""),
+  };
+}
+
 beforeAll(() => {
   const result = runInProcess(
     [
@@ -473,6 +490,7 @@ describe("dispatch goldens", () => {
         // bad-package-json: the host-policy warning only (see its leg above).
         (block) => row !== "bad-package-json" || block.includes("TS80003"),
       ),
+      ...(row === "data-check" ? { mxTscDataCheck: dataCheckLeg(row) } : {}),
     });
     await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(
       join(goldens, `${row}.json`),

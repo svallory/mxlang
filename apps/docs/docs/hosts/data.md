@@ -9,13 +9,15 @@ The **data target** (`@mxlang/data`) reads a `.mx` file as **data**, not UI. `pa
 
 It is a **target**, not a host: it has no framework behind it ([Core and hosts](/architecture/core-and-hosts/)). The normative description is [specification §13.7](/specification/#137-the-data-target).
 
-## Status: use `parseData`, not the tools
+## Status: `mx-tsc` checks, the editor does not yet
 
-Editor and build integration for data files is deferred (TODO `data-target-tooling-dispatch`). Today:
+`mx-tsc` checks a data package. The editor tools do not (TODO `data-target-tooling-dispatch`):
 
-- The language server, the TypeScript plugin, `mx-tsc`, Vite and the Bun loader do **not** compile data files.
-- `mx.target: "data"` in a `package.json` is a positioned error: `mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
-- `parseData` from `@mxlang/data` works on its own and is the supported entry point.
+- **`mx-tsc`** runs the check described [below](#check-a-package-with-mx-tsc). It is the tool for agents and CI.
+- The language server, the TypeScript plugin, Vite and the Bun loader do **not** compile data files. For them `mx.target: "data"` in a `package.json` is still a positioned error: `mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
+- `parseData` from `@mxlang/data` works on its own and is the supported entry point for a program.
+
+The split is deliberate: `mx-tsc` is one command with a printed result, while editor support needs positions, hover and completion for a tree that is not UI, which is still being thought through.
 
 `@mxlang/data` is a private workspace package that ships TypeScript source.
 
@@ -42,6 +44,28 @@ resource="post" table="posts"
 ```
 
 `tree.children[0]` is the `resource` tag. Its `attrs` hold a `value` attribute (the default `="post"`) and `table`; its `children` hold `attributes` and `actions`, each with a `span` that slices the authored text.
+
+## Check a package with `mx-tsc`
+
+```sh
+mx-tsc            # from the package directory
+mx-tsc -p <dir>   # or name it
+```
+
+One command, no tsconfig. When the package's policy resolves to `data` (`mx.target: "data"` in its `package.json`, or `@mxlang/data` as the only target package in its dependencies), `mx-tsc` does not build a TypeScript program. It parses every `.mx` file under the package that the policy assigns to `data` with `parseData`, in path order, and prints each diagnostic in the compact positioned shape it uses for host files:
+
+```text
+unknown-tag.mx(1,1): error TS80001: `<servce>` is not a known tag: it has no contract in `customTags`; did you mean `<service>`?
+violation.mx(1,1): error TS80001: `<service>`: missing required attribute `value`
+```
+
+Positions are 1-based line and column. The exit code is 1 when anything is an error and 0 otherwise. A clean package prints nothing.
+
+- **The tag map** is the one the other tools scan: `tags/` sidecars and `mx.contracts` (see [Writing a dialect package](/custom-tags/dialect-package/)). A problem in the scan or in `package.json` is printed against the `package.json` (`TS80003`).
+- **Defaults are strict.** `structural` and `unknownTags` both default to `"reject"` here, because an agent wants a typo or an `<if>` to fail the run. Loosen either in `package.json`: `{ "mx": { "data": { "structural": "pass", "unknownTags": "allow" } } }`. The `parseData` library API keeps its own defaults (`"pass"` and `"allow"`); only `mx-tsc` reads `mx.data`. An invalid value is an error at the value, and the strict default applies.
+- **Which files.** Every `*.mx` under the directory, skipping `node_modules` and dot directories, whose nearest `package.json` resolves to `data` (a nested package for another target is left out). Other file types, including `.ts`, are not checked: use `tsc` for those.
+- **Only plain runs.** `-p`/`--project` (a directory or a tsconfig path), `--pretty` and `--noEmit` are understood. Anything else (`-b`, `-w`, `--version`, a file list) is a normal `tsc` run, and a data package under it still gets the staged error above.
+- A `tsc` program that spans several packages is not a data project: a data package inside it still gets the staged error. Run `mx-tsc` in the data package.
 
 ## The tree
 

@@ -229,6 +229,17 @@ export function resolveTargetPolicy(filePath: string): TargetPolicy {
   return resolveTargetPolicyDetailed(filePath).policy;
 }
 
+/** Options of {@link resolveTargetPolicyDetailed}; every default is the staged behavior. */
+export interface ResolveTargetPolicyOptions {
+  /**
+   * The caller compiles `data` itself (`mx-tsc`, through `checkDataPackage`):
+   * answer with the real policy, `data` included, instead of the positioned
+   * "not wired yet" error and the `html` fallback the editor tools, Vite and
+   * the Bun loader still get (TODO `data-target-tooling-dispatch`).
+   */
+  dataWired?: boolean;
+}
+
 /**
  * `resolveTargetPolicyDetailed` over the built-in set: the same policy plus
  * whatever the walk had to say (an unknown `mx.host`, a malformed
@@ -236,8 +247,13 @@ export function resolveTargetPolicy(filePath: string): TargetPolicy {
  */
 export function resolveTargetPolicyDetailed(
   filePath: string,
+  options: ResolveTargetPolicyOptions = {},
 ): TargetPolicyResolution {
   const lookup = builtinLookup();
+  // A tool that checks data files itself asks for the unmasked answer: the
+  // registry's staged error and fallback stay the default for every other tool.
+  if (options.dataWired)
+    return coreResolveTargetPolicyDetailed(filePath, lookup);
   // Decision 131 addendum: explicit data is not yet wired into tooling.
   // Mask selection and suggestions, not registration or package inference,
   // so core's generic unknown-target path positions it and hands on the

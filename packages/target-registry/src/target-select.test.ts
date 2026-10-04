@@ -100,3 +100,24 @@ it("legacy agreement remains silent; disagreement keeps the explicit target", ()
     diagnostics: [{ code: "target-host-mismatch", severity: "error" }],
   });
 });
+
+it.each([{}, { "@mxlang/solid": "1" }])(
+  "dataWired answers the real data policy; the default stays staged (%j)",
+  (deps) => {
+    const file = project({ target: "data" }, deps);
+    expect(resolveTargetPolicyDetailed(file, { dataWired: true })).toEqual({
+      policy: { target: "data", host: undefined },
+      diagnostics: [],
+    });
+    // The option is opt-in: the same call without it is still the staged error.
+    expect(resolveTargetPolicyDetailed(file).diagnostics).toHaveLength(1);
+  },
+);
+
+it("dataWired also resolves a dependency-inferred data package (rule 5)", () => {
+  const file = project(undefined, { "@mxlang/data": "*" });
+  expect(resolveTargetPolicyDetailed(file).policy.target).toBe("html");
+  expect(
+    resolveTargetPolicyDetailed(file, { dataWired: true }).policy.target,
+  ).toBe("data");
+});

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (data-cli, decision 131 addendum 4):** `resolveTargetPolicyDetailed(file, { dataWired: true })` answers with the real policy, `data` included, instead of the staged error and `html` fallback (the default for every other caller is unchanged), and the subpath `@mxlang/target-registry/data-check` exports `checkDataPackage(dir)` and `isDataProject(dir)`: `mx-tsc`'s data check, in a module of its own so importing the registry stays light.
+
 - **Added (third-party-target, registration PR 7):** `lookupFor(policy)` (the built-in lookup, plus the descriptor a package specifier under `mx.target` / `mx.host` loaded; cached per descriptor, so its identity is stable) and `descriptorFor(policy)`. The `scanCached` / `getCustomTags` wrappers take an optional `targets` lookup, so a loaded host's name is a valid `mx.tags[].hosts` value. Tools use these in place of `builtinLookup()` wherever a project's policy is in hand.
 
 - **Added (target-select, decisions 129/132 and decision 131 addendum):**

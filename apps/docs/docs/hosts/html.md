@@ -18,10 +18,10 @@ target beats dependency inference, and combining it with `mx.host: "solid"`
 is a positioned `target-host-mismatch` error (decisions 129/132;
 [spec §13.5](/specification/#135-host-and-target-selection)).
 
-The other hostless target, `data`, is not wired into editor/build dispatch yet:
-explicit `mx.target: "data"` errors at its value and names
-`TODO data-target-tooling-dispatch`. Call `parseData` from `@mxlang/data` instead
-(decision 131 addendum).
+The other hostless target, `data`, is checked by `mx-tsc` but not wired into the
+editor tools or Vite yet: explicit `mx.target: "data"` errors at its value there
+and names `TODO data-target-tooling-dispatch`. See [the data target](/hosts/data/)
+(decision 131 addenda).
 
 ## Attribute-tag values
 
