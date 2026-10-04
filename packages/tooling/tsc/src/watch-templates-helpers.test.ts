@@ -7,7 +7,133 @@ import {
   resolveBuildProjects,
 } from "./build-templates.ts";
 import { fixtures, here } from "./test-support.ts";
-import { recountWatchSummary } from "./watch-templates.ts";
+import {
+  installWatchTemplatePass,
+  MISSED_REBUILD,
+  rebuildActivity,
+  recountWatchSummary,
+} from "./watch-templates.ts";
+
+describe("the missed-rebuild notice", () => {
+  // tsc writes a rebuild's diagnostics and its summary in one tick, so the
+  // notice is decided after that tick: a diagnostic (or `--listFiles` text, or
+  // `--extendedDiagnostics`) written before the summary is not a miss.
+  const tick = () =>
+    new Promise<void>((resolve) =>
+      setImmediate(() => setImmediate(() => resolve())),
+    );
+
+  /** The pass installed over stub streams; what it wrote and how often it ran. */
+  function install() {
+    const stdout = process.stdout.write;
+    const stderr = process.stderr.write;
+    let notices = "";
+    let passes = 0;
+    try {
+      process.stderr.write = ((chunk: string | Uint8Array) => {
+        notices += typeof chunk === "string" ? chunk : "";
+        return true;
+      }) as typeof process.stderr.write;
+      installWatchTemplatePass({
+        argv: [],
+        cwd: here,
+        build: false,
+        programs: [],
+        report: () => {
+          passes += 1;
+          return 0;
+        },
+      });
+    } finally {
+      // Only the streams the pass writes to are restored by the caller; the
+      // pass's own stdout interceptor is put back below.
+    }
+    return {
+      notices: () => notices,
+      passes: () => passes,
+      restore: () => {
+        process.stdout.write = stdout;
+        process.stderr.write = stderr;
+      },
+    };
+  }
+
+  it("stays quiet for a rebuild whose diagnostics precede an English summary", async () => {
+    const stub = install();
+    try {
+      const host = { getSourceFile: (..._args: unknown[]) => ({}) };
+      rebuildActivity(host);
+      host.getSourceFile("src/other.ts");
+      process.stdout.write(
+        "src/other.ts(1,14): error TS2322: Type 'number' is not assignable to type 'string'.\n",
+      );
+      process.stdout.write(
+        "\n10:42:50 PM - Found 1 error. Watching for file changes.\n\n",
+      );
+      await tick();
+      expect(stub.passes()).toBe(1);
+      expect(stub.notices()).toBe("");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("stays quiet when a rebuild writes non-summary text (`--listFiles`, `--extendedDiagnostics`) and then its summary", async () => {
+    const stub = install();
+    try {
+      const host = { getSourceFile: (..._args: unknown[]) => ({}) };
+      rebuildActivity(host);
+      host.getSourceFile("src/other.ts");
+      process.stdout.write("/a/src/other.ts\n/b/node_modules/index.d.ts\n");
+      process.stdout.write(
+        "\n10:42:50 PM - Found 0 errors. Watching for file changes.\n\n",
+      );
+      await tick();
+      expect(stub.passes()).toBe(1);
+      expect(stub.notices()).toBe("");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("says so when a rebuild's tick ends with no summary it recognizes", async () => {
+    const stub = install();
+    try {
+      const host = { getSourceFile: (..._args: unknown[]) => ({}) };
+      rebuildActivity(host);
+      host.getSourceFile("src/other.ts");
+      process.stdout.write(
+        "12:05:14 AM - 0 Fehler gefunden. Es wird auf Dateiänderungen überwacht.\n",
+      );
+      await tick();
+      expect(stub.passes()).toBe(0);
+      expect(stub.notices()).toBe(MISSED_REBUILD);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("says so once per rebuild, and stays quiet again after a summary", async () => {
+    const stub = install();
+    try {
+      const host = { getSourceFile: (..._args: unknown[]) => ({}) };
+      rebuildActivity(host);
+      host.getSourceFile("src/other.ts");
+      await tick();
+      expect(stub.notices()).toBe(MISSED_REBUILD);
+      // The next rebuild ends in a summary: quiet, and the pass runs again.
+      host.getSourceFile("src/other.ts");
+      process.stdout.write(
+        "\n10:42:50 PM - Found 0 errors. Watching for file changes.\n\n",
+      );
+      await tick();
+      expect(stub.passes()).toBe(1);
+      expect(stub.notices()).toBe(MISSED_REBUILD);
+    } finally {
+      stub.restore();
+    }
+  });
+});
 
 describe("recountWatchSummary", () => {
   it("raises the count of tsc's own summary, keeping its timestamp and newlines", () => {

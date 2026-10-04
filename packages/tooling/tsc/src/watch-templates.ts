@@ -95,12 +95,15 @@ const EMPTY: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
  * (`getSourceFileByPath` is removed in watch mode, so that is the path every
  * rebuild takes — see `virtualFilesInWatchRebuilds`).
  *
- * Marked here, acted on in the interceptor: a write that follows such a rebuild
- * and is not a summary it recognizes means this pass did not run for it, which
- * is said out loud rather than passed over.
+ * Marked here, acted on in the interceptor, and decided one tick later: tsc
+ * writes a rebuild's diagnostics *and* its summary synchronously, so the first
+ * non-summary write after a rebuild is usually just a diagnostic, not the end
+ * of it. In `setImmediate` — after that whole tick — a rebuild still marked
+ * means no summary was recognized in it, which is a missed rebuild: said out
+ * loud, once per rebuild, rather than passed over in silence.
  */
 let rebuilding = false;
-let reportedMiss = false;
+let deciding = false;
 
 export function rebuildActivity(
   host: { getSourceFile?: unknown } | undefined,
@@ -109,7 +112,16 @@ export function rebuildActivity(
   if (typeof getSourceFile !== "function" || !host) return;
   host.getSourceFile = (...args: unknown[]) => {
     rebuilding = true;
-    reportedMiss = false;
+    if (!deciding) {
+      deciding = true;
+      setImmediate(() => {
+        deciding = false;
+        // A recognized summary cleared the mark: the pass ran for this rebuild.
+        if (!rebuilding) return;
+        rebuilding = false;
+        process.stderr.write(MISSED_REBUILD);
+      });
+    }
     return (getSourceFile as (...a: unknown[]) => unknown)(...args);
   };
 }
@@ -172,16 +184,10 @@ export function installWatchTemplatePass(
     const text = typeof chunk === "string" ? chunk : undefined;
     const summary = text === undefined ? null : WATCH_SUMMARY.exec(text);
     const passThrough = () => write(chunk, ...writeArgs);
-    // Any other write after a rebuild read files, with no summary this pass
-    // recognized (a localized `tsc --locale`): say the templates went
-    // unchecked, once per rebuild, instead of passing over it in silence.
-    if (!summary || text === undefined || busy) {
-      if (!busy && rebuilding && !reportedMiss) {
-        reportedMiss = true;
-        process.stderr.write(MISSED_REBUILD);
-      }
-      return passThrough();
-    }
+    // Not the summary, or a nested run of ours: tsc's own output, untouched.
+    // A rebuild whose summary is not this text (a localized `tsc --locale`) is
+    // not decided here — see `rebuildActivity`, which decides in the next tick.
+    if (!summary || text === undefined || busy) return passThrough();
     busy = true;
     try {
       const errors = options.report(checkWatchTemplates(options));
@@ -215,15 +221,18 @@ export function checkWatchTemplates(
 ): NgDiagnosticsResult {
   if (!options.build) {
     const program = options.programs.at(-1);
+    if (!program) return EMPTY;
+    // Pruned before the empty return below: a project whose newest program
+    // holds no `.ng.mx` must not leave every older program behind.
+    prunePrograms(options, [program]);
     const entries = [
       ...new Map(
-        (program?.getCompiledNgMx() ?? []).map(
-          (entry) => [entry.fileName, entry] as const,
-        ),
+        program
+          .getCompiledNgMx()
+          .map((entry) => [entry.fileName, entry] as const),
       ).values(),
     ];
     if (entries.length === 0) return EMPTY;
-    prunePrograms(options, [program as NgProgram]);
     // One program, so one tsconfig: the same resolution the non-watch path
     // uses, never a guess at which project owns what.
     return checkNgMxProjects(entries, options.argv, options.cwd);

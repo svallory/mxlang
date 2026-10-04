@@ -292,6 +292,64 @@ it(
 );
 
 it(
+  "mx-tsc -w says nothing about missed rebuilds on an English run with ordinary TypeScript errors",
+  async () => {
+    const dir = join(tmpdir(), "mx-tsc-watch-ngmx-ts-error");
+    let watcher: Watcher | undefined;
+    try {
+      cpSync(join(fixtures, "ng-diag-failing"), dir, { recursive: true });
+      symlinkSync(join(here, "..", "node_modules"), join(dir, "node_modules"));
+      const file = join(dir, "src", "x.component.ng.mx");
+      const clean = readFileSync(file, "utf8").replace(
+        `user.${BROKEN}`,
+        "user.name",
+      );
+      writeFileSync(file, clean);
+      // An ordinary TypeScript error, present from the start: tsc writes it as
+      // its own write before the summary of every rebuild, which is what a
+      // notice decided on the first non-summary write would mistake for a
+      // rebuild whose templates went unchecked.
+      const other = join(dir, "src", "other.ts");
+      writeFileSync(other, "export const n: string = 1;\n");
+
+      watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"], englishSummary);
+      const TS_ERROR = "src/other.ts(1,14): error TS2322";
+      const cycles: string[] = [];
+      // The initial build has the TypeScript error and a clean template.
+      const initial = await watcher.untilSummary();
+      expect(initial).toContain(TS_ERROR);
+      expect(initial).toContain("Found 1 error. Watching for file changes.");
+      cycles.push(initial);
+
+      // Broken template as well: both are reported, and the count carries both.
+      writeFileSync(file, clean.replace("user.name", `user.${BROKEN}`));
+      const both = await watcher.untilSummary(file);
+      expect(both).toContain(TS_ERROR);
+      expect(
+        both.split("\n").filter((line) => line.includes("error TS")),
+      ).toHaveLength(2);
+      expect(both).toContain("Found 2 errors. Watching for file changes.");
+      cycles.push(both);
+
+      // Template fixed again: back to the TypeScript error alone.
+      writeFileSync(file, clean);
+      const fixed = await watcher.untilSummary(file);
+      expect(fixed).toContain(TS_ERROR);
+      expect(fixed).toContain("Found 1 error. Watching for file changes.");
+      cycles.push(fixed);
+
+      // Every one of those rebuilds checked the templates; the notice would be
+      // wrong, and worse than noise to an agent reading the output.
+      for (const cycle of cycles) expect(cycle).not.toContain(MISSED_REBUILD);
+    } finally {
+      await watcher?.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  CASE_TIMEOUT_MS,
+);
+
+it(
   "mx-tsc -w says so when a localized tsc's rebuild summary is not the one the pass reads",
   async () => {
     const dir = join(tmpdir(), "mx-tsc-watch-ngmx-locale");
@@ -314,10 +372,18 @@ it(
         ["-w", "-p", "tsconfig.json", "--locale", "de"],
         (output) => /Fehler gefunden/.test(output),
       );
-      expect(await watcher.untilSummary()).toContain(MISSED_REBUILD);
+      // The notice is decided in the tick *after* the rebuild (see
+      // `rebuildActivity`), so it is read from the whole output, once the
+      // watcher has had that tick.
+      const noticeShown = async () => {
+        await watcher?.untilSummary();
+        await delay(1_000);
+        expect(watcher?.output()).toContain(MISSED_REBUILD);
+      };
+      await noticeShown();
 
       writeFileSync(file, clean.replace("user.name", `user.${BROKEN}`));
-      expect(await watcher.untilSummary(file)).toContain(MISSED_REBUILD);
+      await noticeShown();
     } finally {
       await watcher?.stop();
       rmSync(dir, { recursive: true, force: true });
