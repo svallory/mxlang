@@ -6,8 +6,9 @@
     // plugin external). The plugin resolves from its src here, so no
     // typecheck path needs a prebuilt (or fresh) plugin dist; the plugin's
     // published `types` still points at dist. `rootDir` covers the plugin's
-    // src and the private host src it imports (TS6059 otherwise).
-    "rootDir": "../..",
+    // src and the private host src it imports (TS6059 otherwise), and the
+    // shared fake target packages under /test-fixtures.
+    "rootDir": "../../..",
     "paths": {
       "@mxlang/typescript-plugin": ["../typescript-plugin/src/index.ts"]
     },

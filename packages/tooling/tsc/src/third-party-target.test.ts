@@ -209,7 +209,7 @@ describe.each(FAILURES)("$name: $code", ({ name, code, at, message }) => {
     expect(policy.target).toBe("html");
     expect(reported).toHaveLength(1);
     expect(reported[0]).toMatchObject({ severity: 1, source: "mxlang" });
-    expect(norm(reported[0]?.message ?? "")).toBe(
+    expect(norm(String(reported[0]?.message ?? ""))).toBe(
       `<ws>/${name}/package.json:${line}:${column}: ${message}`,
     );
     const range = {
