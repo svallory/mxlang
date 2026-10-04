@@ -33,6 +33,7 @@ import {
 import {
   installWatchTemplatePass,
   rebuildActivity,
+  reportMissedRebuildIfMarked,
 } from "./watch-templates.ts";
 
 /**
@@ -502,6 +503,14 @@ function runMxTscChecks(): number {
     ngPlugins,
     watchMode,
   );
+  // The first watch build is complete: its summary went out before
+  // `executeCommandLine` returned, and a recognized one already ran the pass
+  // (`watchPass.ran`). A rebuild mark still set was never cleared by a
+  // recognized summary, so decide it now — synchronously, before the
+  // fallback template pass below monopolizes this thread and delays the
+  // notice past anyone's patience (a loaded CI machine stretches it past the
+  // fixed grace this output is read with).
+  if (watchMode && watchPass && !watchPass.ran) reportMissedRebuildIfMarked();
   // A watch run re-runs the pass from inside each rebuild; when it printed no
   // summary at all, nothing below ran either and this is its one pass.
   const watchRan = watchPass?.ran === true;

@@ -29,7 +29,10 @@
  * would mean rewriting `_tsc.js` on disk. So a rebuild whose summary is not
  * recognized is reported instead of skipped: {@link rebuildActivity} marks that
  * a rebuild read files, and a write after that with no recognized summary says
- * so out loud, once per rebuild. Never silently.
+ * so out loud, once per rebuild. The first build is decided by
+ * {@link reportMissedRebuildIfMarked}, synchronously, the moment it is known
+ * complete; later rebuilds are decided one tick after their last file read.
+ * Never silently.
  */
 
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
@@ -104,6 +107,24 @@ const EMPTY: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
  */
 let rebuilding = false;
 let deciding = false;
+
+/**
+ * Decides a missed rebuild synchronously, without waiting for the event-loop
+ * turn {@link rebuildActivity}'s `setImmediate` waits for. `runMxTscChecks`
+ * calls this once, right after the first watch build returned and before it
+ * runs anything else: that build's summary was already written (a recognized
+ * one cleared the mark and set `ran`), so a mark still set here means the
+ * first build's summary was not recognized. Deciding now, not one tick from
+ * now, matters because the next thing this thread does is the fallback
+ * template pass, synchronous and seconds long on a loaded machine — the
+ * notice must not wait behind it, and the pending `setImmediate` finds the
+ * mark cleared and stays quiet, so the rebuild is still reported once.
+ */
+export function reportMissedRebuildIfMarked(): void {
+  if (!rebuilding) return;
+  rebuilding = false;
+  process.stderr.write(MISSED_REBUILD);
+}
 
 export function rebuildActivity(
   host: { getSourceFile?: unknown } | undefined,
