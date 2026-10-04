@@ -598,6 +598,14 @@ function emitAttrs(
   onHandler?: () => string,
 ): void {
   for (const attr of attrs) {
+    // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
+    // not accept an empty namespace suffix. Never emit an unparseable tag.
+    if (attr.kind !== "spread" && attr.name.endsWith(":")) {
+      fail(
+        `attribute \`${attr.name}\` has an empty namespace suffix that Angular templates cannot express`,
+        attr,
+      );
+    }
     // Every case but `spread` (which fails) opens with one space, so the
     // attribute's generated extent starts one past `before`.
     const before = out.length;

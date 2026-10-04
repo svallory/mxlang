@@ -1,3 +1,4 @@
+import { parseTemplate } from "@angular/compiler";
 import { describe, expect, it } from "vitest";
 import { emit } from "./helpers.ts";
 
@@ -43,6 +44,32 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
       `<div value:foo="lit">`,
     );
   });
+
+  it.each([
+    ["<div :/>", 1, 5],
+    ["<div\n  :/>", 2, 2],
+  ])(
+    "rejects an empty namespace suffix at the authored name: %s",
+    (source, line, column) => {
+      expect(() => emit(source, "x.ng.mx")).toThrow(
+        expect.objectContaining({
+          message:
+            "attribute `value:` has an empty namespace suffix that Angular templates cannot express",
+          line,
+          column,
+        }),
+      );
+    },
+  );
+
+  it.each(['<div value:foo:bar="y"/>', "<div value:foo:bar=y/>"])(
+    "emits a multi-colon name that Angular's own parser accepts: %s",
+    (source) => {
+      const template = emit(source, "x.ng.mx");
+      expect(template).toContain("value:foo:bar");
+      expect(parseTemplate(template, "x.html").errors).toBeNull();
+    },
+  );
 
   it("still refuses a real modifier, in this host's words", () => {
     expect(() => emit(`<div class:active="x"/>`, "x.ng.mx")).toThrow(

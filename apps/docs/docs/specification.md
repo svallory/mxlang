@@ -536,7 +536,11 @@ already contain colons: `<div value:foo:bar="y"/>` splits into the head
 `value:foo` and modifier `bar`, then emits the complete name `value:foo:bar`.
 JSX cannot spell an empty namespace suffix or multiple colons as an attribute;
 preact/react/hono and Solid carry these names through string-keyed object
-spreads instead, without changing the prop name or value.
+spreads instead, without changing the prop name or value. Angular's template
+parser cannot tokenize a literal attribute with an empty namespace suffix;
+`<div :/>` therefore gives a positioned error at the authored `:` on Angular
+(structured line 1, column 5), rather than emitting an unparseable template.
+Explicit multi-colon names such as `value:foo:bar` remain supported there.
 
 Arguments on these ordinary attributes are rejected at the authored name:
 `<div :foo()="y"/>` reports `Unsupported arguments on the \`value:foo\` attribute.`
