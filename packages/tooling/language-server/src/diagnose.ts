@@ -417,7 +417,10 @@ export function diagnoseDocument(
       // location lives only in the frame's `at` line. Name it, and link it.
       const callee = at && !position.file ? at : undefined;
       const message = callee
-        ? `${split.message} (in ${callee.file}:${callee.line}:${callee.column})`
+        ? // 1-based already: this column is read out of Marko's own
+          // `at <path>:L:C` frame header, and the related-information range
+          // below subtracts 1 to reach an LSP (0-based) character.
+          `${split.message} (in ${callee.file}:${callee.line}:${callee.column})`
         : split.message;
       const diagnostic: Diagnostic = {
         severity: DiagnosticSeverity.Error,

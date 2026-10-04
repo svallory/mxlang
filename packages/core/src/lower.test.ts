@@ -885,10 +885,12 @@ describe("one fixture per IR kind", () => {
         lowerSource(
           "<Panel><@y/></Panel>",
           v2(),
-          invalidInput([["<parse>", "Unexpected token (1:0)"]]),
+          invalidInput([["<parse>", "Unexpected token (1:1)"]]),
         ),
       ).toThrowError(
-        "can't read `<Panel>`'s Input (callee.ts:1:1): Unexpected token",
+        // The named position is 1-based (ruling #227), like `mx-tsc`'s
+        // `file(line,column)`: a span at offset 1 of line 1 is column 2.
+        "can't read `<Panel>`'s Input (callee.ts:1:2): Unexpected token",
       );
     });
 

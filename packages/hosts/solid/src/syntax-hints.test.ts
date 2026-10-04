@@ -36,7 +36,7 @@ function message(source: string): string {
 describe("event binding syntax (solid)", () => {
   it("s10: names the Marko handler attribute", () => {
     expect(message(file('<button (click)="go()">x</button>'))).toBe(
-      "tag arguments `(...)` on `<button>` are not supported in a standalone template; for an event handler write `onClick=go` (3:4)",
+      "tag arguments `(...)` on `<button>` are not supported in a standalone template; for an event handler write `onClick=go`",
     );
   });
 
@@ -62,7 +62,7 @@ describe("scriptlets (solid)", () => {
       expect(
         message(file(`<div>\n      $ ${keyword} y = 1;\n    </div>`)),
       ).toBe(
-        `scriptlets (\`$ statement\`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (\`${keyword} y = …;\`) (4:6)`,
+        `scriptlets (\`$ statement\`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (\`${keyword} y = …;\`)`,
       );
       expect(() =>
         compileFile(`${keyword} y = 1;\ny = 2;\n${file(`<p>\${y}</p>`)}`),
@@ -72,7 +72,7 @@ describe("scriptlets (solid)", () => {
 
   it("s07: says what to write instead", () => {
     expect(message(file("<div>\n      $ const y = ;\n    </div>"))).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (`const y = …;`) (4:6)",
+      "scriptlets (`$ statement`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (`const y = …;`)",
     );
   });
 });

@@ -34,7 +34,37 @@ describe("mxRegionCompile error positioning (Bun runtime)", () => {
   // meaning that if the fixture were ever edited.
   const REGION_LINE = 3; // 1-based; `lines[2]`
   const REGION_COLUMN = REGION_LINE_TEXT.indexOf("<"); // 0-based
-  const AT_REGION = `(${REGION_LINE}:${REGION_COLUMN})`;
+
+  /**
+   * The raised error's text plus its structured position. The text no longer
+   * repeats the position — a printed position is 1-based (ruling #227) and
+   * this one lives on `loc` — so the position is asserted where it is
+   * authoritative, which is exactly what this file is about.
+   */
+  function caughtAt(run: () => unknown): {
+    message: string;
+    line: number;
+    column: number;
+  } {
+    try {
+      run();
+    } catch (error) {
+      const e = error as Error & {
+        loc?: { line: number; column: number };
+      };
+      if (e.loc) {
+        expect(error instanceof Error ? error.message : "").not.toMatch(
+          /\s*\(\d+:\d+\)\s*$/,
+        );
+        return {
+          message: error instanceof Error ? error.message : String(error),
+          line: e.loc.line,
+          column: e.loc.column,
+        };
+      }
+    }
+    throw new Error("expected a positioned MX error");
+  }
 
   it("gives every plain Error own line/column here, unlike V8", () => {
     // The premise the rest of this file rests on. If a future Bun stops
@@ -49,23 +79,29 @@ describe("mxRegionCompile error positioning (Bun runtime)", () => {
   });
 
   it("positions a host's plain Error at the region, not its own throw site", () => {
-    expect(() =>
+    const raised = caughtAt(() =>
       parse(source, "x.solid.mx", {
         mxRegionCompile: () => {
           throw new Error("plain failure");
         },
       }),
-    ).toThrow(`plain failure ${AT_REGION}`);
+    );
+    expect(raised.message).toBe("plain failure");
+    expect(raised.line).toBe(REGION_LINE);
+    expect(raised.column).toBe(REGION_COLUMN);
   });
 
   it("positions a thrown non-Error at the region too", () => {
-    expect(() =>
+    const raised = caughtAt(() =>
       parse(source, "x.solid.mx", {
         mxRegionCompile: () => {
           throw "a string";
         },
       }),
-    ).toThrow(`a string ${AT_REGION}`);
+    );
+    expect(raised.message).toBe("a string");
+    expect(raised.line).toBe(REGION_LINE);
+    expect(raised.column).toBe(REGION_COLUMN);
   });
 
   it("still honours a TranslateError's own file-absolute coordinates", () => {
@@ -82,12 +118,15 @@ describe("mxRegionCompile error positioning (Bun runtime)", () => {
       }
     }
 
-    expect(() =>
+    const raised = caughtAt(() =>
       parse(source, "x.solid.mx", {
         mxRegionCompile: () => {
           throw new TranslateError("elsewhere", 5, 2);
         },
       }),
-    ).toThrow(/elsewhere \(5:2\)/);
+    );
+    expect(raised.message).toBe("elsewhere");
+    expect(raised.line).toBe(5);
+    expect(raised.column).toBe(2);
   });
 });

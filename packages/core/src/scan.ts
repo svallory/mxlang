@@ -64,6 +64,7 @@ import {
   positionOfOffset,
   readPackageJsonCached,
 } from "./package-json.ts";
+import { dropOwnParserPosition } from "./parse-error-position.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import type { TemplateTag } from "./template-tag.ts";
 
@@ -650,7 +651,7 @@ export function readParseOptions(
     const loc = (cause as { loc?: { line?: number; column?: number } }).loc;
     failIn(
       file,
-      `could not be parsed: ${(cause as Error).message}`,
+      `could not be parsed: ${dropOwnParserPosition(cause, (cause as Error).message)}`,
       loc?.line ?? 1,
       loc?.column ?? 0,
     );

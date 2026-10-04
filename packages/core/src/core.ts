@@ -524,7 +524,9 @@ export function warn(ctx: Ctx, warning: MxWarning): void {
     return;
   }
   const where = warning.file ? `${warning.file}:` : "";
-  console.warn(`${where}${warning.line}:${warning.column}: ${warning.message}`);
+  console.warn(
+    `${where}${warning.line}:${warning.column + 1}: ${warning.message}`,
+  );
 }
 
 export function fail(message: string, node: Node, file?: string): never {

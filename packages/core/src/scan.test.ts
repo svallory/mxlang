@@ -1063,7 +1063,10 @@ describe("readParseOptions", () => {
       error = cause;
     }
     expect(error).toBeInstanceOf(TranslateError);
-    expect((error as Error).message).toContain("could not be parsed");
+    expect((error as Error).message).toBe(
+      "a.tag.ts: could not be parsed: Unexpected token",
+    );
+    expect(error).toMatchObject({ line: 1, column: 32 });
   });
 });
 

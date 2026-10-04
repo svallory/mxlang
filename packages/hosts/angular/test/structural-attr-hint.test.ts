@@ -21,6 +21,8 @@ import { compileMx } from "./helpers.ts";
 interface Positioned extends Error {
   line: number;
   column: number;
+  /** A parser error's own position; the text no longer repeats it. */
+  loc?: { line: number; column: number };
 }
 
 /**
@@ -239,7 +241,8 @@ describe("non-first structural attribute: .ng.mx region", () => {
     );
     expectHint(error.message, "*ngIf", "class");
     // Line 5 of the file; `  template: <div class="a" ` is 27 chars before `*`.
-    expect(error.message).toContain("(5:27)");
+    expect(error.message).not.toMatch(/\(\d+:\d+\)$/);
+    expect(error.loc).toMatchObject({ line: 5, column: 27 });
   });
 
   it("reports a later line for a multi-line tag", () => {
@@ -252,7 +255,8 @@ describe("non-first structural attribute: .ng.mx region", () => {
       ),
     );
     expectHint(error.message, "*ngFor", "class");
-    expect(error.message).toContain("(7:4)");
+    expect(error.message).not.toMatch(/\(\d+:\d+\)$/);
+    expect(error.loc).toMatchObject({ line: 7, column: 4 });
   });
 });
 
@@ -321,8 +325,9 @@ describe("what must not change", () => {
       compileNgMx(componentFile("<div a=1 +b=2>hi</div>"), "/p/x.ng.mx"),
     );
     expect(error.message).toBe(
-      "Invalid left-hand side in assignment expression. (5:19)",
+      "Invalid left-hand side in assignment expression.",
     );
+    expect(error.loc).toMatchObject({ line: 5, column: 19 });
   });
 });
 

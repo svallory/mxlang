@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Fix (zero-based-cols-in-message-text):** a diagnostic raised through the MX grammar no longer prints Babel's trailing 0-based ` (L:C)`. `Unexpected token (1:32)` becomes `Unexpected token` — the position is on the error's `loc` (1-based line, 0-based column), which every consumer already reads, so the text no longer carries a second, differently-based one. Every MX-raised error is affected: a host parse failure wrapped as `MxErrors.HostError`, the MX grammar's own rules (`An MX region has exactly one root element…`, `NestedFragment`, `Unterminated fragment`, `PositionRejected`, `MultipleRoots`) and Babel's own failures inside a `.solid.mx`/`.ng.mx` file. A message that quotes a *foreign* file's parser position (a wrapped callee's `(1:32)`) still keeps it: that position belongs to another file and nothing else records it.
+
+  The change is at MX's parse entry (`parse`), not in the vendored tree, so `parseBabel` stays byte-equivalent to npm `@babel/parser` — `src/vendored.test.ts` pins that, and a new case asserts an explicit `mx: false` parse and a plain `.ts` parse still carry upstream's `(2:14)`. Recovered errors (`errorRecovery`) are stripped too, not only thrown ones.
+
 - **Test fix (vite-plugin-colored-marko-header):** the tarball test's `bun pm pack --dry-run` parser strips VT control characters first; bun colourises the report (filename column included) under `FORCE_COLOR`, and the plain-text line regex then matched nothing.
 
 - **Fix (ng-mx-tag-import-in-decorator):** the statements `parse` synthesizes and splices into `program.body` (the hoisted tag imports, the `/var` `let`, the hoisted defines) no longer carry `start`/`end`/`loc`/`range`. They were parsed from a snippet of their own, so those were snippet offsets read as source positions: a host taking the last import's `end` inserted inside a decorator, and `print`'s source map put their tokens at (0, 0). The location is removed rather than repaired, as for a generated `satisfies` type; the printed code is unchanged.

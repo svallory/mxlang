@@ -844,6 +844,14 @@ function schemaFor(input: CalleeInput, owner: string): AttrSchema {
   return { open: true, owner };
 }
 
+/**
+ * A position inside a file, for the `file:line:column` a message names.
+ *
+ * `column` is **1-based**, because every position MX prints is, like
+ * `mx-tsc`'s `file(line,column)` and every editor's (ruling #227). The
+ * structured warning/error positions consumers read stay 0-based (Babel's
+ * base); only the text is converted, at the print site.
+ */
 function spanPosition(
   ctx: Ctx,
   span: { file?: string; sourceStart: number },
@@ -863,7 +871,7 @@ function spanPosition(
   return {
     file,
     line,
-    column: span.sourceStart - lastLine,
+    column: span.sourceStart - lastLine + 1,
   };
 }
 

@@ -2,6 +2,17 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: every printed position is 1-based (zero-based-cols-in-message-text)
+
+Ruling #227: a position MX **prints** — in a message's text as much as in a `file(line,column)` header — is 1-based line and column, the basis `mx-tsc` and every editor use. This completes the pass that started with the duplicate-attribute warning and the Angular build prefixes; the structured `line`/`column` on `MxWarning`, `ScanDiagnostic`, `TargetPolicyDiagnostic` and `TranslateError` are unchanged and stay 0-based (Babel's base), because every consumer subtracts one on the way to an LSP range.
+
+- `warn()`'s `console.warn` fallback printed `file:line:column` with the raw 0-based column (`test.mx:5:20`), one left of the position a build reports and an editor underlines. Now `test.mx:5:21`; the recorded `MxWarning` is untouched, so the language server, `mx-tsc` and every host's `warnings` list see the same value as before.
+- `spanPosition` (the `file:line:column` a callee's unreadable `Input` names) now returns a 1-based column, so the unreadable-`Input` message `... (card.mx:2:24): Unexpected token` points at the 24th character rather than the 23rd.
+- The `parseFragment` padding-contract errors (`assertBaseContract`, `positionRegionSource`) print their position 1-based too, clamped at column 1 rather than printing a negative one; `TranslateError.line`/`column` still carry the raw numbers.
+- `readParseOptions` drops Babel's trailing 0-based ` (L:C)` from the message it embeds (`could not be parsed: Unexpected token`), reusing `dropOwnParserPosition` — the same helper the TypeScript plugin and the language server already share, so a sidecar parse failure names one position instead of two.
+
+Tests: `src/warning-position.test.ts`, the padding-contract rows in `src/fragment.test.ts`, and the two `Input`-unreadable rows whose expected columns are corrected to the 1-based value they were always meant to be.
+
 ### Fixed: mutable scriptlet replacement advice (scriptlet-hint-let-var)
 
 Both the parse-error and lowering paths preserve the declared `const`/`let`/`var` keyword through `HostDeclarations.scriptletReplacement(name, keyword)`. The default suggests `<const>` only for `const`, and `<let>` for `let`/`var`; hosts that reject `<let>` override the advice or omit it by returning an empty string. Host choices remain outside core (decision 126); scriptlets are still rejected (decision 54). Lead ruling 2026-10-03 (question 37): the default says what Marko says (`<let>` is the mutable binding), so a host that cannot do `<let>` must override the hook (documented on `scriptletReplacement`); the `keyword` parameter is additive and no published host is affected.

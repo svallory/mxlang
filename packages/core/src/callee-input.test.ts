@@ -1695,6 +1695,8 @@ describe("readCalleeInput", () => {
   });
 
   it("compile reports a callee parse error with line and column", () => {
+    // 1-based column, like `mx-tsc`'s `file(line,column)` (ruling #227):
+    // the fixture's `;` on line 2 is the 24th character of that line.
     expect(() =>
       compileSource(
         'import Card from "./parse-error"\n<Card><@x/></Card>\n',
@@ -1703,7 +1705,7 @@ describe("readCalleeInput", () => {
         { targets: lookup, emitIr: () => "" },
       ),
     ).toThrowError(
-      `can't read \`<Card>\`'s Input (${fixture("parse-error.ts")}:2:23): Unexpected token`,
+      `can't read \`<Card>\`'s Input (${fixture("parse-error.ts")}:2:24): Unexpected token`,
     );
   });
 

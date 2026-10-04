@@ -23,16 +23,25 @@ import {
 } from "@mxlang/core";
 import type { DataDocument, SerializedDataDocument } from "./tree.ts";
 
+/** A stripped tree value: JSON-shaped data with every Babel node removed. */
+type Stripped =
+  | string
+  | number
+  | boolean
+  | null
+  | Stripped[]
+  | { [key: string]: Stripped };
+
 /** `DataExpr` is the only tree object with a `code` and a `shape`. */
-function isDataExpr(value: object): boolean {
+function isDataExpr(value: Record<string, unknown>): boolean {
   return "code" in value && "shape" in value && "node" in value;
 }
 
-function strip(value: unknown): unknown {
+function strip(value: unknown): Stripped {
   if (Array.isArray(value)) return value.map(strip);
-  if (value === null || typeof value !== "object") return value;
-  const drop = isDataExpr(value);
-  const out: Record<string, unknown> = {};
+  if (value === null || typeof value !== "object") return value as Stripped;
+  const drop = isDataExpr(value as Record<string, unknown>);
+  const out: Record<string, Stripped> = {};
   for (const [key, child] of Object.entries(value)) {
     if (drop && key === "node") continue;
     out[key] = strip(child);
@@ -44,7 +53,9 @@ function strip(value: unknown): unknown {
 export function serializeDataDocument(
   document: DataDocument,
 ): SerializedDataDocument {
-  return strip(document) as SerializedDataDocument;
+  // SAFETY: `strip` only removes `node` keys from tree objects; the remaining
+  // shape is `SerializedDataDocument` by `DataDocument`'s own definition.
+  return strip(document) as unknown as SerializedDataDocument;
 }
 
 /**
@@ -81,10 +92,12 @@ export function compileModule(
     // No sink: print what was raised, even when the parse then throws.
     if (!options.warnings) {
       for (const warning of warnings.slice(first)) {
-        // Core's `warn` format (`core.ts:466`); it needs a `Ctx`, so it is restated.
+        // Core's `warn` format (`core.ts`), restated because it needs a `Ctx`.
+        // Its printed column is 1-based, like `mx-tsc`'s `file(line,column)`
+        // (ruling #227); the structured `warning.column` stays 0-based.
         const where = warning.file ? `${warning.file}:` : "";
         console.warn(
-          `${where}${warning.line}:${warning.column}: ${warning.message}`,
+          `${where}${warning.line}:${warning.column + 1}: ${warning.message}`,
         );
       }
     }

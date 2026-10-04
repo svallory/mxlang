@@ -256,7 +256,7 @@ function assertBaseContract(base: FragmentBase, filename: string): void {
   const column = base.baseColumn ?? 0;
   const fail = (rule: string): never => {
     throw new TranslateError(
-      `parseFragment: broken padding contract in ${filename} at line ${line}, column ${column}: ${rule} ` +
+      `parseFragment: broken padding contract in ${filename} at line ${Math.max(1, line)}, column ${Math.max(1, column + 1)}: ${rule} ` +
         `(baseOffset: ${base.baseOffset}, baseLine: ${base.baseLine}, baseColumn: ${base.baseColumn})`,
       line,
       column,
@@ -341,7 +341,7 @@ export function positionRegionSource(
     throw new TranslateError(
       `parseFragment: broken padding contract in ${filename} at line ${
         at.baseLine + 1
-      }, column ${at.baseColumn}: baseOffset and baseColumn must be >= 0 before any wrapper is subtracted ` +
+      }, column ${Math.max(1, at.baseColumn + 1)}: baseOffset and baseColumn must be >= 0 before any wrapper is subtracted ` +
         `(baseOffset: ${at.baseOffset}, baseLine: ${at.baseLine}, baseColumn: ${at.baseColumn})`,
       at.baseLine + 1,
       at.baseColumn,

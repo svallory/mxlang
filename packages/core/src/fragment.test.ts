@@ -151,6 +151,39 @@ function caught(run: () => unknown): TranslateError {
 }
 
 describe("parseFragment validates the base numbers (padding contract)", () => {
+  it("prints a 1-based padding-contract position but keeps structured columns 0-based", () => {
+    const error = caught(() =>
+      parseFragment("<p/>", {
+        filename: "fragment.mx",
+        baseOffset: 7,
+        baseLine: 0,
+        baseColumn: 6,
+      }),
+    ) as TranslateError;
+    expect(error.message).toBe(
+      "parseFragment: broken padding contract in fragment.mx at line 1, column 7: baseOffset must equal baseColumn when baseLine is 0 (the fragment is on the file's first line) (baseOffset: 7, baseLine: 0, baseColumn: 6)",
+    );
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(6);
+  });
+
+  it("prints a 1-based position for a negative pre-wrapper offset", () => {
+    const error = caught(() =>
+      positionRegionSource(
+        "<p/>",
+        {
+          baseOffset: -1,
+          baseLine: 0,
+          baseColumn: -1,
+        },
+        { filename: "fragment.mx" },
+      ),
+    ) as TranslateError;
+    expect(error.message).toBe(
+      "parseFragment: broken padding contract in fragment.mx at line 1, column 1: baseOffset and baseColumn must be >= 0 before any wrapper is subtracted (baseOffset: -1, baseLine: 0, baseColumn: -1)",
+    );
+    expect(error.column).toBe(-1);
+  });
   for (const [label, run] of [
     ["parseFragment", parseFragment],
     ["parseFragmentNative", parseFragmentNative],
@@ -176,7 +209,7 @@ describe("parseFragment validates the base numbers (padding contract)", () => {
         expect(message).toContain(
           "baseOffset must be >= baseLine + baseColumn",
         );
-        expect(message).toContain("a.mx at line 4, column 4");
+        expect(message).toContain("a.mx at line 4, column 5");
         expect(error.line).toBe(4);
         expect(error.column).toBe(4);
         expect(error.file).toBe("a.mx");
@@ -210,7 +243,7 @@ describe("parseFragment validates the base numbers (padding contract)", () => {
         );
         const message = plain(error.message);
         expect(message).toContain("baseOffset must equal baseColumn");
-        expect(message).toContain("c.mx at line 1, column 19");
+        expect(message).toContain("c.mx at line 1, column 20");
       });
 
       it("line 0 boundaries: equal passes, one above and one below throw", () => {
@@ -333,7 +366,7 @@ describe("positionRegionSource", () => {
         { filename: "b.mx" },
       ),
     );
-    expect(plain(error.message)).toContain("b.mx at line 3, column 4");
+    expect(plain(error.message)).toContain("b.mx at line 3, column 5");
     expect(plain(error.message)).toContain("baseOffset must be >=");
   });
 
@@ -347,7 +380,7 @@ describe("positionRegionSource", () => {
         { filename: "d.mx" },
       ),
     );
-    expect(plain(error.message)).toContain("d.mx at line 1, column -4");
+    expect(plain(error.message)).toContain("d.mx at line 1, column 1");
     expect(plain(error.message)).toContain("must be >= 0");
     // A lone negative column on a later line: the base check cannot see it.
     const lone = caught(() =>

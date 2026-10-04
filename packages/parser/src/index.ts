@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import type { File } from "@babel/types";
-import { isMarkoOrMxSpecifier } from "@mxlang/core";
+import { dropOwnParserPosition, isMarkoOrMxSpecifier } from "@mxlang/core";
 import {
   parse as babelParse,
   parseExpression as babelParseExpression,
@@ -86,7 +86,8 @@ export function parse(
     options.mxUnknownModuleBindings ??
     moduleScan?.unknownModuleBindings ??
     new Set();
-  const file = babelParse(source, {
+  // SAFETY: Babel returns a standard File; its internal AST types differ only at the TypeScript boundary.
+  const file = parseWithDiagnosticText(source, {
     sourceType: "module",
     sourceFilename: filename,
     plugins: MX_DEFAULT_PLUGINS,
@@ -106,6 +107,27 @@ export function parse(
   } as ParserOptions) as unknown as File;
   hoistRegionImports(file, filename);
   return file;
+}
+
+/**
+ * MX diagnostics carry their position in `loc`, never Babel's 0-based suffix.
+ * Keep the vendored Babel entry points (and explicit `mx: false`) unchanged.
+ * This wraps both the declaration prepass and the real region compilation.
+ */
+function parseWithDiagnosticText(source: string, options: ParserOptions) {
+  if (options.mx !== true) return babelParse(source, options);
+  try {
+    const file = babelParse(source, options);
+    for (const error of file.errors ?? []) {
+      error.message = dropOwnParserPosition(error, error.message);
+    }
+    return file;
+  } catch (error) {
+    if (error instanceof Error) {
+      error.message = dropOwnParserPosition(error, error.message);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -129,7 +151,8 @@ function collectModuleScope(
   importDefaultFromMarkoOrMx: Set<string>;
   unknownModuleBindings: Set<string>;
 } {
-  const file = babelParse(source, {
+  // SAFETY: the declaration prepass returns the same standard Babel File as the real parse.
+  const file = parseWithDiagnosticText(source, {
     sourceType: "module",
     sourceFilename: filename,
     plugins: MX_DEFAULT_PLUGINS,
@@ -145,7 +168,8 @@ function collectModuleScope(
   // import (named, namespace, or a default from any other extension) lowers
   // as a dynamic tag on the host side.
   const importDefaultFromMarkoOrMx = new Set<string>();
-  for (const statement of file.program.body as unknown as Array<{
+  // SAFETY: the optional structural fields below cover the Babel statement variants inspected here.
+  for (const statement of file.program.body as Array<{
     type?: string;
     importKind?: string;
     source?: { value?: unknown };
@@ -207,6 +231,7 @@ function collectModuleScope(
  *   ordering depends on.
  */
 function hoistRegionImports(file: File, filename: string): void {
+  // SAFETY: Babel's program body consists of traversable statement records.
   const program = file.program as unknown as {
     body: Array<Record<string, unknown>>;
   };
@@ -284,6 +309,7 @@ function hoistRegionImports(file: File, filename: string): void {
     // only accepts an identifier, never an arbitrary expression, and the
     // expression can depend on the unit's own body locals, so no type-only
     // declaration beside the component can name it either.
+    // SAFETY: this generated declaration is parsed into ordinary Babel statement records.
     const declaration = babelParse(
       `let ${[...returnVars].map((name) => `${name}: any`).join(", ")};`,
       {
@@ -321,14 +347,11 @@ function hoistRegionImports(file: File, filename: string): void {
       renameRegionReferences(program.body, renames, regions);
     }
     if (statements.length > 0) {
-      const parsed = statements.map(
-        (code) =>
-          babelParse(code, {
-            sourceType: "module",
-            plugins: MX_DEFAULT_PLUGINS,
-          }) as unknown as {
-            program: { body: Array<Record<string, unknown>> };
-          },
+      const parsed = statements.map((code) =>
+        babelParse(code, {
+          sourceType: "module",
+          plugins: MX_DEFAULT_PLUGINS,
+        }),
       );
       program.body.splice(
         lastImportIndex + 1,
@@ -349,12 +372,11 @@ function hoistRegionImports(file: File, filename: string): void {
   // future generator shape (an arrow function, a multi-line signature) that
   // still satisfies `HoistedDefine.code`'s contract without matching that
   // one pattern.
-  const parsedDefines = hoistedDefineNodes.map(
-    (entry) =>
-      babelParse(entry.code, {
-        sourceType: "module",
-        plugins: MX_DEFAULT_PLUGINS,
-      }) as unknown as { program: { body: Array<Record<string, unknown>> } },
+  const parsedDefines = hoistedDefineNodes.map((entry) =>
+    babelParse(entry.code, {
+      sourceType: "module",
+      plugins: MX_DEFAULT_PLUGINS,
+    }),
   );
 
   // A hoisted define's gensym is only unique *within its own region* — a

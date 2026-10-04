@@ -7,6 +7,30 @@ import type {
 } from "./region-compile.ts";
 import { solidRegionCompile } from "./test-helpers.ts";
 
+/**
+ * The error a run threw, as text plus its structured position. Every MX-raised
+ * diagnostic carries `loc` (1-based line, 0-based column) and no longer
+ * repeats Babel's 0-based ` (L:C)` suffix in its text, so the position is
+ * asserted where it is authoritative.
+ */
+function caught(run: () => unknown): {
+  message: string;
+  loc: { line: number; column: number };
+} {
+  try {
+    run();
+  } catch (error) {
+    const e = error as Error & {
+      loc?: { line: number; column: number; index: number };
+    };
+    const loc = e.loc;
+    if (!loc) throw new Error("expected a positioned MX error");
+    expect(e.message).not.toMatch(/\s*\(\d+:\d+\)\s*$/);
+    return { message: e.message, loc: { line: loc.line, column: loc.column } };
+  }
+  throw new Error("expected a positioned MX error");
+}
+
 /** Hands back the region text as a string literal, and records what it got. */
 function recordingHook(): {
   hook: MxRegionCompile;
@@ -113,18 +137,23 @@ describe("mxRegionFragment: `<>…</>` is a region", () => {
 
   it("refuses a nested fragment", () => {
     const { hook } = recordingHook();
-    expect(() =>
-      parseFragmentRegions("const v = <><><b/></></>;", hook),
-    ).toThrow(
-      "A fragment `<>…</>` cannot contain another fragment. Its children are already siblings. (1:12)",
-    );
+    expect(
+      caught(() => parseFragmentRegions("const v = <><><b/></></>;", hook)),
+    ).toMatchObject({
+      message:
+        "A fragment `<>…</>` cannot contain another fragment. Its children are already siblings.",
+      loc: { line: 1, column: 12 },
+    });
   });
 
   it("names the fragment when it is never closed", () => {
     const { hook } = recordingHook();
-    expect(() => parseFragmentRegions("const v = <><b/>;", hook)).toThrow(
-      "Unterminated fragment: expected a closing `</>`. (1:10)",
-    );
+    expect(
+      caught(() => parseFragmentRegions("const v = <><b/>;", hook)),
+    ).toMatchObject({
+      message: "Unterminated fragment: expected a closing `</>`.",
+      loc: { line: 1, column: 10 },
+    });
   });
 
   it("refuses a mismatched close, without naming the synthetic root", () => {
@@ -144,33 +173,41 @@ describe("several bare roots", () => {
   const RULE =
     "An MX region has exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.";
 
+  /**
+   * The rule's text, plus the position it was raised at. The text carries no
+   * `(L:C)` any more — the raise puts it on `loc`, where an editor reads it.
+   */
   it.each([
-    ["const el = <p>x</p><p>y</p>;", "1:19"],
-    ["const el = <p>x</p> <p>y</p>;", "1:20"],
-    ["const el = <if=a>x</if><if=b>y</if>;", "1:23"],
-    ["const el = <b/>\n<c/>;", "2:0"],
-    ["f(<b/><c/>);", "1:6"],
-  ])("names the rule in .solid.mx for %j", (source, at) => {
-    expect(() =>
-      print(source, "t.solid.mx", { mxRegionCompile: solidRegionCompile }),
-    ).toThrow(`${RULE} (${at})`);
+    ["const el = <p>x</p><p>y</p>;", { line: 1, column: 19 }],
+    ["const el = <p>x</p> <p>y</p>;", { line: 1, column: 20 }],
+    ["const el = <if=a>x</if><if=b>y</if>;", { line: 1, column: 23 }],
+    ["const el = <b/>\n<c/>;", { line: 2, column: 0 }],
+    ["f(<b/><c/>);", { line: 1, column: 6 }],
+  ])("names the rule in .solid.mx for %j", (source, loc) => {
+    expect(
+      caught(() =>
+        print(source, "t.solid.mx", { mxRegionCompile: solidRegionCompile }),
+      ),
+    ).toEqual({ message: RULE, loc });
   });
 
   it("names the rule with a plain hook too (the check is the shared bridge's)", () => {
     const { hook } = recordingHook();
-    expect(() =>
-      parse("const el = <p/><p/>;", "t.ng.mx", {
-        mx: true,
-        mxRegionCompile: hook,
-      }),
-    ).toThrow(`${RULE} (1:15)`);
+    expect(
+      caught(() =>
+        parse("const el = <p/><p/>;", "t.ng.mx", {
+          mx: true,
+          mxRegionCompile: hook,
+        }),
+      ),
+    ).toEqual({ message: RULE, loc: { line: 1, column: 15 } });
   });
 
   it("names the rule for a fragment followed by a root", () => {
     const { hook } = recordingHook();
-    expect(() => parseFragmentRegions("const el = <>a</><b/>;", hook)).toThrow(
-      `${RULE} (1:17)`,
-    );
+    expect(
+      caught(() => parseFragmentRegions("const el = <>a</><b/>;", hook)),
+    ).toEqual({ message: RULE, loc: { line: 1, column: 17 } });
   });
 
   // The rewrite only replaces a failure. Each of these parsed before it
@@ -203,10 +240,14 @@ describe("several bare roots", () => {
     ).toBe(printed);
   });
 
-  // ...and a failure with no second root behind it keeps its own message.
+  // ...and a failure with no second root behind it keeps its own message. The
+  // first row is a wrapped *host* parse error, so its text still carries the
+  // inner parser's 0-based suffix verbatim: that position belongs to another
+  // file, and `dropOwnParserPosition` deliberately keeps it. The rest are
+  // Babel's own errors on this file, which no longer print one.
   it.each([
     ["const x = <div><b/> < c</div>;", "Unexpected token (1:26)"],
-    ["const x = <b/>, 1;", "Unexpected token (1:16)"],
+    ["const x = <b/>, 1;", "Unexpected token"],
     [
       "const x = <div><b/> <c</div>;",
       "EOF reached while parsing attribute name",

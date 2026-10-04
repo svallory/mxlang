@@ -218,8 +218,37 @@ describe("mxRegionCompile", () => {
     const regionLine = 3; // 1-based; `lines[2]`
     const regionColumn = regionLineText.indexOf("<"); // 0-based, derived
 
+    /**
+     * The raised error's text plus its structured position. MX-raised
+     * diagnostics carry `loc` (1-based line, 0-based column) and their text
+     * no longer repeats Babel's 0-based ` (L:C)` suffix, so the position is
+     * asserted where it is authoritative rather than through the message.
+     */
+    function caughtAt(run: () => unknown): {
+      message: string;
+      line: number;
+      column: number;
+    } {
+      try {
+        run();
+      } catch (error) {
+        const e = error as Error & {
+          loc?: { line: number; column: number };
+        };
+        if (error instanceof Error && e.loc) {
+          expect(error.message).not.toMatch(/\s*\(\d+:\d+\)\s*$/);
+          return {
+            message: error.message,
+            line: e.loc.line,
+            column: e.loc.column,
+          };
+        }
+      }
+      throw new Error("expected a positioned MX error");
+    }
+
     it("keeps a positioned error's own file-absolute coordinates", () => {
-      expect(() =>
+      const raised = caughtAt(() =>
         parse(source, "x.solid.mx", {
           mxRegionCompile: ({ baseLine, baseColumn }) => {
             // What a correct host does: apply the region's base itself, as
@@ -231,7 +260,10 @@ describe("mxRegionCompile", () => {
             );
           },
         }),
-      ).toThrow(/host says no \(3:10\)/);
+      );
+      expect(raised.message).toBe("host says no");
+      expect(raised.line).toBe(regionLine);
+      expect(raised.column).toBe(regionColumn);
     });
 
     it("honours a position that is not the region's own start", () => {
@@ -239,39 +271,46 @@ describe("mxRegionCompile", () => {
       // were *used* rather than coincidentally matching the fallback. This
       // is what caught a `positioned` predicate that recognised a `loc` the
       // real `TranslateError` never carries.
-      expect(() =>
+      const raised = caughtAt(() =>
         parse(source, "x.solid.mx", {
           mxRegionCompile: () => {
             throw new FakeTranslateError("elsewhere", 5, 2);
           },
         }),
-      ).toThrow(/elsewhere \(5:2\)/);
+      );
+      expect(raised.message).toBe("elsewhere");
+      expect(raised.line).toBe(5);
+      expect(raised.column).toBe(2);
     });
 
     it("positions a plain Error at the region's start, not V8's throw site", () => {
       // An ordinary `Error` carries V8's `line`, which points inside the
       // *host's* module. Trusting it reported a line in neither file.
-      expect(() =>
+      const raised = caughtAt(() =>
         parse(source, "x.solid.mx", {
           mxRegionCompile: () => {
             throw new Error("plain failure");
           },
         }),
-      ).toThrow(
-        new RegExp(`plain failure \\(${regionLine}:${regionColumn}\\)`),
       );
+      expect(raised.message).toBe("plain failure");
+      expect(raised.line).toBe(regionLine);
+      expect(raised.column).toBe(regionColumn);
     });
 
     it("positions a thrown non-Error at the region's start too", () => {
       // Rethrowing this raw escaped the positioned-`SyntaxError` contract
       // `toSyntaxError` relies on, and broke `tryParse`'s discipline.
-      expect(() =>
+      const raised = caughtAt(() =>
         parse(source, "x.solid.mx", {
           mxRegionCompile: () => {
             throw "a string";
           },
         }),
-      ).toThrow(new RegExp(`a string \\(${regionLine}:${regionColumn}\\)`));
+      );
+      expect(raised.message).toBe("a string");
+      expect(raised.line).toBe(regionLine);
+      expect(raised.column).toBe(regionColumn);
     });
   });
 

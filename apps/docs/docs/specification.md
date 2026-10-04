@@ -2126,6 +2126,29 @@ expressions are already absolute against their own file. The one place a
 foreign file is attached is a `TranslateError` escaping a unit's metadata
 compile, re-thrown with the tag's filename.
 
+### One base for every printed position (ruling #227)
+
+A position MX **prints** is **1-based line and column** — the basis `mx-tsc`
+prints (`file(line,column)`) and every editor uses. That holds for a position
+inside a message's text, not only for a `file(line,column)` header: a warning
+that names `the later one at 1:16`, the position in a callee-read failure
+(`... (card.mx:2:24): Unexpected token`), an Angular build prefix and a
+`mx-angular map` answer all use the same base, so a reader — or an agent —
+never has to guess which of two numbers on one line is right.
+
+The **structured** fields keep the compiler's own base, which is unchanged and
+is what every consumer already expects: `TranslateError.line`/`column`,
+`MxWarning`, `ScanDiagnostic` and `TargetPolicyDiagnostic` carry a **1-based
+line and a 0-based column** (Babel's), because an LSP range, a Volar offset or
+a TS `textSpan` is computed from the 0-based column. Only the printed text is
+converted, and only at the print site.
+
+A message may also quote **another file's** parser position verbatim — a
+wrapped callee's `Unexpected token (1:32)`, or Marko's own `at <path>:L:C`
+frame header, which is 1-based already. Those stay as they are: that position
+belongs to a file the diagnostic itself does not locate, and nothing else
+records it.
+
 ### Consumer obligations
 
 - The **language server** publishes a foreign-file diagnostic against the

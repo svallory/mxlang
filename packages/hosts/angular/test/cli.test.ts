@@ -922,15 +922,15 @@ describe("mx-angular map", () => {
     const at = emitted.indexOf("user.name");
     const before = emitted.slice(0, at);
     const line = before.split("\n").length;
-    const column = at - (before.lastIndexOf("\n") + 1);
+    const column = at - (before.lastIndexOf("\n") + 1) + 1;
 
     const { exitCode, logs } = runMapCli(
       `${join(projectDir, "src/greeting.html")}:${line}:${column}`,
     );
     expect(exitCode).toBe(0);
-    // Line 3, column 7: `  <p>${user.name}` — two spaces, `<p>`, `${`.
+    // Line 3, printed column 8 (offset 7): two spaces, `<p>`, `${`.
     expect(source.split("\n")[2]?.slice(7)).toBe("user.name}</p>");
-    expect(logs).toEqual(["greeting.mx:3:7"]);
+    expect(logs).toEqual(["greeting.mx:3:8"]);
   });
 
   it("says so when the position came from no source text", () => {
@@ -942,9 +942,9 @@ describe("mx-angular map", () => {
     });
     build(projectDir);
 
-    // Column 0 is the `<` of `<div>`: generated punctuation, not source text.
+    // Printed column 1 is the `<`: generated punctuation, not source text.
     const { exitCode, logs } = runMapCli(
-      `${join(projectDir, "src/greeting.html")}:1:0`,
+      `${join(projectDir, "src/greeting.html")}:1:1`,
     );
     expect(exitCode).toBe(0);
     expect(logs).toEqual([
@@ -971,7 +971,7 @@ describe("mx-angular map", () => {
     const at = emitted.lastIndexOf("</div>") + 2;
     const before = emitted.slice(0, at);
     const line = before.split("\n").length;
-    const column = at - (before.lastIndexOf("\n") + 1);
+    const column = at - (before.lastIndexOf("\n") + 1) + 1;
 
     const { exitCode, logs } = runMapCli(
       `${join(projectDir, "src/greeting.html")}:${line}:${column}`,
@@ -994,7 +994,7 @@ describe("mx-angular map", () => {
     build(projectDir);
 
     const { exitCode, logs } = runMapCli(
-      `${join(projectDir, "src/greeting.html")}:1:0`,
+      `${join(projectDir, "src/greeting.html")}:1:1`,
     );
     expect(exitCode).toBe(0);
     expect(logs).toEqual([
@@ -1010,7 +1010,7 @@ describe("mx-angular map", () => {
     try {
       const exitCode = runCli([
         "map",
-        `${join(projectDir, "src/missing.html")}:1:0`,
+        `${join(projectDir, "src/missing.html")}:1:1`,
       ]);
       expect(exitCode).toBe(1);
     } finally {

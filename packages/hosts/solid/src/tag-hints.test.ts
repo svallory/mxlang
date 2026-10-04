@@ -41,15 +41,27 @@ function parseFile(
 function failure(
   source: string,
   filename?: string,
-): { message: string; line: number; column: number } {
+): {
+  message: string;
+  line?: number;
+  column?: number;
+  /** A parser error's own position (1-based line, 0-based column). */
+  loc?: { line: number; column: number };
+} {
   try {
     parseFile(source, filename);
   } catch (error) {
-    const e = error as { message: string; line: number; column: number };
+    const e = error as {
+      message: string;
+      line?: number;
+      column?: number;
+      loc?: { line: number; column: number };
+    };
     return {
       message: e.message.replace(ANSI, ""),
       line: e.line,
       column: e.column,
+      loc: e.loc,
     };
   }
   throw new Error("expected a compile error, but the template compiled");
@@ -59,8 +71,12 @@ describe("unresolved tag hints (solid)", () => {
   it("tells an unresolved capitalized tag how to resolve it", () => {
     const error = failure(file('<Card title="x"/>'));
     expect(error.message).toBe(
-      'Unable to find entry point for custom tag `<Card>`. Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`. (3:4)',
+      'Unable to find entry point for custom tag `<Card>`. Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.',
     );
+    // The position rides on the error itself, not in the text: a printed
+    // position is 1-based (ruling #227) and the parser's `loc.column` is
+    // 0-based, which is what every consumer converts on.
+    expect(error.loc).toMatchObject({ line: 3, column: 4 });
   });
 
   it("the import it suggests compiles", () => {
@@ -92,7 +108,8 @@ describe("unresolved tag hints (solid)", () => {
       file('<div><Bage label="a"/></div>', 'import Badge from "./Badge.mx";\n'),
     );
     expect(error.message).toBe(
-      "Unable to find entry point for custom tag `<Bage>`. Did you mean `<Badge>`? (4:4)",
+      "Unable to find entry point for custom tag `<Bage>`. Did you mean `<Badge>`?",
     );
+    expect(error.loc).toMatchObject({ line: 4, column: 4 });
   });
 });

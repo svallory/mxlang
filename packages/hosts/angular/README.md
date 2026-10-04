@@ -75,8 +75,10 @@ directory, or a `package.json#mx.tags` entry — `@mxlang/core`'s own
 discovery, not a naming convention). A page compiles to `pageExtension`
 beside its source with a generated-header comment and a `.html.map`
 sidecar; `mx-angular map <file.html:line:col>` reads that sidecar and prints
-the `.mx` position. Writes only when bytes differ, and refuses to overwrite
-a `tagExtension` output that doesn't carry the generated header. See
+the `.mx` position, both 1-based (the sidecar's own coordinates are 0-based
+and converted at the CLI boundary). Writes only when bytes differ, and
+refuses to overwrite a `tagExtension` output that doesn't carry the
+generated header. See
 `apps/docs/docs/hosts/angular.md` for the full CLI reference.
 
 `mx-angular watch` (`src/watch.ts`, `startWatch()`) runs the initial build,
@@ -207,7 +209,7 @@ a conflict. Pasting the members needs no dependency.
 
 ## Warnings
 
-Every diagnostic position `build` and `watch` print (their `file:line:column` prefixes, and the positions quoted inside messages) is 1-based, the basis `mx-tsc` prints (`file(line,column)`), so both surfaces point at the same character. `mx-angular map <file.html:line:col>` is the exception: it is the inverse of the sidecar's 0-based mapping, so it takes and prints 0-based columns. The structured `line`/`column` on `CompileResult.warnings`, `errors` and `TranslateError` are 0-based as well; only the printed diagnostic text is 1-based.
+Every diagnostic position `build` and `watch` print (their `file:line:column` prefixes, and the positions quoted inside messages) is 1-based, the basis `mx-tsc` prints (`file(line,column)`), so both surfaces point at the same character. `mx-angular map <file.html:line:col>` follows the same rule: it takes and prints 1-based columns (the sidecar's own coordinates are 0-based, converted at the CLI boundary), and rejects a `0` column rather than silently reinterpreting it. The structured `line`/`column` on `CompileResult.warnings`, `errors` and `TranslateError` are 0-based as well; only the printed diagnostic text is 1-based.
 
 `compile()`'s `warnings` array collects positioned, non-fatal diagnostics —
 a construct that compiles but diverges from an exact Angular equivalent, or

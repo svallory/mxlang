@@ -141,7 +141,7 @@ function runWatch(args: string[]): Promise<number> {
   });
 }
 
-/** Parses `file.html:line:col`. */
+/** Parses a 1-based `file.html:line:col` for the source-map reader. */
 function parseMapArg(arg: string): {
   file: string;
   line: number;
@@ -152,7 +152,16 @@ function parseMapArg(arg: string): {
     throw new Error(`invalid position, expected file:line:col, got "${arg}"`);
   }
   const [, file, line, column] = match;
-  return { file: file as string, line: Number(line), column: Number(column) };
+  if (Number(line) < 1 || Number(column) < 1) {
+    throw new Error(
+      "invalid position: line and column must be 1-based (at least 1)",
+    );
+  }
+  return {
+    file: file as string,
+    line: Number(line),
+    column: Number(column) - 1,
+  };
 }
 
 function runMap(args: string[]): number {
@@ -170,7 +179,7 @@ function runMap(args: string[]): number {
     // shape the argument took and an editor can jump to it.
     console.log(
       resolved.line !== undefined
-        ? `${resolved.file}:${resolved.line}:${resolved.column}`
+        ? `${resolved.file}${positionSuffix(resolved.line, resolved.column)}`
         : resolved.file,
     );
     if (resolved.line === undefined) {

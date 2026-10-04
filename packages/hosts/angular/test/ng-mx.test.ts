@@ -35,6 +35,18 @@ function emittedTemplate(code: string): string {
   return match[1] as string;
 }
 
+/** The error a compile threw, as an object with a readable `loc`. */
+function thrown(run: () => unknown): SyntaxError & {
+  loc?: { line: number; column: number };
+} {
+  try {
+    run();
+  } catch (error) {
+    return error as SyntaxError & { loc?: { line: number; column: number } };
+  }
+  throw new Error("expected a compile error");
+}
+
 describe("compileNgMx", () => {
   it("lowers a region to a backtick template literal in place", () => {
     const result = compileNgMx(
@@ -1483,14 +1495,14 @@ describe("compileNgMx: fragment regions (G9)", () => {
     expect(() =>
       compileNgMx(componentFile("<><><b/></></>"), "/p/x.component.ng.mx"),
     ).toThrow(
-      "A fragment `<>…</>` cannot contain another fragment. Its children are already siblings. (5:14)",
+      "A fragment `<>…</>` cannot contain another fragment. Its children are already siblings.",
     );
   });
 
   it("refuses an unterminated fragment, naming the fragment", () => {
     expect(() =>
       compileNgMx(componentFile("<><b/>"), "/p/x.component.ng.mx"),
-    ).toThrow("Unterminated fragment: expected a closing `</>`. (5:12)");
+    ).toThrow("Unterminated fragment: expected a closing `</>`.");
   });
 
   // In a `.ng.mx` file a fragment is MX syntax, not TSX. Outside `template:`
@@ -1500,17 +1512,16 @@ describe("compileNgMx: fragment regions (G9)", () => {
     "rejects a fragment outside `template:`: %j",
     (extra) => {
       const source = componentFile("<p/>", extra);
-      let message = "";
-      try {
-        compileNgMx(source, "/p/x.component.ng.mx");
-      } catch (error) {
-        message = (error as Error).message;
-      }
-      expect(message.startsWith(NG_MX_FRAGMENT_POSITION_MESSAGE)).toBe(true);
-      // Positioned at the fragment's `<`.
-      const at = message.match(/\((\d+):(\d+)\)$/);
-      const line = source.split("\n")[Number(at?.[1]) - 1] ?? "";
-      expect(line.slice(Number(at?.[2]))).toMatch(/^<>/);
+      const error = thrown(() => compileNgMx(source, "/p/x.component.ng.mx"));
+      expect(error.message.startsWith(NG_MX_FRAGMENT_POSITION_MESSAGE)).toBe(
+        true,
+      );
+      // Positioned at the fragment's `<`, on the error's own `loc`
+      // (1-based line, 0-based column) rather than in its text.
+      expect(error.message).not.toMatch(/\(\d+:\d+\)$/);
+      const loc = error.loc as { line: number; column: number };
+      const line = source.split("\n")[loc.line - 1] ?? "";
+      expect(line.slice(loc.column)).toMatch(/^<>/);
     },
   );
 
@@ -1688,16 +1699,21 @@ describe("compileNgMx: several bare roots (G9)", () => {
   const RULE =
     "An MX region has exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.";
 
+  // The position rides on `loc` (1-based line, 0-based column); the text
+  // carries no `(L:C)` any more, since a printed position is 1-based
+  // (ruling #227) and this one is not the diagnostic's own.
   it.each([
-    ["<b/><c/>", "5:16"],
-    ["<b>a</b> <i>b</i>", "5:21"],
-    ["<b/>\n<c/>", "6:0"],
-    ["<if=a>x</if><if=b>y</if>", "5:24"],
-    ["<ng-content/><b>hi</b>", "5:25"],
-  ])("rejects %j, naming the rule at the second root", (region, at) => {
-    expect(() =>
+    ["<b/><c/>", { line: 5, column: 16 }],
+    ["<b>a</b> <i>b</i>", { line: 5, column: 21 }],
+    ["<b/>\n<c/>", { line: 6, column: 0 }],
+    ["<if=a>x</if><if=b>y</if>", { line: 5, column: 24 }],
+    ["<ng-content/><b>hi</b>", { line: 5, column: 25 }],
+  ])("rejects %j, naming the rule at the second root", (region, loc) => {
+    const error = thrown(() =>
       compileNgMx(componentFile(region), "/p/x.component.ng.mx"),
-    ).toThrow(`${RULE} (${at})`);
+    );
+    expect(error.message).toBe(RULE);
+    expect(error.loc).toMatchObject(loc);
   });
 
   // Each of these parsed before the rewrite existed (TypeScript reads the

@@ -64,7 +64,11 @@ describe("duplicate attribute in a vite build", () => {
       );
       const dup = lines.filter((line) => line.includes("duplicate attribute"));
       expect(dup).toHaveLength(1);
-      expect(dup[0]).toContain("page.mx:1:5:");
+      // The `file:line:column` prefix `warn()` prints is 1-based, like
+      // `mx-tsc`'s `file(line,column)` (ruling #227): the dropped `class`
+      // name is the 6th character of line 1. The survivor named inside the
+      // text was already 1-based.
+      expect(dup[0]).toContain("page.mx:1:6:");
       expect(dup[0]).toContain(
         "`class`: the later one at 2:3 wins, so this one is dropped",
       );
