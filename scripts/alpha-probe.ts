@@ -19,7 +19,7 @@
 // `bun pm pack` hang on macOS with bun 1.3.14; it did not hang here, and the
 // per-step timeout kills it if it does.
 //
-// Needs a prior `bun run build`. It installs into a scratch dir, so it needs
+// It builds core and data itself first. It installs into a scratch dir, so it needs
 // the network only for core's and data's registry dependencies (not for the
 // two `@mxlang` packages: `overrides` pin both to the tarballs).
 //   bun run scripts/alpha-probe.ts [--keep]
@@ -40,6 +40,8 @@ import { repoRoot } from "./pack-hygiene.ts";
 
 const keep = process.argv.includes("--keep");
 const STEP_TIMEOUT_MS = 240_000;
+const MIN_NODE_MAJOR = 26;
+const tsc = join(repoRoot, "node_modules/.bin/tsc");
 
 const CORE_DIR = join(repoRoot, "packages/core");
 const DATA_DIR = join(repoRoot, "packages/targets/data");
@@ -69,10 +71,16 @@ function run(
 const work = mkdtempSync(join(tmpdir(), "alpha-probe-"));
 console.log(`[alpha-probe] scratch: ${work}`);
 
+/** Build core, then data, so the probe never packs a stale `dist`. */
+for (const dir of [CORE_DIR, DATA_DIR]) {
+  const built = run("bun", ["run", "build"], dir);
+  if (built.status !== 0) fail(`bun run build failed in ${dir}:\n${built.out}`);
+}
+
 /** `bun pm pack` a package into `work/tarballs`; returns the tarball path. */
 function pack(dir: string): string {
   if (!existsSync(join(dir, "dist"))) {
-    fail(`${dir}/dist is missing: run \`bun run build\` first`);
+    fail(`${dir}/dist is missing after the build`);
   }
   const dest = join(work, "tarballs");
   mkdirSync(dest, { recursive: true });
@@ -125,7 +133,9 @@ const customTags = {
 const options = { customTags, structural: "reject", unknownTags: "reject" };
 
 const ok = parseData('<resource>\\n  <attributes title="Post"/>\\n</resource>\\n', "/probe/ok.mx", options);
-const bad = parseData("<resorce/>\\n", "/probe/bad.mx", options);
+const unknown = parseData("<resorce/>\\n", "/probe/unknown.mx", options);
+const structural = parseData("<if=true>\\n  <resource/>\\n</if>\\n", "/probe/structural.mx", options);
+const parents = parseData("<attributes/>\\n", "/probe/parents.mx", options);
 
 const summary = {
   runtime: typeof Bun === "undefined" ? "node " + process.version : "bun " + Bun.version,
@@ -133,14 +143,27 @@ const summary = {
     tree: ok.tree ? { children: ok.tree.children.map((c) => c.kind + ":" + c.name), tagChildren: ok.tree.children[0].children.map((c) => c.name) } : null,
     diagnostics: ok.diagnostics,
   },
-  unknownTag: { tree: bad.tree ?? null, diagnostics: bad.diagnostics },
+  unknownTag: { tree: unknown.tree ?? null, diagnostics: unknown.diagnostics },
+  structuralReject: { tree: structural.tree ?? null, diagnostics: structural.diagnostics },
+  parentsReject: { tree: parents.tree ?? null, diagnostics: parents.diagnostics },
 };
 console.log(JSON.stringify(summary, null, 2));
 
-if (!ok.tree) throw new Error("the valid file returned no tree");
-if (bad.tree) throw new Error("the unknown-tag file returned a tree");
-if (!bad.diagnostics[0]?.message.includes("is not a known tag")) {
-  throw new Error("no unknown-tag diagnostic: " + JSON.stringify(bad.diagnostics));
+const fail = (message) => { throw new Error(message); };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+if (!ok.tree) fail("the valid file returned no tree");
+if (!same(summary.ok.tree.children, ["tag:resource"])) fail("wrong root children: " + JSON.stringify(summary.ok.tree.children));
+if (!same(summary.ok.tree.tagChildren, ["attributes"])) fail("wrong resource children: " + JSON.stringify(summary.ok.tree.tagChildren));
+if (ok.diagnostics.length !== 0) fail("the valid file has diagnostics: " + JSON.stringify(ok.diagnostics));
+for (const [name, result, text] of [
+  ["unknown tag", unknown, "is not a known tag"],
+  ["structural", structural, "static"],
+  ["parents", parents, "must be inside"],
+]) {
+  if (result.tree) fail("the " + name + " file returned a tree");
+  if (result.diagnostics.length !== 1 || result.diagnostics[0].severity !== "error" || !result.diagnostics[0].message.includes(text)) {
+    fail("the " + name + " file has the wrong diagnostic: " + JSON.stringify(result.diagnostics));
+  }
 }
 console.log("probe passed");
 `;
@@ -170,7 +193,51 @@ function consumer(label: string): string {
     ),
   );
   writeFileSync(join(dir, "probe.mjs"), PROBE);
+  writeFileSync(join(dir, "use.ts"), USE);
   return dir;
+}
+
+/** What a consumer writes: every `exports` subpath, with real types. */
+const USE = `import { type ParseDataOptions, parseData } from "@mxlang/data";
+import descriptor from "@mxlang/data/descriptor";
+import type { DataDocument, DataTag } from "@mxlang/data/tree";
+import type { CustomTag } from "@mxlang/core";
+
+const customTags: Record<string, CustomTag> = { resource: { parents: ["#root"] } };
+const options: ParseDataOptions = { customTags, structural: "reject", unknownTags: "reject" };
+const tree: DataDocument | undefined = parseData("<resource/>\\n", "/x.mx", options).tree;
+const first: DataTag | undefined = tree?.children.find((c): c is DataTag => c.kind === "tag");
+export const name: string | undefined = first?.name;
+export const target: string = descriptor.name;
+// @ts-expect-error unknownTags only takes "allow" | "reject"
+export const bad: ParseDataOptions = { unknownTags: "nope" };
+`;
+
+/** \`tsc --noEmit\` over \`use.ts\`, strict and with \`skipLibCheck: false\`, per resolution mode. */
+function typecheck(dir: string): void {
+  for (const mode of ["bundler", "node16"] as const) {
+    writeFileSync(
+      join(dir, `tsconfig.${mode}.json`),
+      JSON.stringify({
+        compilerOptions: {
+          strict: true,
+          module: mode === "bundler" ? "esnext" : "node16",
+          moduleResolution: mode,
+          target: "es2022",
+          noEmit: true,
+          skipLibCheck: false,
+          types: [],
+        },
+        include: ["use.ts"],
+      }),
+    );
+    const r = run(tsc, ["-p", `tsconfig.${mode}.json`], dir);
+    console.log(
+      `[alpha-probe] tsc (${mode}) exit ${r.status}${r.out.trim() ? `\n${r.out.trim()}` : ""}`,
+    );
+    if (r.status !== 0)
+      fail(`the consumer typecheck failed under moduleResolution ${mode}`);
+  }
 }
 
 function check(label: string, probe: { status: number; out: string }): void {
@@ -188,16 +255,24 @@ const npm = run(
   nodeDir,
 );
 if (npm.status !== 0) fail(`npm install failed:\n${npm.out}`);
+const nodeVersion = run("node", ["--version"], nodeDir).out.trim();
 console.log(
-  `[alpha-probe] node ${run("node", ["--version"], nodeDir).out.trim()}, npm ${run("npm", ["--version"], nodeDir).out.trim()}`,
+  `[alpha-probe] node ${nodeVersion}, npm ${run("npm", ["--version"], nodeDir).out.trim()}`,
 );
+if (Number(nodeVersion.replace(/^v/, "").split(".")[0]) < MIN_NODE_MAJOR) {
+  fail(
+    `the npm leg needs Node ${MIN_NODE_MAJOR} or newer, found ${nodeVersion}`,
+  );
+}
 check("node+npm", run("node", ["probe.mjs"], nodeDir));
+typecheck(nodeDir);
 
 // Bun.
 const bunDir = consumer("bun");
 const bun = run("bun", ["install"], bunDir);
 if (bun.status !== 0) fail(`bun install failed:\n${bun.out}`);
 check("bun", run("bun", ["probe.mjs"], bunDir));
+typecheck(bunDir);
 
 console.log("[alpha-probe] PASS");
 if (keep) console.log(`[alpha-probe] kept ${work}`);
