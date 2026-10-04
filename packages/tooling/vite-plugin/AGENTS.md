@@ -1,5 +1,34 @@
 # vite-plugin — agent instructions
 
+## Current target dispatch (decisions 129/132)
+
+Whole-file `.mx`/claimed `.marko` compilation selects
+`builtinLookup().target(policy.target)` and calls its lazy
+`load(core).compileModule` with `targets: builtinLookup()`. No host-name
+compiler branches remain. The registry itself is cached behind a dynamic
+import; config evaluation loads no registry or heavy compiler. Build startup
+installs the registry's lazy callee readers, not a host index for its side
+effects. The `.solid.mx` path selects the registered `region` pipeline and
+collects its compile dependencies per transform, retaining parser `print()`.
+
+D1 stays caller-owned: `options.strict ?? false` reaches the descriptor even
+when its `strict` is `"always"`. D2 stays in descriptor option forwarding:
+HTML/Astro and Preact/React/Hono forward Vite's synchronous resolver, while
+Solid's descriptor retains its existing omission. D4 comes from absent
+`load`, `host.name` and `pending`, keeping Angular's message byte-identical.
+Data remains staged out by the registry's policy wrapper. Whole-file output
+still returns `map: null`, so absent map/mappings are safe. There is no editor
+type-surface rewrite or `typeCheck` option on this build path.
+
+The direct dependencies are core (types/errors), parser (`print`) and the
+registry (dispatch/discovery/readers). No host-package dependencies remain.
+This package is private and source-loaded; it has no published `dist` or
+emitted declarations to strip. Tests intercept descriptor loads/region
+entries instead of host indexes; their project externalizes core/dist so
+native descriptor requires share the plugin's caches/readers.
+
+Historical implementation details below predate table dispatch.
+
 ## Vite plugin
 
 `packages/tooling/vite-plugin` (`@mxlang/vite-plugin`) is the primary integration
@@ -127,8 +156,8 @@ caller's generated attribute-tag shape even though Vite already has an ESM
 edge to the callee module itself. Keep per-caller reverse sets for both sources
 and prune old edges on every transform or deletion; otherwise a long-lived dev
 server retains stale callers. Tests that need a non-empty compile dependency
-mock the dynamically imported host inside `vi.resetModules()` and dynamically
-import a fresh plugin instance. Rebuild `packages/core/dist` before running
+spy on the descriptor's `load` or the registered region's `compileRegion`
+inside `vi.resetModules()` and dynamically import a fresh plugin instance. Rebuild `packages/core/dist` before running
 these tests, because this package resolves core through its built entry.
 
 After Vite resolves configuration, the plugin builds a synchronous resolver

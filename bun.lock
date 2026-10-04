@@ -537,12 +537,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@mxlang/core": "workspace:*",
-        "@mxlang/hono": "workspace:*",
-        "@mxlang/html": "workspace:*",
         "@mxlang/parser": "workspace:*",
-        "@mxlang/preact": "workspace:*",
-        "@mxlang/react": "workspace:*",
-        "@mxlang/solid": "workspace:*",
         "@mxlang/target-registry": "workspace:*",
       },
     },

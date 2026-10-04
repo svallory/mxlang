@@ -1,86 +1,50 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import type { CompileResult } from "@mxlang/core";
+import * as core from "@mxlang/core";
 import {
   type CustomTag,
   isTranslateError,
-  type TargetLookup,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import type { MxRegionCompile } from "@mxlang/parser";
 import { print } from "@mxlang/parser";
-import {
-  builtinLookup,
-  hostFilterKey,
-  resolveTargetPolicyDetailed,
-  scanCached,
-} from "@mxlang/target-registry";
 import type { Plugin } from "vite";
 
 /**
- * Lazily imported, same reasoning as `@mxlang/html` below: `@mxlang/solid`
- * also depends on `@marko/compiler`, so a static import would load it (and
- * break Vite's native-strip-mode config loading) for a `.mx`-only project
- * that never touches `.solid.mx`. Cached across calls in the same process —
- * one dynamic `import()` per build/dev-server lifetime, not per file.
+ * Keep the registry behind a cached dynamic import, never load compilers while
+ * evaluating vite.config.ts. Registry creation installs lazy callee readers;
+ * only descriptor load()/compileRegion() reaches the heavy compile leaves.
  */
-type SolidModule = typeof import("@mxlang/solid");
+type RegistryModule = typeof import("@mxlang/target-registry");
+let registryModule: Promise<RegistryModule> | undefined;
 
-let solidModule: Promise<SolidModule> | undefined;
-
-function loadSolidModule(): Promise<SolidModule> {
-  if (!solidModule) solidModule = import("@mxlang/solid");
-  return solidModule;
+function loadRegistry(): Promise<RegistryModule> {
+  registryModule ??= import("@mxlang/target-registry");
+  return registryModule;
 }
 
-async function registerSolidCalleeReader(): Promise<void> {
-  try {
-    await loadSolidModule();
-  } catch {
-    // Optional for an ordinary `.mx` project. With no Solid host installed,
-    // a `.solid.mx` callee has no readable schema and core correctly uses its
-    // conservative `none` fallback.
-  }
-}
-
-async function loadSolidRegionCompile(
+async function loadRegionCompile(
   dependencies?: Set<string>,
 ): Promise<MxRegionCompile> {
-  const { compileSolidMx } = await loadSolidModule();
-  return ({ source, ...rest }) => {
-    const result = compileSolidMx(source, rest);
-    for (const dependency of result.dependencies) dependencies?.add(dependency);
+  const { builtinFileKinds, builtinLookup } = await loadRegistry();
+  const compileRegion = builtinFileKinds.find(
+    (kind) => kind.pipeline === "region",
+  )?.compileRegion;
+  if (!compileRegion) throw new Error("missing region compiler");
+  return (input) => {
+    // Core keeps the parser's hoisted AST nodes opaque to avoid a cycle.
+    const result = compileRegion(input.source, {
+      ...input,
+      targets: builtinLookup(),
+    }) as ReturnType<MxRegionCompile>;
+    for (const dependency of result.dependencies ?? [])
+      dependencies?.add(dependency);
     return result;
   };
 }
 
-/**
- * Lazily imported, and only inside `transform`'s `.mx` branch:
- * `@mxlang/html` pulls in `@marko/compiler`, a large dependency whose
- * transitive code uses TypeScript parameter-property syntax. A static
- * top-level import here would load that dependency the moment
- * `vite.config.ts` imports this plugin — including for a `.solid.mx`-only
- * project like `examples/counter-app` that never touches `.mx` at all —
- * and break config loading, since Vite's own config loader reads
- * `vite.config.ts` through Node's native strip-only TS mode, which rejects
- * that syntax outright.
- *
- * A dynamic `import()`, not `require()`: `require()` on a bare specifier
- * whose `main` is TS source (`@mxlang/html`'s `src/index.ts`) goes
- * through Node's native module loader with no transform step at all under
- * Vitest's Node-native `require`, hitting the same strip-only-mode error one
- * line of source further in. Dynamic `import()` is handled by Vite's/Vitest's
- * own transform pipeline instead, which strips TypeScript fully rather than
- * in the narrow subset Node's native loader accepts.
- *
- * `@mxlang/html` has no compiled entry (its `main` is `src/index.ts`),
- * so resolving its types at all — even through this dynamic `import()`, cast
- * away below — needs `allowImportingTsExtensions` wherever `tsc` walks that
- * far. Every consumer of this plugin (each example) needs the same flag in
- * its own tsconfig for that reason, not because it imports `.ts` paths
- * itself.
- */
+/** Whole-file compilation selects a target, never the policy's host name. */
 async function compileMarko(
   source: string,
   filename: string,
@@ -89,116 +53,27 @@ async function compileMarko(
   resolveImport:
     | ((specifier: string, importer: string) => string | undefined)
     | undefined,
-): Promise<Pick<CompileResult, "code"> & Partial<CompileResult>> {
-  // Which host owns this file is the nearest `package.json`'s answer, the
-  // same resolver the language server and `mx-tsc` use — so an editor, a
-  // `tsc` run and a `vite build` cannot disagree about what a `.mx` file is.
-  const { resolveTargetPolicy } = await import("@mxlang/target-registry");
-  const host = resolveTargetPolicy(filename).host;
-  if (host === "preact") {
-    const { compilePreactMx } = (await import("@mxlang/preact")) as {
-      compilePreactMx: (
-        source: string,
-        filename: string,
-        options?: {
-          customTags?: Record<string, CustomTag>;
-          resolveImport?: typeof resolveImport;
-          targets?: TargetLookup;
-        },
-      ) => { code: string };
-    };
-    return compilePreactMx(source, filename, {
-      customTags,
-      resolveImport,
-      targets: builtinLookup(),
-    });
-  }
-  if (host === "react") {
-    const { compileReactMx } = (await import("@mxlang/react")) as {
-      compileReactMx: (
-        source: string,
-        filename: string,
-        options?: {
-          customTags?: Record<string, CustomTag>;
-          resolveImport?: typeof resolveImport;
-          targets?: TargetLookup;
-        },
-      ) => { code: string };
-    };
-    return compileReactMx(source, filename, {
-      customTags,
-      resolveImport,
-      targets: builtinLookup(),
-    });
-  }
-  if (host === "hono") {
-    const { compileHonoMx } = (await import("@mxlang/hono")) as {
-      compileHonoMx: (
-        source: string,
-        filename: string,
-        options?: {
-          customTags?: Record<string, CustomTag>;
-          resolveImport?: typeof resolveImport;
-          targets?: TargetLookup;
-        },
-      ) => { code: string };
-    };
-    return compileHonoMx(source, filename, {
-      customTags,
-      resolveImport,
-      targets: builtinLookup(),
-    });
-  }
-  if (host === "solid") {
-    // A whole-file `.mx` document routed to the Solid host goes through
-    // `compileSolidUnit`, not `compileSolidMx` — a whole-file unit is a
-    // module of its own, unlike a `.solid.mx` region spliced into someone
-    // else's module (decision 115). Before this branch existed, `host ===
-    // "solid"` fell through to the `@mxlang/html` branch below: a real
-    // `vite build` compiled a page template meant for Solid through the
-    // vanilla string emitter instead — silently wrong output, no error.
-    const { compileSolidUnit } = (await import("@mxlang/solid")) as {
-      compileSolidUnit: (
-        source: string,
-        options: {
-          filename: string;
-          customTags?: Record<string, CustomTag>;
-          targets?: TargetLookup;
-        },
-      ) => Pick<CompileResult, "code" | "dependencies">;
-    };
-    return compileSolidUnit(source, {
-      filename,
-      customTags,
-      targets: builtinLookup(),
-    });
-  }
-  if (host === "angular") {
-    // `@mxlang/angular` exists (phase 1) but is not wired into this plugin
-    // yet — falling through to the html branch below would silently compile
-    // a page template meant for Angular through the vanilla string emitter
-    // instead, producing plausible-looking but wrong output with no error.
+): Promise<core.TargetCompileResult> {
+  const { builtinLookup, resolveTargetPolicy } = await loadRegistry();
+  const policy = resolveTargetPolicy(filename);
+  const lookup = builtinLookup();
+  const descriptor = lookup.target(policy.target);
+  const load = descriptor?.load;
+  if (!load) {
+    const identity = descriptor?.host
+      ? `${descriptor.host.name} host`
+      : `${policy.target} target`;
     throw new Error(
-      "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)",
+      `the ${identity} is not wired into @mxlang/vite-plugin yet${descriptor?.pending ? ` (${descriptor.pending})` : ""}`,
     );
   }
-  const { compile } = (await import("@mxlang/html")) as {
-    compile: (
-      source: string,
-      filename: string,
-      options?: {
-        strict?: boolean;
-        customTags?: Record<string, CustomTag>;
-        resolveImport?: typeof resolveImport;
-        targets?: TargetLookup;
-      },
-    ) => { code: string };
-  };
-  return compile(source, filename, {
+  return load(core).compileModule(source, filename, {
+    // D1: build strictness is caller-owned, even for an always-strict target.
     strict,
     customTags,
+    // D2: descriptors decide which compile leaves receive the Vite resolver.
     resolveImport,
-    targets: builtinLookup(),
+    targets: lookup,
   });
 }
 
@@ -732,11 +607,13 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    */
   const reported = new Set<string>();
 
-  const tagsFor = (
+  const tagsFor = async (
     file: string,
     warn: (message: string) => void,
     error: (diagnostic: TargetPolicyDiagnostic) => never,
-  ): Record<string, CustomTag> | undefined => {
+  ): Promise<Record<string, CustomTag> | undefined> => {
+    const { resolveTargetPolicyDetailed, hostFilterKey, scanCached } =
+      await loadRegistry();
     const resolution = resolveTargetPolicyDetailed(file);
     for (const diagnostic of resolution.diagnostics) {
       if (diagnostic.severity === "error") error(diagnostic);
@@ -826,7 +703,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    */
   const recordDependencies = (
     caller: string,
-    dependencies: string[] | undefined,
+    dependencies: readonly string[] | undefined,
   ): void => {
     const current = dependencies ?? [];
     const previous = dependencyCallers.get(caller) ?? new Set<string>();
@@ -894,11 +771,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     configResolved(config) {
       aliases = [...config.resolve.alias];
       resolveImport = aliases.length > 0 ? aliasResolver : undefined;
-      void registerSolidCalleeReader();
+      void loadRegistry();
     },
 
     async buildStart() {
-      await registerSolidCalleeReader();
+      await loadRegistry();
     },
 
     async resolveId(id: string, importer: string | undefined) {
@@ -1083,10 +960,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
       try {
         if (ext === ".mx" || ext === TAG_EXT) {
-          // Register compound-host readers before an ordinary template can
-          // inspect one of their Inputs. This also closes the configResolved
-          // import race in direct plugin-hook users and dev-server startup.
-          await registerSolidCalleeReader();
+          // Install registered callee readers even for direct hook callers.
+          await loadRegistry();
           // `compile()`'s map is presently an identity placeholder (no AST
           // is printed on this path), so there is nothing real to hand Vite
           // — returning it would claim a mapping that does not exist.
@@ -1094,7 +969,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             code,
             source,
             options.strict ?? false,
-            tagsFor(source, warn, policyError),
+            await tagsFor(source, warn, policyError),
             resolveImport,
           );
           recordDependencies(source, dependencies);
@@ -1108,8 +983,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // explicitly here, the same as every other `.solid.mx` caller.
         const dependencies = new Set<string>();
         const { code: printed, map } = print(code, source, {
-          customTags: tagsFor(source, warn, policyError),
-          mxRegionCompile: await loadSolidRegionCompile(dependencies),
+          customTags: await tagsFor(source, warn, policyError),
+          mxRegionCompile: await loadRegionCompile(dependencies),
         });
         recordDependencies(source, [...dependencies]);
         return { code: printed, map };

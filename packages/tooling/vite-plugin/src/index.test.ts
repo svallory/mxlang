@@ -7,7 +7,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
-import { type CustomTag, clearScanCache } from "@mxlang/core";
+import {
+  type CustomTag,
+  clearScanCache,
+  type TargetCompiler,
+} from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mx, { MX_SUFFIX, readTemplateSource } from "./index";
 
@@ -90,6 +94,20 @@ function makeContext(
 }
 
 type Hooks = ReturnType<typeof mx>;
+
+/** Intercept table dispatch, not a host index the plugin no longer imports. */
+async function mockCompiler(
+  target: string,
+  compileModule: TargetCompiler["compileModule"],
+) {
+  const { builtinLookup } = await import("@mxlang/target-registry");
+  const descriptor = builtinLookup().target(target);
+  if (!descriptor?.load) throw new Error("missing compiler");
+  const wired = descriptor as typeof descriptor & {
+    load: NonNullable<typeof descriptor.load>;
+  };
+  return vi.spyOn(wired, "load").mockReturnValue({ compileModule });
+}
 
 function resolveIdOf(plugin: Hooks) {
   const { resolveId } = plugin;
@@ -1160,11 +1178,9 @@ export default () => <div />;
       writeFileSync(dependency, "export interface Input {}\n");
 
       vi.resetModules();
-      vi.doMock("@mxlang/html", () => ({
-        compile: () => ({
-          code: "export default () => '';",
-          dependencies: [dependency],
-        }),
+      const compiler = await mockCompiler("html", () => ({
+        code: "export default () => '';",
+        dependencies: [dependency],
       }));
       try {
         const fresh = await import("./index.ts");
@@ -1200,7 +1216,7 @@ export default () => <div />;
         expect(invalidated).toEqual([mod]);
         expect(updated).toEqual([mod]);
       } finally {
-        vi.doUnmock("@mxlang/html");
+        compiler.mockRestore();
         vi.resetModules();
       }
     });
@@ -1218,14 +1234,18 @@ export default () => <div />;
       writeFileSync(dependency, "export interface Input {}\n");
 
       vi.resetModules();
-      vi.doMock("@mxlang/solid", () => ({
-        compileSolidMx: () => ({
-          code: "<Card />",
-          dependencies: [dependency],
-          hoistedImports: [],
-          returnVars: [],
-        }),
-      }));
+      const { builtinFileKinds } = await import("@mxlang/target-registry");
+      const kind = builtinFileKinds.find((kind) => kind.pipeline === "region");
+      if (!kind?.compileRegion) throw new Error("missing region compiler");
+      const wired = kind as typeof kind & {
+        compileRegion: NonNullable<typeof kind.compileRegion>;
+      };
+      const compiler = vi.spyOn(wired, "compileRegion").mockReturnValue({
+        code: "<Card />",
+        dependencies: [dependency],
+        hoistedImports: [],
+        returnVars: [],
+      });
       try {
         const fresh = await import("./index.ts");
         const plugin = fresh.default();
@@ -1260,7 +1280,7 @@ export default () => <div />;
         expect(invalidated).toEqual([mod]);
         expect(updated).toEqual([mod]);
       } finally {
-        vi.doUnmock("@mxlang/solid");
+        compiler.mockRestore();
         vi.resetModules();
       }
     });
@@ -1284,11 +1304,9 @@ export default () => <div />;
       writeFileSync(dependency, "export interface Input {}\n<div/>\n");
 
       vi.resetModules();
-      vi.doMock("@mxlang/solid", () => ({
-        compileSolidUnit: () => ({
-          code: "export default function Caller(input) { return <><Card /></>; }",
-          dependencies: [dependency],
-        }),
+      const compiler = await mockCompiler("solid-jsx", () => ({
+        code: "export default function Caller(input) { return <><Card /></>; }",
+        dependencies: [dependency],
       }));
       try {
         const fresh = await import("./index.ts");
@@ -1324,7 +1342,7 @@ export default () => <div />;
         expect(invalidated).toEqual([mod]);
         expect(updated).toEqual([mod]);
       } finally {
-        vi.doUnmock("@mxlang/solid");
+        compiler.mockRestore();
         vi.resetModules();
       }
     });
@@ -1422,11 +1440,9 @@ export default () => <div />;
       writeFileSync(dependency, "export interface Input {}\n");
       let dependencies = [dependency];
       vi.resetModules();
-      vi.doMock("@mxlang/html", () => ({
-        compile: () => ({
-          code: "export default () => '';",
-          dependencies,
-        }),
+      const compiler = await mockCompiler("html", () => ({
+        code: "export default () => '';",
+        dependencies,
       }));
       try {
         const fresh = await import("./index.ts");
@@ -1464,7 +1480,7 @@ export default () => <div />;
         expect(invalidated).toEqual([]);
         expect(updated).toBeUndefined();
       } finally {
-        vi.doUnmock("@mxlang/html");
+        compiler.mockRestore();
         vi.resetModules();
       }
     });
@@ -1476,11 +1492,9 @@ export default () => <div />;
       const dependency = join(dir, "Card.ts");
       writeFileSync(dependency, "export interface Input {}\n");
       vi.resetModules();
-      vi.doMock("@mxlang/html", () => ({
-        compile: () => ({
-          code: "export default () => '';",
-          dependencies: [dependency],
-        }),
+      const compiler = await mockCompiler("html", () => ({
+        code: "export default () => '';",
+        dependencies: [dependency],
       }));
       try {
         const fresh = await import("./index.ts");
@@ -1519,7 +1533,7 @@ export default () => <div />;
         expect(invalidated).toEqual([]);
         expect(updated).toBeUndefined();
       } finally {
-        vi.doUnmock("@mxlang/html");
+        compiler.mockRestore();
         vi.resetModules();
       }
     });
@@ -1530,12 +1544,13 @@ export default () => <div />;
       );
       let received: unknown = "unset";
       vi.resetModules();
-      vi.doMock("@mxlang/html", () => ({
-        compile: (_source: string, _filename: string, options: unknown) => {
-          received = (options as { resolveImport?: unknown }).resolveImport;
+      const compiler = await mockCompiler(
+        "html",
+        (_source, _filename, options) => {
+          received = options.resolveImport;
           return { code: "export default () => '';", dependencies: [] };
         },
-      }));
+      );
       try {
         const fresh = await import("./index.ts");
         const plugin = fresh.default();
@@ -1549,7 +1564,7 @@ export default () => <div />;
         );
         expect(received).toBeUndefined();
       } finally {
-        vi.doUnmock("@mxlang/html");
+        compiler.mockRestore();
         vi.resetModules();
       }
     });
@@ -1560,24 +1575,16 @@ export default () => <div />;
       );
       let resolved: Array<string | undefined> = [];
       vi.resetModules();
-      vi.doMock("@mxlang/html", () => ({
-        compile: (
-          _source: string,
-          filename: string,
-          options: {
-            resolveImport?: (
-              specifier: string,
-              importer: string,
-            ) => string | undefined;
-          },
-        ) => {
+      const compiler = await mockCompiler(
+        "html",
+        (_source, filename, options) => {
           resolved = [
             options.resolveImport?.("@/Card", filename),
             options.resolveImport?.("react", filename),
           ];
           return { code: "export default () => '';", dependencies: [] };
         },
-      }));
+      );
       try {
         const fresh = await import("./index.ts");
         const plugin = fresh.default();
@@ -1599,7 +1606,7 @@ export default () => <div />;
         );
         expect(resolved).toEqual([`${dir}/src/Card`, "preact/compat"]);
       } finally {
-        vi.doUnmock("@mxlang/html");
+        compiler.mockRestore();
         vi.resetModules();
       }
     });
