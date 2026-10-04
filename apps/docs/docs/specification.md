@@ -74,28 +74,33 @@ Type-only names stay legal: a type parameter (`infer __mxU`, `[__mxK in keyof
 T]`) and a `declare function`'s parameters cannot collide with an emitted
 binding, so they are not rejected.
 
-**Generated names must be `__mx`-reserved.** The reservation protects the
-`__mx` prefix only, so any *binding* a host generates is named inside it.
-That is not cosmetic: a range loop's own mapper parameters are in scope for
-the authored `from`/`to`/`step` expressions written inside the same callback,
-so a generated `_`/`mxIndex`/`$i` there silently shadowed an authored binding
-of the same name (`<const/_=5/>` with `<for|i| from=_ to=_+2>` rendered `NaN`
-three times). `range-loop-name-collision` moved those to `__mxUnused` /
-`__mxIndex` on every host, and moved the Solid whole-unit
-`$mxProps`/`$mxBody`/`$mxValue` helpers, the `$mxChildren`/`$mxMerge` imports
-and the hoisted `$mx_Define*` tags to the `__mx` set as well.
+**Bindings MX spells itself are `__mx`-reserved.** The reservation protects the
+`__mx` prefix, and the reservation only means anything if generated *bindings*
+live inside it — so every binding a host names itself falls under it (decision
+72's stricter-validation policy, as above). That is not cosmetic: a range
+loop's own mapper parameters are in scope for the authored
+`from`/`to`/`step` expressions written inside the same callback, so a
+generated `_`/`mxIndex`/`$i` there silently shadowed an authored binding of the
+same name (`<const/_=5/>` with `<for|i| from=_ to=_+2>` rendered `NaN` three
+times). Those are now `__mxUnused` / `__mxIndex` on every host, as are the
+Solid whole-unit `$mxProps`/`$mxBody`/`$mxValue` helpers (now `__mxProps` and
+friends), the `$mxChildren`/`$mxMerge` imports, and the hoisted `$mx_Define*`
+tags.
 
-Two carve-outs, both properties rather than bindings:
+Two carve-outs, neither a binding MX generates:
 
 - Solid's `$mxReturn` is a *property* name on the emitted `input`, not a
   binding, so nothing can shadow it and its protocol is unchanged.
 - `htmljs-parser`-derived and imported *public* helper names keep their
   spelling; generated imports alias them privately.
 
-A generated name that is source-allocated rather than reserved remains
-possible for a name MX does not choose the spelling of (a discovered tag's
-natural name, an imported callee); those are handled by name avoidance against
-the names already in scope, not by the prefix.
+**The exception: names MX does not choose the spelling of.** A discovered
+tag's injected import binding is minted as `$mx_<tag>_<n>` (`$mx_Icon1`), the
+same shape as a discovered tag's natural name, and is kept out of the `__mx`
+set on purpose — it is name-avoided against the caller's own bindings rather
+than reserved. The same goes for an imported callee, which MX references by
+its real in-scope name. So "`__mx`-reserved" is a rule about bindings MX
+invents, not a claim about every identifier in emitted output.
 
 ### The governing rule
 

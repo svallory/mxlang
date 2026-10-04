@@ -64,7 +64,7 @@ declare module "@mxlang/parser" {
 
   /** One `<define>` a region hoisted to module scope (decision 110b). */
   export interface MxRegionHoistedDefine {
-    /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+    /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
     code: string;
     /** The gensym'd module-scope binding the region calls. */
     binding: string;

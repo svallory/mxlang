@@ -1390,10 +1390,6 @@ function identifierNames(text: string): Set<string> {
   return new Set(text.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []);
 }
 
-function hygienicIndex(params: string[], body: string): string {
-  return hygienicName("__mxIndex", params, body);
-}
-
 /**
  * The `<for step=...>` mapper's own binding, and why it is `__mx`-prefixed.
  *
@@ -1405,7 +1401,9 @@ function hygienicIndex(params: string[], body: string): string {
  * author wrote `10, 12, 14`. `__mx` is reserved by `checkReservedBindings`,
  * so no authored binding can take this name.
  */
-
+function hygienicIndex(params: string[], body: string): string {
+  return hygienicName("__mxIndex", params, body);
+}
 /**
  * Every identifier appearing anywhere in a `<for>`'s body or params.
  *

@@ -1043,7 +1043,12 @@ describe("compileSolidUnit", () => {
       filename: "/fixtures/nobody.mx",
     }).code;
     expect(code).toContain("export default function Nobody(input: Input)");
-    expect(code).not.toContain("$mxMerge");
+    // The body-channel machinery (`__mxChildren`/`__mxMerge`/`__mxBody`) is
+    // only emitted for a unit that actually reads `input.content`. The name
+    // is the reserved `__mxMerge`; asserting the old `$mxMerge` spelling
+    // could never fail once the rename landed.
+    expect(code).not.toContain("__mxMerge");
+    expect(code).not.toContain("__mxChildren");
   });
 
   it("emits an empty Input for a unit that declares none", () => {
