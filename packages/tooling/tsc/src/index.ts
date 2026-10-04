@@ -239,6 +239,35 @@ function fallBackToVolarResolution(
 }
 
 /**
+ * Makes a watch rebuild read an MX file through the same virtual projection the
+ * first program used, instead of through the host's own `getSourceFileByPath`.
+ *
+ * `tsc -w` installs `getSourceFileByPath` on the watch host (`createWatchProgram`,
+ * TypeScript 6.0.3 `_tsc.js:129796`) so a changed file is re-read and versioned,
+ * and `createProgram` prefers it over `getSourceFile` when it is there
+ * (`tryReuseStructureFromOldProgram`, `_tsc.js:123326`) — the single call site
+ * that reads a host method that way. Volar's `proxyCreateProgram` patches only
+ * `getSourceFile` (`proxyCreateProgram.js:98`), on its own copy of the host, so
+ * every *changed* file in a rebuild bypassed the language plugins entirely and
+ * was checked as its own MX source: a `.solid.mx` region then parsed as plain
+ * TSX and a template with a real `TS2345` reported nothing at all, while every
+ * unchanged file kept reporting. That is a silent pass, the one failure mode an
+ * agent cannot recover from by reading the output.
+ *
+ * Deleting the host's own method leaves `createProgram` on the `getSourceFile`
+ * path a non-watch run already takes, and loses nothing: the watch host's
+ * `getSourceFile` *is* that same versioned `getSourceFileByPath`, called with
+ * `toPath(fileName)` (`_tsc.js:129795`), so its source-file cache, its change
+ * detection and its failed-lookup watching all still run. Only Volar's
+ * projection is added back, which is what the first program of the same watcher
+ * already had.
+ */
+function virtualFilesInWatchRebuilds(host: ts.CompilerHost | undefined): void {
+  if (!host?.getSourceFileByPath) return;
+  delete host.getSourceFileByPath;
+}
+
+/**
  * One run of the real `tsc` entry point (`process.argv` as it stands), with the
  * MX language plugins spliced in. Every plugin it creates is pushed to the given
  * lists. Returns tsc's exit code.
@@ -278,13 +307,17 @@ function runPatchedTsc(
         plugins.push(createCompoundExtensionResolver(typescript));
         return {
           languagePlugins: plugins,
-          setup: (language) =>
+          setup: (language) => {
+            // Runs before Volar copies the host and patches `getSourceFile` on
+            // that copy, so both edits below land on the host it copies from.
+            virtualFilesInWatchRebuilds(options.host);
             fallBackToVolarResolution(
               typescript,
               options.host,
               language,
               astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
-            ),
+            );
+          },
         };
       },
       TYPESCRIPT_OBJECT,
