@@ -132,7 +132,7 @@ describe("`<for>` by=/key= (html)", () => {
   it("redirects `key=` to `by=`, at the attribute", () => {
     const of = failure(`<for|x| of=xs key="id"><p/></for>`);
     expect(of.message).toContain(
-      "keys items with the `by=` attribute, not `key=`. Use `by=\"propName\"` or `by=(item, index) => key`",
+      'keys items with the `by=` attribute, not `key=`. Use `by="propName"` or `by=(item, index) => key`',
     );
     expect(of).toMatchObject({ line: 1, column: 14 });
 

@@ -3571,19 +3571,19 @@ describe("<for> by=/key= (Marko parity)", () => {
 
   it("redirects `key=` to `by=`, at the attribute, for every loop form", () => {
     fails(
-      "<for|x| of=xs §key=\"id\"><p/></for>",
-      "keys items with the `by=` attribute, not `key=`. Use `by=\"propName\"` or `by=(item, index) => key`",
+      '<for|x| of=xs §key="id"><p/></for>',
+      'keys items with the `by=` attribute, not `key=`. Use `by="propName"` or `by=(item, index) => key`',
     );
     fails(
-      "<for|k, v| in=o §key=\"id\"><p/></for>",
+      '<for|k, v| in=o §key="id"><p/></for>',
       "keys items with the `by=` attribute, not `key=`. Use `by=(key, value) => key`",
     );
     fails(
-      "<for|i| to=3 §key=\"id\"><p/></for>",
+      '<for|i| to=3 §key="id"><p/></for>',
       "keys items with the `by=` attribute, not `key=`. Use `by=(num) => key`",
     );
     fails(
-      "<for|i| from=1 until=9 §key=\"id\"><p/></for>",
+      '<for|i| from=1 until=9 §key="id"><p/></for>',
       "keys items with the `by=` attribute, not `key=`. Use `by=(num) => key`",
     );
   });
@@ -3609,9 +3609,15 @@ describe("<for> by=/key= (Marko parity)", () => {
 
   it("keeps the string shorthand on `of`, and a function `by=` elsewhere", () => {
     expect(() => lowerSource('<for|x| of=xs by="id"><p/></for>')).not.toThrow();
-    expect(() => lowerSource("<for|k, v| in=o by=(k) => k><p/></for>")).not.toThrow();
-    expect(() => lowerSource("<for|i| to=3 by=(i) => i><p/></for>")).not.toThrow();
-    expect(() => lowerSource("<for|i| until=3 by=(i) => i><p/></for>")).not.toThrow();
+    expect(() =>
+      lowerSource("<for|k, v| in=o by=(k) => k><p/></for>"),
+    ).not.toThrow();
+    expect(() =>
+      lowerSource("<for|i| to=3 by=(i) => i><p/></for>"),
+    ).not.toThrow();
+    expect(() =>
+      lowerSource("<for|i| until=3 by=(i) => i><p/></for>"),
+    ).not.toThrow();
   });
 });
 
@@ -3631,7 +3637,7 @@ describe("<for> by=/key= (Marko parity)", () => {
  */
 describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", () => {
   it("lowers the shorthand to an ordinary attribute named `value:foo`", () => {
-    const ir = lowerSource("<div :foo=y id=\"z\"/>\n");
+    const ir = lowerSource('<div :foo=y id="z"/>\n');
     expect(find(ir.body, "Element").attrs).toMatchObject([
       { kind: "dynamic", name: "value:foo", value: { code: "y" } },
       { kind: "static", name: "id", value: "z" },
@@ -3646,14 +3652,14 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     // value — which is what Marko emits (`<div value:foo>`). It is NOT the
     // `boolean` kind: a host handed `true` renders React's non-boolean
     // warning and drops the attribute, Hono writes `value:foo="true"`.
-    expect(find(lowerSource("<div :foo/>").body, "Element").attrs).toMatchObject(
-      [{ kind: "static", name: "value:foo", value: "" }],
-    );
+    expect(
+      find(lowerSource("<div :foo/>").body, "Element").attrs,
+    ).toMatchObject([{ kind: "static", name: "value:foo", value: "" }]);
     // Every other valueless attribute stays `boolean` — only this one means
     // an empty value, because only this one is not a flag-shaped name.
-    expect(find(lowerSource("<div foo/>").body, "Element").attrs).toMatchObject([
-      { kind: "boolean", name: "foo" },
-    ]);
+    expect(find(lowerSource("<div foo/>").body, "Element").attrs).toMatchObject(
+      [{ kind: "boolean", name: "foo" }],
+    );
   });
 
   it("accepts the explicit `value:foo` spelling with the same meaning", () => {
@@ -3746,9 +3752,9 @@ describe("tag arguments are reported at the argument", () => {
   };
 
   it("points at the argument, not the tag", () => {
-    fails("<div (§click)=\"f()\"/>");
-    fails("<button (§click)=\"go()\">x</button>");
-    fails("<button (§keyup)=\"save()\">x</button>");
+    fails('<div (§click)="f()"/>');
+    fails('<button (§click)="go()">x</button>');
+    fails('<button (§keyup)="save()">x</button>');
   });
 
   it("points at the first argument of several", () => {

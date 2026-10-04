@@ -82,11 +82,11 @@ describe("`:modifier` is the attribute `value:modifier` (react)", () => {
     expect(compileReactMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
       "<div value:foo={y} />",
     );
-    expect(compileReactMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code).toContain(
-      `<div value:foo="lit" />`,
-    );
+    expect(
+      compileReactMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
+    ).toContain(`<div value:foo="lit" />`);
     expect(compileReactMx(`<div :foo/>`, "/fixtures/test.mx").code).toContain(
-      "<div value:foo=\"\" />",
+      '<div value:foo="" />',
     );
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.

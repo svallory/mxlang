@@ -79,14 +79,14 @@ describe("invalid attribute names (preact)", () => {
  */
 describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
   it("emits Marko's attribute, for every value kind", () => {
-    expect(compilePreactMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
-      "<div value:foo={y} />",
-    );
+    expect(
+      compilePreactMx(`<div :foo=y/>`, "/fixtures/test.mx").code,
+    ).toContain("<div value:foo={y} />");
     expect(
       compilePreactMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
     ).toContain(`<div value:foo="lit" />`);
     expect(compilePreactMx(`<div :foo/>`, "/fixtures/test.mx").code).toContain(
-      "<div value:foo=\"\" />",
+      '<div value:foo="" />',
     );
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.

@@ -520,9 +520,10 @@ function lowerAttr(
   // `value:foo` and Marko compiles it (`<div value:foo=y>`). It takes the
   // ordinary attribute path — the value kinds, the positions, the host's own
   // emission — so no host hook sees it and none has to grow a special case.
-  const name = attr.modifier && isValueModifier(attr)
-    ? `${attr.name}:${attr.modifier}`
-    : attr.name;
+  const name =
+    attr.modifier && isValueModifier(attr)
+      ? `${attr.name}:${attr.modifier}`
+      : attr.name;
 
   // `class:foo="x"` is a modifier Marko hands over as a base name plus a
   // modifier. Emitting only the base name renders `class="x"` — not a drop but
@@ -610,7 +611,9 @@ function lowerAttr(
       fail("`on-` needs an event name (`on-<event>`)", attr);
     }
     const event =
-      eventName[2] === "-" ? eventName.slice(3) : eventName.slice(2).toLowerCase();
+      eventName[2] === "-"
+        ? eventName.slice(3)
+        : eventName.slice(2).toLowerCase();
     warnOnNonDomEventSpelling(ctx, attr, eventName);
     return {
       kind: "event",

@@ -142,7 +142,7 @@ describe("`:modifier` renders as the attribute `value:modifier` (astro)", () => 
   it("renders the interpolated form", async () => {
     const html = await renderConditional(
       "value-modifier-dynamic",
-      "const y = \"hello\";",
+      'const y = "hello";',
       // In `.astro.mx` the braces would be an MX object expression, so the
       // dynamic attribute is written without them.
       "<div :foo=y/>",

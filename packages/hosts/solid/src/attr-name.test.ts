@@ -81,15 +81,17 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
       compileSolidMx(`<div :foo=y/>`, { filename: "fixture.solid.mx" }).code,
     ).toContain("<div value:foo={y}>");
     expect(
-      compileSolidMx(`<div :foo="lit"/>`, { filename: "fixture.solid.mx" }).code,
+      compileSolidMx(`<div :foo="lit"/>`, { filename: "fixture.solid.mx" })
+        .code,
     ).toContain(`<div value:foo="lit">`);
     expect(
       compileSolidMx(`<div :foo/>`, { filename: "fixture.solid.mx" }).code,
-    ).toContain("<div value:foo=\"\">");
+    ).toContain('<div value:foo="">');
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(
-      compileSolidMx(`<div value:foo=y/>`, { filename: "fixture.solid.mx" }).code,
+      compileSolidMx(`<div value:foo=y/>`, { filename: "fixture.solid.mx" })
+        .code,
     ).toContain("<div value:foo={y}>");
   });
 

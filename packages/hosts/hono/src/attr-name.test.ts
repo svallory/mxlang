@@ -81,11 +81,11 @@ describe("`:modifier` is the attribute `value:modifier` (hono)", () => {
     expect(compileHonoMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
       "<div value:foo={y} />",
     );
-    expect(compileHonoMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code).toContain(
-      `<div value:foo="lit" />`,
-    );
+    expect(
+      compileHonoMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
+    ).toContain(`<div value:foo="lit" />`);
     expect(compileHonoMx(`<div :foo/>`, "/fixtures/test.mx").code).toContain(
-      "<div value:foo=\"\" />",
+      '<div value:foo="" />',
     );
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
