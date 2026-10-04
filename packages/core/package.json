@@ -1,21 +1,39 @@
 {
   "name": "@mxlang/core",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.1",
+  "description": "MX core: compiles .mx templates on Marko's parser, shared by every target",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mxlang/mx",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "mx",
+    "marko",
+    "template",
+    "compiler"
+  ],
+  "type": "module",
   "engines": {
     "node": ">=22.18",
     "bun": ">=1.3"
   },
-  "private": true,
-  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/parser --external htmljs-parser && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",

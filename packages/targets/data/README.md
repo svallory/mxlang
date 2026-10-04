@@ -7,15 +7,24 @@ walk tags and attributes rather than render them. The first consumer is the
 Ash-style resource framework (mash); the fixture in
 `fixtures/ash-resource/post.mx` is its resource dialect.
 
-This package is private and ships its TypeScript source. There is no host:
-`data` is a hostless target (decision 132).
+Alpha (`0.1.0-alpha.1`, npm tag `alpha`): the API is unstable. It ships a
+built `dist/` with declarations and needs `@mxlang/core` at the same alpha.
+There is no host: `data` is a hostless target (decision 132).
+
+```sh
+bun add @mxlang/core@alpha @mxlang/data@alpha
+```
 
 ## Usage
 
 ```ts
 import { parseData } from "@mxlang/data";
 
-const { tree, diagnostics } = parseData(source, filename);
+const { tree, diagnostics } = parseData(source, filename, {
+  customTags, // contract-only tags; see below
+  structural: "reject",
+  unknownTags: "reject",
+});
 if (!tree) {
   // One positioned error; there is never a partial tree.
   console.error(diagnostics[0]);

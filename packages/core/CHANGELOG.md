@@ -1,5 +1,9 @@
 # @mxlang/core
 
+## 0.1.0-alpha.1
+
+First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 below. `@mxlang/core` is no longer `private`; `exports["."]` now carries a `types` condition so a `moduleResolution: bundler` consumer finds `dist/index.d.ts`. No code change. Unstable API.
+
 ## 0.1.0 (unreleased)
 
 ### Fixed: every printed position is 1-based (zero-based-cols-in-message-text)
