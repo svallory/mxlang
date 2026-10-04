@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Test (`mx.contracts`, decision 142):** a directly imported `ContractMap` passed as `customTags` runs the module's `analyze` under `structural: "reject"` with no scan, and is unaffected by a local `tags/` file that `getCustomTags` would pick up. The dialect-package docs page now shows both one-liners, their differences, and how to compose a dialect as one generated module.
+
 - **Test (body whitespace, decision 141):** pins Marko-normalized spaces/tabs/CRLF and comments beside whitespace in the pass-through tree. A retained one-space text node is still rejected as text under `structural: "reject"`; dropped newline indentation is not structural text. No data-specific normalization is added.
 
 - **Added, unstable (data-pr3, decisions 129 and 132):** the `data` target

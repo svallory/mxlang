@@ -1,4 +1,5 @@
 import {
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -9,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  type CustomTag,
   clearScanCache,
   createTargetLookup,
   getCustomTags,
@@ -428,5 +430,92 @@ describe("mx.contracts on the data path", () => {
     expect(result.diagnostics[0]?.message).toContain(
       "one of `action` or `action-type` is required",
     );
+  });
+});
+
+/**
+ * The direct one-liner a dialect's own build uses: import the module's
+ * `ContractMap` and pass it as `customTags`, with no scan. Mesh depends on
+ * `analyze` running on this path under `structural: "reject"` for its
+ * conditional rules (enum `values`, `action`/`action-type`), so it is pinned
+ * here rather than inferred from the scan path above.
+ */
+describe("a directly imported ContractMap on the data path", () => {
+  async function importedContracts() {
+    const { dir } = dialectProject("");
+    const module = (await import(join(dir, "contracts.ts"))) as {
+      default: Record<string, CustomTag>;
+    };
+    return { dir, contracts: module.default };
+  }
+
+  it("runs analyze with customTags passed directly and structural: reject", async () => {
+    const { dir, contracts } = await importedContracts();
+    const invalid = parseData(
+      [
+        'resource="post" table="posts"',
+        "  attributes",
+        "  policies",
+        "    policy",
+        "      authorize-if=({ post }) => post.state === 'published'",
+      ].join("\n"),
+      join(dir, "post.mx"),
+      { customTags: contracts, structural: "reject" },
+    );
+    expect(
+      invalid.diagnostics.map(({ line, column, message }) => ({
+        line,
+        column,
+        message,
+      })),
+    ).toEqual([
+      {
+        line: 4,
+        column: 4,
+        message: "`<policy>`: one of `action` or `action-type` is required",
+      },
+    ]);
+
+    const valid = parseData(
+      [
+        'resource="post" table="posts"',
+        "  attributes",
+        "  policies",
+        '    policy action="read"',
+        "      authorize-if=({ post }) => true",
+      ].join("\n"),
+      join(dir, "post.mx"),
+      { customTags: contracts, structural: "reject" },
+    );
+    expect(valid.diagnostics).toEqual([]);
+  });
+
+  it("ignores a local tags/ file that getCustomTags would pick up", async () => {
+    const { dir, contracts } = await importedContracts();
+    const file = join(dir, "post.mx");
+    const baseline = parseData(ashSource, file, {
+      customTags: contracts,
+      structural: "reject",
+    });
+    expect(baseline.diagnostics).toEqual([]);
+
+    // A stray local template for a dialect name: the scan lets it win.
+    mkdirSync(join(dir, "tags"));
+    writeFileSync(join(dir, "tags", "attribute.mx"), "<span/>\n");
+    const scanned = getCustomTags(file, { targets: dataTargets, host: null });
+    expect(
+      (scanned.attribute as { template?: { filename: string } } | undefined)
+        ?.template?.filename,
+    ).toBe(join(dir, "tags", "attribute.mx"));
+
+    // parseData with the directly imported map does not consult tags/: the
+    // same source still validates and yields the same tree.
+    clearScanCache();
+    const withLocalTags = parseData(ashSource, file, {
+      customTags: contracts,
+      structural: "reject",
+    });
+    expect(withLocalTags.diagnostics).toEqual([]);
+    expect(withLocalTags.tree).toEqual(baseline.tree);
   });
 });
