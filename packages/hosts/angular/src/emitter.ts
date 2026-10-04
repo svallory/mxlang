@@ -293,7 +293,17 @@ const AT_LOWER = /@(?=[a-z])/g;
 
 /**
  * `{`/`}` -> a single-character interpolation literal (`{{ '{' }}` /
- * `{{ '}' }}`); `@` before a lowercase identifier -> `&#64;`.
+ * `{{ '}' }}`). Shared by static text and static attribute values; the
+ * `@`-before-lowercase rule below is text-only (Angular lexes `@` blocks in
+ * text, never in attribute values).
+ */
+function escapeBraces(value: string): string {
+  return value.replace(/[{}]/g, (char) => `{{ '${char}' }}`);
+}
+
+/**
+ * `{`/`}` -> a single-character interpolation literal; `@` before a lowercase
+ * identifier -> `&#64;`.
  *
  * Entity encoding (`&#123;`/`&#125;`) is correct for an *isolated* brace —
  * measured, `a &#123; b` parses. It fails only for an entity-encoded `{{ …
@@ -306,9 +316,7 @@ const AT_LOWER = /@(?=[a-z])/g;
  * the pair case — one rule instead of two.
  */
 function escapeText(value: string): string {
-  return value
-    .replace(/[{}]/g, (char) => `{{ '${char}' }}`)
-    .replace(AT_LOWER, "&#64;");
+  return escapeBraces(value).replace(AT_LOWER, "&#64;");
 }
 
 function esc(value: string): string {
@@ -584,19 +592,41 @@ function emitAttrs(
     // attribute's generated extent starts one past `before`.
     const before = out.length;
     switch (attr.kind) {
-      case "static":
+      case "static": {
+        const styled =
+          (attr.name === "class" || attr.name === "style") &&
+          /[{}]/.test(attr.value);
         out.write(" ");
+        if (styled) out.write("[attr.");
         writeAttributeName(out, attr.name, attr.nameSpan);
-        // The value is a plain string literal in the IR with no span of its
-        // own, so only the name is mapped here. Angular evaluates `{{ … }}`
-        // inside an attribute value, so the value gets the same brace
-        // escaping as static text (angular-attr-interpolation-literal):
-        // Marko renders `title="{{ x }}"` as the literal text, and the
-        // emitted `{{ '{' }}` interpolation is probed to render that same
-        // text. `escapeText` runs before `esc` so the `&`/`"` layer never
-        // sees the escaping's own characters.
-        out.write(`="${esc(escapeText(attr.value))}"`);
+        if (styled) {
+          // Angular's class/style pipelines do not tolerate braces: a static
+          // class re-tokenizes evaluated interpolation literals
+          // (`class="{{ x }}"` renders `x {{ }}`), and a static style trips
+          // Angular's style parser. A property binding bypasses both
+          // pipelines, and — probed — Angular parses a binding value as one
+          // expression with no interpolation splitting, so the raw braces go
+          // in verbatim inside a string literal and render exactly. Inside
+          // the literal, `\` and `'` are expression-escaped, then `esc`
+          // handles the HTML `&`/`"` layer.
+          out.write(`]="`);
+          out.write(
+            esc(`'${attr.value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`),
+          );
+          out.write('"');
+        } else {
+          // The value is a plain string literal in the IR with no span of
+          // its own, so only the name is mapped here. Angular evaluates
+          // `{{ … }}` inside an attribute value, so a static value gets the
+          // brace escaping from `escapeText` — the `@`-before-lowercase rule
+          // is text-only (Angular lexes `@` blocks in text, never in
+          // attribute values) and must not run here: its `&#64;` entity
+          // would be double-escaped by `esc` and render as the literal text
+          // `&#64;` (rev F1).
+          out.write(`="${esc(escapeBraces(attr.value))}"`);
+        }
         break;
+      }
       case "boolean":
         out.write(" ");
         writeAttributeName(out, attr.name, attr.nameSpan);

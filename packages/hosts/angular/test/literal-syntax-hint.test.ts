@@ -188,6 +188,14 @@ describe("literal Angular syntax in a template", () => {
       // at the `;` inside the string, inlining the truncated `'x`.
       expect(msg("<p>@let a = 'x;y' | f;</p>")).toContain("`<const/a=…>`");
     });
+    it("a `@let` value whose quotes are entity-encoded scans to the real terminator (rev F4)", () => {
+      // `letDecl` scans the raw source span, where the quote is an entity
+      // (Marko decodes it in the Text value, but the span keeps `&#96;`).
+      // The value must not be cut at the entity's own `;`.
+      expect(msg("<p>@let z = &#96;a;b&#96;;</p>")).toContain(
+        "`<const/z=&#96;a;b&#96;>`",
+      );
+    });
     it("@case and @default point at the if/else-if chain", () => {
       expect(msg("<p>@case (1) { a }</p>")).toContain(
         "an `<if>`/`<else if>` chain",

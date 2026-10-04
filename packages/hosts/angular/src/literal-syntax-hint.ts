@@ -122,10 +122,41 @@ function isRewritable(expr: string): boolean {
 }
 
 /**
+ * Entities that decode to a string-literal quote char, as a raw-source
+ * spelling -> quote map. `letDecl` scans the raw span (Marko decodes the
+ * entities in the Text *value*, but the span keeps `&#96;`), so a quoted
+ * value can be entity-wrapped; without this, the entity's own `;` would cut
+ * the value (`@let z = &#96;a;b&#96;;` -> `&#96`). Numeric forms accept any
+ * zero-padding and case (`&#x60;`, `&#X60;`, `&#096;`).
+ */
+const ENTITY_QUOTES: [RegExp, string][] = [
+  [/&#0*96;/i, "`"],
+  [/&#0*34;/i, '"'],
+  [/&#0*39;/i, "'"],
+  [/&quot;/i, '"'],
+  [/&apos;/i, "'"],
+  [/&#x0*60;/i, "`"],
+  [/&#x0*22;/i, '"'],
+  [/&#x0*27;/i, "'"],
+];
+
+/** The quote an entity at `text[i]` decodes to, or `undefined`. */
+function entityQuote(text: string, i: number): string | undefined {
+  for (const [entity, quote] of ENTITY_QUOTES) {
+    entity.lastIndex = 0;
+    if (entity.test(text.slice(i, i + 12))) return quote;
+  }
+  return undefined;
+}
+
+/**
  * The `name` and `value` of a `@let name = value;` whose head starts at the
  * beginning of `text`. The value ends at the first `;` *outside* a string
  * literal — a `;` inside `'x;y'` does not cut it — and a template literal's
- * `${…}` regions count as code, so quotes inside them don't either.
+ * `${…}` regions count as code, so quotes inside them don't either. A value
+ * whose quotes are entity-encoded (`&#96;…&#96;`) is skipped as a pair; a
+ * lone entity-quote with no pair falls back to the `…` placeholder rather
+ * than inlining a truncated value.
  */
 function letDecl(text: string): { name: string; value: string } | undefined {
   const m = /^\s+([A-Za-z_$][\w$]*)\s*=\s*/.exec(text);
@@ -133,7 +164,15 @@ function letDecl(text: string): { name: string; value: string } | undefined {
   const start = m[0].length;
   for (let i = start; i < text.length; i++) {
     const c = text[i];
-    if (c === '"' || c === "'" || c === "`") {
+    if (c === "&") {
+      const quote = entityQuote(text, i);
+      if (!quote) continue;
+      // The same entity spelling closes the pair; content between is opaque.
+      const entity = text.slice(i, i + 12).match(/^&[^;]*;/)?.[0];
+      const close = text.indexOf(entity ?? "", i + (entity?.length ?? 0));
+      if (close < 0) return { name: m[1] ?? "", value: "…" };
+      i = close + (entity?.length ?? 1) - 1;
+    } else if (c === '"' || c === "'" || c === "`") {
       const close = closingQuote(text, i);
       if (close < 0) return undefined;
       i = close;

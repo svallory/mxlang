@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assertAngularParses, compileMx, emit } from "./helpers.ts";
+import {
+  assertAngularParses,
+  compileMx,
+  emit,
+  emitWithTags,
+} from "./helpers.ts";
 
 describe("Text", () => {
   it("protects Marko-normalized retained whitespace from Angular trimming (decision 141)", () => {
@@ -50,6 +55,70 @@ describe("Text", () => {
   it("escapes a single brace in a static attribute value", () => {
     const out = emit('<div title="a { b"></div>');
     expect(out).toBe(`<div title="a {{ '{' }} b"></div>`);
+    assertAngularParses(out);
+  });
+
+  it("does not escape @ in a static attribute value (rev F1)", () => {
+    // The `@`-before-lowercase rule exists for *text*, where Angular lexes
+    // `@` blocks; attribute values are never scanned for blocks, and the
+    // entity would be double-escaped by esc (`&amp;#64;`) rendering as
+    // the literal text `&#64;`. `@` must pass through like main.
+    const mail = emit('<a href="mailto:me@example.com">x</a>');
+    expect(mail).toBe('<a href="mailto:me@example.com">x</a>');
+    assertAngularParses(mail);
+    const handle = emit('<div title="@handle"></div>');
+    expect(handle).toBe('<div title="@handle"></div>');
+    assertAngularParses(handle);
+  });
+
+  it('escapes & and " in a static attribute value, keeping a literal &#64; (rev F1)', () => {
+    // Marko does not decode entities in attribute values (probed: raw in,
+    // raw out), so the emitter's value is the raw text and esc alone
+    // round-trips it to the DOM.
+    const out = emit("<div title='a \" b & c'>x</div>");
+    expect(out).toBe('<div title="a &quot; b &amp; c">x</div>');
+    assertAngularParses(out);
+    const entity = emit('<div title="a &#64; b">x</div>');
+    expect(entity).toBe('<div title="a &amp;#64; b">x</div>');
+    assertAngularParses(entity);
+  });
+
+  it("does not escape @ in a static component input (rev F1)", () => {
+    const out = emitWithTags('<MyComp title="@handle"/>', ["MyComp"]);
+    expect(out).toBe('<mx-my-comp title="@handle"></mx-my-comp>');
+    assertAngularParses(out);
+  });
+
+  it("emits a static class value with braces as an [attr.class] string binding (rev F2)", () => {
+    // Angular's class pipeline re-tokenizes a static class, mangling
+    // evaluated interpolation literals (`class="{{ x }}"` renders `x {{ }}`).
+    // A property binding bypasses the pipeline; probed, Angular parses a
+    // binding value as one expression with no interpolation splitting, so
+    // the raw braces render exactly inside a string literal.
+    const out = emit('<div class="{{ x }}"></div>');
+    expect(out).toBe(`<div [attr.class]="'{{ x }}'"></div>`);
+    assertAngularParses(out);
+  });
+
+  it("emits a static style value with braces as an [attr.style] string binding (rev F3)", () => {
+    // Angular's style parser asserts on a static style holding braces;
+    // [attr.style] bypasses it and renders the value exactly.
+    const out = emit('<div style="{{ x }}"></div>');
+    expect(out).toBe(`<div [attr.style]="'{{ x }}'"></div>`);
+    assertAngularParses(out);
+  });
+
+  it("escapes quotes and backslashes inside the [attr.class] literal (rev F2)", () => {
+    // Marko unescapes attribute values (`\c` -> `c`), so a real backslash
+    // is written `\\` in source; the held value here is `a'b\c{x}`.
+    const out = emit(`<div class="a'b\\\\c{x}"></div>`);
+    expect(out).toBe(`<div [attr.class]="'a\\'b\\\\c{x}'"></div>`);
+    assertAngularParses(out);
+  });
+
+  it("keeps a brace-free class/style value static (rev F2/F3)", () => {
+    const out = emit('<div class="a b" style="color: red"></div>');
+    expect(out).toBe('<div class="a b" style="color: red"></div>');
     assertAngularParses(out);
   });
 
