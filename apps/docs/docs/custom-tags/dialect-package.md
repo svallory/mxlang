@@ -94,6 +94,8 @@ Both run every declaration rule and the module's `analyze` hooks, including unde
 
 By default `parseData` accepts a tag that has no contract (the open set). A dialect that declares every tag can refuse the rest with `unknownTags: "reject"`: any tag at any depth whose name is not in `customTags` is a positioned error naming the tag, with a `did you mean` hint when one declared name is clearly nearest. `#root` placement stays the job of `parents`; the reserved names (`if`, `for`, `const`, ...) are never "unknown", and `<@name>` attribute tags are governed by the parent's `attributeTags`, not by this option.
 
+The check runs on a tag before anything inside it, in document order, so the first error is the root cause: a typo'd parent (`resourse="post"`) is reported with its `did you mean` hint, not the `<attributes> must be inside <resource>` error of the child under it. An error that comes earlier in the file, or a known parent's `children` error positioned at the unknown tag itself, is reported instead; under `structural: "reject"` the construct or unknown tag that comes first wins.
+
 ```ts
 parseData(source, file, {
   customTags: contracts,
@@ -103,7 +105,7 @@ parseData(source, file, {
 // widget="post"  ->  1:0 `<widget>` is not a known tag: it has no contract in `customTags`
 ```
 
-Core's contract errors and a `structural: "reject"` hit are reported first; the unknown-tag check runs on an otherwise valid file. A `transform` that emits tags is not supported on the data target yet: `parseData` throws on its output in either mode (TODO `data-transform-output-tree`). The check itself only ever looks at names the file's author wrote.
+A `transform` that emits tags is not supported on the data target yet: `parseData` throws on its output in either mode (TODO `data-transform-output-tree`). The check itself only ever looks at names the file's author wrote.
 
 ## Composing a dialect from parts
 

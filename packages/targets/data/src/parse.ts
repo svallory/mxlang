@@ -19,9 +19,10 @@ import {
   isTranslateError,
   type MxWarning,
 } from "@mxlang/core";
-import { buildDataDocument, lineStartsOf } from "./build.ts";
+import { buildDataDocument, lineStartsOf, unknownTagMessage } from "./build.ts";
 import { dataDeclarations } from "./declarations.ts";
 import descriptor from "./descriptor.ts";
+import { scanAuthoredTags } from "./scan.ts";
 import { dataTaglib } from "./taglib.ts";
 import type { DataDocument } from "./tree.ts";
 
@@ -54,6 +55,9 @@ export interface ParseDataOptions {
    * positioned error ("the data tree is static; this file's consumer does
    * not evaluate `<if>`"), for a consumer that wants tags and attributes
    * only and must not silently ignore an `<if>` its codegen never reads.
+   * A structural hit and a build error (a dynamic tag, a doctype) are
+   * ordered by position: the one earlier in the file is reported. Before,
+   * the structural hit always won.
    */
   structural?: "pass" | "reject";
   /**
@@ -63,8 +67,12 @@ export interface ParseDataOptions {
    * naming the tag, with a nearest-declared-name hint when one is close. A
    * dialect that declares every tag uses it so a typo at the top level
    * cannot pass silently. Placement at `#root` stays the job of `parents`;
-   * the reserved names never reach the check (core consumes them first), and
-   * a parent's own `children`/`parents` error wins when both would fire.
+   * the reserved names never reach the check (core consumes them first). The
+   * check runs on a tag before anything inside it, in document order: an
+   * unknown parent is reported before its children's `parents`/`children`
+   * errors, and the earliest position wins against a `structural: "reject"`
+   * hit or a build error. A known parent's `children` error positioned at
+   * the unknown tag itself still wins.
    */
   unknownTags?: "allow" | "reject";
   /**
@@ -194,6 +202,40 @@ function toDiagnostic(
 }
 
 /**
+ * The unknown authored tag that a core error must yield to, if any.
+ *
+ * Core raises a contract error (`parents`/`children`) during compile and
+ * stops at the first, so an unknown parent's own typo would be hidden behind
+ * its child's error. Under `unknownTags: "reject"` the unknown-tag check
+ * comes first in document order: scan the authored tags with a parse-only
+ * pass (`scan.ts`, no lowering, so a later lowering error cannot interfere)
+ * and return the first unknown one when it opens strictly before the core
+ * error. An ancestor of the failing tag always does. When the source does not
+ * parse there is nothing to list and the original error stands.
+ * On this path the build never runs, so an unknown tag wins a tie with a build
+ * error at the same position.
+ */
+function unknownTagBefore(
+  error: DataDiagnostic,
+  source: string,
+  filename: string,
+  options: ParseDataOptions,
+): { message: string; at: { line: number; column: number } } | null {
+  if (error.file !== undefined && error.file !== filename) return null;
+  const tags = scanAuthoredTags(source, filename, options.customTags);
+  if (!tags) return null;
+  const declared = new Set(Object.keys(options.customTags ?? {}));
+  const unknown = tags.find((tag) => !declared.has(tag.name));
+  if (!unknown) return null;
+  const { line, column } = unknown;
+  const before =
+    line < error.line || (line === error.line && column < error.column);
+  return before
+    ? { message: unknownTagMessage(unknown.name, declared), at: unknown }
+    : null;
+}
+
+/**
  * Parses one data source into its static tree.
  *
  * Never throws for a source-level problem: a parse error, a rejected
@@ -244,7 +286,25 @@ export function parseData(
   } catch (error) {
     const diagnostic = toErrorDiagnostic(error);
     if (!diagnostic) throw error;
-    return { tree: undefined, diagnostics: [diagnostic] };
+    const unknown =
+      options.unknownTags === "reject"
+        ? unknownTagBefore(diagnostic, source, filename, options)
+        : null;
+    return {
+      tree: undefined,
+      diagnostics: [
+        unknown
+          ? toDiagnostic(
+              "error",
+              unknown.message,
+              unknown.at,
+              lineStarts,
+              source,
+              filename,
+            )
+          : diagnostic,
+      ],
+    };
   }
   if (!ir) {
     throw new Error("@mxlang/data: compile produced no IR and no error");

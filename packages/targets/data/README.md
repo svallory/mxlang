@@ -37,8 +37,12 @@ return `{ tree, diagnostics }`. Options:
   the top level of a closed dialect cannot pass silently. `#root` placement
   stays the job of `parents`; reserved names are never "unknown", and `<@name>`
   attribute tags are governed by the parent's `attributeTags`, not this
-  option. Core's contract errors and a `structural: "reject"` hit are reported
-  first; this check runs on an otherwise valid file.
+  option. The check runs on a tag before anything inside it, in document
+  order: an unknown parent is reported before its children's `parents` /
+  `children` errors (`resourse` before the `<attributes>` inside it), and
+  against a `structural: "reject"` hit the construct that comes first wins. A
+  known parent's `children` error positioned at the unknown tag itself, or
+  any error that comes earlier in the file, still wins.
 - `customTags` — contract-only custom tags (decision 130): required
   attributes and attribute types, validated by core with no data-specific
   code.

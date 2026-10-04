@@ -30,6 +30,7 @@ import {
   type ForHead,
   type Ir,
   type IrNode,
+  isTranslateError,
   nearestName,
   type Position,
   type SourceSpan,
@@ -267,29 +268,8 @@ function dataForHead(head: ForHead, what: string): DataForHead {
   };
 }
 
-/**
- * `unknownTags: "reject"`: a tag with no contract in `customTags` is an error
- * at the tag name. Runs before the tag's body is built, so the body of an
- * unknown tag is never reported on (one error per unknown call). A parent's
- * closed `children` / a `parents` list are enforced by core during compile and
- * so win over this check when both would fire.
- */
-function rejectUnknownTag(name: string, at: Position): void {
-  if (activeOptions.unknownTags !== "reject") return;
-  if (activeOptions.declaredTags.has(name)) return;
-  const near = nearestName(name, activeOptions.declaredTags);
-  fail(
-    `\`<${name}>\` is not a known tag: it has no contract in \`customTags\`${near ? `; did you mean \`<${near}>\`?` : ""}`,
-    at,
-  );
-}
-
 function dataTag(tag: DelegatedTag<unknown>): DataTag {
   checkTagName(tag.name, tag.loc);
-  // A synthesized tag (one a declared tag's `transform` emitted) has no
-  // `nameSpan` (core's marker, `DelegatedTag.nameSpan`): it is the dialect
-  // author's output, not a name the file's author wrote, so it is not checked.
-  if (tag.nameSpan !== undefined) rejectUnknownTag(tag.name, tag.loc);
   rejectMergedShorthandClass(tag.attrs, tag.loc);
   if (tag.var !== null) {
     fail(
@@ -368,11 +348,6 @@ function dataAttrTagNode(node: AttributeTagNode): DataAttrTagNode {
 // span on `InputInterface`), and a statement's structural-reject position is
 // derived from its span. Set per `buildDataDocument` call (compiles are
 // synchronous and single-threaded, same as core's own `current` handle).
-let activeOptions: BuildOptions = {
-  structural: "pass",
-  unknownTags: "allow",
-  declaredTags: new Set(),
-};
 let activeLineStarts: number[] = [0];
 let activeSourceLength = 0;
 /** The source itself, for the two span adjustments that need its text. */
@@ -568,6 +543,85 @@ function statements(ir: Ir): DataStatement[] {
   return out;
 }
 
+/** The error text for an authored tag with no contract in `customTags`. */
+export function unknownTagMessage(
+  name: string,
+  declaredTags: ReadonlySet<string>,
+): string {
+  const near = nearestName(name, declaredTags);
+  return `\`<${name}>\` is not a known tag: it has no contract in \`customTags\`${near ? `; did you mean \`<${near}>\`?` : ""}`;
+}
+
+/** An unknown authored tag, for `unknownTags: "reject"`. */
+export interface UnknownTagHit {
+  message: string;
+  at: Position;
+}
+
+/** Whether a positioned error opens strictly after `at`. */
+function isAfter(error: TranslateError, at: Position): boolean {
+  return (
+    error.line > at.line || (error.line === at.line && error.column > at.column)
+  );
+}
+
+function isBefore(a: Position, b: Position): boolean {
+  return a.line < b.line || (a.line === b.line && a.column < b.column);
+}
+
+/**
+ * The first authored tag, in document order, with no contract in
+ * `declaredTags`; `null` when there is none.
+ *
+ * Document order is parent first: a tag's opening precedes everything inside
+ * it, so an unknown parent is reported before anything in its body, which is
+ * the cause where a child's error is the symptom. A tag a declared tag's
+ * `transform` emitted has no `nameSpan` (core's marker,
+ * `DelegatedTag.nameSpan`): it is the dialect author's output, not a name the
+ * file's author wrote, so it is skipped. `<@name>` is never checked.
+ */
+export function firstUnknownTag(
+  ir: Ir,
+  declaredTags: ReadonlySet<string>,
+): UnknownTagHit | null {
+  let best: { name: string; at: Position } | null = null;
+  const visitTag = (tag: DelegatedTag<unknown>) => {
+    if (
+      tag.nameSpan !== undefined &&
+      !declaredTags.has(tag.name) &&
+      (!best || isBefore(tag.loc, best.at))
+    ) {
+      best = { name: tag.name, at: tag.loc };
+    }
+    visitAttrTagNodes(tag.attributeTagTree);
+    visitNodes(tag.children);
+  };
+  const visitAttrTagNodes = (nodes: AttributeTagNode[]) => {
+    for (const node of nodes) {
+      if (node.kind === "AttributeTag") {
+        visitAttrTagNodes(node.tag.attributeTagTree);
+        visitNodes(node.tag.block.children);
+      } else if (node.kind === "AttributeTagIf") {
+        for (const branch of node.branches) visitAttrTagNodes(branch.nodes);
+      } else {
+        visitAttrTagNodes(node.nodes);
+      }
+    }
+  };
+  const visitNodes = (nodes: IrNode[]) => {
+    for (const node of nodes) {
+      if (node.kind === "DelegatedTag") visitTag(node.tag);
+      else if (node.kind === "IfChain") {
+        for (const branch of node.branches) visitNodes(branch.children);
+      } else if (node.kind === "For") visitNodes(node.children);
+    }
+  };
+  visitNodes(ir.body);
+  if (!best) return null;
+  const { name, at } = best as { name: string; at: Position };
+  return { message: unknownTagMessage(name, declaredTags), at };
+}
+
 /** The earliest structural construct, for `structural: "reject"`. */
 interface StructuralHit {
   construct: string;
@@ -633,7 +687,11 @@ function structuralInNodes(nodes: IrNode[]): StructuralHit | null {
   return null;
 }
 
-function rejectStructural(ir: Ir, stmts: DataStatement[]): never {
+/** The earliest structural construct, as a position and message. */
+function firstStructural(
+  ir: Ir,
+  stmts: DataStatement[],
+): { message: string; at: Position } | null {
   let best: StructuralHit | null = structuralInNodes(ir.body);
   for (const stmt of stmts) {
     if (!best || stmt.span.sourceStart < best.offset) {
@@ -644,8 +702,9 @@ function rejectStructural(ir: Ir, stmts: DataStatement[]): never {
       };
     }
   }
-  if (best) fail(structuralMessage(best.construct), best.at);
-  throw new Error('@mxlang/data: structural: "reject" found no construct');
+  return best
+    ? { message: structuralMessage(best.construct), at: best.at }
+    : null;
 }
 
 /**
@@ -659,22 +718,43 @@ export function buildDataDocument(
   filename: string,
   options: BuildOptions,
 ): DataDocument {
-  activeOptions = options;
   activeLineStarts = lineStartsOf(source);
   activeSource = source;
   activeSourceLength = source.length;
   const stmts = statements(ir);
-  if (options.structural === "reject") {
-    // Only reject when a structural construct exists; a tags-and-attributes
-    // file builds the same under either option.
-    if (stmts.length > 0 || structuralInNodes(ir.body) !== null) {
-      rejectStructural(ir, stmts);
+  // The two document-wide rejects compete by position, earliest first. A
+  // tags-and-attributes file builds the same under either option.
+  const structural =
+    options.structural === "reject" ? firstStructural(ir, stmts) : null;
+  const unknown =
+    options.unknownTags === "reject"
+      ? firstUnknownTag(ir, options.declaredTags)
+      : null;
+  const first =
+    structural && unknown
+      ? isBefore(unknown.at, structural.at)
+        ? unknown
+        : structural
+      : (structural ?? unknown);
+  let children: DataNode[];
+  try {
+    children = dataNodes(ir.body);
+  } catch (error) {
+    // A build error that comes earlier in the file than the hit (a dynamic
+    // tag name, a doctype, an unusable name) is the first error, and so is
+    // one at the same position: a check on the tag is not "inside" it. An
+    // error that is not a positioned `TranslateError` is an internal bug and
+    // is never replaced by the hit.
+    if (first && isTranslateError(error) && isAfter(error, first.at)) {
+      fail(first.message, first.at);
     }
+    throw error;
   }
+  if (first) fail(first.message, first.at);
   return {
     kind: "document",
     filename,
     statements: stmts,
-    children: dataNodes(ir.body),
+    children,
   };
 }
