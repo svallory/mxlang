@@ -2493,9 +2493,9 @@ by core, at the key's value (code `unknown-target`):
 `mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
 The language server and the TypeScript plugin report it as a policy
 error and the Vite plugin fails the transform with it. `mx-tsc` asks the wrapper
-for the unmasked policy when it is run on a data package (§13.7.4); under a
-tsconfig program that spans packages, or under `-b`/`-w`, it still reports the
-error like the editor tools. The tools still hand on
+for the unmasked policy when it is run on a package whose own `package.json`
+says `mx.target: "data"` (§13.7.4); in every other run (rule-5 inference, a
+monorepo root, `-b`/`-w`) it still reports the error like the editor tools. The tools still hand on
 the same fallback as any `unknown-target` (rule 5, else `html`), so later
 diagnostics are not drowned, but the error means no green build. The Bun loader
 does not read `mx.target` at all: `@mxlang/html/bun` always compiles as `html`.
@@ -2712,11 +2712,15 @@ accepts it.
 
 #### 13.7.4 `mx-tsc` on a data package
 
-**Decision 131, addendum 4.** `mx-tsc` run on a project whose policy resolves
-to `data` (§13.5: `mx.target: "data"`, or rule 5) does not build a TypeScript
-program. With no tsconfig it parses every `.mx` file under the project
-directory whose nearest `package.json` resolves to `data`, in path order
-(skipping `node_modules` and dot directories), with `parseData` and the
+**Decision 131, addendum 4.** `mx-tsc` run on a project directory whose own
+`package.json` says `mx.target: "data"` does not build a TypeScript program.
+Rule-5 inference from an `@mxlang/data` dependency does **not** switch it: such
+a package, a monorepo root, and a directory with no manifest of its own keep
+their ordinary `tsc` run and the staged error for their data files, so a
+TypeScript error is never swallowed by an inference. With no tsconfig it parses
+every `.mx` file under the directory that the policy assigns to `data`, in
+full-path order (skipping `node_modules` and dot directories; a nested package
+that resolves to another target is not walked), with `parseData` and the
 package's own tag map (`getCustomTags(file, { host: null })`: `tags/` sidecars
 and `mx.contracts`). The command is `mx-tsc` in the package directory, or
 `mx-tsc -p <dir>`; `-p` also accepts a tsconfig path (only its directory is
@@ -2727,8 +2731,14 @@ Each diagnostic prints as `file(line,column): error TS80001: message` (a
 warning is `TS80002`): the compile diagnostic a host `.mx` file gets, so one
 search finds every `.mx` problem. Positions are 1-based, converted from the
 diagnostic's 1-based `line` and 0-based `column`. A problem in the
-configuring `package.json` (a scan diagnostic, an invalid `mx.data` value) is
-`TS80003` at its position. The exit code is 1 when any diagnostic is an error
+configuring `package.json` is `TS80003` at its position: the resolution's own
+policy diagnostics (a mismatch, an unknown target or host) with their own
+severity, a scan warning, an invalid `mx.data` value (checked even when there
+is no `.mx` file). A discovery failure (a missing or invalid `mx.contracts`
+module) is an error at the position it carries, and independent packages are
+still checked; it is never an empty tag map with a green result. A broken or
+looping `.mx` link and an unreadable directory are `TS80001` errors naming the
+path. The exit code is 1 when any diagnostic is an error
 and 0 otherwise; a clean package prints nothing.
 
 `package.json#mx.data` is `{ "structural"?: "pass" | "reject", "unknownTags"?:

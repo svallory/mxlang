@@ -1,9 +1,11 @@
 import {
+  chmodSync,
   cpSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -180,8 +182,9 @@ describe("mx-tsc on a data package", () => {
     expect(output).toContain("missing required attribute `size`");
   });
 
-  it("checks files in sorted order, skips node_modules, dot dirs and other targets", () => {
+  it("checks files in full-path sorted order, skips node_modules, dot dirs and other targets", () => {
     const dir = emptyPackage({ mx: { target: "data" } });
+    writeFileSync(join(dir, "a-.mx"), "<oops\n");
     for (const sub of ["b", "a", "node_modules/x", ".cache", "html-sub"]) {
       mkdirSync(join(dir, sub), { recursive: true });
       writeFileSync(join(dir, sub, "f.mx"), "<oops\n");
@@ -193,15 +196,7 @@ describe("mx-tsc on a data package", () => {
     writeFileSync(join(dir, "z.mx"), "<oops\n");
     const { output } = check(dir);
     const files = [...output.matchAll(/^(\S+?\.mx)\(/gm)].map((m) => m[1]);
-    expect(files).toEqual(["a/f.mx", "b/f.mx", "z.mx"]);
-  });
-
-  it("a data package found by @mxlang/data in dependencies is checked too", () => {
-    const dir = emptyPackage({ dependencies: { "@mxlang/data": "*" } });
-    writeFileSync(join(dir, "bad.mx"), "<oops\n");
-    const { status, output } = check(dir);
-    expect(status).toBe(1);
-    expect(output).toContain("bad.mx(1,");
+    expect(files).toEqual(["a-.mx", "a/f.mx", "b/f.mx", "z.mx"]);
   });
 
   it("flags other than -p and --pretty fall through to tsc", () => {
@@ -210,5 +205,273 @@ describe("mx-tsc on a data package", () => {
     expect(run.status).toBe(0);
     expect(run.stdout).toMatch(/Version \d+\./);
     expect(check(dir, "--pretty", "false").status).toBe(0);
+  });
+  describe("only an explicit mx.target: data takes the data path (rule 5 does not)", () => {
+    const TSCONFIG = JSON.stringify({
+      compilerOptions: {
+        noEmit: true,
+        strict: true,
+        module: "esnext",
+        moduleResolution: "bundler",
+        target: "esnext",
+        types: [],
+      },
+      include: ["**/*.ts"],
+    });
+
+    it("a TS-only package that merely depends on @mxlang/data keeps its tsc run", () => {
+      const dir = emptyPackage({ dependencies: { "@mxlang/data": "*" } });
+      writeFileSync(join(dir, "tsconfig.json"), TSCONFIG);
+      writeFileSync(join(dir, "bad.ts"), 'export const n: number = "bad";\n');
+      const { status, output } = check(dir);
+      expect(status).toBe(2);
+      expect(output).toContain("bad.ts(1,14): error TS2322:");
+    });
+
+    it("a mixed monorepo root keeps its TS run", () => {
+      const root = emptyPackage({ dependencies: { "@mxlang/data": "*" } });
+      writeFileSync(join(root, "tsconfig.json"), TSCONFIG);
+      writeFileSync(join(root, "bad.ts"), 'export const n: number = "bad";\n');
+      const data = join(root, "packages", "data");
+      mkdirSync(data, { recursive: true });
+      writeFileSync(
+        join(data, "package.json"),
+        JSON.stringify({ mx: { target: "data" } }),
+      );
+      writeFileSync(join(data, "clean.mx"), "<oops\n");
+      const { status, output } = check(root);
+      expect(status).toBe(2);
+      expect(output).toContain("bad.ts(1,14): error TS2322:");
+    });
+
+    it("a nested package that declares mx.target: data is checked when named", () => {
+      const root = emptyPackage({ dependencies: { "@mxlang/data": "*" } });
+      const data = join(root, "packages", "data");
+      mkdirSync(data, { recursive: true });
+      writeFileSync(
+        join(data, "package.json"),
+        JSON.stringify({ mx: { target: "data" } }),
+      );
+      writeFileSync(join(data, "bad.mx"), "<oops\n");
+      const run = runInProcess(["-p", data]);
+      expect(run.status).toBe(1);
+      expect(stripVTControlCharacters(run.stderr)).toContain("bad.mx(1,");
+    });
+  });
+
+  describe("policy diagnostics of the resolution are printed", () => {
+    it("a target/host mismatch is an error even with no .mx file", () => {
+      const dir = emptyPackage({ mx: { target: "data", host: "solid" } });
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toMatch(/^package\.json\(\d+,\d+\): error TS80003: /m);
+      expect(output).toContain("mx.host");
+    });
+
+    it("an invalid nested target that falls back to data is reported, once", () => {
+      const dir = emptyPackage({ mx: { target: "data" } });
+      mkdirSync(join(dir, "sub"));
+      writeFileSync(
+        join(dir, "sub", "package.json"),
+        '{\n  "mx": { "target": "dtaa" },\n  "dependencies": { "@mxlang/data": "*" }\n}\n',
+      );
+      writeFileSync(join(dir, "sub", "a.mx"), "<oops\n");
+      writeFileSync(join(dir, "sub", "b.mx"), "<oops\n");
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      const lines = output
+        .split("\n")
+        .filter((line) => line.startsWith("sub/package.json("));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatch(/^sub\/package\.json\(2,\d+\): error TS80003: /);
+    });
+
+    it("an unknown mx.host stays a warning, positioned in the manifest", () => {
+      const dir = emptyPackage({ mx: { target: "data", host: "bogus" } });
+      writeFileSync(join(dir, "ok.mx"), "x\n");
+      const { output } = check(dir);
+      expect(output).toMatch(/^package\.json\(\d+,\d+\): warning TS80003: /m);
+    });
+  });
+
+  describe("mx.data is located by a structural walk", () => {
+    it("a decoy mx.example.data is not the invalid value", () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        [
+          "{",
+          '  "mx": {',
+          '    "example": {',
+          '      "data": { "unknownTags": "allow" }',
+          "    },",
+          '    "target": "data",',
+          '    "data": {',
+          '      "unknownTags": "oops"',
+          "    }",
+          "  }",
+          "}",
+          "",
+        ].join("\n"),
+      );
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("package.json(8,22): error TS80003:");
+    });
+
+    it("an escaped key is found at its own position", () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        '{\n  "mx": {\n    "target": "data",\n    "d\\u0061ta": {\n      "unknownTags": "oops"\n    }\n  }\n}\n',
+      );
+      const { output } = check(dir);
+      expect(output).toContain("package.json(5,22): error TS80003:");
+    });
+
+    it("a duplicate key resolves like JSON.parse: the last one wins", () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        '{\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "oops" },\n    "data": { "unknownTags": "bad" }\n  }\n}\n',
+      );
+      const { output } = check(dir);
+      expect(output).toContain("package.json(5,30): error TS80003:");
+      expect(output).not.toContain("package.json(4,");
+    });
+
+    it("a key full of regex metacharacters is an unknown-key warning, not a crash", () => {
+      const dir = emptyPackage({
+        mx: { target: "data", data: { "[": true, "(a+)+$": 1, "\\": 2 } },
+      });
+      const { status, output } = check(dir);
+      expect(status).toBe(0);
+      expect(
+        output.match(/warning TS80003: unknown mx\.data key/g),
+      ).toHaveLength(3);
+    });
+
+    it("an invalid mx.data is reported for a package with no .mx file", () => {
+      const dir = emptyPackage({
+        mx: { target: "data", data: { unknownTags: "typo" } },
+      });
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("error TS80003:");
+      expect(output).toContain(
+        'mx.data.unknownTags must be "allow" or "reject"',
+      );
+    });
+  });
+
+  describe("discovery failures are diagnostics, never a green empty map", () => {
+    it("a missing mx.contracts module is printed at its key, and independent packages still run", () => {
+      const dir = emptyPackage({
+        mx: { target: "data", contracts: "./missing.ts" },
+      });
+      writeFileSync(join(dir, "a.mx"), "thing\n");
+      const other = join(dir, "other");
+      mkdirSync(other);
+      writeFileSync(
+        join(other, "package.json"),
+        JSON.stringify({ mx: { target: "data" } }),
+      );
+      writeFileSync(join(other, "b.mx"), "<oops\n");
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /^package\.json\(\d+,\d+\): error TS80001: .*missing\.ts/m,
+      );
+      expect(output.match(/^package\.json\(/gm)).toHaveLength(1);
+      expect(output).toContain("other/b.mx(1,");
+      expect(output).not.toContain("a.mx");
+      expect(output.replaceAll(dir, "<pkg>")).toBe(
+        [
+          "package.json(4,5): error TS80001: `mx.contracts[0].module` could not resolve `./missing.ts` from <pkg>",
+          "other/b.mx(1,1): error TS80001: EOF reached while parsing open tag",
+          "",
+        ].join("\n"),
+      );
+    });
+
+    it("an invalid contract declaration is printed with its own position", () => {
+      const dir = emptyPackage({
+        mx: { target: "data", contracts: "./bad.ts" },
+      });
+      writeFileSync(
+        join(dir, "bad.ts"),
+        'export default { thing: { attributes: { x: { type: "string", requried: true } } } };\n',
+      );
+      writeFileSync(join(dir, "a.mx"), "thing\n");
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output.replaceAll(dir, "<pkg>")).toBe(
+        'bad.ts(1,1): error TS80001: Unknown key "requried" in the "x" attribute declaration of tag "thing"; allowed: type, items, required, enum, default, literalOnly\n',
+      );
+    });
+  });
+
+  describe("discovery is bounded and survives the file system", () => {
+    it("never walks an excluded package, so its broken links cannot fail the check", () => {
+      const dir = copyOfFixture(["clean.mx"]);
+      mkdirSync(join(dir, "other"));
+      writeFileSync(
+        join(dir, "other", "package.json"),
+        JSON.stringify({ mx: { target: "html" } }),
+      );
+      symlinkSync("missing", join(dir, "other", "broken.mx"));
+      expect(check(dir)).toEqual({ status: 0, output: "" });
+    });
+
+    it("a broken or looping .mx link is an error diagnostic and the rest still runs", () => {
+      const dir = emptyPackage({ mx: { target: "data" } });
+      symlinkSync("missing", join(dir, "broken.mx"));
+      symlinkSync("loop.mx", join(dir, "loop.mx"));
+      writeFileSync(join(dir, "z.mx"), "<oops\n");
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toMatch(/^broken\.mx: error TS80001: /m);
+      expect(output).toMatch(/^loop\.mx: error TS80001: /m);
+      expect(output).toContain("z.mx(1,");
+    });
+
+    it("an unreadable directory is an error diagnostic, not a crash", () => {
+      const dir = emptyPackage({ mx: { target: "data" } });
+      mkdirSync(join(dir, "locked"));
+      writeFileSync(join(dir, "z.mx"), "<oops\n");
+      chmodSync(join(dir, "locked"), 0o000);
+      try {
+        const { status, output } = check(dir);
+        expect(status).toBe(1);
+        expect(output).toMatch(/^locked: error TS80001: /m);
+        expect(output).toContain("z.mx(1,");
+      } finally {
+        chmodSync(join(dir, "locked"), 0o755);
+      }
+    });
+  });
+
+  it("a diagnostic in a readable but empty foreign file keeps that file's name", () => {
+    const dir = emptyPackage({ mx: { target: "data", contracts: "./c.ts" } });
+    writeFileSync(join(dir, "empty.txt"), "");
+    writeFileSync(
+      join(dir, "c.ts"),
+      `export default {
+  thing: {
+    analyze(calls: { loc: object }[], ctx: { fail(m: string, l: object): never }) {
+      ctx.fail("empty foreign error", { line: 1, column: 0, file: ${JSON.stringify(
+        join(dir, "empty.txt"),
+      )} });
+    },
+  },
+};
+`,
+    );
+    writeFileSync(join(dir, "a.mx"), "thing\n");
+    const { status, output } = check(dir);
+    expect(status).toBe(1);
+    expect(output).toMatch(
+      /^empty\.txt\(1,1\): error TS80001: .*empty foreign error/m,
+    );
   });
 });

@@ -18,7 +18,7 @@ export interface DataCheckDiagnostic {
   length?: number;
   severity: "error" | "warning";
   message: string;
-  origin: "data" | "manifest";
+  origin: "data" | "manifest" | "io";
 }
 
 export interface DataCheckResult {
@@ -27,7 +27,8 @@ export interface DataCheckResult {
 }
 
 /**
- * Whether the project at `dir` resolves to the `data` target. The editor
+ * Whether the project at `dir` takes the data check: its own `package.json`
+ * says `mx.target: "data"` (rule-5 inference does not count). The editor
  * tools never ask: `mx-tsc` is the one caller (TODO
  * `data-target-tooling-dispatch` keeps the staged error for the rest).
  */

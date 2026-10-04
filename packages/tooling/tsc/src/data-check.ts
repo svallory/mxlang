@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import {
   checkDataPackage,
   type DataCheckDiagnostic,
@@ -18,6 +18,11 @@ import {
  * not answer, so it stays with `tsc` and the staged error for `data` that
  * the registry wrapper still raises (TODO `data-target-tooling-dispatch`).
  * No tsconfig is needed or read: the files are the package's `.mx` files.
+ *
+ * And only when that directory's own `package.json` says `mx.target: "data"`:
+ * a package that is data by rule 5 (an `@mxlang/data` dependency), a monorepo
+ * root, or a directory with no manifest of its own keeps its `tsc` run, so a
+ * TypeScript error is never swallowed by a data inference.
  */
 export function dataProjectDir(
   argv: readonly string[],
@@ -58,15 +63,22 @@ export function runDataCheck(dir: string): number {
   if (diagnostics.length === 0) return 0;
   const require = createRequire(import.meta.url);
   const typescript = require("typescript") as typeof import("typescript");
-  const formatted = typescript.formatDiagnostics(
-    diagnostics.map((diagnostic) => toTsDiagnostic(typescript, diagnostic)),
-    {
-      getCanonicalFileName: (fileName) => fileName,
-      getCurrentDirectory: () => process.cwd(),
-      getNewLine: () => "\n",
-    },
+  const host = {
+    getCanonicalFileName: (fileName: string) => fileName,
+    getCurrentDirectory: () => process.cwd(),
+    getNewLine: () => "\n",
+  };
+  const printed = diagnostics.map((diagnostic) =>
+    diagnostic.origin === "io"
+      ? // The file system refused: there is no text to position in, and
+        // `formatDiagnostics` would drop the path with it.
+        `${relative(host.getCurrentDirectory(), diagnostic.file)}: ${diagnostic.severity} TS80001: ${diagnostic.message}\n`
+      : typescript.formatDiagnostics(
+          [toTsDiagnostic(typescript, diagnostic)],
+          host,
+        ),
   );
-  process.stderr.write(formatted);
+  process.stderr.write(printed.join(""));
   return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
 }
 
@@ -74,28 +86,33 @@ function toTsDiagnostic(
   typescript: typeof import("typescript"),
   diagnostic: DataCheckDiagnostic,
 ): import("typescript").Diagnostic {
-  let text = "";
+  // `undefined` is "could not read"; an empty file that read fine is "" and is
+  // still a file to name and position in.
+  let text: string | undefined;
   try {
     text = readFileSync(diagnostic.file, "utf8");
   } catch {
     // Unreadable now: print the message without a line/column.
   }
-  const file = typescript.createSourceFile(
-    diagnostic.file,
-    text,
-    typescript.ScriptTarget.Latest,
-    false,
-    diagnostic.origin === "manifest"
-      ? typescript.ScriptKind.JSON
-      : typescript.ScriptKind.Unknown,
-  );
-  const starts = file.getLineStarts();
+  const file =
+    text === undefined
+      ? undefined
+      : typescript.createSourceFile(
+          diagnostic.file,
+          text,
+          typescript.ScriptTarget.Latest,
+          false,
+          diagnostic.origin === "manifest"
+            ? typescript.ScriptKind.JSON
+            : typescript.ScriptKind.Unknown,
+        );
+  const starts = file?.getLineStarts() ?? [0];
   const line = Math.min(Math.max(diagnostic.line - 1, 0), starts.length - 1);
   const isError = diagnostic.severity === "error";
   return {
-    file: text === "" ? undefined : file,
+    file,
     // `line` is 1-based and `column` 0-based; tsc prints both 1-based.
-    start: Math.min((starts[line] ?? 0) + diagnostic.column, text.length),
+    start: Math.min((starts[line] ?? 0) + diagnostic.column, text?.length ?? 0),
     length: diagnostic.length ?? 0,
     category: isError
       ? typescript.DiagnosticCategory.Error

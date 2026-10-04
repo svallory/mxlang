@@ -1,6 +1,6 @@
 /**
- * `checkDataPackage`: what `mx-tsc` runs on a package whose policy is the
- * `data` target (decision 131, addendum 4).
+ * `checkDataPackage`: what `mx-tsc` runs on a package that says
+ * `mx.target: "data"` (decision 131, addendum 4).
  *
  * The registry wrapper's staged "not wired yet" error stays the answer for
  * the editor tools and Vite (TODO `data-target-tooling-dispatch`); this
@@ -10,18 +10,25 @@
  * parse entry and the registry's own import must stay light.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { clearScanCache } from "@mxlang/core";
 import {
-  type DataDiagnostic,
-  type ParseDataOptions,
-  parseData,
-} from "@mxlang/data";
+  type Dirent,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
+import { join } from "node:path";
+import {
+  clearScanCache,
+  isTranslateError,
+  type TargetPolicyDiagnostic,
+} from "@mxlang/core";
+import { type ParseDataOptions, parseData } from "@mxlang/data";
 import { resolveTargetPolicyDetailed, scanCached } from "./index.ts";
+import { locateJsonPath } from "./json-locate.ts";
 
 export interface DataCheckDiagnostic {
-  /** The file the position is measured in: a `.mx` file or a `package.json`. */
+  /** The file (or directory) the position is measured in. */
   file: string;
   /** 1-based. */
   line: number;
@@ -31,14 +38,18 @@ export interface DataCheckDiagnostic {
   length?: number;
   severity: "error" | "warning";
   message: string;
-  /** `data`: from `parseData`. `manifest`: a `package.json` or scan problem. */
-  origin: "data" | "manifest";
+  /**
+   * `data`: from `parseData`, or a discovery failure positioned in a file.
+   * `manifest`: a `package.json` or policy problem.
+   * `io`: the file system refused (no text to position in: print the path).
+   */
+  origin: "data" | "manifest" | "io";
 }
 
 export interface DataCheckResult {
-  /** The `.mx` files checked, in the order they were checked. */
+  /** The `.mx` files checked, in the order they were checked (full-path order). */
   files: string[];
-  /** Manifest diagnostics first, then each file's in file order. */
+  /** Policy and manifest diagnostics first, then each file's in file order. */
   diagnostics: DataCheckDiagnostic[];
 }
 
@@ -48,87 +59,45 @@ type UnknownTags = NonNullable<ParseDataOptions["unknownTags"]>;
 const STRUCTURAL: readonly Structural[] = ["pass", "reject"];
 const UNKNOWN_TAGS: readonly UnknownTags[] = ["allow", "reject"];
 
-/** Whether `dir` (a package or a project directory) resolves to the data target. */
-export function isDataProject(dir: string): boolean {
-  return (
-    resolveTargetPolicyDetailed(join(dir, "package.json"), { dataWired: true })
-      .policy.target === "data"
-  );
-}
-
-/** Every `.mx` file under `dir`, sorted by path, skipping `node_modules` and dot directories. */
-function mxFilesUnder(dir: string): string[] {
-  const found: string[] = [];
-  const visit = (current: string): void => {
-    const entries = readdirSync(current, { withFileTypes: true }).sort(
-      (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
-    );
-    for (const entry of entries) {
-      const path = join(current, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name.startsWith("."))
-          continue;
-        visit(path);
-      } else if (entry.name.endsWith(".mx") && statSync(path).isFile()) {
-        found.push(path);
-      }
-    }
-  };
-  visit(dir);
-  return found;
-}
-
 interface Manifest {
   file: string;
   text: string;
   data: unknown;
 }
 
-/** The nearest `package.json` at or above `dir`, parsed leniently. */
-function nearestManifest(dir: string): Manifest | undefined {
-  let current = dir;
-  for (;;) {
-    const file = join(current, "package.json");
-    if (existsSync(file)) {
-      const text = readFileSync(file, "utf8");
-      try {
-        const parsed = JSON.parse(text) as { mx?: { data?: unknown } };
-        return { file, text, data: parsed?.mx?.data };
-      } catch {
-        return { file, text, data: undefined };
-      }
-    }
-    if (basename(current) === "node_modules") return undefined;
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-    current = parent;
+function readManifest(dir: string): Manifest | undefined {
+  const file = join(dir, "package.json");
+  if (!existsSync(file)) return undefined;
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(text) as { mx?: { data?: unknown } } | null;
+    return { file, text, data: parsed?.mx?.data };
+  } catch {
+    return { file, text, data: undefined };
   }
 }
 
-/** Where `mx.data.<key>`'s value starts in a manifest's text; line 1 when it cannot be found. */
-function locateDataValue(
-  text: string,
-  key: string | undefined,
-): { line: number; column: number; length: number } {
-  const steps = key === undefined ? ["mx", "data"] : ["mx", "data", key];
-  let at = 0;
-  let value = 0;
-  for (const step of steps) {
-    const member = new RegExp(`"${step}"\\s*:\\s*`, "g");
-    member.lastIndex = at;
-    const match = member.exec(text);
-    if (!match) return { line: 1, column: 0, length: 1 };
-    at = match.index + match[0].length;
-    value = at;
+/**
+ * Whether `mx-tsc` run on `dir` takes the data path: the directory's own
+ * `package.json` says `mx.target: "data"`. Rule-5 inference from an
+ * `@mxlang/data` dependency does not (such a package, or a monorepo root with
+ * one, keeps its ordinary `tsc` run and the staged error for its data files),
+ * and neither does a `package.json` found only in an ancestor.
+ */
+export function isDataProject(dir: string): boolean {
+  const manifest = readManifest(dir);
+  if (!manifest) return false;
+  try {
+    const parsed = JSON.parse(manifest.text) as { mx?: { target?: unknown } };
+    return parsed?.mx?.target === "data";
+  } catch {
+    return false;
   }
-  const rest = text.slice(value);
-  const length = /^"(?:\\.|[^"\\])*"|^[^\s,}\]]+/.exec(rest)?.[0].length ?? 1;
-  const before = text.slice(0, value).split("\n");
-  return {
-    line: before.length,
-    column: (before.at(-1) ?? "").length,
-    length,
-  };
 }
 
 interface DataOptions {
@@ -136,25 +105,33 @@ interface DataOptions {
   unknownTags: UnknownTags;
 }
 
+type Report = (diagnostic: DataCheckDiagnostic) => void;
+
+/** Where `mx.data[.key]` sits in a manifest, falling back to the manifest's start. */
+function locateData(manifest: Manifest, key?: string) {
+  return (
+    locateJsonPath(
+      manifest.text,
+      key === undefined ? ["mx", "data"] : ["mx", "data", key],
+    ) ?? { line: 1, column: 0, length: 1 }
+  );
+}
+
 /**
  * The `mx.data` options of a package. An invalid value is one error and the
  * strict default for that key, so a typo cannot loosen the check.
  */
-function dataOptions(
-  manifest: Manifest | undefined,
-  report: (diagnostic: DataCheckDiagnostic) => void,
-): DataOptions {
+function dataOptions(manifest: Manifest, report: Report): DataOptions {
   const options: DataOptions = { structural: "reject", unknownTags: "reject" };
-  if (!manifest || manifest.data === undefined) return options;
-  const fail = (key: string | undefined, message: string): void => {
+  if (manifest.data === undefined) return options;
+  const fail = (key: string | undefined, message: string): void =>
     report({
       file: manifest.file,
-      ...locateDataValue(manifest.text, key),
+      ...locateData(manifest, key),
       severity: "error",
       message,
       origin: "manifest",
     });
-  };
   if (
     typeof manifest.data !== "object" ||
     manifest.data === null ||
@@ -190,53 +167,181 @@ function dataOptions(
     if (key === "structural" || key === "unknownTags") continue;
     report({
       file: manifest.file,
-      ...locateDataValue(manifest.text, key),
+      ...locateData(manifest, key),
       severity: "warning",
-      message: `unknown mx.data key "${key}"; known keys: structural, unknownTags`,
+      message: `unknown mx.data key ${JSON.stringify(key)}; known keys: structural, unknownTags`,
       origin: "manifest",
     });
   }
   return options;
 }
 
+/** Core's message with its own leading `<package.json> ` removed: the path is the location. */
+function policyText(diagnostic: TargetPolicyDiagnostic): string {
+  const own = `${diagnostic.file} `;
+  return diagnostic.message.startsWith(own)
+    ? diagnostic.message.slice(own.length)
+    : diagnostic.message;
+}
+
+/** A package the walk is in: its manifest, its options, and its policy. */
+interface Package {
+  manifest: Manifest | undefined;
+  options: DataOptions;
+}
+
+function errorCode(error: unknown): string {
+  return error && typeof error === "object" && "code" in error
+    ? String((error as { code: unknown }).code)
+    : "unknown error";
+}
+
 /**
- * Parses every `.mx` file under `dir` that the policy assigns to `data`, in
- * path order, with the package's own tag map (`tags/` sidecars and
+ * Checks every `.mx` file under `dir` that the policy assigns to `data`, in
+ * full-path order, with the package's own tag map (`tags/` sidecars and
  * `mx.contracts`, from the same scan the other tools use) and the
  * `structural`/`unknownTags` options of `package.json#mx.data`, both
- * `"reject"` unless set. Files a nested package gives to another target are
- * not this check's.
+ * `"reject"` unless set.
+ *
+ * Nothing in here throws for a problem in the project: the resolution's
+ * policy diagnostics, an invalid `mx.data`, a discovery failure (a missing or
+ * invalid `mx.contracts` module), an unreadable directory and a broken or
+ * looping `.mx` link are all diagnostics, so a failed discovery is never an
+ * empty map with a green result. A nested package that resolves to another
+ * target is not walked.
  */
 export function checkDataPackage(dir: string): DataCheckResult {
   // One run per process, but a test (or a watcher) may edit a manifest between
   // runs: never trust a scan from before this call.
   clearScanCache();
   const manifestDiagnostics: DataCheckDiagnostic[] = [];
-  const seen = new Set<string>();
-  const reportManifest = (diagnostic: DataCheckDiagnostic): void => {
-    const key = `${diagnostic.file}\0${diagnostic.line}\0${diagnostic.column}\0${diagnostic.message}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    manifestDiagnostics.push(diagnostic);
-  };
-  const files: string[] = [];
   const fileDiagnostics: DataCheckDiagnostic[] = [];
-  const optionsByManifest = new Map<string, DataOptions>();
+  const seen = new Set<string>();
+  const once =
+    (into: DataCheckDiagnostic[]): Report =>
+    (d) => {
+      const key = `${d.file}\0${d.line}\0${d.column}\0${d.severity}\0${d.message}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      into.push(d);
+    };
+  const reportManifest = once(manifestDiagnostics);
+  const reportFile = once(fileDiagnostics);
 
-  for (const file of mxFilesUnder(dir)) {
-    const { policy } = resolveTargetPolicyDetailed(file, { dataWired: true });
-    if (policy.target !== "data") continue;
-    files.push(file);
-
-    const manifest = nearestManifest(dirname(file));
-    const cacheKey = manifest?.file ?? "";
-    let options = optionsByManifest.get(cacheKey);
-    if (!options) {
-      options = dataOptions(manifest, reportManifest);
-      optionsByManifest.set(cacheKey, options);
+  /** Enters a package directory: its policy diagnostics and options, or `undefined` to skip it. */
+  const enter = (pkgDir: string, entry: boolean): Package | undefined => {
+    const manifest = readManifest(pkgDir);
+    if (!manifest) return undefined;
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(manifest.file, {
+      dataWired: true,
+    });
+    if (!entry && policy.target !== "data") return undefined;
+    for (const d of diagnostics) {
+      reportManifest({
+        file: d.file,
+        line: d.line,
+        column: d.column,
+        ...(d.length !== undefined ? { length: d.length } : {}),
+        severity: d.severity ?? "warning",
+        message: policyText(d),
+        origin: "manifest",
+      });
     }
+    return { manifest, options: dataOptions(manifest, reportManifest) };
+  };
 
-    const scan = scanCached(file, { host: null });
+  const entry = enter(dir, true) ?? {
+    manifest: undefined,
+    options: { structural: "reject", unknownTags: "reject" } as DataOptions,
+  };
+
+  // Walk, pruning another target's package before descending into it.
+  const found: { file: string; pkg: Package }[] = [];
+  const pending: { dir: string; pkg: Package }[] = [{ dir, pkg: entry }];
+  for (let next = pending.pop(); next; next = pending.pop()) {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(next.dir, { withFileTypes: true });
+    } catch (error) {
+      reportFile({
+        file: next.dir,
+        line: 1,
+        column: 0,
+        severity: "error",
+        message: `cannot read directory: ${errorCode(error)}`,
+        origin: "io",
+      });
+      continue;
+    }
+    for (const dirent of entries) {
+      const path = join(next.dir, dirent.name);
+      if (dirent.isDirectory()) {
+        if (dirent.name === "node_modules" || dirent.name.startsWith("."))
+          continue;
+        if (existsSync(join(path, "package.json"))) {
+          const pkg = enter(path, false);
+          if (pkg) pending.push({ dir: path, pkg });
+        } else pending.push({ dir: path, pkg: next.pkg });
+      } else if (dirent.name.endsWith(".mx")) {
+        try {
+          if (!statSync(path).isFile()) continue;
+        } catch (error) {
+          reportFile({
+            file: path,
+            line: 1,
+            column: 0,
+            severity: "error",
+            message: `cannot read file: ${errorCode(error)}`,
+            origin: "io",
+          });
+          continue;
+        }
+        found.push({ file: path, pkg: next.pkg });
+      }
+    }
+  }
+  found.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+
+  const files: string[] = [];
+  for (const { file, pkg } of found) {
+    files.push(file);
+    let source: string;
+    try {
+      source = readFileSync(file, "utf8");
+    } catch (error) {
+      reportFile({
+        file,
+        line: 1,
+        column: 0,
+        severity: "error",
+        message: `cannot read file: ${errorCode(error)}`,
+        origin: "io",
+      });
+      continue;
+    }
+    let scan: ReturnType<typeof scanCached>;
+    try {
+      scan = scanCached(file, { host: null });
+    } catch (error) {
+      if (!isTranslateError(error)) throw error;
+      // Positioned source feedback about the package's own configuration (a
+      // missing contracts module, a bad declaration): print it where it points
+      // and go on with the files that do not depend on it. Never an empty map.
+      const at = error.file ?? pkg.manifest?.file ?? file;
+      // The scan words some of these with the file they point at in front.
+      const prefix = `${at}: `;
+      reportManifest({
+        file: at,
+        line: error.line,
+        column: error.column,
+        severity: "error",
+        message: error.message.startsWith(prefix)
+          ? error.message.slice(prefix.length)
+          : error.message,
+        origin: "data",
+      });
+      continue;
+    }
     for (const d of scan.diagnostics) {
       reportManifest({
         file: d.file,
@@ -247,13 +352,13 @@ export function checkDataPackage(dir: string): DataCheckResult {
         origin: "manifest",
       });
     }
-    const result = parseData(readFileSync(file, "utf8"), file, {
+    const result = parseData(source, file, {
       customTags: scan.customTags,
-      structural: options.structural,
-      unknownTags: options.unknownTags,
+      structural: pkg.options.structural,
+      unknownTags: pkg.options.unknownTags,
     });
-    for (const d of result.diagnostics as DataDiagnostic[]) {
-      fileDiagnostics.push({
+    for (const d of result.diagnostics) {
+      reportFile({
         file: d.file ?? file,
         line: d.line,
         column: d.column,

@@ -52,7 +52,7 @@ mx-tsc            # from the package directory
 mx-tsc -p <dir>   # or name it
 ```
 
-One command, no tsconfig. When the package's policy resolves to `data` (`mx.target: "data"` in its `package.json`, or `@mxlang/data` as the only target package in its dependencies), `mx-tsc` does not build a TypeScript program. It parses every `.mx` file under the package that the policy assigns to `data` with `parseData`, in path order, and prints each diagnostic in the compact positioned shape it uses for host files:
+One command, no tsconfig. When the directory's own `package.json` says `mx.target: "data"`, `mx-tsc` does not build a TypeScript program. (A package that is only inferred as data from an `@mxlang/data` dependency, and a monorepo root, keep their normal `tsc` run, so a TypeScript error is never hidden; name a nested package that declares `mx.target: "data"` with `-p`.) It parses every `.mx` file under the package that the policy assigns to `data` with `parseData`, in full-path order, and prints each diagnostic in the compact positioned shape it uses for host files:
 
 ```text
 unknown-tag.mx(1,1): error TS80001: `<servce>` is not a known tag: it has no contract in `customTags`; did you mean `<service>`?
@@ -61,11 +61,11 @@ violation.mx(1,1): error TS80001: `<service>`: missing required attribute `value
 
 Positions are 1-based line and column. The exit code is 1 when anything is an error and 0 otherwise. A clean package prints nothing.
 
-- **The tag map** is the one the other tools scan: `tags/` sidecars and `mx.contracts` (see [Writing a dialect package](/custom-tags/dialect-package/)). A problem in the scan or in `package.json` is printed against the `package.json` (`TS80003`).
+- **The tag map** is the one the other tools scan: `tags/` sidecars and `mx.contracts` (see [Writing a dialect package](/custom-tags/dialect-package/)). A problem in the policy, the scan or `package.json` is printed against the `package.json` (`TS80003`), even when the package has no `.mx` file; a missing or invalid `mx.contracts` module is an error at its position, never an empty tag map.
 - **Defaults are strict.** `structural` and `unknownTags` both default to `"reject"` here, because an agent wants a typo or an `<if>` to fail the run. Loosen either in `package.json`: `{ "mx": { "data": { "structural": "pass", "unknownTags": "allow" } } }`. The `parseData` library API keeps its own defaults (`"pass"` and `"allow"`); only `mx-tsc` reads `mx.data`. An invalid value is an error at the value, and the strict default applies.
-- **Which files.** Every `*.mx` under the directory, skipping `node_modules` and dot directories, whose nearest `package.json` resolves to `data` (a nested package for another target is left out). Other file types, including `.ts`, are not checked: use `tsc` for those.
+- **Which files.** Every `*.mx` under the directory, skipping `node_modules` and dot directories, whose nearest `package.json` resolves to `data` (a nested package for another target is not walked). A broken or looping `.mx` link, or an unreadable directory, is an error naming the path. Other file types, including `.ts`, are not checked: use `tsc` for those.
 - **Only plain runs.** `-p`/`--project` (a directory or a tsconfig path), `--pretty` and `--noEmit` are understood. Anything else (`-b`, `-w`, `--version`, a file list) is a normal `tsc` run, and a data package under it still gets the staged error above.
-- A `tsc` program that spans several packages is not a data project: a data package inside it still gets the staged error. Run `mx-tsc` in the data package.
+- A `tsc` program that spans several packages (a monorepo root) is not a data project: a data package inside it still gets the staged error. Run `mx-tsc -p <data package>`.
 
 ## The tree
 
