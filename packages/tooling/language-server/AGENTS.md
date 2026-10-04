@@ -182,9 +182,16 @@ here in `diagnoseDocument`'s `catch` block before building the diagnostic.
 set before compiling: contracts modules, sidecars and scanned tag files do
 not necessarily appear among the compiler's callee-input dependencies.
 Recording them early retains these watcher edges even when compilation fails.
+Discovery errors carry partial scan evidence and the last complete scan's
+inputs through `TranslateError.dependencies`, consumed by the same catch path.
 `src/contracts.test.ts` proves module-only and sidecar-only watched-file edits
 re-publish the caller's diagnostics over Bun stdio, through error-to-error,
-error-to-success and success-to-error cycles without editing the page.
+error-to-success and success-to-error cycles without editing the page, plus
+valid → invalid declaration → repair and initially-invalid discovery → repair.
+Dynamic registration includes `.js`, `.mjs` and `.cjs`; a real Node stdio client
+asserts the registered globs and drives a `.cjs` module edit through them.
+Scan-level template dependency fan-out is intentionally deferred to space TODO
+`ls-scan-dependency-fanout`.
 Node's ESM/TS module reload still requires restart (`sync-esm-reload-node`);
 watcher scheduling does not bypass the runtime's export cache.
 

@@ -50,7 +50,7 @@ import {
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
-import { TranslateError } from "./core.ts";
+import { isTranslateError, TranslateError } from "./core.ts";
 import {
   type ContractMap,
   type CustomTag,
@@ -1349,6 +1349,29 @@ function indexMxContractsEntries(
   }
 }
 
+/** Preserve partial discovery inputs when no complete ScanResult can be returned. */
+function withScanDependencies(
+  files: ScanResult["files"],
+  packageFiles: string[],
+  scan: () => ScanResult,
+): ScanResult {
+  try {
+    return scan();
+  } catch (error) {
+    if (isTranslateError(error)) {
+      error.dependencies = [
+        ...new Set([
+          ...(error.dependencies ?? []),
+          ...packageFiles,
+          ...files.map((file) => file.path),
+          ...(error.file ? [error.file] : []),
+        ]),
+      ];
+    }
+    throw error;
+  }
+}
+
 /**
  * Scans for the custom tags callable from `filePath`.
  *
@@ -1369,60 +1392,62 @@ export function scanCustomTags(
   const hostRestrictions: HostRestriction[] = [];
   const dottedTagFiles: DottedTagFile[] = [];
 
-  let dir = dirname(resolve(filePath));
-  let packageDir: string | undefined;
-  let packageJson: string | undefined;
+  return withScanDependencies(files, packageFiles, () => {
+    let dir = dirname(resolve(filePath));
+    let packageDir: string | undefined;
+    let packageJson: string | undefined;
 
-  for (;;) {
-    const candidate = join(dir, TAGS_DIR);
-    directories.push(candidate);
-    if (existsSync(candidate)) {
-      indexDirectory(candidate, tags, files, diagnostics, dottedTagFiles);
+    for (;;) {
+      const candidate = join(dir, TAGS_DIR);
+      directories.push(candidate);
+      if (existsSync(candidate)) {
+        indexDirectory(candidate, tags, files, diagnostics, dottedTagFiles);
+      }
+
+      const manifest = join(dir, "package.json");
+      if (existsSync(manifest)) {
+        packageDir = dir;
+        packageJson = manifest;
+        break;
+      }
+
+      const parent = dirname(dir);
+      if (parent === dir || dir === options.stopAt) break;
+      dir = parent;
     }
 
-    const manifest = join(dir, "package.json");
-    if (existsSync(manifest)) {
-      packageDir = dir;
-      packageJson = manifest;
-      break;
+    if (packageDir && packageJson) {
+      packageFiles.push(packageJson);
+      indexMxTagsEntries(
+        packageDir,
+        packageJson,
+        tags,
+        files,
+        diagnostics,
+        directories,
+        dottedTagFiles,
+        hostRestrictions,
+        options.host,
+      );
     }
 
-    const parent = dirname(dir);
-    if (parent === dir || dir === options.stopAt) break;
-    dir = parent;
-  }
+    if (options.host !== undefined) applyHostFilter(tags, options.host);
 
-  if (packageDir && packageJson) {
-    packageFiles.push(packageJson);
-    indexMxTagsEntries(
-      packageDir,
-      packageJson,
+    return {
       tags,
-      files,
-      diagnostics,
+      customTags: buildCustomTags(tags),
       directories,
-      dottedTagFiles,
+      packageFiles,
+      files,
+      diagnostics: dottedTagFileDiagnostics(
+        dottedTagFiles,
+        options.targets,
+        diagnostics,
+      ),
       hostRestrictions,
-      options.host,
-    );
-  }
-
-  if (options.host !== undefined) applyHostFilter(tags, options.host);
-
-  return {
-    tags,
-    customTags: buildCustomTags(tags),
-    directories,
-    packageFiles,
-    files,
-    diagnostics: dottedTagFileDiagnostics(
       dottedTagFiles,
-      options.targets,
-      diagnostics,
-    ),
-    hostRestrictions,
-    dottedTagFiles,
-  };
+    };
+  });
 }
 
 /** Whether a symlink entry resolves (following the link) to a directory. */
@@ -1553,53 +1578,56 @@ export function discoverProjectTags(
   const hostRestrictions: HostRestriction[] = [];
   const dottedTagFiles: DottedTagFile[] = [];
 
-  const tagsDirs: string[] = [];
-  walkProjectDirectories(root, (dir) => {
-    if (basename(dir) === TAGS_DIR) tagsDirs.push(dir);
-  });
+  return withScanDependencies(files, packageFiles, () => {
+    const tagsDirs: string[] = [];
+    walkProjectDirectories(root, (dir) => {
+      if (basename(dir) === TAGS_DIR) tagsDirs.push(dir);
+    });
 
-  // Shallower directories first, so a name two `tags/` directories both
-  // claim resolves to the one nearer the project root.
-  tagsDirs.sort((left, right) => {
-    const depthDiff = left.split(/[/\\]/).length - right.split(/[/\\]/).length;
-    return depthDiff !== 0 ? depthDiff : left.localeCompare(right);
-  });
+    // Shallower directories first, so a name two `tags/` directories both
+    // claim resolves to the one nearer the project root.
+    tagsDirs.sort((left, right) => {
+      const depthDiff =
+        left.split(/[/\\]/).length - right.split(/[/\\]/).length;
+      return depthDiff !== 0 ? depthDiff : left.localeCompare(right);
+    });
 
-  for (const dir of tagsDirs) {
-    directories.push(dir);
-    indexDirectory(dir, tags, files, diagnostics, dottedTagFiles);
-  }
+    for (const dir of tagsDirs) {
+      directories.push(dir);
+      indexDirectory(dir, tags, files, diagnostics, dottedTagFiles);
+    }
 
-  const packageJson = join(root, "package.json");
-  if (existsSync(packageJson)) {
-    packageFiles.push(packageJson);
-    indexMxTagsEntries(
-      root,
-      packageJson,
+    const packageJson = join(root, "package.json");
+    if (existsSync(packageJson)) {
+      packageFiles.push(packageJson);
+      indexMxTagsEntries(
+        root,
+        packageJson,
+        tags,
+        files,
+        diagnostics,
+        directories,
+        dottedTagFiles,
+        hostRestrictions,
+        options.host,
+      );
+    }
+
+    if (options.host !== undefined) applyHostFilter(tags, options.host);
+
+    return {
       tags,
-      files,
-      diagnostics,
+      customTags: buildCustomTags(tags),
       directories,
-      dottedTagFiles,
+      packageFiles,
+      files,
+      diagnostics: dottedTagFileDiagnostics(
+        dottedTagFiles,
+        options.targets,
+        diagnostics,
+      ),
       hostRestrictions,
-      options.host,
-    );
-  }
-
-  if (options.host !== undefined) applyHostFilter(tags, options.host);
-
-  return {
-    tags,
-    customTags: buildCustomTags(tags),
-    directories,
-    packageFiles,
-    files,
-    diagnostics: dottedTagFileDiagnostics(
       dottedTagFiles,
-      options.targets,
-      diagnostics,
-    ),
-    hostRestrictions,
-    dottedTagFiles,
-  };
+    };
+  });
 }

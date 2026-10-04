@@ -33,6 +33,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
+import { isTranslateError } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import {
   dottedTagFileDiagnostics,
@@ -282,7 +283,24 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
         };
   }
 
-  const result = scanCustomTags(filePath, options);
+  let result: ScanResult;
+  try {
+    result = scanCustomTags(filePath, options);
+  } catch (error) {
+    // Discovery stopped early, so partial evidence cannot authoritatively
+    // replace the last complete scan's watcher edges. Retain those inputs
+    // alongside the offending file; never cache a failed scan as empty.
+    if (cached && isTranslateError(error)) {
+      error.dependencies = [
+        ...new Set([
+          ...(error.dependencies ?? []),
+          ...cached.result.packageFiles,
+          ...cached.result.files.map((file) => file.path),
+        ]),
+      ];
+    }
+    throw error;
+  }
   const entry = snapshot(result);
   const loadedSignature = loadedSignatureOf(entry);
   const parserSignature = parserSignatureOf(result);

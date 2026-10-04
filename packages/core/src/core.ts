@@ -98,9 +98,11 @@ export class TranslateError extends Error {
   readonly file?: string;
   /**
    * Every callee file the failed compile's `readCalleeInput` had already
-   * resolved before the error was raised (decision 106/107). Set only by
+   * resolved before the error was raised (decision 106/107). Set by
    * `compileSource`'s catch, from the same-shaped `Ctx.dependencies` a
-   * successful compile drains into `CompileResult.dependencies` — a
+   * successful compile drains into `CompileResult.dependencies`, and by the
+   * discovery scans (`scanCustomTags`, `scanCached`), which attach the partial
+   * scan inputs read before the failure — a
    * dependent-re-diagnosis integration (the language server) needs this on a
    * *failing* compile too, since a caller reporting "missing required
    * attribute tag" is exactly the caller that must be re-checked once the

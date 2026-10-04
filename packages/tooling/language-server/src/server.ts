@@ -242,6 +242,10 @@ export function startServer(
         { globPattern: "**/*.mx" },
         { globPattern: "**/*.ts" },
         { globPattern: "**/*.tsx" },
+        // Installed contracts modules may export JavaScript, not TypeScript.
+        { globPattern: "**/*.js" },
+        { globPattern: "**/*.mjs" },
+        { globPattern: "**/*.cjs" },
         // A host-policy diagnostic is about a package.json, so fixing it must
         // re-diagnose the documents that reported it.
         { globPattern: "**/package.json" },

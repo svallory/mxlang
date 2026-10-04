@@ -387,11 +387,10 @@ export function diagnoseDocument(
     // where an author is looking.
     return [...scanWarnings, ...warningDiagnostics(warnings, uri, related)];
   } catch (error) {
-    // A failing compile can still have resolved real callees before the
-    // error was raised (e.g. "missing required attribute tag" is only
-    // reachable after reading the callee's declaration) — those are still
-    // this document's dependencies, and the re-diagnosis graph must keep the
-    // edge even though this compile produced no `CompileResult`.
+    // A failing scan carries partial discovery inputs and the previous
+    // complete scan's evidence. A failing compile can likewise have resolved
+    // real callees before raising an error. Both must retain watcher edges
+    // even though no ScanResult or CompileResult was returned.
     if (isTranslateError(error)) {
       for (const dependency of error.dependencies ?? [])
         dependencies?.add(dependency);

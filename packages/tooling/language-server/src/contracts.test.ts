@@ -60,11 +60,20 @@ function nextDiagnostics(
   });
 }
 
-async function startClient(): Promise<MessageConnection> {
+interface WatcherRegistration {
+  registrations: Array<{
+    method: string;
+    registerOptions: { watchers: Array<{ globPattern: string }> };
+  }>;
+}
+
+async function startClient(
+  onRegistration?: (params: WatcherRegistration) => void,
+): Promise<MessageConnection> {
   // Real built server on Bun. Long-lived Node ESM/TS loaders instead need
   // restart (TODO sync-esm-reload-node). No server outlives its test.
   child = spawn(
-    "bun",
+    onRegistration ? "node" : "bun",
     [join(import.meta.dirname, "../dist/bin.js"), "--stdio"],
     {
       stdio: ["pipe", "pipe", "pipe"],
@@ -76,11 +85,22 @@ async function startClient(): Promise<MessageConnection> {
     new StreamMessageWriter(child.stdin),
   );
   connection = conn;
+  if (onRegistration) {
+    conn.onRequest(
+      "client/registerCapability",
+      (params: WatcherRegistration) => {
+        onRegistration(params);
+        return null;
+      },
+    );
+  }
   conn.listen();
   await conn.sendRequest("initialize", {
     processId: null,
     rootUri: null,
-    capabilities: {},
+    capabilities: onRegistration
+      ? { workspace: { didChangeWatchedFiles: { dynamicRegistration: true } } }
+      : {},
   });
   conn.sendNotification("initialized", {});
   return conn;
@@ -128,6 +148,79 @@ function expectRequired(params: Published, name: string): void {
     range: { start: { line: 0, character: 0 } },
   });
 }
+
+const invalidDeclaration =
+  "export default { style: { attributes: { nonce: { requried: true } } } };\n";
+
+it.each([false, true])(
+  "recovers from invalid contracts discovery on module-only watcher edits (initially invalid=%s)",
+  async (initiallyInvalid) => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-recovery-")));
+    directory = dir;
+    const module = join(dir, "contracts.ts");
+    const uri = pathToFileURL(join(dir, "page.mx")).href;
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ mx: { host: "html", contracts: "./contracts.ts" } }),
+    );
+    writeFileSync(
+      module,
+      initiallyInvalid ? invalidDeclaration : declaration("nonce"),
+    );
+    writeFileSync(join(dir, "page.mx"), source);
+    const conn = await startClient();
+    let invalid = await openPage(conn, uri);
+    if (!initiallyInvalid) {
+      expectRequired(invalid, "nonce");
+      invalid = await editWatchedFile(conn, uri, module, invalidDeclaration);
+    }
+    expect(invalid.diagnostics).toHaveLength(1);
+    expect(invalid.diagnostics[0]?.message).toContain('Unknown key "requried"');
+    expectRequired(
+      await editWatchedFile(conn, uri, module, declaration("media")),
+      "media",
+    );
+  },
+  20000,
+);
+
+it("registers JavaScript watchers and re-diagnoses a cjs module edit through the registered path (Node)", async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-js-watch-")));
+  directory = dir;
+  const module = join(dir, "contracts.cjs");
+  const uri = pathToFileURL(join(dir, "page.mx")).href;
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ mx: { host: "html", contracts: "./contracts.cjs" } }),
+  );
+  const cjs = (name: string) =>
+    declaration(name).replace("export default", "module.exports.default =");
+  writeFileSync(module, cjs("nonce"));
+  writeFileSync(join(dir, "page.mx"), source);
+  let registered!: (params: WatcherRegistration) => void;
+  const registration = new Promise<WatcherRegistration>((resolve) => {
+    registered = resolve;
+  });
+  const conn = await startClient(registered);
+  const params = await registration;
+  const watchers = params.registrations.find(
+    (entry) => entry.method === "workspace/didChangeWatchedFiles",
+  )?.registerOptions.watchers;
+  const globs = watchers?.map((watcher) => watcher.globPattern) ?? [];
+  expect(globs).toEqual(
+    expect.arrayContaining(["**/*.js", "**/*.mjs", "**/*.cjs"]),
+  );
+  expectRequired(await openPage(conn, uri), "nonce");
+
+  // Simulate a client that sends only events matching the server's registration.
+  // Do not manually inject an event for an unregistered extension.
+  const extension = module.slice(module.lastIndexOf("."));
+  expect(globs.some((glob) => glob === `**/*${extension}`)).toBe(true);
+  expectRequired(
+    await editWatchedFile(conn, uri, module, cjs("media")),
+    "media",
+  );
+}, 20000);
 
 // Core's walk needs a filesystem path, not a raw URI; the server converts a
 // real file:// URI before its registry scan. `style` is host-delegated, so

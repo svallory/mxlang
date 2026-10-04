@@ -368,7 +368,11 @@ Five facts worth knowing before editing it:
   configuration stays in force, or none is loaded until it parses.
   Modules evaluate eagerly on a scan-cache miss (their names and parser options
   must be known); file stamps retain hashes, not source, and unchanged maps
-  remain interned. Config/resolution failures address the direct `"contracts"`
+  remain interned. A failed discovery walk carries its partial file/manifest
+  evidence (including the offending module) on `TranslateError.dependencies`.
+  `scanCached` also retains the last complete scan's inputs on failure: an
+  incomplete scan is not authoritative empty evidence. A later successful
+  scan replaces those inputs normally. Config/resolution failures address the direct `"contracts"`
   key using cached manifest text; module failures and per-module registration
   errors address the module file at `1:0`. The merged-map check stays intact.
   Use the required `targets` lookup (`src/test-targets.ts` in tests), with no

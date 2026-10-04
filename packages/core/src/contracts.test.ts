@@ -112,6 +112,76 @@ describe("mx.contracts (decision 142)", () => {
     expect(globals.mxContractLoads).toBe(1);
     delete globals.mxContractLoads;
   });
+  it.each([
+    "export default [];",
+    "export default { box: { attributes: { value: { requried: true } } } };",
+  ])(
+    "carries partial dependency evidence on discovery failure: %s",
+    (source) => {
+      const dir = project(source);
+      const tags = join(dir, "tags");
+      mkdirSync(tags);
+      writeFileSync(join(tags, "unused.mx"), "<div/>");
+      for (const run of [
+        () => scan(dir),
+        () => discoverProjectTags(dir, { targets }),
+        () => scanCached(join(dir, "page.mx"), { targets }),
+      ]) {
+        let caught: TranslateError | undefined;
+        try {
+          run();
+        } catch (cause) {
+          expect(cause).toBeInstanceOf(TranslateError);
+          caught = cause as TranslateError;
+        }
+        expect(caught?.dependencies).toEqual(
+          expect.arrayContaining([
+            join(dir, "package.json"),
+            join(dir, "contracts.ts"),
+            join(tags, "unused.mx"),
+          ]),
+        );
+      }
+    },
+  );
+  it("retains previous scan evidence on incomplete discovery, then replaces it on success", () => {
+    const dir = project(undefined, ["./contracts.ts", "./second.ts"]);
+    writeFileSync(
+      join(dir, "second.ts"),
+      "export default { second: { attributes: {} } };",
+    );
+    const page = join(dir, "page.mx");
+    scanCached(page, { targets });
+    // A new module avoids Vitest's separate ESM registry masking the edit.
+    writeFileSync(join(dir, "broken.ts"), "export default [];");
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ mx: { contracts: ["./broken.ts", "./second.ts"] } }),
+    );
+    let caught: TranslateError | undefined;
+    try {
+      scanCached(page, { targets });
+    } catch (cause) {
+      expect(cause).toBeInstanceOf(TranslateError);
+      caught = cause as TranslateError;
+    }
+    expect(caught?.dependencies).toEqual(
+      expect.arrayContaining([
+        join(dir, "contracts.ts"),
+        join(dir, "second.ts"),
+        join(dir, "broken.ts"),
+        join(dir, "package.json"),
+      ]),
+    );
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ mx: { contracts: "./contracts.ts" } }),
+    );
+    const repaired = scanCached(page, { targets });
+    expect(repaired.files.map((file) => file.path)).toEqual([
+      join(dir, "contracts.ts"),
+    ]);
+  });
   it("accepts an absolute module path", () => {
     const dir = project();
     writeFileSync(
