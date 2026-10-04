@@ -51,7 +51,9 @@ describe("event binding syntax (solid)", () => {
       "tag arguments `(...)` on `<button>` are not supported in a standalone template; for an event handler write `onClick=go`",
     );
     expect(raised.message).not.toMatch(/\(\d+:\d+\)$/);
-    expect(raised.loc).toMatchObject({ line: 3, column: 4 });
+    // Marko reports at the argument, so the caret lands on `click` (column 13
+    // of the region line) rather than at the tag's own start.
+    expect(raised.loc).toMatchObject({ line: 3, column: 13 });
   });
 
   it("the handler form it suggests compiles", () => {

@@ -13,3 +13,40 @@ describe("Angular attribute-name passthrough", () => {
     expect(emit(source, "x.ng.mx")).toContain(expected);
   });
 });
+
+/**
+ * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
+ * name at its LAST `:` and fills an empty head with `value`, so
+ * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
+ * `class:`/`style:`/`attr:` are the modifiers Marko's taglib refuses, and this
+ * host refuses them too (`rejectModifier`) — `:foo` is the one modifier form
+ * Marko accepts, so it must reach the template as an attribute.
+ *
+ * A static one is carried verbatim (Angular passes an unknown static attribute
+ * through to the DOM); a dynamic one cannot be a property binding — `[value:foo]`
+ * is a property no element has, NG8002 — so it takes the same `[attr.name]`
+ * route as `data-*`/`aria-*`.
+ */
+describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
+  it("emits Marko's attribute, statically and dynamically", () => {
+    expect(emit(`<div :foo="lit"/>`, "x.ng.mx")).toContain(
+      `<div value:foo="lit">`,
+    );
+    expect(emit(`<div :foo/>`, "x.ng.mx")).toContain(`<div value:foo="">`);
+    expect(emit(`<div :foo=y/>`, "x.ng.mx")).toContain(
+      `<div [attr.value:foo]="y">`,
+    );
+    // The same attribute under its long spelling: Marko compiles
+    // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
+    expect(emit(`<div value:foo="lit"/>`, "x.ng.mx")).toContain(
+      `<div value:foo="lit">`,
+    );
+  });
+
+  it("still refuses a real modifier, in this host's words", () => {
+    expect(() => emit(`<div class:active="x"/>`, "x.ng.mx")).toThrow(
+      /attribute modifier `class:active` is not Marko syntax/,
+    );
+  });
+});

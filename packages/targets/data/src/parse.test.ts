@@ -159,7 +159,7 @@ describe("pass-through constructs (the §3 table)", () => {
     expect(inNode.head.source.kind).toBe("in");
     expect(inNode.head.params).toEqual(["k", "v"]);
 
-    const rangeTree = ok(`<for|i| from=0 until=10 step=2 by="id">x</for>\n`);
+    const rangeTree = ok(`<for|i| from=0 until=10 step=2 by=(i) => i>x</for>\n`);
     const rangeNode = rangeTree.children[0];
     if (rangeNode?.kind !== "for") throw new Error("expected for");
     expect(rangeNode.head.source).toMatchObject({
@@ -170,7 +170,7 @@ describe("pass-through constructs (the §3 table)", () => {
     expect(rangeNode.head.source.from?.code).toBe("0");
     expect(rangeNode.head.source.bound.code).toBe("10");
     expect(rangeNode.head.source.step?.code).toBe("2");
-    expect(rangeNode.head.key?.code).toBe('"id"');
+    expect(rangeNode.head.key?.code).toBe("(i) => i");
   });
 
   it("`<const>` arrives with its name and init expression", () => {

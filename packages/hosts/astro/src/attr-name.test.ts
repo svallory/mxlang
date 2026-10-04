@@ -45,3 +45,38 @@ describe("invalid attribute names (astro)", () => {
     }
   });
 });
+
+/**
+ * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
+ * name at its LAST `:` and fills an empty head with `value`, so
+ * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
+ * `class:active` is the modifier Marko's *taglib* refuses; `:foo` is the one
+ * modifier form Marko accepts, and an `.astro.mx` template body is HTML, so
+ * it is written `value:foo={y}` there too.
+ */
+describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
+  const template = (source: string): string =>
+    lowerAstroMx(`${FENCE}${source}`, "Test.astro.mx").code;
+
+  it("emits Marko's attribute, for every value kind", () => {
+    expect(template(`<div :foo=y/>`)).toContain("<div value:foo={y}>");
+    expect(template(`<div :foo="lit"/>`)).toContain(`<div value:foo="lit">`);
+    expect(template(`<div :foo/>`)).toContain(`<div value:foo="">`);
+    // The `{…}` form, emitted exactly like any other dynamic attribute on
+    // this host (`<div id={y}/>` emits `id={{y}}`: the outer braces are
+    // Astro's interpolation, the inner ones the MX expression).
+    expect(template(`<div :foo={y}/>`)).toContain("<div value:foo={{y}}>");
+    // The same attribute under its long spelling: Marko compiles
+    // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
+    expect(template(`<div value:foo=y/>`)).toContain("<div value:foo={y}>");
+  });
+
+  it("still refuses a real modifier, in this host's words", () => {
+    const error = failure(`<div class:active="x"/>`);
+    expect(error.message).toContain(
+      "attribute modifier `class:active` is not supported in an `.astro.mx` template",
+    );
+    expect(error).toMatchObject({ line: 4, column: 5 });
+  });
+});

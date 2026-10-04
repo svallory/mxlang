@@ -188,16 +188,45 @@ export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
  * `@marko/language-tools` 2.7.0 treats the empty range as "default"), so this
  * returns a zero-width span there instead of measuring `"value".length` over
  * the `=` and the value's first characters.
+ *
+ * The `:modifier` shorthand is the one default attribute that *was* spelled:
+ * Marko's parser fills the empty head with `"value"` and remembers the
+ * shorthand in `attr.default`, so the authored name is `:foo` — measured from
+ * the attribute's own start, which is the `:`.
  */
 function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});
   const sourceName = attr.modifier
-    ? `${attr.name}:${attr.modifier}`
+    ? isValueModifier(attr)
+      ? `:${attr.modifier}`
+      : `${attr.name}:${attr.modifier}`
     : String(attr.name ?? "");
   if (!ctx.source.startsWith(sourceName, sourceStart)) {
     return { sourceStart, sourceEnd: sourceStart };
   }
   return { sourceStart, sourceEnd: sourceStart + sourceName.length };
+}
+
+/**
+ * Is this the `value:<modifier>` attribute rather than a real modifier?
+ *
+ * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
+ * name at its LAST `:`; an empty head is filled with `"value"`, so
+ * `<div :foo="y"/>` parses as `{ name: "value", modifier: "foo", default: true }`
+ * and compiles to `<div value:foo=y>` (`<div value:foo="y"/>` is the same
+ * attribute). `attr.default` is the flag that marks the `:foo` spelling, but
+ * both spellings are the same attribute, so both answer true here.
+ *
+ * This is the *only* modifier form Marko accepts: `class:active` is refused by
+ * the taglib ("`class:active` is not a valid attribute, did you mean
+ * `class={ active: condition }`?"), and every other host's modifier hook still
+ * sees those untouched.
+ */
+function isValueModifier(attr: Node): boolean {
+  return (
+    Boolean(attr?.modifier) &&
+    (attr.default === true || (attr.name === "value" && !attr.default))
+  );
 }
 
 /** Classifies an expression once, while its parsed node is still available. */
@@ -486,12 +515,21 @@ function lowerAttr(
     };
   }
 
+  // `<div :foo="y"/>` is not a modifier: Marko's parser fills the empty head of
+  // `name:modifier` with `value`, so the attribute is literally named
+  // `value:foo` and Marko compiles it (`<div value:foo=y>`). It takes the
+  // ordinary attribute path — the value kinds, the positions, the host's own
+  // emission — so no host hook sees it and none has to grow a special case.
+  const name = attr.modifier && isValueModifier(attr)
+    ? `${attr.name}:${attr.modifier}`
+    : attr.name;
+
   // `class:foo="x"` is a modifier Marko hands over as a base name plus a
   // modifier. Emitting only the base name renders `class="x"` — not a drop but
   // a *wrong* attribute, which is worse. The host gets first refusal so the
   // diagnostic is in its own vocabulary (a Marko-parity target quotes Marko's
   // own fix-it); the core's wording is only the fallback.
-  if (attr.modifier) {
+  if (attr.modifier && name === attr.name) {
     const resolvedName = ctx.declarations.resolveModifier?.(attr, on);
     if (resolvedName !== undefined) {
       return {
@@ -514,14 +552,25 @@ function lowerAttr(
   }
 
   const value = attr.value;
+  // `<div :foo/>`: HTML's valueless attribute is an attribute *present with an
+  // empty value* — `<div value:foo>` and `<div value:foo="">` are one thing to
+  // every HTML parser — and that is what Marko emits (`<div value:foo>`, probed
+  // through the real toolchain). Handing a host a `true` instead is how this
+  // attribute diverged per renderer: React warns "Received `true` for a
+  // non-boolean attribute" and drops it, Hono renders `value:foo="true"`, and
+  // only Preact happens to print Marko's own form. The empty string is the one
+  // value every host renders as the attribute Marko wrote.
+  if (name !== attr.name && value?.type === "BooleanLiteral" && value.value) {
+    return { kind: "static", name, value: "", nameSpan, loc };
+  }
   // A bare attribute (`download`, `checked`) is HTML's spelling of `true`.
   if (value?.type === "BooleanLiteral" && value.value === true) {
-    return { kind: "boolean", name: attr.name, nameSpan, loc };
+    return { kind: "boolean", name, nameSpan, loc };
   }
   if (value?.type === "StringLiteral") {
     return {
       kind: "static",
-      name: attr.name,
+      name,
       value: value.value,
       valueSpan: exprSpan(ctx, value),
       nameSpan,
@@ -551,18 +600,21 @@ function lowerAttr(
   //
   // No `!attr.modifier` guard is needed: the modifier block above either
   // returns the host's resolved name or fails, so nothing carrying a modifier
-  // reaches this point. `on:click`/`oncapture:click` therefore keep going to
-  // the host's own modifier hook and never become events here (decision 101b).
-  if (isElement && EVENT_ATTR.test(attr.name)) {
-    const name = String(attr.name);
-    if (name === "on-") {
+  // reaches this point — except the `value:<modifier>` attribute, which is an
+  // ordinary name and never matches `EVENT_ATTR`. `on:click`/`oncapture:click`
+  // therefore keep going to the host's own modifier hook and never become
+  // events here (decision 101b).
+  if (isElement && EVENT_ATTR.test(String(name))) {
+    const eventName = String(name);
+    if (eventName === "on-") {
       fail("`on-` needs an event name (`on-<event>`)", attr);
     }
-    const event = name[2] === "-" ? name.slice(3) : name.slice(2).toLowerCase();
-    warnOnNonDomEventSpelling(ctx, attr, name);
+    const event =
+      eventName[2] === "-" ? eventName.slice(3) : eventName.slice(2).toLowerCase();
+    warnOnNonDomEventSpelling(ctx, attr, eventName);
     return {
       kind: "event",
-      name,
+      name: eventName,
       event,
       value: exprOf(ctx, value),
       nameSpan,
@@ -572,7 +624,7 @@ function lowerAttr(
 
   return {
     kind: "dynamic",
-    name: attr.name,
+    name,
     value: exprOf(ctx, value),
     nameSpan,
     loc,
@@ -1684,6 +1736,26 @@ function lowerForHead(
   const step = attrByName(node, "step");
   const by = attrByName(node, "by");
 
+  // Marko redirects the React/Vue `key=` habit to `by=` before it validates
+  // anything else about the loop (`core/for.ts`), because `key=` on a `<for>`
+  // is never a key: it is an attribute the loop does not read, so accepting it
+  // silently drops the author's intent. The fix-it names the form the loop
+  // actually has: `of` iterates items, `in` a record's entries, a range an
+  // index.
+  const keyAttr = attrByName(node, "key");
+  if (keyAttr) {
+    fail(
+      `The [\`<for>\` tag](https://markojs.com/docs/reference/core-tag#for) keys items with the \`by=\` attribute, not \`key=\`. ${
+        of
+          ? 'Use `by="propName"` or `by=(item, index) => key`'
+          : inAttr
+            ? "Use `by=(key, value) => key`"
+            : "Use `by=(num) => key`"
+      }.`,
+      keyAttr,
+    );
+  }
+
   const combos = [of, inAttr, attrByName(node, "from") || to || until].filter(
     Boolean,
   ).length;
@@ -1733,6 +1805,20 @@ function lowerForHead(
     };
   } else {
     fail("`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`", node);
+  }
+
+  // A string `by=` is the property-name shorthand and only `of` has one:
+  // `in`/`to`/`until` *call* `by` as a function, so a string would die at
+  // render ("by is not a function"). Marko refuses it at compile time, at the
+  // quoted key it refuses, rather than letting the failure surface on first
+  // paint. `of` keeps the shorthand, so this cannot be "no string `by`".
+  if (!of && by?.value?.type === "StringLiteral") {
+    fail(
+      `The [\`<for>\` tag](https://markojs.com/docs/reference/core-tag#for) only supports a string \`by\` key with \`of\`; use a \`by=(${
+        inAttr ? "key, value" : "index"
+      }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`,
+      by.value,
+    );
   }
 
   const bindings = paramBindings(ctx, node);

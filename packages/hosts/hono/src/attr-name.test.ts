@@ -62,3 +62,45 @@ describe("invalid attribute names (hono)", () => {
     }
   });
 });
+
+/**
+ * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
+ * name at its LAST `:` and fills an empty head with `value`, so
+ * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
+ * `class:active` is the modifier Marko's *taglib* refuses; `:foo` is the one
+ * modifier form Marko accepts.
+ *
+ * Hono renders through the shared JSX emitter, so this is the same
+ * `value:foo={y}` JSXNamespacedName React and Preact emit; rendered parity
+ * with the real Marko toolchain is the `attr-value-modifier` oracle fixture
+ * (`bun run oracle:hono`).
+ */
+describe("`:modifier` is the attribute `value:modifier` (hono)", () => {
+  it("emits Marko's attribute, for every value kind", () => {
+    expect(compileHonoMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
+      "<div value:foo={y} />",
+    );
+    expect(compileHonoMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code).toContain(
+      `<div value:foo="lit" />`,
+    );
+    expect(compileHonoMx(`<div :foo/>`, "/fixtures/test.mx").code).toContain(
+      "<div value:foo=\"\" />",
+    );
+    // The same attribute under its long spelling: Marko compiles
+    // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
+    expect(
+      compileHonoMx(`<div value:foo=y/>`, "/fixtures/test.mx").code,
+    ).toContain("<div value:foo={y} />");
+  });
+
+  it("still refuses a real modifier", () => {
+    expect(failure(`<div class:active=c/>`).message).toContain(
+      "attribute modifier `class:active`",
+    );
+    expect(failure(`<div class:active=c/>`)).toMatchObject({
+      line: 1,
+      column: 5,
+    });
+  });
+});

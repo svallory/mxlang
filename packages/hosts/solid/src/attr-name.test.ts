@@ -62,3 +62,44 @@ describe("invalid attribute names (solid)", () => {
     }
   });
 });
+
+/**
+ * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
+ * name at its LAST `:` and fills an empty head with `value`, so
+ * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
+ * `class:active` is the modifier Marko's *taglib* refuses; `:foo` is the one
+ * modifier form Marko accepts.
+ *
+ * Solid's JSX takes the namespaced attribute (`value:foo={y}`); both Solid 2
+ * backends turn it into `setAttribute(el, "value:foo", …)`, which is the one
+ * place a colon-named attribute can land in a DOM.
+ */
+describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
+  it("emits Marko's attribute, for every value kind", () => {
+    expect(
+      compileSolidMx(`<div :foo=y/>`, { filename: "fixture.solid.mx" }).code,
+    ).toContain("<div value:foo={y}>");
+    expect(
+      compileSolidMx(`<div :foo="lit"/>`, { filename: "fixture.solid.mx" }).code,
+    ).toContain(`<div value:foo="lit">`);
+    expect(
+      compileSolidMx(`<div :foo/>`, { filename: "fixture.solid.mx" }).code,
+    ).toContain("<div value:foo=\"\">");
+    // The same attribute under its long spelling: Marko compiles
+    // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
+    expect(
+      compileSolidMx(`<div value:foo=y/>`, { filename: "fixture.solid.mx" }).code,
+    ).toContain("<div value:foo={y}>");
+  });
+
+  it("still refuses a real modifier, in this host's words", () => {
+    expect(failure(`<div class:active=c/>`).message).toContain(
+      "attribute modifier `class:active` is not supported by Solid",
+    );
+    expect(failure(`<div class:active=c/>`)).toMatchObject({
+      line: 1,
+      column: 5,
+    });
+  });
+});

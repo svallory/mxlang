@@ -62,3 +62,46 @@ describe("invalid attribute names (preact)", () => {
     }
   });
 });
+
+/**
+ * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
+ * name at its LAST `:` and fills an empty head with `value`, so
+ * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
+ * `class:active` is the modifier Marko's *taglib* refuses; `:foo` is the one
+ * modifier form Marko accepts.
+ *
+ * JSX spells that attribute `value:foo={y}` — a JSXNamespacedName, which
+ * every JSX frontend turns into the single string prop `"value:foo"` — so
+ * this host emits Marko's attribute instead of dropping it. Rendered parity
+ * with the real Marko toolchain is the `attr-value-modifier` oracle fixture
+ * (`bun run oracle:preact`).
+ */
+describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
+  it("emits Marko's attribute, for every value kind", () => {
+    expect(compilePreactMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
+      "<div value:foo={y} />",
+    );
+    expect(
+      compilePreactMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
+    ).toContain(`<div value:foo="lit" />`);
+    expect(compilePreactMx(`<div :foo/>`, "/fixtures/test.mx").code).toContain(
+      "<div value:foo=\"\" />",
+    );
+    // The same attribute under its long spelling: Marko compiles
+    // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
+    expect(
+      compilePreactMx(`<div value:foo=y/>`, "/fixtures/test.mx").code,
+    ).toContain("<div value:foo={y} />");
+  });
+
+  it("still refuses a real modifier, in this host's words", () => {
+    expect(failure(`<div class:active=c/>`).message).toContain(
+      "attribute modifier `class:active` is not Preact syntax",
+    );
+    expect(failure(`<div class:active=c/>`)).toMatchObject({
+      line: 1,
+      column: 5,
+    });
+  });
+});

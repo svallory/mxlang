@@ -471,11 +471,33 @@ describe("round 3: attribute order and position (PR #6 review)", () => {
     expect(attr.value.extra.raw).toBe(`"card a&quot;b'c"`);
   });
 
-  it("is a parse error for an empty namespace (`:foo=1`)", () => {
-    expectSyntaxError(
-      () => parseMx(`const el = <div :foo=1>x</div>;`),
-      "malformed namespaced attribute",
-    );
+  it("carries `:foo` as the namespaced attribute `value:foo` (Marko)", () => {
+    // Marko's parser fills the empty head of `:foo` with `value`, so this is
+    // one attribute literally named `value:foo` — the same AST shape a JSX
+    // `value:foo={…}` produces. It used to be rejected here as a "malformed
+    // namespaced attribute", which contradicted what Marko compiles.
+    const attr = attrsOf(`const el = <div :foo=1>x</div>;`)[0] as {
+      name: {
+        type: string;
+        namespace: { name: string };
+        name: { name: string };
+      };
+    };
+    expect(attr.name.type).toBe("JSXNamespacedName");
+    expect(attr.name.namespace.name).toBe("value");
+    expect(attr.name.name.name).toBe("foo");
+  });
+
+  it("gives a valueless `:foo` the empty value Marko's HTML means", () => {
+    // `<div :foo>` is `<div value:foo>` — an attribute present with an empty
+    // value, which every HTML parser reads the same way. The JSX spelling
+    // carries it as `value:foo=""`, not as `true`.
+    const attr = attrsOf(`const el = <div :foo>x</div>;`)[0] as {
+      name: { namespace: { name: string }; name: { name: string } };
+      value: { type: string; value: string };
+    };
+    expect(attr.name.namespace.name).toBe("value");
+    expect(attr.value).toMatchObject({ type: "StringLiteral", value: "" });
   });
 
   it("is a parse error for a doubly-namespaced name (`a:b:c=1`)", () => {

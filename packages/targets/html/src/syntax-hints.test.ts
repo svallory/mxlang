@@ -137,6 +137,26 @@ describe("event binding syntax (html)", () => {
       "tag arguments `(...)` on `<button>` are not supported in a standalone template",
     );
   });
+
+  it("points at the argument, as Marko does", () => {
+    // Marko: "Tag does not support arguments." at `args[0].loc.start`, so
+    // `<button (click)=…` is reported under `click` (column 9), not under
+    // `<button`. There is no `onClick=` hint here because this host has no
+    // event-handler form to suggest — `eventHandlerHint` is gated on
+    // `resolveAttributeMethod`, which `@mxlang/html` does not declare.
+    expect(failure('<div (click)="f()"/>')).toMatchObject({
+      line: 1,
+      column: 6,
+    });
+    expect(failure('<button (click)="go()">x</button>')).toMatchObject({
+      line: 1,
+      column: 9,
+    });
+    expect(failure('<div\n  (click)="f()"/>')).toMatchObject({
+      line: 2,
+      column: 3,
+    });
+  });
 });
 
 describe("round 2 (html)", () => {

@@ -342,10 +342,20 @@ const NOT_EVENTS = new Set(["once", "onto"]);
 // Same set `@mxlang/preact`'s emitter declares, for the same lookup.
 const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
 
-// A dynamic `data-*`/`aria-*` attribute has no Angular DOM property to bind,
-// so it emits `[attr.name]`; every other dynamic attribute stays `[name]`
-// (A1 design note, decision 86).
-const DATA_OR_ARIA = /^(data|aria)-/;
+/**
+ * A dynamic attribute with no Angular DOM property to bind emits
+ * `[attr.name]`; every other dynamic attribute stays `[name]` (A1 design note,
+ * decision 86).
+ *
+ * Two families qualify: `data-*`/`aria-*` (Angular has no `.dataFoo`/
+ * `.ariaFoo` DOM property for most of these), and a name carrying `:`, which
+ * is Marko's `value:<modifier>` attribute (`<div :foo=y/>` is one attribute
+ * literally named `value:foo`, rendered as such by Marko). `[value:foo]` would
+ * be a property binding to a name no element has — NG8002 at the app's own
+ * check. A *static* `value:foo="x"` needs none of this: Angular carries an
+ * unknown static attribute through to the DOM verbatim, exactly as Marko does.
+ */
+const NO_PROPERTY_BINDING = /^(data|aria)-|:/;
 
 /**
  * Marks a warning as "add this symbol to the component's `imports:`".
@@ -686,13 +696,14 @@ function emitAttrs(
             out.writeMapped(esc(attr.value.code), attr.value.span);
             out.write('"');
           }
-        } else if (DATA_OR_ARIA.test(name)) {
+        } else if (NO_PROPERTY_BINDING.test(name)) {
           // A1 (design note), decision 86: Angular property vs attribute
           // binding is the emitter's own call, not an author-written
           // modifier — `class:`/`style:`/`attr:` are rejected as not Marko
           // syntax (`rejectModifier` above). A dynamic `data-*`/`aria-*`
           // attribute has no property to bind (Angular has no `.dataFoo`/
-          // `.ariaFoo` DOM property for most of these), so it emits
+          // `.ariaFoo` DOM property for most of these), and neither has
+          // Marko's `value:<modifier>` attribute, so both emit
           // `[attr.name]`; every other dynamic attribute stays `[name]`.
           out.write(" [attr.");
           out.writeMapped(name, attr.nameSpan);

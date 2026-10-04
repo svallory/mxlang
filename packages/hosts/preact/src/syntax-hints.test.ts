@@ -40,7 +40,9 @@ describe("event binding syntax (preact)", () => {
     expect(error.message).toBe(
       `tag arguments \`(...)\` on \`<button>\` are not supported in a standalone template; for an event handler write \`${fix}\``,
     );
-    expect(error).toMatchObject({ line: 1, column: 0 });
+    // Marko reports at the argument (`assertNoArgs`: `args[0].loc.start`), so
+    // `<button (click)=…` points at `click` — column 9 — not at `<button`.
+    expect(error).toMatchObject({ line: 1, column: 9 });
   });
 
   it("stays as it was for anything that is not a lone event name", () => {
@@ -49,9 +51,11 @@ describe("event binding syntax (preact)", () => {
       "<button(a.b)>x</button>",
       "<button(1)>x</button>",
     ]) {
-      expect(failure(source).message).toBe(
+      const error = failure(source);
+      expect(error.message).toBe(
         "tag arguments `(...)` on `<button>` are not supported in a standalone template",
       );
+      expect(error).toMatchObject({ line: 1, column: 8 });
     }
   });
 

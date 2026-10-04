@@ -1094,9 +1094,13 @@ export function rejectUnsupportedFields(
     );
   }
   if (!allow.args && node.arguments) {
+    // Marko reports at the **argument** (`assertNoArgs`: `args[0].loc.start`,
+    // `args.at(-1).loc.end`) — `<button (click)="go()">` puts the caret under
+    // `click`, not under `<button`. Reporting at the tag points at the tag name
+    // for an error about the arguments next to it.
     fail(
       `tag arguments \`(...)\` on ${what} are not supported in a standalone template${eventHandlerHint(ctx, node)}`,
-      node,
+      node.arguments[0] ?? node,
     );
   }
   if (!allow.var && node.var) {

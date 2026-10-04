@@ -39,6 +39,32 @@ describe("For of", () => {
     assertAngularParses(out);
   });
 
+  it("refuses a string by= on a range or a record, as Marko does", () => {
+    // Angular's `track` is derived from `by=` (`deriveTrack`), and the string
+    // shorthand is `row.<field>` — which only means anything for a loop over
+    // objects. Marko refuses it for `in`/`to`/`until` at compile time rather
+    // than emitting a `track p.id` over numbers or entries, so this host never
+    // reaches `deriveTrack` with one.
+    for (const source of [
+      '<for|i| to=3 by="id">${i}</for>',
+      '<for|i| until=3 by="id">${i}</for>',
+      '<for|k, v| in=people by="id">${v}</for>',
+    ]) {
+      expect(() => emit(source)).toThrow(
+        /only supports a string `by` key with `of`/,
+      );
+    }
+    // The one form that keeps the shorthand still tracks the field.
+    const out = emit('<for|p| of=people by="id">${p}</for>');
+    expect(out).toBe("@for (p of people; track p.id) { {{ p }} }");
+  });
+
+  it("redirects key= on a <for> to by=, as Marko does", () => {
+    expect(() => emit('<for|p| of=people key="id">${p}</for>')).toThrow(
+      /keys items with the `by=` attribute, not `key=`/,
+    );
+  });
+
   it("rejects a non-unwrappable by=", () => {
     expect(() => emit("<for|p| of=people by=trackFn>${p}</for>")).toThrow(
       /Angular's `track` is an expression, not a function/,

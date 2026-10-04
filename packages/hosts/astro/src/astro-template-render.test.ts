@@ -122,6 +122,35 @@ describe("<for> with a nullish of=/in=", () => {
   });
 });
 
+/**
+ * `<div :foo="y"/>` is Marko's attribute literally named `value:foo` (its
+ * parser fills the empty head of `name:modifier` with `value`), which Marko
+ * renders as `<div value:foo=y>`. An `.astro.mx` template body is HTML, so
+ * Astro's own compiler has to accept the name too — rendered here through the
+ * real compiler and the Astro container, not just the lowering.
+ */
+describe("`:modifier` renders as the attribute `value:modifier` (astro)", () => {
+  it("renders Marko's attribute for the static and valueless forms", async () => {
+    const html = await renderPlain(
+      "value-modifier-plain",
+      ['<div :foo="lit"/>', "<div :bar/>"].join("\n"),
+    );
+    expect(html).toContain(`value:foo="lit"`);
+    expect(html).toContain(`value:bar=""`);
+  });
+
+  it("renders the interpolated form", async () => {
+    const html = await renderConditional(
+      "value-modifier-dynamic",
+      "const y = \"hello\";",
+      // In `.astro.mx` the braces would be an MX object expression, so the
+      // dynamic attribute is written without them.
+      "<div :foo=y/>",
+    );
+    expect(html).toContain(`value:foo="hello"`);
+  });
+});
+
 describe("conditional Astro named slots", () => {
   it("renders only the taken simple branch", async () => {
     const html = await renderConditional(

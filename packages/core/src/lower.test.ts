@@ -3521,3 +3521,242 @@ describe("duplicate attributes resolve last-wins (decision 135)", () => {
     ).toHaveLength(2);
   });
 });
+
+/**
+ * Marko 6.3.51 gives two spellings to `<for>` its own errors, and MX was
+ * silent on both (`runtime-tags/src/translator/core/for.ts`):
+ *
+ * - a **string** `by=` is the property-name shorthand, and only `of` has one:
+ *   `in`/`to`/`until` call `by` as a function, so Marko refuses the string at
+ *   compile time ("only supports a string `by` key with `of`") instead of
+ *   letting it die at render;
+ * - `key=` is the React/Vue habit and is redirected to `by=` ("keys items with
+ *   the `by=` attribute, not `key=`"), before the allowed-attribute check.
+ *
+ * Both are reported where Marko reports them: the string `by` at its **value**
+ * (the quoted key it refuses), `key=` at the attribute. `by="id"` on `of` is
+ * the one form that stays legal, so the check cannot be "reject a string `by`".
+ */
+describe("<for> by=/key= (Marko parity)", () => {
+  // `§` marks where the error must land; it is stripped before lowering.
+  const fails = (marked: string, message: string): void => {
+    const column = marked.indexOf("§");
+    const source = marked.replace("§", "");
+    expect(() => lowerSource(source)).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(message),
+        line: 1,
+        column,
+      }),
+    );
+  };
+
+  it("refuses a string `by=` on `in`, at the quoted key", () => {
+    fails(
+      '<for|k, v| in=o by=§"id"><p/></for>',
+      "only supports a string `by` key with `of`; use a `by=(key, value) => ...` function for `<for in>`",
+    );
+  });
+
+  it("refuses a string `by=` on `to` and `until`, naming the index form", () => {
+    fails(
+      '<for|i| to=3 by=§"id"><p/></for>',
+      "only supports a string `by` key with `of`; use a `by=(index) => ...` function for `<for to>`",
+    );
+    fails(
+      '<for|i| until=3 by=§"id"><p/></for>',
+      "only supports a string `by` key with `of`; use a `by=(index) => ...` function for `<for until>`",
+    );
+  });
+
+  it("redirects `key=` to `by=`, at the attribute, for every loop form", () => {
+    fails(
+      "<for|x| of=xs §key=\"id\"><p/></for>",
+      "keys items with the `by=` attribute, not `key=`. Use `by=\"propName\"` or `by=(item, index) => key`",
+    );
+    fails(
+      "<for|k, v| in=o §key=\"id\"><p/></for>",
+      "keys items with the `by=` attribute, not `key=`. Use `by=(key, value) => key`",
+    );
+    fails(
+      "<for|i| to=3 §key=\"id\"><p/></for>",
+      "keys items with the `by=` attribute, not `key=`. Use `by=(num) => key`",
+    );
+    fails(
+      "<for|i| from=1 until=9 §key=\"id\"><p/></for>",
+      "keys items with the `by=` attribute, not `key=`. Use `by=(num) => key`",
+    );
+  });
+
+  it("refuses `key=` however it is spelled", () => {
+    for (const source of [
+      "<for|x| of=xs §key>x</for>",
+      "<for|x| of=xs §key=id>x</for>",
+      "<for|x| of=xs §key=(x) => x.id>x</for>",
+    ]) {
+      fails(source, "keys items with the `by=` attribute, not `key=`");
+    }
+  });
+
+  it("reports `key=` before the string-`by` check, as Marko does", () => {
+    // Marko redirects `key=` first (it is the React habit), so a tag carrying
+    // both is told about `key=`, not about the string.
+    fails(
+      '<for|k, v| in=o §key="id" by="id"><p/></for>',
+      "keys items with the `by=` attribute, not `key=`",
+    );
+  });
+
+  it("keeps the string shorthand on `of`, and a function `by=` elsewhere", () => {
+    expect(() => lowerSource('<for|x| of=xs by="id"><p/></for>')).not.toThrow();
+    expect(() => lowerSource("<for|k, v| in=o by=(k) => k><p/></for>")).not.toThrow();
+    expect(() => lowerSource("<for|i| to=3 by=(i) => i><p/></for>")).not.toThrow();
+    expect(() => lowerSource("<for|i| until=3 by=(i) => i><p/></for>")).not.toThrow();
+  });
+});
+
+/**
+ * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
+ * name at its **last** `:`; an empty head is not an error but the `value`
+ * attribute, so `<div :foo="y"/>` is `value` with modifier `foo` and compiles
+ * to `<div value:foo=y>` (`<div :foo/>` to `<div value:foo>`). Only the
+ * taglib rejects the *other* modifiers — `class:active` is "not a valid
+ * attribute, did you mean `class={ active: condition }`?" — so `:foo` is the
+ * one modifier form MX has to accept, and it means an attribute literally
+ * named `value:foo`.
+ *
+ * Both spellings are the same attribute in Marko (`<div value:foo="y"/>`
+ * compiles identically), and `attr.default` is the flag its parser sets for
+ * the `:foo` spelling, so neither can keep going to the modifier hooks.
+ */
+describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", () => {
+  it("lowers the shorthand to an ordinary attribute named `value:foo`", () => {
+    const ir = lowerSource("<div :foo=y id=\"z\"/>\n");
+    expect(find(ir.body, "Element").attrs).toMatchObject([
+      { kind: "dynamic", name: "value:foo", value: { code: "y" } },
+      { kind: "static", name: "id", value: "z" },
+    ]);
+  });
+
+  it("keeps the value kind each other attribute gets", () => {
+    expect(
+      find(lowerSource('<div :foo="lit"/>').body, "Element").attrs,
+    ).toMatchObject([{ kind: "static", name: "value:foo", value: "lit" }]);
+    // `<div :foo/>` is HTML's valueless attribute — present with an empty
+    // value — which is what Marko emits (`<div value:foo>`). It is NOT the
+    // `boolean` kind: a host handed `true` renders React's non-boolean
+    // warning and drops the attribute, Hono writes `value:foo="true"`.
+    expect(find(lowerSource("<div :foo/>").body, "Element").attrs).toMatchObject(
+      [{ kind: "static", name: "value:foo", value: "" }],
+    );
+    // Every other valueless attribute stays `boolean` — only this one means
+    // an empty value, because only this one is not a flag-shaped name.
+    expect(find(lowerSource("<div foo/>").body, "Element").attrs).toMatchObject([
+      { kind: "boolean", name: "foo" },
+    ]);
+  });
+
+  it("accepts the explicit `value:foo` spelling with the same meaning", () => {
+    expect(
+      find(lowerSource('<div value:foo="lit"/>').body, "Element").attrs,
+    ).toMatchObject([{ kind: "static", name: "value:foo", value: "lit" }]);
+  });
+
+  it("carries a component call's `:foo` as the prop `value:foo`", () => {
+    const ir = lowerSource(
+      'import Card from "./card.marko"\n<Card :foo=y/>\n',
+      fakeDeclarations({ isElement: (name) => name !== "Card" }),
+    );
+    expect(find(ir.body, "Component").attrs).toMatchObject([
+      { name: "value:foo", value: { code: "y" } },
+    ]);
+  });
+
+  it("keeps the position of the name it was authored at", () => {
+    const attr = find(lowerSource("<div :foo=y/>\n").body, "Element").attrs[0];
+    expect(attr?.kind).toBe("dynamic");
+    expect(attr?.kind === "dynamic" ? attr.nameSpan : null).toMatchObject({
+      // `:foo` — the name as authored — starts at column 5 in `<div :foo=y/>`.
+      sourceStart: 5,
+      sourceEnd: 9,
+    });
+  });
+
+  it("hands every *other* modifier to the host's hook, untouched", () => {
+    const seen: Array<{ name: string; modifier: string }> = [];
+    // The core's own rejection follows the hook (the hook only rewords it), so
+    // the throw is expected — what matters is that `class:active` still
+    // arrives as a modifier, with `value`/`foo` never invented.
+    expect(() =>
+      lowerSource(
+        "<div class:active=c/>\n",
+        fakeDeclarations({
+          resolveModifier: (attr) => {
+            const node = attr as unknown as { name: string; modifier: string };
+            seen.push({ name: node.name, modifier: node.modifier });
+            return undefined;
+          },
+          rejectModifier: () => {},
+        }),
+      ),
+    ).toThrow("attribute modifier `class:active`");
+    expect(seen).toEqual([{ name: "class", modifier: "active" }]);
+  });
+
+  it("rejects a modifier on any tag whose host keeps modifiers as syntax", () => {
+    // Solid keeps `prop:x`; a `:x` there is not that, and the hook must still
+    // see it rather than the core quietly accepting it.
+    const seen: Array<{ name: string; modifier: string }> = [];
+    expect(() =>
+      lowerSource(
+        "<div :foo=y/>\n",
+        fakeDeclarations({
+          acceptsForeignAttrNames: true,
+          rejectModifier: () => {},
+          resolveModifier: (attr) => {
+            const node = attr as unknown as { name: string; modifier: string };
+            seen.push({ name: node.name, modifier: node.modifier });
+            return "value:foo";
+          },
+        }),
+      ),
+    ).not.toThrow();
+    expect(seen).toEqual([]);
+  });
+});
+
+/**
+ * `<button (click)="go()">` parses as tag arguments `(click)` plus a default
+ * attribute value, and Marko reports "Tag does not support arguments." at the
+ * **argument** (`assertNoArgs`: `args[0].loc.start`, 0-based column 9 for
+ * `<button (click)=…`) — not at the tag. MX reported at the tag's own start
+ * (1:0), which points at `<button` for an error about `(click)`.
+ */
+describe("tag arguments are reported at the argument", () => {
+  const fails = (marked: string): void => {
+    const column = marked.indexOf("§");
+    const source = marked.replace("§", "");
+    expect(() => lowerSource(source)).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining("tag arguments `(...)`"),
+        line: 1,
+        column,
+      }),
+    );
+  };
+
+  it("points at the argument, not the tag", () => {
+    fails("<div (§click)=\"f()\"/>");
+    fails("<button (§click)=\"go()\">x</button>");
+    fails("<button (§keyup)=\"save()\">x</button>");
+  });
+
+  it("points at the first argument of several", () => {
+    fails("<button (§a, b)>x</button>");
+  });
+
+  it("points at a non-identifier argument too", () => {
+    fails("<button (§a.b)>x</button>");
+    fails("<button (§1)>x</button>");
+  });
+});
