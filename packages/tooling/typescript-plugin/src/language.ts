@@ -90,6 +90,22 @@ export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
    * it: `.mx`, `.solid.mx`, `.ng.mx` and `.astro.mx`.
    */
   getTargetPolicyDiagnostics?(fileName?: string): TargetPolicyDiagnostic[];
+  /**
+   * Drops TypeScript's own semantic diagnostics that this plugin's *projection*
+   * made spurious — never a real error in the author's source.
+   *
+   * A host that compiles authored top-level code inside a function body (Astro's
+   * `---` fence, which becomes the component's render function) but projects it
+   * into a TSX module's top level gets TS1108 "'return' statement can only be
+   * used within a function body" for a `return` that is perfectly valid in that
+   * host. Optional and host-agnostic: the interface states that a projection can
+   * make a diagnostic spurious, and the host that owns the projection decides
+   * which ones, and how narrowly.
+   */
+  filterSemanticDiagnostics?(
+    fileName: string,
+    diagnostics: readonly ts.Diagnostic[],
+  ): ts.Diagnostic[];
 }
 
 export interface SolidMxLanguagePlugin extends MxDiagnosticLanguagePlugin {

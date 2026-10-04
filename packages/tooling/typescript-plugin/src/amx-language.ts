@@ -36,6 +36,39 @@ export const AMX_LANGUAGE_ID =
   fileKindForPipeline("astro-template").languageIds?.[0] ??
   fileKindForPipeline("astro-template").diagnosticSource;
 
+/**
+ * TypeScript's "A 'return' statement can only be used within a function body."
+ * The one code Astro's own language tools suppress for `.astro` (its
+ * `isNoCantReturnOutsideFunction`, whose own TODO asks for a better TSX shape),
+ * because a fence `return` is legal Astro.
+ */
+const CANT_RETURN_OUTSIDE_FUNCTION = 1108;
+
+/**
+ * Where the `---` fence ends, as an offset into the authored `.astro.mx` file.
+ *
+ * `.astro.mx` has no TS1108 problem at compile time: `lowerAstroMx` accepts the
+ * fence's top-level `return` and copies the fence through. TS1108 comes from the
+ * *editor projection* instead — `convertToTSX` (Astro's own compiler) emits the
+ * frontmatter at the top level of a TSX module, ahead of the generated
+ * component function, so TypeScript sees a module-level `return`. Astro's own
+ * language server drops every 1108 for `.astro`; this narrows that to the fence
+ * itself, so a 1108 anywhere else in the virtual file still reaches the author.
+ *
+ * The projection cannot simply wrap the fence in a function body instead: the
+ * fence's imports and its top-level `const`s share module scope with the
+ * template, so wrapping would strand the template's `${…}` references on
+ * bindings it can no longer see.
+ *
+ * The filter works in *source* offsets because that is the space every surface
+ * reports in: by the time a diagnostic reaches it, both the tsserver language
+ * service and `mx-tsc`'s program have mapped it back to the author's own file.
+ */
+function fenceEndOffset(source: string): number | undefined {
+  const fence = source.match(/^---\r?\n[\s\S]*?\r?\n---/);
+  return fence ? fence[0].length : undefined;
+}
+
 export interface AmxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): MxSyntaxError | undefined;
 }
@@ -49,6 +82,7 @@ export function createAmxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
   const reportedScanDiagnostics = new Set<string>();
+  const fenceEnds = new Map<string, number>();
   const hostPolicies = createTargetPolicyRecorder();
 
   return {
@@ -106,6 +140,7 @@ export function createAmxLanguagePlugin(
           lowered.code,
         );
         syntaxErrors.delete(fileName);
+        fenceEnds.set(fileName, fenceEndOffset(source) ?? 0);
         compileDiagnostics.set(
           fileName,
           warnings.map((warning) =>
@@ -122,6 +157,7 @@ export function createAmxLanguagePlugin(
         );
         if (foreign) {
           syntaxErrors.delete(fileName);
+          fenceEnds.delete(fileName);
           // See `ForeignTemplateError`'s doc comment (`language.ts`) for the
           // map-clobber caveat this write is subject to.
           compileDiagnostics.set(foreign.templateFileName, [
@@ -136,6 +172,7 @@ export function createAmxLanguagePlugin(
         }
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
+        fenceEnds.delete(fileName);
         compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
         return createVirtualCode(
           typescript,
@@ -147,6 +184,17 @@ export function createAmxLanguagePlugin(
 
     getSyntaxError(fileName) {
       return syntaxErrors.get(fileName);
+    },
+
+    filterSemanticDiagnostics(fileName, diagnostics) {
+      const fenceEnd = fenceEnds.get(fileName);
+      if (fenceEnd === undefined || fenceEnd === 0) return [...diagnostics];
+      return diagnostics.filter((diagnostic) => {
+        const start = diagnostic.start;
+        if (diagnostic.code !== CANT_RETURN_OUTSIDE_FUNCTION) return true;
+        if (start === undefined) return true;
+        return start >= fenceEnd;
+      });
     },
 
     getCompileDiagnostics(fileName) {

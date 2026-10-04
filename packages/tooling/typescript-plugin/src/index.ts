@@ -224,7 +224,15 @@ function withSyntaxDiagnostics(
     get(target, property, receiver) {
       if (property === "getSemanticDiagnostics") {
         return (fileName: string) => {
-          const diagnostics = target.getSemanticDiagnostics(fileName);
+          let diagnostics = target.getSemanticDiagnostics(fileName);
+          // A host whose own projection makes TypeScript report something
+          // spurious gets to drop exactly those, and only those — every other
+          // diagnostic on the file passes through untouched.
+          for (const plugin of getLanguagePlugins() ?? []) {
+            diagnostics =
+              plugin.filterSemanticDiagnostics?.(fileName, diagnostics) ??
+              diagnostics;
+          }
           const ng = isNgMx(fileName) ? getNgDiagnostics() : undefined;
           ng?.request(fileName);
           return ng

@@ -6,6 +6,10 @@
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
+- **Fix (astro-fence-top-level-return):** a top-level `return` in a `.astro.mx` `---` fence — `return Astro.redirect("/")`, the documented Astro redirect — no longer fails with ``syntax error in the `---` fence: 'return' outside of function``. Astro compiles the fence into the component function's body, so the return is legal there; MX parsed the fence as a plain ES module, where it is not. The fence's three parses (`sourceBindings`, `unknownSourceBindings`, core's `checkReservedSource`) now allow it, for the Astro fence only. The relaxation cannot be scoped by wrapping the fence in a function body instead: the fence's imports and top-level `const`s share module scope with the template, so wrapping would strand the template's `${…}` references.
+
+  A fence syntax error now also reports the **file** position in its message text, 1-based in both line and column (#227), where it previously printed Babel's fence-relative one and pointed at the opening `---`. A break on the fence's third content line reports `(4,11)`. The structured `line`/`column` are unchanged, and both reporters (`mx-tsc`, Vite) still print one position, not two. Real Astro compiler/container renders pin both.
+
 - **Fix (reserve-mx-identifiers):** frontmatter bindings beginning with `__mx` receive core's shared positioned reservation error before generated native-attribute helpers are injected. Template bindings are checked by core too; ordinary property names remain legal.
 
 - **Fix (attr-value-parity review):** native guards are hoisted once into frontmatter, with authored mapping offsets retained. Ordinary function/symbol values receive Marko debug errors; null/false serialization remains unchanged.

@@ -502,6 +502,30 @@ describe("unresolved components (decision 114 parity)", () => {
       expect(error.message).not.toContain("(2:");
     }
   });
+
+  it("prints (4:…) for a break on the fence's third content line", () => {
+    // The fence's own content lines are file lines 2, 3, 4, so a break on
+    // fence content line 3 is file line 4 — the case the earlier test (whose
+    // break sat on file line 3) did not actually cover.
+    const source = [
+      "---",
+      'import Card from "./Card.astro";',
+      "const x = 1;",
+      "const y = ;",
+      "---",
+      "<Card/>",
+    ].join("\n");
+    try {
+      lowerAstroMx(source, "Test.astro.mx");
+      throw new Error("expected the template to fail lowering");
+    } catch (error) {
+      if (!(error instanceof AstroTemplateError)) throw error;
+      expect(error.line).toBe(4);
+      expect(error.message).toContain("(4:");
+      // Babel would have stamped the fence-relative line 3.
+      expect(error.message).not.toContain("(3:");
+    }
+  });
 });
 
 describe("components and slots", () => {

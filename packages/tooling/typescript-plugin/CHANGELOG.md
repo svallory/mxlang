@@ -4,6 +4,14 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: no TS1108 for a top-level return in an `.astro.mx` `---` fence (astro-fence-top-level-return)
+
+A fence `return` is valid Astro, but `convertToTSX` emits the frontmatter at the top level of a TSX module, ahead of the generated component function, so TypeScript reported `1108 A 'return' statement can only be used within a function body` for a page the build accepts. `createAmxLanguagePlugin` now implements a new optional `filterSemanticDiagnostics` on `MxDiagnosticLanguagePlugin`, and the tsserver language-service proxy applies it, so the editor no longer flags a valid fence.
+
+The suppression is deliberately narrower than Astro's own language tools, which drop *every* 1108 in a `.astro` file: only TS1108 whose offset falls inside the fence is dropped, so a real error past the fence and ordinary type checking of the fence (TS2322 and friends) are untouched. The filter works in source offsets because both callers reach it after Volar has mapped a diagnostic back into the author's file.
+
+`mx-tsc --astro` still reports it: Volar's `runTsc` rewrites TypeScript's own source so `createProgram` is a local binding, and `proxyCreateProgram` then decorates that program in place, so nothing `mx-tsc` owns ever sees the program. `packages/tooling/tsc/src/astro-fence-return.test.ts` pins the gap with `it.fails`; closing it needs a Volar diagnostics seam or a filter on `mx-tsc`'s own reporter, both above this package.
+
 ### Test: offsets after an escaped text character map to the shifted generated positions (jsx-text-lt-unescaped)
 
 `createSolidMxLanguagePlugin`'s mappings pin that `${input.zed}` after authored text `a < b` — emitted as `a &#60; b`, three characters longer — maps source offset 23 to generated offset 26, and the following statement (`const n: number = 1;`) maps source 41 to generated 44. The row guards the entity-expansion shift so a diagnostic after an escaped character lands on the authored text, not three columns late. No plugin code changed.
