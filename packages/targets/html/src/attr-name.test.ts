@@ -69,8 +69,8 @@ describe("invalid attribute names (html)", () => {
  * name at its LAST `:` and fills an empty head with `value`, so
  * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
  * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
- * `class:active` is the modifier Marko's *taglib* refuses; `:foo` is the one
- * modifier form Marko accepts.
+ * Only native `class:`, `style:` and `on:` prefixes are reserved; every other
+ * colon name, such as `x:foo` or `data:x`, is an ordinary attribute.
  *
  * Plain HTML carries the name verbatim, so this host renders exactly what
  * Marko renders. `expected.html` in the `attr-value-modifier` fixture is
@@ -105,6 +105,84 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
   });
 
   it.each([
+    "x:foo",
+    "data:x",
+    "prop:x",
+    "attr:x",
+    "bool:x",
+    "use:x",
+    "oncapture:click",
+    "x:foo:bar",
+  ])("renders ordinary colon names without renaming them: %s", (name) => {
+    for (const [suffix, value] of [
+      ["", ""],
+      ['="y"', "y"],
+    ]) {
+      expect(rendered(`<div ${name}${suffix}/>`)).toContain(
+        `out += ${JSON.stringify(`<div ${name}="${value}"></div>`)};`,
+      );
+    }
+    expect(rendered(`<div ${name}=input.x/>`)).toContain(`${name}=\\"`);
+  });
+
+  it.each([
+    ["<div x:() {}/>", "The `x:` attribute cannot be a function.", 1, 5],
+    [
+      "<div :foo() {}/>",
+      "The `value:foo` attribute cannot be a function.",
+      1,
+      5,
+    ],
+    ["<div x:foo() {}/>", "The `x:foo` attribute cannot be a function.", 1, 5],
+    [
+      "<div\n  x:foo() {}\n/>",
+      "The `x:foo` attribute cannot be a function.",
+      2,
+      2,
+    ],
+    [
+      "<div x:foo=(function(){})/>",
+      "The `x:foo` attribute cannot be a function.",
+      1,
+      5,
+    ],
+    [
+      "<div x:foo=(() => {})/>",
+      "The `x:foo` attribute cannot be a function.",
+      1,
+      5,
+    ],
+    [
+      "<div x:foo=function fn() {}/>",
+      "The `x:foo` attribute cannot be a function.",
+      1,
+      5,
+    ],
+    [
+      "<div x:foo()=(() => {})/>",
+      "The `x:foo` attribute cannot be a function.",
+      1,
+      5,
+    ],
+    [
+      "<div\n  x:foo=(function(){})\n/>",
+      "The `x:foo` attribute cannot be a function.",
+      2,
+      2,
+    ],
+    [
+      '<div x:foo()="y"/>',
+      "Unsupported arguments on the `x:foo` attribute.",
+      1,
+      5,
+    ],
+    ['<div x:()="y"/>', "Unsupported arguments on the `x:` attribute.", 1, 5],
+    [
+      '<div\n  x:foo()="y"\n/>',
+      "Unsupported arguments on the `x:foo` attribute.",
+      2,
+      2,
+    ],
     [
       '<div :="x"/>',
       "Attributes may only be bound to identifiers or member expressions",

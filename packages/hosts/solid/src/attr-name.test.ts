@@ -68,8 +68,8 @@ describe("invalid attribute names (solid)", () => {
  * name at its LAST `:` and fills an empty head with `value`, so
  * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
  * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
- * `class:active` is the modifier Marko's *taglib* refuses; `:foo` is the one
- * modifier form Marko accepts.
+ * Only native `class:`, `style:` and `on:` prefixes are reserved; every other
+ * colon name is an ordinary attribute in Marko.
  *
  * Solid's JSX takes the namespaced attribute (`value:foo={y}`); both Solid 2
  * backends turn it into `setAttribute(el, "value:foo", …)`, which is the one

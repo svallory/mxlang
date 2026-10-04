@@ -304,10 +304,9 @@ function rejectModifier(
       attr,
     );
   }
-  // Decision 101 (b): `on:`/`oncapture:` get the event fix-it, not the
-  // class-shaped object suggestion — `on={ click: condition }` is nonsense
-  // for this prefix (design note §4).
-  if (attr.name === "on" || attr.name === "oncapture") {
+  // Only reserved `on:` gets an event fix-it. Lowercase `oncapture:` is an
+  // ordinary colon-named attribute and never reaches the modifier hook.
+  if (attr.name === "on") {
     const event =
       attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
     fail(

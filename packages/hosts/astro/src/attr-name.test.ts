@@ -51,9 +51,9 @@ describe("invalid attribute names (astro)", () => {
  * name at its LAST `:` and fills an empty head with `value`, so
  * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
  * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
- * `class:active` is the modifier Marko's *taglib* refuses; `:foo` is the one
- * modifier form Marko accepts, and an `.astro.mx` template body is HTML, so
- * it is written `value:foo={y}` there too.
+ * Only native `class:`, `style:` and `on:` prefixes are reserved; other colon
+ * names are ordinary. An `.astro.mx` template body is HTML, so the shorthand
+ * is written `value:foo={y}` there too.
  */
 describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
   const template = (source: string): string =>

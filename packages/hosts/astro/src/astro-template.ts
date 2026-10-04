@@ -219,9 +219,9 @@ const declarations: HostDeclarations = {
     );
   },
   rejectModifier: (attr) => {
-    // Decision 101 (b): `on:`/`oncapture:` get the event fix-it naming
-    // `on-<exact>`, in `.astro.mx` vocabulary (design note §4).
-    if (attr.name === "on" || attr.name === "oncapture") {
+    // Reserved `on:` gets an event fix-it. `oncapture:` is an ordinary name,
+    // not a capture alias or invalid Marko syntax.
+    if (attr.name === "on") {
       const event =
         attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
       fail(

@@ -20,9 +20,8 @@ describe("Angular attribute-name passthrough", () => {
  * name at its LAST `:` and fills an empty head with `value`, so
  * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
  * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
- * `class:`/`style:`/`attr:` are the modifiers Marko's taglib refuses, and this
- * host refuses them too (`rejectModifier`) — `:foo` is the one modifier form
- * Marko accepts, so it must reach the template as an attribute.
+ * Only native `class:`, `style:` and `on:` prefixes are reserved; every other
+ * colon name (including `attr:`) is an ordinary attribute in Marko.
  *
  * A static one is carried verbatim (Angular passes an unknown static attribute
  * through to the DOM); a dynamic one cannot be a property binding — `[value:foo]`

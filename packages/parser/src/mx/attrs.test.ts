@@ -229,7 +229,7 @@ describe("style={} object container", () => {
 });
 
 describe("namespaced attributes", () => {
-  it("passes `prop:` through as a JSXNamespacedName (the one surviving namespace)", () => {
+  it("passes ordinary `prop:` through as a JSXNamespacedName", () => {
     const attrs = attrsOf(`const el = <div prop:value=v>x</div>;`);
     expect(attrs).toHaveLength(1);
     const attr = attrs[0] as {
@@ -244,31 +244,36 @@ describe("namespaced attributes", () => {
     expect(attr.name.name.name).toBe("value");
   });
 
-  it("passes the `prop:` attr-method form through as a block-body arrow", () => {
-    const attrs = attrsOf(`const el = <div prop:onx(e) { go(e) }>x</div>;`);
-    expect(attrs).toHaveLength(1);
-    const attr = attrs[0] as {
-      name: { type: string; namespace: { name: string } };
-      value: {
-        expression: { type: string; params: unknown[]; body: { type: string } };
-      };
-    };
-    expect(attr.name.type).toBe("JSXNamespacedName");
-    expect(attr.name.namespace.name).toBe("prop");
-    expect(attr.value.expression.type).toBe("ArrowFunctionExpression");
-    expect(attr.value.expression.body.type).toBe("BlockStatement");
+  it("rejects an ordinary native prop: method with Marko's exact text", () => {
+    expectSyntaxError(
+      () => parseMx(`const el = <div prop:onx(e) { go(e) }>x</div>;`),
+      "The `prop:onx` attribute cannot be a function.",
+    );
   });
 
-  // Solid 2 removed these namespaces outright — they are absent from
-  // `@solidjs/web`'s `jsx.d.ts`, so passing them through would emit props the
-  // compiler ignores. Each parse error names the replacement (decision 10).
-  const removed: [string, string][] = [
-    ["on:scroll=fn", "onX=fn"],
-    ["oncapture:click=fn", "capture: true"],
-    ["attr:title=t", "use the plain attribute"],
-    ["bool:open=o", "use the plain attribute"],
-    ["use:tooltip=opts", "ref=foo(opts)"],
-  ];
+  it.each([
+    "oncapture:click",
+    "attr:title",
+    "bool:open",
+    "use:tooltip",
+    "x:foo",
+    "data:x",
+  ])(
+    "preserves the ordinary colon name %s rather than treating it as a removed namespace",
+    (name) => {
+      const attrs = attrsOf(`const el = <div ${name}=input.x>x</div>;`);
+      expect(attrs[0]).toMatchObject({
+        name: {
+          type: "JSXNamespacedName",
+          namespace: { name: name.split(":")[0] },
+          name: { name: name.split(":")[1] },
+        },
+      });
+    },
+  );
+
+  // Only the native on: prefix remains a reserved modifier.
+  const removed: [string, string][] = [["on:scroll=fn", "onX=fn"]];
 
   for (const [attr, hint] of removed) {
     it(`rejects \`${attr}\` with its fix-it hint`, () => {
@@ -500,10 +505,19 @@ describe("round 3: attribute order and position (PR #6 review)", () => {
     expect(attr.value).toMatchObject({ type: "StringLiteral", value: "" });
   });
 
-  it("is a parse error for a doubly-namespaced name (`a:b:c=1`)", () => {
-    expectSyntaxError(
-      () => parseMx(`const el = <div a:b:c=1>x</div>;`),
-      "malformed namespaced attribute",
-    );
+  it("preserves a multi-colon ordinary name in a string-keyed spread", () => {
+    const attr = attrsOf(`const el = <div a:b:c=1>x</div>;`)[0];
+    expect(attr).toMatchObject({
+      type: "JSXSpreadAttribute",
+      argument: {
+        type: "ObjectExpression",
+        properties: [
+          {
+            key: { type: "StringLiteral", value: "a:b:c" },
+            value: { type: "NumericLiteral", value: 1 },
+          },
+        ],
+      },
+    });
   });
 });

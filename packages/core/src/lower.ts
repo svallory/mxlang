@@ -220,18 +220,15 @@ function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
  * modifier is still present (`:` becomes `value:`), and a head already starting
  * with `value:` keeps its earlier colons (`value:foo:bar` splits into
  * `name: "value:foo", modifier: "bar"`). Marko joins them again on emission.
- * An empty modifier on any ordinary name also keeps its colon (`x:`).
- * On native elements, reserved `class:`, `style:` and `on:` still reject;
- * component props have no such reservation. Events retain their suffix too.
+ * This applies to every colon name (`x:`, `x:foo`, `data:x`), not just `value`.
+ * On native elements only the `class:`, `style:` and `on:` prefixes remain
+ * reserved, including additional colons; component props have no reservation.
+ * Events retain their suffix too.
  */
 function isOrdinaryColonName(attr: Node, isElement: boolean): boolean {
   return (
     attr?.modifier != null &&
-    (attr.default === true ||
-      (attr.modifier === "" &&
-        (!isElement || !["class", "style", "on"].includes(attr.name))) ||
-      attr.name === "value" ||
-      (typeof attr.name === "string" && attr.name.startsWith("value:")))
+    (!isElement || !/^(?:class|style|on)(?::|$)/.test(attr.name))
   );
 }
 
@@ -533,15 +530,23 @@ function lowerAttr(
     fail("`on:` is not a valid attribute, did you mean `on`?", attr);
   }
 
-  // This is an ordinary colon-named attribute, not a handler method. Reject
-  // its arguments in Marko's vocabulary before a host can rename or accept it.
+  // Ordinary native colon names are not handler methods. Marko rejects a
+  // function value before checking arguments, at the authored attribute name.
+  // Events and component props still use their host's callable-prop policy.
   if (
     isElement &&
     isOrdinaryColonName(attr, isElement) &&
-    attr.arguments &&
     !EVENT_ATTR.test(String(name))
   ) {
-    fail(`Unsupported arguments on the \`${name}\` attribute.`, attr);
+    if (
+      attr.value?.type === "FunctionExpression" ||
+      attr.value?.type === "ArrowFunctionExpression"
+    ) {
+      fail(`The \`${name}\` attribute cannot be a function.`, attr);
+    }
+    if (attr.arguments) {
+      fail(`Unsupported arguments on the \`${name}\` attribute.`, attr);
+    }
   }
 
   if (attr.arguments || attr.value?.type === "FunctionExpression") {
@@ -638,12 +643,10 @@ function lowerAttr(
   // the same arrow-function `Expr` the handler-prop form produces, so a host
   // implements one branch and not two.
   //
-  // No `!attr.modifier` guard is needed: the modifier block above either
-  // returns the host's resolved name or fails, so nothing carrying a modifier
-  // reaches this point — except the `value:<modifier>` attribute, which is an
-  // ordinary name and never matches `EVENT_ATTR`. `on:click`/`oncapture:click`
-  // therefore keep going to the host's own modifier hook and never become
-  // events here (decision 101b).
+  // No `!attr.modifier` guard is needed: reserved native prefixes go through
+  // the modifier hook above. Other colon names keep their complete spelling:
+  // `onClick:foo` is an event, but lowercase `oncapture:click` is an ordinary
+  // attribute, not an event or a capture-mode alias.
   if (isElement && EVENT_ATTR.test(String(name))) {
     const eventName = String(name);
     if (eventName === "on-") {

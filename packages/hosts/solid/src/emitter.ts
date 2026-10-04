@@ -627,23 +627,9 @@ export const solidDeclarations: HostDeclarations = {
     if (name !== "try") rawFail(`unknown Solid host tag ${name}`, node);
     return { kind: "try" };
   },
-  resolveModifier(attr) {
-    if ((attr.default && attr.name === "value") || attr.name.includes(":")) {
-      rawFail("malformed namespaced attribute", attr);
-    }
-    if (attr.name === "prop" && attr.modifier) {
-      return `prop:${attr.modifier}`;
-    }
-    return undefined;
-  },
   rejectModifier(attr) {
     const replacements: Record<string, string> = {
       on: "`on:x=fn` was removed in Solid 2; use `onX=fn` for a delegated event or `on-x=fn` for a custom event name (Marko rejects this form too)",
-      oncapture:
-        "`oncapture:x=fn` was removed in Solid 2; use `onX=fn` — MX has no capture spelling in the name, so use a `ref` callback calling `addEventListener(..., { capture: true })` if you need capture",
-      attr: "`attr:x=v` was removed in Solid 2; use the plain attribute `x=v`",
-      bool: "`bool:x=v` was removed in Solid 2; use the plain attribute `x=v`",
-      use: "`use:foo=opts` was removed in Solid 2; use `ref=foo(opts)` (a directive is now a function returning a ref callback)",
     };
     rawFail(
       replacements[attr.name] ??

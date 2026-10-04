@@ -77,13 +77,26 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("rejects on:/oncapture: with a fix-it naming `on-<exact>`", () => {
+  it("rejects reserved on: but preserves ordinary oncapture:", () => {
     expect(() => emit("<a on:click=f>x</a>")).toThrow(
       /`on:click=fn` is not MX syntax; write `onClick=fn`.*or `on-click=fn`/,
     );
-    expect(() => emit("<a oncapture:click=f>x</a>")).toThrow(
-      /`oncapture:click=fn` is not MX syntax; write `onClick=fn`/,
-    );
+    const out = emit('<a oncapture:click="s">x</a>');
+    expect(out).toBe('<a oncapture:click="s">x</a>');
+    assertAngularParses(out);
+    for (const [source, line, column] of [
+      ["<a oncapture:click=f>x</a>", 1, 3],
+      ["<a\n  oncapture:click=f>x</a>", 2, 2],
+    ] as const) {
+      expect(() => emit(source)).toThrow(
+        expect.objectContaining({
+          message:
+            "Angular forbids dynamically binding the ordinary attribute `oncapture:click` for security reasons",
+          line,
+          column,
+        }),
+      );
+    }
   });
 
   it("leaves a bare or string-valued `onClick` alone", () => {
@@ -139,10 +152,10 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("rejects attr:/class:/style: modifiers as not Marko syntax (decision 86)", () => {
-    expect(() => emit("<a attr:aria-label=l>x</a>")).toThrow(
-      /attribute modifier `attr:aria-label` is not Marko syntax/,
-    );
+  it("preserves ordinary attr: but rejects reserved class:/style: (decision 86 follow-up)", () => {
+    const out = emit("<a attr:aria-label=l>x</a>");
+    expect(out).toBe('<a [attr.attr:aria-label]="l">x</a>');
+    assertAngularParses(out);
     expect(() => emit("<a class:on=c>x</a>")).toThrow(
       /attribute modifier `class:on` is not Marko syntax.*\[ngClass\]/,
     );
@@ -208,10 +221,10 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("rejects an unknown attribute modifier prefix, without the data-*/aria-* detail", () => {
-    expect(() => emit("<div prop:x=v>y</div>")).toThrow(
-      "attribute modifier `prop:x` is not Marko syntax; MX has no attribute modifiers — write the attribute plainly (`x=`)",
-    );
+  it("preserves an ordinary colon name instead of inventing a modifier policy", () => {
+    const out = emit("<div prop:x=v>y</div>");
+    expect(out).toBe('<div [attr.prop:x]="v">y</div>');
+    assertAngularParses(out);
   });
 
   it("rejects a spread attribute", () => {

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (colon-attr-followups round 2):** non-reserved colon names such as `attr:x` and `prop:x` are ordinary complete names, not invalid Marko modifiers, and dynamic values use `[attr.name]`. Static `oncapture:click` is preserved; its dynamic form gets a positioned Angular-security refusal because Angular forbids `[attr.on*]` bindings, rather than claiming Marko rejects the spelling.
+
 - **Fix (colon-attr-followups):** core preserves ordinary empty-suffix attribute names such as `x:`, so the existing Angular refusal now reports their authored name position for static, dynamic and valueless forms instead of emitting a different attribute with the colon dropped. Reserved empty modifiers remain errors.
 
 - **Fix (marko-parity-trio review, empty colon):** `<div :/>` is Marko's attribute `value:`, but Angular's template parser cannot tokenize that empty namespace suffix. The emitter now gives a positioned error at the authored `:` instead of returning an unparseable `<div value:="">` template. Explicit multi-colon names such as `value:foo:bar` remain accepted, statically and through `[attr.value:foo:bar]`.

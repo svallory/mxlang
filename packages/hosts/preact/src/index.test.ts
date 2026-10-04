@@ -1547,9 +1547,9 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
     );
   });
 
-  it("rejects oncapture: with the capture explanation", () => {
-    expect(errorOf("<div oncapture:click=fn>x</div>")).toContain(
-      "MX has no capture spelling in the name",
+  it("preserves oncapture: as an ordinary attribute, not a capture alias", () => {
+    expect(markup("<div oncapture:click=fn>x</div>")).toBe(
+      "<div oncapture:click={fn}>x</div>",
     );
   });
 });

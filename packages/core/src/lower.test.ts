@@ -3258,14 +3258,11 @@ describe("`on*` outside a native element stays a prop", () => {
 });
 
 /**
- * `on:*` / `oncapture:*` are given no meaning by core (decision 101b).
- *
- * They are an ordinary `name:modifier` and must reach the host's existing
- * modifier hook untouched, so each host maps or rejects them in its own
- * vocabulary. Core neither rewrites them nor warns.
+ * Native `on:*` is reserved (decision 101b); lowercase `oncapture:*` is an
+ * ordinary colon name in Marko, not an event or a capture-mode alias.
  */
-describe("`on:` and `oncapture:` reach the modifier hook unchanged", () => {
-  it("hands both to resolveModifier with no event lowering and no warning", () => {
+describe("reserved `on:` and ordinary `oncapture:`", () => {
+  it("hands only on: to resolveModifier, with no event lowering or warning", () => {
     const seen: Array<{ name: string; modifier: string }> = [];
     const { ir, warnings } = lowerWithWarnings(
       "<button on:click=f oncapture:focus=g>x</button>\n",
@@ -3277,10 +3274,7 @@ describe("`on:` and `oncapture:` reach the modifier hook unchanged", () => {
         },
       }),
     );
-    expect(seen).toEqual([
-      { name: "on", modifier: "click" },
-      { name: "oncapture", modifier: "focus" },
-    ]);
+    expect(seen).toEqual([{ name: "on", modifier: "click" }]);
     expect(find(ir.body, "Element").attrs).toMatchObject([
       { kind: "dynamic", name: "on:click" },
       { kind: "dynamic", name: "oncapture:focus" },
@@ -3625,11 +3619,9 @@ describe("<for> by=/key= (Marko parity)", () => {
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its **last** `:`; an empty head is not an error but the `value`
  * attribute, so `<div :foo="y"/>` is `value` with modifier `foo` and compiles
- * to `<div value:foo=y>` (`<div :foo/>` to `<div value:foo>`). Only the
- * taglib rejects the *other* modifiers — `class:active` is "not a valid
- * attribute, did you mean `class={ active: condition }`?" — so `:foo` is the
- * one modifier form MX has to accept, and it means an attribute literally
- * named `value:foo`.
+ * to `<div value:foo=y>` (`<div :foo/>` to `<div value:foo>`). The native
+ * taglib reserves only `class:`, `style:` and `on:` prefixes; every other
+ * colon name is ordinary, including `x:foo`, `data:x` and empty suffixes.
  *
  * Both spellings are the same attribute in Marko (`<div value:foo="y"/>`
  * compiles identically), and `attr.default` is the flag its parser sets for
@@ -3767,6 +3759,97 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     );
   });
 
+  it.each([
+    "x:foo",
+    "data:x",
+    "prop:x",
+    "attr:x",
+    "bool:x",
+    "use:x",
+    "oncapture:click",
+    "x:foo:bar",
+    "classy:foo",
+    "stylex:on",
+  ])(
+    "preserves every ordinary colon name without invoking a modifier hook: %s",
+    (name) => {
+      for (const [suffix, expected] of [
+        ["", { kind: "static", value: "" }],
+        ['="y"', { kind: "static", value: "y" }],
+        ["=input.x", { kind: "dynamic", value: { code: "input.x" } }],
+      ] as const) {
+        const ir = lowerSource(
+          `<div ${name}${suffix}/>`,
+          fakeDeclarations({
+            resolveModifier: () => {
+              throw new Error("ordinary name reached modifier hook");
+            },
+          }),
+        );
+        expect(find(ir.body, "Element").attrs).toMatchObject([
+          {
+            ...expected,
+            name,
+            nameSpan: { sourceStart: 5, sourceEnd: 5 + name.length },
+          },
+        ]);
+      }
+    },
+  );
+
+  it.each(["class:foo:bar", "style:foo:bar", "on:foo:bar"])(
+    "keeps the complete reserved native prefix on the modifier path: %s",
+    (name) => {
+      expect(() => lowerSource(`<div ${name}="y"/>`)).toThrow(
+        "attribute modifier",
+      );
+    },
+  );
+
+  it.each([
+    "x:foo",
+    "class:active",
+    "style:color",
+    "on:click",
+    "class:foo:bar",
+  ])("preserves nonempty-suffix component props and methods: %s", (name) => {
+    for (const authored of [`${name}="y"`, `${name}() {}`]) {
+      const ir = lowerSource(
+        `import Card from "./card.marko"\n<Card ${authored}/>`,
+        fakeDeclarations({ resolveAttributeMethod: () => true }),
+      );
+      expect(find(ir.body, "Component").attrs).toMatchObject([{ name }]);
+    }
+  });
+
+  it.each([
+    ["<div x:() {}/>", "x:", 1, 5],
+    ["<div :foo() {}/>", "value:foo", 1, 5],
+    ["<div x:foo() {}/>", "x:foo", 1, 5],
+    ["<div\n  x:foo() {}\n/>", "x:foo", 2, 2],
+    ["<div x:foo=(function(){})/>", "x:foo", 1, 5],
+    ["<div x:foo=(() => {})/>", "x:foo", 1, 5],
+    ["<div x:foo=function fn() {}/>", "x:foo", 1, 5],
+    ["<div x:foo()=(() => {})/>", "x:foo", 1, 5],
+    ["<div\n  x:foo=(function(){})\n/>", "x:foo", 2, 2],
+  ])(
+    "rejects an ordinary colon-name function with Marko's exact text and position: %s",
+    (source, name, line, column) => {
+      expect(() =>
+        lowerSource(
+          source,
+          fakeDeclarations({ resolveAttributeMethod: () => true }),
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          message: `The \`${name}\` attribute cannot be a function.`,
+          line,
+          column,
+        }),
+      );
+    },
+  );
+
   it("preserves an empty modifier's dynamic value and does not rewrite a spread", () => {
     expect(
       find(lowerSource('<div x: = input.x ...{"x:": "s"}/>').body, "Element")
@@ -3837,6 +3920,9 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     ['<div :foo()="y"/>', "value:foo", 1, 5],
     ['<div\n  :foo()="y"/>', "value:foo", 2, 2],
     ['<div value:foo:bar()="y"/>', "value:foo:bar", 1, 5],
+    ['<div x:foo()="y"/>', "x:foo", 1, 5],
+    ['<div x:()="y"/>', "x:", 1, 5],
+    ['<div\n  x:foo()="y"\n/>', "x:foo", 2, 2],
   ])(
     "names the full attribute in Marko's method error: %s",
     (source, name, line, column) => {
@@ -3881,7 +3967,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     });
   });
 
-  it("hands every *other* modifier to the host's hook, untouched", () => {
+  it("hands a reserved native modifier to the host's hook, untouched", () => {
     const seen: Array<{ name: string; modifier: string }> = [];
     // The core's own rejection follows the hook (the hook only rewords it), so
     // the throw is expected — what matters is that `class:active` still
@@ -3902,9 +3988,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     expect(seen).toEqual([{ name: "class", modifier: "active" }]);
   });
 
-  it("rejects a modifier on any tag whose host keeps modifiers as syntax", () => {
-    // Solid keeps `prop:x`; a `:x` there is not that, and the hook must still
-    // see it rather than the core quietly accepting it.
+  it("never sends an ordinary colon name to a host's modifier hook", () => {
     const seen: Array<{ name: string; modifier: string }> = [];
     expect(() =>
       lowerSource(

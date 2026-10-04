@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (colon-attr-followups round 2):** preserve ordinary nonempty colon names such as `x:foo` and `data:x`; reject ordinary native colon-name methods/functions with Marko's exact text and position rather than event-runtime advice. Restore `<input checked:/>` before the oracle fixture's spread element so its resume marker remains terminal.
+
 - **Fix (colon-attr-followups):** ordinary empty-suffix names such as `x:` retain their colon for static, dynamic and valueless attributes. The stock-Marko oracle fixture pins rendered parity. Invalid literal bindings on dynamic tags and controls now fail through core rather than compiling silently.
 
 - **Fix (proto-names): a tag named after an `Object.prototype` member (`<toString/>`, `<constructor/>`, …) no longer crashes the compile with a raw `TypeError`.** It is treated like any other tag name; the fix is in core, html has no code change.

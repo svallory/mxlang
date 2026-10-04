@@ -228,55 +228,32 @@ export const angularDeclarations: HostDeclarations = {
     }
     rawFail(`unknown Angular host tag ${name}`, node);
   },
-  // `class:`/`style:`/`attr:` modifiers are not Marko syntax at all
-  // (decision 86, spec §4, §13.3 bug 7): every other host errors on them,
-  // and Angular must too rather than inventing a spelling MX does not have.
-  // No `resolveModifier` — every modifier falls through to this rejection.
-  // Marko's own node shape: `attr.name` is the modifier prefix
-  // (`attr`/`class`/`style`) and `attr.modifier` is the attribute name that
-  // follows the colon (measured: `attr:aria-label=l` gives
-  // `{ name: "attr", modifier: "aria-label" }`).
+  // Only native `class:`, `style:` and `on:` prefixes reach this hook.
+  // Other colon names (including `attr:` and `oncapture:`) are ordinary
+  // attributes in Marko, not invalid modifier syntax (decision 86 follow-up).
   rejectModifier(attr): void {
     // SAFETY: core passes a raw Marko attribute whose name/modifier are strings.
-    const { name: prefix, modifier: target } = attr as unknown as {
+    const { name, modifier } = attr as unknown as {
       name: string;
       modifier?: string;
     };
-    if (prefix === "on" || prefix === "oncapture") {
-      // Decision 101 (b): core gives `on:`/`oncapture:` no meaning; each
-      // host rejects with a fix-it naming `on-<exact>` (design note §4's
-      // per-prefix wording), this one in Angular vocabulary.
-      const event = (target ?? "")[0]?.toUpperCase() + (target ?? "").slice(1);
+    const fullName = `${name}:${modifier ?? ""}`;
+    const colon = fullName.indexOf(":");
+    const prefix = fullName.slice(0, colon);
+    const target = fullName.slice(colon + 1);
+    if (prefix === "on") {
+      const event = target.charAt(0).toUpperCase() + target.slice(1);
       rawFail(
-        prefix === "on"
-          ? `\`on:${target}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${target}=fn\` for a custom event name (Marko rejects this form too)`
-          : `\`oncapture:${target}=fn\` is not MX syntax; write \`on${event}=fn\` — MX has no capture spelling in the name, so use a host listener with \`{ capture: true }\` if you need capture (Marko rejects this form too)`,
-        attr,
-      );
-    }
-    if (prefix !== "class" && prefix !== "style" && prefix !== "attr") {
-      // An unknown modifier prefix (`prop:x`, and the like): no attr:/
-      // class:/style: name to explain, so the data-*/aria-* detail below
-      // does not apply — just point at the plain attribute spelling.
-      rawFail(
-        `attribute modifier \`${prefix}:${target}\` is not Marko syntax; MX has no attribute modifiers — write the attribute plainly (\`${target ?? ""}=\`)`,
+        `\`on:${target}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${target}=fn\` for a custom event name (Marko rejects this form too)`,
         attr,
       );
     }
     const replacement =
       prefix === "class"
         ? "an object/array `class=` value, lowered to `[ngClass]`"
-        : prefix === "style"
-          ? "an object `style=` value, lowered to `[ngStyle]`"
-          : "a plain dynamic attribute (`" +
-            (target ?? "") +
-            "=`); the emitter binds a dynamic `data-*`/`aria-*` attribute as `[attr." +
-            (target ?? "") +
-            "]` and every other dynamic attribute as `[" +
-            (target ?? "") +
-            "]`";
+        : "an object `style=` value, lowered to `[ngStyle]`";
     rawFail(
-      `attribute modifier \`${prefix}:${target}\` is not Marko syntax; use ${replacement} instead`,
+      `attribute modifier \`${fullName}\` is not Marko syntax; use ${replacement} instead`,
       attr,
     );
   },
@@ -675,6 +652,14 @@ function emitAttrs(
         break;
       case "dynamic": {
         const name = attr.name;
+        if (name.includes(":") && name.toLowerCase().startsWith("on")) {
+          // This is an ordinary Marko name, but Angular's security validator
+          // forbids [attr.on*] bindings. Static strings remain expressible.
+          fail(
+            `Angular forbids dynamically binding the ordinary attribute \`${name}\` for security reasons`,
+            attr,
+          );
+        }
         if (isElement && LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) {
           // `onclick=fn` (lowercase, expression) on a native element: not
           // event-shaped for the core kind, but decision 101 maps it on this
@@ -707,11 +692,11 @@ function emitAttrs(
         } else if (NO_PROPERTY_BINDING.test(name)) {
           // A1 (design note), decision 86: Angular property vs attribute
           // binding is the emitter's own call, not an author-written
-          // modifier — `class:`/`style:`/`attr:` are rejected as not Marko
-          // syntax (`rejectModifier` above). A dynamic `data-*`/`aria-*`
-          // attribute has no property to bind (Angular has no `.dataFoo`/
-          // `.ariaFoo` DOM property for most of these), and neither has
-          // Marko's `value:<modifier>` attribute, so both emit
+          // modifier — native `class:`/`style:` are reserved, but `attr:`
+          // and other non-reserved colon names are ordinary complete names.
+          // A dynamic `data-*`/`aria-*` attribute has no property to bind
+          // (Angular has no `.dataFoo`/`.ariaFoo` DOM property for most of
+          // these), and neither has an ordinary colon name, so both emit
           // `[attr.name]`; every other dynamic attribute stays `[name]`.
           out.write(" [attr.");
           out.writeMapped(name, attr.nameSpan);

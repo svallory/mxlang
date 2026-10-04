@@ -90,6 +90,15 @@ describe("Solid IR lowering", () => {
     ],
     ["prop namespace", `<input prop:value=v>`, ["prop:value={v}"]],
     [
+      "ordinary capture name",
+      `<div oncapture:click=fn/>`,
+      ["oncapture:click={fn}"],
+    ],
+    ["ordinary attr name", `<div attr:title=value/>`, ["attr:title={value}"]],
+    ["ordinary bool name", `<div bool:hidden=value/>`, ["bool:hidden={value}"]],
+    ["ordinary use name", `<div use:tip=opts/>`, ["use:tip={opts}"]],
+    ["ordinary colon name", `<div x:foo=value/>`, ["x:foo={value}"]],
+    [
       "dynamic tag (tagged)",
       `<\${which} n=1>x</>`,
       [
@@ -453,10 +462,11 @@ describe("Solid host errors", () => {
     ["script", `<script>run()</script>`, "surrounding TypeScript module"],
     ["bound attribute", `<input value:=name>`, "bound attribute"],
     ["on modifier", `<div on:click=fn/>`, "removed in Solid 2"],
-    ["capture modifier", `<div oncapture:click=fn/>`, "capture: true"],
-    ["attr modifier", `<div attr:title=value/>`, "plain attribute"],
-    ["bool modifier", `<div bool:hidden=value/>`, "plain attribute"],
-    ["use modifier", `<div use:tip=opts/>`, "ref=foo(opts)"],
+    [
+      "ordinary colon method",
+      `<div x:foo() {}/>`,
+      "The `x:foo` attribute cannot be a function.",
+    ],
     ["dynamic style", `<div style=value/>`, "non-object"],
     ["try params", `<try|value|><p>x</p></try>`, "tag params"],
     ["try variable", `<try/value><p>x</p></try>`, "tag variable"],

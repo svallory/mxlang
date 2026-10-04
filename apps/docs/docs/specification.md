@@ -509,15 +509,16 @@ front — otherwise the attribute is emitted twice and the second wins
 
 ### `class:foo` / `style:foo` modifiers
 
-**Not Marko syntax at all** — not "something MX cannot express" (decision 67b,
-measured against 5.42.5). Marko's *taglib* rejects every form of them with its
+**Reserved on native elements** — not "something MX cannot express" (decision 67b,
+measured against 5.42.5). Marko's native-element *taglib* rejects every form of them with its
 own fix-it (the parser itself parses them; the translator's taglib lookup is
 what refuses):
 
 > `class:active` is not a valid attribute, did you mean `class={ active: condition }`?
 
-So there is no MX behavior to document and no fixture to write: no `.mx` file
-using them compiles. Where a host is reached anyway, core raises:
+Native-element uses therefore fail rather than becoming class/style toggles.
+Component props have no such reservation: `<Card class:active=c/>` forwards
+`class:active` unchanged. Where a native modifier reaches a host, core raises:
 
 | Message | When |
 |---|---|
@@ -536,9 +537,11 @@ applies to any ordinary name: `<div x:/>` means `x:` with an empty value,
 `<div x: = "s"/>` means `x:` with value `"s"`, and `<div x: = expr/>`
 means `x:` with the expression's value (decision 65, Marko parity). The space
 before `=` matters: `x:=expr` is a binding, not an empty-modifier attribute.
-On native elements, reserved `class:`, `style:` and `on:` forms still reject,
-including their empty suffixes (decision 67b); component props have no such
-reservation, so `<Card class: = expr/>` forwards a prop named `class:`.
+Every `name:mod` is an ordinary complete name, including `x:foo`, `data:x`
+and names with multiple colons. Only native-element `class:`, `style:` and
+`on:` prefixes are reserved, including empty suffixes and additional colons
+(decision 67b); component props have no such reservation, so both
+`<Card class: = expr/>` and `<Card class:active=expr/>` forward the complete name.
 An expression-valued native event such as `onClick: = fn` keeps its event name
 `click:`, not an ordinary spread key (decision 101). Authored spread expressions
 and their keys are not rewritten. An explicit head can
@@ -552,9 +555,18 @@ parser cannot tokenize a literal attribute with an empty namespace suffix;
 attribute name on Angular (printed 1:6), as do static and dynamic values of
 `x:`, rather than emitting an unparseable template.
 Explicit multi-colon names such as `value:foo:bar` remain supported there.
+Angular also forbids dynamic bindings to ordinary names beginning with `on`
+for security reasons: `oncapture:click=expr` gives a positioned Angular-specific
+refusal, not a Marko-syntax error; the static string form remains supported.
 
-Arguments on these ordinary native-element attributes are rejected at the authored name:
-`<div :foo()="y"/>` reports `Unsupported arguments on the \`value:foo\` attribute.`
+Function values on ordinary, non-event native colon names (method syntax,
+function expressions or arrows) report `The \`name:mod\` attribute cannot be a function.`
+Calls with attribute arguments report `Unsupported arguments on the \`name:mod\` attribute.`
+Both errors point at the authored attribute name: `<div x:() {}/>` reports
+`The \`x:\` attribute cannot be a function.` and `<div x:foo()="y"/>` reports
+`Unsupported arguments on the \`x:foo\` attribute.`, both at printed 1:6
+(structured line 1, column 5). A function value takes precedence over arguments.
+Event attributes and component props retain their host's callable-prop policy.
 A binding (`:=`) is a different form and keeps the base name. On native
 elements, dynamic tags, ordinary component calls and built-in control tags,
 its target must be an identifier or a member expression (including optional
@@ -585,10 +597,11 @@ binding (`[value:foo]` binds a property no element has, NG8002), so it takes
 the same `[attr.name]` route as a dynamic `data-*`/`aria-*` attribute; a static
 one is carried through verbatim.
 
-For **nonempty modifiers**, `prop:` is the one namespace that passes through
-on the Solid host. `on:`, `oncapture:`, `attr:`, `bool:` and `use:` modifiers are
-parse errors there with fix-it hints (decision 10) — Solid 2 removed them, and MX does not keep syntax with no
-target. Decision 10 records itself as "the most reversible call".
+Core does not treat `prop:`, `oncapture:`, `attr:`, `bool:` or `use:` names as
+modifiers: they preserve their complete names instead of being refused as
+invalid Marko syntax. This corrects decision 10's namespace-removal policy
+against live Marko 6.3.51; a host runtime/compiler still owns how an emitted
+name is interpreted (for example Solid's own `prop:` namespace).
 
 ### Event attributes
 
@@ -655,11 +668,11 @@ list is an illustration of where the rule currently bites; it is not the rule.
 `on-<exact>` is never checked: its whole purpose is to name an event MX cannot
 know about. `on-` with no name after the dash is an error.
 
-**`on:*` and `oncapture:*` are not given meaning by core.** They reach the host
-as the attribute `on`/`oncapture` plus a modifier, through the same hook as any
-other `name:modifier`, and each host maps or rejects them in its own vocabulary
-(Solid 2, React and Angular reject with a fix-it naming `on-<exact>`; a Solid 1
-or Svelte 4 host could map them). Core neither rewrites them nor warns.
+**Native `on:*` is reserved; lowercase `oncapture:*` is an ordinary attribute.**
+Only `on:*` reaches the host's modifier hook for a positioned refusal/fix-it
+(decision 101b, corrected against live Marko 6.3.51). `oncapture:click` retains
+its complete name and is neither an event nor a capture-mode alias. Core does
+not rewrite either spelling or warn.
 
 #### Gotcha: the handler signature and `onChange` are the host's, not MX's
 
@@ -2553,7 +2566,7 @@ does something else, silently.
 | 4 | Solid | **FIXED 2026-09-27**, decision 106. Repeated attribute tags now emit real arrays. |
 | 5 | html-strict | **FIXED 2026-09-28** (decision 111, task `strict-policy-log-debug`). Was: `<log>`/`<debug>` survived `strict` — `STRICT_TAGS` overrode six names but not these two, so they stayed inert under strict, and therefore under the Astro `.mx` host too, whose README claimed all stateful tags were build errors. Both are now `STRICT_TAGS` error rows, same as the other six. |
 | 6 | Preact | README claims a non-object `style=` is an error; `<div style="color:red"/>` compiles. |
-| 7 | Angular | **FIXED 2026-09-17**, decision 86. Was: silently accepted `class:`/`style:`/`attr:` modifiers, lowering `class:active=c` to `[class.active]="c"`. Every other host errors, on the grounds that this is **not Marko syntax at all** (§4). Now rejected the same way, naming the replacement (an object/array `class=`/`style=` value, or a plain dynamic attribute — the emitter itself decides `[attr.x]` vs `[x]` for a dynamic `data-*`/`aria-*` attribute). |
+| 7 | Angular | **FIXED 2026-09-17**, decision 86; corrected by the colon-attribute parity follow-up. Was: silently lowered `class:active=c` to `[class.active]="c"`. Native `class:`/`style:` forms remain rejected with an object/array `class=`/`style=` replacement (§4). `attr:x`, like other non-reserved colon names, is an ordinary complete attribute name in Marko and is preserved; a dynamic value uses `[attr.attr:x]`, not `[attr.x]`. |
 | 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.astro.mx` does. |
 | 9 | html | **FIXED 2026-09-26**, decision 104. Dynamic tags receive attribute-tag props. |
 
