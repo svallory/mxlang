@@ -34,6 +34,21 @@ export interface SourceBindingsError {
 }
 
 /**
+ * Grammar relaxations a caller may need for the source it hands over.
+ *
+ * `allowReturnOutsideFunction` is for authored host module scope that the
+ * *host* wraps in a function body, where a top-level `return` is legal source:
+ * Astro's `---` frontmatter is compiled into the body of the component's
+ * `$$render` (or a redirect handler), so `return Astro.redirect("/")` is
+ * ordinary Astro. A plain ES module — every `.solid.mx`/`.ng.mx`/`appendSolid-
+ * BuiltinImport` caller here — has no such wrapper, so the default stays
+ * off and a stray `return` there is still the syntax error it is today.
+ */
+export interface SourceBindingsOptions {
+  allowReturnOutsideFunction?: boolean;
+}
+
+/**
  * The names of every value a piece of TypeScript/TSX source text binds at
  * its top level — every import's *local* name (so `import { Show as MyShow }`
  * binds `MyShow`, not `Show`) plus every top-level `const`/`function`/`class`
@@ -64,7 +79,10 @@ export interface SourceBindingsError {
  * position this codebase reports), so a caller that cares can report the
  * real problem instead of a misleading downstream symptom.
  */
-export function sourceBindings(source: string): {
+export function sourceBindings(
+  source: string,
+  options: SourceBindingsOptions = {},
+): {
   bindings: Set<string>;
   error?: SourceBindingsError;
 } {
@@ -74,6 +92,9 @@ export function sourceBindings(source: string): {
         babelParse(source, {
           sourceType: "module",
           plugins: ["typescript", "jsx"],
+          ...(options.allowReturnOutsideFunction
+            ? { allowReturnOutsideFunction: true }
+            : {}),
         }).program,
       ),
     };
@@ -187,12 +208,18 @@ export function unknownProgramBindings(program: File["program"]): Set<string> {
  * Same contract as `unknownProgramBindings`, over raw source text — the
  * `sourceBindings` counterpart.
  */
-export function unknownSourceBindings(source: string): Set<string> {
+export function unknownSourceBindings(
+  source: string,
+  options: SourceBindingsOptions = {},
+): Set<string> {
   try {
     return unknownProgramBindings(
       babelParse(source, {
         sourceType: "module",
         plugins: ["typescript", "jsx"],
+        ...(options.allowReturnOutsideFunction
+          ? { allowReturnOutsideFunction: true }
+          : {}),
       }).program,
     );
   } catch {

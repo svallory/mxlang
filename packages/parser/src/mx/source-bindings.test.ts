@@ -1,8 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { parse as babelParse } from "../babel/index.ts";
-import { programBindings, sourceBindings } from "./source-bindings.ts";
+import {
+  programBindings,
+  sourceBindings,
+  unknownSourceBindings,
+} from "./source-bindings.ts";
 
 describe("sourceBindings", () => {
+  it("rejects a top-level return by default (a plain ES module)", () => {
+    // Every default caller here hands over real module scope, where a
+    // top-level `return` genuinely is a syntax error.
+    const { error } = sourceBindings('return Astro.redirect("/");');
+    expect(error?.message).toContain("'return' outside of function");
+  });
+
+  it("accepts a top-level return when the caller opts in", () => {
+    // The Astro fence is the one authored source the host compiles inside a
+    // function body, so its top-level `return` is legal there.
+    const { bindings, error } = sourceBindings(
+      'const a = 1;\nreturn Astro.redirect("/");',
+      {
+        allowReturnOutsideFunction: true,
+      },
+    );
+    expect(error).toBeUndefined();
+    expect(bindings).toEqual(new Set(["a"]));
+  });
+
   it("collects a default import's local name", () => {
     expect(
       sourceBindings('import Widget from "./widget.ts";').bindings,

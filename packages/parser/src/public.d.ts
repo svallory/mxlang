@@ -283,6 +283,16 @@ declare module "@mxlang/parser" {
   }
 
   /**
+   * Grammar relaxations for source that is *not* a plain ES module — see
+   * `source-bindings.ts`'s `SourceBindingsOptions`. `allowReturnOutside-
+   * Function` is for authored host module scope the host wraps in a function
+   * body (Astro's `---` frontmatter); it is off by default.
+   */
+  export interface SourceBindingsOptions {
+    allowReturnOutsideFunction?: boolean;
+  }
+
+  /**
    * The names of every value a piece of TypeScript/TSX source text binds at
    * its top level (imports' local names, top-level `const`/`function`/
    * `class`), excluding type-only bindings. `error` is set only on a parse
@@ -290,7 +300,10 @@ declare module "@mxlang/parser" {
    * real syntax error instead of treating an unparseable file as binding
    * nothing. See `source-bindings.ts` for the full contract.
    */
-  export function sourceBindings(source: string): {
+  export function sourceBindings(
+    source: string,
+    options?: SourceBindingsOptions,
+  ): {
     bindings: Set<string>;
     error?: SourceBindingsError;
   };
@@ -309,7 +322,10 @@ declare module "@mxlang/parser" {
    * See `source-bindings.ts`'s `unknownProgramBindings` for the full
    * contract.
    */
-  export function unknownSourceBindings(source: string): Set<string>;
+  export function unknownSourceBindings(
+    source: string,
+    options?: SourceBindingsOptions,
+  ): Set<string>;
 
   /**
    * Same as `unknownSourceBindings`, over an already-parsed `Program` rather

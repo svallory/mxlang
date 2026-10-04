@@ -127,6 +127,43 @@ describe("reserved generated-code bindings", () => {
     }
   });
 
+  it("rejects a top-level return's own parse failure by default", () => {
+    // A plain module cannot hold a top-level `return`, so the default parse
+    // rejects it — and a caller that wanted the host-legal form must say so.
+    expect(() => checkReservedSource('return Astro.redirect("/");')).toThrow(
+      /'return' outside of function/,
+    );
+  });
+
+  it("accepts a top-level return when the caller opts in", () => {
+    // The Astro fence is the one authored region a host compiles inside a
+    // function body, so its top-level `return` is legal there.
+    expect(() =>
+      checkReservedSource('const a = 1;\nreturn Astro.redirect("/");', 2, 0, {
+        allowReturnOutsideFunction: true,
+      }),
+    ).not.toThrow();
+  });
+
+  it("still reserves __mx bindings inside a return-holding fence", () => {
+    // The relaxation is a grammar one only; it must not weaken the check.
+    let failure: unknown;
+    try {
+      checkReservedSource("const __mxX = 1;\nreturn __mxX;", 2, 0, {
+        allowReturnOutsideFunction: true,
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(isTranslateError(failure)).toBe(true);
+    if (isTranslateError(failure)) {
+      expect(failure.message).toBe(reservedBindingMessage("__mxX"));
+      // File line 2: the fence's second line is file line 3 only because the
+      // caller passed the fence's own start; core reports what it was given.
+      expect(failure.line).toBe(2);
+    }
+  });
+
   it("still rejects an ordinary declare function's own name", () => {
     let failure: unknown;
     try {

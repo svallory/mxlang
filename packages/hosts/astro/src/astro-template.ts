@@ -35,7 +35,11 @@ import {
   type TargetLookup,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
-import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
+import {
+  type SourceBindingsError,
+  sourceBindings,
+  unknownSourceBindings,
+} from "@mxlang/parser";
 import descriptor from "./descriptor.ts";
 
 /**
@@ -1001,6 +1005,20 @@ function emitFence(
   return { code, mappings };
 }
 
+/**
+ * Babel stamps its own fence-relative `(line:col)` onto the parse error's
+ * message text, so a fence error reported verbatim showed `(1:33)` where the
+ * real file line is 2 — the position `errorFor` prints pointed the author at
+ * the opening `---` instead of their own code. Drop Babel's suffix and print
+ * the file-relative position instead: line +1 for the opening fence line
+ * (the captured fence text starts on file line 2), and column 1-based in the
+ * text (#227) while `errorFor` keeps the structured 0-based column.
+ */
+function fenceSyntaxErrorMessage(error: SourceBindingsError): string {
+  const text = error.message.replace(/\s*\(\d+:\d+\)\s*$/, "").trim();
+  return `syntax error in the \`---\` fence: ${text} (${error.line + 1}:${error.column + 1})`;
+}
+
 /** Splits an `.astro.mx` file, resolves its MX template, and emits Astro syntax. */
 export function lowerAstroMx(
   source: string,
@@ -1065,18 +1083,27 @@ export function lowerAstroMx(
     // compiler itself — that happens later, in Vite (`vite-templates.ts`) or
     // the TypeScript plugin — so there is no risk of a duplicate diagnostic
     // for the exact same syntax error from this call.
-    const fenceBindings = sourceBindings(match?.[1] ?? "");
+    // Astro compiles the `---` fence into the body of the component's render
+    // function (or its redirect handler), so a top-level `return` is legal
+    // Astro source -- `return Astro.redirect("/")` in a plain `.astro` file
+    // is the documented way to redirect. Every parser that reads this fence
+    // therefore has to allow it, or a valid Astro page is rejected as
+    // "'return' outside of function". The relaxation is scoped to the fence
+    // only: template expressions and every other host's source are a plain
+    // module and keep the default (off).
+    const FENCE_SOURCE = { allowReturnOutsideFunction: true } as const;
+    const fenceBindings = sourceBindings(match?.[1] ?? "", FENCE_SOURCE);
     if (fenceBindings.error) {
       // The fence's own text starts on the file's second line (the first is
       // the opening `---`), so its 1-based `line` needs +1 to land on the
       // right line of `source`.
       throw new AstroTemplateError(
-        `syntax error in the \`---\` fence: ${fenceBindings.error.message}`,
+        fenceSyntaxErrorMessage(fenceBindings.error),
         fenceBindings.error.line + 1,
         fenceBindings.error.column,
       );
     }
-    checkReservedSource(match?.[1] ?? "", 2);
+    checkReservedSource(match?.[1] ?? "", 2, 0, FENCE_SOURCE);
     for (const name of fenceBindings.bindings) ctx.imports.add(name);
     // Local extension of decision 116 (firstmate's ruling): a fence
     // binding's own non-import value — a top-level `const`/`function`/
@@ -1087,7 +1114,7 @@ export function lowerAstroMx(
     // Skipped when the fence itself already failed to parse above —
     // `unknownSourceBindings` would only re-derive the identical failure
     // through its own independent parse.
-    for (const name of unknownSourceBindings(match?.[1] ?? "")) {
+    for (const name of unknownSourceBindings(match?.[1] ?? "", FENCE_SOURCE)) {
       ctx.unknownLocalValue.add(name);
     }
     const ir = lower(ctx, body);

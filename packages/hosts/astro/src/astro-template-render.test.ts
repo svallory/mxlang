@@ -100,6 +100,63 @@ async function renderPlain(name: string, template: string): Promise<string> {
   return container.renderToString(component);
 }
 
+async function renderSource(name: string, source: string): Promise<string> {
+  const amxFile = join(dir, `${name}.astro.mx`);
+  const lowered = lowerAstroMx(source, amxFile).code;
+  const result = await compiler.transform(lowered, {
+    filename: join(dir, `${name}.astro`),
+  });
+  expect(result.diagnostics ?? []).toEqual([]);
+
+  const moduleFile = join(dir, `${name}.mjs`);
+  writeFileSync(moduleFile, containerModule(result.code));
+  const component = (
+    (await import(
+      /* @vite-ignore */ `${pathToFileURL(moduleFile).href}?case=${name}`
+    )) as { default: Parameters<AstroContainer["renderToString"]>[0] }
+  ).default;
+  return container.renderToString(component);
+}
+
+/**
+ * A top-level `return` in the `---` fence is valid Astro: the fence is
+ * compiled into the component function body, and `return Astro.redirect("/")`
+ * is the documented redirect. This renders one end-to-end through Astro's
+ * real compiler and the Astro container — not just the MX lowering — so the
+ * false reject `'return' outside of function` stays gone against the real
+ * host too.
+ */
+describe("top-level `return` in the `---` fence (astro)", () => {
+  it("renders a redirect return through Astro's compiler and container", async () => {
+    const html = await renderSource(
+      "fence-return-redirect",
+      ["---", 'return Astro.redirect("/");', "---", "<h1>never</h1>"].join(
+        "\n",
+      ),
+    );
+    // Astro's redirect response carries no markup; the fence's return ran
+    // and short-circuited, so the template below it never renders.
+    expect(html).toBe("");
+  });
+
+  it("renders a fence-level Response's body, not just a redirect", async () => {
+    // Any top-level return is host-legal frontmatter, so the fence must not
+    // be parsed as a plain module either. Astro requires what a fence
+    // returns to be a Response, and the container renders its body — proof
+    // the fence's own return statement executed.
+    const html = await renderSource(
+      "fence-return-response",
+      [
+        "---",
+        'return new Response("from the fence");',
+        "---",
+        "<p>never</p>",
+      ].join("\n"),
+    );
+    expect(html).toBe("from the fence");
+  });
+});
+
 describe("<for> with a nullish of=/in=", () => {
   it("renders nothing, matching Marko, rather than throwing", async () => {
     const html = await renderPlain(

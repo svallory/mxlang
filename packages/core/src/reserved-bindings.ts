@@ -116,11 +116,19 @@ const MARKO_PLUGINS = [
 
 // TS permits angle assertions that TSX does not. Check either valid grammar,
 // rather than silently skipping a TS statement because the JSX parse failed.
-function parseAuthoredSource(source: string, line: number, column: number) {
+function parseAuthoredSource(
+  source: string,
+  line: number,
+  column: number,
+  options: { allowReturnOutsideFunction?: boolean } = {},
+) {
   const position = {
     sourceType: "module" as const,
     startLine: line,
     startColumn: column,
+    ...(options.allowReturnOutsideFunction
+      ? { allowReturnOutsideFunction: true }
+      : {}),
   };
   try {
     return parse(source, {
@@ -168,6 +176,22 @@ export function checkReservedTemplate(ctx: Ctx, body: Node[]): void {
 }
 
 /**
+ * Grammar relaxations for authored source that is not a plain ES module.
+ *
+ * `allowReturnOutsideFunction` is for a host whose own top-level code is
+ * compiled *inside a function body*, where a top-level `return` is legal
+ * source — Astro's `---` frontmatter becomes the body of the component's
+ * render (or its redirect handler), so `return Astro.redirect("/")` is
+ * ordinary Astro. Marko statement tags and every other caller's source are a
+ * plain module, where the default (off) keeps `return` the syntax error it
+ * should be. Host-agnostic on purpose (decision 126): the host states the
+ * fact about its own grammar; core does not know what Astro is.
+ */
+export interface CheckReservedSourceOptions {
+  allowReturnOutsideFunction?: boolean;
+}
+
+/**
  * Checks TypeScript source with its file-relative starting position.
  *
  * The one caller outside core is the Astro fence check, whose frontmatter is
@@ -179,6 +203,7 @@ export function checkReservedSource(
   source: string,
   line = 1,
   column = 0,
+  options: CheckReservedSourceOptions = {},
 ): void {
-  checkReservedBindings(parseAuthoredSource(source, line, column));
+  checkReservedBindings(parseAuthoredSource(source, line, column, options));
 }

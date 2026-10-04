@@ -469,6 +469,37 @@ describe("unresolved components (decision 114 parity)", () => {
       // Line 3 of the file: line 1 is `---`, line 2 the import, line 3 the
       // broken `const x = ;`.
       expect(error.line).toBe(3);
+      // The message text carries the position too, and it must be the FILE's,
+      // 1-based line and column (#227) -- never Babel's fence-relative
+      // `(2:…)`, which points an author at their own `---`.
+      expect(error.message).toContain("(3:");
+      expect(error.message).not.toContain("(2:");
+    }
+  });
+
+  it("prints the file position for a fence syntax error on fence line 3", () => {
+    // Before, Babel's own fence-relative `(2:9)` was appended to the message
+    // text, so the reported position pointed at the opening `---` instead of
+    // the author's line 3 (`const y = ;`). The structured line was already
+    // file-relative; the text now matches it.
+    const source = [
+      "---",
+      'import Card from "./Card.astro";',
+      "const y = ;",
+      "---",
+      "<Card/>",
+    ].join("\n");
+    try {
+      lowerAstroMx(source, "Test.astro.mx");
+      throw new Error("expected the template to fail lowering");
+    } catch (error) {
+      if (!(error instanceof AstroTemplateError)) throw error;
+      expect(error.line).toBe(3);
+      // Text position is 1-based line AND column (#227): `;` is the 11th
+      // character of line 3 (`const y = ;`).
+      expect(error.message).toContain("(3:11)");
+      // Must NOT carry Babel's fence-relative line 2.
+      expect(error.message).not.toContain("(2:");
     }
   });
 });
@@ -672,6 +703,43 @@ describe("error positions", () => {
       expect(error).toBeInstanceOf(AstroTemplateError);
       expect((error as AstroTemplateError).line).toBe(4);
     }
+  });
+});
+
+/**
+ * The fence relaxation that admits a top-level `return` is scoped to the
+ * `---` fence — the one region the host compiles inside a function body. An
+ * MX template expression is emitted into the rendered output as authored, so
+ * a `return` written there is still the syntax error it always was.
+ */
+describe("the fence's top-level return does not leak into the template", () => {
+  it("still rejects a bare return in a placeholder", () => {
+    expect(() =>
+      lowerAstroMx(
+        ["---", "const x = 1;", "---", "<p>${return x}</p>"].join("\n"),
+        "Test.astro.mx",
+      ),
+    ).toThrow();
+  });
+
+  it("still rejects a bare return in an attribute expression", () => {
+    expect(() =>
+      lowerAstroMx(
+        ["---", "const x = 1;", "---", "<p a={return x}/>"].join("\n"),
+        "Test.astro.mx",
+      ),
+    ).toThrow();
+  });
+
+  it("still accepts a function-bodied return in a placeholder", () => {
+    // Not over-rejected: the fence option must not make every `return` in
+    // the file a syntax error.
+    expect(
+      lowerAstroMx(
+        ["---", "const x = 1;", "---", "<p>${(() => x)()}</p>"].join("\n"),
+        "Test.astro.mx",
+      ).code,
+    ).toContain("<p>");
   });
 });
 
