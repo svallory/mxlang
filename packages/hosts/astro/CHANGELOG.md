@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (attr-value-parity review):** native guards are hoisted once into frontmatter, with authored mapping offsets retained. Ordinary function/symbol values receive Marko debug errors; null/false serialization remains unchanged.
+
 - **Fix (attr-value-parity):** ordinary native attributes in `.astro.mx`, including computed plain colon-name attributes and final merged spreads, reject unrenderable objects with Marko's render-time diagnostic. Authored expressions evaluate once; class/style, controlled writers and component props are unchanged. Real Astro compiler/container renders pin the fix.
 
 - **Fix (colon-attr-followups round 3):** ordinary native `define:`, `is:`, `transition:`, `client:` and `server:` names and the exact `slot` attribute render as escaped plain attributes through computed spreads, not Astro directives or implicit slot projection. Refuse `set:html`/`set:text`, directive-shaped component props and special style/script/slot contexts at the authored name when plain Marko semantics cannot be preserved. Real Astro container tests pin the behavior; MX-generated directives are unchanged.

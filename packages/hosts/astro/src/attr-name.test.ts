@@ -1,4 +1,5 @@
-import { ATTRIBUTE_VALUE_EXPRESSION as ATTR } from "@mxlang/core";
+const ATTR = "__mxAttrValue";
+
 import { describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
 

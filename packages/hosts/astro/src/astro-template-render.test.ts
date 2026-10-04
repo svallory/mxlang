@@ -208,10 +208,12 @@ describe("Astro directive-shaped names retain plain Marko meaning", () => {
         `---\n${declarations}\n---\n${template}`,
         "Test.astro.mx",
       ).code;
-      const body = lowered.slice(lowered.indexOf("\n---\n") + 5);
+      const close = lowered.indexOf("\n---\n");
+      const frontmatter = lowered.slice(4, close);
+      const body = lowered.slice(close + 5);
       writeFileSync(
         filename,
-        `/// <reference path=${JSON.stringify(astroJsx)} />\nnamespace JSX { export type IntrinsicElements = astroHTML.JSX.IntrinsicElements; }\n${declarations}\nconst view = <>${body}</>;\n`,
+        `/// <reference path=${JSON.stringify(astroJsx)} />\nnamespace JSX { export type IntrinsicElements = astroHTML.JSX.IntrinsicElements; }\n${frontmatter}\nconst view = <>${body}</>;\n`,
       );
       return ts
         .getPreEmitDiagnostics(

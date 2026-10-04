@@ -8,8 +8,8 @@
  */
 
 import {
-  ATTRIBUTE_SPREAD_EXPRESSION,
-  ATTRIBUTE_VALUE_EXPRESSION,
+  ATTRIBUTE_SPREAD_EXPRESSION as ATTRIBUTE_SPREAD_SOURCE,
+  ATTRIBUTE_VALUE_EXPRESSION as ATTRIBUTE_VALUE_SOURCE,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
@@ -44,6 +44,8 @@ import descriptor from "./descriptor.ts";
  * targets passes the built-in registry's lookup through `options.targets`.
  */
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
+const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
+const ATTRIBUTE_SPREAD_EXPRESSION = "__mxAttrSpread";
 
 /**
  * This package's own target lookup, for a direct entry that needs one and has
@@ -937,8 +939,9 @@ function emitFence(
   fence: string,
   statements: HoistedStatement[],
   needsAttrTagImport: boolean,
+  helpers: string[] = [],
 ): { code: string; mappings: AstroTemplateMapping[] } {
-  if (statements.length === 0 && !needsAttrTagImport) {
+  if (statements.length === 0 && !needsAttrTagImport && helpers.length === 0) {
     return {
       code: fence,
       mappings: fence
@@ -985,6 +988,8 @@ function emitFence(
       generatedEnd: code.length,
     });
   }
+
+  for (const helper of helpers) code += `${newline}${helper}`;
 
   code +=
     fence === ""
@@ -1103,24 +1108,42 @@ export function lowerAstroMx(
       ...(ir.inputInterface ? [ir.inputInterface] : []),
       ...ir.prelude,
     ];
+    const templateMappings: AstroTemplateMapping[] = [];
+    const templateEmitter = createEmitter((code, node, generatedStart) => {
+      const range = rangeOfNode(source, node);
+      if (!range) return;
+      templateMappings.push({
+        sourceStart: range[0],
+        sourceEnd: range[1],
+        generatedStart,
+        generatedEnd: generatedStart + code.length,
+      });
+    });
+    const templateCode = emit(templateEmitter, ir);
+    const helpers: string[] = [];
+    if (
+      templateCode.includes("__mxAttrValue(") ||
+      templateCode.includes("__mxAttrSpread(")
+    ) {
+      helpers.push(`const __mxAttrValue = ${ATTRIBUTE_VALUE_SOURCE};`);
+    }
+    if (templateCode.includes("__mxAttrSpread("))
+      helpers.push(`const __mxAttrSpread = ${ATTRIBUTE_SPREAD_SOURCE};`);
     const emittedFence = emitFence(
       source,
       originalFence,
       statements,
       ir.needsAttrTagImport,
+      helpers,
     );
-    const mappings = [...emittedFence.mappings];
-    const templateEmitter = createEmitter((code, node, generatedStart) => {
-      const range = rangeOfNode(source, node);
-      if (!range) return;
-      mappings.push({
-        sourceStart: range[0],
-        sourceEnd: range[1],
-        generatedStart: emittedFence.code.length + generatedStart,
-        generatedEnd: emittedFence.code.length + generatedStart + code.length,
-      });
-    });
-    const templateCode = emit(templateEmitter, ir);
+    const mappings = [
+      ...emittedFence.mappings,
+      ...templateMappings.map((mapping) => ({
+        ...mapping,
+        generatedStart: emittedFence.code.length + mapping.generatedStart,
+        generatedEnd: emittedFence.code.length + mapping.generatedEnd,
+      })),
+    ];
     return {
       code: `${emittedFence.code}${templateCode}`,
       mappings,

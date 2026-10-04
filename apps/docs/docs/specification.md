@@ -446,11 +446,15 @@ this rule. Runtime output is unchanged.
 
 On html, Preact, React, Hono and Astro, an ordinary native attribute
 whose object value cannot be coerced to a useful string fails **at render
-time**, matching Marko 6.3.51's debug-runtime assertion:
+time**, matching Marko 6.3.51's debug-runtime assertion. This always-on guard
+is stricter than optimized Marko output, which renders plain objects as
+`[object Object]` rather than running the debug assertion:
 
 > The `data-x` attribute cannot be a plain object (it would render as `[object Object]`).
 
-This includes null-prototype objects and failed object coercion, not just an
+Functions and symbols fail with `The `data-x` attribute cannot be a function.`
+and the corresponding `cannot be a symbol.` text. This includes
+null-prototype objects and failed object coercion, not just an
 `Object.prototype` check. Arrays with renderable members, meaningful custom
 `toString` values and Dates remain valid. `class` and `style` retain their
 host's structured writers; controlled `input.checked` / `checkedValue`,

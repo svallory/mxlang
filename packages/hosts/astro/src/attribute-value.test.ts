@@ -39,6 +39,23 @@ function result(form: string, value: string): RenderResult {
 }
 
 describe("native attribute object values (real renders)", () => {
+  it("rejects functions and symbols with Marko's debug text", () => {
+    for (const form of [
+      "direct",
+      "spread",
+      "folded",
+      "colon",
+      "foldedColon",
+      "survivingSpread",
+    ])
+      for (const value of ["function", "symbol"]) {
+        const name =
+          form.includes("Colon") || form === "colon" ? "is:raw" : "data-x";
+        expect(result(form, value).error, `${form}/${value}`).toBe(
+          `The \`${name}\` attribute cannot be a ${value}.`,
+        );
+      }
+  });
   it("rejects unrenderable objects with Marko's exact error on every native path", () => {
     const forms = [
       "direct",

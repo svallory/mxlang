@@ -3,10 +3,10 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  ATTRIBUTE_VALUE_EXPRESSION as ATTR,
-  ATTRIBUTE_SPREAD_EXPRESSION as SPREAD,
-} from "@mxlang/core";
+
+const ATTR = "__mxAttrValue";
+const SPREAD = "__mxAttrSpread";
+
 import { describe, expect, it } from "vitest";
 import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
 
@@ -33,7 +33,10 @@ const FIXTURE_FENCE =
 /** Lowers a template with a fixture fence, returning just the template half. */
 function lower(template: string): string {
   const source = `${FIXTURE_FENCE}${template}`;
-  return lowerAstroMx(source, "Test.astro.mx").code.replace(FIXTURE_FENCE, "");
+  return lowerAstroMx(source, "Test.astro.mx").code.replace(
+    /^---[\s\S]*?\n---\n/,
+    "",
+  );
 }
 
 /** The error a template raises, for the error-path tests. */

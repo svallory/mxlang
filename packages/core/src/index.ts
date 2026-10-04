@@ -23,7 +23,6 @@ export type {
 } from "./attr-tag.ts";
 export {
   ATTRIBUTE_SPREAD_EXPRESSION,
-  ATTRIBUTE_VALUE_BODY,
   ATTRIBUTE_VALUE_EXPRESSION,
 } from "./attribute-value.ts";
 export {

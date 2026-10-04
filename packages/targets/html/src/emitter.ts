@@ -33,7 +33,6 @@
  */
 
 import {
-  ATTRIBUTE_VALUE_EXPRESSION,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
@@ -63,6 +62,7 @@ import type { DelegatedTagData } from "./translate.ts";
 import { DYNAMIC, escapeComment } from "./translate.ts";
 
 const INDENT = "  ";
+const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
 
 /**
  * A well-formed HTML attribute name, as source text for the emitted module.

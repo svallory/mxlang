@@ -20,6 +20,8 @@ const require = createRequire(join(packageDir, "package.json"));
 const scratch = mkdtempSync(join(packageDir, ".attr-value-render-"));
 const values: Record<string, unknown> = {
   plain: { a: 1 },
+  function: () => 1,
+  symbol: Symbol("s"),
   array: [1, 2],
   nullproto: Object.create(null),
   custom: { toString: () => "custom" },

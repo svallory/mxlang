@@ -522,6 +522,7 @@ export const policy: Policy = {
   resolveDiscoveredTagModule,
   checkBinding: rejectInputShadowing,
   isDelegatedTag,
+  isBuiltinTag: (name) => name === "let" || name === "id",
   resolveDelegatedTag,
   // The resolver offers the host first refusal on each of these so the
   // diagnostic quotes Marko's own wording rather than the core's generic
@@ -680,7 +681,7 @@ const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string
     for (const [key, value] of Object.entries(attrs)) {
       if (key === "content") continue;
       if (value === false || value === null || value === undefined) continue;
-      out += value === true ? " " + key : " " + key + "=\\"" + escape(${ATTRIBUTE_VALUE_EXPRESSION}(key, value, target)) + "\\"";
+      out += value === true ? " " + key : " " + key + "=\\"" + escape(__mxAttrValue(key, value, target)) + "\\"";
     }
     out += ">";
     if (props.content) out += props.content();
@@ -809,19 +810,27 @@ export default ${name};
  * they are inlined rather than imported, to keep the runtime surface at one
  * `escape` — is a property of this host's target, not of the core.
  */
-export function finalizeModule(code: string): string {
-  // Each helper is emitted only when something calls it, so a template that
-  // uses none of them compiles to `escape` and string concatenation alone —
-  // which is the claim this package exists to make checkable.
-  const helpers = [
+function moduleHelpers(code: string): string[] {
+  const candidates: [string, string][] = [
     ["classValue(", CLASS_VALUE],
     ["styleValue(", STYLE_VALUE],
     ["escapeComment(", ESCAPE_COMMENT],
     ["renderDynamic(", RENDER_DYNAMIC],
-  ]
-    .filter(([call]) => code.includes(call as string))
-    .map(([, source]) => source);
+  ];
+  const helpers = candidates.flatMap(([call, source]) =>
+    code.includes(call) ? [source] : [],
+  );
+  if (
+    code.includes("__mxAttrValue(") ||
+    helpers.some((helper) => helper.includes("__mxAttrValue("))
+  ) {
+    helpers.unshift(`const __mxAttrValue = ${ATTRIBUTE_VALUE_EXPRESSION};`);
+  }
+  return helpers;
+}
 
+export function finalizeModule(code: string): string {
+  const helpers = moduleHelpers(code);
   if (helpers.length === 0) return brandRender(code);
   const defaultExport = defaultExportIn(code);
   if (!defaultExport) return brandRender(code);
@@ -838,14 +847,7 @@ export function finalizeModule(code: string): string {
 
 /** `finalizeModule`, preserving emitter-recorded generated offsets. */
 export function finalizeModuleWithMappings(emitted: MappedCode): MappedCode {
-  const helpers = [
-    ["classValue(", CLASS_VALUE],
-    ["styleValue(", STYLE_VALUE],
-    ["escapeComment(", ESCAPE_COMMENT],
-    ["renderDynamic(", RENDER_DYNAMIC],
-  ]
-    .filter(([call]) => emitted.code.includes(call as string))
-    .map(([, source]) => source);
+  const helpers = moduleHelpers(emitted.code);
   const defaultExport = defaultExportIn(emitted.code);
   if (!defaultExport) {
     // Reuse the detailed seam failure from the string-only path.

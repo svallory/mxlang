@@ -20,7 +20,7 @@
  */
 
 import type { Ctx, Disposition, Node } from "./core.ts";
-import type { Attr } from "./ir.ts";
+import type { Attr, DelegatedTag } from "./ir.ts";
 
 export type { Disposition };
 
@@ -50,6 +50,11 @@ export interface HostDeclarations {
    * code cannot".
    */
   tags: Record<string, Disposition>;
+  /**
+   * Identifies Marko builtin syntax even when a host delegates its lowering.
+   * Absent: a delegated/custom vocabulary claim is not a builtin.
+   */
+  isBuiltinTag?(name: string, ctx: Ctx): boolean;
   /** Whether an unbound lowercase tag name is a real element. */
   isElement(name: string, ctx: Ctx): boolean;
   /** Whether a tag name resolves to a component in this host. */
@@ -85,7 +90,11 @@ export interface HostDeclarations {
    * compile-time meaning hands its resolved form to every host through this
    * channel, since the core cannot know what the macro decided.
    */
-  resolveDelegatedTag?(name: string, node: Node, ctx: Ctx): unknown;
+  resolveDelegatedTag?(
+    name: string,
+    node: Node,
+    ctx: Ctx,
+  ): DelegatedTag["data"];
   /**
    * Rejects an attribute modifier (`class:active`) in this host's own words.
    *

@@ -21,8 +21,6 @@
  */
 
 import {
-  ATTRIBUTE_SPREAD_EXPRESSION,
-  ATTRIBUTE_VALUE_EXPRESSION,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
@@ -136,6 +134,9 @@ function isComponentName(name: string): boolean {
 }
 
 /** Resolve-time questions for a Preact/React JSX dialect. */
+const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
+const ATTRIBUTE_SPREAD_EXPRESSION = "__mxAttrSpread";
+
 export function createJsxDeclarations(dialectName: string): HostDeclarations {
   const declarationName =
     dialectName === "Preact"
@@ -877,7 +878,7 @@ export class PreactEmitter implements Emitter<string> {
             ? []
             : [this.#dialect.classAttr]),
         ]),
-        ")}",
+        ", true)}",
       );
     }
     return concatMapped(

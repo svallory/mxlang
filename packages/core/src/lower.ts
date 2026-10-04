@@ -2821,16 +2821,16 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     validateBoundAttributes(node);
   }
 
-  // An unclaimed delegated vocabulary (e.g. a static tree's `id`) is not
-  // the compiler builtin. Structural names and explicit host-owned names
-  // keep their builtin checks; ordinary element dialects inherit Marko's.
+  // Builtin identity is independent of host rendering policy: default HTML
+  // drops `let`, but it remains Marko syntax. A delegated vocabulary or
+  // registered custom tag can reclaim `let`/`id`; structural names cannot.
   const compilerValueTag =
     name === "const" ||
     name === "return" ||
     ((name === "let" || name === "id") &&
-      (Object.hasOwn(ctx.declarations.tags, name) ||
-        ((!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
-          ctx.declarations.isElement(name, ctx))));
+      (!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
+      (ctx.declarations.isBuiltinTag?.(name, ctx) ??
+        !ctx.declarations.isDelegatedTag?.(name, ctx)));
   if (!fileLocalBinding && compilerValueTag)
     validateBuiltinValueAttributes(node, name);
 

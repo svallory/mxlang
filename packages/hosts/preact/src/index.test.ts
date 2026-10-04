@@ -9,11 +9,11 @@
  * a `<try>` pulls in.
  */
 
-import {
-  ATTRIBUTE_VALUE_EXPRESSION as ATTR,
-  type CustomTag,
-  ATTRIBUTE_SPREAD_EXPRESSION as SPREAD,
-} from "@mxlang/core";
+import type { CustomTag } from "@mxlang/core";
+
+const ATTR = "__mxAttrValue";
+const SPREAD = "__mxAttrSpread";
+
 import { type FunctionComponent, h } from "preact";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx, preactDeclarations, preactDialect } from "./index.ts";
@@ -155,7 +155,7 @@ describe("elements and text", () => {
 
   it("emits a spread attribute", () => {
     expect(markup("<div ...input.rest>x</div>")).toBe(
-      `<div {...${SPREAD}({ ...input.rest }, "div", ["ref","key","dangerouslySetInnerHTML"])}>x</div>`,
+      `<div {...${SPREAD}({ ...input.rest }, "div", ["ref","key","dangerouslySetInnerHTML"], true)}>x</div>`,
     );
   });
 });

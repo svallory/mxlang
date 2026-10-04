@@ -20,6 +20,7 @@
 import { readFileSync } from "node:fs";
 import {
   ATTRIBUTE_SPREAD_EXPRESSION,
+  ATTRIBUTE_VALUE_EXPRESSION,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -179,7 +180,7 @@ function mxDynamic(target: any, payload: any, content?: any) {
     if (typeof target === "string" || mxIsHostComponentObject(target)) {
       const Tag: any = target;
       const attrs = payload[0] || {};
-      return <Tag {...(typeof target === "string" ? ${ATTRIBUTE_SPREAD_EXPRESSION}(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"]) : attrs)}>{content ? content() : undefined}</Tag>;
+      return <Tag {...(typeof target === "string" ? __mxAttrSpread(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true) : attrs)}>{content ? content() : undefined}</Tag>;
     }
     return target;
   }
@@ -191,7 +192,7 @@ function mxDynamic(target: any, payload: any, content?: any) {
   ) {
     const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
-    return <Tag {...(typeof target === "string" ? ${ATTRIBUTE_SPREAD_EXPRESSION}(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"]) : rest)}>{bodyContent ? bodyContent() : undefined}</Tag>;
+    return <Tag {...(typeof target === "string" ? __mxAttrSpread(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true) : rest)}>{bodyContent ? bodyContent() : undefined}</Tag>;
   }
   if (
     target !== null &&
@@ -336,6 +337,19 @@ export function emitModuleWithMappings(
   const imports = importLines(emitter.runtimeImports, dialect);
   if (imports.length > 0) lines.push(...imports);
 
+  const helperInput = [
+    body.code,
+    ...statements.map((statement) => statement.code),
+    ...(emitter.runtimeImports.has("mxDynamic") ? [MX_DYNAMIC] : []),
+  ].join("\n");
+  const attrHelpers: string[] = [];
+  if (
+    helperInput.includes("__mxAttrValue(") ||
+    helperInput.includes("__mxAttrSpread(")
+  )
+    attrHelpers.push(`const __mxAttrValue = ${ATTRIBUTE_VALUE_EXPRESSION};`);
+  if (helperInput.includes("__mxAttrSpread("))
+    attrHelpers.push(`const __mxAttrSpread = ${ATTRIBUTE_SPREAD_EXPRESSION};`);
   const importedNames = new Set(ir.imports.flatMap((node) => node.bindings));
   const hoisted = [
     ...ir.imports.map((node) => node.code),
@@ -359,6 +373,7 @@ export function emitModuleWithMappings(
     // author who also declares one gets a duplicate-declaration
     // `SyntaxError` at this position, the same pre-existing behaviour
     // `@mxlang/html`'s `renderDynamic` has.
+    ...attrHelpers,
     ...(emitter.runtimeImports.has("mxDynamic") ? [MX_DYNAMIC] : []),
   ];
   if (hoisted.length > 0) lines.push("", ...hoisted);
