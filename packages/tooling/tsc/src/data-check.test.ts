@@ -627,4 +627,61 @@ describe("mx-tsc on a data package", () => {
       expect(output).toContain(`foreign.ts${shown}: error TS80001:`);
     });
   });
+  describe("a missing mx.contracts module is positioned where the key is, by any line break", () => {
+    const lines = [
+      "{",
+      ' "mx": {',
+      '  "target": "data",',
+      '  "contracts": "./missing.ts"',
+      " }",
+      "}",
+    ];
+    it.each([
+      ["CR only", lines.join("\r"), "package.json(4,3)"],
+      [
+        "mixed CR/LF",
+        ["{", ' "mx": {'].join("\r") + "\n" + lines.slice(2).join("\n"),
+        "package.json(4,3)",
+      ],
+      [
+        "U+2028 inside a string",
+        [
+          "{",
+          ' "mx": {',
+          '  "target": "data",',
+          '  "note": "x\u2028y",',
+          '  "contracts": "./missing.ts"',
+          " }",
+          "}",
+        ].join("\n"),
+        "package.json(6,3)",
+      ],
+      ["LF", lines.join("\n"), "package.json(4,3)"],
+      ["CRLF", lines.join("\r\n"), "package.json(4,3)"],
+    ])("%s", (_name, text, shown) => {
+      const dir = emptyPackage({});
+      writeFileSync(join(dir, "package.json"), text);
+      writeFileSync(join(dir, "a.mx"), "thing\n");
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain(`${shown}: error TS80001:`);
+      expect(output).toContain("missing.ts");
+    });
+
+    it("an invalid contract declaration is positioned in its module, whatever the manifest's line breaks", () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        lines.join("\r").replace("missing", "bad"),
+      );
+      writeFileSync(
+        join(dir, "bad.ts"),
+        'export default { thing: { attributes: { x: { type: "string", requried: true } } } };\n',
+      );
+      writeFileSync(join(dir, "a.mx"), "thing\n");
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("bad.ts(1,1): error TS80001:");
+    });
+  });
 });

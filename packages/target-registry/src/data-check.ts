@@ -17,7 +17,7 @@ import {
   readFileSync,
   statSync,
 } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   clearScanCache,
   isTranslateError,
@@ -354,6 +354,12 @@ export function checkDataPackage(dir: string): DataCheckResult {
           ? error.message.slice(prefix.length)
           : error.message,
         origin: "data",
+        // Core positions every manifest key it reports (the `mx.contracts`
+        // key, a policy key) by LF only. An error in any other file (a
+        // sidecar, a contracts module, a Babel `loc`) is not.
+        ...(basename(at) === "package.json"
+          ? { lfCoordinates: true as const }
+          : {}),
       });
       continue;
     }
