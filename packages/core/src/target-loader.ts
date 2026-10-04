@@ -217,9 +217,10 @@ function isPackageManifest(manifest: string, fromDir: string): boolean {
  * Failures are never cached: a failed load is re-evaluated on every call, so a
  * fix to any file it loaded (the entry, or a module the entry requires) is
  * picked up by the next call. A miss (`not-found`) is never cached by this
- * module either, but Bun's resolver keeps a miss for the life of the process:
- * under Bun a package installed after a `not-found` is found only after a
- * restart (TODO `target-loader-sticky-not-found`); Node resolves it at once.
+ * module either, but the runtime's resolver keeps a miss once the project has a
+ * `node_modules` (Bun and Node alike): after installing a missing target,
+ * restart the language server, TS server or dev server (TODO
+ * `target-loader-sticky-not-found`).
  * Throws `TargetLoadError`: `not-found` (does not resolve), `load-failed`
  * (throws while evaluating), `invalid-descriptor` (wrong shape, or a
  * `descriptorVersion` this mx does not support).

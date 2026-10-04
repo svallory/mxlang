@@ -19,7 +19,7 @@ Tests: `src/warning-position.test.ts`, the padding-contract rows in `src/fragmen
 
 ### Fixed: a failed target load is retried on every resolution (registration PR 7 round 3)
 
-Round 2's failure cache is removed: it was keyed on the entry file, so a fix to a module the entry requires was never picked up. A throwing or invalid target is re-evaluated per resolution, as in round 1, and reloads after a fix to any file. The registration-verdict cache stays. Under Bun a `target-not-found` persists for the process (TODO `target-loader-sticky-not-found`); Node sees a newly installed package at once.
+Round 2's failure cache is removed: it was keyed on the entry file, so a fix to a module the entry requires was never picked up. A throwing or invalid target is re-evaluated per resolution, as in round 1, and reloads after a fix to any file. The registration-verdict cache stays. After installing a missing target, restart the language server, TS server or dev server: both Bun and Node keep a resolution miss once the project has a `node_modules` (TODO `target-loader-sticky-not-found`).
 
 ### Fixed/Changed: third-party targets, round 2 (registration PR 7)
 
