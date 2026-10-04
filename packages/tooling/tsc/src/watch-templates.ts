@@ -20,6 +20,16 @@
  * rebuild reads as one rebuild, with the templates in it. The same interception
  * covers the first build, which today reports its template errors after a
  * summary that says otherwise.
+ *
+ * That summary is TypeScript's English text, so a localized `tsc` (`--locale
+ * de`) does not match it. The seam the rebuild offers is not reachable from
+ * here: the watch compiler host that carries `afterProgramCreate` is not the
+ * `CompilerHost` the language plugins are handed (`_tsc.js` builds the former
+ * with `createCompilerHostFromProgramHost`, a separate object), and reaching it
+ * would mean rewriting `_tsc.js` on disk. So a rebuild whose summary is not
+ * recognized is reported instead of skipped: {@link rebuildActivity} marks that
+ * a rebuild read files, and a write after that with no recognized summary says
+ * so out loud, once per rebuild. Never silently.
  */
 
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
@@ -41,6 +51,12 @@ import {
 const WATCH_SUMMARY =
   /(?:^|\r?\n| - |\] )(Found (\d+) errors?\. Watching for file changes\.)\r?\n+$/;
 
+/** Printed once per rebuild whose summary this pass did not recognize. */
+export const MISSED_REBUILD =
+  "error mxlang: the Angular template pass missed this rebuild: tsc's watch " +
+  "summary was not recognized (a localized `tsc --locale` writes it in " +
+  "another language), so these templates were not checked now.\n";
+
 export interface WatchTemplatePassOptions {
   /** `tsc`'s command line, as `parseBuildMode` reads it. */
   argv: readonly string[];
@@ -49,10 +65,11 @@ export interface WatchTemplatePassOptions {
   build: boolean;
   /**
    * The programs tsc created so far, each holding that program's `.ng.mx`
-   * compiles. Filled in place as tsc runs, so this is the array the entry
-   * point hands to `runPatchedTsc`.
+   * compiles. Filled in place as tsc runs, and pruned by every pass to the
+   * newest program of each project, so a watcher of any age holds no more than
+   * one program per project (see {@link prunePrograms}).
    */
-  programs: readonly NgProgram[];
+  programs: NgProgram[];
   /**
    * Prints one pass's result (`reportNgDiagnostics`) and returns how many
    * errors it printed, so the summary can count them. Runs inside tsc's own
@@ -73,18 +90,30 @@ export interface WatchTemplatePass {
 const EMPTY: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
 
 /**
- * Runs the Angular template pass once per watch rebuild, from
- * {@link WATCH_SUMMARY}, over the `.ng.mx` compiles of every program this run
- * created. Returns the handle the entry point uses to tell whether the pass
- * ever ran.
+ * Rebuilds this process is in the middle of, seen from the compiler host: a
+ * watch rebuild re-reads the files it changed through `getSourceFile`
+ * (`getSourceFileByPath` is removed in watch mode, so that is the path every
+ * rebuild takes — see `virtualFilesInWatchRebuilds`).
  *
- * The interceptor goes on `process.stdout.write`, because that is where `tsc`
- * ends up: the system object `tsc` writes through is its own (`_tsc.js`,
- * `write(s) { process.stdout.write(s); }`), not the `typescript` module's `sys`
- * a caller can reach. Only the summary line is acted on; every other write,
- * including `mx-tsc`'s own, passes through untouched, and the pass's own
- * output is written past it (it runs with the interceptor marked busy).
+ * Marked here, acted on in the interceptor: a write that follows such a rebuild
+ * and is not a summary it recognizes means this pass did not run for it, which
+ * is said out loud rather than passed over.
  */
+let rebuilding = false;
+let reportedMiss = false;
+
+export function rebuildActivity(
+  host: { getSourceFile?: unknown } | undefined,
+): void {
+  const getSourceFile = host?.getSourceFile;
+  if (typeof getSourceFile !== "function" || !host) return;
+  host.getSourceFile = (...args: unknown[]) => {
+    rebuilding = true;
+    reportedMiss = false;
+    return (getSourceFile as (...a: unknown[]) => unknown)(...args);
+  };
+}
+
 /**
  * `text` with the watch summary's error count raised by `added`, or
  * `undefined` when `text` is not a summary. Only the count changes: tsc's own
@@ -118,6 +147,19 @@ export function recountWatchSummary(
   return `${text.slice(0, at + from)}${recounted}${whole.slice(from + message.length)}${text.slice(at + whole.length)}`;
 }
 
+/**
+ * Runs the Angular template pass once per watch rebuild, from
+ * {@link WATCH_SUMMARY}, over the `.ng.mx` compiles of every program this run
+ * created. Returns the handle the entry point uses to tell whether the pass
+ * ever ran.
+ *
+ * The interceptor goes on `process.stdout.write`, because that is where `tsc`
+ * ends up: the system object `tsc` writes through is its own (`_tsc.js`,
+ * `write(s) { process.stdout.write(s); }`), not the `typescript` module's `sys`
+ * a caller can reach. Only the summary line is acted on; every other write,
+ * including `mx-tsc`'s own, passes through untouched, and the pass's own
+ * output is written past it (it runs with the interceptor marked busy).
+ */
 export function installWatchTemplatePass(
   options: WatchTemplatePassOptions,
 ): WatchTemplatePass {
@@ -130,12 +172,21 @@ export function installWatchTemplatePass(
     const text = typeof chunk === "string" ? chunk : undefined;
     const summary = text === undefined ? null : WATCH_SUMMARY.exec(text);
     const passThrough = () => write(chunk, ...writeArgs);
-    // Not the summary, or a nested run of ours: tsc's own output, untouched.
-    if (!summary || text === undefined || busy) return passThrough();
+    // Any other write after a rebuild read files, with no summary this pass
+    // recognized (a localized `tsc --locale`): say the templates went
+    // unchecked, once per rebuild, instead of passing over it in silence.
+    if (!summary || text === undefined || busy) {
+      if (!busy && rebuilding && !reportedMiss) {
+        reportedMiss = true;
+        process.stderr.write(MISSED_REBUILD);
+      }
+      return passThrough();
+    }
     busy = true;
     try {
       const errors = options.report(checkWatchTemplates(options));
       pass.ran = true;
+      rebuilding = false;
       const recounted =
         errors === 0 ? undefined : recountWatchSummary(text, errors);
       return recounted === undefined
@@ -162,22 +213,59 @@ export function installWatchTemplatePass(
 export function checkWatchTemplates(
   options: WatchTemplatePassOptions,
 ): NgDiagnosticsResult {
-  const entries = [
-    // A file two programs both compile (via `references`) is checked once.
-    ...new Map(
-      options.programs
-        .flatMap((program) => program.getCompiledNgMx())
-        .map((entry) => [entry.fileName, entry] as const),
-    ).values(),
-  ];
-  if (entries.length === 0) return EMPTY;
   if (!options.build) {
+    const program = options.programs.at(-1);
+    const entries = [
+      ...new Map(
+        (program?.getCompiledNgMx() ?? []).map(
+          (entry) => [entry.fileName, entry] as const,
+        ),
+      ).values(),
+    ];
+    if (entries.length === 0) return EMPTY;
+    prunePrograms(options, [program as NgProgram]);
     // One program, so one tsconfig: the same resolution the non-watch path
     // uses, never a guess at which project owns what.
     return checkNgMxProjects(entries, options.argv, options.cwd);
   }
-  const { groups, unchecked } = buildGroups(options, entries);
-  const result = checkNgMxGroups(groups);
+  const projects = resolveBuildProjects(options.argv, options.cwd).filter(
+    (project) => project.hasFiles,
+  );
+  const owner = matchProjects(
+    projects,
+    options.programs.map((program) => program.rootNames),
+  );
+  // Newest program of each project wins, so a file is checked as the last
+  // program compiled it; `-1` collects the programs no project owns.
+  const newest = new Map<number, NgProgram>();
+  owner.forEach((index, at) => {
+    newest.set(index, options.programs[at] as NgProgram);
+  });
+  prunePrograms(options, newest.values());
+
+  const byProject = new Map<string, Map<string, CompiledNgMx>>();
+  const unchecked: string[] = [];
+  for (const [index, program] of newest) {
+    const project = projects[index];
+    const compiled = program.getCompiledNgMx();
+    if (!project) {
+      unchecked.push(...compiled.map((entry) => entry.fileName));
+      continue;
+    }
+    // Looked up per entry, so a project's file list keeps every one of them.
+    let files = byProject.get(project.tsconfigPath);
+    if (!files) {
+      files = new Map();
+      byProject.set(project.tsconfigPath, files);
+    }
+    for (const entry of compiled) files.set(entry.fileName, entry);
+  }
+  const result = checkNgMxGroups(
+    [...byProject].map(([tsconfigPath, files]) => ({
+      tsconfigPath,
+      entries: [...files.values()],
+    })),
+  );
   // A compile no project of the graph owns would otherwise read as a clean
   // rebuild; say which files went unchecked instead.
   for (const file of unchecked) {
@@ -188,56 +276,16 @@ export function checkWatchTemplates(
   return result;
 }
 
-interface BuildGroups {
-  groups: { tsconfigPath: string; entries: CompiledNgMx[] }[];
-  /** Compiles no program of the build graph claims, by file name. */
-  unchecked: string[];
-}
-
 /**
- * The same file sets the non-watch `-b` path checks, keyed by the program that
- * holds each file: the build graph's projects (`resolveBuildProjects`, which
- * reads each tsconfig's own file list), each program matched back to the
- * project whose list it is, and every compile that program made checked under
- * that project's tsconfig. Two programs of one project (a rebuild creating a
- * new one) check their shared files once, as everywhere else.
+ * Keeps only the programs this run still needs: the newest of each project, and
+ * nothing else. Without it a watcher appends a program per rebuild forever, and
+ * the older ones hold compiles of files since deleted or renamed.
  */
-function buildGroups(
+function prunePrograms(
   options: WatchTemplatePassOptions,
-  entries: readonly CompiledNgMx[],
-): BuildGroups {
-  const projects = resolveBuildProjects(options.argv, options.cwd).filter(
-    (project) => project.hasFiles,
-  );
-  const owner = matchProjects(
-    projects,
-    options.programs.map((program) => program.rootNames),
-  );
-  const byProject = new Map<string, CompiledNgMx[]>();
-  for (const [index, program] of options.programs.entries()) {
-    const project = projects[owner[index] as number];
-    if (!project) continue;
-    const held = byProject.get(project.tsconfigPath);
-    for (const entry of program.getCompiledNgMx()) {
-      if (held) {
-        if (!held.some((file) => file.fileName === entry.fileName)) {
-          held.push(entry);
-        }
-      } else {
-        byProject.set(project.tsconfigPath, [entry]);
-      }
-    }
-  }
-  const groups = [...byProject]
-    .filter(([, files]) => files.length > 0)
-    .map(([tsconfigPath, files]) => ({ tsconfigPath, entries: files }));
-  const checked = new Set(
-    groups.flatMap((group) => group.entries.map((entry) => entry.fileName)),
-  );
-  return {
-    groups,
-    unchecked: entries
-      .filter((entry) => !checked.has(entry.fileName))
-      .map((entry) => entry.fileName),
-  };
+  keep: Iterable<NgProgram>,
+): void {
+  const kept = new Set(keep);
+  options.programs.length = 0;
+  options.programs.push(...[...kept].filter((p) => p !== undefined));
 }

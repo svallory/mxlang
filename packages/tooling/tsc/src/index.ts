@@ -30,7 +30,10 @@ import {
   type NgDiagnosticsResult,
   type NgProgram,
 } from "./ng-diagnostics.ts";
-import { installWatchTemplatePass } from "./watch-templates.ts";
+import {
+  installWatchTemplatePass,
+  rebuildActivity,
+} from "./watch-templates.ts";
 
 /**
  * The compound extensions `.solid.mx` and `.ng.mx` as `runTsc` wants them: no
@@ -276,12 +279,14 @@ function virtualFilesInWatchRebuilds(host: ts.CompilerHost | undefined): void {
 /**
  * One run of the real `tsc` entry point (`process.argv` as it stands), with the
  * MX language plugins spliced in. Every plugin it creates is pushed to the given
- * lists. Returns tsc's exit code.
+ * lists. `watchMode` tells the host patches that this run rebuilds on its own,
+ * so a rebuild can be noticed (see `rebuildActivity`). Returns tsc's exit code.
  */
 function runPatchedTsc(
   astro: boolean,
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
   ngPlugins: NgProgram[],
+  watchMode = false,
 ): number {
   let tscExitCode = 0;
   const exit = process.exit;
@@ -318,8 +323,11 @@ function runPatchedTsc(
           languagePlugins: plugins,
           setup: (language) => {
             // Runs before Volar copies the host and patches `getSourceFile` on
-            // that copy, so both edits below land on the host it copies from.
+            // that copy, so every edit below lands on the host it copies from.
             virtualFilesInWatchRebuilds(options.host);
+            // Watch only: marks that a rebuild is reading files, so a rebuild
+            // whose summary the pass cannot recognize is said out loud.
+            if (watchMode) rebuildActivity(options.host);
             fallBackToVolarResolution(
               typescript,
               options.host,
@@ -478,7 +486,8 @@ function runMxTscChecks(): number {
   // its first build and rebuilds on its own, so nothing here runs again after
   // the pass made below: every later rebuild needs the template pass of its
   // own, run from inside tsc's rebuild (see `installWatchTemplatePass`).
-  const watchPass = isWatchMode(argv, process.cwd())
+  const watchMode = isWatchMode(argv, process.cwd());
+  const watchPass = watchMode
     ? installWatchTemplatePass({
         argv,
         cwd: process.cwd(),
@@ -487,7 +496,12 @@ function runMxTscChecks(): number {
         report: reportNgErrors,
       })
     : undefined;
-  const tscExitCode = runPatchedTsc(astro, diagnosticPlugins, ngPlugins);
+  const tscExitCode = runPatchedTsc(
+    astro,
+    diagnosticPlugins,
+    ngPlugins,
+    watchMode,
+  );
   // A watch run re-runs the pass from inside each rebuild; when it printed no
   // summary at all, nothing below ran either and this is its one pass.
   const watchRan = watchPass?.ran === true;
@@ -575,12 +589,21 @@ function countNgErrors(result: NgDiagnosticsResult): number {
  * interceptor: tsc's own summary line is written right after, and its count
  * has to carry these errors too. An error found by a rebuild outlives the call
  * that returns here (a watcher is killed, not exited), so it is also the
- * process's exit code; the entry point never lowers an exit code to 0.
+ * process's exit code — and a later clean pass clears it again, so a watcher
+ * whose templates were fixed and that is stopped cleanly exits 0.
  */
+let watchFailure = false;
+
 function reportNgErrors(result: NgDiagnosticsResult): number {
   reportNgDiagnostics(result);
   const errors = countNgErrors(result);
-  if (errors > 0) process.exitCode = 1;
+  if (errors > 0) {
+    process.exitCode = 1;
+    watchFailure = true;
+  } else if (watchFailure) {
+    process.exitCode = 0;
+    watchFailure = false;
+  }
   return errors;
 }
 
