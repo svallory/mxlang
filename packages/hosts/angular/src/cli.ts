@@ -152,16 +152,24 @@ function parseMapArg(arg: string): {
     throw new Error(`invalid position, expected file:line:col, got "${arg}"`);
   }
   const [, file, line, column] = match;
-  if (Number(line) < 1 || Number(column) < 1) {
+  const lineNumber = Number(line);
+  const columnNumber = Number(column);
+  // `Number.isInteger` as well as `>= 1`: the `\d+` groups cannot be `NaN`
+  // today, but a loosened pattern could pass one, and `NaN < 1` is false —
+  // so a bare `< 1` check would let it through. A position is a positive
+  // integer; a 0-based column is rejected rather than reinterpreted, since
+  // reinterpreting it is what lands a reader one byte left.
+  if (
+    !Number.isInteger(lineNumber) ||
+    !Number.isInteger(columnNumber) ||
+    lineNumber < 1 ||
+    columnNumber < 1
+  ) {
     throw new Error(
       "invalid position: line and column must be 1-based (at least 1)",
     );
   }
-  return {
-    file: file as string,
-    line: Number(line),
-    column: Number(column) - 1,
-  };
+  return { file: file as string, line: lineNumber, column: columnNumber - 1 };
 }
 
 function runMap(args: string[]): number {

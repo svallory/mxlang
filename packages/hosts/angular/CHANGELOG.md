@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (`mx-angular map` 1-based input/output, ruling #227):** `mx-angular map <file.html:line:col>` now takes **and** prints 1-based line and column, the same basis `mx-tsc` prints (`file(line,column)`) and every editor uses, so both halves of the subcommand agree with every other position this tool prints. The sidecar's own coordinates stay 0-based and are converted at the CLI boundary; a `0` line or column is now rejected with `invalid position: line and column must be 1-based (at least 1)` and exit code 1 rather than being silently reinterpreted (a `0` used to mean "the first column", which is the 1st — one byte left of what an editor highlights). See `@mxlang/core`'s and the specification's §12 "One base for every printed position".
+
 - **Fix (ng-mx-hoist-before-directive round 2):** detached headers after the directive prologue also stay before hoisted imports. A directive's trailing inline comment stays on its original statement, while the final attached declaration comment stays with its declaration. Template and later module positions remain mapped correctly.
 
 - **Fix (ng-mx-hoist-before-directive):** without authored imports, `.ng.mx` hoisted imports now follow the leading directive prologue and detached header comments. Directives remain directives, attached declaration comments stay attached, and template/module diagnostic mappings retain their authored positions.
@@ -35,7 +37,7 @@
 
 - **Fix (dup-attr-last-wins-core, decision 135):** a repeated attribute now emits only the last; `x`, `[x]`, `(x)` and `#x` stay distinct names. Before, both were emitted as authored. The earlier occurrence gets a positioned warning naming the surviving one. See `@mxlang/core`.
 
-- **Fix (agent-output-positions, audit item 13):** `mx-angular build`/`watch` printed `file:line:column` with a 0-based column (`5:15`) where `mx-tsc` prints `(5,16)` for the same warning, so an agent landed one column left. Every printed diagnostic position (build, watch, CLI errors, and the two positions quoted in the slot/bare invoker-conflict message) now has a 1-based column. The structured `line`/`column` on `warnings`/`errors` and `TranslateError` are unchanged (0-based). One existing test pinned the old text (`watch.test.ts`, `x.solid.mx:1:0`) and was updated. `mx-angular map` takes and prints its own `file:line:col` unchanged.
+- **Fix (agent-output-positions, audit item 13):** `mx-angular build`/`watch` printed `file:line:column` with a 0-based column (`5:15`) where `mx-tsc` prints `(5,16)` for the same warning, so an agent landed one column left. Every printed diagnostic position (build, watch, CLI errors, and the two positions quoted in the slot/bare invoker-conflict message) now has a 1-based column. The structured `line`/`column` on `warnings`/`errors` and `TranslateError` are unchanged (0-based). One existing test pinned the old text (`watch.test.ts`, `x.solid.mx:1:0`) and was updated. `mx-angular map` takes and prints its own `file:line:col` unchanged. (Superseded for `mx-angular map` only, later in Unreleased: ruling #227 makes that subcommand 1-based in and out.)
 
 - **Breaking (delegated-tag-rename, decision 132):** follows the `@mxlang/core` rename of `claimsTag`/`resolveHostTag`/`HostTag`/`ctx.build.hostTag` to `isDelegatedTag`/`resolveDelegatedTag`/`DelegatedTag`/`ctx.build.delegatedTag`; the host's `Emitter.hostTag` method is now `delegatedTag`. No output or diagnostic change.
 

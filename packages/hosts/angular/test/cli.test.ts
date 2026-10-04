@@ -1003,6 +1003,68 @@ describe("mx-angular map", () => {
     ]);
   });
 
+  it("rejects a 0-based column rather than reinterpreting it", () => {
+    // The guard `parseMapArg` adds. Every other row in this suite was
+    // re-pointed to a 1-based input, which would leave this branch
+    // uncovered: delete it and the whole `mx-angular map` suite still passes.
+    // A `0` column is what the sidecar uses, so accepting one silently would
+    // land the reader one byte left of the position an editor shows.
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
+      }),
+      "src/greeting.mx": "<div>\n  <p>${user.name}</p>\n</div>\n",
+    });
+    build(projectDir);
+
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = (msg: string) => errors.push(msg);
+    try {
+      expect(
+        runCli(["map", `${join(projectDir, "src/greeting.html")}:2:0`]),
+      ).toBe(1);
+      expect(
+        runCli(["map", `${join(projectDir, "src/greeting.html")}:0:1`]),
+      ).toBe(1);
+    } finally {
+      console.error = originalError;
+    }
+    expect(errors).toHaveLength(2);
+    for (const message of errors) {
+      expect(message).toContain(
+        "invalid position: line and column must be 1-based (at least 1)",
+      );
+    }
+  });
+
+  it("rejects a position it cannot read as numbers at all", () => {
+    // `Number.isInteger`, not just `>= 1`: the `\d+` groups cannot be `NaN`
+    // while the pattern holds, but `NaN < 1` is false, so a bare `< 1` check
+    // would let a non-integer through if the pattern ever loosened.
+    const originalError = console.error;
+    const errors: string[] = [];
+    console.error = (msg: string) => errors.push(msg);
+    try {
+      for (const arg of [
+        "a.html:1:",
+        "a.html:1:x",
+        "a.html::1",
+        "a.html:1:-2",
+      ]) {
+        expect(runCli(["map", arg])).toBe(1);
+      }
+    } finally {
+      console.error = originalError;
+    }
+    expect(errors).toHaveLength(4);
+    // Each is rejected — by the shape regex or the 1-based guard, both of
+    // which exit non-zero with a message naming the position.
+    expect(
+      errors.every((message) => message.includes("invalid position")),
+    ).toBe(true);
+  });
+
   it("fails with a clear message when no sidecar exists", () => {
     const originalError = console.error;
     const errors: string[] = [];

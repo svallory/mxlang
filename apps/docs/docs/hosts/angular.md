@@ -290,12 +290,20 @@ right choice for CI, where a stale template silently shipping is worse than
 a missing one.
 
 **`map`** reads the sidecar written beside every emitted `.html` file and
-resolves a position in that file back to the `.mx` it came from:
+resolves a position in that file back to the `.mx` it came from. It takes and
+prints **1-based** line and column, like every other position MX prints and
+like `mx-tsc`'s `file(line,column)`. The sidecar's own coordinates are 0-based
+and are converted at the CLI boundary, so a `0` line or column is rejected
+rather than silently reinterpreted:
 
+```console
+$ mx-angular map src/greeting.html:2:12
+greeting.mx:2:8
 ```
-$ mx-angular map src/greeting.html:3:12
-greeting.mx:3:7
-```
+
+`2:12` is the `12`th character of the emitted line — the `u` of
+`{{ user.name }}` — and `2:8` is the 8th character of the `.mx` line it came
+from, the `u` of `${user.name}`.
 
 The emitter records a span for every run of text it takes from the source —
 tag and attribute names, interpolation and event-handler expressions,
