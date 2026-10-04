@@ -1723,6 +1723,7 @@ export function transformCustomTag(
       `\`<${call.name}>\`: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,
       call.loc.line,
       call.loc.column,
+      call.loc.file,
     );
   }
 

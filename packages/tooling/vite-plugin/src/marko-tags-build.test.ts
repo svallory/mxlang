@@ -149,11 +149,11 @@ describe("a .mx page calling a tags/*.marko tag, built with vite (audit case h18
     );
     expect(error?.message).toContain("bad.marko");
     expect(error?.message).not.toContain("Unexpected JSX expression");
-    // Located at the tag's own line:column (the 0-based column of the closer),
+    // Located at the tag's own line:column (the 1-based column of the closer),
     // with Marko's reason, and not a stack's worth of frames (audit item 19).
     // The header names the authored tag, not the `.marko.tsx` module id this
     // plugin mints for it (`vite-virtual-tsx-id`).
-    expect(error?.message).toContain("bad.marko:1:15");
+    expect(error?.message).toContain("bad.marko:1:16");
     expect(error?.message).not.toContain("bad.marko.tsx");
     expect(error?.message).toContain('closing "div" tag does not match');
   });

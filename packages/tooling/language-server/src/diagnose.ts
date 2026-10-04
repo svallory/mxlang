@@ -496,7 +496,16 @@ export function diagnoseDocument(
               start: { line: 0, character: 0 },
               end: { line: 0, character: 1 },
             },
-            message: `${message} (in ${position.file})`,
+            message: `${message} (in ${position.file}:${position.line}:${position.column + 1})`,
+            relatedInformation: [
+              {
+                location: {
+                  uri: uriOf(position.file),
+                  range: diagnostic.range,
+                },
+                message,
+              },
+            ],
           },
         ];
       }

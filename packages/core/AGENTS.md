@@ -735,6 +735,15 @@ Five facts worth knowing before editing it:
   true`) `Import` carry none. Slicing the source with a span yields the
   authored text; tests in `src/spans.test.ts` assert exactly that, including
   under emoji (UTF-16) and CRLF.
+- **Cross-file errors carry their origin structurally.** `metadataForTemplate`
+  converts a callee's Marko `CompileError`/`CompileErrors` before the custom-tag
+  catch can wrap it at the caller. Its existing `TranslateError.file`, `line`
+  and `column` name the callee together (nested failures keep the deepest file).
+  Aggregates use the first parser error's position and keep every frame. The
+  message keeps frames, not repeated `at <path>:L:C` headers or compiler stacks.
+  Scan failures likewise use `file` rather than a message prefix for sidecars,
+  manifests and contracts. Structured lines are 1-based, columns 0-based;
+  pointer messages print columns 1-based. Tests: `src/cross-file-error.test.ts`.
 - **Positions get a third rule** (spec §2): material from a tag template keeps
   that file's line and column, tagged through the optional `Position.file` (and
   `Expr.file`, since an `Expr` carries no `loc` of its own — only the optional

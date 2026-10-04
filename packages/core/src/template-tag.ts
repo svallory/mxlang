@@ -237,6 +237,32 @@ export function metadataForTemplate(
     return metadata;
   } catch (error) {
     templateCache.delete(tag.filename);
+    // Marko's parse-only front door raises CompileError(s) with positions in
+    // this unit, not in the caller. Convert here before the custom-tag hook
+    // catch can stamp it with the call site's coordinates. Keep every frame
+    // at the first parser error, not path headers or compiler stacks.
+    if (
+      error instanceof Error &&
+      (error.name === "CompileError" || error.name === "CompileErrors")
+    ) {
+      type ParsedError = Error & {
+        loc?: { start?: { line: number; column: number } };
+        frame?: string;
+        label?: string;
+        errors?: ParsedError[];
+      };
+      const parsed = error as ParsedError;
+      const entries = parsed.errors?.length ? parsed.errors : [parsed];
+      const first = entries[0] ?? parsed;
+      throw new TranslateError(
+        entries
+          .map((entry) => entry.frame ?? entry.label ?? entry.message)
+          .join("\n\n"),
+        first.loc?.start?.line ?? 1,
+        first.loc?.start?.column ?? 0,
+        tag.filename,
+      );
+    }
     if (isTranslateError(error) && error.file === undefined) {
       const positioned = new TranslateError(
         error.message,
@@ -244,6 +270,7 @@ export function metadataForTemplate(
         error.column,
         tag.filename,
       );
+      positioned.dependencies = error.dependencies;
       const carried = (error as { [CALLEE_INPUT_ERROR]?: unknown })[
         CALLEE_INPUT_ERROR
       ];

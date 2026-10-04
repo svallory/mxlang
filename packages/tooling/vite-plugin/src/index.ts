@@ -342,7 +342,7 @@ export function relabelBuildErrors(
     if (entry === null || typeof entry !== "object") continue;
     const diagnostic = entry as {
       id?: unknown;
-      loc?: { file?: unknown };
+      loc?: { file?: unknown; column?: unknown };
       plugin?: unknown;
       kind?: unknown;
     };
@@ -353,7 +353,19 @@ export function relabelBuildErrors(
       if (typeof diagnostic.id === "string") {
         const authored = authoredId(diagnostic.id);
         if (authored !== undefined) {
-          diagnostic.id = authored;
+          // Rolldown stamps the caller's virtual id even when core's error
+          // is measured in a callee. The locator's file and coordinates are
+          // a pair; keep that file rather than attaching its line to the caller.
+          diagnostic.id =
+            typeof diagnostic.loc?.file === "string"
+              ? (authoredId(diagnostic.loc.file) ?? diagnostic.loc.file)
+              : authored;
+          // Only the build-render aggregate is converted. `locate` and the
+          // dev overlay keep Vite's 0-based structured columns; rolldown
+          // prints this column verbatim, so its header must be 1-based (#227).
+          if (typeof diagnostic.loc?.column === "number") {
+            diagnostic.loc.column = Math.max(0, diagnostic.loc.column) + 1;
+          }
           relabeled++;
         }
       }
@@ -1114,14 +1126,23 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           // The message opens with the file it is about; `id` and `loc`
           // already say so, and the path is the costliest part of the line.
           const prefix = `${errorFile}: `;
+          // A callee parse failure retains Marko's frame, without its path
+          // header. `locate` builds the overlay frame from the callee source,
+          // so only the caret's reason belongs in the error message.
+          const plain = stripVTControlCharacters(err.message);
+          const reason = /^\s*(?:>\s*)?\d+ \|/.test(plain)
+            ? /^\s*\|\s*\^+\s+(\S.*)$/m.exec(plain)?.[1]
+            : undefined;
           throw locate(err, {
             file: errorFile,
             line: err.line,
             column: err.column,
             source: errorSource,
-            message: err.message.startsWith(prefix)
-              ? err.message.slice(prefix.length)
-              : undefined,
+            message:
+              reason ??
+              (err.message.startsWith(prefix)
+                ? err.message.slice(prefix.length)
+                : undefined),
           });
         }
 

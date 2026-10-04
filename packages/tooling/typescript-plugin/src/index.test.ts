@@ -755,13 +755,13 @@ describe("MX language plugin", () => {
       ).toContain("ok");
     });
 
-    it("reports a broken sidecar as a syntax error naming that file", () => {
-      const { caller } = project(
-        [
-          "const shared = { text: true };",
-          "export default { parseOptions: shared };",
-        ].join("\n"),
-      );
+    it("routes a broken sidecar to its source and leaves a caller pointer", () => {
+      const source = [
+        "const shared = { text: true };",
+        "export default { parseOptions: shared };",
+      ].join("\n");
+      const { dir, caller } = project(source);
+      const sidecar = join(dir, "tags", "thing.tag.ts");
       const plugin = createMxLanguagePlugin(ts);
 
       plugin.createVirtualCode?.(
@@ -771,9 +771,17 @@ describe("MX language plugin", () => {
         { getAssociatedScript: () => undefined },
       );
 
-      // Surfaced through the plugin's own diagnostic channel rather than
-      // thrown, so one bad sidecar does not blank out the whole project.
-      expect(plugin.getSyntaxError(caller)?.message).toContain("thing.tag.ts");
+      // The error belongs to the sidecar, not the caller's syntax channel.
+      // It is still surfaced rather than thrown, with a caller jump pointer.
+      expect(plugin.getSyntaxError(caller)).toBeUndefined();
+      const [own] = plugin.getCompileDiagnostics(sidecar);
+      expect(own?.fileName).toBe(sidecar);
+      expect(own?.source).toBe(source);
+      expect(own?.offset).toBe(source.lastIndexOf("parseOptions"));
+      expect(own?.message).not.toContain(sidecar);
+      const [pointer] = plugin.getCompileDiagnostics(caller);
+      expect(pointer?.offset).toBe(0);
+      expect(pointer?.message).toContain(`(in ${sidecar}:2:18)`);
     });
 
     it("does not resolve an mx.tags entry whose hosts excludes this host (whole-file .mx, html)", () => {

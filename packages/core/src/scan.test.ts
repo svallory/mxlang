@@ -285,7 +285,8 @@ describe("scanCustomTags", () => {
     expect(error).toBeInstanceOf(TranslateError);
     const translate = error as TranslateError;
     // Names the offending file and points into it, so the author can act.
-    expect(translate.message).toContain("computed.tag.ts");
+    expect(translate.file).toContain("computed.tag.ts");
+    expect(translate.message).not.toContain("computed.tag.ts");
     expect(translate.message).toContain("must be an object literal");
     expect(translate.line).toBeGreaterThan(0);
   });
@@ -305,7 +306,8 @@ describe("scanCustomTags", () => {
     }
 
     expect(error).toBeInstanceOf(TranslateError);
-    expect((error as Error).message).toContain("boom.tag.ts");
+    expect((error as TranslateError).file).toContain("boom.tag.ts");
+    expect((error as Error).message).not.toContain("boom.tag.ts");
     expect((error as Error).message).toContain("sidecar failed to load");
   });
 
@@ -315,6 +317,8 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "package.json"), '{"name":"mixed"}');
     writeFileSync(join(dir, "tags", "README.md"), "# tags\n");
     writeFileSync(join(dir, "tags", "helper.ts"), "export const x = 1;\n");
+    // JSON sidecars are not an MX discovery format, even when invalid JSON.
+    writeFileSync(join(dir, "tags", "ignored.tag.json"), "{");
     writeFileSync(join(dir, "tags", "card.mx"), "<div/>\n");
 
     const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
@@ -356,7 +360,8 @@ describe("scanCustomTags", () => {
     }
 
     expect(error).toBeInstanceOf(TranslateError);
-    expect((error as Error).message).toContain("-leading.mx");
+    expect((error as TranslateError).file).toContain("-leading.mx");
+    expect((error as Error).message).not.toContain("-leading.mx");
     expect((error as Error).message).toContain("is not a usable tag name");
   });
 
@@ -1064,9 +1069,9 @@ describe("readParseOptions", () => {
     }
     expect(error).toBeInstanceOf(TranslateError);
     expect((error as Error).message).toBe(
-      "a.tag.ts: could not be parsed: Unexpected token",
+      "could not be parsed: Unexpected token",
     );
-    expect(error).toMatchObject({ line: 1, column: 32 });
+    expect(error).toMatchObject({ file: "a.tag.ts", line: 1, column: 32 });
   });
 });
 

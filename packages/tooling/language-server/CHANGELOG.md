@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (translate-error-callee-file):** callee syntax errors are published on the callee URI at its real range. Caller pointers include the file and 1-based line/column and link to that range.
+
 ### Fixed: no page compile after a target load failure (registration PR 7 round 2)
 
 When the policy carries `target-not-found`, `target-load-failed`, `target-invalid-descriptor` or `host-invalid-descriptor`, the server reports the policy and scan diagnostics only. The fallback target's verdict on a page written for the missing one no longer buries the real error.

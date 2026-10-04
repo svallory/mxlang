@@ -70,7 +70,7 @@ function authored(project: string): string {
 
 /**
  * The one line a build prints above the message: `[plugin mx] <id>:<line>:<col>`,
- * with `column` 0-based like every `loc` this plugin raises.
+ * with printed positions 1-based (#227). The dev overlay's `loc` stays 0-based.
  */
 function header(message: string): string {
   const line = plain(message)
@@ -81,12 +81,32 @@ function header(message: string): string {
 }
 
 describe("a failing vite build names the authored file, not the virtual id", () => {
+  it.each([
+    ["<p>ok</p>\n\n<div>\n", 3, 0, 'Missing ending "div" tag'],
+    ["<div a=(x +)/>\n<span>", 1, 11, "Unexpected token"],
+  ] as const)(
+    "locates a child template syntax error in the child, including the build header",
+    async (source, line, column, message) => {
+      write("callee-parse", "tags/broken.mx", source);
+      const error = await buildError(
+        "callee-parse",
+        "<main>\n  <broken/>\n</main>\n",
+        "html",
+      );
+      expect(header(error.message)).toBe(
+        `[plugin mx] ${join(root, "callee-parse/tags/broken.mx")}:${line}:${column + 1}`,
+      );
+      expect(plain(error.message)).toContain(message);
+      expect(plain(error.message)).not.toContain("page.mx");
+      expect(plain(error.message)).not.toContain("at ../");
+    },
+  );
   it("for a Marko CompileError in a JSX-host .mx", async () => {
     const error = await buildError("compile", "<div>hello\n");
-    // Exact: the header is the authored absolute path, `column` 0-based like
-    // every `loc` this plugin raises (Marko reports the unclosed tag's opener).
+    // Exact: the header is the authored absolute path and printed coordinates
+    // are 1-based (Marko reports the unclosed tag's opener).
     expect(header(error.message)).toBe(
-      `[plugin mx] ${authored("compile")}:1:0`,
+      `[plugin mx] ${authored("compile")}:1:1`,
     );
     // The virtual id is what rolldown stamps on a plugin error; the authored
     // path is what a reader (or an agent following the header) needs.
@@ -99,12 +119,13 @@ describe("a failing vite build names the authored file, not the virtual id", () 
   it("for a TranslateError, and on the html host too", async () => {
     const error = await buildError(
       "translate",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: authored MX source
       "<let/count=0/>\n<div>${count}</div>\n",
       "html",
       true,
     );
     expect(header(error.message)).toBe(
-      `[plugin mx] ${authored("translate")}:1:0`,
+      `[plugin mx] ${authored("translate")}:1:1`,
     );
     expect(plain(error.message)).not.toContain(".mx.tsx");
     expect(plain(error.message)).toContain("`<let>` is reactive state");
@@ -173,6 +194,25 @@ describe("relabelBuildErrors", () => {
     expect(relabelBuildErrors(error, authored)).toBe(1);
     expect(diagnostic.id).toBe("/root/src/page.mx");
     expect(diagnostic.loc.file).toBe("/root/src/page.mx");
+    expect(diagnostic.loc.column).toBe(1);
+  });
+
+  it("keeps a callee locator paired with its coordinates", () => {
+    const diagnostic = {
+      id: "/root/src/page.mx.tsx",
+      loc: { file: "/root/src/tags/broken.mx", line: 3, column: 0 },
+      plugin: "mx",
+    };
+    expect(relabelBuildErrors({ errors: [diagnostic] }, authored)).toBe(1);
+    expect(diagnostic.id).toBe("/root/src/tags/broken.mx");
+    expect(diagnostic.loc).toEqual({
+      file: "/root/src/tags/broken.mx",
+      line: 3,
+      column: 1,
+    });
+    // A second pass must not convert the column again.
+    expect(relabelBuildErrors({ errors: [diagnostic] }, authored)).toBe(0);
+    expect(diagnostic.loc.column).toBe(1);
   });
 
   it("leaves another plugin's error alone", () => {

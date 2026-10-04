@@ -86,6 +86,51 @@ function nextDiagnostics(
 }
 
 describe("stdio server (e2e)", () => {
+  it.each([
+    ["<p>ok</p>\n\n<div>\n", 3, 0, 'Missing ending "div" tag'],
+    ["<div a=(x +)/>\n<span>", 1, 11, "Unexpected token"],
+  ] as const)(
+    "publishes a child template syntax error on the child's URI and range",
+    async (source, line, column, message) => {
+      const directory = mkdtempSync(join(tmpdir(), "mx-lsp-callee-"));
+      try {
+        writeFileSync(
+          join(directory, "package.json"),
+          '{"name":"x","mx":{"host":"html"}}',
+        );
+        mkdirSync(join(directory, "tags"));
+        writeFileSync(join(directory, "tags/broken.mx"), source);
+        const conn = startClient();
+        await conn.sendRequest("initialize", {
+          processId: null,
+          rootUri: null,
+          capabilities: {},
+        });
+        const childUri = `file://${join(directory, "tags/broken.mx")}`;
+        const published = nextDiagnostics(
+          conn,
+          (params) => params.uri === childUri,
+        );
+        await conn.sendNotification("textDocument/didOpen", {
+          textDocument: {
+            uri: `file://${join(directory, "page.mx")}`,
+            languageId: "marko",
+            version: 1,
+            text: "<main>\n  <broken/>\n</main>\n",
+          },
+        });
+        const result = await published;
+        expect(result.uri).toBe(childUri);
+        expect(result.diagnostics[0]?.message).toContain(message);
+        expect((result.diagnostics[0] as { range?: unknown }).range).toEqual({
+          start: { line: line - 1, character: column },
+          end: { line: line - 1, character: column + 1 },
+        });
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
   it("re-diagnoses an open caller from an open callee's unsaved Input changes", async () => {
     const conn = startClient();
     await conn.sendRequest("initialize", {

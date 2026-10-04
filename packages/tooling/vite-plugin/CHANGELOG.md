@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (translate-error-callee-file):** a callee syntax error's build header uses the callee file together with its coordinates, not the caller's authored id. Its message stays compact; the overlay frame is built from the callee source. Build-render headers print 1-based columns (#227); the transform/overlay's structured `loc.column` stays 0-based.
+
 - **Fix (vite-virtual-tsx-id):** a failing `vite build` now names the **authored** file in its error header. Rolldown builds that line (`[plugin mx] <id>:L:C`) from the *module* id and stamps it itself — `TransformPluginContextImpl.error` does `e.id = this.moduleId` — so a compile error in `page.mx` printed `page.mx.tsx:1:0`, a path that does not exist on disk, and neither the plugin's own `id`/`loc.file` nor `this.error({ id, loc })` could change it (verified on rolldown 1.2.8 / vite 8.2.2, this repo's pins). A `buildEnd` hook now re-labels those diagnostics before rolldown aggregates and formats them:
 
   ```text

@@ -312,7 +312,7 @@ export interface ScanDiagnostic {
  * language server point an author at the real problem.
  */
 function failIn(file: string, message: string, line = 1, column = 0): never {
-  throw new TranslateError(`${file}: ${message}`, line, column);
+  throw new TranslateError(message, line, column, file);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -508,10 +508,13 @@ function failContracts(
   line = 1,
   column = 0,
 ): never {
-  const positioned = message.startsWith(`${file}: `)
-    ? message
-    : `${file}: ${message}`;
-  throw new TranslateError(positioned, line, column, file);
+  const prefix = `${file}: `;
+  throw new TranslateError(
+    message.startsWith(prefix) ? message.slice(prefix.length) : message,
+    line,
+    column,
+    file,
+  );
 }
 
 /** Validate configuration and resolve modules against the consuming package. */
@@ -839,6 +842,7 @@ function loadDefaultExport(
     delete require.cache[resolved];
     module = require(file) as { default?: unknown };
   } catch (cause) {
+    if (isTranslateError(cause) && cause.file !== undefined) throw cause;
     const message = cause instanceof Error ? cause.message : String(cause);
     const fail = what === "sidecar" ? failIn : failContracts;
     fail(
@@ -902,7 +906,21 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
 
   let loaded: CustomTag | undefined;
   const load = (): CustomTag => {
-    loaded ??= loadSidecar(sidecar);
+    if (loaded) return loaded;
+    const candidate = loadSidecar(sidecar);
+    // Validate the sidecar's own declarations while its origin is known.
+    // The merged-map checks still run later for cross-tag relationships.
+    // A paired template makes a finalize-only sidecar reachable.
+    try {
+      const own = { [tag.name]: candidate };
+      rejectUnknownDeclarationKeys(own);
+      if (!tag.template) rejectUnreachableHooks(own);
+    } catch (cause) {
+      if (isTranslateError(cause) && cause.file === undefined)
+        failIn(sidecar, cause.message);
+      throw cause;
+    }
+    loaded = candidate;
     return loaded;
   };
 
@@ -1316,6 +1334,7 @@ function indexMxContractsEntries(
       rejectUnknownDeclarationKeys(contracts);
       rejectUnreachableHooks(contracts);
     } catch (cause) {
+      if (isTranslateError(cause) && cause.file !== undefined) throw cause;
       failContracts(
         file,
         cause instanceof Error ? cause.message : String(cause),

@@ -42,6 +42,15 @@ smoke with a stubbed registry. Source unit tests still intercept descriptor
 loads/region entries; their project externalizes core/dist so native requires
 share the plugin's caches/readers.
 
+**Cross-file error headers (`translate-error-callee-file`).** `buildEnd` keeps
+`loc.file` paired with its coordinates when rolldown stamped the caller's
+virtual id on a callee failure. It converts the build-render aggregate's
+column to 1-based (#227); the transform error and dev overlay retain Vite's
+0-based `loc.column`. The historical `:1:0` build examples below predate this
+printed-position correction. Callee parse messages retain only the reason;
+the overlay frame comes from the callee source. `build-error-header.test.ts`
+uses the programmatic build API with a real discovered child syntax error.
+
 Historical implementation details below predate table dispatch.
 
 ## Vite plugin

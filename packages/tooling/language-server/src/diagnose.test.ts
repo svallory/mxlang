@@ -1082,8 +1082,9 @@ describe("a tag template that fails to parse", () => {
         box(),
       );
       expect(d, "diagnostic").toBeDefined();
-      // The header survives, so the author knows a callee threw.
-      expect(d?.message).toContain("`<box>`: custom tag threw:");
+      // A callee parse failure is not a hook failure; the pointer names the
+      // unit and its own coordinates, without a misleading hook wrapper.
+      expect(d?.message).not.toContain("custom tag threw");
       expect(d?.message).toContain('Missing ending "div" tag');
       // The callee's own path:line:col, resolved: never a cwd-relative `../`.
       expect(d?.message).toContain("(in /tags/box.mx:3:1)");
