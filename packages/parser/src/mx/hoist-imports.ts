@@ -47,7 +47,7 @@ export interface HoistedImport {
  * local binding `icon`.
  */
 export interface HoistedDefine {
-  /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+  /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
   code: string;
   /** The gensym'd module-scope binding the region calls. */
   binding: string;

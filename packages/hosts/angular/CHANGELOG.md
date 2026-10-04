@@ -6,6 +6,9 @@
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
+- **Fix (range-loop-name-collision):** the `<for of=>` row binding for a destructured param and the `<for in=>` keyvalue entry are `__mxRow`/`__mxEntry`, not `mxRow`/`mxEntry`. Both are bound around the loop body, so a component field of the same name was shadowed inside it. `__mx` is reserved, so the name-avoidance they still run is now defence in depth against generated-vs-generated names. The `for-destructured-object` and `for-in` oracle fixtures' expected templates and AST goldens are updated for the rename; both rows keep their `pass` verdict.
+
+- **Test (range-loop-name-collision):** pinned, with no code change, that a `<for>` range cannot shadow an authored bound on this host either: a range is baked into a literal array, and a non-literal `from=`/`to=`/`step=` is rejected rather than emitted, so there is no mapper whose parameters could shadow a component field.
 - **Fix (colon-attr-followups round 2):** non-reserved colon names such as `attr:x` and `prop:x` are ordinary complete names, not invalid Marko modifiers, and dynamic values use `[attr.name]`. Static `oncapture:click` is preserved; its dynamic form gets a positioned Angular-security refusal because Angular forbids `[attr.on*]` bindings, rather than claiming Marko rejects the spelling.
 
 - **Fix (colon-attr-followups):** core preserves ordinary empty-suffix attribute names such as `x:`, so the existing Angular refusal now reports their authored name position for static, dynamic and valueless forms instead of emitting a different attribute with the colon dropped. Reserved empty modifiers remain errors.

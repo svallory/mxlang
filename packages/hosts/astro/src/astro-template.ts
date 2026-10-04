@@ -832,14 +832,19 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
           write("0");
         }
       };
+      // `__mxUnused`/`__mxIndex` rather than `_`/`$i`: both mapper parameters
+      // are in scope for the whole callback body, and the author's own
+      // `from`/`bound` expressions are written inside it. A generated `_`
+      // shadowed an authored `_` and the loop rendered `NaN` once per row.
+      // `__mx` is reserved by `checkReservedBindings`.
       write("{Array.from({ length: Math.max(0, (");
       writeExpr(node.source.bound);
       write(") - (");
       writeStart();
       write(node.source.inclusive ? ") + 1)" : "))");
-      write(" }, (_, $i) => (");
+      write(" }, (__mxUnused, __mxIndex) => (");
       writeStart();
-      write(") + $i).map((");
+      write(") + __mxIndex).map((");
       writeParam(0);
       write(") => ");
       writeBranch();

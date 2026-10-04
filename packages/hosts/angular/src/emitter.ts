@@ -1967,7 +1967,7 @@ class AngularEmitter implements Emitter<string> {
           paramNode,
         );
       }
-      return { row: this.gensym("mxRow"), destructure: fields };
+      return { row: this.gensym("__mxRow"), destructure: fields };
     }
     fail(
       "a `<for>` param can be a plain name or a non-renamed object destructure (`{a, b}`) on Angular, because `@for`'s loop variable is a single identifier. Bind the row to a name and read its fields in the body.",
@@ -2028,7 +2028,7 @@ class AngularEmitter implements Emitter<string> {
       );
       const k = this.aliasName(node.paramNodes[0], "$key");
       const v = this.aliasName(node.paramNodes[1], "$value");
-      const entry = this.gensym("mxEntry");
+      const entry = this.gensym("__mxEntry");
       this.out.write(`@for (${entry} of (`);
       this.out.writeMapped(source.object.code, source.object.span);
       this.out.write(

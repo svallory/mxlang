@@ -42,8 +42,8 @@ import {
 } from "./emitter.ts";
 
 /** Local names for the body-channel helpers a unit imports from `solid-js`. */
-const MX_CHILDREN_BINDING = "$mxChildren";
-const MX_MERGE_BINDING = "$mxMerge";
+const MX_CHILDREN_BINDING = "__mxChildren";
+const MX_MERGE_BINDING = "__mxMerge";
 
 export interface CompileSolidMxOptions {
   filename: string;
@@ -164,7 +164,7 @@ export interface HoistedImport {
 
 /** One `<define>` a region hoisted to module scope (decision 110b). */
 export interface HoistedDefine {
-  /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+  /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
   code: string;
   /** The gensym'd module-scope binding the region calls. */
   binding: string;
@@ -513,7 +513,7 @@ export function compileSolidUnit(
     );
   }
   const head = bodyAlias
-    ? `export default function ${name}($mxProps: ${inputType}) { const $mxBody = ${MX_CHILDREN_BINDING}(() => ($mxProps as { content?: unknown }).content ?? ($mxProps as { children?: unknown }).children); const input = ${MX_MERGE_BINDING}($mxProps, { get content() { const $mxValue = $mxBody() as unknown; return typeof $mxValue === "string" || typeof $mxValue === "number" ? $mxValue === "" ? undefined : <>{String($mxValue)}</> : $mxValue; } }) as ${inputType} & { content?: unknown }; ${varDecls}`
+    ? `export default function ${name}(__mxProps: ${inputType}) { const __mxBody = ${MX_CHILDREN_BINDING}(() => (__mxProps as { content?: unknown }).content ?? (__mxProps as { children?: unknown }).children); const input = ${MX_MERGE_BINDING}(__mxProps, { get content() { const __mxValue = __mxBody() as unknown; return typeof __mxValue === "string" || typeof __mxValue === "number" ? __mxValue === "" ? undefined : <>{String(__mxValue)}</> : __mxValue; } }) as ${inputType} & { content?: unknown }; ${varDecls}`
     : `export default function ${name}(input: ${inputType}) { ${varDecls}`;
   parts.push(
     ir.returnValue

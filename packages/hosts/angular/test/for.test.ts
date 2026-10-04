@@ -130,7 +130,7 @@ describe("For in", () => {
   it("emits the keyvalue pipe with a null comparator and a once-per-file warning", () => {
     const { code, warnings } = compileMx("<for|k, v| in=obj>${k}${v}</for>");
     expect(code).toBe(
-      "@for (mxEntry of (obj | keyvalue: null); track mxEntry.key) { @let k = mxEntry.key; @let v = mxEntry.value; {{ k }}{{ v }} }",
+      "@for (__mxEntry of (obj | keyvalue: null); track __mxEntry.key) { @let k = __mxEntry.key; @let v = __mxEntry.value; {{ k }}{{ v }} }",
     );
     assertAngularParses(code);
     expect(warnings).toHaveLength(1);
@@ -141,6 +141,32 @@ describe("For in", () => {
 });
 
 describe("For range", () => {
+  /**
+   * The JSX, Solid and Astro hosts bind `_`/`mxIndex`/`$i` in a range
+   * mapper's own parameter list, which put a generated binding in scope where
+   * the authored `from`/`to` expressions are evaluated — a silent
+   * wrong-value bug there. This host cannot have it: there is no mapper,
+   * because a range is baked into a literal array, and a non-literal bound is
+   * rejected outright rather than emitted. Pinned so a future "emit the
+   * expression" change cannot reintroduce it unnoticed.
+   */
+  it.each([
+    ["_", "<const/_=5/>\n<for|i| from=_ to=_+2>${i}</for>"],
+    [
+      "mxIndex",
+      "<const/mxIndex=10/>\n<for|i| from=mxIndex to=mxIndex+1>${i}</for>",
+    ],
+    [
+      "mxIndex with a step",
+      "<const/mxIndex=10/>\n<for|i| from=mxIndex to=mxIndex+4 step=2>${i}</for>",
+    ],
+  ])(
+    "rejects a non-literal bound named `%s`, so no mapper can shadow it",
+    (_label, source) => {
+      expect(() => emit(source)).toThrow(/non-literal bound/);
+    },
+  );
+
   it("bakes a to= range including the bound", () => {
     const out = emit("<for|i| to=3>${i}</for>");
     expect(out).toBe("@for (i of [0, 1, 2, 3]; track $index) { {{ i }} }");
@@ -218,23 +244,27 @@ describe("For destructured params", () => {
   it("binds a non-renamed object destructure through a gensym'd row and @let", () => {
     const out = emit("<for|{id, name}| of=people>${id}${name}</for>");
     expect(out).toBe(
-      "@for (mxRow of people; track $index) { @let id = mxRow.id; @let name = mxRow.name; {{ id }}{{ name }} }",
+      "@for (__mxRow of people; track $index) { @let id = __mxRow.id; @let name = __mxRow.name; {{ id }}{{ name }} }",
     );
     assertAngularParses(out);
   });
 
-  it("gensyms past a body reference to `mxRow` (R-b)", () => {
-    const out = emit("<for|{id}| of=people>${mxRow}${id}</for>");
+  it("gensyms past a body reference to `__mxRow` (R-b)", () => {
+    const out = emit("<for|{id}| of=people>${__mxRow}${id}</for>");
     expect(out).toBe(
-      "@for (mxRow1 of people; track $index) { @let id = mxRow1.id; {{ mxRow }}{{ id }} }",
+      "@for (__mxRow1 of people; track $index) { @let id = __mxRow1.id; {{ __mxRow }}{{ id }} }",
     );
     assertAngularParses(out);
   });
 
   it("gensyms past a <const/mxRow=.../> declared before the loop (R-b)", () => {
+    // The row binding is now the `__mx`-reserved `__mxRow`, which no authored
+    // binding can take, so the name-avoidance here is defence in depth
+    // against generated-vs-generated names rather than the load-bearing guard
+    // it was when the base was `mxRow`.
     const out = emit("<const/mxRow=1/><for|{id}| of=people>${id}</for>");
     expect(out).toBe(
-      "@let mxRow = 1;@for (mxRow1 of people; track $index) { @let id = mxRow1.id; {{ id }} }",
+      "@let mxRow = 1;@for (__mxRow of people; track $index) { @let id = __mxRow.id; {{ id }} }",
     );
     assertAngularParses(out);
   });
@@ -242,7 +272,7 @@ describe("For destructured params", () => {
   it("gives two nested destructured <for>s' rows distinct names, not a shadow", () => {
     const out = emit("<for|{a}| of=xs><for|{b}| of=ys>${a}${b}</for></for>");
     expect(out).toBe(
-      "@for (mxRow of xs; track $index) { @let a = mxRow.a; @for (mxRow1 of ys; track $index) { @let b = mxRow1.b; {{ a }}{{ b }} } }",
+      "@for (__mxRow of xs; track $index) { @let a = __mxRow.a; @for (__mxRow1 of ys; track $index) { @let b = __mxRow1.b; {{ a }}{{ b }} } }",
     );
     assertAngularParses(out);
   });
@@ -252,7 +282,7 @@ describe("For destructured params", () => {
       "<for|mxRow| of=xs><for|{a}| of=ys>${a}${mxRow}</for></for>",
     );
     expect(out).toBe(
-      "@for (mxRow of xs; track $index) { @for (mxRow1 of ys; track $index) { @let a = mxRow1.a; {{ a }}{{ mxRow }} } }",
+      "@for (mxRow of xs; track $index) { @for (__mxRow of ys; track $index) { @let a = __mxRow.a; {{ a }}{{ mxRow }} } }",
     );
     assertAngularParses(out);
   });

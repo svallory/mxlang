@@ -465,7 +465,7 @@ describe("for: ranges lower to <Repeat>", () => {
     expect(err.pos).toBe(source.indexOf("step=") + "step=".length);
   });
 
-  it("lowers step= to <Repeat count={...}>{(mxIndex) => { const i = ...; return body; }}</Repeat>", () => {
+  it("lowers step= to <Repeat count={...}>{(__mxIndex) => { const i = ...; return body; }}</Repeat>", () => {
     const list = listAttrs(
       `const el = <for|i| from=0 to=9 step=2><li>x</li></for>;`,
     );
@@ -490,7 +490,7 @@ describe("for: ranges lower to <Repeat>", () => {
       };
     };
     expect(arrow.params).toHaveLength(1);
-    expect(arrow.params[0]?.name).toBe("mxIndex");
+    expect(arrow.params[0]?.name).toBe("__mxIndex");
     expect(arrow.body.type).toBe("BlockStatement");
     const [decl, ret] = arrow.body.body;
     expect(decl.type).toBe("VariableDeclaration");
@@ -565,19 +565,24 @@ describe("for: ranges lower to <Repeat>", () => {
     expect(list.attr("count")?.value).toBe(0);
   });
 
-  it("picks a hygienic counter name when the body already uses mxIndex", () => {
+  it("leaves an authored `mxIndex` alone: the counter is `__mxIndex`", () => {
+    // The counter used to be `mxIndex` and was disambiguated away from
+    // anything already in scope. It is now `__mx`-reserved, so no authored
+    // name can reach it and there is nothing to disambiguate against — the
+    // case this test used to cover is what
+    // `range-loop-name-collision.test.ts` renders.
     const list = listAttrs(
       `const el = <for|i| from=0 to=9 step=2><li>\${mxIndex}</li></for>;`,
     );
     const arrow = list.callback as unknown as {
       params: { name: string }[];
     };
-    expect(arrow.params[0]?.name).toBe("mxIndex2");
+    expect(arrow.params[0]?.name).toBe("__mxIndex");
   });
 
-  it("picks a hygienic counter name when the author's own param is named mxIndex", () => {
-    // <for|mxIndex| ...> must not emit `(mxIndex) => { const mxIndex = ...
-    // }` — a duplicate declaration shadowing the very param it reads from.
+  it("leaves an author's own `mxIndex` param alone: the counter is `__mxIndex`", () => {
+    // <for|mxIndex| ...> must not emit `(__mxIndex) => { const mxIndex = ...
+    // }` shadowing the param it derives the row from.
     const list = listAttrs(
       `const el = <for|mxIndex| from=0 to=9 step=1><li>x</li></for>;`,
     );
@@ -587,7 +592,7 @@ describe("for: ranges lower to <Repeat>", () => {
         body: [{ declarations: [{ id: { name: string } }] }, unknown];
       };
     };
-    expect(arrow.params[0]?.name).toBe("mxIndex2");
+    expect(arrow.params[0]?.name).toBe("__mxIndex");
     expect(arrow.body.body[0]?.declarations[0]?.id.name).toBe("mxIndex");
   });
 

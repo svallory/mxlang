@@ -196,7 +196,7 @@ Three facts worth knowing before touching it:
   statement position to live in — the identical wall `hoistedImports`
   already hits for a discovered tag's import. `SolidEmitter.define`
   collects each top-level `Define` node it processes into a module-level
-  `function $mx_DefineN(params) { return <>...</>; }` (`hoistedDefines`,
+  `function __mx_DefineN(params) { return <>...</>; }` (`hoistedDefines`,
   collected the same one-emit-pass way `collectReturnVars` already gathers
   `/var` names and the escape-import flag), gensyms its binding
   (`generatedDefineBinding` — always fresh, never the author's own name,
@@ -238,7 +238,7 @@ Three facts worth knowing before touching it:
   **On Solid, a `<define>` call is a plain function-call expression, not a
   JSX tag.** Every other `Component` target prints an ordinary `<Tag
   .../>` element; JSX has no positional-call syntax, so
-  `SolidEmitter.#defineComponent` instead emits `{$mx_DefineRowN(...)}` —
+  `SolidEmitter.#defineComponent` instead emits `{__mx_DefineRowN(...)}` —
   the same call shape `@mxlang/html`'s `<define>` already uses (decision
   109). Args fill the declared params positionally; any params beyond the
   args are filled by name from attrs/attribute tags/`content`
@@ -271,7 +271,7 @@ Three facts worth knowing before touching it:
     variables between both callers, with no per-caller gate, was the bug.
   - **A gensym is unique only *within its own region*.** Two regions in
     one file each declaring `<define/Row>` independently mint the
-    identical `$mx_DefineRow1` — a host compiling one region has no
+    identical `__mx_DefineRow1` — a host compiling one region has no
     visibility of another's choices. `packages/parser/src/index.ts`'s
     `hoistRegionImports` now runs a collision pass across every region's
     `HoistedDefine` entries after collecting them (paired with the

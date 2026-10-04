@@ -12,6 +12,7 @@
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
+- **Fix (range-loop-name-collision):** a `<for from/to>` mapper's own parameters are named `__mxUnused`/`__mxIndex` instead of `_`/`mxIndex`. Both are in scope for the authored `from`/`to`/`step` expressions written inside the same callback, so an authored `_` or `mxIndex` was shadowed and the loop rendered wrong values silently: `<const/_=5/>` with `<for|i| from=_ to=_+2>` rendered `NaN` three times, and `<const/mxIndex=10/>` with `<for|i| from=mxIndex to=mxIndex+1>` rendered `0, 2`. `until=` alone was never affected (its bound goes into the row count, outside the callback). `__mx` is reserved, so authored code can no longer take either name. Rendered regressions cover Preact, React and Hono. Shared emitter.
 - **Fix (reserve-mx-identifiers):** generated dynamic helpers, body/return temporaries and component aliases use `__mx` names. Generated imports alias class, fragment and boundary helpers without changing public exports. Shared with React and Hono; rendered collision regressions cover all three.
 
 - **Fix (attr-value-parity review):** hoist native value/spread guards once per module, including nested definitions and dynamic tags. Reject ordinary function/symbol values with Marko debug text while preserving event handlers and framework props. Shared with React and Hono.

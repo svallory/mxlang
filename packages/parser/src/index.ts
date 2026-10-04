@@ -385,7 +385,7 @@ function hoistRegionImports(file: File, filename: string): void {
   // A hoisted define's gensym is only unique *within its own region* — a
   // host has no visibility of another region's choices — so two regions in
   // one file each declaring `<define/Row>` can independently mint the
-  // identical binding (`$mx_DefineRow1`), which would otherwise splice two
+  // identical binding (`__mx_DefineRow1`), which would otherwise splice two
   // functions of the same name into one module scope (a `SyntaxError`,
   // duplicate lexical/function binding). Rename every collision but the
   // first occurrence, against a pool seeded with every binding this module

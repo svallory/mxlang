@@ -6,6 +6,7 @@
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
+- **Test (range-loop-name-collision):** pinned, with no code change, that this host never had the range-mapper shadowing bug the JSX, Solid and Astro hosts had. A range binds its own `__mxForN` temporaries for `from`/`to` *before* the `for` opens, so no generated binding is ever in scope where an authored expression is evaluated; `step=` is rejected outright. Rendered regressions guard the shape.
 - **Fix (html-direct-null-attr-empty):** omit native `null`, `undefined` and `false` attributes on direct, bound, colon, merged-spread and dynamic-native paths. Preserve `true`, zero, empty strings and NaN as Marko does, including `aria-*` and `data-*`. Class/style primitive presence, controlled direct `input.checked`, and dynamic void tags now match real Marko 6.3.51 renders. Expressions still run once, and the single hoisted native-value guard remains active.
 
 - **Fix (reserve-mx-identifiers):** private render helpers, buffers and temporaries now use the reserved `__mx` prefix, including attribute-writer capture, structured-text and spread locals. The public `escape` export is unchanged and generated imports alias it privately. Authored bindings with the old helper names no longer shadow generated code.

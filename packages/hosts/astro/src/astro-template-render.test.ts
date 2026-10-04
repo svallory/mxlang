@@ -525,3 +525,46 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
     expect(code).toContain('<Card title="t" />');
   });
 });
+
+/**
+ * An `.astro.mx` range lowers to `Array.from({ length: … }, (_, $i) =>
+ * (from) + $i)`, so both mapper parameters are in scope for the author's own
+ * `from`/`to` expressions, which are written inside the same callback. The
+ * generated `_` therefore shadowed an authored `_` declared in the `---`
+ * fence and the loop rendered `NaN` once per row. `until=` alone was never
+ * affected: its bound goes into the row *count*, computed outside the
+ * callback.
+ *
+ * Rendered through the real Astro compiler and the Astro container (the
+ * harness at the top of this file), not asserted as lowering text.
+ */
+describe("<for> range bounds are not shadowed by the mapper's own params", () => {
+  it("renders `_` bounds, where the mapper's unused `_` used to shadow them", async () => {
+    const html = await renderConditional(
+      "for-underscore",
+      "const _ = 5;",
+      "<for|i| from=_ to=_+2><b>${i}</b></for>",
+    );
+    expect(html).toBe("<b>5</b><b>6</b><b>7</b>");
+  });
+
+  it("renders `$i` bounds, where the mapper's counter used to shadow them", async () => {
+    const html = await renderConditional(
+      "for-dollar-i",
+      "const $i = 10;",
+      "<for|i| from=$i to=$i+1><b>${i}</b></for>",
+    );
+    expect(html).toBe("<b>10</b><b>11</b>");
+  });
+
+  it("still honours an exclusive `until=` bound", async () => {
+    const html = await renderConditional(
+      "for-until-underscore",
+      "const _ = 5;",
+      "<for|i| until=_+2><b>${i}</b></for>",
+    );
+    expect(html).toBe(
+      "<b>0</b><b>1</b><b>2</b><b>3</b><b>4</b><b>5</b><b>6</b>",
+    );
+  });
+});

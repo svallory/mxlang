@@ -75,8 +75,8 @@ export function Lists() {
  }), _el$5);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 5,
- children: (mxIndex) => {
- const i = 0 + mxIndex * 2;
+ children: (__mxIndex) => {
+ const i = 0 + __mxIndex * 2;
  var _el$16 = _tmpl$6();
  _$insert(_el$16, i);
  return _el$16;
@@ -84,8 +84,8 @@ export function Lists() {
  }), _el$6);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 6,
- children: (mxIndex) => {
- const i = 10 + mxIndex * -2;
+ children: (__mxIndex) => {
+ const i = 10 + __mxIndex * -2;
  var _el$17 = _tmpl$6();
  _$insert(_el$17, i);
  return _el$17;
@@ -93,8 +93,8 @@ export function Lists() {
  }), _el$7);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 4,
- children: (mxIndex) => {
- const i = 0 + mxIndex * 3;
+ children: (__mxIndex) => {
+ const i = 0 + __mxIndex * 3;
  var _el$18 = _tmpl$6();
  _$insert(_el$18, i);
  return _el$18;

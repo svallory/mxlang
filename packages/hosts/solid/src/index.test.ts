@@ -207,7 +207,7 @@ describe("Solid IR lowering", () => {
     [
       "stepped range",
       `<for|n| from=2 to=8 step=2><p>\${n}</p></for>`,
-      ["<Repeat count={4}>", "const n = (2) + mxIndex * (2);"],
+      ["<Repeat count={4}>", "const n = (2) + __mxIndex * (2);"],
     ],
     [
       "try boundary",
@@ -746,7 +746,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     expect(result.hoistedDefines).toHaveLength(1);
     const [hoisted] = result.hoistedDefines;
     expect(hoisted?.code).toMatch(
-      /^function \$mx_DefineRow1\(\) \{ return .*x.*; \}$/,
+      /^function __mx_DefineRow1\(\) \{ return .*x.*; \}$/,
     );
     // JSX has no positional-call syntax, so a <define> call is a plain
     // function-call expression, not a JSX tag — the same call shape
@@ -760,7 +760,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
       `<define/Row|item, i|><li>\${item}-\${i}</li></define><Row(input.name, 0)/>`,
     );
     const [hoisted] = result.hoistedDefines;
-    expect(hoisted?.code).toContain("function $mx_DefineRow1(item, i)");
+    expect(hoisted?.code).toContain("function __mx_DefineRow1(item, i)");
     expect(result.code).toContain(`{${hoisted?.binding}(input.name, 0)}`);
   });
 
@@ -808,7 +808,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     expect(result.hoistedDefines).toHaveLength(2);
     const bindings = result.hoistedDefines.map((d) => d.binding);
     expect(new Set(bindings).size).toBe(2);
-    for (const binding of bindings) expect(binding).toMatch(/^\$mx_Define/);
+    for (const binding of bindings) expect(binding).toMatch(/^__mx_Define/);
   });
 
   it("rejects a <define> nested inside <for>/<if> with a positioned error", () => {
@@ -871,7 +871,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     // Regression: `generatedDefineBinding`'s uniqueness check is scoped to
     // one region's own `defineBindings`, freshly created per
     // `compileSolidMx` call — two independent regions each declaring
-    // `<define/Row>` used to mint the identical `$mx_DefineRow1`, spliced
+    // `<define/Row>` used to mint the identical `__mx_DefineRow1`, spliced
     // as two functions of the same name into one module (a SyntaxError).
     // Exercised through the real `parse()` pipeline, since the collision
     // is only visible once both regions' hoisted defines reach the same
@@ -898,8 +898,8 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
       (node) => node.type === "FunctionDeclaration",
     ) as Array<{ id?: { name?: string } }>;
     const names = declared.map((node) => node.id?.name).filter(Boolean);
-    // Two `$mx_DefineRowN` module-scope functions, under two distinct names.
-    const defineNames = names.filter((name) => name?.startsWith("$mx_Define"));
+    // Two `__mx_DefineRowN` module-scope functions, under two distinct names.
+    const defineNames = names.filter((name) => name?.startsWith("__mx_Define"));
     expect(defineNames).toHaveLength(2);
     expect(new Set(defineNames).size).toBe(2);
   });
@@ -918,7 +918,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
       "}",
       "export function B() {",
       "  return (<div><define/Row>",
-      '    ${"function $mx_DefineRow1(" /* not a real function $mx_DefineRow1( */}',
+      '    ${"function __mx_DefineRow1(" /* not a real function __mx_DefineRow1( */}',
       "  </define><Row/></div>);",
       "}",
     ].join("\n");
@@ -938,64 +938,44 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     const defineNames = declared
       .map((node) => node.id?.name)
       .filter((name): name is string =>
-        Boolean(name?.startsWith("$mx_Define")),
+        Boolean(name?.startsWith("__mx_Define")),
       );
     // Both hoisted module-scope functions, under two distinct names — the
     // second region's declaration was renamed, its decoy string/comment left
     // exactly as authored.
     expect(defineNames).toHaveLength(2);
     expect(new Set(defineNames).size).toBe(2);
-    // The renamed declaration is `$mx_DefineRow1_2`; the decoy string
-    // literal inside its own body is still spelled `$mx_DefineRow1`,
+    // The renamed declaration is `__mx_DefineRow1_2`; the decoy string
+    // literal inside its own body is still spelled `__mx_DefineRow1`,
     // untouched by the rename that renamed only the declaration's `id`.
-    expect(defineNames).toContain("$mx_DefineRow1_2");
+    expect(defineNames).toContain("__mx_DefineRow1_2");
     const printed = JSON.stringify(program.body);
-    expect(printed).toContain('"function $mx_DefineRow1("');
+    expect(printed).toContain('"function __mx_DefineRow1("');
   });
 
-  it("does not corrupt $mx_DefineRow1 when a fresh binding needs $mx_DefineRow10", () => {
-    // `freshDefineBinding` mints `<binding>_2`, `<binding>_3`, ... so this
-    // guards a different prefix hazard: a module already using a name whose
-    // *own* text contains another binding's name as a strict prefix
-    // (`$mx_DefineRow1` is a prefix of `$mx_DefineRow10`). Renaming via the
-    // AST's `id.name` assignment is exact regardless of prefix relationships
-    // between bindings — nothing here is spelled as a pattern match.
+  it("cannot be collided with from module scope: `__mx_Define*` is reserved", () => {
+    // `freshDefineBinding` mints `<binding>_2`, `<binding>_3`, ... behind a
+    // `taken` set, which is a name-avoidance check, not a guarantee: what
+    // actually guarantees it is that the minted base is `__mx`-prefixed and
+    // `checkReservedBindings` rejects an authored `__mx` binding outright. The
+    // old prefix hazard this test used to set up (`__mx_DefineRow1` being a
+    // strict prefix of an authored `__mx_DefineRow10`) is unreachable by
+    // construction, so this pins the construction instead of the hazard.
     const source = [
-      "const $mx_DefineRow10 = 1;",
+      "const __mx_DefineRow10 = 1;",
       "export function A() {",
-      "  return (<div>{$mx_DefineRow10}<define/Row>a</define><Row/></div>);",
-      "}",
-      "export function B() {",
-      "  return (<div><define/Row>b</define><Row/></div>);",
+      "  return (<div>{__mx_DefineRow10}<define/Row>a</define><Row/></div>);",
       "}",
     ].join("\n");
     const solidRegionCompile = (
       input: Parameters<typeof compileSolidMx>[1] & { source: string },
     ) => compileSolidMx(input.source, input);
-    const file = parseMxFile(source, "define-prefix-collision.solid.mx", {
-      // biome-ignore lint/suspicious/noExplicitAny: MxRegionCompile shape, avoiding a parser<->solid type cycle in a test
-      mxRegionCompile: solidRegionCompile as any,
-    });
-    const program = file.program as unknown as {
-      body: Array<{ type?: string; id?: { name?: string } }>;
-    };
-    const declared = program.body.filter(
-      (node) => node.type === "FunctionDeclaration",
-    );
-    const defineNames = declared
-      .map((node) => node.id?.name)
-      .filter((name): name is string =>
-        Boolean(name?.startsWith("$mx_Define")),
-      );
-    expect(defineNames).toHaveLength(2);
-    expect(new Set(defineNames).size).toBe(2);
-    // The pre-existing module-scope `const` is untouched.
-    const constDecl = program.body.find(
-      (node) => node.type === "VariableDeclaration",
-    ) as unknown as {
-      declarations: Array<{ id?: { name?: string } }>;
-    };
-    expect(constDecl?.declarations[0]?.id?.name).toBe("$mx_DefineRow10");
+    expect(() =>
+      parseMxFile(source, "define-prefix-collision.solid.mx", {
+        // biome-ignore lint/suspicious/noExplicitAny: MxRegionCompile shape, avoiding a parser<->solid type cycle in a test
+        mxRegionCompile: solidRegionCompile as any,
+      }),
+    ).toThrow(/Identifiers starting with "__mx" are reserved/);
   });
 });
 
@@ -1049,10 +1029,10 @@ describe("compileSolidUnit", () => {
     const code = unitOf("panel.mx");
 
     expect(code).toMatch(/export interface Input \{[^}]*\}/);
-    // `panel.mx` reads `input.content`, so its parameter is `$mxProps` and
+    // `panel.mx` reads `input.content`, so its parameter is `__mxProps` and
     // `input` is the body-channel view over it (see `body-content.test.ts`);
     // a unit that never reads the body keeps `(input: Input)`.
-    expect(code).toContain("export default function Panel($mxProps: Input)");
+    expect(code).toContain("export default function Panel(__mxProps: Input)");
     expect(code).toContain("as Input & { content?: unknown }");
     // The body that reads `input.title` is still emitted.
     expect(code).toContain("input.title");

@@ -332,7 +332,7 @@ describe("Solid: a `{`-led body is a JSX value in every splice position", () => 
       { filename: "fixture.solid.mx" },
     );
     const region = result.code;
-    expect(region).not.toMatch(/\(\{\$mx_Define/);
+    expect(region).not.toMatch(/\({__mx_Define/);
     const module = [
       ...result.hoistedDefines.map((d) => d.code),
       `export const view = <div>${region}</div>;`,

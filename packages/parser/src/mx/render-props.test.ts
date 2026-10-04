@@ -484,6 +484,6 @@ describe("solidmx-multiline-region repro", () => {
         plugins: ["typescript", "jsx"],
       }),
     ).not.toThrow();
-    expect(code).toContain("0 + mxIndex * 2");
+    expect(code).toContain("0 + __mxIndex * 2");
   });
 });

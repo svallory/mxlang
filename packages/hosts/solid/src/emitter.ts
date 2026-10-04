@@ -65,8 +65,10 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
  * Solid author may reasonably expect a signal — a tag wanting reactivity
  * should return an accessor for the caller to call.
  *
- * Carries the `$mx` prefix every generated name here uses, so it cannot
- * collide with a prop an author declares in the unit's own `Input`.
+ * Carries the `__mx` prefix every generated *binding* here uses, so it cannot
+ * collide with a prop an author declares in the unit's own `Input`. (It is a
+ * property name, not a binding, so it is the one name that is not simply
+ * `__mx`-reserved.)
  */
 export const MX_RETURN_PROP = "$mxReturn";
 
@@ -137,7 +139,7 @@ let hoistedDefines: HoistedSolidDefine[] | null = null;
 
 /** One `<define>` hoisted during the current compile. */
 export interface HoistedSolidDefine {
-  /** The `function $mx_DefineN(params) { return <>...</>; }` text. */
+  /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
   code: string;
   /** The gensym'd module-scope binding a `Component` call site now uses. */
   binding: string;
@@ -175,7 +177,7 @@ function generatedDefineBinding(
   let n = 0;
   let binding: string;
   do {
-    binding = `$mx_Define${hint}${++n}`;
+    binding = `__mx_Define${hint}${++n}`;
   } while (taken.has(binding));
   return binding;
 }
@@ -1031,7 +1033,7 @@ function blockExpression(nodes: IrNode[]): MappedCode {
  * Makes a rendered body safe to splice where a JSX *value* is required: an
  * arrow body (`=> BODY`), a `fallback={BODY}` attribute value, or a call
  * argument. A body this emitter renders as `{…}` (the inlined dispatch of a
- * dynamic target, `{(() => …)()}`, or a `<define>` call, `{$mx_DefineR1(…)}`)
+ * dynamic target, `{(() => …)()}`, or a `<define>` call, `{__mx_DefineR1(…)}`)
  * is a JSX expression container, not a value: after `=>` the `{` opens a
  * BLOCK body, so the callback returns `undefined` and the row renders nothing,
  * and inside `fallback={…}` or an argument list it is an object literal, a
@@ -1230,6 +1232,21 @@ function hygienicName(
   return `${preferred}${index}`;
 }
 
+/**
+ * The two bindings an `<for from/to>` mapper names in its own parameter list.
+ *
+ * `Array.from`'s mapper takes `(value, index)`, and both are in scope for the
+ * whole callback body — which is also where the author's own `from`/`to`/
+ * `step` expressions are written. A generated `_` or `mxIndex` there
+ * therefore *shadowed* an authored binding of the same name, silently:
+ * `<for|i| from=mxIndex to=mxIndex+4 step=2>` rendered `0, 3, 6` where the
+ * author wrote `10, 12, 14`. `__mx` is reserved by `checkReservedBindings`,
+ * so no authored binding can take either name.
+ */
+const RANGE_MAPPER_UNUSED = "__mxUnused";
+const rangeCounter = (params: readonly string[], body: string): string =>
+  hygienicName("__mxIndex", params, body);
+
 function attributeTagArrayNode(
   node: AttributeTagNode,
   as: AttrTagProp["as"],
@@ -1323,7 +1340,7 @@ function attributeTagFor(
   const from = source.from?.code ?? "0";
   const bound = source.bound.code;
   const step = source.step;
-  const counter = hygienicName("mxIndex", loop.params, body.code);
+  const counter = rangeCounter(loop.params, body.code);
   const span = step
     ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
     : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
@@ -1331,7 +1348,7 @@ function attributeTagFor(
     ? `(${from}) + ${counter} * (${step.code})`
     : `(${from}) + ${counter}`;
   return result(
-    `Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value})`,
+    `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value})`,
     `${first}, ${itemIndex}`,
   );
 }
@@ -1374,12 +1391,20 @@ function identifierNames(text: string): Set<string> {
 }
 
 function hygienicIndex(params: string[], body: string): string {
-  const used = identifierNames(`${params.join(" ")} ${body}`);
-  if (!used.has("mxIndex")) return "mxIndex";
-  let index = 2;
-  while (used.has(`mxIndex${index}`)) index++;
-  return `mxIndex${index}`;
+  return hygienicName("__mxIndex", params, body);
 }
+
+/**
+ * The `<for step=...>` mapper's own binding, and why it is `__mx`-prefixed.
+ *
+ * With a step, the row value is derived from the index *inside* Solid's
+ * `<Repeat>` callback, so the callback's parameter is in scope for the
+ * author's own `from`/`step` expressions: `<Repeat count={…}>{(mxIndex) => {
+ * const i = (mxIndex) + mxIndex * (2); …`. A generated `mxIndex` shadowed an
+ * authored binding of the same name and the loop rendered `0, 3, 6` where the
+ * author wrote `10, 12, 14`. `__mx` is reserved by `checkReservedBindings`,
+ * so no authored binding can take this name.
+ */
 
 /**
  * Every identifier appearing anywhere in a `<for>`'s body or params.
@@ -1687,7 +1712,7 @@ export class SolidEmitter implements Emitter<string> {
    *
    * JSX has no positional-call syntax, so unlike a `"name"`-target
    * component (an ordinary `<Tag .../>` element), a hoisted `<define>` is
-   * called as a **plain function expression**, `{$mx_DefineRow1(...)}` —
+   * called as a **plain function expression**, `{__mx_DefineRow1(...)}` —
    * exactly `@mxlang/html`'s own `<define>` call shape (decision 109's
    * named-param binding), because a hoisted `<define>` is, at the JS level,
    * exactly what html's already is: an ordinary function, not a Solid

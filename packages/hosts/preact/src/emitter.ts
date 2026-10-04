@@ -390,6 +390,25 @@ function hygienicName(base: string, params: string[], body: string): string {
   return `${base}${index}`;
 }
 
+/**
+ * The two bindings an `<for from/to>` mapper names in its own parameter list.
+ *
+ * `Array.from`'s mapper takes `(value, index)`, and both are in scope for the
+ * whole callback body — which is also where the author's own `from`/`to`/
+ * `step` expressions are written, because the row value has to be derived
+ * from the index. A generated `_` or `mxIndex` there therefore *shadowed* an
+ * authored binding of the same name, silently: `<const/_=5/>` with
+ * `<for|i| from=_ to=_+2>` rendered `NaN` three times, and
+ * `<const/mxIndex=10/>` with `<for|i| from=mxIndex to=mxIndex+1>` rendered
+ * `0, 2`. `__mx` is reserved by `checkReservedBindings`, so no authored
+ * binding can take either of these names. (The html host had no version of
+ * this bug: it binds its own `__mxForN` temporaries *before* the loop opens,
+ * which is the other fix.)
+ */
+const RANGE_MAPPER_UNUSED = "__mxUnused";
+const rangeCounter = (params: string[], body: string): string =>
+  hygienicName("__mxIndex", params, body);
+
 /** Preact JSX text emitter over the shared core IR. */
 export class PreactEmitter implements Emitter<string> {
   readonly #out: MappedCode[] = [];
@@ -1251,7 +1270,7 @@ export class PreactEmitter implements Emitter<string> {
     const from = source.from?.code ?? "0";
     const bound = source.bound.code;
     const step = source.step;
-    const counter = hygienicName("mxIndex", loop.params, body.code);
+    const counter = rangeCounter(loop.params, body.code);
     const span = step
       ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
       : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
@@ -1259,7 +1278,7 @@ export class PreactEmitter implements Emitter<string> {
       ? `(${from}) + ${counter} * (${step.code})`
       : `(${from}) + ${counter}`;
     return result(
-      `Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value})`,
+      `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value})`,
       `${first}, ${itemIndex}`,
     );
   }
@@ -1760,7 +1779,7 @@ export class PreactEmitter implements Emitter<string> {
     const from = source.from?.code ?? "0";
     const bound = source.bound.code;
     const step = source.step;
-    const counter = hygienicName("mxIndex", node.params, body.code);
+    const counter = rangeCounter(node.params, body.code);
     // The row count, computed the same way for both bound forms: `to=` is
     // inclusive, `until=` is not. `Math.max(0, …)` is what makes a backwards
     // or empty range render nothing rather than throwing on a negative length.
@@ -1779,7 +1798,7 @@ export class PreactEmitter implements Emitter<string> {
     const key = keyFrom(first);
     this.#out.push(
       concatMapped(
-        `{Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
+        `{Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
         body,
         "</__mxFragment>)}",
       ),

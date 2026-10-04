@@ -74,13 +74,28 @@ Type-only names stay legal: a type parameter (`infer __mxU`, `[__mxK in keyof
 T]`) and a `declare function`'s parameters cannot collide with an emitted
 binding, so they are not rejected.
 
-**Known gaps.** The reservation protects the `__mx` prefix only. Some generated
-names outside it are still source-allocated rather than reserved, and two
-families are known to still collide with an authored name: the Solid
-whole-unit `$mxProps`/`$mxBody`/`$mxValue` helpers and hoisted `$mx_Define*`
-tags, and the range mapper's `_` and `mxIndex` temporaries in the JSX and Solid
-hosts (`<const/_=5/>` with `<for|i| from=_ to=_+2>` renders wrong today).
-Those are tracked as follow-ups; reserving `__mx` does not claim to fix them.
+**Generated names must be `__mx`-reserved.** The reservation protects the
+`__mx` prefix only, so any *binding* a host generates is named inside it.
+That is not cosmetic: a range loop's own mapper parameters are in scope for
+the authored `from`/`to`/`step` expressions written inside the same callback,
+so a generated `_`/`mxIndex`/`$i` there silently shadowed an authored binding
+of the same name (`<const/_=5/>` with `<for|i| from=_ to=_+2>` rendered `NaN`
+three times). `range-loop-name-collision` moved those to `__mxUnused` /
+`__mxIndex` on every host, and moved the Solid whole-unit
+`$mxProps`/`$mxBody`/`$mxValue` helpers, the `$mxChildren`/`$mxMerge` imports
+and the hoisted `$mx_Define*` tags to the `__mx` set as well.
+
+Two carve-outs, both properties rather than bindings:
+
+- Solid's `$mxReturn` is a *property* name on the emitted `input`, not a
+  binding, so nothing can shadow it and its protocol is unchanged.
+- `htmljs-parser`-derived and imported *public* helper names keep their
+  spelling; generated imports alias them privately.
+
+A generated name that is source-allocated rather than reserved remains
+possible for a name MX does not choose the spelling of (a discovered tag's
+natural name, an imported callee); those are handled by name avoidance against
+the names already in scope, not by the prefix.
 
 ### The governing rule
 
@@ -1011,7 +1026,7 @@ else's module, so it has no statement position for `const Row = (...) =>
 ...;` the way html/preact's in-place `const` does — the same wall
 `hoistedImports` already hits for a discovered tag's synthesized import. The
 compiler resolves it the same way: `@mxlang/solid`'s emitter mints a
-gensym'd module-scope function (`$mx_DefineRowN`, never the author's own
+gensym'd module-scope function (`__mx_DefineRowN`, never the author's own
 name — see `packages/hosts/solid/AGENTS.md`), and `@mxlang/parser`'s bridge
 writes it into the surrounding module alongside any hoisted imports.
 A hoisted `<define>` must be a **direct top-level child of its region**
@@ -1023,7 +1038,7 @@ captured identifier, not silently wrong code. Both are hard limits, not
 `<define>`'s own rule: real module scope has no closure over the region's
 enclosing render function, and no per-row/per-branch scope for a nested one
 to close over either. On Solid, a `<define>` call is a plain function-call
-expression (`{$mx_DefineRowN(...)}`), not a JSX tag — JSX has no
+expression (`{__mx_DefineRowN(...)}`), not a JSX tag — JSX has no
 positional-call syntax — using the identical named-param binding closed item
 9 below describes for html/preact.
 

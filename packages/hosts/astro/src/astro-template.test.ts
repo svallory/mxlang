@@ -236,35 +236,35 @@ describe("<for>", () => {
   it("lowers the inclusive `to=` range to valid, balanced JavaScript", () => {
     const code = lower("<for|n| from=1 to=3><li>${n}</li></for>");
     expect(code).toBe(
-      "{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (_, $i) => (1) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+      "{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (__mxUnused, __mxIndex) => (1) + __mxIndex).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
     );
   });
 
   it("lowers the exclusive `until=` range to valid, balanced JavaScript", () => {
     const code = lower("<for|n| from=1 until=3><li>${n}</li></for>");
     expect(code).toBe(
-      "{Array.from({ length: Math.max(0, (3) - (1)) }, (_, $i) => (1) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+      "{Array.from({ length: Math.max(0, (3) - (1)) }, (__mxUnused, __mxIndex) => (1) + __mxIndex).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
     );
   });
 
   it("lowers a range with no `from=` (defaults to 0)", () => {
     const code = lower("<for|n| to=3><li>${n}</li></for>");
     expect(code).toBe(
-      "{Array.from({ length: Math.max(0, (3) - (0) + 1) }, (_, $i) => (0) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+      "{Array.from({ length: Math.max(0, (3) - (0) + 1) }, (__mxUnused, __mxIndex) => (0) + __mxIndex).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
     );
   });
 
   it("lowers a descending (from > to) range without throwing invalid JS", () => {
     const code = lower("<for|n| from=5 to=1><li>${n}</li></for>");
     expect(code).toBe(
-      "{Array.from({ length: Math.max(0, (1) - (5) + 1) }, (_, $i) => (5) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+      "{Array.from({ length: Math.max(0, (1) - (5) + 1) }, (__mxUnused, __mxIndex) => (5) + __mxIndex).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
     );
   });
 
   it("lowers expression bounds", () => {
     const code = lower("<for|n| from=start() to=count - 1><li>${n}</li></for>");
     expect(code).toBe(
-      "{Array.from({ length: Math.max(0, (count - 1) - (start()) + 1) }, (_, $i) => (start()) + $i).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
+      "{Array.from({ length: Math.max(0, (count - 1) - (start()) + 1) }, (__mxUnused, __mxIndex) => (start()) + __mxIndex).map((n) => (<Fragment><li>{n}</li></Fragment>))}",
     );
   });
 

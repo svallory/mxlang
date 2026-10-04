@@ -323,7 +323,7 @@ describe("<for> loops", () => {
 
   it("folds `step` into the emitted row value", () => {
     const out = markup("<for|i| from=1 to=9 step=2><b>${i}</b></for>");
-    expect(out).toContain("(1) + mxIndex * (2)");
+    expect(out).toContain("(1) + __mxIndex * (2)");
     expect(out).toContain("Math.floor(((9) - (1)) / (2)) + 1");
   });
 
@@ -333,10 +333,16 @@ describe("<for> loops", () => {
     );
   });
 
-  it("picks a non-colliding counter when the body already uses `mxIndex`", () => {
-    expect(
-      markup("<for|mxIndex| from=0 to=2 step=1><b>${mxIndex}</b></for>"),
-    ).toContain("mxIndex2");
+  it("names the counter `__mxIndex`, a name authored code cannot take", () => {
+    // The counter is in scope for the authored `from`/`to`/`step`
+    // expressions, which is why it must be a reserved `__mx` name and not a
+    // plausible author name: see `range-name-collision.test.ts`. The
+    // disambiguation `hygienicName` still does is unreachable for the base
+    // name — an authored `__mxIndex` is rejected at the binding — but it
+    // still guards the generated-name-versus-generated-name case.
+    expect(markup("<for|i| from=0 to=2><b>${i}</b></for>")).toContain(
+      "(__mxUnused, __mxIndex)",
+    );
   });
 });
 

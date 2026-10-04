@@ -1,7 +1,7 @@
 [
   {
     "item": {
-      "name": "mxEntry",
+      "name": "__mxEntry",
       "value": "$implicit"
     },
     "expression": {
@@ -25,7 +25,7 @@
       "ast": {
         "receiver": {
           "receiver": {},
-          "name": "mxEntry"
+          "name": "__mxEntry"
         },
         "name": "key"
       }
@@ -63,7 +63,7 @@
           "ast": {
             "receiver": {
               "receiver": {},
-              "name": "mxEntry"
+              "name": "__mxEntry"
             },
             "name": "key"
           }
@@ -75,7 +75,7 @@
           "ast": {
             "receiver": {
               "receiver": {},
-              "name": "mxEntry"
+              "name": "__mxEntry"
             },
             "name": "value"
           }

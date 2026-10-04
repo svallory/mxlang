@@ -10,6 +10,7 @@
 
   A fence syntax error now also reports the **file** position in its message text, 1-based in both line and column (#227), where it previously printed Babel's fence-relative one and pointed at the opening `---`. A break on the fence's third content line reports `(4,11)`. The structured `line`/`column` are unchanged, and both reporters (`mx-tsc`, Vite) still print one position, not two. Real Astro compiler/container renders pin both.
 
+- **Fix (range-loop-name-collision):** a `<for from/to>` mapper's own parameters are named `__mxUnused`/`__mxIndex` instead of `_`/`$i`. Both are in scope for the authored `from`/`to` expressions written inside the same callback, so a fence binding of the same name was shadowed and the loop rendered `NaN` once per row. `until=` alone was never affected. Pinned by real Astro compiler/container renders.
 - **Fix (reserve-mx-identifiers):** frontmatter bindings beginning with `__mx` receive core's shared positioned reservation error before generated native-attribute helpers are injected. Template bindings are checked by core too; ordinary property names remain legal.
 
 - **Fix (attr-value-parity review):** native guards are hoisted once into frontmatter, with authored mapping offsets retained. Ordinary function/symbol values receive Marko debug errors; null/false serialization remains unchanged.
