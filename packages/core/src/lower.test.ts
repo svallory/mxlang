@@ -3662,6 +3662,74 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     );
   });
 
+  it.each([
+    ["<div :/>", "value:", 5, 6],
+    ['<div value:foo:bar="y"/>', "value:foo:bar", 5, 18],
+    ["<div value:foo:bar/>", "value:foo:bar", 5, 18],
+    ['<div value:foo="y"/>', "value:foo", 5, 14],
+  ])(
+    "preserves Marko's full colon name and authored span: %s",
+    (source, name, start, end) => {
+      expect(find(lowerSource(source).body, "Element").attrs).toMatchObject([
+        {
+          kind: "static",
+          name,
+          nameSpan: { sourceStart: start, sourceEnd: end },
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    ['<div :="x"/>', 1, 7],
+    ['<div\n  :="x"/>', 2, 4],
+    ['<div :foo:="x"/>', 1, 11],
+    ["<div value:=f()/>", 1, 12],
+    ["<div value:=42/>", 1, 12],
+  ])("rejects an invalid binding at its value: %s", (source, line, column) => {
+    expect(() => lowerSource(source)).toThrow(
+      expect.objectContaining({
+        message:
+          "Attributes may only be bound to identifiers or member expressions",
+        line,
+        column,
+      }),
+    );
+  });
+
+  it.each(["x", "input.x", "input?.x", "input[key]"])(
+    "keeps a valid binding target: %s",
+    (value) => {
+      expect(
+        find(lowerSource(`<div value:=${value}/>`).body, "Element").attrs,
+      ).toMatchObject([
+        { kind: "bound", name: "value", value: { code: value } },
+      ]);
+    },
+  );
+
+  it.each([
+    ['<div :foo()="y"/>', "value:foo", 1, 5],
+    ['<div\n  :foo()="y"/>', "value:foo", 2, 2],
+    ['<div value:foo:bar()="y"/>', "value:foo:bar", 1, 5],
+  ])(
+    "names the full attribute in Marko's method error: %s",
+    (source, name, line, column) => {
+      expect(() =>
+        lowerSource(
+          source,
+          fakeDeclarations({ resolveAttributeMethod: () => true }),
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          message: `Unsupported arguments on the \`${name}\` attribute.`,
+          line,
+          column,
+        }),
+      );
+    },
+  );
+
   it("accepts the explicit `value:foo` spelling with the same meaning", () => {
     expect(
       find(lowerSource('<div value:foo="lit"/>').body, "Element").attrs,

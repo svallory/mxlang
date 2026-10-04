@@ -710,6 +710,35 @@ function methodExpression(expr: Expr): string | null {
 }
 
 function renderAttr(attr: Attr, mapName = false): MappedCode {
+  // JSX only permits one colon with a nonempty suffix. Preserve Marko's
+  // `value:` and `value:foo:bar` names as string keys in a prop spread.
+  if (
+    attr.kind !== "spread" &&
+    attr.kind !== "bound" &&
+    attr.kind !== "event" &&
+    attr.name.includes(":") &&
+    !/^[^:]+:[^:]+$/.test(attr.name)
+  ) {
+    const value =
+      attr.kind === "static"
+        ? JSON.stringify(attr.value)
+        : attr.kind === "boolean"
+          ? "true"
+          : (methodExpression(attr.value) ?? attr.value.code);
+    const valueSpan =
+      attr.kind === "static"
+        ? attr.valueSpan
+        : attr.kind === "dynamic"
+          ? attr.value.span
+          : undefined;
+    return concatMapped(
+      " {...{",
+      mapped(JSON.stringify(attr.name), mapName ? attr.nameSpan : null),
+      ": (",
+      mapped(value, valueSpan ?? null),
+      ")}}",
+    );
+  }
   switch (attr.kind) {
     case "spread":
       return concatMapped(` {...${attr.value.code}}`);

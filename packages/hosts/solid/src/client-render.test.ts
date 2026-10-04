@@ -180,6 +180,17 @@ function nodeIdFor(html: string, needle: string): string {
 }
 
 describe("Solid client render: live signal updates through the real DOM", () => {
+  it("preserves empty and multi-colon attribute names through JSX prop spreads", () => {
+    const { snapshots } = renderDomApp(
+      '<div :/><div value:foo:bar="y"/><div value:foo:baz=input.v/>',
+      'const input = { v: "hello" };',
+      "unused",
+      [],
+    );
+    expect(snapshots).toEqual([
+      '<ul><div value:=""></div><div value:foo:bar="y"></div><div value:foo:baz="hello"></div></ul>',
+    ]);
+  });
   it('re-renders a same-key row replacement under <for by="id">, keeping the surviving row\'s own DOM node and reacting to a value change on it', () => {
     const { snapshots } = renderDomApp(
       '<for|row| of=input.rows() by="id"><li>${row.name}</li></for>',

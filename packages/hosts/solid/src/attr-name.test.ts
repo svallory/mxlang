@@ -95,6 +95,19 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
     ).toContain("<div value:foo={y}>");
   });
 
+  it.each([
+    ["<div :/>", "value:", '""'],
+    ['<div value:foo:bar="y"/>', "value:foo:bar", '"y"'],
+    ["<div value:foo:bar=y/>", "value:foo:bar", "y"],
+  ])(
+    "uses a string-keyed spread for a name JSX cannot spell: %s",
+    (source, name, value) => {
+      expect(
+        compileSolidMx(source, { filename: "fixture.solid.mx" }).code,
+      ).toContain(` {...{${JSON.stringify(name)}: (${value})}}`);
+    },
+  );
+
   it("still refuses a real modifier, in this host's words", () => {
     expect(failure(`<div class:active=c/>`).message).toContain(
       "attribute modifier `class:active` is not supported by Solid",

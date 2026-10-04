@@ -543,6 +543,30 @@ export class PreactEmitter implements Emitter<string> {
         attr.nameSpan !== null &&
         attr.nameSpan.sourceEnd > attr.nameSpan.sourceStart;
     }
+    // A JSXNamespacedName has exactly two nonempty pieces. Marko also
+    // accepts `value:` and `value:foo:bar`; a string-keyed spread carries the
+    // exact prop through every JSX frontend without emitting invalid JSX.
+    if (
+      attr.kind !== "spread" &&
+      attr.kind !== "bound" &&
+      attr.kind !== "event" &&
+      attr.name.includes(":") &&
+      !/^[^:]+:[^:]+$/.test(attr.name)
+    ) {
+      const valueSpan =
+        attr.kind === "static"
+          ? attr.valueSpan
+          : attr.kind === "dynamic"
+            ? attr.value.span
+            : undefined;
+      return concatMapped(
+        " {...{",
+        mapped(JSON.stringify(attr.name), mapName ? attr.nameSpan : null),
+        ": (",
+        mapped(this.#attrValue(attr), valueSpan ?? null),
+        ")}}",
+      );
+    }
     switch (attr.kind) {
       case "spread":
         return concatMapped(` {...${attr.value.code}}`);

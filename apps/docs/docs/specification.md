@@ -523,14 +523,29 @@ using them compiles. Where a host is reached anyway, core raises:
 |---|---|
 | `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in a standalone template` | A modifier survived to the lowerer and the host's `resolveModifier` declined it. |
 
-### `:modifier` — the one modifier form Marko accepts
+### `:modifier` — ordinary `value:` attribute names
 
 Marko's parser splits an attribute name at its **last** `:` and fills an empty
 head with `value` (`babel-plugin/parser.js`, `onAttrName`). So `<div :foo="y"/>`
 is not a modifier at all: it is one attribute literally named `value:foo`,
 which Marko compiles and renders as `<div value:foo=y>`. The long spelling
 (`<div value:foo="y"/>`) is the same attribute, and `<div :foo:a="y"/>` is a
-parse error in both.
+parse error in both. An empty modifier still contributes its colon: `<div :/>`
+means an attribute named `value:` with an empty value. An explicit head can
+already contain colons: `<div value:foo:bar="y"/>` splits into the head
+`value:foo` and modifier `bar`, then emits the complete name `value:foo:bar`.
+JSX cannot spell an empty namespace suffix or multiple colons as an attribute;
+preact/react/hono and Solid carry these names through string-keyed object
+spreads instead, without changing the prop name or value.
+
+Arguments on these ordinary attributes are rejected at the authored name:
+`<div :foo()="y"/>` reports `Unsupported arguments on the \`value:foo\` attribute.`
+A binding (`:=`) is a different form and keeps the base name. Its target must
+be an identifier or a member expression (including optional members, excluding
+private members); otherwise core reports Marko's `Attributes may only be bound
+to identifiers or member expressions` at the value. For example,
+`<div :="x"/>` errors at structured line 1, column 7 (printed 1:8), rather than
+silently rendering `value="x"`. Host-specific binding support is unchanged.
 
 | Authored | Meaning | html | preact/react/hono | solid | `.astro.mx` | angular |
 |---|---|---|---|---|---|---|

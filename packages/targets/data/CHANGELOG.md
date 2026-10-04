@@ -3,6 +3,7 @@
 ## 0.1.0-alpha.1
 
 First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 below. `@mxlang/data` is now publishable: it builds to `dist/` with declarations (`.`, `./descriptor`, `./tree`), is no longer `private`, and depends on `@mxlang/core` at the same alpha (the `workspace:*` range is rewritten at `bun publish`) and on `@babel/types` (the shipped `tree.d.ts` imports it). Unstable API.
+
 ## 0.1.0 (unreleased)
 
 - **Fix: a registration error with no source position is a file-level diagnostic.** A `customTags` registration error (for example a `finalize`-only declaration, a contradictory attribute declaration, an unknown key in a `children` declaration) comes from core at 0:0. `parseData` now reports it at `line: 1`, `column: 0`, `offset: 0` instead of `line: 0` and `offset` equal to the source length, so `DataDiagnostic.line` stays 1-based. A warning at 0:0 gets the same treatment, and the caller's `warnings` array is not mutated. The message is unchanged; a diagnostic with a real position is untouched, and one in another file keeps `offset: -1`.

@@ -139,6 +139,15 @@ describe("`:modifier` renders as the attribute `value:modifier` (astro)", () => 
     expect(html).toContain(`value:bar=""`);
   });
 
+  it("renders the empty and multi-colon names without dropping a colon", async () => {
+    const html = await renderPlain(
+      "value-modifier-colons",
+      ["<div :/>", '<div value:foo:bar="y"/>'].join("\n"),
+    );
+    expect(html).toContain('value:=""');
+    expect(html).toContain('value:foo:bar="y"');
+  });
+
   it("renders the interpolated form", async () => {
     const html = await renderConditional(
       "value-modifier-dynamic",

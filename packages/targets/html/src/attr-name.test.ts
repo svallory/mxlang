@@ -94,6 +94,46 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
     );
   });
 
+  it.each([
+    ["<div :/>", 'out += "<div value:=\\"\\"></div>";'],
+    ['<div value:foo:bar="y"/>', 'out += "<div value:foo:bar=\\"y\\"></div>";'],
+    ["<div value:foo:bar/>", 'out += "<div value:foo:bar=\\"\\"></div>";'],
+  ])("renders the full colon name: %s", (source, output) => {
+    expect(rendered(source)).toContain(output);
+  });
+
+  it.each([
+    [
+      '<div :="x"/>',
+      "Attributes may only be bound to identifiers or member expressions",
+      1,
+      7,
+    ],
+    [
+      '<div\n  :="x"/>',
+      "Attributes may only be bound to identifiers or member expressions",
+      2,
+      4,
+    ],
+    [
+      '<div :foo()="y"/>',
+      "Unsupported arguments on the `value:foo` attribute.",
+      1,
+      5,
+    ],
+    [
+      '<div\n  :foo()="y"/>',
+      "Unsupported arguments on the `value:foo` attribute.",
+      2,
+      2,
+    ],
+  ])(
+    "reports Marko's exact error at its position: %s",
+    (source, message, line, column) => {
+      expect(failure(source)).toEqual({ message, line, column });
+    },
+  );
+
   it("still refuses a real modifier, in Marko's words", () => {
     const error = failure(`<div class:active="x"/>`);
     expect(error.message).toContain(

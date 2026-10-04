@@ -196,11 +196,12 @@ export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
  */
 function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});
-  const sourceName = attr.modifier
-    ? isValueModifier(attr)
-      ? `:${attr.modifier}`
-      : `${attr.name}:${attr.modifier}`
-    : String(attr.name ?? "");
+  const sourceName =
+    attr.modifier != null
+      ? attr.default
+        ? `:${attr.modifier}`
+        : `${attr.name}:${attr.modifier}`
+      : String(attr.name ?? "");
   if (!ctx.source.startsWith(sourceName, sourceStart)) {
     return { sourceStart, sourceEnd: sourceStart };
   }
@@ -215,17 +216,18 @@ function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
  * `<div :foo="y"/>` parses as `{ name: "value", modifier: "foo", default: true }`
  * and compiles to `<div value:foo=y>` (`<div value:foo="y"/>` is the same
  * attribute). `attr.default` is the flag that marks the `:foo` spelling, but
- * both spellings are the same attribute, so both answer true here.
- *
- * This is the *only* modifier form Marko accepts: `class:active` is refused by
- * the taglib ("`class:active` is not a valid attribute, did you mean
- * `class={ active: condition }`?"), and every other host's modifier hook still
- * sees those untouched.
+ * both spellings are the same attribute, so both answer true here. An empty
+ * modifier is still present (`:` becomes `value:`), and a head already starting
+ * with `value:` keeps its earlier colons (`value:foo:bar` splits into
+ * `name: "value:foo", modifier: "bar"`). Marko joins them again on emission.
+ * Other modifier families such as `class:active` still reach the host hook.
  */
 function isValueModifier(attr: Node): boolean {
   return (
-    Boolean(attr?.modifier) &&
-    (attr.default === true || (attr.name === "value" && !attr.default))
+    attr?.modifier != null &&
+    (attr.default === true ||
+      attr.name === "value" ||
+      (typeof attr.name === "string" && attr.name.startsWith("value:")))
   );
 }
 
@@ -495,6 +497,35 @@ function lowerAttr(
     );
   }
 
+  // Preserve the parser's last-colon split, including an empty modifier.
+  // Bound attributes retain the base name: Marko uses the modifier as a value
+  // conversion there, not as part of the rendered attribute name.
+  const name =
+    !attr.bound && isValueModifier(attr)
+      ? `${attr.name}:${attr.modifier}`
+      : attr.name;
+
+  if (
+    attr.bound &&
+    attr.value?.type !== "Identifier" &&
+    !(
+      (attr.value?.type === "MemberExpression" ||
+        attr.value?.type === "OptionalMemberExpression") &&
+      attr.value.property?.type !== "PrivateName"
+    )
+  ) {
+    fail(
+      "Attributes may only be bound to identifiers or member expressions",
+      attr.value,
+    );
+  }
+
+  // This is an ordinary colon-named attribute, not a handler method. Reject
+  // its arguments in Marko's vocabulary before a host can rename or accept it.
+  if (isValueModifier(attr) && attr.arguments) {
+    fail(`Unsupported arguments on the \`${name}\` attribute.`, attr);
+  }
+
   if (attr.arguments || attr.value?.type === "FunctionExpression") {
     if (ctx.declarations.resolveAttributeMethod?.(attr, on) !== true) {
       ctx.declarations.rejectAttributeMethod?.(attr, on);
@@ -514,16 +545,6 @@ function lowerAttr(
       loc,
     };
   }
-
-  // `<div :foo="y"/>` is not a modifier: Marko's parser fills the empty head of
-  // `name:modifier` with `value`, so the attribute is literally named
-  // `value:foo` and Marko compiles it (`<div value:foo=y>`). It takes the
-  // ordinary attribute path — the value kinds, the positions, the host's own
-  // emission — so no host hook sees it and none has to grow a special case.
-  const name =
-    attr.modifier && isValueModifier(attr)
-      ? `${attr.name}:${attr.modifier}`
-      : attr.name;
 
   // `class:foo="x"` is a modifier Marko hands over as a base name plus a
   // modifier. Emitting only the base name renders `class="x"` — not a drop but
