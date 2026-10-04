@@ -3,11 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import {
-  ATTRIBUTE_VALUE_EXPRESSION as ATTR,
-  type CustomTag,
-  type TemplateBackedTag,
-} from "@mxlang/core";
+import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 import { brandRender } from "./translate.ts";
@@ -26,6 +22,7 @@ import { brandRender } from "./translate.ts";
  * bytes must lower. "My code cannot do this" is never a row.
  */
 
+const ATTR = "__mxAttrValue";
 const src = (body: string) => (body.endsWith("\n") ? body : `${body}\n`);
 const file = "/tmp/mx-translator-test/probe.marko";
 

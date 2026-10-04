@@ -23,7 +23,15 @@ const SOURCES = [
 describe("typeCheck unset (the runtime compile)", () => {
   it.each(SOURCES)("emits no wrapper and no preamble for %s", (source) => {
     const plain = compile(source).code;
-    expect(plain).not.toContain("__mx");
+    // Runtime attribute helpers are not the tooling-only handler preamble.
+    for (const token of [
+      "__MxJSX",
+      "type __MxM",
+      "type __MxH",
+      "__mxOn",
+      " satisfies ",
+    ])
+      expect(plain).not.toContain(token);
     expect(compile(source, false).code).toBe(plain);
   });
 
