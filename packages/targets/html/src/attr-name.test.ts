@@ -85,7 +85,7 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
       `out += "<div value:foo=\\"lit\\"></div>";`,
     );
     expect(rendered(`<div :foo/>`)).toContain(
-      `out += "<div value:foo></div>";`,
+      `out += "<div value:foo=\\"\\"></div>";`,
     );
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
