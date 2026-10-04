@@ -7,9 +7,12 @@
  *
  * - a tag variable (`<x/v>`): a binding means nothing without evaluation;
  * - a dynamic tag (`<${expr}>`): a static tree needs a name;
- * - a `Component` (a discovered `tags/` template tag call — a capitalized
- *   import call already failed in `declarations.ts`'s `rejectComponentTag`):
- *   a data file cannot call a template tag;
+ * - a `Component` (a call of a tag that has a template: a capitalized
+ *   import call already failed in `declarations.ts`'s `rejectComponentTag`;
+ *   a lowercase name reaches here only when `customTags` holds an entry with
+ *   a template, as a `getCustomTags` map does for a `tags/` file). `parseData`
+ *   never scans, so a `tags/` template that is not in `customTags` is just a
+ *   data tag named like the file: a data file cannot call a template tag;
  * - `<!doctype>`: means nothing in a data file.
  *
  * With `structural: "reject"` the pass-through structural constructs (text,

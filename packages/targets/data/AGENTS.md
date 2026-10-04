@@ -33,7 +33,7 @@ the first) decides what any tag or expression means. Design:
   `<define>`/`<return>`, and `resolveAttributeMethod: () => true` (the Ash
   fixture's method shorthand needs it).
 - `src/build.ts` — the IR→tree projection and every reject: tag variables,
-  dynamic tags, `Component` (a `tags/` template tag call), `<!doctype>`, and
+  dynamic tags, `Component` (a call of an imported component, or of a `customTags` entry that has a template), `<!doctype>`, and
   the `structural: "reject"` walk ("the data tree is static; this file's
   consumer does not evaluate `<if>`").
 - `src/parse.ts` — `parseData`/`parseDataFile` → `{ tree, diagnostics }`.

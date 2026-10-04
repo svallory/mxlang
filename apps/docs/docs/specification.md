@@ -2602,7 +2602,7 @@ nodes calls `parseData`.
 | `<return>` | **error**: ``` `<return>` needs the evaluated mode: the data tree is static and has no value to return ``` | |
 | Tag variable `/v` | **error**: ``tag variable `/v` on `<a>`: the data tree is static; a binding without evaluation means nothing`` | |
 | Dynamic tag `<${x}>` | **error**: ``a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one`` | |
-| Call of an imported component (`<Foo/>` with `import Foo`) | **error**: ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` | a lowercase tag is always a data tag, even when a `tags/` file of that name exists: `parseData` does not scan |
+| Call of an imported component (`<Foo/>` with `import Foo`) | **error**: ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` | `parseData` does not scan, so a lowercase tag is a data tag even when a `tags/` file of that name exists. If `customTags` holds an entry **with a template** (a map from `getCustomTags` does for a `tags/` file), the call is the same error |
 | `<!doctype>` | **error**: ``` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page ``` | |
 | `<![CDATA[…]]>`, `<?xml …?>` | **error**, from core on every target (decision 139) | |
 | Attribute methods `change(ctx) { … }` | accepted, as an `expression` attribute | the Ash-style fixture uses `value({ post }) { … }` |

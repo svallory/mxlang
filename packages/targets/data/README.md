@@ -58,10 +58,17 @@ printed `code` and a UTF-16 `span`: **`code` is the printed form; slice the
 source by `span` for the authored text.**
 
 Always rejected, each with a positioned message: `<define>` and its calls,
-`<return>`, tag variables, dynamic tags, template-tag calls, `<!doctype>`.
+`<return>`, tag variables, dynamic tags, calls of an imported component, `<!doctype>`.
 No data tag may be named `if`, `else`, `else-if`, `for`, `const`, `define`,
 `return`, `import`, `export`, `static` or `try` — core consumes those names
 before any target sees them.
+
+`parseData` never scans `tags/` or `package.json`; `customTags` is the whole
+vocabulary it knows. A `tags/card.mx` template next to the file is therefore
+not rejected: `<card/>` is an ordinary data tag. A call is rejected ("calls a
+template tag; a data file cannot call a template tag") when the name is an
+imported component, or when `customTags` holds an entry with a template, as a
+map from core's `getCustomTags` does for a `tags/` file.
 
 Marko's HTML parse rules are neutralized through the target's own taglib
 (`openTagOnly`, `text` and `preserveWhitespace` to `false` on the 19 names
