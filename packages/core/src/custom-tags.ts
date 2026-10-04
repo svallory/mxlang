@@ -1570,11 +1570,12 @@ function observedCall(call: TagCall): {
 /**
  * Whether a call of this definition hands its validated call to the host.
  *
- * The definition must be contract-only: it declares at least one of
- * `attributes`, `attributeTags`, `children`, `parents` or `parseOptions`, and has neither a
- * `transform` nor a template. `{}` or a hooks-only definition declares no
- * contract, so it keeps the "neither a `transform` nor a template" error. The
- * one question core asks the host is the generic `isDelegatedTag`.
+ * The definition must be contract-only: it has neither a `transform` nor a
+ * template. Whatever else it declares counts, `{}` included: an empty
+ * declaration is a contract for a tag with no attributes and no body rules.
+ * The one question core asks the host is the generic `isDelegatedTag`; on a
+ * target that does not claim the name, such a definition keeps the "neither a
+ * `transform` nor a template" error.
  */
 export function isContractOnlyDelegated(
   ctx: Ctx,
@@ -1584,11 +1585,6 @@ export function isContractOnlyDelegated(
   return (
     !definition.transform &&
     !hasTemplate(definition) &&
-    (definition.attributes !== undefined ||
-      definition.attributeTags !== undefined ||
-      definition.children !== undefined ||
-      definition.parents !== undefined ||
-      definition.parseOptions !== undefined) &&
     ctx.declarations.isDelegatedTag?.(name, ctx) === true
   );
 }

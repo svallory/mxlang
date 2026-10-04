@@ -539,3 +539,83 @@ describe("a directly imported ContractMap on the data path", () => {
     expect(withLocalTags.tree).toEqual(baseline.tree);
   });
 });
+
+describe("an empty `{}` declaration is a contract on the data path", () => {
+  const source = "resource\n  pub";
+  const tags: Record<string, CustomTag> = {
+    resource: { children: { pub: {} } },
+    pub: {},
+  };
+
+  it("accepts a direct customTags `{}` under structural and unknownTags: reject", () => {
+    const { diagnostics, tree } = parseData(source, "/u.mx", {
+      customTags: tags,
+      structural: "reject",
+      unknownTags: "reject",
+    });
+    expect(diagnostics).toEqual([]);
+    expect(tree).toBeDefined();
+  });
+
+  it("accepts the same declaration as an `mx.contracts` module entry", () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-data-empty-")));
+    dirs.push(dir);
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "empty-declaration-fixture",
+        mx: { target: "data", contracts: "./contracts.ts" },
+      }),
+    );
+    writeFileSync(
+      join(dir, "contracts.ts"),
+      "export default { resource: { children: { pub: {} } }, pub: {} };\n",
+    );
+    const file = join(dir, "post.mx");
+    writeFileSync(file, source);
+    const customTags = getCustomTags(file, {
+      targets: dataTargets,
+      host: null,
+    });
+    const { diagnostics, tree } = parseData(source, file, {
+      customTags,
+      structural: "reject",
+      unknownTags: "reject",
+    });
+    expect(diagnostics).toEqual([]);
+    expect(tree).toBeDefined();
+  });
+
+  it("accepts a declaration-only `tags/pub.tag.ts` sidecar that exports `{}`", () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-data-empty-")));
+    dirs.push(dir);
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "empty-sidecar-fixture", mx: { target: "data" } }),
+    );
+    mkdirSync(join(dir, "tags"));
+    writeFileSync(join(dir, "tags", "pub.tag.ts"), "export default {};\n");
+    const file = join(dir, "post.mx");
+    writeFileSync(file, "pub\n");
+    const customTags = getCustomTags(file, {
+      targets: dataTargets,
+      host: null,
+    });
+    const { diagnostics, tree } = parseData("pub\n", file, {
+      customTags,
+      structural: "reject",
+      unknownTags: "reject",
+    });
+    expect(diagnostics).toEqual([]);
+    expect(tree).toBeDefined();
+  });
+
+  it("leaves attributes open on a `{}` tag", () => {
+    const { diagnostics } = parseData("resource\n  pub x=1", "/u.mx", {
+      customTags: tags,
+      structural: "reject",
+      unknownTags: "reject",
+    });
+    expect(diagnostics).toEqual([]);
+  });
+});

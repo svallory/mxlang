@@ -6,6 +6,10 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+### Fixed: an empty `{}` declaration is a contract (empty-declaration)
+
+`customTags: { pub: {} }` was treated as contract-less ("custom tag has neither a `transform` nor a template file ...") while `pub: { attributes: {} }` passed. `isContractOnlyDelegated` no longer looks for a declaration key: a definition with no `transform` and no template is contract-only whatever it declares, `{}` and a hooks-only definition included (an empty declaration is a tag with no attributes and no body rules). It still needs a target that delegates the name; on a target that does not, the "neither a `transform` nor a template" error is unchanged. Covers `customTags`, `mx.contracts` entries and sidecars through the one predicate.
+
 ### Fixed: every printed position is 1-based (zero-based-cols-in-message-text)
 
 Ruling #227: a position MX **prints** — in a message's text as much as in a `file(line,column)` header — is 1-based line and column, the basis `mx-tsc` and every editor use. This completes the pass that started with the duplicate-attribute warning and the Angular build prefixes; the structured `line`/`column` on `MxWarning`, `ScanDiagnostic`, `TargetPolicyDiagnostic` and `TranslateError` are unchanged and stay 0-based (Babel's base), because every consumer subtracts one on the way to an LSP range.

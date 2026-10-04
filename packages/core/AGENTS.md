@@ -521,9 +521,9 @@ Five facts worth knowing before editing it:
   (TODO `sync-esm-reload-node`). A Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
 - **A contract-only tag is a `DelegatedTag` on a claimed name (decision 130).** A
-  definition declaring at least one of `attributes`/`attributeTags`/
-  `parseOptions` (`{}` and hooks-only do not count) and no `transform` and no
-  template fails with "neither a `transform` nor a template" unless
+  definition with no `transform` and no template is contract-only whatever else
+  it declares (`{}` and hooks-only included: an empty declaration is a contract
+  with no attributes and no body rules); it fails with "neither a `transform` nor a template" unless
   `isDelegatedTag(name)` is true; then `transformCustomTag` validates the call, runs
   the `analyze` recording like any custom tag, and returns one `DelegatedTag` built
   from the call (`contractOnlyDelegatedTag`; whitespace-only body kept). Core asks

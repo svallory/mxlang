@@ -1811,14 +1811,37 @@ describe("contract-only custom tags", () => {
     ["an empty definition", {}],
     ["a hooks-only definition", { analyze: () => {} }],
   ] as const)(
-    "keeps today's error for %s on a claimed name",
+    "counts %s on a claimed name as a contract: no attributes, no body rules",
+    (_label, definition) => {
+      const { tag } = find(
+        lowerWithTags(
+          "<attribute/>\n",
+          { attribute: definition as CustomTag },
+          claimAttribute(),
+        ).body,
+        "DelegatedTag",
+      );
+      expect(tag.name).toBe("attribute");
+    },
+  );
+
+  it.each([
+    ["an empty definition", {}],
+    ["a hooks-only definition", { analyze: () => {} }],
+  ] as const)(
+    "keeps today's error for %s when the host does not claim the name",
     (_label, definition) => {
       expect(() =>
         lowerWithTags(
-          "<attribute foo=1/>\n",
+          "<attribute/>\n",
           { attribute: definition as CustomTag },
-          claimAttribute(),
+          fakeDeclarations({ isDelegatedTag: (name) => name === "other" }),
         ),
+      ).toThrowError("so a call has nothing to expand to");
+      expect(() =>
+        lowerWithTags("<attribute/>\n", {
+          attribute: definition as CustomTag,
+        }),
       ).toThrowError("so a call has nothing to expand to");
     },
   );
