@@ -106,4 +106,4 @@ tsc goldens) read the build: rebuild before trusting them. Its own tests import
 `src/`. Keep `parse.ts` free of any import of `descriptor.ts` (an entry-point
 cycle makes Bun drop `dist/parse.js` silently), and keep `@marko/compiler`
 behind a lazy `require` (a static import is hoisted in the bundle and breaks
-the registry's light import). Publishing: `notes/release-alpha.md`.
+the registry's light import). Publishing: the space-level `notes/release-alpha.md` (outside the repo).
