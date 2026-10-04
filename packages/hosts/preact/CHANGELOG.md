@@ -1,5 +1,7 @@
 # @mxlang/preact
 
+- **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to the JSX attribute `value:foo={y}`, Marko's own attribute (MX previously rejected it).
+
 ## 0.1.0 (unreleased)
 
 - **Fix (scriptlet-hint-let-var):** mutable `$ let`/`$ var` declarations no longer get an immutable `<const>` replacement. This host rejects `<let>`, so its declaration omits keyword advice; `$ const` advice is unchanged. Shared with React and Hono.

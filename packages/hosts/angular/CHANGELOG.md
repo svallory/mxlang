@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` is accepted, as the attribute Marko renders literally. A **static** one is carried into the template verbatim (`value:foo="lit"`); a **dynamic** one emits `[attr.value:foo]`, not `[value:foo]`, because a colon-named property binding names a property no element has (NG8002) — the same rule a dynamic `data-*`/`aria-*` attribute already took. `class:`/`style:`/`attr:` are still rejected as not Marko syntax.
+
 ## Unreleased
 
 - **Fix (angular-attr-interpolation-literal round 3, review L1):** the static `class`/`style` brace-binding check now matches the attribute name case-insensitively (HTML attribute names are case-insensitive): an authored `CLASS="{{ x }}"`/`STYLE=…` takes the `[attr.class]`/`[attr.style]` path too, emitted lowercase, instead of falling through to a static attribute Angular's styling pipeline drops.

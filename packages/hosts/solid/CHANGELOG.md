@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to `value:foo={y}`, which both Solid 2 backends lower to `setAttribute(el, "value:foo", …)`; MX previously rejected the form as a malformed namespaced attribute.
+
 ## Unreleased
 
 - **Fix (scriptlet-hint-let-var):** the surrounding-TypeScript-module advice preserves the original `let`/`var` keyword, instead of changing a mutable scriptlet to `const`. Solid still rejects `<let>`; `$ const` advice is unchanged.

@@ -431,6 +431,7 @@ closing tag is a parse error (decision 13).
 | Spread | `...props` | Accepted on elements without diagnostic |
 | Bound (`:=`) | `value:=count` | **Stateful** — host-defined (§14) |
 | Modifier | `class:active=on` | **Not Marko syntax** — see below |
+| Namespaced name | `:foo=y`, `value:foo=y` | Marko's own attribute named `value:foo` — see below |
 | Method | `onClick() { … }` | Event handler — host-defined, see below |
 
 On Preact, React and Hono, tooling checks named, non-event native-element
@@ -509,7 +510,9 @@ front — otherwise the attribute is emitted twice and the second wins
 ### `class:foo` / `style:foo` modifiers
 
 **Not Marko syntax at all** — not "something MX cannot express" (decision 67b,
-measured against 5.42.5). Marko's parser rejects every form with its own fix-it:
+measured against 5.42.5). Marko's *taglib* rejects every form of them with its
+own fix-it (the parser itself parses them; the translator's taglib lookup is
+what refuses):
 
 > `class:active` is not a valid attribute, did you mean `class={ active: condition }`?
 
@@ -519,6 +522,30 @@ using them compiles. Where a host is reached anyway, core raises:
 | Message | When |
 |---|---|
 | `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in a standalone template` | A modifier survived to the lowerer and the host's `resolveModifier` declined it. |
+
+### `:modifier` — the one modifier form Marko accepts
+
+Marko's parser splits an attribute name at its **last** `:` and fills an empty
+head with `value` (`babel-plugin/parser.js`, `onAttrName`). So `<div :foo="y"/>`
+is not a modifier at all: it is one attribute literally named `value:foo`,
+which Marko compiles and renders as `<div value:foo=y>`. The long spelling
+(`<div value:foo="y"/>`) is the same attribute, and `<div :foo:a="y"/>` is a
+parse error in both.
+
+| Authored | Meaning | html | preact/react/hono | solid | `.astro.mx` | angular |
+|---|---|---|---|---|---|---|
+| `<div :foo="x"/>` | attribute `value:foo` = `"x"` | `value:foo="x"` | `value:foo="x"` | `value:foo="x"` | `value:foo="x"` | `value:foo="x"` |
+| `<div :foo=y/>` | attribute `value:foo` = `y` | `value:foo="y"` | `value:foo={y}` | `value:foo={y}` | `value:foo={y}` | `[attr.value:foo]="y"` |
+| `<div :foo/>` | attribute `value:foo` = `""` | `value:foo=""` | `value:foo=""` | `value:foo=""` | `value:foo=""` | `value:foo=""` |
+
+The valueless form is HTML's *empty* attribute — `<div value:foo>` and
+`<div value:foo="">` are one thing to every HTML parser — so it lowers to the
+empty string rather than to `true`: a host handed `true` renders React's
+non-boolean-attribute warning and drops the attribute, and renders
+`value:foo="true"` on Hono. On Angular a dynamic name cannot be a property
+binding (`[value:foo]` binds a property no element has, NG8002), so it takes
+the same `[attr.name]` route as a dynamic `data-*`/`aria-*` attribute; a static
+one is carried through verbatim.
 
 `prop:` is the one namespace that passes through on the Solid host. `on:`,
 `oncapture:`, `attr:`, `bool:` and `use:` are parse errors there with fix-it
@@ -715,6 +742,15 @@ Four iteration shapes, chosen by attribute.
   string-rendering host it is **inert** — accepted, contributing nothing to the
   output (decision 65, reclassifying S8). Caveat carried from that decision: if
   hydration markers are ever emitted, `by=` stops being inert.
+- A **string** `by=` is the property-name shorthand and only `of=` has one:
+  `in=`/`to=`/`until=` *call* `by` as a function, so Marko refuses the string at
+  compile time — reported at the quoted key — instead of letting it fail at
+  render. `by=(k, v) => …` is the form for those three.
+- **`key=` is an error on `<for>`**: it is the React/Vue habit and a `<for>` reads
+  nothing by that name, so accepting it would drop the author's intent silently.
+  Marko redirects it to `by=` before anything else, with the fix-it for the loop's
+  own form (`by="propName"`, `by=(key, value) => key`, `by=(num) => key`), and MX
+  refuses it at the attribute with the same wording.
 
 **Params come before `=value`** — `<for|item, i| of=xs>`, and by the same rule
 `<if|u|=cond>` would be the spelling were it legal. `notes/solidmx-spec.md` §5.1

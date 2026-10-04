@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` in a template body emits `value:foo={y}`, which the real Astro compiler renders as `value:foo="y"`; MX previously rejected the form.
+
 ## Unreleased
 
 - **Fix (scriptlet-hint-let-var):** `.astro.mx` fence advice preserves the original `let`/`var` keyword, not `const`. Ordinary `.mx` under strict policy omits keyword advice for mutable scriptlets; both paths still reject `<let>`. `$ const` advice is unchanged.

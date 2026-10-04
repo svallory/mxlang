@@ -1,5 +1,7 @@
 # @mxlang/parser changelog
 
+- **Fix (marko-parity-trio, `:modifier`):** `:foo=1` in an MX region is no longer a syntax error. It is Marko's attribute named `value:foo`, so it now parses to the JSXNamespacedName `value:foo` (and a valueless `:foo` to `value:foo=""`, HTML's empty attribute); `a:b:c=1` is still refused as malformed.
+
 ## Unreleased
 
 - **Fix (zero-based-cols-in-message-text):** a diagnostic raised through the MX grammar no longer prints Babel's trailing 0-based ` (L:C)`. `Unexpected token (1:32)` becomes `Unexpected token` — the position is on the error's `loc` (1-based line, 0-based column), which every consumer already reads, so the text no longer carries a second, differently-based one. Every MX-raised error is affected: a host parse failure wrapped as `MxErrors.HostError`, the MX grammar's own rules (`An MX region has exactly one root element…`, `NestedFragment`, `Unterminated fragment`, `PositionRejected`, `MultipleRoots`) and Babel's own failures inside a `.solid.mx`/`.ng.mx` file. A message that quotes a *foreign* file's parser position (a wrapped callee's `(1:32)`) still keeps it: that position belongs to another file and nothing else records it.

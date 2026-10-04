@@ -357,7 +357,7 @@ byte-identical with and without the construct.
 | `<log>`, `<debug>` | Write to the console / attach a debugger hook. |
 | `client` blocks | Evaluated only on the client. |
 | `by=` on `<for>` | Reconciler input: which item a DOM node belongs to across re-renders. A one-shot render performs no reconciliation. |
-| `key=` | Rejected by Marko's own parser before the translator sees it (`key is not a valid attribute, did you mean <for by>?`), so it needs no row of our own. |
+| `key=` on `<for>` | An error, not a silent drop: Marko's translator refuses it before it reaches any taglib ("The `<for>` tag keys items with the `by=` attribute, not `key=`…"), so MX refuses it the same way, at the attribute, with the fix-it for that loop's form. It is the **translator** that rejects it, not the parser — the parser hands MX both spellings. |
 
 ### Evaluate initial value
 

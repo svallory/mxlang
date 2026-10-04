@@ -1,5 +1,7 @@
 # @mxlang/hono
 
+- **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to the JSX attribute `value:foo={y}`, Marko's own attribute (MX previously rejected it).
+
 ## 0.1.0 (unreleased)
 
 - **Fix (scriptlet-hint-let-var):** the shared JSX declarations omit immutable `<const>` advice for `$ let`/`$ var`; Hono rejects `<let>`. `$ const` advice is unchanged.

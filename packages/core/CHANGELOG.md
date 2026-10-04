@@ -2,8 +2,9 @@
 
 ## 0.1.0-alpha.1
 
-First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 below. `@mxlang/core` is no longer `private`; `exports["."]` now carries a `types` condition so a `moduleResolution: bundler` consumer finds `dist/index.d.ts`. No code change. Unstable API.
+First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 below.
 
+`@mxlang/core` is no longer `private`; `exports["."]` now carries a `types` condition so a `moduleResolution: bundler` consumer finds `dist/index.d.ts`. No code change. Unstable API.
 ## 0.1.0 (unreleased)
 
 - **Fix (proto-names): a tag named after an `Object.prototype` member (`<toString/>`, `<constructor/>`, `<__proto__/>`, …) no longer crashes the compile.** Marko 6.3.51 throws a raw `TypeError: undefined is not an object (evaluating 'filePath.length')` for it, because its taglib lookup indexes a plain object. `compileSource` and `parseFragment` now strip the prototype from the lookup's tag map, so the name is an ordinary tag name on every target (recorded in `divergences.md`); `lower.ts` guards two more plain-object lookups (`declarations.tags`, the non-DOM event spellings) with own-property checks. A declared `customTags` entry of that name is a contract.
@@ -800,3 +801,9 @@ call — the shape an explicitly imported tag already produced on all six hosts.
   `export interface Input` while the unit path accepts and ignores it. Typing a
   unit's props is phase 3, through the same virtual-file projection the
   TypeScript plugin already does for `.solid.mx`.
+
+- **Fix (marko-parity-trio, `<for>` `by=`/`key=`):** a **string** `by=` outside `of=` and a `key=` on `<for>` are compile errors now, matching Marko 6.3.51 (`runtime-tags/src/translator/core/for.ts`), which refused both and MX accepted both in silence — the S8 silent-drop class, because a `<for>` reads nothing under either name. The string `by` is reported at the quoted key it refuses, with the fix-it for that loop's form (`by=(key, value) => …` for `in`, `by=(index) => …` for `to`/`until`); `key=` is reported at the attribute, before the string check, with Marko's `by=` redirect. `by="id"` on `of=` keeps working on every host, including Angular's `track p.id`.
+
+- **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` is accepted, with Marko's own meaning. Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute name at its last `:` and fills an empty head with `value`, so this is one attribute literally named `value:foo`, which Marko compiles and renders as `<div value:foo=y>` — while every *other* modifier (`class:active`) is refused by Marko's taglib and still is here. Both spellings (`:foo` and `value:foo`) are the same attribute, and a valueless one (`:foo`) lowers to the empty string rather than to `true`, because HTML's valueless attribute is an attribute present with an empty value (React drops a `true` here with a non-boolean-attribute warning; Hono writes `"true"`). No host hook sees this form any more: it takes the ordinary attribute path, so each host emits the name in its own vocabulary.
+
+- **Fix (marko-parity-trio, tag-argument position):** a "tag arguments `(...)`" diagnostic is reported at the **argument**, not at the tag. Marko points at `args[0]` (`assertNoArgs`), so `<button (click)="go()">` is reported under `click`; MX pointed at `<button`, one token left of the thing the error is about. The structured `line`/`column` stay 0-based (ruling #227), so this is a 1-based column of 7 for that source. The message and the `onClick=` fix-it are unchanged.

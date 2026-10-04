@@ -1,5 +1,7 @@
 # @mxlang/html
 
+- **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles and renders as `<div value:foo="y">`, Marko's own attribute (MX previously rejected it).
+
 ## 0.1.0 (unreleased)
 
 - **Fix (proto-names): a tag named after an `Object.prototype` member (`<toString/>`, `<constructor/>`, …) no longer crashes the compile with a raw `TypeError`.** It is treated like any other tag name; the fix is in core, html has no code change.
