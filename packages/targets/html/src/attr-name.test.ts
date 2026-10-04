@@ -122,7 +122,9 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
         `out += ${JSON.stringify(`<div ${name}="${value}"></div>`)};`,
       );
     }
-    expect(rendered(`<div ${name}=input.x/>`)).toContain(`${name}=\\"`);
+    expect(rendered(`<div ${name}=input.x/>`)).toContain(
+      `__mxRenderAttr("${name}", input.x, "div")`,
+    );
   });
 
   it.each([

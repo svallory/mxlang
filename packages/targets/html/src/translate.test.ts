@@ -22,7 +22,6 @@ import { brandRender } from "./translate.ts";
  * bytes must lower. "My code cannot do this" is never a row.
  */
 
-const ATTR = "__mxAttrValue";
 const src = (body: string) => (body.endsWith("\n") ? body : `${body}\n`);
 const file = "/tmp/mx-translator-test/probe.marko";
 
@@ -391,7 +390,7 @@ describe("evaluate-initial-value constructs (decision 65)", () => {
     const body = '<let/v="hi"/>\n<input value:=v>';
     const { code } = compile(src(body), file);
     expect(code).toContain('const v = "hi";');
-    expect(code).toContain(`escape(${ATTR}("value", v, "input"))`);
+    expect(code).toContain(`__mxRenderAttr("value", v, "input")`);
   });
 });
 
@@ -1363,7 +1362,7 @@ describe("module shape", () => {
     // both apply — the one that would silently lose the brand if the rewrites
     // were ordered wrongly.
     const { code } = compile(src("<p class={a: true}>hi</p>"), file);
-    expect(code).toContain("function classValue(value) {");
+    expect(code).toContain("function classValue(value: unknown): string {");
     expect(code).toContain(
       'Object.defineProperty(Probe, Symbol.for("mx.component"), { value: true });',
     );

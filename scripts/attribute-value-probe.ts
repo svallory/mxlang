@@ -184,100 +184,206 @@ async function probe(
 }
 
 try {
-  const inputs = Object.fromEntries(
-    Object.entries(values).map(([name, o]) => [
-      name,
-      { o, attrs: { "data-x": o }, tag: "div" },
-    ]),
-  );
-  for (const [form, source] of Object.entries({
-    direct: "<div data-x=input.o/>",
-    spread: "<div ...input.attrs/>",
-    folded: '<div id="test" ...input.attrs data-x=input.o/>',
-    colon: "<div is:raw=input.o/>",
-    foldedColon: '<div ...{"id":"test"} is:raw=input.o/>',
-    inputSpread: '<input ...input.attrs type="text"/>',
-  }))
-    await probe(form, source, inputs);
-  await probe(
-    "overwritten",
-    '<div data-x=input.o ...{"data-x":"safe"}/>',
-    inputs,
-  );
-  await probe(
-    "overwrittenSpread",
-    '<div ...input.attrs data-x="safe"/>',
-    inputs,
-  );
-  await probe(
-    "overwrittenColon",
-    '<div is:raw=input.o ...{"is:raw":"safe"}/>',
-    inputs,
-  );
-  await probe("survivingSpread", '<div data-x="safe" ...input.attrs/>', inputs);
-  await probe(
-    "structured",
-    '<div class={a:true,b:false} style={color:"red"}/>',
-    { plain: { o: values.plain } },
-  );
-  await probe("classAcrossSpread", "<div class=input.o ...{}/>", {
-    plain: { o: values.plain },
-  });
-  await probe("spreadStructured", "<div ...input.styled/>", {
-    plain: { styled: { class: { a: true }, style: { color: "red" } } },
-  });
-  for (const [form, source] of Object.entries({
-    checked: "<input checked=input.o/>",
-    open: "<details open=input.o/>",
-    selectValue: "<select value=input.o/>",
-  })) {
-    await probe(form, source, { plain: { o: values.plain } });
-  }
-  let reads = 0;
-  const once = Object.defineProperty({}, "o", {
-    enumerable: true,
-    get: () => {
-      reads++;
-      return "once";
-    },
-  });
-  await probe("once", "<div data-x=input.o/>", { getter: once });
-  results.push({ form: "reads", value: "getter", html: String(reads) });
-  for (const [form, source] of Object.entries({
-    coercion: "<div data-x=input.o/>",
-    coercionSpread: "<div ...input.attrs/>",
-  })) {
-    let coercions = 0;
-    const o = {
-      toString: () => {
-        coercions++;
-        return coercions === 1 ? "first" : "second";
-      },
+  if (process.argv[3] === "--primitives") {
+    const primitives = {
+      null: null,
+      undefined: undefined,
+      false: false,
+      true: true,
+      zero: 0,
+      empty: "",
+      NaN: NaN,
     };
-    await probe(form, source, { custom: { o, attrs: { "data-x": o } } });
-    results.push({
-      form: `${form}Count`,
-      value: "custom",
-      html: String(coercions),
-    });
-  }
-  if (host !== "astro" && host !== "marko") {
-    await probe("dynamic", "<${input.tag} data-x=input.o/>", inputs);
-    await probe("dynamicArgs", `<\${input.tag}(input.attrs)/>`, inputs);
-    await probe("component", "<${input.tag} data-x=input.o/>", {
-      plain: {
-        o: values.plain,
-        tag: (props: Record<string, { a: number }>) =>
-          String(props["data-x"]?.a),
-      },
-    });
-  }
-  if (host !== "astro") {
+    for (const name of [
+      "title",
+      "data-x",
+      "aria-hidden",
+      "is:raw",
+      "disabled",
+      "hidden",
+      "checked",
+      "class",
+      "style",
+    ]) {
+      const tag = name === "checked" ? "input" : "div";
+      const inputs = Object.fromEntries(
+        Object.entries(primitives).map(([value, v]) => [
+          value,
+          { v, name, tag, attrs: { [name]: v } },
+        ]),
+      );
+      const forms: Record<string, string> = {
+        direct: `<${tag} ${name}=input.v/>`,
+        spread: `<${tag} ...input.attrs/>`,
+        folded: `<${tag} ${name}=input.v ...{}/>`,
+        tail: `<${tag} ...{} ${name}=input.v/>`,
+        dynamicName: `<${tag} ...{[input.name]:input.v}/>`,
+        dynamic: `<\${input.tag} ${name}=input.v/>`,
+        dynamicArgs: `<\${input.tag}(input.attrs)/>`,
+        bound: `<${tag} ${name}:=input.v/>`,
+      };
+      for (const [form, source] of Object.entries(forms)) {
+        try {
+          await probe(`${name}/${form}`, source, inputs);
+        } catch (error) {
+          for (const value of Object.keys(primitives))
+            results.push({
+              form: `${name}/${form}`,
+              value,
+              error: error instanceof Error ? error.message : String(error),
+            });
+        }
+      }
+    }
+    for (const form of [
+      "direct",
+      "spread",
+      "folded",
+      "tail",
+      "dynamicName",
+      "dynamic",
+      "dynamicArgs",
+      "bound",
+    ]) {
+      let reads = 0;
+      const input = {
+        tag: "div",
+        name: "data-x",
+        get v() {
+          reads++;
+          return null;
+        },
+        get attrs() {
+          return { "data-x": this.v };
+        },
+      };
+      const sources: Record<string, string> = {
+        direct: "<div data-x=input.v/>",
+        spread: "<div ...input.attrs/>",
+        folded: "<div data-x=input.v ...{}/>",
+        tail: "<div ...{} data-x=input.v/>",
+        dynamicName: "<div ...{[input.name]:input.v}/>",
+        dynamic: `<\${input.tag} data-x=input.v/>`,
+        dynamicArgs: `<\${input.tag}(input.attrs)/>`,
+        bound: "<div data-x:=input.v/>",
+      };
+      try {
+        const source = sources[form];
+        if (!source) throw new Error(`Missing primitive form: ${form}`);
+        await probe(`once/${form}`, source, { null: input });
+      } catch (error) {
+        results.push({
+          form: `once/${form}`,
+          value: "null",
+          error: String(error),
+        });
+      }
+      results.push({
+        form: `reads/${form}`,
+        value: "null",
+        html: String(reads),
+      });
+    }
+  } else {
+    const inputs = Object.fromEntries(
+      Object.entries(values).map(([name, o]) => [
+        name,
+        { o, attrs: { "data-x": o }, tag: "div" },
+      ]),
+    );
+    for (const [form, source] of Object.entries({
+      direct: "<div data-x=input.o/>",
+      spread: "<div ...input.attrs/>",
+      folded: '<div id="test" ...input.attrs data-x=input.o/>',
+      colon: "<div is:raw=input.o/>",
+      foldedColon: '<div ...{"id":"test"} is:raw=input.o/>',
+      inputSpread: '<input ...input.attrs type="text"/>',
+    }))
+      await probe(form, source, inputs);
     await probe(
-      "dynamicDataTag",
-      `<\${input.tag}><@meta data=input.o/></>`,
+      "overwritten",
+      '<div data-x=input.o ...{"data-x":"safe"}/>',
       inputs,
     );
+    await probe(
+      "overwrittenSpread",
+      '<div ...input.attrs data-x="safe"/>',
+      inputs,
+    );
+    await probe(
+      "overwrittenColon",
+      '<div is:raw=input.o ...{"is:raw":"safe"}/>',
+      inputs,
+    );
+    await probe(
+      "survivingSpread",
+      '<div data-x="safe" ...input.attrs/>',
+      inputs,
+    );
+    await probe(
+      "structured",
+      '<div class={a:true,b:false} style={color:"red"}/>',
+      { plain: { o: values.plain } },
+    );
+    await probe("classAcrossSpread", "<div class=input.o ...{}/>", {
+      plain: { o: values.plain },
+    });
+    await probe("spreadStructured", "<div ...input.styled/>", {
+      plain: { styled: { class: { a: true }, style: { color: "red" } } },
+    });
+    for (const [form, source] of Object.entries({
+      checked: "<input checked=input.o/>",
+      open: "<details open=input.o/>",
+      selectValue: "<select value=input.o/>",
+    })) {
+      await probe(form, source, { plain: { o: values.plain } });
+    }
+    let reads = 0;
+    const once = Object.defineProperty({}, "o", {
+      enumerable: true,
+      get: () => {
+        reads++;
+        return "once";
+      },
+    });
+    await probe("once", "<div data-x=input.o/>", { getter: once });
+    results.push({ form: "reads", value: "getter", html: String(reads) });
+    for (const [form, source] of Object.entries({
+      coercion: "<div data-x=input.o/>",
+      coercionSpread: "<div ...input.attrs/>",
+    })) {
+      let coercions = 0;
+      const o = {
+        toString: () => {
+          coercions++;
+          return coercions === 1 ? "first" : "second";
+        },
+      };
+      await probe(form, source, { custom: { o, attrs: { "data-x": o } } });
+      results.push({
+        form: `${form}Count`,
+        value: "custom",
+        html: String(coercions),
+      });
+    }
+    if (host !== "astro" && host !== "marko") {
+      await probe("dynamic", `<\${input.tag} data-x=input.o/>`, inputs);
+      await probe("dynamicArgs", `<\${input.tag}(input.attrs)/>`, inputs);
+      await probe("component", `<\${input.tag} data-x=input.o/>`, {
+        plain: {
+          o: values.plain,
+          tag: (props: Record<string, { a: number }>) =>
+            String(props["data-x"]?.a),
+        },
+      });
+    }
+    if (host !== "astro") {
+      await probe(
+        "dynamicDataTag",
+        `<\${input.tag}><@meta data=input.o/></>`,
+        inputs,
+      );
+    }
   }
   process.stdout.write(JSON.stringify(results));
 } finally {

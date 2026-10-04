@@ -29,7 +29,6 @@
 
 import {
   ATTRIBUTE_VALUE_EXPRESSION,
-  type Attr,
   attrByName,
   type Ctx,
   concatMapped,
@@ -626,20 +625,20 @@ export const strictPolicy: Policy = {
  * A dynamic tag's target is whatever the expression evaluated to: a component
  * function, a renderable block (`() => string`), or a tag name as a string.
  */
-const CLASS_VALUE = `function classValue(value) {
-  if (value === null || value === undefined || value === false) return "";
+const CLASS_VALUE = `function classValue(value: unknown): string {
+  if (!value) return "";
   if (typeof value === "string") return escape(value);
   if (Array.isArray(value)) {
     return value.map(classValue).filter(Boolean).join(" ");
   }
   if (typeof value === "object") {
-    return Object.keys(value).filter(key => value[key]).map(escape).join(" ");
+    return Object.entries(value).filter(([, enabled]) => enabled).map(([key]) => escape(key)).join(" ");
   }
   return escape(value);
 }`;
 
-const STYLE_VALUE = `function styleValue(value) {
-  if (value === null || value === undefined || value === false) return "";
+const STYLE_VALUE = `function styleValue(value: unknown): string {
+  if (!value) return "";
   if (typeof value === "string") return escape(value);
   if (Array.isArray(value)) {
     return value.map(styleValue).filter(Boolean).join(";");
@@ -651,6 +650,15 @@ const STYLE_VALUE = `function styleValue(value) {
       .join(";");
   }
   return escape(value);
+}`;
+
+// Capture the authored expression once, then decide presence before coercion.
+// `checked` is presence-only on a direct <input>, but generic on spread and
+// dynamic native paths, matching Marko 6.3.51's controlled-input writer.
+const RENDER_ATTR = `function __mxRenderAttr(name: string, value: unknown, tag = "", checked = false): string {
+  if (value === false || value === null || value === undefined) return "";
+  if (checked || value === true) return " " + name;
+  return " " + name + '="' + escape(__mxAttrValue(name, value, tag)) + '"';
 }`;
 
 const ESCAPE_COMMENT = `function escapeComment(value) {
@@ -681,11 +689,14 @@ const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string
     for (const [key, value] of Object.entries(attrs)) {
       if (key === "content") continue;
       if (value === false || value === null || value === undefined) continue;
-      out += value === true ? " " + key : " " + key + "=\\"" + escape(__mxAttrValue(key, value, target)) + "\\"";
+      if (key === "class" || key === "style") {
+        const text = key === "class" ? classValue(value) : styleValue(value);
+        if (text !== "") out += " " + key + "=\\"" + text + "\\"";
+      } else out += __mxRenderAttr(key, value, target);
     }
     out += ">";
     if (props.content) out += props.content();
-    return out + "</" + target + ">";
+    return /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(target) ? out : out + "</" + target + ">";
   }
   if (typeof target === "object") {
     throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
@@ -811,14 +822,16 @@ export default ${name};
  * `escape` — is a property of this host's target, not of the core.
  */
 function moduleHelpers(code: string): string[] {
-  const candidates: [string, string][] = [
-    ["classValue(", CLASS_VALUE],
-    ["styleValue(", STYLE_VALUE],
-    ["escapeComment(", ESCAPE_COMMENT],
-    ["renderDynamic(", RENDER_DYNAMIC],
+  const dynamic = code.includes("renderDynamic(");
+  const candidates: [boolean, string][] = [
+    [code.includes("__mxRenderAttr(") || dynamic, RENDER_ATTR],
+    [code.includes("classValue(") || dynamic, CLASS_VALUE],
+    [code.includes("styleValue(") || dynamic, STYLE_VALUE],
+    [code.includes("escapeComment("), ESCAPE_COMMENT],
+    [dynamic, RENDER_DYNAMIC],
   ];
-  const helpers = candidates.flatMap(([call, source]) =>
-    code.includes(call) ? [source] : [],
+  const helpers = candidates.flatMap(([used, source]) =>
+    used ? [source] : [],
   );
   if (
     code.includes("__mxAttrValue(") ||

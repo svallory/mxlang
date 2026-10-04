@@ -456,6 +456,20 @@ this rule. Runtime output is unchanged.
 
 ### Native attribute value rendering
 
+On the html target, native `null`, `undefined` and `false` values omit the
+attribute; `true` emits an empty attribute, and `0`, `""` and `NaN` are
+retained. This applies to direct expressions, colon names, bindings, merged
+spreads, computed spread keys and string-valued dynamic tags, including
+`aria-*` and `data-*` (Marko 6.3.51 omits `aria-hidden=false` too).
+`class`/`style` omit falsy primitive values and stringify `true` as `"true"`.
+A direct or bound `<input checked=…>` emits presence for any value other
+than `null`, `undefined` or `false`; with spreads or a dynamic tag, `checked`
+uses the ordinary value writer. Expressions are evaluated exactly once.
+These are measured Marko parity rules (decisions 65 and 67), not changes to
+core's host-independent attribute IR. Other hosts retain their native
+framework serializers; boolean, class/style and controlled-value differences
+remain host-specific compatibility gaps.
+
 On html, Preact, React, Hono and Astro, an ordinary native attribute
 whose object value cannot be coerced to a useful string fails **at render
 time**, matching Marko 6.3.51's debug-runtime assertion. This always-on guard

@@ -62,7 +62,6 @@ import type { DelegatedTagData } from "./translate.ts";
 import { DYNAMIC, escapeComment } from "./translate.ts";
 
 const INDENT = "  ";
-const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
 
 /**
  * A well-formed HTML attribute name, as source text for the emitted module.
@@ -489,18 +488,6 @@ export function createEmitter(): StringEmitter {
     // and later edits write back. A one-shot render has no write path, so the
     // initial value is the whole of it — decision 65's "evaluate initial
     // value" row, and what Marko's own server render emits.
-    if (attr.kind === "bound") {
-      const source = structured(attr.name, attr.value.code);
-      literal(` ${attr.name}="`);
-      expression(
-        source ??
-          `${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`,
-        true,
-      );
-      literal('"');
-      return;
-    }
-
     // Phase B of `dom-events` (decision 101, design note §8): an expression-
     // valued event handler needs a runtime, and this target renders once to
     // a string. A *string*-valued handler (`onclick="…"`) is an ordinary
@@ -527,12 +514,10 @@ export function createEmitter(): StringEmitter {
       return;
     }
 
-    literal(` ${attr.name}="`);
     expression(
-      `${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`,
-      true,
+      `__mxRenderAttr(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)}${tag === "input" && attr.name === "checked" ? ", true" : ""})`,
+      false,
     );
-    literal('"');
   };
 
   /**
@@ -549,10 +534,6 @@ export function createEmitter(): StringEmitter {
         return quote(` ${attr.name}`);
       case "static":
         return quote(` ${attr.name}="${escape(attr.value)}"`);
-      case "bound": {
-        const source = structured(attr.name, attr.value.code);
-        return `${quote(` ${attr.name}="`)} + escape(${source ?? `${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`}) + "\\""`;
-      }
       case "event":
         return fail(
           `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
@@ -563,7 +544,7 @@ export function createEmitter(): StringEmitter {
         if (source) {
           return `((value) => value === "" ? "" : ${quote(` ${attr.name}="`)} + value + "\\"")(${source})`;
         }
-        return `${quote(` ${attr.name}="`)} + escape(${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})) + "\\""`;
+        return `__mxRenderAttr(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`;
       }
     }
   };
@@ -656,9 +637,16 @@ export function createEmitter(): StringEmitter {
       "if (value === false || value === null || value === undefined) continue;",
     );
     push(`if (!${ATTR_NAME_PATTERN}.test(key)) continue;`);
+    push('if (key === "class" || key === "style") {');
+    state.indent++;
     push(
-      `out += value === true ? " " + key : " " + key + "=\\"" + escape(${ATTRIBUTE_VALUE_EXPRESSION}(key, value, ${quote(name)})) + "\\"";`,
+      'const text = key === "class" ? classValue(value) : styleValue(value);',
     );
+    push('if (text !== "") out += " " + key + "=\\"" + text + "\\"";');
+    push("continue;");
+    state.indent--;
+    push("}");
+    push(`out += __mxRenderAttr(key, value, ${quote(name)});`);
     state.indent--;
     push("}");
     state.indent--;
