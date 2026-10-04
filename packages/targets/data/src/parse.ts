@@ -88,9 +88,10 @@ export interface DataDiagnostic {
   severity: "error" | "warning";
   message: string;
   /**
-   * 1-based, as `TranslateError` and `MxWarning`. An error with no source
-   * position (a bad `customTags` registration) is file-level: `line: 1`,
-   * `column: 0`, `offset: 0`.
+   * 1-based, as `TranslateError` and `MxWarning`. An error or warning with no
+   * source position (core's 0:0, as for a bad `customTags` registration) is
+   * file-level: `line: 1`, `column: 0`, `offset: 0` (`-1` when `file` names
+   * another file).
    */
   line: number;
   /** 0-based, as core. */
@@ -127,12 +128,6 @@ function errorPosition(
   error: unknown,
 ): { line: number; column: number; file?: string } | null {
   if (isTranslateError(error)) {
-    // Core raises a registration error that has no source position at 0:0.
-    // That is a file-level error: report it at the start of the file, so
-    // `line` stays 1-based.
-    if (error.line < 1) {
-      return { line: 1, column: 0, file: error.file };
-    }
     return { line: error.line, column: error.column, file: error.file };
   }
   if (!error || typeof error !== "object") return null;
@@ -201,12 +196,17 @@ function toDiagnostic(
   filename: string,
 ): DataDiagnostic {
   const foreign = at.file !== undefined && at.file !== filename;
+  // Core reports a registration error, and may report a warning, with no
+  // source position at 0:0 (or a non-positive line). That is file-level:
+  // report it at the start of the file so `line` stays 1-based. `at` is the
+  // caller's object (a warning sink entry): read it, never write to it.
+  const [line, column] = at.line < 1 ? [1, 0] : [at.line, at.column];
   return {
     severity,
     message,
-    line: at.line,
-    column: at.column,
-    offset: foreign ? -1 : offsetOf(lineStarts, source, at.line, at.column),
+    line,
+    column,
+    offset: foreign ? -1 : offsetOf(lineStarts, source, line, column),
     ...(at.file !== undefined ? { file: at.file } : {}),
   };
 }

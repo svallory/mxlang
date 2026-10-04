@@ -6,7 +6,7 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
-- **Fix: a registration error with no source position is a file-level diagnostic.** A `customTags` registration error (for example a `finalize`-only declaration, a contradictory attribute declaration, an unknown key in a `children` declaration) comes from core at 0:0. `parseData` now reports it at `line: 1`, `column: 0`, `offset: 0` instead of `line: 0` and `offset` equal to the source length, so `DataDiagnostic.line` stays 1-based. The message is unchanged; an error with a real position, or in another file, is untouched.
+- **Fix: a registration error with no source position is a file-level diagnostic.** A `customTags` registration error (for example a `finalize`-only declaration, a contradictory attribute declaration, an unknown key in a `children` declaration) comes from core at 0:0. `parseData` now reports it at `line: 1`, `column: 0`, `offset: 0` instead of `line: 0` and `offset` equal to the source length, so `DataDiagnostic.line` stays 1-based. A warning at 0:0 gets the same treatment, and the caller's `warnings` array is not mutated. The message is unchanged; a diagnostic with a real position is untouched, and one in another file keeps `offset: -1`.
 
 - **Fix (empty-declaration): `customTags: { pub: {} }` is a valid contract.** `parseData("resource\n  pub", ...)` with `pub: {}` (and `resource: { children: { pub: {} } }`) under `structural: "reject"` and `unknownTags: "reject"` now gives a tree and no diagnostics, instead of "custom tag has neither a `transform` nor a template file". The same holds for an `mx.contracts` module entry. The fix is in core (`isContractOnlyDelegated`); data has no code change.
 

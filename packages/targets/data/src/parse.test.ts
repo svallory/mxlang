@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
+import type { CustomTag, MxWarning, TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import cases from "../../../../test-fixtures/body-whitespace/cases.json";
 import { type ParseDataResult, parseData, parseDataFile } from "./parse.ts";
@@ -1555,5 +1555,63 @@ describe("an error in another file keeps `offset: -1`", () => {
         file: "/t/tags/badge.mx",
       },
     ]);
+  });
+});
+
+describe("a warning with no source position is file-level too", () => {
+  const source = "<good/>\n<pub/>\n";
+  const cases = [
+    {
+      label: "line 0, current file",
+      at: { line: 0, column: 0 },
+      want: { line: 1, column: 0, offset: 0 },
+    },
+    {
+      label: "line -1, current file",
+      at: { line: -1, column: 19 },
+      want: { line: 1, column: 0, offset: 0 },
+    },
+    {
+      label: "line 0, foreign file",
+      at: { line: 0, column: 0, file: "/foreign.mx" },
+      want: { line: 1, column: 0, offset: -1 },
+    },
+    {
+      label: "positioned, current file",
+      at: { line: 2, column: 3 },
+      want: { line: 2, column: 3, offset: 11 },
+    },
+    {
+      label: "positioned, foreign file",
+      at: { line: 2, column: 3, file: "/foreign.mx" },
+      want: { line: 2, column: 3, offset: -1 },
+    },
+  ];
+
+  it.each(cases)("$label", ({ at, want }) => {
+    const warnings: MxWarning[] = [];
+    const result = parseData(source, "/t.mx", {
+      warnings,
+      customTags: {
+        pub: {
+          transform() {
+            warnings.push({ message: "probe warning", ...at });
+            return [];
+          },
+        },
+      },
+    });
+    expect(result.tree).toBeDefined();
+    expect(result.diagnostics).toEqual([
+      {
+        severity: "warning",
+        message: "probe warning",
+        ...want,
+        ...(at.file !== undefined ? { file: at.file } : {}),
+      },
+    ]);
+    // The caller-owned sink keeps core's raw position.
+    expect(warnings[0]?.line).toBe(at.line);
+    expect(warnings[0]?.column).toBe(at.column);
   });
 });

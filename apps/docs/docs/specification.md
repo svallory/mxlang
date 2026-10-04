@@ -2506,13 +2506,15 @@ parseDataFile(path: string, options?: ParseDataOptions): ParseDataResult
 `parseData` never throws for a source problem: a Marko parse error, a rejected
 construct or a failed contract is **one** error diagnostic and `tree` is
 `undefined`. Parsing is fail-fast (Marko's parser and core's `fail` both stop at
-the first error), so there is never a partial tree. An error with no position is
-an internal failure and is rethrown.
+the first error), so there is never a partial tree. An unrecognized internal
+error that carries no position fields is rethrown; a `TranslateError` at 0:0
+(core's "no position" sentinel) is not that, it is a file-level diagnostic
+(below).
 
 | Result field | Meaning |
 |---|---|
 | `tree` | the `DataDocument` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `{ severity, message, line, column, offset, file? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `parseData` does not have). An error with no source position, such as a bad `customTags` registration, is file-level: `line: 1`, `column: 0`, `offset: 0`. On success it holds this call's warnings only |
+| `diagnostics` | `{ severity, message, line, column, offset, file? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `parseData` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0` (`-1` when `file` names another file). On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
