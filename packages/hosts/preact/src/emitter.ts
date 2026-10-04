@@ -199,14 +199,18 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
     rejectModifier(attr) {
       // Reserved `on:` gets the event fix-it rather than the class-shaped
       // default. Ordinary names such as `oncapture:` never reach this hook.
-      const event =
-        attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
-      const eventFixIts: Record<string, string> = {
-        on: `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
+      const fullName = `${attr.name}:${attr.modifier}`;
+      const colon = fullName.indexOf(":");
+      const prefix = fullName.slice(0, colon);
+      const remainder = fullName.slice(colon + 1);
+      const event = remainder.charAt(0).toUpperCase() + remainder.slice(1);
+      const fixIts: Record<string, string> = {
+        on: `\`${fullName}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${remainder}=fn\` for a custom event name (Marko rejects this form too)`,
+        style: `attribute modifier \`${fullName}\` is not ${dialectName} syntax; write the prop directly (\`style={{ color: value }}\` rather than \`style:color\`)`,
       };
       rawFail(
-        eventFixIts[attr.name] ??
-          `attribute modifier \`${attr.name}:${attr.modifier}\` is not ${dialectName} syntax; write the prop directly (\`class={{ active: cond }}\` rather than \`class:active\`)`,
+        fixIts[prefix] ??
+          `attribute modifier \`${fullName}\` is not ${dialectName} syntax; write the prop directly (\`class={{ active: cond }}\` rather than \`class:active\`)`,
         attr,
       );
     },
