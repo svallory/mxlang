@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -5,6 +6,7 @@ import {
   cleanupProjects,
   type FakeTarget,
   fakeProject,
+  installFake,
   specifier,
 } from "../../../test-fixtures/third-party-targets/support.ts";
 import * as core from "./index.ts";
@@ -439,42 +441,41 @@ describe("round 2: what a loaded descriptor may not declare", () => {
   });
 });
 
-describe("round 2: validation and failures are cached", () => {
-  it("a throwing package is evaluated once while its manifest is unchanged, and reloads once fixed", async () => {
-    const project = fakeProject({
-      mx: { target: specifier("throws") },
-      install: ["throws"],
-    });
-    const entry = join(project.root, "node_modules/@fake/mx-throws/index.cjs");
-    const { writeFileSync, readFileSync } = await import("node:fs");
+describe("round 3: a failed load is fixed by fixing any file it loaded", () => {
+  it("a throwing file the entry requires: fixing it (not the entry) loads on the next call", () => {
+    const project = fakeProject({ mx: { target: "./t/b.cjs" } });
+    mkdirSync(join(project.root, "t"));
     writeFileSync(
-      entry,
-      'globalThis.__throwsRuns = (globalThis.__throwsRuns ?? 0) + 1;\nthrow new Error("boom");\n',
+      join(project.root, "t/b.cjs"),
+      'module.exports = require("./lib.cjs");\n',
     );
-    (globalThis as { __throwsRuns?: number }).__throwsRuns = 0;
-    for (let i = 0; i < 3; i++)
-      expect(
-        resolveTargetPolicyDetailed(project.path("a.mx"), lookup).diagnostics[0]
-          ?.code,
-      ).toBe("target-load-failed");
-    expect((globalThis as { __throwsRuns?: number }).__throwsRuns).toBe(1);
-    // A fix is a reinstall: the package's manifest changes, so it reloads.
     writeFileSync(
-      entry,
-      readFileSync(
-        join(
-          import.meta.dirname,
-          "../../../test-fixtures/third-party-targets/ok/index.cjs",
-        ),
-        "utf8",
-      ),
+      join(project.root, "t/lib.cjs"),
+      'throw new Error("lib is broken");\n',
     );
-    const manifest = join(
-      project.root,
-      "node_modules/@fake/mx-throws/package.json",
+    const first = resolveTargetPolicyDetailed(project.path("a.mx"), lookup);
+    expect(first.diagnostics[0]?.code).toBe("target-load-failed");
+    expect(first.diagnostics[0]?.message).toContain("lib is broken");
+    writeFileSync(
+      join(project.root, "t/lib.cjs"),
+      'module.exports = { descriptorVersion: 0, name: "fixed-b", packageName: "@t/fixed-b" };\n',
     );
-    writeFileSync(manifest, `${readFileSync(manifest, "utf8")}\n`);
     const fixed = resolveTargetPolicyDetailed(project.path("a.mx"), lookup);
-    expect(fixed.diagnostics[0]?.code).not.toBe("target-load-failed");
+    expect(fixed.diagnostics).toEqual([]);
+    expect(fixed.policy.target).toBe("fixed-b");
+  });
+});
+
+describe("round 3: not-found does not stick after an install", () => {
+  it("a package installed after a miss is found by the next call, in the same process", () => {
+    const project = fakeProject({ mx: { target: specifier("ok") } });
+    expect(
+      resolveTargetPolicyDetailed(project.path("a.mx"), lookup).diagnostics[0]
+        ?.code,
+    ).toBe("target-not-found");
+    installFake(project, "ok");
+    const found = resolveTargetPolicyDetailed(project.path("a.mx"), lookup);
+    expect(found.diagnostics).toEqual([]);
+    expect(found.policy.target).toBe("fake-ok");
   });
 });

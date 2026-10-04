@@ -60,6 +60,8 @@ A specifier that resolves and then fails is an error with no fallback: the build
 | `target-invalid-descriptor` | the export is not a descriptor (the first failing field is named), its `descriptorVersion` is unsupported, or it cannot be registered next to the built-in targets (see below) |
 | `host-invalid-descriptor` | the package is under `mx.host` but its descriptor has no `host` part: use `mx.target`, or add the part |
 
+A failed load is retried on every resolution, so fixing any file it loaded is picked up at once. After installing a *missing* target, restart the dev server if it runs under Bun (Bun's resolver keeps the miss); Node-based tools, including the editor, see it immediately.
+
 The language server shows them on the document, linked to the key in `package.json`. `mx-tsc` and the TypeScript plugin report `TS80003` at the key and `TS80001` on each page, and exit non-zero. See [Host and target selection](/specification/#135-host-and-target-selection) for the whole resolution order.
 
 ### What a third-party target cannot do yet

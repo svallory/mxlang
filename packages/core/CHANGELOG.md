@@ -17,6 +17,10 @@ Tests: `src/warning-position.test.ts`, the padding-contract rows in `src/fragmen
 
 `nearestName(name, candidates)` — the unambiguous-nearest-name helper behind core's did-you-mean hints — is now exported so a target can hint at a declared name (the data target's `unknownTags: "reject"`). Additive; no behaviour change.
 
+### Fixed: a failed target load is retried on every resolution (registration PR 7 round 3)
+
+Round 2's failure cache is removed: it was keyed on the entry file, so a fix to a module the entry requires was never picked up. A throwing or invalid target is re-evaluated per resolution, as in round 1, and reloads after a fix to any file. The registration-verdict cache stays. Under Bun a `target-not-found` persists for the process (TODO `target-loader-sticky-not-found`); Node sees a newly installed package at once.
+
 ### Fixed/Changed: third-party targets, round 2 (registration PR 7)
 
 Rule 3 compares host names for loaded descriptors: a bare `mx.host` naming the loaded target's host selects it with no `unknown-host` warning, and two loaded specifiers of one host agree. A loaded descriptor is rejected with `target-invalid-descriptor` when it declares `host.fileKinds` (`file kinds are supported for built-in targets only (for now)`, TODO `third-party-file-kinds`) or names a built-in host (`host "solid" belongs to the built-in targets; a third-party target cannot join it (for now)`, TODO `third-party-join-builtin-host`). The registration verdict is cached per descriptor and lookup shape, and a load failure (throws, invalid) is cached under the target package's manifest and entry-file stamp, so a throwing module is not re-evaluated per file; a fixed package reloads.

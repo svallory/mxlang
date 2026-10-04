@@ -9,6 +9,14 @@ import type { MxCompileDiagnostic } from "./language.ts";
  */
 export const HOST_POLICY_DIAGNOSTIC_CODE = 80003;
 
+/** Policy diagnostics that say the selected target could not be loaded. */
+export const LOAD_FAILURE_CODES: ReadonlySet<string> = new Set([
+  "target-not-found",
+  "target-load-failed",
+  "target-invalid-descriptor",
+  "host-invalid-descriptor",
+]);
+
 /**
  * Core's message with its own leading `<package.json> ` removed: wherever a
  * diagnostic is printed, the path is already its location, so it is said once.

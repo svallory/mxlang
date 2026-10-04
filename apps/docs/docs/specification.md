@@ -2357,7 +2357,10 @@ named `mxTarget` export, else the module itself when it is the descriptor
 targets only: a third-party target always needs an explicit `mx.target` (or
 `mx.host`) key. The descriptor is cached per resolved file and the target
 package's `package.json` (modification time and content), so its identity is
-stable between calls and a reinstall is picked up.
+stable between calls and a reinstall is picked up. A load that failed is retried on
+every resolution, so fixing any file it loaded is picked up at once. Under Bun,
+a `target-not-found` lasts until the process restarts (restart the dev server
+after installing a missing target); Node sees the new package immediately.
 
 A specifier that resolves and then fails to load or validate is an **error with
 no fallback to a guessed target** (the same family as `target-host-mismatch`:

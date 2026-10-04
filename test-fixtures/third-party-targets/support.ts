@@ -119,18 +119,24 @@ export function fakeProject(options: {
     manifest,
     options.manifestText ?? JSON.stringify({ mx: options.mx }, null, 2),
   );
-  for (const name of options.install ?? []) {
-    cpSync(
-      join(here, name),
-      join(root, "node_modules", "@fake", `mx-${name}`),
-      {
-        recursive: true,
-      },
-    );
-  }
-  if (options.install?.includes("own-core")) installSecondCore(root);
+  const project: FakeProject = {
+    root,
+    manifest,
+    path: (name) => join(root, name),
+  };
+  for (const name of options.install ?? []) installFake(project, name);
   for (const [name, text] of Object.entries(options.files ?? {})) {
     writeFileSync(join(root, name), text);
   }
-  return { root, manifest, path: (name) => join(root, name) };
+  return project;
+}
+
+/** Installs one fake target into an existing project, as a package manager would. */
+export function installFake(project: FakeProject, name: FakeTarget): void {
+  cpSync(
+    join(here, name),
+    join(project.root, "node_modules", "@fake", `mx-${name}`),
+    { recursive: true },
+  );
+  if (name === "own-core") installSecondCore(project.root);
 }

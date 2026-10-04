@@ -33,7 +33,10 @@ import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
 import { fileKindOf } from "./file-kinds.ts";
-import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
+import {
+  createTargetPolicyRecorder,
+  LOAD_FAILURE_CODES,
+} from "./host-policy-diagnostics.ts";
 import {
   codeInformation,
   compileWithDependencies,
@@ -48,6 +51,9 @@ import {
   warningDiagnostic,
 } from "./language.ts";
 import { dropOwnLocationHeader } from "./own-location-header.ts";
+
+/** Thrown inside the compile to skip it when the policy's target failed to load. */
+class TargetNotLoaded extends Error {}
 
 export const MX_LANGUAGE_ID = "mx";
 export const MX_EXTENSIONS = ["mx"] as const;
@@ -159,6 +165,16 @@ export function createMxLanguagePlugin(
           dependencies.get(fileName) ?? [],
           () => {
             const hostPolicy = resolveHost(fileName);
+            // The target failed to load and the page sits under the fallback
+            // target. Its verdict on a page written for another target would
+            // bury the real error (§4.1): compile nothing, point at the policy.
+            if (
+              hostPolicies
+                .get(fileName)
+                .some((diagnostic) => LOAD_FAILURE_CODES.has(diagnostic.code))
+            ) {
+              throw new TargetNotLoaded();
+            }
             const customTags = tagsFor(fileName, hostPolicy);
             // Reuse discovery's policy resolution: resolving it again would
             // repeat deprecation warnings on unchanged non-Angular files.
@@ -194,6 +210,17 @@ export function createMxLanguagePlugin(
           result.angularTag,
         );
       } catch (cause) {
+        if (cause instanceof TargetNotLoaded) {
+          // Only the `target not loaded` pointer (`getCompileDiagnostics`) and
+          // an inert module remain.
+          syntaxErrors.delete(fileName);
+          compileDiagnostics.set(fileName, []);
+          return createVirtualCode(
+            typescript,
+            failedModuleStub(typescript, source),
+            [],
+          );
+        }
         const foreign = foreignTemplateError(
           cause,
           fileName,

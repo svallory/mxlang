@@ -374,4 +374,27 @@ describe("round 2", () => {
     ) as { TranslateError: unknown };
     expect(own.TranslateError).not.toBe(tool.TranslateError);
   });
+
+  it("TS plugin and mx-tsc: after a load failure only target-not-found and `target not loaded`, no html verdict", () => {
+    const { compileDiagnostics, policyDiagnostics } =
+      pluginLeg("missing-rejected");
+    expect(policyDiagnostics.map((d) => d.code)).toEqual(["target-not-found"]);
+    expect(compileDiagnostics.map((d) => norm(d.message))).toEqual([
+      "target not loaded: see <ws>/missing-rejected/package.json(3,15)",
+    ]);
+    const lines = norm(tscOutput)
+      .split("\n")
+      .filter((line) => line.includes("<ws>/missing-rejected/"));
+    expect(lines).toHaveLength(2);
+    expect(
+      lines.filter((l) => l.includes("package.json(3,15): error TS80003:")),
+    ).toHaveLength(1);
+    expect(
+      lines.filter((l) =>
+        l.includes(
+          "a.mx(1,1): error TS80001: target not loaded: see <ws>/missing-rejected/package.json(3,15)",
+        ),
+      ),
+    ).toHaveLength(1);
+  });
 });

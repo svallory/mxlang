@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Fixed: no page compile after a target load failure (registration PR 7 round 3)
+
+When the policy carries `target-not-found`, `target-load-failed`, `target-invalid-descriptor` or `host-invalid-descriptor`, the plugin compiles nothing: it reports TS80003 and the `target not loaded: see package.json(line,col)` pointer over an inert virtual module, as the language server does, instead of the fallback target's verdict on the page. mx-tsc inherits this.
+
 ### Fixed: no html second lowering for a loaded target without declarations (registration PR 7 round 2)
 
 A target loaded from a package specifier that declares no `declarations` maps from the mappings and source map its `compileModule` returns (or none) instead of being re-lowered under html's rules, which rejected pages the target accepts (an event handler, `<let>`). Built-in targets are unchanged.
