@@ -573,4 +573,25 @@ describe("mx-tsc on a data package", () => {
       }
     }
   });
+  describe("core's LF-only policy positions print where the value is", () => {
+    const lines = [
+      "{",
+      ' "mx": {',
+      '  "target": "data",',
+      '  "host": "solid"',
+      " }",
+      "}",
+    ];
+    it.each([
+      ["CR only", "\r", "package.json(3,13)"],
+      ["LF", "\n", "package.json(3,13)"],
+      ["CRLF", "\r\n", "package.json(3,13)"],
+    ])("a target/host mismatch in a %s manifest", (_name, eol, expected) => {
+      const dir = emptyPackage({});
+      writeFileSync(join(dir, "package.json"), lines.join(eol));
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain(`${expected}: error TS80003:`);
+    });
+  });
 });
