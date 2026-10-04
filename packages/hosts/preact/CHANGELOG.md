@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
+
 - **Fix (reserve-mx-identifiers):** generated dynamic helpers, body/return temporaries and component aliases use `__mx` names. Generated imports alias class, fragment and boundary helpers without changing public exports. Shared with React and Hono; rendered collision regressions cover all three.
 
 - **Fix (attr-value-parity review):** hoist native value/spread guards once per module, including nested definitions and dynamic tags. Reject ordinary function/symbol values with Marko debug text while preserving event handlers and framework props. Shared with React and Hono.

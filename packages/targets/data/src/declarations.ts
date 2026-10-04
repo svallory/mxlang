@@ -55,6 +55,8 @@ export function reservedNameMessage(name: string): string {
 export const dataDeclarations: HostDeclarations = {
   name: "data",
   attrTags: 2,
+  // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
+  resolveDefaultTag: () => "div",
   tags: {
     else: { kind: "error", reason: reservedNameMessage("else") },
     "else-if": { kind: "error", reason: reservedNameMessage("else-if") },

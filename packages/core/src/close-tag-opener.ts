@@ -92,7 +92,10 @@ function findOpener(
       pending = { name: "", start: range.start };
     },
     onOpenTagName(range) {
-      const name = parser.read(range) || "div";
+      // An unnamed tag (`<#a>`) reads as "": Marko's own `|| "div"` only picks
+      // a taglib entry, and `div` has no parse options, so "" is a plain tag
+      // in this replay too. No set below holds "", so it needs no stand-in.
+      const name = parser.read(range);
       if (pending) pending.name = name;
       if (STATEMENT.has(name)) return TagType.statement;
       if (VOID.has(name) || OPEN_TAG_ONLY.has(name)) return TagType.void;

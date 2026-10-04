@@ -613,6 +613,8 @@ function rejectUnknownTag(
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/solid",
   attrTags: 2,
+  // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
+  resolveDefaultTag: () => "div",
   tags: STATEFUL_ERRORS,
   isElement: (name) => !/^[A-Z]/.test(name),
   isComponent,

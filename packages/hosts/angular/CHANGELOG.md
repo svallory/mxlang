@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
+
 - **Fix (colon-attr-followups round 2):** non-reserved colon names such as `attr:x` and `prop:x` are ordinary complete names, not invalid Marko modifiers, and dynamic values use `[attr.name]`. Static `oncapture:click` is preserved; its dynamic form gets a positioned Angular-security refusal because Angular forbids `[attr.on*]` bindings, rather than claiming Marko rejects the spelling.
 
 - **Fix (colon-attr-followups):** core preserves ordinary empty-suffix attribute names such as `x:`, so the existing Angular refusal now reports their authored name position for static, dynamic and valueless forms instead of emitting a different attribute with the colon dropped. Reserved empty modifiers remain errors.

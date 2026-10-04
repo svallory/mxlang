@@ -511,6 +511,8 @@ function resolveDelegatedTag(
 export const policy: Policy = {
   name: "@mxlang/html",
   attrTags: 2,
+  // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
+  resolveDefaultTag: () => "div",
   tags: TAGS,
   scriptletReplacement: (name, keyword) =>
     keyword === "const"

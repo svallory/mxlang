@@ -76,6 +76,7 @@ import {
   validateCustomTagParents,
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import { resolveUnnamedTags } from "./default-tag.ts";
 import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
 import type {
@@ -3249,6 +3250,8 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
  */
 export function lower(ctx: Ctx, body: Node[]): Ir {
   checkReservedTemplate(ctx, body);
+  // Before anything reads a tag name: an unnamed tag has none yet.
+  resolveUnnamedTags(ctx, body);
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
   const ownInputCode: string[] = [];

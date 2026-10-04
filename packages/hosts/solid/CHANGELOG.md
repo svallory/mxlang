@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
+
 - **Fix (reserve-mx-identifiers):** private escape, escaped-block and dynamic-tag temporaries and `/var` callback parameters use reserved `__mx` names. The `$mxReturn` property protocol is unchanged. Real SSR regressions pin authored bindings with the former private names.
 
 - **Fix (jsx-text-lt-unescaped):** authored text containing `<` or `>` no longer breaks the generated JSX a `.solid.mx` region splices into the surrounding TypeScript. Text children now escape `<`, `>`, `{`, and `}` as numeric character references, which JSX decodes back to the original characters, so rendered text equals Marko 6.3.51's; authored entities decode the same as in a browser only for `;`-terminated numeric references and the HTML4 named set — HTML5-only names and unterminated legacy forms stay literal (known divergence, tracked separately). Pinned by executed Solid SSR output.

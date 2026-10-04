@@ -150,6 +150,8 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
     name: declarationName,
     attrTags: 2,
     tags: statefulErrors(dialectName),
+    // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
+    resolveDefaultTag: () => "div",
     // `<let>` is not this host's state model. Never turn a mutable JS
     // declaration into an immutable `<const>` just to offer a fix.
     scriptletReplacement: (name, keyword) =>

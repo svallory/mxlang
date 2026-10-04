@@ -6,6 +6,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
+
 - **Fix: a registration error with no source position is a file-level diagnostic.** A `customTags` registration error (for example a `finalize`-only declaration, a contradictory attribute declaration, an unknown key in a `children` declaration) comes from core at 0:0. `parseData` now reports it at `line: 1`, `column: 0`, `offset: 0` instead of `line: 0` and `offset` equal to the source length, so `DataDiagnostic.line` stays 1-based. A warning at 0:0 gets the same treatment, and the caller's `warnings` array is not mutated. The message is unchanged; a diagnostic with a real position is untouched, and one in another file keeps `offset: -1`.
 
 - **Fix (proto-names): a data tag named `toString`, `constructor`, `hasOwnProperty`, `valueOf` or `__proto__` is an ordinary tag.** `parseData` threw a raw `TypeError` from Marko for these names in both `unknownTags` modes. They now parse to a data tag under `"allow"`, get the normal unknown-tag error under `"reject"`, and a `customTags` entry of that name is a contract. The fix is in core, plus the same prototype-stripping on the parse-only scan's own lookup (`scan.ts`), so `unknownTags: "reject"` still reports an unknown prototype-named parent above a contract error on a cold Marko cache.

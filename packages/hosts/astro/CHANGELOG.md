@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
+
 - **Fix (reserve-mx-identifiers):** frontmatter bindings beginning with `__mx` receive core's shared positioned reservation error before generated native-attribute helpers are injected. Template bindings are checked by core too; ordinary property names remain legal.
 
 - **Fix (attr-value-parity review):** native guards are hoisted once into frontmatter, with authored mapping offsets retained. Ordinary function/symbol values receive Marko debug errors; null/false serialization remains unchanged.

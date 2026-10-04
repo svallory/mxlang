@@ -163,6 +163,8 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/angular",
   attrTags: 2,
+  // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
+  resolveDefaultTag: () => "div",
   scriptletReplacement: (name, keyword) =>
     keyword === "const" ? `declare a value with \`<const/${name}=…/>\`` : "",
   // `[prop]=`, `#ref`, `*ngIf` are the target's own syntax and pass through.

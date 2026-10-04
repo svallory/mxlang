@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
+
 - **Fix (attr-value-parity review):** shared JSX guards are hoisted once per module and reject ordinary function/symbol values with Marko debug text; event handlers and framework props remain exempt.
 
 - **Fix (attr-value-parity):** ordinary native object values now throw Marko's diagnostic at render time, including final merged spreads and dynamic string tags; authored expressions are evaluated once. Component, class/style, controlled and framework-only props keep their existing contracts. Nested event/style prefix hints are corrected through the shared JSX emitter.

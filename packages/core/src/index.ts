@@ -94,7 +94,11 @@ export type {
   TagStore,
   TransformContext,
 } from "./custom-tags.ts";
-export type { HostDeclarations, Policy } from "./declarations.ts";
+export type {
+  DefaultTagParent,
+  HostDeclarations,
+  Policy,
+} from "./declarations.ts";
 export { nearestName } from "./did-you-mean.ts";
 export { drive, type Emitter, emit } from "./emit.ts";
 export { escape } from "./escape.ts";

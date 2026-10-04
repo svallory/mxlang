@@ -31,6 +31,16 @@ export type { Disposition };
  * would have nowhere to emit *to*: lower builds an IR, and the buffer does
  * not exist yet.
  */
+/** One authored ancestor of an unnamed tag, as `resolveDefaultTag` receives it. */
+export interface DefaultTagParent {
+  /** The authored tag name; an attribute tag keeps its `@`. */
+  readonly name: string;
+  /** True for an attribute tag (`<@y>`). */
+  readonly attributeTag: boolean;
+  /** The Marko tag node. */
+  readonly node: Node;
+}
+
 export interface HostDeclarations {
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;
@@ -133,6 +143,22 @@ export interface HostDeclarations {
    * A host without template bindings (Solid, Astro) names their module/fence.
    */
   scriptletReplacement?(name: string, keyword: "const" | "let" | "var"): string;
+  /**
+   * Names the tag an unnamed tag (`<#id>`, `<.class>`, concise `#id`/`.class`)
+   * stands for.
+   *
+   * Marko's parser silently writes `div` into the AST for the shorthand; the
+   * core instead recognises it (a string-literal name with an empty source
+   * span) and asks here, once per unnamed tag. The returned name lowers
+   * exactly like an authored tag of that name: `#x` stays `id="x"`, `.a.b`
+   * stays `class="a b"`. `parents` is the authored ancestor chain, nearest
+   * first, control-flow tags (`if`, `for`) included; an unnamed ancestor
+   * appears under the name it already resolved to.
+   *
+   * Without this hook a template that uses the shorthand fails with a
+   * positioned error: no default tag is declared.
+   */
+  resolveDefaultTag?(node: Node, parents: readonly DefaultTagParent[]): string;
   /** Return true when this host carries an attribute method as a callable prop. */
   resolveAttributeMethod?(attr: Node, on?: "element" | "component"): boolean;
   /**
