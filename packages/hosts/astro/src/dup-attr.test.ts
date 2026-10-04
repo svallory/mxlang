@@ -97,7 +97,7 @@ describe("duplicate attributes (astro)", () => {
     // `a=2` already won over the spread's `a`; the dead `a=1` is dropped.
     const { code, warnings } = run('<div a="1" ...input.rest a="2">x</div>');
     // An element with a spread folds into one object, so the merge decides.
-    expect(code).toContain('<div {...{ ...input.rest, "a": "2" }}>');
+    expect(code).toContain('{ ...input.rest, "a": "2" }, "div")');
     expect(code).not.toContain('"a": 1');
     expect(warnings.map((w) => [w.message, w.line, w.column])).toEqual([
       [MESSAGE("a", 4, 25), 4, 5],
@@ -107,6 +107,6 @@ describe("duplicate attributes (astro)", () => {
   it("does not warn or drop for a lone attribute before a spread", () => {
     const { code, warnings } = run('<div a="1" ...input.rest>x</div>');
     expect(warnings).toEqual([]);
-    expect(code).toContain('<div {...{ "a": "1", ...input.rest }}>');
+    expect(code).toContain('{ "a": "1", ...input.rest }, "div")');
   });
 });

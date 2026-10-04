@@ -267,12 +267,12 @@ describe("a spread's own __proto__ key (html, rendered)", () => {
 
   it("an object-valued __proto__ from JSON.parse does not become the merge object's prototype", () => {
     const x = JSON.parse('{"__proto__": {"polluted": "yes"}, "b": "2"}');
-    const out = render("<div a=1 ...input.x>hi</div>", { x });
-    expect(out.kept.b).toBe("2");
-    expect(out.kept.polluted).toBeUndefined();
+    // It stays an own data key, so the ordinary object-value guard rejects
+    // it rather than invoking the prototype setter or silently dropping it.
+    expect(() => render("<div a=1 ...input.x>hi</div>", { x })).toThrow(
+      "The `__proto__` attribute cannot be a plain object (it would render as `[object Object]`).",
+    );
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    // Marko's merge keeps the key as data, so it is an attribute here too.
-    expect(out.names).toContain("__proto__");
   });
 
   it("an explicit attribute named __proto__ is dropped on a tag with a spread, as before", () => {

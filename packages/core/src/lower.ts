@@ -490,6 +490,29 @@ function validateBoundAttributes(node: Node): void {
   }
 }
 
+/** Marko's builtin value checks run before any host can drop or claim a tag. */
+function validateBuiltinValueAttributes(node: Node, name: string): void {
+  if (name === "const" || name === "id") {
+    if ((node.attributes?.length ?? 0) > 1) {
+      fail(
+        `The [\`<${name}>\` tag](https://markojs.com/docs/reference/core-tag#${name}) only supports the [\`value=\` attribute](https://markojs.com/docs/reference/language#shorthand-value).`,
+        node.name,
+      );
+    }
+  } else if (name === "let" || name === "return") {
+    let seen = false;
+    for (const attr of node.attributes ?? []) {
+      if (
+        attr.type !== "MarkoAttribute" ||
+        (!attr.default && attr.name !== "value")
+      )
+        continue;
+      if (seen) fail("Invalid duplicate value attribute.", attr);
+      seen = true;
+    }
+  }
+}
+
 /** Resolves one attribute of an element or component call. */
 function lowerAttr(
   ctx: Ctx,
@@ -2226,7 +2249,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
         attr,
       );
     }
-    if (valueAttr) fail("invalid duplicate `value` attribute", attr);
+    if (valueAttr) fail("Invalid duplicate value attribute.", attr);
     valueAttr = attr;
   }
 
@@ -2797,6 +2820,19 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   ) {
     validateBoundAttributes(node);
   }
+
+  // An unclaimed delegated vocabulary (e.g. a static tree's `id`) is not
+  // the compiler builtin. Structural names and explicit host-owned names
+  // keep their builtin checks; ordinary element dialects inherit Marko's.
+  const compilerValueTag =
+    name === "const" ||
+    name === "return" ||
+    ((name === "let" || name === "id") &&
+      (Object.hasOwn(ctx.declarations.tags, name) ||
+        ((!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
+          ctx.declarations.isElement(name, ctx))));
+  if (!fileLocalBinding && compilerValueTag)
+    validateBuiltinValueAttributes(node, name);
 
   const disposition = Object.hasOwn(ctx.declarations.tags, name)
     ? ctx.declarations.tags[name]

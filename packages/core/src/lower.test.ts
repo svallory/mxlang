@@ -2619,7 +2619,7 @@ describe("<return>", () => {
     [
       "a duplicate value attribute",
       "<return value=1 value=2/>\n",
-      /duplicate `value` attribute/,
+      /Invalid duplicate value attribute\./,
     ],
     // Marko `error-return-args/`
     ["arguments", "<return('a') value=1/>\n", /tag arguments/],

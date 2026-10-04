@@ -479,8 +479,17 @@ attribute written after a spread suppresses the spread's key, and a spread
 written after an explicit attribute suppresses that attribute), so a browser,
 which keeps the first duplicate, sees the survivor. This is tested by rendering.
 
-The warning is an mx-only lint beyond Marko (which accepts duplicates
-silently), recorded in `divergences.md`; decisions 133 and 135.
+The warning is an mx-only lint beyond Marko (which accepts ordinary duplicate
+attributes silently), recorded in `divergences.md`; decisions 133 and 135.
+
+Builtin value syntax is different: duplicate shorthand/named/bound `value`
+spellings on `<let>` and `<return>` fail with Marko's
+`Invalid duplicate value attribute.` at the second value's authored name.
+The equivalent `<const>` / `<id>` duplicates retain their tag-specific linked
+“only supports the `value=` attribute” diagnostic at the tag name, matching
+live Marko 6.3.51 rather than ordinary last-wins normalization. Delegated
+vocabulary names such as a data tag named `id` are not compiler builtins and
+retain ordinary attribute normalization.
 
 ### `class` and `style`
 
