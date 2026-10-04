@@ -20,12 +20,26 @@ Data remains staged out by the registry's policy wrapper. Whole-file output
 still returns `map: null`, so absent map/mappings are safe. There is no editor
 type-surface rewrite or `typeCheck` option on this build path.
 
-The direct dependencies are core (types/errors), parser (`print`) and the
-registry (dispatch/discovery/readers). No host-package dependencies remain.
-This package is private and source-loaded; it has no published `dist` or
-emitted declarations to strip. Tests intercept descriptor loads/region
-entries instead of host indexes; their project externalizes core/dist so
-native descriptor requires share the plugin's caches/readers.
+The package stays private but `main`/`exports` and `types` point at `dist`.
+Its ESM facade loads a relocatable CJS bundle of registry/descriptors/host
+glue, keeping core, parser and `@marko/compiler` external (PR 4/5 precedent).
+A direct ESM bundle hoists data's external compiler import out of its lazy
+leaf; the CJS closure preserves deferred evaluation. Descriptor `require()` calls
+must not escape into source-loaded ESM under native Node. `@marko/compiler`
+is an exact-pinned direct runtime dependency; Vite is an exact-pinned peer
+because the public `Plugin` type comes from it. No host-package dependencies
+remain. Root and moon builds delegate to the same package build, before
+consumer tests/examples. Only `dist/index.d.ts` is emitted; it must import
+neither private registry types nor descriptor subpaths.
+
+Dispatch goldens use the built runtime, without snapshot updates. The plain
+Node dist regression covers every wired page target and a region; the light
+import regression also uses dist under plain Node and checks that config
+loading/reader registration load no compiler, with a first-transform positive
+control. Pack hygiene/probe include this private artifact and a packed Node
+smoke with a stubbed registry. Source unit tests still intercept descriptor
+loads/region entries; their project externalizes core/dist so native requires
+share the plugin's caches/readers.
 
 Historical implementation details below predate table dispatch.
 

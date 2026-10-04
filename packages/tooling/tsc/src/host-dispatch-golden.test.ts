@@ -16,7 +16,7 @@ import {
   diagnoseDocument,
   type RelatedDiagnostics,
 } from "../../language-server/src/diagnose.ts";
-import mxVite, { MX_SUFFIX } from "../../vite-plugin/src/index.ts";
+import mxVite, { MX_SUFFIX } from "../../vite-plugin/dist/index.js";
 import { runInProcess } from "./in-process.ts";
 
 /**

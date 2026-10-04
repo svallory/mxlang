@@ -18,4 +18,6 @@ tasks:
       - "src/**/*"
       # unknown-host-parity.test.ts runs the language server's diagnoseDocument.
       - "/packages/tooling/language-server/src/**/*"
+      # host-dispatch-golden.test.ts imports the built Vite plugin bundle.
+      - "/packages/tooling/vite-plugin/dist/**/*"
       - "/vitest.config.ts"

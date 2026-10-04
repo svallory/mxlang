@@ -360,21 +360,44 @@ function smokeMxTsc(): string | undefined {
 }
 
 /**
- * D4: the language server's d.ts re-exposes `vscode-languageserver/node`, whose
- * own declarations need `@types/node` (installed AND loaded: `types: []` would
- * hide its globals). Documented in the package README; every other package's
- * declarations are self-contained.
+ * Consumers whose declarations re-expose a third-party package's own types,
+ * which then need that package's type prerequisites. Install them, or the
+ * probe fails on `node_modules/`, which proves nothing about this package.
+ *
+ * - `@mxlang/language-server`: `vscode-languageserver/node` needs
+ *   `@types/node` (installed AND loaded: `types: []` would hide its globals).
+ *   Documented in that package's README.
+ * - `@mxlang/vite-plugin`: `Plugin` comes from `vite`, a required peer (only
+ *   optional peers are installed by default). Vite's declarations need
+ *   `@types/node` and an `esnext` lib (`Symbol.asyncDispose`, via rolldown).
+ *   Documented in that package's README.
  */
 function nodeTypes(
   name: string,
   compilerOptions: Record<string, unknown> = {},
 ): Pick<ConsumerOptions, "extraDeps" | "compilerOptions"> {
-  return name === "@mxlang/language-server"
-    ? {
-        extraDeps: { "@types/node": "26.5.1" },
-        compilerOptions: { ...compilerOptions, types: ["node"] },
-      }
-    : { compilerOptions };
+  if (name === "@mxlang/language-server") {
+    return {
+      extraDeps: { "@types/node": "26.5.1" },
+      compilerOptions: { ...compilerOptions, types: ["node"] },
+    };
+  }
+  if (name === "@mxlang/vite-plugin") {
+    return {
+      extraDeps: {
+        // `vite` is a ranged peer (">=8.2.2 <9"); pin the version the repo
+        // builds with so the probe stays deterministic.
+        vite: rootVite(),
+        "@types/node": "26.5.1",
+      },
+      compilerOptions: {
+        ...compilerOptions,
+        types: ["node"],
+        lib: ["esnext", "dom"],
+      },
+    };
+  }
+  return { compilerOptions };
 }
 
 /**
@@ -382,6 +405,15 @@ function nodeTypes(
  * bundles `@mxlang/astro` (a `bun build --external`), whose `main` is
  * `src/*.ts`, so a consumer install cannot load it (D5).
  */
+/** The root `devDependencies.vite`: the exact version the repo and examples build with. */
+function rootVite(): string {
+  const version = (
+    readPackageJson(repoRoot) as { devDependencies?: Record<string, string> }
+  ).devDependencies?.vite;
+  if (!version) fail("root package.json has no devDependencies.vite");
+  return version;
+}
+
 /** The plugin's own exact `devDependencies.typescript`: the version CI builds with. */
 function pluginTypescript(): string {
   const version = (
@@ -460,6 +492,40 @@ try {
       else
         problems.push(
           `packed plugin Node target dispatch failed\n${smoke.out}`,
+        );
+    }
+    if (p.name === "@mxlang/vite-plugin") {
+      // No workspace source or registry implementation exists in this consumer.
+      const smoke = run(
+        "node",
+        [
+          "--input-type=module",
+          "-e",
+          `
+        import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+        import { tmpdir } from "node:os";
+        import { join } from "node:path";
+        import mx from "@mxlang/vite-plugin";
+        for (const target of ["astro-html", "solid-jsx", "react-jsx", "html", "preact-jsx", "hono-jsx"]) {
+          const project = mkdtempSync(join(tmpdir(), "packed-vite-dispatch-"));
+          try {
+            writeFileSync(join(project, "package.json"), JSON.stringify({ mx: { target } }));
+            const result = await mx().transform.call({}, "<p/>", join(project, "page.mx.tsx"));
+            if (!result?.code.includes("export default") || result.map !== null) throw new Error(target + ": " + JSON.stringify(result));
+          } finally { rmSync(project, { recursive: true, force: true }); }
+        }
+        console.log("packed Node ESM Vite target dispatch passed");
+      `,
+        ],
+        dir,
+      );
+      if (smoke.status === 0)
+        console.log(
+          "[pack-probe] PASS packed Vite plugin Node target dispatch",
+        );
+      else
+        problems.push(
+          `packed Vite plugin Node target dispatch failed\n${smoke.out}`,
         );
     }
   }

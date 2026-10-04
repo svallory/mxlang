@@ -13,7 +13,30 @@ tasks:
 
   test:
     command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/vite-plugin"]
+    args: ["run", "--root", "../../..", "--project", "@mxlang/vite-plugin"]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
+      - "vitest.config.ts"
+
+  # One build implementation for native-Node runtime and emitted types.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    inputs:
+      - "src/**/*"
+      - "build/**/*"
+      - "/scripts/bundled-build.ts"
+      - "/scripts/baked-paths.ts"
+      # The bundle inlines the registry, every host and target descriptor and
+      # their compile entries: a change there must not replay a cached dist.
+      - "/packages/target-registry/src/**/*"
+      - "/packages/hosts/*/src/**/*"
+      - "/packages/targets/*/src/**/*"
+      - "/packages/core/src/**/*"
+      - "/packages/parser/src/**/*"
+      - "tsconfig.json"
+      - "tsconfig.build.json"
+      - "package.json"
+    outputs:
+      - "dist"

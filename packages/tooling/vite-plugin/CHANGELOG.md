@@ -2,6 +2,19 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (refactor/vite-plugin, decisions 129 and 132):** whole-file `.mx`
+  compilation dispatches through `@mxlang/target-registry` (`load(core).compileModule`
+  with the full built-in lookup) instead of branching on host names, and
+  `.solid.mx` uses the registered region pipeline. Build strictness,
+  `resolveImport`, mapping absence and the unwired-Angular message now come
+  from the descriptor, so Vite's own behaviour is unchanged.
+
+- **Changed (build/vite-plugin):** the package ships a bundled `dist/`
+  (`main`/`exports`/`types`). Descriptor `load()` needs a bundler, and a
+  source-loaded plugin raised `ERR_AMBIGUOUS_MODULE_SYNTAX` under native Node;
+  the ESM entry is a facade over a relocatable CJS bundle, which keeps every
+  heavy compiler lazy. Importing the plugin still loads no compiler.
+
 - **Fix (vite-plugin-colored-marko-header):** under `FORCE_COLOR=1` kleur colourises Marko's `at <path>:L:C` header (and the reason `label`), so the position regex missed the header and a Marko `CompileError` printed `page.mx.tsx:undefined:undefined` with ANSI still in the message. SGR runs are stripped before the position is parsed (`markoPosition`) and before `label` becomes the printed message, matching what `@mxlang/language-server`'s `splitCodeFrame` already does.
 
 - **Added (target-select, decisions 129/132):** `mx.target` selects its host

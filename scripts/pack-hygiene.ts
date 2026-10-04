@@ -131,6 +131,13 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     extraTopLevel: [],
     declarations: true,
   },
+  {
+    name: "@mxlang/vite-plugin",
+    dir: "packages/tooling/vite-plugin",
+    extraTopLevel: [],
+    distFiles: ["dist/index.cjs", "dist/index.d.ts", "dist/index.js"],
+    declarations: true,
+  },
   // A CLI bundle only: `bun build` emits no declarations, so there is no `types`.
   {
     name: "@mxlang/tsc",

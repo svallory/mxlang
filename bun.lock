@@ -536,9 +536,16 @@
       "name": "@mxlang/vite-plugin",
       "version": "0.0.0",
       "dependencies": {
+        "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",
         "@mxlang/parser": "workspace:*",
         "@mxlang/target-registry": "workspace:*",
+      },
+      "devDependencies": {
+        "@mxlang/html": "workspace:*",
+      },
+      "peerDependencies": {
+        "vite": ">=8.2.2 <9",
       },
     },
   },
