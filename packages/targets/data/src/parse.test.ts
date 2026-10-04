@@ -1463,7 +1463,7 @@ describe("a registration error with no source position is file-level", () => {
 
   it("a `finalize`-only declaration reports at 1:0, offset 0", () => {
     const result = parseData(source, "/t.mx", {
-      customTags: { pub: { finalize() {} } },
+      customTags: { pub: { finalize: () => [] } },
     });
     expect(result.tree).toBeUndefined();
     expect(result.diagnostics).toEqual([
@@ -1514,7 +1514,7 @@ describe("a registration error with no source position is file-level", () => {
 
   it("an empty source still reports at 1:0, offset 0", () => {
     const result = parseData("", "/t.mx", {
-      customTags: { pub: { finalize() {} } },
+      customTags: { pub: { finalize: () => [] } },
     });
     expect(result.diagnostics[0]).toMatchObject({
       line: 1,
@@ -1538,12 +1538,11 @@ describe("a registration error with no source position is file-level", () => {
 
 describe("an error in another file keeps `offset: -1`", () => {
   it("is not normalized: its position stays the other file's", () => {
+    const badge: TemplateBackedTag = {
+      template: { filename: "/t/tags/badge.mx", source: "<return=1/>\n" },
+    };
     const result = parseData("<badge/>\n", "/t.mx", {
-      customTags: {
-        badge: {
-          template: { filename: "/t/tags/badge.mx", source: "<return=1/>\n" },
-        },
-      },
+      customTags: { badge },
     });
     expect(result.tree).toBeUndefined();
     expect(result.diagnostics).toEqual([
