@@ -60,6 +60,12 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     declarations: true,
   },
   {
+    name: "@mxlang/data",
+    dir: "packages/targets/data",
+    extraTopLevel: [],
+    declarations: true,
+  },
+  {
     name: "@mxlang/parser",
     dir: "packages/parser",
     extraTopLevel: [],

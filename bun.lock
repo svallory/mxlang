@@ -424,11 +424,9 @@
       "name": "@mxlang/data",
       "version": "0.0.0",
       "dependencies": {
+        "@babel/types": "7.29.8",
         "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@babel/types": "7.29.8",
       },
     },
     "packages/tooling/angular-checker": {

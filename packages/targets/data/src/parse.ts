@@ -21,9 +21,9 @@ import {
 } from "@mxlang/core";
 import { buildDataDocument, lineStartsOf, unknownTagMessage } from "./build.ts";
 import { dataDeclarations } from "./declarations.ts";
-import descriptor from "./descriptor.ts";
 import { scanAuthoredTags } from "./scan.ts";
 import { dataTaglib } from "./taglib.ts";
+import { dataTargetBase } from "./target-base.ts";
 import type { DataDocument } from "./tree.ts";
 
 export { serializeDataDocument } from "./compile.ts";
@@ -43,7 +43,7 @@ export type {
   SerializedDataDocument,
 } from "./tree.ts";
 
-const dataTargets = createTargetLookup([descriptor]);
+const dataTargets = createTargetLookup([dataTargetBase]);
 
 export interface ParseDataOptions {
   /** Contract-only custom tags (decision 130), by call name. */

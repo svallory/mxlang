@@ -11,10 +11,12 @@
  * the real compile too, so the caller keeps its own error.
  */
 
-import markoCompiler from "@marko/compiler";
+import { createRequire } from "node:module";
 import type { CustomTag } from "@mxlang/core";
 import { RESERVED_NAMES } from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
+
+const require = createRequire(import.meta.url);
 
 /** A tag the author wrote, with the position of its `<`. */
 export interface AuthoredTag {
@@ -100,6 +102,8 @@ export function scanAuthoredTags(
 ): AuthoredTag[] | null {
   let program: { body: MarkoNode[] };
   try {
+    const markoCompiler =
+      require("@marko/compiler") as typeof import("@marko/compiler");
     const result = markoCompiler.compileSync(source, filename, {
       output: "source",
       ast: true,

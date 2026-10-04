@@ -1,7 +1,7 @@
 /**
  * The `data` target descriptor (decisions 129 and 132; unstable).
  *
- * Importing this module loads `./declarations.ts` only (it imports
+ * Importing this module loads `./target-base.ts` (and through it `./declarations.ts`) only (it imports
  * `@mxlang/core` and nothing that compiles). The compile module is required by
  * a relative path inside `load`, and it in turn requires the parser lazily, so
  * neither `load()` nor importing the registry loads `@marko/compiler`.
@@ -15,13 +15,10 @@
  * that returns no `map` and no `mappings`) is chosen in data PR 4.
  */
 import type { TargetDescriptor } from "@mxlang/core";
-import { dataDeclarations } from "./declarations.ts";
+import { dataTargetBase } from "./target-base.ts";
 
 const descriptor: TargetDescriptor = {
-  descriptorVersion: 0,
-  name: "data",
-  packageName: "@mxlang/data",
-  declarations: { default: dataDeclarations },
+  ...dataTargetBase,
   load() {
     const { compileModule } =
       require("./compile.ts") as typeof import("./compile.ts");

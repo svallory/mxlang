@@ -112,9 +112,15 @@ function reachableSources(entry: string, root: string): string[] {
   }
 }
 
-/** A function's text with vitest's per-module import aliases (`__vite_ssr_import_3__`) numbered alike. */
+/** A function's text with vitest's per-module import aliases (`__vite_ssr_import_3__`) numbered alike, and the print differences between Bun's bundle and vitest's transform removed. */
 const sourceText = (fn: unknown) =>
-  String(fn).replace(/__vite_ssr_import_\d+__/g, "__import__");
+  String(fn)
+    .replace(/__vite_ssr_import_\d+__/g, "__import__")
+    // Bun prints an `() => undefined` arrow as `() => { return; }`, the
+    // transform vitest applies to source prints it as `() => void 0`.
+    .replace(/\{\s*return;\s*\}/g, "void 0")
+    // Bun re-indents the bundled function body.
+    .replace(/\s+/g, "");
 
 /**
  * Same declarations object, or (for a package whose `dist` is bundled once per
