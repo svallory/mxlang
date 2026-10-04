@@ -21,6 +21,28 @@ comments beside whitespace and mixed bodies are pinned by the rendered
 not a new divergence. The present-but-empty **placeholder** body / `<if>`
 divergence below is unchanged.
 
+## Native attribute object values: Solid and Angular gaps
+
+Html, Preact, React, Hono and Astro now match Marko 6.3.51's debug render-time
+error for unrenderable object-valued ordinary native attributes, including
+final merged spreads. Arrays, Dates and custom `toString` remain valid;
+structured class/style and controlled writers retain their existing behavior.
+Real-render regression coverage: `packages/{targets/html,hosts/preact,hosts/react,hosts/hono,hosts/astro}/src/attribute-value.test.ts`.
+
+**Solid's attribute-rendering implementation is unchanged.** Its candidate
+passed render checks but failed eight compiler byte-parity oracle rows; it
+was left out under the lead's scoped-completion instruction rather than
+silencing the oracle. Plain/default-object coercion remains a known gap.
+
+**Angular is unchanged on every host path**, including `.ng.mx` and generated
+tag classes: ordinary attribute bindings stringify plain objects to
+`[object Object]`, and null-prototype values raise a framework coercion error
+instead of Marko's diagnostic. Real TestBed probing confirmed both results.
+Closing this gap would require a runtime helper in Angular's template scope;
+requiring a new instance member on author-owned page classes is a compatibility
+change and awaits a lead ruling. This is an open implementation gap, not an
+approved language divergence or a new required authoring pattern.
+
 ## Recorded divergences
 
 | Divergence | Since | Reason | Test |

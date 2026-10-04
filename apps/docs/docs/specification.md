@@ -442,6 +442,38 @@ Spreads have no authored prop name, default attributes have a zero-width name
 span, and custom elements do not acquire native-prop name diagnostics from
 this rule. Runtime output is unchanged.
 
+### Native attribute value rendering
+
+On html, Preact, React, Hono and Astro, an ordinary native attribute
+whose object value cannot be coerced to a useful string fails **at render
+time**, matching Marko 6.3.51's debug-runtime assertion:
+
+> The `data-x` attribute cannot be a plain object (it would render as `[object Object]`).
+
+This includes null-prototype objects and failed object coercion, not just an
+`Object.prototype` check. Arrays with renderable members, meaningful custom
+`toString` values and Dates remain valid. `class` and `style` retain their
+host's structured writers; controlled `input.checked` / `checkedValue`,
+`details.open` / `dialog.open` and `select.value` / `textarea.value` are not
+ordinary attribute writers. Component props are not native attributes.
+Host-only `ref`, `key` and raw-HTML props retain their framework contracts.
+
+Spreads are merged before validation: only the final surviving value is
+checked. A superseded object value does not cause an error, and authored
+expressions are evaluated once, retaining the host's existing evaluation order. String-valued dynamic tags use the
+native rule; component-valued dynamic tags still forward props unchanged.
+
+**Known gaps:** Solid's native attribute rendering remains unchanged: its
+candidate failed the compiler byte-parity oracle and was left out rather
+than weakening that gate. It still accepts plain objects or raises its own
+coercion error. Angular's existing attribute bindings still stringify plain
+objects or raise Angular's own coercion error. All Angular host paths,
+including `.ng.mx` and generated tag classes, remain unchanged pending a
+lead ruling on the compatibility of requiring runtime helpers on authored
+page classes. No new instance member is required by this change.
+
+**Decisions:** 67 (Marko parity), 135 (last-wins spread precedence).
+
 ### Duplicate attributes
 
 Within one tag, the **last** occurrence of an attribute name wins, on every

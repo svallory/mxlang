@@ -6,6 +6,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Fix (attr-value-parity):** validate builtin duplicate values before a host drops or claims the tag. `<let>`/`<return>` use Marko 6.3.51's duplicate-value text at the second value; `<const>`/`<id>` retain their linked tag-specific diagnostic at the tag name. Delegated vocabulary retains ordinary attribute normalization. Export host-neutral, inlinable native-attribute coercion helpers; class/style and controlled writers are exempt.
+
 - **Fix (colon-attr-followups round 2):** every non-reserved colon name (`x:foo`, `data:x`, `attr:x`, etc.) is ordinary and retains its complete spelling; only native `class:`/`style:`/`on:` prefixes reach modifier hooks. Ordinary native colon-name methods and function values now report Marko's exact function diagnostic before argument diagnostics, at the authored attribute name. Component callable props and event attributes retain their existing policies.
 
 - **Fix (colon-attr-followups):** reject non-reference bound attributes at Marko's value position on dynamic tags, ordinary components and built-in controls, including controls containing attribute tags, before any attribute can be silently discarded. Registered custom-tag and attribute-tag contracts keep decision 138's bound-literal checks. Preserve empty modifiers on ordinary names (`x:`), including static, dynamic and valueless attributes; reserved `class:`, `style:` and `on:` still reject and event suffixes are not dropped.

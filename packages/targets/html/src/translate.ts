@@ -28,6 +28,7 @@
  */
 
 import {
+  ATTRIBUTE_VALUE_EXPRESSION,
   type Attr,
   attrByName,
   type Ctx,
@@ -679,7 +680,7 @@ const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string
     for (const [key, value] of Object.entries(attrs)) {
       if (key === "content") continue;
       if (value === false || value === null || value === undefined) continue;
-      out += value === true ? " " + key : " " + key + "=\\"" + escape(value) + "\\"";
+      out += value === true ? " " + key : " " + key + "=\\"" + escape(${ATTRIBUTE_VALUE_EXPRESSION}(key, value, target)) + "\\"";
     }
     out += ">";
     if (props.content) out += props.content();

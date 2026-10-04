@@ -19,6 +19,7 @@
 
 import { readFileSync } from "node:fs";
 import {
+  ATTRIBUTE_SPREAD_EXPRESSION,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -178,7 +179,7 @@ function mxDynamic(target: any, payload: any, content?: any) {
     if (typeof target === "string" || mxIsHostComponentObject(target)) {
       const Tag: any = target;
       const attrs = payload[0] || {};
-      return <Tag {...attrs}>{content ? content() : undefined}</Tag>;
+      return <Tag {...(typeof target === "string" ? ${ATTRIBUTE_SPREAD_EXPRESSION}(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"]) : attrs)}>{content ? content() : undefined}</Tag>;
     }
     return target;
   }
@@ -190,7 +191,7 @@ function mxDynamic(target: any, payload: any, content?: any) {
   ) {
     const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
-    return <Tag {...rest}>{bodyContent ? bodyContent() : undefined}</Tag>;
+    return <Tag {...(typeof target === "string" ? ${ATTRIBUTE_SPREAD_EXPRESSION}(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"]) : rest)}>{bodyContent ? bodyContent() : undefined}</Tag>;
   }
   if (
     target !== null &&

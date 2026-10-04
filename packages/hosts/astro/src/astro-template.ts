@@ -8,6 +8,8 @@
  */
 
 import {
+  ATTRIBUTE_SPREAD_EXPRESSION,
+  ATTRIBUTE_VALUE_EXPRESSION,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
@@ -362,7 +364,7 @@ function emitElementAttrs(
     emitAttrs(attrs, write, writeMapped, name);
     return;
   }
-  write(" {...{ ");
+  write(` {...${ATTRIBUTE_SPREAD_EXPRESSION}({ `);
   attrs.forEach((attr, index) => {
     if (index > 0) write(", ");
     switch (attr.kind) {
@@ -405,7 +407,7 @@ function emitElementAttrs(
       }
     }
   });
-  write(" }}");
+  write(` }, ${JSON.stringify(name)})}`);
 }
 
 function emitAttrs(
@@ -451,9 +453,11 @@ function emitAttrs(
       // making it `string`-typed, not an Astro directive's literal JSX prop.
       write(' + ""]: ');
       if (attr.kind === "dynamic") {
-        write(`${PLAIN_ATTR_VALUE}((`);
+        write(
+          `${PLAIN_ATTR_VALUE}(${ATTRIBUTE_VALUE_EXPRESSION}(${JSON.stringify(attr.name)}, (`,
+        );
         writeMapped(attr.value.code, attr.value.node);
-        write("))");
+        write(`), ${JSON.stringify(nativeName ?? "")}))`);
       } else {
         // `slot` is not a boolean HTML attribute. Its bare form, like every
         // valueless colon name, means the empty string rather than "true".
@@ -464,9 +468,9 @@ function emitAttrs(
     }
     switch (attr.kind) {
       case "spread":
-        write(" {...");
+        write(nativeName ? ` {...${ATTRIBUTE_SPREAD_EXPRESSION}(` : " {...");
         writeMapped(attr.value.code, attr.value.node);
-        write("}");
+        write(nativeName ? `, ${JSON.stringify(nativeName)})}` : "}");
         break;
       case "boolean":
         write(" ");
@@ -508,9 +512,17 @@ function emitAttrs(
             },
           },
         });
-        write("={");
+        const checked =
+          nativeName !== undefined &&
+          attr.name !== "class" &&
+          attr.name !== "style";
+        write(
+          checked
+            ? `={${ATTRIBUTE_VALUE_EXPRESSION}(${JSON.stringify(attr.name)}, (`
+            : "={",
+        );
         writeMapped(attr.value.code, attr.value.node);
-        write("}");
+        write(checked ? `), ${JSON.stringify(nativeName)})}` : "}");
         break;
       }
     }

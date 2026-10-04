@@ -6,10 +6,16 @@ const compile = (source: string, typeCheck?: boolean) =>
 
 function nameMappings(source: string, typeCheck?: boolean) {
   const { code, mappings } = compile(source, typeCheck);
-  return mappings.map((mapping) => ({
-    generated: code.slice(mapping.generatedStart, mapping.generatedEnd),
-    authored: source.slice(mapping.sourceStart, mapping.sourceEnd),
-  }));
+  // Value expressions now have their own mappings through the guard. This
+  // helper asserts names only, including string-keyed merged JSX props.
+  return mappings
+    .map((mapping) => ({
+      generated: code
+        .slice(mapping.generatedStart, mapping.generatedEnd)
+        .replace(/^"|"$/g, ""),
+      authored: source.slice(mapping.sourceStart, mapping.sourceEnd),
+    }))
+    .filter(({ authored }) => /^[A-Za-z_$][\w:-]*$/.test(authored));
 }
 
 describe("native non-event name mappings (decision 140 (b))", () => {

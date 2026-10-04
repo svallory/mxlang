@@ -33,6 +33,7 @@
  */
 
 import {
+  ATTRIBUTE_VALUE_EXPRESSION,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
@@ -470,7 +471,7 @@ export function createEmitter(): StringEmitter {
    * single-quoted `title='a" onerror="…'` cannot close the attribute early
    * (decision 42). A spread emits a runtime loop that validates each key.
    */
-  const attribute = (attr: Attr): void => {
+  const attribute = (attr: Attr, tag = ""): void => {
     // Spreads are written by `elementAttributes`, never one at a time.
     if (attr.kind === "spread") return;
 
@@ -491,7 +492,11 @@ export function createEmitter(): StringEmitter {
     if (attr.kind === "bound") {
       const source = structured(attr.name, attr.value.code);
       literal(` ${attr.name}="`);
-      expression(source ?? attr.value.code, true);
+      expression(
+        source ??
+          `${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`,
+        true,
+      );
       literal('"');
       return;
     }
@@ -523,7 +528,10 @@ export function createEmitter(): StringEmitter {
     }
 
     literal(` ${attr.name}="`);
-    expression(attr.value.code, true);
+    expression(
+      `${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`,
+      true,
+    );
     literal('"');
   };
 
@@ -532,7 +540,10 @@ export function createEmitter(): StringEmitter {
    * merged-object form below. Same rendering as `attribute`, evaluated where the
    * object is built, so an attribute's expression runs in authored order.
    */
-  const attributeText = (attr: Exclude<Attr, { kind: "spread" }>): string => {
+  const attributeText = (
+    attr: Exclude<Attr, { kind: "spread" }>,
+    tag: string,
+  ): string => {
     switch (attr.kind) {
       case "boolean":
         return quote(` ${attr.name}`);
@@ -540,7 +551,7 @@ export function createEmitter(): StringEmitter {
         return quote(` ${attr.name}="${escape(attr.value)}"`);
       case "bound": {
         const source = structured(attr.name, attr.value.code);
-        return `${quote(` ${attr.name}="`)} + escape(${source ?? attr.value.code}) + "\\""`;
+        return `${quote(` ${attr.name}="`)} + escape(${source ?? `${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`}) + "\\""`;
       }
       case "event":
         return fail(
@@ -552,7 +563,7 @@ export function createEmitter(): StringEmitter {
         if (source) {
           return `((value) => value === "" ? "" : ${quote(` ${attr.name}="`)} + value + "\\"")(${source})`;
         }
-        return `${quote(` ${attr.name}="`)} + escape(${attr.value.code}) + "\\""`;
+        return `${quote(` ${attr.name}="`)} + escape(${ATTRIBUTE_VALUE_EXPRESSION}(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})) + "\\""`;
       }
     }
   };
@@ -591,15 +602,15 @@ export function createEmitter(): StringEmitter {
               (attr) => attr.kind !== "spread" && attr.name === "value",
             )
           : undefined;
-      if (value) attribute(value);
-      for (const attr of attrs) if (attr !== value) attribute(attr);
+      if (value) attribute(value, name);
+      for (const attr of attrs) if (attr !== value) attribute(attr, name);
       return;
     }
 
     const isInput = name === "input";
     const tail = isInput ? [] : attrs.slice(lastSpread + 1);
     const head = isInput ? attrs : attrs.slice(0, lastSpread + 1);
-    for (const attr of tail) attribute(attr);
+    for (const attr of tail) attribute(attr, name);
     const written = tail.flatMap((attr) =>
       attr.kind === "spread" ? [] : [attr.name],
     );
@@ -612,11 +623,17 @@ export function createEmitter(): StringEmitter {
       entries = `Object.entries(${only.value.code} ?? {})`;
     } else {
       push("const $raw = Symbol();");
-      const parts = head.map((attr) =>
-        attr.kind === "spread"
-          ? `...${attr.value.code}`
-          : `...{ ${JSON.stringify(attr.name)}: { [$raw]: ${attributeText(attr)} } }`,
-      );
+      const parts = head.map((attr) => {
+        if (attr.kind === "spread") return `...${attr.value.code}`;
+        const key = JSON.stringify(attr.name);
+        if (attr.kind === "boolean" || attr.kind === "static") {
+          return `...{ ${key}: { [$raw]: () => ${attributeText(attr, name)} } }`;
+        }
+        // Evaluate the expression in authored order, but serialize only the
+        // surviving merged value. An overwritten object must not throw.
+        const captured = { ...attr, value: { ...attr.value, code: "$value" } };
+        return `...{ ${key}: (($value) => ({ [$raw]: () => ${attributeText(captured, name)} }))(${attr.value.code}) }`;
+      });
       // One object literal with spread syntax, not `Object.assign`: a spread
       // key such as an own enumerable `__proto__` is then defined as data, as in
       // Marko's own merge, instead of hitting the `[[Set]]` setter.
@@ -632,7 +649,7 @@ export function createEmitter(): StringEmitter {
     }
     if (only?.kind !== "spread") {
       push(
-        'if (value !== null && typeof value === "object" && $raw in value) { out += value[$raw]; continue; }',
+        'if (value !== null && typeof value === "object" && $raw in value) { out += value[$raw](); continue; }',
       );
     }
     push(
@@ -640,7 +657,7 @@ export function createEmitter(): StringEmitter {
     );
     push(`if (!${ATTR_NAME_PATTERN}.test(key)) continue;`);
     push(
-      'out += value === true ? " " + key : " " + key + "=\\"" + escape(value) + "\\"";',
+      `out += value === true ? " " + key : " " + key + "=\\"" + escape(${ATTRIBUTE_VALUE_EXPRESSION}(key, value, ${quote(name)})) + "\\"";`,
     );
     state.indent--;
     push("}");

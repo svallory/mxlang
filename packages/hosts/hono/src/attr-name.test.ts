@@ -1,3 +1,4 @@
+import { ATTRIBUTE_VALUE_EXPRESSION as ATTR } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compileHonoMx } from "./index.ts";
 
@@ -79,7 +80,7 @@ describe("invalid attribute names (hono)", () => {
 describe("`:modifier` is the attribute `value:modifier` (hono)", () => {
   it("emits Marko's attribute, for every value kind", () => {
     expect(compileHonoMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
-      "<div value:foo={y} />",
+      `<div value:foo={${ATTR}("value:foo", y, "div")} />`,
     );
     expect(
       compileHonoMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
@@ -91,7 +92,7 @@ describe("`:modifier` is the attribute `value:modifier` (hono)", () => {
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(
       compileHonoMx(`<div value:foo=y/>`, "/fixtures/test.mx").code,
-    ).toContain("<div value:foo={y} />");
+    ).toContain(`<div value:foo={${ATTR}("value:foo", y, "div")} />`);
   });
 
   it("still refuses a real modifier", () => {

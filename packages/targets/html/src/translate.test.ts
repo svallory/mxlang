@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
+import {
+  ATTRIBUTE_VALUE_EXPRESSION as ATTR,
+  type CustomTag,
+  type TemplateBackedTag,
+} from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 import { brandRender } from "./translate.ts";
@@ -390,7 +394,7 @@ describe("evaluate-initial-value constructs (decision 65)", () => {
     const body = '<let/v="hi"/>\n<input value:=v>';
     const { code } = compile(src(body), file);
     expect(code).toContain('const v = "hi";');
-    expect(code).toContain("escape(v)");
+    expect(code).toContain(`escape(${ATTR}("value", v, "input"))`);
   });
 });
 

@@ -22,6 +22,11 @@ export type {
   AttrTagParams,
 } from "./attr-tag.ts";
 export {
+  ATTRIBUTE_SPREAD_EXPRESSION,
+  ATTRIBUTE_VALUE_BODY,
+  ATTRIBUTE_VALUE_EXPRESSION,
+} from "./attribute-value.ts";
+export {
   type AttrTagDecl,
   type CalleeInput,
   type CalleeInputReader,

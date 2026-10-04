@@ -1,3 +1,4 @@
+import { ATTRIBUTE_VALUE_EXPRESSION as ATTR } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compileReactMx } from "./index.ts";
 
@@ -80,7 +81,7 @@ describe("invalid attribute names (react)", () => {
 describe("`:modifier` is the attribute `value:modifier` (react)", () => {
   it("emits Marko's attribute, for every value kind", () => {
     expect(compileReactMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
-      "<div value:foo={y} />",
+      `<div value:foo={${ATTR}("value:foo", y, "div")} />`,
     );
     expect(
       compileReactMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
@@ -92,7 +93,7 @@ describe("`:modifier` is the attribute `value:modifier` (react)", () => {
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(
       compileReactMx(`<div value:foo=y/>`, "/fixtures/test.mx").code,
-    ).toContain("<div value:foo={y} />");
+    ).toContain(`<div value:foo={${ATTR}("value:foo", y, "div")} />`);
   });
 
   it("still refuses a real modifier, in this host's words", () => {

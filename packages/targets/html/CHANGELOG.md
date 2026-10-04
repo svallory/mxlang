@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (attr-value-parity):** ordinary native attributes, including spreads and dynamic string tags, throw Marko's render-time diagnostic for unrenderable objects instead of emitting `[object Object]`. Validate only final surviving merged values and evaluate authored values once. Existing class/style, controlled-value and direct-null behavior is unchanged.
+
 - **Fix (colon-attr-followups round 3):** native reserved-prefix diagnostics use Marko's exact fix-it, taking the first head and the full remainder: `class:foo:bar` suggests `class={ foo:bar: condition }`, `style:foo:bar` suggests `style={ foo:bar: value }`, and `on:foo:bar` suggests `onFoo:bar`. Authored positions are unchanged.
 
 - **Fix (colon-attr-followups round 2):** preserve ordinary nonempty colon names such as `x:foo` and `data:x`; reject ordinary native colon-name methods/functions with Marko's exact text and position rather than event-runtime advice. Restore `<input checked:/>` before the oracle fixture's spread element so its resume marker remains terminal.

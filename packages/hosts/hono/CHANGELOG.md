@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (attr-value-parity):** ordinary native object values now throw Marko's diagnostic at render time, including final merged spreads and dynamic string tags; authored expressions are evaluated once. Component, class/style, controlled and framework-only props keep their existing contracts. Nested event/style prefix hints are corrected through the shared JSX emitter.
+
 - **Fix (jsx-text-lt-unescaped):** text with JSX-significant characters (`<`, `>`, braces) is escaped in the generated TSX, so `<div>a < b</div>` compiles and renders `a < b` as Marko does, instead of failing downstream parsing. Authored entities decode the same as in a browser only for `;`-terminated numeric references and the HTML4 named set; HTML5-only names and unterminated legacy forms stay literal (known divergence, tracked separately). See `@mxlang/preact`.
 
 - **Fix (scriptlet-hint-let-var):** the shared JSX declarations omit immutable `<const>` advice for `$ let`/`$ var`; Hono rejects `<let>`. `$ const` advice is unchanged.

@@ -9,7 +9,11 @@
  * a `<try>` pulls in.
  */
 
-import type { CustomTag } from "@mxlang/core";
+import {
+  ATTRIBUTE_VALUE_EXPRESSION as ATTR,
+  type CustomTag,
+  ATTRIBUTE_SPREAD_EXPRESSION as SPREAD,
+} from "@mxlang/core";
 import { type FunctionComponent, h } from "preact";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx, preactDeclarations, preactDialect } from "./index.ts";
@@ -118,7 +122,9 @@ describe("elements and text", () => {
   });
 
   it("emits a void element self-closed", () => {
-    expect(markup("<input value=input.v>")).toBe("<input value={input.v} />");
+    expect(markup("<input value=input.v>")).toBe(
+      `<input value={${ATTR}("value", input.v, "input")} />`,
+    );
   });
 
   it("escapes braces in text, which JSX would read as an expression", () => {
@@ -149,7 +155,7 @@ describe("elements and text", () => {
 
   it("emits a spread attribute", () => {
     expect(markup("<div ...input.rest>x</div>")).toBe(
-      "<div {...input.rest}>x</div>",
+      `<div {...${SPREAD}({ ...input.rest }, "div", ["ref","key","dangerouslySetInnerHTML"])}>x</div>`,
     );
   });
 });
@@ -1549,7 +1555,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
 
   it("preserves oncapture: as an ordinary attribute, not a capture alias", () => {
     expect(markup("<div oncapture:click=fn>x</div>")).toBe(
-      "<div oncapture:click={fn}>x</div>",
+      `<div oncapture:click={${ATTR}("oncapture:click", fn, "div")}>x</div>`,
     );
   });
 });

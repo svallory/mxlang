@@ -3,6 +3,10 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  ATTRIBUTE_VALUE_EXPRESSION as ATTR,
+  ATTRIBUTE_SPREAD_EXPRESSION as SPREAD,
+} from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
 
@@ -305,7 +309,9 @@ describe("attributes", () => {
   });
 
   it("wraps a dynamic attribute in braces", () => {
-    expect(lower("<p title=name>x</p>")).toBe("<p title={name}>x</p>");
+    expect(lower("<p title=name>x</p>")).toBe(
+      `<p title={${ATTR}("title", (name), "p")}>x</p>`,
+    );
   });
 
   it("emits a bare attribute as HTML's spelling of true", () => {
@@ -313,7 +319,9 @@ describe("attributes", () => {
   });
 
   it("lowers a spread", () => {
-    expect(lower("<p ...rest>x</p>")).toBe("<p {...rest}>x</p>");
+    expect(lower("<p ...rest>x</p>")).toBe(
+      `<p {...${SPREAD}(rest, "p")}>x</p>`,
+    );
   });
 
   it("lowers a structured class to Astro's class:list", () => {
@@ -330,7 +338,7 @@ describe("attributes", () => {
 
   it("hoists value ahead of type on an input, as Marko does", () => {
     expect(lower('<input type="text" value=v>')).toBe(
-      '<input value={v} type="text" />',
+      `<input value={${ATTR}("value", (v), "input")} type="text" />`,
     );
   });
 

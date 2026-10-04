@@ -21,6 +21,8 @@
  */
 
 import {
+  ATTRIBUTE_SPREAD_EXPRESSION,
+  ATTRIBUTE_VALUE_EXPRESSION,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
@@ -579,13 +581,32 @@ export class PreactEmitter implements Emitter<string> {
         " {...{",
         mapped(JSON.stringify(attr.name), mapName ? attr.nameSpan : null),
         ": (",
-        mapped(this.#attrValue(attr), valueSpan ?? null),
+        !isComponent && attr.kind === "dynamic"
+          ? concatMapped(
+              ATTRIBUTE_VALUE_EXPRESSION,
+              "(",
+              JSON.stringify(attr.name),
+              ", ",
+              mapped(this.#attrValue(attr), valueSpan ?? null),
+              ", ",
+              JSON.stringify(tag ?? ""),
+              ")",
+            )
+          : mapped(this.#attrValue(attr), valueSpan ?? null),
         ")}}",
       );
     }
     switch (attr.kind) {
       case "spread":
-        return concatMapped(` {...${attr.value.code}}`);
+        return isComponent
+          ? concatMapped(` {...${attr.value.code}}`)
+          : concatMapped(
+              " {...",
+              ATTRIBUTE_SPREAD_EXPRESSION,
+              "(",
+              mapped(attr.value.code, attr.value.span ?? null),
+              ")}",
+            );
       case "boolean":
         return concatMapped(
           " ",
@@ -694,7 +715,28 @@ export class PreactEmitter implements Emitter<string> {
         return concatMapped(
           " ",
           mapped(name, mapName ? attr.nameSpan : null),
-          `={${methodExpression(attr.value) ?? attr.value.code}}`,
+          "={",
+          !isComponent &&
+            ![
+              "class",
+              this.#dialect.classAttr,
+              "style",
+              "ref",
+              "key",
+              this.#dialect.rawHtmlProp,
+            ].includes(attr.name)
+            ? concatMapped(
+                ATTRIBUTE_VALUE_EXPRESSION,
+                "(",
+                JSON.stringify(attr.name),
+                ", ",
+                mapped(attr.value.code, attr.value.span ?? null),
+                ", ",
+                JSON.stringify(tag ?? ""),
+                ")",
+              )
+            : concatMapped(methodExpression(attr.value) ?? attr.value.code),
+          "}",
         );
       }
     }
@@ -765,6 +807,79 @@ export class PreactEmitter implements Emitter<string> {
     isComponent: boolean,
     tag?: string,
   ): MappedCode {
+    if (!isComponent && attrs.some((attr) => attr.kind === "spread")) {
+      // Validate after the authored merge: an overwritten object is never
+      // serialized by Marko and must not throw just because it appeared first.
+      const entries = attrs.flatMap((attr, index) => {
+        if (attr.kind === "spread")
+          return [
+            index ? ", " : "",
+            "...",
+            mapped(attr.value.code, attr.value.span ?? null),
+          ];
+        const name =
+          attr.kind === "event"
+            ? this.#eventPropName(attr)
+            : this.#attrName(attr.name, false);
+        const value = this.#attrValue(attr);
+        const span =
+          attr.kind === "dynamic" || attr.kind === "event"
+            ? attr.value.span
+            : attr.kind === "static"
+              ? attr.valueSpan
+              : null;
+        const typedEvent =
+          attr.kind === "event" &&
+          this.#typeCheck &&
+          tag !== undefined &&
+          NATIVE_TAG.test(tag);
+        const shorthand =
+          attr.kind === "event" &&
+          methodExpression(attr.value) !== null &&
+          attr.value.node?.start === undefined;
+        const renderedValue = typedEvent
+          ? concatMapped(
+              "(",
+              shorthand ? mapped(value, attr.nameSpan) : value,
+              ") ",
+              mapped("satisfies", shorthand ? attr.nameSpan : (span ?? null)),
+              ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}">`,
+            )
+          : mapped(value, span ?? null);
+        const nameSpan =
+          mapNames &&
+          attr.kind !== "event" &&
+          !/^on[A-Z-]/.test(attr.name) &&
+          attr.nameSpan &&
+          attr.nameSpan.sourceEnd > attr.nameSpan.sourceStart
+            ? attr.nameSpan
+            : null;
+        return [
+          index ? ", " : "",
+          mapped(JSON.stringify(name), nameSpan),
+          ": ",
+          renderedValue,
+        ];
+      });
+      return concatMapped(
+        " {...",
+        ATTRIBUTE_SPREAD_EXPRESSION,
+        "({ ",
+        ...entries,
+        " }, ",
+        JSON.stringify(tag ?? ""),
+        ", ",
+        JSON.stringify([
+          "ref",
+          "key",
+          this.#dialect.rawHtmlProp,
+          ...(this.#dialect.classAttr === "class"
+            ? []
+            : [this.#dialect.classAttr]),
+        ]),
+        ")}",
+      );
+    }
     return concatMapped(
       ...attrs.map((attr) => this.#attr(attr, mapNames, isComponent, tag)),
     );

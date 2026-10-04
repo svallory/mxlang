@@ -258,18 +258,25 @@ describe("Astro directive-shaped names retain plain Marko meaning", () => {
       const values = [
         ["true", name],
         ["false", ""],
-        ["1", `${name}=\"1\"`],
+        ["1", `${name}="1"`],
         ["null", ""],
         ["undefined", ""],
-        ['({foo: "x"})', `${name}=\"[object Object]\"`],
-        ['["a", "b"]', `${name}=\"a,b\"`],
+        ['({foo: "x"})', "object-error"],
+        ['["a", "b"]', `${name}="a,b"`],
       ] as const;
       for (const [index, [value, attribute]] of values.entries()) {
-        const html = await renderConditional(
+        const rendered = renderConditional(
           `plain-value-${name.replace(":", "-")}-${index}`,
           `const value = ${value}; const rest = {"data-x": "y"};`,
           `<div ${name}=value/><div ...rest ${name}=value/>`,
         );
+        if (attribute === "object-error") {
+          await expect(rendered).rejects.toThrow(
+            `The \`${name}\` attribute cannot be a plain object (it would render as \`[object Object]\`).`,
+          );
+          continue;
+        }
+        const html = await rendered;
         const suffix = attribute ? ` ${attribute}` : "";
         expect(html).toBe(
           `<div${suffix}></div><div data-x="y"${suffix}></div>`,

@@ -1,3 +1,4 @@
+import { ATTRIBUTE_VALUE_EXPRESSION as ATTR } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
 
@@ -60,16 +61,22 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
     lowerAstroMx(`${FENCE}${source}`, "Test.astro.mx").code;
 
   it("emits Marko's attribute, for every value kind", () => {
-    expect(template(`<div :foo=y/>`)).toContain("<div value:foo={y}>");
+    expect(template(`<div :foo=y/>`)).toContain(
+      `<div value:foo={${ATTR}("value:foo", (y), "div")}>`,
+    );
     expect(template(`<div :foo="lit"/>`)).toContain(`<div value:foo="lit">`);
     expect(template(`<div :foo/>`)).toContain(`<div value:foo="">`);
     // The `{…}` form, emitted exactly like any other dynamic attribute on
     // this host (`<div id={y}/>` emits `id={{y}}`: the outer braces are
     // Astro's interpolation, the inner ones the MX expression).
-    expect(template(`<div :foo={y}/>`)).toContain("<div value:foo={{y}}>");
+    expect(template(`<div :foo={y}/>`)).toContain(
+      `<div value:foo={${ATTR}("value:foo", ({y}), "div")}>`,
+    );
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
-    expect(template(`<div value:foo=y/>`)).toContain("<div value:foo={y}>");
+    expect(template(`<div value:foo=y/>`)).toContain(
+      `<div value:foo={${ATTR}("value:foo", (y), "div")}>`,
+    );
   });
 
   it.each(["set:html", "set:text"])(

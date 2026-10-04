@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (attr-value-parity):** native attributes and dynamic string tags reject unrenderable objects with Marko's render-time error, including final merged spreads. Preserve component props, class/style, controlled writers and framework-only props; authored expressions are evaluated once. Nested `on:`/`style:` fix-its now dispatch on the first prefix instead of suggesting class syntax. Shared with React and Hono.
+
 - **Fix (jsx-text-lt-unescaped):** authored text containing `<` or `>` no longer breaks the generated TSX. `<div>a < b</div>` used to emit the `<` verbatim, and the *generated* `page.mx.tsx` then failed downstream parsing (`[builtin:vite-transform] Unexpected token`). Text children now escape `<`, `>`, `{`, and `}` as numeric character references (`a &#60; b`), which JSX decodes back to the original characters, so rendered DOM text equals Marko 6.3.51's. `&` is deliberately left raw: Marko passes authored entities through verbatim, and JSX decodes `;`-terminated numeric references and the HTML4 named entities the same way a browser does. HTML5-only names (`&check;`) and unterminated legacy forms (`&copy x`, `&lt`) are a known divergence — JSX keeps them literal where a browser decodes them (a full HTML5 entity decoder is tracked separately). Rendered parity tests pin Preact, React, and Hono output. Shared with `@mxlang/react` and `@mxlang/hono`.
 
 - **Fix/test (colon-attr-followups):** ordinary empty-suffix attributes (`x:`) use the existing string-keyed JSX spread instead of losing the colon; shared with React and Hono. A mapping regression pins both the string key and expression value of `value:foo:bar=x` to their authored spans.

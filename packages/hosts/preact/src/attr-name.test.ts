@@ -1,3 +1,4 @@
+import { ATTRIBUTE_VALUE_EXPRESSION as ATTR } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
@@ -81,7 +82,7 @@ describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
   it("emits Marko's attribute, for every value kind", () => {
     expect(
       compilePreactMx(`<div :foo=y/>`, "/fixtures/test.mx").code,
-    ).toContain("<div value:foo={y} />");
+    ).toContain(`<div value:foo={${ATTR}("value:foo", y, "div")} />`);
     expect(
       compilePreactMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
     ).toContain(`<div value:foo="lit" />`);
@@ -92,7 +93,7 @@ describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(
       compilePreactMx(`<div value:foo=y/>`, "/fixtures/test.mx").code,
-    ).toContain("<div value:foo={y} />");
+    ).toContain(`<div value:foo={${ATTR}("value:foo", y, "div")} />`);
   });
 
   it.each([
@@ -106,7 +107,7 @@ describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
     "uses a string-keyed spread for a name JSX cannot spell: %s",
     (source, name, value) => {
       expect(compilePreactMx(source, "/fixtures/test.mx").code).toContain(
-        ` {...{${JSON.stringify(name)}: (${value})}}`,
+        ` {...{${JSON.stringify(name)}: (${value === "y" || value === "input.x" ? `${ATTR}(${JSON.stringify(name)}, ${value}, "div")` : value})}}`,
       );
     },
   );
@@ -116,10 +117,10 @@ describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
     const { code, mappings } = compilePreactMx(source, "/fixtures/test.mx");
     for (const [generated, authored] of [
       ['"value:foo:bar"', "value:foo:bar"],
-      ["(x)", "x"],
+      [", x,", "x"],
     ] as const) {
       const generatedStart =
-        code.indexOf(generated) + (generated === "(x)" ? 1 : 0);
+        code.indexOf(generated) + (generated === ", x," ? 2 : 0);
       const sourceStart = source.indexOf(
         authored,
         source.indexOf("value:foo:bar"),
@@ -127,7 +128,7 @@ describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
       expect(mappings).toContainEqual({
         generatedStart,
         generatedEnd:
-          generatedStart + (generated === "(x)" ? 1 : generated.length),
+          generatedStart + (generated === ", x," ? 1 : generated.length),
         sourceStart,
         sourceEnd: sourceStart + authored.length,
       });
