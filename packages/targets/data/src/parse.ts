@@ -209,7 +209,7 @@ function toDiagnostic(
  * its child's error. Under `unknownTags: "reject"` the unknown-tag check
  * comes first in document order: scan the authored tags with a parse-only
  * pass (`scan.ts`, no lowering, so a later lowering error cannot interfere)
- * and return the first unknown one when it opens strictly before the core
+ * and return the earliest unknown one (by position) when it opens strictly before the core
  * error. An ancestor of the failing tag always does. When the source does not
  * parse there is nothing to list and the original error stands.
  * On this path the build never runs, so an unknown tag wins a tie with a build
@@ -225,7 +225,19 @@ function unknownTagBefore(
   const tags = scanAuthoredTags(source, filename, options.customTags);
   if (!tags) return null;
   const declared = new Set(Object.keys(options.customTags ?? {}));
-  const unknown = tags.find((tag) => !declared.has(tag.name));
+  // The earliest by position, not the first in the scan's walk order (which
+  // visits a tag's attribute tags before its children).
+  let unknown: (typeof tags)[number] | undefined;
+  for (const tag of tags) {
+    if (declared.has(tag.name)) continue;
+    if (
+      !unknown ||
+      tag.line < unknown.line ||
+      (tag.line === unknown.line && tag.column < unknown.column)
+    ) {
+      unknown = tag;
+    }
+  }
   if (!unknown) return null;
   const { line, column } = unknown;
   const before =

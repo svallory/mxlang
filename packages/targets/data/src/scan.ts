@@ -87,9 +87,11 @@ function parseTaglib(
 }
 
 /**
- * The authored tags of `source` in document order, or `null` when it does
+ * The authored tags of `source`, or `null` when it does
  * not parse. Excluded: reserved names (core consumes them), `<@name>`
- * attribute tags (their bodies are still walked) and dynamic tags.
+ * attribute tags (their bodies are still walked) and dynamic tags. The list
+ * is in walk order, a tag's attribute tags before its children, not document
+ * order: callers take the earliest by position.
  */
 export function scanAuthoredTags(
   source: string,

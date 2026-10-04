@@ -485,6 +485,25 @@ describe("walk order: attribute tags and children in source order", () => {
     ).toMatch(/^2:2 a dynamic tag/);
   });
 
+  it("core-error path: the earliest unknown tag wins over a later one in an attribute tag", () => {
+    // `<else/>` and `<define/>` are core errors raised after both unknowns.
+    for (const late of ["<else/>", "<define/>"]) {
+      expect(
+        where(
+          `<known>\n  <bogus1/>\n  <@meta>\n    <bogus2/>\n  </@meta>\n</known>\n${late}`,
+        ),
+      ).toMatch(/^2:2 `<bogus1>` is not a known tag/);
+    }
+  });
+
+  it("core-error path: an unknown tag opening before the core error is reported, not the error", () => {
+    expect(
+      where(
+        "<known>\n  <bogus1/>\n  <@meta><a/></@meta>\n  <try/>\n  <@meta><bogus2/></@meta>\n</known>",
+      ),
+    ).toMatch(/^2:2 `<bogus1>` is not a known tag/);
+  });
+
   it("keeps attrTags and children as separate arrays in the tree", () => {
     const { tree } = parse(
       "<known>\n  <a/>\n  <@meta/>\n  <a/>\n</known>",

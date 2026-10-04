@@ -274,27 +274,25 @@ type Part =
   | { side: "child"; node: IrNode };
 
 /**
- * Where a node opens, as an offset: its span when core gave it one, else its
- * `loc`. A `Text` node's `loc` points at the line above (see
- * `textPosition`), so it always uses the span.
+ * Where a node opens, as an offset: its span when core gave it a finite one,
+ * else its `loc`. A `Text` node's `loc` points at the line above (see
+ * `textPosition`), so it relies on its span, which core gives every `Text`
+ * (#234); the `loc` fallback is only a guard.
  */
 function openOffset(part: Part): number {
-  if (part.side === "child") {
-    const node = part.node;
-    if (node.kind === "DelegatedTag") {
-      return node.tag.span?.sourceStart ?? offsetOfLoc(node.tag.loc);
-    }
-    const span = "span" in node ? node.span : undefined;
-    return span?.sourceStart ?? offsetOfLoc(node.loc);
-  }
   const node = part.node;
-  if (node.kind === "AttributeTag") {
-    return node.tag.span?.sourceStart ?? offsetOfLoc(node.tag.loc);
+  const tag =
+    node.kind === "DelegatedTag" || node.kind === "AttributeTag"
+      ? node.tag
+      : undefined;
+  const span = tag ? tag.span : "span" in node ? node.span : undefined;
+  if (span && Number.isFinite(span.sourceStart)) return span.sourceStart;
+  const at = tag ? tag.loc : node.loc;
+  if (!at) {
+    throw new Error(
+      `@mxlang/data: core IR invariant broken — a \`${node.kind}\` node carries neither a span nor a loc`,
+    );
   }
-  return offsetOfLoc(node.loc);
-}
-
-function offsetOfLoc(at: Position): number {
   return offsetOfPosition(at.line, at.column);
 }
 
