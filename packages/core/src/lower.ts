@@ -1353,14 +1353,16 @@ function lowerAttributeTags(
   const directTags = node.attributeTags ?? [];
   // Marko's parser moves a comment written right before an `@tag` into the
   // parent's `attributeTags`. It is body content, not an attribute tag: it
-  // goes back among the content children, merged by source offset.
-  const hoistedComments: Node[] = [];
+  // goes back among the content children, merged by source offset. They are
+  // collected up front: the loop below jumps over an `<if>` chain, and the
+  // chain scan skips layout comments, so a comment collected in the loop
+  // could be skipped with it.
+  const hoistedComments: Node[] = directTags.filter(
+    (tag: Node) => tag?.type === "MarkoComment",
+  );
   for (let index = 0; index < directTags.length; index++) {
     const tag = directTags[index];
-    if (tag?.type === "MarkoComment") {
-      hoistedComments.push(tag);
-      continue;
-    }
+    if (tag?.type === "MarkoComment") continue;
     if (isControl(tag) && containsAttributeTags(tag)) {
       candidates.push({
         offset: nodeSpan(ctx, tag).sourceStart,

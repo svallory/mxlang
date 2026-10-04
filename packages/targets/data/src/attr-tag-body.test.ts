@@ -131,4 +131,52 @@ describe("body content beside attribute tags", () => {
         .diagnostics[0],
     ).toMatchObject({ line: 2 });
   });
+
+  describe("after an attribute-tag `<if>` chain", () => {
+    const chain = "<if=x><@m>M</@m></if>";
+    const attrKinds = (tag: DataTag) => tag.attrTags.map((t) => t.kind);
+
+    it("keeps a comment before the next attribute tag", () => {
+      const source = `<loose>${chain}<!-- c --><@n>N</@n></loose>\n`;
+      const tag = root(source);
+      expect(attrKinds(tag)).toEqual(["if", "attr-tag"]);
+      expect(shape(tag.children)).toEqual(["comment:c"]);
+      const [comment] = tag.children;
+      if (comment?.kind !== "comment") throw new Error("unreachable");
+      expect(
+        source.slice(comment.span.sourceStart, comment.span.sourceEnd),
+      ).toBe("<!-- c -->");
+    });
+
+    it("keeps two comments, in order", () => {
+      const tag = root(
+        `<loose>${chain}<!-- c1 --><!-- c2 --><@n>N</@n></loose>\n`,
+      );
+      expect(shape(tag.children)).toEqual(["comment:c1", "comment:c2"]);
+    });
+
+    it("keeps a comment nested inside an attribute tag's body", () => {
+      const tag = root(
+        `<loose><@group>${chain}<!-- c --><@n>N</@n></@group></loose>\n`,
+      );
+      const group = tag.attrTags[0];
+      if (group?.kind !== "attr-tag") throw new Error("unreachable");
+      expect(shape(group.children)).toEqual(["comment:c"]);
+    });
+
+    it("works in concise mode", () => {
+      const tag = root(
+        "loose\n  if=x\n    @m\n      -- M\n  // c\n  @n\n    -- N\n",
+      );
+      expect(attrKinds(tag)).toEqual(["if", "attr-tag"]);
+      expect(shape(tag.children)).toEqual(["comment:c"]);
+    });
+
+    it("keeps a comment between explicit `@if`/`@else` branches", () => {
+      const tag = root(
+        "<loose><@if=x><@m>M</@m></@if><!-- c --><@else><@m>E</@m></@else></loose>\n",
+      );
+      expect(shape(tag.children)).toEqual(["comment:c"]);
+    });
+  });
 });

@@ -21,10 +21,27 @@ const claimAll: HostDeclarations = {
   resolveAttributeMethod: () => true,
 };
 
+/** `<if>`/`<else>` as control flow, as every real host's taglib declares them. */
+const structuralTaglib: [string, unknown] = [
+  "attr-tag-comments-structural",
+  {
+    taglibId: "attr-tag-comments-structural",
+    "<if>": {
+      parseOptions: { controlFlow: true },
+      "@value": { type: "expression" },
+    },
+    "<else>": {
+      parseOptions: { controlFlow: true },
+      "@if": { type: "expression" },
+    },
+  },
+];
+
 function irOf(source: string): Ir {
   let captured: Ir | undefined;
   compileSource(source, "/tmp/attr-tag-comments.mx", claimAll, {
     targets: lookup,
+    taglibs: [structuralTaglib],
     emitIr: (ir) => {
       captured = ir;
       return "";
@@ -120,5 +137,59 @@ describe("a comment beside an attribute tag", () => {
   it("text beside an attribute tag stays a child (regression pin)", () => {
     const tag = loose("<loose>\n  hi\n  <@m>t</@m>\n</loose>\n");
     expect(shape(tag.children)).toEqual(["text:hi"]);
+  });
+
+  describe("after an attribute-tag `<if>` chain", () => {
+    const chain = "<if=x><@m>M</@m></if>";
+
+    it("keeps a comment before the next attribute tag", () => {
+      const tag = loose(`<loose>${chain}<!-- c --><@n>N</@n></loose>\n`);
+      expect(tag.attributeTagTree.map((n) => n.kind)).toEqual([
+        "AttributeTagIf",
+        "AttributeTag",
+      ]);
+      expect(shape(tag.children)).toEqual(["comment:c"]);
+    });
+
+    it("keeps two comments, in order", () => {
+      const tag = loose(
+        `<loose>${chain}<!-- c1 --><!-- c2 --><@n>N</@n></loose>\n`,
+      );
+      expect(shape(tag.children)).toEqual(["comment:c1", "comment:c2"]);
+    });
+
+    it("keeps a comment nested inside an attribute tag's body", () => {
+      const tag = loose(
+        `<loose><@group>${chain}<!-- c --><@n>N</@n></@group></loose>\n`,
+      );
+      expect(shape(tag.attributeTags[0]?.block.children ?? [])).toEqual([
+        "comment:c",
+      ]);
+    });
+
+    it("works in concise mode", () => {
+      const tag = loose(
+        "loose\n  if=x\n    @m\n      -- M\n  // c\n  @n\n    -- N\n",
+      );
+      expect(tag.attributeTagTree.map((n) => n.kind)).toEqual([
+        "AttributeTagIf",
+        "AttributeTag",
+      ]);
+      expect(shape(tag.children)).toEqual(["comment:c"]);
+    });
+
+    it("keeps a comment after a chain with an `<else>` branch", () => {
+      const tag = loose(
+        "<loose><if=x><@m>M</@m></if><else><@m>E</@m></else><!-- c --><@n>N</@n></loose>\n",
+      );
+      expect(shape(tag.children)).toEqual(["comment:c"]);
+    });
+
+    it("keeps a comment between explicit `@if`/`@else` branches", () => {
+      const tag = loose(
+        "<loose><@if=x><@m>M</@m></@if><!-- c --><@else><@m>E</@m></@else></loose>\n",
+      );
+      expect(shape(tag.children)).toEqual(["comment:c"]);
+    });
   });
 });
