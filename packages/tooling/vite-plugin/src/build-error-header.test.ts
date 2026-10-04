@@ -82,11 +82,19 @@ function header(message: string): string {
 
 describe("a failing vite build names the authored file, not the virtual id", () => {
   it.each([
-    ["<p>ok</p>\n\n<div>\n", 3, 0, 'Missing ending "div" tag'],
-    ["<div a=(x +)/>\n<span>", 1, 11, "Unexpected token"],
+    // One parser error: its single caret reason, which the header points at.
+    ["<p>ok</p>\n\n<div>\n", 3, 0, ['Missing ending "div" tag']],
+    // Two parser errors arrive as one error carrying one frame each. The
+    // header names the first position, but every caret reason survives.
+    [
+      "<div a=(x +)/>\n<span>",
+      1,
+      11,
+      ["Unexpected token", 'Missing ending "span" tag'],
+    ],
   ] as const)(
     "locates a child template syntax error in the child, including the build header",
-    async (source, line, column, message) => {
+    async (source, line, column, reasons) => {
       write("callee-parse", "tags/broken.mx", source);
       const error = await buildError(
         "callee-parse",
@@ -96,7 +104,8 @@ describe("a failing vite build names the authored file, not the virtual id", () 
       expect(header(error.message)).toBe(
         `[plugin mx] ${join(root, "callee-parse/tags/broken.mx")}:${line}:${column + 1}`,
       );
-      expect(plain(error.message)).toContain(message);
+      for (const reason of reasons)
+        expect(plain(error.message)).toContain(reason);
       expect(plain(error.message)).not.toContain("page.mx");
       expect(plain(error.message)).not.toContain("at ../");
     },

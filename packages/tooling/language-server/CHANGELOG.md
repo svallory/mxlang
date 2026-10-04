@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Fix (translate-error-callee-file):** callee syntax errors are published on the callee URI at its real range. Caller pointers include the file and 1-based line/column and link to that range.
+- **Fix (translate-error-callee-file):** callee syntax errors are published on the callee URI at its real range. Caller pointers include the file and 1-based line/column and link to that range. An aggregate callee (several Marko parser errors in one file) says how many further errors its code frame holds, on the callee diagnostic and the caller's pointer alike.
 
 ### Fixed: no page compile after a target load failure (registration PR 7 round 2)
 

@@ -87,11 +87,19 @@ function nextDiagnostics(
 
 describe("stdio server (e2e)", () => {
   it.each([
-    ["<p>ok</p>\n\n<div>\n", 3, 0, 'Missing ending "div" tag'],
-    ["<div a=(x +)/>\n<span>", 1, 11, "Unexpected token"],
+    ["<p>ok</p>\n\n<div>\n", 3, 0, 'Missing ending "div" tag', undefined],
+    // An aggregate callee: the callee's own diagnostic counts what the first
+    // reason leaves out, since only the frame shows the rest.
+    [
+      "<div a=(x +)/>\n<span>",
+      1,
+      11,
+      "Unexpected token (+1 more)",
+      'Missing ending "span" tag',
+    ],
   ] as const)(
     "publishes a child template syntax error on the child's URI and range",
-    async (source, line, column, message) => {
+    async (source, line, column, message, frameReason) => {
       const directory = mkdtempSync(join(tmpdir(), "mx-lsp-callee-"));
       try {
         writeFileSync(
@@ -122,6 +130,12 @@ describe("stdio server (e2e)", () => {
         const result = await published;
         expect(result.uri).toBe(childUri);
         expect(result.diagnostics[0]?.message).toContain(message);
+        if (frameReason !== undefined) {
+          const frame = (
+            result.diagnostics[0] as { data?: { codeFrame?: string } }
+          ).data?.codeFrame;
+          expect(frame).toContain(frameReason);
+        }
         expect((result.diagnostics[0] as { range?: unknown }).range).toEqual({
           start: { line: line - 1, character: column },
           end: { line: line - 1, character: column + 1 },

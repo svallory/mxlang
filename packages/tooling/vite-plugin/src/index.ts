@@ -1126,13 +1126,20 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           // The message opens with the file it is about; `id` and `loc`
           // already say so, and the path is the costliest part of the line.
           const prefix = `${errorFile}: `;
-          // A callee parse failure retains Marko's frame, without its path
-          // header. `locate` builds the overlay frame from the callee source,
-          // so only the caret's reason belongs in the error message.
+          // A callee parse failure retains Marko's frames, without their path
+          // headers. `locate` builds the overlay frame from the callee source
+          // at a single position, so only the caret reasons belong in the
+          // error message — and *every* frame's reason, not just the first:
+          // a callee with several parse errors arrives as one error carrying
+          // one frame each, and the other consumers (core's message, the
+          // language server's `data.codeFrame`) keep all of them.
           const plain = stripVTControlCharacters(err.message);
-          const reason = /^\s*(?:>\s*)?\d+ \|/.test(plain)
-            ? /^\s*\|\s*\^+\s+(\S.*)$/m.exec(plain)?.[1]
-            : undefined;
+          const reasons = /^[ \t]*(?:>[ \t]*)?\d+ \|/.test(plain)
+            ? [...plain.matchAll(/^[ \t]*\|[ \t]*\^+[ \t]+(\S.*)$/gm)].map(
+                (match) => match[1] as string,
+              )
+            : [];
+          const reason = reasons.length > 0 ? reasons.join("\n") : undefined;
           throw locate(err, {
             file: errorFile,
             line: err.line,

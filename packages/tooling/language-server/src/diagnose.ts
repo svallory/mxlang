@@ -141,6 +141,17 @@ function warningDiagnostics(
 }
 
 /**
+ * How many code frames a message carries. One per Marko parser error, so a
+ * callee reported as an aggregate carries every error's frame — while the
+ * split message keeps only the first frame's reason.
+ */
+function frameCount(raw: string): number {
+  return stripVTControlCharacters(raw)
+    .split("\n")
+    .filter((line) => /^[ \t]*> \d+ \|/.test(line)).length;
+}
+
+/**
  * Splits a compiler error into its compact text and its code frame.
  *
  * Babel/Marko errors read `<header>\n    at <path>:L:C\n      1 | <src>\n    > 2 | <src>\n        | ^^^ <text>\n      3 | ...`:
@@ -425,12 +436,11 @@ export function diagnoseDocument(
       const column = Math.max(0, position.column);
       // These errors carry only a start position, not a span, so synthesize a
       // one-character range that marks where the error occurred.
-      const split = splitCodeFrame(
+      const raw =
         error instanceof Error
           ? error.message
-          : String((error as { message?: unknown }).message ?? error),
-        filePathOf(uri),
-      );
+          : String((error as { message?: unknown }).message ?? error);
+      const split = splitCodeFrame(raw, filePathOf(uri));
       const { codeFrame, at } = split;
       // Babel's 0-based `(L:C)` is dropped only when it repeats this position
       // (same rule as the TypeScript plugin, so the surfaces agree).
@@ -438,12 +448,21 @@ export function diagnoseDocument(
       // A wrapped callee parse error has no `file` of its own: its real
       // location lives only in the frame's `at` line. Name it, and link it.
       const callee = at && !position.file ? at : undefined;
+      // Only the first frame's reason reaches the message, and a client that
+      // renders neither `data` nor `relatedInformation` sees just that — so
+      // say how many further errors the frame holds, on the callee
+      // diagnostic and on the caller's pointer alike.
+      const extraFrames = frameCount(raw) - 1;
+      const summary =
+        extraFrames > 0
+          ? `${split.message} (+${extraFrames} more)`
+          : split.message;
       const message = callee
         ? // 1-based already: this column is read out of Marko's own
           // `at <path>:L:C` frame header, and the related-information range
           // below subtracts 1 to reach an LSP (0-based) character.
-          `${split.message} (in ${callee.file}:${callee.line}:${callee.column})`
-        : split.message;
+          `${summary} (in ${callee.file}:${callee.line}:${callee.column})`
+        : summary;
       const diagnostic: Diagnostic = {
         severity: DiagnosticSeverity.Error,
         source: "mxlang",
@@ -466,7 +485,7 @@ export function diagnoseDocument(
                       },
                     },
                   },
-                  message: split.message,
+                  message: summary,
                 },
               ],
             }

@@ -1059,11 +1059,11 @@ describe("compiler code frame placement", () => {
 });
 
 describe("a tag template that fails to parse", () => {
-  const box = (): Record<string, CustomTag> => {
+  const box = (source = "<p>ok</p>\n\n<div>\n"): Record<string, CustomTag> => {
     const tag: TemplateBackedTag = {
       template: {
         filename: "/tags/box.mx",
-        source: "<p>ok</p>\n\n<div>\n",
+        source,
       },
     };
     return { box: tag };
@@ -1113,6 +1113,35 @@ describe("a tag template that fails to parse", () => {
     );
     expect(d?.message).toBe('Missing ending "div" tag');
     expect(d?.relatedInformation).toBeUndefined();
+  });
+
+  it("counts the errors an aggregate callee hides behind the first reason", () => {
+    // Two parser errors in one callee: the position and the message name the
+    // first, so both the pointer and the callee's own diagnostic say how many
+    // more the frame holds, rather than looking like a single error.
+    const [d] = diagnoseDocument(
+      page,
+      "file:///app/page.mx",
+      policy("html"),
+      undefined,
+      "",
+      box("<div a=(x +)/>\n<span>"),
+    );
+    expect(d?.message).toContain("Unexpected token (+1 more)");
+    expect(d?.message).toContain("(in /tags/box.mx:1:12)");
+    expect(d?.relatedInformation?.[0]?.message).toContain("(+1 more)");
+    const frame = (d?.data as { codeFrame?: string } | undefined)?.codeFrame;
+    expect(frame).toContain('Missing ending "span" tag');
+    // A single error is not an aggregate, and must not claim to be one.
+    const [single] = diagnoseDocument(
+      page,
+      "file:///app/page.mx",
+      policy("html"),
+      undefined,
+      "",
+      box(),
+    );
+    expect(single?.message).not.toContain("more)");
   });
 });
 

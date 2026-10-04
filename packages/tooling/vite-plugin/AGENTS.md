@@ -46,8 +46,10 @@ share the plugin's caches/readers.
 `loc.file` paired with its coordinates when rolldown stamped the caller's
 virtual id on a callee failure. It converts the build-render aggregate's
 column to 1-based (#227); the transform error and dev overlay retain Vite's
-0-based `loc.column`. The historical `:1:0` build examples below predate this
-printed-position correction. Callee parse messages retain only the reason;
+0-based `loc.column`. Build headers print 1-based columns (#227); the
+`[plugin mx] /…/src/page.mx:1:0` line quoted below is that correction's
+pre-fix record, not a current output. Callee parse messages retain only the
+reasons, one per caret, so an aggregate callee's later reasons are not lost;
 the overlay frame comes from the callee source. `build-error-header.test.ts`
 uses the programmatic build API with a real discovered child syntax error.
 
@@ -249,12 +251,14 @@ a failing build read
 CompileError: Missing ending "div" tag
 ```
 
-— `locate()`'s `id`/`loc.file` were already the authored path and could not
-change it, and `this.error({ id, loc })` cannot either (the stamp happens after
-the call). `buildEnd` now re-labels the aggregate's diagnostics before rolldown
-formats them (`relabelBuildErrors`, unit-tested and exercised by a real
-`vite build` in `build-error-header.test.ts`): `e.id` becomes the authored
-path, so the header is `…/src/page.mx:1:0`.
+— both defects in one line: a suffixed id nobody wrote, and the pre-#227
+0-based printed column. `locate()`'s `id`/`loc.file` were already the authored
+path and could not change it, and `this.error({ id, loc })` cannot either (the
+stamp happens after the call). `buildEnd` now re-labels the aggregate's
+diagnostics before rolldown formats them (`relabelBuildErrors`, unit-tested and
+exercised by a real `vite build` in `build-error-header.test.ts`): `e.id` becomes
+the authored path and the printed column becomes 1-based, so the header is now
+`…/src/page.mx:1:1`.
 
 The re-label is deliberately narrow, and each bound is load-bearing:
 
