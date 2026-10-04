@@ -21,6 +21,24 @@ import {
 } from "@mxlang/angular-checker";
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
 
+/**
+ * One program `tsc` built, and the `.ng.mx` compiles that program made.
+ *
+ * A program is the unit the template pass works in: it knows which root files
+ * tsc compiled it over, so a `.ng.mx` is checked under the project whose
+ * program holds it, with no guess at ownership from paths.
+ */
+export interface NgProgram {
+  /**
+   * The root files tsc passed to `createProgram`, as it resolved them:
+   * absolute and `/`-separated. Which project of a `-b` graph this program is,
+   * matched against each project's own file list (`matchProjects`). Empty for
+   * a program over no root file of its own.
+   */
+  rootNames: readonly string[];
+  getCompiledNgMx(): CompiledNgMx[];
+}
+
 /** Seams for tests; production uses the real implementations. */
 export interface NgDiagnosticsDeps {
   resolveCompilerCli?: typeof resolveCompilerCli;

@@ -19,12 +19,18 @@ import type { Language, LanguagePlugin } from "@volar/language-core";
 import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
 import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName";
 import type ts from "typescript";
-import { parseBuildMode, resolveBuildProjects } from "./build-templates.ts";
+import {
+  isWatchMode,
+  parseBuildMode,
+  resolveBuildProjects,
+} from "./build-templates.ts";
 import {
   checkNgMxGroups,
   checkNgMxProjects,
   type NgDiagnosticsResult,
+  type NgProgram,
 } from "./ng-diagnostics.ts";
+import { installWatchTemplatePass } from "./watch-templates.ts";
 
 /**
  * The compound extensions `.solid.mx` and `.ng.mx` as `runTsc` wants them: no
@@ -275,7 +281,7 @@ function virtualFilesInWatchRebuilds(host: ts.CompilerHost | undefined): void {
 function runPatchedTsc(
   astro: boolean,
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
-  ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[],
+  ngPlugins: NgProgram[],
 ): number {
   let tscExitCode = 0;
   const exit = process.exit;
@@ -295,7 +301,10 @@ function runPatchedTsc(
         const ngMx = createNgMxLanguagePlugin(typescript, {
           retainCompiled: true,
         });
-        ngPlugins.push(ngMx);
+        ngPlugins.push({
+          rootNames: options.rootNames,
+          getCompiledNgMx: () => ngMx.getCompiledNgMx(),
+        });
         const mx = createMxLanguagePlugin(typescript);
         diagnosticPlugins.push(solidMx, ngMx, mx);
         const plugins: LanguagePlugin<string>[] = [solidMx, ngMx, mx];
@@ -345,7 +354,7 @@ function compileProjectNgMx(
   tsconfigPath: string,
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
 ): CompiledNgMx[] {
-  const ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[] = [];
+  const ngPlugins: NgProgram[] = [];
   const argv = process.argv;
   const stdout = process.stdout.write;
   const stderr = process.stderr.write;
@@ -404,7 +413,12 @@ function collectBuildGroups(
  * whether a file type-checks.
  */
 export function runMxTsc(): void {
-  process.exitCode = runMxTscBody();
+  const code = runMxTscBody();
+  // A watch rebuild finds its Angular template errors after `runMxTscBody`
+  // returned, and sets `process.exitCode` itself (a watcher is killed, not
+  // exited). A pass never lowers an exit code to 0; only a failing run sets
+  // one, and a clean run leaves whatever the watch pass already found.
+  if (code !== 0) process.exitCode = code;
 }
 
 /**
@@ -456,15 +470,33 @@ function runMxTscChecks(): number {
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
   // One language plugin per program: `tsc -b` creates one for each project,
   // and every one of them holds compiles the Angular pass has to see.
-  const ngPlugins: { getCompiledNgMx(): CompiledNgMx[] }[] = [];
+  const ngPlugins: NgProgram[] = [];
+  const argv = process.argv.slice(2);
+  const build = parseBuildMode(argv);
+
+  // `tsc -w` (with or without `-b`) returns from `executeCommandLine` after
+  // its first build and rebuilds on its own, so nothing here runs again after
+  // the pass made below: every later rebuild needs the template pass of its
+  // own, run from inside tsc's rebuild (see `installWatchTemplatePass`).
+  const watchPass = isWatchMode(argv, process.cwd())
+    ? installWatchTemplatePass({
+        argv,
+        cwd: process.cwd(),
+        build: build !== undefined && !build.clean && !build.dry,
+        programs: ngPlugins,
+        report: reportNgErrors,
+      })
+    : undefined;
   const tscExitCode = runPatchedTsc(astro, diagnosticPlugins, ngPlugins);
+  // A watch run re-runs the pass from inside each rebuild; when it printed no
+  // summary at all, nothing below ran either and this is its one pass.
+  const watchRan = watchPass?.ran === true;
 
   // Under `-b`, tsc skips an up-to-date project, so no program (and no
   // language plugin) ever sees its `.ng.mx` files. tsc's incremental state
   // knows nothing about templates, so the Angular pass runs over every project
-  // of the build graph regardless of that state.
-  const argv = process.argv.slice(2);
-  const build = parseBuildMode(argv);
+  // of the build graph regardless of that state. A watch run already ran the
+  // pass from inside its first build.
   const compiledNgMx = [
     // A file two projects both compile (via `references`) is checked once.
     ...new Map(
@@ -476,7 +508,7 @@ function runMxTscChecks(): number {
   const buildProjects =
     build && !build.clean ? resolveBuildProjects(argv, process.cwd()) : [];
   const buildGroups =
-    build && !build.clean && !build.dry
+    build && !build.clean && !build.dry && !watchRan
       ? collectBuildGroups(astro, buildProjects, diagnosticPlugins)
       : undefined;
   if (build?.dry) reportDryRun(buildProjects);
@@ -510,19 +542,46 @@ function runMxTscChecks(): number {
   // only over `.ng.mx` files that compiled, and never loads compiler-cli when
   // there are none. A template error, or a project whose templates could not
   // be checked at all, fails the run. `--clean` and `--dry` check nothing.
+  // A watch run already ran the pass from inside each of its rebuilds; if it
+  // never printed one, the pass below is its one.
   const angular = buildGroups
     ? checkNgMxGroups(buildGroups)
-    : build
+    : build || watchRan
       ? { reports: [], errors: [], warnings: [] }
       : checkNgMxProjects(compiledNgMx, argv, process.cwd());
   reportNgDiagnostics(angular);
-  const hasAngularError =
-    angular.errors.length > 0 ||
-    angular.reports.some((report) =>
-      report.diagnostics.some((d) => d.category === "error"),
-    );
+  const hasAngularError = countNgErrors(angular) > 0;
 
   return hasCompileError || hasPolicyError || hasAngularError ? 1 : tscExitCode;
+}
+
+/**
+ * The errors one pass of the Angular template pass found: every template
+ * diagnostic that is an error, plus every project whose templates could not be
+ * checked at all (reported as `error mxlang:` lines, and a silent pass is the
+ * one thing that must not read as clean).
+ */
+function countNgErrors(result: NgDiagnosticsResult): number {
+  return (
+    result.errors.length +
+    result.reports
+      .flatMap((report) => report.diagnostics)
+      .filter((diagnostic) => diagnostic.category === "error").length
+  );
+}
+
+/**
+ * Reports one pass's result and returns its error count, for the watch
+ * interceptor: tsc's own summary line is written right after, and its count
+ * has to carry these errors too. An error found by a rebuild outlives the call
+ * that returns here (a watcher is killed, not exited), so it is also the
+ * process's exit code; the entry point never lowers an exit code to 0.
+ */
+function reportNgErrors(result: NgDiagnosticsResult): number {
+  reportNgDiagnostics(result);
+  const errors = countNgErrors(result);
+  if (errors > 0) process.exitCode = 1;
+  return errors;
 }
 
 /**

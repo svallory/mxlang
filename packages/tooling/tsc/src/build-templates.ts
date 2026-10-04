@@ -11,7 +11,7 @@
  */
 
 import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { resolveProjectTsconfigs } from "./ng-diagnostics.ts";
 
 type TypeScript = typeof import("typescript");
@@ -47,6 +47,25 @@ export function parseBuildMode(argv: readonly string[]): BuildMode | undefined {
   return { clean: !!buildOptions.clean, dry: !!buildOptions.dry };
 }
 
+/**
+ * Whether `argv` asks `tsc` to keep watching (`-w` / `--watch`), with or
+ * without `-b`, read by TypeScript's own command-line parsers so every
+ * spelling (`--watch`, a response file, `-w` after the projects) agrees with
+ * the TypeScript pass by construction. False on a command line `tsc` rejects.
+ */
+export function isWatchMode(argv: readonly string[], cwd: string): boolean {
+  const ts = loadTypeScript();
+  const first = argv[0]?.replace(/^--?/, "").toLowerCase();
+  if (first === "b" || first === "build") {
+    const { buildOptions, errors } = ts.parseBuildCommand([...argv]);
+    return errors.length === 0 && !!buildOptions.watch;
+  }
+  const { options, errors } = ts.parseCommandLine([...argv], (path) =>
+    ts.sys.readFile(resolve(cwd, path)),
+  );
+  return errors.length === 0 && !!options.watch;
+}
+
 export interface BuildProject {
   tsconfigPath: string;
   /**
@@ -55,6 +74,41 @@ export interface BuildProject {
    * the projects it references do.
    */
   hasFiles: boolean;
+  /**
+   * The root files the project selects, as tsc resolves them for it (absolute,
+   * `/`-separated). A program of the build graph is one of these lists (a
+   * `.ng.mx` reached only by import is not a root file of any project, yet its
+   * program still is), so this is how a program is matched back to the project
+   * that created it — see `matchProjects`.
+   */
+  rootNames: readonly string[];
+}
+
+/**
+ * Which project each program of a `tsc -b` run belongs to, by the program's
+ * own root files: the project whose file list holds the most of them, first in
+ * build order on a tie. Two projects of one build share no root file (tsc
+ * compiles each file in exactly one program; a `references` edge substitutes a
+ * dependency's output `.d.ts`), so the match cannot be ambiguous in practice,
+ * and an unmatched program (`-1`) is reported rather than guessed at.
+ */
+export function matchProjects(
+  projects: readonly BuildProject[],
+  programs: readonly (readonly string[])[],
+): number[] {
+  return programs.map((rootNames) => {
+    const roots = new Set(rootNames);
+    return projects.reduce(
+      (best, project, index) => {
+        let owned = 0;
+        for (const file of project.rootNames) {
+          if (roots.has(file)) owned += 1;
+        }
+        return owned > best.owned ? { index, owned } : best;
+      },
+      { index: -1, owned: 0 },
+    ).index;
+  });
 }
 
 /**
@@ -100,7 +154,11 @@ export function resolveBuildProjects(
     for (const reference of parsed.projectReferences ?? []) {
       visit(ts.resolveProjectReferencePath(reference));
     }
-    projects.push({ tsconfigPath, hasFiles: parsed.fileNames.length > 0 });
+    projects.push({
+      tsconfigPath,
+      hasFiles: parsed.fileNames.length > 0,
+      rootNames: parsed.fileNames,
+    });
   };
   for (const root of resolveProjectTsconfigs(argv, cwd)) visit(root);
   return projects;

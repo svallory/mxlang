@@ -14,6 +14,12 @@ Needs `bun install` and `bun run build` first (`dist/` of core, parser, the html
 
 This package's run is slow and sensitive to machine load (TODO `tsc-tests-runtime-2`): the whole project took ~340 s on a busy machine and hit `[vitest-worker]: Timeout calling "onTaskUpdate"`. Run single files with the path filter (`... src/<file>.test.ts`) while iterating.
 
+## The Angular template pass in watch mode (`src/watch-templates.ts`)
+
+`tsc -w` returns from `executeCommandLine` after its first build and rebuilds on its own, so nothing of `index.ts` runs again afterwards: every rebuild needs the template pass of its own. It runs from an interceptor on `process.stdout.write` (`installWatchTemplatePass`), matched on tsc's own watch summary (`Found N errors. Watching for file changes.`): the pass's diagnostics are printed before that line and its errors are counted into it. Only that line is acted on. Under `-b -w` each program's compiles are matched back to a project by root-file overlap (`matchProjects` in `build-templates.ts`), never by path prefix.
+
+Two bounded real-watcher tests cover the watch surfaces, each killing and reaping its watcher in `finally` with a hard lifetime limit (run one at a time; they spawn real watchers): `src/watch-rebuild-diagnostics.test.ts` (TypeScript pass) and `src/watch-ngmx-rebuild-diagnostics.test.ts` (this pass).
+
 ## Dispatch goldens (`src/host-dispatch-golden.test.ts`)
 
 For one fixture directory per row under `src/fixtures/host-dispatch/`, the test records what each tool produces today: language-server diagnostics, the TypeScript plugin's `generated` text, `mappings`, compile and host-policy diagnostics, the Vite transform output, and `mx-tsc`'s output. `mx-tsc` runs once, in process, over `fixtures/host-dispatch/tsconfig.json` (with `--astro`, which is a superset of the extension lists); its output is split per row by path. Goldens are JSON in `src/fixtures/host-dispatch/__golden__/`, paths normalised to `<root>`/`<repo>`, ANSI stripped.
