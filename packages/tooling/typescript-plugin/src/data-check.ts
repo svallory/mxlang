@@ -17,6 +17,8 @@ export interface DataCheckDiagnostic {
   column: number;
   /** Exact UTF-16 offset in `file`, when known; wins over `line`/`column`. */
   offset?: number;
+  /** `line`/`column` count lines by LF only; read them that way without an `offset`. */
+  lfCoordinates?: true;
   /** Characters covered, when known. */
   length?: number;
   severity: "error" | "warning";

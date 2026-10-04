@@ -594,4 +594,37 @@ describe("mx-tsc on a data package", () => {
       expect(output).toContain(`${expected}: error TS80003:`);
     });
   });
+  describe("a foreign-file diagnostic keeps the coordinates its producer gave", () => {
+    it.each([
+      [
+        "CR only",
+        "const first=0;\rconst second=1;\rconst third=2;",
+        2,
+        9,
+        "(2,10)",
+      ],
+      ["mixed CR/LF", "a\rbbbb\ncccc", 2, 3, "(2,4)"],
+      ["U+2028", "a\u2028bbbb\ncccc", 2, 3, "(2,4)"],
+      ["LF", "a\nbbbb\ncccc", 2, 3, "(2,4)"],
+      ["CRLF", "a\r\nbbbb\r\ncccc", 2, 3, "(2,4)"],
+    ])("%s", (_name, text, line, column, shown) => {
+      const dir = emptyPackage({ mx: { target: "data", contracts: "./c.ts" } });
+      writeFileSync(join(dir, "foreign.ts"), text);
+      writeFileSync(
+        join(dir, "c.ts"),
+        `export default {
+  thing: {
+    analyze(calls: { loc: object }[], ctx: { fail(m: string, l: object): never }) {
+      ctx.fail("foreign failure", { line: ${line}, column: ${column}, file: ${JSON.stringify(join(dir, "foreign.ts"))} });
+    },
+  },
+};
+`,
+      );
+      writeFileSync(join(dir, "a.mx"), "thing\n");
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain(`foreign.ts${shown}: error TS80001:`);
+    });
+  });
 });

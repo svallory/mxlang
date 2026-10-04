@@ -89,10 +89,22 @@ export function runDataCheck(dir: string): number {
     // `undefined` is "could not read"; an empty file that read fine is "" and
     // is still a file to name and position in.
     if (text === undefined) return `${path}: ${head}`;
-    const at = lineAndColumn(
-      text,
-      diagnostic.offset ?? offsetOfLfPosition(text, diagnostic),
-    );
+    const offset =
+      diagnostic.offset ??
+      (diagnostic.lfCoordinates
+        ? offsetOfLfPosition(text, diagnostic)
+        : undefined);
+    const at =
+      offset !== undefined
+        ? lineAndColumn(text, offset)
+        : {
+            // Any other producer's coordinates are printed as given, clamped.
+            line: Math.min(
+              Math.max(diagnostic.line, 1),
+              lineAndColumn(text, text.length).line,
+            ),
+            column: diagnostic.column,
+          };
     // `line` is 1-based and `column` 0-based; tsc prints both 1-based.
     return `${path}(${at.line},${at.column + 1}): ${head}`;
   });
@@ -101,8 +113,9 @@ export function runDataCheck(dir: string): number {
 }
 
 /**
- * The offset a diagnostic without one points at. Its `line`/`column` come from
- * a producer that counts lines by LF only (core's policy diagnostics), so they
+ * The offset a diagnostic without one points at, when it is tagged
+ * `lfCoordinates`. Its `line`/`column` come from a producer that counts lines
+ * by LF only (core's policy and scan diagnostics), so they
  * are turned into an offset by that rule and clamped to the text (a line past
  * the end is the end); the printer then applies TypeScript's rule to the
  * offset. Reading them with TypeScript's rule instead would move a position in

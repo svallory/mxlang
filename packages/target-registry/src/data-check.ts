@@ -42,6 +42,12 @@ export interface DataCheckDiagnostic {
    * so the two can never disagree about what a line break is.
    */
   offset?: number;
+  /**
+   * `line`/`column` were counted by LF only (core's policy and scan
+   * diagnostics). A printer that has no `offset` must read them that way; every
+   * other diagnostic's coordinates are printed as given.
+   */
+  lfCoordinates?: true;
   /** Characters the diagnostic covers, when known (a `package.json` value). */
   length?: number;
   severity: "error" | "warning";
@@ -253,6 +259,7 @@ export function checkDataPackage(dir: string): DataCheckResult {
         severity: d.severity ?? "warning",
         message: policyText(d),
         origin: "manifest",
+        lfCoordinates: true,
       });
     }
     return { manifest, options: dataOptions(manifest, reportManifest) };
@@ -358,6 +365,7 @@ export function checkDataPackage(dir: string): DataCheckResult {
         severity: "warning",
         message: d.message,
         origin: "manifest",
+        lfCoordinates: true,
       });
     }
     const result = parseData(source, file, {
@@ -373,6 +381,8 @@ export function checkDataPackage(dir: string): DataCheckResult {
         severity: d.severity,
         message: d.message,
         origin: "data",
+        // `-1` is "another file's text": the coordinates are the only answer.
+        ...(d.offset >= 0 ? { offset: d.offset } : {}),
       });
     }
   }
