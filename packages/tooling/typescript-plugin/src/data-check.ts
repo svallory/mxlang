@@ -1,6 +1,7 @@
 import {
   checkDataPackage as registryCheckDataPackage,
   isDataProject as registryIsDataProject,
+  lineAndColumn as registryLineAndColumn,
 } from "@mxlang/target-registry/data-check";
 
 /**
@@ -14,6 +15,8 @@ export interface DataCheckDiagnostic {
   line: number;
   /** 0-based. */
   column: number;
+  /** Exact UTF-16 offset in `file`, when known; wins over `line`/`column`. */
+  offset?: number;
   /** Characters covered, when known. */
   length?: number;
   severity: "error" | "warning";
@@ -43,4 +46,16 @@ export function isDataProject(dir: string): boolean {
  */
 export function checkDataPackage(dir: string): DataCheckResult {
   return registryCheckDataPackage(dir);
+}
+
+/**
+ * Line (1-based) and column (0-based) of a UTF-16 `offset` in `text` by
+ * TypeScript's own line-break rules (LF, CR, CRLF, U+2028, U+2029), for a
+ * printer that must not parse the file to find a line start.
+ */
+export function lineAndColumn(
+  text: string,
+  offset: number,
+): { line: number; column: number } {
+  return registryLineAndColumn(text, offset);
 }

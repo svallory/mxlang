@@ -1,11 +1,10 @@
 import { readFileSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, relative, resolve } from "node:path";
 import {
   checkDataPackage,
-  type DataCheckDiagnostic,
   HOST_POLICY_DIAGNOSTIC_CODE,
   isDataProject,
+  lineAndColumn,
 } from "@mxlang/typescript-plugin";
 
 /**
@@ -57,73 +56,50 @@ export function dataProjectDir(
  * problem in the `package.json` that configures the check is TS80003, the
  * code of every other manifest diagnostic. Returns the exit code: 1 on any
  * error, else 0.
+ *
+ * The line is printed here, not by `typescript.formatDiagnostics`: that wants
+ * a parsed `SourceFile`, and parsing a manifest or a data file to find a line
+ * start recurses with its nesting depth, so a deep but valid file would
+ * overflow the stack inside the very diagnostic that reports on it. The
+ * line-break rules are TypeScript's own (`lineAndColumn`, pinned against
+ * `ts.createSourceFile` in `data-check.test.ts`).
  */
 export function runDataCheck(dir: string): number {
   const { diagnostics } = checkDataPackage(dir);
   if (diagnostics.length === 0) return 0;
-  const require = createRequire(import.meta.url);
-  const typescript = require("typescript") as typeof import("typescript");
-  const host = {
-    getCanonicalFileName: (fileName: string) => fileName,
-    getCurrentDirectory: () => process.cwd(),
-    getNewLine: () => "\n",
-  };
-  const printed = diagnostics.map((diagnostic) =>
-    diagnostic.origin === "io"
-      ? // The file system refused: there is no text to position in, and
-        // `formatDiagnostics` would drop the path with it.
-        `${relative(host.getCurrentDirectory(), diagnostic.file)}: ${diagnostic.severity} TS80001: ${diagnostic.message}\n`
-      : typescript.formatDiagnostics(
-          [toTsDiagnostic(typescript, diagnostic)],
-          host,
-        ),
-  );
-  process.stderr.write(printed.join(""));
-  return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
-}
-
-function toTsDiagnostic(
-  typescript: typeof import("typescript"),
-  diagnostic: DataCheckDiagnostic,
-): import("typescript").Diagnostic {
-  // `undefined` is "could not read"; an empty file that read fine is "" and is
-  // still a file to name and position in.
-  let text: string | undefined;
-  try {
-    text = readFileSync(diagnostic.file, "utf8");
-  } catch {
-    // Unreadable now: print the message without a line/column.
-  }
-  const file =
-    text === undefined
-      ? undefined
-      : typescript.createSourceFile(
-          diagnostic.file,
-          text,
-          typescript.ScriptTarget.Latest,
-          false,
-          diagnostic.origin === "manifest"
-            ? typescript.ScriptKind.JSON
-            : typescript.ScriptKind.Unknown,
-        );
-  const starts = file?.getLineStarts() ?? [0];
-  const line = Math.min(Math.max(diagnostic.line - 1, 0), starts.length - 1);
-  const isError = diagnostic.severity === "error";
-  return {
-    file,
-    // `line` is 1-based and `column` 0-based; tsc prints both 1-based.
-    start: Math.min((starts[line] ?? 0) + diagnostic.column, text?.length ?? 0),
-    length: diagnostic.length ?? 0,
-    category: isError
-      ? typescript.DiagnosticCategory.Error
-      : typescript.DiagnosticCategory.Warning,
-    code:
+  const cwd = process.cwd();
+  const printed = diagnostics.map((diagnostic) => {
+    // The path is relative to the cwd, as `tsc` prints it; the cwd itself is `.`.
+    const path = relative(cwd, diagnostic.file) || ".";
+    const code =
       diagnostic.origin === "manifest"
         ? HOST_POLICY_DIAGNOSTIC_CODE
-        : isError
+        : diagnostic.severity === "error"
           ? 80001
-          : 80002,
-    source: "mxlang",
-    messageText: diagnostic.message,
-  };
+          : 80002;
+    const head = `${diagnostic.severity} TS${diagnostic.origin === "io" ? 80001 : code}: ${diagnostic.message}\n`;
+    // The file system refused: there is no text to position in.
+    if (diagnostic.origin === "io") return `${path}: ${head}`;
+    let text: string | undefined;
+    try {
+      text = readFileSync(diagnostic.file, "utf8");
+    } catch {
+      // Unreadable now: print the message without a line/column.
+    }
+    // `undefined` is "could not read"; an empty file that read fine is "" and
+    // is still a file to name and position in.
+    if (text === undefined) return `${path}: ${head}`;
+    const { line: last } = lineAndColumn(text, text.length);
+    const at =
+      diagnostic.offset !== undefined
+        ? lineAndColumn(text, diagnostic.offset)
+        : {
+            line: Math.min(Math.max(diagnostic.line, 1), last),
+            column: diagnostic.column,
+          };
+    // `line` is 1-based and `column` 0-based; tsc prints both 1-based.
+    return `${path}(${at.line},${at.column + 1}): ${head}`;
+  });
+  process.stderr.write(printed.join(""));
+  return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
 }

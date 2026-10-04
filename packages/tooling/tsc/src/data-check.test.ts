@@ -11,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
+import { lineAndColumn } from "@mxlang/typescript-plugin";
+import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import { runInProcess } from "./in-process.ts";
 
@@ -473,5 +475,102 @@ describe("mx-tsc on a data package", () => {
     expect(output).toMatch(
       /^empty\.txt\(1,1\): error TS80001: .*empty foreign error/m,
     );
+  });
+  describe("manifest positions use the printer's own line rules", () => {
+    const manifest = (...lines: string[]) => lines;
+
+    it("a lone CR before the first LF is a line break", () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        '{\r  "mx": {\n    "target": "data",\n    "data": {\n      "unknownTags": "oops"\n    }\n  }\n}\n',
+      );
+      expect(check(dir).output).toContain("package.json(5,22): error TS80003:");
+    });
+
+    it.each([
+      ["U+2028", "\u2028"],
+      ["U+2029", "\u2029"],
+    ])("a literal %s inside a JSON string before the value", (_name, sep) => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        manifest(
+          "{",
+          '  "mx": {',
+          '    "target": "data",',
+          `    "note": "a${sep}b",`,
+          '    "data": { "unknownTags": "oops" }',
+          "  }",
+          "}",
+          "",
+        ).join("\n"),
+      );
+      expect(check(dir).output).toContain("package.json(6,30): error TS80003:");
+    });
+
+    it("CRLF files and unrelated CR inside the object still agree", () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        '{\r\n  "mx": {\r\n    "target": "data",\r\n    "data": { "unknownTags": "oops" }\r\n  }\r\n}\r\n',
+      );
+      expect(check(dir).output).toContain("package.json(4,30): error TS80003:");
+    });
+  });
+
+  it("a deeply nested unrelated value cannot overflow the stack: the positioned error still prints", () => {
+    const dir = emptyPackage({});
+    const depth = 12_000;
+    writeFileSync(
+      join(dir, "package.json"),
+      `{\n  "noise": ${"[".repeat(depth)}${"]".repeat(depth)},\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "oops" }\n  }\n}\n`,
+    );
+    const { status, output } = check(dir);
+    expect(status).toBe(1);
+    expect(output).toContain("package.json(5,30): error TS80003:");
+  });
+
+  it("an unreadable entry directory prints `.` as its path", () => {
+    const dir = emptyPackage({ mx: { target: "data" } });
+    chmodSync(dir, 0o111);
+    try {
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toBe(".: error TS80001: cannot read directory: EACCES\n");
+    } finally {
+      chmodSync(dir, 0o755);
+    }
+  });
+  it("lineAndColumn agrees with ts.createSourceFile on every line-break mix", () => {
+    const pieces = [
+      "a",
+      "\n",
+      "\r",
+      "\r\n",
+      "\u2028",
+      "\u2029",
+      "é",
+      "\u0085",
+      " ",
+    ];
+    let seed = 7;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed;
+    };
+    for (let round = 0; round < 300; round++) {
+      let text = "";
+      for (let i = next() % 24; i > 0; i--)
+        text += pieces[next() % pieces.length];
+      const file = ts.createSourceFile("x.json", text, ts.ScriptTarget.Latest);
+      for (let offset = 0; offset <= text.length; offset++) {
+        const expected = ts.getLineAndCharacterOfPosition(file, offset);
+        expect(
+          lineAndColumn(text, offset),
+          JSON.stringify({ text, offset }),
+        ).toEqual({ line: expected.line + 1, column: expected.character });
+      }
+    }
   });
 });

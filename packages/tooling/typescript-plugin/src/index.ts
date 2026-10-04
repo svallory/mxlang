@@ -314,7 +314,11 @@ export {
 } from "./amx-language.ts";
 export { createAstroLanguagePlugin } from "./astro-language.ts";
 export type { DataCheckDiagnostic, DataCheckResult } from "./data-check.ts";
-export { checkDataPackage, isDataProject } from "./data-check.ts";
+export {
+  checkDataPackage,
+  isDataProject,
+  lineAndColumn,
+} from "./data-check.ts";
 export {
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyMessage,

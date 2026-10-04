@@ -25,7 +25,9 @@ import {
 } from "@mxlang/core";
 import { type ParseDataOptions, parseData } from "@mxlang/data";
 import { resolveTargetPolicyDetailed, scanCached } from "./index.ts";
-import { locateJsonPath } from "./json-locate.ts";
+import { lineAndColumn, locateJsonPath } from "./json-locate.ts";
+
+export { lineAndColumn };
 
 export interface DataCheckDiagnostic {
   /** The file (or directory) the position is measured in. */
@@ -34,6 +36,12 @@ export interface DataCheckDiagnostic {
   line: number;
   /** 0-based. */
   column: number;
+  /**
+   * UTF-16 offset of the position in `file`, when the producer knows it
+   * exactly. A printer that has the text uses it instead of `line`/`column`,
+   * so the two can never disagree about what a line break is.
+   */
+  offset?: number;
   /** Characters the diagnostic covers, when known (a `package.json` value). */
   length?: number;
   severity: "error" | "warning";
@@ -113,7 +121,7 @@ function locateData(manifest: Manifest, key?: string) {
     locateJsonPath(
       manifest.text,
       key === undefined ? ["mx", "data"] : ["mx", "data", key],
-    ) ?? { line: 1, column: 0, length: 1 }
+    ) ?? { offset: 0, line: 1, column: 0, length: 1 }
   );
 }
 
