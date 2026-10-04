@@ -593,12 +593,20 @@ function emitAttrs(
     const before = out.length;
     switch (attr.kind) {
       case "static": {
+        // HTML attribute names are case-insensitive: an authored `CLASS=`
+        // hits the class pipeline exactly like `class=`, so the styled
+        // check lowercases, and the binding is emitted lowercase (rev2 L1).
+        const styledName = attr.name.toLowerCase();
         const styled =
-          (attr.name === "class" || attr.name === "style") &&
+          (styledName === "class" || styledName === "style") &&
           /[{}]/.test(attr.value);
         out.write(" ");
         if (styled) out.write("[attr.");
-        writeAttributeName(out, attr.name, attr.nameSpan);
+        if (styled) {
+          out.writeMapped(styledName, attr.nameSpan);
+        } else {
+          writeAttributeName(out, attr.name, attr.nameSpan);
+        }
         if (styled) {
           // Angular's class/style pipelines do not tolerate braces: a static
           // class re-tokenizes evaluated interpolation literals

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (angular-attr-interpolation-literal round 3, review L1):** the static `class`/`style` brace-binding check now matches the attribute name case-insensitively (HTML attribute names are case-insensitive): an authored `CLASS="{{ x }}"`/`STYLE=…` takes the `[attr.class]`/`[attr.style]` path too, emitted lowercase, instead of falling through to a static attribute Angular's styling pipeline drops.
+
 - **Fix (angular-attr-interpolation-literal round 2, review F1–F3):** the static-value brace escaping no longer applies the text-only `@`-before-lowercase rule (`title="@handle"` and `mailto:me@example.com` rendered the literal text `&#64;…` — the entity was double-escaped by the HTML layer); `@` now passes through in attribute values, pinned by native Angular renders of `@` in `href`/`title`/a component input plus `&`, `"` and a literal `&#64;` round-tripping to Marko's raw value. A static `class`/`style` value holding braces is now a string-literal `[attr.class]`/`[attr.style]` binding instead of a mangled static attribute (Angular's class pipeline re-tokenizes `{{ '{' }}` literals to `x {{ }}`, and its style parser asserts on braces; a binding value parses as one expression with no interpolation splitting, so the raw braces render exactly — `'` and `\` are expression-escaped inside the literal).
 
 - **Fix (angular-literal-hint-edge-cases round 2, review F4):** a `@let` value whose quotes are entity-encoded in the raw source span (`@let z = &#96;a;b&#96;;`) is no longer cut at the entity's own `;` — a quote-decoding entity is treated as the quote (same-entity pair skipped), and a lone entity-quote with no pair falls back to the `…` placeholder.

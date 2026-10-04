@@ -128,6 +128,24 @@ describe("rev F2/F3: class/style with braces render exactly via [attr.*]", () =>
     expect(style.getAttribute("style")).toBe("{{ x }}");
   });
 
+  it("renders authored-uppercase CLASS and STYLE holding braces exactly", () => {
+    class Probe {}
+    Component({
+      selector: "mx-f2-case-probe",
+      // `<div CLASS="{{ x }}"></div><div STYLE="{{ x }}"></div>` — the
+      // [attr.*] binding is emitted lowercase; Angular's HTML parser
+      // lowercases the authored name anyway.
+      template: `<div [attr.class]="'{{ x }}'"></div><div [attr.style]="'{{ x }}'"></div>`,
+    })(Probe);
+
+    const fixture = TestBed.createComponent(Probe);
+    fixture.detectChanges();
+
+    const [cls, style] = fixture.nativeElement.querySelectorAll("div");
+    expect(cls.getAttribute("class")).toBe("{{ x }}");
+    expect(style.getAttribute("style")).toBe("{{ x }}");
+  });
+
   it("renders a class literal with quotes and backslashes exactly", () => {
     class Probe {}
     Component({

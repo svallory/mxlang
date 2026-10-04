@@ -122,6 +122,17 @@ describe("Text", () => {
     assertAngularParses(out);
   });
 
+  it("matches class/style case-insensitively and emits the lowercase binding (rev2 L1)", () => {
+    // HTML attribute names are case-insensitive; an authored `CLASS=` with
+    // braces must take the [attr.class] path too, emitted lowercase.
+    const cls = emit('<div CLASS="{{ x }}"></div>');
+    expect(cls).toBe(`<div [attr.class]="'{{ x }}'"></div>`);
+    assertAngularParses(cls);
+    const style = emit('<div STYLE="{{ x }}"></div>');
+    expect(style).toBe(`<div [attr.style]="'{{ x }}'"></div>`);
+    assertAngularParses(style);
+  });
+
   it("escapes @ before a lowercase identifier (@iffy)", () => {
     const out = emit("-- email me @iffy today");
     expect(out).toBe("email me &#64;iffy today");
