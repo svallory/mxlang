@@ -31,6 +31,14 @@ return `{ tree, diagnostics }`. Options:
   `"reject"` makes each structural construct a positioned error ("the data
   tree is static; this file's consumer does not evaluate `<if>`"), for a
   consumer that wants tags and attributes only.
+- `unknownTags: "allow" | "reject"` (default `"allow"`). `"reject"` makes a
+  tag at any depth with no entry in `customTags` a positioned error naming
+  the tag (with a nearest-declared-name hint when one is close), so a typo at
+  the top level of a closed dialect cannot pass silently. `#root` placement
+  stays the job of `parents`; reserved names are never "unknown", and `<@name>`
+  attribute tags are governed by the parent's `attributeTags`, not this
+  option. Core's contract errors and a `structural: "reject"` hit are reported
+  first; this check runs on an otherwise valid file.
 - `customTags` — contract-only custom tags (decision 130): required
   attributes and attribute types, validated by core with no data-specific
   code.

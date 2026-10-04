@@ -30,6 +30,7 @@ import {
   type ForHead,
   type Ir,
   type IrNode,
+  nearestName,
   type Position,
   type SourceSpan,
   TranslateError,
@@ -48,6 +49,12 @@ import type {
 
 export interface BuildOptions {
   structural: "pass" | "reject";
+  /**
+   * With `"reject"`, a tag whose name is not in `declaredTags` is an error.
+   * `declaredTags` is the key set of `customTags`.
+   */
+  unknownTags: "allow" | "reject";
+  declaredTags: ReadonlySet<string>;
 }
 
 /** The dynamic-tag reject, shared by `Component` and an unusable tag name. */
@@ -260,8 +267,29 @@ function dataForHead(head: ForHead, what: string): DataForHead {
   };
 }
 
+/**
+ * `unknownTags: "reject"`: a tag with no contract in `customTags` is an error
+ * at the tag name. Runs before the tag's body is built, so the body of an
+ * unknown tag is never reported on (one error per unknown call). A parent's
+ * closed `children` / a `parents` list are enforced by core during compile and
+ * so win over this check when both would fire.
+ */
+function rejectUnknownTag(name: string, at: Position): void {
+  if (activeOptions.unknownTags !== "reject") return;
+  if (activeOptions.declaredTags.has(name)) return;
+  const near = nearestName(name, activeOptions.declaredTags);
+  fail(
+    `\`<${name}>\` is not a known tag: it has no contract in \`customTags\`${near ? `; did you mean \`<${near}>\`?` : ""}`,
+    at,
+  );
+}
+
 function dataTag(tag: DelegatedTag<unknown>): DataTag {
   checkTagName(tag.name, tag.loc);
+  // A synthesized tag (one a declared tag's `transform` emitted) has no
+  // `nameSpan` (core's marker, `DelegatedTag.nameSpan`): it is the dialect
+  // author's output, not a name the file's author wrote, so it is not checked.
+  if (tag.nameSpan !== undefined) rejectUnknownTag(tag.name, tag.loc);
   rejectMergedShorthandClass(tag.attrs, tag.loc);
   if (tag.var !== null) {
     fail(
@@ -340,6 +368,11 @@ function dataAttrTagNode(node: AttributeTagNode): DataAttrTagNode {
 // span on `InputInterface`), and a statement's structural-reject position is
 // derived from its span. Set per `buildDataDocument` call (compiles are
 // synchronous and single-threaded, same as core's own `current` handle).
+let activeOptions: BuildOptions = {
+  structural: "pass",
+  unknownTags: "allow",
+  declaredTags: new Set(),
+};
 let activeLineStarts: number[] = [0];
 let activeSourceLength = 0;
 /** The source itself, for the two span adjustments that need its text. */
@@ -626,6 +659,7 @@ export function buildDataDocument(
   filename: string,
   options: BuildOptions,
 ): DataDocument {
+  activeOptions = options;
   activeLineStarts = lineStartsOf(source);
   activeSource = source;
   activeSourceLength = source.length;

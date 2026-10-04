@@ -17,7 +17,7 @@ import {
 } from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import descriptor from "./descriptor.ts";
-import { parseData } from "./parse.ts";
+import { type ParseDataOptions, parseData } from "./parse.ts";
 
 /**
  * The data path for `mx.contracts` (decision 142): a dialect package whose
@@ -237,12 +237,15 @@ function dialectProject(source: string): { dir: string; file: string } {
   return { dir, file };
 }
 
-function parseWithDialect(source: string) {
+function parseWithDialect(
+  source: string,
+  options: Omit<ParseDataOptions, "customTags"> = {},
+) {
   const { file } = dialectProject(source);
   const customTags = getCustomTags(file, { targets: dataTargets, host: null });
   return {
     customTags,
-    result: parseData(source, file, { customTags }),
+    result: parseData(source, file, { customTags, ...options }),
   };
 }
 
@@ -430,6 +433,23 @@ describe("mx.contracts on the data path", () => {
     expect(result.diagnostics[0]?.message).toContain(
       "one of `action` or `action-type` is required",
     );
+  });
+
+  it('unknownTags: reject refuses an unknown root tag (Mesh\'s widget="post")', () => {
+    const { result } = parseWithDialect('widget="post"\n', {
+      structural: "reject",
+      unknownTags: "reject",
+    });
+
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "error",
+      line: 1,
+      column: 0,
+      message:
+        "`<widget>` is not a known tag: it has no contract in `customTags`",
+    });
   });
 });
 

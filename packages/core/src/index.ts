@@ -75,7 +75,6 @@ export {
   VOID_TAGS,
   warn,
 } from "./core.ts";
-export { nearestName } from "./did-you-mean.ts";
 export type {
   AnalyzeContext,
   ChildNode,
@@ -92,6 +91,7 @@ export type {
   TransformContext,
 } from "./custom-tags.ts";
 export type { HostDeclarations, Policy } from "./declarations.ts";
+export { nearestName } from "./did-you-mean.ts";
 export { drive, type Emitter, emit } from "./emit.ts";
 export { escape } from "./escape.ts";
 export { exportNameFor, moduleExportName } from "./export-name.ts";

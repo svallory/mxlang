@@ -57,6 +57,17 @@ export interface ParseDataOptions {
    */
   structural?: "pass" | "reject";
   /**
+   * `"allow"` (default) keeps the open set of decision 131: a tag with no
+   * entry in `customTags` is accepted. `"reject"` closes it: any tag, at any
+   * depth, whose name has no entry in `customTags` is a positioned error
+   * naming the tag, with a nearest-declared-name hint when one is close. A
+   * dialect that declares every tag uses it so a typo at the top level
+   * cannot pass silently. Placement at `#root` stays the job of `parents`;
+   * the reserved names never reach the check (core consumes them first), and
+   * a parent's own `children`/`parents` error wins when both would fire.
+   */
+  unknownTags?: "allow" | "reject";
+  /**
    * A sink for core's warnings, as on the other targets: they are pushed here
    * as they are raised, so those raised before a later error stay in the
    * caller's array. `diagnostics` still reports this call's warnings (not
@@ -242,6 +253,8 @@ export function parseData(
   try {
     const tree = buildDataDocument(document, source, filename, {
       structural: options.structural ?? "pass",
+      unknownTags: options.unknownTags ?? "allow",
+      declaredTags: new Set(Object.keys(options.customTags ?? {})),
     });
     return {
       tree,

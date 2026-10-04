@@ -6,6 +6,8 @@
 
 - **Fix (zero-based-cols-in-message-text):** the `console.warn` fallback restates core's `warn` format, and printed its raw 0-based column (`page.mx:1:5`); it is now 1-based (`page.mx:1:6`), like `mx-tsc`'s `file(line,column)` and core's own fallback (ruling #227). The structured `warning.line`/`column` handed to `options.warnings` are untouched and stay 0-based.
 
+- **Added: `unknownTags: "allow" | "reject"` on `parseData` (decision 131 addendum 3).** Default `"allow"` is unchanged. `"reject"` makes any tag, at any depth, with no entry in `customTags` a positioned error at the tag (`` `<widget>` is not a known tag: it has no contract in `customTags` ``), with a `did you mean` hint from core's `nearestName` when one declared name is clearly nearest. Core's contract errors and a `structural: "reject"` hit are reported first, so the unknown-tag check runs on an otherwise valid file; reserved names and `<@attr>` tags are not checked. Found by Mesh: a typo at the top level (`resorce="post"`) passed silently.
+
 - **Test (body whitespace, decision 141):** pins Marko-normalized spaces/tabs/CRLF and comments beside whitespace in the pass-through tree. A retained one-space text node is still rejected as text under `structural: "reject"`; dropped newline indentation is not structural text. No data-specific normalization is added.
 
 - **Added, unstable (data-pr3, decisions 129 and 132):** the `data` target

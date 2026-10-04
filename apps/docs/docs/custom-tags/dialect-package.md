@@ -90,6 +90,21 @@ Both run every declaration rule and the module's `analyze` hooks, including unde
 
 `targets` in the second form is the target lookup in hand — for a CLI, the registry lookup from `@mxlang/target-registry`. `host: null` is what the hostless data target scans under (a `hosts`-restricted entry is excluded for data, so a data dialect declares no `hosts`). The data target delegates every non-reserved name, so the module is the entire dialect: no `tags/` directory, no sidecars.
 
+## Closing the vocabulary
+
+By default `parseData` accepts a tag that has no contract (the open set). A dialect that declares every tag can refuse the rest with `unknownTags: "reject"`: any tag at any depth whose name is not in `customTags` is a positioned error naming the tag, with a `did you mean` hint when one declared name is clearly nearest. `#root` placement stays the job of `parents`; the reserved names (`if`, `for`, `const`, ...) are never "unknown", and `<@name>` attribute tags are governed by the parent's `attributeTags`, not by this option.
+
+```ts
+parseData(source, file, {
+  customTags: contracts,
+  structural: "reject",
+  unknownTags: "reject",
+});
+// widget="post"  ->  1:0 `<widget>` is not a known tag: it has no contract in `customTags`
+```
+
+Core's contract errors and a `structural: "reject"` hit are reported first; the unknown-tag check runs on an otherwise valid file. A `transform` that emits tags is not supported on the data target yet: `parseData` throws on its output in either mode (TODO `data-transform-output-tree`). The check itself only ever looks at names the file's author wrote.
+
 ## Composing a dialect from parts
 
 If your dialect is assembled from a core vocabulary plus optional extensions — an extension that adds a child tag to `resource`, say — **generate one self-contained contracts module** from the enabled parts, and name that file under `mx.contracts`.
