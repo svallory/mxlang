@@ -53,7 +53,7 @@ Expressions are Marko's Babel nodes plus a printed `code` and a UTF-16 `span`. *
 
 ## What is rejected
 
-Always rejected, each with a positioned message that names the fix: `<define>` and calls to it, `<return>`, tag variables (`/v`), dynamic tags (`<${x}>`), calls to an imported component, `<!doctype>`, CDATA and XML declarations.
+Always rejected, each with a positioned message: `<define>` and calls to it, `<return>`, tag variables (`/v`), dynamic tags (`<${x}>`), calls to an imported component, `<!doctype>`, CDATA and XML declarations.
 
 No data tag may be named `if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static` or `try`: core consumes those names before a target sees them. Names like `id`, `log`, `class` and `source` are ordinary data tag names.
 

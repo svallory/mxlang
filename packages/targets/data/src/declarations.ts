@@ -19,8 +19,8 @@
  *   parses as one) are *not* claimed (`DYNAMIC_TAG` excluded), so core
  *   lowers them to a dynamic `Component` and `build.ts` rejects them: a
  *   static tree needs a name.
- * - **Component calls** (a capitalized import call, a discovered template
- *   tag) are refused through `rejectComponentTag` where core offers it and
+ * - **Component calls** (a capitalized import call, a template-bearing
+ *   `customTags` entry) are refused through `rejectComponentTag` where core offers it and
  *   rejected in `build.ts` for the paths that bypass that hook.
  * - **Attribute methods** (`change(ctx) { … }`, the method shorthand the Ash
  *   fixture uses) are accepted: `resolveAttributeMethod: () => true`.

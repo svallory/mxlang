@@ -2424,7 +2424,8 @@ target package in `dependencies`/`devDependencies`. There is no `x.data.mx` file
 kind: a file kind's segment is a host's name (decision 136) and `data` has none.
 A package that depends on both `@mxlang/data` and another built-in target
 package has two matches under rule 5 and falls to `html`; it must set
-`mx.target`.
+`mx.target` to the target its tool-compiled files use, and its data files go
+through `parseData`.
 
 Editor and tool dispatch for data files is deferred (TODO
 `data-target-tooling-dispatch`): **the language server, the TypeScript plugin,
@@ -2515,7 +2516,7 @@ an internal failure and is rethrown.
 
 | Option | Values | Meaning |
 |---|---|---|
-| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`. `parseData` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows (see [Writing a dialect package](/custom-tags/dialect-package/) for producing it) |
+| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`. `parseData` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. An entry whose `transform` emits tags is not supported yet: `parseData` throws on its output, an internal error rather than a source diagnostic (TODO `data-transform-output-tree`) (see [Writing a dialect package](/custom-tags/dialect-package/) for producing it) |
 | `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs in the tree (§13.7.3). `"reject"` makes the first one, in document order, a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named: text, `${}`, `<if>`, `<for>`, `<const>`, comments, `import`, `export`, `static`). For a consumer that wants tags and attributes only |
 | `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`, not by this option. |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
@@ -2557,9 +2558,10 @@ All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
 - **`DataTag`** (`kind: "tag"`): `name`, `nameSpan`, `span` (the whole tag, body
   and closing tag included), `attrs`, `args` (`<x(1, 2)>`), `params` (`<x|a, b|>`,
   as source text), `attrTags` and `children`.
-- **`DataAttrTag`** (`kind: "attr-tag"`): a `<@y>`; the same fields with `name`
-  without the `@`. `attrTags` is the tree form of a tag's attribute tags, with
-  `<if>`/`<for>` among them kept; they are **not** in `children`, and their
+- **`DataAttrTag`** (`kind: "attr-tag"`): a `<@y>`; the same fields except
+  `args`, with `name` without the `@`. `attrTags` is the tree form of a tag's attribute tags, with
+  `<if>`/`<for>` among them kept (those nodes carry no `span`, unlike the body
+  nodes); they are **not** in `children`, and their
   interleaving with ordinary children is not kept.
 - **`DataAttr`**, by `kind`:
 
@@ -2593,7 +2595,7 @@ nodes calls `parseData`.
 
 | Construct | In the tree | Notes |
 |---|---|---|
-| Tags, attributes, attribute tags | `tag`, `attrs`, `attrTags` | every name core does not own is a data tag (it is *delegated*, decision 132): no `unknown tag` error exists in data |
+| Tags, attributes, attribute tags | `tag`, `attrs`, `attrTags` | every name core does not own is a data tag (it is *delegated*, decision 132): no `unknown tag` error by default (`unknownTags: "allow"`) |
 | Text | `text`: `value`, `span` | `value` is Marko-normalized; `span` slices the text as authored, so they differ on collapsed whitespace. A same-line one-space body (`<a> </a>`) is text; a newline-plus-indent run is not (decision 141) |
 | `${x}`, `$!{x}` | `expression`: `value`, `escaped`, `span` | `span` covers the delimiters, `value.span` the expression |
 | `<if>`, `<else-if>`, `<else>` | `if`: `branches[]` of `{ test \| null, children, span }` | `test: null` is `<else>` |
