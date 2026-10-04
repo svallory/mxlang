@@ -1,0 +1,5 @@
+{
+  "mx": {
+    "host": "./target.cjs"
+  }
+}

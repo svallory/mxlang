@@ -1,0 +1,101 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/third-party-invalid/package.json:3:15: mx.target \"./target.cjs\" must export a target descriptor (default export or \"mxTarget\"): \"name\" is missing, expected a string. See the TargetDescriptor contract (unstable).",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/third-party-invalid/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 14
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 28
+                    }
+                  }
+                },
+                "message": "mx.target \"./target.cjs\" must export a target descriptor (default export or \"mxTarget\"): \"name\" is missing, expected a string. See the TargetDescriptor contract (unstable)."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/third-party-invalid/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "mx.target \"./target.cjs\" must export a target descriptor (default export or \"mxTarget\"): \"name\" is missing, expected a string. See the TargetDescriptor contract (unstable).",
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 14
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 28
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<p>hi</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/third-party-invalid/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not loaded: see <root>/third-party-invalid/package.json(3,15)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "target-invalid-descriptor",
+            "severity": "error",
+            "value": "./target.cjs",
+            "file": "<root>/third-party-invalid/package.json",
+            "message": "mx.target \"./target.cjs\" must export a target descriptor (default export or \"mxTarget\"): \"name\" is missing, expected a string. See the TargetDescriptor contract (unstable).",
+            "line": 3,
+            "column": 14,
+            "length": 14
+          }
+        ],
+        "logged": []
+      },
+      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+    }
+  },
+  "mxTsc": [
+    "<root>/third-party-invalid/page.mx(1,1): error TS80001: target not loaded: see <root>/third-party-invalid/package.json(3,15)",
+    "<root>/third-party-invalid/package.json(3,15): error TS80003: mx.target \"./target.cjs\" must export a target descriptor (default export or \"mxTarget\"): \"name\" is missing, expected a string. See the TargetDescriptor contract (unstable)."
+  ]
+}

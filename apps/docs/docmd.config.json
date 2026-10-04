@@ -81,7 +81,11 @@
         { "title": "Preact host", "path": "/hosts/preact/" },
         { "title": "Hono host", "path": "/hosts/hono/" },
         { "title": "SolidMX", "path": "/hosts/solidmx/" },
-        { "title": "Angular host", "path": "/hosts/angular/" }
+        { "title": "Angular host", "path": "/hosts/angular/" },
+        {
+          "title": "Third-party targets",
+          "path": "/hosts/third-party-targets/"
+        }
       ]
     },
     {

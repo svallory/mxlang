@@ -1,0 +1,101 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/third-party-missing/package.json:3:15: mx.target \"./nope.cjs\" cannot be resolved from <root>/third-party-missing: Cannot find module './nope.cjs'. Check the path or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/third-party-missing/package.json",
+                  "range": {
+                    "start": {
+                      "line": 2,
+                      "character": 14
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 26
+                    }
+                  }
+                },
+                "message": "mx.target \"./nope.cjs\" cannot be resolved from <root>/third-party-missing: Cannot find module './nope.cjs'. Check the path or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template."
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/third-party-missing/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "mx.target \"./nope.cjs\" cannot be resolved from <root>/third-party-missing: Cannot find module './nope.cjs'. Check the path or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 14
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 26
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<p>hi</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/third-party-missing/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not loaded: see <root>/third-party-missing/package.json(3,15)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "target-not-found",
+            "severity": "error",
+            "value": "./nope.cjs",
+            "file": "<root>/third-party-missing/package.json",
+            "message": "mx.target \"./nope.cjs\" cannot be resolved from <root>/third-party-missing: Cannot find module './nope.cjs'. Check the path or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
+            "line": 3,
+            "column": 14,
+            "length": 12
+          }
+        ],
+        "logged": []
+      },
+      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+    }
+  },
+  "mxTsc": [
+    "<root>/third-party-missing/page.mx(1,1): error TS80001: target not loaded: see <root>/third-party-missing/package.json(3,15)",
+    "<root>/third-party-missing/package.json(3,15): error TS80003: mx.target \"./nope.cjs\" cannot be resolved from <root>/third-party-missing: Cannot find module './nope.cjs'. Check the path or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template."
+  ]
+}

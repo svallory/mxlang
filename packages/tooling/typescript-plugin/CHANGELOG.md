@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Added: third-party targets (registration PR 7)
+
+The page compile, the mapping pass and tag discovery use the project's lookup (`lookupFor(policy)`), so a target a package specifier under `mx.target` / `mx.host` loaded compiles like a built-in one. A failed load is `TS80003` at the key's value plus the existing `TS80001` pointer `target not loaded: see package.json(line,col)` on the page. `createHtmlMappings` takes an optional trailing `targets` lookup (default: the built-in one).
+
 ### Fixed: `dropOwnLocationHeader` recognises relative, symlinked and CRLF spellings (no-repeat-path-relative-spellings)
 
 The `at <path>:L:C` line is dropped when it names the diagnosed file. The comparison used to be lexical `resolve` of both strings, so a relative `fileName` spelled differently from Marko's cwd-relative path, a symlinked spelling on either side, or a CRLF message (the trailing `\r` defeated the line regex) kept the repeat. Both sides are now compared by `resolve` and `realpathSync` (guarding a missing file), and the line regex tolerates a trailing `\r`. Round 2: the `at` line is matched on a VT-stripped copy, so a kleur-coloured header under `FORCE_COLOR` reaches the identity comparison too; kept lines retain their original text. Generic path logic only (decision 126); still fail-safe — a spelling that matches nothing is kept, never dropped falsely.

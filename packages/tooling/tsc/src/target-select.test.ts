@@ -43,7 +43,9 @@ it("policy errors alone fail one program; fixing them leaves host warnings non-f
     expect(failed.status).toBe(1);
     expect(output.match(/error TS80003/g)).toHaveLength(cases.length);
     expect(output).toContain('mx.target "html" has no host');
-    expect(output).toContain("loading a target package is not supported yet");
+    expect(output).toContain(
+      'mx.target "@acme/target" cannot be resolved from',
+    );
     expect(output).toContain("TODO data-target-tooling-dispatch");
     for (const i of cases.keys())
       writeFileSync(

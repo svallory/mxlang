@@ -61,7 +61,12 @@ import {
   positionOfOffset,
   readPackageJsonCached,
 } from "./package-json.ts";
-import type { TargetLookup } from "./target-descriptor.ts";
+import {
+  createTargetLookup,
+  type TargetDescriptor,
+  type TargetLookup,
+} from "./target-descriptor.ts";
+import { loadTargetDescriptor, TargetLoadError } from "./target-loader.ts";
 
 /**
  * The target a file compiles through, plus that target's host (when it has
@@ -77,6 +82,14 @@ export interface TargetPolicy {
   target: string;
   host?: string;
   strict?: boolean;
+  /**
+   * The descriptor loaded from a package specifier under `mx.target` or
+   * `mx.host`. Absent for a built-in target, which the tool's lookup holds:
+   * read a descriptor as `policy.descriptor ?? lookup.target(policy.target)`.
+   * The same object on every resolution until the target package changes
+   * (`loadTargetDescriptor` caches it), so its identity is stable.
+   */
+  descriptor?: TargetDescriptor;
 }
 
 /** Why a {@link TargetPolicyDiagnostic} was raised. */
@@ -84,7 +97,11 @@ export type TargetPolicyDiagnosticCode =
   | "unknown-host"
   | "malformed-package-json"
   | "unknown-target"
-  | "target-host-mismatch";
+  | "target-host-mismatch"
+  | "target-not-found"
+  | "target-load-failed"
+  | "target-invalid-descriptor"
+  | "host-invalid-descriptor";
 
 /**
  * One problem found while resolving a target, positioned in the
@@ -303,6 +320,35 @@ function locateMxValue(
   return found ?? { line: 1, column: 0, length: 1 };
 }
 
+/** Whether `value` names a package or a path, not a bare word. */
+function isSpecifier(value: unknown): value is string {
+  return (
+    typeof value === "string" && (value.includes("/") || /^[@./]/.test(value))
+  );
+}
+
+/** One descriptor loaded from the key it came from. */
+interface LoadedSpecifier {
+  spec: string;
+  descriptor: TargetDescriptor;
+}
+
+/** What loading the specifiers in `mx.host` and `mx.target` produced. */
+interface LoadedSpecifiers {
+  host?: LoadedSpecifier;
+  target?: LoadedSpecifier;
+  /** The key held a specifier that did not become a usable descriptor. */
+  failed: { host?: true; target?: true };
+}
+
+const NO_SPECIFIERS: LoadedSpecifiers = { failed: {} };
+
+const LOAD_CODES = {
+  "not-found": "target-not-found",
+  "load-failed": "target-load-failed",
+  "invalid-descriptor": "target-invalid-descriptor",
+} as const;
+
 /**
  * The policy one parsed `package.json` answers with, plus the `mx.host` it
  * had to ignore, if any. Pure: no I/O, no warnings printed.
@@ -310,11 +356,21 @@ function locateMxValue(
 function policyOf(
   pkg: Record<string, unknown>,
   lookup: TargetLookup,
+  loaded: LoadedSpecifiers = NO_SPECIFIERS,
 ): {
   policy: TargetPolicy;
   ignoredHost?: unknown;
   ignoredTarget?: unknown;
-  mismatch?: { host: string; hostTarget: string; target: string };
+  mismatch?: {
+    host: string;
+    hostTarget: string;
+    target: string;
+    /** Host of `target` and of `hostTarget`, which may be loaded descriptors. */
+    targetHost?: string;
+    hostTargetHost?: string;
+    /** `mx.host` named a package, so it is no legacy spelling of anything. */
+    hostIsPackage: boolean;
+  };
   /** The deprecated `mx.host` value used, which the caller warns about. */
   deprecatedValue?: string;
 } {
@@ -323,26 +379,50 @@ function policyOf(
     : undefined;
   let ignoredHost: unknown;
   let ignoredTarget: unknown;
+  const hostOf = (name: string): string | undefined =>
+    loaded.target?.descriptor.name === name
+      ? loaded.target.descriptor.host?.name
+      : loaded.host?.descriptor.name === name
+        ? loaded.host.descriptor.host?.name
+        : lookup.hostOf(name);
+  const descriptorOf = (name: string): TargetDescriptor | undefined =>
+    [loaded.target?.descriptor, loaded.host?.descriptor].find(
+      (d) => d?.name === name,
+    );
 
   if (mx) {
-    const selectedHost =
-      typeof mx.host === "string" ? lookup.hostTarget(mx.host) : undefined;
-    const selectedTarget =
-      typeof mx.target === "string" && lookup.hasTarget(mx.target)
+    const selectedHost: { target: string; deprecated?: true } | undefined =
+      loaded.host
+        ? { target: loaded.host.descriptor.name }
+        : typeof mx.host === "string"
+          ? lookup.hostTarget(mx.host)
+          : undefined;
+    const selectedTarget = loaded.target
+      ? loaded.target.descriptor.name
+      : typeof mx.target === "string" && lookup.hasTarget(mx.target)
         ? mx.target
         : undefined;
-    if (mx.host !== undefined && !selectedHost) ignoredHost = mx.host;
-    if (mx.target !== undefined && !selectedTarget) ignoredTarget = mx.target;
+    // A specifier that failed to load already has its own diagnostic.
+    if (mx.host !== undefined && !selectedHost && !loaded.failed.host)
+      ignoredHost = mx.host;
+    if (mx.target !== undefined && !selectedTarget && !loaded.failed.target)
+      ignoredTarget = mx.target;
     const target = selectedTarget ?? selectedHost?.target;
     if (target !== undefined) {
-      const host = lookup.hostOf(target);
+      const host = hostOf(target);
       const agrees =
         selectedHost &&
-        (lookup.hostOf(selectedHost.target) === mx.host
+        (hostOf(selectedHost.target) === mx.host
           ? host === mx.host
           : selectedHost.target === target);
+      const descriptor = descriptorOf(target);
       return {
-        policy: { target, host, strict: mx.strict as boolean | undefined },
+        policy: {
+          target,
+          host,
+          strict: mx.strict as boolean | undefined,
+          ...(descriptor ? { descriptor } : {}),
+        },
         ignoredHost,
         ignoredTarget,
         ...(selectedTarget && selectedHost && !agrees
@@ -351,6 +431,9 @@ function policyOf(
                 host: mx.host as string,
                 hostTarget: selectedHost.target,
                 target,
+                targetHost: host,
+                hostTargetHost: hostOf(selectedHost.target),
+                hostIsPackage: loaded.host !== undefined,
               },
             }
           : {}),
@@ -386,6 +469,93 @@ function policyOf(
     ignoredHost,
     ignoredTarget,
   };
+}
+
+/**
+ * Loads the package specifiers under `mx.host` and `mx.target` (§4.2), and
+ * pushes one positioned error per failure (§4.3): not found, throws on
+ * load, invalid or unsupported descriptor, a descriptor with no `host` part
+ * under `mx.host`, or a descriptor that cannot join the lookup (a name or
+ * package a built-in already owns). A failure is an error with no fallback to
+ * a guessed target: resolution carries on as if the key were absent, so tools
+ * still have a target to hand on, but the author is never told it worked.
+ */
+function loadSpecifiers(
+  mx: Record<string, unknown>,
+  dir: string,
+  lookup: TargetLookup,
+  source: { file: string; text: string },
+  diagnostics: TargetPolicyDiagnostic[],
+): LoadedSpecifiers {
+  const loaded: LoadedSpecifiers = { failed: {} };
+  for (const key of ["host", "target"] as const) {
+    const spec = mx[key];
+    if (!isSpecifier(spec)) continue;
+    // A built-in or legacy value is never a specifier; a path-shaped one that
+    // the lookup somehow holds is still the lookup's.
+    if (key === "target" ? lookup.hasTarget(spec) : lookup.hostTarget(spec))
+      continue;
+    const fail = (
+      code: TargetPolicyDiagnosticCode,
+      message: string,
+    ): LoadedSpecifiers => {
+      diagnostics.push({
+        code,
+        severity: "error",
+        value: spec,
+        file: source.file,
+        message,
+        ...locateMxValue(source.text, key),
+      });
+      loaded.failed[key] = true;
+      return loaded;
+    };
+    let descriptor: TargetDescriptor;
+    try {
+      descriptor = loadTargetDescriptor(spec, dir);
+    } catch (error) {
+      if (!(error instanceof TargetLoadError)) throw error;
+      const hint =
+        error.code === "not-found"
+          ? ` ${/^[./]/.test(spec) ? "Check the path" : `Install it (bun add -d ${spec})`} or use a built-in target: ${lookup.targetNames().join(", ")}.`
+          : "";
+      fail(
+        LOAD_CODES[error.code],
+        `mx.${key} ${error.message}${error.code === "not-found" ? "." : ""}${hint}`,
+      );
+      continue;
+    }
+    if (key === "host" && !descriptor.host) {
+      fail(
+        "host-invalid-descriptor",
+        `mx.host "${spec}" exports a target with no host. Use mx.target "${spec}", or give the descriptor a "host" part.`,
+      );
+      continue;
+    }
+    try {
+      createTargetLookup(
+        [
+          ...lookup
+            .targetNames()
+            .map((name) => lookup.target(name) as TargetDescriptor),
+          descriptor,
+        ],
+        {
+          defaultTarget: lookup.defaultTarget(),
+          reservedNames: lookup.reservedNames?.() ?? [],
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      fail(
+        "target-invalid-descriptor",
+        `mx.${key} "${spec}" cannot be registered next to the built-in targets: ${error.message}. See the TargetDescriptor contract (unstable).`,
+      );
+      continue;
+    }
+    loaded[key] = { spec, descriptor };
+  }
+  return loaded;
 }
 
 /**
@@ -441,7 +611,11 @@ export function resolveTargetPolicyDetailed(
     return finish(defaultPolicy());
   }
 
-  const resolved = policyOf(read.manifest, lookup);
+  const mx = isObject(read.manifest.mx) ? read.manifest.mx : undefined;
+  const loaded = mx
+    ? loadSpecifiers(mx, dir, lookup, { file, text: read.text }, diagnostics)
+    : NO_SPECIFIERS;
+  const resolved = policyOf(read.manifest, lookup, loaded);
   if (resolved.deprecatedValue !== undefined) {
     const target = lookup.hostTarget(resolved.deprecatedValue)?.target;
     console.warn(
@@ -481,24 +655,25 @@ export function resolveTargetPolicyDetailed(
       typeof value === "string"
         ? nearestHostValue(value, lookup.targetNames())
         : undefined;
-    const packageSpecifier =
-      typeof value === "string" &&
-      (value.includes("/") || /^[@./]/.test(value));
     diagnostics.push({
       code: "unknown-target",
       severity: "error",
       ...(typeof value === "string" ? { value } : {}),
       file,
-      message: packageSpecifier
-        ? `mx.target ${shown}: loading a target package is not supported yet.`
-        : `unknown mx.target ${shown}; valid targets: ${lookup.targetNames().join(", ")}.${isHost ? ` ${shown} is a host, not a target: its default target is "${host.target}" (use mx.host ${shown} or mx.target "${host.target}").` : hint ? ` Did you mean "${hint}"?` : ""} Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.`,
+      message: `unknown mx.target ${shown}; valid targets: ${lookup.targetNames().join(", ")}.${isHost ? ` ${shown} is a host, not a target: its default target is "${host.target}" (use mx.host ${shown} or mx.target "${host.target}").` : hint ? ` Did you mean "${hint}"?` : ""} Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.`,
       ...locateMxValue(read.text, "target"),
     });
   }
   if (resolved.mismatch) {
-    const { host, hostTarget, target } = resolved.mismatch;
-    const targetHost = lookup.hostOf(target);
-    const legacy = lookup.hostOf(hostTarget) !== host;
+    const {
+      host,
+      hostTarget,
+      target,
+      targetHost,
+      hostTargetHost,
+      hostIsPackage,
+    } = resolved.mismatch;
+    const legacy = !hostIsPackage && hostTargetHost !== host;
     diagnostics.push({
       code: "target-host-mismatch",
       severity: "error",

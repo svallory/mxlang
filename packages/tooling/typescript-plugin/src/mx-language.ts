@@ -16,6 +16,8 @@ import {
   newCtx,
   parseFragment,
   printExpression,
+  type TargetLookup,
+  type TargetPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import {
@@ -23,7 +25,7 @@ import {
   builtinLookup,
   builtinTargets,
   getCustomTags,
-  hostFilterKey,
+  lookupFor,
   scanCached,
 } from "@mxlang/target-registry";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
@@ -109,7 +111,7 @@ export function createMxLanguagePlugin(
 
   const tagsFor = (
     fileName: string,
-    target: string,
+    policy: TargetPolicy,
   ): Record<string, CustomTag> | undefined => {
     // A misconfigured `mx.tags` is not fatal — the local `tags/` directories
     // still resolve — but silence is worse than a warning here: a tag simply
@@ -120,8 +122,12 @@ export function createMxLanguagePlugin(
     // The filter value `mx.tags[].hosts` is matched against: the target's own
     // host name, or a hostless target's legacy `mx.host` value (`html`),
     // which is what every existing `hosts: ["html"]` entry matches.
-    const host = hostFilterKey(target) ?? null;
-    for (const diagnostic of scanCached(fileName, { host }).diagnostics) {
+    // `lookupFor` adds a descriptor a package specifier loaded (§4.2), so a
+    // third-party host's name is a valid filter value here too.
+    const targets = lookupFor(policy);
+    const host = targets.hostFilterKey(policy.target) ?? null;
+    for (const diagnostic of scanCached(fileName, { host, targets })
+      .diagnostics) {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
       reported.add(key);
@@ -130,7 +136,7 @@ export function createMxLanguagePlugin(
       );
     }
 
-    const discovered = getCustomTags(fileName, { host });
+    const discovered = getCustomTags(fileName, { host, targets });
     const merged = options.customTags
       ? { ...discovered, ...options.customTags }
       : discovered;
@@ -153,12 +159,12 @@ export function createMxLanguagePlugin(
           dependencies.get(fileName) ?? [],
           () => {
             const hostPolicy = resolveHost(fileName);
-            const customTags = tagsFor(fileName, hostPolicy.target);
+            const customTags = tagsFor(fileName, hostPolicy);
             // Reuse discovery's policy resolution: resolving it again would
             // repeat deprecation warnings on unchanged non-Angular files.
             // Tag projection belongs to the target's registered template
             // pipeline, not a host-name comparison. Pages still hit pending.
-            const descriptor = builtinLookup().target(hostPolicy.target);
+            const descriptor = lookupFor(hostPolicy).target(hostPolicy.target);
             const hasTagPipeline = descriptor?.host?.fileKinds?.some((kind) =>
               builtinFileKinds.some(
                 (builtin) =>
@@ -317,7 +323,8 @@ export function createMxLanguagePlugin(
     angularTag?: boolean;
   } {
     const hostPolicy = resolveHost(fileName);
-    const descriptor = builtinLookup().target(hostPolicy.target);
+    const targets = lookupFor(hostPolicy);
+    const descriptor = targets.target(hostPolicy.target);
     const load = descriptor?.load;
     if (!load) {
       const identity = descriptor?.host
@@ -339,7 +346,7 @@ export function createMxLanguagePlugin(
       customTags,
       warnings,
       typeCheck: true,
-      targets: builtinLookup(),
+      targets,
     });
     const generated = descriptor.typeSurface?.(compiled.code) ?? compiled.code;
     const mappings =
@@ -369,6 +376,7 @@ export function createMxLanguagePlugin(
             // needs somewhere to put its warnings, but they are the ones the
             // compile already reported, so they are not reported again.
             [],
+            targets,
           );
     return {
       generated,
@@ -438,6 +446,7 @@ export function createHtmlMappings(
   emittedMappings: readonly GeneratedMapping[] = [],
   customTags?: Record<string, CustomTag>,
   warnings?: MxWarning[],
+  targets: TargetLookup = builtinLookup(),
 ): CodeMapping[] {
   const require = createRequire(import.meta.url);
   const compiler = require("@marko/compiler") as {
@@ -463,7 +472,7 @@ export function createHtmlMappings(
     mappingDeclarations,
     compiler.taglib.buildLookup(dirname(fileName), fallback?.translator),
     fileName,
-    builtinLookup(),
+    targets,
   );
   // This is the second lowering of the same source. It must see the same tag
   // map as compilation or a custom tag can make the entire mapping pass fail.

@@ -1,0 +1,50 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "fake-host"
+        },
+        "diagnostics": [
+          {
+            "severity": 2,
+            "source": "mxlang",
+            "message": "fake target compiled page.mx",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "export default function Page(): string {\n  return \"<p>hi</p>\\n\";\n}\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/third-party-ok/page.mx",
+            "message": "fake target compiled page.mx",
+            "offset": 0,
+            "category": "warning"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+    }
+  },
+  "mxTsc": [
+    "<root>/third-party-ok/page.mx(1,1): warning TS80002: fake target compiled page.mx"
+  ]
+}

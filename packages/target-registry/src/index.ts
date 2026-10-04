@@ -99,6 +99,45 @@ export function builtinLookup(): TargetLookup {
   return cachedLookup;
 }
 
+const projectLookups = new WeakMap<TargetDescriptor, TargetLookup>();
+
+/**
+ * The lookup for the project `policy` was resolved in: the built-in set, plus
+ * the descriptor a package specifier under `mx.target` / `mx.host` loaded.
+ *
+ * Core already checked that descriptor against this lookup (names, reserved
+ * names, packages, hosts) before handing the policy on, so this cannot throw
+ * for a policy `resolveTargetPolicyDetailed` returned. Cached per descriptor,
+ * and a descriptor is itself cached per package, so the identity is stable
+ * between calls.
+ */
+export function lookupFor(policy: TargetPolicy): TargetLookup {
+  const { descriptor } = policy;
+  if (!descriptor) return builtinLookup();
+  let lookup = projectLookups.get(descriptor);
+  if (!lookup) {
+    lookup = createTargetLookup([...builtinTargets, descriptor], {
+      reservedNames: ["astro-template"],
+    });
+    projectLookups.set(descriptor, lookup);
+  }
+  return lookup;
+}
+
+/**
+ * The descriptor `policy` compiles through: the loaded one, else the built-in
+ * the policy names.
+ */
+export function descriptorFor(policy: TargetPolicy): TargetDescriptor {
+  const found = lookupFor(policy).target(policy.target);
+  if (!found) {
+    throw new Error(
+      `@mxlang/target-registry: no descriptor for target "${policy.target}"`,
+    );
+  }
+  return found;
+}
+
 const PIPELINES: Readonly<Record<string, BuiltinFileKind["pipeline"]>> = {
   solid: "region",
   ng: "ng-template",
@@ -233,9 +272,22 @@ export function hostModuleSegment(entry: string): string | undefined {
  * value matches). The scan records what it read; this is the built-in set's
  * verdict, and the same rule every caller's own lookup applies.
  */
-function restrictionWarnings(result: ScanResult): ScanDiagnostic[] {
-  return hostRestrictionDiagnostics(result.hostRestrictions, builtinLookup());
+function restrictionWarnings(
+  result: ScanResult,
+  targets: TargetLookup,
+): ScanDiagnostic[] {
+  return hostRestrictionDiagnostics(result.hostRestrictions, targets);
 }
+
+/**
+ * Scan options plus the lookup of the project the file is in. Unset, the
+ * built-in set answers; a tool compiling under a loaded third-party target
+ * passes `lookupFor(policy)`, so that target's host name is a valid
+ * `mx.tags[].hosts` value and no unknown-host warning fires for it.
+ */
+export type RegistryScanOptions = Omit<ScanOptions, "targets"> & {
+  targets?: TargetLookup;
+};
 
 /**
  * `scanCached` over the built-in set, with the scan's diagnostics plus the
@@ -246,13 +298,11 @@ function restrictionWarnings(result: ScanResult): ScanDiagnostic[] {
  */
 export function scanCached(
   filePath: string,
-  options: Omit<ScanOptions, "targets"> = {},
+  options: RegistryScanOptions = {},
 ): ScanResult {
-  const result = coreScanCached(filePath, {
-    ...options,
-    targets: builtinLookup(),
-  });
-  const extra = restrictionWarnings(result);
+  const targets = options.targets ?? builtinLookup();
+  const result = coreScanCached(filePath, { ...options, targets });
+  const extra = restrictionWarnings(result, targets);
   return extra.length === 0
     ? result
     : { ...result, diagnostics: [...result.diagnostics, ...extra] };
@@ -261,7 +311,7 @@ export function scanCached(
 /** `getCustomTags` over the built-in set; see {@link scanCached}. */
 export function getCustomTags(
   filePath: string,
-  options: Omit<ScanOptions, "targets"> = {},
+  options: RegistryScanOptions = {},
 ): Record<string, CustomTag> {
   return scanCached(filePath, options).customTags;
 }

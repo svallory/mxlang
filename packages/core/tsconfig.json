@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    // Tests import the shared fake target packages from /test-fixtures; emit
+    // (tsconfig.build.json) stays rooted at src.
+    "rootDir": "../..",
     "types": ["node"],
     "allowImportingTsExtensions": true
   },

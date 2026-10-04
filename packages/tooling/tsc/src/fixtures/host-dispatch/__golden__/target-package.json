@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/target-package/package.json:3:15: mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+            "message": "<root>/target-package/package.json:3:15: mx.target \"@acme/mx-view\" cannot be resolved from <root>/target-package: Cannot find module '@acme/mx-view'. Install it (bun add -d @acme/mx-view) or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
             "range": {
               "start": {
                 "line": 0,
@@ -35,7 +35,7 @@
                     }
                   }
                 },
-                "message": "mx.target \"@acme/mx-view\": loading a target package is not supported yet."
+                "message": "mx.target \"@acme/mx-view\" cannot be resolved from <root>/target-package: Cannot find module '@acme/mx-view'. Install it (bun add -d @acme/mx-view) or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template."
               }
             ]
           }
@@ -47,7 +47,7 @@
               {
                 "severity": 1,
                 "source": "mxlang",
-                "message": "mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+                "message": "mx.target \"@acme/mx-view\" cannot be resolved from <root>/target-package: Cannot find module '@acme/mx-view'. Install it (bun add -d @acme/mx-view) or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
                 "range": {
                   "start": {
                     "line": 2,
@@ -79,11 +79,11 @@
         ],
         "hostPolicyDiagnostics": [
           {
-            "code": "unknown-target",
+            "code": "target-not-found",
             "severity": "error",
             "value": "@acme/mx-view",
             "file": "<root>/target-package/package.json",
-            "message": "mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+            "message": "mx.target \"@acme/mx-view\" cannot be resolved from <root>/target-package: Cannot find module '@acme/mx-view'. Install it (bun add -d @acme/mx-view) or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
             "line": 3,
             "column": 14,
             "length": 15
@@ -94,7 +94,7 @@
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "<root>/target-package/package.json:3:15: mx.target \"@acme/mx-view\": loading a target package is not supported yet.",
+          "message": "<root>/target-package/package.json:3:15: mx.target \"@acme/mx-view\" cannot be resolved from <root>/target-package: Cannot find module '@acme/mx-view'. Install it (bun add -d @acme/mx-view) or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
           "id": "<root>/target-package/package.json",
           "loc": {
             "file": "<root>/target-package/package.json",
@@ -109,6 +109,6 @@
   },
   "mxTsc": [
     "<root>/target-package/page.mx(1,1): error TS80001: target not loaded: see <root>/target-package/package.json(3,15)",
-    "<root>/target-package/package.json(3,15): error TS80003: mx.target \"@acme/mx-view\": loading a target package is not supported yet."
+    "<root>/target-package/package.json(3,15): error TS80003: mx.target \"@acme/mx-view\" cannot be resolved from <root>/target-package: Cannot find module '@acme/mx-view'. Install it (bun add -d @acme/mx-view) or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template."
   ]
 }

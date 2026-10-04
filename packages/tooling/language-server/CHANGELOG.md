@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added: third-party targets (registration PR 7)
+
+`diagnoseDocument` compiles through the descriptor a package specifier under `mx.target` / `mx.host` loaded (`policy.descriptor`), with that project's lookup. The new `target-not-found`, `target-load-failed`, `target-invalid-descriptor` and `host-invalid-descriptor` errors reach the document, linked to the key in `package.json`, through the existing policy-diagnostics path. The language server finds a target the project installed even when it runs as the VSIX-bundled copy: the specifier is resolved from the project, never from the bundle.
+
 ### Fixed (mx.contracts PR 2, decision 142)
 
 - Scanned contracts modules, sidecars and tag files are now caller dependencies.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (third-party-target, registration PR 7):** `mx-tsc` compiles through a target loaded from `package.json#mx.target` / `mx.host` and reports a failed load as `TS80003` at the key's value, with a failing exit code. Dispatch goldens gain the `third-party-*` rows; the `target-package` row now pins `target-not-found` where it pinned the staging error.
+
 - **Test fix (tsc-host-policy-test-macos-tmp round 2):** before normalising a printed TS80003 manifest location, tests assert that its filename resolves from the actual run cwd to the expected `package.json`. A missing-parent-traversal negative control prevents a wrong path from being hidden by normalisation; spawned runs use their project cwd, in-process runs use the runner cwd.
 
 - **Test fix (tsc-host-policy-test-macos-tmp):** host-policy diagnostic tests normalise the unique temporary directory name rather than requiring its absolute spelling to survive TypeScript's cwd-relative formatting. This also works for macOS review checkouts under `/private/tmp`, where the shared `/private` prefix cancels. Production code is unchanged.

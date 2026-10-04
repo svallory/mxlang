@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (third-party-target, registration PR 7):** `lookupFor(policy)` (the built-in lookup, plus the descriptor a package specifier under `mx.target` / `mx.host` loaded; cached per descriptor, so its identity is stable) and `descriptorFor(policy)`. The `scanCached` / `getCustomTags` wrappers take an optional `targets` lookup, so a loaded host's name is a valid `mx.tags[].hosts` value. Tools use these in place of `builtinLookup()` wherever a project's policy is in hand.
+
 - **Added (target-select, decisions 129/132 and decision 131 addendum):**
   `mx.target` selection through the built-in policy wrapper. Explicit `data`
   is a positioned error naming `parseData` from `@mxlang/data` and

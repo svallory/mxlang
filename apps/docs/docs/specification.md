@@ -2319,12 +2319,14 @@ lookup; tools use `@mxlang/target-registry`'s built-in wrapper.
    `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`, `angular-template`, or
    `data` (subject to the tooling limit below). A host name here is an
    `unknown-target` **error** with its default target in the hint; other unknown
-   names get a nearest-target suggestion when within two edits. Package
-   specifiers (containing `/` or starting with `@`, `.` or `/`) are positioned
-   errors: loading a target package is not supported yet.
+   names get a nearest-target suggestion when within two edits. A package
+   specifier (containing `/` or starting with `@`, `.` or `/`) is not a built-in
+   name: it is loaded from the project as a third-party target (below).
 2. `mx.host` selects that host's default target. `mx.host: "html"` is accepted
    silently, the legacy spelling of `mx.target: "html"`. `"translator"` remains
-   a deprecated alias with its existing warning. Unknown hosts remain warnings.
+   a deprecated alias with its existing warning. A bare unknown word remains a
+   warning. A package specifier is loaded as a third-party target whose
+   descriptor must carry a `host` part (below).
 3. If both keys resolve, they must agree: the target belongs to the named host,
    or the legacy host value selects that same target. Otherwise
    `target-host-mismatch` is an **error** at the `mx.target` value, quotes
@@ -2344,6 +2346,51 @@ lookup; tools use `@mxlang/target-registry`'s built-in wrapper.
 `mx.strict` accompanies an explicitly selected target as it did an explicit
 host. `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
 warns that it is a target and suggests `solid`.
+
+**Third-party targets.** A package specifier under `mx.target` or `mx.host` is
+resolved from the directory of the `package.json` that holds the key (never from
+the tool, so a VSIX-bundled language server finds a target the project installed),
+required synchronously, and validated. The module's default export, else its
+named `mxTarget` export, else the module itself when it is the descriptor
+(`module.exports = descriptor`), must be a target descriptor of
+`descriptorVersion` 0. Rule 5's single-dependency inference applies to built-in
+targets only: a third-party target always needs an explicit `mx.target` (or
+`mx.host`) key. The descriptor is cached per resolved file and the target
+package's `package.json` (modification time and content), so its identity is
+stable between calls and a reinstall is picked up.
+
+A specifier that resolves and then fails to load or validate is an **error with
+no fallback to a guessed target** (the same family as `target-host-mismatch`:
+a build that compiled under a target the author did not name would be green and
+wrong). Tools still hand on the rule-5 target so later diagnostics are not
+drowned. Each error is one line then the action, with no stack, positioned at
+the key's value (quotes included, with `length`):
+
+| Code | When | Message |
+|---|---|---|
+| `target-not-found` | the specifier does not resolve from the project | `mx.target "@acme/mx-vue" cannot be resolved from /p/app: <first line of the resolver's message>. Install it (bun add -d @acme/mx-vue) or use a built-in target: html, …` (a relative or absolute path says `Check the path` instead of `Install it`) |
+| `target-load-failed` | evaluating the module throws | `mx.target "@acme/mx-vue" failed to load: <message>. (/p/app/node_modules/@acme/mx-vue/dist/index.js)`; a top-level `await`, or a relative import without its extension, adds the reason (the load is synchronous) |
+| `target-invalid-descriptor` | the export is not a descriptor: the **first** failing field only, an unsupported `descriptorVersion`, or a name, package, host or file-kind segment a built-in target already owns | `mx.target "@acme/mx-vue" must export a target descriptor (default export or "mxTarget"): "name" is missing, expected a string. See the TargetDescriptor contract (unstable).` and `… targets descriptor version 1; this mx supports 0.` |
+| `host-invalid-descriptor` | a specifier under `mx.host` exports a descriptor with no `host` part | `mx.host "@acme/mx-vue" exports a target with no host. Use mx.target "@acme/mx-vue", or give the descriptor a "host" part.` |
+
+`mx.host` and `mx.target` agree under rule 3 with a loaded descriptor exactly as
+with a built-in one (its `host.name` is the host it belongs to). The language
+server shows the error on the document, linked to the key in `package.json`;
+the TypeScript plugin and `mx-tsc` report `TS80003` at the key and `TS80001`
+`target not loaded: see package.json(line,col)` on the page, and exit non-zero.
+
+The loader hands the tool the descriptor; the **tool** then calls
+`descriptor.load(core)` with **its own** `@mxlang/core`. A target uses that
+injected `core` (one scan cache, the editor's unsaved-buffer overrides, and one
+`TranslateError` class) rather than importing its own. A target that imports its
+own copy still works: `TranslateError`s are recognised across copies by a
+`Symbol.for` brand, so a positioned error stays positioned. Such a package
+declares `@mxlang/core` as a **peer** dependency. The descriptor contract is
+**unstable** until `@mxlang/core` is published under a stable version.
+
+A loaded host's name is a valid `mx.tags[].hosts` value for files compiled under
+that target, and its `mx.tags` entries filter by it; no unknown-host warning
+fires for it.
 
 **Tooling limit (decision 131 addendum).** Explicit `mx.target: "data"` is a
 positioned error raised by the registry wrapper, never by core:

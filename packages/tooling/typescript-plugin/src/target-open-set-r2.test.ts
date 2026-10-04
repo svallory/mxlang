@@ -57,7 +57,10 @@ it("keeps data-only tool policy and generated renderer identical to base HTML", 
 });
 
 it("excludes restricted tags when a tool target has no host filter key, keeping unrestricted tags", () => {
-  vi.spyOn(registry, "hostFilterKey").mockReturnValue(undefined);
+  // The plugin asks the project's lookup (`lookupFor`), which is the built-in one here.
+  vi.spyOn(registry.builtinLookup(), "hostFilterKey").mockReturnValue(
+    undefined,
+  );
   const file = project(
     { mx: { tags: [{ dir: "extra", hosts: ["html"] }] } },
     {

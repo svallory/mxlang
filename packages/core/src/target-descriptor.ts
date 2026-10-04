@@ -262,6 +262,13 @@ export interface TargetLookup {
   hostFilterKey(target: string): string | undefined;
   /** Every host file-kind segment. */
   moduleSegments(): readonly string[];
+  /**
+   * Names no descriptor may take (`createTargetLookup`'s `reservedNames`).
+   * Optional: a hand-written lookup that reserves nothing may omit it. A
+   * loader that adds a descriptor to a lookup passes it on, so a loaded
+   * target cannot take a name its registry reserved.
+   */
+  reservedNames?(): readonly string[];
 }
 
 /**
@@ -763,5 +770,6 @@ export function createTargetLookup(
       return descriptor && filterKey(descriptor);
     },
     moduleSegments: () => [...segments.keys()],
+    reservedNames: () => [...reserved],
   };
 }

@@ -23,9 +23,8 @@ import { type PrintOptions, print } from "@mxlang/parser";
 import {
   type BuiltinFileKind,
   builtinFileKinds,
-  builtinLookup,
   getCustomTags,
-  hostFilterKey,
+  lookupFor,
   scanCached,
 } from "@mxlang/target-registry";
 import {
@@ -317,8 +316,11 @@ export function diagnoseDocument(
     // (`html`) it is the target's legacy `mx.host` value, which is the string
     // every existing `hosts: ["html"]` entry already matches.
     // null means no restricted entry matches; undefined would disable filtering.
-    const host = hostFilterKey(hostPolicy.target) ?? null;
-    const scan = scanCached(path, { host });
+    // `lookupFor` adds the descriptor a package specifier under `mx.target`
+    // loaded (§4.2), so a third-party host's name is a valid filter value.
+    const lookup = lookupFor(hostPolicy);
+    const host = lookup.hostFilterKey(hostPolicy.target) ?? null;
+    const scan = scanCached(path, { host, targets: lookup });
     // Discovery reads contracts modules, sidecars and tag files independently
     // of the compiler's callee-input dependencies. Record them before compiling
     // so watcher-only edits reach callers even when compilation fails.
@@ -334,7 +336,8 @@ export function diagnoseDocument(
     // (a test, or an integration that scanned once for a batch of documents)
     // has already decided what this file sees, and re-scanning would either
     // overwrite that or silently merge two answers to one question.
-    const discovered = explicitTags ?? getCustomTags(path, { host });
+    const discovered =
+      explicitTags ?? getCustomTags(path, { host, targets: lookup });
     const customTags =
       Object.keys(discovered).length > 0 ? discovered : undefined;
 
@@ -357,7 +360,7 @@ export function diagnoseDocument(
       const result = print(text, filename, {
         customTags,
         mxRegionCompile: (input) => {
-          const regionInput = { ...input, warnings, targets: builtinLookup() };
+          const regionInput = { ...input, warnings, targets: lookup };
           // Core keeps the parser's hoisted AST nodes opaque to avoid a
           // dependency cycle. This built-in pipeline supplies parser nodes.
           return compileRegion(input.source, regionInput) as ReturnType<
@@ -368,7 +371,7 @@ export function diagnoseDocument(
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);
     } else {
-      const descriptor = builtinLookup().target(hostPolicy.target);
+      const descriptor = lookup.target(hostPolicy.target);
       const load = descriptor?.load;
       // An unwired page target stays silent (D4); never guess a compiler.
       if (!load) return scanWarnings;
@@ -376,7 +379,7 @@ export function diagnoseDocument(
         strict: descriptor.strict === "always" || hostPolicy.strict === true,
         customTags,
         warnings,
-        targets: builtinLookup(),
+        targets: lookup,
       });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);

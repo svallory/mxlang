@@ -169,7 +169,7 @@ describe("mx.target resolution table (§4.1)", () => {
     }
   });
 
-  it.each(["unit", "missing", "@t/target"])(
+  it.each(["unit", "missing"])(
     "carries the offending string %s on unknown-target diagnostics",
     (target) => {
       expect(resolve({ target }).diagnostics[0]).toMatchObject({
@@ -185,16 +185,20 @@ describe("mx.target resolution table (§4.1)", () => {
     );
   });
   it.each(["@acme/mx-view", "x/y", ".local", "/absolute"])(
-    "package specifier %s is a positioned error",
+    "package specifier %s that resolves to nothing is a positioned target-not-found error, not an unknown target",
     (target) => {
       const { policy, diagnostics } = resolve({ target }, { "@t/unit": "1" });
+      // Handed on so later diagnostics are not drowned, but never silently.
       expect(policy.target).toBe("unit-jsx");
+      expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]).toMatchObject({
-        code: "unknown-target",
+        code: "target-not-found",
         severity: "error",
         length: JSON.stringify(target).length,
-        message: `mx.target ${JSON.stringify(target)}: loading a target package is not supported yet.`,
       });
+      expect(diagnostics[0]?.message).toContain(
+        `mx.target ${JSON.stringify(target)} cannot be resolved from `,
+      );
     },
   );
   it.each([null, 5, false, ["page"], { name: "page" }])(

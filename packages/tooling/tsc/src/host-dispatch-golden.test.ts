@@ -123,7 +123,29 @@ const ROWS = [
   "target-data",
   "target-unknown-host",
   "tags-hosts-target",
+  // Registration PR 7 (§6.2): a package specifier under mx.target / mx.host
+  // loads a third-party target. Additive rows. Each target is a local
+  // `./target.cjs` re-exporting the shared fake package of
+  // `test-fixtures/third-party-targets`.
+  "third-party-ok",
+  "third-party-ok-host",
+  "third-party-fail",
+  "third-party-missing",
+  "third-party-throws",
+  "third-party-invalid",
+  "third-party-version",
+  "third-party-hostless-under-host",
 ] as const;
+
+/**
+ * Rows whose Vite leg is not pinned yet: Vite loads no third-party target
+ * until its dispatch refactor (PR 6, `refactor/vite-dispatch`) is on main and
+ * the Vite leg of PR 7 lands on top of it. Pinning today's Vite output here
+ * would pin the wrong behaviour.
+ */
+const VITE_PENDING = new Set(
+  ROWS.filter((row) => row.startsWith("third-party-")),
+);
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
 const ALIASED = new Set(ROWS.filter((row) => row.startsWith("alias-")));
@@ -158,7 +180,9 @@ function recordedPolicy(policy: Parameters<typeof diagnoseDocument>[2]): {
   strict?: boolean;
 } {
   return {
-    host: hostFilterKey(policy.target) as string,
+    host: (hostFilterKey(policy.target) ??
+      (policy as { descriptor?: { host?: { name: string } } }).descriptor?.host
+        ?.name) as string,
     ...(policy.strict === undefined ? {} : { strict: policy.strict }),
   };
 }
@@ -305,6 +329,8 @@ function tsPluginLeg(file: string, text: string) {
 async function viteLeg(row: string, file: string, text: string) {
   if (file.endsWith(".astro.mx"))
     return "not handled: no .astro.mx in this plugin";
+  if (VITE_PENDING.has(row as never))
+    return "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)";
   const plugin = mxVite() as unknown as {
     configResolved(config: unknown): void;
     transform(
