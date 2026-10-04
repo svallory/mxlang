@@ -2,6 +2,18 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (vite-virtual-tsx-id):** a failing `vite build` now names the **authored** file in its error header. Rolldown builds that line (`[plugin mx] <id>:L:C`) from the *module* id and stamps it itself — `TransformPluginContextImpl.error` does `e.id = this.moduleId` — so a compile error in `page.mx` printed `page.mx.tsx:1:0`, a path that does not exist on disk, and neither the plugin's own `id`/`loc.file` nor `this.error({ id, loc })` could change it (verified on rolldown 1.2.8 / vite 8.2.2, this repo's pins). A `buildEnd` hook now re-labels those diagnostics before rolldown aggregates and formats them:
+
+  ```text
+  [plugin mx] /…/src/page.mx:1:0
+  CompileError: Missing ending "div" tag
+  ```
+
+  - Deliberately narrow: only this plugin's own errors (`plugin: "mx"`), and only those rolldown still formats from `id`/`loc.file`. A diagnostic rolldown rendered itself (`[builtin:vite-transform]`, `[PARSE_ERROR]`) carries a `kind`, has no `id`, and bakes the generated path into an already-formatted message at a position in *generated* text; the `.mx` path has no source map, so those keep the generated name rather than print a real file with a line that is not in it.
+  - Only ids this plugin minted are renamed (`isMxModule`/`sourcePath`, the same pair the rest of the plugin uses), and every write is guarded: a diagnostic that cannot be re-labelled still fails the build, with the generated name.
+  - The dev server is unchanged and needed nothing: the plugin's error reaches Vite with the authored `id`.
+  - The module id itself is unchanged. Dropping the virtual `.tsx` suffix (with a `moduleType: "tsx"` hint, which does fix the parse) was measured and rejected: `@solidjs/vite-plugin`'s `transform` gate is the extension (`/\.[mc]?[tj]sx$/`, `.tsrx`, or listed in `options.extensions`), so `.solid.mx` and Solid-host `.mx` would need `solid({ extensions: ['.mx'] })`, breaking the documented zero-config `plugins: [mx(), solid()]`; rewriting from `renderError` is ignored by rolldown. Details in `AGENTS.md`.
+
 - **Added (third-party-target, registration PR 7):** the transform compiles through a target loaded from `package.json#mx.target` / `mx.host` (the project's lookup, `lookupFor(policy)`); a failed load fails the transform with the positioned `package.json:line:col: <message>` error through the existing policy-error path.
 
 - **Changed (refactor/vite-plugin, decisions 129 and 132):** whole-file `.mx`
@@ -54,7 +66,7 @@
   - The plugin now claims a `.marko` import **only when an MX module (or a tag it already claimed) imports it**, and compiles the tag through the same whole-file path as a page, so a tag takes the host of its own nearest `package.json`. This is parity with Marko's auto-discovery of `tags/*.marko`; there is no new option or dependency. `@marko/vite` is not used: it emits Marko runtime templates, not the `(input) => string` / component function the emitted call expects.
   - Fixed for the `html`, `preact`, `react` and `hono` hosts (all four failed before). A Solid whole-file `.mx` does not discover `tags/*.marko` at all; that is outside this plugin.
   - `extensions: [".marko"]` is still rejected: `.marko` is never claimed on its own.
-  - A syntax error inside a tag file is reported at the tag (`…/tags/bad.marko.tsx:1:15`), compact, like any other compile error (see audit-03 below).
+  - A syntax error inside a tag file is reported at the tag (`…/tags/bad.marko:1:15`), compact, like any other compile error (see audit-03 below).
 
 - **Fix (audit-03-vite-errors):** a compile error in an authored `.mx` / `.solid.mx` file (`TranslateError`, Marko `CompileError`, Babel parse error) no longer carries the translator/Babel/rolldown stack, and a Marko `CompileError` no longer prints `undefined:undefined`. Over the agent-feedback corpus a failing `vite build` drops from ~1,450 to ~460 tokens. Errors that are bugs in mx itself keep their stack.
 

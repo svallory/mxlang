@@ -289,6 +289,90 @@ function locate(
 }
 
 /**
+ * Re-points the *header* of this plugin's own build errors at the authored
+ * file, and returns how many it re-labelled.
+ *
+ * A failing `vite build` prints each diagnostic through rolldown's
+ * `getErrorMessage`, which builds its location line from
+ * `e.id ?? e.loc?.file` — and, for an error a plugin hook threw, rolldown has
+ * already stamped `e.id` with the **module id** (`e.id = this.moduleId` in
+ * `TransformPluginContextImpl.error`, and the same for a hook error caught on
+ * the way out of `transform`). For MX that module id is the suffixed
+ * `<path>.mx.tsx` this plugin minted, a file that does not exist on disk, so
+ * the one line an agent follows to a location named a path nobody wrote:
+ *
+ *     [plugin mx] /…/src/page.mx.tsx:1:0
+ *     CompileError: Missing ending "div" tag
+ *
+ * `locate()` cannot fix that from inside the hook — the position and the
+ * authored `loc.file` are already right, and `this.error({ id, loc })` is
+ * overwritten before it is ever read. `buildEnd` runs before rolldown
+ * aggregates and formats the diagnostics (`aggregateBindingErrorsIntoJsError`
+ * → `getErrorMessage`), so rewriting `id` there is the last point at which it
+ * is still the plugin's to own.
+ *
+ * Deliberately narrow, because the aggregate carries every error in the
+ * build:
+ *
+ * - only `plugin === "mx"` entries — another plugin's diagnostic, and every
+ *   module id in the graph besides this plugin's own, are left exactly as
+ *   they were;
+ * - only entries without a `kind`. A `kind` marks a diagnostic rolldown
+ *   rendered itself (`[builtin:vite-transform]`, `[PARSE_ERROR]`, …): its
+ *   `id` is absent and the generated path is baked into an
+ *   already-formatted `message`, whose line:column is a position in
+ *   *generated* text. This plugin has no source map for the `.mx` path, so
+ *   there is no authored position to offer, and relabelling the path alone
+ *   would print a real file with a line that does not exist in it — the same
+ *   reason the unresolved-import path leaves those to rolldown (audit item 10);
+ * - `authoredId` is the only thing that decides what an id is, so a `.tsx`
+ *   file that is not one of ours cannot be renamed.
+ *
+ * Every write is guarded: the diagnostics are napi-backed objects owned by
+ * rolldown, and a diagnostic this cannot re-label must still fail the build.
+ */
+export function relabelBuildErrors(
+  error: unknown,
+  authoredId: (id: string) => string | undefined,
+): number {
+  const errors = (error as { errors?: unknown } | null | undefined)?.errors;
+  if (!Array.isArray(errors)) return 0;
+  let relabeled = 0;
+  for (const entry of errors) {
+    if (entry === null || typeof entry !== "object") continue;
+    const diagnostic = entry as {
+      id?: unknown;
+      loc?: { file?: unknown };
+      plugin?: unknown;
+      kind?: unknown;
+    };
+    if (diagnostic.plugin !== "mx" || Object.hasOwn(diagnostic, "kind")) {
+      continue;
+    }
+    try {
+      if (typeof diagnostic.id === "string") {
+        const authored = authoredId(diagnostic.id);
+        if (authored !== undefined) {
+          diagnostic.id = authored;
+          relabeled++;
+        }
+      }
+      const file = diagnostic.loc?.file;
+      if (typeof file === "string") {
+        const authored = authoredId(file);
+        if (authored !== undefined && diagnostic.loc) {
+          diagnostic.loc.file = authored;
+        }
+      }
+    } catch {
+      // A frozen (or otherwise unwritable) diagnostic is not this hook's
+      // problem to solve: the build still fails, with the generated name.
+    }
+  }
+  return relabeled;
+}
+
+/**
  * A specifier worth asking the resolver about: not a virtual module (`\0…`),
  * a `data:` URL or a remote URL, none of which are files a build resolves.
  */
@@ -765,6 +849,16 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       ? undefined
       : unresolvedImport(sourcePath(importerPath, ext), specifier);
   };
+  /**
+   * The authored file behind one of this plugin's virtual module ids, with any
+   * `?query`/`#hash` carried across, or `undefined` for an id this plugin did
+   * not mint. `relabelBuildErrors`'s only notion of "ours".
+   */
+  const authoredId = (id: string): string | undefined => {
+    const [path, query] = splitId(id);
+    const ext = isMxModule(path);
+    return ext === undefined ? undefined : sourcePath(path, ext) + query;
+  };
 
   return {
     name: "mx",
@@ -778,6 +872,16 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
     async buildStart() {
       await loadRegistry();
+    },
+
+    /**
+     * Names the authored file in the header of this plugin's own build
+     * errors, which rolldown builds from the virtual module id. Runs before
+     * the diagnostics are aggregated and formatted, and is a no-op for every
+     * error that is not one of ours (see `relabelBuildErrors`).
+     */
+    buildEnd(error) {
+      relabelBuildErrors(error, authoredId);
     },
 
     async resolveId(id: string, importer: string | undefined) {

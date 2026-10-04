@@ -112,10 +112,17 @@ stages dispatch on the file extension and `.solid.mx` satisfies none of them:
    parsed as plain JS ("Unexpected JSX expression"). Returning
    `moduleType: "tsx"` fixes the parse but then hands the module to
    rolldown's own JSX transform, which resolves `react/jsx-runtime`.
-3. `@solidjs/vite-plugin` only compiles ids passing its `filter`, default
-   `src/**/*.{jsx,tsx,tsrx,ts,js,mjs,cjs}`. That test runs *before* its
-   `options.extensions` list is consulted, so registering `.solid.mx` there
-   cannot bring the file back in.
+3. `@solidjs/vite-plugin`'s `transform` gate is the **extension**
+   (`@solidjs/vite-plugin@3.0.0-next.41` `dist/esm/index.mjs`, `solidPlugin()`):
+   it returns `null` unless the id matches `/\.[mc]?[tj]sx$/i`, is `.tsrx`, or
+   `getExtension(id)` is listed in `options.extensions`. `.solid.mx` is none of
+   those, so without the suffix Solid's compiler never runs on the file, and
+   every Solid project would have to write `solid({ extensions: ['.mx'] })` —
+   which none does (`examples/counter-app`, `examples/todomvc` are plain
+   `solid()`). Note the plugin's own filter is `options.include` /
+   `options.exclude` (`createFilter(options.include, options.exclude)`, both
+   undefined by default and so matching everything): `options.filter` is a
+   `serverFunctions()` option, and passing it to `solid()` is silently ignored.
 
 The `.tsx`-suffixed id satisfies all three at once, which is why the
 example's `vite.config.ts` is just `plugins: [mx(), solid()]` with no Solid
@@ -218,11 +225,75 @@ stack included; a test pins that. Two details:
   copy of core, so `instanceof` is false after a module-graph reload and the
   error used to reach the log raw.
 
-Not fixable here: rolldown builds the header (`[plugin mx] <id>:L:C`) from the
-*module* id, so a build prints `page.mx.tsx`, not `page.mx` — `this.error({ id,
-loc })` changes nothing (checked on rolldown 1.2.8) — and `vite build`'s CLI
-prints its own ~7-frame stack for the aggregate `Build failed` error. `id`,
-`loc.file` and the dev-server overlay do carry the authored path.
+**Fixed: the build header names the authored file (`vite-virtual-tsx-id`).**
+Rolldown prints each diagnostic through `getErrorMessage`
+(`rolldown/dist/shared/error-*.mjs`), which builds its location line from
+`e.id ?? e.loc?.file` — and for an error a plugin hook threw, `e.id` is the
+**module id**, stamped by rolldown itself: `TransformPluginContextImpl.error`
+does `e.id = this.moduleId` (`bindingify-input-options-*.mjs`), and a hook error
+caught on the way out of `transform` is stamped the same way. That module id is
+the suffixed `<path>.mx.tsx` this plugin mints, which does not exist on disk, so
+a failing build read
+
+```text
+[plugin mx] /…/src/page.mx.tsx:1:0
+CompileError: Missing ending "div" tag
+```
+
+— `locate()`'s `id`/`loc.file` were already the authored path and could not
+change it, and `this.error({ id, loc })` cannot either (the stamp happens after
+the call). `buildEnd` now re-labels the aggregate's diagnostics before rolldown
+formats them (`relabelBuildErrors`, unit-tested and exercised by a real
+`vite build` in `build-error-header.test.ts`): `e.id` becomes the authored
+path, so the header is `…/src/page.mx:1:0`.
+
+The re-label is deliberately narrow, and each bound is load-bearing:
+
+- only `plugin === "mx"` entries — every other plugin's diagnostic, and every
+  other module id in the graph, is untouched;
+- only entries **without** a `kind`. A `kind` marks a diagnostic rolldown
+  rendered itself (`[builtin:vite-transform]`, `[PARSE_ERROR]`): its `id` is
+  absent and the generated path is baked into an already-formatted `message`,
+  at a line:column in *generated* text. The `.mx` path has no source map
+  (`map: null`), so there is no authored position to offer, and renaming the
+  file alone would print a real file with a line that is not in it — the same
+  reason the unresolved-import path leaves those to rolldown (audit item 10).
+  A `.mx` that emits invalid JSX (`<div>a < b</div>` is not escaped by the
+  preact emitter) is the reachable case, and it is an emitter bug, not a
+  header bug;
+- `authoredId` — the same `isMxModule`/`sourcePath` pair the rest of the plugin
+  uses — decides what an id is, so a real `.tsx` file cannot be renamed;
+- every write is in a `try`, since the diagnostics are napi-backed objects owned
+  by rolldown and a frozen one must still fail the build.
+
+The dev server never needed this: the plugin's own error reaches Vite with the
+authored `id` (Vite's plugin context keeps `id`, drops the `loc` it did not
+set), so the overlay already pointed at `page.mx`.
+
+Options measured and rejected (rolldown 1.2.8 / vite 8.2.2, this repo's pins):
+
+- **Drop the `.tsx` suffix from the module id** (with `moduleType: "tsx"`
+  returned from `transform`, which *is* enough to parse: an unsuffixed id with
+  no `moduleType` fails `[PARSE_ERROR] Unexpected JSX expression`). It works —
+  build, dev `ssrLoadModule`, `transformRequest('/page.mx')`, and the JSX
+  transform still runs — but it is a much larger change than the header: the id
+  is what `@solidjs/vite-plugin` gates on (its `transform` admits an id only if
+  it matches `/\.[mc]?[tj]sx$/i`, is `.tsrx`, or lists its extension in
+  `options.extensions` — see stage 3 above), so `.solid.mx` **and** Solid-host
+  `.mx` (`solid-whole-file-build.test.ts`, `examples/counter-app`) would need
+  `solid({ extensions: ['.mx'] })`, breaking the documented zero-config
+  `plugins: [mx(), solid()]`; every other third-party plugin keying on `.tsx`
+  stops matching too; and `isScannable`/`JS_TYPES_RE` would stop counting `.mx`
+  as a JS module for the dev dep-scan. Note the AGENTS.md claim above that
+  `moduleType: "tsx"` "resolves `react/jsx-runtime`" is only half true:
+  rolldown's own JSX transform does run, but each JSX host's emitted code
+  carries `/** @jsxImportSource <host> */`, so it resolves that host's runtime,
+  not React's.
+- **Rewrite the error in `renderError`** — a no-op: throwing a replacement
+  there is ignored and rolldown still reports the original error. `buildEnd` is
+  the hook that runs before the aggregate is formatted.
+- **`this.error({ id, loc })` from the hook** — overwritten by
+  `e.id = this.moduleId` before anything reads it.
 
 **Unresolved imports are located at the authored specifier (audit item 10).**
 For an import that nothing resolves, rolldown raised `UNRESOLVED_IMPORT` against
