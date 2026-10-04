@@ -82,6 +82,7 @@
         { "title": "Hono host", "path": "/hosts/hono/" },
         { "title": "SolidMX", "path": "/hosts/solidmx/" },
         { "title": "Angular host", "path": "/hosts/angular/" },
+        { "title": "Data target", "path": "/hosts/data/" },
         {
           "title": "Third-party targets",
           "path": "/hosts/third-party-targets/"

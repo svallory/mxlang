@@ -2415,12 +2415,31 @@ A loaded host's name is a valid `mx.tags[].hosts` value for files compiled under
 that target, and its `mx.tags` entries filter by it; no unknown-host warning
 fires for it.
 
-**Tooling limit (decision 131 addendum).** Explicit `mx.target: "data"` is a
-positioned error raised by the registry wrapper, never by core:
+**The data target and its tooling limit (decisions 131 and 132, 131 addenda 1
+and 2).** `data` is a **hostless** target: its descriptor has no `host` part, so
+no `mx.host` value names it and it has no file kinds (§13.7). It is chosen only
+per package, by `mx.target: "data"` (rule 1; a nested `package.json` covers a
+subtree of a mixed repository) or by rule 5 when `@mxlang/data` is the single
+target package in `dependencies`/`devDependencies`. There is no `x.data.mx` file
+kind: a file kind's segment is a host's name (decision 136) and `data` has none.
+A package that depends on both `@mxlang/data` and another built-in target
+package has two matches under rule 5 and falls to `html`; it must set
+`mx.target`.
+
+Editor and tool dispatch for data files is deferred (TODO
+`data-target-tooling-dispatch`): **the language server, the TypeScript plugin,
+`mx-tsc`, Vite and the Bun loader do not compile data files yet.** Until it
+lands, an explicit `mx.target: "data"` is a positioned error raised by the
+registry wrapper, never by core, at the key's value (code `unknown-target`):
 `mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
-Tools continue with the same fallback as `unknown-target`; dependency-only
-`data` inference keeps its existing staging to `html`. The direct
-`parseData` API is available independently of editor/build dispatch.
+The language server, TypeScript plugin and `mx-tsc` report it as a policy
+error and the Vite plugin fails the transform with it. The tools still hand on
+the same fallback as any `unknown-target` (rule 5, else `html`), so later
+diagnostics are not drowned, but the error means no green build. The Bun loader
+does not read `mx.target` at all: `@mxlang/html/bun` always compiles as `html`.
+Dependency-only `data` inference (rule 5) keeps its existing staging to `html`
+with no diagnostic. `parseData` from `@mxlang/data` is the supported entry
+point today and is independent of editor/build dispatch (§13.7).
 
 **Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
 a malformed one (or one that is not a JSON object) ends the walk with the
@@ -2458,6 +2477,164 @@ does something else, silently.
 | 7 | Angular | **FIXED 2026-09-17**, decision 86. Was: silently accepted `class:`/`style:`/`attr:` modifiers, lowering `class:active=c` to `[class.active]="c"`. Every other host errors, on the grounds that this is **not Marko syntax at all** (§4). Now rejected the same way, naming the replacement (an object/array `class=`/`style=` value, or a plain dynamic attribute — the emitter itself decides `[attr.x]` vs `[x]` for a dynamic `data-*`/`aria-*` attribute). |
 | 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.astro.mx` does. |
 | 9 | html | **FIXED 2026-09-26**, decision 104. Dynamic tags receive attribute-tag props. |
+
+### 13.7 The data target
+
+**Decisions 131 (with addenda 1 to 3) and 132.** `@mxlang/data` is MX's first
+**hostless** target (§13.5): a `.mx` file under it is **data**, not UI. It
+compiles with core's own pipeline (delegate-everything declarations plus a data
+taglib) and returns a small, closed, serializable **static tree**. The tree
+describes what is written, never what it evaluates to; the consumer decides what
+any tag or expression means. A later *evaluated mode* (the file compiles to a
+module exporting a value) is TODO `data-host-evaluated-mode` and is not part of
+this section.
+
+**Tooling status.** The language server, the TypeScript plugin, `mx-tsc`, Vite
+and the Bun loader do **not** compile data files yet (TODO
+`data-target-tooling-dispatch`); `mx.target: "data"` in a project is the
+positioned error quoted in §13.5. **`parseData` is the supported entry point
+today.** Nothing in this section depends on tool dispatch.
+
+#### 13.7.1 `parseData`
+
+```ts
+parseData(source: string, filename: string, options?: ParseDataOptions): ParseDataResult
+parseDataFile(path: string, options?: ParseDataOptions): ParseDataResult
+```
+
+`parseData` never throws for a source problem: a Marko parse error, a rejected
+construct or a failed contract is **one** error diagnostic and `tree` is
+`undefined`. Parsing is fail-fast (Marko's parser and core's `fail` both stop at
+the first error), so there is never a partial tree. An error with no position is
+an internal failure and is rethrown.
+
+| Result field | Meaning |
+|---|---|
+| `tree` | the `DataDocument` (§13.7.2), or `undefined` when `diagnostics` holds an error |
+| `diagnostics` | `{ severity, message, line, column, offset, file? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `parseData` does not have). On success it holds this call's warnings only |
+
+| Option | Values | Meaning |
+|---|---|---|
+| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`. `parseData` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows (see [Writing a dialect package](/custom-tags/dialect-package/) for producing it) |
+| `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs in the tree (§13.7.3). `"reject"` makes the first one, in document order, a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named: text, `${}`, `<if>`, `<for>`, `<const>`, comments, `import`, `export`, `static`). For a consumer that wants tags and attributes only |
+| `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`, not by this option. |
+| `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
+
+**Error order under `unknownTags: "reject"` (main today).**
+
+1. Everything core raises while compiling comes first, wherever it sits in the
+   file: a Marko parse error, a reserved name, `<define>`, `<return>`, and every
+   `customTags` contract error (attribute shape, closed `children`, `parents`).
+   So a typo'd parent whose child violates a contract reports the child's
+   contract error, not the unknown parent.
+2. Then `structural: "reject"`: if any structural construct exists anywhere, the
+   error is the earliest one in document order, even when an unknown tag opens
+   earlier in the file.
+3. Then the tree is built depth-first and the first failing node wins. Within
+   one tag the order is: its name, the unknown-tag check, the shorthand-class
+   and tag-variable checks, its attributes, its arguments, its attribute tags
+   (`<@name>`, whatever their position), then its children. An unknown tag's own body is never walked, so
+   there is one error per unknown call.
+
+<!-- TODO(unknown-order): data-unknown-tag-order is not on main yet. It changes rules 1 to 3 (an unknown parent is reported before its children's contract errors; the unknown-tag check and the structural reject compete by position). The lead rewrites this list before merge. -->
+
+#### 13.7.2 The tree
+
+All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
+(`{ sourceStart, sourceEnd }`, UTF-16 code units from the file's start, so
+`source.slice(span.sourceStart, span.sourceEnd)` is always the authored text).
+
+- **`DataDocument`**: `{ kind: "document", filename, statements, children }`.
+  `statements` holds the `import`/`export`/`static` statements (each
+  `{ kind, code, span }`), sorted by `span`, because core splits them out of the
+  body and loses their order relative to the body. `children` is a `DataNode[]`.
+- **`DataNode`** is one of: `tag`, `text`, `expression`, `comment`, `if`,
+  `for`, `const`. Each carries a `span`.
+- **`DataTag`** (`kind: "tag"`): `name`, `nameSpan`, `span` (the whole tag, body
+  and closing tag included), `attrs`, `args` (`<x(1, 2)>`), `params` (`<x|a, b|>`,
+  as source text), `attrTags` and `children`.
+- **`DataAttrTag`** (`kind: "attr-tag"`): a `<@y>`; the same fields with `name`
+  without the `@`. `attrTags` is the tree form of a tag's attribute tags, with
+  `<if>`/`<for>` among them kept; they are **not** in `children`, and their
+  interleaving with ordinary children is not kept.
+- **`DataAttr`**, by `kind`:
+
+  | `kind` | Source | Fields |
+  |---|---|---|
+  | `string` | `type="string"`, `<x="post">`, shorthand `#id`, `.cls` | `name`, `value`, `valueSpan`, `nameSpan` (absent for shorthand) |
+  | `boolean` | `required` | `name`, `nameSpan` |
+  | `expression` | `n=1`, `values=[…]`, `change=(x) => …`, `v:=x`, `onClick=fn` | `name`, `value: DataExpr`, `nameSpan`, `bound?: true` |
+  | `spread` | `...rest` | `value: DataExpr` |
+
+  Only a string literal is `string`; `n=1` and `required=true` are `expression`
+  (the tree does not evaluate). A default attribute (`<resource="post">`) is a
+  `string` attribute named `value` whose `nameSpan` is zero-width at the `=`.
+  Attributes keep authored order, then the shorthand-synthesized `class` and
+  `id`. Duplicates follow decision 135: the last occurrence is kept and the
+  dropped one is a warning (`duplicate attribute \`b\`: the later one at 1:8 wins, so this one is dropped`).
+  Event attributes stay plain expression attributes (`onClick`).
+- **`DataExpr`**: `{ code, shape, span, node }`. `shape` is `"object"`,
+  `"array"`, `"string"` or `"other"`. `node` is Marko's own Babel node (offsets at
+  `node.loc.{start,end}.index`). **`code` is the printed form, not the authored
+  text**: a method shorthand `value({ post }) { … }` has `code` `function ({ post }) { … }`. Slice `span` for what the author wrote.
+
+**Serialized form.** `SerializedDataDocument` is `DataDocument` with every `node`
+removed (`code`, `shape` and every `span` stay), so it is plain data. The data
+target's `compileModule` emits it as `export default <literal> as const`, a
+module that imports nothing; it takes `customTags` from its options and uses the
+defaults for `structural` and `unknownTags`. A consumer that needs the Babel
+nodes calls `parseData`.
+
+#### 13.7.3 What each construct means in data
+
+| Construct | In the tree | Notes |
+|---|---|---|
+| Tags, attributes, attribute tags | `tag`, `attrs`, `attrTags` | every name core does not own is a data tag (it is *delegated*, decision 132): no `unknown tag` error exists in data |
+| Text | `text`: `value`, `span` | `value` is Marko-normalized; `span` slices the text as authored, so they differ on collapsed whitespace. A same-line one-space body (`<a> </a>`) is text; a newline-plus-indent run is not (decision 141) |
+| `${x}`, `$!{x}` | `expression`: `value`, `escaped`, `span` | `span` covers the delimiters, `value.span` the expression |
+| `<if>`, `<else-if>`, `<else>` | `if`: `branches[]` of `{ test \| null, children, span }` | `test: null` is `<else>` |
+| `<for>` | `for`: `head`, `children` | `head.source` is `of`, `in` or `range`; plus `params`, `paramSpans`, `key` |
+| `<const/n=expr>` | `const`: `name`, `init` | |
+| Comments | `comment`: `value`, `html` | `html` is true for `<!-- -->`, false for `//` |
+| `import`, `export`, `static` | `statements` | statement text, never resolved or evaluated |
+| Tag params, args | `params` (text), `args` | |
+| `<define>` and calls to it | **error**: ``` `<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use ``` | a macro cannot be expanded by a static tree |
+| `<return>` | **error**: ``` `<return>` needs the evaluated mode: the data tree is static and has no value to return ``` | |
+| Tag variable `/v` | **error**: ``tag variable `/v` on `<a>`: the data tree is static; a binding without evaluation means nothing`` | |
+| Dynamic tag `<${x}>` | **error**: ``a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one`` | |
+| Call of an imported component (`<Foo/>` with `import Foo`) | **error**: ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` | a lowercase tag is always a data tag, even when a `tags/` file of that name exists: `parseData` does not scan |
+| `<!doctype>` | **error**: ``` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page ``` | |
+| `<![CDATA[…]]>`, `<?xml …?>` | **error**, from core on every target (decision 139) | |
+| Attribute methods `change(ctx) { … }` | accepted, as an `expression` attribute | the Ash-style fixture uses `value({ post }) { … }` |
+| Attribute modifiers `class:active=c` | **error** (core, standalone template) | |
+
+A tag or attribute-tag **name** is not restricted to an identifier:
+namespaced (`svg:rect`) and non-ASCII names pass through. The only refused
+names are ones that are not names: a leading `$` or `!`, or a `{`, `}` or
+whitespace (a `$!{x}` line or a `$const x = 1` scriptlet that Marko parses as a
+tag; MX has no scriptlets, decision 54). A shorthand `class` together with an
+authored `class` on one tag (`<x.a class="b"/>`) is one positioned error, because
+core merges them into a class with no source span.
+
+**Reserved names.** No data tag may be named `if`, `else`, `else-if`, `for`,
+`const`, `define`, `return`, `import`, `export`, `static` or **`try`**: core
+consumes these before a target sees a tag (`try` is core-owned, `else` and
+`else-if` are consumed by the `<if>` walk). `if`, `for`, `const`, `import`,
+`export` and `static` always parse as the structural construct. `else`,
+`else-if` and `try` outside such a construct fail with ``` `<try>` cannot name a data tag: it is reserved — core consumes the structural names (…) and `<try>` before a target sees them ```. The host-owned names (`let`, `id`, `log`, `debug`, `effect`, `class`, `await`, …)
+are ordinary data tag names.
+
+**Marko's HTML parse rules are off.** Marko gives 19 tag names an HTML parse rule
+(void `openTagOnly`: `area base br col embed hr img input link meta param source track wbr`; raw `text` bodies: `script style textarea title`;
+`preserveWhitespace`: `pre script style textarea`). The data taglib sets each of
+those three options to `false` on every name Marko's own lookup reports, so a data
+tag named `source`, `input`, `title`, `script` or `pre` parses like any other tag
+and may have child tags. The list is derived from Marko's lookup, not
+hand-written, and a test pins the 19 names. The cost: a tag-like `<name` inside
+a `script`, `style`, `textarea` or `title` body parses as a tag, not text; a data
+file writes text through `${"…"}` or an attribute. This is the one place a data
+file is not a Marko file: Marko rejects `<source><input/></source>`, data
+accepts it.
 
 ### Host selection
 
