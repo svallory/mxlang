@@ -53,7 +53,7 @@ it("keeps data-only tool policy and generated renderer identical to base HTML", 
   expect(data.policy).toEqual(base.policy);
   expect(data.code).toBe(base.code);
   expect(data.diagnostics).toEqual(base.diagnostics);
-  expect(data.code).toContain("let out");
+  expect(data.code).toContain("let __mxOut");
 });
 
 it("excludes restricted tags when a tool target has no host filter key, keeping unrestricted tags", () => {

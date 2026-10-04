@@ -67,7 +67,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += \"<p>ok</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<p>ok</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "mappings": [],
         "compileDiagnostics": [
           {

@@ -12,14 +12,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\ntype MxAstroInput = \"content\" extends keyof Input\n  ? Omit<Input, \"content\"> & { children?: unknown }\n  : Input;\nconst mxAstroRender = Card as unknown as (input: MxAstroInput) => string;\nexport default mxAstroRender;\n",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<div></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\ntype MxAstroInput = \"content\" extends keyof Input\n  ? Omit<Input, \"content\"> & { children?: unknown }\n  : Input;\nconst mxAstroRender = Card as unknown as (input: MxAstroInput) => string;\nexport default mxAstroRender;\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              40
+              54
             ],
             "lengths": [
               49
@@ -37,7 +37,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<div></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
         "map": null,
         "warnings": []
       }
@@ -143,7 +143,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  const count = 0;\n  out += Card({ tab: () => {\n    let out = \"\";\n    return out;\n  } });\n  out += \"<p>\";\n  out += escape(count);\n  out += \"</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  const count = 0;\n  __mxOut += Card({ tab: () => {\n    let __mxOut = \"\";\n    return __mxOut;\n  } });\n  __mxOut += \"<p>\";\n  __mxOut += __mxEscape(count);\n  __mxOut += \"</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "map": null,
         "warnings": []
       }
@@ -162,14 +162,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Plain(input: Input): string {\n  let out = \"\";\n  out += Card({ tab: () => {\n    let out = \"\";\n    return out;\n  } });\n  out += \"<p>plain</p>\";\n  return out;\n}\nObject.defineProperty(Plain, Symbol.for(\"mx.component\"), { value: true });\n\ntype MxAstroInput = \"content\" extends keyof Input\n  ? Omit<Input, \"content\"> & { children?: unknown }\n  : Input;\nconst mxAstroRender = Plain as unknown as (input: MxAstroInput) => string;\nexport default mxAstroRender;\n",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Plain(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += Card({ tab: () => {\n    let __mxOut = \"\";\n    return __mxOut;\n  } });\n  __mxOut += \"<p>plain</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Plain, Symbol.for(\"mx.component\"), { value: true });\n\ntype MxAstroInput = \"content\" extends keyof Input\n  ? Omit<Input, \"content\"> & { children?: unknown }\n  : Input;\nconst mxAstroRender = Plain as unknown as (input: MxAstroInput) => string;\nexport default mxAstroRender;\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              40
+              54
             ],
             "lengths": [
               28
@@ -186,7 +186,7 @@
               31
             ],
             "generatedOffsets": [
-              161
+              183
             ],
             "lengths": [
               4
@@ -203,7 +203,7 @@
               38
             ],
             "generatedOffsets": [
-              168
+              190
             ],
             "lengths": [
               3
@@ -221,7 +221,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Plain(input: Input): string {\n  let out = \"\";\n  out += Card({ tab: () => {\n    let out = \"\";\n    return out;\n  } });\n  out += \"<p>plain</p>\";\n  return out;\n}\nObject.defineProperty(Plain, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Plain;\n",
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Plain(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += Card({ tab: () => {\n    let __mxOut = \"\";\n    return __mxOut;\n  } });\n  __mxOut += \"<p>plain</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Plain, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Plain;\n",
         "map": null,
         "warnings": []
       }

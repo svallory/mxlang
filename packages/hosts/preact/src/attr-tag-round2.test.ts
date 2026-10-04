@@ -178,11 +178,15 @@ describe("generated names do not shadow authored bindings", () => {
     });
     it(`${host}: does not collide with an authored $mx_ret0 temporary`, async () => {
       expect(
-        await renderFixture(host, {
-          "main.mx":
-            'import Counter from "./row.mx"\n<const/$mx_ret0=1/><Counter/n/><p>${n}</p>',
-          "row.mx": "<return value=42/><i>ok</i>",
-        }),
+        await renderFixture(
+          host,
+          {
+            "main.mx": "<const/$mx_ret0=1/><counter/n/><p>${n}</p>",
+            "row.mx": "<return value=42/><i>ok</i>",
+          },
+          {},
+          { counter: "row.mx" },
+        ),
       ).toBe("<i>ok</i><p>42</p>");
     });
   }

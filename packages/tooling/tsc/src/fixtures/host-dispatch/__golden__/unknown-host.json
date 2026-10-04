@@ -67,14 +67,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<div></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              40
+              54
             ],
             "lengths": [
               49
@@ -100,7 +100,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let out = \"\";\n  out += \"<div></div>\";\n  return out;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<div></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
         "map": null,
         "warnings": [
           "@mxlang/vite-plugin: <root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
@@ -176,14 +176,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  const count = 0;\n  out += Card({ tab: () => {\n    let out = \"\";\n    return out;\n  } });\n  out += \"<p>\";\n  out += escape(count);\n  out += \"</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  const count = 0;\n  __mxOut += Card({ tab: () => {\n    let __mxOut = \"\";\n    return __mxOut;\n  } });\n  __mxOut += \"<p>\";\n  __mxOut += __mxEscape(count);\n  __mxOut += \"</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              40
+              54
             ],
             "lengths": [
               28
@@ -200,7 +200,7 @@
               41
             ],
             "generatedOffsets": [
-              167
+              185
             ],
             "lengths": [
               1
@@ -217,7 +217,7 @@
               46
             ],
             "generatedOffsets": [
-              179
+              201
             ],
             "lengths": [
               4
@@ -234,7 +234,7 @@
               53
             ],
             "generatedOffsets": [
-              186
+              208
             ],
             "lengths": [
               3
@@ -251,7 +251,7 @@
               71
             ],
             "generatedOffsets": [
-              273
+              315
             ],
             "lengths": [
               5
@@ -277,7 +277,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  const count = 0;\n  out += Card({ tab: () => {\n    let out = \"\";\n    return out;\n  } });\n  out += \"<p>\";\n  out += escape(count);\n  out += \"</p>\";\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  const count = 0;\n  __mxOut += Card({ tab: () => {\n    let __mxOut = \"\";\n    return __mxOut;\n  } });\n  __mxOut += \"<p>\";\n  __mxOut += __mxEscape(count);\n  __mxOut += \"</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "map": null,
         "warnings": [
           "@mxlang/vite-plugin: <root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."

@@ -14,14 +14,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape } from \"@mxlang/html\";\n\nimport $mx_Thing1 from \"./extra-tags/thing.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += $mx_Thing1({  });\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport $mx_Thing1 from \"./extra-tags/thing.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += $mx_Thing1({  });\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "mappings": [],
         "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
       },
       "vite": {
-        "code": "import { escape } from \"@mxlang/html\";\n\nimport $mx_Thing1 from \"./extra-tags/thing.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let out = \"\";\n  out += $mx_Thing1({  });\n  return out;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport $mx_Thing1 from \"./extra-tags/thing.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += $mx_Thing1({  });\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "map": null,
         "warnings": []
       }

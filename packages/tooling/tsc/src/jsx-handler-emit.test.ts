@@ -110,7 +110,8 @@ describe.each(HOSTS)(
 
         const out = join(root, "out", "Emit.mx.js");
         const js = readFileSync(out, "utf8");
-        expect(js).not.toMatch(/__Mx|__mx|satisfies/);
+        // Reserved runtime helpers remain; type-check-only names are erased.
+        expect(js).not.toMatch(/__Mx|satisfies/);
         // Same handlers as the runtime compile, modulo the one paren layer
         // TypeScript keeps around an erased `satisfies` operand.
         expect(js).toMatch(

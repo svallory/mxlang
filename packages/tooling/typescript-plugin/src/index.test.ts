@@ -222,7 +222,7 @@ describe("SolidMX language plugin", () => {
     // on the authored text instead of three columns late.
     const plugin = createSolidMxLanguagePlugin(ts);
     const source =
-      "const a = <div>a < b \${input.zed}</div>;\nconst n: number = 1;\n";
+      "const a = <div>a < b ${input.zed}</div>;\nconst n: number = 1;\n";
     const virtual = plugin.createVirtualCode?.(
       "/src/mapping.solid.mx",
       SOLID_MX_LANGUAGE_ID,
@@ -557,7 +557,7 @@ describe("MX language plugin", () => {
     expect(virtual.languageId).toBe("typescript");
     expect(generated).toContain("export interface Input { title: string }");
     expect(generated).toContain("function Card(input: Input): string");
-    expect(generated).toContain("out += escape(input.title)");
+    expect(generated).toContain("__mxOut += __mxEscape(input.title)");
     expect(virtual.mappings.length).toBeGreaterThan(0);
     // TSX, not TS, for every host. The Preact host emits a component module
     // whose body is JSX; parsed as plain TS its `return (<>…)` is a syntax

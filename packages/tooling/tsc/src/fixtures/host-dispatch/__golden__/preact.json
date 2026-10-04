@@ -12,7 +12,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "/** @jsxImportSource preact */\nimport type { JSX as __MxJSX } from \"preact/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
+        "generated": "/** @jsxImportSource preact */\nimport type { JSX as __MxJSX } from \"preact/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><div /></>);\n}\n",
         "mappings": [
           {
             "sourceOffsets": [
@@ -37,7 +37,7 @@
         "logged": []
       },
       "vite": {
-        "code": "/** @jsxImportSource preact */\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><div /></>);\n}\n",
+        "code": "/** @jsxImportSource preact */\n\nexport interface Input { [key: string]: unknown }\n\nexport default function Card(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><div /></>);\n}\n",
         "map": null,
         "warnings": []
       }
@@ -171,7 +171,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "/** @jsxImportSource preact */\nimport type { JSX as __MxJSX } from \"preact/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
+        "generated": "/** @jsxImportSource preact */\nimport type { JSX as __MxJSX } from \"preact/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
         "mappings": [
           {
             "sourceOffsets": [
@@ -195,7 +195,7 @@
               31
             ],
             "generatedOffsets": [
-              924
+              930
             ],
             "lengths": [
               4
@@ -212,7 +212,7 @@
               38
             ],
             "generatedOffsets": [
-              929
+              935
             ],
             "lengths": [
               3
@@ -230,7 +230,7 @@
         "logged": []
       },
       "vite": {
-        "code": "/** @jsxImportSource preact */\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const $mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof $mxBody === \"string\" || typeof $mxBody === \"number\"\n        ? $mxBody === \"\"\n          ? undefined\n          : <>{String($mxBody)}</>\n        : $mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
+        "code": "/** @jsxImportSource preact */\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nexport default function Plain(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><Card tab={undefined} /><p>plain</p></>);\n}\n",
         "map": null,
         "warnings": []
       }
