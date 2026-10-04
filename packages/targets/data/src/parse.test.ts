@@ -1457,3 +1457,104 @@ describe("fail-fast parse (the addendum's item 8)", () => {
     expect(result.diagnostics).toHaveLength(1);
   });
 });
+
+describe("a registration error with no source position is file-level", () => {
+  const source = "<pub/>\n<other/>\n";
+
+  it("a `finalize`-only declaration reports at 1:0, offset 0", () => {
+    const result = parseData(source, "/t.mx", {
+      customTags: { pub: { finalize() {} } },
+    });
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      {
+        severity: "error",
+        message:
+          "`<pub>`: a custom tag that defines only `finalize` has no call site and nothing to collect; add a `transform`, an `analyze` or a template file",
+        line: 1,
+        column: 0,
+        offset: 0,
+      },
+    ]);
+  });
+
+  it("a contradictory attribute declaration reports at 1:0, offset 0", () => {
+    const result = parseData(source, "/t.mx", {
+      customTags: { pub: { attributes: { n: { items: "string" } } } },
+    });
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "error",
+      line: 1,
+      column: 0,
+      offset: 0,
+    });
+    expect(result.diagnostics[0]?.message).toContain('"n" attribute');
+  });
+
+  it("an unknown child-declaration key reports at 1:0, offset 0", () => {
+    const result = parseData(source, "/t.mx", {
+      customTags: {
+        pub: {
+          children: { other: { nope: true } as never },
+        },
+        other: {},
+      },
+    });
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "error",
+      line: 1,
+      column: 0,
+      offset: 0,
+    });
+    expect(result.diagnostics[0]?.message).toContain('Unknown key "nope"');
+  });
+
+  it("an empty source still reports at 1:0, offset 0", () => {
+    const result = parseData("", "/t.mx", {
+      customTags: { pub: { finalize() {} } },
+    });
+    expect(result.diagnostics[0]).toMatchObject({
+      line: 1,
+      column: 0,
+      offset: 0,
+    });
+  });
+
+  it("an error with a real position is left alone", () => {
+    const result = parseData("<x\n", "/t.mx");
+    expect(result.diagnostics[0]).toMatchObject({
+      line: 1,
+      column: 0,
+      offset: 0,
+    });
+    const later = parseData("<good/>\n<return=1/>\n", "/t.mx");
+    expect(later.diagnostics[0]?.line).toBe(2);
+    expect(later.diagnostics[0]?.offset).toBeGreaterThan(0);
+  });
+});
+
+describe("an error in another file keeps `offset: -1`", () => {
+  it("is not normalized: its position stays the other file's", () => {
+    const result = parseData("<badge/>\n", "/t.mx", {
+      customTags: {
+        badge: {
+          template: { filename: "/t/tags/badge.mx", source: "<return=1/>\n" },
+        },
+      },
+    });
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      {
+        severity: "error",
+        message: expect.stringContaining("`<return>` needs the evaluated mode"),
+        line: 1,
+        column: 0,
+        offset: -1,
+        file: "/t/tags/badge.mx",
+      },
+    ]);
+  });
+});

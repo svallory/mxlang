@@ -93,8 +93,9 @@ describe("allowed parents under delegate-everything declarations (decision 138 E
       {
         message:
           "`<c>`: parent `<p>` declares `children` without `<c>`; add `<c>` to `<p>`'s `children`, or remove `<p>` from `<c>`'s `parents`",
-        line: 0,
+        line: 1,
         column: 0,
+        offset: 0,
       },
     ]);
   });

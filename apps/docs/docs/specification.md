@@ -2512,7 +2512,7 @@ an internal failure and is rethrown.
 | Result field | Meaning |
 |---|---|
 | `tree` | the `DataDocument` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `{ severity, message, line, column, offset, file? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `parseData` does not have). On success it holds this call's warnings only |
+| `diagnostics` | `{ severity, message, line, column, offset, file? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `parseData` does not have). An error with no source position, such as a bad `customTags` registration, is file-level: `line: 1`, `column: 0`, `offset: 0`. On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|

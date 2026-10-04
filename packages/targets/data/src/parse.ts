@@ -87,7 +87,11 @@ export interface ParseDataOptions {
 export interface DataDiagnostic {
   severity: "error" | "warning";
   message: string;
-  /** 1-based, as `TranslateError` and `MxWarning`. */
+  /**
+   * 1-based, as `TranslateError` and `MxWarning`. An error with no source
+   * position (a bad `customTags` registration) is file-level: `line: 1`,
+   * `column: 0`, `offset: 0`.
+   */
   line: number;
   /** 0-based, as core. */
   column: number;
@@ -123,6 +127,12 @@ function errorPosition(
   error: unknown,
 ): { line: number; column: number; file?: string } | null {
   if (isTranslateError(error)) {
+    // Core raises a registration error that has no source position at 0:0.
+    // That is a file-level error: report it at the start of the file, so
+    // `line` stays 1-based.
+    if (error.line < 1) {
+      return { line: 1, column: 0, file: error.file };
+    }
     return { line: error.line, column: error.column, file: error.file };
   }
   if (!error || typeof error !== "object") return null;
