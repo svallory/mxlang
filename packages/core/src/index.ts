@@ -75,6 +75,7 @@ export {
   VOID_TAGS,
   warn,
 } from "./core.ts";
+export { nearestName } from "./did-you-mean.ts";
 export type {
   AnalyzeContext,
   ChildNode,

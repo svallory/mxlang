@@ -13,6 +13,10 @@ Ruling #227: a position MX **prints** — in a message's text as much as in a `f
 
 Tests: `src/warning-position.test.ts`, the padding-contract rows in `src/fragment.test.ts`, and the two `Input`-unreadable rows whose expected columns are corrected to the 1-based value they were always meant to be.
 
+### Added: `nearestName` export (unknown-tags)
+
+`nearestName(name, candidates)` — the unambiguous-nearest-name helper behind core's did-you-mean hints — is now exported so a target can hint at a declared name (the data target's `unknownTags: "reject"`). Additive; no behaviour change.
+
 ### Fixed: mutable scriptlet replacement advice (scriptlet-hint-let-var)
 
 Both the parse-error and lowering paths preserve the declared `const`/`let`/`var` keyword through `HostDeclarations.scriptletReplacement(name, keyword)`. The default suggests `<const>` only for `const`, and `<let>` for `let`/`var`; hosts that reject `<let>` override the advice or omit it by returning an empty string. Host choices remain outside core (decision 126); scriptlets are still rejected (decision 54). Lead ruling 2026-10-03 (question 37): the default says what Marko says (`<let>` is the mutable binding), so a host that cannot do `<let>` must override the hook (documented on `scriptletReplacement`); the `keyword` parameter is additive and no published host is affected.
