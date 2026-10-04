@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (reserve-mx-identifiers):** frontmatter bindings beginning with `__mx` receive core's shared positioned reservation error before generated native-attribute helpers are injected. Template bindings are checked by core too; ordinary property names remain legal.
+
 - **Fix (attr-value-parity review):** native guards are hoisted once into frontmatter, with authored mapping offsets retained. Ordinary function/symbol values receive Marko debug errors; null/false serialization remains unchanged.
 
 - **Fix (attr-value-parity):** ordinary native attributes in `.astro.mx`, including computed plain colon-name attributes and final merged spreads, reject unrenderable objects with Marko's render-time diagnostic. Authored expressions evaluate once; class/style, controlled writers and component props are unchanged. Real Astro compiler/container renders pin the fix.

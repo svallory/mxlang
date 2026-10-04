@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (reserve-mx-identifiers):** generated dynamic helpers, body/return temporaries and component aliases use `__mx` names. Generated imports alias class, fragment and boundary helpers without changing public exports. Shared with React and Hono; rendered collision regressions cover all three.
+
 - **Fix (attr-value-parity review):** hoist native value/spread guards once per module, including nested definitions and dynamic tags. Reject ordinary function/symbol values with Marko debug text while preserving event handlers and framework props. Shared with React and Hono.
 
 - **Fix (attr-value-parity):** native attributes and dynamic string tags reject unrenderable objects with Marko's render-time error, including final merged spreads. Preserve component props, class/style, controlled writers and framework-only props; authored expressions are evaluated once. Nested `on:`/`style:` fix-its now dispatch on the first prefix instead of suggesting class syntax. Shared with React and Hono.

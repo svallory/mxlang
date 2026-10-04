@@ -111,6 +111,87 @@ async function renderModules(
   }
 }
 
+describe("generated names do not shadow authored bindings", () => {
+  it.each([
+    ["escape", "<p>${input.text}</p>", "<p>&lt;x&gt;</p>"],
+    ["classValue", "<p class=input.classes/>", '<p class="on"></p>'],
+    ["styleValue", "<p style=input.styles/>", '<p style="color:red"></p>'],
+    [
+      "escapeComment",
+      "<html-comment>${input.text}</html-comment>",
+      "<!--<x&gt;-->",
+    ],
+    ["renderDynamic", "<${input.tag}>ok</>", "<p>ok</p>"],
+    ["out", "<p>ok</p>", "<p>ok</p>"],
+    ["value", "<p class=value/>", '<p class="1"></p>'],
+    ["$for2", "<for|x| of=[$for2]><p>${x}</p></for>", "<p>1</p>"],
+  ])("renders with an authored %s", async (name, markup, expected) => {
+    expect(
+      await renderModules(
+        { "page.mx": `<const/${name}=1/>\n${markup}` },
+        "page.mx",
+        {
+          text: "<x>",
+          classes: { on: true },
+          styles: { color: "red" },
+          tag: "p",
+        },
+      ),
+    ).toBe(expected);
+  });
+});
+
+describe("reserved attribute writer after #294", () => {
+  it("preserves direct, merged, spread and dynamic native behavior", async () => {
+    const body = [
+      '<const/text="on"/>',
+      '<const/key="id"/>',
+      '<const/value="safe"/>',
+      '<const/attrs={ class: { [text]: true }, style: { color: "red" }, title: null }/>',
+      '<const/target="input"/>',
+      "<input title=null value=value checked=0/>",
+      "<p class={ [text]: true } ...attrs id=value/>",
+      "<p ...attrs/>",
+      "<${target} ...attrs value=value checked=0/>",
+    ].join("\n");
+    expect(await renderModules({ "page.mx": body }, "page.mx")).toBe(
+      '<input value="safe" checked><p id="safe" class="on" style="color:red"></p><p class="on" style="color:red"></p><input class="on" style="color:red" value="safe" checked="0">',
+    );
+
+    const { code } = compile(src(body), file);
+    for (const name of [
+      "__mxCapturedValue",
+      "__mxKey",
+      "__mxValue",
+      "__mxText",
+      "__mxRenderAttr",
+      "__mxClassValue",
+      "__mxStyleValue",
+      "__mxRenderDynamic",
+    ]) {
+      expect(code).toContain(name);
+    }
+    expect(code).not.toMatch(/\bout\s*\+=|\bconst text\s*=\s*key/);
+  });
+
+  it("does not shadow an authored _error in a parameterless catch", async () => {
+    expect(
+      await renderModules(
+        {
+          "page.mx":
+            '<const/_error="outer"/>\n<try><${input.fail}/><@catch><p>${_error}</p></@catch></try>',
+        },
+        "page.mx",
+        {
+          fail() {
+            throw new Error("boom");
+          },
+        },
+      ),
+    ).toBe("<p>outer</p>");
+  });
+});
+
 describe("an inert tag is inert only in its declared shape", () => {
   // Inert means the construct emits nothing — never that a body or an extra
   // attribute may be discarded. `<effect><div>x</div></effect>` compiled clean
@@ -142,7 +223,7 @@ describe("an inert tag is inert only in its declared shape", () => {
       src('<p>a</p>\n<lifecycle onMount() { } foo="bar"/>'),
       file,
     );
-    expect(code).toContain('out += "<p>a</p>"');
+    expect(code).toContain('__mxOut += "<p>a</p>"');
   });
 
   it("rejects a spread on an inert tag", () => {
@@ -158,7 +239,7 @@ describe("an inert tag is inert only in its declared shape", () => {
       src("<script>console.log(1)</script>\n<p>a</p>"),
       file,
     );
-    expect(code).toContain('out += "<p>a</p>"');
+    expect(code).toContain('__mxOut += "<p>a</p>"');
     expect(code).not.toContain("console.log");
   });
 });
@@ -286,8 +367,8 @@ describe("<html-comment> lowers placeholders", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const body = "<html-comment>build ${input.sha}</html-comment>";
     const { code } = compile(src(body), file);
-    expect(code).toContain("escapeComment(input.sha)");
-    expect(code).toContain("function escapeComment");
+    expect(code).toContain("__mxEscapeComment(input.sha)");
+    expect(code).toContain("function __mxEscapeComment");
   });
 
   it("escapes only `>`, as Marko's own _escape_comment does", () => {
@@ -321,7 +402,7 @@ describe("inert constructs (decision 65): accepted, no output", () => {
     ["debug", "<p>a</p>\n<debug/>"],
   ])("accepts <%s> with no emitted output", (_name, body) => {
     const { code } = compile(src(body), file);
-    expect(code).toContain('out += "<p>a</p>"');
+    expect(code).toContain('__mxOut += "<p>a</p>"');
     expect(code).not.toContain("console.log");
   });
 
@@ -356,7 +437,7 @@ describe("statement blocks", () => {
     expect(code.indexOf("const S = 41 + 1")).toBeLessThan(
       code.indexOf("function Probe(input: Input): string {"),
     );
-    expect(code).toContain("escape(S)");
+    expect(code).toContain("__mxEscape(S)");
   });
 
   // This host used to reject `<return>` outright, on the grounds that "a
@@ -368,7 +449,7 @@ describe("statement blocks", () => {
   it("accepts <return> in a page, with the same meaning as in a tag", () => {
     const { code } = compile(src("<p>x</p>\n<return=42/>"), file);
 
-    expect(code).toContain("return { value: 42, output: out };");
+    expect(code).toContain("return { value: 42, output: __mxOut };");
   });
 });
 
@@ -377,7 +458,7 @@ describe("evaluate-initial-value constructs (decision 65)", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const { code } = compile(src("<let/count=5/>\n<p>${count}</p>"), file);
     expect(code).toContain("const count = 5;");
-    expect(code).toContain("escape(count)");
+    expect(code).toContain("__mxEscape(count)");
   });
 
   it("<const> binds its value", () => {
@@ -458,28 +539,28 @@ describe("<try> without a placeholder is a plain try/catch", () => {
   // tag's body uses.
   it("preserves a whitespace-only body", () => {
     const { code } = compile(src("<try>  </try>"), file);
-    expect(code).toContain('out += " ";');
+    expect(code).toContain('__mxOut += " ";');
   });
 
   it("preserves markup mixed with text in the body", () => {
     const { code } = compile(src("<try>a <b>c</b></try>"), file);
-    expect(code).toContain('out += "a <b>c</b>";');
+    expect(code).toContain('__mxOut += "a <b>c</b>";');
   });
 });
 
 describe("class and style take Marko's structured values", () => {
   it.each([
-    ["object", "<div class={a: true, b: false}>x</div>", "classValue({"],
-    ["array", '<div class=["x", {y: true}]>z</div>', "classValue(["],
-    ["style object", '<div style={color: "red"}>s</div>', "styleValue({"],
+    ["object", "<div class={a: true, b: false}>x</div>", "__mxClassValue({"],
+    ["array", '<div class=["x", {y: true}]>z</div>', "__mxClassValue(["],
+    ["style object", '<div style={color: "red"}>s</div>', "__mxStyleValue({"],
   ])("%s", (_name, body, expected) => {
     expect(compile(src(body), file).code).toContain(expected);
   });
 
   it("emits the helper only when something calls it", () => {
     const plain = compile(src("<p>a</p>"), file).code;
-    expect(plain).not.toContain("function classValue");
-    expect(plain).not.toContain("function renderDynamic");
+    expect(plain).not.toContain("function __mxClassValue");
+    expect(plain).not.toContain("function __mxRenderDynamic");
   });
 });
 
@@ -952,15 +1033,15 @@ describe("dynamic tags", () => {
   it("lowers `<${expr}/>` through the runtime dispatcher", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     const { code } = compile(src("<${input.tag}/>"), file);
-    expect(code).toContain("renderDynamic(input.tag");
-    expect(code).toContain("function renderDynamic");
+    expect(code).toContain("__mxRenderDynamic(input.tag");
+    expect(code).toContain("function __mxRenderDynamic");
   });
 
   it("lowers a bare `${expr}` concise-position line the same way, since this host claims DYNAMIC_TAG for both shapes", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko concise-mode placeholder/dynamic-tag syntax in template source
     const { code } = compile(src("${input.tag}\n"), file);
-    expect(code).toContain("renderDynamic(input.tag");
-    expect(code).toContain("function renderDynamic");
+    expect(code).toContain("__mxRenderDynamic(input.tag");
+    expect(code).toContain("function __mxRenderDynamic");
   });
 
   // attribute-tag-silent-drops B2: `renderDynamic` used to receive `{}` for
@@ -974,8 +1055,8 @@ describe("dynamic tags", () => {
       src("<${input.comp}><@header>hi</@header></>"),
       file,
     );
-    expect(code).toContain("renderDynamic(input.comp, { header:");
-    expect(code).not.toContain("renderDynamic(input.comp, {  });");
+    expect(code).toContain("__mxRenderDynamic(input.comp, { header:");
+    expect(code).not.toContain("__mxRenderDynamic(input.comp, {  });");
   });
 
   it("accepts arguments combined with a body on a dynamic tag (decision 109, Marko parity)", async () => {
@@ -1329,7 +1410,9 @@ describe("the eight-field guard", () => {
 describe("module shape", () => {
   it("imports escape and default-exports the renderer", () => {
     const { code } = compile(src("<p>hi</p>"), file);
-    expect(code).toContain('import { escape } from "@mxlang/html";');
+    expect(code).toContain(
+      'import { escape as __mxEscape } from "@mxlang/html";',
+    );
     expect(code).toContain("function Probe(input: Input): string {");
     expect(code).toContain("export default Probe;");
   });
@@ -1381,7 +1464,9 @@ describe("module shape", () => {
     // both apply — the one that would silently lose the brand if the rewrites
     // were ordered wrongly.
     const { code } = compile(src("<p class={a: true}>hi</p>"), file);
-    expect(code).toContain("function classValue(value: unknown): string {");
+    expect(code).toContain(
+      "function __mxClassValue(__mxValue: unknown): string {",
+    );
     expect(code).toContain(
       'Object.defineProperty(Probe, Symbol.for("mx.component"), { value: true });',
     );
@@ -1694,7 +1779,7 @@ describe("a tag template compiles as its own module", () => {
     expect(statementLine).toBeGreaterThan(-1);
     // Module scope means *before* the render function, not hoisted into it.
     expect(statementLine).toBeLessThan(renderLine);
-    expect(code).toContain("escape(LABEL)");
+    expect(code).toContain("__mxEscape(LABEL)");
   });
 
   // A8. A self-recursive tag: the unit imports itself, which is legal ESM.
@@ -1747,7 +1832,9 @@ describe("a unit that returns a value", () => {
   it("returns { value, output } instead of the output alone", () => {
     const { code } = compile(counterSource, counterFile);
 
-    expect(code).toContain("return { value: input.start + 1, output: out };");
+    expect(code).toContain(
+      "return { value: input.start + 1, output: __mxOut };",
+    );
     // Un-annotated, so the value's type is inferred from the expression —
     // that inference is what types the `/var` binding at the call site.
     expect(code).toContain("function Counter(input: Input) {");
@@ -1766,14 +1853,14 @@ describe("a unit that returns a value", () => {
     // Invariant §7.5-4's sequence: the call bound to a temp, the `/var` read
     // off it, then the output. The temp is what makes the call evaluate once
     // while both halves are read.
-    const call = code.indexOf("const $mx_ret0 = ");
-    const bind = code.indexOf("const n = $mx_ret0.value;");
-    const out = code.indexOf("out += $mx_ret0.output;");
+    const call = code.indexOf("const __mxRet0 = ");
+    const bind = code.indexOf("const n = __mxRet0.value;");
+    const out = code.indexOf("__mxOut += __mxRet0.output;");
     expect(call).toBeGreaterThan(-1);
     expect(bind).toBeGreaterThan(call);
     expect(out).toBeGreaterThan(bind);
     // And the binding is readable after the call.
-    expect(code).toContain("escape(n)");
+    expect(code).toContain("__mxEscape(n)");
   });
 
   it("unwraps the output when the call binds no /var", () => {
@@ -1782,7 +1869,7 @@ describe("a unit that returns a value", () => {
     });
 
     expect(code).toContain(").output;");
-    expect(code).not.toContain("$mx_ret");
+    expect(code).not.toContain("__mxRet");
   });
 
   it("gives each /var call site its own temp", () => {
@@ -1792,8 +1879,8 @@ describe("a unit that returns a value", () => {
       { customTags: { counter } },
     );
 
-    expect(code).toContain("const a = $mx_ret0.value;");
-    expect(code).toContain("const b = $mx_ret1.value;");
+    expect(code).toContain("const a = __mxRet0.value;");
+    expect(code).toContain("const b = __mxRet1.value;");
   });
 
   it("rejects /var on a tag whose template has no <return>", () => {
@@ -1843,7 +1930,7 @@ describe("a unit that returns a value", () => {
       { customTags: { counter } },
     );
 
-    expect(code).toContain("const n = $mx_ret0.value;");
+    expect(code).toContain("const n = __mxRet0.value;");
   });
 
   it("does not mistake a shadowing tag param for the /var", () => {
@@ -1858,7 +1945,7 @@ describe("a unit that returns a value", () => {
       { customTags: { counter } },
     );
 
-    expect(code).toContain("escape(n)");
+    expect(code).toContain("__mxEscape(n)");
   });
 
   it("allows a read from a block nested inside the declaring one", () => {
@@ -1869,7 +1956,7 @@ describe("a unit that returns a value", () => {
     );
 
     // Ordinary JS closure scoping: the binding is in scope for the block.
-    expect(code).toContain("escape(n)");
+    expect(code).toContain("__mxEscape(n)");
   });
 });
 

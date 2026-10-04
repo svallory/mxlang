@@ -90,7 +90,12 @@ async function renderFixture(
       if (!name.endsWith(".mx")) continue;
       const output = compile(source, join(scratch, name), {
         customTags,
-      }).code.replace(/from "\.\/(\w+)\.mx"/g, 'from "./$1.tsx"');
+      })
+        .code.replace(/from "\.\/(\w+)\.mx"/g, 'from "./$1.tsx"')
+        .replaceAll(
+          `from "@mxlang/${host}/runtime"`,
+          `from ${JSON.stringify(fileURLToPath(new URL(`../../${host}/src/runtime.ts`, import.meta.url)))}`,
+        );
       writeFileSync(
         join(scratch, name.replace(/\.mx$/, ".tsx")),
         `/** @jsxRuntime automatic */\n${output}`,
@@ -110,11 +115,13 @@ async function renderFixture(
         reactCreateElement(mod.default as never, input as never),
       );
     }
-    return await (
-      jsx(mod.default as never, input as never) as {
-        toString(): Promise<string>;
-      }
-    ).toString();
+    return String(
+      await (
+        jsx(mod.default as never, input as never) as {
+          toString(): Promise<string>;
+        }
+      ).toString(),
+    );
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -125,6 +132,61 @@ function dataRow(input: string, body: string): string {
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+describe("generated names do not shadow authored bindings", () => {
+  for (const host of hosts) {
+    it.each([
+      ["mxDynamic", "<${input.tag}>ok</>", "<p>ok</p>"],
+      ["mxIsHostComponentObject", "<${input.tag}>ok</>", "<p>ok</p>"],
+      ["mxClass", "<p class={on: true}/>", '<p class="on"></p>'],
+      ["Fragment", "<for|x| of=[1]><p>${x}</p></for>", "<p>1</p>"],
+      ["$mxBody", "<p>ok</p>", "<p>ok</p>"],
+      [
+        host === "hono" ? "ErrorBoundary" : "MxErrorBoundary",
+        "<try><p>ok</p><@catch>bad</@catch></try>",
+        "<p>ok</p>",
+      ],
+      [
+        host === "hono" ? "Suspense" : "MxPlaceholder",
+        "<try><p>ok</p><@placeholder>wait</@placeholder></try>",
+        "<p>ok</p>",
+      ],
+    ])(
+      `${host}: renders with an authored %s`,
+      async (name, markup, expected) => {
+        const binding =
+          name === "mxIsHostComponentObject"
+            ? `static const ${name}=1;`
+            : `<const/${name}=1/>`;
+        expect(
+          await renderFixture(
+            host,
+            { "main.mx": `${binding}\n${markup}` },
+            { tag: "p", classes: { on: true } },
+          ),
+        ).toBe(expected);
+      },
+    );
+    it(`${host}: does not collide with an authored MxBadge alias`, async () => {
+      expect(
+        await renderFixture(host, {
+          "main.mx":
+            'static const MxBadge = 1;\nimport badge from "./row.mx"\n<badge label="ok"/>',
+          "row.mx": "<p>${input.label}</p>",
+        }),
+      ).toBe("<p>ok</p>");
+    });
+    it(`${host}: does not collide with an authored $mx_ret0 temporary`, async () => {
+      expect(
+        await renderFixture(host, {
+          "main.mx":
+            'import Counter from "./row.mx"\n<const/$mx_ret0=1/><Counter/n/><p>${n}</p>',
+          "row.mx": "<return value=42/><i>ok</i>",
+        }),
+      ).toBe("<i>ok</i><p>42</p>");
+    });
+  }
+});
 
 describe("attribute tags round-2 regressions (executed)", () => {
   for (const host of hosts) {

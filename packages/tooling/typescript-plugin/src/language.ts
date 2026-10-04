@@ -1294,8 +1294,9 @@ function toSyntaxError(
     message?: string;
     loc?: { line?: number; column?: number; index?: number };
   };
-  const line = Math.max(1, error.loc?.line ?? 1);
-  const column = Math.max(0, error.loc?.column ?? 0);
+  const coreError = isTranslateError(cause) ? cause : undefined;
+  const line = Math.max(1, error.loc?.line ?? coreError?.line ?? 1);
+  const column = Math.max(0, error.loc?.column ?? coreError?.column ?? 0);
   const lineStart = lineOffsets(source)[line - 1] ?? source.length;
 
   const message = error.message ?? "Invalid SolidMX source.";

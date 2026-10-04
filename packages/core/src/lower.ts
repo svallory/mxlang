@@ -100,6 +100,7 @@ import {
   type ScriptletDeclaration,
   scriptletSentence,
 } from "./parse-error-hints.ts";
+import { checkReservedTemplate } from "./reserved-bindings.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -3247,6 +3248,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
  * filtering the tree for statement nodes.
  */
 export function lower(ctx: Ctx, body: Node[]): Ir {
+  checkReservedTemplate(ctx, body);
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
   const ownInputCode: string[] = [];

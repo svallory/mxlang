@@ -6,6 +6,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Fix (reserve-mx-identifiers):** reject authored `__mx*` bindings, including destructuring, tag parameters and parsed statements, at the authored identifier. Host code regions share the check and actionable diagnostic; property keys and references remain legal. This is intentionally stricter than Marko 6.3.51.
+
 - **Fix (attr-value-parity review):** classify builtin value syntax independently of host rendering disposition, including HTML's delegated `<let>`. Native guards reject functions/symbols with Marko debug text; spread guards reference the once-per-module value helper. Remove the unused public guard-body export.
 
 - **Fix (attr-value-parity):** validate builtin duplicate values before a host drops or claims the tag. `<let>`/`<return>` use Marko 6.3.51's duplicate-value text at the second value; `<const>`/`<id>` retain their linked tag-specific diagnostic at the tag name. Delegated vocabulary retains ordinary attribute normalization. Export host-neutral, inlinable native-attribute coercion helpers; class/style and controlled writers are exempt.

@@ -170,13 +170,15 @@ describe("class and style", () => {
     // The object's contents are sliced verbatim from source (this task's
     // fix keeps TypeScript type arguments the same way), not reformatted by
     // the generator, so no space follows `{` here.
-    expect(code).toContain("class={mxClass({active: input.on})}");
-    expect(code).toContain('import { mxClass } from "@mxlang/preact/runtime";');
+    expect(code).toContain("class={__mxClass({active: input.on})}");
+    expect(code).toContain(
+      'import { mxClass as __mxClass } from "@mxlang/preact/runtime";',
+    );
   });
 
   it("joins the `.class` shorthand merged with an object", () => {
     expect(markup("<div.card class={active: input.on}>x</div>")).toContain(
-      "mxClass(",
+      "__mxClass(",
     );
   });
 
@@ -254,7 +256,7 @@ describe("<if> chains", () => {
 describe("<for> loops", () => {
   it("keys an `of` loop by the row itself when `by=` is absent", () => {
     expect(markup("<for|x| of=input.items><li>${x}</li></for>")).toBe(
-      "{((mxList) => mxList ? [...mxList] : [])(input.items).map((x) => <Fragment key={x}><li>{x}</li></Fragment>)}",
+      "{((mxList) => mxList ? [...mxList] : [])(input.items).map((x) => <__mxFragment key={x}><li>{x}</li></__mxFragment>)}",
     );
   });
 
@@ -292,7 +294,7 @@ describe("<for> loops", () => {
 
   it("keys an `in` loop by the property name", () => {
     expect(markup("<for|k, v| in=input.obj><p>${k}</p></for>")).toBe(
-      "{Object.entries(input.obj ?? {}).map(([k, v]) => <Fragment key={k}><p>{k}</p></Fragment>)}",
+      "{Object.entries(input.obj ?? {}).map(([k, v]) => <__mxFragment key={k}><p>{k}</p></__mxFragment>)}",
     );
   });
 
@@ -305,7 +307,7 @@ describe("<for> loops", () => {
   it("lowers an inclusive range and keys rows by their value", () => {
     const out = markup("<for|i| from=1 to=3><b>${i}</b></for>");
     expect(out).toContain("(3) - (1) + 1");
-    expect(out).toContain("map((i) => <Fragment key={i}>");
+    expect(out).toContain("map((i) => <__mxFragment key={i}>");
   });
 
   it("lowers an exclusive range without the inclusive adjustment", () => {
@@ -401,7 +403,7 @@ describe("components", () => {
 
   it("forwards tag arguments to the inlined mxDynamic helper", () => {
     expect(markup('<${input.render}("x", 2)/>')).toBe(
-      '{mxDynamic(input.render, ["x", 2])}',
+      '{__mxDynamic(input.render, ["x", 2])}',
     );
   });
 
@@ -412,26 +414,26 @@ describe("components", () => {
     // fixture), so this host inlines a small helper rather than binding the
     // expression to a JSX tag position.
     expect(markup("<${input.tag}>hi</>")).toBe(
-      "{mxDynamic(input.tag, { content: () => <><>hi</></> })}",
+      "{__mxDynamic(input.tag, { content: () => <><>hi</></> })}",
     );
-    expect(compile("<${input.tag}>hi</>")).toContain("function mxDynamic(");
+    expect(compile("<${input.tag}>hi</>")).toContain("function __mxDynamic(");
   });
 
   it("emits a bare `${expr}` line the same way, as a dynamic tag", () => {
     // A bare concise-position `${expr}` line and `<${expr}/>` parse to the
     // same Marko node and both are the dynamic-tag shape — see the "four
     // Marko facts" in AGENTS.md.
-    expect(markup("<${input.tag}/>")).toBe("{mxDynamic(input.tag, {  })}");
+    expect(markup("<${input.tag}/>")).toBe("{__mxDynamic(input.tag, {  })}");
   });
 
   it("passes attributes through on a dynamic tag", () => {
     expect(markup("<${input.tag} n=1/>")).toBe(
-      '{mxDynamic(input.tag, { "n": 1 })}',
+      '{__mxDynamic(input.tag, { "n": 1 })}',
     );
   });
 
   it("only inlines mxDynamic when a template actually uses a dynamic tag", () => {
-    expect(compile("<p>x</p>")).not.toContain("mxDynamic");
+    expect(compile("<p>x</p>")).not.toContain("__mxDynamic");
   });
 });
 
@@ -979,8 +981,8 @@ describe("component aliases", () => {
     // `tags/`-discovered `<badge/>` rendered a literal `<badge>` element with
     // the props as attributes — a silently wrong render, not an error.
     const code = compile('import badge from "./badge.mx"\n<badge label="x"/>');
-    expect(code).toContain("<MxBadge");
-    expect(code).toContain("const MxBadge = badge;");
+    expect(code).toContain("<__mxBadge");
+    expect(code).toContain("const __mxBadge = badge;");
   });
 
   it("leaves a capitalized component name alone", () => {
@@ -1059,10 +1061,10 @@ describe("<try>", () => {
       'import Body from "./body.mx"\n<try><Body/><@catch|err|><p>${err}</p></@catch></try>',
     );
     expect(code).toContain(
-      'import { MxErrorBoundary } from "@mxlang/preact/runtime";',
+      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/preact/runtime";',
     );
     expect(code).toContain(
-      "<MxErrorBoundary fallback={(err) => <p>{err}</p>}>",
+      "<__mxErrorBoundary fallback={(err) => <p>{err}</p>}>",
     );
   });
 
@@ -1079,17 +1081,17 @@ describe("<try>", () => {
       'import Body from "./body.mx"\n<try><Body/><@placeholder><p>loading</p></@placeholder></try>',
     );
     expect(code).toContain(
-      'import { MxPlaceholder } from "@mxlang/preact/runtime";',
+      'import { MxPlaceholder as __mxSuspense } from "@mxlang/preact/runtime";',
     );
-    expect(code).toContain("<MxPlaceholder fallback={<p>loading</p>}>");
+    expect(code).toContain("<__mxSuspense fallback={<p>loading</p>}>");
   });
 
   it("nests the placeholder inside the boundary when both are given", () => {
     const out = markup(
       'import Body from "./body.mx"\n<try><Body/><@catch><p>e</p></@catch><@placeholder><p>l</p></@placeholder></try>',
     );
-    expect(out.indexOf("<MxErrorBoundary")).toBeLessThan(
-      out.indexOf("<MxPlaceholder"),
+    expect(out.indexOf("<__mxErrorBoundary")).toBeLessThan(
+      out.indexOf("<__mxSuspense"),
     );
   });
 
@@ -1327,13 +1329,13 @@ describe("a unit that returns a value", () => {
     // Invariant §7.5-4's sequence, in the one place this target has a
     // statement position: the call, then the binding, then the output where
     // the call stood.
-    const call = code.indexOf("const $mx_ret0 = $mx_Counter1(");
-    const bind = code.indexOf("const n = $mx_ret0.value;");
+    const call = code.indexOf("const __mxRet0 = $mx_Counter1(");
+    const bind = code.indexOf("const n = __mxRet0.value;");
     const ret = code.indexOf("return (<>");
     expect(call).toBeGreaterThan(-1);
     expect(bind).toBeGreaterThan(call);
     expect(ret).toBeGreaterThan(bind);
-    expect(code).toContain("{$mx_ret0.output}");
+    expect(code).toContain("{__mxRet0.output}");
     expect(code).toContain("<p>{n}</p>");
   });
 
@@ -1341,7 +1343,7 @@ describe("a unit that returns a value", () => {
     const code = callerCode("<counter start=1/>");
 
     expect(code).toContain('{$mx_Counter1({ "start": 1 }).output}');
-    expect(code).not.toContain("$mx_ret");
+    expect(code).not.toContain("__mxRet");
   });
 
   it("gives each /var call site its own temp", () => {
@@ -1349,8 +1351,8 @@ describe("a unit that returns a value", () => {
       "<counter/a start=1/>\n<counter/b start=2/>\n<p>${a}${b}</p>",
     );
 
-    expect(code).toContain("const a = $mx_ret0.value;");
-    expect(code).toContain("const b = $mx_ret1.value;");
+    expect(code).toContain("const a = __mxRet0.value;");
+    expect(code).toContain("const b = __mxRet1.value;");
   });
 
   // Round 1, findings 1 and 2. Every structural kind on this target is an

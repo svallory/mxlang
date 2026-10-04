@@ -625,85 +625,74 @@ export const strictPolicy: Policy = {
  * A dynamic tag's target is whatever the expression evaluated to: a component
  * function, a renderable block (`() => string`), or a tag name as a string.
  */
-const CLASS_VALUE = `function classValue(value: unknown): string {
-  if (!value) return "";
-  if (typeof value === "string") return escape(value);
-  if (Array.isArray(value)) {
-    return value.map(classValue).filter(Boolean).join(" ");
+const CLASS_VALUE = `function __mxClassValue(__mxValue: unknown): string {
+  if (!__mxValue) return "";
+  if (typeof __mxValue === "string") return __mxEscape(__mxValue);
+  if (Array.isArray(__mxValue)) {
+    return __mxValue.map(__mxClassValue).filter(Boolean).join(" ");
   }
-  if (typeof value === "object") {
-    return Object.entries(value).filter(([, enabled]) => enabled).map(([key]) => escape(key)).join(" ");
+  if (typeof __mxValue === "object") {
+    return Object.entries(__mxValue).filter(([, __mxEnabled]) => __mxEnabled).map(([__mxKey]) => __mxEscape(__mxKey)).join(" ");
   }
-  return escape(value);
+  return __mxEscape(__mxValue);
 }`;
 
-const STYLE_VALUE = `function styleValue(value: unknown): string {
-  if (!value) return "";
-  if (typeof value === "string") return escape(value);
-  if (Array.isArray(value)) {
-    return value.map(styleValue).filter(Boolean).join(";");
+const STYLE_VALUE = `function __mxStyleValue(__mxValue: unknown): string {
+  if (!__mxValue) return "";
+  if (typeof __mxValue === "string") return __mxEscape(__mxValue);
+  if (Array.isArray(__mxValue)) {
+    return __mxValue.map(__mxStyleValue).filter(Boolean).join(";");
   }
-  if (typeof value === "object") {
-    return Object.entries(value)
-      .filter(([, v]) => v !== false && v !== null && v !== undefined && v !== "")
-      .map(([key, v]) => escape(key) + ":" + escape(v))
+  if (typeof __mxValue === "object") {
+    return Object.entries(__mxValue)
+      .filter(([, __mxEntryValue]) => __mxEntryValue !== false && __mxEntryValue !== null && __mxEntryValue !== undefined && __mxEntryValue !== "")
+      .map(([__mxKey, __mxEntryValue]) => __mxEscape(__mxKey) + ":" + __mxEscape(__mxEntryValue))
       .join(";");
   }
-  return escape(value);
+  return __mxEscape(__mxValue);
 }`;
 
 // Capture the authored expression once, then decide presence before coercion.
 // `checked` is presence-only on a direct <input>, but generic on spread and
 // dynamic native paths, matching Marko 6.3.51's controlled-input writer.
-const RENDER_ATTR = `function __mxRenderAttr(name: string, value: unknown, tag = "", checked = false): string {
-  if (value === false || value === null || value === undefined) return "";
-  if (checked || value === true) return " " + name;
-  return " " + name + '="' + escape(__mxAttrValue(name, value, tag)) + '"';
+const RENDER_ATTR = `function __mxRenderAttr(__mxName: string, __mxValue: unknown, __mxTag = "", __mxChecked = false): string {
+  if (__mxValue === false || __mxValue === null || __mxValue === undefined) return "";
+  if (__mxChecked || __mxValue === true) return " " + __mxName;
+  return " " + __mxName + '="' + __mxEscape(__mxAttrValue(__mxName, __mxValue, __mxTag)) + '"';
 }`;
 
-const ESCAPE_COMMENT = `function escapeComment(value) {
-  if (value === null || value === undefined) return "";
-  return String(value).replace(/>/g, "&gt;");
+const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue) {
+  if (__mxValue === null || __mxValue === undefined) return "";
+  return String(__mxValue).replace(/>/g, "&gt;");
 }`;
 
-const RENDER_DYNAMIC = `function renderDynamic(target: any, props: Record<string, any>, args?: any[]) {
-  if (target === null || target === undefined) {
-    // decision 116, Marko parity (\`runtime-tags/src/html/dynamic-tag.ts\`'s
-    // \`_dynamic_tag\`, \`normalizeDynamicRenderer\`): a falsy target has no
-    // renderer, so the tag itself renders nothing — but its own body content
-    // still renders, threaded independently of the target, exactly as the
-    // string branch below already does. Args carry no content of their own
-    // (only \`props\` does), so args are irrelevant here.
-    return props.content ? props.content() : "";
+const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]) {
+  if (__mxTarget === null || __mxTarget === undefined) {
+    // decision 116: content renders independently of a missing renderer.
+    return __mxProps.content ? __mxProps.content() : "";
   }
-  if (typeof target === "string") {
-    // decision 112, Marko parity (\`runtime-tags/src/html/dynamic-tag.ts\`'s
-    // \`_dynamic_tag\`, \`typeof renderer === "string"\` branch): a call with
-    // arguments uses args[0] as the element's attributes, not the call
-    // site's own attributes/attribute tags — those are only reachable here
-    // as decision 109's trailing props object, which Marko itself appends
-    // at args[N] (N > 0), never args[0], so it is not read as attrs either.
-    // Content still renders: Marko threads it independently of the input.
-    const attrs = args ? args[0] || {} : props;
-    let out = "<" + target;
-    for (const [key, value] of Object.entries(attrs)) {
-      if (key === "content") continue;
-      if (value === false || value === null || value === undefined) continue;
-      if (key === "class" || key === "style") {
-        const text = key === "class" ? classValue(value) : styleValue(value);
-        if (text !== "") out += " " + key + "=\\"" + text + "\\"";
-      } else out += __mxRenderAttr(key, value, target);
+  if (typeof __mxTarget === "string") {
+    // decision 112: args[0] provides native attributes; content stays separate.
+    const __mxAttrs = __mxArgs ? __mxArgs[0] || {} : __mxProps;
+    let __mxOut = "<" + __mxTarget;
+    for (const [__mxKey, __mxValue] of Object.entries(__mxAttrs)) {
+      if (__mxKey === "content") continue;
+      if (__mxValue === false || __mxValue === null || __mxValue === undefined) continue;
+      if (__mxKey === "class" || __mxKey === "style") {
+        const __mxText = __mxKey === "class" ? __mxClassValue(__mxValue) : __mxStyleValue(__mxValue);
+        if (__mxText !== "") __mxOut += " " + __mxKey + "=\\"" + __mxText + "\\"";
+      } else __mxOut += __mxRenderAttr(__mxKey, __mxValue, __mxTarget);
     }
-    out += ">";
-    if (props.content) out += props.content();
+    __mxOut += ">";
+    if (__mxProps.content) __mxOut += __mxProps.content();
     // Marko 6.3.51's html/dynamic-tag.ts voidElementsReg, case-sensitive.
-    return /^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(target) ? out : out + "</" + target + ">";
+    return /^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(__mxTarget) ? __mxOut : __mxOut + "</" + __mxTarget + ">";
   }
-  if (typeof target === "object") {
+  if (typeof __mxTarget === "object") {
     throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
   }
-  if (args) return Object.keys(props).length > 0 ? target(...args, props) : target(...args);
-  return target(props);
+  if (__mxArgs) return Object.keys(__mxProps).length > 0 ? __mxTarget(...__mxArgs, __mxProps) : __mxTarget(...__mxArgs);
+  return __mxTarget(__mxProps);
 }`;
 
 /**
@@ -823,12 +812,12 @@ export default ${name};
  * `escape` — is a property of this host's target, not of the core.
  */
 function moduleHelpers(code: string): string[] {
-  const dynamic = code.includes("renderDynamic(");
+  const dynamic = code.includes("__mxRenderDynamic(");
   const candidates: [boolean, string][] = [
     [code.includes("__mxRenderAttr(") || dynamic, RENDER_ATTR],
-    [code.includes("classValue(") || dynamic, CLASS_VALUE],
-    [code.includes("styleValue(") || dynamic, STYLE_VALUE],
-    [code.includes("escapeComment("), ESCAPE_COMMENT],
+    [code.includes("__mxClassValue(") || dynamic, CLASS_VALUE],
+    [code.includes("__mxStyleValue(") || dynamic, STYLE_VALUE],
+    [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
     [dynamic, RENDER_DYNAMIC],
   ];
   const helpers = candidates.flatMap(([used, source]) =>

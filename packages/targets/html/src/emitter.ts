@@ -154,17 +154,19 @@ export function createEmitter(): StringEmitter {
     if (text === "") return;
     const last = state.body[state.body.length - 1];
     const prefix = INDENT.repeat(state.indent);
-    if (last?.startsWith(`${prefix}out += "`) && last.endsWith('";')) {
-      const existing = JSON.parse(last.slice(prefix.length + 7, -1)) as string;
+    if (last?.startsWith(`${prefix}__mxOut += "`) && last.endsWith('";')) {
+      const existing = JSON.parse(
+        last.slice(prefix.length + "__mxOut += ".length, -1),
+      ) as string;
       state.body[state.body.length - 1] =
-        `${prefix}out += ${quote(existing + text)};`;
+        `${prefix}__mxOut += ${quote(existing + text)};`;
       return;
     }
-    push(`out += ${quote(text)};`);
+    push(`__mxOut += ${quote(text)};`);
   };
 
   const expression = (code: string, escaped: boolean): void => {
-    push(`out += ${escaped ? `escape(${code})` : `(${code})`};`);
+    push(`__mxOut += ${escaped ? `__mxEscape(${code})` : `(${code})`};`);
   };
 
   /**
@@ -183,9 +185,9 @@ export function createEmitter(): StringEmitter {
     state.bodyMappings = [];
     state.prelude = [];
     state.indent = outerIndent + 1;
-    push('let out = "";');
+    push('let __mxOut = "";');
     drive(emitter, children);
-    push("return out;");
+    push("return __mxOut;");
     const lines = state.body;
     const lineMappings = state.bodyMappings;
     // A statement hoisted from inside this block belongs at *this* function's
@@ -349,9 +351,9 @@ export function createEmitter(): StringEmitter {
     }
 
     const serial = state.attrTagTemp++;
-    const result = `$attrTags${serial}`;
-    const sourceName = `$attrTagSource${serial}`;
-    const [first = "item", second] = node.loop.params;
+    const result = `__mxAttrTags${serial}`;
+    const sourceName = `__mxAttrTagSource${serial}`;
+    const [first = "__mxItem", second] = node.loop.params;
     const body = arraySourceValue(node.nodes, as, valueType);
 
     if (source.kind === "of") {
@@ -374,8 +376,8 @@ export function createEmitter(): StringEmitter {
       );
     }
 
-    const start = `$attrTagStart${serial}`;
-    const bound = `$attrTagBound${serial}`;
+    const start = `__mxAttrTagStart${serial}`;
+    const bound = `__mxAttrTagBound${serial}`;
     const compare = source.inclusive ? "<=" : "<";
     return concatMapped(
       `(() => { const ${result} = []; const ${start} = ${source.from ? source.from.code : "0"}; const ${bound} = ${source.bound.code}; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
@@ -457,8 +459,8 @@ export function createEmitter(): StringEmitter {
    * wrong attribute rather than a visible failure.
    */
   const structured = (name: string, code: string): string | undefined => {
-    if (name === "class") return `classValue(${code})`;
-    if (name === "style") return `styleValue(${code})`;
+    if (name === "class") return `__mxClassValue(${code})`;
+    if (name === "style") return `__mxStyleValue(${code})`;
     return undefined;
   };
 
@@ -507,8 +509,10 @@ export function createEmitter(): StringEmitter {
       // double-escape the separators the helper already produced.
       push("{");
       state.indent++;
-      push(`const value = ${source};`);
-      push(`if (value !== "") out += " ${attr.name}=\\"" + value + "\\"";`);
+      push(`const __mxValue = ${source};`);
+      push(
+        `if (__mxValue !== "") __mxOut += " ${attr.name}=\\"" + __mxValue + "\\"";`,
+      );
       state.indent--;
       push("}");
       return;
@@ -542,7 +546,7 @@ export function createEmitter(): StringEmitter {
       default: {
         const source = structured(attr.name, attr.value.code);
         if (source) {
-          return `((value) => value === "" ? "" : ${quote(` ${attr.name}="`)} + value + "\\"")(${source})`;
+          return `((__mxValue) => __mxValue === "" ? "" : ${quote(` ${attr.name}="`)} + __mxValue + "\\"")(${source})`;
         }
         return `__mxRenderAttr(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`;
       }
@@ -603,50 +607,55 @@ export function createEmitter(): StringEmitter {
     if (only?.kind === "spread") {
       entries = `Object.entries(${only.value.code} ?? {})`;
     } else {
-      push("const $raw = Symbol();");
+      push("const __mxRaw = Symbol();");
       const parts = head.map((attr) => {
         if (attr.kind === "spread") return `...${attr.value.code}`;
         const key = JSON.stringify(attr.name);
         if (attr.kind === "boolean" || attr.kind === "static") {
-          return `...{ ${key}: { [$raw]: () => ${attributeText(attr, name)} } }`;
+          return `...{ ${key}: { [__mxRaw]: () => ${attributeText(attr, name)} } }`;
         }
         // Evaluate the expression in authored order, but serialize only the
         // surviving merged value. An overwritten object must not throw.
-        const captured = { ...attr, value: { ...attr.value, code: "$value" } };
-        return `...{ ${key}: (($value) => ({ [$raw]: () => ${attributeText(captured, name)} }))(${attr.value.code}) }`;
+        const captured = {
+          ...attr,
+          value: { ...attr.value, code: "__mxCapturedValue" },
+        };
+        return `...{ ${key}: ((__mxCapturedValue) => ({ [__mxRaw]: () => ${attributeText(captured, name)} }))(${attr.value.code}) }`;
       });
       // One object literal with spread syntax, not `Object.assign`: a spread
       // key such as an own enumerable `__proto__` is then defined as data, as in
       // Marko's own merge, instead of hitting the `[[Set]]` setter.
-      push(`const $attrs = { ${parts.join(", ")} };`);
-      entries = "Object.entries($attrs)";
+      push(`const __mxAttrs = { ${parts.join(", ")} };`);
+      entries = "Object.entries(__mxAttrs)";
     }
-    push(`for (const [key, value] of ${entries}) {`);
+    push(`for (const [__mxKey, __mxValue] of ${entries}) {`);
     state.indent++;
     if (written.length > 0) {
       push(
-        `if (${written.map((n) => `key === ${JSON.stringify(n)}`).join(" || ")}) continue;`,
+        `if (${written.map((n) => `__mxKey === ${JSON.stringify(n)}`).join(" || ")}) continue;`,
       );
     }
     if (only?.kind !== "spread") {
       push(
-        'if (value !== null && typeof value === "object" && $raw in value) { out += value[$raw](); continue; }',
+        'if (__mxValue !== null && typeof __mxValue === "object" && __mxRaw in __mxValue) { __mxOut += __mxValue[__mxRaw](); continue; }',
       );
     }
     push(
-      "if (value === false || value === null || value === undefined) continue;",
+      "if (__mxValue === false || __mxValue === null || __mxValue === undefined) continue;",
     );
-    push(`if (!${ATTR_NAME_PATTERN}.test(key)) continue;`);
-    push('if (key === "class" || key === "style") {');
+    push(`if (!${ATTR_NAME_PATTERN}.test(__mxKey)) continue;`);
+    push('if (__mxKey === "class" || __mxKey === "style") {');
     state.indent++;
     push(
-      'const text = key === "class" ? classValue(value) : styleValue(value);',
+      'const __mxText = __mxKey === "class" ? __mxClassValue(__mxValue) : __mxStyleValue(__mxValue);',
     );
-    push('if (text !== "") out += " " + key + "=\\"" + text + "\\"";');
+    push(
+      'if (__mxText !== "") __mxOut += " " + __mxKey + "=\\"" + __mxText + "\\"";',
+    );
     push("continue;");
     state.indent--;
     push("}");
-    push(`out += __mxRenderAttr(key, value, ${quote(name)});`);
+    push(`__mxOut += __mxRenderAttr(__mxKey, __mxValue, ${quote(name)});`);
     state.indent--;
     push("}");
     state.indent--;
@@ -775,7 +784,7 @@ export function createEmitter(): StringEmitter {
         // shape this replaced) silently lost every spread on a dynamic tag.
         push(
           concatMapped(
-            `out += renderDynamic(${target.expr.code}, { `,
+            `__mxOut += __mxRenderDynamic(${target.expr.code}, { `,
             joinedParts,
             " }",
             node.args.length > 0
@@ -826,7 +835,7 @@ export function createEmitter(): StringEmitter {
             : target.params.map((param) => named.get(param) ?? "undefined");
         push(
           concatMapped(
-            "out += ",
+            "__mxOut += ",
             mapped(target.name, node.nameSpan),
             `(${args.join(", ")});`,
           ),
@@ -853,7 +862,7 @@ export function createEmitter(): StringEmitter {
           // a temp, then the `/var`, then the output where the call stood.
           // The temp exists because the call must be evaluated exactly once
           // while both of its halves are read.
-          const temp = `$mx_ret${state.returnTemp++}`;
+          const temp = `__mxRet${state.returnTemp++}`;
           push(
             concatMapped(
               `const ${temp} = `,
@@ -864,12 +873,12 @@ export function createEmitter(): StringEmitter {
             ),
           );
           push(`const ${node.var} = ${temp}.value;`);
-          push(`out += ${temp}.output;`);
+          push(`__mxOut += ${temp}.output;`);
           return;
         }
         push(
           concatMapped(
-            "out += ",
+            "__mxOut += ",
             mapped(callee, node.nameSpan),
             "(",
             props,
@@ -881,7 +890,7 @@ export function createEmitter(): StringEmitter {
 
       push(
         concatMapped(
-          "out += ",
+          "__mxOut += ",
           mapped(callee, node.nameSpan),
           "(",
           props,
@@ -930,12 +939,12 @@ export function createEmitter(): StringEmitter {
        * The name counts emitted lines, matching the walk this replaced.
        */
       const bind = (source: string): string => {
-        const temp = `$for${state.body.length}`;
+        const temp = `__mxFor${state.body.length}`;
         push(`const ${temp} = ${source};`);
         return temp;
       };
 
-      const [first = "item", second] = node.params;
+      const [first = "__mxItem", second] = node.params;
       const source = node.source;
 
       if (source.kind === "of") {
@@ -1034,7 +1043,7 @@ export function createEmitter(): StringEmitter {
             // stays one `out +=`.
             literal(escapeComment(child.value));
           } else if (child.kind === "Interpolation") {
-            push(`out += escapeComment(${child.expr.code});`);
+            push(`__mxOut += __mxEscapeComment(${child.expr.code});`);
           } else if (child.kind !== "Comment") {
             fail(
               "`<html-comment>` takes only text and placeholders; a comment cannot contain markup",
@@ -1048,14 +1057,14 @@ export function createEmitter(): StringEmitter {
       case "raw-element": {
         // `<html-script>`/`<html-style>` are Marko's spelling of a literal
         // `<script>`/`<style>` element, since the bare names are core tags.
-        push(`out += ${quote(`<${data.tag}>`)};`);
+        push(`__mxOut += ${quote(`<${data.tag}>`)};`);
         for (const child of tag.children) {
-          if (child.kind === "Text") push(`out += ${quote(child.value)};`);
+          if (child.kind === "Text") push(`__mxOut += ${quote(child.value)};`);
           else if (child.kind === "Interpolation") {
             expression(child.expr.code, child.escaped);
           }
         }
-        push(`out += ${quote(`</${data.tag}>`)};`);
+        push(`__mxOut += ${quote(`</${data.tag}>`)};`);
         return;
       }
       case "style": {
@@ -1067,7 +1076,7 @@ export function createEmitter(): StringEmitter {
           )
           .map((c) => c.value)
           .join("");
-        push(`out += ${quote(`<style>${text}</style>`)};`);
+        push(`__mxOut += ${quote(`<style>${text}</style>`)};`);
         return;
       }
       case "try": {
@@ -1079,7 +1088,7 @@ export function createEmitter(): StringEmitter {
         drive(emitter, tag.children);
         state.indent--;
         if (katch) {
-          push(`} catch (${katch.block.params.join(", ") || "_error"}) {`);
+          push(`} catch (${katch.block.params.join(", ") || "__mxError"}) {`);
           state.indent++;
           drive(emitter, katch.block.children);
           state.indent--;
@@ -1143,7 +1152,7 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
   const body = emitter.done();
 
   const lines: Array<string | MappedCode> = [
-    `import { escape } from "${escapeFrom}";`,
+    `import { escape as __mxEscape } from "${escapeFrom}";`,
   ];
   if (ir.needsAttrTagImport) {
     lines.push(`import type { AttrTag } from "${escapeFrom}";`);
@@ -1176,7 +1185,7 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
     `export default function ${moduleExportName(ir, "@mxlang/html")}(input: ${inputType})${
       ir.returnValue ? "" : ": string"
     } {`,
-    `${INDENT}let out = "";`,
+    `${INDENT}let __mxOut = "";`,
     // Hoisted statements precede the body but follow `out`, so a hoisted
     // declaration may not reference the buffer — which is the point: it is a
     // declaration, not output.
@@ -1188,8 +1197,8 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
       mappings: emitter.state.bodyMappings[index] ?? [],
     })),
     ir.returnValue
-      ? `${INDENT}return { value: ${ir.returnValue.code}, output: out };`
-      : `${INDENT}return out;`,
+      ? `${INDENT}return { value: ${ir.returnValue.code}, output: __mxOut };`
+      : `${INDENT}return __mxOut;`,
     "}",
     "",
   );

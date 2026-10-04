@@ -23,8 +23,8 @@ const SOURCES = [
 describe("typeCheck unset (the runtime compile)", () => {
   it.each(SOURCES)("emits no wrapper and no preamble for %s", (source) => {
     const plain = compile(source).code;
-    // Allow only these runtime helpers; catch any other __mx tooling leak.
-    expect(plain.replace(/__mxAttr(Value|Spread)/g, "")).not.toContain("__mx");
+    // Runtime helpers use the reserved prefix too; only tooling names leak.
+    expect(plain).not.toContain("__Mx");
     for (const token of [
       "__MxJSX",
       "type __MxM",

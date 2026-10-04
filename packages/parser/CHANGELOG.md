@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (reserve-mx-identifiers):** check authored bindings in MX-enabled TypeScript modules before region emission, even when callers supply binding sets. Generated regions are excluded; plain TypeScript and `mx: false` keep upstream behavior.
+
 - **Test fix (jsx-text-lt-unescaped):** `<div><b/> < c</div>` inside a `.solid.mx` region now *parses* — the solid host escapes the authored `<` for JSX, so Babel's old "Unexpected token (1:26)" splice failure is gone and the region prints `<div><b></b> &#60; c</div>;`. The row moved from the "leaves the error alone" table to the "still parses" table in `fragment-region.test.ts`; no parser behavior changed.
 
 - **Fix (zero-based-cols-in-message-text):** a diagnostic raised through the MX grammar no longer prints Babel's trailing 0-based ` (L:C)`. `Unexpected token (1:32)` becomes `Unexpected token` — the position is on the error's `loc` (1-based line, 0-based column), which every consumer already reads, so the text no longer carries a second, differently-based one. Every MX-raised error is affected: a host parse failure wrapped as `MxErrors.HostError`, the MX grammar's own rules (`An MX region has exactly one root element…`, `NestedFragment`, `Unterminated fragment`, `PositionRejected`, `MultipleRoots`) and Babel's own failures inside a `.solid.mx`/`.ng.mx` file. A message that quotes a *foreign* file's parser position (a wrapped callee's `(1:32)`) still keeps it: that position belongs to another file and nothing else records it.

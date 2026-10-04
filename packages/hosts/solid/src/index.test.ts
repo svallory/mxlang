@@ -139,7 +139,7 @@ describe("Solid IR lowering", () => {
       `<Layout|input| id="x"><@head><h1>H</h1></@head><@foot|year|>\${year}</@foot><p>\${input}</p></Layout>`,
       [
         `<Layout id="x" head={() => <h1>H</h1>} foot={(year) => () => <>{() => {`,
-        "$mxEscape",
+        "__mxEscape",
         `}</>}>`,
         `{(input) => <p>{input}</p>}`,
       ],
@@ -1268,7 +1268,7 @@ describe("a unit that returns a value", () => {
     // option C) rather than a bare `let n;`, which would report its own
     // `noImplicitAny` TS7005 noise at every read.
     expect(code).toContain("let n: any;");
-    expect(code).toContain("$mxReturn={($mxV) => { n = $mxV; }}");
+    expect(code).toContain("$mxReturn={(__mxV) => { n = __mxV; }}");
     // One-shot, not reactive (risk 4): a plain binding read, with no
     // accessor call wrapped around it. A tag wanting reactivity returns an
     // accessor and the author calls it.

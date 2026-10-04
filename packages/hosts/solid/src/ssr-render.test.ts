@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
+import type { TemplateBackedTag } from "@mxlang/core";
 import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
@@ -180,6 +181,79 @@ function renderDeclaredAttrTags(
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+describe("generated names do not shadow authored bindings", () => {
+  it.each(["$mxEscape", "$mxText", "$mxEscaped"])(
+    "renders with an authored %s",
+    (base) => {
+      // The serial is process-wide: probe its next value instead of assuming 0.
+      const probe = compileSolidMx(
+        '<Row><@head kind="x">${value}</@head></Row>',
+        {
+          filename: "fixture.solid.mx",
+          moduleBindings: new Set(["Row", "value"]),
+        },
+      ).code;
+      const serial = Number(/(?:\$mx|__mx)Text(\d+)/.exec(probe)?.[1]) + 1;
+      const name = base === "$mxEscape" ? base : `${base}${serial}`;
+      expect(
+        renderApp(
+          `<Row><@head kind="x">\${${name}}</@head></Row>`,
+          `const ${name} = "<x>"; function Row(input) { return <Dynamic component={input.head.content}/>; }`,
+        ),
+      ).toBe("<ul>&lt;x></ul>");
+    },
+  );
+  it.each(["$mxDyn", "$mxDynValue"])("renders with an authored %s", (base) => {
+    const probe = compileSolidMx("<${target}({})>ok</>", {
+      filename: "fixture.solid.mx",
+    }).code;
+    const serial = Number(/(?:\$mx|__mx)Dyn(\d+)/.exec(probe)?.[1]) + 1;
+    const name = `${base}${serial}`;
+    const html = renderApp(
+      `<\${${name}}${base === "$mxDynValue" ? "({})" : ""}>ok</>`,
+      `const ${name} = "p";`,
+    );
+    expect(html.replace(/ _hk=[^>]* /g, "")).toBe("<ul><p>ok</p></ul>");
+  });
+  it("does not shadow an authored $mxV return binding", () => {
+    expect(
+      renderApp(
+        "<div><counter/$mxV/><p>${$mxV}</p></div>",
+        "let $mxV; function Row(props) { props.$mxReturn(42); return <i>ok</i>; }",
+        {
+          filename: "fixture.solid.mx",
+          customTags: {
+            counter: {
+              template: {
+                filename: "/tmp/reserved-counter.mx",
+                source: "<return value=42/>",
+              },
+              transform(call) {
+                return [
+                  {
+                    kind: "Component",
+                    target: { kind: "name", name: "Row" },
+                    nameSpan: null,
+                    args: [],
+                    attrs: [],
+                    attributeTags: [],
+                    attributeTagTree: [],
+                    attrTagProps: [],
+                    content: null,
+                    returnsValue: true,
+                    var: call.var ?? undefined,
+                    loc: call.loc,
+                  },
+                ];
+              },
+            } as TemplateBackedTag,
+          },
+        },
+      ),
+    ).toBe("<ul><div><i>ok</i><p>42</p></div></ul>");
+  });
+});
 
 describe("Solid SSR render: attribute-tag values", () => {
   it("executes fallback data values, arrays, bodyless content and Dynamic", () => {

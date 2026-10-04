@@ -224,9 +224,11 @@ describe("React dialect", () => {
     // Sliced verbatim from source (no space after `{`), the same seam that
     // keeps TypeScript type arguments (see packages/core's core.ts and the
     // identical assertions in the Preact and Solid host tests).
-    expect(code).toContain("className={mxClass({active: input.on})}");
+    expect(code).toContain("className={__mxClass({active: input.on})}");
     expect(code).toContain("style={{color: input.color}}");
-    expect(code).toContain('import { mxClass } from "@mxlang/react/runtime";');
+    expect(code).toContain(
+      'import { mxClass as __mxClass } from "@mxlang/react/runtime";',
+    );
   });
 
   it("shares keyed list lowering with Preact", () => {
@@ -234,8 +236,8 @@ describe("React dialect", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
       '<for|item| of=input.items by="id"><p>${item.name}</p></for>',
     );
-    expect(code).toContain('import { Fragment } from "react";');
-    expect(code).toContain("<Fragment key={item.id}>");
+    expect(code).toContain('import { Fragment as __mxFragment } from "react";');
+    expect(code).toContain("<__mxFragment key={item.id}>");
   });
 
   it("imports React's boundary runtime for `<try>`", () => {
@@ -244,10 +246,10 @@ describe("React dialect", () => {
       'import Risky from "./Risky.mx"\n<try><Risky/><@catch|error|><p>${error.message}</p></@catch></try>',
     );
     expect(code).toContain(
-      'import { MxErrorBoundary } from "@mxlang/react/runtime";',
+      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/react/runtime";',
     );
     expect(code).toContain(
-      "<MxErrorBoundary fallback={(error) => <p>{error.message}</p>}>",
+      "<__mxErrorBoundary fallback={(error) => <p>{error.message}</p>}>",
     );
   });
 

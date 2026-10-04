@@ -144,6 +144,11 @@ export {
 } from "./mapping.ts";
 export { dropOwnParserPosition } from "./parse-error-position.ts";
 export {
+  checkReservedBindings,
+  checkReservedSource,
+  reservedBindingMessage,
+} from "./reserved-bindings.ts";
+export {
   checkParseOptions,
   type DiscoveredTag,
   type DiscoverProjectTagsOptions,

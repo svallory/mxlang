@@ -125,7 +125,7 @@ const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
  */
 export function componentAlias(name: string): string {
   return /^[a-z]/.test(name) || name.includes("-")
-    ? `Mx${name.replace(/(?:^|-)([a-z])/g, (_m, ch: string) => ch.toUpperCase())}`
+    ? `__mx${name.replace(/(?:^|-)([a-z])/g, (_m, ch: string) => ch.toUpperCase())}`
     : name;
 }
 
@@ -530,8 +530,8 @@ export class PreactEmitter implements Emitter<string> {
           const fixed = staticTemplateValue(attr.value);
           if (fixed !== null) return JSON.stringify(fixed);
           if (attr.value.shape === "object" || attr.value.shape === "array") {
-            this.#runtimeImports.add("mxClass");
-            return `mxClass(${attr.value.code})`;
+            this.#runtimeImports.add("__mxClass");
+            return `__mxClass(${attr.value.code})`;
           }
         }
         if (attr.name === "style" && attr.value.shape !== "object") {
@@ -696,11 +696,11 @@ export class PreactEmitter implements Emitter<string> {
           if (attr.value.shape === "object" || attr.value.shape === "array") {
             // Marko's structured class value; Preact's `class` takes a string,
             // so the object/array form is joined by the emitted helper.
-            this.#runtimeImports.add("mxClass");
+            this.#runtimeImports.add("__mxClass");
             return concatMapped(
               " ",
               mapped(name, mapName ? attr.nameSpan : null),
-              `={mxClass(${attr.value.code})}`,
+              `={__mxClass(${attr.value.code})}`,
             );
           }
         }
@@ -914,8 +914,14 @@ export class PreactEmitter implements Emitter<string> {
     // `items.map((item) => item.content)`. Put the key inside parameterized
     // callbacks too, so their returned nodes are safe to collect in an array.
     if (key !== undefined) {
-      this.#runtimeImports.add("Fragment");
-      value = concatMapped("<Fragment key={", key, "}>", value, "</Fragment>");
+      this.#runtimeImports.add("__mxFragment");
+      value = concatMapped(
+        "<__mxFragment key={",
+        key,
+        "}>",
+        value,
+        "</__mxFragment>",
+      );
     }
     if (!tag.block.hasParams) return value;
     return concatMapped(`(${tag.block.params.join(", ")}) => `, value);
@@ -1346,7 +1352,7 @@ export class PreactEmitter implements Emitter<string> {
       // a callable). JSX's tag position is static, so this host inlines a
       // small `mxDynamic` helper into the module (mirroring `@mxlang/html`'s
       // `renderDynamic`) instead of writing the expression there directly.
-      this.#runtimeImports.add("mxDynamic");
+      this.#runtimeImports.add("__mxDynamic");
       // Decision 109, Marko parity: args now combine with a body/attribute
       // tag (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only
       // a plain attribute alongside args is still rejected
@@ -1391,7 +1397,7 @@ export class PreactEmitter implements Emitter<string> {
           : "";
       this.#out.push(
         concatMapped(
-          "{mxDynamic(",
+          "{__mxDynamic(",
           node.target.expr.code,
           ", ",
           payload,
@@ -1468,7 +1474,7 @@ export class PreactEmitter implements Emitter<string> {
             node,
           );
         }
-        const temp = `$mx_ret${this.#varSerial.n++}`;
+        const temp = `__mxRet${this.#varSerial.n++}`;
         this.#varStatements.push(`const ${temp} = ${name}(${props});`);
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(concatMapped(`{${temp}.output}`));
@@ -1650,12 +1656,12 @@ export class PreactEmitter implements Emitter<string> {
       const listVar = hygienicName("mxList", node.params, source.list.code);
       this.#out.push(
         concatMapped(
-          `{((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <Fragment key={${key}}>`,
+          `{((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <__mxFragment key={${key}}>`,
           body,
-          "</Fragment>)}",
+          "</__mxFragment>)}",
         ),
       );
-      this.#runtimeImports.add("Fragment");
+      this.#runtimeImports.add("__mxFragment");
       return;
     }
 
@@ -1670,12 +1676,12 @@ export class PreactEmitter implements Emitter<string> {
       const key = keyFrom(first);
       this.#out.push(
         concatMapped(
-          `{Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <Fragment key={${key}}>`,
+          `{Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <__mxFragment key={${key}}>`,
           body,
-          "</Fragment>)}",
+          "</__mxFragment>)}",
         ),
       );
-      this.#runtimeImports.add("Fragment");
+      this.#runtimeImports.add("__mxFragment");
       return;
     }
 
@@ -1701,12 +1707,12 @@ export class PreactEmitter implements Emitter<string> {
     const key = keyFrom(first);
     this.#out.push(
       concatMapped(
-        `{Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value}).map((${first}) => <Fragment key={${key}}>`,
+        `{Array.from({ length: Math.max(0, ${span}) }, (_, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
         body,
-        "</Fragment>)}",
+        "</__mxFragment>)}",
       ),
     );
-    this.#runtimeImports.add("Fragment");
+    this.#runtimeImports.add("__mxFragment");
   }
 
   /**
@@ -1754,11 +1760,11 @@ export class PreactEmitter implements Emitter<string> {
       this.#runtimeImports.add(this.#dialect.suspenseName);
       const fallback = this.#expression(placeholder.block.children);
       inner = concatMapped(
-        `<${this.#dialect.suspenseName} fallback={`,
+        "<__mxSuspense fallback={",
         fallback,
         `}>`,
         inner,
-        `</${this.#dialect.suspenseName}>`,
+        "</__mxSuspense>",
       );
     }
     if (!catchTag) {
@@ -1780,11 +1786,11 @@ export class PreactEmitter implements Emitter<string> {
     const fallbackProp = this.#dialect.errorBoundaryFallbackProp ?? "fallback";
     this.#out.push(
       concatMapped(
-        `<${this.#dialect.errorBoundaryName} ${fallbackProp}={`,
+        `<__mxErrorBoundary ${fallbackProp}={`,
         fallback,
         "}>",
         inner,
-        `</${this.#dialect.errorBoundaryName}>`,
+        "</__mxErrorBoundary>",
       ),
     );
   }

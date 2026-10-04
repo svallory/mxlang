@@ -218,9 +218,11 @@ describe("Hono dialect", () => {
     // Sliced verbatim from source (no space after `{`), the same seam that
     // keeps TypeScript type arguments (see packages/core's core.ts and the
     // identical assertions in the Preact/React/Solid host tests).
-    expect(code).toContain("class={mxClass({active: input.on})}");
+    expect(code).toContain("class={__mxClass({active: input.on})}");
     expect(code).toContain("style={{color: input.color}}");
-    expect(code).toContain('import { mxClass } from "@mxlang/hono/runtime";');
+    expect(code).toContain(
+      'import { mxClass as __mxClass } from "@mxlang/hono/runtime";',
+    );
   });
 
   it("shares keyed list lowering with Preact/React", () => {
@@ -228,8 +230,10 @@ describe("Hono dialect", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
       '<for|item| of=input.items by="id"><p>${item.name}</p></for>',
     );
-    expect(code).toContain('import { Fragment } from "hono/jsx";');
-    expect(code).toContain("<Fragment key={item.id}>");
+    expect(code).toContain(
+      'import { Fragment as __mxFragment } from "hono/jsx";',
+    );
+    expect(code).toContain("<__mxFragment key={item.id}>");
   });
 
   it("lowers `<try>` to Hono's built-in ErrorBoundary with fallbackRender", () => {
@@ -237,9 +241,11 @@ describe("Hono dialect", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
       'import Risky from "./Risky.mx"\n<try><Risky/><@catch|error|><p>${error.message}</p></@catch></try>',
     );
-    expect(code).toContain('import { ErrorBoundary } from "hono/jsx";');
     expect(code).toContain(
-      "<ErrorBoundary fallbackRender={(error) => <p>{error.message}</p>}>",
+      'import { ErrorBoundary as __mxErrorBoundary } from "hono/jsx";',
+    );
+    expect(code).toContain(
+      "<__mxErrorBoundary fallbackRender={(error) => <p>{error.message}</p>}>",
     );
   });
 
@@ -248,7 +254,7 @@ describe("Hono dialect", () => {
       'import Risky from "./Risky.mx"\n<try><Risky/><@catch><p>failed</p></@catch></try>',
     );
     expect(code).toContain(
-      "<ErrorBoundary fallbackRender={() => <p>failed</p>}>",
+      "<__mxErrorBoundary fallbackRender={() => <p>failed</p>}>",
     );
   });
 
@@ -256,8 +262,10 @@ describe("Hono dialect", () => {
     const code = compile(
       'import Risky from "./Risky.mx"\n<try><Risky/><@placeholder><p>loading</p></@placeholder></try>',
     );
-    expect(code).toContain('import { Suspense } from "hono/jsx";');
-    expect(code).toContain("<Suspense fallback={<p>loading</p>}>");
+    expect(code).toContain(
+      'import { Suspense as __mxSuspense } from "hono/jsx";',
+    );
+    expect(code).toContain("<__mxSuspense fallback={<p>loading</p>}>");
   });
 
   it("rejects Marko state with Hono-specific guidance", () => {

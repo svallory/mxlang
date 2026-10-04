@@ -7,7 +7,7 @@ const source = "<button onDblClick=((e) => e.detail)>x</button>";
 
 it("wraps handlers against React's JSX types only under typeCheck", () => {
   const plain = compileReactMx(source, "/fixtures/test.mx").code;
-  expect(plain).not.toContain("__mx");
+  expect(plain).not.toContain("__Mx");
   expect(
     compileReactMx(source, "/fixtures/test.mx", { typeCheck: false }).code,
   ).toBe(plain);

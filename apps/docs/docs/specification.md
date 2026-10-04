@@ -57,10 +57,18 @@ must not declare bindings with that prefix, including tag variables, imports,
 module statements, surrounding TypeScript bindings and Astro frontmatter.
 For example, `__mxAttrValue` and `__mxAttrSpread` name generated runtime helpers.
 
-**Known enforcement gap:** the compiler does not yet reject every authored
-`__mx*` binding. Such a binding can shadow a helper or cause a duplicate
-declaration. A clear rejection diagnostic is tracked separately; this
-reservation documents the contract, not a newly implemented check.
+Core rejects these bindings before host lowering, including destructured tag
+variables and parameters, scriptlet declarations, imports and module statements.
+Host code that MX parses (the Astro fence and surrounding `.solid.mx`/`.ng.mx`
+TypeScript) uses the same check. The error points at the binding:
+`Identifiers starting with "__mx" are reserved for generated code; rename "__mxX".`
+Property names, strings and references are not declarations. Public helper
+exports retain their names; generated imports use private aliases.
+
+This is stricter than Marko 6.3.51, which accepts `__mxX`, `_x`, `__x`, `$x`
+and `$mxX` bindings (tag variables and `static` declarations). It is an
+MX-only safety restriction (reserve-mx-identifiers; decision 72's explicit
+stricter-validation policy), not a `$`- or `_`-prefix reservation.
 
 ### The governing rule
 

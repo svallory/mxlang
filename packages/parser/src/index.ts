@@ -1,6 +1,10 @@
 import { dirname, resolve } from "node:path";
 import type { File } from "@babel/types";
-import { dropOwnParserPosition, isMarkoOrMxSpecifier } from "@mxlang/core";
+import {
+  checkReservedBindings,
+  dropOwnParserPosition,
+  isMarkoOrMxSpecifier,
+} from "@mxlang/core";
 import {
   parse as babelParse,
   parseExpression as babelParseExpression,
@@ -65,15 +69,12 @@ export function parse(
   options: MxParseOptions = {},
 ): File {
   const mx = options.mx ?? filename.endsWith(".solid.mx");
-  const needsModuleScan =
-    options.mxImportSpecifiers === undefined ||
-    options.mxModuleBindings === undefined;
-  const moduleScan =
-    needsModuleScan &&
-    mx &&
-    /\bimport\b|\bconst\b|\bfunction\b|\bclass\b/.test(source)
-      ? collectModuleScope(source, filename, options)
-      : undefined;
+  // Validate the authored module before any host lowering can introduce
+  // declarations. This also catches let/var, nested bindings and Unicode
+  // escapes, even when the caller supplied the module binding sets.
+  const moduleScan = mx
+    ? collectModuleScope(source, filename, options)
+    : undefined;
   const importSpecifiers =
     options.mxImportSpecifiers ?? moduleScan?.importSpecifiers ?? new Map();
   const moduleBindings =
@@ -105,6 +106,7 @@ export function parse(
     mxImportDefaultFromMarkoOrMx: importDefaultFromMarkoOrMx,
     mxUnknownModuleBindings: unknownModuleBindings,
   } as ParserOptions) as unknown as File;
+  if (mx) checkReservedBindings(file);
   hoistRegionImports(file, filename);
   return file;
 }
@@ -162,6 +164,7 @@ function collectModuleScope(
     mxImportSpecifiers: new Map<string, string>(),
     mxModuleBindings: new Set<string>(),
   } as ParserOptions) as unknown as File;
+  checkReservedBindings(file);
   const imports = new Map<string, string>();
   // decision 116: only a *default* import from a `.marko`/`.mx` source is
   // Marko's own statically-resolved component case; every other value

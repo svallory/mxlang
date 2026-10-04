@@ -7,7 +7,7 @@ const source = "<button onClick=((e) => e.detail)>x</button>";
 
 it("wraps handlers against Hono's JSX types only under typeCheck", () => {
   const plain = compileHonoMx(source, "/fixtures/test.mx").code;
-  expect(plain).not.toContain("__mx");
+  expect(plain).not.toContain("__Mx");
   expect(
     compileHonoMx(source, "/fixtures/test.mx", { typeCheck: false }).code,
   ).toBe(plain);

@@ -98,20 +98,22 @@ export interface CompilePreactOptions {
  */
 function importLines(names: Set<string>, dialect: JsxDialect): string[] {
   const lines: string[] = [];
-  if (names.has("Fragment")) {
-    lines.push(`import { Fragment } from "${dialect.fragmentModule}";`);
+  if (names.has("__mxFragment")) {
+    lines.push(
+      `import { Fragment as __mxFragment } from "${dialect.fragmentModule}";`,
+    );
   }
   const boundary = [dialect.errorBoundaryName, dialect.suspenseName].filter(
     (name) => names.has(name),
   );
   if (boundary.length > 0) {
     lines.push(
-      `import { ${boundary.join(", ")} } from "${dialect.errorBoundaryModule}";`,
+      `import { ${boundary.map((name) => `${name} as ${name === dialect.errorBoundaryName ? "__mxErrorBoundary" : "__mxSuspense"}`).join(", ")} } from "${dialect.errorBoundaryModule}";`,
     );
   }
-  if (names.has("mxClass")) {
+  if (names.has("__mxClass")) {
     const mxClassModule = dialect.mxClassModule ?? dialect.errorBoundaryModule;
-    lines.push(`import { mxClass } from "${mxClassModule}";`);
+    lines.push(`import { mxClass as __mxClass } from "${mxClassModule}";`);
   }
   return lines;
 }
@@ -154,7 +156,7 @@ function importLines(names: Set<string>, dialect: JsxDialect): string[] {
  * \`payload\` where this dispatch could not tell a real trailing argument from
  * the synthesized props object.
  */
-const MX_DYNAMIC = `function mxIsHostComponentObject(value: any): boolean {
+const MX_DYNAMIC = `function __mxIsHostComponentObject(value: any): boolean {
   if (value === null || typeof value !== "object") return false;
   const marker = value.$$typeof;
   if (typeof marker !== "symbol") return false;
@@ -174,10 +176,10 @@ const MX_DYNAMIC = `function mxIsHostComponentObject(value: any): boolean {
     description === "react.lazy"
   );
 }
-function mxDynamic(target: any, payload: any, content?: any) {
+function __mxDynamic(target: any, payload: any, content?: any) {
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
-    if (typeof target === "string" || mxIsHostComponentObject(target)) {
+    if (typeof target === "string" || __mxIsHostComponentObject(target)) {
       const Tag: any = target;
       const attrs = payload[0] || {};
       return <Tag {...(typeof target === "string" ? __mxAttrSpread(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true) : attrs)}>{content ? content() : undefined}</Tag>;
@@ -188,7 +190,7 @@ function mxDynamic(target: any, payload: any, content?: any) {
   if (
     typeof target === "string" ||
     typeof target === "function" ||
-    mxIsHostComponentObject(target)
+    __mxIsHostComponentObject(target)
   ) {
     const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
@@ -340,7 +342,7 @@ export function emitModuleWithMappings(
   const helperInput = [
     body.code,
     ...statements.map((statement) => statement.code),
-    ...(emitter.runtimeImports.has("mxDynamic") ? [MX_DYNAMIC] : []),
+    ...(emitter.runtimeImports.has("__mxDynamic") ? [MX_DYNAMIC] : []),
   ].join("\n");
   const attrHelpers: string[] = [];
   if (
@@ -368,13 +370,10 @@ export function emitModuleWithMappings(
         ? `const ${componentAlias(name)} = ${name};`
         : `import ${componentAlias(name)} from "./tags/${name}.marko";`,
     ),
-    // Placed after the author's own hoisted module scope, same as
-    // `@mxlang/html`'s inlined helpers. `mxDynamic` is a reserved name: an
-    // author who also declares one gets a duplicate-declaration
-    // `SyntaxError` at this position, the same pre-existing behaviour
-    // `@mxlang/html`'s `renderDynamic` has.
+    // Private helpers use the language-reserved prefix; public runtime
+    // exports retain their names and are imported under private aliases.
     ...attrHelpers,
-    ...(emitter.runtimeImports.has("mxDynamic") ? [MX_DYNAMIC] : []),
+    ...(emitter.runtimeImports.has("__mxDynamic") ? [MX_DYNAMIC] : []),
   ];
   if (hoisted.length > 0) lines.push("", ...hoisted);
 
@@ -405,17 +404,17 @@ export function emitModuleWithMappings(
   // falsy for `<if=input.content>`). A tag-name value never comes through
   // `input.content`, so `<${tag}/>` is unaffected.
   lines.push(
-    "  const $mxBody =",
+    "  const __mxBody =",
     "    (props as { content?: unknown }).content ??",
     "    (props as { children?: unknown }).children;",
     "  const input: Input & { content?: unknown } = {",
     "    ...props,",
     "    content:",
-    '      typeof $mxBody === "string" || typeof $mxBody === "number"',
-    '        ? $mxBody === ""',
+    '      typeof __mxBody === "string" || typeof __mxBody === "number"',
+    '        ? __mxBody === ""',
     "          ? undefined",
-    "          : <>{String($mxBody)}</>",
-    "        : $mxBody,",
+    "          : <>{String(__mxBody)}</>",
+    "        : __mxBody,",
     "  };",
   );
   // A statement lifted by the core's own hoist hook precedes the author's, so

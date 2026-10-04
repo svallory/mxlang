@@ -82,24 +82,27 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
 
   it("renders Marko's attribute, for every value kind", () => {
     expect(rendered(`<div :foo="lit"/>`)).toContain(
-      `out += "<div value:foo=\\"lit\\"></div>";`,
+      `__mxOut += "<div value:foo=\\"lit\\"></div>";`,
     );
     expect(rendered(`<div :foo/>`)).toContain(
-      `out += "<div value:foo=\\"\\"></div>";`,
+      `__mxOut += "<div value:foo=\\"\\"></div>";`,
     );
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(rendered(`<div value:foo="lit"/>`)).toContain(
-      `out += "<div value:foo=\\"lit\\"></div>";`,
+      `__mxOut += "<div value:foo=\\"lit\\"></div>";`,
     );
   });
 
   it.each([
-    ["<div :/>", 'out += "<div value:=\\"\\"></div>";'],
-    ["<div x:/>", 'out += "<div x:=\\"\\"></div>";'],
-    ['<div x: = "s"/>', 'out += "<div x:=\\"s\\"></div>";'],
-    ['<div value:foo:bar="y"/>', 'out += "<div value:foo:bar=\\"y\\"></div>";'],
-    ["<div value:foo:bar/>", 'out += "<div value:foo:bar=\\"\\"></div>";'],
+    ["<div :/>", '__mxOut += "<div value:=\\"\\"></div>";'],
+    ["<div x:/>", '__mxOut += "<div x:=\\"\\"></div>";'],
+    ['<div x: = "s"/>', '__mxOut += "<div x:=\\"s\\"></div>";'],
+    [
+      '<div value:foo:bar="y"/>',
+      '__mxOut += "<div value:foo:bar=\\"y\\"></div>";',
+    ],
+    ["<div value:foo:bar/>", '__mxOut += "<div value:foo:bar=\\"\\"></div>";'],
   ])("renders the full colon name: %s", (source, output) => {
     expect(rendered(source)).toContain(output);
   });
@@ -119,7 +122,7 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
       ['="y"', "y"],
     ]) {
       expect(rendered(`<div ${name}${suffix}/>`)).toContain(
-        `out += ${JSON.stringify(`<div ${name}="${value}"></div>`)};`,
+        `__mxOut += ${JSON.stringify(`<div ${name}="${value}"></div>`)};`,
       );
     }
     expect(rendered(`<div ${name}=input.x/>`)).toContain(

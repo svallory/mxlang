@@ -6,6 +6,8 @@
 
 - **Fix (html-direct-null-attr-empty):** omit native `null`, `undefined` and `false` attributes on direct, bound, colon, merged-spread and dynamic-native paths. Preserve `true`, zero, empty strings and NaN as Marko does, including `aria-*` and `data-*`. Class/style primitive presence, controlled direct `input.checked`, and dynamic void tags now match real Marko 6.3.51 renders. Expressions still run once, and the single hoisted native-value guard remains active.
 
+- **Fix (reserve-mx-identifiers):** private render helpers, buffers and temporaries now use the reserved `__mx` prefix, including attribute-writer capture, structured-text and spread locals. The public `escape` export is unchanged and generated imports alias it privately. Authored bindings with the old helper names no longer shadow generated code.
+
 - **Fix (attr-value-parity review):** validate duplicate `<let>` values before default policy drops the builtin. Hoist one native value guard per module; reject runtime functions/symbols with Marko's debug diagnostics. Null/false serialization is unchanged.
 
 - **Fix (attr-value-parity):** ordinary native attributes, including spreads and dynamic string tags, throw Marko's render-time diagnostic for unrenderable objects instead of emitting `[object Object]`. Validate only final surviving merged values and evaluate authored values once. Existing class/style, controlled-value and direct-null behavior is unchanged.

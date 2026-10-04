@@ -141,9 +141,9 @@ describe("attribute tags become props", () => {
     // `$mxDynN`'s serial is a process-wide counter, not per-test, so it is
     // normalized before comparing — the exact number is not the assertion.
     expect(
-      result.code.replace(/\s+/g, " ").replace(/\$mxDyn\d+/g, "$mxDyn"),
+      result.code.replace(/\s+/g, " ").replace(/__mxDyn\d+/g, "__mxDyn"),
     ).toBe(
-      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const $mxDyn = AttrCallee;if ($mxDyn !== null && typeof $mxDyn === "object" && (Object.getPrototypeOf($mxDyn) === Object.prototype || Object.getPrototypeOf($mxDyn) === null) && Object.prototype.hasOwnProperty.call($mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof $mxDyn === "string" || typeof $mxDyn === "function" ? <Dynamic component={$mxDyn} item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : $mxDyn;})();',
+      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const __mxDyn = AttrCallee;if (__mxDyn !== null && typeof __mxDyn === "object" && (Object.getPrototypeOf(__mxDyn) === Object.prototype || Object.getPrototypeOf(__mxDyn) === null) && Object.prototype.hasOwnProperty.call(__mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof __mxDyn === "string" || typeof __mxDyn === "function" ? <Dynamic component={__mxDyn} item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : __mxDyn;})();',
     );
     expect(() =>
       parseBabel(result.code, {
@@ -182,9 +182,9 @@ describe("attribute tags become props", () => {
     // `$mxDynN`'s serial is a process-wide counter, not per-test, so it is
     // normalized before comparing — the exact number is not the assertion.
     expect(
-      result.code.replace(/\s+/g, " ").replace(/\$mxDyn\d+/g, "$mxDyn"),
+      result.code.replace(/\s+/g, " ").replace(/__mxDyn\d+/g, "__mxDyn"),
     ).toBe(
-      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const $mxDyn = AttrCallee; if ($mxDyn !== null && typeof $mxDyn === "object" && (Object.getPrototypeOf($mxDyn) === Object.prototype || Object.getPrototypeOf($mxDyn) === null) && Object.prototype.hasOwnProperty.call($mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof $mxDyn === "string" || typeof $mxDyn === "function" ? <Dynamic component={$mxDyn} item={(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : $mxDyn;})();',
+      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const __mxDyn = AttrCallee; if (__mxDyn !== null && typeof __mxDyn === "object" && (Object.getPrototypeOf(__mxDyn) === Object.prototype || Object.getPrototypeOf(__mxDyn) === null) && Object.prototype.hasOwnProperty.call(__mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof __mxDyn === "string" || typeof __mxDyn === "function" ? <Dynamic component={__mxDyn} item={(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : __mxDyn;})();',
     );
     expect(() =>
       parseBabel(result.code, {

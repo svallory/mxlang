@@ -84,7 +84,7 @@ let returnVars: Set<string> | null = null;
 let escapeUse: { used: boolean } | null = null;
 
 /** Hygienic-enough alias shared by emitted expressions and module assembly. */
-export const MX_ESCAPE_BINDING = "$mxEscape";
+export const MX_ESCAPE_BINDING = "__mxEscape";
 
 /**
  * The emitter is filling a lazily-evaluated or per-row scope.
@@ -946,8 +946,8 @@ function renderWithNewEmitter(nodes: IrNode[]): MappedCode {
 function escapedBlockValue(expr: Expr): MappedCode {
   if (escapeUse) escapeUse.used = true;
   const serial = dynSerial.n++;
-  const value = `$mxText${serial}`;
-  const escaped = `$mxEscaped${serial}`;
+  const value = `__mxText${serial}`;
+  const escaped = `__mxEscaped${serial}`;
   return concatMapped(
     `() => { const ${value} = `,
     expr.code,
@@ -1589,7 +1589,7 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
     const returnProp = node.var
-      ? ` ${MX_RETURN_PROP}={($mxV) => { ${node.var} = $mxV; }}`
+      ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
       : "";
     if (node.var) returnVars?.add(node.var);
     if (!node.content || raw) {
@@ -1703,11 +1703,11 @@ export class SolidEmitter implements Emitter<string> {
       if (returnVars) returnVars.add(node.var);
       this.#out.push(
         concatMapped(
-          "{(() => { const $mxV = ",
+          "{(() => { const __mxV = ",
           mapped(binding, node.nameSpan),
           "(",
           ...args.flatMap((a, i) => (i === 0 ? [a] : [", ", a])),
-          `); ${node.var} = $mxV; return $mxV; })()}`,
+          `); ${node.var} = __mxV; return __mxV; })()}`,
         ),
       );
       return;
@@ -1776,12 +1776,12 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
     const returnProp = node.var
-      ? ` ${MX_RETURN_PROP}={($mxV) => { ${node.var} = $mxV; }}`
+      ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
       : "";
     if (node.var) returnVars?.add(node.var);
     const serial = dynSerial.n++;
-    const temp = `$mxDyn${serial}`;
-    const value = node.args.length > 0 ? `$mxDynValue${serial}` : temp;
+    const temp = `__mxDyn${serial}`;
+    const value = node.args.length > 0 ? `__mxDynValue${serial}` : temp;
     const invoke =
       node.args.length > 0
         ? ` const ${value} = typeof ${temp} === "function" ? ${temp}(${node.args.map((arg) => arg.code).join(", ")}) : ${temp};`
