@@ -528,3 +528,60 @@ describe("hook-guard-module-list: each host's JsxDialect declares its own hookMo
     ).toThrow(/`useState` cannot be used in a tag that declares `<return>`/);
   });
 });
+
+/**
+ * JSX-significant characters in authored text (the `jsx-text-lt-unescaped`
+ * bug): the shared `@mxlang/preact` emitter this host reuses must escape
+ * `<`, `>`, and braces so the *generated* TSX parses, and React's own
+ * renderer must produce the DOM text Marko does (`a < b` is text in Marko;
+ * the pre-fix emitter copied it verbatim into the JSX, which failed
+ * downstream parsing with `[builtin:vite-transform] Unexpected token`).
+ */
+describe("text with JSX-significant characters (rendered, react runtime)", () => {
+  async function renderEntry(entrySource: string): Promise<string> {
+    const { dirname, join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const scratch = mkdtempSync(join(tmpdir(), "mx-react-text-"));
+    try {
+      symlinkSync(
+        dirname(dirname(require.resolve("react/package.json"))),
+        join(scratch, "node_modules"),
+        "dir",
+      );
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "react" },
+        }),
+      );
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, compileReactMx(entrySource, entry).code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: (props: Record<string, never>) => ReactNode;
+      };
+      return renderToStaticMarkup(createElement(mod.default, {}));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("renders a bare `<` in text as text, like Marko", async () => {
+    expect(await renderEntry("<div>a < b</div>")).toBe("<div>a &lt; b</div>");
+  });
+
+  it("renders `>`, braces, an ampersand, and authored entities like Marko", async () => {
+    expect(await renderEntry("<div>a > b</div>")).toBe("<div>a &gt; b</div>");
+    expect(await renderEntry("<div>a {b} c</div>")).toBe("<div>a {b} c</div>");
+    expect(await renderEntry("<div>a & b</div>")).toBe("<div>a &amp; b</div>");
+    expect(await renderEntry("<div>&lt;a&gt; &amp; b</div>")).toBe(
+      "<div>&lt;a&gt; &amp; b</div>",
+    );
+  });
+});

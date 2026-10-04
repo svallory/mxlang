@@ -234,6 +234,10 @@ describe("several bare roots", () => {
       "const x = <div><b>x</b> <Show when={a}><>y</></Show></div>;",
     ],
     ["const x = <div><b/>, 1</div>;", "const x = <div><b></b>, 1</div>;"],
+    // The MX text ` < c` now survives as JSX text: the host emitter escapes
+    // the `<` (`jsx-text-lt-unescaped`), so Babel's old "Unexpected token"
+    // failure at (1:26) is gone and the region prints the escaped form.
+    ["const x = <div><b/> < c</div>;", "const x = <div><b></b> &#60; c</div>;"],
   ])("still parses %j to %j", (source, printed) => {
     expect(
       print(source, "t.solid.mx", { mxRegionCompile: solidRegionCompile }).code,
@@ -245,8 +249,12 @@ describe("several bare roots", () => {
   // inner parser's 0-based suffix verbatim: that position belongs to another
   // file, and `dropOwnParserPosition` deliberately keeps it. The rest are
   // Babel's own errors on this file, which no longer print one.
+  //
+  // `const x = <div><b/> < c</div>;` used to sit here too ("Unexpected token
+  // (1:26)"), but that error only existed because the solid emitter copied
+  // the authored `<` into the JSX verbatim; escaped (`jsx-text-lt-unescaped`)
+  // it parses, and is asserted in the table above.
   it.each([
-    ["const x = <div><b/> < c</div>;", "Unexpected token (1:26)"],
     ["const x = <b/>, 1;", "Unexpected token"],
     [
       "const x = <div><b/> <c</div>;",

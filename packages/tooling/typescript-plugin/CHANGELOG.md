@@ -2,6 +2,10 @@
 
 ## 0.1.0 (unreleased)
 
+### Test: offsets after an escaped text character map to the shifted generated positions (jsx-text-lt-unescaped)
+
+`createSolidMxLanguagePlugin`'s mappings pin that `${input.zed}` after authored text `a < b` — emitted as `a &#60; b`, three characters longer — maps source offset 23 to generated offset 26, and the following statement (`const n: number = 1;`) maps source 41 to generated 44. The row guards the entity-expansion shift so a diagnostic after an escaped character lands on the authored text, not three columns late. No plugin code changed.
+
 ### Fixed: no page compile after a target load failure (registration PR 7 round 3)
 
 When the policy carries `target-not-found`, `target-load-failed`, `target-invalid-descriptor` or `host-invalid-descriptor`, the plugin compiles nothing: it reports TS80003 and the `target not loaded: see package.json(line,col)` pointer over an inert virtual module, as the language server does, instead of the fallback target's verdict on the page. mx-tsc inherits this.

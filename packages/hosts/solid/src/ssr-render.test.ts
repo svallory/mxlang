@@ -717,3 +717,32 @@ describe("Solid SSR render: dynamic tag", () => {
     // Suspense-aware SSR test infra).
   });
 });
+
+/**
+ * JSX-significant characters in authored text (the `jsx-text-lt-unescaped`
+ * bug): the emitter must escape `<`, `>`, and braces so the *generated* JSX
+ * parses, and the real Solid SSR render must produce the same DOM text
+ * Marko does (`a < b` is text in Marko; the pre-fix emitter copied it
+ * verbatim into the JSX, which failed downstream parsing).
+ */
+describe("Solid SSR render: JSX-significant text characters", () => {
+  it("renders a bare `<` in text as text, like Marko", () => {
+    // Solid's serializer escapes the decoded `<` numerically; parse5-decoded
+    // (the oracle's comparison), both forms equal Marko's `a < b`.
+    expect(renderApp("<li>a < b</li>", "")).toBe("<ul><li>a &#60; b</li></ul>");
+  });
+
+  it("renders `>`, braces, and a literal ampersand like Marko", () => {
+    expect(renderApp("<li>a > b</li>", "")).toBe("<ul><li>a &#62; b</li></ul>");
+    expect(renderApp("<li>a {b} c</li>", "")).toBe(
+      "<ul><li>a &#123;b&#125; c</li></ul>",
+    );
+    expect(renderApp("<li>a & b</li>", "")).toBe("<ul><li>a & b</li></ul>");
+  });
+
+  it("renders authored entities as the decoded character, like Marko's browser parse", () => {
+    expect(renderApp("<li>&lt;a&gt; &amp; b</li>", "")).toBe(
+      "<ul><li>&lt;a&gt; &amp; b</li></ul>",
+    );
+  });
+});

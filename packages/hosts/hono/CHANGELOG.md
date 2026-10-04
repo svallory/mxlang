@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (jsx-text-lt-unescaped):** text with JSX-significant characters (`<`, `>`, braces) is escaped in the generated TSX, so `<div>a < b</div>` compiles and renders `a < b` as Marko does, instead of failing downstream parsing. Authored entities decode the same as in a browser only for `;`-terminated numeric references and the HTML4 named set; HTML5-only names and unterminated legacy forms stay literal (known divergence, tracked separately). See `@mxlang/preact`.
+
 - **Fix (scriptlet-hint-let-var):** the shared JSX declarations omit immutable `<const>` advice for `$ let`/`$ var`; Hono rejects `<let>`. `$ const` advice is unchanged.
 
 - **Fix (jsx-whitespace-body-parity, decision 141):** same-line whitespace-only bodies now render one space when forwarded, through both imported components and discovered `tags/*.mx`. Uses core's host-independent body-presence correction; newline indentation stays absent. Pinned by Hono's rendered output.

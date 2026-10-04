@@ -125,6 +125,18 @@ describe("elements and text", () => {
     expect(markup("<p>a {b} c</p>")).toBe("<p>a &#123;b&#125; c</p>");
   });
 
+  it("escapes angle brackets in text, which JSX would read as element markup", () => {
+    expect(markup("<p>a < b</p>")).toBe("<p>a &#60; b</p>");
+    expect(markup("<p>a > b</p>")).toBe("<p>a &#62; b</p>");
+  });
+
+  it("passes authored entities through text verbatim, matching Marko", () => {
+    // Marko's parser keeps `&lt;`/`&amp;` raw and the browser decodes them
+    // at parse; JSX decodes the same references at compile, so escaping the
+    // `&` would double-encode and render the entity spelling literally.
+    expect(markup("<p>&lt;a&gt; &amp; b</p>")).toBe("<p>&lt;a&gt; &amp; b</p>");
+  });
+
   it("emits an escaped placeholder as an expression container", () => {
     expect(markup("<p>${input.name}</p>")).toBe("<p>{input.name}</p>");
   });
@@ -1576,5 +1588,80 @@ describe("event name positions and plain-recomposition spellings", () => {
       error = caught;
     }
     expect(error).toMatchObject({ line: 2, column: 6 });
+  });
+});
+
+/**
+ * JSX-significant characters in authored text (the `jsx-text-lt-unescaped`
+ * bug): the emitter must escape `<`, `>`, and braces so the *generated* TSX
+ * parses, and the rendered DOM text must equal Marko's. Marko renders
+ * `a < b` as text; the pre-fix emitter copied it verbatim into the JSX,
+ * which failed downstream with `[builtin:vite-transform] Unexpected token`.
+ */
+describe("text with JSX-significant characters (rendered)", () => {
+  async function renderCompiled(source: string): Promise<string> {
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const { render } = (await import("preact-render-to-string")) as {
+      render: (vnode: unknown) => string;
+    };
+    const code = compilePreactMx(source, "/fixtures/text.mx").code;
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-text-"));
+    try {
+      const repoNodeModules = dirname(
+        dirname(require.resolve("preact/package.json")),
+      );
+      symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+        }),
+      );
+      const entry = join(scratch, "text.tsx");
+      writeFileSync(entry, code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: FunctionComponent<Record<string, never>>;
+      };
+      return render(h(mod.default, {}));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+
+  it("renders a bare `<` in text as text, like Marko", async () => {
+    // Marko renders `<div>a < b</div>`; Preact's serializer escapes the
+    // text for HTML, so the byte form differs but the parsed DOM is equal.
+    expect(await renderCompiled("<div>a < b</div>")).toBe(
+      "<div>a &lt; b</div>",
+    );
+  });
+
+  it("renders a bare `>` and a literal ampersand like Marko", async () => {
+    // Preact's serializer leaves `>` bare in text; parse5-decoded, both
+    // forms equal Marko's `a > b` / `a & b`.
+    expect(await renderCompiled("<div>a > b</div>")).toBe("<div>a > b</div>");
+    expect(await renderCompiled("<div>a & b</div>")).toBe(
+      "<div>a &amp; b</div>",
+    );
+  });
+
+  it("renders authored entities as the decoded character, like Marko's browser parse", async () => {
+    expect(await renderCompiled("<div>&lt;a&gt; &amp; b</div>")).toBe(
+      "<div>&lt;a> &amp; b</div>",
+    );
+  });
+
+  it("renders braces in text as literal characters, like Marko", async () => {
+    expect(await renderCompiled("<div>a {b} c</div>")).toBe(
+      "<div>a {b} c</div>",
+    );
   });
 });

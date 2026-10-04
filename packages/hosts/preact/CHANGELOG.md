@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (jsx-text-lt-unescaped):** authored text containing `<` or `>` no longer breaks the generated TSX. `<div>a < b</div>` used to emit the `<` verbatim, and the *generated* `page.mx.tsx` then failed downstream parsing (`[builtin:vite-transform] Unexpected token`). Text children now escape `<`, `>`, `{`, and `}` as numeric character references (`a &#60; b`), which JSX decodes back to the original characters, so rendered DOM text equals Marko 6.3.51's. `&` is deliberately left raw: Marko passes authored entities through verbatim, and JSX decodes `;`-terminated numeric references and the HTML4 named entities the same way a browser does. HTML5-only names (`&check;`) and unterminated legacy forms (`&copy x`, `&lt`) are a known divergence — JSX keeps them literal where a browser decodes them (a full HTML5 entity decoder is tracked separately). Rendered parity tests pin Preact, React, and Hono output. Shared with `@mxlang/react` and `@mxlang/hono`.
+
 - **Fix (scriptlet-hint-let-var):** mutable `$ let`/`$ var` declarations no longer get an immutable `<const>` replacement. This host rejects `<let>`, so its declaration omits keyword advice; `$ const` advice is unchanged. Shared with React and Hono.
 
 - **Fix (jsx-whitespace-body-parity, decision 141):** a same-line whitespace-only body forwarded through `<${input.content}/>` now renders one space, through imports and discovered `tags/*.mx`, rather than disappearing in core. Tabs normalize to one space; newline indentation stays absent. Rendered parity tests cover preact/react/hono; the existing text-body dispatch fix is unchanged.

@@ -542,3 +542,57 @@ describe("hook-guard-module-list: each host's JsxDialect declares its own hookMo
     ).toThrow(/`useState` cannot be used in a tag that declares `<return>`/);
   });
 });
+
+/**
+ * JSX-significant characters in authored text (the `jsx-text-lt-unescaped`
+ * bug): the shared `@mxlang/preact` emitter this host reuses must escape
+ * `<`, `>`, and braces so the *generated* TSX parses, and Hono's own
+ * renderer must produce the DOM text Marko does (`a < b` is text in Marko;
+ * the pre-fix emitter copied it verbatim into the JSX, which failed
+ * downstream parsing with `[builtin:vite-transform] Unexpected token`).
+ */
+describe("text with JSX-significant characters (rendered, hono runtime)", () => {
+  it("escapes `<` and `>` in emitted text", () => {
+    expect(markup("<div>a < b</div>")).toBe("<div>a &#60; b</div>");
+    expect(markup("<div>a > b</div>")).toBe("<div>a &#62; b</div>");
+  });
+
+  it("renders a bare `<` in text as text, like Marko", async () => {
+    const { renderToString } = await import("hono/jsx/dom/server");
+    const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, dirname } = await import("node:path");
+    const scratch = mkdtempSync(join(tmpdir(), "mx-hono-text-"));
+    try {
+      // Hono's exports table blocks `hono/package.json`, so resolve a real
+      // subpath and walk up to the workspace `node_modules`.
+      let nodeModules = dirname(require.resolve("hono/jsx"));
+      while (!nodeModules.endsWith("node_modules")) {
+        nodeModules = dirname(nodeModules);
+      }
+      symlinkSync(nodeModules, join(scratch, "node_modules"), "dir");
+      writeFileSync(
+        join(scratch, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "hono" },
+        }),
+      );
+      const entry = join(scratch, "entry.tsx");
+      writeFileSync(entry, compileHonoMx("<div>a < b</div>", entry).code);
+      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
+        default: () => unknown;
+      };
+      expect(renderToString(jsx(mod.default, null))).toBe(
+        "<div>a &lt; b</div>",
+      );
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+});

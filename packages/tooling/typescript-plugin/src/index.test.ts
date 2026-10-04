@@ -214,6 +214,46 @@ describe("SolidMX language plugin", () => {
     expect(mappings.every((mapping) => mapping.data.navigation)).toBe(true);
   });
 
+  it("maps offsets past an escaped text character to the shifted generated positions", () => {
+    // jsx-text-lt-unescaped: authored `<` in text is emitted as `&#60;`,
+    // three characters longer than the source. An expression after the
+    // escaped character, and a statement on the following line, must still
+    // map to the shifted generated offsets, so a diagnostic on either lands
+    // on the authored text instead of three columns late.
+    const plugin = createSolidMxLanguagePlugin(ts);
+    const source =
+      "const a = <div>a < b \${input.zed}</div>;\nconst n: number = 1;\n";
+    const virtual = plugin.createVirtualCode?.(
+      "/src/mapping.solid.mx",
+      SOLID_MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+
+    if (!virtual) throw new Error("Expected SolidMX virtual code");
+    const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    expect(code).toContain("a &#60; b {input.zed}");
+    // Identity up to the escaped `<`, then everything after it shifted by
+    // the two extra characters of `&#60;`.
+    expect(virtual.mappings).toEqual([
+      expect.objectContaining({
+        generatedOffsets: [0],
+        sourceOffsets: [0],
+        lengths: [17],
+      }),
+      expect.objectContaining({
+        generatedOffsets: [26],
+        sourceOffsets: [23],
+        lengths: [9],
+      }),
+      expect.objectContaining({
+        generatedOffsets: [44],
+        sourceOffsets: [41],
+        lengths: [20],
+      }),
+    ]);
+  });
+
   it("returns a no-mapping stub module and records one positioned syntax error", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const fileName = "/src/broken.solid.mx";

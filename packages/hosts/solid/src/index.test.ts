@@ -243,6 +243,16 @@ describe("Solid IR lowering", () => {
       `<\${which}><@header>hi</@header></>`,
       ["header={", "hi"],
     ],
+    [
+      "JSX-significant characters in text",
+      `<p>a < b > c {d} e</p>`,
+      ["<p>a &#60; b &#62; c &#123;d&#125; e</p>"],
+    ],
+    [
+      "authored entities pass through text verbatim",
+      `<p>&lt;a&gt; &amp; b</p>`,
+      ["&lt;a&gt; &amp; b"],
+    ],
   ];
 
   for (const [name, source, expected, imports] of rows) {

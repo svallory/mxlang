@@ -220,12 +220,23 @@ export const preactDeclarations = createJsxDeclarations("Preact");
 /**
  * Escapes text for a JSX child position.
  *
- * `{` and `}` open and close an expression container in JSX, so literal
- * braces in template text become entities; left raw they would be parsed as
- * an expression and either fail to compile or silently swallow the text.
+ * `{` and `}` open and close an expression container, and `<` starts a JSX
+ * element (a lone `>` is legal JSX text but is escaped with the rest so the
+ * whole run stays uniform), so these characters become numeric character
+ * references; left raw they would be parsed as markup and either fail to
+ * compile or silently swallow the text. JSX decodes character references in
+ * text children, so the rendered text is unchanged. `&` is deliberately left
+ * raw: Marko passes authored entities through verbatim, and JSX decodes
+ * `;`-terminated numeric references and the HTML4 named set the same way a
+ * browser does. HTML5-only names (`&check;`) and unterminated legacy forms
+ * (`&copy x`, `&lt`) are a known divergence — JSX keeps them literal where a
+ * browser would decode them.
+ * TODO(jsx-text-entities): decode authored text with an HTML5 entity decoder
+ * and re-emit the decoded characters as numeric refs, so JSX text equals the
+ * browser's text for every input.
  */
 function escapeText(value: string): string {
-  return value.replace(/[{}]/g, (char) => `&#${char.charCodeAt(0)};`);
+  return value.replace(/[{}<>]/g, (char) => `&#${char.charCodeAt(0)};`);
 }
 
 function escapeAttribute(value: string): string {
