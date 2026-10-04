@@ -526,7 +526,8 @@ describe("dist freshness (html and angular parity reads dist/descriptor.js)", ()
   it.each(["html", "angular"])(
     "@mxlang/%s: dist/descriptor.js is no older than src/descriptor.ts and everything it reaches",
     (host) => {
-      const src = join(here, `../../hosts/${host}/src`);
+      const group = host === "html" ? "targets" : "hosts";
+      const src = join(here, `../../${group}/${host}/src`);
       const dist = join(src, "../dist/descriptor.js");
       expect(
         existsSync(dist),
