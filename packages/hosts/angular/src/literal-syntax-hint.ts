@@ -41,25 +41,66 @@ const BLOCK = new RegExp(`(?<![\\w@.$-])@(${BLOCK_KEYWORDS})(?![\\w$-])`, "g");
 const NEEDS_PAREN = new Set(["if", "else if", "for", "switch", "case"]);
 const MAY_PAREN = new Set(["defer", "placeholder", "loading"]);
 
-/** The index of the quote closing the string opened at `open`, skipping `\x` escapes; -1 if unclosed. */
+/**
+ * The index of the quote closing the string opened at `open`, skipping `\x`
+ * escapes; -1 if unclosed. A backtick string's `${…}` interpolations are
+ * *code*, not text: each is scanned to its matching `}` (strings inside it,
+ * backticks included, are skipped the same way), so a backtick or quote
+ * inside `${…}` never masquerades as the string's end.
+ */
 function closingQuote(text: string, open: number): number {
+  const quote = text[open];
   for (let i = open + 1; i < text.length; i++) {
-    if (text[i] === "\\") i++;
-    else if (text[i] === text[open]) return i;
+    const c = text[i];
+    if (c === "\\") i++;
+    else if (quote === "`" && c === "$" && text[i + 1] === "{") {
+      const close = closingBrace(text, i + 1);
+      if (close < 0) return -1;
+      i = close;
+    } else if (c === quote) return i;
+  }
+  return -1;
+}
+
+/** The index of the `}` matching the `{` at `open`, skipping strings; -1 if unclosed. */
+function closingBrace(text: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'" || c === "`") {
+      const close = closingQuote(text, i);
+      if (close < 0) return -1;
+      i = close;
+    } else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return i;
   }
   return -1;
 }
 
 /**
  * Whether `expr` has an Angular pipe: any single `|` outside a string literal,
- * at any depth. Angular has no bitwise OR, so only `||` is not a pipe.
+ * at any depth. Angular has no bitwise OR, so only `||` is not a pipe. A
+ * template literal's text runs are string content, but each `${…}` region is
+ * code and is scanned for a pipe too (`hasPipe` recurses).
  */
 function hasPipe(expr: string): boolean {
   for (let i = 0; i < expr.length; i++) {
     const c = expr[i];
-    if (c === '"' || c === "'" || c === "`") {
+    if (c === '"' || c === "'") {
       const close = closingQuote(expr, i);
       if (close < 0) return false;
+      i = close;
+    } else if (c === "`") {
+      const close = closingQuote(expr, i);
+      if (close < 0) return false;
+      for (let j = i + 1; j < close; j++) {
+        if (expr[j] === "$" && expr[j + 1] === "{") {
+          const end = closingBrace(expr, j + 1);
+          if (end < 0) return false;
+          if (hasPipe(expr.slice(j + 2, end))) return true;
+          j = end;
+        }
+      }
       i = close;
     } else if (c === "|") {
       if (expr[i + 1] === "|") i++;
@@ -80,7 +121,28 @@ function isRewritable(expr: string): boolean {
   }
 }
 
-const LET_DECL = /^\s+([A-Za-z_$][\w$]*)\s*=([^;]*);/;
+/**
+ * The `name` and `value` of a `@let name = value;` whose head starts at the
+ * beginning of `text`. The value ends at the first `;` *outside* a string
+ * literal — a `;` inside `'x;y'` does not cut it — and a template literal's
+ * `${…}` regions count as code, so quotes inside them don't either.
+ */
+function letDecl(text: string): { name: string; value: string } | undefined {
+  const m = /^\s+([A-Za-z_$][\w$]*)\s*=\s*/.exec(text);
+  if (!m) return undefined;
+  const start = m[0].length;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'" || c === "`") {
+      const close = closingQuote(text, i);
+      if (close < 0) return undefined;
+      i = close;
+    } else if (c === ";") {
+      return { name: m[1] ?? "", value: text.slice(start, i).trim() };
+    }
+  }
+  return undefined;
+}
 
 /**
  * The end of the `Text` node's own source span, found by walking the source
@@ -141,13 +203,13 @@ function blockAfter(
   from: number,
 ): { cond: string | undefined; decl?: string } | undefined {
   if (keyword === "let") {
-    const m = LET_DECL.exec(text.slice(from));
-    if (!m) return undefined;
-    const value = (m[2] ?? "").trim();
+    const decl = letDecl(text.slice(from));
+    if (!decl) return undefined;
+    const value = decl.value;
     // A pipe in the value has no MX form: keep the placeholder, not the expression.
     return {
       cond: undefined,
-      decl: `${m[1]}=${hasPipe(value) ? "…" : value}`,
+      decl: `${decl.name}=${hasPipe(value) ? "…" : value}`,
     };
   }
   let at = from;

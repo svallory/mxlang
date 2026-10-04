@@ -588,8 +588,14 @@ function emitAttrs(
         out.write(" ");
         writeAttributeName(out, attr.name, attr.nameSpan);
         // The value is a plain string literal in the IR with no span of its
-        // own, so only the name is mapped here.
-        out.write(`="${esc(attr.value)}"`);
+        // own, so only the name is mapped here. Angular evaluates `{{ … }}`
+        // inside an attribute value, so the value gets the same brace
+        // escaping as static text (angular-attr-interpolation-literal):
+        // Marko renders `title="{{ x }}"` as the literal text, and the
+        // emitted `{{ '{' }}` interpolation is probed to render that same
+        // text. `escapeText` runs before `esc` so the `&`/`"` layer never
+        // sees the escaping's own characters.
+        out.write(`="${esc(escapeText(attr.value))}"`);
         break;
       case "boolean":
         out.write(" ");

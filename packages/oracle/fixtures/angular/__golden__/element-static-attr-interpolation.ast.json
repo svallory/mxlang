@@ -1,0 +1,45 @@
+[
+  {
+    "name": "div",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "title",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "strings": [
+              "",
+              "",
+              " x ",
+              "",
+              ""
+            ],
+            "expressions": [
+              {
+                "value": "{"
+              },
+              {
+                "value": "{"
+              },
+              {
+                "value": "}"
+              },
+              {
+                "value": "}"
+              }
+            ]
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { literalSyntaxWarnings } from "../src/literal-syntax-hint.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
 import { compileMx } from "./helpers.ts";
 
@@ -149,6 +150,43 @@ describe("literal Angular syntax in a template", () => {
       expect(msg("<p>@let z = 1;</p>")).toBe(
         '`@let…` is literal text in an MX template, not Angular control flow. Use `<const/z=1>`, or `${"@"}let` for literal text.',
       );
+    });
+    it("a pipe inside a template literal's `${…}` keeps the placeholder", () => {
+      // angular-literal-hint-edge-cases (a): `closingQuote` used to treat a
+      // backtick string as opaque, so a pipe in its `${…}` interpolation was
+      // missed and the piped expression was inlined into the rewrite. Unit
+      // level: through a full compile, Marko parses a literal `${…}` in text
+      // as a placeholder and the hint never sees it as one text node — but
+      // the scanner's contract is per Text node, and the opacity bug is
+      // reachable wherever a backtick string does arrive whole (the `@let`
+      // value path below, entity-decoded text, future callers).
+      const warnings = literalSyntaxWarnings(
+        "@if (`${a | async}`) { x }",
+        { line: 0, column: 3 },
+        "<p>@if (`${a | async}`) { x }</p>",
+      );
+      expect(warnings).toHaveLength(1);
+      expect(plain(warnings[0]?.message ?? "")).toContain("Use `<if=…>…</if>`");
+      const interp = literalSyntaxWarnings(
+        "{{ `${a | async}` }}",
+        { line: 0, column: 3 },
+        "<p>{{ `${a | async}` }}</p>",
+      );
+      expect(plain(interp[0]?.message ?? "")).toContain(
+        "Pipes have no MX form",
+      );
+    });
+    it("a `@let` whose value is a backtick string containing `;` scans to the real terminator", () => {
+      // Same edge-case family: `[^;]*` and the opaque-backtick scan cut the
+      // value at the `;` inside the string, inlining the truncated `` `a ``.
+      expect(msg("<p>@let z = `a;b`;</p>")).toBe(
+        '`@let…` is literal text in an MX template, not Angular control flow. Use `<const/z=`a;b`>`, or `${"@"}let` for literal text.',
+      );
+    });
+    it("a `@let` whose string value contains `;` scans to the real terminator", () => {
+      // angular-literal-hint-edge-cases (b): `[^;]*` used to cut the value
+      // at the `;` inside the string, inlining the truncated `'x`.
+      expect(msg("<p>@let a = 'x;y' | f;</p>")).toContain("`<const/a=…>`");
     });
     it("@case and @default point at the if/else-if chain", () => {
       expect(msg("<p>@case (1) { a }</p>")).toContain(
