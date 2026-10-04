@@ -79,16 +79,16 @@ describe("scriptlets (html)", () => {
   it("p09-shaped: an unterminated expression names the declared variable", () => {
     const { message } = failure("$ let count = {;\n<p>1</p>");
     expect(reasonOf(message)).toBe(
-      "EOF reached while parsing expression; scriptlets (`$ …`) are not supported; declare a value with `<let/count=…/>`",
+      "EOF reached while parsing expression; scriptlets (`$ …`) are not supported; declare a value with `<let/count=…/>` (initial value only on this target)",
     );
   });
 
   it.each(["let", "var"])(
-    "preserves %s mutability, but strict mode offers no immutable rewrite",
+    "names the %s construct with its initial-value limit; strict mode omits advice",
     (keyword) => {
       const source = `$ ${keyword} x = 1;\n<p>\${x}</p>`;
       expect(failure(source).message).toBe(
-        "scriptlets (`$ statement`) are not supported in MX (decision 54); declare a value with `<let/x=…/>`",
+        "scriptlets (`$ statement`) are not supported in MX (decision 54); declare a value with `<let/x=…/>` (initial value only on this target)",
       );
       expect(() =>
         compile(`<let/x=1/><p>\${x}</p>`, "/fixtures/test.mx"),
@@ -101,6 +101,15 @@ describe("scriptlets (html)", () => {
       expect(() =>
         compile("<let/x=1/>", "/fixtures/test.mx", { strict: true }),
       ).toThrow("`<let>` is reactive state");
+    },
+  );
+
+  it.each(["let", "var"])(
+    "a malformed $ %s gets the same initial-value warning",
+    (keyword) => {
+      expect(reasonOf(failure(`$ ${keyword} x = ;\n<p>1</p>`).message)).toBe(
+        "Unexpected token; scriptlets (`$ …`) are not supported; declare a value with `<let/x=…/>` (initial value only on this target)",
+      );
     },
   );
 

@@ -280,9 +280,18 @@ function buildHost(
 /**
  * Create an incremental Angular template checker.
  *
- * The returned checker holds an in-memory map of virtual paths to source text
- * and a retained program. Each `check` reuses the previous program, so an
- * edit-then-check cycle costs materially less than the first call.
+ * The returned checker holds virtual sources and an incremental diagnostic
+ * program (`oldProgram` is reused across checks).
+ *
+ * NG8002 hints also retain one separate metadata Program. That single cache
+ * slot speeds repeated checks of the same entry with unchanged sources,
+ * options and resolution evidence (CLI/batch rechecks or repeated tool calls).
+ * Editing a source or alternating entries rebuilds it; this is not an editing
+ * performance improvement. No per-entry map or wider cache is retained.
+ *
+ * The extra Program stays live until replacement or `dispose()`: approximately
+ * 65 MB additional heap in a reviewed 150-component probe, workload-dependent.
+ * `dispose()` releases both programs and their cached evidence.
  *
  * ```ts
  * const checker = createAngularChecker({ projectDir });

@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (hint-followups round 2):** the default target's `$ let`/`$ var` hint still suggests `<let/name=…/>`, now explicitly followed by `(initial value only on this target)`. The qualifier is declared by html, not core; const advice and strict-policy behaviour are unchanged.
+
 - **Fix (scriptlet-hint-let-var):** `$ let`/`$ var` now suggest `<let/name=…/>` on the default initial-value target, not `<const>`. Strict mode rejects `<let>` and omits keyword advice for mutable declarations. `$ const` advice is unchanged; no rendering semantics changed.
 
 - **Test (no-repeat-path-relative-spellings):** `error-no-repeated-path.test.ts` pins that a `TranslateError` message drops the compiled-file prefix for a *relative* `filename` and a filename under a symlinked directory, not only the exact absolute spelling. The fix is in `@mxlang/core`'s `dropCompiledFilePrefix` (resolve/realpath comparison); no html code changes.

@@ -85,7 +85,6 @@ export interface HostDeclarations {
    * compile-time meaning hands its resolved form to every host through this
    * channel, since the core cannot know what the macro decided.
    */
-  // pi-lens-ignore: no-unknown-returns
   resolveDelegatedTag?(name: string, node: Node, ctx: Ctx): unknown;
   /**
    * Rejects an attribute modifier (`class:active`) in this host's own words.

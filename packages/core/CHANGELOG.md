@@ -4,7 +4,7 @@
 
 ### Fixed: mutable scriptlet replacement advice (scriptlet-hint-let-var)
 
-Both the parse-error and lowering paths preserve the declared `const`/`let`/`var` keyword through `HostDeclarations.scriptletReplacement(name, keyword)`. The default suggests `<const>` only for `const`, and `<let>` for `let`/`var`; hosts that reject `<let>` override the advice or omit it by returning an empty string. Host choices remain outside core (decision 126); scriptlets are still rejected (decision 54).
+Both the parse-error and lowering paths preserve the declared `const`/`let`/`var` keyword through `HostDeclarations.scriptletReplacement(name, keyword)`. The default suggests `<const>` only for `const`, and `<let>` for `let`/`var`; hosts that reject `<let>` override the advice or omit it by returning an empty string. Host choices remain outside core (decision 126); scriptlets are still rejected (decision 54). Lead ruling 2026-10-03 (question 37): the default says what Marko says (`<let>` is the mutable binding), so a host that cannot do `<let>` must override the hook (documented on `scriptletReplacement`); the `keyword` parameter is additive and no published host is affected.
 
 ### Fixed: preserve normalized whitespace-only bodies (jsx-whitespace-body-parity, decision 141)
 

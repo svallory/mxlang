@@ -513,6 +513,10 @@ export const policy: Policy = {
   name: "@mxlang/html",
   attrTags: 2,
   tags: TAGS,
+  scriptletReplacement: (name, keyword) =>
+    keyword === "const"
+      ? `declare a value with \`<const/${name}=…/>\``
+      : `declare a value with \`<let/${name}=…/>\` (initial value only on this target)`,
   isElement,
   isComponent,
   resolveDiscoveredTagModule,

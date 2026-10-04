@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Clarification (hint-followups round 2):** the metadata cache speeds only repeated checks of the same entry with unchanged sources, compiler options and resolution evidence (CLI/batch rechecks or repeated tool calls). Editing a source or alternating entries rebuilds the single slot; this is not an editing-performance improvement. One extra full metadata Program is retained per checker until replacement or `dispose()` (approximately 65 MB additional heap in the reviewer's 150-component probe; workload-dependent). The cache is not widened.
+
 - **Fix (ng-input-hint-metadata-program):** NG8002 input hints reuse a per-checker metadata-only program across unchanged checks. Source reads (including imported and virtual modules), resolution evidence (package manifests, missing candidates, symlinks and directory lookups), entry path and compiler options invalidate it by content, never mtime alone; disposal releases it. Changing package exports is detected even when the set of source files stays identical. The diagnostic program remains separate. An upgrade-contract test names `_enableTemplateTypeChecker`, `getTemplateTypeChecker`, `getTemplate` and `getDirectivesOfNode` explicitly if compiler-cli drops them.
 
 - **Fix (ng-mx-tags-call-ts991010):** the compiler host serves in-memory Angular tag modules when a component imports their generated siblings, even before `mx-angular build` has written them. Calling a `tags/` component no longer produces misleading `TS-991010` and hides all the caller's template diagnostics. Tag sources are reread on each check; ordinary TS files keep their own contents.
