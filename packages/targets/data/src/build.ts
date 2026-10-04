@@ -268,6 +268,59 @@ function dataForHead(head: ForHead, what: string): DataForHead {
   };
 }
 
+/** One of a tag's two child lists, tagged so a walk can interleave them. */
+type Part =
+  | { side: "attr"; node: AttributeTagNode }
+  | { side: "child"; node: IrNode };
+
+/**
+ * Where a node opens, as an offset: its span when core gave it one, else its
+ * `loc`. A `Text` node's `loc` points at the line above (see
+ * `textPosition`), so it always uses the span.
+ */
+function openOffset(part: Part): number {
+  if (part.side === "child") {
+    const node = part.node;
+    if (node.kind === "DelegatedTag") {
+      return node.tag.span?.sourceStart ?? offsetOfLoc(node.tag.loc);
+    }
+    const span = "span" in node ? node.span : undefined;
+    return span?.sourceStart ?? offsetOfLoc(node.loc);
+  }
+  const node = part.node;
+  if (node.kind === "AttributeTag") {
+    return node.tag.span?.sourceStart ?? offsetOfLoc(node.tag.loc);
+  }
+  return offsetOfLoc(node.loc);
+}
+
+function offsetOfLoc(at: Position): number {
+  return offsetOfPosition(at.line, at.column);
+}
+
+/**
+ * A tag's attribute tags and children as one list in source order.
+ *
+ * Core keeps the two apart (`attributeTagTree` and `children`), so a walk of
+ * one then the other visits `<@meta>` before a child written above it. Every
+ * walk that reports "the first" hit (the build rejects, the structural
+ * reject) goes through here, so the first it meets is the earliest in the
+ * file. The sort is stable, and the tree still keeps the two lists apart.
+ */
+function inSourceOrder(
+  attrTags: AttributeTagNode[],
+  children: IrNode[],
+): Part[] {
+  const parts: Part[] = [
+    ...attrTags.map((node): Part => ({ side: "attr", node })),
+    ...children.map((node): Part => ({ side: "child", node })),
+  ];
+  return parts
+    .map((part) => ({ part, at: openOffset(part) }))
+    .sort((a, b) => a.at - b.at)
+    .map(({ part }) => part);
+}
+
 function dataTag(tag: DelegatedTag<unknown>): DataTag {
   checkTagName(tag.name, tag.loc);
   rejectMergedShorthandClass(tag.attrs, tag.loc);
@@ -277,6 +330,11 @@ function dataTag(tag: DelegatedTag<unknown>): DataTag {
       tag.loc,
     );
   }
+  const attrs = tag.attrs.map(dataAttr);
+  const args = (tag.args ?? []).map((arg, i) =>
+    dataExpr(arg, `argument ${i + 1} of \`<${tag.name}>\``),
+  );
+  const { attrTags, children } = dataParts(tag.attributeTagTree, tag.children);
   return {
     kind: "tag",
     name: tag.name,
@@ -284,19 +342,39 @@ function dataTag(tag: DelegatedTag<unknown>): DataTag {
     span: withoutTrailingNewline(
       requiredSpan(tag.span, `tag \`<${tag.name}>\``),
     ),
-    attrs: tag.attrs.map(dataAttr),
-    args: (tag.args ?? []).map((arg, i) =>
-      dataExpr(arg, `argument ${i + 1} of \`<${tag.name}>\``),
-    ),
+    attrs,
+    args,
     params: tag.params,
-    attrTags: tag.attributeTagTree.map(dataAttrTagNode),
-    children: dataNodes(tag.children),
+    attrTags,
+    children,
   };
+}
+
+/**
+ * Projects a tag's attribute tags and children in source order, so a build
+ * reject is the earliest one in the file; the two arrays stay separate.
+ */
+function dataParts(
+  attrTagNodes: AttributeTagNode[],
+  childNodes: IrNode[],
+): { attrTags: DataAttrTagNode[]; children: DataNode[] } {
+  const attrTags: DataAttrTagNode[] = [];
+  const children: DataNode[] = [];
+  for (const part of inSourceOrder(attrTagNodes, childNodes)) {
+    if (part.side === "attr") attrTags.push(dataAttrTagNode(part.node));
+    else children.push(dataNode(part.node));
+  }
+  return { attrTags, children };
 }
 
 function dataAttrTag(tag: AttributeTag): DataAttrTagNode {
   checkTagName(tag.name, tag.loc);
   rejectMergedShorthandClass(tag.attrs, tag.loc);
+  const attrs = tag.attrs.map(dataAttr);
+  const { attrTags, children } = dataParts(
+    tag.attributeTagTree,
+    tag.block.children,
+  );
   return {
     kind: "attr-tag",
     name: tag.name,
@@ -304,10 +382,10 @@ function dataAttrTag(tag: AttributeTag): DataAttrTagNode {
     span: withoutTrailingNewline(
       requiredSpan(tag.span, `attribute tag \`<@${tag.name}>\``),
     ),
-    attrs: tag.attrs.map(dataAttr),
+    attrs,
     params: tag.block.params,
-    attrTags: tag.attributeTagTree.map(dataAttrTagNode),
-    children: dataNodes(tag.block.children),
+    attrTags,
+    children,
   };
 }
 
@@ -638,6 +716,21 @@ function hit(construct: string, at: Position): StructuralHit {
   };
 }
 
+/** The earliest structural construct among a tag's attribute tags and children. */
+function structuralInParts(
+  attrTags: AttributeTagNode[],
+  children: IrNode[],
+): StructuralHit | null {
+  for (const part of inSourceOrder(attrTags, children)) {
+    const found =
+      part.side === "attr"
+        ? structuralInAttrTagNodes([part.node])
+        : structuralInNodes([part.node]);
+    if (found) return found;
+  }
+  return null;
+}
+
 function structuralInAttrTagNodes(
   nodes: AttributeTagNode[],
 ): StructuralHit | null {
@@ -647,8 +740,10 @@ function structuralInAttrTagNodes(
         ? hit("`<if>`", node.loc)
         : node.kind === "AttributeTagFor"
           ? hit("`<for>`", node.loc)
-          : structuralInAttrTagNodes(node.tag.attributeTagTree) ||
-            structuralInNodes(node.tag.block.children);
+          : structuralInParts(
+              node.tag.attributeTagTree,
+              node.tag.block.children,
+            );
     if (found) return found;
   }
   return null;
@@ -677,9 +772,7 @@ function structuralInNodes(nodes: IrNode[]): StructuralHit | null {
         found = hit("`<const>`", node.loc);
         break;
       case "DelegatedTag":
-        found =
-          structuralInAttrTagNodes(node.tag.attributeTagTree) ||
-          structuralInNodes(node.tag.children);
+        found = structuralInParts(node.tag.attributeTagTree, node.tag.children);
         break;
     }
     if (found) return found;

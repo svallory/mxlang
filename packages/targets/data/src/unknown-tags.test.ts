@@ -429,3 +429,72 @@ describe('unknownTags: "allow" (default)', () => {
     }
   });
 });
+
+describe("walk order: attribute tags and children in source order", () => {
+  const tags: Record<string, CustomTag> = {
+    known: { attributeTags: { meta: { repeatable: true } } },
+    a: { attributes: {} },
+  };
+  const where = (source: string, options: ParseDataOptions = {}) => {
+    const { diagnostics } = parse(source, options, tags);
+    const d = diagnostics[0];
+    return d ? `${d.line}:${d.column} ${d.message.slice(0, 40)}` : "none";
+  };
+
+  it("structural against structural: the earlier text wins over a later attribute tag", () => {
+    expect(
+      where("<known>\n  <a>hello</a>\n  <@meta>bye</@meta>\n</known>", {
+        structural: "reject",
+      }),
+    ).toMatch(/^2:5 the data tree is static/);
+  });
+
+  it("structural against structural: an earlier <if> wins over a later attribute-tag <if>", () => {
+    // A contract-less parent (`unknownTags` left at "allow"): a declared tag's
+    // contract refuses attribute-tag control flow before the walk runs.
+    expect(
+      where(
+        "<loose>\n  <if=x>\n    <a/>\n  </if>\n  <@meta>\n    <if=y>\n      <@m/>\n    </if>\n  </@meta>\n</loose>",
+        { structural: "reject", unknownTags: "allow" },
+      ),
+    ).toMatch(/^2:2 the data tree is static/);
+  });
+
+  it("build against build: the earlier dynamic tag wins over a later doctype", () => {
+    expect(
+      where(
+        "<known>\n  <${x}/>\n  <@meta>\n    <!doctype html>\n  </@meta>\n</known>",
+      ),
+    ).toMatch(/^2:2 a dynamic tag/);
+  });
+
+  it("across categories: an earlier text beats a later unknown tag and attribute tag", () => {
+    expect(
+      where(
+        "<known>\n  <a>hello</a>\n  <bogus/>\n  <@meta>bye</@meta>\n</known>",
+        { structural: "reject" },
+      ),
+    ).toMatch(/^2:5 the data tree is static/);
+  });
+
+  it("across categories: an earlier dynamic tag beats a later unknown tag and doctype", () => {
+    expect(
+      where(
+        "<known>\n  <${x}/>\n  <bogus/>\n  <@meta>\n    <!doctype html>\n  </@meta>\n</known>",
+      ),
+    ).toMatch(/^2:2 a dynamic tag/);
+  });
+
+  it("keeps attrTags and children as separate arrays in the tree", () => {
+    const { tree } = parse(
+      "<known>\n  <a/>\n  <@meta/>\n  <a/>\n</known>",
+      { unknownTags: "allow" },
+      tags,
+    );
+    const known = tree?.children[0];
+    expect(known?.kind === "tag" && known.attrTags.map((n) => n.kind)).toEqual([
+      "attr-tag",
+    ]);
+    expect(known?.kind === "tag" && known.children.length).toBe(2);
+  });
+});
