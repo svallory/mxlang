@@ -205,7 +205,7 @@ a conflict. Pasting the members needs no dependency.
 - The tooling integration for `.ng.mx` (typescript-plugin, language-server,
   vite-plugin) — attempting to compile through those tools today reports
   the host as not wired in yet, rather than silently falling back to the
-  vanilla HTML host.
+  vanilla html target.
 
 ## Warnings
 

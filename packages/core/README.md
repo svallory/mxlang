@@ -633,7 +633,7 @@ section).
    and hands your emitter the `Ir`.
 
 **The string worked example is `@mxlang/html`** (`src/emitter.ts`): the vanilla
-HTML host, an `Emitter<string[]>` that accumulates `out +=` lines. It is the
+html target, an `Emitter<string[]>` that accumulates `out +=` lines. It is the
 one to read, because it reproduces its predecessor's output byte for byte —
 including two details that look accidental and are not: literals merge across
 node boundaries into a single `out +=`, and `$forN` names a loop temporary from

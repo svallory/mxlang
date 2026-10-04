@@ -31,7 +31,7 @@ Goldens live at `packages/hosts/html/fixtures-marko/<name>/` with
 **rendered HTML**, not on emitted code, so the emitter stays free to improve.
 `biome.json` ignores `**/fixtures-marko`.
 
-## `@mxlang/html`: the vanilla HTML host on `@mxlang/core`
+## `@mxlang/html`: the vanilla html target on `@mxlang/core`
 
 `packages/hosts/html` (`@mxlang/html`, decisions 66, 68) compiles an
 **ordinary Marko template** to a runtime-free `(input) => string` module. Not

@@ -226,7 +226,7 @@ Core-owned:
 
 ### `server` and `client` blocks
 
-A `server` block is **not** inert on the HTML host — that host *is* the server
+A `server` block is **not** inert on the html target — that target *is* the server
 render, so it runs and hoists like `static`, and its bindings are readable from
 the template (decision 67a; verified: `server const S = 41 + 1` then `${S}`
 renders `42`). A `client` block is client-only and is inert or an error per host
@@ -633,7 +633,7 @@ block-body arrows, never unwrapped (decision 11); a bare arrow is written
 
 **Marko hoists `value` first on `<input>`**, so `<input type="text" value=x>`
 emits `<input value=… type=text>`. A browser applies `type` before `value`, and
-some types reinterpret a later `value`. The HTML host reproduces this, and the
+some types reinterpret a later `value`. The html target reproduces this, and the
 oracle compares attribute order, so getting it wrong fails the gate.
 
 ### Spread and trust
@@ -863,7 +863,7 @@ And from the host-primitive request:
 | `this host does not claim \`<${name}>\`, so a custom tag cannot emit one` | The host does not claim `try`. |
 
 Per-host lowering is in §15. Notably `<try>` with `<@placeholder>` is an error on
-the HTML host (it needs a second render pass), while `<try>` with only `<@catch>`
+the html target (it needs a second render pass), while `<try>` with only `<@catch>`
 lowers to an ordinary `try`/`catch`.
 
 **Decisions:** 8, 28, 51, 65, 85, 91, 93.
@@ -914,7 +914,7 @@ inside an `<if>` branch or a `<for>` body reverts to the registered custom tag
 immediately outside it. This closes the gap `custom-tags-import-precedence`
 (decision 93) left open.
 
-The HTML host's rule is stated by case only in the sense above: a tag matching an
+The html target's rule is stated by case only in the sense above: a tag matching an
 import, a `<define>`, or a taglib/`tags/` discovery is a component call; anything
 else is an HTML element whatever its case, hyphenated custom elements included.
 SolidMX keeps JSX's PascalCase-means-component convention, on a separate lowering
@@ -1237,7 +1237,7 @@ same way `moduleBindings`/`importSpecifiers` already are, so a real
 `.solid.mx` file's routing matches a unit test's.
 
 > **Bug, measured 2026-09-17 — an attribute tag on a dynamic tag is silently
-> dropped.** On the HTML host (which claims `DYNAMIC_TAG`),
+> dropped.** On the html target (which claims `DYNAMIC_TAG`),
 > `<${T}><@head>x</@head>y</${T}>` compiles clean and emits
 > `renderDynamic(T, { content: … })` — **no `head` prop, and no diagnostic**.
 > The identical call on a named component emits the `head` prop correctly.
@@ -1297,7 +1297,7 @@ default) or `renderable`, and whether the prop is singular or an array
 every path, and `x: AttrTag<C>[]` is 0..n and always receives a real array.
 `C` conforms to `AttrTagConfig` —
 `{ as?: "data" | "renderable"; attrs?: object; params?: readonly unknown[] }`.
-`attrs` may recursively contain `AttrTag` declarations. On the HTML host a
+`attrs` may recursively contain `AttrTag` declarations. On the html target a
 renderable is `(...params) => string`, read with `<${input.head}/>`; data is
 the declared attributes and nested tag props plus
 `content?: (...params) => string`, read with
@@ -2515,7 +2515,7 @@ deferred (decision 85).
 1. **Event attribute naming** (§4). No rule today; behavior differs per host by
    accident. Blocked on `notes/investigations/dom-events.md`.
 2. **Dynamic tags** (§7). No decision fixes their behavior; hosts may claim them.
-   The attribute-tag-on-a-dynamic-tag silent drop on the HTML host (and on
+   The attribute-tag-on-a-dynamic-tag silent drop on the html target (and on
    Solid's own dynamic-tag path, which shares the bug) is fixed: both now
    forward the attribute tags into the resolved target's props (decision
    104, `attribute-tag-silent-drops`).

@@ -702,7 +702,7 @@ Five facts worth knowing before editing it:
   macro the author wrote — the only expansion left in the language. Returning a
   `TagCall` (or calling `ctx.build.template(call)`) validates or rewrites the
   call and then routes it to the adjacent template unit.
-- **The html host augments `Input` only when the template reads
+- **The html target augments `Input` only when the template reads
   `input.content`**: the render signature becomes
   `input: Input & { content?: () => string }`, so an imported call passing a
   body typechecks; a tag that ignores the body keeps a bare `Input`. The

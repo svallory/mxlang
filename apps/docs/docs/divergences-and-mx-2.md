@@ -44,9 +44,9 @@ record should select an MX array item explicitly. See the complete
 | Attribute tags on native elements (`<div><@head>…</@head></div>`) | A uniform "attribute tags become props" rule for every tag. | Rejected: `Tag does not support nested attribute tags.` |
 | `<fragment>` wrapper | An explicit wrapper for multiple Solid JSX children (in `.solid.mx`, use a TSX fragment `<>…</>`). | Rejected: `Unable to find entry point for custom tag <fragment>.` |
 
-## Fixed: former HTML host bugs
+## Fixed: former html target bugs
 
-Two cases where the HTML host was more permissive than Marko were implementation bugs against the rule "the translator should follow Marko", not intentional divergences. Both are fixed, and the Marko-parity oracle reports no translator bugs across the stock fixture set:
+Two cases where the html target was more permissive than Marko were implementation bugs against the rule "the translator should follow Marko", not intentional divergences. Both are fixed, and the Marko-parity oracle reports no translator bugs across the stock fixture set:
 
 - **`unknown-element`**: real Marko treats an unresolved hyphenated tag as a failed custom-element lookup and refuses to compile. The host used to render it as literal HTML unconditionally; it now rejects it with Marko's own wording.
 - **`lowercase-component`**: real Marko rejects a lowercase local-variable tag reference outright. The host was binding-based regardless of case, so it called the import instead of erroring; it now rejects it with Marko's own wording. The forms that do work are `<${layout}/>` and `<Layout/>`.

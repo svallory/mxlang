@@ -79,7 +79,7 @@ the specialized type from `@mxlang/astro`; see
 
 **Supported**: the structural core — `<if>`/`<else if>`/`<else>`, every `<for>` form, singular attribute-tag projections, generic tag params where the target can express them, `<define>`, `<const>`, `static`, `import` — props, slots, and one MX component calling another.
 
-**Not supported**: the stateful tags — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>` — are compile errors naming the construct. This host has no reactive target at all: it renders once, at build time, so a construct that only means something with a runtime is a build error rather than markup that silently renders once and never updates. This is a stricter policy than the HTML host's own default, and it applies unconditionally here, not behind a flag.
+**Not supported**: the stateful tags — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>` — are compile errors naming the construct. This host has no reactive target at all: it renders once, at build time, so a construct that only means something with a runtime is a build error rather than markup that silently renders once and never updates. This is a stricter policy than the html target's own default, and it applies unconditionally here, not behind a flag.
 
 `client:*` directives on an MX component fail the build, naming the component:
 

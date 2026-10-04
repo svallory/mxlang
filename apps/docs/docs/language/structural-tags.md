@@ -23,7 +23,7 @@ MX's structural core is a small set of tags that render exactly the way Marko re
 </else>
 ```
 
-The HTML host lowers this to a plain JS `if`/`else if`/`else` chain around the corresponding output. SolidMX lowers the same tag to Solid's `<Show>` for two or fewer conditioned branches, or `<Switch>`/`<Match>` for three or more, matching what a hand-written Solid component would use for a branch.
+The html target lowers this to a plain JS `if`/`else if`/`else` chain around the corresponding output. SolidMX lowers the same tag to Solid's `<Show>` for two or fewer conditioned branches, or `<Switch>`/`<Match>` for three or more, matching what a hand-written Solid component would use for a branch.
 
 ## `<for>`
 
@@ -45,7 +45,7 @@ Add `by=` to key each row for reconciliation:
 </for>
 ```
 
-On the HTML host this is a plain `for`/`.map` loop. On SolidMX, `of=` lowers to Solid's `<For each={...} keyed={...}>`, and `by="id"` becomes the `keyed` key function.
+On the html target this is a plain `for`/`.map` loop. On SolidMX, `of=` lowers to Solid's `<For each={...} keyed={...}>`, and `by="id"` becomes the `keyed` key function.
 
 `by=` is evaluated once, outside the loop body, so the loop param is not in scope there. Key with a property-name string (`by="id"`) or a function (`by=(item) => item.id`); `by=item.id` is a compile error pointing at `item`, as in Marko.
 

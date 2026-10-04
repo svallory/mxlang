@@ -233,7 +233,7 @@ silently wrong render rather than an error.
 ## Verification
 
 ```
-bun run oracle:preact          # render parity against the html host
+bun run oracle:preact          # render parity against the html target
 bunx vitest run --root ../../.. --project @mxlang/preact
 ```
 

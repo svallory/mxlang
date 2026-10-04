@@ -75,7 +75,7 @@
       "title": "Hosts",
       "icon": "server",
       "children": [
-        { "title": "HTML host", "path": "/hosts/html/" },
+        { "title": "HTML target", "path": "/hosts/html/" },
         { "title": "Astro host", "path": "/hosts/astro/" },
         { "title": "React host", "path": "/hosts/react/" },
         { "title": "Preact host", "path": "/hosts/preact/" },

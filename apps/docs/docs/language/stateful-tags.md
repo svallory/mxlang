@@ -9,9 +9,9 @@ description: "Why <let>, <effect>, and friends mean whatever the host says."
 
 A template using `<let>` means something different depending on which host compiles it — the same way a piece of JSX means something different depending on which framework's compiler processes it. The structural tags in [Structural tags](/language/structural-tags/) are portable across hosts; stateful tags are not.
 
-## The HTML host's policy
+## The html target's policy
 
-The HTML host has no reactive runtime — it compiles a template to a plain `(input) => string` function — so its default policy treats stateful tags as **inert**: they're accepted, produce no output, and are verified to behave exactly like Marko's own server render (which also strips these to nothing once its resume markers are removed).
+The html target has no reactive runtime — it compiles a template to a plain `(input) => string` function — so its default policy treats stateful tags as **inert**: they're accepted, produce no output, and are verified to behave exactly like Marko's own server render (which also strips these to nothing once its resume markers are removed).
 
 | Tag | Default behavior |
 |---|---|

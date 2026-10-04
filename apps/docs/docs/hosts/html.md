@@ -1,13 +1,13 @@
 ---
-title: "HTML host"
+title: "HTML target"
 description: "Compile .mx and .marko templates to a plain (input) => string function, no runtime beyond an escape helper."
 ---
 
-# HTML host
+# HTML target
 
-The HTML host (`@mxlang/html`) is the vanilla MX host. It compiles an `.mx` file (or its `.marko` alias) to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper. No scheduler, no signals, no hydration, no resume markers.
+The html target (`@mxlang/html`) is the vanilla MX target. It compiles an `.mx` file (or its `.marko` alias) to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper. No scheduler, no signals, no hydration, no resume markers.
 
-The generic half of the work — consuming Marko's AST, applying the structural lowerings, the string-emit model — lives in the shared core. This host supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
+The generic half of the work — consuming Marko's AST, applying the structural lowerings, the string-emit model — lives in the shared core. This target supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
 
 ## Selecting the host
 
@@ -32,7 +32,7 @@ plus an optional `content` thunk. Arrays are real arrays, and conditional and
 looped occurrences preserve source order. See [AttrTag](/language/attr-tag/)
 for declarations, fallback inference, errors, and compiled examples.
 
-Because MX 1.0 uses a strict subset of Marko syntax, this host compiles
+Because MX 1.0 uses a strict subset of Marko syntax, this target compiles
 **stock Marko syntax**, not a parser dialect: tag discovery through taglibs
 and `tags/` directories, Marko's own HTML/SVG/MathML element registry, and
 Marko's component conventions. Consumer-declared `AttrTag` values deliberately
@@ -161,7 +161,7 @@ const html = render({ name: "World" });
 
 ## Strict mode
 
-By default this host renders what Marko's own server render would emit for the stateful tags (`<let>`'s initial value, `<effect>`/`<lifecycle>`/`<script>`/`client` blocks/`<id>` as inert — contributing no output). Passing `{ strict: true }` switches to a stricter policy that rejects those same constructs as compile errors instead, for a template that has no business needing a reactive runtime:
+By default this target renders what Marko's own server render would emit for the stateful tags (`<let>`'s initial value, `<effect>`/`<lifecycle>`/`<script>`/`client` blocks/`<id>` as inert — contributing no output). Passing `{ strict: true }` switches to a stricter policy that rejects those same constructs as compile errors instead, for a template that has no business needing a reactive runtime:
 
 ```typescript
 const { code } = compile(source, "greeting.mx", { strict: true });
@@ -209,9 +209,9 @@ Inert is a *shape*, not permission to drop content. Each inert tag still declare
 ## Events
 
 An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
-(`on-my-event`) is an event handler — and this host has nowhere to bind one:
+(`on-my-event`) is an event handler — and this target has nowhere to bind one:
 `@mxlang/html` renders once to a string, so an expression-valued event
-attribute is a compile error naming the attribute and the host.
+attribute is a compile error naming the attribute and the target.
 
 - **Static strings** (`onclick="alert(1)"`) are an ordinary attribute and
   pass through verbatim; MX does not invent a policy against inline handler
@@ -263,11 +263,11 @@ Output already appended before the throw stays appended — the `catch` branch c
 | `class=["x", {y: true}]` | `class="x y"` |
 | `style={color: "red", top: 0}` | `style="color:red;top:0"` |
 
-One ordering detail is load-bearing: Marko hoists `value` first on `<input>`, so `<input type="text" value=x>` emits `value` before `type`. A browser applies `type` before `value`, and some input types reinterpret a later `value`. This host reproduces that order, and the parity oracle compares attribute order, so getting it wrong fails the run.
+One ordering detail is load-bearing: Marko hoists `value` first on `<input>`, so `<input type="text" value=x>` emits `value` before `type`. A browser applies `type` before `value`, and some input types reinterpret a later `value`. This target reproduces that order, and the parity oracle compares attribute order, so getting it wrong fails the run.
 
 ## Parity with Marko
 
-`bun run oracle:marko` renders every fixture in the stock set two ways — through the real Marko 6 toolchain, and through this host — and compares both against the expected HTML for semantic equality. Current state: **43 fixtures, 41 pass, 2 reasoned skips, 0 translator bugs.** Fixture expectations are generated from real Marko, never hand-written.
+`bun run oracle:marko` renders every fixture in the stock set two ways — through the real Marko 6 toolchain, and through this target — and compares both against the expected HTML for semantic equality. Current state: **43 fixtures, 41 pass, 2 reasoned skips, 0 translator bugs.** Fixture expectations are generated from real Marko, never hand-written.
 
 ## Examples
 

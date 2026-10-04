@@ -17,7 +17,7 @@ Writing parameters between pipes on a tag's opening turns its children into a fu
 </for>
 ```
 
-`<for>` is itself the everyday example — its `|item, i|` are tag params on a native control tag. The same syntax is generic, not special-cased to `<for>`: it works on any tag, components included, which is what lets a JSX-shaped host, such as SolidMX, call a framework's own render-prop components (Solid's `<For>`, `<Show>`) using ordinary MX markup — `<Show|user| when=currentUser>...</Show>` lowers to `<Show when={currentUser}>{(user) => ...}</Show>`, which a JSX target supports directly. The HTML host supports tag params on a component call too, not only on the native control tags: `<Card|x|>${x}</Card>` against an imported component compiles to a local closure the same way `<for|item|>` does.
+`<for>` is itself the everyday example — its `|item, i|` are tag params on a native control tag. The same syntax is generic, not special-cased to `<for>`: it works on any tag, components included, which is what lets a JSX-shaped host, such as SolidMX, call a framework's own render-prop components (Solid's `<For>`, `<Show>`) using ordinary MX markup — `<Show|user| when=currentUser>...</Show>` lowers to `<Show when={currentUser}>{(user) => ...}</Show>`, which a JSX target supports directly. The html target supports tag params on a component call too, not only on the native control tags: `<Card|x|>${x}</Card>` against an imported component compiles to a local closure the same way `<for|item|>` does.
 
 Params are parsed exactly like `<for>`'s own `|item, i|` — destructuring and type annotations included — and empty pipes (`||`) lower to a no-argument function.
 

@@ -11,13 +11,13 @@ MX prefers a compile error over silently dropping or misinterpreting a construct
 
 If the project (or a `<let>`/`<effect>`/etc. author) opted into the `strict` policy, using `<let>`, `<effect>`, `<lifecycle>`, `<script>`, a `client` block, or `<id>` on a host with no reactive target is a compile error naming the construct. The `input`-shadowing check below is not one of these six — it applies regardless of `strict`. See [Stateful tags](/language/stateful-tags/).
 
-## `<await>` on the HTML host
+## `<await>` on the html target
 
-The HTML host compiles to a plain `(input) => string` function with no notion of a pending value, so `<await>` is always an error there — this isn't a `strict`-only restriction, since there's no way to render a promise to a string synchronously.
+The html target compiles to a plain `(input) => string` function with no notion of a pending value, so `<await>` is always an error there — this isn't a `strict`-only restriction, since there's no way to render a promise to a string synchronously.
 
-## `<try>` with `<@placeholder>` on the HTML host
+## `<try>` with `<@placeholder>` on the html target
 
-A `<try>` with only `<@catch>` compiles to an ordinary `try`/`catch`. Adding `<@placeholder>` needs a second render pass (show a placeholder, then swap in the real content once it resolves) that the HTML host's single-pass string output can't do.
+A `<try>` with only `<@catch>` compiles to an ordinary `try`/`catch`. Adding `<@placeholder>` needs a second render pass (show a placeholder, then swap in the real content once it resolves) that the html target's single-pass string output can't do.
 
 ## A binding named `input`
 

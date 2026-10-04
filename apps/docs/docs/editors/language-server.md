@@ -26,7 +26,7 @@ An editor only hands the server a file path and its text — nothing about which
    ```
 
 2. Otherwise, if that `package.json` depends on exactly one `@mxlang/*` host package, that host's default (non-strict) policy applies.
-3. Otherwise, it falls back to the HTML host's default policy.
+3. Otherwise, it falls back to the html target's default policy.
 
 The Astro host always compiles under its strict policy — it has no non-strict mode — so `"host": "astro"` behaves as strict regardless of the field's own `strict` value.
 

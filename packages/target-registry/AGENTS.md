@@ -10,7 +10,7 @@ package's `./descriptor` subpath and exports:
   `mx.host` order (`html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`,
   `hono-jsx`, `angular-template`), then the hostless `data` (no host, no file
   kinds, no `mx.host` value, no `mx.tags[].hosts` filter key).
-- `builtinTargetLookup`: `createTargetLookup(builtinTargets, { reservedNames: ["astro-template"] })`.
+- `builtinLookup()`: `createTargetLookup(builtinTargets, { reservedNames: ["astro-template"] })`, built lazily and cached. `lookupFor(policy)` adds a loaded third-party descriptor to it.
   `astro-template` is reserved for the Astro template output, `.astro.mx` (design note §8 Q5; decision 134 made it a file kind of the `astro` host); the
   reservation lives here because core names no target.
 - `BuiltinFileKind` and `builtinFileKinds`: core's `HostFileKind` plus
@@ -19,13 +19,16 @@ package's `./descriptor` subpath and exports:
   core; `PIPELINES` maps a segment to it, and a built-in file kind with no
   entry throws at import.
 
-**Nothing consumes the registry yet.** Tooling still reads the closed lists
+**The registry is the only dispatch table.** Core's former closed lists
 (`HOST_NAMES`, `HOST_PACKAGES`, `HOST_MODULE_SEGMENTS`, `MX_ATTR_TAG_SOURCES`,
-`SOLID_MX_LANGUAGE_IDS`, the per-host compile branches). `src/parity.test.ts`
-compares every descriptor field with those constants (each `file:line` is in a
-comment), so the change that switches the consumers can delete them with proof.
+`SOLID_MX_LANGUAGE_IDS`, the per-host compile branches) are deleted. The
+language server, the TypeScript plugin (and `@mxlang/tsc` through it) and the Vite plugin
+dispatch through `builtinLookup()` (or `lookupFor(policy)` when a project
+loaded a third-party target through `mx.target`). Adding a target means adding
+a descriptor, not a branch in a tool. `src/parity.test.ts` pins every
+descriptor field against the resolution, scanning and tooling rules those
+lists encoded.
 
-The language server and TypeScript plugin now dispatch through the table.
 Published tooling declarations must not reference this private package; keep
 registry-typed helpers internal to each tool's build.
 

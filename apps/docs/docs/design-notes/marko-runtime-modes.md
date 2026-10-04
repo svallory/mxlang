@@ -1,6 +1,6 @@
 ---
 title: "Why MX has no resume"
-description: "Marko's html output minus its runtime is already a precompiled template language — and that observation is where the HTML host comes from."
+description: "Marko's html output minus its runtime is already a precompiled template language — and that observation is where the html target comes from."
 ---
 
 # Why MX has no resume
@@ -49,9 +49,9 @@ The consequence for the author: `import tpl from "./email.mx"; res.send(tpl({ us
 
 The reactive constructs — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<await>`, `:=` as a two-way binding — either render their initial value (where that has an unambiguous meaning, like `<let>`) or fail at compile time naming the construct, so the boundary between "this needs a runtime" and "this doesn't" is visible to the author rather than silently guessed at.
 
-## This is the HTML host, not a proposal
+## This is the html target, not a proposal
 
-Marko's own compiler exposes a `config.translator` seam: supply a `translate` visitor over Marko's node types plus a taglib, and the compiler drives the rest. A translator that implements only the string-emission rules above, and turns the reactive tags into compile errors, gets the expressions-only mode described above — without forking Marko's compiler at all. This is exactly what the HTML host is: a translator against the real Marko compiler, verified against Marko's own server render on real templates covering components, tag discovery, attribute tags, control flow, structured `class`/`style` values, spread, dynamic tags, and doctype documents. Every one of those templates produces byte-equivalent HTML through both the real Marko toolchain and this translator.
+Marko's own compiler exposes a `config.translator` seam: supply a `translate` visitor over Marko's node types plus a taglib, and the compiler drives the rest. A translator that implements only the string-emission rules above, and turns the reactive tags into compile errors, gets the expressions-only mode described above — without forking Marko's compiler at all. This is exactly what the html target is: a translator against the real Marko compiler, verified against Marko's own server render on real templates covering components, tag discovery, attribute tags, control flow, structured `class`/`style` values, spread, dynamic tags, and doctype documents. Every one of those templates produces byte-equivalent HTML through both the real Marko toolchain and this translator.
 
 ## The other half: reactive output without hydration
 
@@ -63,4 +63,4 @@ The cost is real and specific: if the same markup is also rendered on the server
 
 The reactive tags Marko removed from its own scriptlet-based past (see [Arbitrary code in templates](/design-notes/arbitrary-code-in-templates/)) exist because a modern compiler has to answer specific questions about every piece of code in a template: when does it re-run, what does it depend on, is it a side effect, does it belong to the server or the client, is its result serialized across a hydration boundary. A bare statement answers none of them. A named construct — `<let>` for state, `<const>` for a derived value, `<effect>` for a side effect with a lifecycle — answers all of them by construction.
 
-MX inherits that discipline and pushes it one step further: it makes "no runtime" a legitimate, first-class target, not merely an implementation detail of how a template happens to compile. A host that has no reactive story at all — the HTML host, and the Astro host that renders exclusively at build time — can compile the exact same structural syntax and simply reject the reactive tags outright, because those tags were always host-defined semantics layered on top of a stable structural core, never assumed to be universal.
+MX inherits that discipline and pushes it one step further: it makes "no runtime" a legitimate, first-class target, not merely an implementation detail of how a template happens to compile. A host that has no reactive story at all — the html target, and the Astro host that renders exclusively at build time — can compile the exact same structural syntax and simply reject the reactive tags outright, because those tags were always host-defined semantics layered on top of a stable structural core, never assumed to be universal.

@@ -24,7 +24,7 @@ MX (Markup eXtended) is a template language born from Marko. It takes Marko's sy
 ## What MX is not
 
 - **Not a Marko runtime.** No resume, no serialized scope data, no `@marko/runtime-tags`. A host that wants client-side state uses its own framework's mechanisms. See [why MX has no resume](/design-notes/marko-runtime-modes/).
-- **Not a promise of portability for stateful templates.** A template using `<let>` means one thing on the HTML host (an error, unless explicitly allowed) and something else on a future reactive host — the same way JSX means something different depending on which framework compiles it. The structural core is portable; stateful tags are host-bound.
+- **Not a promise of portability for stateful templates.** A template using `<let>` means one thing on the html target (an error, unless explicitly allowed) and something else on a future reactive host — the same way JSX means something different depending on which framework compiles it. The structural core is portable; stateful tags are host-bound.
 - **Not a superset of Marko.** MX 1.0 is a strict *subset*.
 
 ## The subset rule
@@ -40,7 +40,7 @@ why, and what test guards it — before it ships. Syntax divergences land only
 with the tooling they affect (grammar, formatter, language server). MX 1.0 uses
 Marko syntax unmodified; its one deliberate semantic divergence is the
 consumer-declared [AttrTag value shape](/language/attr-tag/#marko-6-compared-with-mx).
-Two cases where the HTML host used to be more permissive than Marko were
+Two cases where the html target used to be more permissive than Marko were
 implementation bugs rather than divergences, and both are fixed — the
 Marko-parity oracle now reports no translator bugs.
 

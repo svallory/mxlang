@@ -146,6 +146,6 @@ cd examples/hono-app && bun run e2e
 The oracle compiles all 45 stock Marko fixtures, renders through `hono/jsx`
 (`String(jsx(Component, input))`, awaited when the tree contains a caught
 error — Hono's `ErrorBoundary` resolves asynchronously), and compares with the
-HTML host using semantic HTML normalization: **32 pass, 13 reasoned skips, 0
+html target using semantic HTML normalization: **32 pass, 13 reasoned skips, 0
 bugs** — identical to `oracle:preact` and `oracle:react`, since all three
 dialects share the emitter and the skip list.
