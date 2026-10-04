@@ -143,7 +143,7 @@ control-flow components, so there is nothing else for them to become.
 | `text`, `${expr}` | text, `{expr}` |
 | `$!{expr}` as the sole child | `dangerouslySetInnerHTML` |
 | `class="a"` | `className="a"` |
-| `class={a: cond}` | `className={mxClass({a: cond})}` |
+| `class={a: cond}` | `className={__mxClass({a: cond})}` |
 | `<label for=…>` | `htmlFor={…}` |
 | `style={color: c}` | `style={{color: c}}` |
 | `onClick() { … }` | `onClick={() => { … }}` |

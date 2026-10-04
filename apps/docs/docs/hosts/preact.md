@@ -109,7 +109,7 @@ control-flow components, so there is nothing else for them to become.
 | `text`, `${expr}` | text, `{expr}` |
 | `$!{expr}` as the sole child | `dangerouslySetInnerHTML` |
 | `class="a"` | `class="a"` (Preact takes `class` directly) |
-| `class={a: cond}` | `class={mxClass({a: cond})}` |
+| `class={a: cond}` | `class={__mxClass({a: cond})}` |
 | `style={color: c}` | `style={{color: c}}` |
 | `onClick() { … }` | `onClick={() => { … }}` |
 | `...rest` | `{...rest}` |
@@ -123,9 +123,9 @@ control-flow components, so there is nothing else for them to become.
 | `<@name>` | the prop `name`; repeated tags become an array |
 | `<const/x=expr/>` | a `const` in the component body |
 | `<define/R\|p\|>` | a nested function component |
-| `<try>` | `MxErrorBoundary` / `MxPlaceholder` |
+| `<try>` | `__mxErrorBoundary` / `__mxPlaceholder` (the exported `MxErrorBoundary` / `MxPlaceholder`) |
 | `import`, `static`, `export` | hoisted to module scope verbatim |
-| `<${expr}>` (dynamic tag) | `mxDynamic(expr, props)` — JSX's static tag position can't take the expression directly |
+| `<${expr}>` (dynamic tag) | `__mxDynamic(expr, props)` — JSX's static tag position can't take the expression directly |
 | `<return>` | `{ value, output }`; a unit importing a hook is rejected instead |
 
 Element-versus-component follows **Marko's** rule, not JSX's: a tag resolves to

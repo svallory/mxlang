@@ -2453,15 +2453,15 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 
 | Construct | html | Solid | Preact | React | Hono | Astro `.astro.mx` | Angular |
 |---|---|---|---|---|---|---|---|
-| `${}` | `escape(x)` | `{x}` | `{x}` | `{x}` | `{x}` | `{x}` | `{{ x }}` |
+| `${}` | `__mxEscape(x)` | `{x}` | `{x}` | `{x}` | `{x}` | `{x}` | `{{ x }}` |
 | `$!{}` | raw append | sole child → `innerHTML` | `dangerouslySetInnerHTML` | same | same | `<Fragment set:html>` | `<span [innerHTML]>` + warning |
 | `class="a"` | `class` | `class` | `class` | `className` | `class` | `class` | `class` |
-| `class={…}` | inlined `classValue()` | native `class={{…}}` | `mxClass(…)` | `mxClass(…)` | `mxClass(…)` | `class:list` | `[ngClass]` + warning |
-| `style={…}` | inlined `styleValue()` | `style={{…}}` | `style={{…}}` | same | same | `style={{…}}` | `[ngStyle]` + warning |
+| `class={…}` | inlined `__mxClassValue()` | native `class={{…}}` | `__mxClass(…)` | `__mxClass(…)` | `__mxClass(…)` | `class:list` | `[ngClass]` + warning |
+| `style={…}` | inlined `__mxStyleValue()` | `style={{…}}` | `style={{…}}` | same | same | `style={{…}}` | `[ngStyle]` + warning |
 | spread | merged into attrs | `{...o}` | `{...o}` | same | same | `{...o}` | **error** — Angular binds statically named inputs only |
 | `:=` | **initial value only, silently one-way** | **error** | **error** | error | error | **error** | `[(value)]` — **genuinely two-way** |
 | `class:foo` | **error**, quoting Marko | error | **error** | error | error | **error** | error, naming the replacement — fixed 2026-09-17; was **accepted** → `[class.active]` (bug 7) |
-| dynamic tag | `renderDynamic()` | `<Dynamic component>` | `mxDynamic()` | same | same | **error** | `[ngComponentOutlet]` + warning |
+| dynamic tag | `__mxRenderDynamic()` | `<Dynamic component>` | `__mxDynamic()` | same | same | **error** | `[ngComponentOutlet]` + warning |
 | component resolution | Marko's rule (binding + case) | **case only** | Marko's rule, with `componentAlias` | same | same | **case only** | **case only** |
 | repeated `<@item>` | declared real array; fallback array | declared real array; fallback array | declared real array; fallback array | same | same | **error** — a slot is keyed by name | **error** — a projection is keyed by name |
 | tag params | body block | child callback | render-prop child | same | same | **error** — Astro has no render-prop form | `let-x` |

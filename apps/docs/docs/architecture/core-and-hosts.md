@@ -41,9 +41,9 @@ A host is small because most of the work — parsing, structural lowering, guard
 
 Every host emits from the same IR, but targets fall into two shapes, and the difference shows up in the emitter rather than anywhere in the core.
 
-**Statement-shaped.** The html target builds a string by appending: `out += "..."`, one block per function, ending in a conventional module (an `escape` import, the author's hoisted statements, one branded default-exported render function). An `<if>` becomes a real `if` statement.
+**Statement-shaped.** The html target builds a string by appending: `__mxOut += "..."`, one block per function, ending in a conventional module (an `escape` import aliased to `__mxEscape`, the author's hoisted statements, one branded default-exported render function). An `<if>` becomes a real `if` statement.
 
-**Expression-shaped.** JSX has no equivalent of `out += "..."`, so the Solid, Preact, React, Hono and `.astro.mx` emitters produce a single expression instead. An `<if>` becomes a ternary, a `<Show>`, or a `<Switch>` — whatever that target's own author would have written.
+**Expression-shaped.** JSX has no equivalent of `__mxOut += "..."`, so the Solid, Preact, React, Hono and `.astro.mx` emitters produce a single expression instead. An `<if>` becomes a ternary, a `<Show>`, or a `<Switch>` — whatever that target's own author would have written.
 
 Both walk the same IR through the same `drive()`. What differs is only what each method writes, which is why adding a target to an existing emitter can be as small as a vocabulary object: the React and Hono hosts are both the Preact emitter plus a `JsxDialect` naming the JSX import source, the class/for attribute spelling, and the runtime module.
 

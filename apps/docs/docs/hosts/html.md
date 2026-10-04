@@ -48,28 +48,28 @@ divergence render the same bytes as Marko's own server render.
 compiles to:
 
 ```typescript
-import { escape } from "@mxlang/html";
+import { escape as __mxEscape } from "@mxlang/html";
 
 export interface Input {}
 
 function Greeting(input: Input): string {
-  let out = "";
-  out += "<h1";
+  let __mxOut = "";
+  __mxOut += "<h1";
   {
-    const value = classValue({ greeting: true });
-    if (value !== "") out += " class=\"" + value + "\"";
+    const __mxValue = __mxClassValue({ greeting: true });
+    if (__mxValue !== "") __mxOut += " class=\"" + __mxValue + "\"";
   }
-  out += ">Hello, ";
-  out += escape(input.name);
-  out += "!</h1>";
-  return out;
+  __mxOut += ">Hello, ";
+  __mxOut += __mxEscape(input.name);
+  __mxOut += "!</h1>";
+  return __mxOut;
 }
 Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 
 export default Greeting;
 ```
 
-The default export is a **named** declaration, after the file (`greeting.mx` gives `Greeting`, `table-of.mx` gives `TableOf`), and carries a `Symbol.for("mx.component")` brand. The name is derived, never authored — and it is what lets a tag call itself with no self-import. The brand is what lets a host that receives a compiled module as an opaque value — the Astro renderer, for one — recognize it as an MX component without sniffing the function's name. `classValue` is one of four helpers (`classValue`, `styleValue`, `escapeComment`, `renderDynamic`) appended to the module only when the template actually calls them; a template using none of them compiles to `escape` and string concatenation alone.
+The default export is a **named** declaration, after the file (`greeting.mx` gives `Greeting`, `table-of.mx` gives `TableOf`), and carries a `Symbol.for("mx.component")` brand. The name is derived, never authored — and it is what lets a tag call itself with no self-import. The brand is what lets a host that receives a compiled module as an opaque value — the Astro renderer, for one — recognize it as an MX component without sniffing the function's name. `__mxClassValue` is one of four helpers (`__mxClassValue`, `__mxStyleValue`, `__mxEscapeComment`, `__mxRenderDynamic`) appended to the module only when the template actually calls them; a template using none of them compiles to the `escape` import and string concatenation alone. Every generated name carries the reserved `__mx` prefix, and an authored binding with that prefix is a compile error (see "Reserved generated identifiers" in the specification), which is why the public `escape` export is imported under a private alias.
 
 ## Install
 
@@ -237,17 +237,17 @@ compiles to:
 
 ```typescript
 function Risky(input: Input): string {
-  let out = "";
+  let __mxOut = "";
   try {
-    out += "<p>";
-    out += escape(input.risky());
-    out += "</p>";
+    __mxOut += "<p>";
+    __mxOut += __mxEscape(input.risky());
+    __mxOut += "</p>";
   } catch (err) {
-    out += "<p>failed: ";
-    out += escape(err.message);
-    out += "</p>";
+    __mxOut += "<p>failed: ";
+    __mxOut += __mxEscape(err.message);
+    __mxOut += "</p>";
   }
-  return out;
+  return __mxOut;
 }
 ```
 

@@ -34,7 +34,7 @@ it("transforms every wired target and a region from dist under plain Node ESM", 
         writeFileSync(join(dir, "package.json"), JSON.stringify({ mx: { target } }));
         const result = await mx().transform.call({}, "<p>hello</p>\\n", join(dir, "page.mx.tsx"));
         if (!result?.code.includes("export default") || result.map !== null) throw new Error(target + ": " + JSON.stringify(result));
-        if (target === "astro-html" && !result.code.includes("out +=")) throw new Error("not HTML output");
+        if (target === "astro-html" && !result.code.includes("__mxOut +=")) throw new Error("not HTML output");
         if (target === "solid-jsx" && !result.code.includes("<p>hello</p>")) throw new Error("not Solid JSX");
       } finally { rmSync(dir, { recursive: true, force: true }); }
     }

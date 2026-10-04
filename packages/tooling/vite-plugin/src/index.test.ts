@@ -574,7 +574,7 @@ export default () => <div />;
 
       expect(result).not.toBeNull();
       expect(result?.code).toContain("export default Greeting;");
-      expect(result?.code).toContain("escape(input.name)");
+      expect(result?.code).toContain("__mxEscape(input.name)");
       // No real map yet for this path (see the plugin's own doc comment).
       expect(result?.map).toBeNull();
     }, 20_000);
@@ -1423,11 +1423,12 @@ export default () => <div />;
         `${caller}${fresh.MX_SUFFIX}`,
       );
 
-      // The html string emitter would produce `out += ...` concatenation
+      // The html string emitter would produce `__mxOut += ...` concatenation
       // and an `escape` import; the Solid host emits JSX text and a `<p>`
-      // element with no such helper.
+      // element with no such helper. Asserting the reserved name keeps the
+      // negative meaningful — a bare `out +=` would now pass vacuously.
       expect(result?.code).toContain('<p class="x">');
-      expect(result?.code).not.toContain("out +=");
+      expect(result?.code).not.toContain("__mxOut +=");
       expect(result?.code).not.toContain('from "@mxlang/html"');
       vi.resetModules();
     });

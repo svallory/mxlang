@@ -146,7 +146,7 @@ control-flow components, so there is nothing else for them to become.
 | `text`, `${expr}` | text, `{expr}` |
 | `$!{expr}` as the sole child | `dangerouslySetInnerHTML` |
 | `class="a"` | `class="a"` (Hono takes `class` directly) |
-| `class={a: cond}` | `class={mxClass({a: cond})}` |
+| `class={a: cond}` | `class={__mxClass({a: cond})}` |
 | `<label for=…>` | `for={…}` (native, unchanged) |
 | `style={color: c}` | `style={{color: c}}` |
 | `onClick() { … }` | `onClick={() => { … }}` |

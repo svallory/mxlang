@@ -53,7 +53,7 @@ interface Emitter<Out> {
 }
 ```
 
-`Out` is the host's output type — a string for every host shipped today, whether that string is a JSX expression, an Astro template, or a `out +=` function body.
+`Out` is the host's output type — a string for every host shipped today, whether that string is a JSX expression, an Astro template, or a `__mxOut +=` function body.
 
 A host that cannot express a kind **throws**, naming the construct. There is no optional method and no default no-op, deliberately: an emitter that could silently skip a kind would compile a template and quietly drop part of it, which is exactly the failure the IR split was meant to make impossible.
 
