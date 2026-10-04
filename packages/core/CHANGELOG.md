@@ -6,6 +6,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Fix (proto-names): a tag named after an `Object.prototype` member (`<toString/>`, `<constructor/>`, `<__proto__/>`, …) no longer crashes the compile.** Marko 6.3.51 throws a raw `TypeError: undefined is not an object (evaluating 'filePath.length')` for it, because its taglib lookup indexes a plain object. `compileSource` and `parseFragment` now strip the prototype from the lookup's tag map, so the name is an ordinary tag name on every target (recorded in `divergences.md`); `lower.ts` guards two more plain-object lookups (`declarations.tags`, the non-DOM event spellings) with own-property checks. A declared `customTags` entry of that name is a contract.
+
 ### Fixed: an empty `{}` declaration is a contract (empty-declaration)
 
 `customTags: { pub: {} }` was treated as contract-less ("custom tag has neither a `transform` nor a template file ...") while `pub: { attributes: {} }` passed. `isContractOnlyDelegated` no longer looks for a declaration key: a definition with no `transform` and no template is contract-only whatever it declares, `{}` and a hooks-only definition included (an empty declaration is a tag with no attributes and no body rules). It still needs a target that delegates the name; on a target that does not, the "neither a `transform` nor a template" error is unchanged. Covers `customTags`, `mx.contracts` entries and sidecars through the one predicate.

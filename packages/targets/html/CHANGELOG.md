@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (proto-names): a tag named after an `Object.prototype` member (`<toString/>`, `<constructor/>`, …) no longer crashes the compile with a raw `TypeError`.** It is treated like any other tag name; the fix is in core, html has no code change.
+
 - **Fix (hint-followups round 2):** the default target's `$ let`/`$ var` hint still suggests `<let/name=…/>`, now explicitly followed by `(initial value only on this target)`. The qualifier is declared by html, not core; const advice and strict-policy behaviour are unchanged.
 
 - **Fix (scriptlet-hint-let-var):** `$ let`/`$ var` now suggest `<let/name=…/>` on the default initial-value target, not `<const>`. Strict mode rejects `<let>` and omits keyword advice for mutable declarations. `$ const` advice is unchanged; no rendering semantics changed.

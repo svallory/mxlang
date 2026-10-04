@@ -365,7 +365,7 @@ const NON_DOM_EVENT_SPELLINGS: Record<string, string | null> = {
  * attribute rather than the whole tag.
  */
 function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
-  if (!(name in NON_DOM_EVENT_SPELLINGS)) return;
+  if (!Object.hasOwn(NON_DOM_EVENT_SPELLINGS, name)) return;
   const suggestion = NON_DOM_EVENT_SPELLINGS[name];
   const pos = posOf(attr);
   warn(ctx, {
@@ -2603,7 +2603,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
 
   const name = String(node.name.value);
 
-  const disposition = ctx.declarations.tags[name];
+  const disposition = Object.hasOwn(ctx.declarations.tags, name)
+    ? ctx.declarations.tags[name]
+    : undefined;
   if (disposition) {
     if (disposition.kind === "error") fail(disposition.reason, node);
     rejectInertShape(ctx, node, name, disposition);

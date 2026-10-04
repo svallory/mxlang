@@ -34,6 +34,7 @@
  */
 
 import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { type Node, TranslateError } from "./core.ts";
 import {
@@ -42,6 +43,7 @@ import {
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
+import { nullPrototypeTags } from "./lookup-safety.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -57,6 +59,20 @@ const PARSE_ONLY_TRANSLATOR = {
   tagDiscoveryDirs: [],
   translate: {},
 };
+
+/**
+ * Builds the lookup `compileSync` is about to ask for (Marko caches it by
+ * taglib ids), and makes its tag map prototype-free so a tag named `toString` is an
+ * ordinary unknown tag rather than a crash (see `lookup-safety.ts`).
+ */
+function prepareLookup(
+  // biome-ignore lint/suspicious/noExplicitAny: the compiler is required untyped here
+  compiler: any,
+  filename: string,
+  translator: unknown,
+): void {
+  nullPrototypeTags(compiler.taglib.buildLookup(dirname(filename), translator));
+}
 
 function parseOnlyTranslator(
   customTags: Record<string, CustomTag> | undefined,
@@ -382,6 +398,8 @@ export function parseFragment(
   };
 
   const compiler = require("@marko/compiler");
+  const translator = parseOnlyTranslator(base.customTags);
+  prepareLookup(compiler, resolved.filename, translator);
   let ast: Node;
   try {
     ast = compiler.compileSync(source, resolved.filename, {
@@ -392,7 +410,7 @@ export function parseFragment(
       // (`marko/translator`, from the `marko` package) before it parses, which
       // a package that only wants the AST has no reason to depend on — and
       // `@mxlang/core` does not.
-      translator: parseOnlyTranslator(base.customTags),
+      translator,
       // biome-ignore lint/suspicious/noExplicitAny: the compiler's result type is untyped here
     } as any).ast;
   } catch (error) {
@@ -431,10 +449,12 @@ export function parseFragmentNative(
   const filename = base.filename ?? "fragment.mx";
   assertBaseContract(base, filename);
   const compiler = require("@marko/compiler");
+  const translator = parseOnlyTranslator(base.customTags);
+  prepareLookup(compiler, filename, translator);
   const ast: Node = compiler.compileSync(source, filename, {
     output: "source",
     ast: true,
-    translator: parseOnlyTranslator(base.customTags),
+    translator,
     htmlParseOptions: {
       startOffset: base.baseOffset ?? 0,
       startLine: base.baseLine ?? 0,

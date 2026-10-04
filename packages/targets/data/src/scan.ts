@@ -12,6 +12,7 @@
  */
 
 import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import type { CustomTag } from "@mxlang/core";
 import { RESERVED_NAMES } from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
@@ -89,6 +90,33 @@ function parseTaglib(
 }
 
 /**
+ * Builds the lookup `compileSync` is about to ask for and makes its tag map
+ * prototype-free. Marko's `getTag(name)` is `merged.tags[name]` on a plain
+ * object, so a tag named `toString` or `__proto__` resolves to an
+ * `Object.prototype` member and Marko throws a raw `TypeError`, which the
+ * caller's `catch` would turn into "does not parse". Core does the same for
+ * its own compiles (`lookup-safety.ts`); this pass compiles with its own
+ * translator, so it hardens its own lookup rather than relying on a core
+ * export. `buildLookup` returns the lookup Marko caches by taglib ids, so this
+ * runs on a cold or a warm cache alike and is idempotent.
+ */
+function hardenLookup(
+  markoCompiler: typeof import("@marko/compiler"),
+  filename: string,
+  translator: unknown,
+): void {
+  const lookup = markoCompiler.taglib.buildLookup(
+    dirname(filename),
+    // biome-ignore lint/suspicious/noExplicitAny: the translator is an untyped plain object here
+    translator as any,
+  ) as unknown as { merged?: { tags?: object } };
+  const tags = lookup.merged?.tags;
+  if (tags && Object.getPrototypeOf(tags) !== null) {
+    Object.setPrototypeOf(tags, null);
+  }
+}
+
+/**
  * The authored tags of `source`, or `null` when it does
  * not parse. Excluded: reserved names (core consumes them), `<@name>`
  * attribute tags (their bodies are still walked) and dynamic tags. The list
@@ -104,10 +132,12 @@ export function scanAuthoredTags(
   try {
     const markoCompiler =
       require("@marko/compiler") as typeof import("@marko/compiler");
+    const translator = translatorFor(customTags);
+    hardenLookup(markoCompiler, filename, translator);
     const result = markoCompiler.compileSync(source, filename, {
       output: "source",
       ast: true,
-      translator: translatorFor(customTags),
+      translator,
       // biome-ignore lint/suspicious/noExplicitAny: the compiler's result type is untyped here
     } as any) as unknown as { ast: { program: { body: MarkoNode[] } } };
     program = result.ast.program;

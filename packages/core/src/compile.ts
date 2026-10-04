@@ -36,6 +36,7 @@ import {
 } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
+import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
 import { hintParseError } from "./parse-error-hints.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
@@ -316,6 +317,11 @@ export function compileSource(
   const compiler = require("@marko/compiler");
   const translator = createTranslator(host);
 
+  const lookup = compiler.taglib.buildLookup(dirname(filename), translator) as
+    | Lookup
+    | undefined;
+  nullPrototypeTags(lookup);
+
   const state = {
     source,
     filename,
@@ -331,9 +337,7 @@ export function compileSource(
     // The lookup is keyed on the translator object, so asking for it here gets
     // exactly the taglibs this host registers plus Marko's own element
     // taglibs — and the tag-discovery directories beside this particular file.
-    lookup: compiler.taglib.buildLookup(dirname(filename), translator) as
-      | Lookup
-      | undefined,
+    lookup,
   };
 
   const previous = current;
