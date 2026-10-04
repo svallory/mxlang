@@ -265,11 +265,14 @@ const RAW_TEXT_ELEMENTS = new Set(["script", "style"]);
  *
  * `&` is always re-emitted as `&#38;`: a decoded literal ampersand followed
  * by letters (`&amp;copy;` decodes to the text `&copy;`) would otherwise be
- * read by the JSX transform as a fresh entity. A decoded carriage return
- * becomes `&#13;` because a raw `\r` in the serialized HTML would be
- * normalized to `\n` by the HTML parser, where a character reference is
- * not. Astral characters and multi-code-point entities are escaped per
- * code point (`&#128512;`, `&#8810;&#824;`).
+ * read by the JSX transform as a fresh entity. Every C0 control character
+ * (code < 0x20, including LF, TAB, FF and CR) also becomes a
+ * numeric reference: a decoded newline emitted literally would be trimmed
+ * and collapsed by JSX's whitespace rules, where `&#10;` is decoded after
+ * them and survives (`a&#10;b` renders `a\nb`, not `a b`). A decoded carriage
+ * return specifically would also be normalized to `\n` by the HTML parser
+ * if written raw. Astral characters and multi-code-point entities are
+ * escaped per code point (`&#128512;`, `&#8810;&#824;`).
  *
  * In a raw-text element (`<style>`) entity decoding is skipped entirely:
  * the browser applies no character references there, so the text keeps
@@ -284,7 +287,7 @@ function escapeText(value: string, decodeEntities = true): string {
   for (const char of decodeHTML(value)) {
     const code = char.codePointAt(0) ?? 0;
     out +=
-      code > 0x7f || char === "\r" || "&<>{}".includes(char)
+      code < 0x20 || code > 0x7f || "&<>{}".includes(char)
         ? `&#${code};`
         : char;
   }

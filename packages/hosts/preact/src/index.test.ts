@@ -1705,6 +1705,18 @@ describe("text with JSX-significant characters (rendered)", () => {
     );
   });
 
+  it("renders decoded newline references as newlines, not JSX-collapsed space", async () => {
+    // jsx-text-entities round 2: a decoded `\n` re-emitted literally into
+    // JSX text is trimmed/collapsed by the JSX whitespace rules (`a b`),
+    // where Marko's `a&#10;b` renders `a\nb`. The emitter re-emits every
+    // control character as a numeric reference, which JSX decodes after its
+    // own whitespace handling.
+    expect(await renderCompiled("<div>a&#10;b</div>")).toBe("<div>a\nb</div>");
+    expect(await renderCompiled("<div>a&#10;</div>")).toBe("<div>a\n</div>");
+    expect(await renderCompiled("<div>&#10;a</div>")).toBe("<div>\na</div>");
+    expect(await renderCompiled("<div>a&#9;b</div>")).toBe("<div>a\tb</div>");
+  });
+
   it("rejects <html-comment> instead of emitting a literal element", () => {
     // JSX has no comment node; before the claim, the tag fell through to
     // the native-element path and silently rendered `<html-comment>` where

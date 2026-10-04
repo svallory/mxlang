@@ -24,6 +24,7 @@ import {
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
 import { SOLID_BUILTIN_TAGS } from "@mxlang/parser";
+import { decodeHTML } from "entities";
 import { solidEventPropName } from "./event-names.ts";
 
 const STATEFUL_ERRORS: HostDeclarations["tags"] = {
@@ -657,24 +658,48 @@ export const solidDeclarations: HostDeclarations = {
     `declare it in the surrounding TypeScript module (\`${keyword} ${name} = …;\`)`,
 };
 
+/** Intrinsic children stay in an HTML template; other text is a lazy value. */
+type TextContext = "template" | "expression";
+
 /**
- * Escapes text for a JSX child position.
+ * Escapes text for a JSX child position *inside an intrinsic element's
+ * template* (the `"template"` context).
  *
  * `{` and `}` open and close an expression container, and `<` starts a JSX
  * element (a lone `>` is legal JSX text but is escaped with the rest so the
  * whole run stays uniform), so these characters become numeric character
  * references; left raw they would be parsed as markup and either fail to
- * compile or silently swallow the text. Unlike the Preact/React pipeline's
- * transform, `@solidjs/babel-plugin` does not decode character references in
- * JSX text: the authored spelling is preserved into the SSR string (or the
- * DOM template), and the browser decodes it with full HTML5 rules — exactly
- * Marko's own model, so authored entities (`&copy 2026`, `&check;`, `&#123`,
- * surrogate references) already render as the browser decodes them. No
- * compile-time entity decoding happens here; that is deliberate, and the
- * numeric references this function emits round-trip the same way.
+ * compile or silently swallow the text. In this context `@solidjs/babel-plugin`
+ * keeps the authored spelling inside the element's HTML template, and the
+ * browser (parsing the SSR string or cloning the DOM template) decodes it
+ * with full HTML5 rules — exactly Marko's own model, so authored entities
+ * (`&copy 2026`, `&check;`, `&#123`, surrogate references) render as the
+ * browser decodes them. No compile-time entity decoding happens here; that
+ * is deliberate, and the numeric references this function emits round-trip
+ * the same way.
  */
 function escapeText(value: string): string {
   return value.replace(/[{}<>]/g, (char) => `&#${char.charCodeAt(0)};`);
+}
+
+/**
+ * Outside an intrinsic template, Solid's JSX transform decodes authored text
+ * into strings that SSR can treat as trusted HTML. Decode with HTML5 rules
+ * ourselves (including surrogate replacement), then use the same lazy,
+ * build-conditioned escaping as escapedBlockValue: server `escape` returns
+ * escaped HTML; browser `escape` returns undefined and we retain decoded text.
+ * A block-bodied accessor avoids the plugin's literal/IIFE escaping paths,
+ * which differ between Show, For, Loading and fallback positions. Real SSR
+ * and jsdom DOM tests pin single escaping across these positions.
+ */
+function textExpression(value: string): MappedCode {
+  if (escapeUse) escapeUse.used = true;
+  const literal = JSON.stringify(decodeHTML(value));
+  return concatMapped(
+    "{() => { const $mxText = ",
+    literal,
+    `; const $mxEscaped = ${MX_ESCAPE_BINDING}($mxText); return $mxEscaped === undefined ? $mxText : $mxEscaped; }}`,
+  );
 }
 
 function escapeAttribute(value: string): string {
@@ -942,8 +967,11 @@ function hasNamedAttr(attrs: Attr[], name: string): boolean {
   return attrs.some((attr) => attr.kind !== "spread" && attr.name === name);
 }
 
-function renderWithNewEmitter(nodes: IrNode[]): MappedCode {
-  const child = new SolidEmitter();
+function renderWithNewEmitter(
+  nodes: IrNode[],
+  textContext: TextContext = "expression",
+): MappedCode {
+  const child = new SolidEmitter(textContext);
   drive(child, nodes);
   return child.result();
 }
@@ -1520,9 +1548,19 @@ function isIdentifier(text: string): boolean {
 /** Solid JSX text emitter over the shared core IR. */
 export class SolidEmitter implements Emitter<string> {
   readonly #out: MappedCode[] = [];
+  /** Only direct intrinsic children retain authored HTML template text. */
+  readonly #textContext: TextContext;
+
+  constructor(textContext: TextContext = "expression") {
+    this.#textContext = textContext;
+  }
 
   text(node: Extract<IrNode, { kind: "Text" }>): void {
-    this.#out.push(concatMapped(escapeText(node.value)));
+    this.#out.push(
+      this.#textContext === "template" || !/[&{}<>]/.test(node.value)
+        ? concatMapped(escapeText(node.value))
+        : textExpression(node.value),
+    );
   }
 
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {
@@ -1550,7 +1588,9 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(concatMapped(`<${node.name}`, attrs, `${innerHtml} />`));
       return;
     }
-    const children = raw ? concatMapped() : renderWithNewEmitter(node.children);
+    const children = raw
+      ? concatMapped()
+      : renderWithNewEmitter(node.children, "template");
     this.#out.push(
       concatMapped(
         `<${node.name}`,

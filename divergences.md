@@ -48,6 +48,20 @@ approved language divergence or a new required authoring pattern.
 
 ## Recorded divergences
 
+### Character references split across placeholders (JSX hosts)
+
+Preact/React/Hono decode authored text nodes independently. Marko's
+concatenated HTML can complete a reference across a placeholder:
+`<p>&am${"p;"}</p>` renders `&`, and `<p>&${"copy;"}</p>` renders `©` after
+browser parsing. Those hosts instead show literal `&amp;` and `&copy;` text.
+Solid's intrinsic templates match these constant-placeholder examples, but
+its independently decoded component/flow text has the same limitation.
+This is a known concatenation-boundary divergence, not a new syntax rule;
+keep a reference in one text node or interpolate the decoded character.
+Recorded by jsx-text-entities round-2 review (2026-10-04; decision 72).
+No cross-node decoding is introduced. See the specification's authored
+character references section.
+
 | Divergence | Since | Reason | Test |
 |---|---|---|---|
 | Authored bindings starting with **`__mx`** are rejected at the binding, on every target and in host code MX parses. Property names and references remain legal; type-only names (type parameters, `declare function` parameters) are legal too, since nothing is emitted under them. Marko 6.3.51 accepts `__mxX`, `_x`, `__x`, `$x` and `$mxX` tag bindings and `static` declarations; it has no comparable blanket `$`/`_` reservation in these probes. | reserve-mx-identifiers | Prevent authored declarations from shadowing generated helpers or duplicating hoisted declarations. Public runtime exports keep their names; generated imports use private aliases. MX is stricter here. **Not full hygiene:** names outside `__mx` are still allocated, and Solid's whole-unit `$mxProps`/`$mxBody`/`$mxValue`/`$mx_Define*` plus the JSX/Solid range mapper's `_`/`mxIndex` are known to still collide with an authored binding (tracked follow-ups). | `packages/core/src/reserved-bindings.test.ts`; host/parser reservation tests and executed collision regressions |

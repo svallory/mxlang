@@ -609,14 +609,18 @@ describe("text with JSX-significant characters (rendered, hono runtime)", () => 
           compilerOptions: { jsx: "react-jsx", jsxImportSource: "hono" },
         }),
       );
-      const entry = join(scratch, "entry.tsx");
-      writeFileSync(entry, compileHonoMx("<div>a < b</div>", entry).code);
-      const mod = (await import(`${entry}?t=${Date.now()}`)) as {
-        default: () => unknown;
-      };
-      expect(renderToString(jsx(mod.default, null))).toBe(
-        "<div>a &lt; b</div>",
-      );
+      const cases = [
+        ["<div>a < b</div>", "<div>a &lt; b</div>"],
+        ["<div>a&#10;b</div>", "<div>a\nb</div>"],
+        ["<div>a&#10;</div>", "<div>a\n</div>"],
+        ["<div>&#10;a</div>", "<div>\na</div>"],
+      ] as const;
+      for (const [i, [source, expected]] of cases.entries()) {
+        const entry = join(scratch, `entry-${i}.tsx`);
+        writeFileSync(entry, compileHonoMx(source, entry).code);
+        const mod = (await import(entry)) as { default: () => unknown };
+        expect(renderToString(jsx(mod.default, null))).toBe(expected);
+      }
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

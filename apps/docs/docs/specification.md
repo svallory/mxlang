@@ -336,6 +336,27 @@ retained space as text. The rendered parity matrix is
 
 renders `<p>Hello</p>`.
 
+### Authored character references
+
+Authored text uses HTML5 character-reference rules, including legacy
+no-semicolon names (`&copy 2026`), HTML5-only names (`&check;`) and invalid
+numeric-reference replacement (`&#xD800;` becomes U+FFFD). JSX hosts decode
+text before handing values to the host; Solid retains intrinsic-element
+HTML templates but decodes and escapes text in component/flow bodies.
+Decoded control references such as `a&#10;b` retain the newline rather than
+undergoing JSX's whitespace trimming (jsx-text-entities review, 2026-10-04;
+parity correction under decision 72).
+
+**Known divergence (placeholder boundary).** Preact/React/Hono decode each
+authored text node independently. Marko concatenates HTML before the browser
+decodes it, so `<p>&am${"p;"}</p>` and `<p>&${"copy;"}</p>` can complete a
+reference across a placeholder and render `&` and `©`; those JSX hosts retain
+literal `&amp;` and `&copy;` text instead. Solid's intrinsic templates can
+match Marko for these examples, but its independently decoded component/flow
+text has the same boundary limitation. Do not split a reference across a
+placeholder; write `&amp;`/`&copy;` in one text node or interpolate the actual
+character. Cross-node decoding is not guaranteed by JSX host emission.
+
 ### Text lines (`--`)
 
 Concise mode's delimited text block. Inherited from Marko under the subset rule;

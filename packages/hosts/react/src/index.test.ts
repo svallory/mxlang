@@ -599,6 +599,12 @@ describe("text with JSX-significant characters (rendered, react runtime)", () =>
     );
   });
 
+  it("preserves decoded newline references at every text boundary", async () => {
+    expect(await renderEntry("<div>a&#10;b</div>")).toBe("<div>a\nb</div>");
+    expect(await renderEntry("<div>a&#10;</div>")).toBe("<div>a\n</div>");
+    expect(await renderEntry("<div>&#10;a</div>")).toBe("<div>\na</div>");
+  });
+
   it("rejects <html-comment> instead of emitting a literal element", () => {
     // JSX has no comment node; before the claim, the tag fell through to
     // the native-element path and silently rendered `<html-comment>` where
