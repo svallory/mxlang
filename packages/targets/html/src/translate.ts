@@ -304,18 +304,18 @@ function rejectModifier(
       attr,
     );
   }
-  // Only reserved `on:` gets an event fix-it. Lowercase `oncapture:` is an
-  // ordinary colon-named attribute and never reaches the modifier hook.
-  if (attr.name === "on") {
-    const event =
-      attr.modifier.charAt(0).toUpperCase() + attr.modifier.slice(1);
-    fail(
-      `\`${attr.name}:${attr.modifier}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${attr.modifier}=fn\` for a custom event name (Marko rejects this form too)`,
-      attr,
-    );
-  }
+  // The parser splits at the last colon; Marko's native reservation and
+  // fix-it use the first head and the entire remainder instead.
+  const name = `${attr.name}:${attr.modifier}`;
+  const colon = name.indexOf(":");
+  const head = name.slice(0, colon);
+  const remainder = name.slice(colon + 1);
+  const suggestion =
+    head === "on"
+      ? `on${remainder.charAt(0).toUpperCase()}${remainder.slice(1)}`
+      : `${head}={ ${remainder}: ${head === "style" ? "value" : "condition"} }`;
   fail(
-    `\`${attr.name}:${attr.modifier}\` is not a valid attribute; Marko rejects this form too — write \`${attr.name}={ ${attr.modifier}: condition }\``,
+    `\`${name}\` is not a valid attribute, did you mean \`${suggestion}\`?`,
     attr,
   );
 }

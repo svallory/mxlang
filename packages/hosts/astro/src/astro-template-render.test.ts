@@ -1,9 +1,10 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
+import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
 
@@ -157,6 +158,162 @@ describe("`:modifier` renders as the attribute `value:modifier` (astro)", () => 
       "<div :foo=y/>",
     );
     expect(html).toContain(`value:foo="hello"`);
+  });
+});
+
+describe("Astro directive-shaped names retain plain Marko meaning", () => {
+  it.each([
+    "set:unknown",
+    "set:html:extra",
+    "define:vars",
+    "define:x:y",
+    "is:raw",
+    "is:inline",
+    "is:global",
+    "is:raw:extra",
+    "transition:name",
+    "transition:animate",
+    "transition:persist",
+    "transition:persist-props",
+    "client:load",
+    "client:only",
+    "client:load:extra",
+    "server:defer",
+    "slot",
+    "slot:foo",
+    "SET:html",
+  ])(
+    "renders %s as an escaped plain native attribute, not a directive",
+    async (name) => {
+      const html = await renderConditional(
+        `plain-directive-${name.replace(":", "-")}`,
+        "const value = '<b>unsafe</b>&\"quote\"';",
+        `<div ${name}=value>body</div>`,
+      );
+      expect(html).toBe(
+        `<div ${name}="<b>unsafe</b>&amp;&quot;quote&quot;">body</div>`,
+      );
+    },
+  );
+
+  it("plain escaped names do not acquire Astro's directive-specific JSX types", () => {
+    const filename = join(dir, "plain-directive-types.tsx");
+    const declarations = 'const value = "text"; const rest = {"data-x": "y"};';
+    const astroJsx = join(
+      dirname(realpathSync(require.resolve("astro/package.json"))),
+      "astro-jsx.d.ts",
+    );
+    const diagnostics = (template: string) => {
+      const lowered = lowerAstroMx(
+        `---\n${declarations}\n---\n${template}`,
+        "Test.astro.mx",
+      ).code;
+      const body = lowered.slice(lowered.indexOf("\n---\n") + 5);
+      writeFileSync(
+        filename,
+        `/// <reference path=${JSON.stringify(astroJsx)} />\nnamespace JSX { export type IntrinsicElements = astroHTML.JSX.IntrinsicElements; }\n${declarations}\nconst view = <>${body}</>;\n`,
+      );
+      return ts
+        .getPreEmitDiagnostics(
+          ts.createProgram([filename], {
+            strict: true,
+            noUncheckedIndexedAccess: true,
+            exactOptionalPropertyTypes: true,
+            jsx: ts.JsxEmit.Preserve,
+            skipLibCheck: true,
+            noEmit: true,
+            target: ts.ScriptTarget.ESNext,
+            module: ts.ModuleKind.ESNext,
+            moduleResolution: ts.ModuleResolutionKind.Bundler,
+            types: [],
+          }),
+        )
+        .map((diagnostic) => ({
+          code: diagnostic.code,
+          message: ts.flattenDiagnosticMessageText(diagnostic.messageText, " "),
+        }));
+    };
+    expect(
+      diagnostics("<div is:raw=value/><div is:raw=value ...rest/>"),
+    ).toEqual([]);
+    // Escaping the name must not hide errors in the authored value expression.
+    expect(diagnostics("<div is:raw=missing/>")).toEqual([
+      { code: 2304, message: "Cannot find name 'missing'." },
+    ]);
+  });
+
+  it("preserves static and valueless directive-shaped native names", async () => {
+    const html = await renderPlain(
+      "static-plain-directives",
+      '<div is:raw/><div transition:name="a"/><div client:load/><span slot="header">body</span>',
+    );
+    expect(html).toBe(
+      '<div is:raw></div><div transition:name="a"></div><div client:load></div><span slot="header">body</span>',
+    );
+  });
+
+  it.each(["define:vars", "is:raw", "transition:name", "client:load", "slot"])(
+    "matches Marko's plain value serialization for %s, including true",
+    async (name) => {
+      const values = [
+        ["true", name],
+        ["false", ""],
+        ["1", `${name}=\"1\"`],
+        ["null", ""],
+        ["undefined", ""],
+        ['({foo: "x"})', `${name}=\"[object Object]\"`],
+        ['["a", "b"]', `${name}=\"a,b\"`],
+      ] as const;
+      for (const [index, [value, attribute]] of values.entries()) {
+        const html = await renderConditional(
+          `plain-value-${name.replace(":", "-")}-${index}`,
+          `const value = ${value}; const rest = {"data-x": "y"};`,
+          `<div ${name}=value/><div ...rest ${name}=value/>`,
+        );
+        const suffix = attribute ? ` ${attribute}` : "";
+        expect(html).toBe(
+          `<div${suffix}></div><div data-x="y"${suffix}></div>`,
+        );
+      }
+    },
+  );
+
+  it("evaluates a plain directive-shaped value expression exactly once", async () => {
+    const html = await renderConditional(
+      "plain-directive-evaluate-once",
+      "let calls = 0; const read = () => { calls += 1; return true; };",
+      "<div is:raw=read()/><b>${calls}</b>",
+    );
+    expect(html).toBe("<div is:raw></div><b>1</b>");
+  });
+
+  it("preserves a bare slot when explicit attrs merge with a spread", async () => {
+    const html = await renderConditional(
+      "plain-bare-slot-with-spread",
+      'const rest = {"data-x": "y"};',
+      "<span slot ...rest>body</span>",
+    );
+    expect(html).toBe('<span slot data-x="y">body</span>');
+  });
+
+  it("does not turn an authored slot attribute into an implicit named projection", async () => {
+    const html = await renderConditional(
+      "plain-slot-not-projected",
+      "",
+      '<Card><span slot="header">body</span></Card>',
+    );
+    expect(html).toBe("<section>fallback</section>");
+  });
+
+  it("keeps plain directive-shaped names when explicit attrs merge with a spread", async () => {
+    const html = await renderConditional(
+      "plain-directive-with-spread",
+      'const value = "text"; const rest = {"data-x": "y"};',
+      '<div is:raw=value ...rest transition:name="n">body</div>',
+    );
+    expect(html).toBe(
+      '<div is:raw="text" data-x="y" transition:name="n">body</div>',
+    );
   });
 });
 

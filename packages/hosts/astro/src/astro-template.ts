@@ -271,6 +271,48 @@ function escapeAttr(value: string): string {
 
 type MappedWrite = (code: string, node: Node, generatedStart: number) => void;
 
+/** Names Astro consumes rather than emitting as ordinary authored attributes. */
+function isAstroDirectiveName(name: string): boolean {
+  return (
+    /^(?:set|define|is|transition|client|server):/.test(name) ||
+    name === "class:list" ||
+    name === "slot"
+  );
+}
+
+// Marko writes `true` as an empty plain attribute and omits `false`. Astro
+// stringifies both. The IIFE evaluates the authored expression once.
+const PLAIN_ATTR_VALUE =
+  '(($value) => typeof $value === "boolean" ? ($value ? "" : null) : $value)';
+
+/** String-typed keys also avoid Astro's directive-specific intrinsic JSX types. */
+function plainNativeKey(name: string): string {
+  const key = JSON.stringify(name);
+  return isAstroDirectiveName(name) ? `[${key} + ""]` : key;
+}
+
+/** A computed native spread escapes compiler directives, but not runtime filters. */
+function validatePlainAstroAttrs(attrs: Attr[], nativeName?: string): void {
+  for (const attr of attrs) {
+    if (
+      (attr.kind === "boolean" ||
+        attr.kind === "static" ||
+        attr.kind === "dynamic") &&
+      isAstroDirectiveName(attr.name) &&
+      (!nativeName ||
+        ["style", "script", "slot"].includes(nativeName) ||
+        attr.name === "set:html" ||
+        attr.name === "set:text" ||
+        attr.name === "class:list")
+    ) {
+      fail(
+        `attribute \`${attr.name}\` cannot be preserved as a plain Marko attribute in \`.astro.mx\`: Astro interprets it as a directive`,
+        attr,
+      );
+    }
+  }
+}
+
 /**
  * One element's attributes.
  *
@@ -295,6 +337,8 @@ function emitElementAttrs(
   write: (code: string) => void,
   writeMapped: (code: string, node: Node) => void,
 ): void {
+  // Validate before folding explicit attributes into an authored spread too.
+  validatePlainAstroAttrs(attrs, name);
   if (!attrs.some((attr) => attr.kind === "spread")) {
     const value =
       name === "input"
@@ -310,11 +354,12 @@ function emitElementAttrs(
         : attrs,
       write,
       writeMapped,
+      name,
     );
     return;
   }
   if (attrs.length === 1) {
-    emitAttrs(attrs, write, writeMapped);
+    emitAttrs(attrs, write, writeMapped, name);
     return;
   }
   write(" {...{ ");
@@ -326,10 +371,12 @@ function emitElementAttrs(
         writeMapped(attr.value.code, attr.value.node);
         return;
       case "boolean":
-        write(`${JSON.stringify(attr.name)}: true`);
+        write(
+          `${plainNativeKey(attr.name)}: ${attr.name === "slot" ? '""' : "true"}`,
+        );
         return;
       case "static":
-        write(`${JSON.stringify(attr.name)}: ${JSON.stringify(attr.value)}`);
+        write(`${plainNativeKey(attr.name)}: ${JSON.stringify(attr.value)}`);
         return;
       case "bound":
       case "event":
@@ -348,11 +395,12 @@ function emitElementAttrs(
         // `class:list` would render, so a spread's `class` and this one are the
         // same key and the merge is real (as in Marko). `class:list` stays for
         // an element with no spread.
+        const plain = isAstroDirectiveName(attr.name);
         write(
-          `${JSON.stringify(attr.name)}: ${structuredClass ? `(${CLASS_LIST})(` : "("}`,
+          `${plainNativeKey(attr.name)}: ${structuredClass ? `(${CLASS_LIST})(` : plain ? `${PLAIN_ATTR_VALUE}((` : "("}`,
         );
         writeMapped(attr.value.code, attr.value.node);
-        write(")");
+        write(plain ? "))" : ")");
         return;
       }
     }
@@ -364,7 +412,9 @@ function emitAttrs(
   attrs: Attr[],
   write: (code: string) => void,
   writeMapped: (code: string, node: Node) => void,
+  nativeName?: string,
 ): void {
+  validatePlainAstroAttrs(attrs, nativeName);
   const writeName = (attr: Exclude<Attr, { kind: "spread" }>): void => {
     writeMapped(attr.name, {
       loc: {
@@ -377,6 +427,41 @@ function emitAttrs(
     });
   };
   for (const attr of attrs) {
+    if (
+      (attr.kind === "boolean" ||
+        attr.kind === "static" ||
+        attr.kind === "dynamic") &&
+      isAstroDirectiveName(attr.name)
+    ) {
+      // A computed key prevents Astro's parser/compiler from treating the
+      // name as a directive (including implicit slot projection). The native
+      // runtime then renders an ordinary escaped attribute. Component props,
+      // set:html/set:text and special style/script/slot contexts were refused above.
+      write(" {...{ [");
+      writeMapped(JSON.stringify(attr.name), {
+        loc: {
+          start: attr.loc,
+          end: {
+            line: attr.loc.line,
+            column: attr.loc.column + attr.name.length,
+          },
+        },
+      });
+      // Concatenating the empty string retains the exact runtime key while
+      // making it `string`-typed, not an Astro directive's literal JSX prop.
+      write(' + ""]: ');
+      if (attr.kind === "dynamic") {
+        write(`${PLAIN_ATTR_VALUE}((`);
+        writeMapped(attr.value.code, attr.value.node);
+        write("))");
+      } else {
+        // `slot` is not a boolean HTML attribute. Its bare form, like every
+        // valueless colon name, means the empty string rather than "true".
+        write(JSON.stringify(attr.kind === "static" ? attr.value : ""));
+      }
+      write(" }}");
+      continue;
+    }
     switch (attr.kind) {
       case "spread":
         write(" {...");

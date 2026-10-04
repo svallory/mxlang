@@ -601,7 +601,31 @@ Core does not treat `prop:`, `oncapture:`, `attr:`, `bool:` or `use:` names as
 modifiers: they preserve their complete names instead of being refused as
 invalid Marko syntax. This corrects decision 10's namespace-removal policy
 against live Marko 6.3.51; a host runtime/compiler still owns how an emitted
-name is interpreted (for example Solid's own `prop:` namespace).
+name is interpreted (for example Solid's own `prop:` namespace and Astro's
+`set:`/`is:` directives).
+
+On `.astro.mx`, authored native `define:`, `is:`, `transition:`, `client:` and
+`server:` names, plus the exact `slot` attribute, use computed string-keyed
+spreads to render escaped **plain attributes**, not Astro directives or implicit
+named-slot projections (decisions 65 and 67b, Marko parity). Their dynamic values
+are evaluated once; `true` writes an empty attribute and `false` omits it, as in
+Marko. String-typed computed keys avoid Astro's directive-specific JSX types
+without suppressing errors in the authored value expression. Directive-shaped
+props on component calls and attributes on special `style`/`script`/`slot`
+elements are refused at the authored name where plain-attribute semantics cannot
+be guaranteed. Authored `set:html`/`set:text` names are refused because Astro's
+native runtime filters them even through a spread; other `set:` names use the
+plain-attribute spread form. Component `class:list` props
+are refused because Astro normalizes them into `class`. Native `class:` remains
+reserved as above. Ordinary `slot:foo` is not Astro's exact `slot` directive.
+MX-generated directives for structured `class`, unescaped interpolation and
+explicit attribute-tag slot projection are unchanged; authored spreads are not
+rewritten.
+
+HTML's reserved-prefix diagnostics use the first head and the entire remaining
+suffix, matching Marko's text: `class:foo:bar` suggests
+`class={ foo:bar: condition }`, `style:foo:bar` suggests
+`style={ foo:bar: value }`, and `on:foo:bar` suggests `onFoo:bar`.
 
 ### Event attributes
 

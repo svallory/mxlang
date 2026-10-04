@@ -72,6 +72,69 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
     expect(template(`<div value:foo=y/>`)).toContain("<div value:foo={y}>");
   });
 
+  it.each(["set:html", "set:text"])(
+    "refuses a runtime-filtered Astro directive attribute at its authored name: %s",
+    (name) => {
+      for (const suffix of ["", '="x"', "=x"]) {
+        for (const [gap, line, column] of [
+          [" ", 4, 5],
+          ["\n  ", 5, 2],
+        ] as const) {
+          expect(failure(`<div${gap}${name}${suffix}/>`)).toEqual({
+            message: `attribute \`${name}\` cannot be preserved as a plain Marko attribute in \`.astro.mx\`: Astro interprets it as a directive`,
+            line,
+            column,
+          });
+        }
+      }
+    },
+  );
+
+  it("refuses define:vars on a style instead of changing CSS semantics", () => {
+    expect(failure("<style define:vars=x>p { color: red; }</style>")).toEqual({
+      message:
+        "attribute `define:vars` cannot be preserved as a plain Marko attribute in `.astro.mx`: Astro interprets it as a directive",
+      line: 4,
+      column: 7,
+    });
+  });
+
+  it.each([
+    "set:html",
+    "define:vars",
+    "is:raw",
+    "transition:name",
+    "client:load",
+    "server:defer",
+    "class:list",
+    "slot",
+  ])(
+    "refuses directive-shaped component props rather than letting Astro consume them: %s",
+    (name) => {
+      expect(() =>
+        lowerAstroMx(
+          `---\nimport Card from "./card.astro";\n---\n<Card ${name}="x"/>`,
+          "Test.astro.mx",
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          message: `attribute \`${name}\` cannot be preserved as a plain Marko attribute in \`.astro.mx\`: Astro interprets it as a directive`,
+          line: 4,
+          column: 6,
+        }),
+      );
+    },
+  );
+
+  it("refuses an explicit filtered attribute even when a spread follows it", () => {
+    expect(failure('<div set:html=x ...{"data-x": "y"}/>')).toMatchObject({
+      message:
+        "attribute `set:html` cannot be preserved as a plain Marko attribute in `.astro.mx`: Astro interprets it as a directive",
+      line: 4,
+      column: 5,
+    });
+  });
+
   it("still refuses a real modifier, in this host's words", () => {
     const error = failure(`<div class:active="x"/>`);
     expect(error.message).toContain(

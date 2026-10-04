@@ -175,7 +175,7 @@ describe("class:foo / style:foo modifiers", () => {
     ["style:color", '<div style:color="red">d</div>'],
   ])("rejects %s with Marko's own guidance", (_name, body) => {
     expect(() => compile(src(body), file)).toThrow(
-      /is not a valid attribute; Marko rejects this form too/,
+      /is not a valid attribute, did you mean/,
     );
     expect(() => compile(src(body), file)).not.toThrow(/standalone template/);
   });
@@ -1882,10 +1882,10 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
     expect(code).toContain('onclick=\\"alert(1)\\"');
   });
 
-  it("rejects on: with a fix-it naming on-<exact>", () => {
+  it("rejects on: with Marko's exact event-name fix-it", () => {
     const body = "<div on:click=fn>x</div>";
     expect(() => compile(src(body), file)).toThrow(
-      "write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name",
+      "`on:click` is not a valid attribute, did you mean `onClick`?",
     );
   });
 });

@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (colon-attr-followups round 3):** native reserved-prefix diagnostics use Marko's exact fix-it, taking the first head and the full remainder: `class:foo:bar` suggests `class={ foo:bar: condition }`, `style:foo:bar` suggests `style={ foo:bar: value }`, and `on:foo:bar` suggests `onFoo:bar`. Authored positions are unchanged.
+
 - **Fix (colon-attr-followups round 2):** preserve ordinary nonempty colon names such as `x:foo` and `data:x`; reject ordinary native colon-name methods/functions with Marko's exact text and position rather than event-runtime advice. Restore `<input checked:/>` before the oracle fixture's spread element so its resume marker remains terminal.
 
 - **Fix (colon-attr-followups):** ordinary empty-suffix names such as `x:` retain their colon for static, dynamic and valueless attributes. The stock-Marko oracle fixture pins rendered parity. Invalid literal bindings on dynamic tags and controls now fail through core rather than compiling silently.

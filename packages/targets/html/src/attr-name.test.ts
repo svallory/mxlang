@@ -222,10 +222,32 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
     expect(failure(`<div ${name}:/>`).message).toContain(`\`${name}:`);
   });
 
+  it.each([
+    ["class:foo:bar", "class={ foo:bar: condition }"],
+    ["style:foo:bar", "style={ foo:bar: value }"],
+    ["on:foo:bar", "onFoo:bar"],
+  ])(
+    "uses Marko's exact reserved-head fix-it and position: %s",
+    (name, suggestion) => {
+      for (const suffix of ["", '="x"', "=input.x"]) {
+        for (const [gap, line, column] of [
+          [" ", 1, 5],
+          ["\n  ", 2, 2],
+        ] as const) {
+          expect(failure(`<div${gap}${name}${suffix}/>`)).toEqual({
+            message: `\`${name}\` is not a valid attribute, did you mean \`${suggestion}\`?`,
+            line,
+            column,
+          });
+        }
+      }
+    },
+  );
+
   it("still refuses a real modifier, in Marko's words", () => {
     const error = failure(`<div class:active="x"/>`);
     expect(error.message).toContain(
-      "`class:active` is not a valid attribute; Marko rejects this form too",
+      "`class:active` is not a valid attribute, did you mean `class={ active: condition }`?",
     );
     expect(error).toMatchObject({ line: 1, column: 5 });
   });

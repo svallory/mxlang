@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (colon-attr-followups round 3):** ordinary native `define:`, `is:`, `transition:`, `client:` and `server:` names and the exact `slot` attribute render as escaped plain attributes through computed spreads, not Astro directives or implicit slot projection. Refuse `set:html`/`set:text`, directive-shaped component props and special style/script/slot contexts at the authored name when plain Marko semantics cannot be preserved. Real Astro container tests pin the behavior; MX-generated directives are unchanged.
+
 - **Fix (scriptlet-hint-let-var):** `.astro.mx` fence advice preserves the original `let`/`var` keyword, not `const`. Ordinary `.mx` under strict policy omits keyword advice for mutable scriptlets; both paths still reject `<let>`. `$ const` advice is unchanged.
 
 - **Fix (jsx-whitespace-body-parity, decision 141):** `.mx` templates rendered inside Astro now pass same-line whitespace-only content through imported components and discovered `tags/*.mx`, rendering one space through Astro's renderer. Uses core's host-independent body-presence correction; newline indentation stays absent. Pinned by the Astro compiler and container's rendered output.
