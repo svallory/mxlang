@@ -19,6 +19,7 @@
     "build": "cd packages/core && bun run build && cd ../targets/data && bun run build && cd ../../parser && bun run build && cd ../../packages/hosts/html && bun run build && cd ../angular && bun run build && cd ../../../packages/tooling/vite-plugin && bun run build && cd ../language-server && bun run build && cd ../angular-checker && bun run build && cd ../typescript-plugin && bun run build && cd ../tsc && bun run build && cd ../../.. && bun run scripts/check-build-artifacts.ts",
     "consumer-check:html": "bun run packages/hosts/html/scripts/consumer-check.ts",
     "pack-probe": "bun run scripts/pack-probe.ts",
+    "alpha-probe": "bun run scripts/alpha-probe.ts",
     "oracle": "bun run packages/oracle/src/report.ts",
     "oracle:marko": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-marko.ts",
     "oracle:preact": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-preact-cli.ts",
