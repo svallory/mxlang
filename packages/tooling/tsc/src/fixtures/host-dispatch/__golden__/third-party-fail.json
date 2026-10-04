@@ -41,7 +41,20 @@
         "hostPolicyDiagnostics": [],
         "logged": []
       },
-      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "fake target rejects FAIL",
+          "id": "<root>/third-party-fail/page.mx",
+          "loc": {
+            "file": "<root>/third-party-fail/page.mx",
+            "line": 1,
+            "column": 3
+          },
+          "frame": "1 | <p>FAIL</p>\n       ^"
+        },
+        "warnings": []
+      }
     }
   },
   "mxTsc": [

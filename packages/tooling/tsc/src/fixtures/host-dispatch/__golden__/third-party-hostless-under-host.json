@@ -91,7 +91,20 @@
         ],
         "logged": []
       },
-      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/third-party-hostless-under-host/package.json:3:13: mx.host \"./target.cjs\" exports a target with no host. Use mx.target \"./target.cjs\", or give the descriptor a \"host\" part.",
+          "id": "<root>/third-party-hostless-under-host/package.json",
+          "loc": {
+            "file": "<root>/third-party-hostless-under-host/package.json",
+            "line": 3,
+            "column": 12
+          },
+          "frame": "3 |     \"host\": \"./target.cjs\"\n                ^"
+        },
+        "warnings": []
+      }
     }
   },
   "mxTsc": [

@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (third-party-target, registration PR 7):** the transform compiles through a target loaded from `package.json#mx.target` / `mx.host` (the project's lookup, `lookupFor(policy)`); a failed load fails the transform with the positioned `package.json:line:col: <message>` error through the existing policy-error path.
+
 - **Changed (refactor/vite-plugin, decisions 129 and 132):** whole-file `.mx`
   compilation dispatches through `@mxlang/target-registry` (`load(core).compileModule`
   with the full built-in lookup) instead of branching on host names, and

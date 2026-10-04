@@ -91,7 +91,20 @@
         ],
         "logged": []
       },
-      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/third-party-missing/package.json:3:15: mx.target \"./nope.cjs\" cannot be resolved from <root>/third-party-missing: Cannot find module './nope.cjs'. Check the path or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
+          "id": "<root>/third-party-missing/package.json",
+          "loc": {
+            "file": "<root>/third-party-missing/package.json",
+            "line": 3,
+            "column": 14
+          },
+          "frame": "3 |     \"target\": \"./nope.cjs\"\n                  ^"
+        },
+        "warnings": []
+      }
     }
   },
   "mxTsc": [

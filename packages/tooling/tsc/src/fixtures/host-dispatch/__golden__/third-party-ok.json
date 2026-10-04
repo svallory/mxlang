@@ -41,7 +41,11 @@
         "hostPolicyDiagnostics": [],
         "logged": []
       },
-      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+      "vite": {
+        "code": "export default function Page(): string {\n  return \"<p>hi</p>\\n\";\n}\n",
+        "map": null,
+        "warnings": []
+      }
     }
   },
   "mxTsc": [

@@ -91,7 +91,20 @@
         ],
         "logged": []
       },
-      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/third-party-throws/package.json:3:15: mx.target \"./target.cjs\" failed to load: boom: the fixture target exploded on load. (<root>/third-party-throws/target.cjs)",
+          "id": "<root>/third-party-throws/package.json",
+          "loc": {
+            "file": "<root>/third-party-throws/package.json",
+            "line": 3,
+            "column": 14
+          },
+          "frame": "3 |     \"target\": \"./target.cjs\"\n                  ^"
+        },
+        "warnings": []
+      }
     }
   },
   "mxTsc": [

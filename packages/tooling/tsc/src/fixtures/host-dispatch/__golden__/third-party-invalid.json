@@ -91,7 +91,20 @@
         ],
         "logged": []
       },
-      "vite": "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)"
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/third-party-invalid/package.json:3:15: mx.target \"./target.cjs\" must export a target descriptor (default export or \"mxTarget\"): \"name\" is missing, expected a string. See the TargetDescriptor contract (unstable).",
+          "id": "<root>/third-party-invalid/package.json",
+          "loc": {
+            "file": "<root>/third-party-invalid/package.json",
+            "line": 3,
+            "column": 14
+          },
+          "frame": "3 |     \"target\": \"./target.cjs\"\n                  ^"
+        },
+        "warnings": []
+      }
     }
   },
   "mxTsc": [

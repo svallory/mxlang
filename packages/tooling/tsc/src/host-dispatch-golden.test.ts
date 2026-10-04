@@ -137,16 +137,6 @@ const ROWS = [
   "third-party-hostless-under-host",
 ] as const;
 
-/**
- * Rows whose Vite leg is not pinned yet: Vite loads no third-party target
- * until its dispatch refactor (PR 6, `refactor/vite-dispatch`) is on main and
- * the Vite leg of PR 7 lands on top of it. Pinning today's Vite output here
- * would pin the wrong behaviour.
- */
-const VITE_PENDING = new Set(
-  ROWS.filter((row) => row.startsWith("third-party-")),
-);
-
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
 const ALIASED = new Set(ROWS.filter((row) => row.startsWith("alias-")));
 
@@ -329,8 +319,6 @@ function tsPluginLeg(file: string, text: string) {
 async function viteLeg(row: string, file: string, text: string) {
   if (file.endsWith(".astro.mx"))
     return "not handled: no .astro.mx in this plugin";
-  if (VITE_PENDING.has(row as never))
-    return "not pinned: Vite follows PR 6 (registration PR 7, Vite leg)";
   const plugin = mxVite() as unknown as {
     configResolved(config: unknown): void;
     transform(

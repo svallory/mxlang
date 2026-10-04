@@ -54,9 +54,10 @@ async function compileMarko(
     | ((specifier: string, importer: string) => string | undefined)
     | undefined,
 ): Promise<core.TargetCompileResult> {
-  const { builtinLookup, resolveTargetPolicy } = await loadRegistry();
+  const { lookupFor, resolveTargetPolicy } = await loadRegistry();
   const policy = resolveTargetPolicy(filename);
-  const lookup = builtinLookup();
+  // The project's lookup: a target loaded from a package specifier included.
+  const lookup = lookupFor(policy);
   const descriptor = lookup.target(policy.target);
   const load = descriptor?.load;
   if (!load) {
@@ -612,7 +613,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     warn: (message: string) => void,
     error: (diagnostic: TargetPolicyDiagnostic) => never,
   ): Promise<Record<string, CustomTag> | undefined> => {
-    const { resolveTargetPolicyDetailed, hostFilterKey, scanCached } =
+    const { resolveTargetPolicyDetailed, lookupFor, scanCached } =
       await loadRegistry();
     const resolution = resolveTargetPolicyDetailed(file);
     for (const diagnostic of resolution.diagnostics) {
@@ -621,8 +622,9 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     // The filter value `mx.tags[].hosts` is matched against, read off the
     // target: for a hostless target (`html`) it is the target's legacy
     // `mx.host` value, which is the string existing entries already match.
-    const host = hostFilterKey(resolution.policy.target) ?? null;
-    const scan = scanCached(file, { host });
+    const targets = lookupFor(resolution.policy);
+    const host = targets.hostFilterKey(resolution.policy.target) ?? null;
+    const scan = scanCached(file, { host, targets });
 
     // Errors were raised above, before warning dedupe: repeating a transform
     // cannot make a bad target pass. Existing malformed-manifest/unknown-host

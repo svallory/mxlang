@@ -2377,7 +2377,8 @@ the key's value (quotes included, with `length`):
 with a built-in one (its `host.name` is the host it belongs to). The language
 server shows the error on the document, linked to the key in `package.json`;
 the TypeScript plugin and `mx-tsc` report `TS80003` at the key and `TS80001`
-`target not loaded: see package.json(line,col)` on the page, and exit non-zero.
+`target not loaded: see package.json(line,col)` on the page, and exit non-zero;
+the Vite plugin fails the transform with the same text.
 
 The loader hands the tool the descriptor; the **tool** then calls
 `descriptor.load(core)` with **its own** `@mxlang/core`. A target uses that
