@@ -505,7 +505,11 @@ function lowerAttr(
       ? `${attr.name}:${attr.modifier}`
       : attr.name;
 
+  // Native binding targets are references. Custom-tag and attribute-tag
+  // contracts consume their own bound-value vocabulary (decision 138, E1),
+  // including literal arrays; do not replace their shape/item diagnostics.
   if (
+    isElement &&
     attr.bound &&
     attr.value?.type !== "Identifier" &&
     !(

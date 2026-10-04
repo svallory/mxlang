@@ -540,12 +540,14 @@ spreads instead, without changing the prop name or value.
 
 Arguments on these ordinary attributes are rejected at the authored name:
 `<div :foo()="y"/>` reports `Unsupported arguments on the \`value:foo\` attribute.`
-A binding (`:=`) is a different form and keeps the base name. Its target must
-be an identifier or a member expression (including optional members, excluding
-private members); otherwise core reports Marko's `Attributes may only be bound
-to identifiers or member expressions` at the value. For example,
-`<div :="x"/>` errors at structured line 1, column 7 (printed 1:8), rather than
-silently rendering `value="x"`. Host-specific binding support is unchanged.
+A binding (`:=`) is a different form and keeps the base name. On a native
+element its target must be an identifier or a member expression (including
+optional members, excluding private members); otherwise core reports Marko's
+`Attributes may only be bound to identifiers or member expressions` at the
+value. For example, `<div :="x"/>` errors at structured line 1, column 7
+(printed 1:8), rather than silently rendering `value="x"`. Host-specific binding
+support is unchanged. Custom-tag and attribute-tag contracts retain their own
+bound-value shape/item checks (decision 138, E1), including literal arrays.
 
 | Authored | Meaning | html | preact/react/hono | solid | `.astro.mx` | angular |
 |---|---|---|---|---|---|---|
