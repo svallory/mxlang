@@ -1325,6 +1325,15 @@ function attributeIfChainEnd(body: Node[], index: number): number {
   return cursor;
 }
 
+/** Two source-ordered node lists as one, ordered by where each node opens. */
+function mergeBySourceOffset(ctx: Ctx, first: Node[], second: Node[]): Node[] {
+  const keyed = [...first, ...second].map((node) => ({
+    node,
+    at: nodeSpan(ctx, node).sourceStart,
+  }));
+  return keyed.sort((a, b) => a.at - b.at).map(({ node }) => node);
+}
+
 /** Lowers direct and control-flow attribute tags, recursively. */
 function lowerAttributeTags(
   ctx: Ctx,
@@ -1342,8 +1351,16 @@ function lowerAttributeTags(
     siblings?: Node[];
   }> = [];
   const directTags = node.attributeTags ?? [];
+  // Marko's parser moves a comment written right before an `@tag` into the
+  // parent's `attributeTags`. It is body content, not an attribute tag: it
+  // goes back among the content children, merged by source offset.
+  const hoistedComments: Node[] = [];
   for (let index = 0; index < directTags.length; index++) {
     const tag = directTags[index];
+    if (tag?.type === "MarkoComment") {
+      hoistedComments.push(tag);
+      continue;
+    }
     if (isControl(tag) && containsAttributeTags(tag)) {
       candidates.push({
         offset: nodeSpan(ctx, tag).sourceStart,
@@ -1430,10 +1447,14 @@ function lowerAttributeTags(
       )
       .map((candidate) => candidate.index),
   );
-  const contentChildren = body.filter(
+  const bodyChildren = body.filter(
     (_child: Node, index: number) =>
       !controlStarts.has(index) && !consumed.has(index),
   );
+  const contentChildren =
+    hoistedComments.length === 0
+      ? bodyChildren
+      : mergeBySourceOffset(ctx, hoistedComments, bodyChildren);
   if (inControl && tree.length > 0) {
     const offending = contentChildren.find((child: Node) => !isLayout(child));
     if (offending) {

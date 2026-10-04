@@ -2564,7 +2564,11 @@ All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
   `args`, with `name` without the `@`. `attrTags` is the tree form of a tag's attribute tags, with
   `<if>`/`<for>` among them kept (those nodes carry no `span`, unlike the body
   nodes); they are **not** in `children`, and their
-  interleaving with ordinary children is not kept.
+  interleaving with ordinary children is not kept. Every other node written
+  beside an attribute tag (text, tags, comments) is in `children`, in source
+  order, exactly as it is without attribute tags. A comment written right
+  before an `@tag` is one of them: Marko's parser moves it into the tag's
+  attribute list, and core puts it back among the children.
 - **`DataAttr`**, by `kind`:
 
   | `kind` | Source | Fields |

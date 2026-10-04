@@ -82,6 +82,20 @@ function requiredSpan(span: SourceSpan | undefined, what: string): SourceSpan {
   return span;
 }
 
+/** A span the tree can emit: present, with finite offsets (no `NaN`). */
+function finiteSpan(span: SourceSpan | undefined, what: string): SourceSpan {
+  const checked = requiredSpan(span, what);
+  if (
+    !Number.isFinite(checked.sourceStart) ||
+    !Number.isFinite(checked.sourceEnd)
+  ) {
+    throw new Error(
+      `@mxlang/data: core IR invariant broken — ${what} carries a non-finite span`,
+    );
+  }
+  return checked;
+}
+
 function dataExpr(expr: Expr, what: string): DataExpr {
   return {
     code: expr.code,
@@ -379,7 +393,10 @@ function dataAttrTag(tag: AttributeTag): DataAttrTagNode {
   return {
     kind: "attr-tag",
     name: tag.name,
-    nameSpan: tag.nameSpan,
+    nameSpan: finiteSpan(
+      tag.nameSpan,
+      `attribute tag \`<@${tag.name}>\`'s name`,
+    ),
     span: withoutTrailingNewline(
       requiredSpan(tag.span, `attribute tag \`<@${tag.name}>\``),
     ),
