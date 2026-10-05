@@ -73,6 +73,10 @@ const descriptor: TargetDescriptor = {
             ...input,
             targets: input.targets ?? targets(),
           }),
+        completeTypecheckModule: (code) =>
+          (
+            require("./typecheck-module.ts") as typeof import("./typecheck-module.ts")
+          ).appendSolidBuiltinImport(code),
         readCalleeInput: (request) =>
           (
             require("./callee-reader.ts") as typeof import("./callee-reader.ts")

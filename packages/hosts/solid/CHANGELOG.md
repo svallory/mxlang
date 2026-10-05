@@ -1,5 +1,7 @@
 # Changelog
 
+- **Added (bridge-host, decision 154):** `appendSolidBuiltinImport` (moved from `@mxlang/typescript-plugin`) is Solid's `completeTypecheckModule` on the `.solid.mx` file kind, behind the descriptor's lazy `require`; also exported. Output unchanged.
+
 - **Changed (solid-rename, decision 154):** the Solid file kind's `languageIds` are now `["solidmx", "solid"]` (was `["solidmx", "SolidMX"]`): Zed derives its LSP language id from the lowercased language name, and its language is now `Solid`. The `solidmx` id, `compileSolidMx` and the `.solid.mx` suffix are unchanged.
 
 - **Fix (jsx-textarea-value-content, decision 149):** `<textarea value=x/>` renders the value as escaped content, as Marko 6.3.51 does: `null`/`undefined`/`false`/`true` render nothing, `0` and `""` are kept, a leading newline is doubled for the server, a later `value` beats an earlier spread's, and a spread's `value` yields to a body. An explicit `value` together with body content is the compile error "A textarea cannot have both a value attribute and body content." A runtime-resolved `<${tag} value=…/>` that is a textarea takes `value` as content and rejects `content`. Solid doubles under `isServer`, for a runtime-resolved `<${tag} value=…/>` (a `value` attribute, a spread or the args object) too, through `__mxTextareaDynValue`/`__mxTextareaDynSpread`, which leave every non-textarea target and the client render untouched. A runtime-resolved `<${tag} value=…>body</>` whose tag is `textarea` throws Marko's dynamic-textarea content error.

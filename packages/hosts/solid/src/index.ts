@@ -32,6 +32,7 @@ export {
   SolidEmitter,
   solidDeclarations,
 } from "./emitter.ts";
+export { appendSolidBuiltinImport } from "./typecheck-module.ts";
 
 /** Attribute-tag value specialised to Solid's reusable accessor renderable. */
 export type AttrTag<

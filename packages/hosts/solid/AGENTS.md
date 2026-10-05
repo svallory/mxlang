@@ -6,7 +6,7 @@ The Solid host targets **Solid 2 only** — no Solid 1 lowering table, no dual t
 
 Solid 2 is pre-stable and RCs ship weekly. Policy: **pin one RC and stay on it**; re-sync the research note on each bump we choose to take, and do not chase every RC. See `README.md` "Solid 2 RC policy".
 
-Consequences encoded in the lowering table: `Index`/`Key`/`mxRange` are gone (one `For` with a `keyed` prop, plus `Repeat`); `classList` is gone (one `class` prop taking a string, object, or recursive array); `on:`/`oncapture:`/`attr:`/`bool:`/`use:` are parse errors with fix-it hints (only `prop:` survives); `<try>` lowers to `Errored`/`Loading`. Both compilers auto-import the builtIns (`For Show Switch Match Loading Reveal Portal Repeat Dynamic Errored`), and escaped block values additionally request `@solidjs/web`'s public `escape` helper through the region's hoisted-import channel. **That auto-import is Solid's own compiler stage** (`@solidjs/vite-plugin`'s native or Babel compiler), which never runs inside the type-check projection — see `packages/tooling/typescript-plugin/AGENTS.md`'s note on `appendSolidBuiltinImport`, which supplies the same names there so `tsc`/tsserver can resolve them too.
+Consequences encoded in the lowering table: `Index`/`Key`/`mxRange` are gone (one `For` with a `keyed` prop, plus `Repeat`); `classList` is gone (one `class` prop taking a string, object, or recursive array); `on:`/`oncapture:`/`attr:`/`bool:`/`use:` are parse errors with fix-it hints (only `prop:` survives); `<try>` lowers to `Errored`/`Loading`. Both compilers auto-import the builtIns (`For Show Switch Match Loading Reveal Portal Repeat Dynamic Errored`), and escaped block values additionally request `@solidjs/web`'s public `escape` helper through the region's hoisted-import channel. **That auto-import is Solid's own compiler stage** (`@solidjs/vite-plugin`'s native or Babel compiler), which never runs inside the type-check projection — see `packages/tooling/typescript-plugin/AGENTS.md`'s note on `appendSolidBuiltinImport` (`src/typecheck-module.ts`, this file kind's `completeTypecheckModule`), which supplies the same names there so `tsc`/tsserver can resolve them too.
 
 Event props emitted by this host (`onClick=`, `on-dblclick=`, …) are looked up in `@solidjs/web`'s own declared `jsx.d.ts` spelling (`event-names.ts`'s vendored `SOLID_EVENT_PROP_NAMES`, drift-tested against the installed package), not recomposed by capitalizing only the DOM name's first letter — 97 of the 143 declared names differ from `onDblclick`-style capitalize-first (`onDblClick`, `onKeyDown`, …). Solid's runtime lowercases whatever follows `on` regardless of casing (`prop.slice(2).toLowerCase()`), so this is a typing-only change: it can never bind a different DOM event, only satisfy or fail `jsx.d.ts`'s exact prop-name keys.
 
@@ -39,7 +39,7 @@ Three facts worth knowing before touching it:
   local shadowing, since Marko's own rule is that *any* in-scope binding
   resolves a capitalized tag as a reference to it, shadowed or not); and
   `SOLID_BUILTIN_TAGS` (`@mxlang/parser`, shared with
-  `@mxlang/typescript-plugin`'s `appendSolidBuiltinImport`) — `Show`, `For`,
+  this package's `appendSolidBuiltinImport`) — `Show`, `For`,
   `Switch`, `Match`, `Repeat`, `Errored`, `Loading`, `Dynamic`, which
   `@solidjs/vite-plugin`'s own compiler stage auto-imports and this compiler
   never runs through. Neither concept has a Marko equivalent to measure
