@@ -4,6 +4,7 @@ module.exports = {
   descriptorVersion: 0,
   name: "fake-file-kinds",
   packageName: "@fake/mx-file-kinds",
+  defaultTag: "node",
   host: {
     name: "fake-fk",
     fileKinds: [{ segment: "fk", diagnosticSource: "fk" }],

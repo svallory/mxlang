@@ -21,11 +21,17 @@ import {
 
 // Invented built-ins: core names no target and no host (decision 126).
 const lookup = createTargetLookup([
-  { descriptorVersion: 0, name: "page", packageName: "@t/page" },
+  {
+    descriptorVersion: 0,
+    name: "page",
+    packageName: "@t/page",
+    defaultTag: "node",
+  },
   {
     descriptorVersion: 0,
     name: "unit-jsx",
     packageName: "@t/unit",
+    defaultTag: "node",
     host: { name: "unit" },
   },
 ]);
@@ -209,6 +215,22 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
     );
   });
 
+  it.each(["target", "host"])(
+    "a descriptor without defaultTag is refused under mx.%s",
+    (key) => {
+      const { diagnostics } = resolve({ [key]: specifier("no-default-tag") }, [
+        "no-default-tag",
+      ]);
+      expect(diagnostics[0]).toMatchObject({
+        code: "target-invalid-descriptor",
+        severity: "error",
+      });
+      expect(diagnostics[0]?.message).toContain(
+        '"defaultTag" is missing, expected a string',
+      );
+    },
+  );
+
   it("version", () => {
     const { diagnostics } = resolve({ target: specifier("version") }, [
       "version",
@@ -245,6 +267,8 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
   it.each([
     ["target", "throws"],
     ["target", "invalid"],
+    ["target", "no-default-tag"],
+    ["host", "no-default-tag"],
     ["host", "throws"],
   ] as const)(
     "positions %s %s at the key's value with its length",
@@ -265,7 +289,12 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
       install: ["ok"],
     });
     const taken = createTargetLookup([
-      { descriptorVersion: 0, name: "fake-ok", packageName: "@t/taken" },
+      {
+        descriptorVersion: 0,
+        name: "fake-ok",
+        packageName: "@t/taken",
+        defaultTag: "node",
+      },
     ]);
     const { diagnostics, policy } = resolveTargetPolicyDetailed(
       project.path("a.mx"),
@@ -286,7 +315,14 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
       install: ["ok"],
     });
     const reserving = createTargetLookup(
-      [{ descriptorVersion: 0, name: "page", packageName: "@t/page" }],
+      [
+        {
+          descriptorVersion: 0,
+          name: "page",
+          packageName: "@t/page",
+          defaultTag: "node",
+        },
+      ],
       { reservedNames: ["fake-ok"] },
     );
     const { diagnostics } = resolveTargetPolicyDetailed(
@@ -415,11 +451,17 @@ describe("round 2: what a loaded descriptor may not declare", () => {
 
   it("a built-in host name cannot be joined", () => {
     const withSolid = createTargetLookup([
-      { descriptorVersion: 0, name: "page", packageName: "@t/page" },
+      {
+        descriptorVersion: 0,
+        name: "page",
+        packageName: "@t/page",
+        defaultTag: "node",
+      },
       {
         descriptorVersion: 0,
         name: "solid-jsx",
         packageName: "@t/solid",
+        defaultTag: "node",
         host: { name: "solid" },
       },
     ]);
@@ -459,7 +501,7 @@ describe("round 3: a failed load is fixed by fixing any file it loaded", () => {
     expect(first.diagnostics[0]?.message).toContain("lib is broken");
     writeFileSync(
       join(project.root, "t/lib.cjs"),
-      'module.exports = { descriptorVersion: 0, name: "fixed-b", packageName: "@t/fixed-b" };\n',
+      'module.exports = { descriptorVersion: 0, name: "fixed-b", packageName: "@t/fixed-b", defaultTag: "node" };\n',
     );
     const fixed = resolveTargetPolicyDetailed(project.path("a.mx"), lookup);
     expect(fixed.diagnostics).toEqual([]);

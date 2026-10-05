@@ -41,6 +41,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "astro-html",
   packageName: "@mxlang/astro",
+  defaultTag: "div",
   // `typescript-plugin/src/mx-language.ts` (`hostPolicy.host === "astro" || …`)
   // and `language-server/src/diagnose.ts` (`resolveStrict`) force strict for astro.
   strict: "always",

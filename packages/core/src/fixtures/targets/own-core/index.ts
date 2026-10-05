@@ -11,6 +11,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "acme-own-core",
   packageName: "@acme/mx-own-core",
+  defaultTag: "node",
   load() {
     return {
       compileModule(_source, filename) {

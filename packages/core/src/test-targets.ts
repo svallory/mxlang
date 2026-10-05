@@ -21,7 +21,13 @@ function target(
   packageName: string,
   extra: Partial<TargetDescriptor> = {},
 ): TargetDescriptor {
-  return { descriptorVersion: 0, name, packageName, ...extra };
+  return {
+    descriptorVersion: 0,
+    name,
+    packageName,
+    defaultTag: "node",
+    ...extra,
+  };
 }
 
 /** A lookup over two targets: a hostless one and a hosted one with a file kind. */

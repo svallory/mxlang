@@ -34,6 +34,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "solid-jsx",
   packageName: "@mxlang/solid",
+  defaultTag: "div",
   declarations: { default: solidDeclarations },
   // `typescript-plugin/src/mx-language.ts`: Solid merges the decoded map with
   // the recorded mappings; every other target re-lowers.

@@ -41,6 +41,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "react-jsx",
   packageName: "@mxlang/react",
+  defaultTag: "div",
   declarations: { default: reactDeclarations },
   load() {
     const { compileReactMx } =

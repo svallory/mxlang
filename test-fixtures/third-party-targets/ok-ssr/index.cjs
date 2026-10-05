@@ -4,6 +4,7 @@ module.exports = {
   descriptorVersion: 0,
   name: "fake-ok-ssr",
   packageName: "@fake/mx-ok-ssr",
+  defaultTag: "node",
   host: { name: "fake-host" },
   load(core) {
     if (typeof core.TranslateError !== "function") {

@@ -150,7 +150,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
     return file;
   }
 
-  const DESCRIPTOR = `{ descriptorVersion: 0, name: "pkg-target", packageName: "pkg" }`;
+  const DESCRIPTOR = `{ descriptorVersion: 0, name: "pkg-target", packageName: "pkg", defaultTag: "node" }`;
 
   beforeEach(() => {
     project = realpathSync(mkdtempSync(join(tmpdir(), "mx-target-loader-")));
@@ -297,7 +297,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
   describe("cache (design note §4.2)", () => {
     const counting = (marker: string) => `
       globalThis.__mxTargetLoads = (globalThis.__mxTargetLoads ?? 0) + 1;
-      module.exports = { default: { descriptorVersion: 0, name: "pkg-target", packageName: "pkg", pending: "${marker}" } };
+      module.exports = { default: { descriptorVersion: 0, name: "pkg-target", packageName: "pkg", defaultTag: "node", pending: "${marker}" } };
     `;
 
     const loads = () =>
@@ -491,7 +491,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
       const entry = install(
         "pkg",
         `const v = require("./v.js");
-         module.exports = { default: { descriptorVersion: 0, name: "pkg-target", packageName: "pkg", pending: v } };`,
+         module.exports = { default: { descriptorVersion: 0, name: "pkg-target", packageName: "pkg", defaultTag: "node", pending: v } };`,
       );
       const dir = dirname(entry);
       const internal = join(dir, "v.js");
@@ -530,7 +530,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
         `globalThis.__mxShared = (globalThis.__mxShared ?? 0) + 1; module.exports = 1;`,
       );
       const local = (marker: string) =>
-        `require("dep"); require("../shared.js"); module.exports = { default: { descriptorVersion: 0, name: "local", packageName: "local", pending: "${marker}" } };`;
+        `require("dep"); require("../shared.js"); module.exports = { default: { descriptorVersion: 0, name: "local", packageName: "local", defaultTag: "node", pending: "${marker}" } };`;
       writeFileSync(join(dir, "vue.js"), local("one"));
       const first = loadTargetDescriptor("./targets/vue.js", project);
       expect(first.pending).toBe("one");
@@ -562,7 +562,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
       );
       writeFileSync(
         join(dir, "vue.js"),
-        `require("dep"); module.exports = { default: { descriptorVersion: 0, name: "local", packageName: "local", pending: "one" } };`,
+        `require("dep"); module.exports = { default: { descriptorVersion: 0, name: "local", packageName: "local", defaultTag: "node", pending: "one" } };`,
       );
       const nested = join(project, "apps", "web");
       mkdirSync(nested, { recursive: true });
@@ -632,7 +632,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
       writeFileSync(join(dir, "w.js"), counter("__mxW"));
       const entry = (internal: string) =>
         `const n = require("./${internal}.js");
-         module.exports = { default: { descriptorVersion: 0, name: "pkg-target", packageName: "pkg", pending: String(n), load: () => require("./${internal}.js") } };`;
+         module.exports = { default: { descriptorVersion: 0, name: "pkg-target", packageName: "pkg", defaultTag: "node", pending: String(n), load: () => require("./${internal}.js") } };`;
       writeFileSync(join(dir, "index.js"), entry("v"));
       writeFileSync(join(dir, "other.js"), entry("w"));
       const INDEX = "./node_modules/pkg/index.js";
@@ -664,7 +664,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
     it("forgets the cached descriptor when a reload fails, so the next call does not evict the package again", () => {
       const file = install(
         "pkg",
-        `require("./v.js"); module.exports = { default: ${"{"} descriptorVersion: 0, name: "pkg-target", packageName: "pkg" ${"}"} };`,
+        `require("./v.js"); module.exports = { default: ${"{"} descriptorVersion: 0, name: "pkg-target", packageName: "pkg", defaultTag: "node" ${"}"} };`,
       );
       const dir = dirname(file);
       writeFileSync(
@@ -707,7 +707,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
       mkdirSync(dir, { recursive: true });
       const target = join(dir, "vue.js");
       const body = (marker: string) =>
-        `module.exports = { default: { descriptorVersion: 0, name: "local", packageName: "local", pending: "${marker}" } };`;
+        `module.exports = { default: { descriptorVersion: 0, name: "local", packageName: "local", defaultTag: "node", pending: "${marker}" } };`;
       writeFileSync(target, body("one"));
       const manifest = join(project, "package.json");
       const original = statSync(manifest).mtimeMs / 1000;
@@ -727,7 +727,7 @@ describe("loadTargetDescriptor: installed packages and export shapes", () => {
     it("forgets the cached descriptor when a reload is invalid", () => {
       const file = install(
         "pkg",
-        `require("./v.js"); module.exports = { default: ${"{"} descriptorVersion: 0, name: "pkg-target", packageName: "pkg" ${"}"} };`,
+        `require("./v.js"); module.exports = { default: ${"{"} descriptorVersion: 0, name: "pkg-target", packageName: "pkg", defaultTag: "node" ${"}"} };`,
       );
       const dir = dirname(file);
       writeFileSync(

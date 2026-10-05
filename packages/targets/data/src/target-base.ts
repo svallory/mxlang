@@ -14,5 +14,6 @@ export const dataTargetBase: TargetDescriptor = {
   descriptorVersion: 0,
   name: "data",
   packageName: "@mxlang/data",
+  defaultTag: "object",
   declarations: { default: dataDeclarations },
 };

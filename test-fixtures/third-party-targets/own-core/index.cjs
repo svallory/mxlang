@@ -6,6 +6,7 @@ module.exports = {
   descriptorVersion: 0,
   name: "fake-own-core",
   packageName: "@fake/mx-own-core",
+  defaultTag: "node",
   host: { name: "fake-own" },
   load() {
     const core = own;

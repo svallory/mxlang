@@ -41,6 +41,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "hono-jsx",
   packageName: "@mxlang/hono",
+  defaultTag: "div",
   declarations: { default: honoDeclarations },
   load() {
     const { compileHonoMx } =

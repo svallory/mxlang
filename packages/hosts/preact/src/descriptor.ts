@@ -41,6 +41,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "preact-jsx",
   packageName: "@mxlang/preact",
+  defaultTag: "div",
   declarations: { default: preactDeclarations },
   load() {
     const { compilePreactMx } =

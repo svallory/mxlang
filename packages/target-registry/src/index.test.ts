@@ -274,6 +274,7 @@ describe("the reserved `astro-template` name", () => {
     descriptorVersion: 0,
     name: "astro-template",
     packageName: "@acme/mx-astro",
+    defaultTag: "node",
   };
 
   it("is not a built-in target", () => {
@@ -285,6 +286,7 @@ describe("the reserved `astro-template` name", () => {
       descriptorVersion: 0,
       name: "other-jsx",
       packageName: "@acme/other",
+      defaultTag: "node",
       host: {
         name: "other",
         fileKinds: [{ segment: "astro", diagnosticSource: "othermx" }],

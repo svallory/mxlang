@@ -49,6 +49,7 @@ describe("target-table page dispatch", () => {
       descriptorVersion: 0,
       name: "html",
       packageName: "@test/fake",
+      defaultTag: "node",
       host: { name: "not-a-built-in-host" },
       mappings: "merge-recorded",
       strict: "always",

@@ -13,6 +13,7 @@ function target(overrides: Record<string, unknown> = {}): TargetDescriptor {
     descriptorVersion: 0,
     name: "alpha",
     packageName: "@t/alpha",
+    defaultTag: "node",
     ...overrides,
   } as TargetDescriptor;
 }
@@ -54,6 +55,79 @@ function lookupRule(
   }
   throw new Error("expected createTargetLookup to throw");
 }
+
+describe("defaultTag (decision 145)", () => {
+  it("is required on a target", () => {
+    const { defaultTag: _omitted, ...rest } = target() as unknown as Record<
+      string,
+      unknown
+    >;
+    const error = invalidField(rest);
+    expect(error.field).toBe("defaultTag");
+    expect(error.message).toContain('"defaultTag" is missing');
+  });
+
+  it.each([
+    [1, "is a number"],
+    [null, "is null"],
+    [true, "is a boolean"],
+    [{}, "is an object"],
+    ["", "is an empty string"],
+  ])("rejects %j", (value, detail) => {
+    const error = invalidField(target({ defaultTag: value }));
+    expect(error.field).toBe("defaultTag");
+    expect(error.message).toContain(detail);
+  });
+
+  it("accepts any non-empty string, naming no tag itself", () => {
+    expect(() =>
+      validateDescriptor(target({ defaultTag: "anything" })),
+    ).not.toThrow();
+  });
+
+  it("is checked before the later fields", () => {
+    expect(invalidField(target({ defaultTag: 1, strict: "no" })).field).toBe(
+      "defaultTag",
+    );
+  });
+
+  it("host.defaultTag is an optional non-empty string", () => {
+    expect(() =>
+      validateDescriptor(hosted("a", "h", {}, { defaultTag: "slot" })),
+    ).not.toThrow();
+    for (const value of [1, "", null]) {
+      const error = invalidField(hosted("a", "h", {}, { defaultTag: value }));
+      expect(error.field).toBe("host.defaultTag");
+    }
+  });
+
+  it("host.allowContractDefaultTag is an optional boolean", () => {
+    for (const value of [true, false]) {
+      expect(() =>
+        validateDescriptor(
+          hosted("a", "h", {}, { allowContractDefaultTag: value }),
+        ),
+      ).not.toThrow();
+    }
+    for (const value of ["no", 0, null]) {
+      const error = invalidField(
+        hosted("a", "h", {}, { allowContractDefaultTag: value }),
+      );
+      expect(error.field).toBe("host.allowContractDefaultTag");
+      expect(error.message).toContain("a boolean");
+    }
+  });
+
+  it("createTargetLookup refuses a descriptor without it", () => {
+    const { defaultTag: _omitted, ...rest } = target() as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(() =>
+      createTargetLookup([rest as unknown as TargetDescriptor]),
+    ).toThrow(TargetDescriptorError);
+  });
+});
 
 describe("validateDescriptor", () => {
   it("returns the very object it was given when valid", () => {

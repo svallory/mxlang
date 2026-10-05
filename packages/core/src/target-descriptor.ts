@@ -172,6 +172,18 @@ export interface TargetHost {
   readonly default?: true;
   /** Host module file kinds. */
   readonly fileKinds?: readonly HostFileKind[];
+  /**
+   * What the unnamed tag stands for when the host emits it, in place of the
+   * target's `defaultTag`. Outranked by `mx.<target>.defaultTag` and, unless
+   * `allowContractDefaultTag` is false, by a parent contract.
+   */
+  readonly defaultTag?: string;
+  /**
+   * Whether a parent contract's `defaultTag` may override the default for
+   * this host. Absent means true. A host that cannot emit an arbitrary tag
+   * under a given parent sets it to false.
+   */
+  readonly allowContractDefaultTag?: boolean;
 }
 
 /**
@@ -190,6 +202,17 @@ export interface TargetDescriptor {
    * target; targets share one only when they have the same `host.name`.
    */
   readonly packageName: string;
+  /**
+   * The built-in tag an unnamed tag (`<#id>`, `<.class>`) stands for in this
+   * target's output (decision 145). Required: a target with no answer would
+   * leave the shorthand meaningless. It is the last rung of the ladder; a
+   * `mx.<target>.defaultTag` in the package, a host's `defaultTag` and a
+   * parent contract's `defaultTag` all outrank it.
+   *
+   * Core only checks that it is a non-empty string. Whether the name is a
+   * usable tag is the target's own claim, checked where tags are known.
+   */
+  readonly defaultTag: string;
   /**
    * Values accepted under `mx.host` that select this target. Never accepted
    * under `mx.target`. At most one may be non-deprecated: it is the hostless
@@ -442,6 +465,11 @@ function validateHost(value: unknown): void {
       '"host.default" must be true when present',
     );
   }
+  if (value.defaultTag !== undefined)
+    requireString(value, "defaultTag", "host.defaultTag");
+  const allow = value.allowContractDefaultTag;
+  if (allow !== undefined && typeof allow !== "boolean")
+    throw bad("host.allowContractDefaultTag", allow, "a boolean");
   const kinds = value.fileKinds;
   if (kinds !== undefined) {
     if (!Array.isArray(kinds)) throw bad("host.fileKinds", kinds, "an array");
@@ -518,6 +546,7 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
 
   requireName(value, "name", "name");
   requireString(value, "packageName", "packageName");
+  requireString(value, "defaultTag", "defaultTag");
 
   if (value.legacyHostValues !== undefined)
     validateLegacyHostValues(value.legacyHostValues);

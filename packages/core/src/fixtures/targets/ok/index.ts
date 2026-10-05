@@ -8,6 +8,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "acme-jsx",
   packageName: "@acme/mx-ok",
+  defaultTag: "node",
   host: {
     name: "acme",
     fileKinds: [{ segment: "acme", diagnosticSource: "acmemx" }],

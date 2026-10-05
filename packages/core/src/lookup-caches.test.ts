@@ -8,7 +8,12 @@ import { createTargetLookup } from "./target-descriptor.ts";
 import { lookup } from "./test-targets.ts";
 
 const own = createTargetLookup([
-  { descriptorVersion: 0, name: "page", packageName: "@t/page" },
+  {
+    descriptorVersion: 0,
+    name: "page",
+    packageName: "@t/page",
+    defaultTag: "node",
+  },
 ]);
 
 const dirs: string[] = [];

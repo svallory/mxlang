@@ -46,6 +46,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "html",
   packageName: "@mxlang/html",
+  defaultTag: "div",
   // `translator` is `host-policy.ts`'s deprecated alias (the warning text lives there).
   legacyHostValues: [
     { value: "html" },

@@ -4,6 +4,7 @@ module.exports = {
   descriptorVersion: 0,
   name: "fake-join-solid",
   packageName: "@fake/mx-join-solid",
+  defaultTag: "node",
   host: { name: "solid" },
   load(core) {
     if (typeof core.TranslateError !== "function") {

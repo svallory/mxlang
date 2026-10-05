@@ -19,6 +19,7 @@ export function testTargetLookupWithSegments(
       descriptorVersion: 0,
       name: descriptor.name,
       packageName: descriptor.packageName,
+      defaultTag: descriptor.defaultTag,
       host: {
         name: descriptor.host?.name as string,
         fileKinds: segments.map((segment) => ({

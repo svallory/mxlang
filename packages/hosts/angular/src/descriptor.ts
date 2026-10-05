@@ -15,6 +15,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "angular-template",
   packageName: "@mxlang/angular",
+  defaultTag: "div",
   declarations: { default: angularDeclarations },
   // No compileModule or compileRegion yet: there is no HostOptions boundary
   // to forward a caller's targets through. Keep the page path unwired.

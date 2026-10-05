@@ -24,6 +24,7 @@ import { join } from "node:path";
  * - `hostless`  valid target with no `host` part (an error under `mx.host`)
  * - `throws`    its module throws on evaluation
  * - `invalid`   exports something that is not a descriptor
+ * - `no-default-tag` a valid descriptor without the required `defaultTag`
  * - `version`   exports `descriptorVersion: 1`
  *
  * `missing` has no package: a specifier no project installs.
@@ -37,6 +38,7 @@ export type FakeTarget =
   | "hostless"
   | "throws"
   | "invalid"
+  | "no-default-tag"
   | "version";
 
 const here = import.meta.dirname;

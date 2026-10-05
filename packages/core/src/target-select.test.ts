@@ -12,27 +12,36 @@ const lookup = createTargetLookup([
     descriptorVersion: 0,
     name: "page",
     packageName: "@t/page",
+    defaultTag: "node",
     legacyHostValues: [{ value: "page" }],
   },
   {
     descriptorVersion: 0,
     name: "unit-jsx",
     packageName: "@t/unit",
+    defaultTag: "node",
     host: { name: "unit", default: true },
   },
   {
     descriptorVersion: 0,
     name: "unit-dom",
     packageName: "@t/unit",
+    defaultTag: "node",
     host: { name: "unit" },
   },
   {
     descriptorVersion: 0,
     name: "view-jsx",
     packageName: "@t/view",
+    defaultTag: "node",
     host: { name: "view" },
   },
-  { descriptorVersion: 0, name: "tree", packageName: "@t/tree" },
+  {
+    descriptorVersion: 0,
+    name: "tree",
+    packageName: "@t/tree",
+    defaultTag: "node",
+  },
 ]);
 const roots: string[] = [];
 afterEach(() => {
