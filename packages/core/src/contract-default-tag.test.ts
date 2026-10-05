@@ -377,10 +377,6 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
     });
     expect(bad).not.toContain("is invalid");
   });
-    expect(bad).toContain(
-      "(the parent's `defaultTag` `nope` is invalid; see the declaration)",
-    );
-  });
 
   it("the top level has no parent contract", () => {
     expect(asked("<.a/>")).toEqual([undefined]);
