@@ -105,23 +105,6 @@ describe("defaultTag (decision 145)", () => {
     }
   });
 
-  it("host.allowContractDefaultTag is an optional boolean", () => {
-    for (const value of [true, false]) {
-      expect(() =>
-        validateDescriptor(
-          hosted("a", "h", {}, { allowContractDefaultTag: value }),
-        ),
-      ).not.toThrow();
-    }
-    for (const value of ["no", 0, null]) {
-      const error = invalidField(
-        hosted("a", "h", {}, { allowContractDefaultTag: value }),
-      );
-      expect(error.field).toBe("host.allowContractDefaultTag");
-      expect(error.message).toContain("a boolean");
-    }
-  });
-
   it("createTargetLookup refuses a descriptor without it", () => {
     const { defaultTag: _omitted, ...rest } = target() as unknown as Record<
       string,

@@ -1,0 +1,6 @@
+{
+  "name": "@fake/mx-forbids-nohost",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs"
+}

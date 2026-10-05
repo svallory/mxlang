@@ -387,18 +387,13 @@ function contractDiagnostics(
       declarations: descriptor.declarations?.default,
       builtins: builtinsOf(descriptor),
     }),
-    ...(descriptor.host
-      ? {
-          host: {
-            name: descriptor.host.name,
-            // The descriptor and the host's declarations may each forbid it.
-            allowContractDefaultTag:
-              descriptor.host.allowContractDefaultTag !== false &&
-              descriptor.declarations?.default.allowContractDefaultTag !==
-                false,
-          },
-        }
-      : {}),
+    // One source for the permit flag: the target's declarations, host or not.
+    host: {
+      name: descriptor.host?.name ?? descriptor.name,
+      kind: descriptor.host ? "host" : "target",
+      allowContractDefaultTag:
+        descriptor.declarations?.default.allowContractDefaultTag !== false,
+    },
   });
 }
 

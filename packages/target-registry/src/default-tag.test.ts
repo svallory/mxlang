@@ -864,3 +864,66 @@ describe("a dashed custom-element name, per target, as measured (decision 145, r
     }
   });
 });
+
+describe("one source for the permit flag: the declarations (review round 3)", () => {
+  afterEach(() => cleanupProjects());
+
+  /** A project whose contract says `span`, and a config saying `main`; returns registration and compile. */
+  function run(fixture: Parameters<typeof specifier>[0], targetName: string) {
+    const proj = fakeProject({
+      mx: { target: specifier(fixture), [targetName]: { defaultTag: "main" } },
+      install: [fixture],
+    });
+    mkdirSync(proj.path("tags"));
+    writeFileSync(
+      proj.path("tags/my-list.tag.ts"),
+      'export default { defaultTag: "span", transform: (call) => call.content?.children ?? [] };\n',
+    );
+    const file = proj.path("a.mx");
+    const resolution = resolveTargetPolicyDetailed(file);
+    const descriptor = lookupFor(resolution.policy).target(
+      resolution.policy.target,
+    );
+    const load = descriptor?.load;
+    if (!load) throw new Error("fixture has no load");
+    const compiled = (load(core) as { compileModule: Function }).compileModule(
+      "<my-list><.a>x</></my-list>",
+      file,
+      {
+        customTags: getCustomTags(file, {
+          targets: lookupFor(resolution.policy),
+        }),
+        defaultTag: resolution.policy.defaultTag,
+        targets: lookupFor(resolution.policy),
+      },
+    ) as { code: string };
+    return {
+      registration: resolution.diagnostics
+        .filter((d) => d.code === "invalid-default-tag")
+        .map((d) => d.message),
+      elements: compiled.code,
+    };
+  }
+
+  it("a host whose declarations forbid it: the error names the host and the compile ignores the contract", () => {
+    const { registration, elements } = run("forbids-contract", "fake-forbid");
+    expect(registration).toEqual([
+      "`defaultTag` in the contract of `<my-list>` is not allowed: host `fake-forbid-host` does not permit per-tag default tags",
+    ]);
+    expect(elements).toBe("elements:main");
+  });
+
+  it("a target with no host: the error names the target, and the compile ignores the contract (never silent)", () => {
+    const { registration, elements } = run("forbids-nohost", "fake-nohost");
+    expect(registration).toEqual([
+      "`defaultTag` in the contract of `<my-list>` is not allowed: target `fake-nohost` does not permit per-tag default tags",
+    ]);
+    expect(elements).toBe("elements:main");
+  });
+
+  it("a host whose declarations permit it: no error, and the compile honours the contract", () => {
+    const { registration, elements } = run("permits-host", "fake-permits");
+    expect(registration).toEqual([]);
+    expect(elements).toBe("elements:span");
+  });
+});

@@ -128,7 +128,16 @@ export interface ContractDefaultTagInput {
   /** The scope the target checks a default tag in (custom tags known). */
   scope: DefaultTagScope;
   /** The target's host, when it has one: a host may forbid the rung. */
-  host?: { name: string; allowContractDefaultTag?: boolean };
+  /**
+   * Who answers for the target's declarations: its host's name when it has
+   * one, otherwise the target's. `allowContractDefaultTag` is the
+   * declarations' flag, the one value registration and compile both read.
+   */
+  host?: {
+    name: string;
+    kind?: "host" | "target";
+    allowContractDefaultTag?: boolean;
+  };
 }
 
 /**
@@ -169,7 +178,7 @@ export function contractDefaultTagDiagnostics(
       for (const { chain, value } of declared) {
         const owner = `\`<${name}>\`${chain.map((c) => ` \`<@${c}>\``).join("")}`;
         const reason = forbidden
-          ? `\`defaultTag\` in the contract of ${owner} is not allowed: host \`${input.host?.name}\` does not permit per-tag default tags`
+          ? `\`defaultTag\` in the contract of ${owner} is not allowed: ${input.host?.kind ?? "host"} \`${input.host?.name}\` does not permit per-tag default tags`
           : validateDefaultTag(value, input.scope);
         if (reason === undefined) continue;
         out.push({

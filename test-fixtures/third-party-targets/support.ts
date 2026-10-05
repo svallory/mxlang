@@ -26,7 +26,9 @@ import { join } from "node:path";
  * - `invalid`   exports something that is not a descriptor
  * - `no-default-tag` a valid descriptor without the required `defaultTag`
  * - `host-override` a host overriding `defaultTag`; its compile echoes the one it got
- * - `forbids-contract` a host with `allowContractDefaultTag: false`
+ * - `forbids-contract` a host whose declarations set `allowContractDefaultTag: false`
+ * - `forbids-nohost` the same on a target with no host
+ * - `permits-host` a host whose declarations permit the rung
  * - `bad-default-tag` a descriptor whose own `defaultTag` is no tag its target has
  * - `version`   exports `descriptorVersion: 1`
  *
@@ -45,6 +47,8 @@ export type FakeTarget =
   | "host-override"
   | "bad-default-tag"
   | "forbids-contract"
+  | "forbids-nohost"
+  | "permits-host"
   | "version";
 
 const here = import.meta.dirname;

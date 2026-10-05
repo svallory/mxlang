@@ -127,6 +127,7 @@ export function ownDefaultTag(
       scope,
       host: {
         name: input.hostName ?? input.target,
+        kind: input.hostName ? "host" : "target",
         ...(input.declarations?.allowContractDefaultTag === false
           ? { allowContractDefaultTag: false }
           : {}),

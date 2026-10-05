@@ -1,21 +1,18 @@
-// A host that does not permit per-tag default tags (decision 145): a contract
-// declaring defaultTag is a registration error naming the host, and a compile
-// never resolves the unnamed tag through the contract. Its compile reports the
-// element names it lowered, so a test can see which rung answered.
+// A host whose declarations permit the contract rung (decision 145): no registration error and the compile honours the contract.
+// Its compile reports the element names it lowered, so a test can see which rung answered.
 const declarations = {
   tags: {},
   isElement: () => true,
   isComponent: () => false,
-  allowContractDefaultTag: false,
 };
 
 module.exports = {
   descriptorVersion: 0,
-  name: "fake-forbid",
-  packageName: "@fake/mx-forbids-contract",
+  name: "fake-permits",
+  packageName: "@fake/mx-permits-host",
   defaultTag: "div",
   declarations: { default: declarations },
-  host: { name: "fake-forbid-host" },
+  host: { name: "fake-permits-host" },
   load(core) {
     declarations.resolveDefaultTag = (_node, parents, context) =>
       core.contractDefaultTag(parents, context, ["div"]) ??

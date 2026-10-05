@@ -178,16 +178,11 @@ export interface TargetHost {
   readonly fileKinds?: readonly HostFileKind[];
   /**
    * What the unnamed tag stands for when the host emits it, in place of the
-   * target's `defaultTag`. Outranked by `mx.<target>.defaultTag` and, unless
-   * `allowContractDefaultTag` is false, by a parent contract.
+   * target's `defaultTag`. Outranked by `mx.<target>.defaultTag` and, when the
+   * target's declarations permit it, by a parent contract
+   * (`HostDeclarations.allowContractDefaultTag`).
    */
   readonly defaultTag?: string;
-  /**
-   * Whether a parent contract's `defaultTag` may override the default for
-   * this host. Absent means true. A host that cannot emit an arbitrary tag
-   * under a given parent sets it to false.
-   */
-  readonly allowContractDefaultTag?: boolean;
 }
 
 /**
@@ -494,9 +489,6 @@ function validateHost(value: unknown): void {
   }
   if (value.defaultTag !== undefined)
     requireString(value, "defaultTag", "host.defaultTag");
-  const allow = value.allowContractDefaultTag;
-  if (allow !== undefined && typeof allow !== "boolean")
-    throw bad("host.allowContractDefaultTag", allow, "a boolean");
   const kinds = value.fileKinds;
   if (kinds !== undefined) {
     if (!Array.isArray(kinds)) throw bad("host.fileKinds", kinds, "an array");
