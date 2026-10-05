@@ -301,6 +301,36 @@ describe("mx-tsc on a data package", () => {
       expect(output).toContain("unknown attribute `id`");
     });
 
+    it("an invalid contract defaultTag is one error however many files use it (review round 2)", () => {
+      const dir = withContracts(
+        `export default { attributes: { defaultTag: "nope" }, attribute: {} };\n`,
+        {
+          "a.mx": "<attributes><#x/></attributes>\n",
+          "b.mx": "<attributes><#x/></attributes>\n",
+        },
+      );
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      const errors = output
+        .split("\n")
+        .filter((line) => line.includes("error TS"));
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain("contracts.ts(1,1): error TS80003:");
+    });
+
+    it("with a closed children that lists only the invalid value's intended tag, the next rung (object) is a legitimate E2 at each use", () => {
+      const dir = withContracts(
+        `export default { attributes: { defaultTag: "nope", children: { attribute: {} } }, attribute: {} };\n`,
+        { "a.mx": "<attributes><#x/></attributes>\n" },
+      );
+      const errors = check(dir)
+        .output.split("\n")
+        .filter((line) => line.includes("error TS"));
+      expect(errors).toHaveLength(2);
+      expect(errors[0]).toContain("contracts.ts(1,1): error TS80003:");
+      expect(errors[1]).toContain("`<object>` is not allowed here");
+    });
+
     it("an invalid contract defaultTag is TS80003 at the declaring contracts module", () => {
       const dir = withContracts(
         `export default { attributes: { defaultTag: "nope" } };\n`,

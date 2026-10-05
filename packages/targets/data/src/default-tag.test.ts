@@ -266,4 +266,31 @@ describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", ()
     const text = JSON.stringify(tree);
     expect(text).toContain('"name":"entry"');
   });
+
+  it("sees through if and for between the parent and the shorthand", () => {
+    const source =
+      "<attributes><if=x><#a/></if><else><#b/></else><for|i| of=xs><#c/></for></attributes>";
+    const { tree, diagnostics } = parseData(source, "/m.mx", {
+      customTags: mesh,
+    });
+    expect(diagnostics).toEqual([]);
+    expect(JSON.stringify(tree).match(/"name":"attribute"/g)?.length).toBe(3);
+  });
+
+  it("an invalid contract value falls through to object, with the one registration error elsewhere", () => {
+    const tags: Record<string, CustomTag> = {
+      attributes: { defaultTag: "nope" },
+    };
+    const { tree, diagnostics } = parseData(
+      "<attributes><#a/></attributes>",
+      "/m.mx",
+      {
+        customTags: tags,
+      },
+    );
+    expect(diagnostics).toEqual([]);
+    const inner = JSON.stringify(tree);
+    expect(inner).toContain('"name":"object"');
+    expect(inner).not.toContain('"name":"nope"');
+  });
 });

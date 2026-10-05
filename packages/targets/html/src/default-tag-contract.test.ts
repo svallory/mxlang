@@ -88,4 +88,34 @@ describe("the parent contract's defaultTag", () => {
       "<section",
     );
   });
+
+  it("an invalid contract value falls through: `input` never emits <input>, the next rung answers", () => {
+    const bad: Record<string, CustomTag> = {
+      "my-list": { ...pass, defaultTag: "input" },
+      "my-box": { ...pass, defaultTag: "not-a-tag" },
+      "my-wait": { ...pass, defaultTag: "await" },
+    };
+    for (const name of ["my-list", "my-box", "my-wait"]) {
+      const { code } = compile(
+        `<${name}><.a>x</></${name}>`,
+        "/tmp/mx-contract/a.mx",
+        {
+          customTags: bad,
+          targets: htmlTargets,
+          defaultTag: "section",
+        },
+      );
+      expect(code, name).not.toContain("<input");
+      expect(code, name).toContain("<section");
+    }
+    const { code } = compile(
+      "<my-list><.a>x</></my-list>",
+      "/tmp/mx-contract/a.mx",
+      {
+        customTags: bad,
+        targets: htmlTargets,
+      },
+    );
+    expect(code).toContain("<div");
+  });
 });
