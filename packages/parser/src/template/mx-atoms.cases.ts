@@ -174,6 +174,14 @@ export const ATOMS: [string, string][] = [
     "<div async x() { return await f(:a) }/>",
     '<div> @x atom(a@32-34) method:" return await f(0.) "',
   ],
+  // A keyword key with whitespace before `:` reads as keyword + atom (lead
+  // ruling, review round 3): ambiguous with `return :a` and `case :a`, and
+  // `new :a` is atom misuse anyway. Write `{ new: a }`. See divergences.md.
+  ["<div x={ new :a }/>", '<div> @x atom(a@13-15) ="{ new 0. }"'],
+  [
+    "<div x={ delete :a, in :b }/>",
+    '<div> @x atom(a@16-18) atom(b@23-25) ="{ delete 0., in 0. }"',
+  ],
   // An atom named like an operator keyword is still an expression end
   // (review round 2): the next ` :b` is name sugar or the ternary's `:`.
   ["<div x=:delete :b/>", '<div> @x atom(delete@7-14) ="0.00000" @:b'],

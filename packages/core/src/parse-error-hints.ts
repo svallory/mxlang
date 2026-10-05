@@ -224,6 +224,38 @@ function hintOne(
  * (message and `label`, the two places a caller reads it from). An aggregate
  * error is handled entry by entry, mirroring `annotateCloseTagOpener`.
  */
+/** Marko's hint for a `{…}`-wrapped attribute value whose inside parses. */
+const JSX_WRAP_SENTENCE =
+  " Attribute values in Marko are plain JavaScript expressions, not JSX; remove the wrapping `{ }`.";
+
+/**
+ * `x={ new :a }` (decision 156; lead ruling, review round 3): a keyword key
+ * followed by whitespace before `:` is read as the keyword plus an atom, so
+ * `{ … }` fails and its inside (`new 0.`) parses, which makes Marko suggest
+ * removing the braces. Say what happened instead, in place.
+ */
+function rewriteKeywordAtom(
+  error: Located,
+  source: string,
+): string | undefined {
+  const reason = typeof error.label === "string" ? error.label : "";
+  const at = error.loc?.start;
+  if (!reason.includes(JSX_WRAP_SENTENCE) || !at) return undefined;
+  const offset = at.index ?? offsetOf(source, at.line, at.column);
+  const keyword = source.slice(offset).match(/^[A-Za-z_$][\w$]*/)?.[0];
+  if (!keyword) return undefined;
+  const gap = source.slice(offset + keyword.length).match(/^\s+/)?.[0];
+  if (!gap) return undefined;
+  const atomStart = offset + keyword.length + gap.length;
+  const atom = lexedAtoms(source)?.find((found) => found.start === atomStart);
+  if (!atom) return undefined;
+  const name = source.slice(atom.start + 1, atom.end);
+  const sentence = ` \`${keyword} :${name}\` reads as the keyword \`${keyword}\` and the atom \`:${name}\` (decision 156); for an object key write \`{ ${keyword}: ${name} }\`.`;
+  error.label = reason.replace(JSX_WRAP_SENTENCE, sentence);
+  setMessage(error, error.message.replace(JSX_WRAP_SENTENCE, sentence));
+  return sentence;
+}
+
 export function hintParseError(
   error: unknown,
   source: string,
@@ -231,6 +263,17 @@ export function hintParseError(
 ): void {
   if (!(error instanceof Error)) return;
   const aggregate = error as Located;
+  rewriteKeywordAtom(aggregate, source);
+  for (const entry of aggregate.errors ?? []) {
+    if (typeof (entry as Located | null)?.message !== "string") continue;
+    const sentence = rewriteKeywordAtom(entry as Located, source);
+    if (sentence) {
+      setMessage(
+        aggregate,
+        aggregate.message.replace(JSX_WRAP_SENTENCE, sentence),
+      );
+    }
+  }
   hintOne(aggregate, source, declarations);
   for (const entry of aggregate.errors ?? []) {
     if (typeof (entry as Located | null)?.message !== "string") continue;

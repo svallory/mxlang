@@ -24,17 +24,32 @@ describe("atoms on html", () => {
 // Review round 2, finding 5: the atom hint names only an atom the parser
 // lexed, never a `:` in a scriptlet or a statement tag.
 describe("no atom hint where atoms are not read", () => {
-  it.each([
-    "$ const o = { a: :b };\n<div/>",
-    "static const o = { a: :b };\n<div/>",
-  ])("%j", (source) => {
+  it("a scriptlet: the scriptlet error, no atom hint", () => {
     let message = "";
     try {
-      compile(source, "/fixtures/atoms.mx");
+      compile("$ const o = { a: :b };\n<div/>", "/fixtures/atoms.mx");
     } catch (error) {
       message = (error as Error).message;
     }
+    expect(message).toContain("scriptlets (`$ …`) are not supported");
     expect(message).not.toContain("is an atom (decision 156)");
+  });
+
+  it("`static`: no atom is read, and html emits the statement verbatim", () => {
+    // html places a `static` statement's authored text without parsing it,
+    // so `:b` reaches the module unconverted (a JS syntax error at load).
+    // Pre-existing for any invalid `static` code; reported, not widened here.
+    const { code } = compile(
+      "static const o = { a: :b };\n<div/>",
+      "/fixtures/atoms.mx",
+    );
+    expect(code).toContain("const o = { a: :b };");
+  });
+
+  it("`{ new :a }`: keyword plus atom, with a hint that says so", () => {
+    expect(() => compile("<div x={ new :a }/>", "/fixtures/atoms.mx")).toThrow(
+      "`new :a` reads as the keyword `new` and the atom `:a` (decision 156); for an object key write `{ new: a }`.",
+    );
   });
 
   it("an atom where a shorthand property must stand gets it", () => {
