@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <saulovallory@gmail.com>
+Date: Mon, 5 Oct 2026 13:50:00 -0300
+Subject: [PATCH] fix(grammar): an indented line with no tag open is an ERROR node
+
+- src/scanner.c: INVALID_INDENTATION at the root (no tag open, indent > 0, not
+  a comment) returned false, which is silent there: the document is already
+  complete, so tree-sitter stopped at the failed lex and dropped the rest of
+  the file with no ERROR. A column-0 comment after a concise root tag, then an
+  indented line, parsed clean while Marko reports "Line has extra
+  indentation at the beginning". The scanner now emits the offending line as
+  ERROR_SENTINEL, which no state accepts outside recovery, so the parser wraps
+  it in an ERROR node and goes on. The language rule is unchanged.
+
+---
+diff --git a/src/scanner.c b/src/scanner.c
+index 277e07fe..51882c91 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -2498,7 +2498,20 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+   }
+ 
+   if (!t && cur_indent > 0 && c != '/') {
+-    return false;  // INVALID_INDENTATION: extra indentation at the beginning
++    // INVALID_INDENTATION: extra indentation at the beginning. Returning false
++    // here is silent: with no tag open the document is already complete, so
++    // tree-sitter stops at the failed lex and drops the rest of the file
++    // without an ERROR node (a column-0 line after a concise root tag, then
++    // an indented line, parsed clean). Emit the offending line as
++    // ERROR_SENTINEL instead: no state accepts it outside error recovery, so
++    // the parser wraps it in an ERROR node and goes on.
++    while (!at_eof(lexer) && !is_line(lexer->lookahead)) {
++      cursor_advance(&s->cur, lexer->lookahead);
++      lexer->advance(lexer, false);
++    }
++    mark(s, lexer);
++    *result = ERROR_SENTINEL;
++    return true;
+   }
+ 
+   if (t) {
+-- 
+2.50.0

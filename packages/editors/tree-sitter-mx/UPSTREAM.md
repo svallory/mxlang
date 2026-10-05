@@ -102,6 +102,18 @@ is MX's own:
 - `queries/highlights.scm`: `=` and `:=` of an attribute are `@operator`, the
   value `@none` (it is injected TS, like `param_default`).
 
+`patches/0004-fix-grammar-an-indented-line-with-no-tag-open-is-an-error-node.patch`
+is MX's own:
+
+- `src/scanner.c`: an indented line with no tag open (reached through a
+  column-0 comment or tag closing the concise tag above) failed the lex with
+  `return false`, which is silent at the root: the document is already
+  complete, so tree-sitter dropped the rest of the file with no `ERROR`. The
+  scanner emits the line as `ERROR_SENTINEL` (accepted by no state outside
+  recovery) so the parser wraps it in an `ERROR` node. The language rule is
+  unchanged; Marko reports "Line has extra indentation at the beginning".
+  Test: `test/indentation.bun-test.mts`.
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and

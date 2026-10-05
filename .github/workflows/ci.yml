@@ -163,7 +163,7 @@ jobs:
           js="$(bun -p "require('./packages/editors/tree-sitter-mx/package.json').devDependencies['tree-sitter-javascript']")"
           cli="$(bun -p "require('./packages/editors/tree-sitter-mx/package.json').devDependencies['tree-sitter-cli']")"
           test -n "$pin" -a -n "$js" -a -n "$cli"
-          recipe="$(sha256sum packages/editors/tree-sitter-mx/highlight/build-ts-grammar.sh | cut -c1-12)"
+          recipe="$(cat packages/editors/tree-sitter-mx/highlight/build-ts-grammar.sh packages/editors/tree-sitter-mx/highlight/extra-highlights.scm | sha256sum | cut -c1-12)"
           echo "key=docs-ts-grammar-${pin}-js${js}-cli${cli}-${recipe}" >> "$GITHUB_OUTPUT"
       # actions/cache v4.2.4
       - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809

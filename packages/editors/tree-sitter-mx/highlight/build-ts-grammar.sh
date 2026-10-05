@@ -15,9 +15,11 @@
 #   tree-sitter-typescript.wasm   built with `tree-sitter build --wasm`
 #   highlights.scm                tree-sitter-javascript's query, then upstream
 #                                 TypeScript's (later patterns win), because the
-#                                 TypeScript query only adds to the JavaScript one
+#                                 TypeScript query only adds to the JavaScript one,
+#                                 then MX's own extra-highlights.scm (the gaps
+#                                 upstream leaves; patterns there win)
 #
-# Idempotent: a cache keyed on the pin is reused. Needs network on a cold cache
+# Idempotent: a cache keyed on the pin and on extra-highlights.scm is reused. Needs network on a cold cache
 # (one blobless clone of the upstream repo).
 set -euo pipefail
 
@@ -25,8 +27,10 @@ PIN_SHA="f975a621f4e7f532fe322e13c4f79495e0a7b2e7" # tree-sitter-typescript v0.2
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE="$HERE/highlight/ts"
 SRC="$CACHE/src"
+EXTRA="$HERE/highlight/extra-highlights.scm"
+STAMP="$PIN_SHA $(shasum -a 256 "$EXTRA" | cut -c1-16)"
 
-if [[ -f "$CACHE/.pin" && "$(cat "$CACHE/.pin")" == "$PIN_SHA" \
+if [[ -f "$CACHE/.pin" && "$(cat "$CACHE/.pin")" == "$STAMP" \
   && -f "$CACHE/tree-sitter-typescript.wasm" && -f "$CACHE/highlights.scm" ]]; then
   exit 0
 fi
@@ -47,7 +51,7 @@ git -C "$SRC" checkout -q "$PIN_SHA"
 
 # The clone is only the build input; it is not shipped.
 
-cat "$JS_DIR/queries/highlights.scm" "$SRC/queries/highlights.scm" >"$CACHE/highlights.scm"
+cat "$JS_DIR/queries/highlights.scm" "$SRC/queries/highlights.scm" "$EXTRA" >"$CACHE/highlights.scm"
 rm -rf "$SRC"
-echo "$PIN_SHA" >"$CACHE/.pin"
+echo "$STAMP" >"$CACHE/.pin"
 echo "typescript grammar: built tree-sitter-typescript.wasm at $PIN_SHA"

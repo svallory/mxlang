@@ -12,7 +12,9 @@
 #      branch mx/shorthand-anywhere's suite).
 #   4. __tests__/fixtures.bun-test.mts — every htmljs-parser fixture at the
 #      pinned HTMLJS_REV, compared event by event (fetched once into .cache/).
-#   4b. test/highlights.bun-test.mts — MX's own: the shorthand captures of
+#   4b. test/indentation.bun-test.mts — an indented line with no tag open is an
+#      ERROR node, not a silent truncation.
+#   4c. test/highlights.bun-test.mts — MX's own: the shorthand captures of
 #      queries/highlights.scm and of the Zed extension's languages/mx copy, in
 #      both positions and both modes.
 #   5. tools/check-wasm.mts — the wasm parses a sample and both queries load.
@@ -42,7 +44,7 @@ bun run build:wasm
 
 echo
 echo "==> mx shorthand trees, htmljs-parser fixtures, shorthand highlights"
-bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts
+bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts ./test/indentation.bun-test.mts
 
 echo
 echo "==> wasm smoke and queries"

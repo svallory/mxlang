@@ -23,6 +23,14 @@ two local patches (see `UPSTREAM.md`):
   from `apps/docs/plugins/mx-highlight.mjs`, with its `.d.mts`),
   `./tree-sitter-mx.wasm`, `./queries/*.scm`. `web-tree-sitter` is a dependency;
   `@types/emscripten` an optional peer for typed consumers.
+- An indented line with no tag open (a column-0 comment or tag closed the
+  concise tag above) is an `ERROR` node. The scanner used to fail the lex
+  silently there and tree-sitter dropped the rest of the file with a clean
+  tree, where Marko reports "Line has extra indentation at the beginning"
+  (patch 0004). The language rule is unchanged.
+- The injected TypeScript highlights gain `highlight/extra-highlights.scm`:
+  names bound by an object pattern (`({ self }) => ...`, a parameter or a
+  `const { a } = x`) and a ternary's `?` and `:` had no capture.
 - Tests run on bun through web-tree-sitter, and compare against htmljs-parser
   fixtures pinned to v5.12.0 instead of its unpinned HEAD.
 - Tag-param patterns/types/defaults, tag-var types and type arguments start at

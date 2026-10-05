@@ -2498,7 +2498,20 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
   }
 
   if (!t && cur_indent > 0 && c != '/') {
-    return false;  // INVALID_INDENTATION: extra indentation at the beginning
+    // INVALID_INDENTATION: extra indentation at the beginning. Returning false
+    // here is silent: with no tag open the document is already complete, so
+    // tree-sitter stops at the failed lex and drops the rest of the file
+    // without an ERROR node (a column-0 line after a concise root tag, then
+    // an indented line, parsed clean). Emit the offending line as
+    // ERROR_SENTINEL instead: no state accepts it outside error recovery, so
+    // the parser wraps it in an ERROR node and goes on.
+    while (!at_eof(lexer) && !is_line(lexer->lookahead)) {
+      cursor_advance(&s->cur, lexer->lookahead);
+      lexer->advance(lexer, false);
+    }
+    mark(s, lexer);
+    *result = ERROR_SENTINEL;
+    return true;
   }
 
   if (t) {

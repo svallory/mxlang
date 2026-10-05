@@ -214,6 +214,26 @@ describe("injected TypeScript", () => {
     );
   });
 
+  it("colours the names of a destructured parameter, and a ternary's operators", () => {
+    // The pattern's `self` is a shorthand_property_identifier_pattern, which the
+    // catch-all `(identifier) @variable` never sees; `?` and `:` are anonymous
+    // tokens no operator pattern listed. Both were uncoloured.
+    const fence = "<mx-fence that=({ self }) => self.done a=ok ? yes : no/>";
+    const got = spans(renderMx(fence));
+    expect(got).toContainEqual(["ts-variable-parameter", "self"]);
+    expect(got).toContainEqual(["ts-variable", "self"]);
+    expect(got).toContainEqual(["ts-operator", "?"]);
+    expect(got).toContainEqual(["ts-operator", ":"]);
+    // A typed parameter and a binding that is not a parameter.
+    expect(spans(renderMx("static const f = ({ z }: T) => z;"))).toContainEqual(
+      ["ts-variable-parameter", "z"],
+    );
+    expect(spans(renderMx("static const { a = 1 } = x;"))).toContainEqual([
+      "ts-variable",
+      "a",
+    ]);
+  });
+
   it("keeps a parameter a parameter, not the catch-all variable", () => {
     const html = renderMx("<for|item| of=items>x</for>");
     expect(html).toContain('<span class="ts-variable-parameter">item</span>');
