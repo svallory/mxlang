@@ -179,6 +179,49 @@ const resolverIds = new WeakMap<
 >();
 let nextResolverId = 1;
 
+/**
+ * The readers one lookup's file kinds declare (`HostFileKind.readCalleeInput`),
+ * keyed by `.<segment>.mx`, cached per lookup.
+ */
+const lookupReaders = new WeakMap<
+  TargetLookup,
+  ReadonlyMap<string, CalleeInputReader>
+>();
+
+/**
+ * The callee readers a compile under `targets` can use: every reader
+ * registered with {@link registerCalleeInputReader}, then each one the
+ * lookup's own file kinds declare for an extension nobody registered.
+ *
+ * The lookup half is what lets a host's direct compile entry read its own
+ * region-file callees without registering anything at import: its entry
+ * defaults `targets` to the package's own lookup, whose descriptor already
+ * names the reader. A registered reader keeps precedence, so a tool that
+ * installed the registry's table sees exactly what it did before.
+ */
+function readersFor(
+  targets: TargetLookup | undefined,
+): ReadonlyMap<string, CalleeInputReader> {
+  if (!targets) return calleeInputReaders;
+  let own = lookupReaders.get(targets);
+  if (!own) {
+    const readers = new Map<string, CalleeInputReader>();
+    for (const name of targets.targetNames()) {
+      for (const kind of targets.target(name)?.host?.fileKinds ?? []) {
+        if (kind.readCalleeInput)
+          readers.set(`.${kind.segment}.mx`, kind.readCalleeInput);
+      }
+    }
+    own = readers;
+    lookupReaders.set(targets, own);
+  }
+  if (own.size === 0) return calleeInputReaders;
+  const merged = new Map(calleeInputReaders);
+  for (const [extension, reader] of own)
+    if (!merged.has(extension)) merged.set(extension, reader);
+  return merged;
+}
+
 interface CalleeCacheEntry {
   mtimeMs: number | undefined;
   source: string;
@@ -612,12 +655,13 @@ function resolveTarget(
 /**
  * Extension probes, in order (literal path first): `.mx`, then every compound
  * extension a host registered through {@link registerCalleeInputReader} (in
- * registration order), then the script extensions. A host module extension is
- * therefore only probed once its host package is loaded.
+ * registration order) or the compile's lookup declares (`readersFor`), then
+ * the script extensions. A host module extension is therefore only probed once
+ * a reader for it is registered or its target is in the lookup.
  */
-function extensionProbes(): string[] {
+function extensionProbes(targets?: TargetLookup): string[] {
   return [
-    ...new Set([".mx", ...calleeInputReaders.keys()]),
+    ...new Set([".mx", ...readersFor(targets).keys()]),
     ".tsx",
     ".ts",
     ".jsx",
@@ -635,8 +679,12 @@ const SCRIPT_EXTENSIONS = [
   ".cjs",
 ];
 
-function probeFile(base: string, probes?: string[]): string | undefined {
-  const extensions = extensionProbes();
+function probeFile(
+  base: string,
+  probes?: string[],
+  targets?: TargetLookup,
+): string | undefined {
+  const extensions = extensionProbes(targets);
   for (const candidate of [
     base,
     ...extensions.map((ext) => base + ext),
@@ -683,6 +731,7 @@ export function resolveSpecifier(
                 ? aliased
                 : resolvePath(dirname(importer), aliased),
               probes,
+              context.targets,
             )
           : resolveSpecifier(
               aliased,
@@ -698,7 +747,11 @@ export function resolveSpecifier(
     specifier.startsWith("/") ||
     isAbsolute(specifier)
   ) {
-    return probeFile(resolvePath(dirname(importer), specifier), probes);
+    return probeFile(
+      resolvePath(dirname(importer), specifier),
+      probes,
+      context.targets,
+    );
   }
   try {
     const resolved = require.resolve(specifier, { paths: [dirname(importer)] });
@@ -716,7 +769,11 @@ export function resolveSpecifier(
     const packageJson = require.resolve(`${packageName}/package.json`, {
       paths: [dirname(importer)],
     });
-    return probeFile(resolvePath(dirname(packageJson), subpath), probes);
+    return probeFile(
+      resolvePath(dirname(packageJson), subpath),
+      probes,
+      context.targets,
+    );
   } catch {
     return undefined;
   }
@@ -732,7 +789,7 @@ function readInputAt(
   parsedSources: Map<string, string>;
 } {
   const parsedSources = new Map<string, string>([[path, source]]);
-  const readerEntry = [...calleeInputReaders]
+  const readerEntry = [...readersFor(context.targets)]
     .sort(([left], [right]) => right.length - left.length)
     .find(([extension]) => path.endsWith(extension));
   if (readerEntry) {
