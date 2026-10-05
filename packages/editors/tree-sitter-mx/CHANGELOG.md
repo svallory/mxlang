@@ -19,6 +19,6 @@ two local patches (see `UPSTREAM.md`):
 - Tests run on bun through web-tree-sitter, and compare against htmljs-parser
   fixtures pinned to v5.12.0 instead of its unpinned HEAD.
 - Tag-param patterns/types/defaults, tag-var types and type arguments start at
-  their first character instead of the whitespace before it, so highlight
+  their first character and end at their last (no whitespace around them), so highlight
   captures cover `number`, not `" number"`. An attribute's `=` and `:=` are
   `@operator` and its value `@none`.

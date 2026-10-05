@@ -316,6 +316,7 @@ typedef struct {
   int32_t *la;
   uint32_t la_len, la_pos, la_cap;
   bool automark;  // mark after every consumed char (expressions)
+  bool trim_ws;   // ...except whitespace: the token ends at its last non-ws
 } EStream;
 
 static void es_init(EStream *es, Scanner *s, TSLexer *lexer, bool automark) {
@@ -365,7 +366,8 @@ static void es_consume(EStream *es, bool always_mark) {
   }
   buf_push(es->s, c);
   cursor_advance(&es->s->cur, c);
-  if (es->la_pos == es->la_len && (always_mark || es->automark)) {
+  if (es->la_pos == es->la_len && !(es->trim_ws && is_ws(c)) &&
+      (always_mark || es->automark)) {
     mark(es->s, es->lexer);
     es->marked_len = es->s->buf_len;
   }
@@ -2883,6 +2885,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     es_skip_leading_ws(s, es, false);
     if (es_peek(es, 0) != '|' || !valid[PARAMS_CLOSE]) {
       bool empty = false;
+      es->trim_ws = true;
       if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_PATTERN), &empty)) {
         return false;
       }
@@ -2897,6 +2900,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     if (valid[PARAM_TYPE]) {
       es_skip_leading_ws(s, es, false);
       bool empty = false;
+      es->trim_ws = true;
       if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_TYPE), &empty)) {
         return false;
       }
@@ -2906,12 +2910,14 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     if (valid[PARAM_DEFAULT]) {
       es_skip_leading_ws(s, es, false);
       bool empty = false;
+      es->trim_ws = true;
       if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_DEFAULT), &empty)) {
         return false;
       }
       lexer->result_symbol = PARAM_DEFAULT;  // may be zero-width
       return true;
     }
+    es_skip_leading_ws(s, es, false);
     int32_t pc = es_peek(es, 0);
     if (pc == ':' && valid[PARAM_COLON]) {
       es_next_mark(es);
@@ -2941,6 +2947,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   if (valid[TYPE_EXPR] && !valid[ATTR_NAME]) {
     es_skip_leading_ws(s, es, false);
     bool empty = false;
+    es->trim_ws = true;
     if (!scan_expr_es(es, cfg_type_expr(), &empty)) return false;
     if (!empty) {
       lexer->result_symbol = TYPE_EXPR;
@@ -2948,6 +2955,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     }
   }
   if (valid[TYPES_CLOSE] && !valid[ATTR_NAME]) {
+    es_skip_leading_ws(s, es, false);
     if (es_peek(es, 0) != '>') return false;
     es_next_mark(es);
     if (s->types_was_args) {

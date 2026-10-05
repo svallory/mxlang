@@ -104,11 +104,7 @@ describe("mx binding and attribute-value captures", () => {
     it(`${name}: extra and missing whitespace around params`, () => {
       assert.deepStrictEqual(
         capturesNamed(file, "<for|a ,   b:   string   = 2|>x</for>\n", BINDING),
-        [
-          '"a "@variable.parameter',
-          '"b"@variable.parameter',
-          '"string   "@type',
-        ],
+        ['"a"@variable.parameter', '"b"@variable.parameter', '"string"@type'],
       );
       assert.deepStrictEqual(
         capturesNamed(file, "<for|x:number,i|>x</for>\n", BINDING),
@@ -137,7 +133,7 @@ describe("mx binding and attribute-value captures", () => {
     it(`${name}: type arguments start at the first character`, () => {
       assert.deepStrictEqual(
         capturesNamed(file, "<foo< T , U >(x)/>\n", BINDING),
-        ['"T , U "@type'],
+        ['"T , U"@type'],
       );
     });
 
@@ -163,6 +159,30 @@ describe("mx binding and attribute-value captures", () => {
           '":="@operator',
           '"2"@none',
         ],
+      );
+    });
+  }
+});
+
+describe("mx binding captures end at their last character", () => {
+  for (const [name, file] of Object.entries(QUERIES)) {
+    it(`${name}: no trailing whitespace in params, defaults or type args`, () => {
+      assert.deepStrictEqual(
+        capturesNamed(file, "<for| a : T , b = 1 , c |>x</for>\n", BINDING),
+        [
+          '"a"@variable.parameter',
+          '"T"@type',
+          '"b"@variable.parameter',
+          '"c"@variable.parameter',
+        ],
+      );
+      assert.deepStrictEqual(
+        capturesNamed(file, "for|\n  x\n  ,\n  y\n|\n  x\n", BINDING),
+        ['"x"@variable.parameter', '"y"@variable.parameter'],
+      );
+      assert.deepStrictEqual(
+        capturesNamed(file, "<foo< T , U >(x)/>\n", BINDING),
+        ['"T , U"@type'],
       );
     });
   }

@@ -9,6 +9,9 @@ Subject: [PATCH] fix(grammar): start binding captures at their first character; 
   trivia before the token starts, as it already did for attribute values. The
   tag-var type keeps the char before the whitespace as its lookbehind, so a
   `a: (B | C)` still scans as the parser does.
+- src/scanner.c: the same tokens (params, defaults, type args) end at their
+  last non-whitespace char; the whitespace before a `,` `:` `=` `|` or `>` is
+  skipped as trivia by the separator token instead of trailing the expression.
 - queries/highlights.scm: capture `=` / `:=` of an attribute as @operator and
   the value as @none (it is injected TS, like param_default).
 ---
@@ -29,10 +32,10 @@ index 9e6e8466..fae2e087 100644
  ; Binding positions: patterns get the TS injection; types are captured
  ; flatly because a bare type is not a valid TS program (matching the
 diff --git a/src/scanner.c b/src/scanner.c
-index 2092c12b..596ed37b 100644
+index 2092c12b..277e07fe 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
-@@ -312,6 +312,7 @@ typedef struct {
+@@ -312,9 +312,11 @@ typedef struct {
    uint32_t start;  // s->buf index where the current construct begins
    uint32_t marked_len;  // buf_len at the last committed mark
    uint8_t before_token;  // the char immediately before the token start
@@ -40,7 +43,21 @@ index 2092c12b..596ed37b 100644
    int32_t *la;
    uint32_t la_len, la_pos, la_cap;
    bool automark;  // mark after every consumed char (expressions)
-@@ -381,6 +382,22 @@ static void es_mark(EStream *es) {
++  bool trim_ws;   // ...except whitespace: the token ends at its last non-ws
+ } EStream;
+ 
+ static void es_init(EStream *es, Scanner *s, TSLexer *lexer, bool automark) {
+@@ -364,7 +366,8 @@ static void es_consume(EStream *es, bool always_mark) {
+   }
+   buf_push(es->s, c);
+   cursor_advance(&es->s->cur, c);
+-  if (es->la_pos == es->la_len && (always_mark || es->automark)) {
++  if (es->la_pos == es->la_len && !(es->trim_ws && is_ws(c)) &&
++      (always_mark || es->automark)) {
+     mark(es->s, es->lexer);
+     es->marked_len = es->s->buf_len;
+   }
+@@ -381,6 +384,22 @@ static void es_mark(EStream *es) {
    }
  }
  
@@ -63,7 +80,7 @@ index 2092c12b..596ed37b 100644
  static int32_t es_at(EStream *es, int64_t i) {
    Scanner *s = es->s;
    if (i >= 0 && (uint64_t)i < s->buf_len) return (int32_t)(uint8_t)s->buf[i];
-@@ -1110,7 +1127,10 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
+@@ -1110,7 +1129,10 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
  static bool scan_expr_es(EStream *es, ExprCfg cfg, bool *empty) {
    bool prev_automark = es->automark;
    uint32_t start = es->s->buf_len;
@@ -75,39 +92,63 @@ index 2092c12b..596ed37b 100644
    es->automark = true;
    es->start = start;
  
-@@ -2860,6 +2880,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+@@ -2860,8 +2882,10 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
    // boundaries (",", ":", "=") so each piece can highlight properly. The
    // union of the sub-scans consumes exactly the parser's chars.
    if (valid[PARAM_PATTERN] && !valid[ATTR_NAME]) {
 +    es_skip_leading_ws(s, es, false);
      if (es_peek(es, 0) != '|' || !valid[PARAMS_CLOSE]) {
        bool empty = false;
++      es->trim_ws = true;
        if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_PATTERN), &empty)) {
-@@ -2874,6 +2895,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+         return false;
+       }
+@@ -2874,7 +2898,9 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
         valid[PARAM_TYPE] || valid[PARAM_DEFAULT] || valid[PARAMS_CLOSE]) &&
        !valid[ATTR_NAME]) {
      if (valid[PARAM_TYPE]) {
 +      es_skip_leading_ws(s, es, false);
        bool empty = false;
++      es->trim_ws = true;
        if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_TYPE), &empty)) {
          return false;
-@@ -2882,6 +2904,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+       }
+@@ -2882,13 +2908,16 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
        return true;
      }
      if (valid[PARAM_DEFAULT]) {
 +      es_skip_leading_ws(s, es, false);
        bool empty = false;
++      es->trim_ws = true;
        if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_DEFAULT), &empty)) {
          return false;
-@@ -2916,6 +2939,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+       }
+       lexer->result_symbol = PARAM_DEFAULT;  // may be zero-width
+       return true;
+     }
++    es_skip_leading_ws(s, es, false);
+     int32_t pc = es_peek(es, 0);
+     if (pc == ':' && valid[PARAM_COLON]) {
+       es_next_mark(es);
+@@ -2916,7 +2945,9 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
      return false;
    }
    if (valid[TYPE_EXPR] && !valid[ATTR_NAME]) {
 +    es_skip_leading_ws(s, es, false);
      bool empty = false;
++    es->trim_ws = true;
      if (!scan_expr_es(es, cfg_type_expr(), &empty)) return false;
      if (!empty) {
-@@ -2996,6 +3020,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+       lexer->result_symbol = TYPE_EXPR;
+@@ -2924,6 +2955,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+     }
+   }
+   if (valid[TYPES_CLOSE] && !valid[ATTR_NAME]) {
++    es_skip_leading_ws(s, es, false);
+     if (es_peek(es, 0) != '>') return false;
+     es_next_mark(es);
+     if (s->types_was_args) {
+@@ -2996,6 +3028,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
      ExprCfg cfg = cfg_tag_var(s);
      cfg.in_type = true;
      cfg.resume_lookbehind = true;

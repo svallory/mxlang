@@ -95,6 +95,10 @@ is MX's own:
   the scanner already did for attribute values). The tag-var type keeps the
   char before the whitespace as its lookbehind, so `a: (B | C)` still scans
   the way htmljs-parser does (fixture `tag-var-type-with-parens`).
+- `src/scanner.c`: those tokens also end at their last non-whitespace char
+  (`ExprState`'s automark skips whitespace under `trim_ws`); the separators
+  (`,` `:` `=` `|`, and `>` of type args) skip the whitespace before them as
+  trivia.
 - `queries/highlights.scm`: `=` and `:=` of an attribute are `@operator`, the
   value `@none` (it is injected TS, like `param_default`).
 
