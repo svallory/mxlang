@@ -79,6 +79,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/bun.d.ts",
       "dist/bun.js",
       "dist/compiler.d.ts",
+      "dist/default-tag.d.ts",
       "dist/descriptor.d.ts",
       "dist/descriptor.js",
       "dist/emitter.d.ts",
