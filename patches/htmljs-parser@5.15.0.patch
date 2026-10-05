@@ -1,0 +1,104 @@
+diff --git a/dist/index.js b/dist/index.js
+index 36e76264848ac190749322bf199405fb4cc32afa..78db52a65b7594e5c10c9d16a826ed781196cb65 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -306,7 +306,7 @@ var ATTRIBUTE = {
+       if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
+         attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
+         let expr = this.enterState(states_exports.EXPRESSION);
+-        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
++        expr.attrValue = !0, expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
+         return;
+       } else if (code === 40) {
+         attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
+@@ -1160,6 +1160,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+           return;
+         case 63:
+           if (expression.operators && !expression.groupStack.length) {
++            if (expression.attrValue) {
++              let nextCode = data.charCodeAt(this.pos + 1);
++              if (nextCode === 63 || nextCode === 46 && !(data.charCodeAt(this.pos + 2) >= 48 && data.charCodeAt(this.pos + 2) <= 57)) {
++                this.pos += 2;
++                continue;
++              }
++            }
+             expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
+             continue;
+           }
+@@ -1378,11 +1385,13 @@ function lookAheadForOperator(expression, data, pos) {
+     case 40:
+     case 62:
+     case 63:
+-    case 58:
+     case 61:
+       return pos;
++    case 58:
++      return expression.attrValue && !expression.ternaryDepth && isIdentStartCode(data.charCodeAt(pos + 1)) ? -1 : pos;
+     // defers to base expression state to track block groups.
+     case 46: {
++      if (expression.attrValue && isIdentStartCode(data.charCodeAt(pos + 1))) return -1;
+       let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
+       return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+     }
+@@ -1428,6 +1437,9 @@ function canFollowDivision(code) {
+       return !1;
+   }
+ }
++function isIdentStartCode(code) {
++  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
++}
+ function isWordOrPeriodCode(code) {
+   return code === 46 || isWordCode(code);
+ }
+diff --git a/dist/index.mjs b/dist/index.mjs
+index b07a38424560be0d52c9c402b39bac73eff1d47e..4d46a2c53abf86a7db9d466657484cca9ebf86df 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -280,7 +280,7 @@ var ATTRIBUTE = {
+       if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
+         attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
+         let expr = this.enterState(states_exports.EXPRESSION);
+-        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
++        expr.attrValue = !0, expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
+         return;
+       } else if (code === 40) {
+         attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
+@@ -1134,6 +1134,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+           return;
+         case 63:
+           if (expression.operators && !expression.groupStack.length) {
++            if (expression.attrValue) {
++              let nextCode = data.charCodeAt(this.pos + 1);
++              if (nextCode === 63 || nextCode === 46 && !(data.charCodeAt(this.pos + 2) >= 48 && data.charCodeAt(this.pos + 2) <= 57)) {
++                this.pos += 2;
++                continue;
++              }
++            }
+             expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
+             continue;
+           }
+@@ -1352,11 +1359,13 @@ function lookAheadForOperator(expression, data, pos) {
+     case 40:
+     case 62:
+     case 63:
+-    case 58:
+     case 61:
+       return pos;
++    case 58:
++      return expression.attrValue && !expression.ternaryDepth && isIdentStartCode(data.charCodeAt(pos + 1)) ? -1 : pos;
+     // defers to base expression state to track block groups.
+     case 46: {
++      if (expression.attrValue && isIdentStartCode(data.charCodeAt(pos + 1))) return -1;
+       let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
+       return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+     }
+@@ -1402,6 +1411,9 @@ function canFollowDivision(code) {
+       return !1;
+   }
+ }
++function isIdentStartCode(code) {
++  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
++}
+ function isWordOrPeriodCode(code) {
+   return code === 46 || isWordCode(code);
+ }

@@ -64,5 +64,8 @@
     "typescript": "6.0.3",
     "vite": "8.2.2",
     "vitest": "3.2.7"
+  },
+  "patchedDependencies": {
+    "htmljs-parser@5.15.0": "patches/htmljs-parser@5.15.0.patch"
   }
 }
