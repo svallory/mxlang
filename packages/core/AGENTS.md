@@ -108,7 +108,7 @@ Five facts worth knowing before editing it:
   AST (decision 158).
 - **Its JS parsers are Marko's own Babel (`markoBabel()`) and `@babel/parser`.**
   `core.ts` used to parse
-  an `import` line with `@mxlang/parser` — the *Solid parser* package — for a
+  an `import` line with `@mxlang/tsx-bridge` — the *Solid parser* package — for a
   single `parse` call. It now asks `@marko/compiler/internal/babel`
   (`parse`/`parseExpression`/`traverse`/`types`, all present), which is also
   the instance Marko's own nodes belong to. Do not reintroduce a second Babel.
@@ -136,7 +136,7 @@ Five facts worth knowing before editing it:
   pending cross-file metadata entry remains unknown and is not cached. Keep this
   path synchronous: Bun loaders, Volar, diagnostics, and `mx-tsc` cannot await
   it. Do not replace full TSX parsing with declaration text extraction, and do
-  not add a `core -> @mxlang/parser` dependency: parser's Solid test path
+  not add a `core -> @mxlang/tsx-bridge` dependency: parser's Solid test path
   reaches `@mxlang/solid`, which already depends on core.
   **An editor-only callee (not yet on disk) still resolves and still reports a
   dependency (phase 4 tooling fix).** `probeFile` now also checks the active
@@ -237,7 +237,7 @@ Five facts worth knowing before editing it:
   `translate`), because `@marko/compiler` otherwise resolves its default
   `marko/translator` before parsing and fails — the `marko` package is not a
   dependency here. Solid's own bridge
-  (`packages/parser/src/mx/bridge.ts`) now calls `parseFragment` for every MX
+  (`packages/tsx-bridge/src/mx/bridge.ts`) now calls `parseFragment` for every MX
   region it finds; see "`@mxlang/solid`: the Solid host on `@mxlang/core`"
   in `packages/hosts/solid/AGENTS.md`.
 - **Programmatic custom tags lower to ordinary IR before a host emits.** Every
@@ -853,7 +853,7 @@ Five facts worth knowing before editing it:
   `import`/`static`/`export`/`export interface` inside a region is still the
   same positioned error (the author has a real module to put it in), while a
   synthesized import is handed back on `CompileSolidMxResult.hoistedImports`
-  for the caller to place. `packages/parser`'s bridge stamps those on the
+  for the caller to place. `packages/tsx-bridge`'s bridge stamps those on the
   region root's `extra.mx` and `parse` writes them into the surrounding
   module: once per **resolved path** (the node carries `specifier` and
   `resolvedPath` beside `synthesized`, so no consumer parses the statement
@@ -877,7 +877,7 @@ Five facts worth knowing before editing it:
   import, a duplicate-binding `SyntaxError`), never a binding position, and
   never a non-computed object key or member property (`{ $mx_Icon1: 1 }` and
   `o.$mx_Icon1` are not references to a binding at all).
-  The placement decision itself lives in `packages/parser/src/mx/hoist-imports.ts`
+  The placement decision itself lives in `packages/tsx-bridge/src/mx/hoist-imports.ts`
   (`planHoistedImports`) because **two** consumers need it: `parse`, and
   `@mxlang/typescript-plugin`'s `.solid.mx` path, which reaches it through
   `print()` — `mx-language.ts` never sees a `.solid.mx` file (`isMx` excludes

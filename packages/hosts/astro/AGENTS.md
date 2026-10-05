@@ -52,7 +52,7 @@ Four facts worth knowing before editing it:
 - **A capitalized tag resolves through the `---` fence's own value bindings**
   (decision 114 parity, `unresolved-tag-jsx-astro-angular`), not by bare
   casing. `lowerAstroMx` parses the fence's own top-level imports and
-  `const`/`function`/`class` declarations with `@mxlang/parser`'s
+  `const`/`function`/`class` declarations with `@mxlang/tsx-bridge`'s
   `sourceBindings` (type-only bindings excluded, same rule as everywhere
   else decision 114/115 applies) and feeds them into `ctx.imports` before
   lowering — the same operator-ruling extension `.solid.mx`'s

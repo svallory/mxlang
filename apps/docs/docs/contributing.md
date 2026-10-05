@@ -11,7 +11,9 @@ The repository is a Bun workspace with two workspace globs, `packages/*` and `ex
 
 | Package | Purpose |
 |---|---|
-| `packages/parser` | A `@babel/parser` fork: MX in expression position lowers to JSX, for the Solid host. |
+| `packages/babel` | A vendored `@babel/parser` fork whose MX grammar is injected through a hook interface. |
+| `packages/tsx-bridge` | MX in TypeScript: finds each MX region and lowers it to JSX through a host, for the Solid host. |
+| `packages/parser` | The htmljs-parser-derived template parser. Not used by core yet. |
 | `packages/core` | The Marko-node consumer every MX host is built on: structural lowerings, the IR, `HostDeclarations`, `Emitter<Out>`, three stateful-tag hooks, two front doors. |
 | `packages/targets/html` | The html target: `.mx`/`.marko` compile to a pure `(input) => string` function. |
 | `packages/hosts/astro` | The Astro host: components, pages, and `.astro.mx` templates, all rendered to static markup. |

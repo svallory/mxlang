@@ -70,7 +70,7 @@ order is their order in the `plugins` array — `mx()` must come first.
 `mx()`'s default `extensions` is `[".solid.mx", ".mx"]` today (derived from
 the registry, see above): `.mx` (the official
 and only template extension — `.marko` is not accepted, see "`.mx` is the
-only template extension" in `packages/parser/AGENTS.md`) compiles through `compileMarko()` (routing
+only template extension" in `packages/tsx-bridge/AGENTS.md`) compiles through `compileMarko()` (routing
 to the resolved host's compiler — `@mxlang/html`'s `compile()`,
 `@mxlang/preact`'s `compilePreactMx()`, etc.) instead of `print()`, to a
 plain `(input) => string` module or a JSX component module per host —
@@ -179,7 +179,7 @@ extension lookup for HMR (an edited tag invalidates its own module and the
 callers recorded against it). Tests: `marko-tags-build.test.ts` (real
 `vite build` + `createServer().ssrLoadModule`, output executed).
 
-`@mxlang/parser`'s `main` is `dist/index.js`, not `src/index.ts`. Vite's config
+`@mxlang/tsx-bridge`'s `main` is `dist/index.js`, not `src/index.ts`. Vite's config
 loader externalizes bare imports, so a consumer that pulls the parser's TS
 source makes Node load the vendored Babel tree, whose `const enum`s the
 strip-only TypeScript loader rejects. `types` still points at

@@ -116,7 +116,7 @@ Two traps, both pinned by tests:
 
 **Typecheck hygiene (angular-checker-dist-before-typecheck):** `typecheck`
 runs `tsc -p tsconfig.typecheck.json`, which maps
-`@mxlang/core`/`@mxlang/parser`/`@mxlang/angular` to their src via `paths`
+`@mxlang/core`/`@mxlang/tsx-bridge`/`@mxlang/angular` to their src via `paths`
 (the #182/#192 pattern), so no typecheck needs a prebuilt or fresh dep `dist`.
 The mapping must NOT move into `tsconfig.json`: Bun's bundler honours the
 nearest tsconfig's `paths`, and the typescript-plugin VSIX bundle inlines this

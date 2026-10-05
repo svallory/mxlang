@@ -50,7 +50,7 @@ in a bundle. (Cross-package: `astro-html` requires `@mxlang/html` by name; a
 literal bare `require` is bundled too.) `src/light-import.test.ts` runs a
 fresh `bun` process, lists the compiler modules in `require.cache`, and checks
 the detector with a positive control (compiling once loads `@marko/compiler`).
-`@babel/parser` does load (Solid's emitter and `@mxlang/parser` import it); it
+`@babel/parser` does load (Solid's emitter and `@mxlang/tsx-bridge` import it); it
 is not a compiler.
 
 Do not add a top-level import of a host's `index.ts` to a descriptor, and do

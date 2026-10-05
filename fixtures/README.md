@@ -160,7 +160,7 @@ carries a `PENDING` marker. Neither is a pass. `bun run oracle` prints a loud
 `ALL SKIPPED` banner whenever every row is skipped as a reminder, and
 `--strict` fails the run on either status.
 
-`@mxlang/parser` is wired in now, so a `skipped` row means the parser genuinely
+`@mxlang/tsx-bridge` is wired in now, so a `skipped` row means the parser genuinely
 failed to load — treat it as a failure, not as "not implemented yet".
 
 ## `bun run oracle` flags

@@ -223,7 +223,7 @@ same signature and return shape as `parseFragment`, implemented directly on
 `@marko/compiler`'s new `htmlParseOptions` instead of the post-hoc shift — no
 tree walk, no `seen` set, no `shiftNode`/`shiftPosition`. It is **not called
 by any consumer** in this commit; it exists so the two patches above have a
-concrete, testable consumer without touching `packages/parser/src/mx/bridge.ts`
+concrete, testable consumer without touching `packages/tsx-bridge/src/mx/bridge.ts`
 or `packages/hosts/solid/src/index.ts` (both untouched, per the brief).
 
 **On "behind a flag"**: there is no environment variable or config option
@@ -285,7 +285,7 @@ delegate to `parseFragmentNative` (a local, uncommitted one-line change, not
 part of this commit) and the following ran:
 
 ```
-bunx vitest run --project @mxlang/core --project @mxlang/solid --project @mxlang/parser
+bunx vitest run --project @mxlang/core --project @mxlang/solid --project @mxlang/tsx-bridge
 ```
 ```
 Test Files  16 passed (16)
@@ -296,7 +296,7 @@ position-shift assertions from `next-items-facts.md` §A),
 `packages/core/src/fragment-native.test.ts` (8 tests, 0 skipped with the
 packages linked),
 `packages/hosts/solid/src/index.test.ts` (43 tests, including the two
-past-the-base error-position tests), and every `packages/parser/src/mx/*`
+past-the-base error-position tests), and every `packages/tsx-bridge/src/mx/*`
 test (mx.test.ts, fragment.test.ts, attrs.test.ts, control.test.ts,
 render-props.test.ts, print.test.ts, vendored.test.ts, perf.test.ts) — all
 passing identically through `parseFragmentNative` as they do through the
@@ -349,7 +349,7 @@ patches solving a documented real gap (`next-items-facts.md` §A confirms zero
 existing upstream issues/PRs on this), each backed by its own repo's test
 suite passing (443/443 and 147/17 — the exact pre-existing failure count),
 and mx's own consumer-shaped test suites (`fragment.test.ts`,
-`hosts/solid`, `packages/parser`) pass identically on the native path.
+`hosts/solid`, `packages/tsx-bridge`) pass identically on the native path.
 
 If only one can be sent, send **`htmljs-parser` first** — it is the simpler,
 fully self-contained patch (one package, no monorepo tooling to explain, no

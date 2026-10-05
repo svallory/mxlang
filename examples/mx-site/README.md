@@ -36,8 +36,8 @@ bun run e2e     # Playwright against both the dev server and dist/
 
 ## A tsconfig quirk this example works around
 
-`packages/targets/html/tsconfig.json` maps `@mxlang/parser` to
-`../parser/src/public.d.ts` in its `paths` for typechecking. Bun's `bun
+`packages/targets/html/tsconfig.json` maps `@mxlang/tsx-bridge` to
+`../tsx-bridge/src/public.d.ts` in its `paths` for typechecking. Bun's `bun
 run` also honours `tsconfig.json` `paths` at runtime, and it resolves that
 mapping for *any* file under `packages/targets/html/`, regardless of which
 script is the entry point — so a plain `bun run` of anything that imports

@@ -34,11 +34,11 @@ Three facts worth knowing before touching it:
   at all): `compileSolidMx`'s `moduleBindings` option (every value the
   *surrounding* TypeScript module binds at its top level — an import or a
   top-level `const`/`function`/`class`, type-only excluded — computed by
-  `@mxlang/parser`'s `programBindings`/`sourceBindings` from a
+  `@mxlang/tsx-bridge`'s `programBindings`/`sourceBindings` from a
   declaration-only pre-parse with regions nulled, and passed unfiltered by
   local shadowing, since Marko's own rule is that *any* in-scope binding
   resolves a capitalized tag as a reference to it, shadowed or not); and
-  `SOLID_BUILTIN_TAGS` (`@mxlang/parser`, shared with
+  `SOLID_BUILTIN_TAGS` (`@mxlang/tsx-bridge`, shared with
   this package's `appendSolidBuiltinImport`) — `Show`, `For`,
   `Switch`, `Match`, `Repeat`, `Errored`, `Loading`, `Dynamic`, which
   `@solidjs/vite-plugin`'s own compiler stage auto-imports and this compiler
@@ -129,12 +129,12 @@ Three facts worth knowing before touching it:
   possible — `typeof` only accepts an identifier, never an arbitrary
   expression, and the `<return>` expression can depend on the unit's own
   body locals, so no type-only declaration beside the component can name it
-  either. Both emission sites (`@mxlang/parser`'s `hoistRegionImports` for a
+  either. Both emission sites (`@mxlang/tsx-bridge`'s `hoistRegionImports` for a
   `.solid.mx` region, `compileSolidUnit` above for a whole-file unit)
   therefore declare the binding `let n: any;` explicitly — not a bare
   `let n;`, which would additionally report `noImplicitAny`'s own TS7005 on
   every read. A misuse of the bound value type-checks clean today; pinned by
-  a regression test on each path (`packages/parser/src/mx/hoist-imports.test.ts`,
+  a regression test on each path (`packages/tsx-bridge/src/mx/hoist-imports.test.ts`,
   `packages/tooling/typescript-plugin/src/index.test.ts`), named so a future
   fix flips the assertion.
 - **It is an `Emitter<string>`, same shape as `@mxlang/astro`'s
@@ -163,16 +163,16 @@ Three facts worth knowing before touching it:
   reaches `packages/core` beyond the two IR fields (`ForSource.range.step`,
   `For.key`) every Marko-syntax host needs regardless of target — see the
   core README's IR table.
-- **`.solid.mx` region discovery stays in `@mxlang/parser`.**
-  `packages/parser/src/mx/{walk.ts,bridge.ts}` (the vendored Babel's JSX
+- **`.solid.mx` region discovery stays in `@mxlang/tsx-bridge`.**
+  `packages/tsx-bridge/src/mx/{walk.ts,bridge.ts}` (the vendored Babel's JSX
   plugin, replaced to recognize `<` in expression position) find each MX
   region and hand its raw text to this package's `compileSolidMx`, which
   resolves it through `@mxlang/core`'s `parseFragment` and re-splices the
   emitted JSX text back into the surrounding TypeScript AST at the same
   span — so positions and the eventual source map stay anchored to the
-  original `.solid.mx` file. `@mxlang/parser`'s own `lower.ts`/`control.ts`/
+  original `.solid.mx` file. `@mxlang/tsx-bridge`'s own `lower.ts`/`control.ts`/
   `attrs.ts` (the pre-core-IR lowering) are deleted; that lowering now lives
-  entirely in this package. See `packages/parser/README.md`.
+  entirely in this package. See `packages/tsx-bridge/README.md`.
 
 - **Decisions 109 and 112 are disjoint, not in conflict (lead ruling,
   2026-09-28): 109 governs a function/component target with arguments; 112
@@ -238,7 +238,7 @@ Three facts worth knowing before touching it:
   could already declare it), and records the author name -> gensym mapping
   in `defineBindings` for the call site to look up. `compileSolidMx` returns
   the collected list as `CompileSolidMxResult.hoistedDefines`, and the
-  parser bridge (`packages/parser/src/mx/hoist-imports.ts`'s
+  parser bridge (`packages/tsx-bridge/src/mx/hoist-imports.ts`'s
   `HoistedDefine`) writes each one into the surrounding module after the
   import block, the same channel and placement `hoistedImports` uses.
   **Only a *direct top-level* child of the region hoists** — `define()`
@@ -262,7 +262,7 @@ Three facts worth knowing before touching it:
   over-reporting (a false "capture" the author works around by passing a
   param) over under-reporting (silently wrong code reading `undefined` at
   the hoisted function's real, module scope) — the same tradeoff
-  `packages/parser/src/index.ts`'s `shadowedNames` already makes for an
+  `packages/tsx-bridge/src/index.ts`'s `shadowedNames` already makes for an
   adjacent problem. `KNOWN_GLOBALS` allowlists common JS globals (`Math`,
   `console`, …, deliberately *not* DOM/browser globals, since SSR runs
   under Node/Bun first); `$mxEscape` (the escape helper's own hoisted
@@ -306,7 +306,7 @@ Three facts worth knowing before touching it:
   - **A gensym is unique only *within its own region*.** Two regions in
     one file each declaring `<define/Row>` independently mint the
     identical `__mx_DefineRow1` — a host compiling one region has no
-    visibility of another's choices. `packages/parser/src/index.ts`'s
+    visibility of another's choices. `packages/tsx-bridge/src/index.ts`'s
     `hoistRegionImports` now runs a collision pass across every region's
     `HoistedDefine` entries after collecting them (paired with the
     region range each came from, via `defineRange`), renaming every

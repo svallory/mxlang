@@ -1,17 +1,17 @@
-# parser — agent instructions
+# tsx-bridge — agent instructions
 
 ## MX parser
 
-`packages/parser` vendors `@babel/parser` 7.29.8 and forks one method of its JSX plugin so `<` in expression position is parsed as MX. Entry points:
+`packages/tsx-bridge` is the MX bridge over `@mxlang/babel` (`packages/babel`), which vendors `@babel/parser` 7.29.8 and forks one method of its JSX plugin so `<` in expression position is parsed as MX. The fork itself knows no MX logic: this package supplies the grammar to it as the `mxHooks` parser option (`src/mx/bridge.ts`'s `mxHooks`; every entry point here injects it when `mx: true`), and the fork throws if `mx: true` arrives without hooks. The Babel tree and its `UPSTREAM.md` live in `packages/babel`; tests that need the real Solid lowering live in `packages/hosts/solid/src/bridge/`, because this package must depend on no host. Entry points:
 
-- `parse(source, filename, options?)` — parses `.solid.mx`, returns a Babel `File` of standard node types only (MX facts go in `node.extra.mx`). The parser imports no host: every MX region is lowered by whichever `mxRegionCompile` hook the caller supplies — for `.solid.mx`, that is `@mxlang/solid`'s `compileSolidMx`, passed explicitly by every caller — before being re-parsed and spliced back in. See "`@mxlang/solid`: the Solid host on `@mxlang/core`" in `packages/hosts/solid/AGENTS.md` for that lowering, and `packages/parser/README.md` for this package's own, now-narrower job (region discovery only).
+- `parse(source, filename, options?)` — parses `.solid.mx`, returns a Babel `File` of standard node types only (MX facts go in `node.extra.mx`). The parser imports no host: every MX region is lowered by whichever `mxRegionCompile` hook the caller supplies — for `.solid.mx`, that is `@mxlang/solid`'s `compileSolidMx`, passed explicitly by every caller — before being re-parsed and spliced back in. See "`@mxlang/solid`: the Solid host on `@mxlang/core`" in `packages/hosts/solid/AGENTS.md` for that lowering, and `packages/tsx-bridge/README.md` for this package's own, now-narrower job (region discovery only).
 - `parseBabel` / `parseBabelExpression` — the untouched vendored `@babel/parser` surface, for plain `.ts`/`.tsx`.
 
-MX parsing is opt-in through the `mx` parser option, which `parse` sets. Without it the vendored parser is byte-equivalent to npm `@babel/parser` — `src/vendored.test.ts` pins that, so keep those tests on `parseBabel` rather than `parse`. `packages/parser/UPSTREAM.md` "Local modifications" records exactly what the fork changed.
+MX parsing is opt-in through the `mx` parser option, which `parse` sets. Without it the vendored parser is byte-equivalent to npm `@babel/parser` — `src/vendored.test.ts` pins that, so keep those tests on `parseBabel` rather than `parse`. `packages/babel/UPSTREAM.md` "Local modifications" records exactly what the fork changed.
 
 Consumers typecheck against `src/public.d.ts`, not `src/index.ts`: the vendored tree needs tsconfig relaxations that must not leak into packages that merely call `parse`. The package's published `types` is `dist/index.d.ts`, which `scripts/emit-declarations.ts` generates from `src/public.d.ts` (the `declare module` wrapper unwrapped, statements unchanged) as part of `bun run build`; `files` is `dist` + `README.md`, and `src/pack-contents.test.ts` pins the tarball contents and that the two export lists match. Edit `src/public.d.ts`, never `dist/`.
 
-A host can reject an MX region's syntactic position (e.g. Angular's `.ng.mx` only allowing one as `@Component({ template: … })`'s value) through the `mxRegionPositionCheck` parser option — see `packages/parser/README.md` and `src/mx/region-context.ts`.
+A host can reject an MX region's syntactic position (e.g. Angular's `.ng.mx` only allowing one as `@Component({ template: … })`'s value) through the `mxRegionPositionCheck` parser option — see `packages/tsx-bridge/README.md` and `src/mx/region-context.ts`.
 
 `<>…</>` is a TSX fragment by default. The `mxRegionFragment` option (off; `.ng.mx` turns it on) makes it an MX **fragment region** instead: `jsxParseElementAt` sends `<>` to the bridge, `walkMxRegion(..., { fragment: true })` walks it as a synthetic dynamic-named root (htmljs has no nameless open tag, and a static root ignores `</>`), and the host gets the children with `fragment: true` on `MxRegionCompileInput` (the replaced span is `<>`+source+`</>`). Separately and unconditionally, `noteSiblingRoot` (bridge) records a well-formed root that directly follows a region, and `parse` (`babel/index.ts`) rewrites a *Babel* failure that lands inside it to `MxErrors.MultipleRoots`. It never rewrites an MX-raised error (`syntaxPlugin === "mx"`: TypeScript's generic-arrow retry re-enters the bridge and leaves stale hints) and never rejects input that parses.
 
@@ -83,7 +83,7 @@ side the same way the oracle already rewrites them to `.ts`. `.solid.mx` is
 unaffected either way — a different file kind (TSX with MX regions), never
 covered by the `.marko` alias in the first place.
 
-- `parse(source, filename)` in `@mxlang/parser` — a `.solid.mx` file: a
+- `parse(source, filename)` in `@mxlang/tsx-bridge` — a `.solid.mx` file: a
   TypeScript module in which `<` in expression position opens an MX element,
   lowered to Solid 2 JSX by `@mxlang/solid` (see below). This is the parser
   package's only mode; there is no `mxMode` option. Solid is a separate
@@ -94,7 +94,7 @@ covered by the `.marko` alias in the first place.
   `@marko/compiler` parses, validates and supplies the tag registry; the
   package supplies only a translator (`packages/targets/html/src/translate.ts`)
   and its own taglib (`packages/core/src/taglib/core-tags.json`, exported as `CORE_TAGLIB`).
-  `@mxlang/parser` is not on this path at all. `compile()`/`compileFile()`
+  `@mxlang/tsx-bridge` is not on this path at all. `compile()`/`compileFile()`
   themselves do not gate on the filename extension (it is inert in
   `@mxlang/core`'s `compileSource` too — the extension check lives at the
   loader boundary instead); the Bun loader (`@mxlang/html/bun`) and
@@ -169,20 +169,5 @@ regression stays visible either way.
 To turn the budget into a gate, set the variable:
 
 ```
-MX_PERF_STRICT=1 bunx vitest run --root ../.. --project @mxlang/parser src/mx/perf.test.ts
+MX_PERF_STRICT=1 bunx vitest run --root ../.. --project @mxlang/tsx-bridge src/mx/perf.test.ts
 ```
-
-Note also that Biome **ignores** `src/template/` wholesale
-(`packages/parser/src/template/{core,states,util,__tests__}`, plus
-`index.ts` and `internal.ts`, in `biome.json`'s `files.includes`), to keep the
-vendored copy byte-comparable with upstream. `biome check` on those paths
-reports them as ignored and checks nothing, so "lint clean" is vacuous there:
-match the repo's formatting by hand or via
-`biome format --stdin-file-path=x.ts < <file>`.
-
-`.pi-lens.json` at the repo root exempts `packages/parser/src/template/**` from
-pi-lens's SAFETY-comment rule for `as unknown as`, for the same reason: the
-directory is copied upstream source kept byte-identical except the two patched
-state files and MX's own patches, so the rule asks every editor to change lines
-that are outside their task and that upstream owns. The exemption was requested
-by the repo's lead, who owns the tooling.

@@ -1,7 +1,7 @@
 ; Highlights for .solid.mx.
 ;
 ; The MX region is one opaque `mx_element` token — the grammar deliberately
-; gives it no interior structure (that belongs to @mxlang/parser), so there is
+; gives it no interior structure (that belongs to @mxlang/tsx-bridge), so there is
 ; nothing finer to capture inside it. Everything else in the file is ordinary
 ; TypeScript, so these patterns cover the TS host language.
 

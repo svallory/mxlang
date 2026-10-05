@@ -22,7 +22,7 @@ successful compile clears any previous diagnostics for that file.
   `host: "solid"` uses `@mxlang/solid`'s fixed profile, where stateful Marko
   tags such as `<let>` are errors.
 - `.solid.mx` parses as a whole TypeScript/TSX module through
-  `@mxlang/parser`, the same region-discovery and Solid-lowering path used by
+  `@mxlang/tsx-bridge`, the same region-discovery and Solid-lowering path used by
   the Vite plugin. This reports errors inside MX regions at file-absolute
   positions. It also reports TypeScript syntax errors outside regions because
   finding regions requires parsing the whole module; TypeScript's own language

@@ -62,7 +62,7 @@ entry.
 - **`@mxlang/typescript-plugin`** is the editor half — a Volar
   `LanguagePlugin` (`src/language.ts`) plus a tsserver plugin
   (`src/index.ts`, loaded via `compilerOptions.plugins`).
-  `createVirtualCode` runs `@mxlang/parser`'s `print()` and wraps the printed
+  `createVirtualCode` runs `@mxlang/tsx-bridge`'s `print()` and wraps the printed
   TSX in a `VirtualCode` whose `CodeMapping`s are decoded from the returned
   map. A `print` failure yields empty virtual code plus one recorded syntax
   error, appended to `getSyntacticDiagnostics` so a bad region reports once,
@@ -207,7 +207,7 @@ Four facts worth knowing before editing either:
   `__filename`, none of which exist in an ES module — hence `dist/bin.cjs`.
 - **Column accuracy comes from the parser bridge, not from this package.**
   `print`'s map is line-based; the exact columns come from
-  `packages/parser/src/mx/bridge.ts` repositioning each Babel node onto the
+  `packages/tsx-bridge/src/mx/bridge.ts` repositioning each Babel node onto the
   source expression it was copied from. `decodeMappings` then keeps only spans
   whose generated and source text match, and merges contiguous ones.
   Whole-file `.mx` is the exception: its HTML map is empty, so the
@@ -258,7 +258,7 @@ appended after every mapping is computed from the unmodified generated text
 an existing line or offset; it is skipped for a name already bound by an
 `import`/`const`/`function`/`class` at the top level of the generated file,
 so an author's own same-named export is never shadowed. Shadow detection
-(`sourceBindings`) parses the generated text with `@mxlang/parser`'s
+(`sourceBindings`) parses the generated text with `@mxlang/tsx-bridge`'s
 `parseBabel` and reads each top-level declaration's actual bound name — an
 import's *local* name (so `import { Show as MyShow }` binds `MyShow`, never
 `Show`), and destructured `const`/`function`/`class` names — rather than

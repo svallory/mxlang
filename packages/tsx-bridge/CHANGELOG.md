@@ -1,4 +1,6 @@
-# @mxlang/parser changelog
+# @mxlang/tsx-bridge changelog
+
+- **Changed (parser-split, decision 158):** this package is what `@mxlang/parser` was before the split, minus the vendored Babel fork and the htmljs-parser template parser. The fork moved to `@mxlang/babel` (`packages/babel`) and the template parser stays in `@mxlang/parser`. The public surface (`parse`, `print`, `printAst`, `sourceBindings`, …) and `dist/index.d.ts` are unchanged apart from the module name, `@mxlang/tsx-bridge`; every in-repo importer moved with it. The bridge now injects the MX grammar into the fork through the `mxHooks` option (`bridge.ts`'s `mxHooks`) instead of the fork importing it. Solid-lowering tests moved to `@mxlang/solid` (`src/bridge/`), so the package depends on no host. Earlier entries below were written under the old package name.
 
 - **Added (decision 164):** `MxRegionCompileInput.importSites` (and the `mxImportSites` option `parse` pre-collects): where each import binding's `import` statement starts, so a host can position the lowercase-tag diagnostic at the import.
 - **Changed (bridge-host, decision 154):** the parser names no host and no file suffix. `parse`/`print` turn the MX grammar on when `mx: true` is passed or an `mxRegionCompile` hook is supplied; the `.solid.mx` filename default is gone (a hook-less `parse("x.solid.mx")` is now a plain TSX parse, and every tool passes `mx: true`). `MissingRegionCompile` names the region-entry contract (`HostFileKind.compileRegion`) instead of `compileSolidMx`.
@@ -8,13 +10,6 @@
 - **Fix (marko-parity-trio, `:modifier`):** `:foo=1` in an MX region is no longer a syntax error. It is Marko's attribute named `value:foo`, so it now parses to the JSXNamespacedName `value:foo` (and a valueless `:foo` to `value:foo=""`, HTML's empty attribute); `a:b:c=1` is still refused as malformed.
 
 ## Unreleased
-
-- **Fix (template-parser-lookbehinds-followup, decisions 156 addenda 11 and 12, 165):** in the template parser (`src/template/`, which `@mxlang/core` bundles) and the `htmljs-parser` patch:
-  - A closing tag after a tag that never got its name (`,--/</e>`) is an `onError` (`EXTRA_CLOSING_TAG`) instead of a `TypeError` out of `parse()`.
-  - Unicode whitespace and line terminators behave as ASCII whitespace in every look-behind, so `(é)\u00a0/ 2` divides.
-  - A comment before `of`/`yield`/`await` is skipped as whitespace is (`f(/*c*/ await :b)` lexes no atom, as `f( await :b)` does not).
-  - **Behaviour change:** text after NBSP + `//` in a body is a comment, as after a space (`<div>a\u00a0// c</div>`).
-  - **Behaviour change (addendum 12):** in concise mode, `--` after Unicode whitespace starts the text block; the attribute's range keeps the trailing whitespace.
 
 - **Types (public-dts-customtags-any):** `PrintOptions.customTags`, `MxRegionCompileInput.customTags` and `MxParseOptions.mxCustomTags` are now `Record<string, CustomTag>` (type-only `@mxlang/core` import; no runtime or declaration cycle). They were `any`/`unknown`, so a loose tag definition that used to typecheck can now fail to build.
 

@@ -1,4 +1,9 @@
-# @mxlang/parser
+# @mxlang/tsx-bridge
+
+> The vendored Babel fork itself lives in `@mxlang/babel` (`packages/babel`)
+> and the template parser in `@mxlang/parser`; this package is the bridge
+> between them and the host emitters. It injects the MX grammar into the fork
+> through the `mxHooks` option.
 
 MX's parser is a fork of `@babel/parser` with one plugin function replaced:
 the JSX element parser, so `<` in expression position opens an MX region
@@ -131,7 +136,7 @@ Because a `.ng.mx` filename would never match `parse`'s own `.solid.mx`
 extension test, `parse` honours an explicit `mx: boolean` option as the
 grammar gate, falling back to that test when it is unset.
 
-`@mxlang/parser` has no dependency on `@mxlang/solid` or any other host
+`@mxlang/tsx-bridge` has no dependency on `@mxlang/solid` or any other host
 (only a `devDependency`, for this package's own tests). Every in-repo
 `.solid.mx` caller (the Vite plugin, the TypeScript plugin, the language
 server, the oracle) now imports `@mxlang/solid` itself and passes
@@ -154,7 +159,7 @@ this task.
 ## Build
 
 ```
-bun run build   # from packages/parser, or `bun run build` at the repo root
+bun run build   # from packages/tsx-bridge, or `bun run build` at the repo root
 ```
 
 Produces `dist/index.js` (ESM) from `src/index.ts`, re-exporting `parse`,
@@ -166,7 +171,7 @@ build --define` so no `process.env` lookups survive in `dist/`.
 ## Re-vendor
 
 ```
-packages/parser/scripts/vendor.sh [tag]   # defaults to the pinned tag
+packages/babel/scripts/vendor.sh [tag]   # defaults to the pinned tag
 ```
 
 Idempotent: deletes `src/babel/` and re-fetches. Does not reapply the local

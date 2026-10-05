@@ -142,7 +142,7 @@ second Babel dependency:
 - **The alternative is worse.** Adding `@babel/parser` + `@babel/traverse` as
   real dependencies buys a second copy of Babel, a second version to keep in
   step, and the cross-instance problem above. `@mxlang/html` used to reach
-  for `@mxlang/parser` (the *Solid parser* package, a vendored `@babel/parser`
+  for `@mxlang/tsx-bridge` (the *Solid parser* package, a vendored `@babel/parser`
   fork) for exactly one `parse` call; dropping that is what leaves this package
   with a single dependency.
 
@@ -175,7 +175,7 @@ enclosing file. The consumer is a host whose MX lives inside another language
 (Solid's `.solid.mx`). This is the stopgap
 `notes/research/marko-seam-spikes.md` spike 1 measured, not a fix: the fix is an
 additive base-position parameter upstream, which MX still intends to send.
-Solid's own bridge (`packages/parser/src/mx/bridge.ts`) now calls this
+Solid's own bridge (`packages/tsx-bridge/src/mx/bridge.ts`) now calls this
 front door for every MX region it finds — see `packages/hosts/solid/README.md`
 for the bridge's own side of that hand-off. Documented limits:
 

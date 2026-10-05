@@ -217,7 +217,7 @@ Astro example's `.astro` and `.astro.mx` correct/wrong fixtures, asserting exact
 diagnostics and exit codes (plus that plain `tsc` does *not* catch the Solid
 error). It needs
 `bun run build` to have produced `dist/bin.cjs` first —
-the same fresh-worktree caveat `@mxlang/parser`'s `dist/index.js` carries;
+the same fresh-worktree caveat `@mxlang/tsx-bridge`'s `dist/index.js` carries;
 `bun run verify` builds before it tests.
 
 ```

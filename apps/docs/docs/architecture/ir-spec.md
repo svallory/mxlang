@@ -107,7 +107,7 @@ What each span covers is listed with its field. The rule throughout: slicing the
 
 ### 3.4 Fragments and `baseOffset`
 
-When MX is a region inside another file (a `.solid.mx` region, found by `packages/parser/src/mx/bridge.ts`), `parseFragment(source, { filename, baseOffset, baseLine, baseColumn })` parses the substring and shifts every position so the IR is file-absolute. The bridge passes `baseOffset: inner.start`. The numbers (`fragment.ts`, `FragmentBase`):
+When MX is a region inside another file (a `.solid.mx` region, found by `packages/tsx-bridge/src/mx/bridge.ts`), `parseFragment(source, { filename, baseOffset, baseLine, baseColumn })` parses the substring and shifts every position so the IR is file-absolute. The bridge passes `baseOffset: inner.start`. The numbers (`fragment.ts`, `FragmentBase`):
 
 - all three count UTF-16 code units;
 - `baseOffset` is the number of units before the fragment; `baseLine` is zero-based (the number of `\n` before it); `baseColumn` is zero-based (units between the last `\n` and the fragment);

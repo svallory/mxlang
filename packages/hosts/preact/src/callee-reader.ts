@@ -12,7 +12,7 @@ import { parse as parseMx } from "@mxlang/tsx-bridge";
  * callees, which recurses forever for two region files importing each other.
  * The reader does not depend on the segment, since the declarations it reads
  * are plain TypeScript in every region kind. This is the one place the JSX
- * hosts import `@mxlang/parser`.
+ * hosts import `@mxlang/tsx-bridge`.
  */
 export const readJsxCalleeInput: CalleeInputReader = ({
   path,

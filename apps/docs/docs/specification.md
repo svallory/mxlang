@@ -1487,7 +1487,7 @@ else's module, so it has no statement position for `const Row = (...) =>
 `hoistedImports` already hits for a discovered tag's synthesized import. The
 compiler resolves it the same way: `@mxlang/solid`'s emitter mints a
 gensym'd module-scope function (`__mx_DefineRowN`, never the author's own
-name — see `packages/hosts/solid/AGENTS.md`), and `@mxlang/parser`'s bridge
+name — see `packages/hosts/solid/AGENTS.md`), and `@mxlang/tsx-bridge`'s bridge
 writes it into the surrounding module alongside any hoisted imports.
 A hoisted `<define>` must be a **direct top-level child of its region**
 (not nested inside `<if>`/`<for>`/an attribute tag/another `<define>`) and
@@ -1681,7 +1681,7 @@ construct:
 - A capitalized tag bound in the **surrounding TypeScript module** as a value
   — an import or a top-level `const`/`function`/`class`, type-only bindings
   excluded — resolves, even though the region itself has no module scope of
-  its own to hold such a binding. `@mxlang/parser`'s `programBindings`/
+  its own to hold such a binding. `@mxlang/tsx-bridge`'s `programBindings`/
   `sourceBindings` (shared with `@mxlang/typescript-plugin`'s
   `appendSolidBuiltinImport`) reads this from a declaration-only pre-parse of
   the whole file, region bodies replaced with `null`; the parser bridge
@@ -1692,7 +1692,7 @@ construct:
   is actually in scope*, never as unresolved.
 - One of Solid's own JSX built-ins (`Show`, `For`, `Switch`, `Match`,
   `Repeat`, `Errored`, `Loading`, `Dynamic` — `SOLID_BUILTIN_TAGS`,
-  `@mxlang/parser`) resolves unconditionally: `@mxlang/solid`'s emitter
+  `@mxlang/tsx-bridge`) resolves unconditionally: `@mxlang/solid`'s emitter
   prints these as a bare tag with no import of its own, because the real
   Solid build pipeline (`@solidjs/vite-plugin`'s compiler stage) auto-imports
   every one it sees — a stage this compiler never runs through.
@@ -1721,7 +1721,7 @@ each supplying `rejectUnknownTag` (Marko's own wording) for the fallthrough:
 - **Astro** (`.astro.mx`): a `.astro.mx` template body has no MX-level
   `import`/`<define>`/`<const>` of its own — Astro's local-component form
   *is* a `---` fence import — so `lowerAstroMx` now parses the fence's own
-  top-level value bindings (`@mxlang/parser`'s `sourceBindings`, the same
+  top-level value bindings (`@mxlang/tsx-bridge`'s `sourceBindings`, the same
   reader `.solid.mx`'s `moduleBindings` extension above uses) and feeds them
   into `ctx.imports` before lowering, the operator-ruling extension pattern
   decision 114 already established for `.solid.mx`'s larger scope. A `.astro.mx`
@@ -1773,7 +1773,7 @@ a new `Ctx.importedNames` (every binding, type or value) serves the two
 readers that need the older, unfiltered meaning — `needsAttrTagImport`'s "is
 `AttrTag` already imported" check and the self-export collision check. The
 import statement is still emitted verbatim either way. Mirrors
-`@mxlang/parser`'s `programBindings` above, which already excluded the same
+`@mxlang/tsx-bridge`'s `programBindings` above, which already excluded the same
 two shapes for the `.solid.mx` *region* path.
 
 ### Dynamic tags
@@ -1856,7 +1856,7 @@ classifies each local's value:
 `ctx.unknownLocalValue` (`@mxlang/core`) carries the classified set;
 `isFunctionLikeValue` (also exported) is the shared AST-shape check. On
 Solid, where a `.solid.mx` region's module scope arrives as a pre-computed
-name set rather than real AST nodes, `@mxlang/parser`'s
+name set rather than real AST nodes, `@mxlang/tsx-bridge`'s
 `unknownProgramBindings`/`unknownSourceBindings` perform the identical
 classification at the parser boundary (over the surrounding module's own
 `programBindings` pre-parse) and thread it through as
@@ -1953,7 +1953,7 @@ branch, additionally exposed a pre-existing gap where a region whose entire
 content is one dynamic tag failed to re-parse (its compiled JSX
 child-expression-container braces are not a standalone expression on their
 own) — the parser bridge now retries with those braces stripped on a parse
-failure. `@mxlang/parser`'s module-scope scan gained a parallel
+failure. `@mxlang/tsx-bridge`'s module-scope scan gained a parallel
 `importDefaultFromMarkoOrMx` set (§7's precedence text above), threaded the
 same way `moduleBindings`/`importSpecifiers` already are, so a real
 `.solid.mx` file's routing matches a unit test's.
@@ -2775,7 +2775,7 @@ parameter no caller can supply (JSX call sites take no type arguments).
 Solid explicitly declares the binding `let n: any;` (not a bare `let n;`,
 which would additionally report `noImplicitAny`'s own TS7005 on every read,
 unrelated to this gap) on both the `.solid.mx` region path
-(`@mxlang/parser`'s `hoistRegionImports`) and the whole-file `.mx` path
+(`@mxlang/tsx-bridge`'s `hoistRegionImports`) and the whole-file `.mx` path
 (`@mxlang/solid`'s `compileSolidUnit`). A misuse of the bound value (e.g.
 calling a string method on a `<return>`'d number) type-checks clean today —
 pinned by a regression test on each path, named so a future fix (MX 2's

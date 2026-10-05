@@ -144,7 +144,7 @@ it, so a bare Preact render would print `class` first. The golden is correct). F
 - Region declarations come from `createJsxDeclarations(name, { region: true })`:
   reactive-tag errors name only the hook in the surrounding component.
 - `src/callee-reader.ts` (`readJsxCalleeInput`) is the JSX hosts' one callee
-  reader and this package's only `@mxlang/parser` import; keep it there.
+  reader and this package's only `@mxlang/tsx-bridge` import; keep it there.
   Core finds it through the compile's lookup (`readersFor` in
   `core/src/callee-input.ts`: registered readers, then the lookup's file
   kinds), so a direct region compile under the host's own lookup reads

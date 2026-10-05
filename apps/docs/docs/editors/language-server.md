@@ -52,7 +52,7 @@ errors, each naming that framework's own primitive.
 
 `.solid.mx` is a different file format rather than another policy for a
 whole-file template: it is TypeScript/TSX with MX regions. The server parses
-the complete module through `@mxlang/parser`, which lowers each region through
+the complete module through `@mxlang/tsx-bridge`, which lowers each region through
 `@mxlang/solid`. Host errors and malformed expressions inside a region are
 reported at their file-absolute positions.
 
@@ -88,4 +88,4 @@ This tells the language server to apply the React host policy. If the `strict` f
 
 ### Region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`)
 
-For region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/parser` bridge and runs each through the file kind's host (`@mxlang/solid`, `@mxlang/react`, `@mxlang/preact`, `@mxlang/hono`), mapping the resulting errors back to the correct source positions within the complete TypeScript file.
+For region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/tsx-bridge` bridge and runs each through the file kind's host (`@mxlang/solid`, `@mxlang/react`, `@mxlang/preact`, `@mxlang/hono`), mapping the resulting errors back to the correct source positions within the complete TypeScript file.

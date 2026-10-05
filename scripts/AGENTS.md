@@ -9,7 +9,7 @@ bun run typecheck   # or: moon run :typecheck
 bun run test        # or: moon run :test
 bun run lint        # or: moon run :lint
 bun run verify      # or: moon run :verify   -- delegates straight to `bun run verify`, see below
-bun run build       # or: moon run parser:build -- builds packages/parser to dist/
+bun run build       # or: moon run tsx-bridge:build -- builds packages/tsx-bridge to dist/
 ```
 
 moon's root `typecheck`/`test` tasks are thin aggregates (`deps: ["^:typecheck"]` / `["^:test"]`) that fan out to each package's own task; `lint` runs once at the root over the whole tree via biome. `bun run typecheck`/`test` take the other layer — a single shell loop/vitest run at the root (the typecheck loop defers to a package's own `typecheck` script when it has one, which is what lets `examples/counter-app` and `examples/todomvc` run `mx-tsc`, and `examples/astro-static` run `mx-tsc --astro`, while everything else runs plain `tsc`) — so pick one command style (bun or moon) per invocation rather than mixing them. An example whose `tsconfig.json` is solution-style (`files: []` plus `references` to the real project configs, Angular CLI's own default shape — see `examples/angular-app/tsconfig.json`) needs its own `typecheck` script for the same reason: the root loop's plain `bunx tsc --noEmit` against that `tsconfig.json` is a silent no-op, since there are no `files` listed to check and `tsc` does not follow `references` without `--build`. `examples/angular-app`'s `typecheck` script runs `tsc -p tsconfig.app.json --noEmit` directly against the real project config instead. `verify` is the one exception: moon's `verify` task is a single `bun run verify` command, not a `deps` list, because `bun run verify`'s own chain (pre-verify must run before test; the coverage script must run last, after everything else) isn't expressible as an unordered `deps` set — delegating keeps the two entry points from silently drifting into two different definitions of "verified".
@@ -28,7 +28,7 @@ scripts/pre-verify.ts && typecheck && lint && build && test && test:bun && test:
   (`vitest-results.json`, `packages/editors/tree-sitter-solid/.test-ran`) and writes
   `.verify-start` with the current time. All three are gitignored.
 - `bun run test` runs vitest (over the root `vitest.config.ts`'s `projects`
-  list — `scripts`, `packages/core`, `packages/oracle`, `packages/parser`,
+  list — `scripts`, `packages/core`, `packages/oracle`, `packages/tsx-bridge`,
   `packages/hosts/*`, `packages/tooling/*`, `packages/editors/*` — which
   auto-discovers a project per matched directory with test files) with
   `--reporter=json --outputFile=vitest-results.json`.
@@ -72,6 +72,8 @@ by workspace-relative path):
 - `examples/react-app` — e2e only
 - `examples/react-region-app` — e2e only
 - `examples/todomvc` — e2e only
+- `packages/babel` — vendored Babel fork, typecheck only; its behaviour is
+  pinned by `@mxlang/tsx-bridge`'s `vendored.test.ts` and the bridge suites
 - `packages/editors/zed` — grammar and Rust extension (registers
   `@mxlang/language-server`), both build-verified in CI
   (`zed-compile-check`, `zed-compile-check`)

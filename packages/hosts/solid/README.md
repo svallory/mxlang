@@ -15,7 +15,7 @@ using the same definitions as whole-file `.mx` hosts.
 bun add @mxlang/solid
 ```
 
-Workspace-internal today: `@mxlang/parser` depends on it directly for the
+Workspace-internal today: `@mxlang/tsx-bridge` depends on it directly for the
 `.solid.mx` bridge (see below), and no other package or example imports it.
 Pinned dependencies: `@babel/parser` at `7.29.8` (matching the parser
 package's own pin), `@marko/compiler` at `5.42.10`, `magic-string` at
@@ -30,9 +30,9 @@ JSX *text*. Generated modules import Solid primitives as needed, including
 ## `.solid.mx` bridge
 
 A `.solid.mx` file is a TypeScript module in which `<` in expression position
-opens an MX region. `@mxlang/parser` (its vendored Babel fork) is the only
+opens an MX region. `@mxlang/tsx-bridge` (its vendored Babel fork) is the only
 thing that finds these regions — `walk.ts`/`bridge.ts`, unchanged in scope by
-this package. For each region, `packages/parser/src/mx/bridge.ts` slices the
+this package. For each region, `packages/tsx-bridge/src/mx/bridge.ts` slices the
 raw region text and calls this package's `compileSolidMx(source, { filename,
 baseOffset, baseLine, baseColumn })`, which runs `@mxlang/core`'s
 `parseFragment` (Marko's parser, over just that substring, with every

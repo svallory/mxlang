@@ -288,9 +288,9 @@ Every type this catalogue defines is `Mx` + a PascalCase noun (`MxDocument`,
 
 `Span` is the one unprefixed helper. No name starts with `Marko` (criterion
 11). Collision check: the Babel fork's node types in
-`packages/parser/src/babel/types.ts` contain no `Mx` prefix (`rg 'type: "Mx'`
+`packages/babel/src/types.ts` contain no `Mx` prefix (`rg 'type: "Mx'`
 returns 0), while unprefixed candidates would collide (`Placeholder` is a Babel
-type in `packages/parser/src/babel/types.ts`, as is `TemplateLiteral`).
+type in `packages/babel/src/types.ts`, as is `TemplateLiteral`).
 
 ```ts
 interface Span { start: number; end: number }      // §5
@@ -1682,7 +1682,7 @@ depend on an input marked "front end" in the last column.
 | `htmlParseOptions.preserveWhitespace` (file-wide) | `:5898-5899` | not passed by MX (`fragment.ts` `parseFragmentNative` passes only offsets, in the unused `parseFragmentNative`) | dropped |
 | `tagDiscoveryDirs` (`tags/*.marko` found by Marko's scanner) | taglib lookup | the html target passes `["tags"]` (`targets/html/src/compiler.ts` `host`) | **dropped** with `@marko/compiler` (ruling Q22): no `marko-tag.json`/`marko.json` exists, and the two discovered `.marko` tags (`targets/html/fixtures-marko/tags-discovery/tags/badge.marko`, `fixtures-marko/try-child-throw/tags/boom.marko`) carry no parse options (a `.marko` file can only get them from a `marko-tag.json`), so nothing depends on it |
 | Babel parser options (`typescript` plugin, `allow*` flags) | `:6699-6705` (`manipulateOptions(opts) {` is at `:6699`) | the compiler | **front end**, fixed configuration of the expression sub-parser |
-| The expression sub-parser itself | `parseExpression` and friends, `[C]chunk-src.js:947-1016` | Marko's bundled `@babel/parser` **7.29.7** (`[C]babel.js`, region `@babel+parser@7.29.7`) | **front end**: MX's Babel fork (`packages/parser/src/babel`, from `@babel/parser` 7.29.8). It must produce node shapes equal to today's, including `extra.raw`, `extra.parenthesized` and comments, or emitted code changes (ruling Q13/P3) |
+| The expression sub-parser itself | `parseExpression` and friends, `[C]chunk-src.js:947-1016` | Marko's bundled `@babel/parser` **7.29.7** (`[C]babel.js`, region `@babel+parser@7.29.7`) | **front end**: MX's Babel fork (`packages/babel/src`, from `@babel/parser` 7.29.8). It must produce node shapes equal to today's, including `extra.raw`, `extra.parenthesized` and comments, or emitted code changes (ruling Q13/P3) |
 | The generator and Babel support packages | `printExpression` (`core/src/compile.ts`, `generator(node, { concise: true })`); `expr()` for loc-less nodes; `declName` | Marko's bundled `@babel/generator`, `@babel/traverse`, `@babel/types` **7.29.7** (`[C]babel.js`; `markoBabel`, `core/src/core.ts`) | **lowering**, not the front end: the port pins `@babel/{types,traverse,generator}` at 7.29.7 with today's generator options (`concise: true`). The generator is part of the byte contract: it prints `Const.name`, `Define`/`Component.var`/`DelegatedTag.var` names, unsliceable `For` params, attribute-method values and dynamic tag names, and rewrites authored text (`<const/{ a,b }=x/>` gives `"{ a, b }"`, the reviewer's probe c). Replacing generator output with source slices is wanted, but as a separate recorded change after the port (TODO `ir-generated-text-to-source-slices`) |
 | `file.___hasParseErrors`, `watchFiles` | `:1028`, `:6190` | internal | dropped (errors are data; dependency tracking is core's) |
 

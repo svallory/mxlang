@@ -146,7 +146,7 @@ spawns the real built `dist/bin.js` with `bun run ... --stdio`, exchanges
 asserts the resulting `publishDiagnostics` notification; the child process is
 killed in `afterEach`, honoring the load rule's "kill what you start").
 Requires `bun run build` to have produced `dist/bin.js` first — the same
-fresh-worktree caveat as `@mxlang/parser`'s `dist/index.js` (see "Build
+fresh-worktree caveat as `@mxlang/tsx-bridge`'s `dist/index.js` (see "Build
 before downstream tests" in the root `AGENTS.md`): `bun run verify` builds before it tests,
 so this only bites a standalone `vitest run` of this package.
 

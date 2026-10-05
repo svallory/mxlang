@@ -8,7 +8,9 @@ Custom tags let a project define its own portable markup vocabulary in `tags/x.m
 
 | Package | npm name | Purpose |
 |---|---|---|
-| `packages/parser` | `@mxlang/parser` | `@babel/parser` fork: MX in expression position -> lowered JSX AST (the language) |
+| `packages/babel` | `@mxlang/babel` | Vendored `@babel/parser` fork with an injectable MX grammar hook (`mxHooks`); no MX logic of its own |
+| `packages/tsx-bridge` | `@mxlang/tsx-bridge` | MX in TypeScript: region discovery, `parse`/`print`, MX in expression position -> lowered JSX AST (the language); supplies the hooks to `@mxlang/babel` |
+| `packages/parser` | `@mxlang/parser` | The htmljs-parser-derived template parser (`src/template/`); not used by core yet |
 | `packages/tooling/babel-plugin` | `@mxlang/babel-plugin` | `parserOverride` -> parser |
 | `packages/tooling/typescript-plugin` | `@mxlang/typescript-plugin` | `@volar/typescript` plugin; virtual `.tsx` via `@babel/generator` source maps |
 | `packages/tooling/tsc` | `@mxlang/tsc` | `tsc` wrapper (`runTsc`) so CI type-checks `.solid.mx` |
@@ -66,10 +68,10 @@ All dependencies below are pinned to an exact version (no `^`/`~`) at the root `
 
 `marko`/`@marko/compiler`/`@marko/runtime-tags`/`parse5` are pinned in `packages/oracle/package.json`, not the root — they are only a dev dependency of the `oracle:marko` parity check (decision 51), not of the language itself. `@marko/compiler`'s own version numbering is decoupled from the Marko language version; 5.42.5 is the compiler release that ships Marko 6's translator (`marko/translator`) and is what `marko@6.3.51` itself depends on. `parse5` is `oracle:marko`'s HTML parser for semantic (decoded-content) comparison rather than raw-string comparison, pinned to the version already resolved transitively through `@solidjs/babel-plugin`'s own dependency on it.
 
-The last four entries are build-only dependencies of `packages/parser`'s
+The last four entries are build-only dependencies of `packages/babel`'s
 vendored `@babel/parser` source (`@babel/parser`'s own runtime deps, which
 npm's published bundle doesn't need to declare since Babel's build inlines
-them) — see `packages/parser/README.md` and `UPSTREAM.md`. A fifth such
+them) — see `packages/babel/UPSTREAM.md`. A fifth such
 dependency, `@babel/helper-string-parser`, is vendored as source instead of
 installed as a package (see `UPSTREAM.md`'s "Local modifications"); its
 pinned version (7.27.1) is recorded there, not here, since there's no
@@ -100,7 +102,7 @@ Runnable via `bun run <name>` or `moon run :<name>`:
 - `test` — `vitest run`
 - `lint` — `biome check .`
 - `verify` — typecheck, then lint, then build, then test; stops on first failure. Includes `build` so `vendored.test.ts`'s dist-equivalence pass always runs against a fresh `dist/index.js`, not just the pre-build TS source.
-- `build` — builds `packages/parser`'s vendored parser to `dist/index.js`
+- `build` — builds `packages/tsx-bridge` (the MX bridge, with the vendored Babel fork bundled in) to `dist/index.js`
 - `oracle` — runs only the oracle/golden harness (`packages/oracle`) and prints a fixture/variant/status summary
 
 ## Try it

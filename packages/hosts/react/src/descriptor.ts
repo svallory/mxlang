@@ -75,7 +75,7 @@ const descriptor: TargetDescriptor = {
             targets: input.targets ?? targets(),
           }),
         // The JSX hosts' one reader, in `@mxlang/preact`: the only place
-        // they import `@mxlang/parser`.
+        // they import `@mxlang/tsx-bridge`.
         readCalleeInput: (request) =>
           (
             require("@mxlang/preact/callee-reader") as typeof import("@mxlang/preact/callee-reader")

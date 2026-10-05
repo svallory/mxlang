@@ -40,7 +40,7 @@ resolvable (see `linkRuntime` in `bun.test.ts`).
 
 Whitespace on **every** host, Solid included, is decision 33's rule
 applied once, by Marko's own `onText` before `@mxlang/core`'s resolver ever
-sees a `MarkoText` node (see the four Marko facts in `packages/parser/AGENTS.md`) — there is no
+sees a `MarkoText` node (see the four Marko facts in `packages/tsx-bridge/AGENTS.md`) — there is no
 separate Solid-specific whitespace pass to keep in sync; a second
 implementation on any host's path would collapse whitespace twice.
 
@@ -217,7 +217,7 @@ author binding (the same rule applies to ordinary content loops).
 retired `@mxlang/html/bun` by decision 68). It exports a `BunPlugin` that
 registers `build.onLoad({ filter: MX_FILTER }, ...)` — `MX_FILTER` is
 `/(?<!\.solid)\.mx$/`, `.mx` only; `.marko` is deliberately not registered
-(see "`.mx` is the only template extension" in `packages/parser/AGENTS.md`). On each matched `.mx`
+(see "`.mx` is the only template extension" in `packages/tsx-bridge/AGENTS.md`). On each matched `.mx`
 file it reads the source, runs it through `compile()`, and returns
 `{ contents: code, loader: "ts" }` — `compile()`'s output is plain TypeScript
 (an `import`, an optional `export interface Input`, a default-exported

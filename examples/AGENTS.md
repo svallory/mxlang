@@ -8,7 +8,7 @@ entirely in MX: `App.solid.mx` (state, hash-routed filter, localStorage
 persistence), `TodoItem.solid.mx` (toggle, double-click-to-edit, destroy),
 `Footer.solid.mx` (count, filters, clear-completed). Root `package.json`
 `workspaces` includes `examples/*`, so `@mxlang/vite-plugin` and
-`@mxlang/parser` resolve as workspace deps, and root `typecheck` covers
+`@mxlang/tsx-bridge` resolve as workspace deps, and root `typecheck` covers
 `examples/*/` as well as `packages/*/`.
 
 Solid 2's `createEffect` requires **two** arguments — a compute function and
@@ -63,14 +63,14 @@ Solid, no client runtime, no prebuild step. `src/server.ts` and
 `src/build.ts` `import renderX from "./pages/x.mx"` directly, exactly like
 any other module; `bunfig.toml` preloads the loader.
 
-`packages/targets/html/tsconfig.json` maps `@mxlang/parser` to
-`../parser/src/public.d.ts` in its `paths`, for typechecking against the
+`packages/targets/html/tsconfig.json` maps `@mxlang/tsx-bridge` to
+`../tsx-bridge/src/public.d.ts` in its `paths`, for typechecking against the
 parser's public types without requiring `dist/` to be built first. Bun's
 `bun run` also honours `tsconfig.json` `paths` at runtime, and does so per
 imported file's own directory, not just the entry point's — so a plain `bun
 run` of any script that imports `@mxlang/html` (which imports
-`@mxlang/parser`) fails with `Export named 'X' not found in module
-".../public.d.ts"`, because Bun resolves the bare `@mxlang/parser` specifier
+`@mxlang/tsx-bridge`) fails with `Export named 'X' not found in module
+".../public.d.ts"`, because Bun resolves the bare `@mxlang/tsx-bridge` specifier
 against `packages/targets/html/tsconfig.json`'s `paths` regardless of where the
 importing file lives. Work around it with `bun run
 --tsconfig-override=<path to a tsconfig with no such paths>`; `examples/mx-site`'s
@@ -117,7 +117,7 @@ example's typecheck would otherwise fail on the file that exists to fail.
 **`.mx` pages** (decision 76b, `packages/hosts/astro/src/index.ts` +
 `packages/hosts/astro/src/vite-pages.ts`): the integration calls Astro's
 `addPageExtension(".mx")` — `.marko` is not a registered extension for this
-integration at all (see "`.mx` is the only template extension" in `packages/parser/AGENTS.md`), so
+integration at all (see "`.mx` is the only template extension" in `packages/tsx-bridge/AGENTS.md`), so
 there is no separate question of whether it is a page. A second Vite plugin (`mxPages`,
 `enforce: "post"`, scoped to `<srcDir>/pages/`) runs after
 `@mxlang/vite-plugin`'s own `.mx` → TS compile in the *same* transform pass

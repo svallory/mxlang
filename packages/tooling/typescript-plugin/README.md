@@ -22,7 +22,7 @@ whether a file compiles.
 `createSolidMxLanguagePlugin(ts)` builds a `LanguagePlugin<string>`:
 
 - `getLanguageId` reports `solidmx` for any `*.solid.mx` path.
-- `createVirtualCode` runs `@mxlang/parser`'s `print(source, filename)` and
+- `createVirtualCode` runs `@mxlang/tsx-bridge`'s `print(source, filename)` and
   wraps the printed TSX in a `VirtualCode` whose `CodeMapping`s are decoded
   from the returned source map, with `verification`, `completion`, `semantic`
   and `navigation` all enabled.
@@ -64,7 +64,7 @@ install it, so an editor and CI resolve imports identically.
 Diagnostics land on the exact source column, not the start of the region. For
 `.solid.mx`, the printer's map is line-based, so columns come from the bridge
 repositioning each Babel node onto the source expression it was copied from
-(`packages/parser/src/mx/bridge.ts`). `decodeMappings` then turns that map into
+(`packages/tsx-bridge/src/mx/bridge.ts`). `decodeMappings` then turns that map into
 `CodeMapping`s, keeping only spans whose generated and source text actually
 match and merging contiguous ones.
 
