@@ -369,6 +369,27 @@ describe("name sugar renders (html)", () => {
   ])("%s is a positioned error", (source, text) => {
     expect(failure(source).message).toContain(text);
   });
+
+  // A `:name` sugar on a statement tag is not a tag name: rewriting it made
+  // `<import name="x"/>`, a statement node in whatever body the tag sits in,
+  // which this target reported as "@mxlang/core: unexpected module-level node
+  // kind \"Import\" in the body walk" — an internal error, not source
+  // feedback. Core now rejects the sugar, positioned on the colon.
+  it.each([
+    ["<import:x/>", "import", 7],
+    ["<div><import:x/></div>", "import", 12],
+    ["<div><export:x/></div>", "export", 12],
+    ["<div><static:x/></div>", "static", 12],
+  ])(
+    "%s is a positioned error naming the statement tag",
+    (source, tag, column) => {
+      const error = failure(source);
+      expect(error.message).toContain("not supported on the statement tag");
+      expect(error.message).toContain(`\`${tag}\``);
+      expect(error.line).toBe(1);
+      expect(error.column).toBe(column);
+    },
+  );
 });
 
 // Round 3, review B: a falsy literal beside a `.x` sugar renders as the

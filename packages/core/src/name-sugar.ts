@@ -1014,11 +1014,27 @@ function isStatementTag(ctx: Ctx, name: string): boolean {
 export function rewriteNameSugar(ctx: Ctx, node: Node): void {
   if (done.has(node) || node?.type !== "MarkoTag") return;
   done.add(node);
-  if (
-    node.name?.type === "StringLiteral" &&
-    isStatementTag(ctx, node.name.value)
-  ) {
-    return;
+  if (node.name?.type === "StringLiteral") {
+    const spelled: string = node.name.value;
+    if (isStatementTag(ctx, spelled)) return;
+    // `<import:x/>` is a `:name` sugar on a statement tag, not a tag called
+    // `import:x`. Rewriting it would make `<import name="x"/>`, which lowers to
+    // a statement node wherever the tag sits — and a statement inside a body is
+    // an IR shape no target can describe, so every host reported it as an
+    // internal error instead of source feedback. The name before the colon is
+    // what names the tag, so that is what decides.
+    const colon = spelled.indexOf(":");
+    if (
+      colon > 0 &&
+      !spelled.startsWith("@") &&
+      isStatementTag(ctx, spelled.slice(0, colon))
+    ) {
+      failAt(
+        ctx,
+        `a \`:name\` is not supported on the statement tag \`${spelled.slice(0, colon)}\`: its text is code, not attributes — write \`${spelled.slice(0, colon)} …\` at the root of the template instead`,
+        startOf(ctx, node.name) + colon,
+      );
+    }
   }
   if (!Array.isArray(node.attributes)) return;
   rewriteHead(ctx, node);

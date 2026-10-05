@@ -646,6 +646,49 @@ describe("statement tags are not rewritten", () => {
   });
 });
 
+// A `:name` sugar on a statement tag (`<import:x/>`) is not a tag called
+// `import:x`: rewriting it made `<import name="x"/>`, which lowers to a
+// statement node wherever the tag sits, and a statement inside a body is an IR
+// shape no target can describe. Every host reported that as an internal error
+// (data: "unexpected IR node kind `Import` in a body"; html: "unexpected
+// module-level node kind \"Import\" in the body walk"). The name before the
+// colon is what names the tag, so it decides, and the diagnostic sits on the
+// colon.
+describe("a `:name` sugar on a statement tag", () => {
+  it.each([
+    ["import", "<import:x/>", 7],
+    ["export", "<export:x/>", 7],
+    ["static", "<static:x/>", 7],
+  ])("%s: named at the root", (name, source, column) => {
+    const error = errorOf(source);
+    expect(error.message).toBe(
+      `a \`:name\` is not supported on the statement tag \`${name}\`: its text is code, not attributes — write \`${name} …\` at the root of the template instead`,
+    );
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(column);
+  });
+
+  it.each([
+    ["import", "<div><import:x/></div>", 12],
+    ["export", "<div><export:x/></div>", 12],
+    ["static", "<div><static:x/></div>", 12],
+  ])("%s: nested in a body", (name, source, column) => {
+    const error = errorOf(source);
+    expect(error.message).toContain(
+      `not supported on the statement tag \`${name}\``,
+    );
+    expect(error.column).toBe(column);
+  });
+
+  it("an attribute tag's namespaced name is not a statement tag", () => {
+    // `<@svg:rect>` names an attribute tag; the `:` in it is XML's, and the
+    // name after it is not a `:name` sugar.
+    expect(errorOf("<div><@svg:rect/></div>").message).not.toContain(
+      "not supported on the statement tag",
+    );
+  });
+});
+
 // Round 3, review B: a non-string authored literal folds the way Marko's class
 // value does: `false`, `0`, `null` and `undefined` drop out; other numbers and
 // `true` stringify; a string stays as written. Every row is pinned against the

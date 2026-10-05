@@ -1820,3 +1820,32 @@ describe("a dynamic shorthand class on data", () => {
     expect(result.diagnostics[0]?.message).toContain(expected);
   });
 });
+
+// TODO `data-import-tag-internal-error`: `<root><import:x/></root>` used to
+// throw "@mxlang/data: unexpected IR node kind `Import` in a body". The cause
+// was core's: a `:name` sugar on a statement tag rewrote into `<import
+// name="x"/>`, which lowers to a statement node in whatever body the tag sits
+// in. Core now rejects that sugar, positioned on the colon, so every target
+// reports source feedback instead of an internal error.
+describe("a `:name` sugar on a statement tag nested in a body", () => {
+  it.each([
+    ["import", "<root><import:x/></root>", 13],
+    ["export", "<root><export:x/></root>", 13],
+    ["static", "<root><static:x/></root>", 13],
+  ])("%s", (name, source, column) => {
+    failWith(source, {
+      message: `a \`:name\` is not supported on the statement tag \`${name}\`: its text is code, not attributes — write \`${name} …\` at the root of the template instead`,
+      line: 1,
+      column,
+    });
+  });
+
+  it("is reported at the root too", () => {
+    failWith("<import:x/>", {
+      message:
+        "a `:name` is not supported on the statement tag `import`: its text is code, not attributes — write `import …` at the root of the template instead",
+      line: 1,
+      column: 7,
+    });
+  });
+});

@@ -746,7 +746,7 @@ tag, `id="name"` plus `value=function`; `:name` and `.class` work the same way.
 (`(` and `=` cannot be part of a sugar, so the space after it is optional.) A tag
 that already has a default value (`kind=1 #x=2`, `<if=a #x=b>`, two sugars with
 values) is a positioned error at the second one (a bound `value:=y` is a default value too; two authored `value=` alone stay decision 135's warning, but with any sugar value beside them the error lands on the second authored one). On Angular, attribute-position `#x=1` is still the template reference, not this sugar. Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, so a second plain `value=` beside it is decision 135's warning there. A bound `:=` right after a sugar (`:n:=y`, `#x:=y`, `.c:=y`) is a positioned error: `a bound value is not supported on name sugar; write name=... value:=...`. A `:name` that is not an identifier, and `:b:c` (two names) or
-`:b(x)`, `#x(p)` and `.c(p)` (arguments without a body), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors.
+`:b(x)`, `#x(p)` and `.c(p)` (arguments without a body), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors. A `:name` on a **statement tag** (`<import:x/>`, `<export:x/>`, `<static:x/>`) is a positioned error on the colon too: an `import`/`export`/`static` is code, not a tag with a name, so its text is not attributes (a statement written without angle brackets is still left completely alone).
 
 **Left alone:** the named forms (`class:x`, `style:x`, `value:fn:=x`, and the
 explicit `value:x`), a dynamic tag name
