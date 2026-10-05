@@ -256,8 +256,8 @@
         "@types/emscripten",
       ],
     },
-    "packages/editors/tree-sitter-solidmx": {
-      "name": "@mxlang/tree-sitter-solidmx",
+    "packages/editors/tree-sitter-solid": {
+      "name": "@mxlang/tree-sitter-solid",
       "version": "0.0.0",
       "devDependencies": {
         "tree-sitter-cli": "0.26.9",
@@ -1121,7 +1121,7 @@
 
     "@mxlang/tree-sitter-mx": ["@mxlang/tree-sitter-mx@workspace:packages/editors/tree-sitter-mx"],
 
-    "@mxlang/tree-sitter-solidmx": ["@mxlang/tree-sitter-solidmx@workspace:packages/editors/tree-sitter-solidmx"],
+    "@mxlang/tree-sitter-solid": ["@mxlang/tree-sitter-solid@workspace:packages/editors/tree-sitter-solid"],
 
     "@mxlang/tsc": ["@mxlang/tsc@workspace:packages/tooling/tsc"],
 
@@ -2855,7 +2855,7 @@
 
     "@mxlang/tree-sitter-mx/tree-sitter-cli": ["tree-sitter-cli@0.26.9", "", { "bin": { "tree-sitter": "cli.js" } }, "sha512-7l+U1RmazPVe+yA/JiX80GFOILnL/j24GbawamIzNQC8UlINrcyECbaWGaG1wuq4j/m0DQTx7Uu4r0iW9Ao1BQ=="],
 
-    "@mxlang/tree-sitter-solidmx/tree-sitter-cli": ["tree-sitter-cli@0.26.9", "", { "bin": { "tree-sitter": "cli.js" } }, "sha512-7l+U1RmazPVe+yA/JiX80GFOILnL/j24GbawamIzNQC8UlINrcyECbaWGaG1wuq4j/m0DQTx7Uu4r0iW9Ao1BQ=="],
+    "@mxlang/tree-sitter-solid/tree-sitter-cli": ["tree-sitter-cli@0.26.9", "", { "bin": { "tree-sitter": "cli.js" } }, "sha512-7l+U1RmazPVe+yA/JiX80GFOILnL/j24GbawamIzNQC8UlINrcyECbaWGaG1wuq4j/m0DQTx7Uu4r0iW9Ao1BQ=="],
 
     "@oxc-parser/binding-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 
