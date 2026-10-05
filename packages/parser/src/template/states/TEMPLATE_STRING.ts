@@ -27,8 +27,11 @@ export const TEMPLATE_STRING: StateDefinition = {
         case CODE.DOLLAR:
           if (data.charCodeAt(this.pos + 1) === CODE.OPEN_CURLY_BRACE) {
             this.pos += 2; // skip ${
-            this.enterState(STATE.EXPRESSION).shouldTerminate =
-              matchesCloseCurlyBrace;
+            const expr = this.enterState(STATE.EXPRESSION);
+            expr.shouldTerminate = matchesCloseCurlyBrace;
+            // MX: a `${}` lexes atoms when the template's expression does.
+            expr.atoms = !!(templateString.parent as STATE.ExpressionMeta)
+              .atoms;
             return;
           }
           this.pos++;

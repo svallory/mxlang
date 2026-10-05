@@ -96,8 +96,9 @@ export function checkForPlaceholder(parser: Parser, code: number) {
       parser.endText();
       parser.enterState(PLACEHOLDER).escape = escape;
       parser.pos += escape ? 2 : 3; // skip ${ or $!{
-      parser.enterState(STATE.EXPRESSION).shouldTerminate =
-        matchesCloseCurlyBrace;
+      const expr = parser.enterState(STATE.EXPRESSION);
+      expr.shouldTerminate = matchesCloseCurlyBrace;
+      expr.atoms = true; // MX: decision 156
       return true;
     }
   }

@@ -94,14 +94,81 @@ does exactly this — shifts once, not twice.
 
 Covered by `__tests__/base-offset.test.ts`, alongside the upstream suite.
 
+### Atoms (decision 156)
+
+Atom lexing, the same change as the patch's atom hunks (both dist builds carry
+identical JavaScript for it):
+
+| Source location | What it does |
+|---|---|
+| `states/EXPRESSION.ts`: `atoms`, `comments`, `regexEnd` on `ExpressionMeta` | `atoms` turns lexing on for one expression; the other two let the look-behind skip comments and see a regex end |
+| `states/EXPRESSION.ts`, `case CODE.COLON`, first | `lexAtom` runs before the ternary/type handling, so an atom's `:` never counts as a ternary's |
+| `states/EXPRESSION.ts`, `return` | records comment and regular-expression children while `atoms` is on |
+| `states/EXPRESSION.ts`, end of file | `atomKeywords`, `lexAtom`, `atomNameEnd`, `expectsExpression` |
+| `states/ATTRIBUTE.ts` (value and argument `EXPRESSION`), `states/OPEN_TAG.ts` (tag arguments), `states/PLACEHOLDER.ts` (`checkForPlaceholder`) | set `atoms = true` |
+| `states/TEMPLATE_STRING.ts` | a template's `${}` inherits `atoms` from the template's own expression |
+| `core/Parser.ts` | `atoms` (reset by `parse`), `read()` stands atoms in, `standInAtoms` |
+| `util/constants.ts` | the `onAtom` handler |
+
+Behaviour:
+
+- Atoms are lexed only in attribute values (named, default, bound and spread),
+  attribute arguments, tag arguments, placeholders (`${}`, `$!{}`) and the
+  `${}` of a template literal inside one of those. Never in statement tags
+  (`static`, `import`, …), scriptlets, method bodies, tag variables, tag
+  parameters or type arguments, and never in string, template or regex text
+  or comments (those are other states).
+- A `:` starts an atom only where an expression is expected: at the start of
+  the expression, or after an operator, a punctuator, a spread's `...` or one
+  of `atomKeywords` (`return`, `typeof`, `in`, …). Never after an expression
+  end (a word, a literal, `)`, `]`, `}`, a quote, a regex), after `.` or `?.`,
+  after `as`/`satisfies`, after a postfix `++`/`--`, or as TypeScript's
+  optional/definite marker (`x?:`, `x!:`: a `?` or `!` directly after a word,
+  `]`, `-` or `+` and directly before the `:`). The name is
+  `[A-Za-z_$][\w$]*(-[\w$]+)*`.
+- The ternary counter skips an atom's `:`, so `x=a ? :b :c` is one value;
+  that is the only input whose decision 146 split changes.
+- `::` (with or without a name) is reserved: `onError` with
+  `INVALID_EXPRESSION`, the range of the `::name` token, and "`` `::a` is
+  reserved (decision 156): `::` will be the Symbol.for sugar; write `:a` for
+  an atom``". Parsing stops there, as for every other parser error.
+
+API (what core and other consumers use):
+
+- `read(range)` returns the source of `range` with every atom wholly inside
+  it replaced by a **same-length numeric stand-in**: `0.` followed by zeros
+  (`:a` → `0.`, `:rename-all` → `0.000000000`). Babel parses it as a
+  `NumericLiteral` at the atom's exact offsets; it is not assignable, not a
+  binding and not a shorthand key, so misuse fails at the atom. A consumer
+  tells a stand-in from an authored number by the source character at the
+  node's start, which is `:` (no authored numeric literal starts with `:`).
+  This is how core sees atoms through `@marko/compiler`, which owns the parser
+  instance and its handlers.
+- `onAtom(range)` (handler, `Ranges.Value`): fired once per atom as it is
+  lexed, in source order. `start`/`end` cover the whole atom, `:` included;
+  `value` is the name (`start + 1` to `end`). For consumers that drive the
+  parser themselves (probes, scans).
+- `Parser#atoms` (internal): the recorded spans, `{ start, end }[]`.
+
+An unconverted stand-in reads as a number: anything that compiles through this
+parser without core's conversion turns atoms into numbers silently.
+
+Nothing else differs from `v5.18.0`. To check: extract `git archive v5.18.0 src`
+of upstream and diff; only `states/ATTRIBUTE.ts`, `states/EXPRESSION.ts`,
+`states/OPEN_TAG.ts`, `states/PLACEHOLDER.ts`, `states/TEMPLATE_STRING.ts`,
+`core/Parser.ts` and `util/constants.ts` differ.
+
 ## Tests
 
 - `__tests__/` (upstream, above), via `upstream-suite.test.ts`.
 - `mx-after-value.test.ts`: `patches/htmljs-parser.test.ts` re-pointed at this
   source (vitest).
+- `mx-atoms.test.ts`: atom lexing, from the case table in `mx-atoms.cases.ts`,
+  which `patches/htmljs-parser.test.ts` runs against both npm builds too.
 - `corpus-equivalence.test.ts`: event streams of this copy against the patched
   npm build over every tracked `.mx`, `.marko` and `.amx` file and every `mx` /
-  `marko` Markdown fence.
+  `marko` Markdown fence (`onAtom` included); and that the only atoms in that
+  corpus are the atoms ADR's own examples.
 - `__tests__/base-offset.test.ts`: the base position — handler ranges
   identical with and without the options, `offsetAt` shifting only by
   `startOffset`, the first-line-only column rule, non-BMP input, zero bases,

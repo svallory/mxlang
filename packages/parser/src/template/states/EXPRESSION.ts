@@ -15,6 +15,17 @@ export interface ExpressionMeta extends Meta {
   operators: boolean;
   /** MX: the expression is a named attribute's (or spread's) value. */
   attrValue: boolean;
+  /**
+   * MX (decision 156): `:name` here is an atom where an expression is
+   * expected. Set for attribute values, spreads and arguments, tag
+   * arguments, placeholders and the `${}` of a template inside one of those;
+   * never for statement tags, scriptlets or method bodies.
+   */
+  atoms: boolean;
+  /** MX: the comments read so far, which atom lexing looks behind past. */
+  comments: Meta[] | undefined;
+  /** MX: where the last regular expression literal ended. */
+  regexEnd: number;
   wasComment: boolean;
   hadUnguardedNewline: boolean;
   inType: boolean;
@@ -81,6 +92,9 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
       shouldTerminate,
       operators: false,
       attrValue: false,
+      atoms: false,
+      comments: undefined,
+      regexEnd: -1,
       wasComment: false,
       hadUnguardedNewline: false,
       inType: false,
@@ -211,6 +225,11 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
           this.pos++;
           break;
         case CODE.COLON:
+          // MX: an atom's `:` is not a ternary's, so it is consumed first.
+          if (expression.atoms && lexAtom(this, expression, data)) {
+            if (this.pos > maxPos) return; // `::` was reported
+            continue;
+          }
           if (expression.operators && !expression.groupStack.length) {
             if (expression.ternaryDepth) {
               expression.ternaryDepth--;
@@ -405,6 +424,16 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
   },
 
   return(child, expression) {
+    if (expression.atoms) {
+      if (child.state === STATE.REGULAR_EXPRESSION) {
+        expression.regexEnd = child.end;
+      } else if (
+        child.state === STATE.JS_COMMENT_LINE ||
+        child.state === STATE.JS_COMMENT_BLOCK
+      ) {
+        (expression.comments ||= []).push(child);
+      }
+    }
     if (child.state === STATE.JS_COMMENT_LINE) {
       expression.wasComment = true;
       // A line comment that runs to the end of the input (rather than being
@@ -783,4 +812,152 @@ function isBareColonEnd(data: string, at: number) {
     (code === CODE.FORWARD_SLASH &&
       data.charCodeAt(at + 1) === CODE.CLOSE_ANGLE_BRACKET)
   );
+}
+
+// MX (decision 156): words after which an expression is expected.
+const atomKeywords = [
+  "await",
+  "case",
+  "delete",
+  "do",
+  "else",
+  "extends",
+  "in",
+  "instanceof",
+  "new",
+  "of",
+  "return",
+  "throw",
+  "typeof",
+  "void",
+  "yield",
+] as const;
+
+/**
+ * MX (decision 156), at a `:`: lexes `::name` (reserved, reported through
+ * `onError`) or, where an expression is expected, an atom `:name`, recorded
+ * on the parser and announced through `onAtom`. Returns whether it consumed
+ * the `:`.
+ */
+function lexAtom(
+  parser: Parser,
+  expression: ExpressionMeta,
+  data: string,
+): boolean {
+  const start = parser.pos;
+  if (data.charCodeAt(start + 1) === CODE.COLON) {
+    const end = atomNameEnd(data, start + 2);
+    const name = data.slice(start + 2, end);
+    parser.emitError(
+      { start, end },
+      ErrorCode.INVALID_EXPRESSION,
+      `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`,
+    );
+    return true;
+  }
+
+  const end = atomNameEnd(data, start + 1);
+  if (end === start + 1 || !expectsExpression(expression, data, start)) {
+    return false;
+  }
+
+  const { atoms } = parser;
+  const last = atoms[atoms.length - 1];
+  if (!last || last.start < start) {
+    atoms.push({ start, end });
+    parser.options.onAtom?.({ start, end, value: { start: start + 1, end } });
+  }
+  parser.pos = end;
+  return true;
+}
+
+/** Where an atom name `[A-Za-z_$][\w$]*(-[\w$]+)*` starting at `pos` ends. */
+function atomNameEnd(data: string, pos: number) {
+  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
+  let end = pos + 1;
+  for (;;) {
+    while (isWordCode(data.charCodeAt(end))) end++;
+    if (
+      data.charCodeAt(end) !== CODE.HYPHEN ||
+      !isWordCode(data.charCodeAt(end + 1))
+    ) {
+      return end;
+    }
+    end += 2;
+  }
+}
+
+/**
+ * Whether an expression is expected at `pos`: at the start of the
+ * expression, or after an operator, punctuator or operator keyword; never
+ * after an expression end (a word, literal, `)`, `]`, `}`), `.`, `?.`, a
+ * postfix `++`/`--`, or TypeScript's `x?:` / `x!:` markers.
+ */
+function expectsExpression(
+  expression: ExpressionMeta,
+  data: string,
+  pos: number,
+): boolean {
+  let i = pos - 1;
+  for (;;) {
+    while (i >= expression.start && isWhitespaceCode(data.charCodeAt(i))) i--;
+    const comment = expression.comments?.find((c) => c.end === i + 1);
+    if (!comment) break;
+    i = comment.start - 1;
+  }
+
+  if (i < expression.start) return true;
+  const code = data.charCodeAt(i);
+  switch (code) {
+    case CODE.CLOSE_PAREN:
+    case CODE.CLOSE_SQUARE_BRACKET:
+    case CODE.CLOSE_CURLY_BRACE:
+    case CODE.DOUBLE_QUOTE:
+    case CODE.SINGLE_QUOTE:
+    case CODE.BACKTICK:
+      return false;
+    case CODE.PERIOD:
+      // Only a spread's `...` expects an expression.
+      return (
+        data.charCodeAt(i - 1) === CODE.PERIOD &&
+        data.charCodeAt(i - 2) === CODE.PERIOD
+      );
+    case CODE.QUESTION:
+    case CODE.EXCLAMATION: {
+      // `x?:` (optional) and `x!:` (definite assignment) are TypeScript.
+      if (i !== pos - 1 || i === expression.start) return true;
+      const owner = data.charCodeAt(i - 1);
+      return !(
+        isWordCode(owner) ||
+        owner === CODE.CLOSE_SQUARE_BRACKET ||
+        owner === CODE.HYPHEN ||
+        owner === CODE.PLUS
+      );
+    }
+    case CODE.PLUS:
+    case CODE.HYPHEN:
+      // A `++`/`--` before a `:` is postfix.
+      return data.charCodeAt(i - 1) !== code;
+    case CODE.FORWARD_SLASH:
+      return i + 1 !== expression.regexEnd;
+    default: {
+      if (!isWordCode(code)) return true;
+      let wordStart = i;
+      while (
+        wordStart > expression.start &&
+        isWordCode(data.charCodeAt(wordStart - 1))
+      ) {
+        wordStart--;
+      }
+      if (
+        wordStart > expression.start &&
+        data.charCodeAt(wordStart - 1) === CODE.PERIOD
+      ) {
+        return false;
+      }
+      return (atomKeywords as readonly string[]).includes(
+        data.slice(wordStart, i + 1),
+      );
+    }
+  }
 }

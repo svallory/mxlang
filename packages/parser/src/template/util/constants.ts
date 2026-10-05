@@ -77,6 +77,11 @@ export type TagType = (typeof _TagType)[keyof typeof _TagType];
 
 export interface ParserOptions {
   onError?(data: Ranges.Error): void;
+  /**
+   * MX (decision 156): an atom `:name` was lexed. The range is the whole
+   * atom (`:` included); `value` is its name.
+   */
+  onAtom?(data: Ranges.Value): void;
   onText?(data: Range): void;
   onPlaceholder?(data: Ranges.Placeholder): void;
   onComment?(data: Ranges.Value): void;

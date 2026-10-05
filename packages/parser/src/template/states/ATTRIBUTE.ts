@@ -114,6 +114,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         const expr = this.enterState(STATE.EXPRESSION);
         // MX: a default attribute (no name) is exempt from the after-value rule.
         expr.attrValue = !!(attr.name || attr.spread);
+        expr.atoms = true; // MX: decision 156
         expr.operators = true;
         expr.terminatedByWhitespace = true;
         expr.shouldTerminate = this.isConcise
@@ -128,7 +129,9 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         if (!attr.async) ensureAttrName(this, attr);
         attr.stage = ATTR_STAGE.ARGUMENT;
         this.pos++; // skip (
-        this.enterState(STATE.EXPRESSION).shouldTerminate = matchesCloseParen;
+        const expr = this.enterState(STATE.EXPRESSION);
+        expr.shouldTerminate = matchesCloseParen;
+        expr.atoms = true; // MX: decision 156
         return;
       } else if (
         code === CODE.OPEN_ANGLE_BRACKET &&

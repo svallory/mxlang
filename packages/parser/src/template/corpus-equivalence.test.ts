@@ -113,4 +113,29 @@ describe("source copy vs patched npm htmljs-parser", () => {
       expect(total).toBeGreaterThan(10_000);
     });
   }
+
+  // Decision 156: apart from the atoms ADR's own examples, no file holds an
+  // atom or a reserved `::`, so atom lexing changes no existing parse
+  // (research §5 row 16).
+  it("lexes atoms only in the atoms ADR's examples", () => {
+    const hits: string[] = [];
+    for (const { name, text } of inputs) {
+      for (const [event, range] of events(source, text, true) as [
+        string,
+        { message?: string },
+      ][]) {
+        if (
+          event === "onAtom" ||
+          (event === "onError" && range.message?.includes("is reserved"))
+        ) {
+          hits.push(name);
+        }
+      }
+    }
+    expect(hits).toEqual([
+      "apps/docs/docs/design-notes/adr-atoms.md#fence3",
+      "apps/docs/docs/design-notes/adr-atoms.md#fence3",
+      "apps/docs/docs/design-notes/adr-atoms.md#fence4",
+    ]);
+  });
 });

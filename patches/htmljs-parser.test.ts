@@ -16,6 +16,14 @@
 import { createRequire } from "node:module";
 import * as esm from "htmljs-parser";
 import { describe, expect, it } from "vitest";
+import {
+  ATOMS,
+  type AtomParserModule,
+  NOT_ATOMS,
+  RESERVED,
+  renderAtoms,
+  SUGAR_FORMS,
+} from "../packages/parser/src/template/mx-atoms.cases.ts";
 
 type Parser = typeof esm;
 
@@ -279,5 +287,38 @@ const DEFAULT_ATTRIBUTE: [string, string][] = [
 describe.each(builds)("default attribute (exempt) (%s)", (_name, mod) => {
   it.each(DEFAULT_ATTRIBUTE)("%j", (input, expected) => {
     expect(render(mod, input)).toBe(expected);
+  });
+});
+
+// Atom lexing (decision 156): the same table the source copy runs
+// (`packages/parser/src/template/mx-atoms.test.ts`), so the two stay in
+// lockstep.
+describe.each(builds)("atoms (%s)", (_name, build) => {
+  const mod = build as unknown as AtomParserModule;
+
+  it.each(ATOMS)("atom: %j", (input, expected) => {
+    expect(renderAtoms(mod, input)).toBe(expected);
+  });
+
+  it.each(RESERVED)("reserved: %j", (input, expected) => {
+    expect(renderAtoms(mod, input)).toBe(expected);
+  });
+
+  it.each(NOT_ATOMS)("not an atom: %j", (input, expected) => {
+    expect(renderAtoms(mod, input, true)).toBe(expected);
+  });
+
+  it.each(SUGAR_FORMS)("decision 146 form lexes no atom: %j", (input) => {
+    expect(renderAtoms(mod, input)).not.toMatch(/atom\(|is reserved/);
+  });
+
+  it("read() stands in every atom fully inside the range", () => {
+    const code = "<div x=:a y=:bb/>";
+    const parser = build.createParser({});
+    parser.parse(code);
+    expect(parser.read({ start: 0, end: code.length })).toBe(
+      "<div x=0. y=0.0/>",
+    );
+    expect(parser.read({ start: 8, end: 9 })).toBe("a");
   });
 });

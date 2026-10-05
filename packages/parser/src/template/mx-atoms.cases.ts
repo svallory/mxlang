@@ -1,0 +1,252 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
+/**
+ * Atom lexing (decision 156) at the parser level: one case table, run against
+ * this source copy (`mx-atoms.test.ts`) and against both builds of the patched
+ * npm `htmljs-parser` (`patches/htmljs-parser.test.ts`), so the two stay in
+ * lockstep.
+ *
+ * Events are rendered compactly: `<tag>`, `@name`, `="value"` (as `read()`
+ * returns it, so atoms show as their same-length numeric stand-in),
+ * `..."spread"`, `args:"…"`, `aargs:"…"`, `${"…"}`, `var:"…"`,
+ * `params:"…"`, `$"scriptlet"`, `atom(name@start-end)` (`onAtom`) and
+ * `ERR(start-end message)`.
+ */
+
+/** The structural subset of a parser module these cases drive. */
+export interface AtomParserModule {
+  createParser(handlers: Record<string, unknown>): {
+    parse(code: string): void;
+    read(range: { start: number; end: number }): string;
+  };
+  TagType: { statement: number };
+}
+
+interface ValueRange {
+  start: number;
+  end: number;
+  value: { start: number; end: number };
+}
+
+// What Marko and `close-tag-opener.ts` return from `onOpenTagName`.
+const STATEMENT_TAGS = new Set([
+  "static",
+  "import",
+  "export",
+  "server",
+  "client",
+]);
+
+export function renderAtoms(
+  mod: AtomParserModule,
+  code: string,
+  statements = false,
+): string {
+  const out: string[] = [];
+  const show = (r: { start: number; end: number }) =>
+    JSON.stringify(parser.read(r));
+  const parser = mod.createParser({
+    onError: (e: { start: number; end: number; message: string }) =>
+      out.push(`ERR(${e.start}-${e.end} ${e.message})`),
+    onAtom: (a: ValueRange) =>
+      out.push(
+        `atom(${code.slice(a.value.start, a.value.end)}@${a.start}-${a.end})`,
+      ),
+    onOpenTagName: (t: { start: number; end: number }) => {
+      const name = code.slice(t.start, t.end);
+      out.push(`<${name}>`);
+      if (statements && STATEMENT_TAGS.has(name)) return mod.TagType.statement;
+    },
+    onTagArgs: (t: ValueRange) => out.push(`args:${show(t.value)}`),
+    onTagParams: (t: ValueRange) => out.push(`params:${show(t.value)}`),
+    onTagVar: (t: ValueRange) => out.push(`var:${show(t.value)}`),
+    onAttrName: (t: { start: number; end: number }) =>
+      out.push(`@${code.slice(t.start, t.end)}`),
+    onAttrArgs: (t: ValueRange) => out.push(`aargs:${show(t.value)}`),
+    onAttrValue: (t: ValueRange) => out.push(`=${show(t.value)}`),
+    onAttrMethod: (t: { body: ValueRange }) =>
+      out.push(`method:${show(t.body.value)}`),
+    onAttrSpread: (t: ValueRange) => out.push(`...${show(t.value)}`),
+    onPlaceholder: (t: ValueRange) => out.push(`\${${show(t.value)}}`),
+    onScriptlet: (t: ValueRange) => out.push(`$${show(t.value)}`),
+  });
+  parser.parse(code);
+  return out.join(" ");
+}
+
+const reserved = (name: string, at: string) =>
+  `ERR(${at} \`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name}\` for an atom)`;
+
+/** [input, rendered events] — atoms are lexed and stood in for. */
+export const ATOMS: [string, string][] = [
+  // Research §5 row 1, 2, 3: attribute values.
+  ["<div x=:a/>", '<div> @x atom(a@7-9) ="0."'],
+  ["<div x=[:a, :b]/>", '<div> @x atom(a@8-10) atom(b@12-14) ="[0., 0.]"'],
+  ["<div x=f(:a)/>", '<div> @x atom(a@9-11) ="f(0.)"'],
+  ["<div x={k: :a}/>", '<div> @x atom(a@11-13) ="{k: 0.}"'],
+  [
+    "<div x=a ? :b : :c/>",
+    '<div> @x atom(b@11-13) atom(c@16-18) ="a ? 0. : 0."',
+  ],
+  ["<div x=:rename-all/>", '<div> @x atom(rename-all@7-18) ="0.000000000"'],
+  ["<div x=:a-1/>", '<div> @x atom(a-1@7-11) ="0.00"'],
+  ["<div x=:$a_b/>", '<div> @x atom($a_b@7-12) ="0.000"'],
+  // A trailing or doubled `-` is not part of the name.
+  ["<div x=:a - b/>", '<div> @x atom(a@7-9) ="0. - b"'],
+  ["<div x=:a--/>", '<div> @x atom(a@7-9) ="0.--"'],
+  // After operators, punctuators and operator keywords.
+  ["<div x=a || :b/>", '<div> @x atom(b@12-14) ="a || 0."'],
+  ["<div x=a ?? :b/>", '<div> @x atom(b@12-14) ="a ?? 0."'],
+  ["<div x=a === :b/>", '<div> @x atom(b@13-15) ="a === 0."'],
+  ["<div x=(a) => :b/>", '<div> @x atom(b@14-16) ="(a) => 0."'],
+  ["<div x=!:a/>", '<div> @x atom(a@8-10) ="!0."'],
+  ["<div x=[...:a]/>", '<div> @x atom(a@11-13) ="[...0.]"'],
+  [
+    "<div x=() => { return :a }/>",
+    '<div> @x atom(a@22-24) ="() => { return 0. }"',
+  ],
+  ["<div x=typeof :a/>", '<div> @x atom(a@14-16) ="typeof 0."'],
+  ["<div x=(a in :b)/>", '<div> @x atom(b@13-15) ="(a in 0.)"'],
+  [
+    "<div x=[\n :a,\n :b\n]/>",
+    '<div> @x atom(a@10-12) atom(b@15-17) ="[\\n 0.,\\n 0.\\n]"',
+  ],
+  // A comment between the operator and the atom is skipped.
+  ["<div x=[ /* c */ :a]/>", '<div> @x atom(a@17-19) ="[ /* c */ 0.]"'],
+  ["<div x=[ // c\n :a]/>", '<div> @x atom(a@15-17) ="[ // c\\n 0.]"'],
+  // Row 4: placeholders, tag arguments, concise mode, attribute tags,
+  // spreads, attribute arguments, default attributes, template `${}`.
+  ["<div>${:a}</div>", '<div> atom(a@7-9) ${"0."}'],
+  ["<div>${[:a, :b]}</div>", '<div> atom(a@8-10) atom(b@12-14) ${"[0., 0.]"}'],
+  ["<div>$!{:a}</div>", '<div> atom(a@8-10) ${"0."}'],
+  ["<if(:a)>y</if>", '<if> atom(a@4-6) args:"0."'],
+  [
+    "<if(a ? :b : :c)>y</if>",
+    '<if> atom(b@8-10) atom(c@13-15) args:"a ? 0. : 0."',
+  ],
+  ["div x=[:a, :b]\n", '<div> @x atom(a@7-9) atom(b@11-13) ="[0., 0.]"'],
+  ["<t><@b x=[:a]/></t>", '<t> <@b> @x atom(a@10-12) ="[0.]"'],
+  ["<div ...{ k: :a }/>", '<div> atom(a@13-15) ..."{ k: 0. }"'],
+  ["<t x(:a)/>", '<t> @x atom(a@5-7) aargs:"0."'],
+  ["<if=:a>y</if>", '<if> @ atom(a@4-6) ="0."'],
+  ["<const/x=:a/>", '<const> var:"x" @ atom(a@9-11) ="0."'],
+  ["<div x=`t :a ${:b}`/>", '<div> @x atom(b@15-17) ="`t :a ${0.}`"'],
+  ["<div>${`${:a}`}</div>", '<div> atom(a@10-12) ${"`${0.}`"}'],
+  // Row 5: whitespace after `=` is consumed before the value starts.
+  ["<div x= :b/>", '<div> @x atom(b@8-10) ="0."'],
+  ["<div x = :b/>", '<div> @x atom(b@9-11) ="0."'],
+  ["t x= :b", '<t> @x atom(b@5-7) ="0."'],
+  // Row 6: the ternary counter skips an atom's `:`, so this is ONE value
+  // (decision 146's after-value split used to cut it at ` :c`).
+  ["<div x=a ? :b :c/>", '<div> @x atom(b@11-13) ="a ? 0. :c"'],
+  ["<div x=a ?:b :c/>", '<div> @x atom(b@10-12) ="a ?0. :c"'],
+  ["<div x=a ? :b :c :d/>", '<div> @x atom(b@11-13) ="a ? 0. :c" @:d'],
+  [
+    "<div x=:a ? :b : :c/>",
+    '<div> @x atom(a@7-9) atom(b@12-14) atom(c@17-19) ="0. ? 0. : 0."',
+  ],
+  // Row 12: an atom value followed by decision 146 name sugar.
+  ["<div x=:a :b/>", '<div> @x atom(a@7-9) ="0." @:b'],
+  ["<div :b x=:a/>", '<div> @:b @x atom(a@10-12) ="0."'],
+  ["<div:b x=[:c]/>", '<div:b> @x atom(c@10-12) ="[0.]"'],
+  ["<div x=:a .b/>", '<div> @x atom(a@7-9) ="0." @.b'],
+  ["div x=:a :b", '<div> @x atom(a@6-8) ="0." @:b'],
+];
+
+/** [input, rendered events] — `::name` is reserved: a positioned error. */
+export const RESERVED: [string, string][] = [
+  ["<div x=::a/>", `<div> @x ${reserved("a", "7-10")}`],
+  ["<div x={k::a}/>", `<div> @x ${reserved("a", "9-12")}`],
+  ["<div x=a?b::c/>", `<div> @x ${reserved("c", "10-13")}`],
+  ["<div>${::rename-all}</div>", `<div> ${reserved("rename-all", "7-19")}`],
+  ["<if(::a)>y</if>", `<if> ${reserved("a", "4-7")}`],
+  ["<div x=[:a, ::b]/>", `<div> @x atom(a@8-10) ${reserved("b", "12-15")}`],
+  [
+    "<div x=::/>",
+    "<div> @x ERR(7-9 `::` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom)",
+  ],
+];
+
+/** [input, rendered events] — never atoms (research §5 rows 8, 9). */
+export const NOT_ATOMS: [string, string][] = [
+  // Strings, template text, regex literals and comments.
+  ['<div x="s :a"/>', '<div> @x ="\\"s :a\\""'],
+  ["<div x='s :a'/>", "<div> @x =\"'s :a'\""],
+  ["<div x=`t :a`/>", '<div> @x ="`t :a`"'],
+  ["<div x=/ :a/g/>", '<div> @x ="/ :a/g"'],
+  ["<div x=a /* :b */ + c/>", '<div> @x ="a /* :b */ + c"'],
+  ["<div x=[a // :b\n]/>", '<div> @x ="[a // :b\\n]"'],
+  // After an expression end: identifiers, literals, `)`, `]`, `}`, strings.
+  ["<div x=a ? b :c/>", '<div> @x ="a ? b :c"'],
+  ["<div x=(a ? b :c)/>", '<div> @x ="(a ? b :c)"'],
+  ["<div x={ a:b }/>", '<div> @x ="{ a:b }"'],
+  ["<div x=(x :number) => x/>", '<div> @x ="(x :number) => x"'],
+  ["<div x=(x):number => x/>", '<div> @x ="(x):number => x"'],
+  ["<div x=f([k]:a)/>", '<div> @x ="f([k]:a)"'],
+  ["<div x={ 'k':a }/>", "<div> @x =\"{ 'k':a }\""],
+  ["<div x=(a ? 1 :b)/>", '<div> @x ="(a ? 1 :b)"'],
+  // After `.`, `?.`, `as`, `satisfies` and other (non-operator) words.
+  ["<div x=o.:a/>", '<div> @x ="o.:a"'],
+  ["<div x=o?.:a/>", '<div> @x ="o?.:a"'],
+  ["<div x=(a as :b)/>", '<div> @x ="(a as :b)"'],
+  ["<div x=(a satisfies :b)/>", '<div> @x ="(a satisfies :b)"'],
+  ["<div x=(o.return :a)/>", '<div> @x ="(o.return :a)"'],
+  // TypeScript's optional marker `x?:` and definite assignment `x!:`.
+  ["<div x=(a?: number) => a/>", '<div> @x ="(a?: number) => a"'],
+  ["<div x=(a?:number) => a/>", '<div> @x ="(a?:number) => a"'],
+  ["<div x=() => { let a!:T; }/>", '<div> @x ="() => { let a!:T; }"'],
+  // Stock htmljs-parser ends an unparenthesized value at a binary keyword
+  // followed by `:`, so this is name sugar, as before atoms.
+  ["<div x=a in :b/>", '<div> @x ="a" @in @:b'],
+  // A `:` not followed by a name start.
+  ["<div x=(a ? b : 1)/>", '<div> @x ="(a ? b : 1)"'],
+  ["<div x=[a ?: 1]/>", '<div> @x ="[a ?: 1]"'],
+  ["<div x=[:1]/>", '<div> @x ="[:1]"'],
+  // Statement tags, scriptlets, method bodies, tag variables, tag params.
+  ["static const s = :a;\n<div/>", "<static> <div>"],
+  ["$ const y = :a;\n<div/>", '$"const y = :a;" <div>'],
+  ["$ { const y = :a; }\n<div/>", '$" const y = :a; " <div>'],
+  ["<div onClick() { return :a; }/>", '<div> @onClick method:" return :a; "'],
+  ["<for|:a| of=x>y</for>", '<for> params:":a" @of ="x"'],
+  // The attribute name position is never a value (decision 146 sugar).
+  ["<div :a/>", "<div> @:a"],
+  ["<div:a/>", "<div:a>"],
+];
+
+/**
+ * Decision 146's forms (research §4, the 31 `p8-invariants` sources): every
+ * piece of sugar lives in tag and attribute names, never in a value, so none
+ * of these lexes an atom or reports `::`.
+ */
+export const SUGAR_FORMS: string[] = [
+  "<:email/>",
+  "<input:email/>",
+  "<input :email/>",
+  "<input#main:email.big/>",
+  "<input:email#main.big/>",
+  "<input:email.big#main/>",
+  "<input.big:email#main/>",
+  "<input.big#main:email/>",
+  "<input#main.big:email/>",
+  "<:email.big/>",
+  "<input #main/>",
+  "<input .big/>",
+  '<input :email type="email"/>',
+  '<input type="email" :email/>',
+  "<input x=1 #main .big :email/>",
+  "<input x=a.b .c/>",
+  "<input:email=1/>",
+  "<input :email=1/>",
+  "<input:email(a) { return a; }/>",
+  "<input #main(a) { return a; }/>",
+  "<input x=1 :/>",
+  "<input :/>",
+  "<a:b:c/>",
+  "<if=a\n  .b>x</if>",
+  "<const/x=items\n  .filter(Boolean)/>\n${x}",
+  "<div class:x=1/>",
+  "<div style:x=1/>",
+  "<input value:fn:=x/>",
+  "<div><@svg:rect/></div>",
+  "<input x=a ? b :c/>",
+  "<input x=(a) :T => a/>",
+];

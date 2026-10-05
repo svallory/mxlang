@@ -64,6 +64,8 @@ export class Parser {
   declare public textPos: number; // Used to buffer text that is found within the body of a tag
   declare public lines: undefined | number[]; // Keeps track of line indexes to provide line/column info.
   declare public options: Options;
+  /** MX (decision 156): the span of every atom lexed so far, in source order. */
+  declare public atoms: Range[];
 
   constructor(options: Options) {
     this.options = options;
@@ -74,7 +76,30 @@ export class Parser {
   declare public startColumn: number;
 
   read(range: Range) {
-    return this.data.slice(range.start, range.end);
+    const text = this.data.slice(range.start, range.end);
+    return this.atoms.length ? this.standInAtoms(text, range) : text;
+  }
+
+  /**
+   * MX (decision 156): `text` (the source of `range`) with every atom that
+   * lies wholly inside `range` replaced by a numeric literal of the same
+   * length (`:a` -> `0.`, `:rename-all` -> `0.000000000`), which Babel parses
+   * at the atom's exact offsets. A consumer tells the stand-in from an
+   * authored number by the source character at its start, which is `:`.
+   */
+  standInAtoms(text: string, range: Range) {
+    let out = "";
+    let last = range.start;
+    for (const atom of this.atoms) {
+      if (atom.start < range.start) continue;
+      if (atom.end > range.end) break;
+      out +=
+        this.data.slice(last, atom.start) +
+        "0." +
+        "0".repeat(atom.end - atom.start - 2);
+      last = atom.end;
+    }
+    return last === range.start ? text : out + this.data.slice(last, range.end);
   }
 
   /**
@@ -337,6 +362,7 @@ export class Parser {
     this.isConcise = true;
     this.beginMixedMode = this.endingMixedModeAtEOL = false;
     this.lines = this.activeTag = this.activeAttr = undefined;
+    this.atoms = [];
     // Drop any state left over from a previous parse so reusing a parser
     // does not chain (and retain) the old state metas via parent references.
     this.activeRange = undefined as unknown as Meta;

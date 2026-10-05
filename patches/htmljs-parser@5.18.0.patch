@@ -1,17 +1,61 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..a913063ea445d178357bc72491ab680185a12601 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b29248a62 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -311,7 +311,7 @@ var ATTRIBUTE = {
+@@ -47,7 +47,17 @@ var Parser = class {
+     this.options = options;
+   }
+   read(range) {
+-    return this.data.slice(range.start, range.end);
++    let text = this.data.slice(range.start, range.end);
++    return this.atoms.length ? this.standInAtoms(text, range) : text;
++  }
++  standInAtoms(text, range) {
++    let out = "", last = range.start;
++    for (let atom of this.atoms)
++      if (!(atom.start < range.start)) {
++        if (atom.end > range.end) break;
++        out += this.data.slice(last, atom.start) + "0." + "0".repeat(atom.end - atom.start - 2), last = atom.end;
++      }
++    return last === range.start ? text : out + this.data.slice(last, range.end);
+   }
+   positionAt(offset) {
+     return getPosition(
+@@ -188,7 +198,7 @@ var Parser = class {
+   }
+   parse(data) {
+     let maxPos = this.maxPos = data.length;
+-    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
++    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.atoms = [], this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
+       this.activeState.parse.call(this, data, maxPos, this.activeRange);
+   }
+ };
+@@ -311,10 +321,12 @@ var ATTRIBUTE = {
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
 -        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
-+        expr.attrValue = !!(attr.name || attr.spread), expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
++        expr.attrValue = !!(attr.name || attr.spread), expr.atoms = !0, expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
          return;
        } else if (code === 40) {
-         attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
-@@ -1147,6 +1147,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+-        attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
++        attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++;
++        let expr = this.enterState(states_exports.EXPRESSION);
++        expr.shouldTerminate = matchesCloseParen, expr.atoms = !0;
+         return;
+       } else if (code === 60 && // A pending `async` leaves the stage UNKNOWN, but type params can
+       // still follow it for a default attribute method.
+@@ -1079,6 +1091,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
+       groupStack: [],
+       shouldTerminate,
+       operators: !1,
++      atoms: !1,
++      comments: void 0,
++      regexEnd: -1,
+       wasComment: !1,
+       hadUnguardedNewline: !1,
+       inType: !1,
+@@ -1147,12 +1162,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -25,7 +69,26 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..a913063ea445d178357bc72491ab6801
              expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
              continue;
            }
-@@ -1382,11 +1389,13 @@ function lookAheadForOperator(expression, data, pos) {
+           this.pos++;
+           break;
+         case 58:
++          if (expression.atoms && lexAtom(this, expression, data)) {
++            if (this.pos > maxPos) return;
++            continue;
++          }
+           if (expression.operators && !expression.groupStack.length) {
+             expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
+             continue;
+@@ -1277,7 +1303,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+     );
+   },
+   return(child, expression) {
+-    child.state === states_exports.JS_COMMENT_LINE && (expression.wasComment = !0, this.pos === this.maxPos && !expression.groupStack.length && (expression.hadUnguardedNewline = !0));
++    expression.atoms && (child.state === states_exports.REGULAR_EXPRESSION ? expression.regexEnd = child.end : (child.state === states_exports.JS_COMMENT_LINE || child.state === states_exports.JS_COMMENT_BLOCK) && (expression.comments || (expression.comments = [])).push(child)), child.state === states_exports.JS_COMMENT_LINE && (expression.wasComment = !0, this.pos === this.maxPos && !expression.groupStack.length && (expression.hadUnguardedNewline = !0));
+   }
+ };
+ function checkForOperators(parser, expression, eol) {
+@@ -1382,11 +1408,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -40,7 +103,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..a913063ea445d178357bc72491ab6801
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1432,6 +1441,13 @@ function canFollowDivision(code) {
+@@ -1432,6 +1460,98 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -51,23 +114,185 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..a913063ea445d178357bc72491ab6801
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}
++var atomKeywords = [
++  "await",
++  "case",
++  "delete",
++  "do",
++  "else",
++  "extends",
++  "in",
++  "instanceof",
++  "new",
++  "of",
++  "return",
++  "throw",
++  "typeof",
++  "void",
++  "yield"
++];
++function lexAtom(parser, expression, data) {
++  var _a, _b;
++  let start = parser.pos;
++  if (data.charCodeAt(start + 1) === 58) {
++    let end2 = atomNameEnd(data, start + 2), name = data.slice(start + 2, end2);
++    return parser.emitError(
++      { start, end: end2 },
++      6,
++      `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`
++    ), !0;
++  }
++  let end = atomNameEnd(data, start + 1);
++  if (end === start + 1 || !expectsExpression(expression, data, start))
++    return !1;
++  let { atoms } = parser, last = atoms[atoms.length - 1];
++  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), parser.pos = end, !0;
++}
++function atomNameEnd(data, pos) {
++  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
++  let end = pos + 1;
++  for (; ; ) {
++    for (; isWordCode(data.charCodeAt(end)); ) end++;
++    if (data.charCodeAt(end) !== 45 || !isWordCode(data.charCodeAt(end + 1)))
++      return end;
++    end += 2;
++  }
++}
++function expectsExpression(expression, data, pos) {
++  var _a;
++  let i = pos - 1;
++  for (; ; ) {
++    for (; i >= expression.start && isWhitespaceCode(data.charCodeAt(i)); ) i--;
++    let comment = (_a = expression.comments) == null ? void 0 : _a.find((c) => c.end === i + 1);
++    if (!comment) break;
++    i = comment.start - 1;
++  }
++  if (i < expression.start) return !0;
++  let code = data.charCodeAt(i);
++  switch (code) {
++    case 41:
++    case 93:
++    case 125:
++    case 34:
++    case 39:
++    case 96:
++      return !1;
++    case 46:
++      return data.charCodeAt(i - 1) === 46 && data.charCodeAt(i - 2) === 46;
++    case 63:
++    case 33: {
++      if (i !== pos - 1 || i === expression.start) return !0;
++      let owner = data.charCodeAt(i - 1);
++      return !(isWordCode(owner) || owner === 93 || owner === 45 || owner === 43);
++    }
++    case 43:
++    case 45:
++      return data.charCodeAt(i - 1) !== code;
++    case 47:
++      return i + 1 !== expression.regexEnd;
++    default: {
++      if (!isWordCode(code)) return !0;
++      let wordStart = i;
++      for (; wordStart > expression.start && isWordCode(data.charCodeAt(wordStart - 1)); )
++        wordStart--;
++      return wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46 ? !1 : atomKeywords.includes(data.slice(wordStart, i + 1));
++    }
++  }
++}
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
+@@ -1981,7 +2101,9 @@ var OPEN_TAG = {
+               );
+               return;
+             }
+-            tag.hasArgs = !0, tag.stage = 2, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
++            tag.hasArgs = !0, tag.stage = 2, this.pos++;
++            let expr = this.enterState(states_exports.EXPRESSION);
++            expr.shouldTerminate = matchesCloseParen, expr.atoms = !0;
+             return;
+           }
+           case 124: {
+@@ -2345,7 +2467,9 @@ function checkForPlaceholder(parser, code) {
+           return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
+         parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
+       }
+-      return parser.endText(), parser.enterState(PLACEHOLDER).escape = escape, parser.pos += escape ? 2 : 3, parser.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace, !0;
++      parser.endText(), parser.enterState(PLACEHOLDER).escape = escape, parser.pos += escape ? 2 : 3;
++      let expr = parser.enterState(states_exports.EXPRESSION);
++      return expr.shouldTerminate = matchesCloseCurlyBrace, expr.atoms = !0, !0;
+     }
+   }
+   return !1;
+@@ -2587,7 +2711,9 @@ var TEMPLATE_STRING = {
+       switch (data.charCodeAt(this.pos)) {
+         case 36:
+           if (data.charCodeAt(this.pos + 1) === 123) {
+-            this.pos += 2, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace;
++            this.pos += 2;
++            let expr = this.enterState(states_exports.EXPRESSION);
++            expr.shouldTerminate = matchesCloseCurlyBrace, expr.atoms = !!templateString.parent.atoms;
+             return;
+           }
+           this.pos++;
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a8b0d3f8604008792ebcd37c206b5ec082db8150 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbbe96f86ff 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -284,7 +284,7 @@ var ATTRIBUTE = {
+@@ -20,7 +20,17 @@ var Parser = class {
+     this.options = options;
+   }
+   read(range) {
+-    return this.data.slice(range.start, range.end);
++    let text = this.data.slice(range.start, range.end);
++    return this.atoms.length ? this.standInAtoms(text, range) : text;
++  }
++  standInAtoms(text, range) {
++    let out = "", last = range.start;
++    for (let atom of this.atoms)
++      if (!(atom.start < range.start)) {
++        if (atom.end > range.end) break;
++        out += this.data.slice(last, atom.start) + "0." + "0".repeat(atom.end - atom.start - 2), last = atom.end;
++      }
++    return last === range.start ? text : out + this.data.slice(last, range.end);
+   }
+   positionAt(offset) {
+     return getPosition(
+@@ -161,7 +171,7 @@ var Parser = class {
+   }
+   parse(data) {
+     let maxPos = this.maxPos = data.length;
+-    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
++    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.atoms = [], this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
+       this.activeState.parse.call(this, data, maxPos, this.activeRange);
+   }
+ };
+@@ -284,10 +294,12 @@ var ATTRIBUTE = {
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
 -        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
-+        expr.attrValue = !!(attr.name || attr.spread), expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
++        expr.attrValue = !!(attr.name || attr.spread), expr.atoms = !0, expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
          return;
        } else if (code === 40) {
-         attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
-@@ -1120,6 +1120,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+-        attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
++        attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++;
++        let expr = this.enterState(states_exports.EXPRESSION);
++        expr.shouldTerminate = matchesCloseParen, expr.atoms = !0;
+         return;
+       } else if (code === 60 && // A pending `async` leaves the stage UNKNOWN, but type params can
+       // still follow it for a default attribute method.
+@@ -1052,6 +1064,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
+       groupStack: [],
+       shouldTerminate,
+       operators: !1,
++      atoms: !1,
++      comments: void 0,
++      regexEnd: -1,
+       wasComment: !1,
+       hadUnguardedNewline: !1,
+       inType: !1,
+@@ -1120,12 +1135,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -81,7 +306,26 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a8b0d3f8604008792ebcd37c206b5ec0
              expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
              continue;
            }
-@@ -1355,11 +1362,13 @@ function lookAheadForOperator(expression, data, pos) {
+           this.pos++;
+           break;
+         case 58:
++          if (expression.atoms && lexAtom(this, expression, data)) {
++            if (this.pos > maxPos) return;
++            continue;
++          }
+           if (expression.operators && !expression.groupStack.length) {
+             expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
+             continue;
+@@ -1250,7 +1276,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+     );
+   },
+   return(child, expression) {
+-    child.state === states_exports.JS_COMMENT_LINE && (expression.wasComment = !0, this.pos === this.maxPos && !expression.groupStack.length && (expression.hadUnguardedNewline = !0));
++    expression.atoms && (child.state === states_exports.REGULAR_EXPRESSION ? expression.regexEnd = child.end : (child.state === states_exports.JS_COMMENT_LINE || child.state === states_exports.JS_COMMENT_BLOCK) && (expression.comments || (expression.comments = [])).push(child)), child.state === states_exports.JS_COMMENT_LINE && (expression.wasComment = !0, this.pos === this.maxPos && !expression.groupStack.length && (expression.hadUnguardedNewline = !0));
+   }
+ };
+ function checkForOperators(parser, expression, eol) {
+@@ -1355,11 +1381,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -96,7 +340,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a8b0d3f8604008792ebcd37c206b5ec0
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1405,6 +1414,13 @@ function canFollowDivision(code) {
+@@ -1405,6 +1433,98 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -107,6 +351,124 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a8b0d3f8604008792ebcd37c206b5ec0
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}
++var atomKeywords = [
++  "await",
++  "case",
++  "delete",
++  "do",
++  "else",
++  "extends",
++  "in",
++  "instanceof",
++  "new",
++  "of",
++  "return",
++  "throw",
++  "typeof",
++  "void",
++  "yield"
++];
++function lexAtom(parser, expression, data) {
++  var _a, _b;
++  let start = parser.pos;
++  if (data.charCodeAt(start + 1) === 58) {
++    let end2 = atomNameEnd(data, start + 2), name = data.slice(start + 2, end2);
++    return parser.emitError(
++      { start, end: end2 },
++      6,
++      `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`
++    ), !0;
++  }
++  let end = atomNameEnd(data, start + 1);
++  if (end === start + 1 || !expectsExpression(expression, data, start))
++    return !1;
++  let { atoms } = parser, last = atoms[atoms.length - 1];
++  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), parser.pos = end, !0;
++}
++function atomNameEnd(data, pos) {
++  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
++  let end = pos + 1;
++  for (; ; ) {
++    for (; isWordCode(data.charCodeAt(end)); ) end++;
++    if (data.charCodeAt(end) !== 45 || !isWordCode(data.charCodeAt(end + 1)))
++      return end;
++    end += 2;
++  }
++}
++function expectsExpression(expression, data, pos) {
++  var _a;
++  let i = pos - 1;
++  for (; ; ) {
++    for (; i >= expression.start && isWhitespaceCode(data.charCodeAt(i)); ) i--;
++    let comment = (_a = expression.comments) == null ? void 0 : _a.find((c) => c.end === i + 1);
++    if (!comment) break;
++    i = comment.start - 1;
++  }
++  if (i < expression.start) return !0;
++  let code = data.charCodeAt(i);
++  switch (code) {
++    case 41:
++    case 93:
++    case 125:
++    case 34:
++    case 39:
++    case 96:
++      return !1;
++    case 46:
++      return data.charCodeAt(i - 1) === 46 && data.charCodeAt(i - 2) === 46;
++    case 63:
++    case 33: {
++      if (i !== pos - 1 || i === expression.start) return !0;
++      let owner = data.charCodeAt(i - 1);
++      return !(isWordCode(owner) || owner === 93 || owner === 45 || owner === 43);
++    }
++    case 43:
++    case 45:
++      return data.charCodeAt(i - 1) !== code;
++    case 47:
++      return i + 1 !== expression.regexEnd;
++    default: {
++      if (!isWordCode(code)) return !0;
++      let wordStart = i;
++      for (; wordStart > expression.start && isWordCode(data.charCodeAt(wordStart - 1)); )
++        wordStart--;
++      return wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46 ? !1 : atomKeywords.includes(data.slice(wordStart, i + 1));
++    }
++  }
++}
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
+@@ -1954,7 +2074,9 @@ var OPEN_TAG = {
+               );
+               return;
+             }
+-            tag.hasArgs = !0, tag.stage = 2, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
++            tag.hasArgs = !0, tag.stage = 2, this.pos++;
++            let expr = this.enterState(states_exports.EXPRESSION);
++            expr.shouldTerminate = matchesCloseParen, expr.atoms = !0;
+             return;
+           }
+           case 124: {
+@@ -2318,7 +2440,9 @@ function checkForPlaceholder(parser, code) {
+           return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
+         parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
+       }
+-      return parser.endText(), parser.enterState(PLACEHOLDER).escape = escape, parser.pos += escape ? 2 : 3, parser.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace, !0;
++      parser.endText(), parser.enterState(PLACEHOLDER).escape = escape, parser.pos += escape ? 2 : 3;
++      let expr = parser.enterState(states_exports.EXPRESSION);
++      return expr.shouldTerminate = matchesCloseCurlyBrace, expr.atoms = !0, !0;
+     }
+   }
+   return !1;
+@@ -2560,7 +2684,9 @@ var TEMPLATE_STRING = {
+       switch (data.charCodeAt(this.pos)) {
+         case 36:
+           if (data.charCodeAt(this.pos + 1) === 123) {
+-            this.pos += 2, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace;
++            this.pos += 2;
++            let expr = this.enterState(states_exports.EXPRESSION);
++            expr.shouldTerminate = matchesCloseCurlyBrace, expr.atoms = !!templateString.parent.atoms;
+             return;
+           }
+           this.pos++;

@@ -335,8 +335,9 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
               tag.hasArgs = true;
               tag.stage = TAG_STAGE.ARGUMENT;
               this.pos++; // skip (
-              this.enterState(STATE.EXPRESSION).shouldTerminate =
-                matchesCloseParen;
+              const expr = this.enterState(STATE.EXPRESSION);
+              expr.shouldTerminate = matchesCloseParen;
+              expr.atoms = true; // MX: decision 156
               return;
             }
 

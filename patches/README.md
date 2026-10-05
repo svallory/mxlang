@@ -15,6 +15,10 @@ After whitespace inside an attribute value, `:name` and `.name` start a new attr
 
 The patch edits both published builds (`dist/index.js`, `dist/index.mjs`). Tests: `patches/htmljs-parser.test.ts` (vitest project `patches`). It also changes how stock Marko in `packages/oracle` parses the same input.
 
+It also lexes **atoms** (decision 156): in attribute values, attribute and tag arguments, placeholders and their templates' `${}`, a `:name` where an expression is expected is an atom, `read()` hands the compiler a same-length numeric stand-in for it (`:a` → `0.`), and `::name` is a reserved-token error. The ternary counter skips an atom's `:`, so `x=a ? :b :c` is one value. The source copy `packages/parser/src/template/` carries the same change; its `PROVENANCE.md` "Atoms" section is the description and the API (`onAtom`, the stand-in), and `packages/parser/src/template/mx-atoms.cases.ts` is the one case table both suites run.
+
+**Lockstep with the source copy.** Nothing generates one from the other: the copy's TypeScript and the patch's JavaScript are edited by hand to the same logic (the patch's helpers are the copy's, transpiled by hand in esbuild's style), and three tests hold them together: `corpus-equivalence.test.ts` (identical event streams over the repo corpus, `onAtom` included), the shared atom case table, and the decision 146 tables (`mx-after-value.test.ts` here is `htmljs-parser.test.ts` re-pointed). Change both in one commit.
+
 To regenerate on a version bump (or to change the rule), in this order (`bun install` aborts while `patchedDependencies` points at a missing file):
 
 1. `TMP=$(mktemp -d) && git show HEAD:patches/htmljs-parser@<old>.patch > "$TMP/old.patch"`
