@@ -117,6 +117,8 @@ describe("the capture classes", () => {
       ["ts-property", ".c"],
       ["ts-label", ":b"],
       ["ts-attribute", "x"],
+      // highlights.scm captures the `=` as an operator.
+      ["ts-operator", "="],
       // The attribute value is an `attr_value_expr`, which injections.scm
       // hands to TypeScript; its own query says string.
       ["ts-string", '"1"'],
