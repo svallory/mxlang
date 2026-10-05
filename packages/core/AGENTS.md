@@ -708,7 +708,8 @@ Five facts worth knowing before editing it:
   not reactive** (design §2.4, risk 4) — a tag wanting reactivity returns an
   accessor.
   **Astro** renders an MX component through its own renderer rather than a
-  call site, so `server.ts` unwraps the pair there; a `.astro.mx` template may
+  call site; its `.mx` leaf components are html units, so `server.ts` calls
+  the default export and gets the markup (the value stays in `render`); a `.astro.mx` template may
   *call* a returning tag but cannot bind one, since it has no statement
   position of its own (`/var` in `.astro.mx` is a positioned error).
   **`/var` is top-level-only on the JSX hosts and Solid.** Every structural
@@ -836,7 +837,11 @@ Five facts worth knowing before editing it:
   `createAstroTypeSurface`, and `@mxlang/astro`'s two `vite-pages` patterns.
   Since decision 155 the module also carries `<Name>.render = __mxRender;`
   after the default export; `vite-pages`' `wrapAsPage` renames that line along
-  with the function, so a fifth match lives there.
+  with the function, so a fifth match lives there. The final statement is
+  `export default <Name> as ((input: Input) => string) & { render: typeof
+  __mxRender };` (the `as` keeps diagnostics printing the signature rather
+  than `typeof <Name>`), so the Astro type-surface and `vite-pages` tail
+  patterns accept an optional `as …` before the `;`.
   Pinning the literal there is what made every `.mx` import report
   "is not a module" under `mx-tsc --astro` when the name first changed.
 - **A synthesized import is told apart from an authored one by

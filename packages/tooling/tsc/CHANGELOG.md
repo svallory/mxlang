@@ -1,5 +1,7 @@
 # @mxlang/tsc
 
+- **Tests (render-consumers, decision 155):** a dynamic tag over a `<return>` unit types `/var` as `number` (`undefined` for a plain function), and the diagnostic for an html unit's default export prints `((input: Input) => string) & { render: … }`. Host-dispatch goldens: only the `export default` lines moved.
+
 ## Unreleased
 
 - **Changed (bridge-host, decision 154):** the extra extensions and region plugins come from the registry's file kinds (`moduleFileExtensions()`, `createRegionLanguagePlugins`) instead of a literal `.solid.mx`; same list and order today.

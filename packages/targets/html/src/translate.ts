@@ -700,7 +700,8 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 // \`render\` returns, which is what a \`/var\` on the dynamic tag binds. A
 // compiled template is told apart by its \`.render\` entry, never by the shape
 // of what it returns; any other function returns a string that is written.
-const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
+const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: Record<string, any>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : undefined;
+function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   if (__mxTarget === null || __mxTarget === undefined) {
     // decision 116: content renders independently of a missing renderer.
     if (__mxProps.content) __mxSink.write(__mxProps.content());
@@ -763,7 +764,7 @@ const RENDER_TAG = `function __mxRenderTag<F extends (input: never) => unknown>(
 // Always `: string` since decision 155: a unit that declares `<return>`
 // returns its value from `render`, not from the default export.
 const DEFAULT_EXPORT =
-  /\nexport default function ([A-Za-z_$][\w$]*)\(input: Input(?: & \{ content\?: \(\) => string \})?\): string \{/;
+  /\nexport default function ([A-Za-z_$][\w$]*)\(input: (Input(?: & \{ content\?: \(\) => string \})?)\): string \{/;
 
 /**
  * The core's emitted default-export line, and the name it declares.
@@ -772,9 +773,33 @@ const DEFAULT_EXPORT =
  * matches the shape and reads the name back rather than pinning a literal.
  * Both `finalizeModule`'s helper injection and `brandRender` key off it.
  */
-function defaultExportIn(code: string): { line: string; name: string } | null {
+function defaultExportIn(
+  code: string,
+): { line: string; name: string; inputType: string } | null {
   const match = code.match(DEFAULT_EXPORT);
-  return match?.[1] ? { line: match[0], name: match[1] } : null;
+  return match?.[1] && match[2]
+    ? { line: match[0], name: match[1], inputType: match[2] }
+    : null;
+}
+
+/**
+ * The module's branded tail: the brand, then the default export typed as what
+ * it is to a consumer.
+ *
+ * The `as` names the signature rather than leaving TypeScript to infer
+ * `typeof Name` from the declaration plus its `Name.render = …` expando, which
+ * diagnostics print as `typeof Name` and so hide the call signature an agent
+ * needs to read ("not assignable to type 'typeof Comp'"). It is a pure
+ * restatement of the declaration's own type, so it widens nothing, and it is
+ * erased with the rest of the types: the emitted JavaScript still ends in
+ * `export default Name;`, which is what `@mxlang/astro`'s page wrapper
+ * matches after the bundler strips types.
+ */
+function brandedTail(name: string, inputType: string): string {
+  return `Object.defineProperty(${name}, Symbol.for("mx.component"), { value: true });
+
+export default ${name} as ((input: ${inputType}) => string) & { render: typeof __mxRender };
+`;
 }
 
 /**
@@ -852,12 +877,9 @@ export function brandRender(code: string): string {
     );
   }
 
-  const { line, name } = defaultExport;
+  const { line, name, inputType } = defaultExport;
   return `${code.replace(line, namedRenderFrom(line))}
-Object.defineProperty(${name}, Symbol.for("mx.component"), { value: true });
-
-export default ${name};
-`;
+${brandedTail(name, inputType)}`;
 }
 
 /**
@@ -917,14 +939,11 @@ export function finalizeModuleWithMappings(emitted: MappedCode): MappedCode {
     brandRender(emitted.code);
     throw new Error("@mxlang/html: unreachable missing default export");
   }
-  const { line, name } = defaultExport;
+  const { line, name, inputType } = defaultExport;
   const withHelpers =
     helpers.length === 0
       ? emitted
       : replaceMapped(emitted, line, `\n${helpers.join("\n\n")}\n${line}`);
   const branded = replaceMapped(withHelpers, line, namedRenderFrom(line));
-  return concatMapped(
-    branded,
-    `Object.defineProperty(${name}, Symbol.for("mx.component"), { value: true });\n\nexport default ${name};\n`,
-  );
+  return concatMapped(branded, brandedTail(name, inputType));
 }

@@ -355,4 +355,38 @@ describe("mx-tsc", () => {
     },
     SPAWN_TIMEOUT_MS,
   );
+
+  it(
+    "types a /var on a dynamic tag from its callee's render, and prints a unit's default export as its signature",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "dynamic-return-var-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      const errors = result.output
+        .split("\n")
+        .filter((line) => line.includes("): error TS"));
+      expect(errors).toHaveLength(3);
+      // `<${input.tag}/n start=1/>` over `typeof Counter`: decision 155 binds
+      // what the callee's `render` returns, so `n` is Counter's `<return>`
+      // value, a number — not the `any` the dynamic helper used to hand back.
+      expect(result.output).toContain(
+        "Dyn.mx(8,8): error TS2339: Property 'toUpperCase' does not exist on type 'number'",
+      );
+      // A plain function has no `render`: its string is written, and the
+      // binding is `undefined`.
+      expect(result.output).toContain(
+        "Dyn.mx(10,6): error TS18048: 'm' is possibly 'undefined'",
+      );
+      // The wording an agent reads when it misuses a unit's default export:
+      // its call signature and sink entry, not `typeof Dyn`.
+      expect(stripVTControlCharacters(result.output)).toContain(
+        "index.ts(3,14): error TS2322: Type '((input: Input) => string) & { render: (input: Input, __mxOut: __MxOut) => void; }' is not assignable to type 'number'.",
+      );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 });

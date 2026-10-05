@@ -1875,7 +1875,19 @@ describe("module shape", () => {
       'import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";',
     );
     expect(code).toContain("function Probe(input: Input): string {");
-    expect(code).toContain("export default Probe;");
+    // Typed as its signature, not left as `typeof Probe` (the declaration
+    // plus its `.render` expando), so a diagnostic prints what a caller can
+    // pass and get back.
+    expect(code).toContain(
+      "export default Probe as ((input: Input) => string) & { render: typeof __mxRender };",
+    );
+  });
+
+  it("restates the content-reading signature on the typed default export", () => {
+    const { code } = compile(src("<p>${input.content?.()}</p>"), file);
+    expect(code).toContain(
+      "export default Probe as ((input: Input & { content?: () => string }) => string) & { render: typeof __mxRender };",
+    );
   });
 
   // Decision 155: two entries. The default export keeps `(input) => string`;
@@ -1956,7 +1968,7 @@ describe("module shape", () => {
     expect(code).toContain(
       'Object.defineProperty(Probe, Symbol.for("mx.component"), { value: true });',
     );
-    expect(code).toContain("export default Probe;");
+    expect(code).toContain("export default Probe as ");
   });
 
   it("hoists imports and static blocks above the render function", () => {

@@ -1,0 +1,10 @@
+import Counter from "../lib/counter.mx";
+
+export interface Input {
+  tag: typeof Counter;
+  plain: (input: { start: number }) => string;
+}
+<${input.tag}/n start=1/>
+<p>${n.toUpperCase()}</p>
+<${input.plain}/m start=1/>
+<p>${m.toUpperCase()}</p>
