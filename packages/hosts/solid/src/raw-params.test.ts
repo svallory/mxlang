@@ -63,6 +63,8 @@ describe("raw `$!{}` body with tag params (solid)", () => {
       `${IMPORT}<Row|item|><div innerHTML=item/></Row>\n`,
       { filename: "fixture.mx" },
     );
-    expect(code).toContain("<div innerHTML={item}");
+    expect(code).toContain(
+      '<div innerHTML={__mxAttrValue("innerHTML", item, "div")}',
+    );
   });
 });

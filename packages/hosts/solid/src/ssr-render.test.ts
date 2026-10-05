@@ -36,7 +36,11 @@ function renderSolidMx(
     filename: "fixture.solid.mx",
   },
 ): string {
-  const { code: forCode, hoistedImports } = compileSolidMx(mxFragment, {
+  const {
+    code: forCode,
+    hoistedImports,
+    hoistedDefines,
+  } = compileSolidMx(mxFragment, {
     ...options,
     // `setup` is spliced into the compiled runtime module at render time,
     // below, but never seen by `compileSolidMx` itself — so a name it
@@ -48,7 +52,9 @@ function renderSolidMx(
     // `@mxlang/parser`'s `unknownSourceBindings`.
     unknownModuleBindings: unknownSourceBindings(setup),
   });
-  const imports = hoistedImports.map((entry) => entry.code).join("\n");
+  const imports = [...hoistedImports, ...hoistedDefines]
+    .map((entry) => entry.code)
+    .join("\n");
   const jsxSource = `${imports}\nimport { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;
 
   const ssr = transformSync(jsxSource, {
@@ -126,11 +132,17 @@ function renderAppWithImport(
     if (!targetSsr?.code)
       throw new Error("Solid babel plugin produced no code for target.tsx");
     writeFileSync(join(dir, "target.mjs"), targetSsr.code);
-    const { code: forCode, hoistedImports } = compileSolidMx(mxFragment, {
+    const {
+      code: forCode,
+      hoistedImports,
+      hoistedDefines,
+    } = compileSolidMx(mxFragment, {
       filename: join(dir, "fixture.solid.mx"),
       importSpecifiers: new Map([[targetName, "./target.tsx"]]),
     });
-    const imports = hoistedImports.map((entry) => entry.code).join("\n");
+    const imports = [...hoistedImports, ...hoistedDefines]
+      .map((entry) => entry.code)
+      .join("\n");
     const jsxSource = `${imports}\nimport { ${targetName} } from "./target.tsx";\nexport function App() {\n  return <ul>${forCode}</ul>;\n}\n`;
     const ssr = transformSync(jsxSource, {
       filename: "fixture.tsx",

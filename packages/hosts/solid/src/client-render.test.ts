@@ -67,12 +67,18 @@ const SUBPROCESS_TIMEOUT_MS = 15_000;
  * the other.
  */
 function renderSolidMxDom(mxFragment: string, setup: string): string {
-  const { code: forCode, hoistedImports } = compileSolidMx(mxFragment, {
+  const {
+    code: forCode,
+    hoistedImports,
+    hoistedDefines,
+  } = compileSolidMx(mxFragment, {
     filename: "fixture.solid.mx",
     moduleBindings: sourceBindings(setup).bindings,
     unknownModuleBindings: unknownSourceBindings(setup),
   });
-  const imports = hoistedImports.map((entry) => entry.code).join("\n");
+  const imports = [...hoistedImports, ...hoistedDefines]
+    .map((entry) => entry.code)
+    .join("\n");
   const jsxSource = `${imports}\nimport { createSignal } from "solid-js";\nexport function App() {\n  ${setup}\n  return <ul>${forCode}</ul>;\n}\n`;
 
   const dom = transformSync(jsxSource, {

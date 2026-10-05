@@ -79,7 +79,7 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
   it("emits Marko's attribute, for every value kind", () => {
     expect(
       compileSolidMx(`<div :foo=y/>`, { filename: "fixture.solid.mx" }).code,
-    ).toContain("<div value:foo={y}>");
+    ).toContain('<div value:foo={__mxAttrValue("value:foo", y, "div")}>');
     expect(
       compileSolidMx(`<div :foo="lit"/>`, { filename: "fixture.solid.mx" })
         .code,
@@ -92,16 +92,20 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
     expect(
       compileSolidMx(`<div value:foo=y/>`, { filename: "fixture.solid.mx" })
         .code,
-    ).toContain("<div value:foo={y}>");
+    ).toContain('<div value:foo={__mxAttrValue("value:foo", y, "div")}>');
   });
 
   it.each([
     ["<div :/>", "value:", '""'],
     ["<div x:/>", "x:", '""'],
     ['<div x: = "s"/>', "x:", '"s"'],
-    ["<div x: = input.x/>", "x:", "input.x"],
+    ["<div x: = input.x/>", "x:", '__mxAttrValue("x:", input.x, "div")'],
     ['<div value:foo:bar="y"/>', "value:foo:bar", '"y"'],
-    ["<div value:foo:bar=y/>", "value:foo:bar", "y"],
+    [
+      "<div value:foo:bar=y/>",
+      "value:foo:bar",
+      '__mxAttrValue("value:foo:bar", y, "div")',
+    ],
   ])(
     "uses a string-keyed spread for a name JSX cannot spell: %s",
     (source, name, value) => {
@@ -118,10 +122,10 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
     });
     for (const [generated, authored] of [
       ['"value:foo:bar"', "value:foo:bar"],
-      ["(x)", "x"],
+      ['", x, "', "x"],
     ] as const) {
       const generatedStart =
-        code.indexOf(generated) + (generated === "(x)" ? 1 : 0);
+        code.indexOf(generated) + (generated === '", x, "' ? 3 : 0);
       const sourceStart = source.indexOf(
         authored,
         source.indexOf("value:foo:bar"),
@@ -129,7 +133,7 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
       expect(mappings).toContainEqual({
         generatedStart,
         generatedEnd:
-          generatedStart + (generated === "(x)" ? 1 : generated.length),
+          generatedStart + (generated === '", x, "' ? 1 : generated.length),
         sourceStart,
         sourceEnd: sourceStart + authored.length,
       });

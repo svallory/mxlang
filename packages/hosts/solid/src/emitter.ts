@@ -802,6 +802,19 @@ function nativeTagOf(native: NativeAttrs): string {
   return native.when ? `(${native.when} ? ${native.tag} : null)` : native.tag;
 }
 
+/** A literal can never render as `[object Object]`, so it needs no guard. */
+function isPrimitiveValue(value: Expr): boolean {
+  const type = value.node?.type;
+  return (
+    value.shape === "string" ||
+    type === "NumericLiteral" ||
+    type === "BooleanLiteral" ||
+    type === "NullLiteral" ||
+    type === "BigIntLiteral" ||
+    type === "TemplateLiteral"
+  );
+}
+
 function guardValue(
   name: string,
   value: string,
@@ -840,7 +853,7 @@ function renderAttr(
     const guardedColon =
       native !== undefined &&
       attr.kind === "dynamic" &&
-      attr.value.shape !== "string" &&
+      !isPrimitiveValue(attr.value) &&
       !UNGUARDED_NAMESPACE.test(attr.name);
     if (guardedColon && attrGuardUse) attrGuardUse.value = true;
     return concatMapped(
@@ -849,10 +862,13 @@ function renderAttr(
       // retain its name mapping even when native prop-name mapping is off.
       mapped(JSON.stringify(attr.name), attr.nameSpan ?? null),
       ": (",
-      mapped(
-        guardedColon ? guardValue(attr.name, value, native) : value,
-        valueSpan ?? null,
-      ),
+      guardedColon && native
+        ? concatMapped(
+            `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(attr.name)}, `,
+            mapped(value, valueSpan ?? null),
+            `, ${nativeTagOf(native)})`,
+          )
+        : mapped(value, valueSpan ?? null),
       ")}}",
     );
   }
@@ -929,7 +945,7 @@ function renderAttr(
       // compiles exactly as before.
       const guarded =
         native !== undefined &&
-        attr.value.shape !== "string" &&
+        !isPrimitiveValue(attr.value) &&
         !UNGUARDED_ATTRS.has(attr.name) &&
         !UNGUARDED_NAMESPACE.test(attr.name);
       if (guarded && attrGuardUse) attrGuardUse.value = true;
@@ -1974,7 +1990,12 @@ export class SolidEmitter implements Emitter<string> {
       when: `typeof ${value} === "string"`,
     };
     const attrs = renderAttrs(node.attrs, true, native);
-    const tags = attributeTagProps(node.attrTagProps, owner, native);
+    // A decision-116 import target is a component, never a native element.
+    const tags = attributeTagProps(
+      node.attrTagProps,
+      owner,
+      owner === undefined ? native : undefined,
+    );
     // decision 112 (lead ruling 2026-09-28): 109 governs a function/
     // component target called with arguments (`renderer(...args, props)`);
     // 112 governs only a *string* (native-element) target — the two are

@@ -97,7 +97,11 @@ describe("Solid IR lowering", () => {
     ["ordinary attr name", `<div attr:title=value/>`, ["attr:title={value}"]],
     ["ordinary bool name", `<div bool:hidden=value/>`, ["bool:hidden={value}"]],
     ["ordinary use name", `<div use:tip=opts/>`, ["use:tip={opts}"]],
-    ["ordinary colon name", `<div x:foo=value/>`, ["x:foo={value}"]],
+    [
+      "ordinary colon name",
+      `<div x:foo=value/>`,
+      ['x:foo={__mxAttrValue("x:foo", value, "div")}'],
+    ],
     [
       "dynamic tag (tagged)",
       `<\${which} n=1>x</>`,
