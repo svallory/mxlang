@@ -58,28 +58,22 @@ export function Lists() {
  _v$6 = _$escape(_$Repeat({
  count: 5,
  children: __mxIndex => {
- const i = 0 + __mxIndex * 2;
- var _v$17 = _$ssrHydrationKey(),
- _v$18 = _$escape(i);
- return _$ssr(_tmpl$6, _v$17, _v$18);
+ var _v$17, _v$18;
+ return _v$17 = _$ssrHydrationKey(), _v$18 = 0 + _$escape(__mxIndex) * 2, _$ssr(_tmpl$6, _v$17, _v$18);
  }
  })),
  _v$7 = _$escape(_$Repeat({
  count: 6,
  children: __mxIndex => {
- const i = 10 + __mxIndex * -2;
- var _v$19 = _$ssrHydrationKey(),
- _v$20 = _$escape(i);
- return _$ssr(_tmpl$6, _v$19, _v$20);
+ var _v$19, _v$20;
+ return _v$19 = _$ssrHydrationKey(), _v$20 = 10 + _$escape(__mxIndex) * -2, _$ssr(_tmpl$6, _v$19, _v$20);
  }
  })),
  _v$8 = _$escape(_$Repeat({
  count: 4,
  children: __mxIndex => {
- const i = 0 + __mxIndex * 3;
- var _v$21 = _$ssrHydrationKey(),
- _v$22 = _$escape(i);
- return _$ssr(_tmpl$6, _v$21, _v$22);
+ var _v$21, _v$22;
+ return _v$21 = _$ssrHydrationKey(), _v$22 = 0 + _$escape(__mxIndex) * 3, _$ssr(_tmpl$6, _v$21, _v$22);
  }
  })),
  _v$9 = _$escape(_$For({

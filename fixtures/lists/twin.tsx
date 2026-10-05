@@ -33,26 +33,11 @@ export function Lists() {
       {/* exclusive range with literal bounds, folded at lowering time */}
       <Repeat count={4}>{(i) => <b>{i}</b>}</Repeat>
       {/* stepped range: positive step */}
-      <Repeat count={5}>
-        {(__mxIndex) => {
-          const i = 0 + __mxIndex * 2;
-          return <em>{i}</em>;
-        }}
-      </Repeat>
+      <Repeat count={5}>{(__mxIndex) => <em>{0 + __mxIndex * 2}</em>}</Repeat>
       {/* stepped range: negative step counting down */}
-      <Repeat count={6}>
-        {(__mxIndex) => {
-          const i = 10 + __mxIndex * -2;
-          return <em>{i}</em>;
-        }}
-      </Repeat>
+      <Repeat count={6}>{(__mxIndex) => <em>{10 + __mxIndex * -2}</em>}</Repeat>
       {/* stepped range: until= with step= uses the exclusive bound */}
-      <Repeat count={4}>
-        {(__mxIndex) => {
-          const i = 0 + __mxIndex * 3;
-          return <em>{i}</em>;
-        }}
-      </Repeat>
+      <Repeat count={4}>{(__mxIndex) => <em>{0 + __mxIndex * 3}</em>}</Repeat>
       {/* object entries, keyed by the entry key */}
       {/*
         `keyed={fn}` makes Solid pass the entry as an accessor, so the pair

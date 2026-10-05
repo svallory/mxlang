@@ -465,7 +465,7 @@ describe("for: ranges lower to <Repeat>", () => {
     expect(err.pos).toBe(source.indexOf("step=") + "step=".length);
   });
 
-  it("lowers step= to <Repeat count={...}>{(__mxIndex) => { const i = ...; return body; }}</Repeat>", () => {
+  it("lowers step= to <Repeat count={...}>{(__mxIndex) => body}</Repeat>, the row value read inline", () => {
     const list = listAttrs(
       `const el = <for|i| from=0 to=9 step=2><li>x</li></for>;`,
     );
@@ -478,24 +478,14 @@ describe("for: ranges lower to <Repeat>", () => {
 
     const arrow = list.callback as unknown as {
       params: { type: string; name: string }[];
-      body: {
-        type: string;
-        body: [
-          {
-            type: string;
-            declarations: [{ id: { type: string; name: string } }];
-          },
-          { type: string },
-        ];
-      };
+      body: { type: string };
     };
     expect(arrow.params).toHaveLength(1);
     expect(arrow.params[0]?.name).toBe("__mxIndex");
-    expect(arrow.body.type).toBe("BlockStatement");
-    const [decl, ret] = arrow.body.body;
-    expect(decl.type).toBe("VariableDeclaration");
-    expect(decl.declarations[0]?.id.name).toBe("i");
-    expect(ret.type).toBe("ReturnStatement");
+    // No callback-local `const i`: Solid never re-runs the callback, so a
+    // value computed there would not follow a reactive bound. The body is the
+    // row itself and reads of `i` expand in place.
+    expect(arrow.body.type).toBe("JSXElement");
   });
 
   it("keeps the count as a guarded arithmetic expression when a bound is dynamic", () => {
@@ -581,19 +571,15 @@ describe("for: ranges lower to <Repeat>", () => {
   });
 
   it("leaves an author's own `mxIndex` param alone: the counter is `__mxIndex`", () => {
-    // <for|mxIndex| ...> must not emit `(__mxIndex) => { const mxIndex = ...
-    // }` shadowing the param it derives the row from.
+    // <for|mxIndex| ...> must not emit `(mxIndex) => ...` shadowing the
+    // author's own bindings that the row value is derived from.
     const list = listAttrs(
-      `const el = <for|mxIndex| from=0 to=9 step=1><li>x</li></for>;`,
+      `const el = <for|mxIndex| from=0 to=9 step=1><li>\${mxIndex}</li></for>;`,
     );
     const arrow = list.callback as unknown as {
       params: { name: string }[];
-      body: {
-        body: [{ declarations: [{ id: { name: string } }] }, unknown];
-      };
     };
     expect(arrow.params[0]?.name).toBe("__mxIndex");
-    expect(arrow.body.body[0]?.declarations[0]?.id.name).toBe("mxIndex");
   });
 
   it("without step=, output is unchanged: no Repeat callback body block", () => {

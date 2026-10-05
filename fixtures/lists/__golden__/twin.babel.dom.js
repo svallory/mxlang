@@ -71,30 +71,27 @@ export function Lists() {
  }), _el$5);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 5,
- children: __mxIndex => {
- const i = 0 + __mxIndex * 2;
+ children: __mxIndex => (() => {
  var _el$14 = _tmpl$6();
- _$insert(_el$14, i);
+ _$insert(_el$14, 0 + __mxIndex * 2);
  return _el$14;
- }
+ })()
  }), _el$6);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 6,
- children: __mxIndex => {
- const i = 10 + __mxIndex * -2;
+ children: __mxIndex => (() => {
  var _el$15 = _tmpl$6();
- _$insert(_el$15, i);
+ _$insert(_el$15, 10 + __mxIndex * -2);
  return _el$15;
- }
+ })()
  }), _el$7);
  _$insert(_el$, _$createComponent(_$Repeat, {
  count: 4,
- children: __mxIndex => {
- const i = 0 + __mxIndex * 3;
+ children: __mxIndex => (() => {
  var _el$16 = _tmpl$6();
- _$insert(_el$16, i);
+ _$insert(_el$16, 0 + __mxIndex * 3);
  return _el$16;
- }
+ })()
  }), _el$8);
  _$insert(_el$, _$createComponent(_$For, {
  get each() {
