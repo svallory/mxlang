@@ -325,19 +325,20 @@ function scopeFor(
 ) {
   return () => {
     const hostKey = lookup.hostFilterKey(descriptor.name);
-    // A scan that throws (a malformed mx.contracts) throws here, and the
-    // check then skips the reachability question: the tool's own scan reports
-    // the error, and policy resolution must not throw because of it.
-    const customTags = coreScanCached(filePath, {
-      targets: lookup,
-      ...(hostKey === undefined ? {} : { host: hostKey }),
-    }).customTags;
     return defaultTagScopeFor({
       dir: dirname(filePath),
       translator: (descriptor.parseTranslator ??
         descriptor.translator ??
         html.translator) as unknown,
-      customTags,
+      // The scan alone may fail (a malformed mx.contracts): the custom tags
+      // are then unknown, the parse-shape check still runs, and the tool's
+      // own scan reports the real error. A taglib or translator failure is
+      // not tolerated and throws.
+      customTags: () =>
+        coreScanCached(filePath, {
+          targets: lookup,
+          ...(hostKey === undefined ? {} : { host: hostKey }),
+        }).customTags,
       declarations: descriptor.declarations?.default,
       builtins,
     });

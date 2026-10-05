@@ -435,3 +435,139 @@ describe("a host override reaches the compile through defaultTagFor", () => {
     expect(compile()).toBe("default-tag:main");
   });
 });
+
+describe("Marko core tags are no valid default on any target (round 3)", () => {
+  const CORE = ["await", "try", "define", "effect"];
+
+  it.each(builtinTargets.map((t) => t.name).filter((n) => n !== "data"))(
+    "%s rejects every core tag and the file falls back to the built-in",
+    (target) => {
+      for (const name of CORE) {
+        const file = project({
+          mx: { target, [target]: { defaultTag: name } },
+        });
+        const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+        expect(
+          diagnostics.map((d) => d.code),
+          `${target} ${name}`,
+        ).toEqual(["invalid-default-tag"]);
+        expect(policy.defaultTag).toBeUndefined();
+        expect(tagFor(file)).toBe("div");
+      }
+    },
+  );
+
+  it("a .solid.mx file reads solid-jsx's key and rejects them too", () => {
+    for (const name of CORE) {
+      const file = project(
+        { mx: { target: "html", "solid-jsx": { defaultTag: name } } },
+        {},
+        "a.solid.mx",
+      );
+      const { diagnostics } = resolveTargetPolicyDetailed(file);
+      expect(
+        diagnostics.map((d) => d.code),
+        name,
+      ).toEqual(["invalid-default-tag"]);
+      expect(tagFor(file)).toBe("div");
+    }
+  });
+
+  it("data rejects them as well (and falls back to object)", () => {
+    for (const name of CORE) {
+      const file = project({
+        mx: { target: "data", data: { defaultTag: name } },
+      });
+      const { diagnostics } = resolveTargetPolicyDetailed(file, {
+        dataWired: true,
+      });
+      expect(
+        diagnostics.map((d) => d.code),
+        name,
+      ).toEqual(["invalid-default-tag"]);
+    }
+  });
+
+  describe("a third-party descriptor with no declarations", () => {
+    afterEach(() => cleanupProjects());
+    it.each(CORE)("rejects <%s>", (name) => {
+      const proj = fakeProject({
+        mx: { target: specifier("ok"), "fake-ok": { defaultTag: name } },
+        install: ["ok"],
+      });
+      const { diagnostics } = resolveTargetPolicyDetailed(proj.path("a.mx"));
+      expect(
+        diagnostics.filter((d) => d.code === "invalid-default-tag"),
+      ).toHaveLength(1);
+    });
+
+    it("still accepts a plain element", () => {
+      const proj = fakeProject({
+        mx: { target: specifier("ok"), "fake-ok": { defaultTag: "section" } },
+        install: ["ok"],
+      });
+      expect(
+        resolveTargetPolicyDetailed(proj.path("a.mx")).diagnostics,
+      ).toEqual([]);
+    });
+  });
+
+  it("re-enumerating html's lookup still gives 193 accepted and 43 rejected", () => {
+    const descriptor = builtinLookup().target("html");
+    const dir = join(project({ mx: { target: "html" } }), "..");
+    const lookup = core.buildMarkoLookup(
+      dir,
+      descriptor?.translator,
+    ) as unknown as {
+      merged: { tags: Record<string, unknown> };
+    };
+    const scope = core.defaultTagScopeFor({
+      dir,
+      translator: descriptor?.translator,
+      declarations: descriptor?.declarations?.default,
+    });
+    const names = Object.keys(lookup.merged.tags);
+    const accepted = names.filter(
+      (n) => core.validateDefaultTag(n, scope) === undefined,
+    );
+    expect([accepted.length, names.length - accepted.length]).toEqual([
+      193, 43,
+    ]);
+  });
+});
+
+describe("a scan failure keeps the parse-shape check (round 3)", () => {
+  const broken = (value: string) => ({
+    mx: {
+      target: "html",
+      contracts: { item: {} },
+      html: { defaultTag: value },
+    },
+  });
+
+  it("`input` is still the void-tag error, with no throw", () => {
+    const file = project(broken("input"));
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toBe(
+      "invalid `defaultTag` value: `<input>` is a void tag, not a plain tag",
+    );
+    expect(policy.defaultTag).toBeUndefined();
+    expect(tagFor(file)).toBe("div");
+  });
+
+  it("a plain element is kept", () => {
+    const file = project(broken("section"));
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toEqual([]);
+    expect(policy.defaultTag).toBe("section");
+    expect(tagFor(file)).toBe("section");
+  });
+
+  it("a name only a custom tag could provide is kept: that verdict needs the custom tags", () => {
+    const file = project(broken("my-card"));
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toEqual([]);
+    expect(policy.defaultTag).toBe("my-card");
+  });
+});

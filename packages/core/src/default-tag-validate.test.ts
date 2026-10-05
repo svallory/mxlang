@@ -137,3 +137,21 @@ describe("validateDefaultTag: only elements of the target are built-ins", () => 
     ).toBe("`<input>` is a void tag, not a plain tag");
   });
 });
+
+describe("validateDefaultTag when the custom tags are unknown (round 3)", () => {
+  const scope = { lookup, customTagsUnknown: true as const };
+
+  it("keeps the parse-shape verdicts of lookup tags", () => {
+    expect(validateDefaultTag("input", scope)).toBe(
+      "`<input>` is a void tag, not a plain tag",
+    );
+    expect(validateDefaultTag("pre", scope)).toContain("whitespace-preserving");
+  });
+
+  it("skips the reachability verdicts: a custom tag might provide the name", () => {
+    expect(validateDefaultTag("nope", scope)).toBeUndefined();
+    expect(
+      validateDefaultTag("div", { ...scope, isElement: () => false }),
+    ).toBeUndefined();
+  });
+});

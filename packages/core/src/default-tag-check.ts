@@ -29,10 +29,8 @@ export type DefaultTagScopeSource = DefaultTagScope | (() => DefaultTagScope);
  * usable default tag in `scope`. `owner` names where the value is written
  * when that is not the package's own `mx.<target>.defaultTag`.
  *
- * Building the scope may throw (it scans the package, and a malformed
- * `mx.contracts` throws): the reachability check is then skipped and the name
- * accepted, because refusing a custom tag the scan could not read would be a
- * false error, and the tool's own scan already reports the real one.
+ * A failed scan (a malformed `mx.contracts`) is not an error here: see
+ * `defaultTagScopeFor`. Any other failure building the scope throws.
  */
 export function defaultTagDiagnostic(
   name: string,
@@ -40,12 +38,10 @@ export function defaultTagDiagnostic(
   source: DefaultTagScopeSource,
   owner?: string,
 ): TargetPolicyDiagnostic | undefined {
-  let scope: DefaultTagScope;
-  try {
-    scope = typeof source === "function" ? source() : source;
-  } catch {
-    return undefined;
-  }
+  // Anything that throws while building the scope (a taglib that fails to
+  // load, a translator getter) throws: only a failed scan is tolerated, and
+  // `defaultTagScopeFor` handles that where the scan is read.
+  const scope = typeof source === "function" ? source() : source;
   const reason = validateDefaultTag(name, scope);
   if (reason === undefined) return undefined;
   return {
@@ -86,8 +82,8 @@ export function checkConfiguredDefaultTag(
 export interface OwnDefaultTagInput {
   /** The target whose `mx.<target>.defaultTag` this compile reads. */
   target: string;
-  /** The custom tags this compile scanned for the file. */
-  customTags?: Readonly<Record<string, CustomTag>>;
+  /** The custom tags this compile scanned for the file, or the scan (see `defaultTagScopeFor`). */
+  customTags?: DefaultTagScopeInput["customTags"];
   /** The Marko translator the target compiles with. */
   translator: unknown;
   declarations?: HostDeclarations;
@@ -126,28 +122,62 @@ export function ownDefaultTag(
  * tags, Marko's lookup for its translator (parse shape, and its elements
  * through the host's own `isElement`), and the names it lists as built-in.
  */
-export function defaultTagScopeFor(input: {
+export function defaultTagScopeFor(
+  input: DefaultTagScopeInput,
+): DefaultTagScope {
+  return buildScope(input);
+}
+
+/** What `defaultTagScopeFor` needs. */
+export interface DefaultTagScopeInput {
   /** A directory of the package: the lookup is built as seen from there. */
   dir: string;
   translator: unknown;
-  customTags?: Readonly<Record<string, CustomTag>>;
+  /**
+   * The package's custom tags, or the scan that reads them. A scan that throws
+   * makes the custom tags unknown (`customTagsUnknown`): the parse-shape check
+   * still runs, and a verdict that needs them is skipped. Nothing else is
+   * caught.
+   */
+  customTags?:
+    | Readonly<Record<string, CustomTag>>
+    | (() => Readonly<Record<string, CustomTag>>);
   declarations?: HostDeclarations;
   builtins?: readonly string[];
-}): DefaultTagScope {
+}
+
+function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
+  let customTags: Readonly<Record<string, CustomTag>> | undefined;
+  let customTagsUnknown = false;
+  if (typeof input.customTags === "function") {
+    try {
+      customTags = input.customTags();
+    } catch {
+      customTagsUnknown = true;
+    }
+  } else customTags = input.customTags;
   const lookup = buildMarkoLookup(input.dir, input.translator);
   const declarations = input.declarations;
-  const isElement = declarations?.isElement
-    ? (name: string): boolean =>
-        declarations.isElement(name, {
-          lookup,
-          defines: new Set<string>(),
-          imports: new Set<string>(),
-        } as unknown as Ctx)
-    : undefined;
+  // An element needs the host's say AND Marko's own `html` flag on the tag
+  // def. The flag is a taglib property (every element of marko-html, -svg and
+  // -math has it, no core or translator tag does), so a host whose own
+  // `isElement` is casing-only (Solid) cannot let `await` or `define` through,
+  // and a target with no declarations is covered too.
+  const flagged = (name: string): boolean =>
+    (lookup?.getTag(name) as { html?: unknown } | undefined)?.html === true;
+  const isElement = (name: string): boolean =>
+    (!declarations?.isElement ||
+      declarations.isElement(name, {
+        lookup,
+        defines: new Set<string>(),
+        imports: new Set<string>(),
+      } as unknown as Ctx)) &&
+    flagged(name);
   return {
-    ...(input.customTags ? { customTags: input.customTags } : {}),
+    ...(customTags ? { customTags } : {}),
+    ...(customTagsUnknown ? { customTagsUnknown } : {}),
     ...(lookup ? { lookup } : {}),
     ...(input.builtins ? { builtins: input.builtins } : {}),
-    ...(isElement ? { isElement } : {}),
+    isElement,
   };
 }

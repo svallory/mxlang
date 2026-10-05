@@ -22,6 +22,13 @@ export interface DefaultTagScope {
    * answers parse-shape questions only.
    */
   isElement?: (name: string) => boolean;
+  /**
+   * The package's custom tags could not be read (its scan failed). A tag's
+   * parse shape does not depend on them, so that verdict stands; a verdict
+   * that a custom tag might overturn (not reachable, not an element) is
+   * skipped, and the value kept.
+   */
+  customTagsUnknown?: boolean;
 }
 
 interface ParseShape {
@@ -64,10 +71,12 @@ export function validateDefaultTag(
     );
     if (shape !== undefined) return shape;
     if (!scope.isElement || scope.isElement(name)) return undefined;
-    if (scope.builtins?.includes(name)) return undefined;
+    if (scope.builtins?.includes(name) || scope.customTagsUnknown)
+      return undefined;
     return `\`<${name}>\` is not an element of this target`;
   }
-  if (scope.builtins?.includes(name)) return undefined;
+  if (scope.builtins?.includes(name) || scope.customTagsUnknown)
+    return undefined;
   return `\`<${name}>\` is not a tag reachable from this package`;
 }
 

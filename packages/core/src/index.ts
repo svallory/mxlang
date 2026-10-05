@@ -104,6 +104,7 @@ export type {
 export {
   type CheckedDefaultTag,
   checkConfiguredDefaultTag,
+  type DefaultTagScopeInput,
   type DefaultTagScopeSource,
   defaultTagDiagnostic,
   defaultTagScopeFor,

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-ladder r3):** `solid-jsx` (and `.solid.mx`) and third-party targets without declarations reject Marko core tags as `defaultTag`; a malformed `mx.contracts` beside `defaultTag: "input"` is the void-tag error, and only the scan is tolerated.
+
 - **Fix (default-tag-ladder r2):** a failing scan never escapes `resolveTargetPolicyDetailed`; on data, reachable means `object` plus the custom tags (html's elements are no data tags); a loaded descriptor's own `defaultTag`/`host.defaultTag` are checked against the target's lookup; `defaultTagFor(file, policy)` takes the resolved policy; `resolveTargetPolicy` accepts the options.
 
 - **Added (default-tag-ladder, decision 145):** `effectiveDefaultTag` (config, then host override, then target built-in), `defaultTagFor(file)` (the same for the target the file compiles under, so a `.solid.mx` reads `mx.solid-jsx.defaultTag`) and the one `invalid-default-tag` error: `resolveTargetPolicyDetailed` checks the package's value once per package, at its `package.json` position, even when no file uses the shorthand (not a tag reachable from the package, or a void, text, statement, control-flow or whitespace-preserving tag, read from the target's Marko lookup). A rejected value is dropped so the built-in answers. A loaded third-party descriptor's own values are checked at its `mx.target` value; `{ quiet }` skips the deprecated-alias warning. `mx-tsc`'s data check passes `mx.data.defaultTag` through and treats `defaultTag` as a known `mx.data` key.
