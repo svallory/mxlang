@@ -2,19 +2,31 @@ import ProductCard from "./tags/product-card.mx";
 import { money } from "./format.ts";
 import type { Product } from "./product.ts";
 
+// Concise mode: one tag per line, children indented, no angle brackets and
+// no closing tags — the block below ends at the first line back at column 0.
+// A file is parsed in one mode, so it comes before the HTML-mode interface.
+section.printed
+  h3
+    -- Concise mode
+  p
+    -- One tag per line, children indented, no closing tags;
+    -- a text line starts with two hyphens.
+
 export interface Input {
   products: Product[];
   currency: string;
   filter?: string;
   emptyHtml?: string;
-  currencyNote?: string;
+  note?: string;
 }
 
 static const MAX_ITEMS = 3;
 
-// A non-reactive binding, computed once per render.
+// A value derived on each render. `<const>` is not a signal.
 <const/shown=input.products.slice(0, MAX_ITEMS)/>
 <const/cardAttrs={ currency: input.currency }/>
+// `<let>` is state: a reactive host re-renders on assignment, the html target
+// reads the initial value once.
 <let/selectedId=shown[0]?.id/>
 
 <define/Row|label, value|>
@@ -22,26 +34,26 @@ static const MAX_ITEMS = 3;
   <dd>${value}</dd>
 </define>
 
-<!-- Markup, attributes and control flow in one file. -->
+<!-- A source comment: it never reaches the output. -->
 <h1#store-title.store-title>${shown.length} products, one file</h1>
 
 <form.search role="search">
   <input#q.q name="q" type="search" placeholder="Filter" required/>
 </form>
 
-<if=!input.filter>
-  <p.hint>Showing every product.</p>
+<if=shown.length === 0>
+  <p.empty>$!{input.emptyHtml ?? "No products yet."}</p>
 </if>
 <else if=input.filter>
   <p.hint>Filtered by ${input.filter}.</p>
 </else>
 <else>
-  <p.hint>Nothing to show.</p>
+  <p.hint>Showing all ${shown.length} products.</p>
 </else>
 
 <ul.store aria-live="polite">
   <for|product, i| of=shown>
-    <li class="row" style={ paddingLeft: `${i}rem` }>
+    <li class="row" style={ "padding-left": `${i}rem` }>
       <ProductCard product=product featured=(i === 0) ...cardAttrs>
         <@badge><span.badge>${i === 0 ? "Featured" : "New"}</span></@badge>
         <@price|amount|><b.sale>${money(amount, input.currency)}</b></@price>
@@ -53,12 +65,8 @@ static const MAX_ITEMS = 3;
 <Cheapest/best products=shown/>
 <dl.summary>
   <Row label="Currency" value=input.currency/>
-  <Row label="Cheapest" value=money(best.price, input.currency)/>
+  <Row label="Cheapest" value=best ? money(best.price, input.currency) : "—"/>
   <Row label="Selected" value=selectedId ?? "none"/>
 </dl>
 
-<h2>Concise mode: one tag per line</h2>
-<hr/>
-<small.printed>
-  MX / ${shown.length} items / $!{input.currencyNote ?? input.currency}
-</small>
+<p.printed>$!{input.note ?? "Printed from one <code>.mx</code> file."}</p>

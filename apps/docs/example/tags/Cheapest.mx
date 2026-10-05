@@ -4,5 +4,8 @@ export interface Input {
   products: Product[];
 }
 
-/** Renders nothing; hands the cheapest product back to the caller. */
-<return value=input.products.reduce((min, p) => (p.price < min.price ? p : min))/>
+/**
+ * Renders nothing; hands the cheapest product back to the caller, or
+ * `undefined` for an empty list so the caller's `/var` is never read as one.
+ */
+<return value=input.products.length ? input.products.reduce((min, p) => (p.price < min.price ? p : min)) : undefined/>

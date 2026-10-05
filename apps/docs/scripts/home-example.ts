@@ -30,6 +30,8 @@ export const markersPath = join(
   "home-example.markers.json",
 );
 export const indexPath = join(docsRoot, "docs", "index.md");
+/** docmd's output directory — the only place a heading slug is knowable. */
+export const siteRoot = join(docsRoot, "site");
 
 export const START = "<!-- mx-home:generated:start -->";
 export const END = "<!-- mx-home:generated:end -->";
@@ -112,6 +114,29 @@ export function linkExists(href: string): boolean {
 }
 
 /**
+ * Whether `href`'s fragment is an `id` the built site actually has.
+ *
+ * docmd's heading slugs are prefixed with the page title (and, on
+ * `specification.md`, with the whole heading path), so no slug can be
+ * predicted from the markdown by hand — fifteen of the links here were wrong
+ * once. Only the built HTML knows the answer, so this reads
+ * `site/<page>/index.html`; `--check` runs after `docmd build` for that
+ * reason.
+ */
+export function anchorExists(href: string, siteDir = siteRoot): boolean {
+  const [, fragment = ""] = href.split("#");
+  if (!fragment) return true;
+  const page = linkPage(href);
+  if (!page) return false;
+  const file = join(siteDir, page.replace(/^\/+|\/+$/g, ""), "index.html");
+  if (!existsSync(file)) return false;
+  return readFileSync(file, "utf8").includes(`id="${fragment}"`);
+}
+
+/** Every marker key this file understands; anything else is a typo. */
+const MARKER_KEYS = new Set(["id", "label", "note", "href", "match", "ranges"]);
+
+/**
  * Every reason the example and its markers would make the home page a lie.
  * An empty array is the only acceptable answer.
  */
@@ -122,6 +147,11 @@ export function validate(lines: string[], markers: Marker[]): string[] {
   const claimed = new Map<number, Array<[number, number, string]>>();
 
   for (const marker of markers) {
+    for (const key of Object.keys(marker)) {
+      if (!MARKER_KEYS.has(key)) {
+        errors.push(`marker \`${marker.id}\` has an unknown key \`${key}\``);
+      }
+    }
     if (seen.has(marker.id))
       errors.push(`duplicate marker id \`${marker.id}\``);
     seen.add(marker.id);

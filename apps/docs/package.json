@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "build:home": "bun scripts/build-home.ts",
+    "check:home": "bun scripts/build-home.ts --check",
     "dev": "bun run build:home && docmd dev",
-    "build": "bun run build:home && docmd validate && docmd build",
+    "build": "bun run build:home && docmd validate && docmd build && bun run check:home",
     "validate": "docmd validate",
     "test": "vitest run",
     "preview": "npx serve site"
