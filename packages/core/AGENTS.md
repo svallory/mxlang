@@ -966,3 +966,27 @@ stable version.
   by Node's strip-only `require`: no parameter properties, no enums, and core's
   own source cannot be imported by one (it uses parameter properties), which is
   why `own-core` carries a stand-in `core-copy.ts`.
+
+## Atoms (decision 156)
+
+- **`expr()` emits the authored source slice, not the printed AST; an
+  AST-level rewrite must also splice into the slice through
+  `rewriteReferencesSource`.** The slice is what keeps TypeScript type
+  arguments (Marko drops them from the AST). `src/atoms.ts` converts each atom
+  stand-in to a `StringLiteral` in the tree, and `expr()` splices the same
+  `"name"` at each atom's span on both paths (no bindings: `spliceSource`;
+  bindings: added to the binding rewrites). Converting the node alone leaves
+  `:a` in `Expr.code`, so every host and the virtual code would emit it.
+- **The parser hands Babel a same-length numeric stand-in** (`:a` is `0.`),
+  recognised by `source[start] === ":"`. `convertAtoms` runs from `lower` and
+  from an external `lowerChildren` before `resolveUnnamedTags`; `exprOf`
+  asserts no stand-in survives (`assertNoStandIn`). A stand-in reaching an
+  emitter would print as a number, silently.
+- **A whole-value atom is a `static` attr with `atom`**, so no emitter changed;
+  the `:name` sugar's `name` gets `extra.mxAtom` in `sugarAttr`. Nested atoms
+  are `Expr.atoms`; `mappedExpr` maps each one to its literal. Hosts mapping an
+  expression should call `mappedExpr(expr)`, not `mapped(expr.code, expr.span)`.
+- **Stock parser:** `installedParserLexesAtoms` probes `onAtom`; on a stock
+  parser `stockAtomError` turns Babel's failure at a `:name` into the
+  "atoms need the MX parser" error, in `compileSource`, `parseFragment` and
+  `exprOf`'s recovered-parse path.
