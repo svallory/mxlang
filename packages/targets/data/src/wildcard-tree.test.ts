@@ -45,13 +45,21 @@ const tagsOf = (node: DataTag): DataTag[] =>
 
 describe("wildcard-matched tags in the data tree (decision 147)", () => {
   it("by reference: name is authored, contract is the canonical tag", () => {
-    const [attributes] = tree('<attributes>\n  <title type="string"/>\n</attributes>\n');
+    const [attributes] = tree(
+      '<attributes>\n  <title type="string"/>\n</attributes>\n',
+    );
     const [title] = tagsOf(attributes as DataTag);
-    expect(title).toMatchObject({ kind: "tag", name: "title", contract: "attribute" });
+    expect(title).toMatchObject({
+      kind: "tag",
+      name: "title",
+      contract: "attribute",
+    });
     expect(title?.groups).toBeUndefined();
     // nameSpan slices the authored name.
     const src = '<attributes>\n  <title type="string"/>\n</attributes>\n';
-    expect(src.slice(title?.nameSpan.sourceStart, title?.nameSpan.sourceEnd)).toBe("title");
+    expect(
+      src.slice(title?.nameSpan.sourceStart, title?.nameSpan.sourceEnd),
+    ).toBe("title");
   });
 
   it("carries the pattern's named groups", () => {
