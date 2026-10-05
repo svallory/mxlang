@@ -67,7 +67,7 @@ import type Parser from "./index.ts";
 import { OptionFlags, type SourceType } from "../options.ts";
 // MX FORK: the enclosing-property/boundary frames `mxRegionPositionCheck`
 // reads (see ../../mx/region-context.ts).
-import { mxPropertyKeyName } from "../../mx/region-context.ts";
+import { mxPropertyKeyName } from "../mx-hooks.ts";
 
 export default abstract class ExpressionParser extends LValParser {
   // Forward-declaration: defined in statement.js

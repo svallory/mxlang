@@ -18,40 +18,9 @@
  * is fine).
  */
 
-/** One synthesized import a region needs written into its module. */
-export interface HoistedImport {
-  /** The `import X from "./y.mx"` statement text. */
-  code: string;
-  /** The local binding the emitted region references. */
-  binding: string;
-  /** The module specifier, as written in `code`. */
-  specifier: string;
-  /**
-   * The template's resolved absolute path.
-   *
-   * Dedupe and authored-import reuse key on this, not on the specifier: two
-   * spellings (`./tags/icon.mx`, `./tags/../tags/icon.mx`) are one file and
-   * must collapse to one import.
-   */
-  resolvedPath: string;
-}
+import type { HoistedDefine, HoistedImport } from "../babel/mx-hooks.ts";
 
-/**
- * One `<define>` a region hoisted to module scope (decision 110b).
- *
- * Unlike a `HoistedImport`, there is nothing to reuse or dedupe against: the
- * declaration exists nowhere until the region mints it, so the binding is
- * always a fresh gensym (`@mxlang/solid`'s `generatedDefineBinding`), never
- * the author's own `<define>` name — the same reason a discovered tag's
- * import is always gensym'd rather than guessing it is safe to call the
- * local binding `icon`.
- */
-export interface HoistedDefine {
-  /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
-  code: string;
-  /** The gensym'd module-scope binding the region calls. */
-  binding: string;
-}
+export type { HoistedDefine, HoistedImport };
 
 /** What placing a set of hoisted imports decided. */
 export interface HoistPlan {

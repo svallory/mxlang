@@ -33,7 +33,7 @@ import { ParseBindingListFlags } from "./lval.ts";
 import { LoopLabelKind } from "../tokenizer/state.ts";
 // MX FORK: the enclosing-decorator frame `mxRegionPositionCheck` reads (see
 // ../../mx/region-context.ts).
-import { decoratorNameFromExpression } from "../../mx/region-context.ts";
+import { decoratorNameFromExpression } from "../mx-hooks.ts";
 
 const loopLabel = { kind: LoopLabelKind.Loop } as const,
   switchLabel = { kind: LoopLabelKind.Switch } as const;

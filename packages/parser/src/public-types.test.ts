@@ -19,7 +19,7 @@ import type {
   MxRegionCompile as RealMxRegionCompile,
   MxRegionCompileInput as RealMxRegionCompileInput,
   MxRegionCompileResult as RealMxRegionCompileResult,
-} from "./mx/region-compile.ts";
+} from "./babel/mx-hooks.ts";
 import type {
   MxRegionContext as RealMxRegionContext,
   MxRegionPositionCheck as RealMxRegionPositionCheck,

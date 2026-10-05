@@ -125,7 +125,7 @@ export interface Options {
    * other channel to the caller. Absent means every position is accepted
    * (unchanged behavior).
    */
-  mxRegionPositionCheck?: import("../mx/region-context.ts").MxRegionPositionCheck;
+  mxRegionPositionCheck?: import("./mx-hooks.ts").MxRegionPositionCheck;
 
   /**
    * MX FORK: when true, `<>…</>` in expression position is an MX **fragment
@@ -152,7 +152,7 @@ export interface Options {
    * `.ng.mx` lowers a region to an Angular template string — both only text
    * the surrounding grammar can parse.
    */
-  mxRegionCompile?: import("../mx/region-compile.ts").MxRegionCompile;
+  mxRegionCompile?: import("./mx-hooks.ts").MxRegionCompile;
 
   /** MX FORK: surrounding module imports pre-collected by `parse`. */
   mxImportSpecifiers?: ReadonlyMap<string, string>;

@@ -2,49 +2,16 @@ import { parseExpression } from "../babel/index.ts";
 import { types as tc } from "../babel/tokenizer/context.ts";
 import { Position } from "../babel/util/location.ts";
 import { MxErrors } from "./errors.ts";
-import type { HoistedDefine, HoistedImport } from "./hoist-imports.ts";
-import type { MxRegionCompile } from "./region-compile.ts";
-import {
-  computeMxRegionContext,
-  type MxRegionContext,
-  type MxRegionPositionCheck,
-} from "./region-context.ts";
+import type {
+  HoistedDefine,
+  HoistedImport,
+  MxParserHost,
+  MxRegionCompile,
+} from "../babel/mx-hooks.ts";
+import type { MxRegionContext, MxRegionPositionCheck } from "../babel/mx-hooks.ts";
+import { computeMxRegionContext } from "./region-context.ts";
 import { type MxElement, type MxRange, walkMxRegion } from "./walk.ts";
 
-/**
- * The parser surface `mxParseElementAt` needs. Structural rather than a direct
- * import of the Parser class, so this module stays free of the vendored
- * parser's mixin plumbing.
- */
-export interface MxParserHost {
-  input: string;
-  state: {
-    pos: number;
-    curLine: number;
-    lineStart: number;
-    startIndex: number;
-    context: unknown[];
-    start: number;
-    startLoc: Position;
-    end: number;
-    endLoc: Position;
-    // biome-ignore lint/suspicious/noExplicitAny: MxRegionParentFrame kept structural, to avoid a tokenizer-state dependency cycle
-    mxRegionParents: any[];
-    /** Function parameters known before Babel registers them in its scope. */
-    mxFunctionParamNames: Array<Set<string>>;
-  };
-  // biome-ignore lint/suspicious/noExplicitAny: matches the vendored raise signature
-  raise(toParseError: any, at: Position | any, details?: any): unknown;
-  next(): void;
-  // biome-ignore lint/suspicious/noExplicitAny: the vendored options bag
-  options: any;
-  // biome-ignore lint/suspicious/noExplicitAny: Babel's own node type is internal
-  finishNode?: any;
-  /** Babel's active lexical scopes, used to hide shadowed module imports. */
-  scope?: {
-    scopeStack?: Array<{ names?: Map<string, unknown> }>;
-  };
-}
 
 function visibleImportSpecifiers(
   parser: MxParserHost,

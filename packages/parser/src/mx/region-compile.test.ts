@@ -4,7 +4,7 @@ import { parse } from "../index.ts";
 import type {
   MxRegionCompile,
   MxRegionCompileInput,
-} from "./region-compile.ts";
+} from "../babel/mx-hooks.ts";
 
 /** The spliced region node of `const view = <…>;`, the shape these assert on. */
 function regionNode(file: File): {

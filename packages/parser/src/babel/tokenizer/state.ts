@@ -9,7 +9,7 @@ import type { ParseError } from "../parse-error.ts";
 // MX FORK: the enclosing-syntax parent stack `mxRegionPositionCheck` reads
 // (see `../../mx/region-context.ts`). Only pushed/popped when a host set
 // that option; see `parser/expression.ts`/`parser/statement.ts`.
-import type { MxRegionParentFrame } from "../../mx/region-context.ts";
+import type { MxRegionParentFrame } from "../mx-hooks.ts";
 
 export type DeferredStrictError =
   | typeof Errors.StrictNumericEscape
