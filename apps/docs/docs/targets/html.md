@@ -201,7 +201,7 @@ Inert is a *shape*, not permission to drop content. Each inert tag still declare
 |---|---|
 | `<await>` | Marko itself refuses to render one to a string |
 | `<try>` with `<@placeholder>` | A placeholder needs a second render pass |
-| `<return>` | Hands a value to a parent template; a module compiled to `(input) => string` has no parent |
+| `<return>` inside `<if>`, `<for>` or any other tag | It declares the value the whole unit returns, so it must be at the top level of its template. At the top level it compiles, in a tag and in a page alike: the module returns `{ value, output }`, which is what `/var` reads |
 | `<let/input=…>`, `<const/input=…>` | Shadows the render function's own `input` parameter, making the template's input unreachable. A **tag param** named `input` (`<for|input|>`) is fine — that opens a nested scope, which is an ordinary JS shadow |
 | A capitalized tag with no matching binding | No HTML element is capitalized, so this is a missing import rather than an element |
 | `class:foo`, `style:foo` | Not Marko syntax at all — see [Errors](/language/errors/) |
