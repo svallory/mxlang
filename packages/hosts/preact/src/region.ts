@@ -125,6 +125,7 @@ function rejectModuleLevel(
   ir: Ir,
   segment: string,
   regionStart: { line: number; column: number },
+  returnTag: { line: number; column: number; file?: string } | undefined,
 ): void {
   const offending: Array<
     { loc?: { line: number; column: number; file?: string } } | undefined
@@ -134,14 +135,10 @@ function rejectModuleLevel(
     ...(ir.inputInterface ? [ir.inputInterface] : []),
     ...ir.prelude,
   ];
-  if (ir.returnValue) {
-    const start = (
-      ir.returnValue.node as
-        | { loc?: { start?: { line: number; column: number } } }
-        | undefined
-    )?.loc?.start;
-    offending.push(start ? { loc: start } : undefined);
-  }
+  // `<return>` at its tag (core keeps the tag's position on the `Ctx`, the
+  // IR only the value), so the error points where the author wrote it.
+  if (ir.returnValue)
+    offending.push(returnTag ? { loc: returnTag } : undefined);
   if (offending.length === 0) return;
   // Earliest first, so the reported statement is the first one in the file.
   const first = offending
@@ -208,6 +205,7 @@ export function compileJsxRegion(
   ctx.customTags = options.customTags;
   ctx.defaultTag = options.defaultTag;
   ctx.warnings = options.warnings;
+  ctx.unsupportedIn = `a \`.${segment}.mx\` region`;
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
     for (const name of options.importSpecifiers.keys()) ctx.imports.add(name);
@@ -228,11 +226,20 @@ export function compileJsxRegion(
     }
   }
   const ir = lower(ctx, body);
-  rejectModuleLevel(ir, segment, regionStart);
+  rejectModuleLevel(ir, segment, regionStart, ctx.returnValue?.loc);
 
   // A region is one root element, so its `<define>`s sit in markup; the
   // region emitter lifts those outside a callback into `liftedDefines`.
-  const emitter = createRegionEmitter(dialect, segment);
+  // The padded source is file-shaped (offset = file offset), so a span's
+  // offset maps straight to the file's line and column.
+  const emitter = createRegionEmitter(dialect, segment, (offset) => {
+    const before = padded.slice(0, offset);
+    const lastBreak = before.lastIndexOf("\n");
+    return {
+      line: before.split("\n").length,
+      column: offset - (lastBreak + 1),
+    };
+  });
   drive(emitter, ir.body);
   const markupCode = emitter.result();
   // Defines first, then the `/var` calls, as a whole-file module orders them.

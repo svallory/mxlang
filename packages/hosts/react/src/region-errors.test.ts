@@ -6,6 +6,7 @@
  * authored `.react.mx` line (1-based) and column (0-based).
  */
 
+import { join } from "node:path";
 import { createTargetLookup } from "@mxlang/core";
 import { print } from "@mxlang/parser";
 import { describe, expect, it } from "vitest";
@@ -18,13 +19,16 @@ const FILE = "/fixtures/region-errors/Panel.react.mx";
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
 const stripAnsi = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, "");
 
-function errorOf(source: string): {
+function errorOf(
+  source: string,
+  file = FILE,
+): {
   message: string;
   line: number;
   column: number;
 } {
   try {
-    print(source, FILE, {
+    print(source, file, {
       mx: true,
       mxRegionCompile: (input) =>
         compileReactRegion(input.source, { ...input, targets }) as ReturnType<
@@ -95,7 +99,12 @@ describe("region rule", () => {
   );
 
   it("refuses <return> as module-level", () => {
-    expect(hookError("<div/>\n<return=1/>").message).toBe(MODULE_LEVEL);
+    // At the tag (file line 4, column 0), not at its value (column 8).
+    expect(hookError("<div/>\n<return=1/>")).toEqual({
+      message: MODULE_LEVEL,
+      line: 4,
+      column: 0,
+    });
   });
 
   it("refuses a top-level <const>, pointing at the surrounding component", () => {
@@ -125,11 +134,52 @@ describe("region rule", () => {
           "<for|n| of=[1]>\n        <define/Row><b/></define>\n      </for>",
         ),
       ),
-    ).toMatchObject({
+    ).toEqual({
       message:
-        "`<define>` must appear at the top level of the template; a block declared inside markup cannot be lifted without changing its scope",
+        "`<define>` inside `<for>`/`<if>`/an attribute-tag body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
       line: 6,
       column: 8,
+    });
+  });
+
+  it("refuses a second <define> of the same name, at its name (Marko: Duplicate declaration)", () => {
+    // Both lift into the region's one arrow, so this would be a second
+    // `const Row`; Marko 6.3.51 reports `Duplicate declaration "Row"` at the
+    // second define's name.
+    expect(
+      errorOf(
+        inRegion(
+          "<section><define/Row><b>1</b></define><Row/></section><section><define/Row><i>2</i></define><Row/></section>",
+        ),
+      ),
+    ).toEqual({ message: 'Duplicate declaration "Row"', line: 5, column: 77 });
+  });
+
+  it("refuses a /var inside a <for> with the region's wording", () => {
+    // `counter.mx` declares `<return>`, so `/doubled` is a real tag variable.
+    const file = join(
+      import.meta.dirname,
+      "fixtures",
+      "region",
+      "tag-var",
+      "loop.react.mx",
+    );
+    const source = `import Counter from "./counter.mx";\nexport function Panel() {\n  return (\n    <div>\n      <for|n| of=[1]><Counter/doubled start=n/></for>\n    </div>\n  );\n}\n`;
+    expect(errorOf(source, file)).toEqual({
+      message:
+        "`/var` on `<Counter>` inside `<for>`/`<if>`/an attribute-tag body is not supported in a `.react.mx` region; bind it directly in the region's markup, outside those bodies",
+      line: 5,
+      column: 21,
+    });
+  });
+
+  it("names the region, not a standalone template, when refusing a tag variable", () => {
+    expect(errorOf(inRegion("<p/x>text</p>"))).toMatchObject({
+      message: expect.stringContaining(
+        "is not supported in a `.react.mx` region",
+      ),
+      line: 5,
+      column: 6,
     });
   });
 });

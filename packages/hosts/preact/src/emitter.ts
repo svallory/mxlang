@@ -109,6 +109,18 @@ function statefulErrors(
   };
 }
 
+/** A region compile's shared state (`createRegionEmitter`). */
+interface RegionSink {
+  /** The file kind's segment, named in region-only errors. */
+  segment: string;
+  /** Lifted `<define>` statements, in source order. */
+  defines: MappedCode[];
+  /** Their names, to refuse a duplicate. */
+  names: Set<string>;
+  /** File line (1-based) and column of a file-absolute offset. */
+  positionAt(offset: number): { line: number; column: number };
+}
+
 /** What `resolveDelegatedTag` records for a claimed tag. */
 type DelegatedTagData = { kind: "try" };
 
@@ -531,7 +543,7 @@ export class PreactEmitter implements Emitter<string> {
    * none), so declaring them above the region's markup changes nothing they
    * close over. `undefined` for a whole-file compile, which keeps refusing.
    */
-  readonly #region: { segment: string; defines: MappedCode[] } | undefined;
+  readonly #region: RegionSink | undefined;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -542,7 +554,7 @@ export class PreactEmitter implements Emitter<string> {
     callbackScope = false,
     typeCheck?: string,
     decodeText = true,
-    region?: { segment: string; defines: MappedCode[] },
+    region?: RegionSink,
   ) {
     this.#dialect = dialect;
     this.#region = region;
@@ -1700,7 +1712,9 @@ export class PreactEmitter implements Emitter<string> {
         // Invariant §7.5-8 rejects the escape rather than emitting it.
         if (this.#callbackScope) {
           fail(
-            `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
+            this.#region
+              ? `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\`/an attribute-tag body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
+              : `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
             node,
           );
         }
@@ -1956,6 +1970,21 @@ export class PreactEmitter implements Emitter<string> {
    */
   define(node: Extract<IrNode, { kind: "Define" }>): void {
     if (this.#region && !this.#callbackScope) {
+      // Every lifted define shares the region's one arrow, so a second
+      // `<define/Row>` in a sibling element would be a second `const Row`.
+      // Marko 6.3.51 refuses it too: `Duplicate declaration "Row"`, at the
+      // second define's name.
+      if (this.#region.names.has(node.name)) {
+        const at = node.nameSpan
+          ? this.#region.positionAt(node.nameSpan.sourceStart)
+          : node.loc;
+        throw new TranslateError(
+          `Duplicate declaration "${node.name}"`,
+          at.line,
+          at.column,
+        );
+      }
+      this.#region.names.add(node.name);
       // The whole-file statement text (`emitModuleWithMappings`). The body is
       // a function of its own, so it renders as a callback: a `/var` inside
       // it has no statement position and is refused, as in any callback.
@@ -1969,7 +1998,9 @@ export class PreactEmitter implements Emitter<string> {
       return;
     }
     fail(
-      "`<define>` must appear at the top level of the template; a block declared inside markup cannot be lifted without changing its scope",
+      this.#region
+        ? `\`<define>\` inside \`<for>\`/\`<if>\`/an attribute-tag body cannot be lifted out of it in a \`.${this.#region.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside those bodies`
+        : "`<define>` must appear at the top level of the template; a block declared inside markup cannot be lifted without changing its scope",
       node,
     );
   }
@@ -2076,6 +2107,7 @@ export class PreactEmitter implements Emitter<string> {
 export function createRegionEmitter(
   dialect: JsxDialect,
   segment: string,
+  positionAt: RegionSink["positionAt"],
 ): PreactEmitter {
   return new PreactEmitter(
     dialect,
@@ -2086,7 +2118,7 @@ export function createRegionEmitter(
     false,
     undefined,
     true,
-    { segment, defines: [] },
+    { segment, defines: [], names: new Set(), positionAt },
   );
 }
 

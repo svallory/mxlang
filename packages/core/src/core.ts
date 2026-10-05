@@ -374,6 +374,14 @@ export interface Ctx {
    * entry points; absent means "not a module".
    */
   emitsModule?: boolean;
+  /**
+   * What the "is not supported in …" refusals (`rejectUnsupportedFields`) name
+   * as the place being compiled; absent means `a standalone template`. A host
+   * compiling an MX region inside someone else's module sets it (the JSX
+   * region engine: "a `.react.mx` region"), since a region has no template
+   * of its own to be "standalone". Generic opt-in; nothing host-specific.
+   */
+  unsupportedIn?: string;
   /** Resolved template path -> default import binding, authored or injected. */
   customTagImports?: Map<string, string>;
   /** Imports synthesized while lowering discovered template calls. */
@@ -1109,6 +1117,11 @@ function eventHandlerHint(ctx: Ctx, node: Node): string {
   return `; for an event handler write \`on${event[0].toUpperCase()}${event.slice(1)}=${handler ?? "handler"}\``;
 }
 
+/** The place {@link rejectUnsupportedFields} names; see `Ctx.unsupportedIn`. */
+function unsupportedIn(ctx: Ctx): string {
+  return ctx.unsupportedIn ?? "a standalone template";
+}
+
 /**
  * Rejects the node fields this translator does not read.
  *
@@ -1155,25 +1168,25 @@ export function rejectUnsupportedFields(
     // `click`, not under `<button`. Reporting at the tag points at the tag name
     // for an error about the arguments next to it.
     fail(
-      `tag arguments \`(...)\` on ${what} are not supported in a standalone template${eventHandlerHint(ctx, node)}`,
+      `tag arguments \`(...)\` on ${what} are not supported in ${unsupportedIn(ctx)}${eventHandlerHint(ctx, node)}`,
       node.arguments[0] ?? node,
     );
   }
   if (!allow.var && node.var) {
     fail(
-      `tag variable \`/${expr(ctx, node.var)}\` on ${what} is not supported in a standalone template`,
+      `tag variable \`/${expr(ctx, node.var)}\` on ${what} is not supported in ${unsupportedIn(ctx)}`,
       node,
     );
   }
   if (node.typeArguments || node.body?.typeParameters) {
     fail(
-      `type arguments on ${what} are not supported in a standalone template`,
+      `type arguments on ${what} are not supported in ${unsupportedIn(ctx)}`,
       node,
     );
   }
   if (!allow.params && node.body?.params?.length) {
     fail(
-      `tag params \`|...|\` on ${what} are not supported in a standalone template`,
+      `tag params \`|...|\` on ${what} are not supported in ${unsupportedIn(ctx)}`,
       node,
     );
   }
