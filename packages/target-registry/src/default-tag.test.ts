@@ -513,7 +513,9 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
     });
   });
 
-  it("re-enumerating html's lookup still gives 193 accepted and 43 rejected", () => {
+  // 194, not 193 as with @marko/compiler 5.42.5: 5.42.10's native-tag taglib
+  // adds the HTML `<search>` element, a plain element, so it is accepted.
+  it("re-enumerating html's lookup still gives 194 accepted and 43 rejected", () => {
     const descriptor = builtinLookup().target("html");
     const dir = join(project({ mx: { target: "html" } }), "..");
     const lookup = core.buildMarkoLookup(
@@ -532,7 +534,7 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
       (n) => core.validateDefaultTag(n, scope) === undefined,
     );
     expect([accepted.length, names.length - accepted.length]).toEqual([
-      193, 43,
+      194, 43,
     ]);
   });
 });
