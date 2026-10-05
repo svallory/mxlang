@@ -12,6 +12,7 @@ import * as core from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProjects,
+  type FakeTarget,
   fakeProject,
   specifier,
 } from "../../../test-fixtures/third-party-targets/support.ts";
@@ -869,7 +870,7 @@ describe("one source for the permit flag: the declarations (review round 3)", ()
   afterEach(() => cleanupProjects());
 
   /** A project whose contract says `span`, and a config saying `main`; returns registration and compile. */
-  function run(fixture: Parameters<typeof specifier>[0], targetName: string) {
+  function run(fixture: FakeTarget, targetName: string) {
     const proj = fakeProject({
       mx: { target: specifier(fixture), [targetName]: { defaultTag: "main" } },
       install: [fixture],
