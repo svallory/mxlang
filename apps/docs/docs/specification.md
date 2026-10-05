@@ -736,10 +736,10 @@ repeats the written name (`</div:x>`) or is `</>`; concise mode is unaffected.
 shorthand does, and `#x` or `:x` repeated or beside an explicit `id=`/`name=`
 follow the duplicate rule (the later one wins, with a warning). A value on the
 sugar (`:x=1`), a `:name` that is not an identifier, and `:b:c` (two names) or
-`:b(x)` (arguments) are positioned errors.
+`:b(x)` (arguments), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors.
 
 **Left alone:** the named forms (`class:x`, `style:x`, `value:fn:=x`, and the
-explicit `value:x`), a bare `:` (still Marko's `value:`), a dynamic tag name
+explicit `value:x`), a dynamic tag name
 (`<${x}>`), a bound attribute, and the
 **default attribute**: sugar right after a default value (`<if=a .b>`,
 `<const/x=items\n  .filter()/>`) keeps Marko's meaning, and `:name` there is one

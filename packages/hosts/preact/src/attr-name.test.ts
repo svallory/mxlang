@@ -111,7 +111,7 @@ describe("`:modifier` is the attribute `value:modifier` (preact)", () => {
   });
 
   it.each([
-    ["<div :/>", "value:", '""'],
+    ["<div value:/>", "value:", '""'],
     ["<div x:/>", "x:", '""'],
     ['<div x: = "s"/>', "x:", '"s"'],
     ["<div x: = input.x/>", "x:", "input.x"],

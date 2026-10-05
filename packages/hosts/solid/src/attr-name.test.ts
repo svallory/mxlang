@@ -108,7 +108,7 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
   });
 
   it.each([
-    ["<div :/>", "value:", '""'],
+    ["<div value:/>", "value:", '""'],
     ["<div x:/>", "x:", '""'],
     ['<div x: = "s"/>', "x:", '"s"'],
     ["<div x: = input.x/>", "x:", '__mxAttrValue("x:", input.x, "div")'],

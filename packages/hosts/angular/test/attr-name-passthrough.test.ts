@@ -57,8 +57,8 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
   });
 
   it.each([
-    ["<div :/>", "value:", 1, 5],
-    ["<div\n  :/>", "value:", 2, 2],
+    ["<div value:/>", "value:", 1, 5],
+    ["<div\n  value:/>", "value:", 2, 2],
     ["<div x:/>", "x:", 1, 5],
     ['<div x: = "s"/>', "x:", 1, 5],
     ["<div x: = input.x/>", "x:", 1, 5],

@@ -103,7 +103,7 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
   });
 
   it.each([
-    ["<div :/>", '__mxOut += "<div value:=\\"\\"></div>";'],
+    ["<div value:/>", '__mxOut += "<div value:=\\"\\"></div>";'],
     ["<div x:/>", '__mxOut += "<div x:=\\"\\"></div>";'],
     ['<div x: = "s"/>', '__mxOut += "<div x:=\\"s\\"></div>";'],
     [

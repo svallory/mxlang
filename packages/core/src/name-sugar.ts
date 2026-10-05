@@ -447,6 +447,36 @@ function sugarKind(attr: Node): "#" | "." | ":" | undefined {
   return undefined;
 }
 
+/**
+ * Splits `.c#m.d` into its `.`/`#` parts, outside any `${…}`: a placeholder's
+ * own dots (`.a${input.s}`) are not separators.
+ */
+function splitShorthandChain(
+  name: string,
+): { sigil: string; word: string; index: number }[] {
+  const parts: { sigil: string; word: string; index: number }[] = [];
+  let depth = 0;
+  let current: { sigil: string; word: string; index: number } | undefined;
+  for (let at = 0; at < name.length; at++) {
+    const char = name[at] as string;
+    if (depth === 0 && (char === "." || char === "#")) {
+      current = { sigil: char, word: "", index: at };
+      parts.push(current);
+      continue;
+    }
+    if (char === "$" && name[at + 1] === "{") {
+      depth++;
+      if (current) current.word += "${";
+      at++;
+      continue;
+    }
+    if (depth > 0 && char === "{") depth++;
+    if (depth > 0 && char === "}") depth--;
+    if (current) current.word += char;
+  }
+  return parts;
+}
+
 const shorthandProbe = new Map<string, boolean>();
 
 /** The probe cache is cleared past this many words (a long-lived server). */
@@ -525,6 +555,15 @@ function checkNearSugar(ctx: Ctx, attr: Node): void {
   ) {
     failAt(ctx, SECOND_NAME, start + attr.name.length);
   }
+  // A bare `:` (no name): Marko would read it as `value:` (divergences.md,
+  // row 2); here it is sugar with nothing to name, like a bare `#` or `.`.
+  if (attr.default === true && attr.name === "value" && attr.modifier === "") {
+    failAt(
+      ctx,
+      "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+      start,
+    );
+  }
   if (
     attr.default === true &&
     attr.name === "value" &&
@@ -595,10 +634,10 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
     // part is exactly what Marko's shorthand accepts (probed against its own
     // parser); a trailing `:y` (`.c:y`, `#d:y`) is a name too.
     let cursor = start;
-    for (const part of attr.name.matchAll(/([.#])([^.#]*)/g)) {
-      const sigil = part[1] as string;
-      const word = part[2] as string;
-      const partStart = start + (part.index ?? 0);
+    for (const part of splitShorthandChain(attr.name)) {
+      const sigil = part.sigil;
+      const word = part.word;
+      const partStart = start + part.index;
       cursor = partStart + 1 + word.length;
       if (word.includes(":")) {
         failAt(ctx, SECOND_NAME, partStart + 1 + word.indexOf(":"));

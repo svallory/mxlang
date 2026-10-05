@@ -3672,7 +3672,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
   });
 
   it.each([
-    ["<div :/>", "value:", 5, 6],
+    ["<div value:/>", "value:", 5, 11],
     ["<div x:/>", "x:", 5, 7],
     ['<div x: = "s"/>', "x:", 5, 7],
     ['<div value:foo:bar="y"/>', "value:foo:bar", 5, 18],

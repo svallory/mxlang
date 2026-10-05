@@ -299,7 +299,7 @@ describe("`#id`, `.class` and `:name` in attribute position", () => {
     ).toBe('a class:x=<"y">');
     expect(shape("<a x:foo/>")).toBe('a x:foo=""');
     expect(shape("<a value:foo/>")).toBe('a value:foo=""');
-    expect(shape("<a :/>")).toBe('a value:=""');
+    expect(shape("<a value:/>")).toBe('a value:=""');
   });
 
   it("reports each token at its own span", () => {
@@ -507,6 +507,19 @@ describe("a dynamic shorthand in attribute position", () => {
   it("the tag-adjacent form still works", () => {
     expect(shape("<div.a${x}/>")).toBe("div class=<`a${x}`>");
   });
+
+  // Review (PR 3 round 2), finding 3: the chain splits on sigils outside the
+  // `${…}` only, and the message quotes the authored text.
+  it.each([
+    ["<div .a${input.s}/>", "<div.a${input.s}>", ".a${input.s}"],
+    ["<div #a${input.s.t}/>", "<div#a${input.s.t}>", "#a${input.s.t}"],
+    ["<div .a${x.y}b/>", "<div.a${x.y}b>", ".a${x.y}b"],
+  ])("%s quotes the whole authored token", (source, adjacent, token) => {
+    const error = errorOf(source);
+    expect(error.message).toContain(`(\`${adjacent}\`)`);
+    expect(error.message).toContain(`not as \`${token}\``);
+    expect([error.line, error.column]).toEqual([1, 5]);
+  });
 });
 
 // Delta review NIT 3: the probe cache is bounded.
@@ -518,5 +531,28 @@ describe("the shorthand probe cache", () => {
     }
     expect(isShorthandWord(".", "a b")).toBe(false);
     expect(isShorthandWord(".", "2xl")).toBe(true);
+  });
+});
+
+// Leader addition to PR 3 round 2 (item 9): a bare `:` in attribute position
+// is a positioned error, like a bare `#` or `.`. Marko would have read it as
+// `value:` (divergence row 2); the named forms with an empty suffix (`x:`) are
+// still Marko's.
+describe("a bare `:` in attribute position", () => {
+  it.each([
+    ["<input :/>", 1, 7],
+    ["input :", 1, 6],
+    ['<input x="1" :/>', 1, 13],
+    ["<input\n  :/>", 2, 2],
+  ])("%j is a positioned error", (source, line, column) => {
+    const error = errorOf(source);
+    expect(error.message).toContain("`:` is name sugar and needs a name");
+    expect(error.message).toContain("`:email`");
+    expect([error.line, error.column]).toEqual([line, column]);
+  });
+
+  it("the named forms with an empty suffix stay Marko's", () => {
+    expect(shape("<div x:/>")).toBe('div x:=""');
+    expect(shape('<div x: = "s"/>')).toBe('div x:="s"');
   });
 });

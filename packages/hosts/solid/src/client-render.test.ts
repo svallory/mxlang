@@ -222,7 +222,7 @@ describe("Solid client render: live signal updates through the real DOM", () => 
   });
   it("preserves empty and multi-colon attribute names through JSX prop spreads", () => {
     const { snapshots } = renderDomApp(
-      '<div :/><div value:foo:bar="y"/><div value:foo:baz=input.v/><div x:/><div x: = "s"/><div x: = input.v/>',
+      '<div value:/><div value:foo:bar="y"/><div value:foo:baz=input.v/><div x:/><div x: = "s"/><div x: = input.v/>',
       'const input = { v: "hello" };',
       "unused",
       [],
