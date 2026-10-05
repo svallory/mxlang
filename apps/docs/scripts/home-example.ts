@@ -54,6 +54,17 @@ export interface Marker {
   /** The text the ranges must still cover — the drift guard. */
   match: string;
   ranges: MarkerRange[];
+  /**
+   * Strings that must appear inside the marked text.
+   *
+   * A range that silently stops short of the construct its label and note
+   * name is invisible to every other check: the matched text still equals
+   * `match`, the page still builds, and the only reader who notices is a human
+   * diffing the note against the ranges — which is exactly how the `if-chain`
+   * marker shipped twice claiming to cover an `<else>` it stopped short of.
+   * Naming the constructs closes that gap: the build fails instead.
+   */
+  covers?: string[];
 }
 
 /**
@@ -134,7 +145,15 @@ export function anchorExists(href: string, siteDir = siteRoot): boolean {
 }
 
 /** Every marker key this file understands; anything else is a typo. */
-const MARKER_KEYS = new Set(["id", "label", "note", "href", "match", "ranges"]);
+const MARKER_KEYS = new Set([
+  "id",
+  "label",
+  "note",
+  "href",
+  "match",
+  "ranges",
+  "covers",
+]);
 
 /**
  * Every reason the example and its markers would make the home page a lie.
@@ -200,6 +219,13 @@ export function validate(lines: string[], markers: Marker[]): string[] {
       errors.push(
         `marker \`${marker.id}\` no longer covers its text:\n  expected ${JSON.stringify(marker.match)}\n  found    ${JSON.stringify(matched)}`,
       );
+    }
+    for (const expected of marker.covers ?? []) {
+      if (!matched.includes(expected)) {
+        errors.push(
+          `marker \`${marker.id}\` declares it covers ${JSON.stringify(expected)}, which is not inside its marked text`,
+        );
+      }
     }
   }
   return errors;

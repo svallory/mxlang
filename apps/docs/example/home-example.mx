@@ -2,9 +2,9 @@ import ProductCard from "./tags/product-card.mx";
 import { money } from "./format.ts";
 import type { Product } from "./product.ts";
 
-// Concise mode: one tag per line, children indented, no angle brackets and
-// no closing tags — the block below ends at the first line back at column 0.
-// A file is parsed in one mode, so it comes before the HTML-mode interface.
+// Concise mode: a tag on its own line without angle brackets, children
+// nested under it by indentation, a `--` text line for literal text, and no
+// closing tag anywhere in the region.
 section.printed
   h3
     -- Concise mode
@@ -53,7 +53,7 @@ static const MAX_ITEMS = 3;
 
 <ul.store aria-live="polite">
   <for|product, i| of=shown>
-    <li class="row" style={ "padding-left": `${i}rem` }>
+    <li class="row" data-high-value=(product.price > 30) style={ "padding-left": `${i}rem` }>
       <ProductCard product=product featured=(i === 0) ...cardAttrs>
         <@badge><span.badge>${i === 0 ? "Featured" : "New"}</span></@badge>
         <@price|amount|><b.sale>${money(amount, input.currency)}</b></@price>

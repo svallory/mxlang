@@ -377,6 +377,50 @@ text has the same boundary limitation. Do not split a reference across a
 placeholder; write `&amp;`/`&copy;` in one text node or interpolate the actual
 character. Cross-node decoding is not guaranteed by JSX host emission.
 
+### Concise mode
+
+A tag written on its own line, **without angle brackets**, is a concise tag.
+Its children are the lines indented under it, and the block ends at the first
+line back at column 0 that is not a tag line — a column-0 tag line is a
+*sibling* inside the same block, not a terminator:
+
+```marko
+ul.store
+  li.row
+    -- A text line.
+  li.row
+    -- Another one.
+```
+
+Concise and HTML mode coexist in one file; a region that needs an explicit
+closing tag does not end the region before it, and a concise block may sit
+before or after one:
+
+```marko
+<p>rendered first</p>
+
+ul.store
+  -- Concise, after an HTML-mode line.
+
+div
+  span
+    -- Nested by indentation.
+```
+
+**Closing tags are a parse error in a concise region** (`The closing "div" tag
+was not expected`), and a line in a concise region cannot start with a single
+hyphen — see **Text lines (`--`)** below for the `--` rule, and **A bare
+`${expr}` line** for that line's own trap.
+
+Inherited from Marko under the subset rule: no MX decision fixes this and **no
+MX fixture exercises it**. Every rule on this page was read off
+htmljs-parser's `CONCISE_HTML_CONTENT`/`HTML_CONTENT` states by compiling the
+snippets above and their variants on the html target; the behaviour is the
+parser's, and no host changes it.
+
+**Decisions:** none of its own — inherited under the subset rule (decisions 71,
+72).
+
 ### Text lines (`--`)
 
 Concise mode's delimited text block. Inherited from Marko under the subset rule;
