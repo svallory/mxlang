@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { type AtomFacts, atomCandidates } from "./atom-contracts.ts";
+import {
+  type AtomFacts,
+  atomCandidates,
+  emptyAtomFacts,
+} from "./atom-contracts.ts";
 import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
@@ -25,7 +29,7 @@ const declarations: HostDeclarations = {
 function run(
   source: string,
   customTags: Record<string, CustomTag>,
-): { facts: AtomFacts; error?: TranslateError } {
+): { facts?: AtomFacts; error?: TranslateError } {
   try {
     const result = compileSource(
       source,
@@ -39,10 +43,10 @@ function run(
         emitIr: () => "",
       },
     );
-    return { facts: result.atomFacts as AtomFacts };
+    return { facts: result.atomFacts };
   } catch (cause) {
     if (!(cause instanceof TranslateError)) throw cause;
-    return { facts: cause.atomFacts as AtomFacts, error: cause };
+    return { facts: cause.atomFacts, error: cause };
   }
 }
 
@@ -52,7 +56,13 @@ function candidates(marked: string, tags: Record<string, CustomTag>) {
   // The last good facts: the buffer with an atom where the cursor is.
   const source = marked.replace(":|", ":x").replace("|", "");
   const { facts } = run(source, tags);
-  return atomCandidates(facts.facts, facts.derived, offset);
+  // An empty result must come from the contract, never from missing facts.
+  expect(facts, "the source records its atom facts").toBeDefined();
+  expect(
+    (facts as unknown as { calls: unknown[] }).calls.length,
+    "the facts hold the call",
+  ).toBeGreaterThan(0);
+  return atomCandidates(facts as AtomFacts, offset);
 }
 
 const names = (list: { name: string }[]) => list.map((item) => item.name);
@@ -102,6 +112,7 @@ const mesh: Record<string, CustomTag> = {
     declares: { kind: "attribute", from: "name", scope: "entity" },
   },
   set: { defaultTag: "setter" },
+  req: { attributes: { x: { type: "string", required: true } } },
 };
 
 describe("atomCandidates: values", () => {
@@ -252,8 +263,9 @@ describe("atomCandidates: the name sugar", () => {
 describe("atomCandidates: nothing to offer", () => {
   it("has no candidates without a contract, or with a bare atom type", () => {
     expect(candidates("<policy free=:|/>", mesh)).toEqual([]);
-    expect(candidates("<other x=:|/>", mesh)).toEqual([]);
-    expect(candidates("<policy text=:|/>", mesh)).toEqual([]);
+    expect(candidates("<create :|/>", mesh)).toEqual([]);
+    // A string-typed attribute has no atoms to offer.
+    expect(candidates('<policy text="x|"/>', mesh)).toEqual([]);
   });
 
   it("has no candidates outside any tag or attribute value", () => {
@@ -262,7 +274,7 @@ describe("atomCandidates: nothing to offer", () => {
   });
 
   it("has no candidates when the facts are empty", () => {
-    expect(atomCandidates([], [], 3)).toEqual([]);
+    expect(atomCandidates(emptyAtomFacts(), 3)).toEqual([]);
   });
 });
 
@@ -327,9 +339,22 @@ describe("the atom diagnostics list the candidates", () => {
     );
   });
 
-  it("string where an atom ref is expected names the kinds it may refer to", () => {
-    expect(message('<policy either="id"/>')).toBe(
-      "`<policy>`: attribute `either` must be atom, got string (a declared attribute or action)",
+  it("string where an atom ref is expected lists the declared names and the atom to write", () => {
+    expect(message('<uuid :id/><action :publish/><policy either="id"/>')).toBe(
+      "`<policy>`: attribute `either` must be atom, got string (one of :id, :publish); write it as `:id`",
+    );
+    expect(message('<policy accept="title"/>')).toBe(
+      "`<policy>`: attribute `accept` must be atom, got string (none declared); write it as `:title`",
+    );
+  });
+
+  it("the string-for-ref error is positioned at the string and waits for the declarations", () => {
+    const source = '<uuid :id/><policy accept="id"/>';
+    const { error } = run(source, mesh);
+    expect(error?.column).toBe(source.indexOf('"id"'));
+    // A later declaration, written after the string, is listed too.
+    expect(message('<policy accept="id"/><uuid :id/>')).toContain(
+      "(one of :id)",
     );
   });
 
@@ -343,5 +368,129 @@ describe("the atom diagnostics list the candidates", () => {
     expect(message('<policy types=[:read, "x"]/>')).toBe(
       "`<policy>`: attribute `types` must be atom, got string (one of :create, :read)",
     );
+  });
+});
+
+describe("the candidates never offer a name the checker rejects", () => {
+  const tags: Record<string, CustomTag> = {
+    ...mesh,
+    pat: {
+      attributes: {
+        a: { type: "atom", ref: "attribute", pattern: "^i" },
+        b: { type: "atom", values: ["a", "zz"], pattern: "^a" },
+        c: { type: "atom", values: ["id", "title", "other"], ref: "attribute" },
+        d: {
+          type: "atom",
+          values: ["id", "title", "other"],
+          ref: "attribute",
+          pattern: "^t",
+        },
+        e: { type: "atom", pattern: "^i" },
+      },
+    },
+  };
+  const declared = "<uuid :id/><uuid :title/><uuid :zzz/>";
+
+  it("filters ref names by the pattern", () => {
+    expect(names(candidates(`${declared}<pat a=:|/>`, tags))).toEqual(["id"]);
+  });
+
+  it("filters values by the pattern", () => {
+    expect(names(candidates("<pat b=:|/>", tags))).toEqual(["a"]);
+  });
+
+  it("intersects values with ref", () => {
+    expect(names(candidates(`${declared}<pat c=:|/>`, tags))).toEqual([
+      "id",
+      "title",
+    ]);
+  });
+
+  it("intersects values with ref, then filters by the pattern", () => {
+    expect(names(candidates(`${declared}<pat d=:|/>`, tags))).toEqual([
+      "title",
+    ]);
+  });
+
+  it("offers nothing for a pattern alone", () => {
+    expect(candidates("<pat e=:|/>", tags)).toEqual([]);
+  });
+
+  it("every candidate passes the checker", () => {
+    for (const attr of ["a", "b", "c", "d"]) {
+      const list = candidates(`${declared}<pat ${attr}=:|/>`, tags);
+      expect(list.length).toBeGreaterThan(0);
+      for (const { name } of list) {
+        expect(
+          run(`${declared}<pat ${attr}=:${name}/>`, tags).error,
+          `${attr}=:${name}`,
+        ).toBeUndefined();
+      }
+    }
+  });
+
+  it("the ref diagnostic lists the same filtered names", () => {
+    expect(run(`${declared}<pat a=:iota/>`, tags).error?.message).toBe(
+      "`<pat>`: attribute `a`: `:iota` is not a declared attribute here (one of :id)",
+    );
+    expect(run(`${declared}<pat d=:other/>`, tags).error?.message).toBe(
+      "`<pat>`: attribute `d`: `:other` does not match the pattern /^t/",
+    );
+    expect(run(`${declared}<pat c=:zzz/>`, tags).error?.message).toContain(
+      "is not one of :id, :other, :title",
+    );
+  });
+});
+
+describe("the facts are opaque and light", () => {
+  it("hold no syntax node, definition or hook", () => {
+    const { facts } = run("<uuid :id/><policy accept=:id/>", mesh);
+    const seen = new Set<unknown>();
+    const walk = (value: unknown) => {
+      if (typeof value === "function") throw new Error("a function");
+      if (typeof value !== "object" || value === null || seen.has(value))
+        return;
+      seen.add(value);
+      if ("type" in value && typeof value.type === "string" && "loc" in value) {
+        throw new Error("a syntax node");
+      }
+      for (const inner of Object.values(value)) walk(inner);
+    };
+    expect(facts).toBeDefined();
+    walk(facts);
+  });
+});
+
+describe("TranslateError.atomFacts", () => {
+  it("is set when the atom check failed, and the facts are complete", () => {
+    const { error, facts } = run("<uuid :id/><policy accept=:nope/>", mesh);
+    expect(error?.message).toMatch(/not a declared/);
+    expect(facts).toBeDefined();
+    expect(names(atomCandidates(facts as AtomFacts, 31))).toEqual(["id"]);
+  });
+
+  it.each([
+    ["a type error", "<uuid :id/><policy text=:x/>"],
+    ["a missing attribute", "<uuid :id/><req/>"],
+    ["an unknown attribute", "<uuid :id/><uuid :a bogus=1/>"],
+  ])("is unset on %s, before the atom check ran", (_what, source) => {
+    const { error, facts } = run(source, mesh);
+    expect(error).toBeDefined();
+    expect(error?.message).not.toMatch(/declared|clash/);
+    expect(facts).toBeUndefined();
+  });
+
+  it("is unset when an analyze hook fails", () => {
+    const tags: Record<string, CustomTag> = {
+      ...mesh,
+      boom: {
+        analyze() {
+          throw new Error("analyze failed");
+        },
+      },
+    };
+    const { error, facts } = run("<uuid :id/><boom/>", tags);
+    expect(error).toBeDefined();
+    expect(facts).toBeUndefined();
   });
 });

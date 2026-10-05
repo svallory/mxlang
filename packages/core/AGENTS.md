@@ -1023,8 +1023,14 @@ stable version.
   outside every call is visible too. Attribute-tag attributes (any depth) are
   checked from `call.attributeTags` against `definition.attributeTags`. A call's own atom-vs-string type check stays in
   `validateAttributes` (`checkAtomAttr`), not here.
-  Diagnostics list the candidates through `atomList` (sorted, ten, `+N more`);
-  `atomCandidates(facts, derived, offset)` answers the same for a position,
-  with `declare(null, ...)` non-throwing, from `CompileResult.atomFacts` or
-  `TranslateError.atomFacts` (set by `compileSource`, also on failure). Editor
-  completion on top of it is a TODO (the language server is diagnostics-only).
+  Diagnostics list the candidates through `atomList` (sorted, ten, `+N more`)
+  and `acceptedNames` (the one filter shared with completion: `pattern`
+  filters, `values` and `ref` intersect). `atomCandidates(atomFacts, offset)`
+  answers the same for a position and never throws. `AtomFacts` is opaque and
+  compact (`atomFactsOf`: resolved declarations, scope ids, atom slots per call;
+  no node, definition or hook). `checkAtomContracts` sets `ctx.atomFacts` when
+  it starts, so `TranslateError.atomFacts` exists only when the atom check ran
+  (complete facts); earlier errors leave it unset. A plain string against a
+  `ref` atom is raised by that check (`checkStringForRef`), listing the names.
+  Editor completion on top of it is a TODO (the language server is
+  diagnostics-only).

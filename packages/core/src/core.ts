@@ -107,7 +107,14 @@ export class TranslateError extends Error {
    * callee's declaration changes again.
    */
   dependencies?: string[];
-  /** The unit's custom tag calls and declared names, for `atomCandidates` (set by `compileSource`). */
+  /**
+   * The unit's atom facts, for `atomCandidates`. Set only when the error came
+   * from the file-level atom check (a clash, an unknown atom, a string against
+   * a `ref` atom), which runs after every call was seen, so the facts are
+   * complete. An error thrown before it (a type error, a missing attribute, an
+   * `analyze` failure, a parse error) leaves it unset: a consumer then keeps
+   * the facts of the last good `CompileResult` instead of partial ones.
+   */
   atomFacts?: AtomFacts;
 
   constructor(message: string, line: number, column: number, file?: string) {
@@ -253,6 +260,8 @@ export interface Ctx {
   contractFacts?: Map<Node, ContractFact>;
   /** Names `analyze` hooks declared with `ctx.declare`. */
   contractDerived?: DerivedDeclaration[];
+  /** The unit's atom facts, set when the atom check starts (every call has been seen). */
+  atomFacts?: AtomFacts;
   source: string;
   /** Absolute or caller-supplied filename used to resolve injected imports. */
   filename: string;

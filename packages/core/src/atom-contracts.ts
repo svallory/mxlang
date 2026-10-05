@@ -18,6 +18,7 @@
  * with `ref`.
  */
 
+import { attrLabel } from "./attr-label.ts";
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import type {
   ContractDeclaration,
@@ -306,24 +307,68 @@ export interface AtomCandidate {
   kind?: string;
 }
 
-/** What `compileSource` records of a unit for tooling: its custom tag calls and `ctx.declare`d names. */
-export interface AtomFacts {
-  facts: ContractFact[];
-  derived: DerivedDeclaration[];
-}
+declare const atomFactsBrand: unique symbol;
 
 /**
- * The names of `kinds` visible from a call: its authored ancestors innermost
+ * What `compileSource` records of a unit for tooling: an opaque value, the
+ * input of `atomCandidates`. It holds names, kinds, spans and scope data only,
+ * never syntax nodes or contract hooks, so keeping a result does not keep its
+ * AST. Build it with `compileSource`; its shape is not public.
+ */
+export interface AtomFacts {
+  readonly [atomFactsBrand]: true;
+}
+
+/** What a contract says about the names an atom may take. */
+interface AtomContract {
+  values?: readonly string[];
+  pattern?: string;
+  ref?: readonly string[];
+}
+
+/** One place an atom is written (or can be) in a call: where the cursor counts, and what the contract allows. */
+interface AtomSlot {
+  /** Spans that must all hold the cursor: the attribute tags around the attribute. */
+  within: SourceSpan[];
+  /** Where the attribute writes its value. */
+  ranges: SourceSpan[];
+  /** `null` when the attribute is not an atom. */
+  contract: AtomContract | null;
+}
+
+interface CallFacts {
+  span?: SourceSpan;
+  /** Scope ids of the authored ancestors, outermost first, ending with the call's own node. */
+  chain: number[];
+  slots: AtomSlot[];
+}
+
+interface FactsData extends AtomFacts {
+  calls: CallFacts[];
+  declarations: Array<{
+    scope: number;
+    kind: string;
+    name: string;
+    span: SourceSpan;
+  }>;
+}
+
+/** The id of the file scope in `FactsData`. */
+const FILE_SCOPE_ID = 0;
+
+/**
+ * The names of `kinds` visible from a call: its scope owners innermost
  * first, the file scope last, each name once (the first kind that declared it).
  */
-export function visibleNames(
-  scopes: Scopes,
-  chain: readonly Node[],
+export function visibleNames<K>(
+  scopes: Map<K, Map<string, ReadonlyArray<{ kind: string }>>>,
+  chain: readonly K[],
+  fileScope: K,
   kinds: readonly string[],
 ): AtomCandidate[] {
   const seen = new Set<string>();
   const found: AtomCandidate[] = [];
-  for (const scope of [...chain].reverse().concat(FILE_SCOPE)) {
+  for (const scope of [...chain].reverse().concat(fileScope)) {
     const names = scopes.get(scope);
     if (!names) continue;
     for (const [name, decls] of names) {
@@ -334,6 +379,52 @@ export function visibleNames(
     }
   }
   return found;
+}
+
+/**
+ * The names a contract accepts, which diagnostics and completion share so a
+ * list never offers a name the checker rejects: `values` and `ref` together
+ * intersect, `pattern` filters, and a contract with neither `values` nor `ref`
+ * (a bare atom, or `pattern` alone) has no list. `visible` is what `ref` can
+ * see at the call.
+ */
+function acceptedNames(
+  contract: AtomContract,
+  visible: readonly AtomCandidate[],
+): AtomCandidate[] {
+  const { values, pattern, ref } = contract;
+  let pool: readonly AtomCandidate[];
+  if (ref !== undefined) {
+    pool = values
+      ? visible.filter((candidate) => values.includes(candidate.name))
+      : visible;
+  } else if (values) {
+    pool = values.map((name) => ({ name }));
+  } else {
+    return [];
+  }
+  if (pattern === undefined) return [...pool];
+  const matcher = new RegExp(pattern);
+  return pool.filter((candidate) => matcher.test(candidate.name));
+}
+
+function contractOf(declaration: CustomTagAttribute): AtomContract {
+  const { values, pattern, ref } = declaration;
+  return {
+    values,
+    pattern,
+    ref: ref === undefined ? undefined : asList(ref),
+  };
+}
+
+/** The text of an attribute written as a plain string (not an atom, not an expression), else undefined. */
+export function plainStringOf(attr: Attr): string | undefined {
+  if (attr.kind === "static") return attr.atom ? undefined : attr.value;
+  if (attr.kind !== "dynamic") return undefined;
+  const node = attr.value.node;
+  return node?.type === "StringLiteral" && !node.extra?.mxAtom
+    ? String(node.value)
+    : undefined;
 }
 
 function checkAtom(
@@ -367,10 +458,11 @@ function checkAtom(
   }
   if (ref === undefined) return;
   const kinds = asList(ref);
-  const candidates = visibleNames(scopes, fact.chain, kinds).map(
+  const visible = visibleNames(scopes, fact.chain, FILE_SCOPE, kinds);
+  if (visible.some((candidate) => candidate.name === atom.name)) return;
+  const candidates = acceptedNames(contractOf(declaration), visible).map(
     (candidate) => candidate.name,
   );
-  if (candidates.includes(atom.name)) return;
   const near = nearestName(atom.name, candidates);
   const kindLabel = kinds.join(" or ");
   const listed = candidates.length
@@ -382,6 +474,37 @@ function checkAtom(
     atom.span,
     file,
   );
+}
+
+/**
+ * A plain string where a `ref` atom is expected: the type error, raised once
+ * the file's declarations exist so it can list the names the author may mean.
+ */
+function checkStringForRef(
+  ctx: Ctx,
+  fact: ContractFact,
+  scopes: Scopes,
+  label: string,
+  attr: Exclude<Attr, { kind: "spread" }>,
+  declaration: CustomTagAttribute,
+  text: string,
+): void {
+  const visible = visibleNames(
+    scopes,
+    fact.chain,
+    FILE_SCOPE,
+    asList(declaration.ref),
+  );
+  const names = acceptedNames(contractOf(declaration), visible).map(
+    (candidate) => candidate.name,
+  );
+  const listed = names.length ? `one of ${atomList(names)}` : "none declared";
+  const message = `${label}: attribute ${attrLabel(attr)} must be atom, got string (${listed}); write it as \`:${text}\``;
+  const file = fact.call.loc.file;
+  const span = valueRanges(attr)[0];
+  throw span
+    ? errorAt(ctx, message, span, file)
+    : new TranslateError(message, attr.loc.line, attr.loc.column, file);
 }
 
 /** Queues a check for every atom of every contract attribute in `attrs`. */
@@ -406,6 +529,14 @@ function queueAttrs(
       declaration.pattern === undefined &&
       declaration.ref === undefined
     ) {
+      continue;
+    }
+    const text =
+      declaration.ref === undefined ? undefined : plainStringOf(attr);
+    if (text !== undefined) {
+      refs.push(() =>
+        checkStringForRef(ctx, fact, scopes, label, attr, declaration, text),
+      );
       continue;
     }
     for (const atom of atomsOf(attr)) {
@@ -455,6 +586,8 @@ function queueAttributeTags(
 
 /** Declare every name of the file, then check every atom reference against them. */
 export function checkAtomContracts(ctx: Ctx): void {
+  // From here the facts are complete: every call of the unit has been seen.
+  ctx.atomFacts = atomFactsOf(ctx);
   const facts = ctx.contractFacts ? [...ctx.contractFacts.values()] : [];
   const derived = ctx.contractDerived ?? [];
   if (facts.length === 0 && derived.length === 0) return;
@@ -484,12 +617,49 @@ export function checkAtomContracts(ctx: Ctx): void {
   for (const check of refs) check();
 }
 
-/** The facts of a unit, for tooling (`CompileResult.atomFacts`). */
+/** The facts of a file with no custom tag call. */
+export function emptyAtomFacts(): AtomFacts {
+  return { calls: [], declarations: [] } as unknown as AtomFacts;
+}
+
+/**
+ * The compact facts of a unit, for tooling (`CompileResult.atomFacts`): the
+ * declarations `declare(null, ...)` resolves, scope owners as ids, and for each
+ * call where its atoms sit. No node, `CustomTag` or hook is kept.
+ */
 export function atomFactsOf(ctx: Ctx): AtomFacts {
-  return {
-    facts: ctx.contractFacts ? [...ctx.contractFacts.values()] : [],
-    derived: ctx.contractDerived ? [...ctx.contractDerived] : [],
+  const facts = ctx.contractFacts ? [...ctx.contractFacts.values()] : [];
+  const scopes = declare(null, facts, ctx.contractDerived ?? []);
+  const ids = new Map<object, number>([[FILE_SCOPE, FILE_SCOPE_ID]]);
+  const idOf = (owner: object): number => {
+    let id = ids.get(owner);
+    if (id === undefined) {
+      id = ids.size;
+      ids.set(owner, id);
+    }
+    return id;
   };
+  const calls = facts.map(({ definition, call, chain }) => {
+    const slots: AtomSlot[] = [];
+    collectSlots(
+      definition.attributes,
+      call.attrs,
+      definition.attributeTags,
+      call.attributeTags,
+      [],
+      slots,
+    );
+    return { span: call.span, chain: chain.map(idOf), slots };
+  });
+  const declarations: FactsData["declarations"] = [];
+  for (const [owner, names] of scopes) {
+    for (const decls of names.values()) {
+      for (const { kind, name, span } of decls) {
+        declarations.push({ scope: idOf(owner), kind, name, span });
+      }
+    }
+  }
+  return { calls, declarations } as unknown as AtomFacts;
 }
 
 function covers(span: SourceSpan | undefined, offset: number): boolean {
@@ -498,90 +668,104 @@ function covers(span: SourceSpan | undefined, offset: number): boolean {
   );
 }
 
-/** Whether `offset` is where `attr` writes its value, or its sugar name. */
-function inValue(attr: Attr, offset: number): boolean {
-  if (attr.kind === "spread" || attr.kind === "boolean") return false;
-  if (attr.kind === "static" && attr.atom)
-    return covers(attr.atom.span, offset);
-  if (attr.kind === "static") return covers(attr.valueSpan, offset);
-  return (
-    covers(attr.value.span, offset) ||
-    (attr.value.atoms ?? []).some((atom) => covers(atom.span, offset))
-  );
+/** Where `attr` writes its value: a whole-value atom's span, the string, or the expression and its atoms. */
+function valueRanges(attr: Attr): SourceSpan[] {
+  if (attr.kind === "spread" || attr.kind === "boolean") return [];
+  if (attr.kind === "static") {
+    const span = attr.atom ? attr.atom.span : attr.valueSpan;
+    return span ? [span] : [];
+  }
+  return [
+    ...(attr.value.span ? [attr.value.span] : []),
+    ...(attr.value.atoms ?? []).map((atom) => atom.span),
+  ];
 }
 
-/** The contract of the attribute under `offset`, looking through attribute tags at any depth. */
-function declarationAt(
+/**
+ * Every attribute that can hold the cursor, attributes of a level before its
+ * attribute tags, at any depth: the first slot to match a position is the
+ * attribute under it.
+ */
+function collectSlots(
   attributes: CustomTag["attributes"],
   attrs: readonly Attr[],
   declared: CustomTag["attributeTags"],
   tags: readonly AttributeTag[],
-  offset: number,
-): CustomTagAttribute | undefined {
+  within: SourceSpan[],
+  slots: AtomSlot[],
+): void {
   for (const attr of attrs) {
     if (attr.kind === "spread" || !attributes) continue;
-    if (!Object.hasOwn(attributes, attr.name) || !inValue(attr, offset)) {
-      continue;
-    }
-    return attributes[attr.name];
+    if (!Object.hasOwn(attributes, attr.name)) continue;
+    const ranges = valueRanges(attr);
+    if (ranges.length === 0) continue;
+    const declaration = attributes[attr.name];
+    slots.push({
+      within,
+      ranges,
+      contract: declaration?.type === "atom" ? contractOf(declaration) : null,
+    });
   }
-  if (!declared) return undefined;
+  if (!declared) return;
   for (const tag of tags) {
     const declaration = Object.hasOwn(declared, tag.name)
       ? declared[tag.name]
       : undefined;
-    if (!declaration || !covers(tag.span, offset)) continue;
-    const found = declarationAt(
+    if (!declaration || !tag.span) continue;
+    collectSlots(
       declaration.attributes,
       tag.attrs,
       declaration.attributeTags,
       tag.attributeTags,
-      offset,
+      [...within, tag.span],
+      slots,
     );
-    if (found) return found;
   }
-  return undefined;
 }
 
 /**
  * The atoms that can be written at `offset` (UTF-16, into the file the facts
- * came from): a contract's `values`, or the names of its `ref` kinds visible
- * from the call, innermost scope first and the file last, each once, with the
- * kind as `kind`. Empty with no contract, a bare `type: "atom"`, or when
- * `offset` is not in an attribute value. Never throws: a clash or a scope with
- * no ancestor drops that declaration instead of reporting it, so it runs on the
- * facts of a unit whose compile failed (an unknown atom, a clash) as well.
+ * came from): what the contract accepts (`values`, or the names of its `ref`
+ * kinds visible from the call, innermost scope first and the file last, each
+ * once, with the kind as `kind`; `values` and `ref` together intersect, and
+ * `pattern` filters), so a listed name is one the checker accepts. Empty with
+ * no contract, a bare `type: "atom"`, `pattern` alone, or when `offset` is not
+ * in an attribute value. Never throws.
  */
 export function atomCandidates(
-  facts: readonly ContractFact[],
-  derived: readonly DerivedDeclaration[],
+  atomFacts: AtomFacts,
   offset: number,
 ): AtomCandidate[] {
-  let target: ContractFact | undefined;
-  for (const fact of facts) {
+  const { calls, declarations } = atomFacts as FactsData;
+  let target: CallFacts | undefined;
+  for (const call of calls) {
     if (
-      covers(fact.call.span, offset) &&
+      covers(call.span, offset) &&
       (!target ||
-        (fact.call.span?.sourceStart ?? 0) >=
-          (target.call.span?.sourceStart ?? 0))
+        (call.span?.sourceStart ?? 0) >= (target.span?.sourceStart ?? 0))
     ) {
-      target = fact;
+      target = call;
     }
   }
-  if (!target) return [];
-  const declaration = declarationAt(
-    target.definition.attributes,
-    target.call.attrs,
-    target.definition.attributeTags,
-    target.call.attributeTags,
-    offset,
+  const slot = target?.slots.find(
+    (candidate) =>
+      candidate.within.every((span) => covers(span, offset)) &&
+      candidate.ranges.some((span) => covers(span, offset)),
   );
-  if (declaration?.type !== "atom") return [];
-  if (declaration.values) return declaration.values.map((name) => ({ name }));
-  if (declaration.ref === undefined) return [];
-  return visibleNames(
-    declare(null, facts, derived),
-    target.chain,
-    asList(declaration.ref),
+  if (!target || !slot?.contract) return [];
+  const contract = slot.contract;
+  if (contract.ref === undefined) return acceptedNames(contract, []);
+  const scopes = new Map<number, Map<string, Array<{ kind: string }>>>();
+  for (const { scope, name, kind } of declarations) {
+    const names =
+      scopes.get(scope) ?? new Map<string, Array<{ kind: string }>>();
+    scopes.set(scope, names);
+    const same = names.get(name) ?? [];
+    names.set(name, same);
+    same.push({ kind });
+  }
+  return acceptedNames(
+    contract,
+    visibleNames(scopes, target.chain, FILE_SCOPE_ID, contract.ref),
   );
 }

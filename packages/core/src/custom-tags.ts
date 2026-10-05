@@ -7,7 +7,11 @@
  * custom tag existed.
  */
 
-import { atomExpectation, positionAt } from "./atom-contracts.ts";
+import {
+  atomExpectation,
+  plainStringOf,
+  positionAt,
+} from "./atom-contracts.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
@@ -972,6 +976,11 @@ function checkAtomAttr(
   // An atom, the sugar-derived `name` included, satisfies an atom contract.
   if (attr.kind === "static" && attr.atom) return;
   const shape = attrShape(attr);
+  // A plain string against a `ref` atom is reported by the file-level check,
+  // once the declarations exist and the error can list the names.
+  if (declaration.ref !== undefined && plainStringOf(attr) !== undefined) {
+    return;
+  }
   if (shape && shape !== "atom" && shape !== "array") {
     failForOwner(
       owner,

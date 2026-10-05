@@ -17,7 +17,7 @@
 
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { type AtomFacts, atomFactsOf } from "./atom-contracts.ts";
+import { type AtomFacts, emptyAtomFacts } from "./atom-contracts.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import {
@@ -174,7 +174,7 @@ let current: {
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   targets: TargetLookup;
   dependencies: string[];
-  atomFacts: AtomFacts;
+  atomFacts: AtomFacts | undefined;
 } | null = null;
 
 /**
@@ -247,7 +247,7 @@ export function createTranslator(host: TranslatorOptions): Translator {
             // the edge matter, and never re-check it when the callee changes
             // again.
             state.dependencies = [...(ctx.dependencies ?? [])];
-            state.atomFacts = atomFactsOf(ctx);
+            state.atomFacts = ctx.atomFacts;
           }
           state.code = state.postEmit ? state.postEmit(code) : code;
           path.node.body = [];
@@ -366,7 +366,7 @@ export function compileSource(
     resolveImport: host.resolveImport,
     targets: host.targets,
     dependencies: [] as string[],
-    atomFacts: { facts: [], derived: [] } as AtomFacts,
+    atomFacts: undefined,
     // The lookup is keyed on the translator object, so asking for it here gets
     // exactly the taglibs this host registers plus Marko's own element
     // taglibs — and the tag-discovery directories beside this particular file.
@@ -408,7 +408,7 @@ export function compileSource(
   return {
     code: state.code,
     dependencies: state.dependencies,
-    atomFacts: state.atomFacts,
+    atomFacts: state.atomFacts ?? emptyAtomFacts(),
     map: {
       version: 3,
       file: filename,
