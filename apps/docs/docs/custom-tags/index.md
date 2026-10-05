@@ -24,7 +24,7 @@ Raw parser hooks are a later layer, deferred until after MX 1.x. They are not pa
 
 Create `tags/icon.mx`:
 
-```marko
+```mx
 <svg width=input.size ?? 24 class=input.class>
   <title>${input.name}</title>
 </svg>
@@ -32,7 +32,7 @@ Create `tags/icon.mx`:
 
 Then use it from a template below the same package root:
 
-```marko
+```mx
 <p><icon name="check" size=16 class="row"/></p>
 ```
 

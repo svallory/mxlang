@@ -353,7 +353,7 @@ On this host a tag file compiles to a **standalone component module**
 (`tags/badge.mx` → `tags/badge.ts`), not a template: an Angular
 component is a class with a decorator, so there is no template-only form.
 
-```marko
+```mx
 // tags/badge.mx
 export interface Input { kind: "ok" | "warn" | "error"; label?: string }
 <span class="badge" data-kind=input.kind>
@@ -444,7 +444,7 @@ A page that calls a discovered tag emits its element, and MX warns once per
 file with the exact import and `imports:` entry the page's own TypeScript
 needs — in step 1 MX does not edit that file:
 
-```marko
+```mx
 <div><badge kind="ok">All systems nominal</badge></div>
 ```
 

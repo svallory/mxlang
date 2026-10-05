@@ -100,7 +100,7 @@ name. `onClick=f` → `onClick={f}`; `onDblClick=f` and `on-dblclick=f` both
 
 ## Hooks and boundaries
 
-```marko
+```mx
 import { useState } from "hono/jsx";
 
 <const/state=useState(0)/>

@@ -128,7 +128,7 @@ const markdown: CustomTag = {
 };
 ```
 
-```marko
+```mx
 <markdown># title
 1 < 2 && 3 > 2</markdown>
 ```

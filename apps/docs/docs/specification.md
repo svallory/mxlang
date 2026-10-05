@@ -384,7 +384,7 @@ Its children are the lines indented under it, and the block ends at the first
 line back at column 0 that is not a tag line — a column-0 tag line is a
 *sibling* inside the same block, not a terminator:
 
-```marko
+```mx
 ul.store
   li.row
     -- A text line.
@@ -396,7 +396,7 @@ Concise and HTML mode coexist in one file; a region that needs an explicit
 closing tag does not end the region before it, and a concise block may sit
 before or after one:
 
-```marko
+```mx
 <p>rendered first</p>
 
 ul.store
@@ -412,8 +412,11 @@ was not expected`), and a line in a concise region cannot start with a single
 hyphen — see **Text lines (`--`)** below for the `--` rule, and **A bare
 `${expr}` line** for that line's own trap.
 
-Inherited from Marko under the subset rule: no MX decision fixes this and **no
-MX fixture exercises it**. Every rule on this page was read off
+Inherited from Marko under the subset rule: no MX decision fixes this, and no
+oracle or conformance fixture exercises it. The one MX source that does is the
+landing page's example (`apps/docs/example/home-example.mx`), which holds a
+concise block that every docs build compiles on the html target and renders.
+Every rule in this section was read off
 htmljs-parser's `CONCISE_HTML_CONTENT`/`HTML_CONTENT` states by compiling the
 snippets above and their variants on the html target; the behaviour is the
 parser's, and no host changes it.
@@ -424,7 +427,9 @@ parser's, and no host changes it.
 ### Text lines (`--`)
 
 Concise mode's delimited text block. Inherited from Marko under the subset rule;
-no MX decision fixes it and **no MX fixture exercises it**. The parser's own
+no MX decision fixes it, and no oracle or conformance fixture exercises it (the
+landing page's example does use `--` lines, and is compiled and rendered on
+every docs build). The parser's own
 constraint, verbatim from htmljs-parser's `CONCISE_HTML_CONTENT`:
 
 > `A line in concise mode cannot start with a single hyphen. Use "--" instead.`

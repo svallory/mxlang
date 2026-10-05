@@ -98,7 +98,7 @@ React's own — see the `onChange` gotcha in
 
 ## Hooks and boundaries
 
-```marko
+```mx
 import { useState } from "react";
 
 <const/state=useState(0)/>

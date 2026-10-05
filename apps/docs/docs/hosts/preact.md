@@ -34,7 +34,7 @@ export default defineConfig({ plugins: [mx(), preact()] });
 
 ## What it looks like
 
-```marko
+```mx
 import { useState } from "preact/hooks";
 
 export interface Input { label: string }

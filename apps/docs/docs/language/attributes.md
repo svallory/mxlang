@@ -30,7 +30,7 @@ bind the same event. Each host then writes the handler in its own form — Solid
 gets `onDblClick`, Angular gets `(dblclick)` — from the one resolved name, so
 `onDblClick` and `on-dblclick` produce the same binding everywhere.
 
-```marko
+```mx
 <button onClick=() => count++>increment</button>
 <video on-loadedmetadata=start/>
 <my-widget on-value-changed=sync/>
@@ -42,7 +42,7 @@ A name that is not event-shaped is an ordinary attribute: `onclick`, `once` and
 **The value has to be an expression.** Only a handler expression makes an event
 handler, so these two are ordinary attributes and render exactly as written:
 
-```marko
+```mx
 <div onClick>x</div>
 <div onClick="alert(1)">x</div>
 ```
@@ -56,7 +56,7 @@ for you out of a function.
 An `on*` attribute on a **component** — or a `<define>` call, a custom tag, a
 host tag like `<try>`, or an attribute tag — is an ordinary prop, not an event:
 
-```marko
+```mx
 <Row onSelect=pick/>
 ```
 
@@ -71,7 +71,7 @@ something else is exactly the bug this rule prevents. React's `onDoubleClick`
 lowercases to `doubleclick`, which is **not** a DOM event and which no element
 ever fires. MX emits what you wrote and warns:
 
-```marko
+```mx
 <button onDoubleClick=handle>x</button>
 ```
 

@@ -15,19 +15,19 @@ Every example below is copied from a passing core fixture or template test.
 
 Read a call's attributes as `input.<name>`:
 
-```marko
+```mx
 <div>${input.title}${input.count}</div>
 ```
 
 The passing call-site case is:
 
-```marko
+```mx
 <box title="hello" count=2/>
 ```
 
 `input` is the tag module's own parameter, so an omitted attribute is `undefined` and ordinary fallbacks work:
 
-```marko
+```mx
 <div>${input.size ?? 24}</div>
 ```
 
@@ -37,13 +37,13 @@ Because `input` is a real parameter rather than a name resolved at compile time,
 
 Place the caller's body with a dynamic tag over `input.content`:
 
-```marko
+```mx
 <section><${input.content}/></section>
 ```
 
 For this call:
 
-```marko
+```mx
 <box><em>body</em></box>
 ```
 
@@ -55,13 +55,13 @@ If a caller supplies body content and the template never reads `input.content`, 
 
 Place `<@name>` content through `input.<name>`:
 
-```marko
+```mx
 <ul><${input.item}/></ul>
 ```
 
 Repeated attribute tags remain repeated and preserve their order:
 
-```marko
+```mx
 <list><@item>one</@item><@item>two</@item></list>
 ```
 
@@ -71,7 +71,7 @@ An attribute tag the template never reads produces a warning naming it. `<@conte
 
 Tag params remain scoped to the caller's body block:
 
-```marko
+```mx
 <box|row|>${row}</box>
 ```
 
@@ -81,7 +81,7 @@ When the template places `<${input.content}/>`, that block still owns `row`; the
 
 A template's `export interface Input` is the tag's **public type**. It reaches the call site through the injected import, so passing a wrong attribute type is a `tsc` error at the caller's own line and column:
 
-```marko
+```mx
 export interface Input { name: string; size?: number }
 ```
 
@@ -91,13 +91,13 @@ Where a template reads `input.content`, the host augments its render signature s
 
 A template can hand a value back to its caller with `<return>`, and the caller binds it with `/var`:
 
-```marko
+```mx
 export interface Input { start: number }
 <span class="count">${input.start}</span>
 <return value=input.start + 1/>
 ```
 
-```marko
+```mx
 <counter/next start=41/>
 <p>${next}</p>
 ```
@@ -149,7 +149,7 @@ Every host delivers the value the same way to an author, but Solid's mechanism d
 
 That binding is **not reactive**. It holds the value from the single call that produced it and does not update afterwards, which matches `/var`'s meaning on every other host. If you want a value that tracks, return an accessor and call it:
 
-```marko
+```mx
 <return value=() => count()/>
 ```
 
@@ -157,7 +157,7 @@ That binding is **not reactive**. It holds the value from the single call that p
 
 A template's `import` and `static` statements stay in the tag's own module. They are the module system's, not the caller's, which means a `static` block runs **once per process**, at import time — not once per calling module.
 
-```marko
+```mx
 import helper from "./helper.ts"
 <div>${helper()}</div>
 ```

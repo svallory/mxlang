@@ -16,7 +16,7 @@ What happens to a tag name nobody declared:
 
 A vocabulary often wants the middle ground: "any child name is fine here, and every one of them is an *attribute*". Writing
 
-```marko
+```mx
 <attributes>
   <title type="string" required/>
   <body type="string"/>
