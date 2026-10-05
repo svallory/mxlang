@@ -66,6 +66,38 @@ describe("Manifest", () => {
     );
   });
 
+  it("orders preactmx before mx in language contributions", () => {
+    // Same reasoning as solidmx: .preact.mx must not be mistakenly matched as .mx
+    const mxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "mx",
+    );
+    const preactMxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "preactmx",
+    );
+    expect(preactMxIndex).toBeGreaterThanOrEqual(0);
+    expect(preactMxIndex).toBeLessThan(mxIndex);
+  });
+
+  it("gives preactmx a TSX grammar, activation and the language server", () => {
+    const grammar = pkg.contributes.grammars.find(
+      (g: { language: string }) => g.language === "preactmx",
+    );
+    const stub = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", grammar.path), "utf-8"),
+    );
+    expect(stub.scopeName).toBe("source.preactmx");
+    expect(stub.patterns).toEqual([{ include: "source.tsx" }]);
+    expect(pkg.activationEvents).toContain("onLanguage:preactmx");
+    const source = fs.readFileSync(
+      path.join(__dirname, "extension.ts"),
+      "utf-8",
+    );
+    const selector = source.slice(source.indexOf("documentSelector"));
+    expect(selector.slice(0, selector.indexOf("]"))).toContain(
+      'language: "preactmx"',
+    );
+  });
+
   it("orders ngmx before mx in language contributions", () => {
     // Same reasoning as solidmx: .ng.mx must not be mistakenly matched as .mx
     const mxIndex = pkg.contributes.languages.findIndex(
@@ -101,6 +133,7 @@ describe("Manifest", () => {
     expect(tsPlugin.languages).toContain("mx");
     expect(tsPlugin.languages).toContain("solidmx");
     expect(tsPlugin.languages).toContain("reactmx");
+    expect(tsPlugin.languages).toContain("preactmx");
     expect(tsPlugin.languages).toContain("ngmx");
     expect(tsPlugin.languages).toContain("astromx");
   });

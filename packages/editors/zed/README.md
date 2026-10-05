@@ -25,11 +25,13 @@ Ships four languages:
   compiling a second, identical grammar.
 - `ReactMX` (`.react.mx`), on the same `solid` grammar for the same reason
   (`languages/reactmx/config.toml`).
+- `PreactMX` (`.preact.mx`), likewise on the `solid` grammar
+  (`languages/preactmx/config.toml`).
 - `AstroMX` (`.astro.mx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
 
 Also registers a language server: `src/lib.rs` (a minimal Rust extension,
 `Cargo.toml`) implements `zed::Extension::language_server_command` for
-`@mxlang/language-server` on `MX`, `Solid` and `ReactMX` — see "Language server"
+`@mxlang/language-server` on `MX`, `Solid`, `ReactMX` and `PreactMX` — see "Language server"
 below.
 
 ## Toolchain prerequisite: Rust + wasm32-wasip1
@@ -160,6 +162,8 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
 - `ReactMX` (`.react.mx`): the same as `Solid` above (grammar, queries and
   injected `mx_element` highlighting), with React host diagnostics from
   `@mxlang/language-server`.
+- `PreactMX` (`.preact.mx`): the same as `ReactMX`, with Preact host
+  diagnostics.
 
 `.astro.mx` follows the same rule as `.solid.mx` and `.ng.mx` (decision 134):
 it also matches `MX`'s `.mx` suffix, and Zed's longest-suffix match picks

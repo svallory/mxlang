@@ -36,6 +36,7 @@
     "onLanguage:mx",
     "onLanguage:solidmx",
     "onLanguage:reactmx",
+    "onLanguage:preactmx",
     "onLanguage:astromx",
     "onLanguage:ngmx"
   ],
@@ -63,6 +64,17 @@
         ],
         "extensions": [
           ".react.mx"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "preactmx",
+        "aliases": [
+          "PreactMX",
+          "preactmx"
+        ],
+        "extensions": [
+          ".preact.mx"
         ],
         "configuration": "./language-configuration.json"
       },
@@ -122,6 +134,11 @@
         "path": "./syntaxes/reactmx.tmLanguage.json"
       },
       {
+        "language": "preactmx",
+        "scopeName": "source.preactmx",
+        "path": "./syntaxes/preactmx.tmLanguage.json"
+      },
+      {
         "language": "ngmx",
         "scopeName": "source.ngmx",
         "path": "./syntaxes/ngmx.tmLanguage.json"
@@ -135,6 +152,7 @@
           "mx",
           "solidmx",
           "reactmx",
+          "preactmx",
           "ngmx",
           "astromx"
         ]

@@ -2,6 +2,10 @@
 
 ## 0.0.0 (unreleased)
 
+### Added: `.preact.mx` (PreactMX, decision 154)
+
+A new `preactmx` language (alias `PreactMX`) for `.preact.mx`, TSX with MX regions on Preact, contributed before `mx` so the suffix is not read as a whole-file `.mx`. Its grammar is a `source.preactmx` stub over `source.tsx`; it activates the extension, is in `typescriptServerPlugins.languages` and in the language server client's document selector. The Zed extension gains the `PreactMX` language (`languages/preactmx`, on the shared `solid` grammar, built by `scripts/vendor.sh` from `base/preactmx` and `overlay/preactmx`) and lists it in `[language_servers.mxlang]`.
+
 ### Added: `.react.mx` (ReactMX, decision 154)
 
 A new `reactmx` language (alias `ReactMX`) for `.react.mx`, TSX with MX regions on React, contributed before `mx` so the suffix is not read as a whole-file `.mx`. Its grammar is a `source.reactmx` stub over `source.tsx`; it activates the extension, is in `typescriptServerPlugins.languages` and in the language server client's document selector. The Zed extension gains the `ReactMX` language (`languages/reactmx`, on the shared `solid` grammar, built by `scripts/vendor.sh` from `base/reactmx` and `overlay/reactmx`) and lists it in `[language_servers.mxlang]`.
