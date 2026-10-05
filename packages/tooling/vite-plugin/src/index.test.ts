@@ -1426,12 +1426,13 @@ export default () => <div />;
         `${caller}${fresh.MX_SUFFIX}`,
       );
 
-      // The html string emitter would produce `__mxOut += ...` concatenation
-      // and an `escape` import; the Solid host emits JSX text and a `<p>`
-      // element with no such helper. Asserting the reserved name keeps the
-      // negative meaningful — a bare `out +=` would now pass vacuously.
+      // The html string emitter would produce `__mxOut.write(...)` sink
+      // writes (decision 155) and a runtime import; the Solid host emits JSX
+      // text and a `<p>` element with no such helper. Asserting the reserved
+      // name keeps the negative meaningful — a bare `out +=` would pass
+      // vacuously.
       expect(result?.code).toContain('<p class="x">');
-      expect(result?.code).not.toContain("__mxOut +=");
+      expect(result?.code).not.toContain("__mxOut.write(");
       expect(result?.code).not.toContain('from "@mxlang/html"');
       vi.resetModules();
     });
