@@ -434,7 +434,7 @@ export function exampleSection(source: string, markers: Marker[]): string {
     `</style>`,
     `<section class="mx-home-example" aria-labelledby="mx-home-example-title">`,
     `<h2 id="mx-home-example-title">Every construct MX ships, in one file</h2>`,
-    `<p class="mx-home-hint">Hover or focus a marked region to light it up; click, or press Enter, to pin its note. This exact file compiles on the <a href="/hosts/html/">html target</a> on every docs build.</p>`,
+    `<p class="mx-home-hint">Hover or focus a marked region to light it up; click, or press Enter, to pin its note. This exact file compiles on the <a href="/targets/html/">html target</a> on every docs build.</p>`,
     `<div class="mx-home-grid">`,
     `<div class="mx-home-code" tabindex="0" role="group" aria-label="MX source example">`,
     code,

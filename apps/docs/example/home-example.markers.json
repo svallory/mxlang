@@ -340,7 +340,7 @@
     "id": "structured-style",
     "label": "structured style",
     "note": "`style` takes a structured value, and its keys are written as CSS properties: `padding-left`, not `paddingLeft`.",
-    "href": "/hosts/html/#html-target-structured-class-and-style",
+    "href": "/targets/html/#html-target-structured-class-and-style",
     "match": "style={ \"padding-left\": `${i}rem` }",
     "ranges": [
       {

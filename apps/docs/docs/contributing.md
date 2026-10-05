@@ -19,7 +19,7 @@ The repository is a Bun workspace with two workspace globs, `packages/*` and `ex
 | `packages/editors/zed` | The Zed editor extension (three languages plus the language server registration). |
 | `packages/oracle` | The parity-checking harness described below. |
 
-Each package publishes its own README with install instructions, API surface, and implementation notes specific to that package — the pages under [Hosts](/hosts/html/) and [Editors](/editors/zed/) summarize the parts a consumer needs; the READMEs go deeper for a contributor.
+Each package publishes its own README with install instructions, API surface, and implementation notes specific to that package — the pages under [Hosts](/hosts/astro/) and [Editors](/editors/zed/) summarize the parts a consumer needs; the READMEs go deeper for a contributor.
 
 ## Verify and its rules
 

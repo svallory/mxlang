@@ -20,7 +20,7 @@ is a positioned `target-host-mismatch` error (decisions 129/132;
 
 The other hostless target, `data`, is checked by `mx-tsc` but not wired into the
 editor tools or Vite yet: explicit `mx.target: "data"` errors at its value there
-and names `TODO data-target-tooling-dispatch`. See [the data target](/hosts/data/)
+and names `TODO data-target-tooling-dispatch`. See [the data target](/targets/data/)
 (decision 131 addenda).
 
 ## Attribute-tag values
