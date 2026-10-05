@@ -82,7 +82,7 @@ beforeAll(() => {
   makeWritable(stock);
   reversePatch(
     stock,
-    readFileSync(join(repo, "patches/htmljs-parser@5.15.0.patch"), "utf8"),
+    readFileSync(join(repo, "patches/htmljs-parser@5.18.0.patch"), "utf8"),
   );
   hook = join(work, "hook.cjs");
   writeFileSync(

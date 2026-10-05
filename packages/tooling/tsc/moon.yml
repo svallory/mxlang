@@ -27,5 +27,5 @@ tasks:
       - "/packages/tooling/typescript-plugin/dist/**/*"
       - "/packages/tooling/tsc/dist/**/*"
       - "/packages/core/dist/**/*"
-      - "/patches/htmljs-parser@5.15.0.patch"
+      - "/patches/htmljs-parser@5.18.0.patch"
       - "/vitest.config.ts"
