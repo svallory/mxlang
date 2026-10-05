@@ -39,6 +39,7 @@ import type { Ir } from "./ir.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
 import { hintParseError } from "./parse-error-hints.ts";
+import { stockParserError } from "./stock-parser.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
 const require = createRequire(import.meta.url);
@@ -378,7 +379,8 @@ export function compileSource(
     }
     annotateCloseTagOpener(error, source);
     hintParseError(error, source, policy);
-    throw error;
+    // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
+    throw stockParserError(error, source) ?? error;
   } finally {
     current = previous;
   }

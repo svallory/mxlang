@@ -44,6 +44,7 @@ import {
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
+import { stockParserError } from "./stock-parser.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -417,6 +418,14 @@ export function parseFragment(
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).
     const positioned = error as PositionedError;
+    // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
+    // The fragment's own coordinates are shifted like Marko's error's.
+    const stock = stockParserError(error, source);
+    if (stock) {
+      const at = { line: stock.line, column: stock.column };
+      shiftPosition(at, resolved);
+      throw new TranslateError(stock.message, at.line, at.column);
+    }
     if (positioned?.loc) {
       shiftPosition(positioned.loc.start, resolved);
       shiftPosition(positioned.loc.end, resolved);
