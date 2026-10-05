@@ -85,7 +85,7 @@ is MX's own:
   (ADR 146, divergence 4). The test asserts each snippet is present, so a
   fixture change fails instead of silently comparing less.
 
-`patches/0003-fix-grammar-start-binding-captures-at-their-first-character.patch`
+`patches/0003-fix-grammar-start-binding-captures-around-their-text.patch`
 is MX's own:
 
 - `src/scanner.c`: the tag-param pattern, type and default, the tag-var type

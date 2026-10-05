@@ -153,7 +153,8 @@ jobs:
       # everything the output depends on: the pinned SHA (read from the script,
       # so bumping the pin is the only way to invalidate by hand), the
       # tree-sitter-javascript version whose highlights query is concatenated
-      # in, and the tree-sitter-cli version that builds the wasm.
+      # in, the tree-sitter-cli version that builds the wasm, and a hash of the
+      # recipe itself so a change to build-ts-grammar.sh misses the cache.
       - name: TypeScript grammar cache key
         id: ts-grammar
         run: |
@@ -161,7 +162,8 @@ jobs:
           js="$(bun -p "require('./apps/docs/package.json').dependencies?.['tree-sitter-javascript'] ?? require('./apps/docs/package.json').devDependencies['tree-sitter-javascript']")"
           cli="$(bun -p "require('./packages/editors/tree-sitter-mx/package.json').devDependencies['tree-sitter-cli']")"
           test -n "$pin" -a -n "$js" -a -n "$cli"
-          echo "key=docs-ts-grammar-${pin}-js${js}-cli${cli}" >> "$GITHUB_OUTPUT"
+          recipe="$(sha256sum apps/docs/scripts/build-ts-grammar.sh | cut -c1-12)"
+          echo "key=docs-ts-grammar-${pin}-js${js}-cli${cli}-${recipe}" >> "$GITHUB_OUTPUT"
       # actions/cache v4.2.4
       - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
         with:

@@ -51,8 +51,10 @@ renders `<p>Hello</p>` — the newlines and indentation around `Hello` are dropp
 
 ## HTML comments
 
-`<html-comment>` renders as a literal HTML comment, with any `${}` placeholders inside it escaped by a comment-safe rule that differs from ordinary text: only `>` is escaped, while `<`, `&`, and quotes pass through raw. This matches how Marko itself escapes comment content, and it means a placeholder like a commit SHA can appear inside a comment without being mangled:
+On the html target, `<html-comment>` renders as a literal HTML comment, with any `${}` placeholders inside it escaped by a comment-safe rule that differs from ordinary text: only `>` is escaped, while `<`, `&`, and quotes pass through raw. This matches how Marko itself escapes comment content, and it means a placeholder like a commit SHA can appear inside a comment without being mangled:
 
 ```html
 <html-comment>build ${input.sha}</html-comment>
 ```
+
+Other hosts differ: Angular accepts only plain text in a comment and rejects a `${}` inside it, and the JSX hosts (Preact, React, Hono, Solid) refuse the tag with a positioned error. See [HTML comments](/specification/#the-mx-language-3-text-and-interpolation-html-comments) in the specification.
