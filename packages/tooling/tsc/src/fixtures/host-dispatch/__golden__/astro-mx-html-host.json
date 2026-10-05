@@ -17,7 +17,7 @@
               19
             ],
             "data": {
-              "verification": true,
+              "verification": {},
               "completion": true,
               "semantic": true,
               "navigation": true

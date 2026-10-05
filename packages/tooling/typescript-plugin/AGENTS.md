@@ -467,6 +467,10 @@ diagnostic; use it for anything about the generated code's types.
   plugin (both are supported together, see that package's `AGENTS.md`)
   closes it.
 
+## TS1108 in the `.astro.mx` fence (`mx-tsc --astro` and the editor)
+
+A top-level `return` in the `---` fence is valid Astro, but `convertToTSX` puts the fence at module level, so TypeScript reports TS1108. `amx-language.ts` closes it twice: `filterSemanticDiagnostics` (tsserver proxy only) and, for every surface including `mx-tsc`, `withFenceVerification`, which gives the mappings lying wholly inside the fence a `CodeInformation` whose `verification.shouldReport` rejects code 1108. Volar's `transformDiagnostic` applies `shouldReport` inside `runTsc` too, and it is the only seam there: `mx-tsc` never holds the decorated program. A 1108 outside the fence (a hoisted `static` block), in `.mx`, or in a plain `.ts` is still reported. The host-dispatch goldens show that mapping's `verification` as `{}` (a function does not serialise). Tests: `packages/tooling/tsc/src/astro-fence-return.test.ts`.
+
 ## Failed compiles produce a typed stub module, never `""`
 
 When a template fails to compile, `createVirtualCode` returns `failedModuleStub(source)` (`src/failed-module-stub.ts`), not an empty string. An empty virtual module is not a module, so each importer gets `TS2306 … is not a module`, printed by `mx-tsc` *before* the real compile error and at the wrong file. Do not revert it to `""`.
