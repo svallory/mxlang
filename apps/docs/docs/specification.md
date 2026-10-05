@@ -3051,14 +3051,14 @@ the key's value (quotes included, with `length`):
 | `host-invalid-descriptor` | a specifier under `mx.host` exports a descriptor with no `host` part | `mx.host "@acme/mx-vue" exports a target with no host. Use mx.target "@acme/mx-vue", or give the descriptor a "host" part.` |
 
 A descriptor cannot be registered when the built-in targets already own what it
-claims. The `<reason>` is the first of: `file kinds are supported for built-in
-targets only (for now)` (a loaded descriptor may not declare `host.fileKinds`;
-TODO `third-party-file-kinds`); `host "solid" belongs to the built-in targets; a
+claims. The `<reason>` is the first of: `host "solid" belongs to the built-in targets; a
 third-party target cannot join it (for now)` (a loaded target may not name a
 built-in host; TODO `third-party-join-builtin-host`); or the set rule
 `createTargetLookup` enforces (a target registered twice, a name that is a host
 name, a reserved name, a package, `mx.host` value or file-kind segment already
-taken).
+taken). A loaded descriptor may declare `host.fileKinds` (decision 148), checked
+by those same rules: a segment another host already owns is refused, and a kind
+without `compileRegion` is a whole-file kind that compiles on the host's target.
 
 `mx.host` and `mx.target` agree under rule 3 with a loaded descriptor exactly as
 with a built-in one: they agree when the target's `host.name` is the host the
