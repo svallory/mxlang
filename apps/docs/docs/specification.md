@@ -835,9 +835,10 @@ write `{[:a]: 1}`). An atom where a binding, an assignment target or a
 shorthand property must stand (`:a = 1`, `(:a) => 1`, `{:a}`) is a positioned
 parse error naming the atom. `::name` is reserved for a future `Symbol.for`
 sugar (decision 156.5): "`::a` is reserved (decision 156)…", positioned at the
-`::`, in a tag or attribute name too (`<a ::b>`, `<a::b>`; addendum 2). A published package resolving a stock htmljs-parser reports "`:a` is an
-atom (decision 156), and atoms need the MX parser" at the atom (decisions 151 §1
-and 158 §2).
+`::`, in a tag or attribute name too (`<a ::b>`, `<a::b>`; addendum 2). Published `@mxlang/core` parses atoms
+too: it bundles the parse layer with MX's template parser (decision 159). A
+caller that bypasses that bundle with a stock htmljs-parser gets "`:a` is an
+atom (decision 156), and atoms need the MX parser" at the atom.
 
 **IR and data.** An attribute whose whole value is one atom is a `static`
 attribute carrying `atom: { kind: "atom", name, span }`; in `parseData` it is
