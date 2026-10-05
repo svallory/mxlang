@@ -399,8 +399,10 @@ describe("a literal class beside a `.x` sugar renders like the tag-adjacent clas
 // Decision 146 addendum 4 (PR 4): a sugar followed by `=value` or
 // `(params) { body }` sets the default attribute (`value`).
 describe("a sugar followed by =value sets the default attribute (html)", () => {
-  const render = (source: string, input: object = {}): string =>
-    mx(source, { filename: "/fixtures/render.mx" })(input);
+  const render = (
+    source: string,
+    input: Record<string, unknown> = {},
+  ): string => mx(source, { filename: "/fixtures/render.mx" })(input);
 
   it.each([
     ["<input #x=1/>", '<input value="1" id="x">'],
