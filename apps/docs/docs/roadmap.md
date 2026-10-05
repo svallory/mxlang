@@ -13,7 +13,7 @@ The final pieces of the MX 1.0 baseline:
 - **Whole-file `.mx` components:** Expanding Solid and other reactive frameworks to support whole-file `.mx` rather than just `.solid.mx` regions. First question: why, versus "just use Marko"? Write the case for and against before any code.
 - **Custom tags:** L1 templates, L2 TypeScript sidecars, discovery, validation, IR transforms, and the `analyze`/`finalize` collecting pair are shipped. See [Custom tags](/custom-tags/).
 - **Editor tooling:** Prettier support by aliasing (with `prettier-plugin-marko`); ESLint plugin deferred. VS Code extension with TextMate grammars, LS client, and TS plugin contribution.
-- **Marketing:** Researching what made JSX, Astro and comparable cases popular. "Markup eXtended" name, site, the translator as the Pug successor, Solid as the JSX replacement; the Marko-team conversation with working hosts to show.
+- **Marketing:** Researching what made JSX, Astro and comparable cases popular. "Markup eXtended" name, site, the translator as the Pug successor, the Solid host as the JSX replacement; the Marko-team conversation with working hosts to show.
 
 ## MX 2 Investigations
 

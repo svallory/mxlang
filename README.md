@@ -81,7 +81,7 @@ The two tooling packages that load TypeScript at runtime (`@mxlang/tsc`, `@mxlan
 
 ### Solid 2 RC policy
 
-Solid targets **Solid 2 only**. `babel-preset-solid` and `vite-plugin-solid`
+The Solid host targets **Solid 2 only**. `babel-preset-solid` and `vite-plugin-solid`
 are dead ends: the live packages are `@solidjs/babel-plugin` and
 `@solidjs/vite-plugin`, and `@solidjs/compiler` (native Oxc) is the default
 backend. Solid 2 is pre-stable — `solid-js`'s npm `latest` is still 1.9.15

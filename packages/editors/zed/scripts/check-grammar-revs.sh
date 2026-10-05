@@ -8,10 +8,10 @@
 #   3. `<path>/src` at `rev` is the same tree as at HEAD, so Zed compiles the
 #      grammar this checkout tests, not an older one.
 #
-# Why: [grammars.solid] pinned e8bb6e17, a commit from before the
+# Why: [grammars.solidmx] pinned e8bb6e17, a commit from before the
 # packages/editors/ regroup (f130d8a4). At that rev `path` did not exist, and
 # a dev install failed with "clang: no such file:
-# grammars/solid/packages/editors/tree-sitter-solid/src/parser.c", while
+# grammars/solidmx/packages/editors/tree-sitter-solidmx/src/parser.c", while
 # every check here stayed green: zed-compile-check compiles HEAD, never the
 # pinned rev. A grammar commit without a `rev` bump fails check 3 the same way.
 #

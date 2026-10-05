@@ -3427,7 +3427,7 @@ deferred (decision 85).
 ## 16. Docs to fix
 
 Fixed 2026-09-28 (docs-drift-2026-09-17): the `<return>`-on-html claim, the
-"future Solid or React host" line, the Solid `<if>`-lowering description,
+"future SolidMX or React host" line, the Solid `<if>`-lowering description,
 the html tag-params-on-component-call claim, the `define-const-static-import.md`
 `.mx` import example, the `input`-shadowing strict-only omission on
 `errors.md`, this section's own §13.2 dynamic-tag row (Solid/Preact/React/Hono

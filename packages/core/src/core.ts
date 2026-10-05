@@ -49,7 +49,7 @@ const require = createRequire(import.meta.url);
  * The core parses JS in two places (an `import` statement's bindings, and an
  * expression whose identifier references a host may rewrite). Both used
  * `@mxlang/parser`'s vendored Babel while this file lived in the translator,
- * which made the string host depend on the *Solid parser* package for a
+ * which made the string host depend on the *Solid host parser* package for a
  * plain `parse` call. `@marko/compiler` is already this package's only
  * dependency and already bundles a full Babel, and these nodes belong to that
  * instance anyway — so the core asks it, and `@mxlang/core` depends on

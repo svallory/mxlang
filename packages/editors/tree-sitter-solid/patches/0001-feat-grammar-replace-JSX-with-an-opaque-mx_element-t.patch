@@ -33,8 +33,8 @@ index efb0b76..87c308d 100644
 -module.exports = function defineGrammar(dialect) {
 +// MX: `name` is a second parameter so a grammar can select the tsx *behaviour*
 +// while carrying its own *name*. The generated parser's C symbols are derived
-+// from the name (`tree_sitter_<name>_external_scanner_scan`), so SolidMX must
-+// be named `solidmx`, but every dialect conditional below must still take the
++// from the name (`tree_sitter_<name>_external_scanner_scan`), so the Solid grammar must
++// be named `solid`, but every dialect conditional below must still take the
 +// `tsx` branch. Defaults to `dialect`, so upstream's own two grammars are
 +// unaffected.
 +module.exports = function defineGrammar(dialect, name = dialect) {

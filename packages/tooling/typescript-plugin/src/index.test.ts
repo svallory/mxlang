@@ -62,7 +62,7 @@ describe("Solid language plugin", () => {
       { getAssociatedScript: () => undefined },
     );
 
-    if (!virtual) throw new Error("Expected Solid virtual code");
+    if (!virtual) throw new Error("Expected .solid.mx virtual code");
     const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     // A region is an expression, so the import the compiler minted for
     // `<icon>` belongs to the surrounding module. If it does not reach the
@@ -106,7 +106,7 @@ describe("Solid language plugin", () => {
         { getAssociatedScript: () => undefined },
       );
 
-      if (!virtual) throw new Error("Expected Solid virtual code");
+      if (!virtual) throw new Error("Expected .solid.mx virtual code");
       const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
       expect(code).not.toMatch(/import \$mx_Gizmo\d+/);
     } finally {
@@ -172,7 +172,7 @@ describe("Solid language plugin", () => {
 
     expect(plugin.getLanguageId("/src/example.solid.mx")).toBe("solidmx");
     expect(plugin.getLanguageId("/src/example.tsx")).toBeUndefined();
-    if (!virtual) throw new Error("Expected Solid virtual code");
+    if (!virtual) throw new Error("Expected .solid.mx virtual code");
     expect(virtual?.languageId).toBe("typescriptreact");
     expect(virtual?.snapshot.getText(0, virtual.snapshot.getLength())).toBe(
       "export const answer: number = 42;",
@@ -230,7 +230,7 @@ describe("Solid language plugin", () => {
       { getAssociatedScript: () => undefined },
     );
 
-    if (!virtual) throw new Error("Expected Solid virtual code");
+    if (!virtual) throw new Error("Expected .solid.mx virtual code");
     const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     expect(code).toContain("a &#60; b {input.zed}");
     // Identity up to the escaped `<`, then everything after it shifted by
@@ -448,7 +448,7 @@ describe("Solid language plugin", () => {
       ts.ScriptSnapshot.fromString(source),
       { getAssociatedScript: () => undefined },
     );
-    if (!virtual) throw new Error("Expected Solid virtual code");
+    if (!virtual) throw new Error("Expected .solid.mx virtual code");
     const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     expect(generated).toContain("pick<string>(item)");
   });

@@ -100,8 +100,8 @@ itself, copied rather than included from outside it.
 time it was tried (`~/Library/Logs/Zed/Zed.log`):
 
 ```
-failed to compile grammar 'solid': failed to compile solid parser with clang:
-.../grammars/solid/packages/editors/tree-sitter-solid/src/scanner.c:18:10:
+failed to compile grammar 'solidmx': failed to compile solidmx parser with clang:
+.../grammars/solidmx/packages/editors/tree-sitter-solidmx/src/scanner.c:18:10:
 fatal error: '../vendor/tree-sitter-typescript/common/scanner.h' file not found
 ```
 
