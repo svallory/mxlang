@@ -92,4 +92,17 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
       "<div><span>1</span></div>",
     );
   });
+
+  // Astro's fence imports reach core as plain bindings with no specifier, so
+  // core cannot read the callee's `<return>` and keeps refusing `/var` here
+  // with its generic message; `.astro.mx` cannot bind one either way (the
+  // fence runs before the template).
+  it("still refuses /var on the imported call, positioned", () => {
+    expect(() =>
+      lowerAstroMx(
+        '---\nimport Counter from "./counter.mx";\n---\n<Counter/n start=1/><p>{n}</p>',
+        join(dir, "page.astro.mx"),
+      ),
+    ).toThrow(/tag variable `\/n` on `<Counter>` is not supported/);
+  });
 });

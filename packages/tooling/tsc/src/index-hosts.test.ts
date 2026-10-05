@@ -330,4 +330,29 @@ describe("mx-tsc", () => {
     },
     SPAWN_TIMEOUT_MS,
   );
+
+  it(
+    "types a /var on an imported .mx call as the callee's <return> value, positioned at the misuse",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "imported-return-var-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      const errors = result.output
+        .split("\n")
+        .filter((line) => line.includes("): error TS"));
+      // `<Counter/n start=1/>` returns `input.start + 1`, so `n` is a number:
+      // the only diagnostic is the string method read on it, at its authored
+      // position. A `/var` rejected by core would show TS80001 here instead.
+      expect(errors).toHaveLength(1);
+      expect(result.output).toContain("VarType.mx(8,8): error TS2339");
+      expect(result.output).toContain(
+        "Property 'toUpperCase' does not exist on type 'number'",
+      );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 });

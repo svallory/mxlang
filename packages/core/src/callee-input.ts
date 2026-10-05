@@ -410,8 +410,25 @@ export function readCalleeInput(
  * placeholder; the unit's own compile validates its `<return>`.
  */
 export function calleeReturnsValue(target: ComponentTarget, ctx: Ctx): boolean {
-  if (target.kind !== "name") return false;
-  if (target.name === ctx.exportName) return false;
+  return calleeReturnShape(target, ctx) === "returns";
+}
+
+/**
+ * What is known about an imported call target's `<return>`:
+ * - `returns`: a `.mx` unit that declares it;
+ * - `none`: a `.mx` unit that compiles and declares none;
+ * - `unknown`: anything else (not a `.mx` file, unresolved, dynamic, host
+ *   module file, self call, mid-compile `pending`, non-compiling callee).
+ *
+ * `/var` on a `none` callee is the call the core can refuse by name, the same
+ * as on a discovered tag; `unknown` carries no claim either way.
+ */
+export function calleeReturnShape(
+  target: ComponentTarget,
+  ctx: Ctx,
+): "returns" | "none" | "unknown" {
+  if (target.kind !== "name") return "unknown";
+  if (target.name === ctx.exportName) return "unknown";
   const resolved = resolveTarget(target, {
     importer: ctx.filename,
     resolveImport: ctx.resolveImport,
@@ -419,11 +436,13 @@ export function calleeReturnsValue(target: ComponentTarget, ctx: Ctx): boolean {
     ctx,
     targets: ctx.targets,
   });
-  if (resolved.kind !== "path" || !resolved.path.endsWith(".mx")) return false;
+  if (resolved.kind !== "path" || !resolved.path.endsWith(".mx")) {
+    return "unknown";
+  }
   // A host module file (`card.solid.mx`) is a TypeScript module with a
   // template region, not a template unit: `readInputAt` reads it the same way.
   if (hostModuleSegment(basename(resolved.path), ctx.targets) !== undefined) {
-    return false;
+    return "unknown";
   }
   try {
     const { mtimeMs, source } = sourceSnapshot(resolved.path);
@@ -432,11 +451,12 @@ export function calleeReturnsValue(target: ComponentTarget, ctx: Ctx): boolean {
       source,
       mtimeMs,
     });
-    return metadata.pending !== true && metadata.returnsValue === true;
+    if (metadata.pending === true) return "unknown";
+    return metadata.returnsValue === true ? "returns" : "none";
   } catch {
     // An unreadable or non-compiling callee is reported by `readCalleeInput`
     // at this same call; there is no return shape to act on.
-    return false;
+    return "unknown";
   }
 }
 

@@ -578,16 +578,97 @@ describe("an imported .mx tag that declares <return>", () => {
     }
   });
 
-  it("still rejects /var on the imported call, positioned at the call", () => {
+  // Marko 6.3.51: `<Counter/n start=1/>` renders the body and `n` holds the
+  // return value (`<div><span>1</span><p>2</p></div>`).
+  it("binds /var to the returned value and renders the body", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "page.mx":
+          'import Counter from "./counter.mx"\n<div><Counter/n start=1/><p>${n}</p></div>',
+      },
+      "page.mx",
+      {},
+      true,
+    );
+    expect(html).toBe("<div><span>1</span><p>2</p></div>");
+  });
+
+  it("binds each call's own /var", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "page.mx":
+          'import Counter from "./counter.mx"\n<Counter/a start=1/><Counter/b start=10/><i>${a}-${b}</i>',
+      },
+      "page.mx",
+      {},
+      true,
+    );
+    expect(html).toBe("<span>1</span><span>10</span><i>2-11</i>");
+  });
+
+  it("emits the same /var lowering a discovered tag gets", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-"));
+    try {
+      writeFileSync(join(dir, "counter.mx"), src(counter));
+      const { code } = compile(
+        src('import Counter from "./counter.mx"\n<Counter/n start=1/>'),
+        join(dir, "page.mx"),
+      );
+      expect(code).toMatch(/const n = [\s\S]*\.value/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a read of the /var before the call, positioned", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-early-"));
     try {
       writeFileSync(join(dir, "counter.mx"), src(counter));
       expect(() =>
         compile(
-          src('import Counter from "./counter.mx"\n<Counter/n start=1/>'),
+          src(
+            'import Counter from "./counter.mx"\n<p>${n}</p>\n<Counter/n start=1/>',
+          ),
           join(dir, "page.mx"),
         ),
-      ).toThrow(/tag variable `\/n` on `<Counter>` is not supported/);
+      ).toThrow(/`n` is read before the `\/var` that binds it/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects /var on an imported tag that declares no <return>, at the call", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-none-"));
+    try {
+      writeFileSync(join(dir, "plain.mx"), src("<b>x</b>"));
+      let error: (Error & { line?: number; column?: number }) | undefined;
+      try {
+        compile(
+          src('import Plain from "./plain.mx"\n<Plain/n/>'),
+          join(dir, "page.mx"),
+        );
+      } catch (caught) {
+        error = caught as Error;
+      }
+      expect(error?.message).toMatch(/`<Plain>` does not return a value/);
+      expect(error?.line).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("still rejects /var on an imported .ts component", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-ts-"));
+    try {
+      writeFileSync(join(dir, "widget.ts"), "export default () => ({})");
+      expect(() =>
+        compile(
+          src('import Widget from "./widget.ts"\n<Widget/n/>'),
+          join(dir, "page.mx"),
+        ),
+      ).toThrow(/tag variable `\/n` on `<Widget>` is not supported/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

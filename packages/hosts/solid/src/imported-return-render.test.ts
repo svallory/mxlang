@@ -46,11 +46,13 @@ function renderImported(fragment: string): string {
     const caller = compileSolidMx(fragment, {
       filename: join(dir, "page.solid.mx"),
       importSpecifiers: new Map([["Counter", "./counter.mx"]]),
+      // What the region compiler passes for a default import of a `.mx` file.
+      importDefaultFromMarkoOrMx: new Set(["Counter"]),
     });
     const imports = [...caller.hoistedImports, ...caller.hoistedDefines]
       .map((entry) => entry.code)
       .join("\n");
-    const app = `${imports}\nimport Counter from "./counter.mx";\nexport function App() {\n  return <ul>${caller.code}</ul>;\n}\n`;
+    const app = `${imports}\nimport Counter from "./counter.mx";\nexport function App() {\n  ${caller.returnVars.map((v) => `let ${v};`).join(" ")}\n  return <ul>${caller.code}</ul>;\n}\n`;
     writeFileSync(
       join(dir, "app.mjs"),
       ssr(app, "app.tsx").replace('"./counter.mx"', '"./counter.mjs"'),
@@ -73,5 +75,14 @@ describe("an imported tag that declares <return>, rendered on Solid", () => {
     expect(renderImported("<Counter start=1/>").replace(/ _hk=\S+/g, "")).toBe(
       "<ul><span>1</span></ul>",
     );
+  });
+
+  it("binds /var to the returned value and renders the body", () => {
+    expect(
+      renderImported("<div><Counter/n start=1/><p>${n}</p></div>").replace(
+        / _hk=\S+/g,
+        "",
+      ),
+    ).toContain("<span>1</span><p>2</p>");
   });
 });

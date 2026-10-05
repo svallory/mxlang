@@ -33,7 +33,7 @@ import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
   type CalleeInput,
-  calleeReturnsValue,
+  calleeReturnShape,
   readCalleeInput,
   readOwnInput,
 } from "./callee-input.ts";
@@ -2615,10 +2615,21 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     // reaching a host emitter, which can only silently drop one side.
     rejectArgsWithProps(node, target);
   }
+  // `/var` binds an imported `.mx` unit's `<return>` the way it does a
+  // discovered tag's. Any other target (a `.ts` module, a `<define>`, a
+  // dynamic tag) has no return shape the core can read, so it stays refused.
+  const returnShape = calleeReturnShape(target, ctx);
+  if (node.var && returnShape === "none") {
+    fail(
+      `\`<${targetName(target)}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
+      node,
+    );
+  }
   rejectUnsupportedFields(ctx, node, `\`<${targetName(target)}>\``, {
     attributeTags: true,
     args: true,
     params: true,
+    var: returnShape === "returns",
   });
 
   const input =
@@ -2636,6 +2647,15 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, owner));
   raiseInvalidCalleeInput(ctx, input, owner, loweredTags.flat);
   const children = loweredTags.contentChildren;
+  const callVar = node.var ? declName(ctx, node.var) : null;
+  // Reaching the call makes the binding readable; see the discovered path.
+  if (callVar) {
+    ctx.tagVars ??= new Map();
+    ctx.tagVars.set(callVar, {
+      block: [...(ctx.tagVarBlock ?? [])],
+      pending: false,
+    });
+  }
   return {
     kind: "Component",
     target,
@@ -2650,9 +2670,9 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     args: (node.arguments ?? []).map((a: Node) => exprOf(ctx, a)),
     // An imported `.mx` unit that declares `<return>` hands back
     // `{ value, output }`; a discovered one already says so through
-    // `routeTemplateCall`. Only the flag is set here: `/var` on an imported
-    // call is still rejected above.
-    ...(calleeReturnsValue(target, ctx) ? { returnsValue: true } : {}),
+    // `routeTemplateCall`, which also carries the `/var` the emitters bind.
+    var: callVar,
+    ...(returnShape === "returns" ? { returnsValue: true } : {}),
     loc: posOf(node),
   };
 }
@@ -3168,6 +3188,19 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   // reference the emitted JS leaves in the temporal dead zone — Marko's own
   // check (`references.ts:597-602`), which compares sibling indices for
   // exactly this reason.
+  // Imports lower in the walk below, after this pass, so the names a sibling
+  // `import` statement binds are read off the source here.
+  let siblingImports: Set<string> | undefined;
+  const importsName = (tagName: string): boolean => {
+    siblingImports ??= new Set(
+      children.flatMap((child) =>
+        child?.type === "MarkoTag" && child.name?.value === "import"
+          ? importBindings(sliceLoc(ctx, child.loc).trim())
+          : [],
+      ),
+    );
+    return siblingImports.has(tagName);
+  };
   for (const child of children) {
     if (child?.type !== "MarkoTag" || !child.var) continue;
     // Only a *custom tag call* binds a `/var` from a unit's `<return>`.
@@ -3175,10 +3208,15 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
     // declares an ordinary binding whose scope rules already work, and
     // pre-registering those made a legal read of one report as out of scope.
     const tagName = child.name?.value;
+    const discovered =
+      typeof tagName === "string" &&
+      ctx.customTags !== undefined &&
+      Object.hasOwn(ctx.customTags, tagName);
+    // An imported binding is a call too; `lowerComponent` refuses `/var` on
+    // the ones that return nothing.
     if (
       typeof tagName !== "string" ||
-      !ctx.customTags ||
-      !Object.hasOwn(ctx.customTags, tagName)
+      !(discovered || ctx.importSpecifiers.has(tagName) || importsName(tagName))
     ) {
       continue;
     }

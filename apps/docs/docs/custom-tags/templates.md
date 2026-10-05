@@ -119,11 +119,11 @@ A `<return>` in a page is legal and means the same thing — a page is a module 
 - **The tag must declare `<return>`.** `/var` on a tag whose template returns nothing is an error, rather than a binding that silently reads `undefined`.
 - **The binding is scoped to the block the call is in**, like any `let`. Reading it from outside that block is an error rather than a binding hoisted somewhere the reader cannot see.
 - **The call has to come first.** Reading a `/var` earlier in the same block than the call that binds it is an error, not a run-time crash.
-- **The tag must be a discovered one.** `/var` binds what a *discovered* tag (`tags/counter.mx`, called as `<counter/n/>`) returns. On a tag you `import` and call by binding (`import Counter from "./lib/counter.mx"`, then `<Counter/n/>`), `/var` is rejected, even when that file declares `<return>`: ``tag variable `/n` on `<Counter>` is not supported in a standalone template``. To bind a returned value, put the file under a `tags/` directory and call it by its discovered name.
+- **Discovered or imported, both bind.** `/var` binds what a *discovered* tag (`tags/counter.mx`, called as `<counter/n/>`) returns, and what a tag you `import` and call by binding returns (`import Counter from "./lib/counter.mx"`, then `<Counter/n start=1/>`), exactly as Marko does. The imported form needs a default import of a `.mx` file that declares `<return>`; one that declares none is the same error as a discovered tag. A callee MX cannot read at compile time (a `.ts` module, a barrel re-export, a dynamic tag) keeps the positioned ``tag variable `/n` on `<Widget>` is not supported in a standalone template``.
 
 ### Calling a returning tag without `/var`
 
-A tag that declares `<return>` can be called without a `/var`. The call renders the tag's body and drops the value, as Marko does, whether the tag is discovered (`<counter start=1/>`) or imported by its default binding from a `.mx` file (`import Counter from "./lib/counter.mx"`, then `<Counter start=1/>`). The value stays unreachable in both forms, and the imported form cannot bind it at all.
+A tag that declares `<return>` can be called without a `/var`. The call renders the tag's body and drops the value, as Marko does, whether the tag is discovered (`<counter start=1/>`) or imported by its default binding from a `.mx` file (`import Counter from "./lib/counter.mx"`, then `<Counter start=1/>`). The value stays unreachable in both forms unless the call binds a `/var`.
 
 Only a default import that resolves straight to a `.mx` file is recognised. Two other routes to a returning tag are a known gap, because the compiler cannot see the callee's shape:
 

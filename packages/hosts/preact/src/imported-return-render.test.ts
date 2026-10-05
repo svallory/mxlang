@@ -83,4 +83,33 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
       "<span>1</span><span>5</span>",
     );
   });
+
+  it("binds /var to the returned value and renders the body", async () => {
+    expect(
+      await renderCaller("<div><Counter/n start=1/><p>${n}</p></div>"),
+    ).toBe("<div><span>1</span><p>2</p></div>");
+  });
+
+  it("binds each call's own /var", async () => {
+    expect(
+      await renderCaller(
+        "<Counter/a start=1/><Counter/b start=10/><i>${a}-${b}</i>",
+      ),
+    ).toBe("<span>1</span><span>10</span><i>2-11</i>");
+  });
+
+  it("refuses /var on an imported tag without <return>, at the call", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-imported-none-"));
+    try {
+      writeFileSync(join(scratch, "plain.mx"), "<b>x</b>\n");
+      expect(() =>
+        compilePreactMx(
+          'import Plain from "./plain.mx"\n<Plain/n/>',
+          join(scratch, "caller.mx"),
+        ),
+      ).toThrow(/`<Plain>` does not return a value/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
 });

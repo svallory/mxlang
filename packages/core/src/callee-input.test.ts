@@ -26,6 +26,7 @@ import {
   type AttrTagDecl,
   type CalleeInput,
   type CalleeInputResult,
+  calleeReturnShape,
   calleeReturnsValue,
   type ResolveContext,
   readCalleeInput,
@@ -1907,6 +1908,26 @@ describe("calleeReturnsValue", () => {
       { "counter.mx": "<if=>\n" },
       [["Counter", "./counter.mx"]],
       (ctx) => expect(calleeReturnsValue(target, ctx)).toBe(false),
+    );
+  });
+
+  it("calleeReturnShape tells a .mx unit without <return> (none) from an unknown target", () => {
+    withFiles(
+      {
+        "counter.mx": "<span>x</span>\n",
+        "broken.mx": "<if=>\n",
+        "plain.ts": "export default function Counter() { return 1; }\n",
+      },
+      [["Counter", "./counter.mx"]],
+      (ctx) => {
+        expect(calleeReturnShape(target, ctx)).toBe("none");
+        ctx.importSpecifiers = new Map([["Counter", "./plain.ts"]]);
+        expect(calleeReturnShape(target, ctx)).toBe("unknown");
+        ctx.importSpecifiers = new Map([["Counter", "./broken.mx"]]);
+        expect(calleeReturnShape(target, ctx)).toBe("unknown");
+        ctx.importSpecifiers = new Map([["Counter", "./missing.mx"]]);
+        expect(calleeReturnShape(target, ctx)).toBe("unknown");
+      },
     );
   });
 });

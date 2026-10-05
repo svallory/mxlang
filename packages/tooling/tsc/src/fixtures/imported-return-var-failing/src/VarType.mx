@@ -1,0 +1,8 @@
+import Counter from "../lib/counter.mx";
+
+export interface Input {
+  title: string;
+}
+<h1>${input.title}</h1>
+<Counter/n start=1/>
+<p>${n.toUpperCase()}</p>
