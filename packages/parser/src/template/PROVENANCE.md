@@ -24,10 +24,11 @@ produce identical event streams.
 ## Kept
 
 - `core/`, `states/`, `util/`, `index.ts`, `internal.ts`: byte-identical to
-  `v5.18.0` except the two files below.
+  `v5.18.0` except the files listed under "Changes after the copy".
 - `__tests__/`: upstream's 418 fixture directories and its `node:test` suite
-  (`api`, `escape`, `main`, `validate`; 552 tests), byte-identical. They run
-  under `node --test` from `upstream-suite.test.ts`; vitest excludes the
+  (`api`, `escape`, `main`, `validate`; 552 tests), byte-identical, plus
+  `base-offset.test.ts` (MX's own, added after the copy). They run under
+  `node --test` from `upstream-suite.test.ts`; vitest excludes the
   directory (`vitest.config.ts`) because it cannot collect `node:test` files.
 
 ## Dropped
@@ -53,9 +54,41 @@ to one place in `src/`:
 | helpers `isBareColonEnd`, `isIdentStartCode` | `states/EXPRESSION.ts`, end of file (plus `isDigitCode`, the inline `>= 48 && <= 57` of the `?.` hunk) |
 | (the minified build keeps the flag implicit) | `states/EXPRESSION.ts`: `attrValue: boolean` on `ExpressionMeta`, initialised `false` in `enter` |
 
-Nothing else differs from `v5.18.0`. To check: extract `git archive v5.18.0 src`
-of upstream and diff; only `states/ATTRIBUTE.ts` and `states/EXPRESSION.ts`
-differ.
+Nothing else from the decision 146 rule differs from `v5.18.0`. To check:
+extract `git archive v5.18.0 src` of upstream and diff; only
+`states/ATTRIBUTE.ts` and `states/EXPRESSION.ts` differ from upstream for that
+rule, plus the three files the base-position addition below touches.
+
+## Base position for fragment parses (MX addition, not from the patch)
+
+`docs/upstream/htmljs-parser-offset.patch` is this project's own proposal to
+upstream htmljs-parser, never sent. Its design is applied here as ordinary
+source, so `core/Parser.ts` and `index.ts` now also differ from `v5.18.0`.
+No state file is touched — the change is confined to the two files and one
+test file the patch itself names.
+
+`parse(code, options?)` accepts an optional base position
+`{ startOffset?, startLine?, startColumn? }` for the case where `code` is a
+substring of a larger file, plus a new `offsetAt(offset)` that rebases a raw
+character offset the same way. The contract:
+
+- Ranges passed to handlers (including error ranges) and read back by
+  `read(range)` stay relative to the string passed to `parse`, exactly as
+  without the options; `positionAt`, `locationAt` and `offsetAt` are relative
+  to the enclosing file.
+- `startColumn` applies to the fragment's first line only; later lines start
+  at column 0. `startLine` shifts every line. `startOffset` shifts offsets
+  and nothing else. All three default to 0, so an absent or empty options
+  object is behaviourally identical to passing none.
+- Positions stay in UTF-16 code units, as they are upstream.
+
+Internal indexing is untouched: the substring is still scanned from index 0
+(`this.pos`, `this.data`), which is why handler ranges stay
+fragment-relative and why a handler that reads a node's own `start`/`end`
+back through `locationAt` mid-parse — `@marko/compiler`'s `onCloseTagEnd`
+does exactly this — shifts once, not twice.
+
+Covered by `__tests__/base-offset.test.ts`, alongside the upstream suite.
 
 ## Tests
 
@@ -65,3 +98,8 @@ differ.
 - `corpus-equivalence.test.ts`: event streams of this copy against the patched
   npm build over every tracked `.mx`, `.marko` and `.amx` file and every `mx` /
   `marko` Markdown fence.
+- `__tests__/base-offset.test.ts`: the base position — handler ranges
+  identical with and without the options, `offsetAt` shifting only by
+  `startOffset`, the first-line-only column rule, non-BMP input, zero bases,
+  an error at end of input, the mid-parse `locationAt` single-shift case, and
+  an embedding-equivalence property test against a whole-document parse.

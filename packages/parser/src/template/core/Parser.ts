@@ -1,7 +1,6 @@
 import {
   type ErrorCode,
   getLines,
-  getLocation,
   getPosition,
   isWhitespaceCode,
   type ParserOptions as Options,
@@ -14,6 +13,29 @@ import * as TagType from "../util/tag-type.ts";
 export interface Meta extends Range {
   parent: Meta;
   state: StateDefinition;
+}
+/**
+ * A base position for `parse`: when the source text handed to `parse` is a
+ * substring of a larger document, this lets `positionAt`/`locationAt` (and
+ * `offsetAt`) report positions relative to that document instead of the
+ * substring. Every position/offset a caller passes *in* stays substring
+ * relative — only what comes back out is rebased.
+ *
+ * Ranges passed to handlers (including error ranges) and read back by
+ * `read(range)` stay relative to the parsed string, exactly as without these
+ * options; `positionAt`, `locationAt` and `offsetAt` are relative to the
+ * enclosing file.
+ */
+export interface ParseOptions {
+  /** Character offset of the substring's first character in the document. */
+  startOffset?: number;
+  /** Zero-based line of the substring's first character in the document. */
+  startLine?: number;
+  /**
+   * Column of the substring's first character in the document. Applied only
+   * to positions on the substring's own first line.
+   */
+  startColumn?: number;
 }
 export interface StateDefinition<P extends Meta = Meta> {
   name: string;
@@ -47,23 +69,50 @@ export class Parser {
     this.options = options;
   }
 
+  declare public startOffset: number;
+  declare public startLine: number;
+  declare public startColumn: number;
+
   read(range: Range) {
     return this.data.slice(range.start, range.end);
   }
 
+  /**
+   * Given an offset in the current source code, returns a Position object
+   * with line & character information, rebased onto the enclosing document
+   * when `parse` was called with a base position (`startOffset`/`startLine`/
+   * `startColumn`).
+   */
   positionAt(offset: number) {
-    return getPosition(
+    const position = getPosition(
       this.lines || (this.lines = getLines(this.data)),
       offset,
     );
+    if (!this.startOffset && !this.startLine && !this.startColumn) {
+      return position;
+    }
+    return {
+      line: position.line + this.startLine,
+      character:
+        position.line === 0
+          ? position.character + this.startColumn
+          : position.character,
+    };
   }
 
   locationAt(range: Range) {
-    return getLocation(
-      this.lines || (this.lines = getLines(this.data)),
-      range.start,
-      range.end,
-    );
+    return {
+      start: this.positionAt(range.start),
+      end: this.positionAt(range.end),
+    };
+  }
+
+  /**
+   * Rebases a substring-relative character offset onto the enclosing
+   * document, using the base offset given to `parse`.
+   */
+  offsetAt(offset: number) {
+    return offset + this.startOffset;
   }
 
   enterState<P extends Meta>(state: StateDefinition<P>): P {
@@ -277,9 +326,12 @@ export class Parser {
     this.pos += ahead;
   }
 
-  parse(data: string) {
+  parse(data: string, options?: ParseOptions) {
     const maxPos = (this.maxPos = data.length);
     this.data = data;
+    this.startOffset = options?.startOffset ?? 0;
+    this.startLine = options?.startLine ?? 0;
+    this.startColumn = options?.startColumn ?? 0;
     this.indent = "";
     this.textPos = -1;
     this.isConcise = true;

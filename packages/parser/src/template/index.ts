@@ -1,4 +1,9 @@
-import { Parser, type ParserOptions, type Range } from "./internal.ts";
+import {
+  type ParseOptions,
+  Parser,
+  type ParserOptions,
+  type Range,
+} from "./internal.ts";
 export {
   ErrorCode,
   getLines,
@@ -6,6 +11,7 @@ export {
   getPosition,
   type ParserOptions as Handlers,
   type Location,
+  type ParseOptions,
   type Position,
   type Range,
   type Ranges,
@@ -28,10 +34,12 @@ export function createParser(handlers: ParserOptions) {
 
   return {
     /**
-     * Parses code and calls the provided handlers.
+     * Parses code and calls the provided handlers. When `options` gives a
+     * base position, `positionAt`/`locationAt`/`offsetAt` report positions
+     * rebased onto the enclosing document instead of `code` itself.
      */
-    parse(code: string) {
-      return parser.parse(code);
+    parse(code: string, options?: ParseOptions) {
+      return parser.parse(code, options);
     },
     /**
      * Given an offset range in the current source code, reads and returns the substring in the input code.
@@ -50,6 +58,13 @@ export function createParser(handlers: ParserOptions) {
      */
     locationAt(range: Range) {
       return parser.locationAt(range);
+    },
+    /**
+     * Given an offset in the current source code, returns that offset rebased
+     * onto the enclosing document using `parse`'s base position.
+     */
+    offsetAt(offset: number) {
+      return parser.offsetAt(offset);
     },
   };
 }
