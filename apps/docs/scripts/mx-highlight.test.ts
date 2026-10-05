@@ -50,6 +50,23 @@ function textOf(html: string): string {
   return unescapeHtml(html.replace(/<[^>]+>/g, ""));
 }
 
+/**
+ * Re-join neighbouring spans of one class. A marker that ends inside a token
+ * has to cut it in two; this is the inverse, so a cut span and the uncut
+ * original compare equal.
+ */
+function mergeSpans(html: string): string {
+  let merged = html;
+  for (;;) {
+    const next = merged.replace(
+      /<span class="([^"]+)">([^<]*)<\/span><span class="\1">/g,
+      '<span class="$1">$2',
+    );
+    if (next === merged) return merged;
+    merged = next;
+  }
+}
+
 /** Drop the `.mk` marker wrappers, keeping the capture spans inside them. */
 function stripMarkers(html: string): string {
   const stack: boolean[] = [];
@@ -100,17 +117,14 @@ describe("the capture classes", () => {
       ["ts-property", ".c"],
       ["ts-label", ":b"],
       ["ts-attribute", "x"],
+      // The attribute value is an `attr_value_expr`, which injections.scm
+      // hands to TypeScript; its own query says string.
+      ["ts-string", '"1"'],
       ["ts-constant", "#d"],
       ["ts-property", ".e"],
       ["ts-label", ":f"],
       ["ts-punctuation-bracket", ">"],
     ]);
-    // The attribute value is not a capture in highlights.scm (a gap in the
-    // grammar's query, reported in the dev report): it is plain code text,
-    // never mis-coloured as an attribute.
-    expect(html).toContain(
-      '<span class="ts-attribute">x</span>=&quot;1&quot; ',
-    );
   });
 
   it("colours the same shorthand in concise mode", () => {
@@ -126,7 +140,7 @@ describe("the capture classes", () => {
   it("maps every capture name the query can produce to a class", () => {
     for (const name of captureNames) {
       const cls = classOf(name);
-      if (name === "none") expect(cls).toBeNull();
+      if (name === "none" || name === "embedded") expect(cls).toBeNull();
       else expect(cls, name).toMatch(/^ts-[a-z]+(-[a-z]+)?$/);
     }
     expect(classOf("punctuation.bracket")).toBe("ts-punctuation-bracket");
@@ -136,7 +150,7 @@ describe("the capture classes", () => {
     const css = readFileSync(join(docsRoot, "assets/css/home.css"), "utf8");
     for (const name of captureNames) {
       const cls = classOf(name);
-      if (cls) expect(css, cls).toContain(`.${cls} {`);
+      if (cls) expect(css, cls).toMatch(new RegExp(`\\.${cls}[ ,{]`));
     }
     expect(css).toContain(':root[data-theme="dark"]');
   });
@@ -160,6 +174,58 @@ describe("the capture classes", () => {
   });
 });
 
+describe("injected TypeScript", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+  const source = "<p>Hi ${user.name.toUpperCase()}</p>";
+
+  it("colours a placeholder's expression with the TypeScript query", () => {
+    expect(spans(renderMx(source))).toEqual([
+      ["ts-punctuation-bracket", "<"],
+      ["ts-tag", "p"],
+      ["ts-punctuation-bracket", ">"],
+      ["ts-punctuation-special", "${"],
+      ["ts-variable", "user"],
+      ["ts-punctuation-delimiter", "."],
+      ["ts-property", "name"],
+      ["ts-punctuation-delimiter", "."],
+      ["ts-function-method", "toUpperCase"],
+      ["ts-punctuation-bracket", "()"],
+      ["ts-punctuation-special", "}"],
+      ["ts-punctuation-bracket", "</"],
+      ["ts-tag", "p"],
+      ["ts-punctuation-bracket", ">"],
+    ]);
+  });
+
+  it("colours types, which a bare JavaScript grammar cannot parse", () => {
+    const html = renderMx("export interface Input { title: string }");
+    expect(html).toContain('<span class="ts-keyword">interface</span>');
+    expect(html).toContain('<span class="ts-type-builtin">string</span>');
+  });
+
+  it("colours a static body and an attribute value", () => {
+    expect(renderMx("static const LIMIT = 3;")).toContain(
+      '<span class="ts-number">3</span>',
+    );
+    expect(renderMx("<p class=cls count=3>x</p>")).toContain(
+      '<span class="ts-number">3</span>',
+    );
+  });
+
+  it("keeps a parameter a parameter, not the catch-all variable", () => {
+    const html = renderMx("<for|item| of=items>x</for>");
+    expect(html).toContain('<span class="ts-variable-parameter">item</span>');
+    expect(html).toContain('<span class="ts-variable">items</span>');
+  });
+
+  it("leaves text and structure alone: the spans still rebuild the source", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    const mixed =
+      "static const A = 1;\n<div class=x onClick=() => n++>${a?.b ?? 2}</div>\n";
+    expect(textOf(renderMx(mixed))).toBe(mixed);
+  });
+});
+
 describe("the landing example and an ordinary fence", () => {
   const { source } = readExample();
   const text = source.replace(/\n$/, "");
@@ -170,7 +236,9 @@ describe("the landing example and an ordinary fence", () => {
       /^<pre[^>]*><code[^>]*>|<\/code><\/pre>$/g,
       "",
     );
-    expect(stripMarkers(inner)).toBe(renderMx(text));
+    // A marker that ends inside a token cuts it in two; merged back, the
+    // spans are the plain fence's.
+    expect(mergeSpans(stripMarkers(inner))).toBe(renderMx(text));
     expect(highlightExample(source, [])).toBe(
       renderFence(source).replace(
         '<pre class="hljs mx-hl">',

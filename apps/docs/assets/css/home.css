@@ -295,7 +295,9 @@
    (`packages/editors/tree-sitter-mx/queries/highlights.scm`). `plugins/
    mx-highlight.mjs` turns a capture name into a class by prefixing `ts-` and
    replacing dots with dashes (`punctuation.bracket` -> `ts-punctuation-bracket`);
-   `@none` ("deliberately unstyled") gets no class. The values are docmd's own
+   `@none` ("deliberately unstyled") and the JavaScript query's `@embedded` get
+   none. The TypeScript names (`function.method`, `number`, `operator`, ...) come
+   from the injected expressions, see `scripts/build-ts-grammar.sh`. The values are docmd's own
    highlight palette (`docmd-highlight-light.css` / `-dark.css`), keyed on the
    same `data-theme` attribute the theme switch sets on <html>. */
 
@@ -313,6 +315,10 @@
   --ts-constant: #0184bb;
   --ts-punctuation: #696c77;
   --ts-special: #a626a4;
+  --ts-function: #4078f2;
+  --ts-builtin: #0184bb;
+  --ts-number: #986801;
+  --ts-operator: #0184bb;
 }
 
 :root[data-theme="dark"] {
@@ -329,6 +335,10 @@
   --ts-constant: #56b6c2;
   --ts-punctuation: #abb2bf;
   --ts-special: #c678dd;
+  --ts-function: #61aeee;
+  --ts-builtin: #56b6c2;
+  --ts-number: #d19a66;
+  --ts-operator: #56b6c2;
 }
 
 .ts-comment { color: var(--ts-comment); font-style: italic; }
@@ -344,3 +354,11 @@
 .ts-constant { color: var(--ts-constant); }
 .ts-punctuation-bracket { color: var(--ts-punctuation); }
 .ts-punctuation-special { color: var(--ts-special); }
+.ts-punctuation-delimiter { color: var(--ts-punctuation); }
+.ts-function, .ts-function-method { color: var(--ts-function); }
+.ts-function-builtin, .ts-variable-builtin, .ts-constant-builtin,
+.ts-type-builtin { color: var(--ts-builtin); }
+.ts-constructor { color: var(--ts-type); }
+.ts-number { color: var(--ts-number); }
+.ts-string-special { color: var(--ts-string); }
+.ts-operator { color: var(--ts-operator); }

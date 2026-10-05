@@ -36,31 +36,64 @@ const grammarDir = join(
 );
 const wasmPath = join(grammarDir, "tree-sitter-mx.wasm");
 const highlightsPath = join(grammarDir, "queries", "highlights.scm");
+const injectionsPath = join(grammarDir, "queries", "injections.scm");
+/** Built by `scripts/build-ts-grammar.sh`. */
+const tsDir = join(here, "..", ".cache", "ts");
+const tsWasmPath = join(tsDir, "tree-sitter-typescript.wasm");
+const tsHighlightsPath = join(tsDir, "highlights.scm");
 
-if (!existsSync(wasmPath)) {
-  throw new Error(
-    `${wasmPath} is missing. The docs highlight \`mx\` code with the tree-sitter grammar and do not fall back to plain text. Build it: \`bun run --cwd packages/editors/tree-sitter-mx build:wasm\` (apps/docs' build, dev and test scripts do this for you).`,
-  );
+for (const [path, build] of [
+  [wasmPath, "bun run --cwd packages/editors/tree-sitter-mx build:wasm"],
+  [tsWasmPath, "bash apps/docs/scripts/build-ts-grammar.sh"],
+  [tsHighlightsPath, "bash apps/docs/scripts/build-ts-grammar.sh"],
+]) {
+  if (!existsSync(path)) {
+    throw new Error(
+      `${path} is missing. The docs highlight \`mx\` code with the tree-sitter grammars and do not fall back to plain text. Build it: \`${build}\` (apps/docs' build, dev and test scripts do this for you via \`build:wasm\`).`,
+    );
+  }
 }
 
 await Parser.init();
 const mx = await Language.load(wasmPath);
+const typescript = await Language.load(tsWasmPath);
 const highlights = new Query(mx, readFileSync(highlightsPath, "utf8"));
+const injections = new Query(mx, readFileSync(injectionsPath, "utf8"));
+const tsHighlights = new Query(
+  typescript,
+  readFileSync(tsHighlightsPath, "utf8"),
+);
+
+/**
+ * The languages `injections.scm` can name that this build can highlight. Add
+ * one by loading its wasm and highlights query here and giving it an entry;
+ * `injectedSpans` does the rest. `css` and `html` are in `injections.scm` too
+ * (`<style>`, html comments) and render as plain code text until they are.
+ */
+const injectable = new Map([
+  ["typescript", { language: typescript, query: tsHighlights }],
+]);
 
 /**
  * Capture name -> CSS class. Dots are not valid in a bare class selector, so
  * `punctuation.bracket` becomes `ts-punctuation-bracket`. `none` is the
- * grammar's "deliberately unstyled" (`(text) @none`) and gets no class.
+ * grammar's "deliberately unstyled" (`(text) @none`) and gets no class, and
+ * neither does `embedded` (the JavaScript query's template-substitution
+ * marker, which only says "inner captures decide").
  *
  * @param {string} name
  * @returns {string | null}
  */
 export function classOf(name) {
-  return name === "none" ? null : `ts-${name.replace(/\./g, "-")}`;
+  return name === "none" || name === "embedded"
+    ? null
+    : `ts-${name.replace(/\./g, "-")}`;
 }
 
-/** Every capture name the highlights query can produce. */
-export const captureNames = [...new Set(highlights.captureNames)];
+/** Every capture name the MX and the injected-language queries can produce. */
+export const captureNames = [
+  ...new Set([...highlights.captureNames, ...tsHighlights.captureNames]),
+];
 
 /**
  * Parse `source` as MX. A fresh parser per call: a parser holds native state,
@@ -81,51 +114,130 @@ export function parseMx(source) {
 }
 
 /**
- * The seam for embedded languages. `queries/injections.scm` says which ranges
- * hold TypeScript, CSS or HTML; each language needs its own wasm and
- * highlights query. Return `{ start, end, name }` spans (UTF-16 offsets, the
- * same capture names as the MX query) and `spansOf` folds them in, innermost
- * wins. Until a language is wired here, its range renders as plain code text.
+ * The embedded-language seam: highlight what `queries/injections.scm` says is
+ * another language. Each match names a content node and, through `#set!`, a
+ * language; the languages in `injectable` are parsed over exactly the content
+ * ranges (the node, minus its children unless `injection.include-children`)
+ * with `includedRanges`, then captured with that language's own query. Spans
+ * are UTF-16 offsets into `source`, like every other span. A language that is
+ * not in `injectable` renders as plain code text.
  *
- * @param {import("web-tree-sitter").Tree} _tree
- * @param {string} _source
+ * `injection.combined` is not honoured: each region is parsed on its own, so a
+ * construct split across two `<script>` bodies would be seen as two programs.
+ *
+ * @param {import("web-tree-sitter").Tree} tree
+ * @param {string} source
  * @returns {Array<{ start: number, end: number, name: string }>}
  */
-function injectedSpans(_tree, _source) {
-  return [];
+function injectedSpans(tree, source) {
+  /** @type {Map<string, { language: string, ranges: Array<[number, number]> }>} */
+  const regions = new Map();
+  for (const match of injections.matches(tree.rootNode)) {
+    const language = match.setProperties?.["injection.language"];
+    const content = match.captures.find(
+      (capture) => capture.name === "injection.content",
+    )?.node;
+    if (!language || !content || !injectable.has(language)) continue;
+    /** @type {Array<[number, number]>} */
+    let ranges = [[content.startIndex, content.endIndex]];
+    if (!("injection.include-children" in (match.setProperties ?? {}))) {
+      ranges = [];
+      let from = content.startIndex;
+      for (const child of content.children) {
+        if (child.startIndex > from) ranges.push([from, child.startIndex]);
+        from = Math.max(from, child.endIndex);
+      }
+      if (from < content.endIndex) ranges.push([from, content.endIndex]);
+    }
+    if (ranges.length) {
+      regions.set(`${language}:${JSON.stringify(ranges)}`, {
+        language,
+        ranges,
+      });
+    }
+  }
+
+  const lineStarts = [0];
+  for (let at = 0; at < source.length; at++) {
+    if (source[at] === "\n") lineStarts.push(at + 1);
+  }
+  /** @param {number} index */
+  const pointAt = (index) => {
+    let row = 0;
+    while (row + 1 < lineStarts.length && (lineStarts[row + 1] ?? 0) <= index) {
+      row++;
+    }
+    return { row, column: index - (lineStarts[row] ?? 0) };
+  };
+
+  const spans = [];
+  for (const { language, ranges } of regions.values()) {
+    const target = injectable.get(language);
+    if (!target) continue;
+    const parser = new Parser();
+    try {
+      parser.setLanguage(target.language);
+      const injected = parser.parse(source, null, {
+        includedRanges: ranges.map(([start, end]) => ({
+          startIndex: start,
+          endIndex: end,
+          startPosition: pointAt(start),
+          endPosition: pointAt(end),
+        })),
+      });
+      if (!injected) continue;
+      for (const capture of target.query.captures(injected.rootNode)) {
+        spans.push({
+          start: capture.node.startIndex,
+          end: capture.node.endIndex,
+          name: capture.name,
+        });
+      }
+    } finally {
+      parser.delete();
+    }
+  }
+  return spans;
 }
 
 /**
  * One class per character, so overlapping captures resolve deterministically:
  * the narrower range wins, and between equal ranges the later pattern wins
- * (tree-sitter-highlight's rule). On the current query nothing overlaps, so
- * this is a guard for the day a pattern does.
+ * (tree-sitter-highlight's rule). The MX query is painted first and an
+ * injected language's captures refine it; the MX query alone never overlaps.
  *
  * @param {string} source
  * @param {import("web-tree-sitter").Tree} [tree]
  * @returns {Array<string | null>} the class of each UTF-16 unit of `source`
  */
 export function classesOf(source, tree = parseMx(source)) {
-  const found = [
-    ...highlights.captures(tree.rootNode).map((capture, order) => ({
-      start: capture.node.startIndex,
-      end: capture.node.endIndex,
-      name: capture.name,
-      order,
-    })),
-    ...injectedSpans(tree, source).map((span, order) => ({
-      ...span,
-      order: 1e6 + order,
-    })),
-  ];
-  found.sort(
-    (a, b) => b.end - b.start - (a.end - a.start) || a.order - b.order,
-  );
+  const own = highlights.captures(tree.rootNode).map((capture, order) => ({
+    start: capture.node.startIndex,
+    end: capture.node.endIndex,
+    name: capture.name,
+    order,
+  }));
+  const injected = injectedSpans(tree, source).map((span, order) => ({
+    ...span,
+    order,
+  }));
+  const narrowestFirst = (a, b) =>
+    b.end - b.start - (a.end - a.start) || a.order - b.order;
   /** @type {Array<string | null>} */
   const classes = new Array(source.length).fill(null);
-  for (const span of found) {
+  for (const span of own.sort(narrowestFirst)) {
     const cls = classOf(span.name);
     for (let at = span.start; at < span.end; at++) classes[at] = cls;
+  }
+  // The JavaScript query's catch-all `(identifier) @variable` would otherwise
+  // repaint a binding the MX query already knows is a parameter or a type, so
+  // an injected plain `variable` only fills text that has no class yet.
+  for (const span of injected.sort(narrowestFirst)) {
+    const cls = classOf(span.name);
+    for (let at = span.start; at < span.end; at++) {
+      if (span.name === "variable" && classes[at]) continue;
+      classes[at] = cls;
+    }
   }
   return classes;
 }

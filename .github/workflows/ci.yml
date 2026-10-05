@@ -141,6 +141,13 @@ jobs:
       # The landing page's own drift test; `apps/docs build` runs the same
       # checks, so this only adds the one it cannot see: a committed
       # docs/index.md that no longer matches the generator.
+      # The docs highlight mx code with the tree-sitter grammars, built to wasm:
+      # tree-sitter-mx.wasm (gitignored, from packages/editors/tree-sitter-mx)
+      # and tree-sitter-typescript.wasm (cloned from the pin the solidmx grammar
+      # vendors). `test` and `build` run this themselves; it is a step of its own
+      # so a toolchain failure reads as that and not as a docs failure. The docs
+      # build fails loudly, never falls back to plain text, when either is missing.
+      - run: bun run --cwd apps/docs build:wasm
       - run: bun run --cwd apps/docs test
       - run: bun run --cwd apps/docs build
 

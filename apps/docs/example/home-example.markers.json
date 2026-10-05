@@ -73,12 +73,7 @@
         "to": 43
       }
     ],
-    "covers": [
-      "section.printed",
-      "h3",
-      "p",
-      "-- Concise mode"
-    ],
+    "covers": ["section.printed", "h3", "p", "-- Concise mode"],
     "node": "element",
     "startsIn": "tag_name_fragment",
     "endsIn": "text"
@@ -213,12 +208,7 @@
         "to": 9
       }
     ],
-    "covers": [
-      "<define/Row|label, value|>",
-      "<dt>",
-      "<dd>",
-      "</define>"
-    ],
+    "covers": ["<define/Row|label, value|>", "<dt>", "<dd>", "</define>"],
     "node": "element",
     "exact": true,
     "startsIn": "open_tag_start",
@@ -416,12 +406,7 @@
         "to": 7
       }
     ],
-    "covers": [
-      "<if=",
-      "<else if=",
-      "<else>",
-      "</else>"
-    ],
+    "covers": ["<if=", "<else if=", "<else>", "</else>"],
     "node": "document",
     "startsIn": "open_tag_start",
     "endsIn": "close_tag_end"
@@ -439,10 +424,7 @@
         "to": 28
       }
     ],
-    "covers": [
-      "<for|product, i|",
-      "of=shown"
-    ],
+    "covers": ["<for|product, i|", "of=shown"],
     "node": "element",
     "startsIn": "open_tag_start",
     "endsIn": "open_tag_end"
@@ -477,10 +459,7 @@
         "to": 75
       }
     ],
-    "covers": [
-      "<@badge>",
-      "</@badge>"
-    ],
+    "covers": ["<@badge>", "</@badge>"],
     "node": "element",
     "exact": true,
     "startsIn": "open_tag_start",
@@ -499,10 +478,7 @@
         "to": 77
       }
     ],
-    "covers": [
-      "<@price|amount|>",
-      "</@price>"
-    ],
+    "covers": ["<@price|amount|>", "</@price>"],
     "node": "element",
     "exact": true,
     "startsIn": "open_tag_start",
