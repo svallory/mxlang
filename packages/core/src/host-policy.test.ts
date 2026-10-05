@@ -756,3 +756,112 @@ describe("TargetPolicyDiagnostic code", () => {
     expect(diagnostics).toEqual([]);
   });
 });
+
+describe("mx.<target>.defaultTag (decision 145)", () => {
+  const roots: string[] = [];
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  function project(packageJson: string): string {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-default-tag-")));
+    roots.push(root);
+    writeFileSync(join(root, "package.json"), packageJson);
+    writeFileSync(join(root, "a.mx"), "");
+    return join(root, "a.mx");
+  }
+
+  it("is read from the resolved target's own key", () => {
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(
+      project(
+        JSON.stringify({
+          mx: { target: "view-jsx", "view-jsx": { defaultTag: "my-card" } },
+        }),
+      ),
+      lookup,
+    );
+    expect(diagnostics).toEqual([]);
+    expect(policy.defaultTag).toBe("my-card");
+  });
+
+  it("is read when the target comes from a dependency, not from mx.target", () => {
+    const { policy } = resolveTargetPolicyDetailed(
+      project(
+        JSON.stringify({
+          dependencies: { "@t/page": "1" },
+          mx: { page: { defaultTag: "box" } },
+        }),
+      ),
+      lookup,
+    );
+    expect(policy.target).toBe("page");
+    expect(policy.defaultTag).toBe("box");
+  });
+
+  it("ignores another target's key", () => {
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(
+      project(
+        JSON.stringify({
+          mx: { target: "page", "view-jsx": { defaultTag: "other" } },
+        }),
+      ),
+      lookup,
+    );
+    expect(diagnostics).toEqual([]);
+    expect(policy.defaultTag).toBeUndefined();
+  });
+
+  it("is absent when not configured", () => {
+    const { policy } = resolveTargetPolicyDetailed(
+      project(JSON.stringify({ mx: { target: "page", page: {} } })),
+      lookup,
+    );
+    expect(policy).not.toHaveProperty("defaultTag");
+  });
+
+  it.each([
+    [1, "a number"],
+    [null, "null"],
+    [true, "a boolean"],
+    [["a"], "an array"],
+    [{}, "an object"],
+    ["", "an empty string"],
+  ])("rejects %j, positioned at the value", (value, kind) => {
+    const text = `{
+  "mx": {
+    "target": "page",
+    "page": { "defaultTag": ${JSON.stringify(value)} }
+  }
+}`;
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(
+      project(text),
+      lookup,
+    );
+    expect(policy.defaultTag).toBeUndefined();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      code: "invalid-default-tag",
+      severity: "error",
+      line: 4,
+      column: text.split("\n")[3]?.indexOf(JSON.stringify(value)),
+      length: JSON.stringify(value).length,
+    });
+    expect(diagnostics[0]?.message).toContain("invalid `defaultTag` value");
+    expect(diagnostics[0]?.message).toContain(kind);
+    expect(diagnostics[0]?.message).toContain("mx.page.defaultTag");
+  });
+
+  it("positions an escaped key at its value, not at a decoy elsewhere", () => {
+    const text = `{
+  "decoy": { "page": { "defaultTag": 9 } },
+  "mx": { "target": "page", "p\\u0061ge": { "defaultTag": 7 } }
+}`;
+    const { diagnostics } = resolveTargetPolicyDetailed(project(text), lookup);
+    expect(diagnostics[0]).toMatchObject({
+      code: "invalid-default-tag",
+      line: 3,
+    });
+  });
+});

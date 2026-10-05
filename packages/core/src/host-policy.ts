@@ -90,6 +90,13 @@ export interface TargetPolicy {
    * (`loadTargetDescriptor` caches it), so its identity is stable.
    */
   descriptor?: TargetDescriptor;
+  /**
+   * The `mx.<target>.defaultTag` the package configures (decision 145), when
+   * it is a usable string. Whether the name is a reachable, plain-parsing tag
+   * is checked where tags are known; an invalid value is a diagnostic and is
+   * never carried here.
+   */
+  defaultTag?: string;
 }
 
 /** Why a {@link TargetPolicyDiagnostic} was raised. */
@@ -101,7 +108,8 @@ export type TargetPolicyDiagnosticCode =
   | "target-not-found"
   | "target-load-failed"
   | "target-invalid-descriptor"
-  | "host-invalid-descriptor";
+  | "host-invalid-descriptor"
+  | "invalid-default-tag";
 
 /**
  * One problem found while resolving a target, positioned in the
@@ -257,14 +265,15 @@ function validHostsClause(lookup: TargetLookup): string {
  */
 function locateMxValue(
   text: string,
-  key: "host" | "target",
+  key: string | readonly string[],
   legacyValue?: unknown,
 ): { line: number; column: number; length: number } {
+  const keys = typeof key === "string" ? [key] : key;
   if (legacyValue !== undefined) {
     const mxKey = /"mx"\s*:/.exec(text);
     if (mxKey) {
       const wanted = JSON.stringify(legacyValue);
-      const member = new RegExp(`"${key}"\\s*:\\s*`, "g");
+      const member = new RegExp(`"${keys.join(".")}"\\s*:\\s*`, "g");
       member.lastIndex = mxKey.index + mxKey[0].length;
       for (let match = member.exec(text); match; match = member.exec(text)) {
         const at = match.index + match[0].length;
@@ -307,7 +316,11 @@ function locateMxValue(
       }
       cursor++;
     }
-    if (path.length === 2 && path[0] === "mx" && path[1] === key) {
+    if (
+      path.length === keys.length + 1 &&
+      path[0] === "mx" &&
+      keys.every((k, i) => path[i + 1] === k)
+    ) {
       const end = tokens[cursor - 1];
       found = {
         ...positionOfOffset(text, start.index),
@@ -318,6 +331,14 @@ function locateMxValue(
   };
   value([]);
   return found ?? { line: 1, column: 0, length: 1 };
+}
+
+/** How a JSON value reads in a diagnostic: "a number", "null", "an array". */
+function describeJson(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  if (typeof value === "object") return "an object";
+  return `a ${typeof value}`;
 }
 
 /** Whether `value` names a package or a path, not a bare word. */
@@ -662,6 +683,22 @@ export function resolveTargetPolicyDetailed(
     ? loadSpecifiers(mx, dir, lookup, { file, text: read.text }, diagnostics)
     : NO_SPECIFIERS;
   const resolved = policyOf(read.manifest, lookup, loaded);
+  const configured = mx?.[resolved.policy.target];
+  if (isObject(configured) && configured.defaultTag !== undefined) {
+    const value = configured.defaultTag;
+    if (typeof value === "string" && value !== "") {
+      resolved.policy.defaultTag = value;
+    } else {
+      const key = `mx.${resolved.policy.target}.defaultTag`;
+      diagnostics.push({
+        code: "invalid-default-tag",
+        severity: "error",
+        file,
+        message: `invalid \`defaultTag\` value: ${key} is ${value === "" ? "an empty string" : describeJson(value)}, expected a tag name string`,
+        ...locateMxValue(read.text, [resolved.policy.target, "defaultTag"]),
+      });
+    }
+  }
   if (resolved.deprecatedValue !== undefined) {
     const target = lookup.hostTarget(resolved.deprecatedValue)?.target;
     console.warn(
