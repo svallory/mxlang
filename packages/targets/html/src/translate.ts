@@ -700,7 +700,11 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 // \`render\` returns, which is what a \`/var\` on the dynamic tag binds. A
 // compiled template is told apart by its \`.render\` entry, never by the shape
 // of what it returns; any other function returns a string that is written.
-const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: Record<string, any>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : undefined;
+// The overload types the binding \`undefined\` only when the type proves the
+// callee has no \`render\` (a string, null, undefined or a plain function);
+// \`unknown\`, \`object\`, \`{}\` and \`Function\` might be a unit at run time, so
+// they bind \`unknown\`, and \`any\` stays \`any\`.
+const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: Record<string, any>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   if (__mxTarget === null || __mxTarget === undefined) {
     // decision 116: content renders independently of a missing renderer.

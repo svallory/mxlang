@@ -374,13 +374,18 @@ describe("mx-tsc", () => {
       // what the callee's `render` returns, so `n` is Counter's `<return>`
       // value, a number — not the `any` the dynamic helper used to hand back.
       expect(result.output).toContain(
-        "Dyn.mx(8,8): error TS2339: Property 'toUpperCase' does not exist on type 'number'",
+        "Dyn.mx(10,8): error TS2339: Property 'toUpperCase' does not exist on type 'number'",
       );
       // A plain function has no `render`: its string is written, and the
       // binding is `undefined`.
       expect(result.output).toContain(
-        "Dyn.mx(10,6): error TS18048: 'm' is possibly 'undefined'",
+        "Dyn.mx(12,6): error TS18048: 'm' is possibly 'undefined'",
       );
+      // A callee typed `unknown` or `object` might be a unit at run time, so
+      // its binding is `unknown`: a `typeof` guard narrows it to `number`
+      // instead of `never` (no error on the `toFixed` lines, so the count of
+      // three above would grow if the binding were `undefined`).
+      expect(result.output).not.toContain("toFixed");
       // The wording an agent reads when it misuses a unit's default export:
       // its call signature and sink entry, not `typeof Dyn`.
       expect(stripVTControlCharacters(result.output)).toContain(

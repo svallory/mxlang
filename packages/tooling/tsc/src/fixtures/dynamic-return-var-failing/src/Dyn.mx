@@ -3,8 +3,14 @@ import Counter from "../lib/counter.mx";
 export interface Input {
   tag: typeof Counter;
   plain: (input: { start: number }) => string;
+  untyped: unknown;
+  anything: object;
 }
 <${input.tag}/n start=1/>
 <p>${n.toUpperCase()}</p>
 <${input.plain}/m start=1/>
 <p>${m.toUpperCase()}</p>
+<${input.untyped}/u start=1/>
+<if=typeof u === "number">${u.toFixed(1)}</if>
+<${input.anything}/o start=1/>
+<if=typeof o === "number">${o.toFixed(1)}</if>
