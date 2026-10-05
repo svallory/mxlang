@@ -1,5 +1,10 @@
 import type { CustomTag, CustomTagAttributeTag } from "./custom-tags.ts";
 import type { DefaultTagParent } from "./declarations.ts";
+import {
+  type DefaultTagScope,
+  validateDefaultTag,
+} from "./default-tag-validate.ts";
+import type { TargetPolicyDiagnostic } from "./host-policy.ts";
 
 /**
  * Whether a parent is structure rather than an authored tag: control flow
@@ -91,4 +96,75 @@ function ownsChainStructurally(
 
 function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** What `contractDefaultTagDiagnostics` reads from a package's scan. */
+export interface ContractDefaultTagInput {
+  /** The scan's tags: where each declaration is written (a contracts module or a sidecar). */
+  tags: ReadonlyMap<string, { module?: string; sidecar?: string }>;
+  customTags: Readonly<Record<string, CustomTag>>;
+  /** The scope the target checks a default tag in (custom tags known). */
+  scope: DefaultTagScope;
+  /** The target's host, when it has one: a host may forbid the rung. */
+  host?: { name: string; allowContractDefaultTag?: boolean };
+}
+
+/**
+ * Registration check for every `defaultTag` the package's contracts declare,
+ * top level and on attribute-tag declarations at any depth: one
+ * `invalid-default-tag` diagnostic per declaration, at the file that writes it
+ * (the contracts module or the sidecar). A host that forbids per-tag default
+ * tags (`allowContractDefaultTag: false`) refuses each declaration, naming the
+ * host; otherwise the value goes through the shared `validateDefaultTag`.
+ * A tag whose sidecar fails to load is skipped: the scan reports that error.
+ */
+export function contractDefaultTagDiagnostics(
+  input: ContractDefaultTagInput,
+): TargetPolicyDiagnostic[] {
+  const out: TargetPolicyDiagnostic[] = [];
+  const forbidden = input.host?.allowContractDefaultTag === false;
+  for (const [name, found] of input.tags) {
+    const file = found.module ?? found.sidecar;
+    const tag = Object.hasOwn(input.customTags, name)
+      ? input.customTags[name]
+      : undefined;
+    if (!file || !tag) continue;
+    try {
+      const declared: Array<{ chain: string[]; value: string }> = [];
+      const collect = (
+        declaration: CustomTag | CustomTagAttributeTag,
+        chain: string[],
+      ): void => {
+        const value = declaration.defaultTag;
+        if (typeof value === "string" && value !== "")
+          declared.push({ chain, value });
+        for (const [attrName, nested] of Object.entries(
+          declaration.attributeTags ?? {},
+        ))
+          collect(nested, [...chain, attrName]);
+      };
+      collect(tag, []);
+      for (const { chain, value } of declared) {
+        const owner = `\`<${name}>\`${chain.map((c) => ` \`<@${c}>\``).join("")}`;
+        const reason = forbidden
+          ? `\`defaultTag\` in the contract of ${owner} is not allowed: host \`${input.host?.name}\` does not permit per-tag default tags`
+          : validateDefaultTag(value, input.scope);
+        if (reason === undefined) continue;
+        out.push({
+          code: "invalid-default-tag",
+          severity: "error",
+          file,
+          message: forbidden
+            ? reason
+            : `invalid \`defaultTag\` value: ${reason} (contract of ${owner})`,
+          line: 1,
+          column: 0,
+          length: 1,
+        });
+      }
+    } catch {
+      // The sidecar's own registration error is the scan's to report.
+    }
+  }
+  return out;
 }

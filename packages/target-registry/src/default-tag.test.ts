@@ -571,3 +571,113 @@ describe("a scan failure keeps the parse-shape check (round 3)", () => {
     expect(policy.defaultTag).toBe("my-card");
   });
 });
+
+describe("a contract's defaultTag is checked at registration, at the declaration (decision 145, PR 3)", () => {
+  afterEach(() => cleanupProjects());
+
+  const contracts = (body: string) =>
+    project(
+      { mx: { target: "html", contracts: "./contracts.ts" } },
+      { "contracts.ts": `export default {\n${body}\n};\n` },
+    );
+  const own = (file: string) =>
+    resolveTargetPolicyDetailed(file).diagnostics.filter(
+      (d) => d.code === "invalid-default-tag",
+    );
+
+  it("accepts an element, and a custom tag the package declares", () => {
+    const file = contracts(
+      `  list: { defaultTag: "item", children: { item: {} } },\n  item: {},`,
+    );
+    expect(own(file)).toEqual([]);
+    expect(own(contracts(`  list: { defaultTag: "section" },`))).toEqual([]);
+  });
+
+  it.each([
+    ["nope", "`<nope>` is not a tag reachable from this package"],
+    ["input", "`<input>` is a void tag, not a plain tag"],
+    ["pre", "`<pre>` is a whitespace-preserving tag, not a plain tag"],
+    ["await", "`<await>` is not an element of this target"],
+  ])("rejects %s, positioned at the contracts module", (name, reason) => {
+    const file = contracts(`  list: { defaultTag: "${name}" },`);
+    const found = own(file);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      severity: "error",
+      file: join(file, "..", "contracts.ts"),
+      message: `invalid \`defaultTag\` value: ${reason} (contract of \`<list>\`)`,
+    });
+  });
+
+  it("an attribute-tag declaration's value is checked too, naming the chain", () => {
+    const file = contracts(
+      `  list: { attributeTags: { items: { attributeTags: { sub: { defaultTag: "nope" } } } } },`,
+    );
+    const found = own(file);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("`<list>`");
+    expect(found[0]?.message).toContain("<@items>");
+    expect(found[0]?.message).toContain("<@sub>");
+  });
+
+  it("a sidecar's value is checked at the sidecar", () => {
+    const file = project(
+      { mx: { target: "html" } },
+      {
+        "tags/list.tag.ts": `export default { defaultTag: "nope", transform: () => [] };\n`,
+      },
+    );
+    const found = own(file);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.file).toBe(join(file, "..", "tags", "list.tag.ts"));
+  });
+
+  it("a name only a custom tag could provide is kept when the scan fails", () => {
+    const file = project({
+      mx: { target: "html", contracts: { item: {} } },
+    });
+    expect(() => resolveTargetPolicyDetailed(file)).not.toThrow();
+  });
+
+  it("on data, `object` and declared tags are valid; html elements are not", () => {
+    const data = (name: string) =>
+      project(
+        { mx: { target: "data", contracts: "./contracts.ts" } },
+        {
+          "contracts.ts": `export default { list: { defaultTag: "${name}" }, item: {} };\n`,
+        },
+      );
+    const check = (name: string) =>
+      resolveTargetPolicyDetailed(data(name), {
+        dataWired: true,
+      }).diagnostics.filter((d) => d.code === "invalid-default-tag");
+    expect(check("object")).toEqual([]);
+    expect(check("item")).toEqual([]);
+    expect(check("div")).toHaveLength(1);
+  });
+
+  it("a host that forbids it: every declaration is a registration error naming the host", () => {
+    const proj = fakeProject({
+      mx: {
+        target: specifier("forbids-contract"),
+        contracts: "./contracts.ts",
+      },
+      install: ["forbids-contract"],
+      files: {
+        "contracts.ts": `export default { "my-list": { defaultTag: "div", attributeTags: { items: { defaultTag: "div" } } } };\n`,
+      },
+    });
+    const found = resolveTargetPolicyDetailed(
+      proj.path("a.mx"),
+    ).diagnostics.filter((d) => d.code === "invalid-default-tag");
+    expect(found).toHaveLength(2);
+    expect(found[0]).toMatchObject({
+      severity: "error",
+      file: proj.path("contracts.ts"),
+      message:
+        "`defaultTag` in the contract of `<my-list>` is not allowed: host `fake-forbid-host` does not permit per-tag default tags",
+    });
+    expect(found[1]?.message).toContain("<@items>");
+    expect(found[1]?.message).toContain("fake-forbid-host");
+  });
+});

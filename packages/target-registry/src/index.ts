@@ -19,6 +19,7 @@ import angular from "@mxlang/angular/descriptor";
 import astro from "@mxlang/astro/descriptor";
 import {
   type CustomTag,
+  contractDefaultTagDiagnostics,
   hostModuleSegment as coreHostModuleSegment,
   resolveTargetPolicyDetailed as coreResolveTargetPolicyDetailed,
   scanCached as coreScanCached,
@@ -345,6 +346,51 @@ function scopeFor(
   };
 }
 
+const TARGET_ERROR_CODES: ReadonlySet<string> = new Set([
+  "unknown-target",
+  "target-host-mismatch",
+  "target-not-found",
+  "target-load-failed",
+  "target-invalid-descriptor",
+  "host-invalid-descriptor",
+]);
+
+/**
+ * The registration check of the package's contracts' `defaultTag`s (the
+ * parent-contract rung): each at its declaration, and refused by a host that
+ * does not permit it. A failed scan skips it; the tool's own scan reports that.
+ */
+function contractDiagnostics(
+  descriptor: TargetDescriptor,
+  lookup: TargetLookup,
+  filePath: string,
+): TargetPolicyDiagnostic[] {
+  let scan: ReturnType<typeof coreScanCached>;
+  const hostKey = lookup.hostFilterKey(descriptor.name);
+  try {
+    scan = coreScanCached(filePath, {
+      targets: lookup,
+      ...(hostKey === undefined ? {} : { host: hostKey }),
+    });
+  } catch {
+    return [];
+  }
+  return contractDefaultTagDiagnostics({
+    tags: scan.tags,
+    customTags: scan.customTags,
+    scope: defaultTagScopeFor({
+      dir: dirname(filePath),
+      translator: (descriptor.parseTranslator ??
+        descriptor.translator ??
+        html.translator) as unknown,
+      customTags: scan.customTags,
+      declarations: descriptor.declarations?.default,
+      builtins: builtinsOf(descriptor),
+    }),
+    ...(descriptor.host ? { host: descriptor.host } : {}),
+  });
+}
+
 /** The built-in names a target lists: its own and its host's override. */
 function builtinsOf(descriptor: TargetDescriptor): readonly string[] {
   return [descriptor.defaultTag, descriptor.host?.defaultTag].filter(
@@ -391,6 +437,11 @@ function checkDefaultTags(
       }
     }
   }
+  // A package whose target could not be selected or loaded compiles under a
+  // fallback its author did not ask for: its contracts are not this target's
+  // to judge, and reading them would re-scan a package already in error.
+  if (!resolution.diagnostics.some((d) => TARGET_ERROR_CODES.has(d.code)))
+    diagnostics.push(...contractDiagnostics(descriptor, lookup, filePath));
   if (
     policy.descriptor &&
     policy.descriptorAt &&
