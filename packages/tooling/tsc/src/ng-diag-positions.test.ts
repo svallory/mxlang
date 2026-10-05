@@ -32,10 +32,10 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
       expect(result.output).toContain(
         at("[value]=title", "-998002: Can't bind to '[value]'"),
       );
-      // A plain dynamic attribute (`lable=title`, emitted `[lable]`): the
+      // A plain dynamic attribute (`labelText=title`, emitted `[labelText]`): the
       // authored name.
       expect(result.output).toContain(
-        at("lable=title", "-998002: Can't bind to 'lable'"),
+        at("labelText=title", "-998002: Can't bind to 'labelText'"),
       );
       // A default attribute (`<widget=title>`) has no spelled name: its
       // value is where the diagnostic lands.
@@ -67,7 +67,7 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
         `x.component.ng.mx(${printed(source, "title.nmae")}): error TS2339`,
       );
       expect(result.output).toContain(
-        `x.component.ng.mx(${printed(source, "lable=title")}): error TS-998002`,
+        `x.component.ng.mx(${printed(source, "labelText=title")}): error TS-998002`,
       );
       expect(result.output).not.toContain("approximate location");
     },

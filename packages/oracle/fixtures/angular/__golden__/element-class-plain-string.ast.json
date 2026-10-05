@@ -1,5 +1,22 @@
 [
   {
+    "name": "__mxAttr0",
+    "value": {
+      "ast": {
+        "receiver": {
+          "receiver": {},
+          "name": "$any"
+        },
+        "args": [
+          {
+            "receiver": {},
+            "name": "someExpr"
+          }
+        ]
+      }
+    }
+  },
+  {
     "name": "div",
     "attributes": [],
     "inputs": [
@@ -9,8 +26,34 @@
         "securityContext": 0,
         "value": {
           "ast": {
-            "receiver": {},
-            "name": "someExpr"
+            "condition": {
+              "receiver": {},
+              "name": "__mxAttr0"
+            },
+            "trueExp": {
+              "expression": {
+                "condition": {
+                  "operation": "===",
+                  "left": {
+                    "receiver": {},
+                    "name": "__mxAttr0"
+                  },
+                  "right": {
+                    "value": true
+                  }
+                },
+                "trueExp": {
+                  "value": "true"
+                },
+                "falseExp": {
+                  "receiver": {},
+                  "name": "__mxAttr0"
+                }
+              }
+            },
+            "falseExp": {
+              "value": null
+            }
           }
         },
         "unit": null

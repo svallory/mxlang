@@ -1,5 +1,22 @@
 [
   {
+    "name": "__mxAttr0",
+    "value": {
+      "ast": {
+        "receiver": {
+          "receiver": {},
+          "name": "$any"
+        },
+        "args": [
+          {
+            "receiver": {},
+            "name": "expr"
+          }
+        ]
+      }
+    }
+  },
+  {
     "name": "a",
     "attributes": [],
     "inputs": [
@@ -9,8 +26,49 @@
         "securityContext": 0,
         "value": {
           "ast": {
-            "receiver": {},
-            "name": "expr"
+            "condition": {
+              "operation": "||",
+              "left": {
+                "operation": "||",
+                "left": {
+                  "operation": "==",
+                  "left": {
+                    "receiver": {},
+                    "name": "__mxAttr0"
+                  },
+                  "right": {
+                    "value": null
+                  }
+                },
+                "right": {
+                  "operation": "===",
+                  "left": {
+                    "receiver": {},
+                    "name": "__mxAttr0"
+                  },
+                  "right": {
+                    "value": false
+                  }
+                }
+              },
+              "right": {
+                "operation": "===",
+                "left": {
+                  "receiver": {},
+                  "name": "__mxAttr0"
+                },
+                "right": {
+                  "value": true
+                }
+              }
+            },
+            "trueExp": {
+              "value": ""
+            },
+            "falseExp": {
+              "receiver": {},
+              "name": "__mxAttr0"
+            }
           }
         },
         "unit": null

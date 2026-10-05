@@ -4047,7 +4047,7 @@ describe(".ng.mx language plugin", () => {
         const attributeError = found.find(
           (d) => d.source === "angular" && d.code === -998002,
         );
-        expect(attributeError?.start).toBe(source.indexOf("lable=title"));
+        expect(attributeError?.start).toBe(source.indexOf("labelText=title"));
         expect(service.getSyntacticDiagnostics(tag)).toEqual([]);
       } finally {
         project.close();

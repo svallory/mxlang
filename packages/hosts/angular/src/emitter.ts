@@ -598,6 +598,9 @@ function primitiveForm(
 ): PrimitiveForm | null {
   if (attr.kind !== "dynamic") return null;
   const name = attr.name;
+  // A dashed tag is an Angular component selector (or a custom element): its
+  // attributes are inputs, bound as properties and type-checked as such.
+  if (tagName?.includes("-")) return null;
   if (name.includes(":") && name.toLowerCase().startsWith("on")) return null;
   if (LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) return null;
   if (name === "class" || name === "style") {

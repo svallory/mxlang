@@ -57,6 +57,10 @@ describe("Element", () => {
     ]);
   });
 
+  it("keeps a dashed tag's attributes as inputs, with no primitive normalization", () => {
+    const out = emit("<app-child label=title/>");
+    expect(out).toBe('<app-child [label]="title"></app-child>');
+  });
   it("does not treat once=/onto= as events", () => {
     const out = emit("<div once=x onto=y>z</div>");
     expect(out).toBe('<div [once]="x" [onto]="y">z</div>');

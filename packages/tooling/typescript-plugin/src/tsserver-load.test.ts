@@ -315,7 +315,7 @@ describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
         before("title.nmae"),
       );
       expect(found.find((d) => d.code === -998002)?.start).toEqual(
-        before("lable=title"),
+        before("labelText=title"),
       );
       expect(found.some((d) => d.text.includes("approximate location"))).toBe(
         false,
