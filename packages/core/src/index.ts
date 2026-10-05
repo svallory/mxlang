@@ -122,6 +122,7 @@ export {
   type DefaultTagScope,
   validateDefaultTag,
 } from "./default-tag-validate.ts";
+export { sugarTagName } from "./name-sugar.ts";
 export { nearestName } from "./did-you-mean.ts";
 export { drive, type Emitter, emit } from "./emit.ts";
 export { escape } from "./escape.ts";

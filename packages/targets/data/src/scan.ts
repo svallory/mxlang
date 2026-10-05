@@ -13,7 +13,7 @@
 
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
-import type { CustomTag } from "@mxlang/core";
+import { type CustomTag, sugarTagName } from "@mxlang/core";
 import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
 
@@ -165,11 +165,12 @@ export function scanAuthoredTags(
         nameLoc !== undefined &&
         nameLoc.start.line === nameLoc.end.line &&
         nameLoc.start.column === nameLoc.end.column;
-      const name = unnamed
-        ? defaultTag
-        : node.name?.type === "StringLiteral"
-          ? node.name.value
-          : undefined;
+      // Decision 146: `resource:post` is the tag `resource` and `:title` an
+      // unnamed tag; the real compile splits them, so this pass does too.
+      const written =
+        node.name?.type === "StringLiteral" ? node.name.value : undefined;
+      const split = written === undefined ? undefined : sugarTagName(written);
+      const name = unnamed || split?.unnamed ? defaultTag : split?.tag;
       const start = node.loc?.start;
       if (
         name !== undefined &&

@@ -517,3 +517,49 @@ describe("walk order: attribute tags and children in source order", () => {
     expect(known?.kind === "tag" && known.children.length).toBe(2);
   });
 });
+
+// Decision 146: `tag:name` and `:name` are sugar; the parse-only scan reads
+// Marko's raw tree, so it applies core's `sugarTagName` rule to each name.
+describe("name sugar in the parse-only scan", () => {
+  it("`resource:post` is the known tag `resource`, so the real error shows", () => {
+    const { diagnostics } = parse("resource:post\nrelationships\n");
+    expect(diagnostics).toMatchObject([
+      {
+        message:
+          "`<relationships>` must be inside `<resource>`; found at the top level",
+        line: 2,
+        column: 0,
+      },
+    ]);
+  });
+
+  it("the HTML form `<resource:post/>` is the same", () => {
+    const { diagnostics } = parse("<resource:post/>\n<relationships/>\n");
+    expect(diagnostics).toMatchObject([
+      { message: expect.stringContaining("`<relationships>` must be inside"), line: 2 },
+    ]);
+  });
+
+  it("`:title` is an unnamed tag, so it gets the default tag", () => {
+    const { diagnostics } = parse(
+      "resource\n  attributes\n    :title\nrelationships\n",
+      {},
+      { ...customTags, object: {} },
+    );
+    expect(diagnostics.map((d) => d.message).join("\n")).not.toContain(
+      "`<:title>`",
+    );
+  });
+
+  it("a real unknown name before a colon is still reported as that name", () => {
+    const { diagnostics } = parse("widget:post\n");
+    expect(diagnostics).toMatchObject([
+      {
+        message:
+          "`<widget>` is not a known tag: it has no contract in `customTags`",
+        line: 1,
+        column: 0,
+      },
+    ]);
+  });
+});

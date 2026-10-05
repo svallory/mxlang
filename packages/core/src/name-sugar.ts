@@ -29,6 +29,21 @@ import { type Ctx, type Node, TranslateError } from "./core.ts";
  * (`acceptsForeignAttrNames`): there `svg:rect` and `#ref` are not ours.
  */
 
+/**
+ * What a tag name written in source means after the split: `resource:post` is
+ * the tag `resource` (plus `name="post"`), `:title` is an unnamed tag. Pure, so
+ * a parse-only pass (the data target's unknown-tag scan) applies the same rule
+ * as the rewrite without running it. A name that starts with `@` (an attribute
+ * tag) is a property key and is never split.
+ */
+export function sugarTagName(raw: string): { tag: string; unnamed: boolean } {
+  if (raw.startsWith("@")) return { tag: raw, unnamed: false };
+  const colon = raw.indexOf(":");
+  if (colon < 0) return { tag: raw, unnamed: false };
+  const tag = raw.slice(0, colon);
+  return { tag, unnamed: tag === "" };
+}
+
 /** An identifier-like token, as Marko's own shorthand allows. */
 const SUGAR_TOKEN = /^[A-Za-z_$][\w$-]*$/;
 
