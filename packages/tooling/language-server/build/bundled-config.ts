@@ -26,8 +26,13 @@ export const BUNDLED_MAIN = "bin.cjs";
  */
 export const BUNDLED_INSTALLED = ["@marko/compiler"] as const;
 
-/** Left external and NOT shipped. None: the server needs no project package. */
-export const BUNDLED_PROJECT_RESOLVED = [] as const;
+/**
+ * Left external and NOT shipped: resolved from the user's project at run time.
+ * `@angular/compiler` is an optional peer of `@mxlang/angular`, which reads
+ * Angular's DOM schema from it through `createRequire(projectDir)`
+ * (`hosts/angular/src/dom-schema.ts`); a missing one is a positioned error.
+ */
+export const BUNDLED_PROJECT_RESOLVED = ["@angular/compiler"] as const;
 
 export const BUNDLED_EXTERNALS = [
   ...BUNDLED_INSTALLED,
