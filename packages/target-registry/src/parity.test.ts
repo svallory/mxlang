@@ -273,7 +273,7 @@ describe("packages and rule 2 (the single target dependency)", () => {
     // `@mxlang/core` is a dependency of every target package and declares no
     // target itself; a project's own package does the same.
     expect(lookup.fromPackage("@mxlang/core")).toBeUndefined();
-    expect(lookup.fromPackage("@mxlang/parser")).toBeUndefined();
+    expect(lookup.fromPackage("@mxlang/tsx-bridge")).toBeUndefined();
     const resolved = resolveTargetPolicy(
       project({ dependencies: { "@mxlang/core": "*" } }),
     );

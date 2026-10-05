@@ -178,7 +178,7 @@ describe("MxRegionContext", () => {
     expect(context.propertyKey).toBe("template");
     expect(context.decoratorNames).toEqual([]);
     // Not a decorator's own argument object, so nothing here claims a
-    // decorator frame — packages/parser has no notion of "is this a
+    // decorator frame — packages/tsx-bridge has no notion of "is this a
     // decorator-shaped call", only of an actual `@decorator` syntax node.
   });
 

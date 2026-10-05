@@ -22,7 +22,7 @@ import {
 } from "./pack-hygiene.ts";
 
 // One block per package that ships (or will ship) a tarball. Needs a built
-// `dist/` (`bun run build`), like `packages/parser/src/pack-contents.test.ts`.
+// `dist/` (`bun run build`), like `packages/tsx-bridge/src/pack-contents.test.ts`.
 // The `skipLibCheck: false` consumer probe is `scripts/pack-probe.ts`, run
 // from `verify`, not here.
 

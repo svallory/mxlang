@@ -11,7 +11,7 @@ const dist = await bundledBuild({
   packageDir: fileURLToPath(new URL("../", import.meta.url)),
   entries: ["index"],
   outdir: "dist",
-  externals: ["@marko/compiler", "@mxlang/core", "@mxlang/parser"],
+  externals: ["@marko/compiler", "@mxlang/core", "@mxlang/tsx-bridge"],
 });
 writeFileSync(
   join(dist, "index.js"),

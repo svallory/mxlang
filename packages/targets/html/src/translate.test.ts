@@ -520,7 +520,7 @@ describe("error constructs: the target genuinely cannot express them", () => {
 describe("a type-only import does not resolve a tag (decision 114 parity)", () => {
   // `import type Widget from "./widget.mx"` binds no runtime value, so
   // `<Widget/>` must be Marko's own unresolved-tag error — matching
-  // `@mxlang/parser`'s `programBindings`, which already excludes type-only
+  // `@mxlang/tsx-bridge`'s `programBindings`, which already excludes type-only
   // bindings for the `.solid.mx` region path (see
   // `packages/hosts/solid/src/index.test.ts`, "still rejects a capitalized
   // tag bound only by a type-only import"). Before this fix, core's own

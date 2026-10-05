@@ -1,0 +1,35 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "typescript"
+
+tasks:
+  typecheck:
+    command: "tsc"
+    args: ["--noEmit"]
+    inputs:
+      - "src/**/*"
+      - "/packages/babel/src/**/*"
+      - "tsconfig.json"
+
+  test:
+    command: "vitest"
+    args: ["run", "--root", "../..", "--project", "@mxlang/tsx-bridge"]
+    inputs:
+      - "src/**/*"
+      - "/packages/babel/src/**/*"
+      - "/vitest.config.ts"
+
+  # Delegates to package.json's build (bundle, `rm -rf dist`, declaration
+  # emit) so the two cannot drift: a moon-built dist must carry the
+  # `dist/index.d.ts` that `types` points at.
+  build:
+    command: "bun"
+    args: ["run", "build"]
+    inputs:
+      - "src/**/*"
+      - "/packages/babel/src/**/*"
+      - "scripts/emit-declarations.ts"
+      - "package.json"
+    outputs:
+      - "dist"

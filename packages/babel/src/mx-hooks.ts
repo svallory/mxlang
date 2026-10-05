@@ -13,7 +13,7 @@
  * the options bag, supplied by whoever is driving the parse, with the parser
  * itself staying free of host knowledge. The position check vetoes *where* a
  * region may appear; this decides *who lowers it*. Neither one teaches
- * `packages/parser` what a `Component` or a `template` is.
+ * `packages/babel` what a `Component` or a `template` is.
  */
 
 import type { CustomTag } from "@mxlang/core";
@@ -247,7 +247,7 @@ export interface MxRegionCompileInput {
   /**
    * Every value the surrounding module binds at its top level — import
    * locals plus top-level `const`/`function`/`class` names, type-only
-   * bindings excluded (`@mxlang/parser`'s `programBindings`). A capitalized
+   * bindings excluded (`@mxlang/tsx-bridge`'s `programBindings`). A capitalized
    * tag a region references may resolve through this scope rather than
    * anything the region itself imports or declares (decision 114).
    */
@@ -275,7 +275,7 @@ export interface MxRegionCompileInput {
    * `const`/`function`/`class`) whose value is not statically a
    * function/arrow/class — the local extension of decision 116 (firstmate's
    * ruling under decision 116 in `notes/decisions-2026-09-10.md`;
-   * `@mxlang/parser`'s `unknownProgramBindings`). A host lowers a
+   * `@mxlang/tsx-bridge`'s `unknownProgramBindings`). A host lowers a
    * capitalized tag bound to a name in this set as a dynamic tag instead of
    * the direct call `moduleBindings` alone would give it.
    */

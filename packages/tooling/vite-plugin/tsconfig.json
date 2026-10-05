@@ -8,7 +8,7 @@
     "types": ["node"],
     "allowImportingTsExtensions": true,
     "paths": {
-      "@mxlang/parser": ["../parser/src/public.d.ts"]
+      "@mxlang/tsx-bridge": ["../tsx-bridge/src/public.d.ts"]
     }
   },
   "include": ["src"]

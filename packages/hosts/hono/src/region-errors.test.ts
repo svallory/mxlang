@@ -8,7 +8,7 @@
 
 import { join } from "node:path";
 import { createTargetLookup } from "@mxlang/core";
-import { print } from "@mxlang/parser";
+import { print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
 import descriptor from "./descriptor.ts";
 import { compileHonoMx, compileHonoRegion } from "./index.ts";

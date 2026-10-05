@@ -3,8 +3,9 @@
  * `mx-atoms.cases.ts`; `patches/htmljs-parser.test.ts` runs the same table
  * against the patched npm build.
  */
+
+import { parseExpression as parseBabelExpression } from "@mxlang/babel";
 import { describe, expect, it } from "vitest";
-import { parseBabelExpression } from "../index.ts";
 import * as template from "./index.ts";
 import {
   ATOMS,

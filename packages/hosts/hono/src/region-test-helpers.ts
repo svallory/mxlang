@@ -15,7 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createTargetLookup, getCustomTags } from "@mxlang/core";
-import { print } from "@mxlang/parser";
+import { print } from "@mxlang/tsx-bridge";
 import type { Child } from "hono/jsx";
 import descriptor from "./descriptor.ts";
 import { compileHonoMx, compileHonoRegion } from "./index.ts";

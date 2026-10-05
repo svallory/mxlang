@@ -52,7 +52,7 @@ import type { TargetLookup } from "./target-descriptor.ts";
  *
  * The core parses JS in two places (an `import` statement's bindings, and an
  * expression whose identifier references a host may rewrite). Both used
- * `@mxlang/parser`'s vendored Babel while this file lived in the translator,
+ * `@mxlang/tsx-bridge`'s vendored Babel while this file lived in the translator,
  * which made the string host depend on the *Solid host parser* package for a
  * plain `parse` call. `@marko/compiler` already bundles a full Babel, and
  * these nodes belong to that instance anyway — so the core asks it. Loaded
@@ -977,11 +977,11 @@ export function importBindings(line: string): string[] {
  * check and `exportNameFor`'s collision check correctly want) and
  * `ctx.imports` (value bindings only — what every host's own `isComponent`,
  * and this file's own file-local-binding check, correctly want for
- * tag-name resolution). Mirrors `@mxlang/parser`'s `programBindings`, which
+ * tag-name resolution). Mirrors `@mxlang/tsx-bridge`'s `programBindings`, which
  * excludes the same two shapes outright for `.solid.mx` region resolution
  * (a region has no `needsAttrTagImport`-style second consumer to preserve);
  * duplicated rather than shared because core may not depend on
- * `@mxlang/parser` (see `packages/core/AGENTS.md`).
+ * `@mxlang/tsx-bridge` (see `packages/core/AGENTS.md`).
  */
 export function importTypeOnlyBindings(line: string): Set<string> {
   const typeOnly = new Set<string>();
@@ -1074,7 +1074,7 @@ export function importedNames(
  * lowers as a dynamic tag instead of a direct call, matching Marko's own
  * `_dynamic_tag` runtime dispatch. Exported so every consumer checking "is
  * this specifier a template file" (`lower.ts`'s own `import` handling, and
- * `@mxlang/parser`'s module-scope scan for `.solid.mx`) shares one rule
+ * `@mxlang/tsx-bridge`'s module-scope scan for `.solid.mx`) shares one rule
  * rather than duplicating the extension test.
  */
 export function isMarkoOrMxSpecifier(specifier: string): boolean {

@@ -7,8 +7,8 @@ import {
   isTranslateError,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import type { MxRegionCompile } from "@mxlang/parser";
-import { print } from "@mxlang/parser";
+import type { MxRegionCompile } from "@mxlang/tsx-bridge";
+import { print } from "@mxlang/tsx-bridge";
 import type { Plugin } from "vite";
 
 /**
@@ -583,7 +583,7 @@ function markoPosition(
 /**
  * Compiles `.solid.mx` and `.mx` ahead of the rest of the pipeline.
  *
- * `.solid.mx` prints to JSX source text (`print()`, from `@mxlang/parser`)
+ * `.solid.mx` prints to JSX source text (`print()`, from `@mxlang/tsx-bridge`)
  * ahead of `@solidjs/vite-plugin`. Ordering: this plugin is `enforce: "pre"`,
  * matching `@solidjs/vite-plugin`'s own hard-coded `enforce: "pre"`, so
  * relative order between the two is the order they appear in the user's

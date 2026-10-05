@@ -14,7 +14,7 @@
     "hono": "4.6.20"
   },
   "devDependencies": {
-    "@mxlang/parser": "workspace:*",
+    "@mxlang/tsx-bridge": "workspace:*",
     "@types/node": "26.5.1",
     "playwright": "1.63.0",
     "typescript": "5.9.3",

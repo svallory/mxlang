@@ -28,7 +28,7 @@
  */
 
 import type { MxWarning } from "@mxlang/core";
-import { parse } from "@mxlang/parser";
+import { parse } from "@mxlang/tsx-bridge";
 import { offsetAt } from "./mapping.ts";
 
 /** Control-flow keywords Angular reads after `@`. */

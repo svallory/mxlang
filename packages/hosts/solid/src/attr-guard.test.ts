@@ -7,7 +7,7 @@ import {
   parse as parseMxFile,
   sourceBindings,
   unknownSourceBindings,
-} from "@mxlang/parser";
+} from "@mxlang/tsx-bridge";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { beforeAll, describe, expect, it } from "vitest";
 import {

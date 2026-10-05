@@ -116,7 +116,7 @@ export function sourceBindings(
  * than raw source text. For a caller that already has one — a `.solid.mx`
  * file cannot be re-parsed with plain `typescript`/`jsx` plugins, since it
  * contains MX-only syntax (shorthand `class`/`#id`, object-literal
- * attributes) real TSX rejects; `@mxlang/parser`'s own
+ * attributes) real TSX rejects; `@mxlang/tsx-bridge`'s own
  * `collectModuleImportSpecifiers`-style declaration pre-pass (regions
  * replaced with `null`) is what produces a parseable `Program` for it.
  */

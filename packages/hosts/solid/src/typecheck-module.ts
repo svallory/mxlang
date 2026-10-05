@@ -1,9 +1,9 @@
 import type { MxWarning } from "@mxlang/core";
-import { SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
+import { SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/tsx-bridge";
 
 /**
  * Appends an import for every Solid JSX built-in (`SOLID_BUILTIN_TAGS`,
- * `@mxlang/parser`) the generated text uses as a bare tag and the source
+ * `@mxlang/tsx-bridge`) the generated text uses as a bare tag and the source
  * does not already bind (`sourceBindings`, same package) — so a caller who
  * genuinely wrote `import { Show } from "./my-show.ts"` is left alone rather
  * than getting a colliding second `Show`. `@mxlang/solid`'s emitter prints

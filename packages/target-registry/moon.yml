@@ -17,5 +17,5 @@ tasks:
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
-      # region.test.ts imports the parser's built entry (`print`).
-      - "/packages/parser/dist/**/*"
+      # region.test.ts imports the tsx-bridge's built entry (`print`).
+      - "/packages/tsx-bridge/dist/**/*"

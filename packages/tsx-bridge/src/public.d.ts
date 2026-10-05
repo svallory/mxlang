@@ -1,12 +1,12 @@
 /**
- * Public types for `@mxlang/parser` as seen by other packages.
+ * Public types for `@mxlang/tsx-bridge` as seen by other packages.
  *
  * Consumers typecheck against this rather than against `src/index.ts`, because
- * the vendored `@babel/parser` source under `src/babel/` needs relaxations
+ * the vendored `@babel/parser` source in `packages/babel` needs relaxations
  * (`allowImportingTsExtensions`, looser index/variance checks) that should not
  * leak into every package that merely calls `parse`.
  */
-declare module "@mxlang/parser" {
+declare module "@mxlang/tsx-bridge" {
   import type { Expression, File } from "@babel/types";
   // Type-only. `@mxlang/core` has no runtime dependency on the parser and
   // nothing in core's emitted declarations references it (the only core -> parser

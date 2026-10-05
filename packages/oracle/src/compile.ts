@@ -6,7 +6,7 @@ import {
 } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import type { File } from "@babel/types";
-import { printAst } from "@mxlang/parser";
+import { printAst } from "@mxlang/tsx-bridge";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { transform as nativeTransform } from "@solidjs/compiler";
 
@@ -70,7 +70,7 @@ function isMxPath(filename: string): boolean {
  * compiled output and break byte parity against a twin that went through the
  * ordinary TS pipeline.
  *
- * MX input is printed with `@mxlang/parser`'s `printAst` rather than left to
+ * MX input is printed with `@mxlang/tsx-bridge`'s `printAst` rather than left to
  * Babel's own output stage, because that printer (and its
  * `retainLines`/`jsescOption` settings) is MX's real product boundary: the
  * text the native compiler will actually receive in the Vite plugin.

@@ -99,7 +99,7 @@ export interface CompileSolidMxOptions {
   /**
    * The subset of `moduleBindings`' *non-import* names (a top-level
    * `const`/`function`/`class` the surrounding module declares) whose value
-   * `@mxlang/parser`'s `programBindings` could not statically prove is a
+   * `@mxlang/tsx-bridge`'s `programBindings` could not statically prove is a
    * function/arrow/class — the local extension of decision 116 (firstmate's
    * ruling under decision 116 in `notes/decisions-2026-09-10.md`). A
    * capitalized tag bound to a name in this set lowers as a dynamic tag

@@ -9,7 +9,7 @@
  */
 import { join } from "node:path";
 import type { MxWarning } from "@mxlang/core";
-import { print } from "@mxlang/parser";
+import { print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
 import { compileReactRegion } from "./index.ts";
 

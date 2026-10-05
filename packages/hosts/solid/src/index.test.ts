@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import { type CustomTag, readCalleeInput } from "@mxlang/core";
-import { parse as parseMxFile } from "@mxlang/parser";
+import { parse as parseMxFile } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit, solidTargets } from "./index.ts";
 
@@ -607,7 +607,7 @@ describe("Solid host errors", () => {
   it("resolves a capitalized tag bound by the surrounding module (decision 114)", () => {
     // A `.solid.mx` region has no module scope of its own; a real caller's
     // surrounding TypeScript module supplies this through
-    // `moduleBindings`, computed by `@mxlang/parser`'s `programBindings`
+    // `moduleBindings`, computed by `@mxlang/tsx-bridge`'s `programBindings`
     // from the whole file (imports plus top-level const/function/class).
     expect(() =>
       compileSolidMx("<Widget/>", {
@@ -619,12 +619,12 @@ describe("Solid host errors", () => {
 
   it("still rejects a capitalized tag bound only by a type-only import (decision 114)", () => {
     // `import type Widget from "./widget.mx"` binds no runtime value, so it
-    // must not resolve `<Widget/>` — matching `@mxlang/parser`'s
+    // must not resolve `<Widget/>` — matching `@mxlang/tsx-bridge`'s
     // `programBindings`, which excludes type-only bindings by design (see
     // `source-bindings.ts`). Passed explicitly here as `moduleBindings`
     // would already exclude it were it computed live; this asserts the
     // *effect* (still unresolved) rather than re-testing `programBindings`
-    // itself, which has its own coverage in `@mxlang/parser`.
+    // itself, which has its own coverage in `@mxlang/tsx-bridge`.
     let error: unknown;
     try {
       compileSolidMx("<Widget/>", {
@@ -1235,7 +1235,7 @@ describe("compileSolidUnit", () => {
             paths: {
               "@mxlang/solid": [join(HERE, "index.ts")],
               "@mxlang/core": [join(HERE, "../../../core/dist/index.d.ts")],
-              "@mxlang/parser": [join(HERE, "../../../parser/src/public.d.ts")],
+              "@mxlang/tsx-bridge": [join(HERE, "../../../tsx-bridge/src/public.d.ts")],
             },
           },
           include: ["*.tsx"],
@@ -1417,7 +1417,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (solid)", ()
   // Firstmate's extension of decision 116 (`notes/decisions-2026-09-10.md`):
   // a non-import module-scope binding whose value is not statically a
   // function/arrow/class is "unknown" and routes through `<Dynamic>` too.
-  // `unknownModuleBindings` is the classified subset `@mxlang/parser`'s
+  // `unknownModuleBindings` is the classified subset `@mxlang/tsx-bridge`'s
   // `unknownProgramBindings`/`unknownSourceBindings` compute; these tests
   // exercise the host-side wiring directly, the same way the decision-116
   // tests above exercise `importDefaultFromMarkoOrMx`.

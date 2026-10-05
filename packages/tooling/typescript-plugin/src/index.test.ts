@@ -23,7 +23,7 @@ import {
   type TargetDescriptor,
   type TemplateBackedTag,
 } from "@mxlang/core";
-import { print } from "@mxlang/parser";
+import { print } from "@mxlang/tsx-bridge";
 import { builtinLookup } from "@mxlang/target-registry";
 import ts from "typescript";
 import {
@@ -1646,7 +1646,7 @@ describe("MX language plugin", () => {
   // the component can name it either). This is the `.solid.mx` *region*
   // counterpart of the whole-file test above: a `/var` bound from a
   // discovered `<counter/n .../>` inside a region is `let n;`, untyped, the
-  // surrounding TypeScript module declares it (`@mxlang/parser`'s
+  // surrounding TypeScript module declares it (`@mxlang/tsx-bridge`'s
   // `hoistRegionImports`), and the region's `$mxReturn={...}` callback prop
   // assigns it — same shape and same limitation as the whole-file case.
   it("types a .solid.mx region's <return> unit /var as any (KNOWN LIMIT, tag-var-type-from-return)", () => {
@@ -4151,7 +4151,9 @@ function emittedDiagnostics(
       "@mxlang/astro/typecheck": [
         join(repoRoot, "packages/hosts/astro/src/typecheck.ts"),
       ],
-      "@mxlang/parser": [join(repoRoot, "packages/parser/src/public.d.ts")],
+      "@mxlang/tsx-bridge": [
+        join(repoRoot, "packages/tsx-bridge/src/public.d.ts"),
+      ],
     },
     ignoreDeprecations: "6.0",
   };
@@ -4344,7 +4346,9 @@ function createMutablePluginService(
       "@mxlang/astro/typecheck": [
         join(repoRoot, "packages/hosts/astro/src/typecheck.ts"),
       ],
-      "@mxlang/parser": [join(repoRoot, "packages/parser/src/public.d.ts")],
+      "@mxlang/tsx-bridge": [
+        join(repoRoot, "packages/tsx-bridge/src/public.d.ts"),
+      ],
     },
     ignoreDeprecations: "6.0",
   };

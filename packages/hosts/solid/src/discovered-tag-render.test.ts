@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import { getCustomTags } from "@mxlang/core";
-import { print } from "@mxlang/parser";
+import { print } from "@mxlang/tsx-bridge";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit, solidTargets } from "./index.ts";

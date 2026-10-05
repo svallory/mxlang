@@ -1,6 +1,6 @@
 # Upstream provenance
 
-`src/babel/` is a vendored copy of `@babel/parser`'s TypeScript source. There
+`packages/babel/src/` is a vendored copy of `@babel/parser`'s TypeScript source. There
 is no public plugin API for `@babel/parser` (see
 `/Users/svallory/work/mx/notes/research/parser-fork-strategy.md` section 1),
 so shipping a parser with a modified JSX plugin means owning and building
@@ -45,7 +45,7 @@ build didn't force dropping any of these.
 4. **`util/string-parser.ts` added as a new file**: `@babel/parser`'s own `package.json` depends on `@babel/helper-string-parser` and `charcodes` for these two runtime helpers, but neither publishes `.d.ts` files to npm (a known gap in Babel's own release — `helper-string-parser`'s source comment literally says `// We inline this package`, confirming Babel's own build inlines it rather than treating it as a real external import). Vendored `packages/babel-helper-string-parser/src/index.ts` at the same tag/commit as `util/string-parser.ts`, unmodified except the import rewrite in `tokenizer/index.ts` (`@babel/helper-string-parser` → `../util/string-parser.ts`). **`@babel/helper-string-parser` is not a devDependency** anywhere in this repo — it's fully inlined as source, never imported by name, so there's nothing for a package manager to resolve. The version vendored is pinned here instead of in a `package.json`: **`@babel/helper-string-parser` 7.27.1** (matches the version range `@babel/parser`'s own `package.json` devDependency listed at the vendored tag).
 
 5. **`plugins/jsx/index.ts` — the MX fork itself** (the only behavioral change to the vendored tree). Three edits:
-   - One import added at the top of the file: `import { mxParseElementAt } from "../../../mx/bridge.ts";`.
+   - One import added at the top of the file: `import type { MxHooks, MxParserHost } from "../../mx-hooks.ts";`. The fork no longer imports the bridge: it calls `options.mxHooks.parseRegion(this, startLoc)`, an object `@mxlang/tsx-bridge` injects.
    - `jsxParseElementAt(startLoc)` is now a dispatcher: when the `mx` option is on and the tag is not a fragment (`!this.match(tt.jsxTagEnd)`), it returns `mxParseElementAt(this, startLoc)`. Otherwise (including for `<>` fragments), it calls `jsxParseElementAtOriginal(startLoc)`. Babel's original body is **preserved verbatim** under the new name `jsxParseElementAtOriginal`.
    - The one recursive call inside that original body (`children.push(this.jsxParseElementAtOriginal(startLoc))`, for nested JSX children) now calls `jsxParseElementAt(startLoc)`, so that fragment children are routed back into the MX hook.
 
@@ -60,9 +60,9 @@ build didn't force dropping any of these.
    - `parseExprListItem` (`expression.ts:2882`, the single choke point call arguments and array elements both go through) pushes `{ kind: "boundary", valueStart, argumentIndex }` around one list item, `valueStart` captured before anything is parsed. `argumentIndex` is the item's own position in the enclosing list, handed off through the transient `state.mxNextBoundaryIndex` field (set right before each `parseExprListItem` call, read and cleared inside it) by *both* of its two callers' own loops — `parseExprList` and, separately, `parseCallExpressionArguments` (a decorator's own call arguments go through the latter, not `parseExprList`, since `parseMaybeDecoratorArguments` calls it directly) — non-`null` only for a decorator's own top-level argument list; any other list (a plain call, an array, a non-top-level argument) leaves it `null`.
    - `parseMaybeDecoratorArguments` (`statement.ts:865`) pushes `{ kind: "decorator", name }` around a decorator's call-argument parse.
 
-   `computeMxRegionContext` (`src/mx/region-context.ts`) computes `isDirectPropertyValue` by walking the frames after the innermost decorator (or from the start of the stack) while they are `boundary` frames sharing one common `valueStart` — the first frame's own — then requiring the frame right after that run to be a `property` whose own `valueStart` equals the region's start. Every `boundary` frame is always pushed unconditionally (no coalescing of any kind between `parseObjectLike`'s and `parseExprListItem`'s pushes): the position-exact chain-walk is what distinguishes `@Component({ template: <div/> })` (the decorator's own argument-slot boundary and the object-literal boundary share one `valueStart`, since nothing sits between the `(` and the `{`) from `@Component(wrap({ template: <div/> }))` (the two boundaries' `valueStart`s diverge, since `wrap(` sits between them) — not a count of frames. `argumentIndex` is read straight off that same first frame after the decorator, whenever one exists and is a `boundary`.
+   `computeMxRegionContext` (`packages/tsx-bridge/src/mx/region-context.ts` (its types and two AST helpers live in `src/mx-hooks.ts`)) computes `isDirectPropertyValue` by walking the frames after the innermost decorator (or from the start of the stack) while they are `boundary` frames sharing one common `valueStart` — the first frame's own — then requiring the frame right after that run to be a `property` whose own `valueStart` equals the region's start. Every `boundary` frame is always pushed unconditionally (no coalescing of any kind between `parseObjectLike`'s and `parseExprListItem`'s pushes): the position-exact chain-walk is what distinguishes `@Component({ template: <div/> })` (the decorator's own argument-slot boundary and the object-literal boundary share one `valueStart`, since nothing sits between the `(` and the `{`) from `@Component(wrap({ template: <div/> }))` (the two boundaries' `valueStart`s diverge, since `wrap(` sits between them) — not a count of frames. `argumentIndex` is read straight off that same first frame after the decorator, whenever one exists and is a `boundary`.
 
-   `options.ts` gained `mxRegionPositionCheck?: MxRegionPositionCheck`, following the same "must default to `undefined`, not be left out" rule `mxCustomTags` already established (`getOptions` only copies known keys). See `src/mx/region-context.ts` for `MxRegionContext`/`computeMxRegionContext`, and `packages/parser/README.md` for the design summary.
+   `options.ts` gained `mxRegionPositionCheck?: MxRegionPositionCheck`, following the same "must default to `undefined`, not be left out" rule `mxCustomTags` already established (`getOptions` only copies known keys). See `packages/tsx-bridge/src/mx/region-context.ts` (its types and two AST helpers live in `src/mx-hooks.ts`) for `MxRegionContext`/`computeMxRegionContext`, and `packages/parser/README.md` for the design summary.
 
 8. **`options.ts`, `src/mx/bridge.ts`, `src/index.ts` — the `mxRegionCompile` host hook.** Which host lowers a discovered MX region used to be fixed at `bridge.ts`'s import site: it imported `compileSolidMx` from `@mxlang/solid` and called it for every region in every file, defaulting the filename to `"input.solid.mx"`. That is correct for `.solid.mx` and unusable for any other file kind — Angular's `.ng.mx` lowers the same region to a template string for `@Component({ template: … })`, sharing nothing with Solid's JSX but being text the surrounding grammar can parse.
 
@@ -78,7 +78,7 @@ build didn't force dropping any of these.
 
    **Done in `parser-solid-inversion`:** the `@mxlang/solid` import is gone from `bridge.ts`. The parser imports no host at all: `mxRegionCompile` is required whenever the grammar is on, and a region reached with the hook absent is a positioned compile error naming the option and pointing at `compileSolidMx` for `.solid.mx`. Every in-repo caller (the Vite plugin, the TypeScript plugin, the language server, the oracle) now supplies `compileSolidMx` explicitly — a breaking change for each of them, made deliberately since the alternative (a silent default) is what let a misconfigured caller of a non-Solid file kind lower through the Solid host by accident. `@mxlang/solid` moved from `dependencies` to `devDependencies` in `packages/parser/package.json` (kept only for this package's own tests, via `src/mx/test-helpers.ts`'s `parseSolid`/`solidRegionCompile`). See `src/mx/region-compile.ts` for the types and `packages/parser/README.md` for the design summary.
 
-## tsconfig relaxations (`packages/parser/tsconfig.json`, whole-package)
+## tsconfig relaxations (`packages/babel/tsconfig.json`, whole-package)
 
 Attempted a `src/babel/**`-only scoped tsconfig via TypeScript project
 references first (a second `composite: true` project just for `src/babel`).
@@ -116,8 +116,8 @@ code that relies on the looser settings.
 
 ## Re-vendoring procedure
 
-Run `packages/parser/scripts/vendor.sh <tag>` (defaults to the currently
-pinned tag if omitted). It deletes `src/babel/` and re-fetches both
+Run `packages/babel/scripts/vendor.sh <tag>` (defaults to the currently
+pinned tag if omitted). It deletes `src/` (keeping `mx-hooks.ts` and `internal.ts`, which are ours) and re-fetches both
 `packages/babel-parser/src` and `packages/babel-helper-string-parser/src`
 (the latter into `util/string-parser.ts`), then reapplies the `flow` drop.
 It does **not** reapply the four numbered local modifications above, rerun
@@ -137,5 +137,5 @@ After running it:
 3. Re-check whether `@babel/helper-string-parser`'s version moved (compare
    against the version `@babel/parser`'s own `package.json` devDependency
    lists at the new tag) and update the pin recorded above if so.
-4. `bun run build` and `bun run test` (from `packages/parser`), and fix
+4. `bun run build` and `bun run test` (`typecheck` from `packages/babel`, `test` from `packages/tsx-bridge`), and fix
    whatever the equivalence test or the build surfaces.

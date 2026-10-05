@@ -8,6 +8,7 @@ export default defineConfig({
       "packages/core",
       "packages/oracle",
       "packages/parser",
+      "packages/tsx-bridge",
       "packages/target-registry",
       "packages/hosts/*",
       "packages/targets/*",

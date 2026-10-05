@@ -62,7 +62,7 @@ const tsc = join(repoRoot, "node_modules/.bin/tsc");
  * 404. The probe packs the ones that ship a `dist` and stubs the rest (their
  * `main` is `src/*.ts`, which no consumer could load). Named, not silent.
  */
-const PACK_PRIVATE = ["@mxlang/core", "@mxlang/parser"];
+const PACK_PRIVATE = ["@mxlang/core", "@mxlang/tsx-bridge"];
 const STUB_PRIVATE = [
   "@mxlang/hono",
   "@mxlang/preact",
@@ -129,7 +129,7 @@ function tarballOf(name: string, dir: string): string {
 
 const workspaceDirs: Record<string, string> = {
   "@mxlang/core": join(repoRoot, "packages/core"),
-  "@mxlang/parser": join(repoRoot, "packages/parser"),
+  "@mxlang/tsx-bridge": join(repoRoot, "packages/tsx-bridge"),
 };
 for (const p of PACKED_PACKAGES) workspaceDirs[p.name] = pkgDirOf(p);
 workspaceDirs["@mxlang/typescript-plugin"] = join(
@@ -346,7 +346,7 @@ function typecheck(dir: string): { ok: boolean; out: string } {
  * `@mxlang/tsc` ships a CLI bundle only. Install its tarball and declared
  * deps, then run the bin: the file must exist in the tarball, be linked by the
  * installer, and its runtime `require`s must resolve. Private workspace deps
- * are packed (typescript-plugin, angular, html, core, parser) or stubbed (D5).
+ * are packed (typescript-plugin, angular, html, core, tsx-bridge) or stubbed (D5).
  */
 function smokeMxTsc(): string | undefined {
   const dir = makeConsumer({

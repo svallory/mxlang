@@ -28,7 +28,7 @@ import {
   type MxRegionContext,
   type MxRegionPositionCheck,
   parse,
-} from "@mxlang/parser";
+} from "@mxlang/tsx-bridge";
 import MagicString from "magic-string";
 import { directivesFor } from "./directives.ts";
 import {
@@ -602,7 +602,7 @@ function walk(node: unknown, visit: (node: NgMxNode) => void): void {
  * Round 1 of the design note put this in the parser bridge, as Solid's
  * import injection is. It is owned here instead: "add an import" is generic,
  * but "mutate a specific decorator's `imports` array" is Angular semantics,
- * and `packages/parser` must stay free of it.
+ * and `packages/tsx-bridge` must stay free of it.
  */
 function applyComponentImports(
   rewritten: MagicString,

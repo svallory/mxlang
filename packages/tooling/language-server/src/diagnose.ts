@@ -20,7 +20,7 @@ import {
   type TargetPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import { type PrintOptions, print } from "@mxlang/parser";
+import { type PrintOptions, print } from "@mxlang/tsx-bridge";
 import {
   type BuiltinFileKind,
   builtinFileKinds,

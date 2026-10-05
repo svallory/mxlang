@@ -16,7 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createTargetLookup, getCustomTags } from "@mxlang/core";
-import { print } from "@mxlang/parser";
+import { print } from "@mxlang/tsx-bridge";
 import { createElement, type FC } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import descriptor from "./descriptor.ts";

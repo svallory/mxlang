@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CustomTag, MxWarning } from "@mxlang/core";
-import { parse } from "@mxlang/parser";
+import { parse } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
 

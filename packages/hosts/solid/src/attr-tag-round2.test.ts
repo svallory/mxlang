@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
-import { sourceBindings } from "@mxlang/parser";
+import { sourceBindings } from "@mxlang/tsx-bridge";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
@@ -114,7 +114,7 @@ function runFixture(fixture: Fixture, mode: "dom" | "ssr"): unknown {
       importSpecifiers,
       importDefaultFromMarkoOrMx,
       // The real pipeline compiles a region in the context of its whole
-      // surrounding module (`@mxlang/parser`'s `parse()`); this test compiles
+      // surrounding module (`@mxlang/tsx-bridge`'s `parse()`); this test compiles
       // the region standalone and splices `fixture.setup` in only afterward,
       // at runtime, so the two steps must agree on what that setup binds.
       moduleBindings: sourceBindings(fixture.setup ?? "").bindings,

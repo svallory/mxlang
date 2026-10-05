@@ -28,7 +28,7 @@ import {
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
-import { SOLID_BUILTIN_TAGS } from "@mxlang/parser";
+import { SOLID_BUILTIN_TAGS } from "@mxlang/tsx-bridge";
 import { decodeHTML } from "entities";
 import {
   MX_ATTR_SPREAD_BINDING,
@@ -234,7 +234,7 @@ function generatedDefineBinding(
 /**
  * Well-known globals a hoisted `<define>` body may reference without that
  * being a region-local closure. Deliberately conservative — the codebase's
- * own rule for this exact tradeoff (`packages/parser/src/index.ts`'s
+ * own rule for this exact tradeoff (`packages/tsx-bridge/src/index.ts`'s
  * `shadowedNames`): "over-reporting costs one extra positioned error a user
  * can work around (pass it as a param); under-reporting is the silent bug"
  * (wrong code that reads `undefined` at the hoisted function's real, module
@@ -294,7 +294,7 @@ const KNOWN_GLOBALS = new Set([
  * `@babel/parser` is already a direct dependency here; `@babel/traverse` is
  * not, so this walks the tree itself rather than adding one, using the same
  * "collect every binding position, then subtract" shape
- * `packages/parser/src/index.ts`'s `shadowedNames`/`namesIn` already use for
+ * `packages/tsx-bridge/src/index.ts`'s `shadowedNames`/`namesIn` already use for
  * an adjacent problem (there: is a name shadowed; here: is a name free).
  *
  * Deliberately coarse, in the safe direction: it tracks *lexical* bindings
@@ -634,13 +634,13 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
  *   import or a top-level `const`/`function`/`class` in the module the
  *   region is embedded in (decision 113's shadowing already applies before
  *   this: `ctx.imports` only contains what is *visible* at this point,
- *   `packages/parser/src/mx/bridge.ts`'s `visibleModuleBindings`). Folded
+ *   `packages/tsx-bridge/src/mx/bridge.ts`'s `visibleModuleBindings`). Folded
  *   into `ctx.imports` at the call site (`compileSolidMx`, `index.ts`)
  *   rather than a new `Ctx` field, since core's precedence order already
  *   treats that set as "the file resolves this name to a value" before
  *   `isComponent` is ever asked.
  * - **It is one of Solid's own JSX built-ins** (`SOLID_BUILTIN_TAGS`,
- *   `@mxlang/parser`) — `<Show>`, `<For>`, … — which `@mxlang/solid`'s
+ *   `@mxlang/tsx-bridge`) — `<Show>`, `<For>`, … — which `@mxlang/solid`'s
  *   emitter prints as a bare tag with no import of its own because the real
  *   Solid build pipeline (`@solidjs/vite-plugin`'s compiler stage)
  *   auto-imports every one it sees, a stage that runs after this compiler

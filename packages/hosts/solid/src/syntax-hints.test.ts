@@ -1,4 +1,4 @@
-import { parse as parseMxFile } from "@mxlang/parser";
+import { parse as parseMxFile } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
 

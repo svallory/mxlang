@@ -1,5 +1,5 @@
 import type { CalleeInputReader, Node } from "@mxlang/core";
-import { parse as parseMx } from "@mxlang/parser";
+import { parse as parseMx } from "@mxlang/tsx-bridge";
 
 function parseSolidCalleeProgram(source: string, path: string): Node[] {
   return parseMx(source, path, {

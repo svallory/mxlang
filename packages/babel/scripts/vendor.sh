@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Re-vendors @babel/parser's TypeScript source into packages/parser/src/babel/.
-# Idempotent: deletes the existing src/babel/ before re-fetching. Not run by CI —
+# Re-vendors @babel/parser's TypeScript source into packages/babel/src/.
+# Idempotent: deletes the existing src/ before re-fetching, except the two files
+# that are ours alone (src/mx-hooks.ts, src/internal.ts), which it keeps. Not run by CI —
 # vendoring a new tag is a deliberate, reviewed action, not an automatic pull.
 #
 # Usage: scripts/vendor.sh [tag]
@@ -14,15 +15,16 @@
 # new tag can shift line numbers or change these call sites enough that blindly
 # reapplying a patch would be wrong. Re-diff by hand against UPSTREAM.md's
 # "Local modifications" section, then:
-#   bun run build   (from packages/parser)
-#   bun run test    (from packages/parser)
+#   bun run typecheck   (from packages/babel)
+#   bun run test        (from packages/tsx-bridge)
 
 set -euo pipefail
 
 TAG="${1:-v7.29.8}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
-BABEL_DIR="$PACKAGE_DIR/src/babel"
+BABEL_DIR="$PACKAGE_DIR/src"
+OWN_FILES=(mx-hooks.ts internal.ts)
 STRING_PARSER_DIR="packages/babel-helper-string-parser/src"
 STRING_PARSER_SRC="$STRING_PARSER_DIR/index.ts"
 STRING_PARSER_DEST="$BABEL_DIR/util/string-parser.ts"
@@ -40,9 +42,13 @@ git clone --filter=blob:none --sparse --depth 1 --branch "$TAG" \
 COMMIT="$(cd "$TMP_DIR" && git rev-parse HEAD)"
 echo "Resolved $TAG -> $COMMIT"
 
-echo "Removing existing $BABEL_DIR..."
+echo "Removing existing $BABEL_DIR (keeping ${OWN_FILES[*]})..."
+KEEP_DIR="$TMP_DIR/own-files"
+mkdir -p "$KEEP_DIR"
+for f in "${OWN_FILES[@]}"; do cp "$BABEL_DIR/$f" "$KEEP_DIR/$f"; done
 rm -rf "$BABEL_DIR"
 mkdir -p "$BABEL_DIR"
+for f in "${OWN_FILES[@]}"; do cp "$KEEP_DIR/$f" "$BABEL_DIR/$f"; done
 
 echo "Copying vendored source..."
 cp -R "$TMP_DIR/packages/babel-parser/src/." "$BABEL_DIR/"
@@ -55,7 +61,7 @@ cp "$TMP_DIR/$STRING_PARSER_SRC" "$STRING_PARSER_DEST"
 
 cat <<EOF
 
-Done. src/babel/ is now $TAG ($COMMIT), flow dropped.
+Done. src/ is now $TAG ($COMMIT), flow dropped.
 
 This script did NOT:
   - remove 'flow' from plugin-utils.ts's mixinPlugins/mixinPluginNames
@@ -67,7 +73,7 @@ This script did NOT:
 
 Reapply each by hand against UPSTREAM.md's "Local modifications" section
 (line numbers may have shifted), update UPSTREAM.md's Pin section, then run
-from packages/parser:
-  bun run build
-  bun run test
+from packages/babel and packages/tsx-bridge:
+  bun run typecheck   (packages/babel)
+  bun run test        (packages/tsx-bridge)
 EOF

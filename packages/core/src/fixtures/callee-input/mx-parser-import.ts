@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/parser";
+import type { AttrTag } from "@mxlang/tsx-bridge";
 export interface Input {
   x?: AttrTag;
 }

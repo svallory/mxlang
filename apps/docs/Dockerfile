@@ -20,7 +20,7 @@ RUN bun install --frozen-lockfile
 # the landing-page generator uses are built first; CI builds all of them.
 RUN bun run --cwd packages/core build \
   && bun run --cwd packages/targets/data build \
-  && bun run --cwd packages/parser build \
+  && bun run --cwd packages/tsx-bridge build \
   && bun run --cwd packages/targets/html build
 RUN bun run --cwd apps/docs build
 

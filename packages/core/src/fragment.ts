@@ -10,7 +10,7 @@
  * It is the stopgap `notes/research/marko-seam-spikes.md` (spike 1) measured,
  * not a fix: the fix is an additive `parseFragment({ start, line, column })`
  * upstream, which MX still intends to send once a host consumes this door.
- * The Solid host's own bridge (`packages/parser/src/mx/bridge.ts`) is untouched
+ * The Solid host's own bridge (`packages/tsx-bridge/src/mx/bridge.ts`) is untouched
  * until phase 4 switches it over.
  *
  * ## Documented limits (all measured, spike 1)

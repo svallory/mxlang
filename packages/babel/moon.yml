@@ -3,6 +3,8 @@ $schema: "https://moonrepo.dev/schemas/project.json"
 
 language: "typescript"
 
+# The vendored Babel fork has no build of its own: `@mxlang/tsx-bridge`
+# bundles it into its dist.
 tasks:
   typecheck:
     command: "tsc"
@@ -10,10 +12,3 @@ tasks:
     inputs:
       - "src/**/*"
       - "tsconfig.json"
-
-  test:
-    command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/parser"]
-    inputs:
-      - "src/**/*"
-      - "/vitest.config.ts"

@@ -14,7 +14,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --define import.meta.url=__mxImportMetaUrl --define __filename=__mxFilename --define __dirname=__mxDirname --banner 'var __mxImportMetaUrl = require(\"node:url\").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;' --external @angular/compiler --external @angular/compiler-cli --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/core --external @mxlang/parser --external @volar/language-core --external @volar/typescript --external typescript && bun build/cjs-factory.ts && bun ../../../scripts/bundled-build.ts dist/*.cjs && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist && bun build/strip-ng-declarations.ts dist",
+    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --define import.meta.url=__mxImportMetaUrl --define __filename=__mxFilename --define __dirname=__mxDirname --banner 'var __mxImportMetaUrl = require(\"node:url\").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;' --external @angular/compiler --external @angular/compiler-cli --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external @volar/language-core --external @volar/typescript --external typescript && bun build/cjs-factory.ts && bun ../../../scripts/bundled-build.ts dist/*.cjs && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist && bun build/strip-ng-declarations.ts dist",
     "build:bundled": "bun build/bundled.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -25,7 +25,7 @@
     "@mxlang/angular": "workspace:*",
     "@mxlang/astro": "workspace:*",
     "@mxlang/core": "workspace:*",
-    "@mxlang/parser": "workspace:*",
+    "@mxlang/tsx-bridge": "workspace:*",
     "@mxlang/target-registry": "workspace:*",
     "@volar/language-core": "2.4.28",
     "@volar/typescript": "2.4.28"

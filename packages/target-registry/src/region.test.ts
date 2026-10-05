@@ -6,7 +6,7 @@ import {
 } from "@mxlang/core";
 import { describe, expect, it, vi } from "vitest";
 // The parser's built entry (the registry does not depend on the parser).
-import { print } from "../../parser/dist/index.js";
+import { print } from "../../tsx-bridge/dist/index.js";
 import {
   builtinFileKinds,
   builtinLookup,

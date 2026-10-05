@@ -13,7 +13,7 @@
     "rootDir": "../../..",
     "paths": {
       "@mxlang/core": ["../../core/src/index.ts"],
-      "@mxlang/parser": ["../../parser/src/public.d.ts"],
+      "@mxlang/tsx-bridge": ["../../tsx-bridge/src/public.d.ts"],
       "@mxlang/angular": ["./src/index.ts"]
     },
     "types": ["node", "bun"],

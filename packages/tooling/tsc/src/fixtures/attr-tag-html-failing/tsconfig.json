@@ -12,7 +12,7 @@
     "paths": {
       "@mxlang/html": ["../../../../../targets/html/src/index.ts"],
       "@mxlang/core": ["../../../../../core/src/index.ts"],
-      "@mxlang/parser": ["../../../../../parser/src/public.d.ts"]
+      "@mxlang/tsx-bridge": ["../../../../../tsx-bridge/src/public.d.ts"]
     },
     "ignoreDeprecations": "6.0"
   },

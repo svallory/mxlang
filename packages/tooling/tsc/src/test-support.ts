@@ -24,7 +24,7 @@ export const honoApp = join(repoRoot, "examples", "hono-app");
  * no in-process surface to assert against: the thing under test *is* the
  * process's diagnostics and exit code. These tests therefore run the built
  * entry point, which means `bun run build` must have produced `dist/bin.cjs`
- * first — the same fresh-worktree caveat `@mxlang/parser`'s `dist/index.js`
+ * first — the same fresh-worktree caveat `@mxlang/tsx-bridge`'s `dist/index.js`
  * carries.
  *
  * `dist/bin.cjs` directly, not `node_modules/.bin/mx-tsc`: bun creates a bin

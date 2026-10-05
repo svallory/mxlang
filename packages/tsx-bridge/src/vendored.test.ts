@@ -112,7 +112,7 @@ describe("built dist/index.js equivalence", () => {
   it.skipIf(!distExists)(
     distExists
       ? "produces an identical AST to node_modules/@babel/parser for every case"
-      : "skipped: dist/index.js not found — run `bun run build` in packages/parser first",
+      : "skipped: dist/index.js not found — run `bun run build` in packages/tsx-bridge first",
     async () => {
       // `parse` is the MX entry point; the vendored @babel/parser surface is
       // exported as `parseBabel`, and that is what must stay equivalent to npm.

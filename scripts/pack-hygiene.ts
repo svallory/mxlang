@@ -84,8 +84,8 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     declarations: true,
   },
   {
-    name: "@mxlang/parser",
-    dir: "packages/parser",
+    name: "@mxlang/tsx-bridge",
+    dir: "packages/tsx-bridge",
     extraTopLevel: [],
     declarations: true,
   },

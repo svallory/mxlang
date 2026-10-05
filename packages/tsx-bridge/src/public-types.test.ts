@@ -9,7 +9,7 @@ import type {
   MxRegionHoistedImport as PublicMxRegionHoistedImport,
   MxRegionPositionCheck as PublicMxRegionPositionCheck,
   PrintOptions as PublicPrintOptions,
-} from "@mxlang/parser";
+} from "@mxlang/tsx-bridge";
 import { expectTypeOf, it } from "vitest";
 import type {
   HoistedDefine as RealHoistedDefine,

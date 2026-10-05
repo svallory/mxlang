@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "bun"],
+    "outDir": "dist",
+    "rootDir": "src",
+    "allowImportingTsExtensions": true,
+    "noUncheckedIndexedAccess": false,
+    "strictFunctionTypes": false
+  },
+  "include": ["src"]
+}

@@ -41,7 +41,7 @@ import {
   type SourceBindingsError,
   sourceBindings,
   unknownSourceBindings,
-} from "@mxlang/parser";
+} from "@mxlang/tsx-bridge";
 import descriptor from "./descriptor.ts";
 
 /**

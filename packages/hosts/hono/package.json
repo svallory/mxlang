@@ -28,7 +28,7 @@
     "hono": "4.6.20"
   },
   "devDependencies": {
-    "@mxlang/parser": "workspace:*",
+    "@mxlang/tsx-bridge": "workspace:*",
     "@types/bun": "1.4.2",
     "hono": "4.6.20",
     "jsdom": "30.1.1"

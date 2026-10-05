@@ -2,11 +2,11 @@
  * Writes `dist/index.d.ts` from `src/public.d.ts`.
  *
  * `public.d.ts` is the package's hand-written public surface, wrapped in an
- * ambient `declare module "@mxlang/parser" { … }` so in-repo consumers can map
+ * ambient `declare module "@mxlang/tsx-bridge" { … }` so in-repo consumers can map
  * the specifier to it through `paths`. A published `types` entry must be a real
  * module instead, so this unwraps the block (same statements, same order,
  * dedented one level). `tsc --emitDeclarationOnly` over `src/index.ts` is not
- * an option: the vendored `src/babel/` tree needs tsconfig relaxations that
+ * an option: the vendored `packages/babel/` tree needs tsconfig relaxations that
  * must not reach the emitted surface (see AGENTS.md).
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -16,11 +16,11 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = readFileSync(join(root, "src/public.d.ts"), "utf8");
 
-const open = /^declare module "@mxlang\/parser" \{\n/m.exec(source);
+const open = /^declare module "@mxlang\/tsx-bridge" \{\n/m.exec(source);
 const close = source.lastIndexOf("\n}");
 if (!open || close < open.index) {
   throw new Error(
-    'src/public.d.ts: expected one `declare module "@mxlang/parser" { … }` block',
+    'src/public.d.ts: expected one `declare module "@mxlang/tsx-bridge" { … }` block',
   );
 }
 

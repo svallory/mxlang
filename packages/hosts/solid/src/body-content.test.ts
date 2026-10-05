@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import { createTargetLookup, getCustomTags } from "@mxlang/core";
-import { sourceBindings } from "@mxlang/parser";
+import { sourceBindings } from "@mxlang/tsx-bridge";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
 import cases from "../../../../test-fixtures/body-whitespace/cases.json";

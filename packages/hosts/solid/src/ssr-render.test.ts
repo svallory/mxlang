@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import type { TemplateBackedTag } from "@mxlang/core";
-import { sourceBindings, unknownSourceBindings } from "@mxlang/parser";
+import { sourceBindings, unknownSourceBindings } from "@mxlang/tsx-bridge";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
@@ -21,7 +21,7 @@ const packageRoot = new URL("..", import.meta.url).pathname;
  * expected string.
  *
  * `compileSolidMx` (the fragment API this host actually exports) is used
- * directly rather than going through `@mxlang/parser`'s whole-file
+ * directly rather than going through `@mxlang/tsx-bridge`'s whole-file
  * `.solid.mx` `parse()`: that bridge has a separate, pre-existing bug
  * (unrelated to the `keyed` fix here, reproduced on `main`) triggered by a
  * parenthesized/multi-line `<for>` region regardless of `by=` — a two-param
@@ -49,7 +49,7 @@ function renderSolidMx(
     moduleBindings: sourceBindings(setup).bindings,
     // Local extension of decision 116: classified the same way a real
     // `.solid.mx` compile classifies its surrounding module, through
-    // `@mxlang/parser`'s `unknownSourceBindings`.
+    // `@mxlang/tsx-bridge`'s `unknownSourceBindings`.
     unknownModuleBindings: unknownSourceBindings(setup),
   });
   const imports = [...hoistedImports, ...hoistedDefines]

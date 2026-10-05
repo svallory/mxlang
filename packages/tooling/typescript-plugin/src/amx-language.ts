@@ -5,7 +5,7 @@ import {
   type MxWarning,
   reportScanDiagnostics,
 } from "@mxlang/core";
-import type { RawSourceMap } from "@mxlang/parser";
+import type { RawSourceMap } from "@mxlang/tsx-bridge";
 import {
   builtinLookup,
   defaultTagFor,

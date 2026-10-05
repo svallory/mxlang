@@ -67,7 +67,7 @@ function exportedNames(file: string): string[] {
   return [...names].sort();
 }
 
-describe("@mxlang/parser tarball", () => {
+describe("@mxlang/tsx-bridge tarball", () => {
   it("declares a `files` allowlist", () => {
     expect(pkg.files).toEqual(["dist", "README.md"]);
   });
@@ -89,7 +89,7 @@ describe("@mxlang/parser tarball", () => {
   });
 });
 
-describe("@mxlang/parser emitted declarations", () => {
+describe("@mxlang/tsx-bridge emitted declarations", () => {
   it("export exactly what src/public.d.ts exports", () => {
     const emitted = join(pkgDir, pkg.types);
     expect(existsSync(emitted)).toBe(true);

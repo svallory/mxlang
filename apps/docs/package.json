@@ -23,7 +23,7 @@
     "@mxlang/core": "workspace:*",
     "@mxlang/hono": "workspace:*",
     "@mxlang/html": "workspace:*",
-    "@mxlang/parser": "workspace:*",
+    "@mxlang/tsx-bridge": "workspace:*",
     "@mxlang/preact": "workspace:*",
     "@mxlang/react": "workspace:*",
     "@mxlang/solid": "workspace:*",

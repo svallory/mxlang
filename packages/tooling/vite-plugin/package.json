@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@mxlang/core": "workspace:*",
-    "@mxlang/parser": "workspace:*",
+    "@mxlang/tsx-bridge": "workspace:*",
     "@mxlang/target-registry": "workspace:*"
   },
   "devDependencies": {

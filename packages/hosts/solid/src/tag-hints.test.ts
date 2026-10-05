@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CustomTag, getCustomTags } from "@mxlang/core";
-import { parse as parseMxFile } from "@mxlang/parser";
+import { parse as parseMxFile } from "@mxlang/tsx-bridge";
 import { afterAll, describe, expect, it } from "vitest";
 import { compileSolidMx, solidTargets } from "./index.ts";
 
