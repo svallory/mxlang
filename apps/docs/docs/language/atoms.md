@@ -173,7 +173,7 @@ things atoms add:
   else can follow it and the split is unambiguous (decision 146 addendum 5):
 
   ```mx
-  <belongs-to=:Customer :customer/>
+<belongs-to=:Customer :customer/>
   ```
 
   Every other default value keeps decision 151 ruling 2 — `belongs-to=a
