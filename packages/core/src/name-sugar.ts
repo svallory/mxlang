@@ -141,6 +141,9 @@ function failAt(ctx: Ctx, message: string, offset: number): never {
 const SECOND_NAME =
   'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)';
 
+const BOUND_ON_SUGAR =
+  "a bound value is not supported on name sugar; write name=... value:=...";
+
 function stringLiteral(ctx: Ctx, value: string, start: number, end: number) {
   return {
     type: "StringLiteral",
@@ -575,8 +578,18 @@ export function isShorthandWord(sigil: string, word: string): boolean {
  * `:b` or `value:b`, which the author never wrote).
  */
 function checkNearSugar(ctx: Ctx, attr: Node): void {
-  if (attr?.type !== "MarkoAttribute" || attr.bound) return;
+  if (attr?.type !== "MarkoAttribute") return;
   const start = startOf(ctx, attr);
+  if (attr.bound) {
+    // `:n:=y`, `#x:=y`, `.c:=y`: `:=` is not a value separator for a sugar
+    // (only `=` is), and the sugar is not the attribute to bind.
+    const authoredSugar =
+      ctx.source[start] === ":" ||
+      (/^[#.]/.test(ctx.source[start] ?? "") &&
+        !(ctx.source[start] === "#" && ctx.declarations.claimsAttributeHash));
+    if (authoredSugar) failAt(ctx, BOUND_ON_SUGAR, start);
+    return;
+  }
   if (
     typeof attr.name === "string" &&
     attr.name.startsWith(":") &&

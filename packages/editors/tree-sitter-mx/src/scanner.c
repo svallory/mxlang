@@ -2658,6 +2658,14 @@ static bool is_attr_shorthand_start(int32_t c, int32_t n1) {
   }
 }
 
+// MX (decision 146 addendum 4): `=` and `(` end a sugar and start the default
+// value, but a bound `:=` is not supported on one: it stays an error.
+static bool shorthand_takes_no_bound_value(Scanner *s, int32_t c, int32_t n1) {
+  if (!s->in_shorthand) return false;
+  if (s->shorthand_kind != ':' && !s->attr_shorthand) return false;
+  return c == ':' && n1 == '=';
+}
+
 // Scan one tag name fragment / shorthand-start / interp-start token.
 // Returns 0 on failure, 1 when a token was produced, 2 when the name section
 // ended without producing a token (continue with tag-level dispatch).
@@ -2743,6 +2751,7 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
     }
     // MX (decision 146 addendum 4): `=` and `(` cannot be part of a sugar,
     // so they end it and start the tag's default value / method.
+    if (shorthand_takes_no_bound_value(s, c, n1)) return 0;
     finalize_tag_name(s, c);
     return 2;
   }
@@ -2772,6 +2781,8 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
     // The whole name was this single fragment: classify it.
     t->type = classify_tag_name(s);
   }
+
+  if (shorthand_takes_no_bound_value(s, c, n1)) return 0;
 
   if (c != '.' && c != '#' && !(c == ':' && n1 != '=') &&
       !(c == '$' && n1 == '{')) {

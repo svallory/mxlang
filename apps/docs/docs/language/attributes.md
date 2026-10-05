@@ -139,6 +139,8 @@ default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second. A bound
 `#x=1` stays the template reference (it emits `[#x]="1"`, not `id` plus `value`);
 `:n=1`, `.c=1` and tag-adjacent `<div#x=1>` set the default value there.
 
+Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, not this sugar's value, so a second plain `value=` beside it is decision 135's duplicate warning there, not the double-default error. A bound `:=` right after a sugar (`<a :n:=y/>`, `#x:=y`, `.c:=y`) is an error: write `name=... value:=...`.
+
 ### What stays what Marko does
 
 | You write | You get |

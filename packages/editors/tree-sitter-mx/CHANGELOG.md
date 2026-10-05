@@ -29,7 +29,7 @@ two local patches (see `UPSTREAM.md`):
   silently there and tree-sitter dropped the rest of the file with a clean
   tree, where Marko reports "Line has extra indentation at the beginning"
   (patch 0004). The language rule is unchanged.
-- **Fix (name-sugar-default-value, decision 146 addendum 4, patch 0006):** `=` and `(` end a sugar and start the tag's default value: `<input #x=1/>`, `<input :x=input.y/>`, `<input:x=1/>`, `<input .c=1/>` and concise `input #x=1` parse without `ERROR` (they were errors), as Mesh's `boolean #isOverdue({ self }) { return self.x }` and `kind (p) { b } #name` already did. Scanner only; `src/` is unchanged.
+- **Fix (name-sugar-default-value, decision 146 addendum 4, patch 0006):** `=` and `(` end a sugar and start the tag's default value: `<input #x=1/>`, `<input :x=input.y/>`, `<input:x=1/>`, `<input .c=1/>` and concise `input #x=1` parse without `ERROR` (they were errors), as Mesh's `boolean #isOverdue({ self }) { return self.x }` and `kind (p) { b } #name` already did. A bound `:=` after a sugar (`<a :n:=y/>`, `#x:=y`, `.c:=y`) stays an error: only `=` and `(` end a sugar. Scanner only; `src/` is unchanged.
 - The injected TypeScript highlights gain `highlight/extra-highlights.scm`:
   names bound by an object pattern (`({ self }) => ...`, a parameter or a
   `const { a } = x`) and a ternary's `?` and `:` had no capture.

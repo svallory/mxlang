@@ -49,7 +49,8 @@ are regenerated here instead). It adds:
   `.ident`, or by `:ident` when no conditional `?` is open
   (`ExprState.cond_depth`, which does not count `??` or `?.`). A value on the
   sugar (`:x=1`, `#x=1`, `.x=1`) was an error in this patch; patch 0006 (decision 146
-  addendum 4) removed that rule. The new state is serialized.
+  addendum 4) removed the `=` half of that rule; a bound `:=` after a sugar is
+  still refused (`<a :n:=y/>` is `ERROR`). The new state is serialized.
 - **Grammar** (`grammar.js`): the `shorthand_name` node. Attribute-position
   shorthands use their own external start tokens and are aliased to the same
   three node names; tag-adjacent shorthands carry a `shorthand` field.

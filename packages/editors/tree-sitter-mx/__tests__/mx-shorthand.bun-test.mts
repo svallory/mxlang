@@ -244,6 +244,19 @@ describe("mx shorthands", () => {
     });
   }
 
+  // `=` ends a sugar and starts the default value, but `:=` stays an error:
+  // a bound value is not supported on name sugar.
+  for (const src of [
+    "<a :n:=y/>",
+    "<a #x:=y/>",
+    "<a .c:=y/>",
+    "<a type=text :n:=y/>",
+  ]) {
+    it(`a bound value on a sugar is an error: ${src}`, () => {
+      assert.ok(parse(src).hasError, src);
+    });
+  }
+
   it("splits the value exactly before the shorthand", () => {
     const values = (src: string) =>
       parse(src)
