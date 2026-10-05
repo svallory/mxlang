@@ -1,9 +1,9 @@
 ---
-title: "SolidMX"
+title: "Solid"
 description: "The .solid.mx host — MX markup in JSX's position inside a Solid component file, lowered to Solid 2 JSX."
 ---
 
-# SolidMX
+# Solid
 
 A Solid component with MX in place of JSX. In a `.solid.mx` file the component is still a Solid function: signals, props, `For` and `Show` from `solid-js`, and Solid's own compiler all stay as Solid provides them. MX markup goes where JSX would, and the compiler lowers it back to Solid JSX in the same position. Everything outside the markup is your own TypeScript, passed through untouched.
 
@@ -53,9 +53,9 @@ export function Greeter(props: {
 }
 ```
 
-SolidMX (`.solid.mx`) is MX markup written directly inside a Solid component file, in the same position JSX would go, lowered to Solid's own JSX at compile time. A `.solid.mx` file is otherwise an ordinary TypeScript module — imports, functions, hooks — with MX markup wherever an expression is expected.
+Solid (`.solid.mx`) is MX markup written directly inside a Solid component file, in the same position JSX would go, lowered to Solid's own JSX at compile time. A `.solid.mx` file is otherwise an ordinary TypeScript module — imports, functions, hooks — with MX markup wherever an expression is expected.
 
-SolidMX ships as `@mxlang/solid`, the third emitter over `@mxlang/core`'s shared IR alongside the HTML and Astro hosts. The MX parser's vendored Babel fork finds each MX region inside a `.solid.mx` file and hands it to `compileSolidMx`, which resolves the region through the same Marko-syntax core every host shares and emits Solid JSX text back into the surrounding TypeScript module, at the same span — so positions and source maps stay anchored to the original file.
+Solid ships as `@mxlang/solid`, the third emitter over `@mxlang/core`'s shared IR alongside the HTML and Astro hosts. The MX parser's vendored Babel fork finds each MX region inside a `.solid.mx` file and hands it to `compileSolidMx`, which resolves the region through the same Marko-syntax core every host shares and emits Solid JSX text back into the surrounding TypeScript module, at the same span — so positions and source maps stay anchored to the original file.
 
 ## Selecting the host
 
@@ -182,7 +182,7 @@ Every `<for>` form lowers to one of Solid's own iteration primitives:
 ```
 
 The builtins (`For`, `Show`, `Switch`, `Match`, `Loading`, `Errored`, `Repeat`,
-and the rest) are auto-imported by Solid's own compilers. SolidMX additionally
+and the rest) are auto-imported by Solid's own compilers. Solid additionally
 hoists `@solidjs/web`'s public `escape` helper only when an escaped lazy body
 needs server-safe insertion.
 

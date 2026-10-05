@@ -1,6 +1,6 @@
 ---
 title: "Zed"
-description: "The mxlang Zed extension: MX, SolidMX, AngularMX, and AstroMX languages, plus diagnostics."
+description: "The mxlang Zed extension: MX, Solid, AngularMX, and AstroMX languages, plus diagnostics."
 ---
 
 # Zed
@@ -8,8 +8,8 @@ description: "The mxlang Zed extension: MX, SolidMX, AngularMX, and AstroMX lang
 The `mxlang` extension ships four languages:
 
 - **MX** (`.mx`) — MX's own tree-sitter grammar: Marko's grammar plus the `:name` sugar and `#id`/`.class`/`:name` in attribute position ([ADR 146](/design-notes/adr-name-sugar/)). Until decision 146, `.mx` rode Marko's grammar and queries unmodified (decision 72); MX syntax is now a superset of Marko's, so MX owns its grammar. It is named `mx`, so it coexists with the official Marko extension's `marko` grammar.
-- **SolidMX** (`.solid.mx`) — its own grammar, a patched TypeScript/TSX grammar with MX recognized in expression position.
-- **AngularMX** (`.ng.mx`) — an ordinary TypeScript module whose `@Component` template is MX. Reuses SolidMX's grammar unchanged: the grammar's only MX-specific addition is an opaque `mx_element` token in expression position, which is neither Solid- nor Angular-specific.
+- **Solid** (`.solid.mx`) — its own grammar, a patched TypeScript/TSX grammar with MX recognized in expression position.
+- **AngularMX** (`.ng.mx`) — an ordinary TypeScript module whose `@Component` template is MX. Reuses Solid's grammar unchanged: the grammar's only MX-specific addition is an opaque `mx_element` token in expression position, which is neither Solid- nor Angular-specific.
 - **AstroMX** (`.astro.mx`) — its own small grammar to separate the TypeScript fence from the MX body, with injected highlighting for both.
 
 ## Install the official Marko extension too
@@ -18,7 +18,7 @@ The `mxlang` extension ships four languages:
 
 ## `.mx` vs `.solid.mx`, `.ng.mx` and `.astro.mx`
 
-Every one of these can match the same file's `.mx` suffix at once: `Counter.solid.mx` matches `MX`'s `.mx` suffix and `SolidMX`'s `.solid.mx` suffix, `Counter.ng.mx` matches `MX`'s `.mx` suffix and `AngularMX`'s `.ng.mx` suffix, and `Card.astro.mx` matches `MX`'s `.mx` suffix and `AstroMX`'s `.astro.mx` suffix. Zed resolves this by picking the *longest* matching suffix, so `.solid.mx`/`.ng.mx`/`.astro.mx` always win over plain `.mx`, regardless of which extension you installed first.
+Every one of these can match the same file's `.mx` suffix at once: `Counter.solid.mx` matches `MX`'s `.mx` suffix and `Solid`'s `.solid.mx` suffix, `Counter.ng.mx` matches `MX`'s `.mx` suffix and `AngularMX`'s `.ng.mx` suffix, and `Card.astro.mx` matches `MX`'s `.mx` suffix and `AstroMX`'s `.astro.mx` suffix. Zed resolves this by picking the *longest* matching suffix, so `.solid.mx`/`.ng.mx`/`.astro.mx` always win over plain `.mx`, regardless of which extension you installed first.
 
 ## What each language gets today
 
@@ -26,12 +26,12 @@ Every one of these can match the same file's `.mx` suffix at once: `Counter.soli
 | --- | --- | --- |
 | MX (`.mx`) | Yes, from the MX grammar, `#id`/`.class`/`:name` shorthands included | Yes — see below |
 | AstroMX (`.astro.mx`) | Yes: the fence as TypeScript, the template body through the MX grammar | No |
-| SolidMX (`.solid.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
+| Solid (`.solid.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
 | AngularMX (`.ng.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | No — not registered for this language yet |
 
 ## Diagnostics language server
 
-The extension registers `@mxlang/language-server` for the `MX` and `SolidMX`
+The extension registers `@mxlang/language-server` for the `MX` and `Solid`
 languages. It resolves the server to launch, in order: a local install under
 the project (`node_modules/.bin/mxlang-language-server`), a global install,
 `bunx @mxlang/language-server --stdio`, then `npx`. Nothing needs to be
@@ -79,7 +79,7 @@ TypeScript errors *inside* a `.solid.mx` file are a separate job, handled by
               {
                 "name": "@mxlang/typescript-plugin",
                 "location": "/absolute/path/to/node_modules/@mxlang/typescript-plugin",
-                "languages": ["solidmx"],
+                "languages": ["solid"],
                 "enableForWorkspaceTypeScriptVersions": true
               }
             ]
@@ -91,12 +91,12 @@ TypeScript errors *inside* a `.solid.mx` file are a separate job, handled by
 }
 ```
 
-`languages` must be `solidmx`, lowercase. `vtsls` matches that entry against
+`languages` must be `solid`, lowercase. `vtsls` matches that entry against
 the **LSP language id**, not against the name in the language's
 `config.toml`. Zed derives the id by lowercasing the language name
 (`LanguageName::lsp_id()` in `crates/language_core/src/language_name.rs`
 returns `name.to_lowercase()`, special-casing only `Plain Text`), so this
-extension's `SolidMX` language is sent over LSP as `solidmx`.
+extension's `Solid` language is sent over LSP as `solid`.
 
 With `typescript-language-server` in place of `vtsls`, the same plugin goes in
 its `plugins` array:
@@ -110,7 +110,7 @@ its `plugins` array:
           {
             "name": "@mxlang/typescript-plugin",
             "location": "/absolute/path/to/node_modules/@mxlang/typescript-plugin",
-            "languages": ["solidmx"]
+            "languages": ["solid"]
           }
         ]
       }
@@ -128,7 +128,7 @@ Both grammar packages below follow the same loop. The MX grammar
 (`packages/editors/tree-sitter-mx`) is a snapshot of `marko-js/tree-sitter`
 plus `patches/`; its `UPSTREAM.md` holds the pin and the patch procedure.
 
-The SolidMX grammar package also backs AngularMX (`languages/ngmx/config.toml` declares `grammar = "solidmx"` directly rather than a second, identical grammar package) — a change here affects both languages' highlighting. It is a `file://` dependency during development, and this has one consequence worth knowing before you lose an afternoon to it: **Zed only ever sees committed code.** Its checkout runs `git init`, `git fetch --depth 1 origin <rev>` and `git checkout <rev>` regardless of the URL scheme, so uncommitted changes in your working tree are invisible. There is no way to point Zed at a dirty tree, and Zed never runs `tree-sitter generate` itself — it compiles whatever `src/parser.c` is committed at that revision.
+The Solid grammar package also backs AngularMX (`languages/ngmx/config.toml` declares `grammar = "solid"` directly rather than a second, identical grammar package) — a change here affects both languages' highlighting. It is a `file://` dependency during development, and this has one consequence worth knowing before you lose an afternoon to it: **Zed only ever sees committed code.** Its checkout runs `git init`, `git fetch --depth 1 origin <rev>` and `git checkout <rev>` regardless of the URL scheme, so uncommitted changes in your working tree are invisible. There is no way to point Zed at a dirty tree, and Zed never runs `tree-sitter generate` itself — it compiles whatever `src/parser.c` is committed at that revision.
 
 The loop is therefore **commit, bump, reinstall**:
 

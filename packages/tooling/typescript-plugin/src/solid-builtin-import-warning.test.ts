@@ -48,7 +48,7 @@ describe("appendSolidBuiltinImport's parse-failure warning reaches a real caller
       ts.ScriptSnapshot.fromString(source),
       { getAssociatedScript: () => undefined },
     );
-    if (!virtual) throw new Error("Expected SolidMX virtual code");
+    if (!virtual) throw new Error("Expected Solid virtual code");
     expect(plugin.getSyntaxError?.(fileName)).toBeUndefined();
 
     const diagnostics = plugin.getCompileDiagnostics(fileName);

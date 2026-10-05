@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reproduces Zed's own grammar compile step against a CLEAN CLONE of this
 # repo at HEAD — i.e. only committed files, never the working tree. Copied
-# from packages/editors/tree-sitter-solidmx/scripts/zed-compile-check.sh (see
+# from packages/editors/tree-sitter-solid/scripts/zed-compile-check.sh (see
 # that package's UPSTREAM.md "A real defect this caused" for the defect class
 # this gate exists for); only PKG_REL and GRAMMAR_NAME differ. The export
 # name `tree_sitter_mx` is what `[grammars.mx]` in packages/editors/zed's
@@ -101,7 +101,7 @@ else
   fi
   # ZED_COMPILE_CHECK_WASM_BUILD_ARGS: extra flags for `tree-sitter build`.
   #
-  # Unlike the solidmx/amx copies (tree-sitter-cli 0.24.7 with --docker), this
+  # Unlike the solid/amx copies (tree-sitter-cli 0.24.7 with --docker), this
   # fallback uses package.json's own tree-sitter-cli 0.26.9: it downloads its
   # own wasi-sdk (no Docker or emsdk needed on CI) and compiles the clone's
   # committed src/ as-is. 0.24.7 regenerates src/parser.c from grammar.js

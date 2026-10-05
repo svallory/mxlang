@@ -436,10 +436,10 @@ tooling, and editor integration.
 value is an MX region — is registered in both VS Code and Zed the same way
 `.solid.mx` is: the surrounding TypeScript highlights as TypeScript
 (decorators included), and the MX region inside `template:` highlights as MX.
-Zed's `AngularMX` language reuses `SolidMX`'s grammar package unchanged (the
+Zed's `AngularMX` language reuses `Solid`'s grammar package unchanged (the
 grammar's only MX-specific addition, the opaque `mx_element` token, is
 neither Solid- nor Angular-specific); VS Code's `ngmx` language falls back to
-`source.tsx` highlighting, the same fallback `solidmx` uses. See
+`source.tsx` highlighting, the same fallback `solid` uses. See
 [VS Code](/editors/vscode/) and [Zed](/editors/zed/) for setup. TypeScript
 semantics for `.ng.mx` come from `@mxlang/typescript-plugin` and `mx-tsc`
 (see [`.ng.mx`](#ngmx)); Angular template diagnostics run in `mx-tsc` and in the

@@ -11,7 +11,7 @@ The repository is a Bun workspace with two workspace globs, `packages/*` and `ex
 
 | Package | Purpose |
 |---|---|
-| `packages/parser` | A `@babel/parser` fork: MX in expression position lowers to JSX, for the SolidMX host. |
+| `packages/parser` | A `@babel/parser` fork: MX in expression position lowers to JSX, for the Solid host. |
 | `packages/core` | The Marko-node consumer every MX host is built on: structural lowerings, the IR, `HostDeclarations`, `Emitter<Out>`, three stateful-tag hooks, two front doors. |
 | `packages/targets/html` | The html target: `.mx`/`.marko` compile to a pure `(input) => string` function. |
 | `packages/hosts/astro` | The Astro host: components, pages, and `.astro.mx` templates, all rendered to static markup. |
@@ -41,7 +41,7 @@ Each host is checked against real, working reference code rather than only again
 
 | Command | What it compares | Current state |
 |---|---|---|
-| `bun run oracle` | Each SolidMX fixture against a hand-written Solid twin, across both Solid 2 backends and both generate variants | 20 rows, all pass |
+| `bun run oracle` | Each Solid fixture against a hand-written Solid twin, across both Solid 2 backends and both generate variants | 20 rows, all pass |
 | `bun run oracle:marko` | Each stock fixture rendered through the real Marko toolchain *and* through the html target | 43 fixtures: 41 pass, 2 reasoned skips, 0 bugs |
 | `bun run oracle:preact` | The same 43 fixtures rendered with `preact-render-to-string` | 30 pass, 13 reasoned skips, 0 bugs |
 | `bun run oracle:react` | The same 43 fixtures rendered with `react-dom/server` | 30 pass, 13 reasoned skips, 0 bugs |
@@ -54,7 +54,7 @@ The three host oracles are CI jobs rather than part of `verify`: the Marko toolc
 
 A Marko-parity fixture is a directory under the html target's `fixtures-marko/` holding `input.marko`, `input.json` (the props) and `expected.html`. **Generate `expected.html` from real Marko; never hand-write it** — a hand-written expectation records what you believed, not what Marko does. If a construct is deliberately out of scope for a host, add a `meta.json` naming the reason instead of deleting the fixture.
 
-A SolidMX fixture is a directory holding `input.solid.mx` and a hand-written `twin.tsx`. The twin must not introduce whitespace MX drops: MX follows Marko's rule that a whitespace-only run containing a newline disappears, so `text<p>…` goes on one line in the twin wherever the MX source separates them only by indentation.
+A Solid fixture is a directory holding `input.solid.mx` and a hand-written `twin.tsx`. The twin must not introduce whitespace MX drops: MX follows Marko's rule that a whitespace-only run containing a newline disappears, so `text<p>…` goes on one line in the twin wherever the MX source separates them only by indentation.
 
 ## How to add a host
 

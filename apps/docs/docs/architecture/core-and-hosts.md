@@ -35,7 +35,7 @@ A host is small because most of the work — parsing, structural lowering, guard
 
 **`compileSource(source, filename, policy, host?)`** compiles a whole file through `@marko/compiler`'s translator seam. This is what a host uses when the entire file is MX — the html target's `.mx` files, for example.
 
-**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** parses a Marko *substring* embedded inside a larger file, with every position shifted so error locations and source maps point at the right place in the outer file. This is what a host uses when MX syntax sits inside something else — Astro's `.astro.mx` templates (MX after a frontmatter fence) and SolidMX's `.solid.mx` files (MX in JSX's position inside a TSX file) both use this door.
+**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** parses a Marko *substring* embedded inside a larger file, with every position shifted so error locations and source maps point at the right place in the outer file. This is what a host uses when MX syntax sits inside something else — Astro's `.astro.mx` templates (MX after a frontmatter fence) and Solid's `.solid.mx` files (MX in JSX's position inside a TSX file) both use this door.
 
 ## Statement-shaped and expression-shaped hosts
 

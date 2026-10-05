@@ -51,7 +51,7 @@ echo
 echo "Push to the target repo, e.g.:"
 echo "  git push <mxlang/zed remote url> $BRANCH:main"
 echo
-echo "Then, in extension.toml, swap [grammars.solidmx]'s repository from the"
-echo "file:// dev form to the split-off tree-sitter-solidmx repo's real"
+echo "Then, in extension.toml, swap [grammars.solid]'s repository from the"
+echo "file:// dev form to the split-off tree-sitter-solid repo's real"
 echo "GitHub URL (and drop 'path', since that repo's root is already the"
 echo "grammar root) before registering with zed-industries/extensions."

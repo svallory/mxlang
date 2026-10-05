@@ -316,7 +316,7 @@ unconditionally with `escaped` taken from the node, so `$!{}` is simply
 `onText` has already applied it before `@mxlang/core` sees a text node. There is
 no `normalizeText` in core, and **a second normalization pass on any host's path
 would collapse whitespace twice** — this is the same single rule on every host,
-SolidMX included.
+Solid included.
 
 Marko's parser owns boundary trimming and collapses remaining whitespace
 runs with `value.replace(/\s+/g, " ")` (decisions 33 and 141). It ignores
@@ -1479,7 +1479,7 @@ immediately outside it. This closes the gap `custom-tags-import-precedence`
 The html target's rule is stated by case only in the sense above: a tag matching an
 import, a `<define>`, or a taglib/`tags/` discovery is a component call; anything
 else is an HTML element whatever its case, hyphenated custom elements included.
-SolidMX keeps JSX's PascalCase-means-component convention, on a separate lowering
+Solid keeps JSX's PascalCase-means-component convention, on a separate lowering
 path.
 
 | Message | When |
@@ -3427,7 +3427,7 @@ deferred (decision 85).
 ## 16. Docs to fix
 
 Fixed 2026-09-28 (docs-drift-2026-09-17): the `<return>`-on-html claim, the
-"future SolidMX or React host" line, the Solid `<if>`-lowering description,
+"future Solid or React host" line, the Solid `<if>`-lowering description,
 the html tag-params-on-component-call claim, the `define-const-static-import.md`
 `.mx` import example, the `input`-shadowing strict-only omission on
 `errors.md`, this section's own §13.2 dynamic-tag row (Solid/Preact/React/Hono
@@ -3453,7 +3453,7 @@ custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 - `worktrees/main/divergences.md` — the subset rule, deferred-to-MX-2 table
 - `worktrees/main/AGENTS.md` — per-package and per-host contracts
 - [`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/) — the custom-tags feature spec
-- `notes/solidmx-spec.md` — SolidMX (note §5.1's `<if=cond|u|>` is wrong; see §5.2)
+- `notes/solidmx-spec.md` — Solid (note §5.1's `<if=cond|u|>` is wrong; see §5.2)
 - `packages/core/src/{lower,core,custom-tags,builtin-tags,template-tag,scan,ir}.ts`
 - `packages/hosts/*/README.md` and their emitters
 - `apps/docs/docs/language/*.md` — six user-facing pages

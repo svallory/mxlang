@@ -84,7 +84,7 @@ describe("@mxlang/html/bun", () => {
   test("does not claim a .solid.mx path", async () => {
     Bun.plugin(markoPlugin);
 
-    // Real SolidMX source: it would fail the string translator outright
+    // Real Solid source: it would fail the string translator outright
     // (JSX like <button onClick={...}> isn't valid `.marko` syntax), so the
     // regression this guards against is real, not just theoretical.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-translator-bun-solid-"));

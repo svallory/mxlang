@@ -24,7 +24,7 @@ export const readSolidCalleeInput: CalleeInputReader = ({
   try {
     return analyze(parseSolidCalleeProgram(source, path));
   } catch {
-    // A host reader is advisory. Malformed or unsupported SolidMX must never
+    // A host reader is advisory. Malformed or unsupported Solid must never
     // make a caller invalid merely because its Input could not be inspected.
     return { kind: "none", path };
   }

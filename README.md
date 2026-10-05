@@ -1,6 +1,6 @@
 # MX
 
-MX (Markup eXtended) is a template language born from Marko. It takes Marko's syntax and brings it to wherever JSX lives today, letting each **host** decide what state, reactivity, and output mean. MX 1.0 is a strict subset of Marko: every MX file is a valid Marko file, which is what lets MX borrow Marko's parser, formatter, and grammar. `.mx` is the official and only whole-template extension; porting a Marko component that stays within the subset is a rename. SolidMX (codename "Fluid", `.solid.mx`) is the Solid host: MX in JSX's position inside Solid component files.
+MX (Markup eXtended) is a template language born from Marko. It takes Marko's syntax and brings it to wherever JSX lives today, letting each **host** decide what state, reactivity, and output mean. MX 1.0 is a strict subset of Marko: every MX file is a valid Marko file, which is what lets MX borrow Marko's parser, formatter, and grammar. `.mx` is the official and only whole-template extension; porting a Marko component that stays within the subset is a rename. Solid (codename "Fluid", `.solid.mx`) is the Solid host: MX in JSX's position inside Solid component files.
 
 Custom tags let a project define its own portable markup vocabulary in `tags/x.mx` or `tags/x.tag.ts`. They are discovered without call-site imports and expand to ordinary IR before any host emits. See the [custom-tag guide](apps/docs/docs/custom-tags/index.md).
 
@@ -81,7 +81,7 @@ The two tooling packages that load TypeScript at runtime (`@mxlang/tsc`, `@mxlan
 
 ### Solid 2 RC policy
 
-SolidMX targets **Solid 2 only**. `babel-preset-solid` and `vite-plugin-solid`
+Solid targets **Solid 2 only**. `babel-preset-solid` and `vite-plugin-solid`
 are dead ends: the live packages are `@solidjs/babel-plugin` and
 `@solidjs/vite-plugin`, and `@solidjs/compiler` (native Oxc) is the default
 backend. Solid 2 is pre-stable — `solid-js`'s npm `latest` is still 1.9.15
@@ -204,7 +204,7 @@ bun run e2e
 `packages/editors/tree-sitter-mx` (`marko-js/tree-sitter` plus the decision
 146 shorthands), `AstroMX` (`.astro.mx`), backed by
 `packages/editors/tree-sitter-amx` with the MX grammar injected into the
-template body, and `SolidMX` (`.solid.mx`) and `AngularMX` (`.ng.mx`), backed
-by `packages/editors/tree-sitter-solidmx`.
+template body, and `Solid` (`.solid.mx`) and `AngularMX` (`.ng.mx`), backed
+by `packages/editors/tree-sitter-solid`.
 See its `README.md` for dev-install steps, the per-language limitations, and
 the upstream bump procedure.

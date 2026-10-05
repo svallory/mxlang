@@ -1,4 +1,4 @@
-<!-- This is the 74-construct coverage baseline that packages/editors/tree-sitter-solidmx/test/corpus/*.txt is measured against. Copied verbatim from notes/zed/solidmx-corpus-checklist.md (see UPSTREAM.md "What the corpus is measured against"). -->
+<!-- This is the 74-construct coverage baseline that packages/editors/tree-sitter-solid/test/corpus/*.txt is measured against. Copied verbatim from notes/zed/solidmx-corpus-checklist.md (see UPSTREAM.md "What the corpus is measured against"). -->
 
 <!--
 2026-09-13 re-audit (zed-solidmx-followups): this checklist predates decision
@@ -11,7 +11,7 @@
   `.solid.mx` fixtures use `<if=cond()>` with no `|params|`.
 - #50/#72/lowering-table `<fragment>`: REMOVED — decision 72 retired
   `<fragment>` entirely (it was the old `.mx` dialect's own construct, not
-  real Marko). It does not come back for SolidMX or any other host.
+  real Marko). It does not come back for Solid or any other host.
 
 The 4 stateful items (#56-59: `<let>`, `<const>`, `<effect>`, `:=`) are
 confirmed still NON-GOAL for lowering (decision 69/72: stateful tags are
@@ -27,7 +27,7 @@ fall out of the general "any unrecognized tag name scans as an ordinary MX
 element" behavior every other tag exercises.
 
 Everything else in this checklist (#1-32, #34-49, #51-71, #73) still matches
-current SolidMX syntax and is exercised by `test/corpus/*.txt` and/or the
+current Solid syntax and is exercised by `test/corpus/*.txt` and/or the
 `.solid.mx` fixtures under `fixtures/`. Updated count: 74 valid constructs
 in the original list minus the 2 removed above (`<fragment>` #50/#72, tag
 params on `<if>` folded into #33/#36's still-valid non-`<if>` uses) = **72
@@ -40,10 +40,10 @@ region walk, not just "parses without ERROR/MISSING."
 -->
 
 
-# SolidMX Test Corpus Checklist
+# Solid Test Corpus Checklist
 ## Exhaustive Syntactic Constructs for Tree-sitter Coverage
 
-This checklist covers every distinct syntactic construct in SolidMX (MX for Solid 2) from spec sections 3 and 4. Each entry specifies valid modes, exact syntax from spec, and minimal example.
+This checklist covers every distinct syntactic construct in Solid (MX for Solid 2) from spec sections 3 and 4. Each entry specifies valid modes, exact syntax from spec, and minimal example.
 
 ---
 
@@ -712,10 +712,10 @@ The following are summarized from the lowering table. Each is a separate syntact
 | Line comment | ✓ | ✓ | Dropped from output |
 | MX in attr method | ✓ | ✓ | Nested in TS expression block |
 | TS expr in placeholder | ✓ | ✓ | Nested in MX placeholder |
-| `<let>` tag | ✓ | ✓ | Parses as ordinary tag (NON-GOAL for SolidMX) |
-| `<const>` tag | ✓ | ✓ | Parses as ordinary tag (NON-GOAL for SolidMX) |
-| `<effect>` tag | ✓ | ✓ | Parses as ordinary tag (NON-GOAL for SolidMX) |
-| `:=` binding | ✓ | ✓ | Parses as ordinary attribute (NON-GOAL for SolidMX) |
+| `<let>` tag | ✓ | ✓ | Parses as ordinary tag (NON-GOAL for Solid) |
+| `<const>` tag | ✓ | ✓ | Parses as ordinary tag (NON-GOAL for Solid) |
+| `<effect>` tag | ✓ | ✓ | Parses as ordinary tag (NON-GOAL for Solid) |
+| `:=` binding | ✓ | ✓ | Parses as ordinary attribute (NON-GOAL for Solid) |
 
 ---
 

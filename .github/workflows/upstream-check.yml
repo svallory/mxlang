@@ -3,26 +3,26 @@ name: Zed extension upstream check
 on:
   # MX's weekly upstream drift check (schedule/workflow_dispatch, opening a PR
   # on drift) was retired with the MX language (decision 68): MX was the only
-  # language here with a networked upstream to drift against. SolidMX's
+  # language here with a networked upstream to drift against. Solid's
   # `vendor.sh` (packages/editors/zed/scripts/vendor.sh) has no `--check`
   # mode at all — its highlights source is a local sibling package, so
   # "check for drift" would only ever report success (decision 55: a gate
   # that cannot fail is not a gate). Every remaining job here is
-  # pull_request-only; `solidmx-vendor-matches` below still calls
-  # packages/editors/tree-sitter-solidmx's own `vendor.sh --check` — a different
+  # pull_request-only; `solid-vendor-matches` below still calls
+  # packages/editors/tree-sitter-solid's own `vendor.sh --check` — a different
   # script, for a real drift check against that package's upstream pin.
   pull_request:
     paths:
       - "packages/editors/zed/**"
-      - "packages/editors/tree-sitter-solidmx/**"
+      - "packages/editors/tree-sitter-solid/**"
       - "packages/editors/tree-sitter-mx/**"
 
 permissions:
   contents: read
 
 jobs:
-  solidmx-vendor-matches:
-    # packages/editors/tree-sitter-solidmx vendors tree-sitter-typescript at a pinned
+  solid-vendor-matches:
+    # packages/editors/tree-sitter-solid vendors tree-sitter-typescript at a pinned
     # sha and reapplies patches/*.patch on top. `vendor.sh --check` re-fetches
     # the pin into a temp dir, reapplies the patches, and diffs against
     # vendor/ — so a hand-edit to vendor/ that was never captured as a patch
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/editors/tree-sitter-solidmx
+        working-directory: packages/editors/tree-sitter-solid
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -48,7 +48,7 @@ jobs:
       - name: vendor.sh --check
         run: ./scripts/vendor.sh --check
 
-  solidmx-generated-output-matches:
+  solid-generated-output-matches:
     # The generated parser is committed because Zed compiles it directly and
     # never runs `tree-sitter generate` (UPSTREAM.md). That only holds if the
     # committed output actually corresponds to grammar.js + the vendored tree,
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/editors/tree-sitter-solidmx
+        working-directory: packages/editors/tree-sitter-solid
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -69,7 +69,7 @@ jobs:
       - run: |
           if ! git diff --exit-code -- src; then
             echo "src/ doesn't match what 'tree-sitter generate' produces from grammar.js + vendor/." >&2
-            echo "Run 'bun run generate' in packages/editors/tree-sitter-solidmx and commit the result." >&2
+            echo "Run 'bun run generate' in packages/editors/tree-sitter-solid and commit the result." >&2
             exit 1
           fi
 
@@ -90,12 +90,12 @@ jobs:
         run: ./scripts/vendor-check.sh
 
   vendored-files-match:
-    # Regenerates languages/{mx,solidmx,ngmx}/*.scm (no live upstream HEAD lookup — just
+    # Regenerates languages/{mx,solid,ngmx}/*.scm (no live upstream HEAD lookup — just
     # what vendor.sh's normal mode already does) and diffs against what's
     # committed. Catches a hand-edit of those files, which UPSTREAM.md says
     # never to do.
     #
-    # SolidMX's highlights.scm source (packages/editors/tree-sitter-solidmx/queries)
+    # Solid's highlights.scm source (packages/editors/tree-sitter-solid/queries)
     # is a sibling package in this same checkout, not a network fetch, so
     # this job needs no extra setup for it beyond running vendor.sh.
     if: github.event_name == 'pull_request'
@@ -107,8 +107,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./scripts/vendor.sh
       - run: |
-          if ! git diff --exit-code -- languages/mx languages/solidmx languages/ngmx; then
-            echo "languages/{mx,solidmx,ngmx}/*.scm doesn't match what vendor.sh generates." >&2
+          if ! git diff --exit-code -- languages/mx languages/solid languages/ngmx; then
+            echo "languages/{mx,solid,ngmx}/*.scm doesn't match what vendor.sh generates." >&2
             echo "Never hand-edit those files — edit overlay/<lang>/*.scm or" >&2
             echo "base/<lang>/*.scm (or the grammar package's queries/) and rerun vendor.sh." >&2
             exit 1

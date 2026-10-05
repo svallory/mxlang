@@ -1,7 +1,7 @@
 {
   "name": "vscode",
   "displayName": "MX",
-  "description": "MX, AstroMX and SolidMX language support.",
+  "description": "MX, AstroMX and Solid language support.",
   "version": "0.0.0",
   "private": true,
   "publisher": "mxlang",
@@ -46,7 +46,7 @@
       {
         "id": "solidmx",
         "aliases": [
-          "SolidMX",
+          "Solid",
           "solidmx"
         ],
         "extensions": [

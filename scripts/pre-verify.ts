@@ -11,7 +11,7 @@ const root = `${import.meta.dir}/../`;
 
 const evidenceFiles = [
   join(root, "vitest-results.json"),
-  join(root, "packages/editors/tree-sitter-solidmx/.test-ran"),
+  join(root, "packages/editors/tree-sitter-solid/.test-ran"),
   join(root, "packages/editors/tree-sitter-amx/.test-ran"),
   join(root, "packages/editors/tree-sitter-mx/.test-ran"),
 ];

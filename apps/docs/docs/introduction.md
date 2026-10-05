@@ -19,7 +19,7 @@ MX (Markup eXtended) is a template language born from Marko. It takes Marko's sy
   - **Astro** — `.astro.mx` is an Astro component with MX as its template; plain `.mx` components and pages render to static markup at build time, no islands, no client JavaScript.
   - **React** — a React function component with MX in place of the JSX; hooks go through `<const>` and `<try>` through a class error boundary.
   - **Preact** — a Preact function component with MX in place of the JSX: the same structural lowering, on Preact's runtime and native prop vocabulary.
-  - **SolidMX** (`.solid.mx`) — MX in JSX's position inside a Solid component file, lowered to Solid's own JSX. See [SolidMX](/hosts/solidmx/).
+  - **Solid** (`.solid.mx`) — MX in JSX's position inside a Solid component file, lowered to Solid's own JSX. See [Solid](/hosts/solid/).
 
 ## What MX is not
 
@@ -51,7 +51,7 @@ If you are new to MX, read these five in order — about twenty minutes end to e
 1. [Structural tags](/language/structural-tags/) — `<if>`, `<for>`, and the rest of the portable core. This is the part that means the same thing on every host.
 2. [Interpolation and escaping](/language/interpolation/) — `${}` versus `$!{}`, and the whitespace rule that surprises people coming from JSX.
 3. [Custom tags](/custom-tags/) — define reusable project vocabulary without coupling it to a host.
-4. Pick your host and follow its install: [HTML](/targets/html/) for a plain string, [Astro](/hosts/astro/) for static markup, [React](/hosts/react/) or [Preact](/hosts/preact/) for components, [Hono](/hosts/hono/) for server JSX, [SolidMX](/hosts/solidmx/) for MX inside a Solid file.
+4. Pick your host and follow its install: [HTML](/targets/html/) for a plain string, [Astro](/hosts/astro/) for static markup, [React](/hosts/react/) or [Preact](/hosts/preact/) for components, [Hono](/hosts/hono/) for server JSX, [Solid](/hosts/solid/) for MX inside a Solid file.
 5. [Stateful tags](/language/stateful-tags/) — what `<let>` and friends mean, which is the one place hosts deliberately disagree.
 
 Then set up your editor: [Zed](/editors/zed/), [VS Code](/editors/vscode/), and the [TypeScript](/editors/typescript/) integration that type-checks MX files.

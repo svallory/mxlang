@@ -70,8 +70,8 @@ export const hostExamples: Record<string, HostExample> = {
   },
   // `.solid.mx` is a TypeScript module with MX regions; the parser finds each
   // region and hands it to the host, exactly as the Vite plugin does.
-  solidmx: {
-    page: "solidmx",
+  solid: {
+    page: "solid",
     native: "solid/Greeter.tsx",
     mx: "solid/Greeter.solid.mx",
     compile: (source, filename, warnings) =>

@@ -88,7 +88,7 @@ Five facts worth knowing before editing it:
 
 - **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
   `core.ts` used to parse
-  an `import` line with `@mxlang/parser` — the *SolidMX parser* package — for a
+  an `import` line with `@mxlang/parser` — the *Solid parser* package — for a
   single `parse` call. It now asks `@marko/compiler/internal/babel`
   (`parse`/`parseExpression`/`traverse`/`types`, all present), which is also
   the instance Marko's own nodes belong to. Do not reintroduce a second Babel.
@@ -216,7 +216,7 @@ Five facts worth knowing before editing it:
   `parseFragment` also passes a **parse-only translator stub** (empty
   `translate`), because `@marko/compiler` otherwise resolves its default
   `marko/translator` before parsing and fails — the `marko` package is not a
-  dependency here. SolidMX's own bridge
+  dependency here. Solid's own bridge
   (`packages/parser/src/mx/bridge.ts`) now calls `parseFragment` for every MX
   region it finds; see "`@mxlang/solid`: the Solid host on `@mxlang/core`"
   in `packages/hosts/solid/AGENTS.md`.
@@ -337,7 +337,7 @@ Five facts worth knowing before editing it:
   for the shape checks changed from each host's hand-written phrasing (e.g.
   "given twice") to the generic custom-tag messages (e.g. "may not be
   repeated") — a wording change, not a behavior change, so the affected host
-  and SolidMX-bridge tests were updated to match rather than left failing. A
+  and Solid-bridge tests were updated to match rather than left failing. A
   tag whose `attributes` is declared empty (`{}`, `<try>`'s own case) reports
   a named or spread attribute the same way — "accepts no attributes" — rather
   than the generic checker's own internal wording ("spread attributes cannot
@@ -396,7 +396,7 @@ Five facts worth knowing before editing it:
   which has no `mx.tags` entry to carry one) means visible to every host,
   `host` unset included. Every call site that scans passes its own host name
   — the Bun loaders (`"html"`, `"hono"`), `@mxlang/astro`'s `.astro.mx` plugin
-  (`"astro"`), the SolidMX and whole-file `.mx` typescript-plugin paths
+  (`"astro"`), the Solid and whole-file `.mx` typescript-plugin paths
   (`"solid"`, resolved per file via `resolveTargetPolicy`), the language
   server (`hostPolicy.host`), the Vite plugin (`resolveTargetPolicyDetailed(file)`
   per compiled file), and the Angular build/oracle (`"angular"`) — so a

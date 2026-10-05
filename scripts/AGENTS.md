@@ -25,15 +25,15 @@ scripts/pre-verify.ts && typecheck && lint && build && test && test:bun && test:
 ```
 
 - `scripts/pre-verify.ts` deletes any evidence left over from a previous run
-  (`vitest-results.json`, `packages/editors/tree-sitter-solidmx/.test-ran`) and writes
+  (`vitest-results.json`, `packages/editors/tree-sitter-solid/.test-ran`) and writes
   `.verify-start` with the current time. All three are gitignored.
 - `bun run test` runs vitest (over the root `vitest.config.ts`'s `projects`
   list — `scripts`, `packages/core`, `packages/oracle`, `packages/parser`,
   `packages/hosts/*`, `packages/tooling/*`, `packages/editors/*` — which
   auto-discovers a project per matched directory with test files) with
   `--reporter=json --outputFile=vitest-results.json`.
-- `bun run test:grammar` runs `moon run tree-sitter-solidmx:test --force`
-  (`tree-sitter-solidmx`'s real test is `scripts/test.sh`, not vitest, so it
+- `bun run test:grammar` runs `moon run tree-sitter-solid:test --force`
+  (`tree-sitter-solid`'s real test is `scripts/test.sh`, not vitest, so it
   can never appear in the JSON report). `scripts/test.sh` writes
   `.test-ran` as its last step, only on success; `--force` bypasses moon's
   own task cache so a cached "already ran, nothing changed" result can't be
@@ -50,7 +50,7 @@ scripts/pre-verify.ts && typecheck && lint && build && test && test:bun && test:
   full path rather than basename is load-bearing: an example and a package
   can share a basename (`examples/angular-app` vs `packages/hosts/angular`),
   and a basename-only match let one satisfy the other's coverage requirement
-  for free. For `tree-sitter-solidmx`/`tree-sitter-amx`/`tree-sitter-mx` only, evidence is
+  for free. For `tree-sitter-solid`/`tree-sitter-amx`/`tree-sitter-mx` only, evidence is
   the `.test-ran` marker instead. Every evidence file's mtime must be `>=`
   `.verify-start`'s timestamp, or it's treated as stale and the package
   fails — there is no code path that marks a package as tested without

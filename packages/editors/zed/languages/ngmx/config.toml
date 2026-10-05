@@ -1,12 +1,12 @@
 name = "AngularMX"
-grammar = "solidmx"
+grammar = "solid"
 path_suffixes = ["ng.mx"]
 
 # TypeScript host language: line comments, no HTML comments — everything
 # outside an `mx_element` region is plain TypeScript, unlike Marko's own
-# markup-mode host. Same convention as SolidMX; this grammar (a patched
+# markup-mode host. Same convention as Solid; this grammar (a patched
 # tree-sitter-typescript tsx dialect) has no Angular- or Solid-specific
-# behavior, so AngularMX reuses the solidmx grammar under its own language
+# behavior, so AngularMX reuses the solid grammar under its own language
 # name and path suffix rather than compiling a second grammar package.
 line_comments = ["// "]
 block_comment = ["/* ", " */"]

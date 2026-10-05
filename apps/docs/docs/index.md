@@ -18,7 +18,7 @@ noStyle: true
 <section class="mx-home-hero">
 <h1>MX</h1>
 <p class="mx-home-lead">MX is a template language born from Marko: one markup language, many hosts.</p>
-<p class="mx-home-targets">It compiles today for <a href="/targets/html/">HTML</a>, <a href="/hosts/astro/">Astro</a>, <a href="/hosts/react/">React</a>, <a href="/hosts/preact/">Preact</a>, <a href="/hosts/hono/">Hono</a>, <a href="/hosts/solidmx/">SolidMX</a>, <a href="/hosts/angular/">Angular</a> and <a href="/targets/data/">data</a>.</p>
+<p class="mx-home-targets">It compiles today for <a href="/targets/html/">HTML</a>, <a href="/hosts/astro/">Astro</a>, <a href="/hosts/react/">React</a>, <a href="/hosts/preact/">Preact</a>, <a href="/hosts/hono/">Hono</a>, <a href="/hosts/solid/">Solid</a>, <a href="/hosts/angular/">Angular</a> and <a href="/targets/data/">data</a>.</p>
 <p class="mx-home-actions"><a class="mx-home-cta" href="/introduction/">Read the introduction</a><a class="mx-home-cta mx-home-cta-quiet" href="/specification/">The specification</a></p>
 </section>
 <!-- mx-home:generated:start -->

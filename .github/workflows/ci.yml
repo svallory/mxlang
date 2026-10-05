@@ -103,7 +103,7 @@ jobs:
         with:
           auto-install: false
       - name: vendor tree-sitter-typescript
-        working-directory: packages/editors/tree-sitter-solidmx
+        working-directory: packages/editors/tree-sitter-solid
         run: ./scripts/vendor.sh
       - run: bun run scripts/pre-verify.ts
       - run: bun run build
@@ -143,7 +143,7 @@ jobs:
       # docs/index.md that no longer matches the generator.
       # The docs highlight mx code with the tree-sitter grammars, built to wasm:
       # tree-sitter-mx.wasm (gitignored, from packages/editors/tree-sitter-mx)
-      # and tree-sitter-typescript.wasm (cloned from the pin the solidmx grammar
+      # and tree-sitter-typescript.wasm (cloned from the pin the solid grammar
       # vendors). `test` and `build` run this themselves; it is a step of its own
       # so a toolchain failure reads as that and not as a docs failure. The docs
       # build fails loudly, never falls back to plain text, when either is missing.
@@ -215,7 +215,7 @@ jobs:
 
   zed-compile-check:
     # Reproduces Zed's own grammar compile step against a clean clone of
-    # HEAD (packages/editors/tree-sitter-solidmx/scripts/zed-compile-check.sh).
+    # HEAD (packages/editors/tree-sitter-solid/scripts/zed-compile-check.sh).
     # This is its own job, not folded into verify above, so a missing wasm
     # toolchain here can never be masked by bun run test's own success —
     # see the ZED_COMPILE_CHECK_FORCE_FALLBACK note below for why runners
@@ -250,9 +250,9 @@ jobs:
       # a gate that goes silently green when its toolchain is missing is
       # exactly the defect class this whole check exists to catch.
       - name: >-
-          solidmx: zed-compile-check.sh
+          solid: zed-compile-check.sh
           (forced fallback: tree-sitter build --wasm --docker)
-        working-directory: packages/editors/tree-sitter-solidmx
+        working-directory: packages/editors/tree-sitter-solid
         env:
           ZED_COMPILE_CHECK_FORCE_FALLBACK: "1"
           ZED_COMPILE_CHECK_WASM_BUILD_ARGS: "--docker"

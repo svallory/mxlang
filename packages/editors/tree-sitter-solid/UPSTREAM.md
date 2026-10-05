@@ -50,7 +50,7 @@ emscripten install). Verified against a sibling defect: `tree-sitter-amx`'s
 own `zed-compile-check.sh` was briefly bumped to 0.26.9 and broke CI's
 Docker-based wasm build for exactly this reason (commit `11d1acaf`,
 "tree-sitter-cli 0.26.9 dropped the --docker argument for build --wasm"),
-and was reverted back to 0.24.7 to match `tree-sitter-solidmx`'s own
+and was reverted back to 0.24.7 to match `tree-sitter-solid`'s own
 (already-correct) pin. Do not "fix" `zed-compile-check.sh`'s bunx pin to
 match `package.json` without first confirming `--docker` support is back in
 whatever CLI version you'd bump to, or that CI no longer needs `--docker`.
@@ -72,7 +72,7 @@ binary.
   fails loudly at the vendor step instead of silently merging into MX code.
 - `tsx/grammar.js` — two lines calling `defineGrammar('tsx')`. MX's own
   `grammar.js` at the package root plays this role, calling
-  `defineGrammar("tsx", "solidmx")`.
+  `defineGrammar("tsx", "solid")`.
 
 `tsx/src/parser.c` is ~8.4 MB upstream and MX's generated `src/parser.c` is
 ~8.1 MB. First clang compile is slow (tens of seconds); that is a known,
@@ -100,8 +100,8 @@ itself, copied rather than included from outside it.
 time it was tried (`~/Library/Logs/Zed/Zed.log`):
 
 ```
-failed to compile grammar 'solidmx': failed to compile solidmx parser with clang:
-.../grammars/solidmx/packages/editors/tree-sitter-solidmx/src/scanner.c:18:10:
+failed to compile grammar 'solid': failed to compile solid parser with clang:
+.../grammars/solid/packages/editors/tree-sitter-solid/src/scanner.c:18:10:
 fatal error: '../vendor/tree-sitter-typescript/common/scanner.h' file not found
 ```
 
@@ -171,8 +171,8 @@ touch only `common/define-grammar.js`:
    place. This is what makes `<` in expression position start MX, not JSX.
 3. **`defineGrammar(dialect, name = dialect)`** — take the grammar *name* as a
    second parameter. The generated C symbols derive from the name
-   (`tree_sitter_solidmx_external_scanner_scan`), so SolidMX must be named
-   `solidmx` while still selecting every `tsx` dialect branch. Defaulting to
+   (`tree_sitter_solid_external_scanner_scan`), so Solid must be named
+   `solid` while still selecting every `tsx` dialect branch. Defaulting to
    `dialect` leaves upstream's own two grammars unaffected.
 
 `0002-*.patch` (task `solidmx-grammar-fragments`):
@@ -218,7 +218,7 @@ offered that position (so `valid_symbols` is not what declines it).
 ## What the corpus is measured against
 
 `test/corpus/*.txt` is scored against **`notes/zed/solidmx-corpus-checklist.md`**
-— 74 catalogued constructs from spec sections 3 and 4, derived from the SolidMX
+— 74 catalogued constructs from spec sections 3 and 4, derived from the Solid
 spec by the squad rather than from this grammar. That file lives in the
 operator's `notes/` at the project-space root and is **not versioned with this
 repo**, so record the number here for it to mean anything later:

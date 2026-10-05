@@ -6,7 +6,7 @@
 # an MX file hold TypeScript (placeholders, attribute values, `static` bodies,
 # `import`/`export`/`class` statements, ...). Highlighting them needs a
 # TypeScript wasm and a highlights query; neither is in the repo, so this
-# builds them from the same upstream pin `packages/editors/tree-sitter-solidmx`
+# builds them from the same upstream pin `packages/editors/tree-sitter-solid`
 # vendors (`UPSTREAM.md`): tree-sitter-typescript v0.23.2, the plain
 # `typescript` dialect (not `tsx`: an injected expression is never JSX).
 #

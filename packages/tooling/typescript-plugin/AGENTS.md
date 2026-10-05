@@ -275,7 +275,7 @@ every error inside it. Both examples' `src/mx.d.ts` are deleted; dropping
 `todomvc`'s surfaced a real bug it had been masking (a `<fragment>` wrapper,
 removed by decision 72, rendering as a literal unknown element).
 
-`packages/tooling/tsc/src/fixtures/` holds two SolidMX projects differing in
+`packages/tooling/tsc/src/fixtures/` holds two Solid projects differing in
 one expression. The suite also runs the Astro example's paired
 `typecheck-fixtures`: `<Card title="..." />` passes and `<Card title={1} />`
 reports TS2322. The failing fixtures stay outside their packages' normal

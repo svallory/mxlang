@@ -50,7 +50,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-describe("SolidMX language plugin", () => {
+describe("Solid language plugin", () => {
   it("puts a discovered tag's hoisted import in the virtual file", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const fileName = `${here}/fixtures/solid-tags/page.solid.mx`;
@@ -62,7 +62,7 @@ describe("SolidMX language plugin", () => {
       { getAssociatedScript: () => undefined },
     );
 
-    if (!virtual) throw new Error("Expected SolidMX virtual code");
+    if (!virtual) throw new Error("Expected Solid virtual code");
     const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     // A region is an expression, so the import the compiler minted for
     // `<icon>` belongs to the surrounding module. If it does not reach the
@@ -106,7 +106,7 @@ describe("SolidMX language plugin", () => {
         { getAssociatedScript: () => undefined },
       );
 
-      if (!virtual) throw new Error("Expected SolidMX virtual code");
+      if (!virtual) throw new Error("Expected Solid virtual code");
       const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
       expect(code).not.toMatch(/import \$mx_Gizmo\d+/);
     } finally {
@@ -172,7 +172,7 @@ describe("SolidMX language plugin", () => {
 
     expect(plugin.getLanguageId("/src/example.solid.mx")).toBe("solidmx");
     expect(plugin.getLanguageId("/src/example.tsx")).toBeUndefined();
-    if (!virtual) throw new Error("Expected SolidMX virtual code");
+    if (!virtual) throw new Error("Expected Solid virtual code");
     expect(virtual?.languageId).toBe("typescriptreact");
     expect(virtual?.snapshot.getText(0, virtual.snapshot.getLength())).toBe(
       "export const answer: number = 42;",
@@ -230,7 +230,7 @@ describe("SolidMX language plugin", () => {
       { getAssociatedScript: () => undefined },
     );
 
-    if (!virtual) throw new Error("Expected SolidMX virtual code");
+    if (!virtual) throw new Error("Expected Solid virtual code");
     const code = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     expect(code).toContain("a &#60; b {input.zed}");
     // Identity up to the escaped `<`, then everything after it shifted by
@@ -312,7 +312,7 @@ describe("SolidMX language plugin", () => {
       {
         [component]: [
           "export function Counter(props: { start: number }) {",
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: SolidMX placeholder syntax
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Solid placeholder syntax
           "  return <button>${props.start}</button>;",
           "}",
         ].join("\n"),
@@ -448,7 +448,7 @@ describe("SolidMX language plugin", () => {
       ts.ScriptSnapshot.fromString(source),
       { getAssociatedScript: () => undefined },
     );
-    if (!virtual) throw new Error("Expected SolidMX virtual code");
+    if (!virtual) throw new Error("Expected Solid virtual code");
     const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     expect(generated).toContain("pick<string>(item)");
   });

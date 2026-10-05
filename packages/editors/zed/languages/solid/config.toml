@@ -1,5 +1,5 @@
-name = "SolidMX"
-grammar = "solidmx"
+name = "Solid"
+grammar = "solid"
 path_suffixes = ["solid.mx"]
 
 # TypeScript host language: line comments, no HTML comments — everything

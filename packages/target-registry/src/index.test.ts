@@ -103,7 +103,7 @@ describe("shape of each descriptor", () => {
     const [kind] = solid.host?.fileKinds ?? [];
     expect(kind?.segment).toBe("solid");
     expect(kind?.diagnosticSource).toBe("solidmx");
-    expect(kind?.languageIds).toEqual(["solidmx", "SolidMX"]);
+    expect(kind?.languageIds).toEqual(["solidmx", "solid"]);
     expect(kind?.compileRegion).toBeTypeOf("function");
     expect(kind?.readCalleeInput).toBeTypeOf("function");
   });

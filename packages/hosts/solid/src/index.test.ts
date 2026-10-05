@@ -324,7 +324,7 @@ describe("Solid IR lowering", () => {
 });
 
 describe("Solid callee Input reader", () => {
-  it("returns none for a SolidMX callee with MX syntax and no Input", () => {
+  it("returns none for a Solid callee with MX syntax and no Input", () => {
     const path = join(HERE, "fixtures", "no-input-control.solid.mx");
     expect(
       readCalleeInput(
@@ -377,7 +377,7 @@ describe("Solid callee Input reader", () => {
   });
 
   it.each(["untyped-default-arrow", "untyped-named-arrow"])(
-    "returns none instead of throwing for %s SolidMX",
+    "returns none instead of throwing for %s Solid",
     (name) => {
       const path = join(HERE, "fixtures", `${name}.solid.mx`);
       expect(

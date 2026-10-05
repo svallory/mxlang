@@ -1,12 +1,12 @@
 # @mxlang/solid
 
-The Solid host: SolidMX's emitter over `@mxlang/core`'s shared IR (decisions
+The Solid host: Solid's emitter over `@mxlang/core`'s shared IR (decisions
 69, 71, 72, 79, 81). Same package shape as `@mxlang/astro` — `src/`,
 `moon.yml`, a vitest project, this README — and the third emitter over the
 core IR after `@mxlang/html` (vanilla strings) and `@mxlang/astro` (`.astro.mx`).
 
 Project [custom tags](../../../apps/docs/docs/custom-tags/index.md) cross the
-SolidMX parser boundary and expand to ordinary IR before this emitter runs,
+Solid parser boundary and expand to ordinary IR before this emitter runs,
 using the same definitions as whole-file `.mx` hosts.
 
 ## Install

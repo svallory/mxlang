@@ -64,7 +64,7 @@ const descriptor: TargetDescriptor = {
       {
         segment: "solid",
         // `language-server/src/diagnose.ts` `SOLID_MX_LANGUAGE_IDS`.
-        languageIds: ["solidmx", "SolidMX"],
+        languageIds: ["solidmx", "solid"],
         diagnosticSource: "solidmx",
         compileRegion: (source, input) =>
           (

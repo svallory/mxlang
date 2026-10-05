@@ -1,5 +1,5 @@
 {
-  "name": "@mxlang/tree-sitter-solidmx",
+  "name": "@mxlang/tree-sitter-solid",
   "version": "0.0.0",
   "private": true,
   "//type": "No \"type\" field on purpose: tree-sitter loads grammar.js as CommonJS, and \"type\": \"module\" makes its require() call fail. Upstream's tsx package.json omits it for the same reason.",

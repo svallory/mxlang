@@ -30,8 +30,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
-PKG_REL="packages/editors/tree-sitter-solidmx"
-GRAMMAR_NAME="solidmx"
+PKG_REL="packages/editors/tree-sitter-solid"
+GRAMMAR_NAME="solid"
 
 # Zed's own wasi-sdk clang, if this machine has installed the extension at
 # least once (it ships wasi-sdk under Zed's own app-support directory, not
@@ -62,7 +62,7 @@ CLONE_DIR="$TMP_DIR/clone"
 # Clone the whole monorepo (this grammar has no repo of its own yet — it
 # lives nested at $PKG_REL, same as extension.toml's file:// + path dev
 # form), at HEAD, so only committed files are present. This mirrors exactly
-# what Zed's checkout_repo does for [grammars.solidmx].
+# what Zed's checkout_repo does for [grammars.solid].
 echo "Cloning committed HEAD only (file://$REPO_ROOT, at $PKG_REL)..."
 git clone --quiet --depth 1 "file://$REPO_ROOT" "$CLONE_DIR"
 

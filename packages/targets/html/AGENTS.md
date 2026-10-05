@@ -20,10 +20,10 @@ Emitted module shape: the `escape` import, the author's hoisted `import`s and
 see the export-name bullet below) building one local by `out +=`
 concatenation (**not** an array join — the goldens diff this code).
 
-Whitespace on **every** host, SolidMX included, is decision 33's rule
+Whitespace on **every** host, Solid included, is decision 33's rule
 applied once, by Marko's own `onText` before `@mxlang/core`'s resolver ever
 sees a `MarkoText` node (see the four Marko facts in `packages/parser/AGENTS.md`) — there is no
-separate SolidMX-specific whitespace pass to keep in sync; a second
+separate Solid-specific whitespace pass to keep in sync; a second
 implementation on any host's path would collapse whitespace twice.
 
 Goldens live at `packages/targets/html/fixtures-marko/<name>/` with

@@ -1,6 +1,6 @@
 ---
 title: "TypeScript"
-description: "Type-check SolidMX, whole-file MX, and AstroMX in editors and CI."
+description: "Type-check Solid, whole-file MX, and AstroMX in editors and CI."
 ---
 
 # TypeScript
@@ -74,7 +74,7 @@ Zed's `vtsls` equivalent is:
               {
                 "name": "@mxlang/typescript-plugin",
                 "location": "/absolute/path/to/node_modules/@mxlang/typescript-plugin",
-                "languages": ["solidmx", "mx", "astro", "astromx"],
+                "languages": ["solid", "mx", "astro", "astromx"],
                 "enableForWorkspaceTypeScriptVersions": true
               }
             ]

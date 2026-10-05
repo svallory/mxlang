@@ -18,7 +18,7 @@ const root = `${import.meta.dir}/../`;
 const vitestJsonPath = join(root, "vitest-results.json");
 const grammarMarkerPath = join(
   root,
-  "packages/editors/tree-sitter-solidmx/.test-ran",
+  "packages/editors/tree-sitter-solid/.test-ran",
 );
 const amxGrammarMarkerPath = join(
   root,
@@ -86,10 +86,10 @@ const NO_TEST_EXCEPTIONS: Record<string, string> = {
   "apps/docs": "docs site: built in verify",
 };
 
-// The one package whose real test (packages/editors/tree-sitter-solidmx/scripts/test.sh,
-// run via `moon run tree-sitter-solidmx:test`) is not vitest and so can never
+// The one package whose real test (packages/editors/tree-sitter-solid/scripts/test.sh,
+// run via `moon run tree-sitter-solid:test`) is not vitest and so can never
 // appear in vitest-results.json — it's checked against its own marker file.
-const GRAMMAR_MARKER_PACKAGE = "tree-sitter-solidmx";
+const GRAMMAR_MARKER_PACKAGE = "tree-sitter-solid";
 
 function readPackageJson(dir: string): Record<string, unknown> | null {
   const path = join(dir, "package.json");
@@ -354,7 +354,7 @@ async function main() {
     }
     if (!mode || kind === "grammar") {
       for (const [key, marker] of [
-        ["packages/editors/tree-sitter-solidmx", grammarMarkerPath],
+        ["packages/editors/tree-sitter-solid", grammarMarkerPath],
         ["packages/editors/tree-sitter-amx", amxGrammarMarkerPath],
         ["packages/editors/tree-sitter-mx", mxGrammarMarkerPath],
       ]) {

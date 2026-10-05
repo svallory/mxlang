@@ -1,6 +1,6 @@
 # `@mxlang/vscode`
 
-The official VS Code extension for MX. It provides syntax highlighting for MX (`.mx`), SolidMX (`.solid.mx`), AngularMX (`.ng.mx`), and AstroMX (`.astro.mx`), plus language server integration and TypeScript diagnostics for `.mx` and `.solid.mx`. `.ng.mx` gets TypeScript semantics and Angular template diagnostics (see below).
+The official VS Code extension for MX. It provides syntax highlighting for MX (`.mx`), Solid (`.solid.mx`), AngularMX (`.ng.mx`), and AstroMX (`.astro.mx`), plus language server integration and TypeScript diagnostics for `.mx` and `.solid.mx`. `.ng.mx` gets TypeScript semantics and Angular template diagnostics (see below).
 
 ## Installation
 

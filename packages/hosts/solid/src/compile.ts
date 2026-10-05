@@ -193,7 +193,7 @@ export interface HoistedDefine {
 
 /**
  * Marko parses attribute-method bodies as ordinary TypeScript, where a nested
- * JSX/MX expression is reported as a `MarkoParseError` statement. SolidMX's
+ * JSX/MX expression is reported as a `MarkoParseError` statement. Solid's
  * surrounding language is TSX, so retry only those statement-shaped failures
  * with Babel's TSX parser. Genuine expression failures remain untouched and
  * are reported by the core with Marko's precise `errorLoc`.

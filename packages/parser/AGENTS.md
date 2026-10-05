@@ -86,7 +86,7 @@ covered by the `.marko` alias in the first place.
 - `parse(source, filename)` in `@mxlang/parser` — a `.solid.mx` file: a
   TypeScript module in which `<` in expression position opens an MX element,
   lowered to Solid 2 JSX by `@mxlang/solid` (see below). This is the parser
-  package's only mode; there is no `mxMode` option. SolidMX is a separate
+  package's only mode; there is no `mxMode` option. Solid is a separate
   host from the vanilla one below, and is not affected by `.mx` being the
   only template extension or by decision 68's dialect retirement.
 - `compile(source, filename)` in `@mxlang/html` — a whole-file MX
@@ -151,7 +151,7 @@ extracted by parsing the hoisted import line with `parseBabel` (default,
 namespace, named, aliased, and combined forms), not by regex. An unbound
 *lowercase* tag that is neither hyphenated nor a real HTML/SVG/MathML element
 is a translate error naming it, rather than silently rendering as an unknown
-custom element. SolidMX's own PascalCase-means-component convention
+custom element. Solid's own PascalCase-means-component convention
 (`packages/hosts/solid/src/emitter.ts`'s `isComponent`) is unrelated and
 unchanged by this — it follows JSX, and is a separate host on a separate
 lowering path.

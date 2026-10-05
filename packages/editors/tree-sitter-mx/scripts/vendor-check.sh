@@ -33,7 +33,7 @@ git -C "$FETCH" fetch --quiet --depth 1 "$UPSTREAM" "$PIN_SHA"
 
 # A real repository at $OUT: without one, `git -C "$OUT" apply` resolves
 # upward to an enclosing repository and "Skipped patch" exits 0 (the defect
-# recorded in ../tree-sitter-solidmx/UPSTREAM.md).
+# recorded in ../tree-sitter-solid/UPSTREAM.md).
 git init --quiet "$OUT"
 git -C "$FETCH" archive FETCH_HEAD "${FILES[@]}" | tar -x -C "$OUT"
 

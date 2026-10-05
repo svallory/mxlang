@@ -214,7 +214,7 @@ Zed's TypeScript support runs `vtsls`. Register the plugin globally:
               {
                 "name": "@mxlang/typescript-plugin",
                 "location": "/absolute/path/to/node_modules/@mxlang/typescript-plugin",
-                "languages": ["solidmx", "mx", "astro", "astromx"],
+                "languages": ["solid", "mx", "astro", "astromx"],
                 "enableForWorkspaceTypeScriptVersions": true
               }
             ]
@@ -231,10 +231,10 @@ LSP language id, not against the name in Zed's language config. Zed derives
 that id by lowercasing the language's name — `LanguageName::lsp_id()` in
 `crates/language_core/src/language_name.rs` is
 `match self.0.as_ref() { "Plain Text" => "plaintext", name => name.to_lowercase() }`
-— so the `SolidMX` language declared in
-`packages/editors/zed/languages/solidmx/config.toml` is sent over LSP as
-`solidmx`. That happens to be the same string this plugin's
-`SOLID_MX_LANGUAGE_ID` uses, but the two are independent: `vtsls` never sees
+— so the `Solid` language declared in
+`packages/editors/zed/languages/solid/config.toml` is sent over LSP as
+`solid`. That differs from the `solidmx` string this plugin's
+`SOLID_MX_LANGUAGE_ID` uses, and the two are independent: `vtsls` never sees
 the plugin's constant.
 
 With `typescript-language-server` instead of `vtsls`, the equivalent is its
@@ -249,7 +249,7 @@ With `typescript-language-server` instead of `vtsls`, the equivalent is its
           {
             "name": "@mxlang/typescript-plugin",
             "location": "/absolute/path/to/node_modules/@mxlang/typescript-plugin",
-            "languages": ["solidmx", "mx", "astro", "astromx"]
+            "languages": ["solid", "mx", "astro", "astromx"]
           }
         ]
       }
@@ -294,7 +294,7 @@ coexist in one editor.
 ## Tests
 
 `src/index.test.ts` drives a real `ts.LanguageService` built over the plugin:
-the SolidMX, whole-file MX, and AstroMX virtual-code shapes, IR-backed and
+the Solid, whole-file MX, and AstroMX virtual-code shapes, IR-backed and
 composed mapping accuracy, syntax diagnostics, host resolution, import typing,
 and optional Astro composition (enabled, disabled, and missing-peer cases).
 

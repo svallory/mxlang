@@ -192,7 +192,7 @@ plugin:
   `runTsc` does not spawn `tsc`; it reads that file, rewrites `createProgram`
   to route through Volar, and evaluates the result. So it needs the real entry
   point's path, not the `typescript` module's exports.
-- **`getLanguagePlugins`** returns the SolidMX and whole-file MX plugins plus
+- **`getLanguagePlugins`** returns the Solid and whole-file MX plugins plus
   `createCompoundExtensionResolver(ts)`, and optionally Astro's plugin. The
   resolver is what makes
   `import "./X.solid.mx"` resolve; without it every import is `TS2307`, even
@@ -212,9 +212,9 @@ and `__filename`, none of which exist in an ES module.
 
 ## Tests
 
-`src/index*.test.ts` (split by scenario family so vitest spreads them over workers; shared helpers in `src/test-support.ts`) run the built binary against the SolidMX fixtures and the
+`src/index*.test.ts` (split by scenario family so vitest spreads them over workers; shared helpers in `src/test-support.ts`) run the built binary against the Solid fixtures and the
 Astro example's `.astro` and `.astro.mx` correct/wrong fixtures, asserting exact
-diagnostics and exit codes (plus that plain `tsc` does *not* catch the SolidMX
+diagnostics and exit codes (plus that plain `tsc` does *not* catch the Solid
 error). It needs
 `bun run build` to have produced `dist/bin.cjs` first —
 the same fresh-worktree caveat `@mxlang/parser`'s `dist/index.js` carries;

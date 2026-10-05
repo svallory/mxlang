@@ -194,7 +194,7 @@ describe("attribute tags become props", () => {
     ).not.toThrow();
   });
 
-  it("does not recurse when two SolidMX callees import each other", () => {
+  it("does not recurse when two Solid callees import each other", () => {
     const filename = join(HERE, "fixtures", "mutual-a.solid.mx");
     const source = readFileSync(filename, "utf8");
     const result = print(source, filename, {

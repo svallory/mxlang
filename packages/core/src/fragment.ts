@@ -2,7 +2,7 @@
  * The fragment front door (decision 70): parse a *substring* of a larger file
  * as Marko, with positions reported against the enclosing file.
  *
- * The consumer is a host whose MX lives inside another language — SolidMX's
+ * The consumer is a host whose MX lives inside another language — Solid's
  * `.solid.mx`, where an MX region starts partway into a TSX file. Marko's
  * parser has no base-position parameter, so every `loc` it produces is
  * relative to the substring it was given. This shifts them afterwards.
@@ -10,7 +10,7 @@
  * It is the stopgap `notes/research/marko-seam-spikes.md` (spike 1) measured,
  * not a fix: the fix is an additive `parseFragment({ start, line, column })`
  * upstream, which MX still intends to send once a host consumes this door.
- * SolidMX's own bridge (`packages/parser/src/mx/bridge.ts`) is untouched
+ * Solid's own bridge (`packages/parser/src/mx/bridge.ts`) is untouched
  * until phase 4 switches it over.
  *
  * ## Documented limits (all measured, spike 1)

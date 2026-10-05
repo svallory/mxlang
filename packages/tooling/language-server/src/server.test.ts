@@ -770,9 +770,9 @@ describe("stdio server (e2e)", () => {
     expect(params.diagnostics[0]?.message).toMatch(/let/i);
   }, 15000);
 
-  it("recognizes both SolidMX language ids but not an ordinary .ts document", () => {
+  it("recognizes both solid language ids but not an ordinary .ts document", () => {
     expect(isMxDocument("untitled:App", "solidmx")).toBe(true);
-    expect(isMxDocument("untitled:App", "SolidMX")).toBe(true);
+    expect(isMxDocument("untitled:App", "solid")).toBe(true);
     expect(isMxDocument("file:///project/App.ts", "typescript")).toBe(false);
   });
 

@@ -1,6 +1,6 @@
 id = "mxlang"
 name = "MX"
-description = "MX (.mx, Marko syntax), AstroMX (.astro.mx, Marko syntax in an Astro component), SolidMX (.solid.mx, Marko syntax with Solid host-language expressions) and AngularMX (.ng.mx, Marko syntax with Angular host-language expressions) language support for Zed."
+description = "MX (.mx, Marko syntax), AstroMX (.astro.mx, Marko syntax in an Astro component), Solid (.solid.mx, Marko syntax with Solid host-language expressions) and AngularMX (.ng.mx, Marko syntax with Angular host-language expressions) language support for Zed."
 version = "0.2.0"
 schema_version = 1
 authors = ["Saulo Vallory <me@saulo.engineer>"]
@@ -15,7 +15,7 @@ repository = "https://github.com/mxlang/mx"
 # addendum, UPSTREAM.md). Named `mx`, not `marko`, so it never collides with
 # the grammar of Marko's own Zed extension.
 #
-# DEV FORM. Same rules as solidmx below: Zed fetches the committed `rev`
+# DEV FORM. Same rules as solid below: Zed fetches the committed `rev`
 # (never the working tree), and `path` points at the grammar's subdirectory
 # of this monorepo. After a grammar commit, move `rev` to it. Merge by
 # fast-forward only: a squash or rebase merge orphans this sha, and
@@ -36,20 +36,20 @@ path = "packages/editors/tree-sitter-mx"
 # does not compile that file kind.
 [language_servers.mxlang]
 name = "MX Language Server"
-languages = ["MX", "SolidMX"]
+languages = ["MX", "Solid"]
 
-[grammars.solidmx]
+[grammars.solid]
 # Also backs the AngularMX language (`languages/ngmx/config.toml`,
 # `path_suffixes = ["ng.mx"]`): this grammar is a patched
 # tree-sitter-typescript tsx dialect whose only MX-specific addition is an
 # opaque `mx_element` external token in expression position — nothing about
-# it is Solid-specific, so AngularMX declares `grammar = "solidmx"` directly
+# it is Solid-specific, so AngularMX declares `grammar = "solid"` directly
 # rather than this extension compiling a second, identical grammar package.
 #
 # DEV FORM. Zed still requires a committed `rev` even for a `file://`
 # repository — it runs `git init` + `git remote add origin <url>` +
 # `git fetch --depth 1 origin <rev>` + `git checkout <rev>`, so uncommitted
-# changes under packages/editors/tree-sitter-solidmx are invisible to it (see
+# changes under packages/editors/tree-sitter-solid are invisible to it (see
 # notes/zed-decisions.md Z7). `path` points Zed at the grammar's
 # subdirectory inside this monorepo's working tree, since the checked-out
 # `rev` is the whole repo, not a single-grammar repo the way a plain
@@ -58,14 +58,14 @@ languages = ["MX", "SolidMX"]
 #
 # AT PUBLISH TIME: after `packages/editors/zed` is subtree-split into its
 # own `mxlang/zed` repo (see scripts/subtree-split.sh), swap `repository` to
-# the split-off `tree-sitter-solidmx` repo's real GitHub URL and drop `path`
+# the split-off `tree-sitter-solid` repo's real GitHub URL and drop `path`
 # (that repo's root will already be the grammar root).
 repository = "file:///Users/svallory/work/mx"
 rev = "21993969d12c40faafb70b0e7141ad4ebe1e280a"
-path = "packages/editors/tree-sitter-solidmx"
+path = "packages/editors/tree-sitter-solid"
 
 [grammars.amx]
-# DEV FORM. Same rules as solidmx.
+# DEV FORM. Same rules as solid.
 # AT PUBLISH TIME: swap to real GitHub URL and drop `path`.
 repository = "file:///Users/svallory/work/mx"
 rev = "3ed8d406cd401f11f58d54e798ac24216603eebd"

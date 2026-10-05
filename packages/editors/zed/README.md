@@ -15,19 +15,19 @@ Ships four languages:
   Real `.marko` files are covered by installing the official
   [`marko-js/zed`](https://github.com/marko-js/zed) extension directly, a
   separate `Marko` language (and `marko` grammar) unrelated to this one.
-- `SolidMX` (`.solid.mx`), backed by `packages/editors/tree-sitter-solidmx` (a
+- `Solid` (`.solid.mx`), backed by `packages/editors/tree-sitter-solid` (a
   patched `tree-sitter-typescript` tsx dialect with an `mx_element` external
   token in expression position).
-- `AngularMX` (`.ng.mx`), backed by the same `tree-sitter-solidmx` grammar
+- `AngularMX` (`.ng.mx`), backed by the same `tree-sitter-solid` grammar
   package — the grammar's only MX-specific addition (`mx_element`) is
   neither Solid- nor Angular-specific, so `languages/ngmx/config.toml`
-  declares `grammar = "solidmx"` directly rather than this extension
+  declares `grammar = "solid"` directly rather than this extension
   compiling a second, identical grammar.
 - `AstroMX` (`.astro.mx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
 
 Also registers a language server: `src/lib.rs` (a minimal Rust extension,
 `Cargo.toml`) implements `zed::Extension::language_server_command` for
-`@mxlang/language-server` on `MX` and `SolidMX` — see "Language server"
+`@mxlang/language-server` on `MX` and `Solid` — see "Language server"
 below.
 
 ## Toolchain prerequisite: Rust + wasm32-wasip1
@@ -125,13 +125,13 @@ get in Zed today" below for what each language gets in practice.
 
 Zed's suffix matcher takes the text after a file's **last** dot as the
 extension, then picks the language whose `path_suffixes` entry is the
-**longest match**. `MX` declares `path_suffixes = ["mx"]`; `SolidMX` declares
+**longest match**. `MX` declares `path_suffixes = ["mx"]`; `Solid` declares
 `path_suffixes = ["solid.mx"]`; `AngularMX` declares `path_suffixes =
 ["ng.mx"]`. `Counter.solid.mx` matches both `MX` (its last-dot suffix is
-`mx`) and `SolidMX` (`solid.mx` matches too via Zed's own multi-segment
-suffix check), so `SolidMX`'s longer, more specific entry wins; the same
+`mx`) and `Solid` (`solid.mx` matches too via Zed's own multi-segment
+suffix check), so `Solid`'s longer, more specific entry wins; the same
 holds for `Counter.ng.mx` against `MX` and `AngularMX`. Verified by
-inspection of the existing `languages/solidmx/config.toml` (already
+inspection of the existing `languages/solid/config.toml` (already
 `path_suffixes = ["solid.mx"]` from when it was the only language shipped
 here) — no change was needed to keep this precedence correct when `MX` was
 added back, and `languages/ngmx/config.toml` follows the identical shape.
@@ -143,15 +143,15 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
   `@mxlang/language-server`. Marko's own server still supplies its broader
   language features for files associated with its `Marko` language.
 - `AstroMX` (`.astro.mx`): syntax highlighting, brackets, outline, via injections mapping the `---` fence to TypeScript and the body to Marko. The fence properly highlights as TypeScript. No language server yet.
-- `SolidMX` (`.solid.mx`): syntax highlighting, brackets, outline, syntax
+- `Solid` (`.solid.mx`): syntax highlighting, brackets, outline, syntax
   highlighting inside `mx_element` regions via the official Marko extension's
   injection (see "Prerequisite" below), and Solid host diagnostics from
   `@mxlang/language-server`. TSX fragments (`<>...</>`) are supported: each
   `<tag>` child highlights as its own `mx_element` region, the same as a
   fragment-free file (task `solidmx-grammar-fragments`; see
-  `packages/editors/tree-sitter-solidmx/UPSTREAM.md` "Local modifications").
+  `packages/editors/tree-sitter-solid/UPSTREAM.md` "Local modifications").
 - `AngularMX` (`.ng.mx`): syntax highlighting, brackets, outline, and
-  injected `mx_element` highlighting, all identical to `SolidMX` above since
+  injected `mx_element` highlighting, all identical to `Solid` above since
   it reuses the same grammar and queries. No language server registration
   yet — `@mxlang/language-server` does not compile `.ng.mx` (see
   `AGENTS.md`'s Zed extension section).
@@ -163,40 +163,40 @@ it also matches `MX`'s `.mx` suffix, and Zed's longest-suffix match picks
 ## Prerequisite: install the official Marko extension too
 
 A `.solid.mx` or `.ng.mx` file's `mx_element` regions are highlighted by
-injecting a language named `"marko"` (`base/solidmx/injections.scm`,
+injecting a language named `"marko"` (`base/solid/injections.scm`,
 `base/ngmx/injections.scm`) — Zed resolves that
 by name against installed languages, and the only extension that provides a
 language named `Marko` is the official `marko-js/zed` extension. **Install
 it from Zed's extension registry (Command Palette → "zed: extensions" →
 search "Marko") before installing this dev extension.** Without it,
 `mx_element` regions render as unhighlighted plain text — everything else
-(the `SolidMX` TypeScript host, brackets, outline) still works.
+(the `Solid` TypeScript host, brackets, outline) still works.
 
-## Dev install (Zed) — `SolidMX` and `AngularMX`
+## Dev install (Zed) — `Solid` and `AngularMX`
 
-`SolidMX`'s grammar lives in this monorepo at `packages/editors/tree-sitter-solidmx`,
-so `extension.toml`'s `[grammars.solidmx]` uses the **`file://` dev form**
-with `path = "packages/editors/tree-sitter-solidmx"` (Zed clones the whole repo at
+`Solid`'s grammar lives in this monorepo at `packages/editors/tree-sitter-solid`,
+so `extension.toml`'s `[grammars.solid]` uses the **`file://` dev form**
+with `path = "packages/editors/tree-sitter-solid"` (Zed clones the whole repo at
 `rev`, then looks for `src/` under that `path` — `GrammarManifestEntry.path`
 in Zed's own `extension_manifest.rs`). `AngularMX` reuses this exact grammar
-(`languages/ngmx/config.toml` declares `grammar = "solidmx"`, no
+(`languages/ngmx/config.toml` declares `grammar = "solid"`, no
 `[grammars.ngmx]` entry exists), so every step below that bumps
-`[grammars.solidmx]`'s `rev` affects both languages at once.
+`[grammars.solid]`'s `rev` affects both languages at once.
 
 Even in dev form, Zed still requires a **committed** `rev` — it runs `git
 init` + `git remote add origin <url>` + `git fetch --depth 1 origin <rev>` +
 `git checkout <rev>` regardless of scheme, so **uncommitted changes under
-`packages/editors/tree-sitter-solidmx` are invisible to Zed**. There is no way to
+`packages/editors/tree-sitter-solid` are invisible to Zed**. There is no way to
 point Zed at a dirty working tree. Zed also never runs `tree-sitter
 generate` itself — it compiles whatever `src/parser.c` (and
 `src/scanner_mx.c`/`src/scanner.c`) is committed at that rev with clang.
 
 The dev loop is therefore **commit, then bump `rev`, then reinstall**:
 
-1. Make your change under `packages/editors/tree-sitter-solidmx` and commit it (in
+1. Make your change under `packages/editors/tree-sitter-solid` and commit it (in
    this worktree, on this branch).
 2. `git rev-parse HEAD` — copy the sha.
-3. Update `extension.toml`'s `[grammars.solidmx]` `rev` to that sha.
+3. Update `extension.toml`'s `[grammars.solid]` `rev` to that sha.
 4. Command Palette → **"zed: install dev extension"** → select this
    directory (`worktrees/main/packages/editors/zed` from the operator's
    space root, i.e. `packages/editors/zed` inside whichever worktree you're
@@ -205,14 +205,14 @@ The dev loop is therefore **commit, then bump `rev`, then reinstall**:
    extension from the registry (Command Palette → "zed: extensions" → search
    "Marko") — see "Prerequisite" above; without it `mx_element` regions
    render as unhighlighted plain text.
-5. Open or create a `.solid.mx` file — it should be recognized as `SolidMX`,
+5. Open or create a `.solid.mx` file — it should be recognized as `Solid`,
    with the TypeScript host language highlighted, brackets matched, an
    outline of its declarations, and each `mx_element` region highlighted via
    its `marko` injection (requires the official Marko extension — see
    "Prerequisite" above). A `.ng.mx` file gets the identical treatment under
    `AngularMX`.
 
-**First compile is slow.** `tree-sitter-solidmx`'s generated `src/parser.c`
+**First compile is slow.** `tree-sitter-solid`'s generated `src/parser.c`
 is ~8.2 MB; clang's first compile of it after a fresh dev-install can take
 tens of seconds. This is expected — not a hang.
 
@@ -220,20 +220,20 @@ tens of seconds. This is expected — not a hang.
 
 Zed does not watch `extension.toml` or `languages/` for live changes.
 After editing anything under `packages/editors/zed` (or bumping
-`[grammars.solidmx]`'s `rev`), re-run "zed: install dev extension" and pick
+`[grammars.solid]`'s `rev`), re-run "zed: install dev extension" and pick
 this directory again to reload it.
 
 ## Upstream bump procedure
 
-See `UPSTREAM.md` "Bump procedure — SolidMX" for the full steps.
-`languages/solidmx/*.scm` are regenerated by `bun run vendor` — from
-`packages/editors/tree-sitter-solidmx/queries/highlights.scm` plus this package's own
-`base/solidmx/{injections,brackets,outline}.scm` and `overlay/solidmx/*.scm`.
-`packages/editors/tree-sitter-solidmx`'s own grammar/scanner bump procedure (a
+See `UPSTREAM.md` "Bump procedure — Solid" for the full steps.
+`languages/solid/*.scm` are regenerated by `bun run vendor` — from
+`packages/editors/tree-sitter-solid/queries/highlights.scm` plus this package's own
+`base/solid/{injections,brackets,outline}.scm` and `overlay/solid/*.scm`.
+`packages/editors/tree-sitter-solid`'s own grammar/scanner bump procedure (a
 *different* upstream, `tree-sitter-typescript`) is in that package's own
 `UPSTREAM.md`, not here.
 
-There is no `vendor:check` script — SolidMX's highlights source is a local
+There is no `vendor:check` script — Solid's highlights source is a local
 sibling package, not a networked upstream, so a "check for drift" mode could
 only ever report success (decision 55: a gate that cannot fail is not a
 gate). `.github/workflows/upstream-check.yml`'s `vendored-files-match` job
@@ -268,9 +268,9 @@ submission procedure, verifying the `.mx`/`.solid.mx` suffix precedence in a
 running Zed, and the manual `.mx`/`.astro.mx` editor checks still owed.
 
 **Publish-time URL swap.** Both the dev-install steps above and
-`extension.toml`'s `[grammars.solidmx]` comment describe the `file://` form
+`extension.toml`'s `[grammars.solid]` comment describe the `file://` form
 as temporary: once `packages/editors/zed` is subtree-split into its own
-repo and `packages/editors/tree-sitter-solidmx` is published on its own (or the split
+repo and `packages/editors/tree-sitter-solid` is published on its own (or the split
 repo vendors it), swap `repository` to that repo's real GitHub URL, drop
 `path` (its root will already be the grammar root), and commit. Registering
 with `zed-industries/extensions` needs the remote form — a registry

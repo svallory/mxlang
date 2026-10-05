@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reproduces Zed's own Rust extension build against a CLEAN CLONE of this
 # repo at HEAD — i.e. only committed files, never the working tree. Mirrors
-# packages/editors/tree-sitter-solidmx/scripts/zed-compile-check.sh's rationale (the
+# packages/editors/tree-sitter-solid/scripts/zed-compile-check.sh's rationale (the
 # grammar's own gate), extended to this package's Rust extension code
 # (Cargo.toml, src/lib.rs): Zed's extension_builder.rs builds a
 # Cargo.toml-backed extension with `cargo build --release --target

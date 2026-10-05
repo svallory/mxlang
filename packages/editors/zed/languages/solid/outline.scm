@@ -27,7 +27,7 @@
 (method_definition
   name: (property_identifier) @name) @item
 
-; --- SolidMX overlay (overlay/solidmx/outline.scm) ---
-; SolidMX-specific outline overlay, concatenated onto base/solidmx/outline.scm
-; by scripts/vendor.sh. Empty for now: base/solidmx/outline.scm already
+; --- Solid overlay (overlay/solid/outline.scm) ---
+; Solid-specific outline overlay, concatenated onto base/solid/outline.scm
+; by scripts/vendor.sh. Empty for now: base/solid/outline.scm already
 ; covers every declaration the TypeScript host language emits.

@@ -1,9 +1,9 @@
 {
   "grammars": [
     {
-      "name": "solidmx",
-      "camelcase": "SolidMx",
-      "scope": "source.solidmx",
+      "name": "solid",
+      "camelcase": "Solid",
+      "scope": "source.solid",
       "path": ".",
       "external-files": [
         "src/scanner_mx.c",
@@ -11,13 +11,13 @@
       ],
       "file-types": ["solid.mx"],
       "highlights": ["queries/highlights.scm"],
-      "injection-regex": "^(solidmx|solid\\.mx)$"
+      "injection-regex": "^(solid|solid\\.mx)$"
     }
   ],
   "metadata": {
     "version": "0.0.0",
     "license": "MIT",
-    "description": "tree-sitter grammar for SolidMX (.solid.mx)",
+    "description": "tree-sitter grammar for Solid (.solid.mx)",
     "authors": [
       {
         "name": "mx contributors"

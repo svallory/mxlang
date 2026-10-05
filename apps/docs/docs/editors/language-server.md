@@ -48,7 +48,7 @@ accepted as a deprecated alias for `"html"` and warns.) A whole-file
 `solid`, `preact` and `react` among them — reports `<let>` and the rest as
 errors, each naming that framework's own primitive.
 
-## SolidMX documents
+## Solid documents
 
 `.solid.mx` is a different file format rather than another policy for a
 whole-file template: it is TypeScript/TSX with MX regions. The server parses
@@ -88,4 +88,4 @@ This tells the language server to apply the React host policy. If the `strict` f
 
 ### `.solid.mx` files
 
-For SolidMX (`.solid.mx`) files, the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/parser` bridge and runs each through `@mxlang/solid`, mapping the resulting errors back to the correct source positions within the complete TypeScript file.
+For Solid (`.solid.mx`) files, the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/parser` bridge and runs each through `@mxlang/solid`, mapping the resulting errors back to the correct source positions within the complete TypeScript file.

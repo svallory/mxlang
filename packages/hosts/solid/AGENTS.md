@@ -2,7 +2,7 @@
 
 ## Solid 2 target and pin policy
 
-SolidMX targets **Solid 2 only** — no Solid 1 lowering table, no dual target. Pins: `solid-js`, `@solidjs/web`, `@solidjs/babel-plugin`, `@solidjs/compiler` all at `2.0.0-rc.7`. `babel-preset-solid` and `vite-plugin-solid` are dead ends (renamed upstream).
+Solid targets **Solid 2 only** — no Solid 1 lowering table, no dual target. Pins: `solid-js`, `@solidjs/web`, `@solidjs/babel-plugin`, `@solidjs/compiler` all at `2.0.0-rc.7`. `babel-preset-solid` and `vite-plugin-solid` are dead ends (renamed upstream).
 
 Solid 2 is pre-stable and RCs ship weekly. Policy: **pin one RC and stay on it**; re-sync the research note on each bump we choose to take, and do not chase every RC. See `README.md` "Solid 2 RC policy".
 
@@ -13,7 +13,7 @@ Event props emitted by this host (`onClick=`, `on-dblclick=`, …) are looked up
 ## `@mxlang/solid`: the Solid host on `@mxlang/core`
 
 `packages/hosts/solid` (`@mxlang/solid`, decisions 69, 71, 72, 79, 81) is the
-third emitter over the core IR — SolidMX's `.solid.mx` becomes Solid JSX
+third emitter over the core IR — Solid's `.solid.mx` becomes Solid JSX
 text instead of a string or Astro template. `packages/hosts/solid/README.md`
 carries the full lowering table (IR kind to Solid JSX), the error list, and
 the `.solid.mx` bridge paragraph; the summary here is the package-map entry.
@@ -312,7 +312,7 @@ Three facts worth knowing before touching it:
     (`` Unable to find entry point for custom tag `<A>`. ``) as a side
     effect, not something `<define>` hoisting itself changed.
 
-Decision 72's subset rule removed four SolidMX constructs real Marko itself
+Decision 72's subset rule removed four Solid constructs real Marko itself
 rejects (tag params on `<if>`, tag params and attribute tags on native
 elements, `<fragment>`) — see `divergences.md`'s "Deferred to MX 2" table for
 each construct, Marko's exact error, and the test that used to cover it.

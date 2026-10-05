@@ -22,7 +22,7 @@ sees committed history; commit everything in this package first.
 
 ## 2. Drop `path`, switch `repository`/`rev` for every grammar
 
-`extension.toml` currently points `[grammars.mx]`, `[grammars.solidmx]` and
+`extension.toml` currently points `[grammars.mx]`, `[grammars.solid]` and
 `[grammars.amx]`
 at this monorepo over `file://`, with a `path` selecting the grammar's
 subdirectory — that only works for a dev install (Zed still clones the repo
@@ -30,7 +30,7 @@ at a committed `rev` even for `file://`; see each grammar's own comment in
 `extension.toml`). At publish time, for **each** grammar:
 
 1. Commit and push `packages/editors/tree-sitter-mx` (or
-   `tree-sitter-solidmx`, `tree-sitter-amx`) to its own real repository — either as its own
+   `tree-sitter-solid`, `tree-sitter-amx`) to its own real repository — either as its own
    subtree-split repo, or wherever it will be vendored from.
 2. In `extension.toml`, swap that grammar's `repository` from
    `file:///Users/svallory/work/mx` to the real GitHub URL.
@@ -40,7 +40,7 @@ at a committed `rev` even for `file://`; see each grammar's own comment in
    (a registry submodule cannot point at a contributor's local filesystem
    at all, so this step is not optional the way it might look).
 
-Do this for `[grammars.mx]`, `[grammars.solidmx]` and `[grammars.amx]`
+Do this for `[grammars.mx]`, `[grammars.solid]` and `[grammars.amx]`
 independently; they
 are unrelated repos and may be split/published on different schedules.
 
@@ -74,7 +74,7 @@ pushes to arbitrary hosts. The procedure (from that repo's own README):
 ## 5. Verify `path_suffixes` precedence (Z37) in a running Zed
 
 README.md "Zed suffix precedence: `.mx` vs `.solid.mx`" documents the
-expected precedence (`SolidMX`'s `path_suffixes = ["solid.mx"]` should win
+expected precedence (`Solid`'s `path_suffixes = ["solid.mx"]` should win
 over `MX`'s `["mx"]` for a `Counter.solid.mx` file, since Zed picks the
 longest matching suffix) but says so **by inspection of the config**, not by
 observing it in a running Zed. Before or shortly after publishing, verify it
@@ -83,7 +83,7 @@ for real:
 1. Install the extension (dev install via `file://`, or the published one).
 2. Open a `.solid.mx` file and a plain `.mx` file side by side in Zed.
 3. Check the language shown in Zed's status bar / language picker for each:
-   the `.solid.mx` file must show `SolidMX`, and `.mx` must show `MX`.
+   the `.solid.mx` file must show `Solid`, and `.mx` must show `MX`.
 4. If `.solid.mx` incorrectly shows `MX`, the precedence assumption in
    README.md is wrong and both `languages/*/config.toml` files need
    re-checking — do not "fix" it by renaming `path_suffixes` without first
@@ -92,7 +92,7 @@ for real:
 ## 6. Manual editor checks Saulo still owes
 
 Two things this task's automated checks (`bun run --cwd
-packages/editors/tree-sitter-solidmx test`, `zed-compile-check`, `bun run
+packages/editors/tree-sitter-solid test`, `zed-compile-check`, `bun run
 verify`) cannot exercise, because they need a real Zed window:
 
 - **`.mx` diagnostics**: open an `.mx` file with a known host error (e.g. a
@@ -114,7 +114,7 @@ wherever this checklist is run from next.
 - README.md "Publishing: subtree-split" — the split procedure in full.
 - README.md "Zed suffix precedence" — the Z37 precedence claim this
   checklist's step 5 verifies.
-- `extension.toml`'s own `[grammars.solidmx]`/`[grammars.amx]` comments —
+- `extension.toml`'s own `[grammars.solid]`/`[grammars.amx]` comments —
   the dev-form/publish-form distinction for each grammar.
 - `scripts/subtree-split.sh` — the split script itself, with its own usage
   comment.

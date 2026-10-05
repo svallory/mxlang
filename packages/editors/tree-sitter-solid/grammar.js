@@ -13,5 +13,5 @@
 const defineGrammar = require("./vendor/tree-sitter-typescript/common/define-grammar");
 
 // `tsx` selects the dialect behaviour (JSX position, generic disambiguation);
-// `solidmx` is the grammar name, which the generated C symbols derive from.
-module.exports = defineGrammar("tsx", "solidmx");
+// `solid` is the grammar name, which the generated C symbols derive from.
+module.exports = defineGrammar("tsx", "solid");

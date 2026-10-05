@@ -25,7 +25,7 @@ It depends on `@marko/compiler` and nothing else.
 | `escape` | Its own integration: a Vite plugin, a Bun loader, a TypeScript plugin |
 
 `@mxlang/html` is the first host (vanilla HTML strings); `@mxlang/astro`
-(`.astro.mx`, expression-shaped Astro syntax) and `@mxlang/solid` (SolidMX's
+(`.astro.mx`, expression-shaped Astro syntax) and `@mxlang/solid` (Solid's
 `.solid.mx` bridge, Solid JSX text) are the other two.
 
 ## The HostDeclarations contract
@@ -142,7 +142,7 @@ second Babel dependency:
 - **The alternative is worse.** Adding `@babel/parser` + `@babel/traverse` as
   real dependencies buys a second copy of Babel, a second version to keep in
   step, and the cross-instance problem above. `@mxlang/html` used to reach
-  for `@mxlang/parser` (the *SolidMX parser* package, a vendored `@babel/parser`
+  for `@mxlang/parser` (the *Solid parser* package, a vendored `@babel/parser`
   fork) for exactly one `parse` call; dropping that is what leaves this package
   with a single dependency.
 
@@ -172,10 +172,10 @@ caller that wants the lookup must hand the compiler the same object.
 **`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** — a
 Marko *substring* of a larger file, with every position shifted to the
 enclosing file. The consumer is a host whose MX lives inside another language
-(SolidMX's `.solid.mx`). This is the stopgap
+(Solid's `.solid.mx`). This is the stopgap
 `notes/research/marko-seam-spikes.md` spike 1 measured, not a fix: the fix is an
 additive base-position parameter upstream, which MX still intends to send.
-SolidMX's own bridge (`packages/parser/src/mx/bridge.ts`) now calls this
+Solid's own bridge (`packages/parser/src/mx/bridge.ts`) now calls this
 front door for every MX region it finds — see `packages/hosts/solid/README.md`
 for the bridge's own side of that hand-off. Documented limits:
 

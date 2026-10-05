@@ -904,7 +904,7 @@ export function appendSolidBuiltinImport(generated: string): {
 /**
  * Maps each synthetic attribute-tag value object back to its authored tag
  * name, and each of that tag's own attributes back to its authored
- * `name=value` span. The SolidMX printer can map an attribute's *value*
+ * `name=value` span. The Solid printer can map an attribute's *value*
  * (`title=1`'s `1`) exactly, because it is copied verbatim into the
  * generated object literal, but not its *key*: the printer re-quotes it
  * (`title` becomes `"title"`), so `decodeMappings`'s text-equality walk
@@ -1328,7 +1328,7 @@ function toSyntaxError(
   const column = Math.max(0, error.loc?.column ?? coreError?.column ?? 0);
   const lineStart = lineOffsets(source)[line - 1] ?? source.length;
 
-  const message = error.message ?? "Invalid SolidMX source.";
+  const message = error.message ?? "Invalid Solid source.";
   return {
     fileName,
     // Babel's `(L:C)` is dropped only when it repeats this position.

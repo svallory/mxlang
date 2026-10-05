@@ -1,4 +1,4 @@
-// External scanner for the solidmx grammar.
+// External scanner for the solid grammar.
 //
 // Two scanners meet here, and they are kept in separate files on purpose
 // (plan decision 5, Z2):
@@ -32,24 +32,24 @@
 // does the same (Z7). It defines the MX token id and the region scan.
 #include "scanner_mx.c"
 
-void *tree_sitter_solidmx_external_scanner_create(void) { return NULL; }
+void *tree_sitter_solid_external_scanner_create(void) { return NULL; }
 
-void tree_sitter_solidmx_external_scanner_destroy(void *payload) { (void)payload; }
+void tree_sitter_solid_external_scanner_destroy(void *payload) { (void)payload; }
 
-unsigned tree_sitter_solidmx_external_scanner_serialize(void *payload, char *buffer) {
+unsigned tree_sitter_solid_external_scanner_serialize(void *payload, char *buffer) {
     (void)payload;
     (void)buffer;
     return 0; // both scanners are stateless across tokens
 }
 
-void tree_sitter_solidmx_external_scanner_deserialize(void *payload, const char *buffer,
+void tree_sitter_solid_external_scanner_deserialize(void *payload, const char *buffer,
                                                       unsigned length) {
     (void)payload;
     (void)buffer;
     (void)length;
 }
 
-bool tree_sitter_solidmx_external_scanner_scan(void *payload, TSLexer *lexer,
+bool tree_sitter_solid_external_scanner_scan(void *payload, TSLexer *lexer,
                                                const bool *valid_symbols) {
     // When the grammar admits an mx_element and/or either fragment delimiter
     // here, all of them must be decided by ONE call into scanner_mx.c:

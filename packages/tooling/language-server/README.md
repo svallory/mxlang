@@ -73,7 +73,7 @@ tags), whatever `strict` says. The Solid host also has a fixed profile:
 is reserved for `.solid.mx`'s embedded MX regions — a whole file has its own
 module scope to place an authored `import` in, which a region spliced into
 someone else's module does not), so stateful Marko tags are rejected the
-same way. A `.solid.mx` suffix or `solidmx`/`SolidMX` language id takes
+same way. A `.solid.mx` suffix or `solidmx`/`solid` language id takes
 precedence over package policy because that suffix identifies a different
 file format: TypeScript/TSX with MX regions.
 
@@ -112,7 +112,7 @@ language another extension owns (or one's own): Zed's `extension.toml`
 `[language_servers.<key>]` table binds a server only to a `languages` array
 implemented by that extension's own `zed::Extension::language_server_command`
 — a Rust `Cargo.toml`-backed extension. `packages/editors/zed` implements that
-command and registers this server for both its `MX` and `SolidMX` languages.
+command and registers this server for both its `MX` and `Solid` languages.
 See `packages/editors/zed/UPSTREAM.md` and `extension.toml` for the command's
 provenance and registration.
 
@@ -184,7 +184,7 @@ this is not declared as a dependency.
 bunx vitest run --root ../.. --project @mxlang/language-server
 ```
 
-`src/diagnose.test.ts` covers HTML policy diagnostics, SolidMX host and parse
+`src/diagnose.test.ts` covers HTML policy diagnostics, Solid host and parse
 errors with exact positions, clean documents, Solid-host `.mx`, and the
 locationless-error callback. `@mxlang/core`'s `src/host-policy.test.ts` covers explicit,
 dependency-derived (including `@mxlang/solid`), and fallback policies.
