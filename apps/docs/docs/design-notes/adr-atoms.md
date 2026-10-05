@@ -45,6 +45,10 @@ A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-
 
 `::name` is reserved and is lexed as **one token together with its name** (`::a`), so a later `Symbol.for("name")` sugar needs no lookahead change, no existing program can be using it, and the error covers what the author wrote. Until then it is a positioned error: "`::a` is reserved (decision 156): `::` will be the `Symbol.for` sugar; write `:a` for an atom". Consequence: `{k::a}` and `a?b::c` are errors; write `{k: :a}`.
 
+**Decision 156 addendum 2** (mx-lead, 2026-10-05). A `${}` placeholder is an expression position wherever it appears, including `<script>`, `<style>` and `<textarea>` bodies; "script blocks" means TypeScript statement blocks (static, import, export, scriptlets). Placeholders in tag names and shorthands lex atoms. `::` is reported as the reserved token in attribute-name and tag-name position as well.
+
+**TypeScript markers win** (PR #342 review). A `?` right after a word or `]` (`a? :T`), a postfix `!` (`c ? a! :b`) and a type's closing `>` (`y as Array<T> :z`) end an operand whether or not whitespace comes before the `:`, so no atom starts there; `of`, `yield` and `await` used as identifiers stay identifiers.
+
 ### 2. IR
 
 An atom is its own IR node, `atom { name, span }`, distinct from `string`. It is not a string literal in the tree; it lowers to one (next section). `parseData` exposes it as an atom, so data consumers can tell `:title` from `"title"` and tools can offer completion and go-to on it.

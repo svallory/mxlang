@@ -81,6 +81,11 @@ export interface ParserOptions {
    * MX (decision 156): an atom `:name` was lexed. The range is the whole
    * atom (`:` included); `value` is its name.
    */
+  /**
+   * MX (decision 156): one call per atom, in source order. `read()` of the
+   * atom's own range returns its stand-in (`0.`), by design; slice the
+   * source for the atom's text, or read `value` for its name.
+   */
   onAtom?(data: Ranges.Value): void;
   onText?(data: Range): void;
   onPlaceholder?(data: Ranges.Placeholder): void;

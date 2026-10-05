@@ -175,3 +175,25 @@ of upstream and diff; only `states/ATTRIBUTE.ts`, `states/EXPRESSION.ts`,
   `startOffset`, the first-line-only column rule, non-BMP input, zero bases,
   an error at end of input, the mid-parse `locationAt` single-shift case, and
   an embedding-equivalence property test against a whole-document parse.
+
+Review round 4 on PR #342 (both dist builds carry the same JavaScript):
+
+- **Look-behind.** A `?` right after a word or `]` is TypeScript's optional
+  marker and a `!` right after an operand is postfix, whitespace before the
+  `:` or not; a type's closing `>` (`inType`, not `=>`) ends an operand. `of`
+  is an operator only after an operand, `yield`/`await` not after `?`, `:`,
+  `,` or `(` (`isOperatorWord`). A non-ASCII letter right after a name ends
+  no atom (`:aé` stays source, so no stand-in reaches Babel's message).
+- **`read()`** binary-searches the first atom at or after the range start
+  (it was a linear scan: 627 ms at 40k atoms). Reading exactly an atom's own
+  range returns its stand-in, by design: that is how `x=:a`'s value reaches
+  Babel. A read that starts at a tag name (`tagNameStarts`, the raw open tag
+  `@marko/compiler` builds `rawValue` from, which `<style>` uses) returns the
+  source. `read()`'s consumers in `@marko/compiler` parse expressions from
+  value, argument, placeholder and method ranges (stand-ins wanted) and slice
+  the raw open tag (source wanted).
+- **Decision 156 addendum 2.** Every `${}` is an expression position: tag
+  names and shorthands (`states/TAG_NAME.ts`) lex atoms too, as do
+  placeholders in `<script>`/`<style>`/`<textarea>` bodies. `::` in a tag
+  name or an attribute name is the reserved-token error, positioned at the
+  `::` (`rejectReservedName`, from `TAG_NAME.ts` and `ATTRIBUTE.ts`).

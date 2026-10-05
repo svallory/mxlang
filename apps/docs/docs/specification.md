@@ -790,7 +790,7 @@ contracts, and ends at lowering.
 | Position | Example |
 |---|---|
 | attribute value | `mode=:strict`, `x= :b`, `x = :b` (all `"b"`-valued atoms) |
-| placeholder | `${:strict}` |
+| placeholder, anywhere (raw-text bodies, tag names and shorthands included; addendum 2) | `${:strict}`, `<${:kind}>` |
 | tag and attribute arguments, default values | `<if=kind === :primary>`, `<const/x=:a/>` |
 | method-shorthand body (an attribute value; lead ruling 2026-10-05) | `that({ self }) { return self.status === :sent }` |
 | inside any expression | `[:a, :b]`, `{ k: :a }`, `f(:a)`, `x === :a`, `` `${:a}` ``, `() => :a`, `{[:a]: 1}` |
@@ -814,7 +814,7 @@ write `{[:a]: 1}`). An atom where a binding, an assignment target or a
 shorthand property must stand (`:a = 1`, `(:a) => 1`, `{:a}`) is a positioned
 parse error naming the atom. `::name` is reserved for a future `Symbol.for`
 sugar (decision 156.5): "`::a` is reserved (decision 156)…", positioned at the
-`::`. A published package resolving a stock htmljs-parser reports "`:a` is an
+`::`, in a tag or attribute name too (`<a ::b>`, `<a::b>`; addendum 2). A published package resolving a stock htmljs-parser reports "`:a` is an
 atom (decision 156), and atoms need the MX parser" at the atom (decisions 151 §1
 and 158 §2).
 

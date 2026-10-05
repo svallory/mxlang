@@ -4,6 +4,7 @@ import {
   isWordCode,
   type Meta,
   Parser,
+  type Range,
   STATE,
   type StateDefinition,
 } from "../internal.ts";
@@ -857,24 +858,100 @@ function lexAtom(
     parser.emitError(
       { start, end },
       ErrorCode.INVALID_EXPRESSION,
-      `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`,
+      reservedMessage(name),
     );
     return true;
   }
 
   const end = atomNameEnd(data, start + 1);
-  if (end === start + 1 || !expectsExpression(expression, data, start)) {
+  if (
+    end === start + 1 ||
+    // A non-ASCII letter right after the name (`:aé`) is not part of it, and
+    // a stand-in there would reach Babel's message; leave `:` to Babel.
+    data.charCodeAt(end) >= 0x80 ||
+    !expectsExpression(expression, data, start)
+  ) {
     return false;
   }
 
   const { atoms } = parser;
   const last = atoms[atoms.length - 1];
+  // Defensive: no state rewinds `pos` into an expression today (280k fuzzed
+  // inputs never re-lexed one), but a re-lex must not record an atom twice.
   if (!last || last.start < start) {
     atoms.push({ start, end });
     parser.options.onAtom?.({ start, end, value: { start: start + 1, end } });
   }
   expression.atomEnd = end;
   parser.pos = end;
+  return true;
+}
+
+/** MX (decision 156): the error for the reserved `::name` token. */
+export function reservedMessage(name: string) {
+  return `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
+}
+
+/** MX (decision 156): reports a `::` in a tag or attribute name, if any. */
+export function rejectReservedName(parser: Parser, range: Range): boolean {
+  const at = parser.data.indexOf("::", range.start);
+  if (at === -1 || at + 2 > range.end) return false;
+  const end = atomNameEnd(parser.data, at + 2);
+  parser.emitError(
+    { start: at, end },
+    ErrorCode.INVALID_EXPRESSION,
+    reservedMessage(parser.data.slice(at + 2, end)),
+  );
+  return true;
+}
+
+/**
+ * Whether the word ending at `end` (inclusive) is an operator keyword after
+ * which an expression is expected. Never an atom's own name (`:delete :b`,
+ * `:foo-new :b`), a member name (`a.new`), or a contextual keyword used as an
+ * identifier: `of` only after an operand (`for (x of …)`), `yield`/`await`
+ * not after `?`, `:`, `,` or `(` (`c ? of :b`, `c ? yield :b`).
+ */
+function isOperatorWord(
+  expression: ExpressionMeta,
+  data: string,
+  end: number,
+): boolean {
+  if (end + 1 === expression.atomEnd) return false;
+  let wordStart = end;
+  while (
+    wordStart > expression.start &&
+    isWordCode(data.charCodeAt(wordStart - 1))
+  ) {
+    wordStart--;
+  }
+  if (
+    wordStart > expression.start &&
+    data.charCodeAt(wordStart - 1) === CODE.PERIOD
+  ) {
+    return false;
+  }
+  const word = data.slice(wordStart, end + 1);
+  if (!(atomKeywords as readonly string[]).includes(word)) return false;
+  if (word === "of" || word === "yield" || word === "await") {
+    let j = wordStart - 1;
+    while (j >= expression.start && isWhitespaceCode(data.charCodeAt(j))) j--;
+    const before = j < expression.start ? -1 : data.charCodeAt(j);
+    if (word === "of") {
+      return (
+        isWordCode(before) ||
+        before === CODE.CLOSE_PAREN ||
+        before === CODE.CLOSE_SQUARE_BRACKET ||
+        before === CODE.CLOSE_CURLY_BRACE
+      );
+    }
+    return !(
+      before === CODE.QUESTION ||
+      before === CODE.COLON ||
+      before === CODE.COMMA ||
+      before === CODE.OPEN_PAREN
+    );
+  }
   return true;
 }
 
@@ -930,10 +1007,11 @@ function expectsExpression(
         data.charCodeAt(i - 1) === CODE.PERIOD &&
         data.charCodeAt(i - 2) === CODE.PERIOD
       );
-    case CODE.QUESTION:
-    case CODE.EXCLAMATION: {
-      // `x?:` (optional) and `x!:` (definite assignment) are TypeScript.
-      if (i !== pos - 1 || i === expression.start) return true;
+    case CODE.QUESTION: {
+      // A `?` written right after a word or `]` is TypeScript's optional
+      // marker (`a?:T`, `a? :T`), whatever follows it; a ternary's `?` has
+      // whitespace before it (`a ? :b`).
+      if (i === expression.start) return true;
       const owner = data.charCodeAt(i - 1);
       return !(
         isWordCode(owner) ||
@@ -942,6 +1020,27 @@ function expectsExpression(
         owner === CODE.PLUS
       );
     }
+    case CODE.EXCLAMATION: {
+      // A `!` right after an operand is postfix (non-null `a!`, `(a)!`, or
+      // definite assignment `x!:`), and an operand ends there; after an
+      // operator keyword (`typeof!x`) or anything else it is unary.
+      if (i === expression.start) return true;
+      const owner = data.charCodeAt(i - 1);
+      if (
+        owner === CODE.CLOSE_PAREN ||
+        owner === CODE.CLOSE_SQUARE_BRACKET ||
+        owner === CODE.HYPHEN ||
+        owner === CODE.PLUS
+      ) {
+        return false;
+      }
+      if (!isWordCode(owner)) return true;
+      return isOperatorWord(expression, data, i - 1);
+    }
+    case CODE.CLOSE_ANGLE_BRACKET:
+      // A type's closing `>` (`y as Array<T> :z`) ends an operand; `=>` and
+      // a comparison `>` expect an expression.
+      return !(expression.inType && data.charCodeAt(i - 1) !== CODE.EQUAL);
     case CODE.PLUS:
     case CODE.HYPHEN:
       // A `++`/`--` before a `:` is postfix.
@@ -951,25 +1050,9 @@ function expectsExpression(
     default: {
       if (!isWordCode(code)) return true;
       // A word directly before the `:` is an object key or a label, keyword
-      // or not (`{ new:a }`); and an atom's own name (`:delete :b`,
-      // `:foo-new :b`) is an expression end, never an operator keyword.
-      if (i === pos - 1 || i + 1 === expression.atomEnd) return false;
-      let wordStart = i;
-      while (
-        wordStart > expression.start &&
-        isWordCode(data.charCodeAt(wordStart - 1))
-      ) {
-        wordStart--;
-      }
-      if (
-        wordStart > expression.start &&
-        data.charCodeAt(wordStart - 1) === CODE.PERIOD
-      ) {
-        return false;
-      }
-      return (atomKeywords as readonly string[]).includes(
-        data.slice(wordStart, i + 1),
-      );
+      // or not (`{ new:a }`).
+      if (i === pos - 1) return false;
+      return isOperatorWord(expression, data, i);
     }
   }
 }

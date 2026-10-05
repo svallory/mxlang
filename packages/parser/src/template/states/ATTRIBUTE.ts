@@ -14,6 +14,7 @@ import {
 } from "../internal.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
+import { rejectReservedName } from "./EXPRESSION.ts";
 import * as ATTR_STAGE from "./attr-stage.ts";
 import * as TAG_STAGE from "./tag-stage.ts";
 
@@ -225,6 +226,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         }
 
         attr.name = name;
+        // MX (decision 156 addendum 2): `::` is reserved in an attribute name.
+        if (rejectReservedName(this, name)) return;
 
         // With a pending `async` this name is emitted later, once we know
         // which attribute it belongs to.

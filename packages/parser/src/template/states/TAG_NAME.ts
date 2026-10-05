@@ -9,6 +9,7 @@ import {
 } from "../internal.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
+import { rejectReservedName } from "./EXPRESSION.ts";
 import * as TagType from "../util/tag-type.ts";
 import { prepareScriptlet } from "./INLINE_SCRIPT.ts";
 
@@ -66,6 +67,9 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         break;
       default: {
         const tag = this.activeTag!;
+        // MX (decision 156 addendum 2): `::` is reserved in a tag name too.
+        if (rejectReservedName(this, { start, end })) return;
+        this.tagNameStarts.add(start);
         const tagType = this.options.onOpenTagName?.({
           start,
           end,
@@ -127,8 +131,10 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         data.charCodeAt(this.pos + 1) === CODE.OPEN_CURLY_BRACE
       ) {
         this.pos += 2; // skip ${
-        this.enterState(STATE.EXPRESSION).shouldTerminate =
-          matchesCloseCurlyBrace;
+        const expr = this.enterState(STATE.EXPRESSION);
+        expr.shouldTerminate = matchesCloseCurlyBrace;
+        // MX: every `${}` is an expression position (decision 156 addendum 2).
+        expr.atoms = true;
         return;
       } else if (
         isWhitespaceCode(code) ||

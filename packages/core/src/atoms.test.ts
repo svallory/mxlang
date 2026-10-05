@@ -250,6 +250,17 @@ describe("a nested atom is a StringLiteral with extra.mxAtom", () => {
   });
 });
 
+describe("every `${}` is an expression position (addendum 2)", () => {
+  it("a shorthand class placeholder", () => {
+    const element = firstElement("<div.${:big}/>");
+    const klass = element.attrs.find(
+      (a) => a.kind !== "spread" && a.name === "class",
+    );
+    expect(JSON.stringify(klass)).toContain('"big"');
+    expect(JSON.stringify(klass)).not.toContain(":big");
+  });
+});
+
 describe("binding rewrites and atoms splice together", () => {
   it("the rewrite path splices both", () => {
     const value = exprOfAttr2("<div x=[count, :a, count + 1]/>", "x", (ctx) =>
@@ -377,6 +388,9 @@ describe("misuse is a positioned MX error at the atom", () => {
   it.each([
     ["<div x=::a/>", 7],
     ["<div x={k::a}/>", 9],
+    // Decision 156 addendum 2: in an attribute name and a tag name too.
+    ["<b ::a/>", 3],
+    ["<b::a/>", 2],
   ])("%j: the reserved `::` is positioned", (source, column) => {
     const error = errorOf(source);
     expect(error.message).toContain("`::a` is reserved (decision 156)");

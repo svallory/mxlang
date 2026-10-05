@@ -10,6 +10,8 @@ import {
   type AtomParserModule,
   NOT_ATOMS,
   RESERVED,
+  rawOpenTagReads,
+  readMismatches,
   renderAtoms,
   SUGAR_FORMS,
 } from "./mx-atoms.cases.ts";
@@ -23,6 +25,14 @@ describe("atoms (src/template)", () => {
 
   it.each(RESERVED)("reserved: %j", (input, expected) => {
     expect(renderAtoms(mod, input)).toBe(expected);
+  });
+
+  it("a raw open-tag read is the source; the value keeps its stand-in", () => {
+    expect(rawOpenTagReads(mod)).toEqual({ raw: "style x=:a", value: "0." });
+  });
+
+  it("read()'s binary search agrees with a linear stand-in on every range", () => {
+    expect(readMismatches(mod)).toEqual([]);
   });
 
   it.each(NOT_ATOMS)("not an atom: %j", (input, expected) => {

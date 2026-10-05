@@ -66,6 +66,12 @@ export class Parser {
   declare public options: Options;
   /** MX (decision 156): the span of every atom lexed so far, in source order. */
   declare public atoms: Range[];
+  /**
+   * MX (decision 156): where each tag name starts. A read from there is raw
+   * open-tag text (`@marko/compiler`'s `rawValue`, which `<style>` uses), so
+   * it gets the source, never stand-ins.
+   */
+  declare public tagNameStarts: Set<number>;
 
   constructor(options: Options) {
     this.options = options;
@@ -86,12 +92,27 @@ export class Parser {
    * length (`:a` -> `0.`, `:rename-all` -> `0.000000000`), which Babel parses
    * at the atom's exact offsets. A consumer tells the stand-in from an
    * authored number by the source character at its start, which is `:`.
+   *
+   * A read that starts at a tag name (the raw open tag) gets the source.
+   * Reading exactly an atom's own range does get the stand-in, by design:
+   * that is how `x=:a`'s value reaches Babel. A consumer that wants the
+   * atom's text slices the source (or reads `value`, the name).
+   * The first candidate atom is found by binary search.
    */
   standInAtoms(text: string, range: Range) {
+    if (this.tagNameStarts.has(range.start)) return text;
+    const { atoms } = this;
+    let lo = 0;
+    let hi = atoms.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (atoms[mid]!.start < range.start) lo = mid + 1;
+      else hi = mid;
+    }
     let out = "";
     let last = range.start;
-    for (const atom of this.atoms) {
-      if (atom.start < range.start) continue;
+    for (let k = lo; k < atoms.length; k++) {
+      const atom = atoms[k]!;
       if (atom.end > range.end) break;
       out +=
         this.data.slice(last, atom.start) +
@@ -363,6 +384,7 @@ export class Parser {
     this.beginMixedMode = this.endingMixedModeAtEOL = false;
     this.lines = this.activeTag = this.activeAttr = undefined;
     this.atoms = [];
+    this.tagNameStarts = new Set();
     // Drop any state left over from a previous parse so reusing a parser
     // does not chain (and retain) the old state metas via parent references.
     this.activeRange = undefined as unknown as Meta;

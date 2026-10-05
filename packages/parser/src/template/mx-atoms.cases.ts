@@ -194,6 +194,40 @@ export const ATOMS: [string, string][] = [
   ],
   ["<div x=:in :b/>", '<div> @x atom(in@7-10) ="0.0" @:b'],
   ["<div x=:typeof :b/>", '<div> @x atom(typeof@7-14) ="0.00000" @:b'],
+  // Review round 4 (PR #342): contextual keywords as identifiers, unary `!`,
+  // and every `${}` (in raw-text bodies and tag names too, addendum 2).
+  ["<div x=f(of, :b)/>", '<div> @x atom(b@13-15) ="f(of, 0.)"'],
+  ["<div x=typeof!:a/>", '<div> @x atom(a@14-16) ="typeof!0."'],
+  ["<div x=!:a/>", '<div> @x atom(a@8-10) ="!0."'],
+  ["<div x=a => :b/>", '<div> @x atom(b@12-14) ="a => 0."'],
+  [
+    "<div x() { for (const v of :a) {} }/>",
+    '<div> @x atom(a@27-29) method:" for (const v of 0.) {} "',
+  ],
+  [
+    "<div x() { return await :a }/>",
+    '<div> @x atom(a@24-26) method:" return await 0. "',
+  ],
+  ["<style>${:a}</style>", '<style> atom(a@9-11) ${"0."}'],
+  ["<script>${:a}</script>", '<script> atom(a@10-12) ${"0."}'],
+  ["<textarea>${:a}</textarea>", '<textarea> atom(a@12-14) ${"0."}'],
+  ["<${:a}/>", "atom(a@3-5) <${:a}>"],
+  ["<div.${:a}/>", "<div> atom(a@7-9)"],
+  ["<div#${:a}/>", "<div> atom(a@7-9)"],
+  [
+    "<div x=:a",
+    '<div> @x atom(a@7-9) ERR(7-7 EOF reached while parsing attribute value for the "x" attribute)',
+  ],
+  [
+    "<div>${:a",
+    "<div> atom(a@7-9) ERR(7-7 EOF reached while parsing placeholder)",
+  ],
+  ["<div x=:a:b/>", '<div> @x atom(a@7-9) ="0.:b"'],
+  ["<div x=a / :b/>", '<div> @x atom(b@11-13) ="a / 0."'],
+  [
+    "<div x=a ? :b : c ? :d :e/>",
+    '<div> @x atom(b@11-13) atom(d@20-22) ="a ? 0. : c ? 0. :e"',
+  ],
   // Row 12: an atom value followed by decision 146 name sugar.
   ["<div x=:a :b/>", '<div> @x atom(a@7-9) ="0." @:b'],
   ["<div :b x=:a/>", '<div> @:b @x atom(a@10-12) ="0."'],
@@ -213,6 +247,19 @@ export const RESERVED: [string, string][] = [
   [
     "<div x=::/>",
     "<div> @x ERR(7-9 `::` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom)",
+  ],
+  // `::` in attribute-name and tag-name position (decision 156 addendum 2).
+  [
+    "<a ::b/>",
+    "<a> ERR(3-6 `::b` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:b` for an atom)",
+  ],
+  [
+    "<a::b/>",
+    "ERR(2-5 `::b` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:b` for an atom)",
+  ],
+  [
+    "<div :: />",
+    "<div> ERR(5-7 `::` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom)",
   ],
 ];
 
@@ -262,6 +309,34 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=(a ? b : 1)/>", '<div> @x ="(a ? b : 1)"'],
   ["<div x=[a ?: 1]/>", '<div> @x ="[a ?: 1]"'],
   ["<div x=[:1]/>", '<div> @x ="[:1]"'],
+  // Review round 4 (PR #342, D1): TypeScript markers and type ends win
+  // even with whitespace before `:`; `of`/`yield` as identifiers. Each
+  // expected value is the pre-atoms parse.
+  ["<div x=c ? a! :b/>", '<div> @x ="c ? a! :b"'],
+  ["<div x=c ? (a)! :b/>", '<div> @x ="c ? (a)! :b"'],
+  ["<div x=(a? :T) => a/>", '<div> @x ="(a? :T) => a"'],
+  [
+    "<div onClick(e? :Event) { return e }/>",
+    '<div> @onClick method:" return e "',
+  ],
+  ["<div x={ a? :T }/>", '<div> @x ="{ a? :T }"'],
+  ["<div x() { let t: { b? :U } }/>", '<div> @x method:" let t: { b? :U } "'],
+  ["<div x() { class C { b! :U } }/>", '<div> @x method:" class C { b! :U } "'],
+  ["<div x=c ? y as Array<T> :z/>", '<div> @x ="c ? y as Array<T> :z"'],
+  [
+    "<div x=c ? x satisfies Foo<T> :d/>",
+    '<div> @x ="c ? x satisfies Foo<T> :d"',
+  ],
+  ["<div x=c ? of :b/>", '<div> @x ="c ? of :b"'],
+  ["<div x=c ? yield :b/>", '<div> @x ="c ? yield :b"'],
+  ["<div x=c ? a! :b :name/>", '<div> @x ="c ? a! :b" @:name'],
+  // A non-ASCII letter right after a name: no atom, so no stand-in can
+  // reach Babel's message (N5). A touching keyword is never an operator
+  // (Q4). A regex end is an operand. A statement after a block (N8).
+  ["<div x=:a\u00e9/>", '<div> @x =":a\u00e9"'],
+  ["<div x=typeof:a/>", '<div> @x ="typeof:a"'],
+  ["<div x=/r/ :b/>", '<div> @x ="/r/" @:b'],
+  ["<div x() { if (a) {} :b }/>", '<div> @x method:" if (a) {} :b "'],
   // Statement tags, scriptlets, tag variables, tag params.
   ["static const s = :a;\n<div/>", "<static> <div>"],
   ["$ const y = :a;\n<div/>", '$"const y = :a;" <div>'],
@@ -310,3 +385,65 @@ export const SUGAR_FORMS: string[] = [
   "<input x=a ? b :c/>",
   "<input x=(a) :T => a/>",
 ];
+
+/**
+ * Review round 4 (N4): a read from a tag name start (the raw open tag that
+ * `@marko/compiler` uses for `rawValue`, as `<style>` does) is the source,
+ * while the attribute value still reads its stand-in. Returns both reads.
+ */
+export function rawOpenTagReads(mod: AtomParserModule): {
+  raw: string;
+  value: string;
+} {
+  const code = "<style x=:a>b{}</style>";
+  let nameStart = -1;
+  let value = "";
+  let raw = "";
+  const parser = mod.createParser({
+    onOpenTagName: (t: { start: number }) => {
+      nameStart = t.start;
+    },
+    onAttrValue: (t: ValueRange) => {
+      value = parser.read(t.value);
+    },
+    onOpenTagEnd: (t: { end: number }) => {
+      raw = parser.read({ start: nameStart, end: t.end - 1 });
+    },
+  });
+  parser.parse(code);
+  return { raw, value };
+}
+
+/**
+ * Review round 4 (N1): read() finds atoms by binary search. Checks every
+ * sub-range of a value holding many atoms against a linear stand-in, and
+ * returns the mismatches (none expected).
+ */
+export function readMismatches(mod: AtomParserModule): string[] {
+  const items = Array.from({ length: 40 }, (_, k) => `:a${k}`);
+  const code = `<div x=[${items.join(", ")}]/>`;
+  const parser = mod.createParser({});
+  parser.parse(code);
+  const atoms: [number, number][] = [];
+  for (const m of code.matchAll(/:a\d+/g)) {
+    atoms.push([m.index, m.index + m[0].length]);
+  }
+  const naive = (start: number, end: number) => {
+    let out = "";
+    let last = start;
+    for (const [a, b] of atoms) {
+      if (a < start || b > end) continue;
+      out += code.slice(last, a) + "0." + "0".repeat(b - a - 2);
+      last = b;
+    }
+    return out + code.slice(last, end);
+  };
+  const bad: string[] = [];
+  for (let start = 6; start < code.length; start += 3) {
+    for (let end = start; end <= code.length; end += 5) {
+      const got = parser.read({ start, end });
+      if (got !== naive(start, end)) bad.push(`${start}-${end}: ${got}`);
+    }
+  }
+  return bad;
+}
