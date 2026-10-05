@@ -650,7 +650,9 @@ export function createEmitter(): StringEmitter {
         'if (__mxValue !== null && typeof __mxValue === "object" && __mxRaw in __mxValue) { __mxOut += __mxValue[__mxRaw](); continue; }',
       );
     }
-    if (isTextarea) {
+    // A tail `value` is already in `written` (skipped above), so only a
+    // spread-sourced or merged value needs this branch.
+    if (isTextarea && !written.includes("value")) {
       push('if (__mxKey === "value") { __mxTa = __mxValue; continue; }');
     }
     push(
