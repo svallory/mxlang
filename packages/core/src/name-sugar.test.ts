@@ -228,8 +228,23 @@ describe("`#id`, `.class` and `:name` in attribute position", () => {
   });
 
   it("merges beside an authored class like a shorthand does", () => {
-    expect(shape('<a class="z" .b/>')).toBe('a class=<`${"b"} ${"z"}`>');
-    expect(shape("<a class=x .b/>")).toBe('a class=<["b", x]>');
+    // Sugar is appended to the shorthand part, so the written tag and its
+    // sugar-free spelling are the same tag (review finding 4).
+    expect(shape('<div.c class="x" .d/>')).toBe(shape('<div.c.d class="x"/>'));
+    expect(shape("<div.a class={a: true} .b/>")).toBe(
+      shape("<div.a.b class={a: true}/>"),
+    );
+    expect(shape('<div.c class="x" .d .e/>')).toBe(
+      shape('<div.c.d.e class="x"/>'),
+    );
+    expect(shape("<div.${y} class=x .d/>")).toBe(
+      shape("<div.${y}.d class=x/>"),
+    );
+    // No shorthand: the written order is kept.
+    expect(shape('<a class="z" .b/>')).toBe('a class=<`${"z"} ${"b"}`>');
+    expect(shape("<a class=x .b/>")).toBe('a class=<[x, "b"]>');
+    expect(shape('<div class=["x"] .d/>')).toBe('div class=<["x", "d"]>');
+    expect(shape('<div class="x" .d/>')).toBe('div class=<`${"x"} ${"d"}`>');
   });
 
   it("follows the duplicate rule (decision 135), last one wins", () => {
@@ -341,5 +356,46 @@ describe("known limits of the tag-adjacent split", () => {
     );
     expect(shape("<div:x>hi</div:x>")).toBe('div name="x"');
     expect(shape("<div:x>hi</>")).toBe('div name="x"');
+  });
+});
+
+// Review finding 3: a rewritten shorthand's value span stops before the colon
+// (it used to cover `c:b`, overlapping the `name` span). A class merged from
+// tokens that are not contiguous keeps its FIRST token's span: no single
+// honest span covers `c`, `#m` and `.b`.
+describe("exact value spans of the rewritten shorthand", () => {
+  const slices = (source: string) => {
+    const [element] = elements(lowerSource(source).body);
+    return Object.fromEntries(
+      (element?.attrs ?? []).map((attr) => {
+        const named = attr as Extract<Attr, { kind: "static" }>;
+        const span = named.valueSpan;
+        return [
+          named.name,
+          span ? source.slice(span.sourceStart, span.sourceEnd) : null,
+        ];
+      }),
+    );
+  };
+
+  it.each([
+    ["<a.c:b/>", { name: "b", class: "c" }],
+    ["<a#d:b/>", { name: "b", id: "d" }],
+    ["<a.c:b.d/>", { name: "b", class: "c" }],
+    ["<a.c #m .b/>", { id: "m", class: "c" }],
+    ["<a.c.d:b/>", { name: "b", class: "c.d" }],
+    ["<a.c:b#d/>", { name: "b", class: "c", id: "d" }],
+  ])("%s", (source, expected) => {
+    expect(slices(source)).toEqual(expected);
+  });
+
+  it("the name span and the class span do not overlap", () => {
+    const element = elements(lowerSource("<a.c:b/>").body)[0];
+    const attrs = (element?.attrs ?? []) as Extract<Attr, { kind: "static" }>[];
+    const name = attrs.find((attr) => attr.name === "name");
+    const cls = attrs.find((attr) => attr.name === "class");
+    expect(cls?.valueSpan?.sourceEnd).toBeLessThanOrEqual(
+      name?.nameSpan.sourceStart ?? 0,
+    );
   });
 });

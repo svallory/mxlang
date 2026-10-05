@@ -207,6 +207,10 @@ function headNamesIn(ctx: Ctx, part: Node, found: HeadName[]): void {
       start: colon,
       end: colon + 1 + name.length,
       strip() {
+        // The value's span stops before the colon, so it does not overlap the
+        // `name`'s. (Tokens joined with a space keep the first token's span.)
+        part.end = colon;
+        part.loc = loc(ctx, start, colon);
         part.value = text.slice(0, idx) + rest;
         if (part.extra) {
           part.extra.raw = JSON.stringify(part.value);
@@ -239,6 +243,7 @@ function headNamesIn(ctx: Ctx, part: Node, found: HeadName[]): void {
       start: colon,
       end: colon + 1 + name.length,
       strip() {
+        tail.loc = loc(ctx, offsetOfPosition(ctx, tail.loc.start), colon);
         tail.value.raw = raw.slice(0, idx);
         if (typeof tail.value.cooked === "string") {
           tail.value.cooked = tail.value.cooked.slice(
@@ -283,6 +288,7 @@ function mergeClassTokens(
   attrs: Node[],
   tokens: { value: string; start: number; end: number }[],
   at: number,
+  regionEnd: number,
 ): void {
   if (tokens.length === 0) return;
   const first = tokens[0] as { start: number };
@@ -309,19 +315,44 @@ function mergeClassTokens(
     return;
   }
   const value = existing.value;
-  if (!existing.loc && value?.type === "StringLiteral") {
-    // The shorthand-only class: one string, as `<a.c.x>` would have made it.
-    value.value = `${value.value} ${text}`;
-    value.end = sugar.end;
-    value.loc = loc(ctx, startOf(ctx, value), sugar.end);
-    if (value.extra) {
-      value.extra.raw = JSON.stringify(value.value);
-      value.extra.rawValue = value.value;
+  const append = (node: Node) => {
+    node.value = `${node.value} ${text}`;
+    if (node.extra) {
+      node.extra.raw = JSON.stringify(node.value);
+      node.extra.rawValue = node.value;
+    }
+  };
+  // The shorthand part of the class, wherever Marko merged it: the sugar is
+  // appended THERE, so `<div.c class="x" .d>` is `<div.c.d class="x">`. The
+  // tokens are not contiguous (`<a.c #m .b>`), so no single span is honest:
+  // the value keeps its first token's span.
+  if (!existing.loc) {
+    if (value?.type === "StringLiteral") {
+      append(value);
+    } else if (value?.type === "ArrayExpression") {
+      value.elements.push(sugar);
+    } else {
+      existing.value = { type: "ArrayExpression", elements: [value, sugar] };
     }
     return;
   }
-  // An authored class beside the sugar: Marko's own merge of a shorthand
-  // class with a `class=` attribute.
+  const parts = shorthandClassParts(ctx, existing, regionEnd);
+  if (parts.length > 0) {
+    if (value?.type === "ArrayExpression") {
+      const lastPart = parts[parts.length - 1];
+      const index = value.elements.indexOf(lastPart);
+      if (lastPart?.type === "StringLiteral" && parts.length === 1) {
+        append(lastPart);
+      } else {
+        value.elements.splice(index + 1, 0, sugar);
+      }
+    } else {
+      // `${shorthand} ${class}`: the shorthand string grows.
+      append(parts[0]);
+    }
+    return;
+  }
+  // No shorthand: an authored class with the sugar after it, in written order.
   if (value?.type === "StringLiteral") {
     existing.value = {
       type: "TemplateLiteral",
@@ -338,7 +369,7 @@ function mergeClassTokens(
         },
         { type: "TemplateElement", value: { raw: "", cooked: "" }, tail: true },
       ],
-      expressions: [sugar, value],
+      expressions: [value, sugar],
     };
     return;
   }
@@ -346,8 +377,8 @@ function mergeClassTokens(
     type: "ArrayExpression",
     elements:
       value?.type === "ArrayExpression"
-        ? [sugar, ...value.elements]
-        : [sugar, value],
+        ? [...value.elements, sugar]
+        : [value, sugar],
   };
 }
 
@@ -376,6 +407,11 @@ function sugarKind(attr: Node): "#" | "." | ":" | undefined {
 
 function rewriteAttributes(ctx: Ctx, node: Node): void {
   const attrs: Node[] = node.attributes;
+  // Where the shorthand ends: before the first authored attribute.
+  const regionEnd = attrs
+    .filter((attr) => attr.loc)
+    .map((attr) => startOf(ctx, attr))
+    .reduce((min, at) => Math.min(min, at), Number.POSITIVE_INFINITY);
   const classTokens: { value: string; start: number; end: number }[] = [];
   let classAt = -1;
   let sawId = false;
@@ -441,7 +477,7 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
 
   node.attributes = out;
   if (classTokens.length > 0) {
-    mergeClassTokens(ctx, node.attributes, classTokens, classAt);
+    mergeClassTokens(ctx, node.attributes, classTokens, classAt, regionEnd);
   }
   // `<div.a #m .b>` must come out as `<div.a.b#m>` does: the parser pushes
   // the shorthand class before the shorthand id.
