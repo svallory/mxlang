@@ -29,7 +29,7 @@ target behaves identically because nothing host-specific is emitted.
 **Without a contract, an atom is never an error.** It is its name. A vocabulary
 opts in per attribute (`accept: { type: "atom", ref: "attribute" }`), and only
 then does a name get checked, completed and go-to-able in an editor. See
-[Atoms in contracts](#atoms-in-contracts).
+[Atoms in contracts](#atoms-atoms-in-contracts).
 
 Decision 156; the full reasoning is in [ADR 156](/design-notes/adr-atoms/).
 
@@ -164,7 +164,7 @@ atom checks it and `name="title"` is a type error there:
 ```
 
 The whole sugar, its positions and its duplicates are in
-[Attributes](/language/attributes/#name-and-id-and-class-after-an-attribute). Two
+[Attributes](/language/attributes/#attributes-name-and-id-and-class-after-an-attribute). Two
 things atoms add:
 
 - **A sugar after a single-atom default value.** `belongs-to=:Customer :customer`
@@ -188,7 +188,7 @@ things atoms add:
 
 ## Known limits: a `:` TypeScript owns
 
-Three spellings where TypeScript's `:` and an atom's `:` collide are pinned as
+Four spellings where TypeScript's `:` and an atom's `:` collide are pinned as
 known limits, because settling them needs a type parser in the lexer. They are
 listed, tested and diverged from on purpose.
 
@@ -197,7 +197,7 @@ listed, tested and diverged from on purpose.
    atoms. The hint says why:
 
    ```text
-   hint: `<a<b> :c` reads `a<b>` as type arguments (TypeScript's reading), so `:c` is not an atom there; this spelling is ambiguous (ADR 156, known limits)
+   hint: `a<b> :c` reads `a<b>` as type arguments (TypeScript's reading), so `:c` is not an atom there; this spelling is ambiguous (ADR 156, known limits)
    ```
 
 2. A spaced `c ? a < b > :z`, a conditional type inside inline-cast type
@@ -211,9 +211,9 @@ listed, tested and diverged from on purpose.
    hint: `:z` was read as an atom (decision 156), so the ternary has no `:`; if TypeScript owns that `:` (type arguments before it, ADR 156 known limits), write `: z` with a space
    ```
 
-Each of the four has a row in `divergences.md` and a case-table row, so a future
+The four share one row in `divergences.md` (143) and a case-table row, so a future
 lexer change is a conscious one. See also the rows in
-[the specification](/specification/#the-mx-language-4-elements-and-attributes-).
+[the specification](/specification/#the-mx-language-4-elements-and-attributes).
 
 ## Atoms in contracts
 
@@ -233,8 +233,10 @@ any:    { type: "atom" },                               // any atom
 - A name outside `values` is a positioned error on the atom that lists the
   candidates and adds a did-you-mean when one is clearly nearest:
   `` `<box>`: attribute `mode`: `:strct` is not one of :strict, :loose; did you mean `:strict`? ``.
-- A name that no declaration of the `ref` kind covers is the same, with the kind
-  in the wording: `` `<policy>`: attribute `load`: `:title` is not a declared relationship or computed here ``.
+- A name that no declaration of the `ref` kind covers is an error with the kind in
+  the wording and the same did-you-mean, but no candidate list — the declared
+  names depend on the enclosing scopes:
+  `` `<policy>`: attribute `load`: `:title` is not a declared relationship or computed here ``.
 
 A tag states what it **declares** for references with `declares` (one entry or an
 array), and a vocabulary's `analyze` hook adds derived names with
@@ -258,7 +260,7 @@ string: {
 
 The full contract reference — every field, the resolution rules, duplicates,
 `ctx.declare` and the kind namespace — is in
-[Sidecars: Atoms in contracts](/custom-tags/sidecars/#atoms-in-contracts).
+[Sidecars: Atoms in contracts](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts).
 
 ### Mesh's `accept=[:title]`
 
@@ -294,7 +296,7 @@ the vocabulary's own build step checks that.
 ## See also
 
 - [Attributes](/language/attributes/) — the `#id`, `.class` and `:name` sugars.
-- [Sidecars](/custom-tags/sidecars/#atoms-in-contracts) — the atom contract reference.
-- [Errors](/language/errors/#atom-errors) — the diagnostics, listed by message.
+- [Sidecars](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts) — the atom contract reference.
+- [Errors](/language/errors/#errors-atom-errors) — the diagnostics, listed by message.
 - [ADR 156](/design-notes/adr-atoms/) — why this is the shape it is.
 - [The specification](/specification/#the-mx-language-4-elements-and-attributes) — the normative text.

@@ -136,7 +136,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `attributes` | Closed attribute contract, validated before hooks; omit it to leave attributes open. |
 | `attributeTags` | Closed `<@name>` contract with required/repeatable controls and recursive `attributes`, `attributeTags` and `children` maps. |
 | `defaultTag` | The tag name that `<#id>` and `<.class>` (an unnamed tag) written directly inside this tag stand for. Also accepted on every `attributeTags` declaration. A non-empty string naming a plain tag reachable from the package; see [Name the unnamed tag](/custom-tags/sidecars/#sidecars-declare-the-call-contract-name-the-unnamed-tag-defaulttag). |
-| `declares` | The names this tag declares for atom references: one entry or an array of `{ kind, from: "id" \| "name", scope?, under?, uniqueWith? }` (decision 156, see [Atoms in contracts](/custom-tags/sidecars/#atoms-in-contracts)). |
+| `declares` | The names this tag declares for atom references: one entry or an array of `{ kind, from: "id" \| "name", scope?, under?, uniqueWith? }` (decision 156, see [Atoms in contracts](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts)). |
 | `analyze` | Non-mutating pass over every call of this tag in one file, before transforms. |
 | `transform` | Expands one validated call into ordinary IR; optional only when a template exists. |
 | `finalize` | Adds nodes once per file after expansion; returned nodes are prepended. |

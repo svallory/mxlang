@@ -827,7 +827,7 @@ nearest ancestor with one of those names; none is an error, addendum 5), and
 two declarations of one name and kind in a scope are an error carrying both
 spans (`TranslateError.spans`, see below). An unknown name is an error on the atom with a did-you-mean. `ref`
 checks the one file. Without a contract an atom is never an error. See
-[Custom tags: atoms in contracts](/custom-tags/sidecars/#atoms-in-contracts).
+[Custom tags: atoms in contracts](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts).
 
 **Errors core owns**, each positioned at the atom: member access (`:a.length`,
 `:a[0]`), a call (`:a(1)`), a unary operator (`-:a`, `!:a`, `typeof :a`),

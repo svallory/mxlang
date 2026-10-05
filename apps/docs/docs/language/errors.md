@@ -202,12 +202,12 @@ is an expression: `<${"a::b"}/>` is legal.
 
 ### The `:` TypeScript owns
 
-Three spellings where TypeScript's `:` and an atom's `:` collide are known limits
-(see [Atoms](/language/atoms/#known-limits-a--typescript-owns)), each with a
+Four spellings where TypeScript's `:` and an atom's `:` collide are known limits
+(see [Atoms](/language/atoms/#atoms-known-limits-a-typescript-owns)), each with a
 hint that names the ambiguity and the fix:
 
 ```text
-hint: `<a<b> :c` reads `a<b>` as type arguments (TypeScript's reading), so `:c` is not an atom there; this spelling is ambiguous (ADR 156, known limits)
+hint: `a<b> :c` reads `a<b>` as type arguments (TypeScript's reading), so `:c` is not an atom there; this spelling is ambiguous (ADR 156, known limits)
 ```
 
 ```text
