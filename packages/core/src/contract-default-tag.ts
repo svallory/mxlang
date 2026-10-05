@@ -63,6 +63,14 @@ export function contractDefaultTag(
     : undefined;
 }
 
+/** The `defaultTag` the nearest authored parent's contract declares, valid or not. */
+export function declaredContractDefaultTag(
+  parents: readonly DefaultTagParent[],
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+): string | undefined {
+  return lookupDeclared(parents, customTags);
+}
+
 function lookupDeclared(
   parents: readonly DefaultTagParent[],
   customTags: Readonly<Record<string, CustomTag>> | undefined,

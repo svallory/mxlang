@@ -1,6 +1,7 @@
 import { dirname } from "node:path";
+import { declaredContractDefaultTag } from "./contract-default-tag.ts";
 import { type Ctx, type Node, TranslateError } from "./core.ts";
-import type { DefaultTagParent } from "./declarations.ts";
+import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
   elementPredicate,
   judgingLookup,
@@ -28,6 +29,16 @@ function isUnnamedTag(node: Node): boolean {
 }
 
 const resolved = new WeakSet<Node>();
+const hints = new WeakMap<Node, string>();
+
+/**
+ * Why an unnamed tag is not what its parent's contract asked for, when that
+ * contract's `defaultTag` was invalid and the next rung answered: the use-site
+ * error then says so instead of naming a tag the author never wrote.
+ */
+export function invalidDefaultTagHint(node: Node): string | undefined {
+  return hints.get(node);
+}
 
 /** The scope this compile can judge a default tag in; a target adds its built-ins. */
 function scopeOf(ctx: Ctx): DefaultTagScope {
@@ -62,7 +73,7 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
             at.column,
           );
         }
-        node.name.value = resolve.call(ctx.declarations, node, parents, {
+        const context: DefaultTagContext = {
           ...(ctx.declarations.allowContractDefaultTag === false
             ? { contractRung: false }
             : {}),
@@ -73,7 +84,20 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
           ...(ctx.customTags === undefined
             ? {}
             : { customTags: ctx.customTags }),
-        });
+        };
+        const answer = resolve.call(ctx.declarations, node, parents, context);
+        node.name.value = answer;
+        // A contract value that was not taken (invalid) is remembered for the
+        // use-site error; one the resolver answered (valid) needs no hint.
+        const declared =
+          context.contractRung === false
+            ? undefined
+            : declaredContractDefaultTag(parents, ctx.customTags);
+        if (declared !== undefined && declared !== answer)
+          hints.set(
+            node,
+            `(the parent's \`defaultTag\` \`${declared}\` is invalid; see the declaration)`,
+          );
       }
       const name = String(node.name?.value ?? "");
       const attributeTag = name.startsWith("@");

@@ -76,7 +76,7 @@ import {
   validateCustomTagParents,
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
-import { resolveUnnamedTags } from "./default-tag.ts";
+import { invalidDefaultTagHint, resolveUnnamedTags } from "./default-tag.ts";
 import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
 import type {
@@ -2441,7 +2441,13 @@ function authoredChildTree(children: readonly Node[]): ChildNode[] {
           loc,
         });
       } else {
-        tree.push({ kind: "ChildTag", name, loc });
+        const why = invalidDefaultTagHint(node);
+        tree.push({
+          kind: "ChildTag",
+          name,
+          loc,
+          ...(why ? { hint: why } : {}),
+        });
       }
     }
   }

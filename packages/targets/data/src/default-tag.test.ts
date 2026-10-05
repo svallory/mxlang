@@ -293,4 +293,29 @@ describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", ()
     expect(inner).toContain('"name":"object"');
     expect(inner).not.toContain('"name":"nope"');
   });
+
+  it("a closed children after an invalid parent defaultTag: the E2 says why (the hint)", () => {
+    const tags: Record<string, CustomTag> = {
+      attributes: { defaultTag: "nope", children: { attribute: {} } },
+      attribute: {},
+    };
+    const { diagnostics } = parseData(
+      "<attributes><#a/></attributes>",
+      "/m.mx",
+      {
+        customTags: tags,
+      },
+    );
+    expect(diagnostics[0]?.message).toBe(
+      "`<attributes>`: `<object>` is not allowed here; allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)",
+    );
+    // A valid-but-disallowed default carries no hint, and neither does a plain E2.
+    const plain = parseData("<attributes><#a/></attributes>", "/m.mx", {
+      customTags: {
+        attributes: { children: { attribute: {} } },
+        attribute: {},
+      },
+    });
+    expect(plain.diagnostics[0]?.message).not.toContain("is invalid");
+  });
 });

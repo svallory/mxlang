@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-contracts r3):** the E2 after an invalid contract `defaultTag` carries "(the parent's `defaultTag` `x` is invalid; see the declaration)".
+
 - **Fix (default-tag-contracts r2):** an invalid contract `defaultTag` is one TS80003 at its declaration however many files use the parent.
 
 - **Added (default-tag-contracts, decision 145):** data-check rows for a parent contract's `defaultTag` (the Mesh example, E1/E2 at the shorthand, an invalid declaration at its contracts module).

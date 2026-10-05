@@ -329,6 +329,9 @@ describe("mx-tsc on a data package", () => {
       expect(errors).toHaveLength(2);
       expect(errors[0]).toContain("contracts.ts(1,1): error TS80003:");
       expect(errors[1]).toContain("`<object>` is not allowed here");
+      expect(errors[1]).toContain(
+        "(the parent's `defaultTag` `nope` is invalid; see the declaration)",
+      );
     });
 
     it("an invalid contract defaultTag is TS80003 at the declaring contracts module", () => {

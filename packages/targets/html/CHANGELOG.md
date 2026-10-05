@@ -6,6 +6,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (default-tag-contracts r3):** the Marko core taglib moved to `@mxlang/core` (`CORE_TAGLIB`); no behaviour change.
+
 - **Fix (default-tag-contracts r2):** `loadMx`, nested tags, the Bun loader and the example runner run the contracts' `defaultTag` registration check and warn once at the declaring file; an invalid contract value no longer compiles to the wrong element (`input`) and the next rung answers.
 
 - **Added (default-tag-contracts, decision 145):** the unnamed tag resolves through the parent's contract `defaultTag` first, then `mx.html.defaultTag`, then `div`.

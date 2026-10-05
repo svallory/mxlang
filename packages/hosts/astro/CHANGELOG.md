@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-contracts r3):** a `.astro.mx` template refuses a contract's dashed `defaultTag` (`sl-card`), as `astro-html`'s registration does, so the two agree.
+
 - **Fix (default-tag-contracts r2):** the `.astro.mx` Vite plugin reports an invalid contract `defaultTag` once at its declaration.
 
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag in `.astro.mx` templates.

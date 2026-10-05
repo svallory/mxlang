@@ -82,7 +82,7 @@ export interface CustomTagChild {
 
 /** Authored direct children, before transforms or host lowering change them. */
 export type ChildNode =
-  | { kind: "ChildTag"; name: string; loc: Position }
+  | { kind: "ChildTag"; name: string; loc: Position; hint?: string }
   | { kind: "ChildText"; loc: Position }
   | { kind: "ChildDynamic"; loc: Position }
   | { kind: "ChildFor"; nodes: ChildNode[]; loc: Position }
@@ -943,7 +943,7 @@ export function validateCustomTagChildren(
               ? allowed === "none"
                 ? "text is not allowed here; it accepts no child tags"
                 : `text is not allowed here; it accepts only the child tags ${allowed}`
-              : `\`<${name}>\` is not allowed here; allowed children: ${allowed}`,
+              : `\`<${name}>\` is not allowed here; allowed children: ${allowed}${node.kind === "ChildTag" && node.hint ? ` ${node.hint}` : ""}`,
             node.loc,
           );
         }
