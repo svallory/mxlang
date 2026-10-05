@@ -21,7 +21,7 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 | `<await>` | Error — the host genuinely can't render a pending value to a string |
 | `<try>` with `<@placeholder>` | Error — needs a second render pass the host doesn't have |
 | `<try>` with only `<@catch>` | Lowers to an ordinary `try`/`catch` |
-| `<return>` | Not an error — a tag is its own compiled module under the unit model, so its caller invokes it; the module's export becomes `{ value, output }` and the call site unwraps it. `/var` is supported in any scope. See [Returning a value](/custom-tags/templates/#returning-a-value) for the full grammar, `/var` scoping per host, and the JSX-hooks restriction. |
+| `<return>` | Not an error — a tag is its own compiled module under the unit model, so its caller invokes it. The module's `render(input, out)` entry writes the output to the caller's sink and returns the value, which never travels in the output (decision 155). `/var` is supported in any scope, dynamic tags included. See [Returning a value](/custom-tags/templates/#returning-a-value) for the full grammar, `/var` scoping per host, and the JSX-hooks restriction. |
 
 "Inert" is a shape, not a license to silently drop content: an inert tag's own attributes and body are validated against what Marko's own tag definition allows, and anything unexpected is a compile error naming the tag — not silently discarded.
 

@@ -114,23 +114,25 @@ A template may declare **at most one** `<return>`, and it must sit at the **top 
 
 A `<return>` in a page is legal and means the same thing — a page is a module that returns a value nobody reads yet.
 
+**The value never travels in the output.** As in Marko, a tag writes its HTML into its caller's output and hands the value back separately. On `@mxlang/html` (and Astro's `.mx` components) a compiled template has a `render(input, out)` entry that writes to `out` and *returns* the `<return>` value, and the call site passes its own `out` down; `/var` is that return value. The default export stays `(input) => string` and drops the value.
+
 ### Rules for `/var`
 
 - **The tag must declare `<return>`.** `/var` on a tag whose template returns nothing is an error, rather than a binding that silently reads `undefined`.
 - **The binding is scoped to the block the call is in**, like any `let`. Reading it from outside that block is an error rather than a binding hoisted somewhere the reader cannot see.
 - **The call has to come first.** Reading a `/var` earlier in the same block than the call that binds it is an error, not a run-time crash.
-- **Discovered or imported, both bind.** `/var` binds what a *discovered* tag (`tags/counter.mx`, called as `<counter/n/>`) returns, and what a tag you `import` and call by binding returns (`import Counter from "./lib/counter.mx"`, then `<Counter/n start=1/>`), exactly as Marko does. The imported form needs a default import of a `.mx` file that declares `<return>`; one that declares none is the same error as a discovered tag. A `.mx` import that is missing or does not compile is reported as the cause (`/n` on `<B>` can't bind: … does not exist / does not compile). A callee MX cannot read at compile time (a `.ts` module or a barrel re-export) keeps the positioned ``tag variable `/n` on `<Widget>` is not supported in a standalone template``. **Known gap:** on `@mxlang/html`, `/var` on a *dynamic* tag (`<${Counter}/n/>`) is silently dropped instead of refused, and reading `n` then throws a `ReferenceError` at render; the JSX hosts refuse it with the positioned error.
+- **Discovered or imported, both bind.** `/var` binds what a *discovered* tag (`tags/counter.mx`, called as `<counter/n/>`) returns, and what a tag you `import` and call by binding returns (`import Counter from "./lib/counter.mx"`, then `<Counter/n start=1/>`), exactly as Marko does. The imported form needs a default import of a `.mx` file that declares `<return>`; one that declares none is the same error as a discovered tag. A `.mx` import that is missing or does not compile is reported as the cause (`/n` on `<B>` can't bind: … does not exist / does not compile). A callee MX cannot read at compile time (a `.ts` module or a barrel re-export) keeps the positioned ``tag variable `/n` on `<Widget>` is not supported in a standalone template``. On `@mxlang/html`, `/var` on a *dynamic* tag (`<${Counter}/n/>`) binds the callee's return value, as in Marko (`undefined` when the callee is not a compiled template); the JSX hosts refuse it with the positioned error.
 
 ### Calling a returning tag without `/var`
 
 A tag that declares `<return>` can be called without a `/var`. The call renders the tag's body and drops the value, as Marko does, whether the tag is discovered (`<counter start=1/>`) or imported by its default binding from a `.mx` file (`import Counter from "./lib/counter.mx"`, then `<Counter start=1/>`). The value stays unreachable in both forms unless the call binds a `/var`.
 
-Only a default import that resolves straight to a `.mx` file is recognised. Two other routes to a returning tag are a known gap, because the compiler cannot see the callee's shape:
+Two other routes reach a returning tag without the compiler seeing its shape:
 
-- a `.mx` file re-exported through a `.ts` barrel (`export { default as Counter } from "./counter.mx"`) is a dynamic tag, not a static import;
-- a dynamic tag (`<${x}/>`) goes through the host's runtime dispatch.
+- a `.mx` file re-exported through a `.ts` barrel (`export { default as Counter } from "./counter.mx"`);
+- a dynamic tag (`<${x}/>`).
 
-On `@mxlang/html`, both render `[object Object]` instead of the body until the runtime fix lands (TODO `dynamic-tag-return-unit-object-object`). Use a direct `.mx` import or a discovered tag. There is no compile-time error for these: whether a dynamic call unwraps depends on the host (Solid and Astro render it correctly), which the shared compiler does not know.
+On `@mxlang/html` both render the body: the call dispatches at run time, rendering through the callee's `render` entry when it has one (decision 155). The JSX hosts still render `[object Object]` for these (TODO `dynamic-tag-return-unit-object-object`, JSX half); use a direct `.mx` import or a discovered tag there.
 
 ### Where `/var` can be written, per host
 

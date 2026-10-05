@@ -5,7 +5,7 @@ description: "Compile .mx and .marko templates to a plain (input) => string func
 
 # HTML target
 
-The html target (`@mxlang/html`) is the vanilla MX target. It compiles an `.mx` file (or its `.marko` alias) to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper. No scheduler, no signals, no hydration, no resume markers.
+The html target (`@mxlang/html`) is the vanilla MX target. It compiles an `.mx` file (or its `.marko` alias) to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper and a string-buffer sink. No scheduler, no signals, no hydration, no resume markers.
 
 The generic half of the work — consuming Marko's AST, applying the structural lowerings, the string-emit model — lives in the shared core. This target supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
 
@@ -48,28 +48,36 @@ divergence render the same bytes as Marko's own server render.
 compiles to:
 
 ```typescript
-import { escape as __mxEscape } from "@mxlang/html";
+import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";
 
 export interface Input {}
 
 function Greeting(input: Input): string {
-  let __mxOut = "";
-  __mxOut += "<h1";
-  {
-    const __mxValue = __mxClassValue({ greeting: true });
-    if (__mxValue !== "") __mxOut += " class=\"" + __mxValue + "\"";
-  }
-  __mxOut += ">Hello, ";
-  __mxOut += __mxEscape(input.name);
-  __mxOut += "!</h1>";
-  return __mxOut;
+  const __mxOut = __mxCreateOut();
+  __mxRender(input, __mxOut);
+  return __mxOut.toString();
 }
+Greeting.render = __mxRender;
+
+function __mxRender(input: Input, __mxOut: __MxOut): void {
+  __mxOut.write("<h1");
+  {
+    const __mxValue = __mxClassValue({greeting: true});
+    if (__mxValue !== "") __mxOut.write(" class=\"" + __mxValue + "\"");
+  }
+  __mxOut.write(">Hello, ");
+  __mxOut.write(__mxEscape(input.name));
+  __mxOut.write("!</h1>");
+}
+export { __mxRender as render };
 Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 
 export default Greeting;
 ```
 
-The default export is a **named** declaration, after the file (`greeting.mx` gives `Greeting`, `table-of.mx` gives `TableOf`), and carries a `Symbol.for("mx.component")` brand. The name is derived, never authored — and it is what lets a tag call itself with no self-import. The brand is what lets a host that receives a compiled module as an opaque value — the Astro renderer, for one — recognize it as an MX component without sniffing the function's name. `__mxClassValue` is one of four helpers (`__mxClassValue`, `__mxStyleValue`, `__mxEscapeComment`, `__mxRenderDynamic`) appended to the module only when the template actually calls them; a template using none of them compiles to the `escape` import and string concatenation alone. Every generated name carries the reserved `__mx` prefix, and an authored binding with that prefix is a compile error (see "Reserved generated identifiers" in the specification), which is why the public `escape` export is imported under a private alias.
+The module has two entries (decision 155, the Marko render model). `render(input, out)` writes the HTML to a sink and returns the template's `<return>` value; the default export creates the sink, calls `render`, and returns the string. `Greeting.render` is the same function as the named `render` export, so a caller holding only the default export can render into its own sink. A tag call passes the caller's sink down rather than concatenating a returned string; the specification's "The html target: render entry and sink" section has the call-by-call rules.
+
+The default export is a **named** declaration, after the file (`greeting.mx` gives `Greeting`, `table-of.mx` gives `TableOf`), and carries a `Symbol.for("mx.component")` brand. The name is derived, never authored — and it is what lets a tag call itself with no self-import. The brand is what lets a host that receives a compiled module as an opaque value — the Astro renderer, for one — recognize it as an MX component without sniffing the function's name. `__mxClassValue` is one of the helpers (`__mxClassValue`, `__mxStyleValue`, `__mxEscapeComment`, `__mxRenderDynamic`, `__mxRenderTag`) appended to the module only when the template actually calls them; a template using none of them compiles to the runtime import and sink writes alone. Every generated name carries the reserved `__mx` prefix, and an authored binding with that prefix is a compile error (see "Reserved generated identifiers" in the specification), which is why the public `escape` export is imported under a private alias.
 
 ## Install
 
@@ -88,7 +96,8 @@ const { code } = compile(source, "greeting.mx");
 - `compile(source, filename, { strict? })` → `{ code, map }`
 - `compileFile(filename, { strict? })` → `{ code, map }`
 - `build(filenames, { strict? })` → `Map<filename, { code, map }>`, a CLI-free build step
-- `escape(value)` — the entire runtime the emitted module imports
+- `escape(value)`, `createOut()`, `createBufferedOut(parent)` — the entire runtime the emitted module imports; the sink half is also published as `@mxlang/html/runtime`
+- `Out` — the sink type: `write(html: string)` and `toString()`
 - `TranslateError` — thrown for a construct with no lowering, carrying `line`/`column`
 
 The package is also a plain `@marko/compiler` translator, so the compiler's own entry points work directly:
@@ -201,7 +210,7 @@ Inert is a *shape*, not permission to drop content. Each inert tag still declare
 |---|---|
 | `<await>` | Marko itself refuses to render one to a string |
 | `<try>` with `<@placeholder>` | A placeholder needs a second render pass |
-| `<return>` inside `<if>`, `<for>` or any other tag | It declares the value the whole unit returns, so it must be at the top level of its template. At the top level it compiles, in a tag and in a page alike: the module returns `{ value, output }`, which is what `/var` reads |
+| `<return>` inside `<if>`, `<for>` or any other tag | It declares the value the whole unit returns, so it must be at the top level of its template. At the top level it compiles, in a tag and in a page alike: `render(input, out)` returns the value, which is what `/var` reads; the output goes to the sink |
 | `<let/input=…>`, `<const/input=…>` | Shadows the render function's own `input` parameter, making the template's input unreachable. A **tag param** named `input` (`<for|input|>`) is fine — that opens a nested scope, which is an ordinary JS shadow |
 | A capitalized tag with no matching binding | No HTML element is capitalized, so this is a missing import rather than an element |
 | `class:foo`, `style:foo` | Not Marko syntax at all — see [Errors](/language/errors/) |
@@ -224,7 +233,7 @@ attribute is a compile error naming the attribute and the target.
 
 ## `<try>`
 
-A `<try>` with `<@catch>` lowers to a real `try`/`catch` around the block's output:
+A `<try>` with `<@catch>` lowers to a real `try`/`catch`, with the body rendered into a buffered sub-sink:
 
 ```html
 <try>
@@ -236,22 +245,22 @@ A `<try>` with `<@catch>` lowers to a real `try`/`catch` around the block's outp
 compiles to:
 
 ```typescript
-function Risky(input: Input): string {
-  let __mxOut = "";
+function __mxRender(input: Input, __mxOut: __MxOut): void {
+  const __mxTry0 = __mxCreateBufferedOut(__mxOut);
   try {
-    __mxOut += "<p>";
-    __mxOut += __mxEscape(input.risky());
-    __mxOut += "</p>";
+    __mxTry0.write("<p>");
+    __mxTry0.write(__mxEscape(input.risky()));
+    __mxTry0.write("</p>");
+    __mxTry0.commit();
   } catch (err) {
-    __mxOut += "<p>failed: ";
-    __mxOut += __mxEscape(err.message);
-    __mxOut += "</p>";
+    __mxOut.write("<p>failed: ");
+    __mxOut.write(__mxEscape(err.message));
+    __mxOut.write("</p>");
   }
-  return __mxOut;
 }
 ```
 
-Output already appended before the throw stays appended — the `catch` branch continues from there rather than discarding it, which is what a single-pass string builder can do. A `<try>` carrying `<@placeholder>` is a compile error: showing a placeholder and then replacing it needs a second pass this target does not have.
+The body's output reaches the page only when the body finishes. When it throws, the partial output is dropped and the `catch` branch renders in its place, as Marko 6.3.51 does (before decision 155 this target kept the partial output). A `<try>` carrying `<@placeholder>` is a compile error: showing a placeholder and then replacing it needs a second pass this target does not have.
 
 ## Structured `class` and `style`
 

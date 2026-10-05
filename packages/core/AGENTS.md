@@ -662,7 +662,9 @@ Five facts worth knowing before editing it:
   Marko's own, ported with MX wording; its eleven compile-time error fixtures
   each have a counterpart test in `lower.test.ts`. `<return>` in a *page* is
   legal and means the same thing.
-  **The export shape is the host's business**: `{ value, output }` on html and
+  **The export shape is the host's business**: on html, `render(input, out)`
+  writes to the caller's sink and returns the value (decision 155, the Marko
+  render model; core still only records `returnsValue`); `{ value, output }` on
   the three JSX hosts (where the call is emitted as an ordinary *function
   call*, not a JSX element — a JSX element is a description of a call the
   runtime makes later, so it could never hand the pair back); on Solid a
@@ -797,6 +799,9 @@ Five facts worth knowing before editing it:
   read the name back rather than pinning `render` — `@mxlang/html`'s
   `brandRender`/`finalizeModule`, `@mxlang/typescript-plugin`'s
   `createAstroTypeSurface`, and `@mxlang/astro`'s two `vite-pages` patterns.
+  Since decision 155 the module also carries `<Name>.render = __mxRender;`
+  after the default export; `vite-pages`' `wrapAsPage` renames that line along
+  with the function, so a fifth match lives there.
   Pinning the literal there is what made every `.mx` import report
   "is not a module" under `mx-tsc --astro` when the name first changed.
 - **A synthesized import is told apart from an authored one by

@@ -1424,9 +1424,11 @@ And from the host-primitive request:
 |---|---|
 | `this host does not claim \`<${name}>\`, so a custom tag cannot emit one` | The host does not claim `try`. |
 
-Per-host lowering is in §15. Notably `<try>` with `<@placeholder>` is an error on
+Per-host lowering is in §13. Notably `<try>` with `<@placeholder>` is an error on
 the html target (it needs a second render pass), while `<try>` with only `<@catch>`
-lowers to an ordinary `try`/`catch`.
+lowers to an ordinary `try`/`catch` whose body renders into a buffered sub-sink
+(§13.8): when the body throws, its partial output is dropped and `<@catch>`
+renders in its place, as in Marko 6.3.51 (decision 155).
 
 **Decisions:** 8, 28, 51, 65, 85, 91, 93.
 
@@ -2480,7 +2482,8 @@ Plus the four generic field rejections (§4) with `` `<return>` `` as the label.
 
 | Host | Shape |
 |---|---|
-| html, Preact, React, Hono | `{ value, output }`; the call is emitted as an ordinary **function call**, not a JSX element — a JSX element is a *description* of a call the runtime makes later, so it could never hand the pair back |
+| html (and Astro's `.mx` units) | The unit's sink entry `render(input, out)` writes the output to the caller's sink and **returns** the value (decision 155, §13.8). The value never travels in the output, and the default export stays `(input) => string` |
+| Preact, React, Hono | `{ value, output }`; the call is emitted as an ordinary **function call**, not a JSX element — a JSX element is a *description* of a call the runtime makes later, so it could never hand the pair back |
 | Solid | A generated `$mxReturn` **callback prop** the unit calls during setup, because a Solid component's return value is its view. **One-shot, not reactive** — a tag wanting reactivity returns an accessor |
 | Astro | Renders through its own renderer rather than a call site, so the pair is unwrapped there |
 
@@ -2515,14 +2518,15 @@ unlike the JSX-host/Solid restriction above, which is a real MX 2 gap
 (`tag-var-in-callback-scope`); `.astro.mx`'s case cannot be lifted by giving a
 callback scope a statement position, because there is no callback scope here
 at all. The workaround is to call the unit directly from the fence's own
-TypeScript instead of from the template — an ordinary function call, since a
-`.mx` unit compiled for this host still exports the plain
-`{ value, output }` shape (see the table above):
+TypeScript instead of from the template, through the unit's sink entry
+(§13.8), which returns the value and writes the output to a sink the fence
+creates:
 
 ```astro
 ---
+import { createOut } from "@mxlang/html/runtime";
 import Counter from "./tags/counter.mx";
-const { value } = Counter({ start: 1 });
+const value = Counter.render({ start: 1 }, createOut());
 ---
 <p>{value}</p>
 ```
@@ -2556,8 +2560,9 @@ Mechanics that are normative:
 
 **Solid-only divergence: `/var`'s bound type is `any`, not the `<return>`
 expression's real type (TODO `tag-var-type-from-return`, filed from PR #159
-round 2).** On html, preact, react and hono, the caller binds `/var` with
-`const n = temp.value;`, and TypeScript infers `n`'s real type from the
+round 2).** On html the caller binds `/var` with
+`const n = Counter.render(props, out);` (on preact, react and hono with
+`const n = temp.value;`), and TypeScript infers `n`'s real type from the
 callee's own return signature for free. Solid cannot do this: its `/var` is
 assigned inside the region's or unit's `$mxReturn={($mxV) => { n = $mxV; }}`
 callback prop (§9's return-value table), so TypeScript's control-flow
@@ -2804,9 +2809,9 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `const` | `const x = …` | same | **error** in a region | `const` at component-body top | **error** — declare it in the fence | `@let x = …;` |
 | `let` | initial value only | **error** (strict) | **error** — use `createSignal` | **error** — use `useState` | **error** | error — fixed 2026-09-17, `<let>`-specific message; was **the wrong error** (bug 1, only the generic `/var` field guard fired) |
 | `try` | `try`/`catch` | same | `<Loading>` | body inline | **error** | **error** |
-| `try` + `<@catch>` | `catch` block | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React) / native `ErrorBoundary` with `fallbackRender` (Hono) | error | error |
+| `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React) / native `ErrorBoundary` with `fallbackRender` (Hono) | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
-| `<return>` + `/var` | `{ value, output }`; `/var` in **any** scope | same | `$mxReturn` callback prop; `/var` top-level only | `{ value, output }`; `/var` top-level only; **hook imports are a compile error** | **error** | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
+| `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | `$mxReturn` callback prop; `/var` top-level only | `{ value, output }`; `/var` top-level only; **hook imports are a compile error** | **error** | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
 
 ### 13.2 Markup and attributes
 
@@ -3279,6 +3284,56 @@ about a file's host.
 
 `host: "astro"` always compiles under `strictPolicy` regardless of the field's
 own `strict` value, because that host has no other mode.
+
+### 13.8 The html target: render entry and sink
+
+**Decision 155**, the Marko render model, for the html family (the html target,
+and Astro's `.mx` leaf components and pages, which use its emitter). The data
+target has no output and is unchanged; the JSX hosts return elements and keep
+their own `/var` mechanism.
+
+A compiled unit has **two entries**:
+
+| Entry | Signature | Does |
+|---|---|---|
+| `render` (named export, and `Name.render` on the default export) | `(input, out) => value` | Writes the unit's HTML to `out` and returns its `<return>` value (`undefined` without one) |
+| default export, named after the file | `(input) => string` | Creates an `out`, calls `render`, returns `out.toString()` |
+
+The default export's signature is the public one and does not change with
+`<return>`. The sink entry is reachable from the default export, so a caller
+holding only the default export needs no shape check: **a callee with
+`.render` is a compiled template; any other function returns a string, which
+is written**. Rendering never inspects what a callee returns.
+
+`out` is `@mxlang/html/runtime`'s `Out`: `write(html: string)` and
+`toString()`, made by `createOut()`. It is the seam a streaming implementation
+replaces later without touching emitted code.
+
+**Every tag call passes the caller's sink down.** A tag call does not build a
+string and append it; the callee writes into the same `out`. The value of a
+`<return>` therefore never travels in the output, and `/var` is exactly the
+return value of `render`:
+
+| Call | Lowering |
+|---|---|
+| Discovered tag, self-recursive tag, or an imported `.mx` unit known to declare `<return>` | `Name.render(props, out)`; with `/var`, `const n = Name.render(props, out)` |
+| Any other statically named tag (an imported `.mx` unit without `<return>`, a hand-written function, a `.ts` barrel re-export) | Run-time dispatch: `.render(props, out)` when the callee has it, otherwise the callee is called and its string written |
+| Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`) |
+| `<define>` call, `content`, a renderable attribute tag | Unchanged: a block is `(…params) => string`, rendered into its own sink and written |
+
+A hand-written `.ts` function used as a tag keeps returning a string; it never
+receives `out`. A `.mx` unit reached through a dynamic tag or a `.ts` barrel
+renders its body (it once rendered `[object Object]`), and `/var` on a dynamic
+tag binds (it was once silently dropped).
+
+**`<try>` renders its body into a buffered sub-sink**, `createBufferedOut(out)`,
+committed to `out` only when the body finishes. When the body throws, the
+buffered output is dropped and `<@catch>` renders into `out` instead, so a
+half-rendered body never reaches the page (verified against Marko 6.3.51). A
+nested `<try>` commits into its enclosing one. `<@placeholder>` stays an error
+on this target (§6).
+
+**Decisions:** 95, 155.
 
 ---
 

@@ -176,6 +176,10 @@
           "path": "/design-notes/adr-wildcard-children/"
         },
         {
+          "title": "ADR 155: the render model",
+          "path": "/design-notes/adr-render-model/"
+        },
+        {
           "title": "ADR 156: atoms",
           "path": "/design-notes/adr-atoms/"
         }
