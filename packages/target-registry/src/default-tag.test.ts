@@ -775,3 +775,88 @@ describe("a dependency's contract (review round 2, the unprobed note)", () => {
     );
   });
 });
+
+describe("a dashed custom-element name, per target, as measured (decision 145, round 2 addition)", () => {
+  // Measured: what an unknown `<sl-card class="a">x</sl-card>` compiles to today.
+  //   html, astro-html (page)  : error, Marko's "Unable to find entry point for custom tag"
+  //   solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template : a native element
+  //   data : not a tag
+  const NATIVE = [
+    "solid-jsx",
+    "preact-jsx",
+    "react-jsx",
+    "hono-jsx",
+    "angular-template",
+  ];
+  const REJECTED = ["html", "astro-html"];
+
+  afterEach(() => cleanupProjects());
+
+  it.each(NATIVE)(
+    "%s accepts it as mx.<target>.defaultTag and as a contract's value",
+    (target) => {
+      const config = project({
+        mx: { target, [target]: { defaultTag: "sl-card" } },
+      });
+      const policy = resolveTargetPolicyDetailed(config);
+      expect(policy.diagnostics).toEqual([]);
+      expect(tagFor(config)).toBe("sl-card");
+      const contract = project(
+        { mx: { target, contracts: "./contracts.ts" } },
+        {
+          "contracts.ts": `export default { list: { defaultTag: "sl-card" } };\n`,
+        },
+      );
+      expect(resolveTargetPolicyDetailed(contract).diagnostics).toEqual([]);
+    },
+  );
+
+  it.each(REJECTED)(
+    "%s still rejects it (Marko refuses an unresolved dashed tag there)",
+    (target) => {
+      const config = project({
+        mx: { target, [target]: { defaultTag: "sl-card" } },
+      });
+      const { diagnostics } = resolveTargetPolicyDetailed(config);
+      expect(diagnostics.map((d) => d.code)).toEqual(["invalid-default-tag"]);
+      expect(diagnostics[0]?.message).toContain(
+        "`<sl-card>` is not a tag reachable",
+      );
+      expect(tagFor(config)).toBe("div");
+    },
+  );
+
+  it("data rejects it, config and contract", () => {
+    const config = project({
+      mx: { target: "data", data: { defaultTag: "sl-card" } },
+    });
+    expect(
+      resolveTargetPolicyDetailed(config, { dataWired: true }).diagnostics.map(
+        (d) => d.code,
+      ),
+    ).toEqual(["invalid-default-tag"]);
+    const contract = project(
+      { mx: { target: "data", contracts: "./contracts.ts" } },
+      {
+        "contracts.ts": `export default { list: { defaultTag: "sl-card" } };\n`,
+      },
+    );
+    expect(
+      resolveTargetPolicyDetailed(contract, {
+        dataWired: true,
+      }).diagnostics.map((d) => d.code),
+    ).toEqual(["invalid-default-tag"]);
+  });
+
+  it("non-dashed unknown names and Marko core tags stay rejected on a native-element target", () => {
+    for (const name of ["nope", "await", "annotation-xml"]) {
+      const file = project({
+        mx: { target: "preact-jsx", "preact-jsx": { defaultTag: name } },
+      });
+      expect(
+        resolveTargetPolicyDetailed(file).diagnostics.map((d) => d.code),
+        name,
+      ).toEqual(["invalid-default-tag"]);
+    }
+  });
+});

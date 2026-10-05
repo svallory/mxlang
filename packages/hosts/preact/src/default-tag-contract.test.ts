@@ -59,4 +59,27 @@ describe("the parent contract's defaultTag on the JSX hosts (decision 145 PR 3)"
     expect(out).not.toContain("<input");
     expect(out).toContain("<section");
   });
+
+  it("a dashed custom-element name compiles as a native element, from config and from a contract (sl-card)", () => {
+    const run = (src: string, cfg?: string) =>
+      compilePreactMx(src, "/tmp/a.mx", { customTags: tags, defaultTag: cfg })
+        .code;
+    expect(run("<.a>x</>", "sl-card")).toContain('<sl-card class="a">');
+    const dashed: Record<string, CustomTag> = {
+      "my-list": {
+        defaultTag: "sl-card",
+        transform: (call) => call.content?.children ?? [],
+      },
+    };
+    const out = run("<my-list><.a>x</></my-list>", undefined).length;
+    expect(out).toBeGreaterThan(0);
+    const viaContract = (src: string) =>
+      compilePreactMx(src, "/tmp/a.mx", {
+        customTags: dashed,
+        defaultTag: undefined,
+      }).code;
+    expect(viaContract("<my-list><.a>x</></my-list>")).toContain(
+      '<sl-card class="a">',
+    );
+  });
 });

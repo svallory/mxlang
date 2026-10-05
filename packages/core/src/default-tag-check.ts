@@ -189,12 +189,14 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
   const lookup = buildMarkoLookup(input.dir, input.translator);
   const declarations = input.declarations;
   const isElement = elementPredicate(lookup, declarations);
+  const isNativeElement = nativeElementPredicate(lookup, declarations);
   return {
     ...(customTags ? { customTags } : {}),
     ...(customTagsUnknown ? { customTagsUnknown } : {}),
     ...(lookup ? { lookup } : {}),
     ...(input.builtins ? { builtins: input.builtins } : {}),
     isElement,
+    isNativeElement,
   };
 }
 
@@ -220,4 +222,22 @@ export function elementPredicate(
         imports: new Set<string>(),
       } as unknown as Ctx)) &&
     flagged(name);
+}
+
+/**
+ * Whether the host compiles a name its lookup does not know as a native
+ * element: its own `isElement` answer, never the lookup's flag. A target with
+ * no declarations cannot say.
+ */
+export function nativeElementPredicate(
+  lookup: { getTag(name: string): object | undefined } | undefined,
+  declarations: HostDeclarations | undefined,
+): (name: string) => boolean {
+  return (name) =>
+    !!declarations?.isElement &&
+    declarations.isElement(name, {
+      lookup,
+      defines: new Set<string>(),
+      imports: new Set<string>(),
+    } as unknown as Ctx);
 }

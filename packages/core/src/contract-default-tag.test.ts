@@ -286,7 +286,7 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
   it("an invalid contract value falls through: the answer is none", () => {
     const bad: Record<string, CustomTag> = {
       "my-list": { defaultTag: "input", transform: () => [] },
-      nope: { defaultTag: "not-a-tag", transform: () => [] },
+      nope: { defaultTag: "notatag", transform: () => [] },
       awaited: { defaultTag: "await", transform: () => [] },
     };
     expect(asked("<my-list><.a/></my-list>", bad)).toEqual([undefined]);

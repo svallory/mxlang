@@ -6,7 +6,10 @@ import {
 } from "./compile.ts";
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import type { DefaultTagParent } from "./declarations.ts";
-import { elementPredicate } from "./default-tag-check.ts";
+import {
+  elementPredicate,
+  nativeElementPredicate,
+} from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
@@ -63,6 +66,7 @@ function scopeOf(ctx: Ctx): DefaultTagScope {
     ...(ctx.customTags ? { customTags: ctx.customTags } : {}),
     ...(lookup ? { lookup } : {}),
     isElement: elementPredicate(lookup, ctx.declarations),
+    isNativeElement: nativeElementPredicate(lookup, ctx.declarations),
   };
 }
 

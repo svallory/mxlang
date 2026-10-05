@@ -26,7 +26,7 @@ The unnamed tag is resolved through `defaultTag`, in this order:
 
 `#x` still becomes `id="x"` and `.a.b` still becomes `class="a b"`, as in Marko. After resolution the tag is ordinary: the parent's closed `children`, its own `attributes` contract (`<.x>` under a tag whose closed attributes lack `class` is an E1 error), attribute tags and everything else apply unchanged.
 
-From the user's point of view there is one error, at the declaration, never at the use site: an invalid `defaultTag` value, meaning a name that is not a builtin or a custom tag reachable from that package, or a builtin whose parse shape is not plain (`input`, `script`, `textarea`, `pre`).
+From the user's point of view there is one error, at the declaration, never at the use site: an invalid `defaultTag` value, meaning a name that is not an element of the target or a custom tag reachable from that package (on the html tags of every target, any valid HTML, SVG or MathML element name; on the JSX hosts, Solid, Angular and Astro templates also a dashed custom-element name such as `sl-card`, because an unknown dashed name compiles to a native element there; on data, `object` or a custom tag), or a tag whose parse shape on that target is not plain (for html: void, text, statement, control-flow or whitespace-preserving tags such as `input`, `title`, `script`, `textarea`, `pre`, and Marko core tags such as `await`).
 
 ## Why post-parse
 

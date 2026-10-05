@@ -23,6 +23,13 @@ export interface DefaultTagScope {
    */
   isElement?: (name: string) => boolean;
   /**
+   * Whether the target compiles a name its lookup does not know as a native
+   * element (the host's own `isElement`, which on the JSX, Solid and Angular
+   * hosts falls back to casing for an unknown name, and on html and data says
+   * no). Only a valid custom-element name (`sl-card`) is accepted through it.
+   */
+  isNativeElement?: (name: string) => boolean;
+  /**
    * The package's custom tags could not be read (its scan failed). A tag's
    * parse shape does not depend on them, so that verdict stands; a verdict
    * that a custom tag might overturn (not reachable, not an element) is
@@ -77,7 +84,29 @@ export function validateDefaultTag(
   }
   if (scope.builtins?.includes(name) || scope.customTagsUnknown)
     return undefined;
+  if (isCustomElementName(name) && scope.isNativeElement?.(name))
+    return undefined;
   return `\`<${name}>\` is not a tag reachable from this package`;
+}
+
+/** HTML's own names that look like custom elements but are not (the spec's reserved list). */
+const RESERVED_ELEMENT_NAMES = new Set([
+  "annotation-xml",
+  "color-profile",
+  "font-face",
+  "font-face-src",
+  "font-face-uri",
+  "font-face-format",
+  "font-face-name",
+  "missing-glyph",
+]);
+
+/** A valid custom element name: lowercase ASCII start, a hyphen, no uppercase, not a reserved name. */
+export function isCustomElementName(name: string): boolean {
+  return (
+    /^[a-z][a-z0-9._]*-[a-z0-9._-]*$/.test(name) &&
+    !RESERVED_ELEMENT_NAMES.has(name)
+  );
 }
 
 function shapeReason(name: string, options: unknown): string | undefined {

@@ -92,7 +92,7 @@ describe("the parent contract's defaultTag", () => {
   it("an invalid contract value falls through: `input` never emits <input>, the next rung answers", () => {
     const bad: Record<string, CustomTag> = {
       "my-list": { ...pass, defaultTag: "input" },
-      "my-box": { ...pass, defaultTag: "not-a-tag" },
+      "my-box": { ...pass, defaultTag: "notatag" },
       "my-wait": { ...pass, defaultTag: "await" },
     };
     for (const name of ["my-list", "my-box", "my-wait"]) {

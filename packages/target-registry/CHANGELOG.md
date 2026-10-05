@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-contracts r2):** `sl-card` is accepted as `mx.<target>.defaultTag` and as a contract value on solid-jsx, preact-jsx, react-jsx, hono-jsx and angular-template, and refused on html, astro-html (Marko rejects an unresolved dashed tag there) and data.
+
 - **Fix (default-tag-contracts r2):** the contract registration check honours a host whose declarations forbid the rung; a library's contract is judged by the consuming compile's tags and reported at the library's declaring module.
 
 - **Added (default-tag-contracts, decision 145):** `resolveTargetPolicyDetailed` checks every contract `defaultTag` once per package at the file that declares it (the contracts module or the sidecar): the shared reasons (not reachable, not an element of the target, not a plain tag), or a refusal naming the host when its descriptor sets `allowContractDefaultTag: false`.
