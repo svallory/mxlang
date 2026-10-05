@@ -1024,6 +1024,7 @@ export function routeTemplateCall(
       // The call routes to a generated binding, so a host reporting on this
       // call has to be able to name the tag as written.
       authoredName: call.name,
+      ...(call.alias ? { alias: call.alias } : {}),
       loc: call.loc,
     },
   ];

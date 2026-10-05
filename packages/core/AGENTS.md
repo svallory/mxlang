@@ -539,6 +539,22 @@ Five facts worth knowing before editing it:
   survives `require.cache` eviction, so ESM/TS entries need a tool restart
   (TODO `sync-esm-reload-node`). A Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
+- **`children["*"]` is resolved in one top-down walk, never by renaming the
+  tree (decision 147).** `resolveUnnamedTags` (`default-tag.ts`) carries the
+  contract in force (`scopeForChildren`) and records each match per node
+  (`matchWildcardChild` in `wildcard-resolve.ts`); `lower.ts` reads the
+  record (`activeWildcard`) and routes the child to `lowerCustomTag` with the
+  canonical name, `alias` on the IR node. A name is claimable only when
+  nothing else resolves it: not a core structural name, not a core-owned or
+  registered tag, not a *built-in of the target*, which is a tag in the
+  target's own `ctx.lookup` that is not an element or belongs to core's own
+  taglib (`isBuiltin`). Core holds no builtin list and no host literal; data's
+  taglib omits `let`, so it stays claimable there. A native element name is
+  claimable (the contract decides inside a contract parent), and a
+  PascalCase file-local binding beats a match. The parse-only data scan
+  (`@mxlang/data` `scan.ts`) reuses `matchWildcardChild`/`scopeForChildren`
+  with no `lookup`. Cycle rule: only an inline entry object reachable from
+  itself is non-terminating; recursion by `contract` reference is fine.
 - **A contract-only tag is a `DelegatedTag` on a claimed name (decision 130).** A
   definition with no `transform` and no template is contract-only whatever else
   it declares (`{}` and hooks-only included: an empty declaration is a contract

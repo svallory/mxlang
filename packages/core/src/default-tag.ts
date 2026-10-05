@@ -8,6 +8,11 @@ import {
 } from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
 import { rewriteNameSugar } from "./name-sugar.ts";
+import {
+  type ContractScope,
+  matchWildcardChild,
+  scopeForChildren,
+} from "./wildcard-resolve.ts";
 
 /**
  * Marko's parser writes `div` into the name of every tag that has only a
@@ -57,14 +62,22 @@ function scopeOf(ctx: Ctx): DefaultTagScope {
  *
  * Runs on the parsed tree (never the source), top-down, so an unnamed
  * ancestor is already resolved when it shows up in a descendant's `parents`.
+ * The same walk records which tags a parent's `children["*"]` claims
+ * (decision 147), so an unnamed tag inside a wildcard child reads the matched
+ * contract's `defaultTag`.
  */
 export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
-  const walk = (nodes: readonly Node[], parents: DefaultTagParent[]): void => {
+  const walk = (
+    nodes: readonly Node[],
+    parents: DefaultTagParent[],
+    scope: ContractScope | undefined,
+  ): void => {
     for (const node of new Set(nodes)) {
       if (node?.type !== "MarkoTag") continue;
       // Decision 146: `:name`/`#id`/`.class` sugar turns into the tag the
       // author would have written without it, before the name is read.
       rewriteNameSugar(ctx, node);
+      const unnamed = resolved.has(node) || isUnnamedTag(node);
       if (!resolved.has(node) && isUnnamedTag(node)) {
         resolved.add(node);
         const resolve = ctx.declarations.resolveDefaultTag;
@@ -101,9 +114,18 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
           context,
         );
       }
-      const name = String(node.name?.value ?? "");
+      const named = node.name?.type === "StringLiteral";
+      const authored = String(node.name?.value ?? "");
+      // An unnamed tag has no authored spelling to alias, and a dynamic name
+      // no spelling at all: neither is a wildcard child.
+      const match =
+        named && !unnamed
+          ? matchWildcardChild(node, authored, scope, ctx)
+          : undefined;
+      const name = match?.canonical ?? authored;
       const attributeTag = name.startsWith("@");
-      const tagDef = attributeTag ? undefined : ctx.lookup?.getTag(name);
+      const tagDef =
+        attributeTag || match ? undefined : ctx.lookup?.getTag(name);
       const self: DefaultTagParent = {
         name,
         attributeTag,
@@ -113,8 +135,9 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
       walk(
         [...(node.body?.body ?? []), ...(node.attributeTags ?? [])],
         [self, ...parents],
+        named ? scopeForChildren(node, name, scope, ctx.customTags) : undefined,
       );
     }
   };
-  walk(body, []);
+  walk(body, [], undefined);
 }

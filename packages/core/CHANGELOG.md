@@ -6,6 +6,12 @@
 - **Added:** `markoCompiler()`, `markoBabel()` (now exported from the index, previously internal) and `markoHtmljsParser()`, with types `MarkoCompiler`, `MarkoBabel`, `HtmljsParser`: the one compiler instance core compiles with. Every MX package that needs Marko's compiler or its Babel goes through them, so one compiler loads per process. From source they resolve the workspace's `@marko/compiler` as before. Additive, `@unstable`.
 - The decision 151 stock-parser diagnostic stays; it now fires only for a caller that bypasses core's bundle (for example a tool that hands core a stock compiler).
 
+## Unreleased
+
+- Added `children["*"]` wildcard children (decision 147): a parent's `children` accepts an entry or ordered list of `{ pattern?, contract }` / inline-contract entries that claim child names nothing else resolves, validate them by another tag's contract (E1, E4, E2, `defaultTag`), and record the authored name as the additive `alias` (`TagAlias`) on the IR node. Exports `TagAlias`, `CustomTagChildren`, `WildcardChildEntry`, `WildcardChildren`, `isWildcardEligible`, `matchWildcardChild`, `scopeForChildren`, `WILDCARD_NEAR_EXPLICIT`. A name the target's own taglib holds as a built-in is never claimed; core keeps no list of them.
+- Added registration errors for malformed `"*"` entries (unknown key, bad or non-compiling `pattern`, unreachable or raw-text `contract`, `contract` plus inline contract, an inline contract that contains itself) and for a self-containing attribute-tag declaration, which previously never terminated.
+- Added the did-you-mean guard warning (`MxWarning.code: "wildcard-near-explicit"`; `MxWarning.code` is additive) for a wildcard child near an explicit sibling.
+
 ## 0.1.0-alpha.2
 
 2026-10-05. Identical to alpha.1; republished because the alpha.1 tarballs lacked `dist/` when installed by Bun. No code change.

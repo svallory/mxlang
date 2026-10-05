@@ -80,6 +80,7 @@ import {
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { invalidDefaultTagHint, resolveUnnamedTags } from "./default-tag.ts";
+import { nearestName } from "./did-you-mean.ts";
 import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
 import type {
@@ -97,6 +98,7 @@ import type {
   Ir,
   IrNode,
   Position,
+  TagAlias,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import {
@@ -116,6 +118,12 @@ import {
   registerTemplateMetadataCompiler,
   type TemplateTag,
 } from "./template-tag.ts";
+import { tagLabel, WILDCARD_NEAR_EXPLICIT } from "./wildcard-children.ts";
+import {
+  isWildcardEligible,
+  type WildcardMatch,
+  wildcardMatchOf,
+} from "./wildcard-resolve.ts";
 
 /** A node's start position, in `TranslateError`'s own 1-based/0-based shape. */
 function posOf(node: Node): Position {
@@ -2359,6 +2367,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
 
 /** Check attribute-tag authored bodies before any child can transform away its name. */
 function validateCustomAttributeTagBodies(
+  ctx: Ctx,
   owner: string,
   node: Node,
   declarations: CustomTag["attributeTags"],
@@ -2377,6 +2386,7 @@ function validateCustomAttributeTagBodies(
   for (const tag of directTags) {
     if (isControl(tag)) {
       validateCustomAttributeTagBodies(
+        ctx,
         owner,
         tag,
         declarations,
@@ -2420,12 +2430,13 @@ function validateCustomAttributeTagBodies(
         {
           name: `@${name}`,
           loc: posOf(tag),
-          childTree: authoredChildTree(tag.body?.body ?? []),
+          childTree: authoredChildTree(ctx, tag.body?.body ?? []),
         },
         nestedOwner,
       );
     }
     validateCustomAttributeTagBodies(
+      ctx,
       nestedOwner,
       tag,
       declaration?.attributeTags,
@@ -2440,6 +2451,7 @@ function validateCustomAttributeTagBodies(
       !directTags.includes(child)
     ) {
       validateCustomAttributeTagBodies(
+        ctx,
         owner,
         child,
         declarations,
@@ -2450,8 +2462,58 @@ function validateCustomAttributeTagBodies(
   }
 }
 
+/**
+ * The wildcard match for this tag (decision 147), unless a file-local binding
+ * of the same PascalCase name is in scope: that binding outranks a registered
+ * custom tag (spec §4), so it outranks a wildcard too.
+ */
+function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
+  const match = wildcardMatchOf(node);
+  if (!match) return undefined;
+  const name = match.authored;
+  const bound =
+    /^[A-Z]/.test(name) &&
+    (ctx.defines.has(name) ||
+      ctx.imports.has(name) ||
+      (ctx.tagVarShadowed?.has(name) ?? false));
+  return bound ? undefined : match;
+}
+
+function aliasOf(ctx: Ctx, node: Node, match: WildcardMatch): TagAlias {
+  const span = exprSpan(ctx, node.name);
+  return {
+    authored: match.authored,
+    ...(span ? { span } : {}),
+    groups: match.groups,
+  };
+}
+
+/**
+ * The did-you-mean guard (decision 147): a wildcard child whose name is one
+ * typo from an explicit child of the same parent most likely meant that
+ * child. A warning (`wildcard-near-explicit`), which `mx-tsc`'s data check
+ * promotes to an error.
+ */
+function warnNearExplicitChild(
+  ctx: Ctx,
+  node: Node,
+  match: WildcardMatch,
+  label: string,
+): void {
+  const near = nearestName(match.authored, match.parent.explicit);
+  if (near === undefined) return;
+  const at = posOf(node);
+  warn(ctx, {
+    code: WILDCARD_NEAR_EXPLICIT,
+    message: `${label} matched the wildcard of ${match.parent.label}; did you mean the explicit child \`<${near}>\`?`,
+    line: at.line,
+    column: at.column,
+    ...(at.file !== undefined ? { file: at.file } : {}),
+  });
+}
+
 /** Retains authored names and groups transparent control flow without lowering its contents. */
-function authoredChildTree(children: readonly Node[]): ChildNode[] {
+function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
   const tree: ChildNode[] = [];
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
@@ -2471,14 +2533,14 @@ function authoredChildTree(children: readonly Node[]): ChildNode[] {
       if (name === "for") {
         tree.push({
           kind: "ChildFor",
-          nodes: authoredChildTree(node.body?.body ?? []),
+          nodes: authoredChildTree(ctx, node.body?.body ?? []),
           loc,
         });
       } else if (name === "if") {
         const branches = [
           {
             unconditional: false,
-            nodes: authoredChildTree(node.body?.body ?? []),
+            nodes: authoredChildTree(ctx, node.body?.body ?? []),
           },
         ];
         let cursor = index + 1;
@@ -2498,7 +2560,7 @@ function authoredChildTree(children: readonly Node[]): ChildNode[] {
             branchName === "else" && !attrByName(branch, "if");
           branches.push({
             unconditional,
-            nodes: authoredChildTree(branch.body?.body ?? []),
+            nodes: authoredChildTree(ctx, branch.body?.body ?? []),
           });
           index = cursor++;
           if (unconditional) break;
@@ -2511,18 +2573,23 @@ function authoredChildTree(children: readonly Node[]): ChildNode[] {
           branches: [
             {
               unconditional: false,
-              nodes: authoredChildTree(node.body?.body ?? []),
+              nodes: authoredChildTree(ctx, node.body?.body ?? []),
             },
           ],
           loc,
         });
       } else {
         const why = invalidDefaultTagHint(node);
+        const wildcard = activeWildcard(ctx, node);
         tree.push({
           kind: "ChildTag",
-          name,
+          name: wildcard?.canonical ?? name,
           loc,
           ...(why ? { hint: why } : {}),
+          ...(wildcard ? { alias: aliasOf(ctx, node, wildcard) } : {}),
+          ...(!wildcard && !isWildcardEligible(name, ctx)
+            ? { known: true }
+            : {}),
         });
       }
     }
@@ -2545,14 +2612,19 @@ function lowerCustomTag(
   name: string,
   definition: CustomTag,
   isBuiltin = false,
+  wildcard?: WildcardMatch,
 ): IrNode[] {
+  const alias = wildcard ? aliasOf(ctx, node, wildcard) : undefined;
+  const label = tagLabel(name, alias);
   validateCustomTagParents(
     definition,
     name,
     posOf(node),
     ctx.authoredAncestors?.at(-2) ?? "#root",
+    label,
   );
-  rejectUnsupportedFields(ctx, node, `\`<${name}>\``, {
+  if (wildcard) warnNearExplicitChild(ctx, node, wildcard, label);
+  rejectUnsupportedFields(ctx, node, label, {
     attributeTags: true,
     params: true,
     // `var: true` only opts out of this generic rejector's own wording;
@@ -2571,12 +2643,13 @@ function lowerCustomTag(
   // own wording, inside its `transform`.
   if (!isBuiltin && node.var && !hasTemplate(definition)) {
     fail(
-      `\`/var\` on \`<${name}>\` is not supported: it has no template, so it has no \`<return>\` to bind`,
+      `\`/var\` on ${label} is not supported: it has no template, so it has no \`<return>\` to bind`,
       node,
     );
   }
   validateCustomAttributeTagBodies(
-    `\`<${name}>\``,
+    ctx,
+    label,
     node,
     definition.attributeTags,
     hasTemplate(definition),
@@ -2597,8 +2670,12 @@ function lowerCustomTag(
   });
   raiseInvalidCalleeInput(ctx, input, name, loweredTags.flat);
   const children = loweredTags.contentChildren;
-  const childTree = authoredChildTree(children);
-  validateCustomTagChildren(definition, { name, loc: posOf(node), childTree });
+  const childTree = authoredChildTree(ctx, children);
+  validateCustomTagChildren(
+    definition,
+    { name, loc: posOf(node), childTree },
+    label,
+  );
   const handsToHost =
     !isBuiltin &&
     !definition.transform &&
@@ -2606,6 +2683,7 @@ function lowerCustomTag(
     isContractOnlyDelegated(ctx, name, definition);
   const call: TagCall = {
     name,
+    ...(alias ? { alias } : {}),
     nameSpan: exprSpan(ctx, node.name),
     span: exprSpan(ctx, node),
     loc: posOf(node),
@@ -2867,7 +2945,12 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     node.name?.type === "StringLiteral" ? String(node.name.value) : `\${…}`;
   // If/else branches lower through lowerIfChain; for lowers through this entry.
   if (name === "for") return lowerAuthoredTag(ctx, node);
-  const pop = pushAuthoredAncestor(ctx, name);
+  // One identity per tag (decision 147): a wildcard child is its canonical
+  // tag to every `parents` check below it.
+  const pop = pushAuthoredAncestor(
+    ctx,
+    activeWildcard(ctx, node)?.canonical ?? name,
+  );
   try {
     return lowerAuthoredTag(ctx, node);
   } finally {
@@ -2916,6 +2999,20 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   }
 
   const name = String(node.name.value);
+  // A parent's `children["*"]` claimed this tag (decision 147): it is a call
+  // of the matched contract, under the canonical name, ahead of every
+  // host-specific reading of the authored name (disposition, claim, element).
+  const wildcard = activeWildcard(ctx, node);
+  if (wildcard) {
+    return lowerCustomTag(
+      ctx,
+      node,
+      wildcard.canonical,
+      wildcard.definition,
+      false,
+      wildcard,
+    );
+  }
   const fileLocalBinding =
     /^[A-Z]/.test(name) &&
     (ctx.defines.has(name) ||

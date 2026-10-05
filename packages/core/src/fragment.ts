@@ -41,6 +41,7 @@ import {
   customTagTaglib,
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
+  rejectWildcardReferences,
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
@@ -82,6 +83,7 @@ function parseOnlyTranslator(
 ) {
   rejectShadowedRegistration(customTags);
   rejectUnknownDeclarationKeys(customTags);
+  rejectWildcardReferences(customTags);
   rejectUnreachableHooks(customTags);
   const taglib = customTagTaglib(customTags);
   return taglib

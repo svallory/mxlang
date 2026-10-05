@@ -8,3 +8,6 @@ import coreTags from "./taglib/core-tags.json" with { type: "json" };
  * translator adds this to Marko's registered element taglibs.
  */
 export const CORE_TAGLIB: unknown = coreTags;
+
+/** The id the core taglib registers under. */
+export const CORE_TAGLIB_ID = "mx-translator-core";

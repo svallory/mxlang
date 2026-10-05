@@ -25,6 +25,7 @@ import type {
   ForSource,
   IrNode,
   Position,
+  TagAlias,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import {
@@ -32,6 +33,17 @@ import {
   routeTemplateCall,
   type TemplateBackedTag,
 } from "./template-tag.ts";
+import {
+  entryRegExp,
+  explicitChildEntries,
+  hasExplicitChild,
+  INLINE_CONTRACT_KEYS,
+  matchWildcardEntry,
+  tagLabel,
+  WILDCARD,
+  WILDCARD_ENTRY_KEYS,
+  wildcardEntries,
+} from "./wildcard-children.ts";
 
 export interface CustomTagParseOptions {
   /** Body arrives as one unparsed text node. */
@@ -71,8 +83,8 @@ export interface CustomTagAttributeTag {
   attributes?: Record<string, CustomTagAttribute>;
   /** Recursive closed attribute-tag contract. */
   attributeTags?: Record<string, CustomTagAttributeTag>;
-  /** Closed authored children, with the reserved `#text` class. */
-  children?: Record<string, CustomTagChild>;
+  /** Closed authored children, with the reserved `#text` class and the `"*"` wildcard. */
+  children?: CustomTagChildren;
 }
 
 /** Cardinality of an authored plain child (or the reserved `#text` class). */
@@ -81,9 +93,56 @@ export interface CustomTagChild {
   required?: boolean;
 }
 
+/**
+ * One `children["*"]` entry (decision 147): an optional `pattern`, then either
+ * a `contract` reference or an inline contract (never both).
+ */
+export interface WildcardChildEntry {
+  /**
+   * JavaScript regex source matched against the whole tag name; MX anchors it
+   * (`^(?:pattern)$`, no flags). Omitted, the entry matches every name.
+   */
+  pattern?: string;
+  /** The tag whose whole contract validates the child, and its canonical name. */
+  contract?: string;
+  /** Inline contract: the child's attributes. */
+  attributes?: Record<string, CustomTagAttribute>;
+  /** Inline contract: the child's attribute tags. */
+  attributeTags?: Record<string, CustomTagAttributeTag>;
+  /** Inline contract: the child's own children. */
+  children?: CustomTagChildren;
+  /** Inline contract: the unnamed tag inside the child (decision 145). */
+  defaultTag?: string;
+}
+
+/** `children["*"]`: one entry, or a list tried in declaration order. */
+export type WildcardChildren =
+  | WildcardChildEntry
+  | readonly WildcardChildEntry[];
+
+/**
+ * A closed `children` record (contract extension E2): explicit names (and
+ * `#text`), plus the optional `"*"` entries for names no explicit entry, no
+ * built-in and no custom tag claims (decision 147). Explicit entries win.
+ */
+export interface CustomTagChildren {
+  [name: string]: CustomTagChild | WildcardChildren | undefined;
+  "*"?: WildcardChildren;
+}
+
 /** Authored direct children, before transforms or host lowering change them. */
 export type ChildNode =
-  | { kind: "ChildTag"; name: string; loc: Position; hint?: string }
+  | {
+      kind: "ChildTag";
+      /** The tag's name; the canonical name for a wildcard child. */
+      name: string;
+      loc: Position;
+      hint?: string;
+      /** How a wildcard child was written (decision 147). */
+      alias?: TagAlias;
+      /** A built-in or declared name, which no wildcard entry may claim. */
+      known?: boolean;
+    }
   | { kind: "ChildText"; loc: Position }
   | { kind: "ChildDynamic"; loc: Position }
   | { kind: "ChildFor"; nodes: ChildNode[]; loc: Position }
@@ -127,6 +186,11 @@ export interface TagCall {
   attrs: Attr[];
   /** UTF-16 span of the tag name at the call site, when the call has source. */
   nameSpan?: SourceSpan;
+  /**
+   * How the call was written, when a parent's `children["*"]` matched it
+   * (decision 147): `name` is then the canonical tag.
+   */
+  alias?: TagAlias;
   /** UTF-16 span of the whole call, body and closing tag included. */
   span?: SourceSpan;
   content: Block | null;
@@ -362,8 +426,11 @@ export interface CustomTag {
   parseOptions?: CustomTagParseOptions;
   attributes?: Record<string, CustomTagAttribute>;
   attributeTags?: Record<string, CustomTagAttributeTag>;
-  /** Closed allowed authored children; `#text` permits non-whitespace text and interpolations. */
-  children?: Record<string, CustomTagChild>;
+  /**
+   * Closed allowed authored children; `#text` permits non-whitespace text and
+   * interpolations, and `"*"` accepts undeclared names (decision 147).
+   */
+  children?: CustomTagChildren;
   /** Allowed authored direct parents; `#root` is a unit's top level and `@name` an attribute tag. */
   parents?: string[];
   analyze?(calls: readonly TagCall[], ctx: AnalyzeContext): void;
@@ -888,6 +955,7 @@ export function validateCustomTagParents(
   name: string,
   loc: Position,
   parent: string,
+  label = `\`<${name}>\``,
 ): void {
   const parents = definition.parents;
   // A dynamic parent's diagnostic placeholder is not an authored name.
@@ -902,7 +970,7 @@ export function validateCustomTagParents(
   const found =
     parent === "#root" ? "at the top level" : `inside \`<${parent}>\``;
   throw new TranslateError(
-    `\`<${name}>\` must be ${required}; found ${found}`,
+    `${label} must be ${required}; found ${found}`,
     loc.line,
     loc.column,
     loc.file,
@@ -917,13 +985,44 @@ export function validateCustomTagChildren(
 ): void {
   if (!definition.children) return;
   const declarations = definition.children;
+  const explicit = explicitChildEntries(declarations);
+  const entries = wildcardEntries(declarations);
   const tree = call.childTree ?? [];
   const leaves: Array<Extract<ChildNode, { kind: "ChildTag" | "ChildText" }>> =
     [];
   const allowed =
-    Object.keys(declarations)
-      .map((name) => `\`<${name}>\``)
-      .join(", ") || "none";
+    explicit.map(([name]) => `\`<${name}>\``).join(", ") || "none";
+  // Check order (decision 147): an explicit entry, then the `"*"` entries in
+  // order (the lowerer already matched them, recorded on the child), then the
+  // closed record's own error.
+  const notAllowed = (
+    node: Extract<ChildNode, { kind: "ChildTag" }>,
+  ): string => {
+    const label = `\`<${node.name}>\``;
+    const hint = node.hint ? ` ${node.hint}` : "";
+    if (entries.length === 0) {
+      return `${label} is not allowed here; allowed children: ${allowed}${hint}`;
+    }
+    const patterns = entries
+      .flatMap((entry) =>
+        entry.pattern === undefined ? [] : [`\`${entry.pattern}\``],
+      )
+      .join(" or ");
+    const catchAll = entries.some((entry) => entry.pattern === undefined);
+    const names = explicit.filter(([name]) => name !== "#text");
+    const rule = patterns
+      ? `${names.length > 0 ? "other names" : "names"} must match ${patterns}${catchAll ? ", or be undeclared" : ""}`
+      : `${names.length > 0 ? "other names" : "names"} must be undeclared`;
+    const known =
+      node.known && matchWildcardEntry(declarations, node.name)
+        ? ` (${label} is a declared tag, so the wildcard does not apply to it)`
+        : "";
+    const listed =
+      names.length > 0
+        ? `allowed children: ${names.map(([name]) => `\`<${name}>\``).join(", ")}; `
+        : "";
+    return `${label} is not allowed here; ${listed}${rule}${known}${hint}`;
+  };
   const collect = (nodes: readonly ChildNode[]): void => {
     for (const node of nodes) {
       if (node.kind === "ChildFor") collect(node.nodes);
@@ -937,14 +1036,15 @@ export function validateCustomTagChildren(
         );
       } else {
         const name = node.kind === "ChildTag" ? node.name : "#text";
-        if (!Object.hasOwn(declarations, name)) {
+        const matched = node.kind === "ChildTag" && node.alias !== undefined;
+        if (!matched && !hasExplicitChild(declarations, name)) {
           failForOwner(
             owner,
             node.kind === "ChildText"
               ? allowed === "none"
                 ? "text is not allowed here; it accepts no child tags"
                 : `text is not allowed here; it accepts only the child tags ${allowed}`
-              : `\`<${name}>\` is not allowed here; allowed children: ${allowed}${node.kind === "ChildTag" && node.hint ? ` ${node.hint}` : ""}`,
+              : notAllowed(node),
             node.loc,
           );
         }
@@ -953,16 +1053,23 @@ export function validateCustomTagChildren(
     }
   };
   collect(tree);
-  for (const [name, declaration] of Object.entries(declarations)) {
+  // One identity per tag (ADR 147): a wildcard child counts under its
+  // canonical name against that name's explicit entry.
+  for (const [name, declaration] of explicit) {
     const range = attributeTagOccurrenceRange(tree, name);
     if (declaration.repeatable !== true && range.max > 1) {
       const occurrences = leaves.filter(
         (node) => (node.kind === "ChildTag" ? node.name : "#text") === name,
       );
+      const repeated = occurrences[1] ?? occurrences[0];
+      const label =
+        repeated?.kind === "ChildTag"
+          ? tagLabel(repeated.name, repeated.alias)
+          : `\`<${name}>\``;
       failForOwner(
         owner,
-        `\`<${name}>\` may not be repeated`,
-        occurrences[1]?.loc ?? occurrences[0]?.loc ?? call.loc,
+        `${label} may not be repeated`,
+        repeated?.loc ?? call.loc,
       );
     }
     if (declaration.required && range.min === 0) {
@@ -1159,11 +1266,11 @@ export function validateCustomTagCall(
   definition: CustomTag,
   call: TagCall,
 ): void {
-  validateCustomTagChildren(definition, call);
+  const owner = tagLabel(call.name, call.alias);
+  validateCustomTagChildren(definition, call, owner);
   if (definition.parseOptions?.openTagOnly && call.content) {
-    failAt(call.name, "does not accept content", call.loc);
+    failForOwner(owner, "does not accept content", call.loc);
   }
-  const owner = `\`<${call.name}>\``;
   validateAttributes(owner, definition.attributes, call.attrs, call.loc);
   validateAttributeTags(
     owner,
@@ -1306,7 +1413,7 @@ export function rejectUnknownDeclarationKeys(
           );
         }
       }
-      for (const [childName, declaration] of Object.entries(
+      for (const [childName, declaration] of explicitChildEntries(
         definition.children,
       )) {
         const child =
@@ -1338,7 +1445,8 @@ export function rejectUnknownDeclarationKeys(
           : undefined;
       if (
         parent?.children !== undefined &&
-        !Object.hasOwn(parent.children, tagName)
+        !hasExplicitChild(parent.children, tagName) &&
+        !wildcardReferences(parent.children, tagName)
       ) {
         failAt(
           tagName,
@@ -1348,7 +1456,11 @@ export function rejectUnknownDeclarationKeys(
       }
     }
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
-    rejectRecursiveContractKeys(`tag "${tagName}"`, definition);
+    rejectRecursiveContractKeys(
+      `tag "${tagName}"`,
+      definition,
+      `\`<${tagName}>\``,
+    );
   }
   for (const [tagName, definition] of Object.entries(customTags)) {
     rejectAttributeTagParentConflicts(
@@ -1370,7 +1482,7 @@ function rejectAttributeTagParentConflicts(
     const parentLabel = `\`<${parentName}>\``;
     const nestedOwner = `${owner}: ${parentLabel}`;
     if (declaration.children !== undefined) {
-      for (const childName of Object.keys(declaration.children)) {
+      for (const [childName] of explicitChildEntries(declaration.children)) {
         const child =
           childName !== "#text" && Object.hasOwn(customTags, childName)
             ? customTags[childName]
@@ -1389,7 +1501,8 @@ function rejectAttributeTagParentConflicts(
       for (const [childName, child] of Object.entries(customTags)) {
         if (
           child.parents?.includes(parentName) &&
-          !Object.hasOwn(declaration.children, childName)
+          !hasExplicitChild(declaration.children, childName) &&
+          !wildcardReferences(declaration.children, childName)
         ) {
           failAt(
             childName,
@@ -1436,9 +1549,12 @@ function rejectNonStringDefaultTag(
 function rejectRecursiveContractKeys(
   owner: string,
   definition: Pick<CustomTag, "attributes" | "attributeTags" | "children">,
+  label = owner,
+  root = label,
+  path: Set<object> = new Set([definition]),
 ): void {
   const keys = (
-    declaration: CustomTagAttribute | CustomTagAttributeTag | CustomTagChild,
+    declaration: object,
     allowed: readonly string[],
     description: string,
   ): void => {
@@ -1452,16 +1568,81 @@ function rejectRecursiveContractKeys(
       }
     }
   };
+  const fail: (message: string) => never = (message) => {
+    throw new TranslateError(message, 0, 0);
+  };
   for (const [attrName, declaration] of Object.entries(
     definition.attributes ?? {},
   )) {
     keys(declaration, ATTRIBUTE_KEYS, `"${attrName}" attribute declaration`);
     rejectContradictoryAttribute(owner, attrName, declaration);
   }
-  for (const [childName, declaration] of Object.entries(
-    definition.children ?? {},
+  for (const [childName, declaration] of explicitChildEntries(
+    definition.children,
   )) {
     keys(declaration, CHILD_KEYS, `"${childName}" child declaration`);
+  }
+  if (definition.children && Object.hasOwn(definition.children, WILDCARD)) {
+    const value: unknown = definition.children[WILDCARD];
+    if (value === null || typeof value !== "object") {
+      fail(
+        `${label}: \`children["*"]\` must be an entry object or a list of entry objects`,
+      );
+    }
+    const entries = Array.isArray(value) ? value : [value];
+    entries.forEach((entry: unknown, index) => {
+      const at = `\`children["*"]\` entry ${index + 1}`;
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+        fail(`${label}: ${at} must be an object`);
+      }
+      const declared = entry as WildcardChildEntry;
+      keys(declared, WILDCARD_ENTRY_KEYS, at);
+      if (declared.pattern !== undefined) {
+        if (typeof declared.pattern !== "string") {
+          fail(`${label}: ${at}: \`pattern\` must be a string`);
+        }
+        try {
+          entryRegExp(declared);
+        } catch (error) {
+          fail(
+            `${label}: ${at} has an invalid \`pattern\` ${JSON.stringify(declared.pattern)}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      const inline = INLINE_CONTRACT_KEYS.filter((key) =>
+        Object.hasOwn(declared, key),
+      );
+      if (declared.contract !== undefined) {
+        if (typeof declared.contract !== "string" || declared.contract === "") {
+          fail(`${label}: ${at}: \`contract\` must be a non-empty tag name`);
+        }
+        if (inline.length > 0) {
+          fail(
+            `${label}: ${at} has both \`contract\` and an inline contract (${inline.map((key) => `\`${key}\``).join(", ")}); use one`,
+          );
+        }
+        return;
+      }
+      // An inline contract is a declaration like any other, at any depth. A
+      // reference by name always terminates (each authored child resolves
+      // against its own parent), but an inline object that contains itself
+      // never finishes being read: the one cycle registration must refuse.
+      if (path.has(declared)) {
+        fail(
+          `${root}: \`children["*"]\` holds an inline contract that contains itself; declare it as a tag and refer to it with \`contract\``,
+        );
+      }
+      rejectNonStringDefaultTag(`${label}: ${at}`, declared);
+      path.add(declared);
+      rejectRecursiveContractKeys(
+        `${owner}: ${at}`,
+        declared,
+        `${label}: ${at}`,
+        root,
+        path,
+      );
+      path.delete(declared);
+    });
   }
   for (const [name, declaration] of Object.entries(
     definition.attributeTags ?? {},
@@ -1472,7 +1653,92 @@ function rejectRecursiveContractKeys(
       `"${name}" attribute tag declaration`,
     );
     rejectNonStringDefaultTag(`${owner}: \`<@${name}>\``, declaration);
-    rejectRecursiveContractKeys(`${owner}: "<@${name}>"`, declaration);
+    if (path.has(declaration)) {
+      fail(
+        `${label}: \`<@${name}>\`: an attribute-tag declaration contains itself`,
+      );
+    }
+    path.add(declaration);
+    rejectRecursiveContractKeys(
+      `${owner}: "<@${name}>"`,
+      declaration,
+      `${label}: \`<@${name}>\``,
+      root,
+      path,
+    );
+    path.delete(declaration);
+  }
+}
+
+/** Whether a `children` record's wildcard entries reference `tagName` by `contract`. */
+function wildcardReferences(
+  children: CustomTagChildren | undefined,
+  tagName: string,
+): boolean {
+  return wildcardEntries(children).some((entry) => entry.contract === tagName);
+}
+
+/**
+ * The merged-map checks of `children["*"]` (decision 147): every `contract`
+ * names a tag this compile can reach, that tag's parse options do not need
+ * the name it is written with, and its `parents` admit the parent. Runs on the
+ * whole map a compile receives, never per sidecar or per module, where a
+ * reference to another file's tag would look unreachable.
+ */
+export function rejectWildcardReferences(
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+): void {
+  if (!customTags) return;
+  const fail: (message: string) => never = (message) => {
+    throw new TranslateError(message, 0, 0);
+  };
+  const visit = (
+    label: string,
+    declaration: Pick<CustomTag, "attributeTags" | "children">,
+    parentName: string | undefined,
+    seen: Set<object>,
+  ): void => {
+    if (seen.has(declaration)) return;
+    seen.add(declaration);
+    wildcardEntries(declaration.children).forEach((entry, index) => {
+      const at = `\`children["*"]\` entry ${index + 1}`;
+      if (entry.contract === undefined) {
+        visit(`${label}: ${at}`, entry, undefined, seen);
+        return;
+      }
+      const referenced = Object.hasOwn(customTags, entry.contract)
+        ? customTags[entry.contract]
+        : undefined;
+      if (!referenced) {
+        fail(
+          `${label}: ${at} references \`contract: ${JSON.stringify(entry.contract)}\`, which is not a tag reachable from this compile`,
+        );
+      }
+      for (const option of ["text", "preserveWhitespace"] as const) {
+        if (referenced.parseOptions?.[option] === true) {
+          fail(
+            `${label}: ${at} references \`<${entry.contract}>\`, which sets \`parseOptions.${option}\`; parse options apply to the name as written, before the wildcard resolves it`,
+          );
+        }
+      }
+      if (
+        parentName !== undefined &&
+        referenced.parents !== undefined &&
+        !referenced.parents.includes(parentName)
+      ) {
+        fail(
+          `${label}: \`children["*"]\` references \`<${entry.contract}>\`, which declares \`parents\` without \`<${parentName}>\`; add \`<${parentName}>\` to \`<${entry.contract}>\`'s \`parents\`, or remove the reference`,
+        );
+      }
+    });
+    for (const [name, nested] of Object.entries(
+      declaration.attributeTags ?? {},
+    )) {
+      visit(`${label}: \`<@${name}>\``, nested, `@${name}`, seen);
+    }
+  };
+  for (const [tagName, definition] of Object.entries(customTags)) {
+    visit(`\`<${tagName}>\``, definition, tagName, new Set());
   }
 }
 
@@ -1649,6 +1915,7 @@ function contractOnlyDelegatedTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
     kind: "DelegatedTag",
     tag: {
       name: call.name,
+      ...(call.alias ? { alias: call.alias } : {}),
       nameSpan: call.nameSpan,
       span: call.span,
       attrs: call.attrs,
@@ -1678,9 +1945,10 @@ export function transformCustomTag(
   // on a name the active host claims; anywhere else a call has nothing to
   // expand to.
   const contractOnly = isContractOnlyDelegated(ctx, call.name, definition);
+  const owner = tagLabel(call.name, call.alias);
   if (!definition.transform && !hasTemplate(definition) && !contractOnly) {
-    failAt(
-      call.name,
+    failForOwner(
+      owner,
       "custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
       call.loc,
     );
@@ -1745,7 +2013,7 @@ export function transformCustomTag(
   const tagContext: TransformContext = {
     build: builders,
     hoist: (code) => ctx.hoist(code, node),
-    fail: (message, at) => failAt(call.name, message, at ?? call.loc),
+    fail: (message, at) => failForOwner(owner, message, at ?? call.loc),
     gensym: (hint) => gensymFor(ctx, call.name, hint),
     store: storeFor(ctx, call.name),
   };
@@ -1761,7 +2029,7 @@ export function transformCustomTag(
   } catch (error) {
     if (isTranslateError(error)) throw error;
     throw new TranslateError(
-      `\`<${call.name}>\`: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,
+      `${owner}: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,
       call.loc.line,
       call.loc.column,
       call.loc.file,
@@ -1786,8 +2054,8 @@ export function transformCustomTag(
       : result;
     nodes = routeTemplateCall(ctx, definition, routedCall);
   } else {
-    failAt(
-      call.name,
+    failForOwner(
+      owner,
       "custom tag transform must return an array of IR nodes or a TagCall for its template",
       call.loc,
     );
@@ -1801,7 +2069,7 @@ export function transformCustomTag(
     !observed.attributeTagsRead()
   ) {
     warn(ctx, {
-      message: `\`<${call.name}>\`: custom tag transform did not read its attributeTags; authored attribute tags were dropped`,
+      message: `${owner}: custom tag transform did not read its attributeTags; authored attribute tags were dropped`,
       line: call.loc.line,
       column: call.loc.column,
       file: call.loc.file,

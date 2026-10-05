@@ -7,6 +7,7 @@ import {
 } from "./default-tag-validate.ts";
 import type { TargetPolicyDiagnostic } from "./host-policy.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
+import { wildcardMatchOf } from "./wildcard-resolve.ts";
 
 /**
  * Whether a parent is structure rather than an authored tag: control flow
@@ -23,6 +24,7 @@ function isStructural(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
 ): boolean {
   if (parent.attributeTag) return false;
+  if (wildcardMatchOf(parent.node)) return false;
   if (customTags && Object.hasOwn(customTags, parent.name)) return false;
   if (
     CONTROL_FLOW_TAGS.includes(parent.name) ||
@@ -78,9 +80,7 @@ function lookupDeclared(
       continue;
     }
     if (!parent.attributeTag) {
-      return customTags && Object.hasOwn(customTags, parent.name)
-        ? stringOrUndefined(customTags[parent.name]?.defaultTag)
-        : undefined;
+      return stringOrUndefined(contractOf(parent, customTags)?.defaultTag);
     }
     // An attribute tag: gather the chain of attribute tags (innermost first),
     // then the owner, skipping structure between them.
@@ -105,10 +105,10 @@ function lookupDeclared(
     if (chain.length === 0) continue;
     const owner = parents[i];
     if (!owner || owner.attributeTag) return undefined;
-    let declaration: CustomTagAttributeTag | CustomTag | undefined =
-      customTags && Object.hasOwn(customTags, owner.name)
-        ? customTags[owner.name]
-        : undefined;
+    let declaration: CustomTagAttributeTag | CustomTag | undefined = contractOf(
+      owner,
+      customTags,
+    );
     for (const name of chain.reverse()) {
       const tags: Record<string, CustomTagAttributeTag> | undefined =
         declaration?.attributeTags;
@@ -117,6 +117,18 @@ function lookupDeclared(
     return stringOrUndefined(declaration?.defaultTag);
   }
   return undefined;
+}
+
+/** A parent's own contract: a wildcard child's matched one (decision 147), else its registration. */
+function contractOf(
+  parent: DefaultTagParent,
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+): CustomTag | undefined {
+  const matched = wildcardMatchOf(parent.node);
+  if (matched) return matched.definition;
+  return customTags && Object.hasOwn(customTags, parent.name)
+    ? customTags[parent.name]
+    : undefined;
 }
 
 function stringOrUndefined(value: unknown): string | undefined {

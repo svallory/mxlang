@@ -310,8 +310,25 @@ export interface Branch extends IrBase {
  * not carried: a host that needs a field the IR does not model records it in
  * `data` from `resolveDelegatedTag`, while the node is still in hand.
  */
+/**
+ * How a wildcard child was written (decision 147). The tag's `name` is the
+ * canonical tag whose contract it matched (the authored name itself for an
+ * inline contract); this records the spelling the author wrote. Present only
+ * when a parent's `children["*"]` entry matched.
+ */
+export interface TagAlias {
+  /** The tag name as written (`title` in `<title>`). */
+  authored: string;
+  /** File-absolute UTF-16 code-unit span of the authored name. */
+  span?: SourceSpan;
+  /** The entry pattern's named capture groups; empty without any. */
+  groups: Record<string, string>;
+}
+
 export interface DelegatedTag<Data = unknown> extends IrBase {
   name: string;
+  /** The authored spelling, when a wildcard child resolved to `name` (decision 147). */
+  alias?: TagAlias;
   /**
    * File-absolute UTF-16 code-unit span of the tag name (`x` in `<x>`). `undefined` for a
    * dynamic tag (`<${expr}>`) and for a synthesized tag with no source.
@@ -529,6 +546,8 @@ export type IrNode =
        * name a binding the author never typed. Only set where they differ.
        */
       authoredName?: string;
+      /** The authored spelling, when a wildcard child resolved to this tag (decision 147). */
+      alias?: TagAlias;
     } & IrBase)
   | ({
       kind: "IfChain";

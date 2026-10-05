@@ -5,7 +5,7 @@ import {
   contractDefaultTagDiagnostics,
 } from "./contract-default-tag.ts";
 import type { Ctx } from "./core.ts";
-import { CORE_TAGLIB } from "./core-taglib.ts";
+import { CORE_TAGLIB, CORE_TAGLIB_ID } from "./core-taglib.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import {
@@ -220,7 +220,7 @@ export function judgingLookup(
   dir: string,
 ): { getTag(name: string): object | undefined } | undefined {
   coreTranslator ??= {
-    taglibs: [["mx-translator-core", CORE_TAGLIB]],
+    taglibs: [[CORE_TAGLIB_ID, CORE_TAGLIB]],
     tagDiscoveryDirs: [],
     translate: {},
   };

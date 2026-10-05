@@ -32,6 +32,7 @@ import {
   customTagTaglib,
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
+  rejectWildcardReferences,
 } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
@@ -200,6 +201,7 @@ export function printExpression(node: Node): string {
 export function createTranslator(host: TranslatorOptions): Translator {
   rejectShadowedRegistration(host.customTags);
   rejectUnknownDeclarationKeys(host.customTags);
+  rejectWildcardReferences(host.customTags);
   rejectUnreachableHooks(host.customTags);
   const customTags = customTagTaglib(host.customTags);
   return {

@@ -94,12 +94,15 @@ export type {
   CustomTagAttribute,
   CustomTagAttributeTag,
   CustomTagChild,
+  CustomTagChildren,
   CustomTagParseOptions,
   FinalizeContext,
   IrBuilders,
   TagCall,
   TagStore,
   TransformContext,
+  WildcardChildEntry,
+  WildcardChildren,
 } from "./custom-tags.ts";
 export type {
   DefaultTagContext,
@@ -164,6 +167,7 @@ export type {
   IrNode,
   MxAtomMark,
   Position,
+  TagAlias,
 } from "./ir.ts";
 export { expressionShape, lower, lowerChildren } from "./lower.ts";
 export {
@@ -253,3 +257,12 @@ export {
   type TemplateTag,
   templateCompileCount,
 } from "./template-tag.ts";
+export { WILDCARD_NEAR_EXPLICIT } from "./wildcard-children.ts";
+export {
+  type ContractScope,
+  isWildcardEligible,
+  matchWildcardChild,
+  scopeForChildren,
+  type WildcardContext,
+  type WildcardMatch,
+} from "./wildcard-resolve.ts";
