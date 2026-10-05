@@ -20,6 +20,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (name-sugar-default-value, decision 146 addendum 4):** `<input #x=1/>` renders `id="x"` plus `value="1"` (a sugar followed by `=value` sets the default attribute); a method value needs a runtime, as before; a second default value is a positioned error.
+
 - **Docs (name-sugar-tooling, decision 151 ruling 4):** the README warns that `prettier-plugin-marko` bundles a stock htmljs-parser and rewrites `<a x=a .b/>` to `<a x=a.b/>`; do not run it on files that use the name sugar after an attribute value.
 
 - **Changed (name-sugar-core, decision 146):** bare `:x` is `name="x"` sugar, as `#x` is `id` and `.x` is `class`, in every position (`<input type="email" :email>`, `<input:email>`). Marko's `value:x` is still written `value:x`. The `attr-value-modifier` oracle fixture now writes it that way. See `divergences.md`.

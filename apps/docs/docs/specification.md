@@ -738,8 +738,14 @@ tag-adjacent class, `.x` joins it, ahead of an authored `class=`
 `class=` keep their written order (`<div class="a" .b>` is `a b`, `<div .b
 class="a">` is `b a`), and a falsy authored literal (`false`, `0`, `null`,
 `undefined`) drops out as Marko's class value does. And `#x` or `:x` repeated or beside an explicit `id=`/`name=`
-follow the duplicate rule (the later one wins, with a warning). A value on the
-sugar (`:x=1`), a `:name` that is not an identifier, and `:b:c` (two names) or
+follow the duplicate rule (the later one wins, with a warning). **A sugar followed
+directly by `=value` or `(params) { body }` sets the tag's default attribute**
+(decision 146 addendum 4): `<a #x=1>` is `id="x"` plus `value=1`, and `kind
+#name(p) { b }`, `kind #name (p) { b }` and `kind (p) { b } #name` are the same
+tag, `id="name"` plus `value=function`; `:name` and `.class` work the same way.
+(`(` and `=` cannot be part of a sugar, so the space after it is optional.) A tag
+that already has a default value (`kind=1 #x=2`, `<if=a #x=b>`, two sugars with
+values) is a positioned error at the second one. A `:name` that is not an identifier, and `:b:c` (two names) or
 `:b(x)` (arguments), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors.
 
 **Left alone:** the named forms (`class:x`, `style:x`, `value:fn:=x`, and the

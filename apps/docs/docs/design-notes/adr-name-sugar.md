@@ -23,9 +23,11 @@ MX is a language first (its targets exist to test it), so the question was treat
 | first attribute | `<input :email>` | same |
 | after any attribute | `<input type="email" :email>`, `<input x="1" #main .big>` | same, in HTML and concise mode |
 
-Tag-adjacent sugars compose in any order (`<a.c:b>`, `<a#d:b.c>`, `<:b.c>`). The value is the same identifier-like token Marko's shorthand accepts; `:x=1` is a positioned error. After the sugar is resolved, `name` is an ordinary attribute: contracts, duplicate rules and attribute typing apply unchanged.
+Tag-adjacent sugars compose in any order (`<a.c:b>`, `<a#d:b.c>`, `<:b.c>`). The value is the same identifier-like token Marko's shorthand accepts; a sugar may be followed directly by `=value` or `(params) { body }` (addendum 4, below). After the sugar is resolved, `name` is an ordinary attribute: contracts, duplicate rules and attribute typing apply unchanged.
 
 Two scope rulings (decision 146, addendum 3). The sugars apply on every host, Angular included; the one host-owned exception is attribute-position `#x` on Angular, which stays its template reference, and `<svg:rect>` is the tag `svg` plus a name on every target (wrap in `<svg>`). An attribute tag's name is a property key, not an element, so `<@svg:rect>` is not split, while attribute-position sugar on an attribute tag applies (`<@z .b>` gives `class="b"`).
+
+**Addendum 4 (2026-10-05, operator): a sugar followed by a value.** `(` and `=` cannot be part of a sugar, so the space after a sugar is optional, and what follows sets the tag's default attribute (`value`): `#name=expr` is id `name` plus `value=expr`, and `kind #name(params) { body }`, `kind #name (params) { body }` and `kind (params) { body } #name` are one tag, id `name` plus `value=function` (the same for `:name` and `.class`). It is an error only when the tag already has a default value, positioned at the second. This replaces the "sugar takes no value" errors; the bare `:`/`#`/`.` errors stay. Marko already parses every form (a sugar attribute carrying the value, or the default attribute beside the sugar), so the split is post-parse in core and needs no parser change. Mesh's `boolean #isOverdue({ self }) { return self.x }` is therefore valid.
 
 ## What was measured
 

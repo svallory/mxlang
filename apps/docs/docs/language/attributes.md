@@ -118,6 +118,24 @@ beside an explicit `id=` or `name=`, follows the
 the later one wins, with a warning (`<input name="a" :b/>` renders
 `<input name="b">`).
 
+### A sugar followed by a value
+
+`=` and `(` cannot be part of a sugar, so the space after a sugar is optional, and
+what follows sets the tag's **default attribute** (`value`). `<input #x=1/>` is
+`id="x"` plus `value=1`; `:x` and `.c` work the same way. A method after a sugar
+is the default attribute's function, which is how a data vocabulary writes a
+computed member, in any of three spellings that are one tag:
+
+```mx
+boolean #isOverdue({ self }) { return self.x }
+boolean #isOverdue ({ self }) { return self.x }
+boolean ({ self }) { return self.x } #isOverdue
+```
+
+(on the [data target](/specification/#the-mx-language-13-host-semantics-table-137-the-data-target):
+a tag `boolean` with `id="isOverdue"` and a function `value`). A tag takes **one**
+default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second.
+
 ### What stays what Marko does
 
 | You write | You get |
@@ -125,7 +143,7 @@ the later one wins, with a warning (`<input name="a" :b/>` renders
 | `<a class="hover:x"/>` | `class="hover:x"`, untouched |
 | `<a.hover:x/>` | class `hover` plus `name="x"`: a shorthand class cannot contain `:` |
 | `<div value:foo="y"/>` | Marko's attribute `value:foo`, untouched (the explicit `value:x` spelling) |
-| `<a :x=1/>` | an error: the sugar takes no value |
+| `<a :x=1/>` | `name="x"` plus `value=1`: a sugar followed by `=value` sets the default attribute (see below) |
 | `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
 | `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a .2xl/>` is `id="1a"`, `class="2xl"`) |
 

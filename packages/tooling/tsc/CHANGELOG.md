@@ -4,6 +4,8 @@
 
 - **Changed (bridge-host, decision 154):** the extra extensions and region plugins come from the registry's file kinds (`moduleFileExtensions()`, `createRegionLanguagePlugins`) instead of a literal `.solid.mx`; same list and order today.
 
+- **Tests (name-sugar-default-value):** host-dispatch row `sugar-default-value` (preact: the sugar tokens and each value expression map exactly); `sugar-value` is now the second-default-value error row.
+
 - **Tests (name-sugar-tooling r2):** host-dispatch rows `sugar-bare-colon` and a `${input.s}` file in `sugar-dynamic-shorthand`; moon test inputs now include the four dists and the htmljs-parser patch that `sugar-stock-parser.test.ts` runs.
 
 - **Tests (name-sugar-tooling, decision 146 PR 3):** nine host-dispatch rows for the name sugar (valid sugar on a string and a JSX host, a typed template tag, one row per reachable PR 2 error, and the Mesh data check clean and with an E1 error at the sugar); `sugar-stock-parser.test.ts` pins the stock-parser error at the exact token in the language server, the TS plugin, Vite and `mx-tsc`; `sugar-mappings.test.ts` reads the sugar mappings as text. No code change: PR 2's spans already give every tool the exact range.
