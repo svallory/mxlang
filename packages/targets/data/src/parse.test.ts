@@ -1338,23 +1338,34 @@ describe("round 4 (rev-236-r2)", () => {
   describe("finding 2: the tag-name rule is narrow", () => {
     // It was written to catch a concise `$!{x}` line and a `$const x = 1`
     // scriptlet, both of which Marko parses as a tag *name*. It must not
-    // refuse XML-style namespaced names (`svg:rect`, `soap:Envelope`) or a
-    // non-ASCII name (a data file in Portuguese or Japanese).
+    // refuse a non-ASCII name (a data file in Portuguese or Japanese).
     it.each([
-      ["a namespaced name", `<svg:rect/>\n`],
-      ["an xml: prefix", `<xml:lang/>\n`],
-      ["a namespaced dashed name", `<ns:tag-x/>\n`],
       ["a non-ASCII name", `<é/>\n`],
       ["a CJK name", `<日本/>\n`],
-      ["a namespaced name, concise", `svg:rect\n`],
       ["a non-ASCII name, concise", `é\n`],
-      ["a close tag form", `<a:b></a:b>\n`],
       ["a dollar inside a name", `<a$b/>\n`],
       ["an underscore name", `<_x/>\n`],
       ["a leading digit", `<1x/>\n`],
     ])("accepts %s", (_case, source) => {
       const tree = ok(source);
       expect(tree.children[0]).toMatchObject({ kind: "tag" });
+    });
+
+    // Decision 146: a colon in a tag name is the `name` sugar, so the
+    // XML-style namespaced spellings are the tag plus a name, not a name that
+    // carries a colon. (Attribute tags keep their colon, below.)
+    it.each([
+      ["a namespaced name", `<svg:rect/>\n`, "svg", "rect"],
+      ["an xml: prefix", `<xml:lang/>\n`, "xml", "lang"],
+      ["a namespaced dashed name", `<ns:tag-x/>\n`, "ns", "tag-x"],
+      ["a namespaced name, concise", `svg:rect\n`, "svg", "rect"],
+      ["a close tag form", `<a:b></a:b>\n`, "a", "b"],
+    ])("splits %s into the tag plus `name`", (_case, source, tag, name) => {
+      const node = firstTag(ok(source));
+      expect(node.name).toBe(tag);
+      expect(
+        node.attrs.map((a) => (a.kind === "string" ? [a.name, a.value] : null)),
+      ).toEqual([["name", name]]);
     });
 
     it("accepts the same names as attribute tags, so both agree", () => {

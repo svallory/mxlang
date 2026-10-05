@@ -6,7 +6,12 @@ import { type Ctx, type MxWarning, type Node, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
-import { sugarTagName } from "./name-sugar.ts";
+import {
+  isShorthandWord,
+  SHORTHAND_CACHE_LIMIT,
+  shorthandCacheSize,
+  sugarTagName,
+} from "./name-sugar.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -480,5 +485,37 @@ describe("sugarTagName", () => {
     ["ünï:tag", { tag: "ünï", unnamed: false }],
   ])("%s", (raw, expected) => {
     expect(sugarTagName(raw)).toEqual(expected);
+  });
+});
+
+// Delta review LOW 2: a dynamic shorthand works only tag-adjacent, and the
+// message says so instead of blaming the characters.
+describe("a dynamic shorthand in attribute position", () => {
+  it.each([
+    ["<div .a${x}/>", "<div.a${x}>", 5],
+    ["<div #a${x}/>", "<div#a${x}>", 5],
+  ])("%s", (source, hint, column) => {
+    const error = errorOf(source);
+    expect(error.message).toContain(
+      `a dynamic shorthand works only tag-adjacent (\`${hint}\`)`,
+    );
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(column);
+  });
+
+  it("the tag-adjacent form still works", () => {
+    expect(shape("<div.a${x}/>")).toBe("div class=<`a${x}`>");
+  });
+});
+
+// Delta review NIT 3: the probe cache is bounded.
+describe("the shorthand probe cache", () => {
+  it("is cleared past its limit and keeps answering correctly", () => {
+    for (let index = 0; index < SHORTHAND_CACHE_LIMIT + 50; index++) {
+      expect(isShorthandWord(".", `w${index}`)).toBe(true);
+      expect(shorthandCacheSize()).toBeLessThanOrEqual(SHORTHAND_CACHE_LIMIT);
+    }
+    expect(isShorthandWord(".", "a b")).toBe(false);
+    expect(isShorthandWord(".", "2xl")).toBe(true);
   });
 });

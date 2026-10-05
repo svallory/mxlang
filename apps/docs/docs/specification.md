@@ -715,7 +715,8 @@ Marko's shorthand takes, in every position: a run of characters up to
 whitespace, `=`, `(`, `/`, `|`, `<`, `,` or `>`, with `.` and `#` starting the
 next part (read from htmljs-parser's own rule and probed against it, so
 `<div #1a>` is `<div#1a>` and `.2xl` and `.é` work in both positions; a chain
-such as `.c#m.d` splits like a tag-adjacent one). `name` is then an ordinary attribute, so contracts,
+such as `.c#m.d` splits like a tag-adjacent one; a dynamic shorthand, `.a${x}`,
+works only tag-adjacent: `<div.a${x}>`). `name` is then an ordinary attribute, so contracts,
 the duplicate-attribute rule (decision 135) and E1 types all apply.
 
 **Tag-adjacent sugars compose in any order** (23:23 addendum): `<a.c:b>` is class

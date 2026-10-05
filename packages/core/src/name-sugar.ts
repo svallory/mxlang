@@ -422,6 +422,14 @@ function sugarKind(attr: Node): "#" | "." | ":" | undefined {
 
 const shorthandProbe = new Map<string, boolean>();
 
+/** The probe cache is cleared past this many words (a long-lived server). */
+export const SHORTHAND_CACHE_LIMIT = 1000;
+
+/** Test seam: how many words the probe has cached. */
+export function shorthandCacheSize(): number {
+  return shorthandProbe.size;
+}
+
 /**
  * Is `word` something Marko's shorthand (`<a.word>`, `<a#word>`) accepts as
  * one token? Decided by the parser itself: the `htmljs-parser` that
@@ -432,7 +440,7 @@ const shorthandProbe = new Map<string, boolean>();
  * start the next part, so `1a`, `2xl`, `é`, `a@b` and `a+b` are all fine. The
  * pure fallback below mirrors that list for a probe that cannot run.
  */
-function isShorthandWord(sigil: string, word: string): boolean {
+export function isShorthandWord(sigil: string, word: string): boolean {
   const key = `${sigil}${word}`;
   const known = shorthandProbe.get(key);
   if (known !== undefined) return known;
@@ -468,6 +476,8 @@ function isShorthandWord(sigil: string, word: string): boolean {
   } else {
     answer = !/[\s=(/|<,>.#]|:=|\$\{/.test(word);
   }
+  // The answer is one cheap parse, so a full cache is simply emptied.
+  if (shorthandProbe.size >= SHORTHAND_CACHE_LIMIT) shorthandProbe.clear();
   shorthandProbe.set(key, answer);
   return answer;
 }
@@ -565,6 +575,13 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
       cursor = partStart + 1 + word.length;
       if (word.includes(":")) {
         failAt(ctx, SECOND_NAME, partStart + 1 + word.indexOf(":"));
+      }
+      if (word.includes("${")) {
+        failAt(
+          ctx,
+          `a dynamic shorthand works only tag-adjacent (\`<${node.name?.value || "div"}${sigil}${word}>\`), not as \`${sigil}${word}\` after the tag name`,
+          partStart,
+        );
       }
       if (word === "" || !isShorthandWord(sigil, word)) {
         failAt(
