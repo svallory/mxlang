@@ -16,6 +16,7 @@
  * `packages/parser` what a `Component` or a `template` is.
  */
 
+import type { CustomTag } from "@mxlang/core";
 import type { HoistedDefine, HoistedImport } from "./hoist-imports.ts";
 import type { MxRegionContext } from "./region-context.ts";
 
@@ -66,8 +67,7 @@ export interface MxRegionCompileInput {
    * runs inside the tokenizer, so the options bag is the only channel an
    * integration has to the region being lowered.
    */
-  // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
-  customTags?: Record<string, any>;
+  customTags?: Record<string, CustomTag>;
   /** `package.json#mx.<target>.defaultTag` the caller resolved (decision 145). */
   defaultTag?: string;
   /**

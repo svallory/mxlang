@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { TemplateBackedTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { print } from "../index.ts";
 import { solidRegionCompile } from "./test-helpers.ts";
@@ -11,7 +12,7 @@ const COUNTER_TEMPLATE = join(HERE, "fixtures", "tags", "counter.mx");
 const PAGE = join(HERE, "fixtures", "page.solid.mx");
 
 /** The discovered `<icon>` tag, as an integration's scan would supply it. */
-function iconTag(): Record<string, unknown> {
+function iconTag(): Record<string, TemplateBackedTag> {
   return {
     icon: {
       template: {
@@ -212,17 +213,18 @@ describe("hoisting a region's discovered-tag imports", () => {
  * silently (round 1, finding 6).
  */
 describe("hoisting a region's `/var` bindings", () => {
+  const counterTags: Record<string, TemplateBackedTag> = {
+    counter: {
+      template: {
+        filename: COUNTER_TEMPLATE,
+        source: readFileSync(COUNTER_TEMPLATE, "utf8"),
+        mtimeMs: statSync(COUNTER_TEMPLATE).mtimeMs,
+      },
+    },
+  };
   const withCounter = (source: string) =>
     print(source, PAGE, {
-      customTags: {
-        counter: {
-          template: {
-            filename: COUNTER_TEMPLATE,
-            source: readFileSync(COUNTER_TEMPLATE, "utf8"),
-            mtimeMs: statSync(COUNTER_TEMPLATE).mtimeMs,
-          },
-        },
-      },
+      customTags: counterTags,
       mxRegionCompile: solidRegionCompile,
     }).code;
 

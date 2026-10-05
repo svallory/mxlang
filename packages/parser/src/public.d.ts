@@ -8,6 +8,8 @@
  */
 declare module "@mxlang/parser" {
   import type { Expression, File } from "@babel/types";
+  // Type-only, so no runtime cycle: `@mxlang/core` does not depend on the parser.
+  import type { CustomTag } from "@mxlang/core";
 
   // Declared inline rather than re-exported through a relative import: a
   // relative import/re-export inside an ambient `declare module` block is
@@ -88,9 +90,8 @@ declare module "@mxlang/parser" {
     baseLine: number;
     /** The region's 0-based start column on that line. */
     baseColumn: number;
-    /** Custom tag definitions the caller registered, opaque here. */
-    // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
-    customTags?: Record<string, any>;
+    /** Custom tag definitions the caller registered, keyed by tag name. */
+    customTags?: Record<string, CustomTag>;
     /** `package.json#mx.<target>.defaultTag` the caller resolved (decision 145). */
     defaultTag?: string;
     /** Where this region appeared, the same context `mxRegionPositionCheck`
@@ -367,7 +368,7 @@ declare module "@mxlang/parser" {
      * Forwarded through the parser to whichever host lowers each MX region;
      * without it a registered tag is unknown inside the region.
      */
-    customTags?: Record<string, unknown>;
+    customTags?: Record<string, CustomTag>;
     /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
     defaultTag?: string;
     /**

@@ -1,5 +1,6 @@
 import generate from "@babel/generator";
 import type { File } from "@babel/types";
+import type { CustomTag } from "@mxlang/core";
 import { parse } from "../index.ts";
 import type { MxRegionCompile } from "./region-compile.ts";
 
@@ -31,8 +32,7 @@ export interface PrintOptions {
    * (`mxRegionCompile` below); without it a registered tag is unknown inside
    * the region.
    */
-  // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
-  customTags?: Record<string, any>;
+  customTags?: Record<string, CustomTag>;
   /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
   defaultTag?: string;
   /**

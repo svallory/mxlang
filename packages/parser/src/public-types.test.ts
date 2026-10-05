@@ -1,3 +1,4 @@
+import type { CustomTag } from "@mxlang/core";
 import type {
   MxRegionCompile as PublicMxRegionCompile,
   MxRegionCompileInput as PublicMxRegionCompileInput,
@@ -6,6 +7,7 @@ import type {
   MxRegionHoistedDefine as PublicMxRegionHoistedDefine,
   MxRegionHoistedImport as PublicMxRegionHoistedImport,
   MxRegionPositionCheck as PublicMxRegionPositionCheck,
+  PrintOptions as PublicPrintOptions,
 } from "@mxlang/parser";
 import { expectTypeOf, it } from "vitest";
 import type {
@@ -40,4 +42,15 @@ it("keeps public.d.ts's ambient MX region types assignable both ways with the re
   expectTypeOf<PublicMxRegionCompileInput>().toEqualTypeOf<RealMxRegionCompileInput>();
   expectTypeOf<PublicMxRegionCompileResult>().toEqualTypeOf<RealMxRegionCompileResult>();
   expectTypeOf<PublicMxRegionCompile>().toEqualTypeOf<RealMxRegionCompile>();
+});
+
+it("types customTags as core's CustomTag, so a wrong shape is rejected", () => {
+  type Tags = NonNullable<PublicPrintOptions["customTags"]>;
+  expectTypeOf<Tags>().toEqualTypeOf<Record<string, CustomTag>>();
+  expectTypeOf<Tags>().not.toBeAny();
+  expectTypeOf<{ box: { attributes: 1 } }>().not.toMatchTypeOf<Tags>();
+  expectTypeOf<{ box: { transform: string } }>().not.toMatchTypeOf<Tags>();
+  expectTypeOf<{
+    box: { attributes: Record<string, never> };
+  }>().toMatchTypeOf<Tags>();
 });
