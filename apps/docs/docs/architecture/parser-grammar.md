@@ -43,22 +43,44 @@ Two changes are described here as they **will be**, not as the patch is today:
 - atoms, phase B — `:name` lexed in expression position, `::` reserved
   (decision 156).
 
-### Method: every behavioural claim is observed
+### Method: every behavioural rule is read out of the parser source
 
-No statement in this document about what the parser does is written from memory.
-Every stop rule and every row of [Ambiguous inputs](#ambiguous-inputs) was run
-through the **patched** `htmljs-parser` 5.18.0 dist in this repo's `node_modules`
-and through the **stock** 5.18.0 source in `/Users/svallory/work/htmljs-parser`,
-with the same consumer callbacks (`onOpenTagName` returning `TagType.statement`
-for `static`/`import`/`export`/`server`/`client`, `TagType.text` for
-`script`/`style`/`textarea`, `TagType.void` for `input`/`br`). The observed
-event streams are the appendix of the task report. **Stock and patched agree on
-every input below unless the text says otherwise**; the patch only adds the
-after-value rule of decision 146.
+Every rule in this document about what the existing parser does is **derived
+from the parser's source**, `htmljs-parser` 5.18.0 in
+`/Users/svallory/work/htmljs-parser/src` (read-only), and cites the file and the
+symbol or line the rule comes from. The parser is a hand-written state machine;
+the symbols named here are the whole of the state machine's decision surface:
 
-Where the observed behaviour differs from what a source of truth says should
-happen, this document records the observation and raises an open question. It
-does not smooth the difference over, and it does not invent a ruling.
+| Concern | Source |
+| --- | --- |
+| value termination, whitespace continuation, operators, ternary depth, type context, end of input | `src/states/EXPRESSION.ts` — `EXPRESSION.parse`, `checkForOperators`, `lookBehindForOperator`, `lookAheadForOperator`, and the keyword tables `unaryKeywords`, `jsUnaryKeywords`, `tsUnaryKeywords`, `binaryKeywords` at `:35-67` |
+| attribute name, value, argument, method and type-parameter positions; the per-mode terminator sets | `src/states/ATTRIBUTE.ts` — `shouldTerminateHtmlAttrName`, `shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrName`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseGroupedAttrName`, `shouldTerminateConciseGroupedAttrValue`, `detectAmbiguousCloseAngleBracket` |
+| tag head, tag variable, tag arguments, tag parameters, tag type arguments and parameters, the tag-level default method | `src/states/OPEN_TAG.ts` — `OPEN_TAG.parse`, `OPEN_TAG.return`, `shouldTerminateHtmlTagVar`, `shouldTerminateConciseTagVar` |
+| tag name terminators, shorthands, dynamic names, statement-tag recognition | `src/states/TAG_NAME.ts` — `TAG_NAME.parse`, `TAG_NAME.exit`, `prepareStatement` |
+| concise indentation and line rules, mixed mode | `src/states/CONCISE_HTML_CONTENT.ts` — `CONCISE_HTML_CONTENT.parse` |
+| `--` and `---` blocks | `src/states/BEGIN_DELIMITED_HTML_BLOCK.ts` — `BEGIN_DELIMITED_HTML_BLOCK.parse`, `handleDelimitedBlockEOL` |
+| scriptlets and statement tags | `src/states/INLINE_SCRIPT.ts` — `INLINE_SCRIPT.parse`, `prepareScriptlet` |
+| placeholders | `src/states/PLACEHOLDER.ts` — `checkForPlaceholder` |
+| raw-text (`TagType.text`) bodies | `src/states/PARSED_TEXT_CONTENT.ts` — `PARSED_TEXT_CONTENT.parse` |
+| the character predicates every rule is stated in terms of | `src/util/util.ts` — `isWhitespaceCode`, `isIndentCode`, `isWordCode`, `matchesCloseParen`, `matchesCloseAngleBracket`, `matchesPipe` |
+
+Every rule is then **confirmed by probe** — and, where a rule can be worded
+wrongly, by probes chosen to break the wording rather than to illustrate it. Each
+rule carries the inputs that try to break it and the observed event stream; the
+table is in the task report `scratch/reports/mx2/grammar-spec-r2.md`. Probes ran
+through the **patched** 5.18.0 dist in this repo's `node_modules` **and** the
+**stock** source, with the same consumer callbacks (`onOpenTagName` returning
+`TagType.statement` for `static`/`import`/`export`/`server`/`client`,
+`TagType.text` for `script`/`style`/`textarea`, `TagType.void` for
+`input`/`br`). **Stock and patched agree on every input below unless the text
+says otherwise**; the only input on which they differ is the after-value `??`/`.`
+rule, which is the patch.
+
+Where the parser's behaviour differs from what a source of truth says should
+happen, this document records the difference and raises an open question. It
+does not smooth the difference over, and it does not invent a ruling. Where the
+parser silently accepts input that is not valid TypeScript, that is recorded as
+an open question too, not normalised away.
 
 ### The central design change
 
@@ -85,6 +107,20 @@ This is the vocabulary the whole document uses.
 - A **soft stop** is a character at which the value *may* end. It ends the value
   only when the continuation rules of that position do not carry the value
   across it.
+- **One exemption applies to every hard stop, and the parser does not present it
+  as an exemption.** `EXPRESSION.parse` asks `shouldTerminate` and, when it says
+  yes, then checks whether the **previous non-whitespace character is an
+  operator**; if it is, the stop is **ignored** and the character is consumed as
+  part of the value (`EXPRESSION.ts:151-172`, the `wasExpression` local, whose
+  test is `lookBehindForOperator(...) !== -1`). So a stop character written
+  directly after an operator does **not** end the value. This only ever affects
+  input that is not valid TypeScript — no valid TypeScript puts an operator
+  immediately before `,`, `/>` or `>` — and the parser's recovery from it is not
+  consistent: `<div x=a + ,b/>` silently becomes the single value `a + ,b`,
+  while `<div x=a +/>` and `<div x=a ? />` enter the regular-expression state
+  and report `EOF reached while parsing regular expression` instead. This
+  document states the exemption as part of the default and records the
+  inconsistency as an open question (OQ 17).
 - **Grouping characters** are `(`, `[`, `{` and, in a type context, `<`. Inside
   an open group no stop character is significant, at any depth.
 - **Depth** is the parser's group stack depth. Every stop below applies at
@@ -95,7 +131,8 @@ This is the vocabulary the whole document uses.
   one.
 
 Decision 157.3 makes the **stock** rule the normative default: wherever this
-document says "the default", it means what the stock parser does, as observed.
+document says "the default", it means what the stock parser's source says, as
+confirmed by probe.
 
 ### Conventions
 
@@ -114,11 +151,16 @@ Inside a tag body there are three mutually exclusive forms:
 | Form | Entered by | Left by |
 | --- | --- | --- |
 | **HTML mode** | the `>` that ends an open tag, or content after a tag ends | the matching close tag, `/>`, or end of input |
-| **Concise mode** | a tag name written at the start of a line without angle brackets | dedent: a line whose indentation is not greater than the enclosing tag's |
-| **Delimited text block** | a `--` line, or a `--`/`---` block delimiter | the matching end-of-line, the matching delimiter, or a line with less indentation |
+| **Concise mode** | a tag name written at the start of a line without angle brackets | dedent: `CONCISE_HTML_CONTENT.parse:65-71` closes every active tag whose `indent.length >= curIndent`, so a line whose indentation is not greater than the enclosing tag's closes it |
+| **Delimited HTML block** | a `--` line followed by content on the same line, or a `--`/`---` line followed by a newline (`BEGIN_DELIMITED_HTML_BLOCK.parse:36-77`) | the end of the line, the matching `indent` + `delimiter`, or a non-blank line that does not start with the block's `indent` (`handleDelimitedBlockEOL:101-157`) |
+
+The block's **body is HTML**, not text: `BEGIN_DELIMITED_HTML_BLOCK.parse` calls
+`beginHtmlBlock` on both paths (`:53` for the multi-line form, `:70` for the
+single-line form), so tags and placeholders inside it are parsed.
 
 Concise and HTML mode coexist in one file (spec §3 "Concise mode"): a line
-starting with `<` enters HTML mode, and an HTML-mode region does not end the
+starting with `<` sets `beginMixedMode` and enters HTML mode
+(`CONCISE_HTML_CONTENT.parse:109-112`), and an HTML-mode region does not end the
 region before a closing tag. A column-0 tag line inside a concise block is a
 **sibling**, not a terminator — that is the reader-level description in spec §3;
 mechanically the parser closes a concise block by indentation
@@ -206,10 +248,22 @@ concise mode to the end of the line, or to the `]` of a grouped list.
 | Method | `onClick() { … }` | `()` is attribute arguments, `{ … }` is a statement block ([E4](#e4--attribute-arguments), [E5](#e5--attribute-method-body)) |
 | Sugar | `#x`, `.x`, `:x` | [Dialect rules](#dialect-rules) |
 
-Attribute **names** must terminate on `,`, `=`, `(`, `>`, `<`, on `:` when the next
-character is `=`, and on `/` when the next character is `>` (HTML mode). In
-concise mode they terminate on `;` and on `[`, not on `>` or `/>`; inside a
-`[…]` group they terminate on `]` and not on `;` or `--`.
+Attribute **names** are `EXPRESSION` positions with `operators = false` and
+`terminatedByWhitespace = true` (`ATTRIBUTE.parse`, the `ATTR_STAGE.NAME` branch,
+`:174-186`), so their terminator set is exactly the position's
+`shouldTerminate`:
+
+| Mode | Name terminators | Source |
+| --- | --- | --- |
+| HTML | `,` `=` `(` `>` `<`; `:` when the next character is `=`; `/` when the next character is `>` | `shouldTerminateHtmlAttrName:586-601` |
+| Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `--` **only** when the previous character is whitespace | `shouldTerminateConciseAttrName:633-655` |
+| Concise, `[ … ]` group | `,` `=` `(` `]` `<`; `:` when the next character is `=` | `shouldTerminateConciseGroupedAttrName:676-693` |
+
+Three consequences that this document states explicitly because they are easy to
+get wrong: a concise name does **not** end on `[` (`div a[b]=1` gives the name
+`a[b]`, observed); neither the HTML nor the concise set ends a name on `>` or
+`/>` in the other mode; and inside a `[ … ]` group a name does **not** end on
+`;` or on `--`.
 
 The **default attribute** — a value with no written name, `=expr` — has a
 zero-width name span, and it is the only value the after-value rule exempts.
@@ -217,8 +271,13 @@ zero-width name span, and it is the only value the after-value rule exempts.
 ## Tag arguments, tag variables, tag parameters and types
 
 **Tag arguments** `<Tag(expr)>`: a parenthesised, comma-separated argument list
-([E6](#e6--tag-arguments)). A tag may have arguments **or** attributes, not both,
-unless it is a dynamic tag or a `<define>` call (decision 109; spec §9).
+([E6](#e6--tag-arguments)). A tag **must not** have both arguments and
+attributes, unless it is a dynamic tag or a `<define>` call (decision 109; spec
+§9). Decision 109 says the same exception covers "a body and/or attribute tags",
+and that "arguments plus plain attributes remain an error" for those two tag
+forms too. That is a **compiler** rule, not a parser one: the parser accepts
+`<foo(a) b=1/>` and the rejection belongs to the layer that builds the call
+(`assertAttributesOrArgs`, decision 109).
 
 **Tag variables** `div/x=1`: a name, `/`, then a pattern position and an attribute
 list on that variable ([E9](#e9--tag-variable)). The value after a tag variable
@@ -274,9 +333,16 @@ rejected in lowering on every host with decision 54's message (spec §3
 
 **Statement tags** `static`, `import`, `export`, `server`, `client` take a
 TypeScript module-level statement list ([E10](#e10--statement-tags); spec §2).
-They are recognised only when the consumer returns `TagType.statement`, and the
-consumer decides that from the taglib (`parseOptions`, decision 87(a); spec §9.3)
-— the parser has no list of its own.
+They are recognised only when the consumer returns `TagType.statement`
+(`TAG_NAME.exit:80-101`), and the consumer decides that from a hard-coded set
+in this repo — `packages/core/src/close-tag-opener.ts:49-55`, which reproduces
+Marko 6.3.51's core taglib parse options (`@marko/compiler`'s
+`babel-plugin/parser.js:341-352`, quoted at `close-tag-opener.ts:37-48`). That
+set also contains `class`, so `<class>` is a statement tag too. **Spec §9.3 does
+not say this**: it names only `text`, `preserveWhitespace` and `openTagOnly` as
+the `parseOptions` keys a tag declaration may carry, and decision 87(a) says only
+that MX reuses Marko's parser and syntax subset. The parser itself has no list
+of its own.
 
 ## Text, comments, CDATA, doctype, declarations and text bodies
 
@@ -289,36 +355,52 @@ consumer decides that from the taglib (`parseOptions`, decision 87(a); spec §9.
 | CDATA / declaration | `<![CDATA[ … ]]>` and `<? … ?>` parse to nodes and are rejected in lowering (spec §3) |
 
 A **text body** (`TagType.text`) is an element whose body the consumer marked as
-text — `script`, `style`, `textarea`, `title` and whatever else a taglib marks
-(observed through `onOpenTagName`; decision 87(a)). Such a body recognises
-`${…}` and `$!{…}` placeholders, and lexes strings, template literals and
-JavaScript comments (observed: `<script>a ${x} <b></script>` yields a
-placeholder). Inside it `<![CDATA[…]]>` is literal text. Spec §3 says such a
-body is "a single `MarkoText`", which contradicts the observation (OQ 13).
+text — `script`, `style`, `textarea`, `title` in this repo's consumer
+(`close-tag-opener.ts`, the `TEXT` set, mirroring Marko's core taglib `text` parse
+option). The tag type comes from the consumer's `onOpenTagName` return value,
+**not** from the spec §9.3 `parseOptions` list (which carries only `text`,
+`preserveWhitespace` and `openTagOnly`) and **not** from a parser-side list: the
+parser has none. Such a body recognises `${…}` and `$!{…}` placeholders, and lexes
+strings, template literals and JavaScript comments
+(`PARSED_TEXT_CONTENT.parse:74-105`, `STATE.checkForPlaceholder`); observed:
+`<script>a ${x} <b></script>` yields the placeholder `x` and the text ` <b>`.
+Inside it `<![CDATA[…]]>` is literal text. Spec §3 says such a body is "a single
+`MarkoText`", which contradicts the observation (OQ 13).
 
 ## Concise mode: indentation and line rules
 
-These are the parser's rules, all observed or read from
-`CONCISE_HTML_CONTENT`/`OPEN_TAG`:
+These are the parser's rules, read from
+`CONCISE_HTML_CONTENT.parse` and `OPEN_TAG.parse`:
 
-- a concise block ends by **dedent** — a line whose indentation is not greater
-  than the enclosing tag's;
+- a concise block ends by **dedent** — `CONCISE_HTML_CONTENT.parse:65-71` closes
+  every active tag whose `indent.length >= curIndent`, so a line whose indentation
+  is not greater than the enclosing tag's closes it;
 - a line whose indentation does not match the previous line is an error
   (`Line has extra indentation at the beginning`, `Line indentation does match
-  indentation of previous line`);
-- a line must not start with a single hyphen; `--` is the delimited text form;
-- a line must not start with `/` unless it starts `//` or `/*`;
-- `;` ends the open tag's line, and only a comment may follow it;
-- a line starting with `,` continues the open tag's attribute list (observed:
-  `div x=1\n  ,y=2` is `x=1` and `y=2`);
-- a line starting with `<` enters HTML mode (mixed mode);
-- an `[ … ]` attribute group may span lines;
-- in a tag whose children are text only, every line must start with `-`;
-- a value continues onto the next line when the whitespace rule of E1 says so —
-  an operator before the newline or after the indentation both continue it
-  (observed: `<div x=a +\n  b/>` and `<div x=a\n  + b/>` are each one value);
-  a next line that is indented and starts with a word is a **child tag**
-  (observed: `div x=a\n  b` is the value `a` and the child tag `b`);
+  indentation of previous line`; `CONCISE_HTML_CONTENT.parse:76-104`);
+- a line must not start with a single hyphen; `--` is the delimited text form
+  (`CONCISE_HTML_CONTENT.parse:121-131`);
+- a line must not start with `/` unless it starts `//` or `/*`
+  (`CONCISE_HTML_CONTENT.parse:132-148`);
+- `;` ends the open tag's line, and only a comment may follow it
+  (`OPEN_TAG.parse:146-186`, `INVALID_CODE_AFTER_SEMICOLON`);
+- a line starting with `,` continues the open tag's attribute list
+  (`OPEN_TAG.parse:108-142`; observed: `div x=1\n  ,y=2` is `x=1` and `y=2`);
+- a line starting with `<` enters HTML mode (mixed mode;
+  `CONCISE_HTML_CONTENT.parse:109-112`);
+- an `[ … ]` attribute group may span lines and is bounded by `]`
+  (`OPEN_TAG.parse:227-250`; the group also suppresses the concise end-of-line
+  rule at `OPEN_TAG.parse:108`);
+- in a tag whose children are text only, every line must start with `-`
+  (`CONCISE_HTML_CONTENT.parse:86-93`);
+- **a value continues onto the next line only when the character before the
+  newline is an operator** — see [E2](#e2--attribute-value-concise-mode). In
+  concise mode the parser never looks ahead past a newline for a continuation
+  (`EXPRESSION.ts:421-422`: `checkForOperators` computes `terminatedByEOL =
+  expression.terminatedByEOL || parser.isConcise` and skips the whole look-ahead
+  block when that is true at a newline). A next line that is indented and starts
+  with anything else — a word, `.b`, `(b)`, `!b`, `+ b`, `? b : c`, `in b` — is a
+  **child tag**, not a continuation (all observed);
 - every rule in this section is inherited from the parser and has no MX decision
   of its own (decisions 71, 72).
 
@@ -353,16 +435,23 @@ offset. The parser's own messages, as observed:
 | EOF inside a placeholder | `EOF reached while parsing placeholder` |
 | EOF inside any other expression | `EOF reached while parsing expression` |
 | EOF inside a regex | `EOF reached while parsing regular expression` |
+| EOF inside a template literal's `${…}` | `EOF reached while parsing template string expression` (`TEMPLATE_STRING.ts:51`) |
+| EOF inside an open tag (HTML mode) | `EOF reached while parsing open tag` |
+| EOF inside a `[ … ]` group | `EOF reached while within an attribute group (e.g. "[ ... ]").` |
 | A `>` preceded by whitespace inside a value, with more on the line | `Ambiguous ">" in attribute. …` |
 | `</` before the open tag closes | `A close tag was found before the "div" open tag was closed. …` |
 | A statement tag written in HTML mode | `The "static" tag is reserved and cannot be used as an HTML tag.` |
-| A closing tag in a concise region | `The closing "div" tag was not expected` |
+| A closing tag in a concise region | `The closing "div" tag was not expected` (`CLOSE_TAG.ts:85-93`, no active tag) |
+| A closing tag that names a different tag | `The closing "x" tag does not match the corresponding opening "y" tag` (`CLOSE_TAG.ts:117-126`) |
 | Concise line starting with `-` | `A line in concise mode cannot start with a single hyphen. Use "--" instead.` |
 | Concise line starting with `/` | `A line in concise mode cannot start with "/" unless it starts a "//" or "/*" comment` |
 | Mismatched groups | `Mismatched group. …` |
 | Code after `;` on a concise line | the parser reports it; see OQ 10 |
 | An HTML comment inside an open tag | the parser reports it; see OQ 10 |
 | Type parameters where none are allowed | `Attribute cannot contain type parameters unless it is a shorthand method` |
+| A `<…>` list after a tag name followed by neither `|` nor `(` | `Unexpected types. Type arguments must directly follow a tag name and type paremeters must precede a method or tag parameters.` |
+| Whitespace after a tag variable's `/` | `A slash was found that was not followed by a variable name or lhs expression` |
+| A line inside a `TagType.text` tag that does not start with `-` | `A line within a tag that only allows text content must begin with a "-" character` |
 
 Semantic rejections raised outside the parser: scriptlets (decision 54), CDATA
 and declarations (spec §3), duplicate attributes (decision 135), a second `:` in
@@ -380,10 +469,20 @@ Rules that hold at **every** position below:
 
 - **R1 — grouping.** `(`, `[`, `{` open a group. No stop character may end a
   value inside an open group, at any depth.
-- **R2 — angle brackets in a type.** `<` opens a group **only** while the parser
-  is in a type context (after `as`, `satisfies`, or a type annotation), and the
-  matching `>` closes it. Outside a type, `>` ends an HTML-mode value. This is
-  what separates two observed cases:
+- **R2 — angle brackets in a type, and when the type context ends.** `<` opens a
+  group **only** while the parser is in a type context, and the matching `>`
+  closes it (`EXPRESSION.ts:263-273` and `:277-306`). A `>` at the top of the
+  group is consumed as a closing bracket only when `inType` is set **and** the
+  previous character is not `=`; otherwise it is just a character
+  (`EXPRESSION.ts:278-283`). `inType` is **entered** by a `:` at depth 0 with an
+  open ternary count of 0 (`EXPRESSION.ts:188-197`), and by `as`/`satisfies` in
+  the look-ahead (`:617-623`), where `forceType` is set when no ternary or group
+  is open. It is **left** by an `=` that is not `=>` (`:198-215`), by a `{` that
+  is not preceded by an operator (`:243-256`), and by an explicit reset on the
+  next `=` after a type. Consequence: a value in a type context does not end at
+  `=` or `<` — `x=a as T = b` and `x=a as T < b` are each **one** value
+  (observed). Outside a type context `>` ends an HTML-mode value. This is what
+  separates two observed cases:
 
   ```mx
   <!-- Example: a type argument list is a group, so the value survives the `>`. -->
@@ -400,51 +499,103 @@ Rules that hold at **every** position below:
   that can follow a division is an operator; otherwise it starts a regex. The
   decision is made from the previous significant character.
 - **R4 — whitespace.** Stated per position; see [E1](#e1--attribute-value-html-mode).
-- **R5 — end of input.** Stated per position; HTML-mode positions report a
-  positioned EOF error, concise-mode positions terminate the value.
+- **R5 — end of input.** Stated per position. The rule is
+  `EXPRESSION.ts:336-341`: if no group is open and the parser `isConcise` or the
+  position is `terminatedByEOL`, the value **terminates silently**; otherwise the
+  EOF error is chosen by the **parent state** (`EXPRESSION.ts:343-389`). So
+  end of input terminates a concise-mode value only when no group is open, and
+  the observed result per position is:
+
+  | Position | Input | Observed at end of input |
+  | --- | --- | --- |
+  | E1/E2 attribute value, HTML | `<div x=(a` | `EOF reached while parsing attribute value for the "x" attribute` |
+  | E1/E2 attribute value, concise | `div x=(a` | the same error — concise mode terminates at EOF only with **no open group** |
+  | E1 default attribute, HTML | `<div =(a` | `EOF reached while parsing attribute name for the "div" tag` (`EXPRESSION.ts:349-360`, the `!attr.spread && !attr.name` branch) |
+  | E1 template string, concise | `` div x=`a `` | `EOF reached while parsing template string expression` (`TEMPLATE_STRING.ts:51`) |
+  | E3 spread | `<div ...(` | `EOF reached while parsing attribute value for the ... attribute` |
+  | E4 attribute arguments | `<div onClick(a` | `EOF reached while parsing attribute value for the "onClick" attribute` — the parent-state switch is keyed on the parent **state**, not on the attribute's stage, so E1 and E4 share a message |
+  | E6 tag arguments | `div(a` | **no error** — tag arguments are not whitespace-terminated, so the expression runs to `maxPos` and `isConcise` terminates it (`EXPRESSION.ts:336-341`) |
+  | E8 placeholder | `-- ${a` | `EOF reached while parsing placeholder` |
+  | E10 statement tag | `static const x = (` | `EOF reached while parsing expression` |
+  | E11 scriptlet block | `$ {a` | **no error** — see the note below |
+  | E13 dynamic tag name | `<div ${a` | `EOF reached while parsing attribute name for the "div" tag` |
+  | E14/E15/E16 type lists | `<foo<A` | `EOF reached while parsing expression` |
+
+  Two of these rows are worth stating rather than tabulating: a concise value
+  with an open group does **not** terminate silently (`div x=(a` errors), and a
+  scriptlet block `$ {a` **does** terminate silently even with the `{` group
+  open. Both are parser behaviours with no source of truth behind them (OQ 19).
 - **R6 — atoms** (decision 156.1): `:name` is lexed where an expression is
-  expected. The exclusions beyond decision 156.1's "attribute value, `${}`,
-  tag arguments; never inside `static`/`import`/script blocks" — scriptlets,
-  method bodies, tag parameters — come from the atoms prototype report, not from
-  a decision, and are **not settled** (OQ 14).
+  expected. Decision 156.1 itself rules only on the three **in** positions —
+  attribute values, `${}`, and tag arguments — and only one **out**: "never
+  inside `static`/`import`/script blocks". The wider exclusion list (scriptlets,
+  method bodies, tag parameters, the tag variable, spreads) and the
+  "never after `.`, `?.`, `as`, `satisfies`" rule come from the atoms prototype
+  report — `scratch/reports/squad-atoms/parser-approach.md` §1d and §2, test-table
+  row 9 — which is **evidence, not a decision**. Those parts are **not settled**
+  (OQ 14).
 
 ### E1 — Attribute value, HTML mode
 
 - **Start:** the first non-whitespace character after `=`, or after `:=` for a
-  bound value. `x= :b` starts at `:b`: the whitespace after `=` is consumed by
-  the parser and is not part of the value (observed).
-- **Stops:**
+  bound value (`ATTRIBUTE.parse:84-107`: the value branch consumes the `=`, `:=`
+  or `...` and then calls `consumeWhitespace()`). `x= :b` starts at `:b`: the
+  whitespace after `=` is consumed by the parser and is not part of the value
+  (observed).
+- **Stops** (`shouldTerminateHtmlAttrValue:603-631`):
 
   | Character | Hard or soft | Condition |
   | --- | --- | --- |
   | `,` | hard | — |
-  | `/>` | hard | — |
-  | `>` | soft | does not apply when it is the `>` of `=>`, nor when it is preceded by whitespace and followed by `=` (that is `>=`) |
+  | `/>` | hard | the `/` when the next character is `>` |
+  | `>` | soft | it terminates **unless** it is at the value's first character, unless the previous character is `=` (that is `=>`), and unless it is preceded by whitespace and followed by `=` (that is `>=`). Every other `>` terminates the value |
   | whitespace | soft | see below |
-  | end of input | — | EOF error, see R5 |
+  | end of input | — | EOF error, see R5 below |
 
-- **Whitespace rule (complete, as observed).** An attribute value is
-  whitespace-terminated. At depth 0 a whitespace run ends the value **unless** a
-  continuation applies:
-  - **an operator before the whitespace**: `&`, `*`, `^`, `:`, `=`, `<`, `%`,
-    `|`, `?`, `~`, `!`, `+`, `-`, a closing `>` that is not in a type and not
-    preceded by `=`, `.` followed by a word, and a unary keyword — `async`,
-    `await`, `class`, `function`, `new`, `typeof`, plus `delete` and `void`, plus
-    TypeScript's `asserts`, `infer`, `is`, `keyof`, `readonly`, `unique` in a
-    type. A `!` directly after an operand is a non-null assertion and does **not**
-    continue;
-  - **or an operator after the whitespace**: `&`, `*`, `^`, `!`, `<`, `%`, `|`,
-    `~`, `+`, `-`; or `/`, `{`, `(`, `>`, `?`, `:`, `=`; or `.` followed by a
-    word; or the binary keywords `as`, `const`, `extends`, `instanceof`, `in`,
-    `satisfies` followed by whitespace and then an operand that is not itself a
-    terminator;
-  - **and** the next non-space character is not `</` (HTML mode) and not `<!--`.
+- **Whitespace rule.** The position is created with `terminatedByWhitespace =
+  true` and `operators = true` (`ATTRIBUTE.parse:105-113`). At depth 0 a
+  whitespace run ends the value **unless** `checkForOperators`
+  (`EXPRESSION.ts:408-462`) carries it across, and it does so when either of the
+  two following holds, and in both cases the next non-space character is not
+  `</` (HTML mode) and not `<!--`:
+
+  - **an operator before the whitespace** — `lookBehindForOperator`
+    (`EXPRESSION.ts:464-555`): the characters `&` `*` `^` `:` `=` `<` `%` `|` `?`
+    `~`; a `!`, which is an operator **unless** it follows an operand (a closing
+    `)`/`]`/quote or an identifier, and unless the identifier is `in`/`instanceof`),
+    so a postfix non-null assertion does not continue; a `>`, which is an operator
+    when it is **not** in a type context and **is** an operator when it is the
+    `>` of `=>` (the branch returns the position of the `=`); a `.` followed by a
+    word character; a `+` or `-`, **except** when it is the second character of a
+    `++`/`--`, where the check recurses further back and so a postfix increment
+    does not continue; or a whole-word unary keyword — `async` `await` `class`
+    `function` `new` `typeof`, plus `delete` and `void` outside a type, plus
+    `asserts` `infer` `is` `keyof` `readonly` `unique` inside one
+    (`EXPRESSION.ts:35-57`, selected at `:551`). `return`, `throw` and `yield`
+    are deliberately absent: JavaScript forbids a line break after them, so they
+    never continue.
+  - **an operator after the whitespace** — `lookAheadForOperator`
+    (`EXPRESSION.ts:557-635`), and **only when the next non-space character is
+    not itself a stop of this position**, because `checkForOperators` calls
+    `shouldTerminate` on the looked-at character first (`EXPRESSION.ts:439-444`).
+    That is why `x=a > b` is not one value while `x=a >= b` is. The characters are
+    `&` `*` `^` `!` `<` `%` `|` `~` `+` `-`; `/` `{` `(` `>` `?` `:` `=`; a `.`
+    followed by a word character; or one of the binary keywords `as` `extends`
+    `instanceof` `in` `satisfies` (`EXPRESSION.ts:59-67`) followed by whitespace
+    and then an operand that is not one of `:` `,` `=` `/` `>` `;`
+    (`EXPRESSION.ts:608-625`).
+
+  In HTML mode this rule also applies **across a newline**, because the
+  position is `terminatedByWhitespace`, not `terminatedByEOL`
+  (`EXPRESSION.ts:421-422`). Observed: `<div x=a\n  <span/>` is the single value
+  `a\n  <span`. In concise mode it does not; see [E2](#e2--attribute-value-concise-mode).
 
   A real TypeScript expression parser continues in different places, and the
   default's failures are documented, not fixed (OQ 2): `x=a [0]` is two
   attributes (`[0]` is an attribute name), `` x=a `t` `` is two attributes, while
   `x=a {b}` and `x=a: b` are one value each although TypeScript cannot parse
-  either.
+  either. The one input on which the patched and stock parsers differ is
+  `x=a ?? b :c`, which is the patch's `??` rule below.
 - **Overrides:**
   - **after-value sugar.** When the attribute **whose value is being read** has a
     name or is a spread, and whitespace immediately precedes the character, then
@@ -472,17 +623,59 @@ Rules that hold at **every** position below:
 
 ### E2 — Attribute value, concise mode
 
-- **Start:** as E1.
-- **Stops:** `,` (hard), `;` (hard), `--` at a space boundary (hard), `]` when
-  the tag was opened with `[` (hard), whitespace (soft, same rule as E1), end of
-  input (**terminates** the value — no EOF error).
+- **Start:** as E1 (`ATTRIBUTE.parse` consumes the `=`/`:=`/`...` and the
+  following whitespace).
+- **Stops** (`shouldTerminateConciseAttrValue:657-674`):
+
+  | Character | Hard or soft | Condition |
+  | --- | --- | --- |
+  | `,` | hard | — |
+  | `;` | hard | — |
+  | `--` | hard | **only** when the previous character is whitespace |
+  | whitespace | soft | see below |
+  | end of input | — | **terminates** the value, no EOF error |
+
+  Inside a `[ … ]` group the stop set is instead `,` and `]`
+  (`shouldTerminateConciseGroupedAttrValue:695-701`), and the group suppresses
+  the end-of-line rule in `OPEN_TAG.parse:108`.
+
+- **Whitespace rule — the one that differs from E1.** The **look-behind** half of
+  E1's whitespace rule applies in full. The **look-ahead** half does **not**
+  apply across a newline in concise mode: `checkForOperators` sets
+  `terminatedByEOL = expression.terminatedByEOL || parser.isConcise` and skips
+  the entire look-ahead when that is true and the whitespace was a newline
+  (`EXPRESSION.ts:416-422`). So a newline continues the value **only** when the
+  character before it is an operator in `lookBehindForOperator`'s list, and a
+  next line that is indented and begins with anything else is a **child tag**.
+  Confirmed by probe, all in concise mode:
+
+  | Input | Observed |
+  | --- | --- |
+  | `div x=a\n  b` | value `a`, then the child tag `b` |
+  | `div x=a\n  <span/>` | value `a`, then the child tag `span` |
+  | `div x=a\n  .b` | value `a`, then an unnamed child tag with class `b` |
+  | `div x=a\n  (b)` | value `a`, then a child tag with tag arguments `b` |
+  | `div x=a\n  !b` | value `a`, then the child tag `!b` |
+  | `div x=a\n  + b` | value `a`, then the child tag `+` with attribute `b` |
+  | `div x=a\n  ? b : c` | value `a`, then the child tag `?` |
+  | `div x=a\n  in b` | value `a`, then the child tag `in` |
+  | `div x=a\n  {b}` | value `a`, then the child tag `{b}` |
+  | `div x=a +\n  b` | **one** value `a +\n  b` |
+
+  The last row is the look-behind half working; the nine above it are the
+  look-ahead half not applying. TypeScript, by contrast, continues across the
+  newline in all of them (OQ 2, OQ 18).
 - **Overrides:** identical to E1, including the default-attribute exemption.
 
 ### E3 — Spread attribute
 
-- **Start:** the first non-whitespace character after `...`; the stock value
-  range **includes** the whitespace between `...` and the expression (observed).
-- **Stops:** as E1 (HTML) or E2 (concise).
+- **Start:** the first non-whitespace character after `...`. The parser skips
+  exactly the three dots and **not** the whitespace after them
+  (`ATTRIBUTE.parse:96-98`, `this.pos += 3`), so the stock value range
+  **includes** the whitespace between `...` and the expression; `<div ... props/>`
+  yields the value text `" props"` (observed).
+- **Stops:** as E1 (HTML) or E2 (concise) — the same position is used, with
+  `attr.spread = true`.
 - **Overrides:** the patch applies the after-value rules to a spread as well as
   to a named attribute, so `...props .b` is a spread plus a class sugar
   (observed; `patches/htmljs-parser.test.ts` pins it). **Not settled** — the
@@ -539,14 +732,39 @@ Rules that hold at **every** position below:
 
 `div/x=1`:
 
-- **Start:** the first non-whitespace character after `/`, before the `=`.
-- **Stops:** `|` (hard), `,` (hard), `=` (hard), `(` (hard), `>` (hard), `<`
-  outside a type, `:=` (hard), `/>` (hard), and in concise mode `;` and `--`
-  (hard).
+- **Start:** the character immediately after `/`. There is **no** whitespace skip:
+  `OPEN_TAG.parse:305-314` reads `/`, advances past it, and if the next character
+  is whitespace it raises `A slash was found that was not followed by a variable
+  name or lhs expression`. Observed: `<div/ x/>` is that error.
+- **Expression flags:** `operators = true` and `terminatedByWhitespace = true`
+  (`OPEN_TAG.parse:315-320`), so E1's **look-behind** whitespace rule applies here
+  too and E1's **look-ahead** rule does not (the position is not `terminatedByEOL`,
+  so a newline takes the look-ahead path, but concise mode still supplies
+  `terminatedByEOL` through `parser.isConcise`). Observed: `<div/x y=1/>` is the
+  variable `x`; `<div/x + 1 y=1/>` is the variable `x + 1`.
+- **Stops:**
+
+  | Character | HTML mode | Concise mode |
+  | --- | --- | --- |
+  | `|` | hard | hard |
+  | `,` | hard | hard |
+  | `=` | hard | hard |
+  | `(` | hard | hard |
+  | `;` | — | hard |
+  | `<` | hard **unless** `expression.inType` | same |
+  | `--` | — | hard (any `--`, no whitespace-before requirement, unlike an attribute value) |
+  | `:` | hard when the next character is `=` | same |
+  | `>` | hard | — |
+  | `/>` | hard | — |
+
+  Sources: `shouldTerminateHtmlTagVar:554-576`, `shouldTerminateConciseTagVar:530-552`.
+  `>` and `/>` are stops **only in HTML mode**: `div/x>1` is the variable `x>1`
+  (observed).
 - **The value that follows is the default attribute** and is exempt from the
   after-value rule, exactly like `<if=a .b>` (observed;
-  `patches/htmljs-parser.test.ts` `DEFAULT_ATTRIBUTE`). A named attribute after
-  the default value still splits.
+  `patches/htmljs-parser.test.ts` `DEFAULT_ATTRIBUTE`, `<a/x=…>` and
+  `<const/x=…>` rows; divergence row "The parser after-value rule"; decision 151,
+  ruling 2). A named attribute after the default value still splits.
 
 ### E10 — Statement tags
 
@@ -556,13 +774,24 @@ returns `TagType.statement`:
 - **Constraints:** concise mode only (`<static …/>` in HTML mode is
   `The "static" tag is reserved and cannot be used as an HTML tag.`) and root
   only (both observed).
-- **Start:** the first non-whitespace character after the keyword.
-- **Stops:** the **end of the line** — a statement tag is `terminatedByEOL` with
-  indented-content consumption. The value continues past a newline only while a
-  group is open, a trailing operator continues it, or the next line is indented
-  under it (observed; htmljs fixture `statement-concise-only`; decision 151's
-  test pins that no attributes are parsed). There is **no** `/>`, **no** close
-  tag, and it does **not** run to the end of the region.
+- **Start:** the first non-whitespace character after the keyword
+  (`prepareStatement`, `TAG_NAME.ts:194-201`, which calls `prepareScriptlet`
+  with `this.pos + 1`).
+- **Stops:** the **end of the line** — `prepareScriptlet` sets
+  `terminatedByEOL = true` (`INLINE_SCRIPT.ts:83-90`), and `prepareStatement`
+  additionally sets `consumeIndentedContent = true`, so an indented next line
+  continues it. The value also continues past a newline while a group is open or
+  a trailing operator continues it (E1's whitespace rule; observed:
+  `static const x = 1\n<div/>` ends at the newline, and
+  `static const x = (\n  a)` does not). There is **no** `/>`, **no** close tag,
+  and it does **not** run to the end of the region. The test that pins "no
+  attributes are parsed" is `patches/htmljs-parser.test.ts`'s `statement tags`
+  block (`describe("statement tags")`, `:235-253`), not a decision.
+- **Type context:** `prepareScriptlet` sets `inType`/`forceType` when the code
+  begins with `declare`, `interface` or `type` followed by a type name
+  (`INLINE_SCRIPT.ts:76-130`), so a `static declare` or `static interface`
+  statement is read as a type. `x=return b` and `x=throw b` do not continue
+  (observed) because those keywords are absent from `unaryKeywords`.
 - **Overrides:** none. This is TypeScript's own statement grammar. Atoms are not
   lexed (decision 156.1).
 
@@ -570,24 +799,55 @@ returns `TagType.statement`:
 
 `$ statement`, `$ { … }`:
 
-- **Start:** in HTML mode only at the beginning of a line (observed: `$` inside
-  a body is text); in concise mode `$` must be followed by whitespace.
+- **Start:** in HTML mode only at the **beginning of a line** — `HTML_CONTENT.parse:126-136`
+  requires `$`, then whitespace, then `isBeginningOfLine(this)`
+  (`HTML_CONTENT.ts:206-222`, which scans back to the last newline); observed,
+  `<p>x $ const a</p>` gives text. In concise mode `$` must be followed by
+  whitespace (`CONCISE_HTML_CONTENT.parse:113-118`), which is not a
+  beginning-of-line test, because a concise `$` is always at the start of a line.
 - **Stops:** end of line for the statement form, unless an open group or a
-  trailing operator continues it (observed: `$ const a = 1 +\n    2` is one
-  scriptlet); `}` for the block form, followed by an optional `;`.
+  trailing operator continues it (`prepareScriptlet` sets `operators = true` and
+  `terminatedByEOL = true`, `INLINE_SCRIPT.ts:83-90`; observed:
+  `$ const a = 1 +\n    2` is one scriptlet); `}` for the block form, followed by
+  an optional `;` (`INLINE_SCRIPT.return`).
 - **Overrides:** none. Rejected in lowering by decision 54.
 
-### E12 — Delimited text blocks
+### E12 — Delimited HTML blocks
 
-- **`-- text`**: the line's remainder is a **single-line HTML block**: tags and
-  placeholders in it are parsed (observed: `-- hi ${x} <b>y</b>` yields a
-  placeholder and a tag; htmljs fixture `concise-contentplaceholder-start`;
-  spec §3 "Text lines" gives `-- ${expr}` as the escape hatch, which is the same
-  rule).
-- **`--` alone on a line**: the following lines are text until a line whose
-  indentation is not greater than the opening `--`, or a matching delimiter.
-  A longer delimiter opens a longer block: `---` closes with `---` (observed:
-  `--\n  a\n  b\n--` is the text `"  a\n  b"`).
+**`-- text` (single-line block).** The line's remainder is a **single-line HTML
+block**: `BEGIN_DELIMITED_HTML_BLOCK.parse:65-72` sees content after the `--`,
+calls `beginHtmlBlock(undefined, true)`, and tags and placeholders in it are
+parsed. Observed: `-- hi ${x} <b>y</b>` yields the text `hi `, the placeholder
+`x`, the text ` `, the tag `b`, the text `y`; htmljs fixture
+`concise-contentplaceholder-start` is `-- ${data.name}`. The escape hatch for a
+line of literal text is `-- ${expr}` in spec §3 "Text lines", which is this same
+single-line-block rule, not a different one.
+
+**`--` alone on a line (multi-line block).** The body is again **HTML, not
+text**: `beginHtmlBlock(block.delimiter, false)`
+(`BEGIN_DELIMITED_HTML_BLOCK.parse:50-55`) with the delimiter string recorded.
+Observed: `--\n<b>${x}</b>\n--` yields the tag `b` and the placeholder `x`; htmljs
+fixture `multiline-html-block` parses `<strong>` the same way.
+
+**Where a multi-line block ends** (`handleDelimitedBlockEOL:101-157`), in order:
+
+1. the line begins with `indent + delimiter` — the block ends. `---` therefore
+   closes with `---`. A closing delimiter may be followed only by whitespace, or
+   the parser reports `A concise mode closing block delimiter can only be
+   followed by whitespace.`;
+2. the line begins with `indent` — the block **continues**, and the indent is
+   consumed as part of the block. A line at the **same** indentation as the
+   opening `--` therefore stays inside the block;
+3. the line is not blank and does not begin with `indent` — the block **ends**,
+   and the line is reprocessed in the enclosing region. This is the only
+   indentation-based end: a line with **less** indentation than the opening `--`
+   ends the block, and a line with equal indentation does not;
+4. the line is blank — the block continues.
+
+Observed: `div\n  --\n    a\n  span` yields the text `"  a\n"` and then the
+**text** `span` — `span` was at less indentation than the block's `    `, so it
+ended the block and was read as body content. Observed: `--\n  a\n  b\n--` is the
+text `"  a\n  b"`.
 
 ### E13 — Dynamic tag name and dynamic shorthand
 
@@ -601,31 +861,55 @@ returns `TagType.statement`:
 
 `<Tag<A, B>>`:
 
-- **Start:** the first non-whitespace character after the tag name when the next
-  character is `<`.
-- **Stops:** the matching `>` (hard; a group, so nested generics and `,` are
-  fine).
-- **Overrides:** none; TypeScript's own grammar. The parser has its own error
-  for malformed type arguments (htmljs fixtures `tag-with-type-arguments`,
-  `invalid-*type*`).
+- **Start:** the `<` **directly after the tag name, with no whitespace**.
+  `OPEN_TAG.return`'s `TAG_STAGE.TYPES` branch decides between type arguments and
+  type parameters with `tag.tagName.end === types.start` (`OPEN_TAG.ts:488-492`);
+  with whitespace before the `<` the equality fails and the list is **type
+  parameters**, not type arguments.
+- **Stops:** the matching `>` (hard; the expression runs with `inType = true`,
+  `forceType = true` and `shouldTerminate = matchesCloseAngleBracket`,
+  `OPEN_TAG.parse:360-368`), so nested generics and `,` are fine.
+- **Overrides:** none; TypeScript's own grammar. If the list is followed by
+  anything other than `|` or `(`, the parser reports `Unexpected types. Type
+  arguments must directly follow a tag name and type paremeters must precede a
+  method or tag parameters.` (`OPEN_TAG.ts:499-511`). Observed: `<foo<A>/>` is
+  type arguments `A`; `<foo <A>>` is that error; `<foo<A> |x|/>` is type
+  arguments `A` **and** parameters `x`; `<foo <A>|x|/>` is type parameters `A`
+  and parameters `x`; `<foo <A>(a) {x}/>` is a tag-level default method whose
+  method range starts at the `<`. htmljs fixtures `tag-with-type-arguments`,
+  `tag-params-with-type-parameters`, `invalid-*type*`.
 
 ### E15 — Tag type parameters
 
 `<Tag <A, B>|x|>` and `<Tag <A, B>(x) { … }>`:
 
-- **Start / stops:** as E14.
-- **Overrides:** none. Position applies in both the params and the
-  args-plus-method forms (htmljs fixture `tag-params-with-type-parameters`).
+- **Start / stops:** the same `<…>` position as E14, but **after whitespace**, so
+  `tag.tagName.end !== types.start` and the list is type parameters.
+- **Overrides:** after the closing `>` the next non-whitespace character **must**
+  be `|` with no parameters yet, or `(` with no type parameters, no parameters and
+  no arguments (`OPEN_TAG.ts:494-511`); the `(` form is stored as
+  `tag.typeParams`, and any other next character is the `Unexpected types. …`
+  error. htmljs fixture `tag-params-with-type-parameters`.
 
 ### E16 — Attribute-method type parameters
 
 `<div onClick<T>(a) { … }>`:
 
-- **Start:** the first non-whitespace character after `(` when it is `<`.
-- **Stops:** the matching `>` (hard).
+- **Start:** the `<` after the attribute **name**, before the `(` — not after
+  the `(`. `ATTRIBUTE.parse:126-137` enters the type-parameter branch only when
+  `attr.stage === ATTR_STAGE.NAME` (or a pending `async` is held), that is, before
+  any `(`, `=` or `{` has been seen for this attribute. Observed:
+  `<div onClick<T>(a) {x}/>` and `<div onClick <T>(a) {x}/>` are both shorthand
+  methods (whitespace is allowed before the `<`); `<div onClick<T>/>` is the error
+  below.
+- **Stops:** the matching `>` (hard), after which `consumeWhitespaceIfBefore("(")`
+  **must** succeed (`ATTRIBUTE.return`, the `ATTR_STAGE.TYPE_PARAMS` branch,
+  `:296-311`).
 - **Overrides:** type parameters are allowed **only** on a shorthand method;
   elsewhere the parser reports `Attribute cannot contain type parameters unless
-  it is a shorthand method`.
+  it is a shorthand method`. An attribute may not have both type parameters and
+  arguments (the `ATTR_STAGE.ARGUMENT` branch, `:216-224`). htmljs fixtures
+  `attr-method-with-type-parameters`, `invalid-*type*`.
 
 ### E17 — Tag-level default method
 
@@ -702,8 +986,10 @@ handled by E1's `>` rule and not by the type parser.
 
 ## Ambiguous inputs
 
-Each row gives the input and the parse the grammar requires. "Observed" is the
-patched 5.18.0 result recorded in the task report's appendix.
+Each row gives the input and the parse the grammar requires. "Observed" means
+the event stream the **patched** 5.18.0 parser produced for that input, with
+the stock parser agreeing unless the row says otherwise; the runs and the
+rule-by-rule table are in `scratch/reports/mx2/grammar-spec-r2.md`.
 
 | Input | Required parse | Settled by |
 | --- | --- | --- |
@@ -717,7 +1003,8 @@ patched 5.18.0 result recorded in the task report's appendix.
 | `x=a?.b :c` | value `a?.b`, then a `name` sugar | decision 146, divergence 3 (observed) |
 | `x=a < b` | one value | default (observed) |
 | `x=f<T>(y)` | value `f<T`; `>` ends the tag; `(y)/>` is body text (observed). For the TypeScript-parser design this is **NOT SETTLED** | default; OQ 7 |
-| `x=a > b` inside a tag | `Ambiguous ">" in attribute.` error | default (observed); OQ 8 |
+| `x=a > b` with no later `>` on the line | value `a`, the tag closes at the `>`, the body is the text ` b` | default (`shouldTerminateHtmlAttrValue`; observed `<div x=a > b</div>`) |
+| `x=a > b` with a later `>` or `/>` on the same line | `Ambiguous ">" in attribute. …` | default (`detectAmbiguousCloseAngleBracket:389-521`; observed `<div x=a > b/>` and `<div x=a > b>`); OQ 8 |
 | `x=a as T` | one value | default (observed) |
 | `x=a satisfies T` | one value | default (observed) |
 | `x=a! .c` | value `a!`, then a class sugar | decision 146, divergence 3 (observed) |
@@ -726,13 +1013,20 @@ patched 5.18.0 result recorded in the task report's appendix.
 | `x=a [0]` | value `a`, then an attribute named `[0]` | default (observed); OQ 2 |
 | `x=a {b}` | one value, although TypeScript cannot parse it | default (observed); OQ 2 |
 | `x=a: b` | one value, although TypeScript cannot parse it | default (observed); OQ 2 |
-| `` x=a `t` `` | value `` a `t` ``? observed: value `` `t` `` then attribute `y` — two attributes | default (observed); OQ 2 |
+| `` <div x=a `t`/> `` | value `a`, then an attribute **named** `` `t` `` | default (observed; `shouldTerminateHtmlAttrName` does not end on a backtick) |
 | `x=a .2xl` | one value | patch pins it; **not settled** — OQ 4 |
 | `x=a :b :c` | value `a`, then two `name` sugars; last wins with a warning | decision 135, decision 146, spec §4 (observed) |
 | `x=a ?:b` | one value | default (observed); whether it should be an error is OQ 3 |
 | `x= :b` | value `:b` — the atom `"b"` | default (observed); decision 156.1 makes a `:name` in an attribute value an atom |
-| `x=a ? :b :c` | one value `a ? "b" : c` | atoms report §4, test-table row 6 — **NOT SETTLED**, OQ 9 |
-| `x=a :: b` | `::` reserved | decision 156.5 |
+| `x=a ? :b :c` | one value `a ? "b" : c` | atoms report **§5** test-table row 6 — **NOT SETTLED**, OQ 9 |
+| `x=a :: b` | **NOT SETTLED.** Observed in a tag as `<div x=a :: b/>`: the single value `a :: b` — `::` after whitespace is a `:` that opens a type context, and the stock parser has no `::` token. Decision 156.5 reserves `::name` only when the `::` directly precedes a name; nothing rules on `::` followed by a space | no source; decision 156.5 covers `::name` only |
+| `<div x=::a/>` | the reserved `::` error at the `::` column | decision 156.5; atoms report §5 test-table row 7 |
+| `div x=a\n  <span/>` (concise) | value `a`, then the **child tag** `span` — the newline ends the value | `checkForOperators` skips the look-ahead in concise mode at a newline (`EXPRESSION.ts:421-422`); OQ 18 |
+| `div x=a\n  .b` (concise) | value `a`, then an unnamed child tag with class `b` | same; OQ 18 |
+| `div x=a\n  (b)` (concise) | value `a`, then a child tag with tag arguments `b` | same; OQ 18 |
+| `div x=a\n  + b` (concise) | value `a`, then the child tag `+` | same; OQ 18 |
+| `div x=a +\n  b` (concise) | one value `a +\n  b` | `lookBehindForOperator` (`EXPRESSION.ts:464-555`); OQ 18 |
+| `<div x=a\n  <span/>` (HTML mode) | the single value `a\n  <span` — the look-ahead **does** apply across a newline here | `terminatedByEOL` is false for an HTML attribute value (`EXPRESSION.ts:421-422`); OQ 2 |
 | `<input type="email" :email>` | `type="email"` then `name="email"` | decision 146, divergence 3 (observed) |
 | `<:email/>` | unnamed tag, `name="email"` | decision 145; atoms invariant table |
 | `<input:email/>` | tag `input`, `name="email"` | decision 146, divergence 1; observed as tag `input:email` |
@@ -748,15 +1042,16 @@ patched 5.18.0 result recorded in the task report's appendix.
 | `<input:email(a) { return a; }/>` | `name="email"`, default value a function | decision 146, addendum 4; observed as tag `input:email` + default method (E17) |
 | `<input #main(a) {}/>` | id and default value a function | decision 146, addendum 4 |
 | `<input x=1 :/>`, `<input :/>` | positioned error, bare `:` | decision 146, divergence 2; patch pinned |
-| `<a:b:c/>` | positioned error, one name per tag | decision 146, divergence 1 |
+| `<a:b:c/>` | positioned error, one name per tag | divergence row "A static tag name may not contain `:`" (the second-`:` clause); spec §4; decision 146 |
 | `<if=a\n .b>x</if>` | one value; the default attribute is exempt | decision 151, ruling 2 (observed) |
 | `<const/x=items\n .filter(Boolean)/>` | one value | decision 151, ruling 2 (observed) |
 | `<div class:x=1/>` | Marko's refusal (`class:x` is reserved on native elements) | spec §4 "class/style modifiers"; observed as the attribute `class:x` |
 | `<div style:x=1/>` | same, `style:x` | spec §4 "class/style modifiers"; observed as the attribute `style:x` |
 | `<input value:fn:=x/>` | a bound `value:fn` | decision 146, divergence 2 |
 | `<div><@svg:rect/></div>` | an attribute tag named `svg:rect` — **an error**, attribute tags on a native element | decision 146, addendum 3; `divergences.md` "Deferred to MX 2" |
-| `x=a ? b :c` | one value | atoms invariant table |
+| `x=a ? b :c` | one value | atoms report §4 invariant table |
 | `x=a ?? b :c` | value `a ?? b`, then a name sugar | patch; **not settled** — OQ 3 |
+| `<div x=a ?.b :c/>` | value `a ?.b`, then a name sugar | patch; **not settled** — OQ 3 |
 
 ## Open questions for mx-lead
 
@@ -767,9 +1062,9 @@ One line each. None is resolved in the normative text.
    the start. *Recommendation:* the parser lead owns a thin wrapper that returns
    `{ node, endIndex }`, built before any of the other questions matter.
 2. **Where the default whitespace rule and TypeScript continuation diverge.**
-   Observed: `x=a [0]` and `` x=a `t` `` split although TypeScript would continue;
-   `x=a {b}` and `x=a: b` stay whole although TypeScript cannot parse them.
-   *Recommendation:* keep the stock rule as normative default, and adopt
+   The full table is [Where a real TypeScript parser would end the value
+   differently](#where-a-real-typescript-parser-would-end-the-value-differently)
+   below. *Recommendation:* keep the stock rule as normative default, and adopt
    TypeScript's continuation only for inputs the stock rule rejects.
 3. **`??`, `?.` and `?:`.** The skip is in the patch and pinned by tests, but no
    spec paragraph or decision states it, and `?:` is not an exception (it goes
@@ -817,8 +1112,68 @@ One line each. None is resolved in the normative text.
 16. **A tag name's first character.** The parser accepts a leading digit; no
     source states a class. *Recommendation:* write `<name> ::= <any run of
     non-terminator characters>` in the spec, or pin the observed acceptance.
+17. **The hard-stop operator exemption.** `EXPRESSION.ts:151-172` ignores any
+    stop character written directly after an operator, so `x=a + ,b` is one
+    value while `x=a +/>` and `x=a ? />` report a regular-expression EOF error.
+    No valid TypeScript is affected. *Recommendation:* state the exemption as an
+    error-recovery rule and give the three inputs one shared diagnostic, or turn
+    it into a plain hard stop. Either way the current silent acceptance of
+    `a + ,b` should stop.
+18. **Newline continuation in concise mode.** The default continues a concise
+    value across a newline only on a look-behind operator; a TypeScript parser
+    continues across all of them, so `<div x=a\n  <span/>` in HTML mode is the
+    garbage value `a\n  <span` while the same input in concise mode is the value
+    `a` plus a child tag `span`. See the OQ 2 divergence table for the full set.
+    *Recommendation:* keep the look-behind-only rule as the MX default and make
+    the TypeScript-parser design reproduce it, so a `.mx` file parses the same in
+    both modes.
+19. **End of input with an open group.** `div x=(a` reports an EOF error in
+    concise mode, and `$ {a` terminates silently with the `{` group open. Two
+    positions, one rule (`isConcise || terminatedByEOL` terminates only when no
+    group is open), two different outcomes, neither of them a stated design.
+    *Recommendation:* one rule — terminate the value and let the value's own
+    syntax error be reported by the expression parser.
+20. **`::` with whitespace.** Decision 156.5 reserves `::name`; the stock parser
+    has no `::` token, and `<div x=a :: b/>` is the single value `a :: b` (a `:`
+    that opens a type context). *Recommendation:* rule `::` as a token the lexer
+    rejects wherever it appears, with or without a following name.
+21. **Names of expression positions and span rules.** MX2 gets its own AST
+    (decision 158), catalogued in `apps/docs/docs/architecture/ast.md`, which is
+    being drafted on another branch. The two documents have to agree on the
+    **names of the expression positions** used here (this document's E1–E18) and
+    on **span rules** (which spans include the delimiter: an attribute value
+    includes the `=`, a placeholder includes `${`, a tag variable includes `/`,
+    a method's range starts at its `async` or its type parameters). This document
+    does not depend on that catalogue and does not edit it.
+    *Recommendation:* whoever lands second adopts the other's names, and the AST
+    catalogue cites this document for the spans rather than restating them.
+
+### Where a real TypeScript parser would end the value differently
+
+Every row is the **stock** behaviour, which this document keeps as the normative
+default, with what TypeScript's own grammar does instead. Each is an input, not
+a class, and each is observed.
+
+| Input | Stock parse (normative default) | TypeScript parse | OQ |
+| --- | --- | --- | --- |
+| `div x=a\n  <span/>` (concise) | value `a`, child tag `span` | continues across the newline as `a < span` | OQ 18 |
+| `div x=a\n  .b` (concise) | value `a`, unnamed child tag with class `b` | `a.b` | OQ 18 |
+| `div x=a\n  (b)` (concise) | value `a`, child tag with tag arguments | `a(b)` | OQ 18 |
+| `<div x=a\n  <span/>` (HTML mode) | the single value `a\n  <span` | `a < span` continuing the newline | OQ 2, OQ 18 |
+| `<div x=a !b/>` | one value `a !b` | `a!` as a non-null assertion, then `b` | OQ 2 |
+| `<div x=a ++b/>` | one value `a ++b` | `a++`, then `b` | OQ 2 |
+| `<div x=a as T < b/>` | one value `a as T < b` | the type context ends at `T`, so `< b` is a comparison | OQ 2 |
+| `<div x=a as T = b/>` | one value `a as T = b` | not valid TypeScript at all | OQ 2 |
+| `<div x=a {b}/>` | one value `a {b}` | not valid TypeScript at all | OQ 2 |
+| `<div x=a: b/>` | one value `a: b` | a type annotation, so `x` would be `a` annotated `b` — but the default keeps it in the value | OQ 2, OQ 3 |
+| `<div x=a const b/>` | value `a`, then attributes `const` and `b` | `const` is not an operator, so TypeScript also stops — the default agrees here | OQ 2 |
 
 ## Conformance
+
+The htmljs-parser fixtures cited below live in
+`/Users/svallory/work/htmljs-parser/src/__tests__/fixtures/` — one directory per
+case, each with an `input.marko` and a snapshot — and are **evidence of the
+default behaviour, not a gate**.
 
 | Section | Exercised by |
 | --- | --- |
@@ -826,7 +1181,7 @@ One line each. None is resolved in the normative text.
 | Sugars and the after-value rule | **`patches/htmljs-parser.test.ts`** (`CHANGED`, `PINNED`, `DEFAULT_ATTRIBUTE` blocks — the primary asset for Expression boundaries); `packages/core/src/name-sugar.test.ts`; `packages/core/src/stock-parser.test.ts` |
 | E1–E3 attribute values, spreads, whitespace | `patches/htmljs-parser.test.ts`; htmljs fixtures `attr-*`, `ts-generic-*`, `attr-value-*`, `attr-ambiguous-right-angle-bracket*` |
 | E4–E5, E16–E17 methods and type parameters | htmljs fixtures `attr-method-*` (5), `invalid-*type*` |
-| E6–E7, E15 tag arguments and parameters | htmljs fixtures `tag-params-*`, `tag-with-type-arguments`, `attribute-tags`; `fixtures/render-props`; `packages/targets/html/fixtures-marko/attribute-tags*` |
+| E6–E7, E15 tag arguments and parameters | htmljs fixtures `tag-params-*`, `tag-with-type-arguments`; `fixtures/render-props`; `packages/targets/html/fixtures-marko/attribute-tags*`. There is no htmljs fixture named `attribute-tags` |
 | E8, E13 placeholders and dynamic names | htmljs fixtures `placeholder-*`, `shorthand-*-dynamic*`; `fixtures/{counter,todos,lists}` |
 | E9 tag variables | htmljs fixtures `tag-var-*`; `patches/htmljs-parser.test.ts` |
 | E10 statement tags | `patches/htmljs-parser.test.ts` (`statement tags` block); htmljs fixtures `statement-*` |
@@ -836,8 +1191,9 @@ One line each. None is resolved in the normative text.
 | Whitespace | `test-fixtures/body-whitespace/cases.json` |
 | Text, comments, doctype, raw text | `packages/targets/html/fixtures-marko/{doctype-page,comments-and-html-comment,html-comment-placeholder,elements-text,piped-text}`; htmljs fixtures `placeholder-within-script-tag`, `dtd`, `*-crlf` |
 | Attribute tags | `packages/targets/html/fixtures-marko/attribute-tags*`; htmljs fixtures `empty-closing-tag*`, `shorthand-closing-html*` |
-| Error positions | `packages/core/src/parse-error-position.test.ts`, `parse-error-hints.test.ts`; htmljs fixtures `attr-close-tag-in-unenclosed-value`, `open-tag-comments*`, `commas-relax`, `commas-require-*` |
-| Atoms | **no asset** — the atoms test table is written but not implemented |
+| Atoms | **no asset** — the atoms test table (atoms report §5) is written but not implemented |
+| End of input, per position | htmljs fixtures `eof-attr-value`, `eof-attr-name`, `eof-attr-argument`, `attr-eof-after-name`, `attr-eof-default-value`, `attr-eof-spread`, `attr-eof-unnamed`, `attr-eof-value-string`, `eof-placeholder-*`, `eof-script-body`, `eof-style`, `eof-tag-start`, `tag-name-placeholder-eof` — these **do** pin which position produces which EOF message |
+| Concise EOF termination | htmljs fixtures `eof-attr-value-js-comment-comment-concise`, `eof-placeholder-concise` |
 
 ### Rules no existing test covers
 
@@ -848,7 +1204,12 @@ One line each. None is resolved in the normative text.
 - The sugar-then-`=` and sugar-then-`(` forms of decision 146, addendum 4 (PR 4).
 - `:name` with a dash as an atom (`:rename-all`).
 - `|x: A | B|` and other union types inside tag parameters.
-- End-of-input behaviour per position as an explicit assertion (the EOF errors
-  exist but no test pins which position produces which message).
+- The **concise newline continuation** rule as an explicit assertion — which of
+  the look-ahead half's operators stop applying at a newline in concise mode (the
+  htmljs fixtures cover `attr-comma-multiline*` but not this).
+- A concise value with an open group at EOF (`div x=(a`), and a scriptlet block
+  at EOF (`$ {a`), whose two results differ for no stated reason (OQ 19).
+- The hard-stop operator exemption (`x=a + ,b`, `x=a +/>`, `x=a ? />`) — it is
+  error recovery, so no test should pin it until OQ 17 is ruled.
 - `--` text lines in an MX-specific asset (the htmljs fixtures cover them; the
   MX tree does not — already flagged as untested in spec §3).
