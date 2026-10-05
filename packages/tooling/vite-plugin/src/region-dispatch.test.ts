@@ -46,7 +46,11 @@ function transformOf(plugin: ReturnType<typeof mx>): Transform {
 
 describe("default extensions", () => {
   it("are the registry's region kinds, then .mx, before any hook runs", async () => {
-    expect(await defaultExtensions()).toEqual([".solid.mx", ".mx"]);
+    expect(await defaultExtensions()).toEqual([
+      ".solid.mx",
+      ".react.mx",
+      ".mx",
+    ]);
   });
 
   it("claim .solid.mx and .mx on a first transform, with no buildStart", async () => {

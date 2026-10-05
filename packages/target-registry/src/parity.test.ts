@@ -319,7 +319,12 @@ describe("attr-tag sources (what the callee reader asks the lookup)", () => {
 
 describe("module segments (the file kinds the lookup holds)", () => {
   it("are the file-kind segments of the targets, in registration order", () => {
-    expect([...moduleSegments()].sort()).toEqual(["astro", "ng", "solid"]);
+    expect([...moduleSegments()].sort()).toEqual([
+      "astro",
+      "ng",
+      "react",
+      "solid",
+    ]);
   });
 
   it("hostModuleSegment over the built-in set answers for a file kind only", () => {
@@ -410,10 +415,22 @@ describe("callee readers are installed from the table at registry creation", () 
 });
 
 describe("registered file-kind language ids and diagnostic sources", () => {
-  it("solid's ids match the language server and TS plugin", () => {
-    const [kind] = target("solid-jsx").host?.fileKinds ?? [];
-    expect(new Set(kind?.languageIds)).toEqual(SOLID_MX_LANGUAGE_IDS);
-    expect(kind?.languageIds).toContain(SOLID_MX_LANGUAGE_ID);
+  it("solid's and react's ids are the language server's region ids, and solid's matches the TS plugin", () => {
+    const [solid] = target("solid-jsx").host?.fileKinds ?? [];
+    const [react] = target("react-jsx").host?.fileKinds ?? [];
+    expect(
+      new Set([...(solid?.languageIds ?? []), ...(react?.languageIds ?? [])]),
+    ).toEqual(SOLID_MX_LANGUAGE_IDS);
+    expect(solid?.languageIds).toContain(SOLID_MX_LANGUAGE_ID);
+  });
+
+  it("react's first id is VS Code's language id for .react.mx", () => {
+    const [kind] = target("react-jsx").host?.fileKinds ?? [];
+    const contributes = JSON.parse(
+      readFileSync(join(here, "../../editors/vscode/package.json"), "utf8"),
+    ).contributes.languages as { id: string; extensions?: string[] }[];
+    const vscode = contributes.find((l) => l.extensions?.includes(".react.mx"));
+    expect(vscode?.id).toBe(kind?.languageIds?.[0]);
   });
 
   it("angular's id matches the TS plugin", () => {
@@ -439,6 +456,7 @@ describe("registered file-kind language ids and diagnostic sources", () => {
       ),
     ).toEqual({
       solid: "solidmx",
+      react: "reactmx",
       ng: "ngmx",
       astro: "astromx",
     });

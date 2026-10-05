@@ -110,7 +110,6 @@ describe("shape of each descriptor", () => {
 
   it.each([
     ["preact-jsx", "preact"],
-    ["react-jsx", "react"],
     ["hono-jsx", "hono"],
   ])(
     "%s: host %s, a compile entry, no file kinds, no mapping override",
@@ -123,6 +122,23 @@ describe("shape of each descriptor", () => {
       expect(target.strict).toBeUndefined();
     },
   );
+
+  it("react-jsx: host react with one `react` region file kind, a compile entry, no mapping override", () => {
+    const react = byName("react-jsx");
+    expect(react.load).toBeTypeOf("function");
+    expect(react.mappings).toBeUndefined();
+    expect(react.host?.name).toBe("react");
+    const [kind, ...rest] = react.host?.fileKinds ?? [];
+    expect(rest).toEqual([]);
+    expect(kind).toMatchObject({
+      segment: "react",
+      languageIds: ["reactmx"],
+      diagnosticSource: "reactmx",
+    });
+    expect(kind?.compileRegion).toBeTypeOf("function");
+    expect(kind?.readCalleeInput).toBeTypeOf("function");
+    expect(kind?.completeTypecheckModule).toBeUndefined();
+  });
 
   it("angular-template: no load, pending phase 2, one `ng` file kind", () => {
     const ng = byName("angular-template");
@@ -144,11 +160,16 @@ describe("shape of each descriptor", () => {
     ]);
   });
 
-  it("only solid-jsx carries a region compile and a callee reader", () => {
+  it("only solid-jsx and react-jsx carry a region compile and a callee reader", () => {
+    const regionTargets = ["solid-jsx", "react-jsx"];
     for (const t of builtinTargets) {
       for (const kind of t.host?.fileKinds ?? []) {
-        expect(Boolean(kind.compileRegion)).toBe(t.name === "solid-jsx");
-        expect(Boolean(kind.readCalleeInput)).toBe(t.name === "solid-jsx");
+        expect(Boolean(kind.compileRegion)).toBe(
+          regionTargets.includes(t.name),
+        );
+        expect(Boolean(kind.readCalleeInput)).toBe(
+          regionTargets.includes(t.name),
+        );
       }
     }
   });
@@ -226,8 +247,8 @@ describe("builtinLookup: packages and host values", () => {
     expect(lookup.hostFilterKey("angular-template")).toBe("angular");
   });
 
-  it("moduleSegments are astro, solid and ng (target registration order)", () => {
-    expect(lookup.moduleSegments()).toEqual(["astro", "solid", "ng"]);
+  it("moduleSegments are astro, solid, react and ng (target registration order)", () => {
+    expect(lookup.moduleSegments()).toEqual(["astro", "solid", "react", "ng"]);
   });
 
   it("attrTagSources are the seven host packages and @mxlang/data", () => {
@@ -265,9 +286,10 @@ describe("the hostless `data` target", () => {
     expect(builtinFileKinds.map((k) => k.segment)).toEqual([
       "astro",
       "solid",
+      "react",
       "ng",
     ]);
-    expect(lookup.moduleSegments()).toEqual(["astro", "solid", "ng"]);
+    expect(lookup.moduleSegments()).toEqual(["astro", "solid", "react", "ng"]);
   });
 
   it("is selected by its package (note 4.1 rule 2) and is not the default", () => {
@@ -340,12 +362,13 @@ describe("the reserved `astro-template` name", () => {
 });
 
 describe("builtinFileKinds", () => {
-  it("tags solid with the region pipeline, ng with ng-template and astro with astro-template", () => {
+  it("tags solid and react with the region pipeline, ng with ng-template and astro with astro-template", () => {
     expect(
       builtinFileKinds.map((k) => [k.segment, k.pipeline, k.diagnosticSource]),
     ).toEqual([
       ["astro", "astro-template", "astromx"],
       ["solid", "region", "solidmx"],
+      ["react", "region", "reactmx"],
       ["ng", "ng-template", "ngmx"],
     ]);
   });

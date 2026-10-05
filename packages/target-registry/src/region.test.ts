@@ -64,7 +64,10 @@ describe("region file kinds are a capability, not a name", () => {
   it("lists the built-in region kinds with the target that declares them", () => {
     expect(
       regionFileKinds().map(({ segment, target }) => ({ segment, target })),
-    ).toEqual([{ segment: "solid", target: "solid-jsx" }]);
+    ).toEqual([
+      { segment: "solid", target: "solid-jsx" },
+      { segment: "react", target: "react-jsx" },
+    ]);
   });
 });
 
@@ -154,7 +157,7 @@ describe("a registered test host's region file is routed to its own entry", () =
 describe("a .<word>.mx no region kind registers is not claimed", () => {
   it.each([
     "/app/x.nope.mx",
-    "/app/x.react.mx",
+    "/app/x.preact.mx",
     "/app/x.ng.mx",
     "/app/x.astro.mx",
     "/app/x.mx",
