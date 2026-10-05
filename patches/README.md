@@ -25,6 +25,6 @@ To regenerate on a version bump (or to change the rule), in this order (`bun ins
 
 The edits: an `attrValue` flag set where a named attribute's (or a spread's) value expression is entered — not for a default attribute (`<if=a .b>`, `<const/x=…>`), which is exempt; `?` handling skips `??` and `?.` so they do not count as ternaries; `lookAheadForOperator` ends the value at ` :ident` (no open `?`) and ` .ident`; a small `isIdentStartCode` helper. The `:` check also ends the value at a bare `:` right before `/>`, `>`, a newline or the end of the source, so core can report "`:` is name sugar and needs a name".
 
-Known changes to valid input: the `.` half changes `x=a.b .c` and html-mode multi-line chains (`x=foo\n  .bar()`), but not default attributes (`<if=a .b>`, `<const/x=items\n  .filter()/>`), which keep Marko's meaning (decision 151). The `:` half changes one valid TS spelling, a return type written `(a) :T => a` (space before the colon, none after); `(a): T` and `(a) : T` are unchanged.
+Known changes to valid input: the `.` half changes `x=a.b .c` and html-mode multi-line chains (`x=foo\n  .bar()`), but not default attributes (`<if=a .b>`, `<const/x=items\n  .filter()/>`), which keep Marko's meaning (decision 151). The `:` half changes two valid TS spellings, a return type written with a space before the colon and no space after it (`(a) :T => a`) or a newline after it (`(a) :\n T => a`); `(a): T` and `(a) : T` are unchanged.
 
 Published `@mxlang/*` packages do not carry this patch; a consumer install resolves stock `htmljs-parser`.

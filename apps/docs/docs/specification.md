@@ -732,8 +732,12 @@ repeats the written name (`</div:x>`) or is `</>`; concise mode is unaffected.
 
 **In attribute position** `#x`, `.x` and `:x` are rewritten to `id`, class and
 `name` before the shorthand merge, so `<div.a #m .b>` is exactly
-`<div.a.b#m>`: `.x` values are space-joined, an authored `class=` merges as a
-shorthand does, and `#x` or `:x` repeated or beside an explicit `id=`/`name=`
+`<div.a.b#m>` and `.x` values are space-joined. **Class order, one rule:** with a
+tag-adjacent class, `.x` joins it, ahead of an authored `class=`
+(`<div.c class="x" .d>` is `<div.c.d class="x">`); with none, `.x` and an authored
+`class=` keep their written order (`<div class="a" .b>` is `a b`, `<div .b
+class="a">` is `b a`), and a falsy authored literal (`false`, `0`, `null`,
+`undefined`) drops out as Marko's class value does. And `#x` or `:x` repeated or beside an explicit `id=`/`name=`
 follow the duplicate rule (the later one wins, with a warning). A value on the
 sugar (`:x=1`), a `:name` that is not an identifier, and `:b:c` (two names) or
 `:b(x)` (arguments), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors.

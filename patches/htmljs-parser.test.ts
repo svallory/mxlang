@@ -137,6 +137,13 @@ const CHANGED: [string, string][] = [
     "<a x=function (a) :T { return a }/>",
     '<a> @x ="function (a)" @:T @{ return a }',
   ],
+  // A TS return type with a space before the `:` and a newline after it is the
+  // second valid spelling the bare-`:` rule changes (round 3, review C; accepted
+  // under decision 151 ruling 3, same family as `(a) :T`). Stock keeps one value.
+  [
+    "<a x=(a) :\n T => a/>",
+    '<a> @x ="(a)" @: @T ERR(Missing value for attribute)',
+  ],
   // A bare `:` (no name) right before the end of the tag or the line starts a
   // new attribute, so core can say it needs a name (leader addition, PR 3
   // round 2). `:` followed by whitespace and more text stays the value's.

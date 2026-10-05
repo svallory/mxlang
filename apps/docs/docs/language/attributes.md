@@ -105,10 +105,14 @@ default tag with a name:
 ```
 
 A tag takes **one** `:name`. `<a:b.c:d/>` is an error at the second colon (write
-the second as `name="…"`). In attribute position `#x` and `.x` merge exactly as
-they do next to the tag name: `<div.a #m .b/>` and `<div.a.b#m/>` are the same
-tag, and `.x` beside an authored `class` is appended to the shorthand part
-(`<div.c class="x" .d/>` renders `class="c d x"`). A repeated `#x` or `:x`, or one
+the second as `name="…"`). In attribute position `#x` and `.x` merge like the
+shorthand next to the tag name: `<div.a #m .b/>` and `<div.a.b#m/>` are the same
+tag. The class order follows one rule. **With a tag-adjacent class** (`<div.c>`),
+`.x` joins it, ahead of an authored `class` (`<div.c class="x" .d/>` renders
+`class="c d x"`, the same as `<div.c.d class="x"/>`). **With no tag-adjacent
+class**, `.x` and an authored `class` keep their written order
+(`<div class="a" .b/>` is `a b`, `<div .b class="a"/>` is `b a`). A falsy authored
+literal (`false`, `0`, `null`, `undefined`) drops out, as Marko's class value does. A repeated `#x` or `:x`, or one
 beside an explicit `id=` or `name=`, follows the
 [duplicate-attribute rule](/specification/#the-mx-language-4-elements-and-attributes-name-sugar-name-id-and-class-anywhere-on-a-tag):
 the later one wins, with a warning (`<input name="a" :b/>` renders
