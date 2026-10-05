@@ -165,6 +165,22 @@ is MX's own: `README.md` states patch 0007's known limit (an atom in a `${}`
 of a template literal inside an expression is not recognised; TODO
 `tree-sitter-atoms-template-placeholder`).
 
+`patches/0009-fix-grammar-a-default-attributes-value-is-not-ended-at-a-sugar.patch`
+is MX's own (decision 151 ruling 2, decision 146 addendum 5):
+
+- `src/scanner.c`: the after-value sugar rule (`src/scanner.c`'s
+  `ExprCfg.split_at_shorthand`, from patch 0001) no longer applies to the tag's
+  **default** attribute value, so `<if=a .b>` is member access and
+  `<a=1 .d=2/>` one value, as in core. `attr_default_value` is set at the `=`
+  (or a nameless `:=`) that starts the value and cleared by a spread and by a
+  name scanned before it, and it is serialized with the rest of the tag state.
+- `src/scanner.c`: the one exception is decision 146 addendum 5: a default
+  value that is a **single atom** still ends at `:name`
+  (`belongs-to=:Customer :customer`). `after_single_atom` reads it off the
+  resumed (serialized) expression state of the atom split from patch 0007.
+- Tests: `test/atoms.bun-test.mts`, the `default attribute values` block (MX's
+  own file, so not in the patch).
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and

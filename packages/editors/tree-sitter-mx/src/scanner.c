@@ -268,6 +268,11 @@ typedef struct {
   uint8_t attr_stage;  // ATTR_*
   uint8_t attr_has_args;
   uint8_t attr_has_type_params;
+  // MX (decision 151 ruling 2): the attribute whose value is being scanned has
+  // no name and no spread (the tag's default value), so the after-value sugar
+  // rule is exempt: `.ident` and `:ident` stay part of the value. Set at the
+  // `=` / `:=`; a name scanned before it, or a spread, turns it off.
+  uint8_t attr_default_value;
   uint8_t tag_has_attrs;
   uint8_t tag_has_args;
   uint8_t tag_has_params;
@@ -776,6 +781,20 @@ static void es_consume_ws(EStream *es) {
   }
 }
 
+// MX (decision 146, addendum 5): the expression resumed from an atom (the
+// only thing it contains so far) and has consumed nothing since: the value is
+// a single atom, and ` :name` after it is the name sugar. `s->buf` is emptied
+// when the split resumes (es_init), so whitespace-only means nothing at all
+// was consumed: the value is exactly that one atom.
+static bool after_single_atom(EStream *es, const ExprState *e) {
+  if (!e->resumed) return false;
+  const Scanner *s = es->s;
+  for (uint32_t i = 0; i < s->buf_len; i++) {
+    if (!is_ws(s->buf[i])) return false;
+  }
+  return true;
+}
+
 // checkForOperators(parser, expression, eol)
 static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
   if (!e->cfg.operators) return false;
@@ -796,10 +815,16 @@ static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
     }
 
     int32_t next_c = es_peek(es, k);
-    if (e->cfg.split_at_shorthand && is_ident_start_code(es_peek(es, k + 1)) &&
+    // MX: after whitespace, `.ident` and `:ident` (no open `?`) begin a
+    // shorthand attribute instead of continuing the value. A default
+    // attribute (no name, no spread) is exempt (decision 151, ruling 2), so
+    // the sugar stays part of the value (`<if=a .b>` is member access,
+    // `<if=a :b>` one value) and the value keeps Marko's meaning.
+    bool exempt = s->attr_default_value &&
+                  (next_c == '.' || !after_single_atom(es, e));
+    if (e->cfg.split_at_shorthand && !exempt &&
+        is_ident_start_code(es_peek(es, k + 1)) &&
         (next_c == '.' || (next_c == ':' && !e->cond_depth))) {
-      // MX: after whitespace, `.ident` and `:ident` (no open `?`) begin a
-      // shorthand attribute instead of continuing the value.
       return false;
     }
     if (next_c >= 0 && !should_terminate(es, e, next_c, k)) {
@@ -3515,6 +3540,9 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   // ---- ATTRIBUTE.parse dispatch
   if (c == '=') {
     if (!valid[ATTR_EQ]) return false;
+    // MX (decision 151, ruling 2): no name was scanned (the tag's default
+    // value), so the after-value sugar rule does not apply to this value.
+    s->attr_default_value = (s->attr_stage != ATTR_NAME_STAGE);
     es_next_mark(es);
     s->attr_stage = ATTR_VALUE_STAGE;
     lexer->result_symbol = ATTR_EQ;
@@ -3522,6 +3550,8 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   }
   if (c == ':' && es_peek(es, 1) == '=') {
     if (!valid[ATTR_BOUND_EQ]) return false;
+    // A bound `:=` value without a name before it is the default value too.
+    s->attr_default_value = (s->attr_stage != ATTR_NAME_STAGE);
     es_next_mark(es);
     es_next_mark(es);
     s->attr_stage = ATTR_VALUE_STAGE;
@@ -3530,6 +3560,8 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   }
   if (c == '.' && es_peek(es, 1) == '.' && es_peek(es, 2) == '.') {
     if (!valid[ATTR_SPREAD_START]) return false;
+    // A spread is not exempt: `...a.b :c` still splits (as in core).
+    s->attr_default_value = 0;
     es_next_mark(es);
     es_next_mark(es);
     es_next_mark(es);
@@ -3856,6 +3888,7 @@ unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
   WRITE(s->attr_stage);
   WRITE(s->attr_has_args);
   WRITE(s->attr_has_type_params);
+  WRITE(s->attr_default_value);
   WRITE(s->tag_has_attrs);
   WRITE(s->tag_has_args);
   WRITE(s->tag_has_params);
@@ -3929,6 +3962,7 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
     READ(s->attr_stage);
     READ(s->attr_has_args);
     READ(s->attr_has_type_params);
+    READ(s->attr_default_value);
     READ(s->tag_has_attrs);
     READ(s->tag_has_args);
     READ(s->tag_has_params);
