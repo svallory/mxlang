@@ -18,3 +18,7 @@ two local patches (see `UPSTREAM.md`):
   so it never collides with the `marko` grammar of Marko's own Zed extension.
 - Tests run on bun through web-tree-sitter, and compare against htmljs-parser
   fixtures pinned to v5.12.0 instead of its unpinned HEAD.
+- Tag-param patterns/types/defaults, tag-var types and type arguments start at
+  their first character instead of the whitespace before it, so highlight
+  captures cover `number`, not `" number"`. An attribute's `=` and `:=` are
+  `@operator` and its value `@none`.

@@ -312,6 +312,7 @@ typedef struct {
   uint32_t start;  // s->buf index where the current construct begins
   uint32_t marked_len;  // buf_len at the last committed mark
   uint8_t before_token;  // the char immediately before the token start
+  uint8_t skipped_before;  // char before whitespace skipped ahead (0: none)
   int32_t *la;
   uint32_t la_len, la_pos, la_cap;
   bool automark;  // mark after every consumed char (expressions)
@@ -379,6 +380,22 @@ static void es_mark(EStream *es) {
     mark(es->s, es->lexer);
     es->marked_len = es->s->buf_len;
   }
+}
+
+// Skip the whitespace before an expression piece, so the piece's token (and
+// the highlight capture on it) starts at its first real character. The skipped
+// whitespace becomes trivia, exactly as for ATTR_VALUE_EXPR below. Only when no
+// lookahead is pending: a peeked-at char is already part of the logical stream.
+//
+// `keep_before` keeps the char before the skipped whitespace as the token's
+// lookbehind char (a resumed expression, which the parser scans from before
+// the whitespace).
+static void es_skip_leading_ws(Scanner *s, EStream *es, bool keep_before) {
+  if (keep_before) es->skipped_before = s->cur.prev_char;
+  while (es_drained(es) && !at_eof(es->lexer) && is_ws(es->lexer->lookahead)) {
+    skipc(s, es->lexer);
+  }
+  es_mark(es);
 }
 
 static int32_t es_at(EStream *es, int64_t i) {
@@ -1110,7 +1127,10 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
 static bool scan_expr_es(EStream *es, ExprCfg cfg, bool *empty) {
   bool prev_automark = es->automark;
   uint32_t start = es->s->buf_len;
-  if (start == 0) es->before_token = es->s->cur.prev_char;
+  if (start == 0) {
+    es->before_token =
+        es->skipped_before ? es->skipped_before : es->s->cur.prev_char;
+  }
   es->automark = true;
   es->start = start;
 
@@ -2860,6 +2880,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   // boundaries (",", ":", "=") so each piece can highlight properly. The
   // union of the sub-scans consumes exactly the parser's chars.
   if (valid[PARAM_PATTERN] && !valid[ATTR_NAME]) {
+    es_skip_leading_ws(s, es, false);
     if (es_peek(es, 0) != '|' || !valid[PARAMS_CLOSE]) {
       bool empty = false;
       if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_PATTERN), &empty)) {
@@ -2874,6 +2895,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
        valid[PARAM_TYPE] || valid[PARAM_DEFAULT] || valid[PARAMS_CLOSE]) &&
       !valid[ATTR_NAME]) {
     if (valid[PARAM_TYPE]) {
+      es_skip_leading_ws(s, es, false);
       bool empty = false;
       if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_TYPE), &empty)) {
         return false;
@@ -2882,6 +2904,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
       return true;
     }
     if (valid[PARAM_DEFAULT]) {
+      es_skip_leading_ws(s, es, false);
       bool empty = false;
       if (!scan_expr_es(es, cfg_enclosed(TERM_PARAM_DEFAULT), &empty)) {
         return false;
@@ -2916,6 +2939,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     return false;
   }
   if (valid[TYPE_EXPR] && !valid[ATTR_NAME]) {
+    es_skip_leading_ws(s, es, false);
     bool empty = false;
     if (!scan_expr_es(es, cfg_type_expr(), &empty)) return false;
     if (!empty) {
@@ -2996,6 +3020,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
     ExprCfg cfg = cfg_tag_var(s);
     cfg.in_type = true;
     cfg.resume_lookbehind = true;
+    es_skip_leading_ws(s, es, true);
     if (!scan_expr_es(es, cfg, NULL)) return false;
     lexer->result_symbol = VAR_TYPE;  // may be zero-width
     concise_tag_epilogue(s, lexer);

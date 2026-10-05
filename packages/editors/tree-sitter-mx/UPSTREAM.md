@@ -85,6 +85,19 @@ is MX's own:
   (ADR 146, divergence 4). The test asserts each snippet is present, so a
   fixture change fails instead of silently comparing less.
 
+`patches/0003-fix-grammar-start-binding-captures-at-their-first-character.patch`
+is MX's own:
+
+- `src/scanner.c`: the tag-param pattern, type and default, the tag-var type
+  and the type-arg expression tokens used to include the whitespace before
+  them, so a highlight capture on `<for|x: number, i|>` covered `" number"` and
+  `" i"`. `es_skip_leading_ws` skips it as trivia before the token starts (as
+  the scanner already did for attribute values). The tag-var type keeps the
+  char before the whitespace as its lookbehind, so `a: (B | C)` still scans
+  the way htmljs-parser does (fixture `tag-var-type-with-parens`).
+- `queries/highlights.scm`: `=` and `:=` of an attribute are `@operator`, the
+  value `@none` (it is injected TS, like `param_default`).
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and

@@ -17,6 +17,11 @@
 (shorthand_name) @label
 
 (attr_name) @attribute
+; `=` and `:=` between a name and its value. The value itself is injected TS
+; (injections.scm), so it takes no flat color.
+(attr_eq) @operator
+(attr_bound_eq) @operator
+(attr_value_expr) @none
 
 ; Binding positions: patterns get the TS injection; types are captured
 ; flatly because a bare type is not a valid TS program (matching the
