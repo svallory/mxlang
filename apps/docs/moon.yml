@@ -10,6 +10,9 @@ tasks:
     inputs:
       - "docs/**/*"
       - "assets/**/*"
+      - "example/**/*"
+      - "scripts/**/*"
+      - "package.json"
       - "docmd.config.json"
     outputs:
       - "site"

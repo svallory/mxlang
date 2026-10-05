@@ -138,6 +138,10 @@ jobs:
       - run: bun run build
       - run: bun run consumer-check:html
       - run: bun run pack-probe
+      # The landing page's own drift test; `apps/docs build` runs the same
+      # checks, so this only adds the one it cannot see: a committed
+      # docs/index.md that no longer matches the generator.
+      - run: bun run --cwd apps/docs test
       - run: bun run --cwd apps/docs build
 
   coverage:

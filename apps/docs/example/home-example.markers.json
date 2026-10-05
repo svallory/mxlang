@@ -1,0 +1,414 @@
+[
+  {
+    "id": "import-tag",
+    "label": "import",
+    "note": "A `.mx` file imports another `.mx` file and calls it as a tag.",
+    "href": "/custom-tags/",
+    "match": "import ProductCard from \"./tags/product-card.mx\";",
+    "ranges": [
+      {
+        "line": 1,
+        "from": 0,
+        "to": 49
+      }
+    ]
+  },
+  {
+    "id": "import-type",
+    "label": "import type",
+    "note": "Types come from a `.ts` module \u2014 a `.mx` file compiles to a template, not to a module of helpers.",
+    "href": "/language/define-const-static-import/#define-const-static-import-import",
+    "match": "import type { Product } from \"./product.ts\";",
+    "ranges": [
+      {
+        "line": 3,
+        "from": 0,
+        "to": 44
+      }
+    ]
+  },
+  {
+    "id": "input-interface",
+    "label": "export interface Input",
+    "note": "The exported `Input` is the tag's public type: what a call site may pass.",
+    "href": "/language/attr-tag/",
+    "match": "export interface Input {\n  products: Product[];\n  currency: string;\n  filter?: string;\n  emptyHtml?: string;\n  currencyNote?: string;\n}",
+    "ranges": [
+      {
+        "line": 5,
+        "from": 0,
+        "to": 24
+      },
+      {
+        "line": 6,
+        "from": 0,
+        "to": 22
+      },
+      {
+        "line": 7,
+        "from": 0,
+        "to": 19
+      },
+      {
+        "line": 8,
+        "from": 0,
+        "to": 18
+      },
+      {
+        "line": 9,
+        "from": 0,
+        "to": 21
+      },
+      {
+        "line": 10,
+        "from": 0,
+        "to": 24
+      },
+      {
+        "line": 11,
+        "from": 0,
+        "to": 1
+      }
+    ]
+  },
+  {
+    "id": "static",
+    "label": "static",
+    "note": "`static` runs once at module load, not once per render.",
+    "href": "/language/define-const-static-import/#define-const-static-import-static",
+    "match": "static const MAX_ITEMS = 3;",
+    "ranges": [
+      {
+        "line": 13,
+        "from": 0,
+        "to": 27
+      }
+    ]
+  },
+  {
+    "id": "line-comment",
+    "label": "// comment",
+    "note": "A `//` line comment is stripped from the output.",
+    "href": "/specification/#the-mx-language-3-text-and-interpolation-html-comments",
+    "match": "// A non-reactive binding, computed once per render.",
+    "ranges": [
+      {
+        "line": 15,
+        "from": 0,
+        "to": 52
+      }
+    ]
+  },
+  {
+    "id": "const",
+    "label": "<const>",
+    "note": "`<const>` binds a value computed fresh on each render.",
+    "href": "/language/define-const-static-import/#define-const-static-import-const",
+    "match": "<const/shown=input.products.slice(0, MAX_ITEMS)/>",
+    "ranges": [
+      {
+        "line": 16,
+        "from": 0,
+        "to": 49
+      }
+    ]
+  },
+  {
+    "id": "let",
+    "label": "<let>",
+    "note": "`<let>` is state. On the html target it is the initial value only.",
+    "href": "/language/stateful-tags/",
+    "match": "<let/selectedId=shown[0]?.id/>",
+    "ranges": [
+      {
+        "line": 18,
+        "from": 0,
+        "to": 30
+      }
+    ]
+  },
+  {
+    "id": "define",
+    "label": "<define>",
+    "note": "`<define>` names a fragment you can call like any other tag.",
+    "href": "/language/define-const-static-import/#define-const-static-import-define",
+    "match": "<define/Row|label, value|>\n  <dt>${label}</dt>\n  <dd>${value}</dd>\n</define>",
+    "ranges": [
+      {
+        "line": 20,
+        "from": 0,
+        "to": 26
+      },
+      {
+        "line": 21,
+        "from": 0,
+        "to": 19
+      },
+      {
+        "line": 22,
+        "from": 0,
+        "to": 19
+      },
+      {
+        "line": 23,
+        "from": 0,
+        "to": 9
+      }
+    ]
+  },
+  {
+    "id": "html-comment",
+    "label": "HTML comment",
+    "note": "An HTML comment reaches the browser as a real comment node.",
+    "href": "/language/interpolation/#interpolation-and-escaping-html-comments",
+    "match": "<!-- Markup, attributes and control flow in one file. -->",
+    "ranges": [
+      {
+        "line": 25,
+        "from": 0,
+        "to": 57
+      }
+    ]
+  },
+  {
+    "id": "tag-adjacent",
+    "label": "#id and .class shorthand",
+    "note": "`#id` and `.class` merge into `id=` and `class=` right where they are written.",
+    "href": "/specification/#the-mx-language-4-elements-and-attributes-class-and-style",
+    "match": "<h1#store-title.store-title>",
+    "ranges": [
+      {
+        "line": 26,
+        "from": 0,
+        "to": 28
+      }
+    ]
+  },
+  {
+    "id": "escaped",
+    "label": "escaped `${}`",
+    "note": "`${}` escapes: the value becomes text, never markup.",
+    "href": "/language/interpolation/",
+    "match": "${shown.length} products, one file",
+    "ranges": [
+      {
+        "line": 26,
+        "from": 28,
+        "to": 62
+      }
+    ]
+  },
+  {
+    "id": "boolean-attr",
+    "label": "boolean attribute",
+    "note": "A valueless attribute is `true` \u2014 HTML's own boolean spelling.",
+    "href": "/specification/#the-mx-language-4-elements-and-attributes-attribute-forms",
+    "match": "required",
+    "ranges": [
+      {
+        "line": 29,
+        "from": 57,
+        "to": 65
+      }
+    ]
+  },
+  {
+    "id": "attr-static",
+    "label": "static attribute",
+    "note": "`name=\"value\"` is an ordinary static attribute.",
+    "href": "/specification/#the-mx-language-4-elements-and-attributes-attribute-forms",
+    "match": "class=\"row\"",
+    "ranges": [
+      {
+        "line": 44,
+        "from": 8,
+        "to": 19
+      }
+    ]
+  },
+  {
+    "id": "attr-expression",
+    "label": "expression attribute",
+    "note": "`name=expr` is any expression; the parens keep commas out of the attribute list.",
+    "href": "/specification/#the-mx-language-4-elements-and-attributes-attribute-forms",
+    "match": "featured=(i === 0)",
+    "ranges": [
+      {
+        "line": 45,
+        "from": 35,
+        "to": 53
+      }
+    ]
+  },
+  {
+    "id": "attr-spread",
+    "label": "spread attribute",
+    "note": "`...attrs` spreads an object into the call; an attribute written after it wins.",
+    "href": "/specification/#the-mx-language-4-elements-and-attributes-attribute-forms",
+    "match": "...cardAttrs",
+    "ranges": [
+      {
+        "line": 45,
+        "from": 54,
+        "to": 66
+      }
+    ]
+  },
+  {
+    "id": "structured-style",
+    "label": "structured style",
+    "note": "`style` takes a structured value, not a string.",
+    "href": "/hosts/html/#html-target-structured-class-and-style",
+    "match": "style={ paddingLeft: `${i}rem` }",
+    "ranges": [
+      {
+        "line": 44,
+        "from": 20,
+        "to": 52
+      }
+    ]
+  },
+  {
+    "id": "if-chain",
+    "label": "<if> / <else if> / <else>",
+    "note": "`<if>`, `<else if>` and `<else>` are one chain with one closing tag each.",
+    "href": "/language/structural-tags/#structural-tags-if-else-if-else",
+    "match": "<if=!input.filter>\n  <p.hint>Showing every product.</p>\n</if>\n<else if=input.filter>\n  <p.hint>Filtered by ${input.filter}.</p>\n</else>",
+    "ranges": [
+      {
+        "line": 32,
+        "from": 0,
+        "to": 18
+      },
+      {
+        "line": 33,
+        "from": 0,
+        "to": 36
+      },
+      {
+        "line": 34,
+        "from": 0,
+        "to": 5
+      },
+      {
+        "line": 35,
+        "from": 0,
+        "to": 22
+      },
+      {
+        "line": 36,
+        "from": 0,
+        "to": 42
+      },
+      {
+        "line": 37,
+        "from": 0,
+        "to": 7
+      }
+    ]
+  },
+  {
+    "id": "for",
+    "label": "<for>",
+    "note": "`<for|item, i| of=list>` iterates; the pipes are tag params.",
+    "href": "/language/structural-tags/#structural-tags-for-of-iterate-a-list",
+    "match": "<for|product, i| of=shown>",
+    "ranges": [
+      {
+        "line": 43,
+        "from": 2,
+        "to": 28
+      }
+    ]
+  },
+  {
+    "id": "custom-tag",
+    "label": "custom tag",
+    "note": "A tag in `tags/` is callable without an import; this one is imported explicitly.",
+    "href": "/custom-tags/reference/",
+    "match": "<ProductCard",
+    "ranges": [
+      {
+        "line": 45,
+        "from": 6,
+        "to": 18
+      }
+    ],
+    "to": 36
+  },
+  {
+    "id": "attr-tag",
+    "label": "<@attributeTag>",
+    "note": "`<@name>` becomes a named prop of the call instead of part of its children.",
+    "href": "/language/attribute-tags-and-params/#attribute-tags-and-tag-params-attribute-tags-name",
+    "match": "<@badge><span.badge>${i === 0 ? \"Featured\" : \"New\"}</span></@badge>",
+    "ranges": [
+      {
+        "line": 46,
+        "from": 8,
+        "to": 75
+      }
+    ]
+  },
+  {
+    "id": "attr-tag-params",
+    "label": "attribute tag params",
+    "note": "Pipes on an attribute tag make that prop a function of its parameters.",
+    "href": "/language/attribute-tags-and-params/#attribute-tags-and-tag-params-tag-params-tagparams",
+    "match": "<@price|amount|><b.sale>${money(amount, input.currency)}</b></@price>",
+    "ranges": [
+      {
+        "line": 47,
+        "from": 8,
+        "to": 77
+      }
+    ]
+  },
+  {
+    "id": "tag-var",
+    "label": "tag variable",
+    "note": "`/name` binds the value the callee hands back with `<return>`.",
+    "href": "/custom-tags/templates/#template-tags-returning-a-value",
+    "match": "<Cheapest/best products=shown/>",
+    "ranges": [
+      {
+        "line": 53,
+        "from": 0,
+        "to": 31
+      }
+    ]
+  },
+  {
+    "id": "raw",
+    "label": "raw `$!{}`",
+    "note": "`$!{}` interpolates raw: the value is inserted as markup, unescaped.",
+    "href": "/language/interpolation/#interpolation-and-escaping-and",
+    "match": "$!{input.currencyNote ?? input.currency}",
+    "ranges": [
+      {
+        "line": 63,
+        "from": 31,
+        "to": 71
+      }
+    ]
+  },
+  {
+    "id": "concise",
+    "label": "concise mode",
+    "note": "Concise mode: one tag per line, children as plain text lines.",
+    "href": "/specification/",
+    "match": "<small.printed>\n  MX / ${shown.length} items /",
+    "ranges": [
+      {
+        "line": 62,
+        "from": 0,
+        "to": 15
+      },
+      {
+        "line": 63,
+        "from": 0,
+        "to": 30
+      }
+    ]
+  }
+]

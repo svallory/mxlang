@@ -48,6 +48,12 @@
       "dependencies": {
         "@docmd/core": "0.9.5",
       },
+      "devDependencies": {
+        "@mxlang/core": "workspace:*",
+        "@mxlang/html": "workspace:*",
+        "shiki": "4.4.3",
+        "vitest": "3.2.7",
+      },
     },
     "examples/angular-app": {
       "name": "@mxlang/example-angular-app",

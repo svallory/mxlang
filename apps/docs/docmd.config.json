@@ -21,14 +21,20 @@
   "theme": {
     "name": "default",
     "appearance": "system",
-    "codeHighlight": true
+    "codeHighlight": true,
+    "customCss": ["/assets/css/home.css"]
   },
   "minify": true,
   "autoTitleFromH1": true,
   "copyCode": true,
   "pageNavigation": true,
   "navigation": [
-    { "title": "Start Here: Introduction", "path": "/", "icon": "book-open" },
+    { "title": "Home", "path": "/", "icon": "house" },
+    {
+      "title": "Start Here: Introduction",
+      "path": "/introduction/",
+      "icon": "book-open"
+    },
     {
       "title": "Language",
       "icon": "code",

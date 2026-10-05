@@ -1,0 +1,8 @@
+import type { Product } from "../product.ts";
+
+export interface Input {
+  products: Product[];
+}
+
+/** Renders nothing; hands the cheapest product back to the caller. */
+<return value=input.products.reduce((min, p) => (p.price < min.price ? p : min))/>

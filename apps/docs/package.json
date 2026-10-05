@@ -4,12 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "docmd dev",
-    "build": "docmd validate && docmd build",
+    "build:home": "bun scripts/build-home.ts",
+    "dev": "bun run build:home && docmd dev",
+    "build": "bun run build:home && docmd validate && docmd build",
     "validate": "docmd validate",
+    "test": "vitest run",
     "preview": "npx serve site"
   },
   "dependencies": {
     "@docmd/core": "0.9.5"
+  },
+  "devDependencies": {
+    "@mxlang/core": "workspace:*",
+    "@mxlang/html": "workspace:*",
+    "shiki": "4.4.3",
+    "vitest": "3.2.7"
   }
 }

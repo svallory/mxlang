@@ -1,0 +1,23 @@
+import type { AttrTag } from "@mxlang/core";
+import { money } from "../format.ts";
+import type { Product } from "../product.ts";
+
+export interface Input {
+  product: Product;
+  currency: string;
+  featured?: boolean;
+  /** A named prop: the caller writes `<@badge>…</@badge>`. */
+  badge?: AttrTag<{ as: "renderable" }>;
+  /** A named prop that is itself a render function of `amount`. */
+  price?: AttrTag<{ as: "renderable"; params: [amount: number] }>;
+}
+
+<article class={ card: true, featured: input.featured } id=`product-${input.product.id}`>
+  <if=input.badge><${input.badge}/></if>
+  <h3>${input.product.name}</h3>
+  <p>$!{input.product.blurb}</p>
+  <p.tags>
+    <for|tag| of=input.product.tags><span>#${tag}</span></for>
+  </p>
+  <${input.price}(input.product.price)/>
+</article>
