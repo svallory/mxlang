@@ -20,16 +20,17 @@ This rewrites `packages/editors/zed`'s history onto a repo whose root holds
 `extension.toml` — the shape the Zed extension registry requires. It only
 sees committed history; commit everything in this package first.
 
-## 2. Drop `path`, switch `repository`/`rev` for both grammars
+## 2. Drop `path`, switch `repository`/`rev` for every grammar
 
-`extension.toml` currently points `[grammars.solidmx]` and `[grammars.amx]`
+`extension.toml` currently points `[grammars.mx]`, `[grammars.solidmx]` and
+`[grammars.amx]`
 at this monorepo over `file://`, with a `path` selecting the grammar's
 subdirectory — that only works for a dev install (Zed still clones the repo
 at a committed `rev` even for `file://`; see each grammar's own comment in
-`extension.toml`). At publish time, for **each** of the two grammars:
+`extension.toml`). At publish time, for **each** grammar:
 
-1. Commit and push `packages/editors/tree-sitter-solidmx` (or
-   `tree-sitter-amx`) to its own real repository — either as its own
+1. Commit and push `packages/editors/tree-sitter-mx` (or
+   `tree-sitter-solidmx`, `tree-sitter-amx`) to its own real repository — either as its own
    subtree-split repo, or wherever it will be vendored from.
 2. In `extension.toml`, swap that grammar's `repository` from
    `file:///Users/svallory/work/mx` to the real GitHub URL.
@@ -39,7 +40,8 @@ at a committed `rev` even for `file://`; see each grammar's own comment in
    (a registry submodule cannot point at a contributor's local filesystem
    at all, so this step is not optional the way it might look).
 
-Do this for `[grammars.solidmx]` and `[grammars.amx]` independently; they
+Do this for `[grammars.mx]`, `[grammars.solidmx]` and `[grammars.amx]`
+independently; they
 are unrelated repos and may be split/published on different schedules.
 
 ## 3. Bump `version` in `extension.toml`

@@ -7,7 +7,7 @@ description: "The mxlang Zed extension: MX, SolidMX, AngularMX, and AstroMX lang
 
 The `mxlang` extension ships four languages:
 
-- **MX** (`.mx`, and its `.marko` alias) — rides Marko's own tree-sitter grammar and queries unmodified. No overlay: MX 1.0 is a strict subset of Marko syntax, so Marko's own highlighting, brackets, and outline already apply.
+- **MX** (`.mx`) — MX's own tree-sitter grammar: Marko's grammar plus the `:name` sugar and `#id`/`.class`/`:name` in attribute position ([ADR 146](/design-notes/adr-name-sugar/)). Until decision 146, `.mx` rode Marko's grammar and queries unmodified (decision 72); MX syntax is now a superset of Marko's, so MX owns its grammar. It is named `mx`, so it coexists with the official Marko extension's `marko` grammar.
 - **SolidMX** (`.solid.mx`) — its own grammar, a patched TypeScript/TSX grammar with MX recognized in expression position.
 - **AngularMX** (`.ng.mx`) — an ordinary TypeScript module whose `@Component` template is MX. Reuses SolidMX's grammar unchanged: the grammar's only MX-specific addition is an opaque `mx_element` token in expression position, which is neither Solid- nor Angular-specific.
 - **AstroMX** (`.astro.mx`) — its own small grammar to separate the TypeScript fence from the MX body, with injected highlighting for both.
@@ -24,8 +24,8 @@ Every one of these can match the same file's `.mx` suffix at once: `Counter.soli
 
 | Language | Highlighting | Language server |
 | --- | --- | --- |
-| MX (`.mx`) | Yes, from Marko's grammar | Yes — see below |
-| AstroMX (`.astro.mx`) | Yes, from Marko's grammar (the frontmatter fence itself highlights as Marko markup, a known limitation) | No |
+| MX (`.mx`) | Yes, from the MX grammar, `#id`/`.class`/`:name` shorthands included | Yes — see below |
+| AstroMX (`.astro.mx`) | Yes: the fence as TypeScript, the template body through the MX grammar | No |
 | SolidMX (`.solid.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
 | AngularMX (`.ng.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | No — not registered for this language yet |
 
@@ -123,6 +123,10 @@ For a command-line typecheck, `tsc` ignores `compilerOptions.plugins` — use
 `mx-tsc` from `@mxlang/tsc` instead.
 
 ## Working on the grammar
+
+Both grammar packages below follow the same loop. The MX grammar
+(`packages/editors/tree-sitter-mx`) is a snapshot of `marko-js/tree-sitter`
+plus `patches/`; its `UPSTREAM.md` holds the pin and the patch procedure.
 
 The SolidMX grammar package also backs AngularMX (`languages/ngmx/config.toml` declares `grammar = "solidmx"` directly rather than a second, identical grammar package) — a change here affects both languages' highlighting. It is a `file://` dependency during development, and this has one consequence worth knowing before you lose an afternoon to it: **Zed only ever sees committed code.** Its checkout runs `git init`, `git fetch --depth 1 origin <rev>` and `git checkout <rev>` regardless of the URL scheme, so uncommitted changes in your working tree are invisible. There is no way to point Zed at a dirty tree, and Zed never runs `tree-sitter generate` itself — it compiles whatever `src/parser.c` is committed at that revision.
 

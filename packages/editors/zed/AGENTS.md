@@ -7,13 +7,16 @@
 `SolidMX` (`.solid.mx`) and `AngularMX` (`.ng.mx`, task
 `angular-editor-grammar`). `AstroMX` rides the `amx` grammar (from `packages/editors/tree-sitter-amx`, which splits the file into a TypeScript fence and an MX template body) and injects Marko queries into the body, so the frontmatter highlights as TypeScript.
 
-`MX` rides Marko's own unmodified tree-sitter grammar (`[grammars.marko]` in
-`extension.toml`, pinned to the same rev the official `marko-js/zed`
-extension pins: `7fb20382b9b0c97c8bdbceee0e0641bea11dd00f`,
-`@marko/tree-sitter` v0.2.0). `languages/mx/*.scm` are the official
-extension's `languages/marko/*.scm` copied **verbatim**, no overlay, no
-edits — MX 1.0 being a strict Marko subset (decision 72) means Marko's own
-queries already apply. `languages/mx/config.toml` is hand-written (`name =
+`MX` rides MX's own tree-sitter grammar, `[grammars.mx]` in `extension.toml`
+(dev form: `file://` + committed `rev` + `path =
+"packages/editors/tree-sitter-mx"`): `marko-js/tree-sitter` at
+`7fb20382b9b0c97c8bdbceee0e0641bea11dd00f` (`@marko/tree-sitter` v0.2.0) plus
+the decision 146 shorthands. `scripts/vendor.sh` builds `languages/mx/*.scm`
+(highlights and injections from `packages/editors/tree-sitter-mx/queries/`,
+brackets and outline from `base/mx/`); never hand-edit them. Decision 72 had
+`.mx` ride Marko's grammar unmodified; since 146 MX syntax is a superset of
+Marko's, so MX owns its grammar (decision 72 addendum in `UPSTREAM.md`).
+After a grammar commit, move `[grammars.mx]`'s `rev`. `languages/mx/config.toml` is hand-written (`name =
 "MX"`, `path_suffixes = ["mx"]`) since the official file's `name = "Marko"`
 would collide with the official extension's own language if copied as-is.
 `.marko` files are covered by installing Zed's official `marko-js/zed`
@@ -66,9 +69,11 @@ copy of `base/solidmx/*.scm`'s content, since the grammar's TypeScript-host
 node shapes are identical. All four per language get
 `overlay/{solidmx,ngmx}/*.scm` concatenated on top. Never hand-edit
 `languages/{solidmx,ngmx}/*.scm` directly.
-There is no `vendor.sh --check` mode (MX's version had one, comparing its
-`marko-js/tree-sitter`/`marko-js/zed` pins against upstream HEAD): SolidMX's
-highlights source is local, with no upstream HEAD to drift against, so a
+There is no `vendor.sh --check` mode (the retired MX language's version had
+one, comparing its `marko-js/tree-sitter`/`marko-js/zed` pins against
+upstream HEAD): every query source is now local (MX's own drift check against
+`marko-js/tree-sitter` is `packages/editors/tree-sitter-mx`'s
+`vendor-check.sh`), with no upstream HEAD to drift against, so a
 "check" mode could only ever report success — decision 55, a gate that
 cannot fail is not a gate. `.github/workflows/upstream-check.yml`'s
 `vendored-files-match` job does the real check instead.

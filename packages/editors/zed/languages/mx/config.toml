@@ -1,9 +1,10 @@
 name = "MX"
-grammar = "marko"
+grammar = "mx"
 path_suffixes = ["mx"]
 
 # JS-style line comments in expression/concise positions; HTML comments in
-# markup (same convention as upstream Marko — the grammar is unmodified).
+# markup (same convention as Marko; the mx grammar is Marko's plus the
+# decision 146 shorthands).
 line_comments = ["// "]
 block_comment = ["<!-- ", " -->"]
 

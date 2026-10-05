@@ -200,8 +200,11 @@ bun run e2e
 
 ## Editors
 
-`packages/editors/zed` ships three languages for Zed: `MX` (`.mx`) and
-`AstroMX` (`.astro.mx`), both backed by the unmodified `marko-js/tree-sitter`
-grammar, and `SolidMX` (`.solid.mx`), backed by `packages/editors/tree-sitter-solidmx`.
+`packages/editors/zed` ships four languages for Zed: `MX` (`.mx`), backed by
+`packages/editors/tree-sitter-mx` (`marko-js/tree-sitter` plus the decision
+146 shorthands), `AstroMX` (`.astro.mx`), backed by
+`packages/editors/tree-sitter-amx` with the MX grammar injected into the
+template body, and `SolidMX` (`.solid.mx`) and `AngularMX` (`.ng.mx`), backed
+by `packages/editors/tree-sitter-solidmx`.
 See its `README.md` for dev-install steps, the per-language limitations, and
 the upstream bump procedure.

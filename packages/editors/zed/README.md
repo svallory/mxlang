@@ -2,16 +2,19 @@
 
 Ships four languages:
 
-- `MX` (`.mx`, the only extension this language registers — MX only supports
-  the MX 1.0 subset of Marko syntax) on Marko's own unmodified tree-sitter
-  grammar, `[grammars.marko]` pinned to the same rev the official
-  `marko-js/zed` extension pins (`7fb20382b9b0c97c8bdbceee0e0641bea11dd00f`,
-  `@marko/tree-sitter` v0.2.0). `languages/mx/*.scm` are the official
-  extension's `languages/marko/*.scm` copied **verbatim** (no overlay, no
-  edits) — MX 1.0 is a strict subset of Marko syntax (decision 72), so
-  Marko's own queries apply unmodified. Real `.marko` files are covered by
-  installing the official [`marko-js/zed`](https://github.com/marko-js/zed)
-  extension directly, a separate `Marko` language unrelated to this one.
+- `MX` (`.mx`, the only extension this language registers) on MX's own
+  tree-sitter grammar, `[grammars.mx]` from `packages/editors/tree-sitter-mx`:
+  `marko-js/tree-sitter` at `7fb20382b9b0c97c8bdbceee0e0641bea11dd00f`
+  (`@marko/tree-sitter` v0.2.0, the rev the official `marko-js/zed` extension
+  pins) plus the decision 146 shorthands (`:name`, and `#id`/`.class`/`:name`
+  in attribute position). `scripts/vendor.sh` builds `languages/mx/*.scm`:
+  highlights and injections from that package's `queries/`, brackets and
+  outline from `base/mx/` (taken from `marko-js/zed`). Decision 72 had `.mx`
+  ride Marko's grammar unmodified; since decision 146 MX syntax is a superset
+  of Marko's, so MX owns its grammar (decision 72 addendum, `UPSTREAM.md`).
+  Real `.marko` files are covered by installing the official
+  [`marko-js/zed`](https://github.com/marko-js/zed) extension directly, a
+  separate `Marko` language (and `marko` grammar) unrelated to this one.
 - `SolidMX` (`.solid.mx`), backed by `packages/editors/tree-sitter-solidmx` (a
   patched `tree-sitter-typescript` tsx dialect with an `mx_element` external
   token in expression position).
