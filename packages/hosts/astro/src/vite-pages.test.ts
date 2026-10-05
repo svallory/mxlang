@@ -90,6 +90,16 @@ describe("wrapAsPage", () => {
     );
   });
 
+  it("moves the sink entry onto the renamed page function (decision 155)", () => {
+    // The compiled module attaches `render(input, out)` to its default export
+    // as `NAME.render = __mxRender;`. Left behind by the rename, that line
+    // would reference a function that no longer exists and throw on load.
+    const wrapped = wrapAsPage(compilePage("<p>hi</p>\n"));
+
+    expect(wrapped).toContain("__mxRenderPage.render = __mxRender;");
+    expect(wrapped).not.toMatch(/\bPage\.render = /);
+  });
+
   it("returns null when the brand and the default export name disagree", () => {
     // Both halves of the tail must name the same function. A module where
     // they differ is not `brandRender`'s output, and wrapping it would brand

@@ -130,8 +130,15 @@ export function wrapAsPage(code: string): string | null {
   // with no type annotations at all — so injecting `(input: Input)`/`as
   // Input` here would hand rolldown's plain-JS parser syntax it no longer
   // expects anywhere else in the module.
+  // `NAME.render = …` attaches the sink entry to the default export
+  // (decision 155); it follows the function to its new name, or it would
+  // reference a binding the rename removed.
   const rendered = withoutLayout
     .replace(brandedTail, "\nfunction __mxRenderPage(input) {")
+    .replace(
+      new RegExp(`\\n${brandedName.replaceAll("$", "\\$")}\\.render = `),
+      "\n__mxRenderPage.render = ",
+    )
     .replace(EXPORT_DEFAULT_RENDER_RE, "");
 
   const imports = [
