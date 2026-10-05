@@ -211,7 +211,7 @@ listed, tested and diverged from on purpose.
    hint: `:z` was read as an atom (decision 156), so the ternary has no `:`; if TypeScript owns that `:` (type arguments before it, ADR 156 known limits), write `: z` with a space
    ```
 
-The four share one row in `divergences.md` (143) and a case-table row, so a future
+The four share one row in `divergences.md` and a case-table row, so a future
 lexer change is a conscious one. See also the rows in
 [the specification](/specification/#the-mx-language-4-elements-and-attributes).
 
