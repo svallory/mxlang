@@ -88,7 +88,8 @@ cannot: `<await>` (Marko itself refuses to render one to a string) and
 `<@catch>` lowers to `try`/`catch` whose body writes into a buffered sub-sink
 (`createBufferedOut`), committed on success and dropped on a throw, as Marko
 does. A `<try>` without `<@catch>` is a plain block: the error propagates, as
-in Marko. The `try-*` fixtures in `fixtures-marko` lock both; the JSX oracles
+in Marko (locked by a unit test; the oracle cannot express a throw). The
+`try-*` fixtures in `fixtures-marko` lock the partial-output drop; the JSX oracles
 skip three of them (TODO `jsx-try-ssr-error-boundary`, `tryGaps` in
 `packages/oracle/src/report-preact.ts`).
 

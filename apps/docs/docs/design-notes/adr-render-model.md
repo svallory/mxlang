@@ -27,13 +27,13 @@ Between units the emitter always passes the caller's sink down, and `/var` is `r
 
 `out` is `@mxlang/html/runtime`'s `Out`, which has two members, `write` and `toString`, so a streaming implementation can replace it later without touching emitted code. `<try>` renders its body into a buffered sub-sink (`createBufferedOut`) that is committed when the body finishes and dropped when it throws.
 
-Rendered HTML is byte-identical except where the old emitter diverged from Marko; each such case is oracle-locked in this PR. There are three:
+Rendered HTML is byte-identical except where the old emitter diverged from Marko. There are three such cases, and this PR locks each one against Marko:
 
-- A `<try>` body that throws after writing output now drops that partial output and renders `<@catch>`, which is what Marko renders. The old emitter kept the partial body.
-- A `<try>` without `<@catch>` now rethrows, as Marko does. The old emitter swallowed the error with `catch {}`.
-- `/var` on a dynamic tag binds the callee's return value, including when the tag is called with arguments. The old emitter dropped it.
+- A `<try>` body that throws after writing output now drops that partial output and renders `<@catch>`, which is what Marko renders. The old emitter kept the partial body. **Oracle-locked** by `try-catch-partial`, `try-nested` and `try-child-throw`.
+- `/var` on a dynamic tag binds the callee's return value, including when the tag is called with arguments. The old emitter dropped it. **Oracle-locked** by `dynamic-tag-var`.
+- A `<try>` without `<@catch>` now rethrows, as Marko does. The old emitter swallowed the error with `catch {}`. **Locked by a unit test** (`translate.test.ts`, "rethrows from a `<try>` without `<@catch>`") against measured Marko 6.3.51 output. The oracle compares HTML only and cannot express a throw; its `try-no-catch` fixture locks only the path that does not throw.
 
-The `try-catch-partial`, `try-no-catch`, `try-nested` and `try-child-throw` fixtures in `packages/targets/html/fixtures-marko` hold Marko's own output. The JSX hosts skip three of them under TODO `jsx-try-ssr-error-boundary`.
+The fixtures live in `packages/targets/html/fixtures-marko`, and their `expected.html` is Marko's own output. The JSX hosts skip three `try-*` fixtures under TODO `jsx-try-ssr-error-boundary`, and `dynamic-tag-var` because they refuse `/var` on a dynamic tag (TODO `jsx-hosts-return-channel`).
 
 ## Alternatives considered
 

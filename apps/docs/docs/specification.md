@@ -3335,7 +3335,10 @@ nested `<try>` commits into its enclosing one. A `<try>` **without**
 `<@catch>` catches nothing: the error propagates out of the render, or to an
 enclosing `<try>`, as in Marko (it was once swallowed). `<@placeholder>` stays
 an error on this target (§6). The `try-*` fixtures in
-`packages/targets/html/fixtures-marko` lock all of this against Marko.
+`packages/targets/html/fixtures-marko` oracle-lock the partial-output drop,
+and `dynamic-tag-var` oracle-locks `/var` on a dynamic tag, with and without
+arguments. The catch-less rethrow is locked by a unit test against measured
+Marko 6.3.51 output; the oracle cannot express a throw.
 
 **Decisions:** 95, 155.
 

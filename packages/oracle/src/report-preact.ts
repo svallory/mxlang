@@ -54,6 +54,7 @@ function skips(targetName: string): Record<string, string> {
     "dynamic-tag":
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX dynamic-tag syntax
       "a dynamic tag name (`<${expr}>`) cannot sit in JSX tag position, which requires a capitalized identifier",
+    "dynamic-tag-var": `\`/var\` on a dynamic tag is a positioned compile error on the ${targetName} host: a dynamic call has no return channel there (TODO jsx-hosts-return-channel)`,
     "dynamic-tag-lowercase-import":
       "same as `dynamic-tag`: a runtime-resolved tag name has no JSX form",
     "doctype-page":
