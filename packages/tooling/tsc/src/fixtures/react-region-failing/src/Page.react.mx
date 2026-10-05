@@ -1,0 +1,16 @@
+import { useState } from "react";
+import Card from "./Card.react.mx";
+
+export function Page() {
+  const [label] = useState(0);
+  return (
+    <section>
+      <Card>
+        <@row|count|>
+          <strong>${count.toUpperCase()}</strong>
+        </@row>
+      </Card>
+      <p title=label.trim()>${label}</p>
+    </section>
+  );
+}

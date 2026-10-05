@@ -7,7 +7,10 @@ import type { HostFileKind, HostRegionInput } from "@mxlang/core";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { fileKindForPipeline } from "./file-kinds.ts";
-import { createRegionLanguagePlugin } from "./language.ts";
+import {
+  createRegionLanguagePlugin,
+  createRegionLanguagePlugins,
+} from "./language.ts";
 
 /** A region file kind no built-in target declares. */
 function fakeKind(
@@ -87,5 +90,36 @@ describe("a case-variant suffix (X.SOLID.mx) is claimed but not lowered", () => 
       solid.createVirtualCode?.(file, "solidmx", snapshot(source), noScript);
     expect(solid.getSyntaxError("/a/X.SOLID.mx")).toBeDefined();
     expect(solid.getSyntaxError("/a/x.solid.mx")).toBeUndefined();
+  });
+});
+
+describe(".react.mx: the React region kind's own plugin", () => {
+  const react = createRegionLanguagePlugins(ts).find(
+    (plugin) => plugin.getLanguageId("/a/x.react.mx") !== undefined,
+  );
+
+  it("claims .react.mx as reactmx, and no other kind's suffix", () => {
+    expect(react?.getLanguageId("/a/x.react.mx")).toBe("reactmx");
+    for (const file of ["/a/x.solid.mx", "/a/x.mx", "/a/x.preact.mx"])
+      expect(react?.getLanguageId(file)).toBeUndefined();
+    expect(
+      react?.typescript?.extraFileExtensions.map((e) => e.extension),
+    ).toEqual(["react.mx"]);
+  });
+
+  it("lowers a region to React JSX in the virtual code", () => {
+    const file = "/a/Panel.react.mx";
+    const source =
+      'export const view = <label for="n" class={ on: true }>n</label>;\n';
+    const virtual = react?.createVirtualCode?.(
+      file,
+      "reactmx",
+      snapshot(source),
+      noScript,
+    );
+    expect(react?.getSyntaxError(file)).toBeUndefined();
+    const text = virtual?.snapshot.getText(0, virtual.snapshot.getLength());
+    expect(text).toContain("htmlFor=");
+    expect(text).toContain("className=");
   });
 });
