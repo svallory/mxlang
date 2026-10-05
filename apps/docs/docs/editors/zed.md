@@ -5,18 +5,19 @@ description: "The mxlang Zed extension: MX, Solid, AngularMX, and AstroMX langua
 
 # Zed
 
-The `mxlang` extension ships four languages:
+The `mxlang` extension ships seven languages:
 
 - **MX** (`.mx`) — MX's own tree-sitter grammar: Marko's grammar plus the `:name` sugar and `#id`/`.class`/`:name` in attribute position ([ADR 146](/design-notes/adr-name-sugar/)). Until decision 146, `.mx` rode Marko's grammar and queries unmodified (decision 72); MX syntax is now a superset of Marko's, so MX owns its grammar. It is named `mx`, so it coexists with the official Marko extension's `marko` grammar.
 - **Solid** (`.solid.mx`) — its own grammar, a patched TypeScript/TSX grammar with MX recognized in expression position.
+- **ReactMX** (`.react.mx`), **PreactMX** (`.preact.mx`) and **HonoMX** (`.hono.mx`) — TSX with MX regions, on Solid's grammar unchanged for the same reason AngularMX reuses it. Each has its own language name, so the language server and the diagnostics follow the host.
 - **AngularMX** (`.ng.mx`) — an ordinary TypeScript module whose `@Component` template is MX. Reuses Solid's grammar unchanged: the grammar's only MX-specific addition is an opaque `mx_element` token in expression position, which is neither Solid- nor Angular-specific.
 - **AstroMX** (`.astro.mx`) — its own small grammar to separate the TypeScript fence from the MX body, with injected highlighting for both.
 
 ## Install the official Marko extension too
 
-`.mx`/`.astro.mx` files render correctly on their own, but the region of a `.solid.mx` or `.ng.mx` file that contains embedded MX is highlighted through an *injection* — Zed asks for a language named `marko` to highlight that region, and only Zed's official Marko extension provides a language by that name. Install it from Zed's extension registry (Command Palette → "zed: extensions" → search "Marko") before or alongside `mxlang`. Without it, those regions still parse and match brackets correctly — they just render as plain, unhighlighted text.
+`.mx`/`.astro.mx` files render correctly on their own, but the region of a `.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx` or `.ng.mx` file that contains embedded MX is highlighted through an *injection* — Zed asks for a language named `marko` to highlight that region, and only Zed's official Marko extension provides a language by that name. Install it from Zed's extension registry (Command Palette → "zed: extensions" → search "Marko") before or alongside `mxlang`. Without it, those regions still parse and match brackets correctly — they just render as plain, unhighlighted text.
 
-## `.mx` vs `.solid.mx`, `.ng.mx` and `.astro.mx`
+## `.mx` vs `.solid.mx`, the JSX region kinds, `.ng.mx` and `.astro.mx`
 
 Every one of these can match the same file's `.mx` suffix at once: `Counter.solid.mx` matches `MX`'s `.mx` suffix and `Solid`'s `.solid.mx` suffix, `Counter.ng.mx` matches `MX`'s `.mx` suffix and `AngularMX`'s `.ng.mx` suffix, and `Card.astro.mx` matches `MX`'s `.mx` suffix and `AstroMX`'s `.astro.mx` suffix. Zed resolves this by picking the *longest* matching suffix, so `.solid.mx`/`.ng.mx`/`.astro.mx` always win over plain `.mx`, regardless of which extension you installed first.
 
@@ -27,11 +28,12 @@ Every one of these can match the same file's `.mx` suffix at once: `Counter.soli
 | MX (`.mx`) | Yes, from the MX grammar, `#id`/`.class`/`:name` shorthands included | Yes — see below |
 | AstroMX (`.astro.mx`) | Yes: the fence as TypeScript, the template body through the MX grammar | No |
 | Solid (`.solid.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
+| ReactMX / PreactMX / HonoMX (`.react.mx`, `.preact.mx`, `.hono.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
 | AngularMX (`.ng.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | No — not registered for this language yet |
 
 ## Diagnostics language server
 
-The extension registers `@mxlang/language-server` for the `MX` and `Solid`
+The extension registers `@mxlang/language-server` for the `MX`, `Solid`, `ReactMX`, `PreactMX` and `HonoMX`
 languages. It resolves the server to launch, in order: a local install under
 the project (`node_modules/.bin/mxlang-language-server`), a global install,
 `bunx @mxlang/language-server --stdio`, then `npx`. Nothing needs to be

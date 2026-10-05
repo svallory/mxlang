@@ -5,7 +5,7 @@ description: "Type-check Solid, whole-file MX, and AstroMX in editors and CI."
 
 # TypeScript
 
-TypeScript cannot parse a `.solid.mx` module, a whole-file `.mx` / `.marko`
+TypeScript cannot parse a `.solid.mx`, `.react.mx`, `.preact.mx` or `.hono.mx` module, a whole-file `.mx` / `.marko`
 template, or an AstroMX `.astro.mx` file. Without help, an editor cannot derive
 their exports and an import is unresolved. MX projects the source to the
 host's generated TypeScript and keeps diagnostics mapped to the original file.
@@ -164,7 +164,7 @@ file kind, which is how ESLint and TypeScript already coexist.
 
 The TypeScript plugin provides robust position mapping back to your original source:
 
-- **Component tags and attributes:** When you pass an incorrect prop type, the error highlights the exact attribute name or value in the `.mx` or `.solid.mx` file, not a location in the compiled output.
+- **Component tags and attributes:** When you pass an incorrect prop type, the error highlights the exact attribute name or value in the `.mx` or region (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`) file, not a location in the compiled output.
 - **Hoisted blocks:** Type errors inside `static` blocks or `import` statements are mapped correctly despite being hoisted to the top of the generated module.
 
 ### Known Gaps

@@ -9,7 +9,7 @@ description: "@mxlang/language-server: diagnostics-only, for what a host's polic
 
 ## Scope: diagnostics only
 
-It does exactly one thing: watch `.mx`, `.marko`, and `.solid.mx` documents, compile or parse each one through its host, and publish one diagnostic per positioned error. No completion, no hover, no go-to-definition, no formatting, no semantic tokens — Marko's own language server already provides those features for `.mx`/`.marko`, and this server is meant to run *alongside* it, not replace it. Running two language servers against one file type is an ordinary pattern in both VS Code and Zed (the same way ESLint and TypeScript's own server coexist).
+It does exactly one thing: watch `.mx`, `.marko`, and region documents (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), compile or parse each one through its host, and publish one diagnostic per positioned error. No completion, no hover, no go-to-definition, no formatting, no semantic tokens — Marko's own language server already provides those features for `.mx`/`.marko`, and this server is meant to run *alongside* it, not replace it. Running two language servers against one file type is an ordinary pattern in both VS Code and Zed (the same way ESLint and TypeScript's own server coexist).
 
 ## Name sugar
 
@@ -86,6 +86,6 @@ The language server determines the correct host policy to use by reading the `mx
 
 This tells the language server to apply the React host policy. If the `strict` flag is true, stateful tags like `<let>` or `<effect>` will be reported as diagnostics.
 
-### `.solid.mx` files
+### Region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`)
 
-For Solid (`.solid.mx`) files, the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/parser` bridge and runs each through `@mxlang/solid`, mapping the resulting errors back to the correct source positions within the complete TypeScript file.
+For region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/parser` bridge and runs each through the file kind's host (`@mxlang/solid`, `@mxlang/react`, `@mxlang/preact`, `@mxlang/hono`), mapping the resulting errors back to the correct source positions within the complete TypeScript file.

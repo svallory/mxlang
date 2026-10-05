@@ -1,6 +1,6 @@
 ---
 title: "VS Code"
-description: "Highlighting for .mx, .solid.mx, .ng.mx, and .astro.mx files in VS Code, plus formatting and diagnostics for .mx and .solid.mx."
+description: "Highlighting for .mx, .solid.mx, .react.mx, .preact.mx, .hono.mx, .ng.mx, and .astro.mx files in VS Code, plus formatting and diagnostics for .mx and the region file kinds."
 ---
 
 # VS Code
@@ -20,6 +20,7 @@ The extension provides:
 - **MX (`.mx`, `.marko`)**: Full highlighting powered by the official Marko TextMate grammar.
 - **AstroMX (`.astro.mx`)**: Highlighting for the Astro frontmatter and delegates the body to the Marko grammar.
 - **Solid (`.solid.mx`)**: Highlighting as `source.tsx`. *Note: True grammar injection for MX regions within Solid is not feasible via regex alone, so `.solid.mx` falls back to standard TSX highlighting for now.*
+- **ReactMX (`.react.mx`), PreactMX (`.preact.mx`) and HonoMX (`.hono.mx`)**: Highlighting as `source.tsx`, the same fallback as Solid. Each is a TypeScript module with MX regions (language ids `reactmx`, `preactmx`, `honomx`), and a file of that kind is no longer treated as a plain `.mx`. See [React](/hosts/react/#region-files-reactmx), [Preact](/hosts/preact/#region-files-preactmx) and [Hono](/hosts/hono/#region-files-honomx).
 - **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as Solid — an ordinary TypeScript module whose `@Component` template is MX. The TypeScript plugin compiles it as its own file kind, so TypeScript semantics work: errors in the component class and module are reported at their `.ng.mx` position. Angular template diagnostics (checking the expressions inside `template:`) also appear in the editor: Angular's compiler runs in a background process, 1 second after you stop typing (or on save, or never, per `package.json#mx.angular.diagnostics`), and needs `@angular/compiler-cli` `>=22 <23` in your project. The language server does not handle `.ng.mx` yet.
 
 ## Formatting
@@ -49,7 +50,7 @@ are not affected.
 
 ## Diagnostics
 
-The extension automatically starts `@mxlang/language-server` for `.mx` and `.solid.mx` files. (Note: The language server does not currently handle `.astro.mx` or `.ng.mx` files.)
+The extension automatically starts `@mxlang/language-server` for `.mx`, `.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` files. (Note: The language server does not currently handle `.astro.mx` or `.ng.mx` files.)
 
 ### Command Resolution
 The extension looks for the language server in the following order:
@@ -72,7 +73,7 @@ You can override the path to the language server executable using the `mxlang.la
 
 ## TypeScript
 
-The extension automatically contributes `@mxlang/typescript-plugin` to VS Code's internal TypeScript server for `.mx`, `.solid.mx`, and `.astro.mx` files.
+The extension automatically contributes `@mxlang/typescript-plugin` to VS Code's internal TypeScript server for `.mx`, `.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx` and `.astro.mx` files.
 
 You do **not** need to configure `typescript.tsserver.pluginPaths` or `compilerOptions.plugins` for editor diagnostics, as the extension injects the plugin directly.
 
