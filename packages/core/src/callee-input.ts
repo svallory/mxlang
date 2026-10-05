@@ -393,6 +393,53 @@ export function readCalleeInput(
   return result;
 }
 
+/**
+ * Whether a call target is a `.mx` unit that declares `<return>`, so its
+ * default export hands back `{ value, output }` rather than the output alone.
+ *
+ * The imported counterpart of `routeTemplateCall`'s `returnsValue`: a
+ * discovered template tag learns it from the unit's cached metadata, and an
+ * imported `.mx` binding reads the same cache through the same resolution
+ * `readCalleeInput` uses. The shape is invisible at the call site, so without
+ * this an emitter concatenates the pair as a string.
+ *
+ * False when the target does not resolve to a `.mx` file (a `.ts` module, a
+ * barrel re-export, an unresolved specifier, a local `<define>`): nothing is
+ * known about its return shape, and it is called as an ordinary component.
+ * False too while the unit is mid-compile (`pending`), whose metadata is a
+ * placeholder; the unit's own compile validates its `<return>`.
+ */
+export function calleeReturnsValue(target: ComponentTarget, ctx: Ctx): boolean {
+  if (target.kind !== "name") return false;
+  if (target.name === ctx.exportName) return false;
+  const resolved = resolveTarget(target, {
+    importer: ctx.filename,
+    resolveImport: ctx.resolveImport,
+    imports: ctx.importSpecifiers,
+    ctx,
+    targets: ctx.targets,
+  });
+  if (resolved.kind !== "path" || !resolved.path.endsWith(".mx")) return false;
+  // A host module file (`card.solid.mx`) is a TypeScript module with a
+  // template region, not a template unit: `readInputAt` reads it the same way.
+  if (hostModuleSegment(basename(resolved.path), ctx.targets) !== undefined) {
+    return false;
+  }
+  try {
+    const { mtimeMs, source } = sourceSnapshot(resolved.path);
+    const metadata = metadataForTemplate(ctx, {
+      filename: resolved.path,
+      source,
+      mtimeMs,
+    });
+    return metadata.pending !== true && metadata.returnsValue === true;
+  } catch {
+    // An unreadable or non-compiling callee is reported by `readCalleeInput`
+    // at this same call; there is no return shape to act on.
+    return false;
+  }
+}
+
 function recordDependencies(
   ctx: Ctx | undefined,
   dependencies: string[],

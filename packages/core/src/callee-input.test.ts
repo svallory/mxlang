@@ -26,6 +26,7 @@ import {
   type AttrTagDecl,
   type CalleeInput,
   type CalleeInputResult,
+  calleeReturnsValue,
   type ResolveContext,
   readCalleeInput,
   resetCalleeInputCache,
@@ -1821,6 +1822,91 @@ describe("readCalleeInput", () => {
     ).toThrowError(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko syntax.
       "render its body with `<${input.x.content}/>`",
+    );
+  });
+});
+
+describe("calleeReturnsValue", () => {
+  const withFiles = (
+    files: Record<string, string>,
+    specifiers: [string, string][],
+    run: (ctx: ReturnType<typeof newCtx>) => void,
+  ) => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-callee-returns-"));
+    try {
+      for (const [name, text] of Object.entries(files)) {
+        writeFileSync(join(directory, name), text);
+      }
+      resetTemplateCache();
+      const ctx = newCtx(
+        "",
+        printExpression,
+        declarations(),
+        undefined,
+        join(directory, "caller.mx"),
+        lookup,
+      );
+      ctx.importSpecifiers = new Map(specifiers);
+      run(ctx);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  };
+  const target = { kind: "name", name: "Counter" } as const;
+  const returning = "<span>x</span>\n<return value=1/>\n";
+
+  it("is true for an imported .mx unit that declares <return>", () => {
+    withFiles(
+      { "counter.mx": returning },
+      [["Counter", "./counter.mx"]],
+      (ctx) => expect(calleeReturnsValue(target, ctx)).toBe(true),
+    );
+  });
+
+  it("is false for an imported .mx unit without <return>", () => {
+    withFiles(
+      { "counter.mx": "<span>x</span>\n" },
+      [["Counter", "./counter.mx"]],
+      (ctx) => expect(calleeReturnsValue(target, ctx)).toBe(false),
+    );
+  });
+
+  it("is false for a .ts callee and for a barrel re-exporting a .mx", () => {
+    withFiles(
+      {
+        "counter.mx": returning,
+        "barrel.ts": 'export { default as Counter } from "./counter.mx";\n',
+        "plain.ts": "export default function Counter() { return 1; }\n",
+      },
+      [["Counter", "./barrel.ts"]],
+      (ctx) => {
+        expect(calleeReturnsValue(target, ctx)).toBe(false);
+        ctx.importSpecifiers = new Map([["Counter", "./plain.ts"]]);
+        expect(calleeReturnsValue(target, ctx)).toBe(false);
+      },
+    );
+  });
+
+  it("is false for an unresolved specifier, a missing binding and a dynamic target", () => {
+    withFiles({}, [["Counter", "./missing.mx"]], (ctx) => {
+      expect(calleeReturnsValue(target, ctx)).toBe(false);
+      expect(calleeReturnsValue({ kind: "name", name: "Other" }, ctx)).toBe(
+        false,
+      );
+      expect(
+        calleeReturnsValue(
+          { kind: "dynamic", expr: { code: "x" } } as never,
+          ctx,
+        ),
+      ).toBe(false);
+    });
+  });
+
+  it("is false for a callee that does not compile, leaving the error to readCalleeInput", () => {
+    withFiles(
+      { "counter.mx": "<if=>\n" },
+      [["Counter", "./counter.mx"]],
+      (ctx) => expect(calleeReturnsValue(target, ctx)).toBe(false),
     );
   });
 });

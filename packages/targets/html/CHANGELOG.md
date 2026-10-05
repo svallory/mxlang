@@ -1,5 +1,7 @@
 # @mxlang/html
 
+- **Fix (html-imported-return-tag-object-object):** an imported `.mx` tag that declares `<return>`, called without `/var`, renders its body and drops the value (`<div><span>1</span></div>`) instead of `[object Object]`, as Marko 6.3.51 does. The fix is in `@mxlang/core` (the call now carries `returnsValue`); the html emitter's existing unwrap does the rest.
+
 - **Fix (html-textarea-value-content, decision 149):** `<textarea value=x/>` renders the value as escaped content (`<textarea>0</textarea>`), as Marko 6.3.51 does, instead of a `value` attribute. `null`/`undefined`/`false`/`true` render nothing, `0` and `""` are kept, a leading newline is doubled, a spread's `value` is content (a body wins over it), a dynamic `<${"textarea"} value=…/>` does the same, and an explicit `value` together with a body is Marko's compile error. Known divergence: a `null`/`undefined` spread on a textarea throws in Marko; here it is ignored and renders empty, as the target documents for every tag.
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles and renders as `<div value:foo="y">`, Marko's own attribute (MX previously rejected it).

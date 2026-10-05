@@ -1,5 +1,7 @@
 # Changelog
 
+- **Test (html-imported-return-tag-object-object):** `server.test.ts` renders a unit that declares `<return>` through the renderer and pins that the markup renders and the value is dropped. No code change.
+
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` in a template body emits `value:foo={y}`, which the real Astro compiler renders as `value:foo="y"`; MX previously rejected the form.
 
 ## Unreleased

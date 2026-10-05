@@ -33,6 +33,7 @@ import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
   type CalleeInput,
+  calleeReturnsValue,
   readCalleeInput,
   readOwnInput,
 } from "./callee-input.ts";
@@ -2624,6 +2625,11 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     attributeTagTree: loweredTags.tree,
     attrTagProps: loweredTags.props,
     args: (node.arguments ?? []).map((a: Node) => exprOf(ctx, a)),
+    // An imported `.mx` unit that declares `<return>` hands back
+    // `{ value, output }`; a discovered one already says so through
+    // `routeTemplateCall`. Only the flag is set here: `/var` on an imported
+    // call is still rejected above.
+    ...(calleeReturnsValue(target, ctx) ? { returnsValue: true } : {}),
     loc: posOf(node),
   };
 }

@@ -121,6 +121,12 @@ A `<return>` in a page is legal and means the same thing — a page is a module 
 - **The call has to come first.** Reading a `/var` earlier in the same block than the call that binds it is an error, not a run-time crash.
 - **The tag must be a discovered one.** `/var` binds what a *discovered* tag (`tags/counter.mx`, called as `<counter/n/>`) returns. On a tag you `import` and call by binding (`import Counter from "./lib/counter.mx"`, then `<Counter/n/>`), `/var` is rejected, even when that file declares `<return>`: ``tag variable `/n` on `<Counter>` is not supported in a standalone template``. To bind a returned value, put the file under a `tags/` directory and call it by its discovered name.
 
+### Calling a returning tag without `/var`
+
+A tag that declares `<return>` can be called without a `/var`. The call renders the tag's body and drops the value, as Marko does, whether the tag is discovered (`<counter start=1/>`) or imported by its default binding from a `.mx` file (`import Counter from "./lib/counter.mx"`, then `<Counter start=1/>`). The value stays unreachable in both forms, and the imported form cannot bind it at all.
+
+Only a default import that resolves straight to a `.mx` file is recognised. A `.mx` file re-exported through a `.ts` barrel (`export { default as Counter } from "./counter.mx"`) is a dynamic tag, not a static import; the compiler cannot see that its callee returns a value.
+
 ### Where `/var` can be written, per host
 
 On **html** and **Astro `.mx`** components, a `/var` works anywhere a call does — including inside `<if>` and `<for>`, where the binding lands in that block and the call runs per iteration.
