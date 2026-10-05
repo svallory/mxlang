@@ -1,0 +1,6 @@
+import { mxClass as __mxClass } from "@mxlang/react/runtime";export default function Page(props: {active: boolean;}) {
+  return <>
+    <><p className={__mxClass({ on: props.active, off: !props.active })} style={{ color: "red" }}>x</p></>
+    <><label htmlFor="n" className={__mxClass(["a", props.active && "b"])}>n</label></>
+  </>;
+}

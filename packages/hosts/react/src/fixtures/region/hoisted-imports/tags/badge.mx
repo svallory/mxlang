@@ -1,0 +1,2 @@
+export interface Input { label: string }
+<span class="badge">${input.label}</span>

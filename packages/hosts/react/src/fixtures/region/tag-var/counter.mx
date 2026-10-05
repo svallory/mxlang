@@ -1,0 +1,3 @@
+export interface Input { start: number }
+<return=input.start * 2/>
+<span>counter ${input.start}</span>

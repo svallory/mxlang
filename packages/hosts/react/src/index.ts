@@ -5,11 +5,17 @@ import type {
   RawSourceMap,
 } from "@mxlang/core";
 import { createTargetLookup, type TargetLookup } from "@mxlang/core";
-import type { CompilePreactOptions, CompilePreactResult } from "@mxlang/preact";
+import type {
+  CompileJsxRegionResult,
+  CompilePreactOptions,
+  CompilePreactResult,
+} from "@mxlang/preact";
 import type { ReactNode } from "react";
 import {
   compileReactFile as compileReactFileWith,
   compileReactMx as compileReactMxWith,
+  compileReactRegion as compileReactRegionWith,
+  type ReactRegionOptions,
 } from "./compile.ts";
 import descriptor from "./descriptor.ts";
 
@@ -24,7 +30,12 @@ import descriptor from "./descriptor.ts";
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 
 export { TranslateError } from "@mxlang/preact";
-export { reactDeclarations, reactDialect } from "./dialect.ts";
+export type { ReactRegionOptions } from "./compile.ts";
+export {
+  reactDeclarations,
+  reactDialect,
+  reactRegionDeclarations,
+} from "./dialect.ts";
 export type { CompileResult, RawSourceMap };
 
 /** Attribute-tag value specialised to React's renderable node type. */
@@ -72,6 +83,23 @@ export function compileReactFile(
   > = {},
 ): CompileResult {
   return compileReactFileWith(filename, {
+    ...options,
+    targets: options.targets ?? ownTargets,
+  });
+}
+
+/**
+ * Compiles one MX region of a `.react.mx` module to a React JSX expression.
+ *
+ * A `.react.mx` file is TypeScript (TSX) with MX regions: hooks and logic
+ * live in the surrounding module, and the parser bridge calls this once per
+ * region. `options.targets` defaults to this package's own lookup.
+ */
+export function compileReactRegion(
+  source: string,
+  options: Omit<ReactRegionOptions, "targets"> & { targets?: TargetLookup },
+): CompileJsxRegionResult {
+  return compileReactRegionWith(source, {
     ...options,
     targets: options.targets ?? ownTargets,
   });

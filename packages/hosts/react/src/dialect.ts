@@ -173,3 +173,8 @@ export const reactDialect: JsxDialect = {
 
 /** Resolve-time policy shared structurally with Preact, with React diagnostics. */
 export const reactDeclarations = createJsxDeclarations("React");
+
+/** {@link reactDeclarations} for a `.react.mx` region: hook errors name the surrounding component. */
+export const reactRegionDeclarations = createJsxDeclarations("React", {
+  region: true,
+});

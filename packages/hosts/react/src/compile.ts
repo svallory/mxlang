@@ -19,12 +19,19 @@
 import { readFileSync } from "node:fs";
 import type { TargetLookup } from "@mxlang/core";
 import {
+  type CompileJsxRegionOptions,
+  type CompileJsxRegionResult,
   type CompilePreactOptions,
   type CompilePreactResult,
   type CompileResult,
+  compileJsxRegion,
   compilePreactMx,
 } from "@mxlang/preact";
-import { reactDeclarations, reactDialect } from "./dialect.ts";
+import {
+  reactDeclarations,
+  reactDialect,
+  reactRegionDeclarations,
+} from "./dialect.ts";
 
 /** This host's compile options: the preact emitter's surface, minus the dialect, which is always react's here. */
 export type ReactCompileOptions = Pick<
@@ -61,4 +68,27 @@ export function compileReactFile(
   options: ReactCompileOptions & { targets: TargetLookup },
 ): CompileResult {
   return compileReactMx(readFileSync(filename, "utf8"), filename, options);
+}
+
+/** A `.react.mx` region's options: the shared JSX region engine's, minus what React fixes. */
+export type ReactRegionOptions = Omit<
+  CompileJsxRegionOptions,
+  "dialect" | "declarations" | "segment"
+>;
+
+/**
+ * Compiles one MX region of a `.react.mx` module to a React JSX expression,
+ * under an explicit `targets` lookup (`@mxlang/preact`'s `compileJsxRegion`
+ * with React's dialect and region declarations).
+ */
+export function compileReactRegion(
+  source: string,
+  options: ReactRegionOptions,
+): CompileJsxRegionResult {
+  return compileJsxRegion(source, {
+    ...options,
+    dialect: reactDialect,
+    declarations: reactRegionDeclarations,
+    segment: "react",
+  });
 }

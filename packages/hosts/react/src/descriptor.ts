@@ -2,7 +2,7 @@
  * The `react-jsx` target descriptor (decisions 129 and 132; unstable).
  *
  * Importing this module loads `./dialect.ts` (the declarations) only; the
- * compile entry is required by a relative path inside `load`, from
+ * compile entry (whole-file and region) is required by a relative path, from
  * `./compile.ts` — a descriptor-free leaf. The descriptor never requires
  * `./index.ts`: the index imports this module to build the package's own
  * lookup, so a require back would close an entry-point cycle that a bundler
@@ -59,7 +59,30 @@ const descriptor: TargetDescriptor = {
         }),
     };
   },
-  host: { name: "react" },
+  host: {
+    name: "react",
+    fileKinds: [
+      {
+        segment: "react",
+        // VS Code's language id, then Zed's language name (lowercased).
+        languageIds: ["reactmx", "react"],
+        diagnosticSource: "reactmx",
+        compileRegion: (source, input) =>
+          (
+            require("./compile.ts") as typeof import("./compile.ts")
+          ).compileReactRegion(source, {
+            ...input,
+            targets: input.targets ?? targets(),
+          }),
+        // The JSX hosts' one reader, in `@mxlang/preact`: the only place
+        // they import `@mxlang/parser`.
+        readCalleeInput: (request) =>
+          (
+            require("@mxlang/preact/callee-reader") as typeof import("@mxlang/preact/callee-reader")
+          ).readJsxCalleeInput(request),
+      },
+    ],
+  },
 };
 
 export default descriptor;

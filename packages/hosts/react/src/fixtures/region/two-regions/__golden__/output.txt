@@ -1,0 +1,10 @@
+import { mxClass as __mxClass } from "@mxlang/react/runtime";function Header(props: {text: string;}) {
+  return <><h1 className={__mxClass({ big: true })}>{props.text}</h1></>;
+}
+
+export default function Page() {
+  return <>
+    <><Header text="hi" /></>
+    <><p className={__mxClass({ small: true })}>second</p></>
+  </>;
+}

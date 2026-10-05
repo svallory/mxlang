@@ -1,0 +1,12 @@
+import { useState } from "react";
+
+export default function Page() {
+  const [label] = useState("from-state");
+  return (
+    <>{(() =>
+      {const Row = (n: number) => <><li>{label} {n}</li></>;
+        return <><ul>{Row(1)}{Row(
+              2)}</ul></>;
+      })()}</>);
+
+}

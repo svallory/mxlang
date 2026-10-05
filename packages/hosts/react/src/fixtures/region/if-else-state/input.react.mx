@@ -1,0 +1,12 @@
+import { useState } from "react";
+
+export default function Page(props: { open: boolean }) {
+  const [open] = useState(props.open);
+  return (
+    <div>
+      <if=open><p>open</p></if>
+      <else-if=props.open === undefined><p>unknown</p></else-if>
+      <else><p>closed</p></else>
+    </div>
+  );
+}

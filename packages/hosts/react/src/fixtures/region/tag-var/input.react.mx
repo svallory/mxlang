@@ -1,0 +1,10 @@
+import Counter from "./counter.mx";
+
+export default function Page() {
+  return (
+    <div>
+      <Counter/doubled start=3/>
+      <p>doubled ${doubled}</p>
+    </div>
+  );
+}

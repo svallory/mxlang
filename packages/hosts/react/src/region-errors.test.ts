@@ -1,0 +1,192 @@
+/**
+ * `.react.mx` region errors: the region rule (module-level MX and `<const>`
+ * are refused, at the statement the author wrote) and the reactive-tag
+ * errors, whose region variant points only at the hook in the surrounding
+ * component. Messages are matched with ANSI stripped; positions are the
+ * authored `.react.mx` line (1-based) and column (0-based).
+ */
+
+import { createTargetLookup } from "@mxlang/core";
+import { print } from "@mxlang/parser";
+import { describe, expect, it } from "vitest";
+import descriptor from "./descriptor.ts";
+import { compileReactMx, compileReactRegion } from "./index.ts";
+
+const targets = createTargetLookup([descriptor]);
+const FILE = "/fixtures/region-errors/Panel.react.mx";
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
+const stripAnsi = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, "");
+
+function errorOf(source: string): {
+  message: string;
+  line: number;
+  column: number;
+} {
+  try {
+    print(source, FILE, {
+      mx: true,
+      mxRegionCompile: (input) =>
+        compileReactRegion(input.source, { ...input, targets }) as ReturnType<
+          NonNullable<
+            NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
+          >
+        >,
+    });
+  } catch (error) {
+    const e = error as Error & { loc?: { line: number; column: number } };
+    if (!e.loc) throw new Error(`expected a positioned error: ${e.message}`);
+    return {
+      // The parser appends ` (line:column)` to a positioned message.
+      message: stripAnsi(e.message).replace(/ \(\d+:\d+\)$/, ""),
+      line: e.loc.line,
+      column: e.loc.column,
+    };
+  }
+  throw new Error("expected a compile error, but the module compiled");
+}
+
+/** A component whose region spans lines 3-7 and holds `body` on line 5. */
+const inRegion = (body: string) =>
+  `import { useState } from "react";\nexport function Panel() {\n  return (\n    <div>\n      ${body}\n    </div>\n  );\n}\n`;
+
+const MODULE_LEVEL =
+  "module-level MX statements cannot appear inside a `.react.mx` expression; write them in the surrounding TypeScript module";
+
+describe("region rule", () => {
+  // A bridge-found region is one element, so module-level MX reaches the
+  // region entry only through a direct caller handing it statements: the
+  // hook's own contract. The region sits at file line 3 (0-based 2), column
+  // 4, offset 40, so a position equal to the region start would be (3, 4).
+  function hookError(source: string) {
+    try {
+      compileReactRegion(source, {
+        filename: FILE,
+        baseOffset: 40,
+        baseLine: 2,
+        baseColumn: 4,
+        targets,
+      });
+    } catch (error) {
+      const e = error as Error & { line?: number; column?: number };
+      return {
+        message: stripAnsi(e.message).replace(/ \(\d+:\d+\)$/, ""),
+        line: e.line,
+        column: e.column,
+      };
+    }
+    throw new Error("expected a compile error");
+  }
+
+  it.each([
+    ["an import", 'import x from "./x.mx"'],
+    ["a static block", "static const n = 1"],
+    ["an export", "export const n = 1"],
+    ["an Input interface", "export interface Input { n: number }"],
+  ])(
+    "refuses %s at its own line and column, not the region start",
+    (_label, statement) => {
+      expect(hookError(`<div/>\n${statement}\n<p/>`)).toEqual({
+        message: MODULE_LEVEL,
+        line: 4,
+        column: 0,
+      });
+    },
+  );
+
+  it("refuses <return> as module-level", () => {
+    expect(hookError("<div/>\n<return=1/>").message).toBe(MODULE_LEVEL);
+  });
+
+  it("refuses a top-level <const>, pointing at the surrounding component", () => {
+    expect(errorOf(inRegion("<const/n=useState(0)/>"))).toEqual({
+      message:
+        "`<const>` cannot declare a binding inside a `.react.mx` expression; declare it in the surrounding component",
+      line: 5,
+      column: 6,
+    });
+  });
+
+  it("refuses a <const> nested deeper in the region with the same message", () => {
+    expect(
+      errorOf(inRegion("<section>\n        <const/n=1/>\n      </section>")),
+    ).toEqual({
+      message:
+        "`<const>` cannot declare a binding inside a `.react.mx` expression; declare it in the surrounding component",
+      line: 6,
+      column: 8,
+    });
+  });
+
+  it("keeps a <define> inside a callback refused (it would change scope)", () => {
+    expect(
+      errorOf(
+        inRegion(
+          "<for|n| of=[1]>\n        <define/Row><b/></define>\n      </for>",
+        ),
+      ),
+    ).toMatchObject({
+      message:
+        "`<define>` must appear at the top level of the template; a block declared inside markup cannot be lifted without changing its scope",
+      line: 6,
+      column: 8,
+    });
+  });
+});
+
+describe("reactive-tag errors in a region name only the hook", () => {
+  it.each([
+    [
+      "<let/count=0/>",
+      "`<let>` is Marko reactive state; use React's `useState` in the surrounding component",
+    ],
+    [
+      "<effect() { console.log(1) }/>",
+      "`<effect>` is a Marko reactive effect; use React's `useEffect` in the surrounding component",
+    ],
+    [
+      "<id/key/>",
+      "`<id>` allocates an identifier for Marko's reactive runtime; use React's `useId` in the surrounding component",
+    ],
+    [
+      "<lifecycle onMount() {}/>",
+      "`<lifecycle>` is a Marko lifecycle hook; use React's `useEffect`/`useLayoutEffect` in the surrounding component",
+    ],
+  ])("%s", (tag, message) => {
+    const error = errorOf(inRegion(tag));
+    expect(error).toEqual({ message, line: 5, column: 6 });
+    expect(error.message).not.toContain("<const");
+  });
+});
+
+describe("whole-file reactive-tag errors are unchanged", () => {
+  function wholeFileError(source: string): string {
+    try {
+      compileReactMx(source, "/fixtures/whole.mx", { targets });
+    } catch (error) {
+      return stripAnsi((error as Error).message);
+    }
+    throw new Error("expected a compile error");
+  }
+
+  it.each([
+    [
+      "<let/count=0/>",
+      "`<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+    ],
+    [
+      "<effect() { console.log(1) }/>",
+      "`<effect>` is a Marko reactive effect; use React's `useEffect` via `<const/_=useEffect(...)/>` or in the surrounding module",
+    ],
+    [
+      "<id/key/>",
+      "`<id>` allocates an identifier for Marko's reactive runtime; use React's `useId`",
+    ],
+    [
+      "<lifecycle onMount() {}/>",
+      "`<lifecycle>` is a Marko lifecycle hook; use React's `useEffect`/`useLayoutEffect` instead",
+    ],
+  ])("%s", (tag, message) => {
+    expect(wholeFileError(tag)).toContain(message);
+  });
+});
