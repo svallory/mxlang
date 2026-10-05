@@ -20,10 +20,13 @@ strict subset of Marko so every borrowed Marko tool keeps working. `.mx` is
 MX's only extension.
 
 `@mxlang/angular` compiles an MX (`.mx`) page template to a plain Angular
-template string — no runtime, no `@angular/*` dependency in the compiled
-output or in this package's own `dependencies` (`@angular/compiler` is a
-devDependency of the test suite only, which asserts every golden against
-the real compiler's `parseTemplate`).
+template string — no runtime and no `@angular/*` code in the compiled
+output. `@angular/compiler` (`>=22.0.0 <23.0.0`) is an optional peer
+dependency, resolved from your project and never bundled: the emitter reads
+Angular's DOM schema from it to choose `[name]` or `[attr.name]` for a
+dynamic attribute on a native element, and a template that needs it while it
+is missing fails with a positioned error naming the package. The test suite
+also asserts every golden against the real compiler's `parseTemplate`.
 
 ```ts
 import { compile } from "@mxlang/angular";

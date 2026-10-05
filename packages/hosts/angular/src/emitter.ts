@@ -35,7 +35,10 @@ import {
   unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";
-import { nativeBinding } from "./dom-schema.ts";
+import {
+  AngularCompilerUnavailableError,
+  nativeBinding,
+} from "./dom-schema.ts";
 import { literalSyntaxWarnings } from "./literal-syntax-hint.ts";
 import {
   type AngularMapping,
@@ -592,19 +595,22 @@ function writeAttributeName(
  */
 type PrimitiveForm = "attr" | "present" | "text" | "list";
 
-/** How a dynamic attribute on a native element renders, or null to keep the legacy binding. */
-function primitiveForm(
-  attr: Attr,
-  tagName: string | undefined,
-): PrimitiveForm | null {
-  return primitiveBinding(attr, tagName)?.form ?? null;
+/** How a normalized attribute binds: its form, and the attribute (`[attr.x]`) or the DOM property (`[x]`). */
+interface PrimitiveBinding {
+  form: PrimitiveForm;
+  attribute: boolean;
 }
 
-/** The form and whether it binds the attribute (`[attr.x]`) or the DOM property (`[x]`). */
+/**
+ * How a dynamic attribute on a native element renders, or null to keep the
+ * legacy binding. `filename` is the file being compiled: Angular's DOM schema
+ * is read from the `@angular/compiler` its project resolves.
+ */
 function primitiveBinding(
   attr: Attr,
   tagName: string | undefined,
-): { form: PrimitiveForm; attribute: boolean } | null {
+  filename: string,
+): PrimitiveBinding | null {
   if (attr.kind !== "dynamic") return null;
   const name = attr.name;
   // A dashed tag is an Angular component selector (or a custom element): its
@@ -632,7 +638,13 @@ function primitiveBinding(
   // `[name]` (a real boolean for a boolean property); a name that is a property
   // only of other elements is an attribute here; a name the schema has never
   // heard of may be a directive input and keeps `[name]` untouched.
-  const binding = nativeBinding(tagName ?? "", name);
+  let binding: ReturnType<typeof nativeBinding>;
+  try {
+    binding = nativeBinding(tagName ?? "", name, filename);
+  } catch (err) {
+    if (err instanceof AngularCompilerUnavailableError) fail(err.message, attr);
+    throw err;
+  }
   if (binding.kind === "property") {
     return {
       form: binding.type === "boolean" ? "present" : "text",
@@ -667,8 +679,7 @@ function emitAttrs(
   // threaded in exactly like the core's `isElement` gate.
   isElement = false,
   onHandler?: () => string,
-  tagName?: string,
-  lets?: Map<Attr, string>,
+  lets?: Map<Attr, PrimitiveBinding & { variable: string }>,
 ): void {
   for (const attr of attrs) {
     // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
@@ -784,7 +795,12 @@ function emitAttrs(
             out.write(" [");
             out.writeMapped(name, attr.nameSpan);
             out.write(']="');
-            out.write(primitiveExpression(lets.get(attr) as string, "list"));
+            out.write(
+              primitiveExpression(
+                (lets.get(attr) as { variable: string }).variable,
+                "list",
+              ),
+            );
             out.write('"');
           } else {
             out.write(" [");
@@ -797,14 +813,13 @@ function emitAttrs(
           // See `primitiveBinding`: a DOM property of the element keeps `[name]`
           // (so a typed value is not fought by a stale attribute), a name with
           // no property here is `[attr.name]`.
-          const { form, attribute } = primitiveBinding(
+          const { form, attribute, variable } = lets.get(
             attr,
-            tagName,
-          ) as NonNullable<ReturnType<typeof primitiveBinding>>;
+          ) as PrimitiveBinding & { variable: string };
           out.write(attribute ? " [attr." : " [");
           out.writeMapped(name, attr.nameSpan);
           out.write(']="');
-          out.write(primitiveExpression(lets.get(attr) as string, form));
+          out.write(primitiveExpression(variable, form));
           out.write('"');
         } else if (NO_PROPERTY_BINDING.test(name)) {
           // A1 (design note), decision 86: Angular property vs attribute
@@ -1297,6 +1312,8 @@ class AngularEmitter implements Emitter<string> {
   private readonly out = new TemplateWriter();
   private readonly ctx: Ctx;
   private readonly tsFilename: string;
+  /** The file being compiled; Angular's DOM schema resolves from its project. */
+  private readonly filename: string;
   private readonly warnedOnce = new Set<string>();
   private sourceIdentifiers: Set<string> | undefined;
   // Collected during the walk, each flushed as one warning per file in
@@ -1336,6 +1353,7 @@ class AngularEmitter implements Emitter<string> {
     selectorPrefix: string = TAG_SELECTOR_PREFIX,
   ) {
     this.ctx = ctx;
+    this.filename = filename;
     this.selectorPrefix = selectorPrefix;
     // `x.component.mx` -> `x.component.ts`, the emitted sibling the step-1
     // import warning tells the author to edit. Falls back to the bare
@@ -1649,9 +1667,12 @@ class AngularEmitter implements Emitter<string> {
       this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
     };
     // Each primitive-normalized attribute binds its authored expression once.
-    const normalized = node.attrs.filter(
-      (attr) => attr.kind === "dynamic" && primitiveForm(attr, node.name),
-    );
+    const bindings = new Map<Attr, PrimitiveBinding>();
+    for (const attr of node.attrs) {
+      const binding = primitiveBinding(attr, node.name, this.filename);
+      if (binding) bindings.set(attr, binding);
+    }
+    const normalized = [...bindings.keys()];
     // A `*` structural attribute is sugar for a template around the element,
     // and a `let`/`as` variable it declares is visible only inside that
     // template. The `@let` must sit inside it too, so the structural attribute
@@ -1669,11 +1690,11 @@ class AngularEmitter implements Emitter<string> {
       emitAttrs(this.out, structural, warn, true);
       this.out.write(">");
     }
-    const lets = new Map<Attr, string>();
-    for (const attr of normalized) {
+    const lets = new Map<Attr, PrimitiveBinding & { variable: string }>();
+    for (const [attr, binding] of bindings) {
       if (attr.kind !== "dynamic") continue;
       const variable = this.gensym("__mxAttr");
-      lets.set(attr, variable);
+      lets.set(attr, { ...binding, variable });
       this.out.write(`@let ${variable} = $any(`);
       this.out.writeMapped(esc(attr.value.code), attr.value.span);
       this.out.write(");");
@@ -1698,7 +1719,6 @@ class AngularEmitter implements Emitter<string> {
         );
         return this.ctx.source;
       },
-      node.name,
       lets,
     );
     this.out.write(">");

@@ -169,7 +169,7 @@ A few of Angular's own idioms:
 | a component call | an Angular component element |
 | a dynamic `data-*`/`aria-*` attribute on a native element | `@let __mxAttr = $any(expr);` then `[attr.data-x]` with Marko's primitive rules |
 | a dynamic attribute that is a DOM property of its element (`title`, `hidden`, `disabled` on a `<button>`, `<input value>`, …) | `[title]` with the primitive rules folded into the value; a boolean property gets a real boolean |
-| a dynamic attribute that is a DOM property only of *other* elements (`disabled` on a `<div>`) | `[attr.disabled]` with the primitive rules |
+| a dynamic attribute that is a DOM property only of *other* elements (`disabled` on a `<div>`), a real attribute whose DOM property is spelled differently (`maxlength`/`maxLength`, `colspan`, `playsinline`, `contenteditable`, …), or an interface-typed property (`<input files>`, `<table caption>`) | `[attr.disabled]` with the primitive rules |
 | a dynamic `class`/`style` on a native element | `[class]`/`[style]` with a falsy value omitted and `true` printed as `"true"` |
 | every other dynamic attribute (a name Angular's DOM schema does not know, a component's or dashed tag's input, a camelCase name such as `innerHTML`, a name starting `on`) | `[x]`, untouched |
 
@@ -181,13 +181,27 @@ Marko's rules (`null`/`undefined`/`false` omit, `true` is bare, `0` and `""` are
 kept) are folded into the value where a property can express them; a property
 cannot remove an attribute, so a string property prints `title=""` for `null`
 (see `divergences.md`). A name the schema knows only on other
-elements has no property here and becomes an attribute binding. A name the
+elements has no property here and becomes an attribute binding. HTML attribute
+names are case-insensitive while the schema keys the DOM property's own
+spelling, so a name that misses in its own spelling is looked up again
+case-insensitively: `maxlength` finds `maxLength`, which makes it a real
+attribute, bound as `[attr.maxlength]` exactly as Marko prints it. A property
+whose type is an interface (`<input files>` is a `FileList`, `<table caption>`
+an element) would throw when given a string, so it is an attribute too. A name the
 schema has never heard of keeps `[x]`: it may be a directive input
 (`selector: "[hi]", inputs: ["hi"]`) or a content-projection slot
 (`<ng-content select="[header]">`), and without a directive Angular still reports
-NG8002, as before. A dashed tag is an Angular component selector, so its
+NG8002, as before (`role`, `itemscope`, `popover` and `exportparts` are absent
+from Angular 22's schema in any spelling, so they are in this group). SVG and
+MathML elements are not in the HTML schema: their attributes keep `[x]`, as
+before, except a name the schema knows on some HTML element (`<svg width>`),
+which becomes `[attr.width]`. A dashed tag is an Angular component selector, so its
 attributes stay input bindings with NG8001/NG8002 and the "did you mean" hint.
-`@angular/compiler` is a dependency of `@mxlang/angular` for this reason.
+`@angular/compiler` is an optional peer dependency of `@mxlang/angular` for this
+reason (`>=22.0.0 <23.0.0`, which every Angular project already has): it is
+resolved from your project, never bundled, and loaded only when a template binds
+a dynamic attribute on a native element. When it is missing or out of range,
+that attribute is a positioned compile error naming the package to install.
 
 Every normalized attribute binds its authored expression once, in an
 `@let __mxAttr = $any(expr);` written before the element (`__mxAttr1`,

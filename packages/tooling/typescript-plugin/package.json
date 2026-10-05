@@ -14,13 +14,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --define import.meta.url=__mxImportMetaUrl --define __filename=__mxFilename --define __dirname=__mxDirname --banner 'var __mxImportMetaUrl = require(\"node:url\").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;' --external @angular/compiler-cli --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/core --external @mxlang/parser --external @volar/language-core --external @volar/typescript --external typescript && bun build/cjs-factory.ts && bun ../../../scripts/bundled-build.ts dist/*.cjs && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist && bun build/strip-ng-declarations.ts dist",
+    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --define import.meta.url=__mxImportMetaUrl --define __filename=__mxFilename --define __dirname=__mxDirname --banner 'var __mxImportMetaUrl = require(\"node:url\").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;' --external @angular/compiler --external @angular/compiler-cli --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/core --external @mxlang/parser --external @volar/language-core --external @volar/typescript --external typescript && bun build/cjs-factory.ts && bun ../../../scripts/bundled-build.ts dist/*.cjs && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist && bun build/strip-ng-declarations.ts dist",
     "build:bundled": "bun build/bundled.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@angular/compiler": "22.1.7",
     "@astrojs/compiler": "2.13.1",
     "@jridgewell/sourcemap-codec": "1.6.0",
     "@marko/compiler": "5.42.5",
@@ -33,11 +32,15 @@
     "@volar/typescript": "2.4.28"
   },
   "peerDependencies": {
+    "@angular/compiler": ">=22.0.0 <23.0.0",
     "@angular/compiler-cli": ">=22.0.0 <23.0.0",
     "@astrojs/language-server": "2.16.16",
     "typescript": ">=5.9.0 <7"
   },
   "peerDependenciesMeta": {
+    "@angular/compiler": {
+      "optional": true
+    },
     "@angular/compiler-cli": {
       "optional": true
     },
@@ -47,6 +50,7 @@
   },
   "devDependencies": {
     "@mxlang/angular-checker": "workspace:*",
+    "@angular/compiler": "22.1.7",
     "@angular/compiler-cli": "22.1.7",
     "@angular/core": "22.1.7",
     "@astrojs/language-server": "2.16.16",

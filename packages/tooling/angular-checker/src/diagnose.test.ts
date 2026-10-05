@@ -317,13 +317,15 @@ describe("diagnoseNgMx element and attribute diagnostics (real ngtsc)", () => {
 
   it("a default attribute has no spelled name, so it lands on its value", () => {
     const { source, diagnostics } = check(
-      '<div><widget=title><case="a">a</case></widget></div>',
+      '<div><my-widget=title><case="a">a</case></my-widget></div>',
     );
     const starts = diagnostics.map((d) => d.start);
-    // `<widget>` and `<case>` (NG8001) point at their names; the `value`
-    // input Angular finds on `<widget>` (NG8002) at the default value.
+    // `<my-widget>` and `<case>` (NG8001) point at their names; the `value`
+    // input Angular finds on `<my-widget>` (NG8002) at the default value. A
+    // dashed tag keeps input bindings; an undashed one is a native element,
+    // where `value` (a DOM property of other elements) is `[attr.value]`.
     // <switch=…> is now an MX error, tested in fix-hints.test.ts.
-    expect(starts).toContain(source.indexOf("widget"));
+    expect(starts).toContain(source.indexOf("my-widget"));
     expect(starts).toContain(source.indexOf("case"));
     const bound = diagnostics.find((x) => x.code === -998002);
     expect(bound?.start).toBe(source.indexOf("title"));

@@ -23,6 +23,7 @@ import {
   platformBrowserTesting,
 } from "@angular/platform-browser/testing";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { RESCUED } from "./primitive-attribute-rescued.ts";
 
 interface Template {
   form: string;
@@ -108,9 +109,8 @@ function render(template: string, v: unknown): HTMLElement {
   TestBed.configureTestingModule({ errorOnUnknownProperties: true });
   const fixture = TestBed.createComponent(Probe);
   fixture.detectChanges();
-  return fixture.nativeElement.querySelector(
-    "div, input, button, option",
-  ) as HTMLElement;
+  return (fixture.nativeElement as HTMLElement)
+    .firstElementChild as HTMLElement;
 }
 
 const forms = [
@@ -142,15 +142,6 @@ describe("angular primitive attribute values (real renders, Marko 6.3.51)", () =
         // jsdom's HTMLElement has no `autofocus` property, so Angular's runtime
         // schema check rejects the binding there; browsers have it. The emitted
         // binding is pinned by the element tests.
-        return;
-      }
-      if (name === "allowfullscreen") {
-        // Not a property of any element in Angular's DOM schema: it keeps
-        // `[allowfullscreen]` (a directive input may own it), which is loud
-        // without one, as on main.
-        expect(() => render(entry?.template ?? "", values[key])).toThrow(
-          /Can't bind to 'allowfullscreen'/,
-        );
         return;
       }
       const element = render(entry?.template ?? "", values[key]);
@@ -240,6 +231,11 @@ describe("DOM-property bindings, measured (jsdom TestBed), against Marko's gener
     // an enumerated attribute behind a boolean property
     ["div", "draggable", null, '<div draggable="false"></div>'],
     ["div", "draggable", "x", '<div draggable="true"></div>'],
+    // the same for `translate`, whose reflection is "yes"/"no" (jsdom has no
+    // `spellcheck`/`inert`/`autofocus` property, so those are pinned by the
+    // element tests only)
+    ["div", "translate", null, '<div translate="no"></div>'],
+    ["div", "translate", "x", '<div translate="yes"></div>'],
     // a number property
     ["div", "tabindex", null, '<div tabindex="0"></div>'],
     ["div", "tabindex", "x", '<div tabindex="0"></div>'],
@@ -248,6 +244,54 @@ describe("DOM-property bindings, measured (jsdom TestBed), against Marko's gener
     ["option", "selected", true, "<option></option>"],
   ])("%s %s=%j renders %s", (tag, name, v, html) => {
     expect(cell(tag, name, v)).toBe(html);
+  });
+});
+
+describe("an attribute spelled differently from its IDL property binds [attr.name], as Marko prints it", () => {
+  // Marko's rule for a plain attribute (the title/data-*/aria-* rows of the
+  // matrix): null/undefined/false omit, true and "" bare, 0 "0", "x" "x".
+  const marko: [unknown, string | null][] = [
+    [null, null],
+    [undefined, null],
+    [false, null],
+    [true, ""],
+    [0, "0"],
+    ["", ""],
+    ["x", "x"],
+  ];
+  for (const [tag, name] of RESCUED) {
+    it.each(marko)(`<${tag} ${name}=%j> renders ${name}=%j`, (v, printed) => {
+      const template =
+        templates.find((t) => t.form === `cell/${tag}/${name}`)?.template ?? "";
+      expect(template).toContain(`[attr.${name}]`);
+      const element = render(template, v);
+      expect(element.localName).toBe(tag);
+      expect(element.getAttribute(name)).toBe(printed);
+    });
+  }
+});
+
+describe("an interface-typed DOM property binds [attr.name] instead of throwing at render", () => {
+  it.each([
+    ["input", "files"],
+    ["table", "caption"],
+  ])("<%s %s=x>", (tag, name) => {
+    const template =
+      templates.find((t) => t.form === `cell/${tag}/${name}`)?.template ?? "";
+    expect(template).toContain(`[attr.${name}]`);
+    expect(render(template, "x").getAttribute(name)).toBe("x");
+    TestBed.resetTestingModule();
+    expect(render(template, false).hasAttribute(name)).toBe(false);
+  });
+});
+
+describe("Angular refuses a bound iframe security attribute (NG0910), in any binding form", () => {
+  it("<iframe allowfullscreen=x> binds [attr.allowfullscreen], which Angular rejects at render", () => {
+    const template =
+      templates.find((t) => t.form === "cell/iframe/allowfullscreen")
+        ?.template ?? "";
+    expect(template).toContain("[attr.allowfullscreen]");
+    expect(() => render(template, "x")).toThrow(/NG0910/);
   });
 });
 

@@ -279,7 +279,6 @@
         "mx-angular": "./dist/bin.js",
       },
       "dependencies": {
-        "@angular/compiler": "22.1.7",
         "@jridgewell/sourcemap-codec": "1.6.0",
         "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",
@@ -288,12 +287,19 @@
       },
       "devDependencies": {
         "@angular/common": "22.1.7",
+        "@angular/compiler": "22.1.7",
         "@angular/core": "22.1.7",
         "@angular/platform-browser": "22.1.7",
         "@types/bun": "1.4.2",
         "jsdom": "30.1.1",
         "typescript": "5.9.3",
       },
+      "peerDependencies": {
+        "@angular/compiler": ">=22.0.0 <23.0.0",
+      },
+      "optionalPeers": [
+        "@angular/compiler",
+      ],
     },
     "packages/hosts/astro": {
       "name": "@mxlang/astro",
@@ -532,7 +538,6 @@
       "name": "@mxlang/typescript-plugin",
       "version": "0.0.0",
       "dependencies": {
-        "@angular/compiler": "22.1.7",
         "@astrojs/compiler": "2.13.1",
         "@jridgewell/sourcemap-codec": "1.6.0",
         "@marko/compiler": "5.42.5",
@@ -545,6 +550,7 @@
         "@volar/typescript": "2.4.28",
       },
       "devDependencies": {
+        "@angular/compiler": "22.1.7",
         "@angular/compiler-cli": "22.1.7",
         "@angular/core": "22.1.7",
         "@astrojs/language-server": "2.16.16",
@@ -552,11 +558,13 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
+        "@angular/compiler": ">=22.0.0 <23.0.0",
         "@angular/compiler-cli": ">=22.0.0 <23.0.0",
         "@astrojs/language-server": "2.16.16",
         "typescript": ">=5.9.0 <7",
       },
       "optionalPeers": [
+        "@angular/compiler",
         "@angular/compiler-cli",
         "@astrojs/language-server",
       ],

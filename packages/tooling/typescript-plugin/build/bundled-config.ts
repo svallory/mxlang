@@ -32,6 +32,7 @@ export const BUNDLED_INSTALLED = [
  */
 export const BUNDLED_PROJECT_RESOLVED = [
   "typescript",
+  "@angular/compiler",
   "@angular/compiler-cli",
   "@astrojs/language-server",
 ] as const;

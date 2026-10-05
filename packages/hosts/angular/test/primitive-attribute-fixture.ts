@@ -1,4 +1,5 @@
 import { compile } from "../src/index.ts";
+import { RESCUED } from "./primitive-attribute-rescued.ts";
 
 /** Names of the shared parity matrix (`scripts/attribute-value-probe.ts --parity`), direct form only: Angular rejects spreads. */
 const names = [
@@ -46,11 +47,18 @@ for (const [tag, name] of [
   ["div", "title"],
   ["div", "hidden"],
   ["div", "draggable"],
+  ["div", "translate"],
   ["div", "tabindex"],
   ["button", "disabled"],
   ["option", "selected"],
   ["div", "header"],
   ["div", "hi"],
+  // spelled differently from their IDL property (`maxLength`): attributes
+  ...RESCUED,
+  // interface-typed properties (`FileList`, `HTMLTableCaptionElement`)
+  ["input", "files"],
+  ["table", "caption"],
+  ["iframe", "allowfullscreen"],
 ]) {
   templates.push({
     form: `cell/${tag}/${name}`,
