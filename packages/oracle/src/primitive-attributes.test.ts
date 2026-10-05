@@ -4,7 +4,7 @@
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
  * compared as parsed DOM, over 8 attributes x 4 forms x 7 values.
  *
- * Documented divergences, pinned here rather than skipped:
+ * Documented divergences, pinned here rather than skipped (names: disabled, hidden, required, open, `checked` on input):
  *  - React prints a boolean property as presence only (`disabled=""` where
  *    Marko prints `disabled="0"`), so those cells compare presence.
  *  - React cannot render a string `style` (`true`/"x"): it throws its own error.
@@ -44,7 +44,8 @@ function rows(host: string): Row[] {
   );
 }
 
-const BOOLEAN = new Set(["disabled", "checked", "hidden"]);
+/** Names React renders as boolean presence under the name MX emits (value text is not printable). */
+const BOOLEAN = new Set(["disabled", "hidden", "required", "open"]);
 
 /** The rendered elements as canonical JSON; `presence` drops boolean values. */
 function dom(row: Row | undefined, presence: boolean): string {
@@ -55,7 +56,11 @@ function dom(row: Row | undefined, presence: boolean): string {
     if (!node.nodeName.startsWith("#") && node.nodeName !== "script") {
       const attrs = (node.attrs ?? []).map((a): [string, string] => [
         a.name,
-        presence && BOOLEAN.has(a.name) ? "" : a.value,
+        presence &&
+        (BOOLEAN.has(a.name) ||
+          (a.name === "checked" && node.nodeName === "input"))
+          ? ""
+          : a.value,
       ]);
       out.push(
         `${node.nodeName}${JSON.stringify(Object.fromEntries(attrs.sort()))}`,
@@ -80,6 +85,13 @@ const attributes = [
   "disabled",
   "checked",
   "value",
+  "autofocus",
+  "readonly",
+  "selected",
+  "required",
+  "open",
+  "allowfullscreen",
+  "checked@div",
 ];
 const forms = ["direct", "spread", "merged", "mergedBefore"];
 const values = ["null", "undefined", "false", "true", "zero", "empty", "x"];

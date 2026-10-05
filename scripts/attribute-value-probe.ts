@@ -257,19 +257,29 @@ try {
       "disabled",
       "checked",
       "value",
+      // Names React spells camelCase or scopes to one element, plus
+      // `checked` on a non-input (`name@div` renders on a div).
+      "autofocus",
+      "readonly",
+      "selected",
+      "required",
+      "open",
+      "allowfullscreen",
+      "checked@div",
     ]) {
+      const attribute = name.replace("@div", "");
       const tag = name === "checked" || name === "value" ? "input" : "div";
       const inputs = Object.fromEntries(
         Object.entries(parityValues).map(([value, v]) => [
           value,
-          { v, attrs: { [name]: v }, other: {} },
+          { v, attrs: { [attribute]: v }, other: {} },
         ]),
       );
       const forms: Record<string, string> = {
-        direct: `<${tag} ${name}=input.v/>`,
+        direct: `<${tag} ${attribute}=input.v/>`,
         spread: `<${tag} ...input.attrs/>`,
-        merged: `<${tag} id="i" ...input.attrs ${name}=input.v/>`,
-        mergedBefore: `<${tag} ${name}=input.v ...input.other/>`,
+        merged: `<${tag} id="i" ...input.attrs ${attribute}=input.v/>`,
+        mergedBefore: `<${tag} ${attribute}=input.v ...input.other/>`,
       };
       for (const [form, source] of Object.entries(forms)) {
         try {

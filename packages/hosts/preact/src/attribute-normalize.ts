@@ -49,6 +49,34 @@ const BOOLEAN_ATTRIBUTES = [
   "selected",
 ];
 
+/**
+ * The names React itself renders as boolean presence under the lowercase
+ * spelling MX emits (react-dom 19.3 server property table, measured by render:
+ * truthy prints the bare attribute, falsy omits). Every other HTML boolean
+ * attribute is spelled camelCase in React (`autoFocus`, `readOnly`, ...) or is
+ * element-specific (`selected`): under the lowercase name React takes its
+ * unknown-attribute path, which prints a string/number and drops a boolean, so
+ * those names pass through raw. `checked` is boolean on `<input>` only.
+ */
+const REACT_BOOLEAN_ATTRIBUTES = [
+  "async",
+  "controls",
+  "credentialless",
+  "default",
+  "defer",
+  "disabled",
+  "hidden",
+  "inert",
+  "loop",
+  "multiple",
+  "muted",
+  "open",
+  "required",
+  "reversed",
+  "scoped",
+  "seamless",
+];
+
 /** The normalizer body, shared by the direct and the object paths. */
 const NORMALIZE_BODY = `
   const lower = name.toLowerCase();
@@ -64,7 +92,8 @@ const NORMALIZE_BODY = `
   if (value === null || value === undefined || value === false) return undefined;
   if (direct && tag === "input" && name === "checked") return true;
   const boolean = ${JSON.stringify(BOOLEAN_ATTRIBUTES)}.includes(lower);
-  if (boolean) return reactBooleans ? true : value;
+  if (boolean && !reactBooleans) return value;
+  if (reactBooleans && (${JSON.stringify(REACT_BOOLEAN_ATTRIBUTES)}.includes(lower) || (tag === "input" && lower === "checked"))) return true;
   return value === true ? "" : value;
 `;
 

@@ -728,16 +728,9 @@ export class PreactEmitter implements Emitter<string> {
     }
     switch (attr.kind) {
       case "spread":
-        if (!isComponent) this.#rejectStringStyle(attr);
-        return isComponent
-          ? concatMapped(` {...${attr.value.code}}`)
-          : concatMapped(
-              " {...",
-              ATTRIBUTE_SPREAD_EXPRESSION,
-              "(",
-              mapped(attr.value.code, attr.value.span ?? null),
-              ")}",
-            );
+        // A native element's spread is merged by `#attrs` (which also runs
+        // `#rejectStringStyle`); only a component call reaches this writer.
+        return concatMapped(` {...${attr.value.code}}`);
       case "boolean":
         return concatMapped(
           " ",
