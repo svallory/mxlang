@@ -123,6 +123,97 @@ component renders with `ngTemplateOutlet`. ``
 The complete value shapes and legal render idioms are in the
 [AttrTag guide](/language/attr-tag/).
 
+## Atom errors
+
+`:name` in an expression position is an [atom](/language/atoms/). Most atom
+errors are the contract checks (a name that is not allowed, an atom where a
+string was declared) and the operations an atom refuses; each is positioned at
+the atom. The wording below is the compiler's.
+
+### A name a contract does not allow
+
+With `mode: { type: "atom", values: ["strict", "loose"] }`, a name outside the
+set is an error on the atom, listing the candidates and adding a did-you-mean
+when one is clearly nearest:
+
+| Message | Cause |
+| --- | --- |
+| `` `<box>`: attribute `mode`: `:strct` is not one of :strict, :loose; did you mean `:strict`? `` | a name outside `values`, near one of them |
+| `` `<box>`: attribute `mode`: `:zzzzzz` is not one of :strict, :loose `` | a name outside `values`, near none of them |
+| `` `<box>`: attribute `slug`: `:ab-c` does not match the pattern /^[a-z]+$/ `` | a name that fails `pattern` (checked with or without `values`; with both, a name must pass both) |
+| `` `<policy>`: attribute `load`: `:title` is not a declared relationship or computed here `` | an atom where the contract says `ref`, and no declaration of that kind covers the name. A union ref names every kind it accepts |
+
+Every atom of a list is checked at its own position, so
+`mode=[:strict, :lose]` points at `:lose`, not at the attribute. Without a
+contract an atom is never an error: it is only its name.
+
+### An atom where a string is declared, and the other way round
+
+The distinction is checked both ways, at the value (an attribute-tag attribute
+at any depth is prefixed `` `<box>`: `<@row>`: ``):
+
+| Message | Cause |
+| --- | --- |
+| `` attribute `label` must be string, got atom `` | `label` is declared `string` and written `label=:title` |
+| `` attribute `kind` must be atom, got string `` | `kind` is declared `atom` and written `kind="title"`; in a list, the string item itself is the position |
+
+**The name sugar is the exception** (decision 156 addendum 6): `name` set by the
+sugar satisfies a `string` or `enum` contract as its string and an `atom`
+contract as the atom, so `<field :email/>` is fine either way. An explicit
+`x=:a` against `string` stays an error, and `name="title"` against an
+atom-typed `name` stays an error.
+
+### Operations an atom refuses
+
+An atom is a name, not a value to work on. Member access (`:a.length`, `:a[0]`),
+a call (`:a(1)`), a unary operator (`-:a`, `!:a`, `typeof :a`), spreading
+(`f(...:a)`, `[...:a]`, `<div ...:a/>`) and a non-computed object key
+(`{:a: 1}`) are all errors at the atom:
+
+```text
+<div x=:a.length/>
+1:7 `:a` is an atom (decision 156), a name and not a value to operate on: member access is not allowed on it; write `"a"` for a string you mean to operate on
+```
+
+```text
+<div x={:a: 1}/>
+1:8 `:a` cannot be an object key: an atom is a value (decision 156); write `a:` for the key, or `[:a]` to compute it from the atom
+```
+
+Where a binding, an assignment target or a shorthand property must stand
+(`:a = 1`, `(:a) => 1`, `{:a}`), the parse error names the atom instead:
+
+```text
+<div x=(:a) => 1/>
+1:8 `:a` is an atom (decision 156): a value, not a binding, an assignment target or a shorthand property
+```
+
+### `::name` is reserved
+
+```text
+<div x=::a/>
+1:7 `::a` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:a` for an atom
+```
+
+`::` is one token, so it is reported the same way in a tag or attribute name and
+in a shorthand's static text (`<b::a/>`, `<b ::a/>`, `<b.c::a/>`), positioned at
+the `::`. It is never reported inside a `${}` of a tag name or shorthand, which
+is an expression: `<${"a::b"}/>` is legal.
+
+### The `:` TypeScript owns
+
+Three spellings where TypeScript's `:` and an atom's `:` collide are known limits
+(see [Atoms](/language/atoms/#known-limits-a--typescript-owns)), each with a
+hint that names the ambiguity and the fix:
+
+```text
+hint: `<a<b> :c` reads `a<b>` as type arguments (TypeScript's reading), so `:c` is not an atom there; this spelling is ambiguous (ADR 156, known limits)
+```
+
+```text
+hint: `:z` was read as an atom (decision 156), so the ternary has no `:`; if TypeScript owns that `:` (type arguments before it, ADR 156 known limits), write `: z` with a space
+```
+
 ## `class:foo` and `style:foo`
 
 ```html

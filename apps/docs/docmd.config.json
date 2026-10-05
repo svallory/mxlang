@@ -51,6 +51,10 @@
           "path": "/language/attributes/"
         },
         {
+          "title": "Atoms",
+          "path": "/language/atoms/"
+        },
+        {
           "title": "Attribute tags and tag params",
           "path": "/language/attribute-tags-and-params/"
         },

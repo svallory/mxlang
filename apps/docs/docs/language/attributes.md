@@ -86,6 +86,12 @@ positions, in HTML and concise mode alike:
 it, and a type or "unknown attribute" error names what you wrote, with what it
 stands for: ``attribute `:email` (`name`) must be number, got string``.
 
+In an expression position the same `:name` is an [atom](/language/atoms/), a
+value that represents itself: `mode=:strict` is `"strict"` at runtime, and a
+contract can type it (`type: "atom"`, `values`, `pattern`, `ref`). The sugar
+above is the one case where an atom standing alone sets `name` instead, and the
+`name` it sets keeps its atom-ness.
+
 ### Composition
 
 Tag-adjacent sugars combine in any order. With no tag name the tag is the
@@ -199,8 +205,8 @@ and sugar right after such a value is not supported:
 ```
 
 The one exception (decision 146 addendum 5): when the default value is a single
-atom, a `:name` after it is the name sugar, because an atom takes no member
-access or operator and nothing else can follow it. `belongs-to=:Customer
+[atom](/language/atoms/), a `:name` after it is the name sugar, because an atom
+takes no member access or operator and nothing else can follow it. `belongs-to=:Customer
 :customer` sets the default value to the atom `:Customer` and `name` to the atom
 `:customer`; `belongs-to=a :customer` is still the error above.
 

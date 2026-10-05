@@ -779,7 +779,8 @@ Divergences from Marko: four rows in `divergences.md` (a `:` in a tag name, bare
 
 ### Atoms: `:name` as a value
 
-**Decision 156 and its addendum 1; [ADR 156](/design-notes/adr-atoms/).** In an
+**Decision 156 and its addenda 1–7; [ADR 156](/design-notes/adr-atoms/).** User
+docs: [Atoms](/language/atoms/). In an
 expression position `:name` is an **atom**: a value that represents itself.
 Its runtime value is the name as a string literal on every target, so
 `mode=:strict` is `mode="strict"` and `accept=[:title, :body]` is
@@ -847,7 +848,9 @@ included. An atom nested in an expression is a `StringLiteral` whose
 `extra.mxAtom` is `{ span }` and whose `Expr.atoms` lists it (see
 [the IR spec](/architecture/ir-spec/)).
 
-**Not yet:** contracts over atoms (`{ type: "atom" }`, `ref`, `declares`) are Phase B PR 2.
+**Not yet:** printing and round-trip — a formatter and a `parseData` consumer
+that re-emits source must keep `:x` as `:x` (the IR keeps the span; no formatter
+exists yet).
 
 ### The unnamed tag
 
