@@ -1,10 +1,12 @@
 # @mxlang/data
 
-## Unreleased
+## 0.1.0-alpha.4
 
 - `unknownTags: "reject"` counts a child claimed by a parent's `children["*"]` as known, on the build path and on the parse-only scan used when core reports an earlier error (decision 147).
 - `<let>`, `<style>` and the other core-taglib names are never claimed by a wildcard, like every target (decision 147 addendum 2).
-- The data fixtures that typed the sugar's `name` as `string` now type it `atom` (`:title` is an atom, decision 156 PR 2); no code change.
+- **Added: atoms in `parseData` (decision 156).** An attribute whose whole value is one atom, the sugar-derived `name` included, is `DataAttr { kind: "atom", name, value, nameSpan?, span }`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom = { span }` in `DataExpr.node`. Atom contracts (`type: "atom"` with `values`, `pattern`, `ref`, and `declares`) are checked; see `@mxlang/core` 0.1.0-alpha.4.
+- **Added:** a sugar after a single-atom default value (`belongs-to=:Customer :customer`, decision 146 addendum 5) and a sugar followed by `=value` or `(params) { body }` (decision 146 addendum 4) parse on the data target.
+- **Fixed:** shorthand attributes carry a real `nameSpan`.
 
 ## 0.1.0-alpha.3
 
