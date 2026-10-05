@@ -1,0 +1,113 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [
+          "<root>/sugar-typed/tags/field.mx"
+        ],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport $mx_Field1 from \"./tags/field.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += $mx_Field1({ name: \"email\" });\n  __mxOut += $mx_Field1({ title: \"t\", name: \"email\" });\n  __mxOut += $mx_Field1({ name: \"email\" });\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              7
+            ],
+            "generatedOffsets": [
+              207
+            ],
+            "lengths": [
+              6
+            ],
+            "generatedLengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              23
+            ],
+            "generatedOffsets": [
+              251
+            ],
+            "lengths": [
+              5
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              33
+            ],
+            "generatedOffsets": [
+              263
+            ],
+            "lengths": [
+              6
+            ],
+            "generatedLengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              48
+            ],
+            "generatedOffsets": [
+              307
+            ],
+            "lengths": [
+              6
+            ],
+            "generatedLengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport $mx_Field1 from \"./tags/field.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += $mx_Field1({ name: \"email\" });\n  __mxOut += $mx_Field1({ title: \"t\", name: \"email\" });\n  __mxOut += $mx_Field1({ name: \"email\" });\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/sugar-typed/page.mx(1,8): error TS2322: Type 'string' is not assignable to type 'number'.",
+    "<root>/sugar-typed/page.mx(2,18): error TS2322: Type 'string' is not assignable to type 'number'.",
+    "<root>/sugar-typed/page.mx(3,7): error TS2322: Type 'string' is not assignable to type 'number'."
+  ]
+}

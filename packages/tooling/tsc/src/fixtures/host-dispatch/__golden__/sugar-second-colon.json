@@ -1,0 +1,63 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 6
+              },
+              "end": {
+                "line": 0,
+                "character": 7
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/sugar-second-colon/page.mx",
+            "message": "a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)",
+            "offset": 6,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)",
+          "id": "<root>/sugar-second-colon/page.mx",
+          "loc": {
+            "file": "<root>/sugar-second-colon/page.mx",
+            "line": 1,
+            "column": 6
+          },
+          "frame": "1 | <a:b.c:d/>\n          ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/sugar-second-colon/page.mx(1,7): error TS80001: a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)"
+  ]
+}

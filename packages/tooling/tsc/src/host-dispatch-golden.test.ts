@@ -152,6 +152,21 @@ const ROWS = [
   "default-tag-html",
   "default-tag-invalid",
   "default-tag-data",
+  // Decision 146 (the `:name` sugar), PR 3: valid sugar in every position on a
+  // string host and a JSX host (the JSX row pins the mapped name/class/id
+  // tokens), a typed template tag whose `name` prop gets the wrong type (the
+  // TS error lands on the sugar token), and one row per PR 2 error: a second
+  // `:` in the tag head, a value on the sugar, sugar right after a default
+  // value and a dynamic shorthand in attribute position. The stock-parser error
+  // cannot arise here (the repo installs the patched parser); its positions in
+  // every tool are pinned by `sugar-stock-parser.test.ts`.
+  "sugar-html",
+  "sugar-preact",
+  "sugar-typed",
+  "sugar-second-colon",
+  "sugar-value",
+  "sugar-default-attr",
+  "sugar-dynamic-shorthand",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */

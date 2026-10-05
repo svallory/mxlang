@@ -1,0 +1,144 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "preact"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "/** @jsxImportSource preact */\nimport type { JSX as __MxJSX } from \"preact/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><input name=\"email\" type=\"email\" /><input type=\"email\" name=\"email\" class=\"big\" id=\"main\" /></>);\n}\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              6
+            ],
+            "generatedOffsets": [
+              905
+            ],
+            "lengths": [
+              6
+            ],
+            "generatedLengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              13
+            ],
+            "generatedOffsets": [
+              918
+            ],
+            "lengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              35
+            ],
+            "generatedOffsets": [
+              940
+            ],
+            "lengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              48
+            ],
+            "generatedOffsets": [
+              953
+            ],
+            "lengths": [
+              6
+            ],
+            "generatedLengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              55
+            ],
+            "generatedOffsets": [
+              966
+            ],
+            "lengths": [
+              4
+            ],
+            "generatedLengths": [
+              5
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              60
+            ],
+            "generatedOffsets": [
+              978
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              2
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "/** @jsxImportSource preact */\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><input name=\"email\" type=\"email\" /><input type=\"email\" name=\"email\" class=\"big\" id=\"main\" /></>);\n}\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": []
+}

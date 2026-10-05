@@ -1,0 +1,63 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`:x=1` is name sugar and takes no value; write `name=\"…\"` to give one",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 3
+              },
+              "end": {
+                "line": 0,
+                "character": 4
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/sugar-value/page.mx",
+            "message": "`:x=1` is name sugar and takes no value; write `name=\"…\"` to give one",
+            "offset": 3,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "`:x=1` is name sugar and takes no value; write `name=\"…\"` to give one",
+          "id": "<root>/sugar-value/page.mx",
+          "loc": {
+            "file": "<root>/sugar-value/page.mx",
+            "line": 1,
+            "column": 3
+          },
+          "frame": "1 | <a :x=1/>\n       ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/sugar-value/page.mx(1,4): error TS80001: `:x=1` is name sugar and takes no value; write `name=\"…\"` to give one"
+  ]
+}

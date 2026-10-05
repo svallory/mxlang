@@ -1,0 +1,3 @@
+<input:email type="email"/>
+<input type="email" :email .big #main/>
+<:b.c/>

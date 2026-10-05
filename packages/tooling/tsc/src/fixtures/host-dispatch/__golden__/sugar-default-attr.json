@@ -1,0 +1,63 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 12
+              },
+              "end": {
+                "line": 0,
+                "character": 13
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/sugar-default-attr/page.mx",
+            "message": "`:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md.",
+            "offset": 12,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "`:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md.",
+          "id": "<root>/sugar-default-attr/page.mx",
+          "loc": {
+            "file": "<root>/sugar-default-attr/page.mx",
+            "line": 1,
+            "column": 12
+          },
+          "frame": "1 | <if=input.x :b>y</if>\n                ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/sugar-default-attr/page.mx(1,13): error TS80001: `:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md."
+  ]
+}
