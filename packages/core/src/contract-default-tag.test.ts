@@ -308,6 +308,80 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
     ).toEqual([undefined]);
   });
 
+  /** The first error compiling `source`, with a resolver that ranks the config above the contract. */
+  function configFirstError(
+    source: string,
+    tags: Record<string, CustomTag>,
+  ): string {
+    const policy: Policy = {
+      tags: {},
+      attrTags: 2,
+      isDelegatedTag: () => true,
+      isElement: () => true,
+      isComponent: (name) => name in tags,
+      // A target may order the ladder as it likes: config before the contract.
+      resolveDefaultTag: (_node, parents, context) =>
+        context.configured ?? contractDefaultTag(parents, context) ?? "div",
+    };
+    const compiler = createRequire(import.meta.url)("@marko/compiler");
+    try {
+      compiler.compileSync(source, "/tmp/mx-cdt/a.mx", {
+        translator: {
+          ...translator,
+          translate: {
+            Program: {
+              exit(path: { node: { body: Node[] } }) {
+                const ctx: Ctx = newCtx(
+                  source,
+                  () => "",
+                  policy,
+                  buildMarkoLookup(tmpdir(), translator),
+                  "a.mx",
+                  lookup,
+                );
+                ctx.customTags = tags;
+                ctx.defaultTag = "section";
+                lower(ctx, path.node.body);
+                path.node.body = [];
+              },
+            },
+          },
+        },
+        output: "html",
+        writeVersionComment: false,
+      });
+    } catch (error) {
+      return (error as Error).message;
+    }
+    return "";
+  }
+
+  it("the E2 hint only claims a value is invalid when validation rejected it (config-first resolver)", () => {
+    const span: Record<string, CustomTag> = {
+      "my-list": {
+        defaultTag: "span",
+        children: { span: {} },
+        transform: () => [],
+      },
+      span: { transform: () => [] },
+    };
+    // `span` is valid: the config answered, the E2 names `section`, and there is no declaration error to "see".
+    const valid = configFirstError("<my-list><.a/></my-list>", span);
+    expect(valid).toContain("`<section>` is not allowed here");
+    expect(valid).not.toContain("is invalid");
+    // An invalid value the resolver never consulted (config answered) is no
+    // claim either; a consulted-and-rejected one is covered by the data tests.
+    const bad = configFirstError("<my-list><.a/></my-list>", {
+      ...span,
+      "my-list": { ...(span["my-list"] as CustomTag), defaultTag: "nope" },
+    });
+    expect(bad).not.toContain("is invalid");
+  });
+    expect(bad).toContain(
+      "(the parent's `defaultTag` `nope` is invalid; see the declaration)",
+    );
+  });
+
   it("the top level has no parent contract", () => {
     expect(asked("<.a/>")).toEqual([undefined]);
   });

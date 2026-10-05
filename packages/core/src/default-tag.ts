@@ -1,5 +1,4 @@
 import { dirname } from "node:path";
-import { declaredContractDefaultTag } from "./contract-default-tag.ts";
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
@@ -74,6 +73,12 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
           );
         }
         const context: DefaultTagContext = {
+          // Only a value validateDefaultTag rejected earns the use-site hint.
+          onContractRejected: (declared) =>
+            hints.set(
+              node,
+              `(the parent's \`defaultTag\` \`${declared}\` is invalid; see the declaration)`,
+            ),
           ...(ctx.declarations.allowContractDefaultTag === false
             ? { contractRung: false }
             : {}),
@@ -85,19 +90,12 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
             ? {}
             : { customTags: ctx.customTags }),
         };
-        const answer = resolve.call(ctx.declarations, node, parents, context);
-        node.name.value = answer;
-        // A contract value that was not taken (invalid) is remembered for the
-        // use-site error; one the resolver answered (valid) needs no hint.
-        const declared =
-          context.contractRung === false
-            ? undefined
-            : declaredContractDefaultTag(parents, ctx.customTags);
-        if (declared !== undefined && declared !== answer)
-          hints.set(
-            node,
-            `(the parent's \`defaultTag\` \`${declared}\` is invalid; see the declaration)`,
-          );
+        node.name.value = resolve.call(
+          ctx.declarations,
+          node,
+          parents,
+          context,
+        );
       }
       const name = String(node.name?.value ?? "");
       const attributeTag = name.startsWith("@");

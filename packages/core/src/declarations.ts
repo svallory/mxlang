@@ -72,6 +72,13 @@ export interface DefaultTagContext {
    * so an invalid one falls through to the next rung.
    */
   readonly scope?: DefaultTagScope;
+  /**
+   * Called by `contractDefaultTag` when `validateDefaultTag` rejected the
+   * parent contract's value (so the next rung answers): the use-site error
+   * can then say the declaration is the problem. Never called for a value that
+   * was not consulted or was valid.
+   */
+  readonly onContractRejected?: (value: string) => void;
 }
 
 export interface HostDeclarations {

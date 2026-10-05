@@ -55,20 +55,15 @@ export function contractDefaultTag(
   if (found === undefined) return undefined;
   // An invalid value falls through to the next rung, as an invalid config
   // value does: the registration error is the one reported, never a use-site one.
-  return validateDefaultTag(found, {
-    ...context.scope,
-    builtins: [...(context.scope?.builtins ?? []), ...builtins],
-  }) === undefined
-    ? found
-    : undefined;
-}
-
-/** The `defaultTag` the nearest authored parent's contract declares, valid or not. */
-export function declaredContractDefaultTag(
-  parents: readonly DefaultTagParent[],
-  customTags: Readonly<Record<string, CustomTag>> | undefined,
-): string | undefined {
-  return lookupDeclared(parents, customTags);
+  if (
+    validateDefaultTag(found, {
+      ...context.scope,
+      builtins: [...(context.scope?.builtins ?? []), ...builtins],
+    }) === undefined
+  )
+    return found;
+  context.onContractRejected?.(found);
+  return undefined;
 }
 
 function lookupDeclared(
