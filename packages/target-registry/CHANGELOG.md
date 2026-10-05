@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (preact-region, decision 154):** the built-in table has a third region kind, `preact` (`.preact.mx`, from `@mxlang/preact`, registered before `react`); `regionFileKinds()`, `moduleSegments()` and every derived list (Vite default extensions, LS language ids, TS plugin per-kind plugins) include it. A `*.preact.mx` file is no longer a whole-file `.mx`.
+
 - **Changed (react-region, decision 154):** the built-in table has a second region kind, `react` (`.react.mx`, from `@mxlang/react`); `regionFileKinds()`, `moduleSegments()` and every derived list (Vite default extensions, LS language ids, TS plugin per-kind plugins) include it.
 
 - **Added (bridge-host, decision 154):** a file kind is a region kind because it has a `compileRegion`, not because its segment is `solid`: `builtinFileKinds` derives `pipeline: "region"` from it, and `regionFileKinds(lookup?)`, `regionFileKind(file, lookup?)` and `regionCompileFor(file, options)` route a `.<segment>.mx` file to its host's region entry through any lookup, `lookupFor(policy)` included. An unregistered `.<word>.mx`, and a file kind without a region entry, are never region files. `regionKindCompile(kind, options)` is the same hook for a kind already in hand (the TS plugin's per-kind plugins).

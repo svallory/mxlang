@@ -108,20 +108,33 @@ describe("shape of each descriptor", () => {
     expect(kind?.readCalleeInput).toBeTypeOf("function");
   });
 
-  it.each([
-    ["preact-jsx", "preact"],
-    ["hono-jsx", "hono"],
-  ])(
-    "%s: host %s, a compile entry, no file kinds, no mapping override",
-    (name, host) => {
-      const target = byName(name);
-      expect(target.host).toEqual({ name: host });
-      expect(target.load).toBeTypeOf("function");
-      expect(target.mappings).toBeUndefined();
-      expect(target.typeSurface).toBeUndefined();
-      expect(target.strict).toBeUndefined();
-    },
-  );
+  it("hono-jsx: host hono, a compile entry, no file kinds, no mapping override", () => {
+    const target = byName("hono-jsx");
+    expect(target.host).toEqual({ name: "hono" });
+    expect(target.load).toBeTypeOf("function");
+    expect(target.mappings).toBeUndefined();
+    expect(target.typeSurface).toBeUndefined();
+    expect(target.strict).toBeUndefined();
+  });
+
+  it("preact-jsx: host preact with one `preact` region file kind, a compile entry, no mapping override", () => {
+    const preact = byName("preact-jsx");
+    expect(preact.load).toBeTypeOf("function");
+    expect(preact.mappings).toBeUndefined();
+    expect(preact.typeSurface).toBeUndefined();
+    expect(preact.strict).toBeUndefined();
+    expect(preact.host?.name).toBe("preact");
+    const [kind, ...rest] = preact.host?.fileKinds ?? [];
+    expect(rest).toEqual([]);
+    expect(kind).toMatchObject({
+      segment: "preact",
+      languageIds: ["preactmx"],
+      diagnosticSource: "preactmx",
+    });
+    expect(kind?.compileRegion).toBeTypeOf("function");
+    expect(kind?.readCalleeInput).toBeTypeOf("function");
+    expect(kind?.completeTypecheckModule).toBeUndefined();
+  });
 
   it("react-jsx: host react with one `react` region file kind, a compile entry, no mapping override", () => {
     const react = byName("react-jsx");
@@ -160,8 +173,8 @@ describe("shape of each descriptor", () => {
     ]);
   });
 
-  it("only solid-jsx and react-jsx carry a region compile and a callee reader", () => {
-    const regionTargets = ["solid-jsx", "react-jsx"];
+  it("only solid-jsx, preact-jsx and react-jsx carry a region compile and a callee reader", () => {
+    const regionTargets = ["solid-jsx", "preact-jsx", "react-jsx"];
     for (const t of builtinTargets) {
       for (const kind of t.host?.fileKinds ?? []) {
         expect(Boolean(kind.compileRegion)).toBe(
@@ -247,8 +260,14 @@ describe("builtinLookup: packages and host values", () => {
     expect(lookup.hostFilterKey("angular-template")).toBe("angular");
   });
 
-  it("moduleSegments are astro, solid, react and ng (target registration order)", () => {
-    expect(lookup.moduleSegments()).toEqual(["astro", "solid", "react", "ng"]);
+  it("moduleSegments are astro, solid, preact, react and ng (target registration order)", () => {
+    expect(lookup.moduleSegments()).toEqual([
+      "astro",
+      "solid",
+      "preact",
+      "react",
+      "ng",
+    ]);
   });
 
   it("attrTagSources are the seven host packages and @mxlang/data", () => {
@@ -286,10 +305,17 @@ describe("the hostless `data` target", () => {
     expect(builtinFileKinds.map((k) => k.segment)).toEqual([
       "astro",
       "solid",
+      "preact",
       "react",
       "ng",
     ]);
-    expect(lookup.moduleSegments()).toEqual(["astro", "solid", "react", "ng"]);
+    expect(lookup.moduleSegments()).toEqual([
+      "astro",
+      "solid",
+      "preact",
+      "react",
+      "ng",
+    ]);
   });
 
   it("is selected by its package (note 4.1 rule 2) and is not the default", () => {
@@ -362,12 +388,13 @@ describe("the reserved `astro-template` name", () => {
 });
 
 describe("builtinFileKinds", () => {
-  it("tags solid and react with the region pipeline, ng with ng-template and astro with astro-template", () => {
+  it("tags solid, preact and react with the region pipeline, ng with ng-template and astro with astro-template", () => {
     expect(
       builtinFileKinds.map((k) => [k.segment, k.pipeline, k.diagnosticSource]),
     ).toEqual([
       ["astro", "astro-template", "astromx"],
       ["solid", "region", "solidmx"],
+      ["preact", "region", "preactmx"],
       ["react", "region", "reactmx"],
       ["ng", "ng-template", "ngmx"],
     ]);

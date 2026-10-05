@@ -48,6 +48,7 @@ describe("default extensions", () => {
   it("are the registry's region kinds, then .mx, before any hook runs", async () => {
     expect(await defaultExtensions()).toEqual([
       ".solid.mx",
+      ".preact.mx",
       ".react.mx",
       ".mx",
     ]);
