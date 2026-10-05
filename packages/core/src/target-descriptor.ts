@@ -44,6 +44,8 @@ export interface TargetCompileOptions {
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   /** Caller-owned target set for cross-file resolution; unset uses the descriptor's own lookup. */
   targets?: TargetLookup;
+  /** `package.json#mx.<target>.defaultTag` the caller resolved, already validated (decision 145). */
+  defaultTag?: string;
 }
 
 /**
@@ -98,6 +100,8 @@ export interface HostRegionInput {
   customTags?: Record<string, CustomTag>;
   /** Caller-owned target set for cross-file resolution; unset uses the descriptor's own lookup. */
   targets?: TargetLookup;
+  /** `package.json#mx.<target>.defaultTag` the caller resolved, already validated (decision 145). */
+  defaultTag?: string;
   /** Where the region appeared; opaque here. */
   context?: unknown;
   /** Imports declared by the surrounding module, local binding to specifier. */

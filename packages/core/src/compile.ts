@@ -123,6 +123,8 @@ export interface HostOptions extends TranslatorOptions {
   stripTypes?: boolean;
   /** Emits the module from the lowered IR (decision 79). */
   emitIr: (ir: Ir, ctx: Ctx) => string;
+  /** `package.json#mx.<target>.defaultTag`, handed to the host's `resolveDefaultTag`. */
+  defaultTag?: string;
 }
 
 /**
@@ -160,6 +162,7 @@ let current: {
   postEmit?: (code: string) => string;
   emitIr: (ir: Ir, ctx: Ctx) => string;
   customTags?: Readonly<Record<string, CustomTag>>;
+  defaultTag?: string;
   warnings?: MxWarning[];
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   targets: TargetLookup;
@@ -214,6 +217,7 @@ export function createTranslator(host: TranslatorOptions): Translator {
             state.targets,
           );
           ctx.customTags = state.customTags;
+          ctx.defaultTag = state.defaultTag;
           ctx.warnings = state.warnings;
           ctx.resolveImport = state.resolveImport;
           // Every host reaching `compileSource` emits a whole module with a
@@ -330,6 +334,7 @@ export function compileSource(
     postEmit: host.postEmit,
     emitIr: host.emitIr,
     customTags: host.customTags,
+    defaultTag: host.defaultTag,
     warnings: host.warnings,
     resolveImport: host.resolveImport,
     targets: host.targets,

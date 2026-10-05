@@ -44,7 +44,14 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
             at.column,
           );
         }
-        node.name.value = resolve.call(ctx.declarations, node, parents);
+        node.name.value = resolve.call(ctx.declarations, node, parents, {
+          ...(ctx.defaultTag === undefined
+            ? {}
+            : { configured: ctx.defaultTag }),
+          ...(ctx.customTags === undefined
+            ? {}
+            : { customTags: ctx.customTags }),
+        });
       }
       const name = String(node.name?.value ?? "");
       const self: DefaultTagParent = {

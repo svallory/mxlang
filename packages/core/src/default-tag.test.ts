@@ -30,6 +30,7 @@ function lowerSource(
   source: string,
   policy: Policy,
   customTags?: Readonly<Record<string, CustomTag>>,
+  defaultTag?: string,
 ): Ir {
   let ir: Ir | null = null;
   let thrown: unknown = null;
@@ -50,6 +51,7 @@ function lowerSource(
             lookup,
           );
           ctx.customTags = customTags;
+          if (defaultTag !== undefined) ctx.defaultTag = defaultTag;
           try {
             ir = lower(ctx, path.node.body);
           } catch (error) {
@@ -334,5 +336,37 @@ describe("lower() calls the resolver once per unnamed tag", () => {
       { marker: tag },
     );
     expect(calls).toHaveLength(3);
+  });
+});
+
+describe("the resolver's context", () => {
+  it("carries the configured name and the custom tags of this compile", () => {
+    const seen: Array<{ configured?: string; tags: string[] }> = [];
+    const policy = declarations((_node, _parents, context) => {
+      seen.push({
+        ...(context.configured === undefined
+          ? {}
+          : { configured: context.configured }),
+        tags: Object.keys(context.customTags ?? {}),
+      });
+      return context.configured ?? "section";
+    });
+    const tag: CustomTag = {
+      transform: (call) => call.content?.children ?? [],
+    };
+    lowerSource("<.a/>", policy, { marker: tag }, "my-card");
+    expect(seen).toEqual([{ configured: "my-card", tags: ["marker"] }]);
+  });
+
+  it("has no configured name when the compile carries none", () => {
+    let configured: string | undefined = "unset";
+    lowerSource(
+      "<.a/>",
+      declarations((_n, _p, context) => {
+        configured = context.configured;
+        return "div";
+      }),
+    );
+    expect(configured).toBeUndefined();
   });
 });

@@ -393,6 +393,8 @@ export interface Ctx {
    * validates from a Babel path rather than during the walk.
    */
   returnDepth?: number;
+  /** `package.json#mx.<target>.defaultTag` for this compile; the resolver's `configured`. */
+  defaultTag?: string;
   /**
    * True while every unnamed tag of the tree being lowered has already been
    * resolved through `resolveDefaultTag`. `lower` sets it; an external

@@ -41,6 +41,17 @@ export interface DefaultTagParent {
  * would have nowhere to emit *to*: lower builds an IR, and the buffer does
  * not exist yet.
  */
+/**
+ * What `resolveDefaultTag` may consult beyond the node and its ancestors.
+ * Additive: later rungs of the ladder read more of the compile here.
+ */
+export interface DefaultTagContext {
+  /** `package.json#mx.<target>.defaultTag`, when the package sets one. */
+  readonly configured?: string;
+  /** The custom tags of this compile (scan, `mx.contracts`): a parent's contract lives here. */
+  readonly customTags?: Readonly<Record<string, CustomTag>>;
+}
+
 export interface HostDeclarations {
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;
@@ -158,7 +169,11 @@ export interface HostDeclarations {
    * Without this hook a template that uses the shorthand fails with a
    * positioned error: no default tag is declared.
    */
-  resolveDefaultTag?(node: Node, parents: readonly DefaultTagParent[]): string;
+  resolveDefaultTag?(
+    node: Node,
+    parents: readonly DefaultTagParent[],
+    context: DefaultTagContext,
+  ): string;
   /** Return true when this host carries an attribute method as a callable prop. */
   resolveAttributeMethod?(attr: Node, on?: "element" | "component"): boolean;
   /**
