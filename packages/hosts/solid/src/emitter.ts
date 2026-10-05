@@ -31,6 +31,8 @@ import {
   MX_ATTR_VALUE_BINDING,
   MX_CLASS_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
+  MX_TEXTAREA_DYN_SPREAD_BINDING,
+  MX_TEXTAREA_DYN_VALUE_BINDING,
   MX_TEXTAREA_OMIT_BINDING,
   MX_TEXTAREA_PICK_BINDING,
 } from "./attr-guard.ts";
@@ -101,6 +103,7 @@ let attrGuardUse: {
   spread: boolean;
   klass: boolean;
   textarea: boolean;
+  dynTextarea: boolean;
 } | null = null;
 
 /**
@@ -544,6 +547,7 @@ export function collectReturnVars(
     spread: boolean;
     klass: boolean;
     textarea: boolean;
+    dynTextarea: boolean;
   };
   hoistedDefines: HoistedSolidDefine[];
 } {
@@ -559,6 +563,7 @@ export function collectReturnVars(
     spread: false,
     klass: false,
     textarea: false,
+    dynTextarea: false,
   };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
@@ -841,6 +846,30 @@ function isPrimitiveValue(value: Expr): boolean {
   );
 }
 
+/**
+ * On a runtime-resolved tag, a `value` that may land on a `<textarea>` gets the
+ * server's leading-newline doubling (Marko 6.3.51); other targets are unchanged.
+ */
+function dynTextareaValue(
+  name: string,
+  value: string,
+  native: NativeAttrs | undefined,
+): string {
+  if (name !== "value" || native?.when === undefined) return value;
+  if (attrGuardUse) attrGuardUse.dynTextarea = true;
+  return `${MX_TEXTAREA_DYN_VALUE_BINDING}(${value}, ${native.tag})`;
+}
+
+/** A spread (or args object) on a runtime-resolved tag, with the same doubling. */
+function dynTextareaSpread(
+  value: string,
+  native: NativeAttrs | undefined,
+): string {
+  if (native?.when === undefined) return value;
+  if (attrGuardUse) attrGuardUse.dynTextarea = true;
+  return `${MX_TEXTAREA_DYN_SPREAD_BINDING}(${value}, ${native.tag})`;
+}
+
 function guardValue(
   name: string,
   value: string,
@@ -906,7 +935,7 @@ function renderAttr(
       }
       if (attrGuardUse) attrGuardUse.spread = true;
       return concatMapped(
-        ` {...${MX_ATTR_SPREAD_BINDING}(${attr.value.code}, ${nativeTagOf(native)})}`,
+        ` {...${dynTextareaSpread(`${MX_ATTR_SPREAD_BINDING}(${attr.value.code}, ${nativeTagOf(native)})`, native)}}`,
       );
     }
     case "boolean":
@@ -916,6 +945,13 @@ function renderAttr(
         "={true}",
       );
     case "static":
+      if (attr.name === "value" && native?.when !== undefined) {
+        return concatMapped(
+          " ",
+          mapped(attr.name, mapName ? attr.nameSpan : null),
+          `={${dynTextareaValue("value", JSON.stringify(attr.value), native)}}`,
+        );
+      }
       return concatMapped(
         " ",
         mapped(attr.name, mapName ? attr.nameSpan : null),
@@ -1012,7 +1048,7 @@ function renderAttr(
       return concatMapped(
         " ",
         mapped(attr.name, mapName ? attr.nameSpan : null),
-        `={${guarded ? guardValue(attr.name, value, native) : value}}`,
+        `={${dynTextareaValue(attr.name, guarded ? guardValue(attr.name, value, native) : value, native)}}`,
       );
     }
   }
@@ -2132,7 +2168,7 @@ export class SolidEmitter implements Emitter<string> {
     if (node.args.length > 0 && attrGuardUse) attrGuardUse.spread = true;
     const stringArgsAttrs =
       node.args.length > 0
-        ? ` {...${MX_ATTR_SPREAD_BINDING}(${node.args[0]?.code} || {}, ${value})}`
+        ? ` {...${dynTextareaSpread(`${MX_ATTR_SPREAD_BINDING}(${node.args[0]?.code} || {}, ${value})`, native)}}`
         : "";
     // decision 116, Marko parity (`runtime-tags/src/html/dynamic-tag.ts`'s
     // `_dynamic_tag`, `normalizeDynamicRenderer`): a target that is neither

@@ -290,6 +290,24 @@ describe("Solid SSR render: attribute-tag values", () => {
   });
 });
 
+describe("Solid SSR render: runtime-resolved <textarea value>", () => {
+  const setup =
+    'const input = { tag: "textarea", other: "div", v: "\\nx", attrs: { value: "\\nx" } };';
+  it("doubles a leading newline in every value form, as Marko does", () => {
+    const html = renderApp(
+      '<${input.tag} value=input.v/><${input.tag} value="\\nx"/><${input.tag} ...input.attrs/><${input.tag}(input.attrs)/>',
+      setup,
+    );
+    expect(html.match(/<textarea[^>]*>\n\nx<\/textarea>/g)).toHaveLength(4);
+  });
+
+  it("leaves a non-textarea target's value alone", () => {
+    const html = renderApp("<${input.other} title=input.v/>", setup);
+    expect(html).toContain('title="\nx"');
+    expect(html).not.toContain("\n\nx");
+  });
+});
+
 describe("Solid SSR render: <for>", () => {
   it("renders row properties for the unkeyed (no by=) form", () => {
     const html = renderApp(

@@ -139,25 +139,9 @@ describe("html target <textarea value> (real renders, Marko 6.3.51)", () => {
   });
 });
 
-/**
- * Cells a host still renders differently from Marko, with the reason. Pinned
- * so a fix shows up as a failing test to delete the entry from.
- */
-const KNOWN_GAPS: Record<string, string[]> = {
-  // A dynamic tag's runtime `textarea` target cannot see the doubled leading
-  // newline: the value reaches Solid's `<Dynamic>` as a plain prop.
-  solid: [
-    "dynamicTag/newline",
-    "dynamicTag/newlines",
-    "dynamicTagArgs/newline",
-    "dynamicTagArgs/newlines",
-  ],
-};
-
 describe.each(JSX_HOSTS)(
   "%s <textarea value> (real renders, Marko 6.3.51)",
   (host) => {
-    const gaps = KNOWN_GAPS[host] ?? [];
     const cell = (m: Row) => `${m.form}/${m.value}`;
 
     it("matches Marko's parsed DOM for every measured case", () => {
@@ -168,7 +152,7 @@ describe.each(JSX_HOSTS)(
             textareas(m) !== textareas(find(jsx[host] ?? [], m.form, m.value)),
         )
         .map(cell);
-      expect(diffs).toEqual(gaps);
+      expect(diffs).toEqual([]);
     });
 
     it("renders the value as content, never as an attribute", () => {

@@ -139,6 +139,10 @@ function renderDomApp(
       "  for (const li of container.querySelectorAll('li:not([data-mx-node-id])')) {",
       "    li.setAttribute('data-mx-node-id', String(nextNodeId++));",
       "  }",
+      "  // A runtime-resolved textarea gets `value` as a DOM property, which innerHTML omits.",
+      "  for (const ta of container.querySelectorAll('textarea')) {",
+      "    if (!ta.textContent && ta.value) ta.setAttribute('data-value', JSON.stringify(ta.value));",
+      "  }",
       "};",
       "stampNodeIds();",
       "const snapshots = [container.innerHTML];",
@@ -197,6 +201,21 @@ describe("Solid client render: live signal updates through the real DOM", () => 
     expect(snapshots).toEqual([
       '<ul><textarea>\nx</textarea><textarea class="c">\nx</textarea></ul>',
     ]);
+  });
+
+  it("renders a runtime-resolved textarea's value on the client without the server's doubled leading newline", () => {
+    const { snapshots } = renderDomApp(
+      '<${input.tag} value=input.v/><${input.tag} ...input.attrs class="c"/><${input.tag}(input.attrs)/><${input.tag} value="\\nx"/>',
+      'const input = { tag: "textarea", v: "\\nx", attrs: { value: "\\nx" } }; const [, setV] = createSignal(0); (globalThis as any).setV = setV;',
+      "setV",
+      ["1"],
+    );
+    // `<Dynamic>` sets `value` as a DOM property in an effect, so read the
+    // settled snapshot; a doubled newline would show as "\n\nx".
+    const values = [
+      ...(snapshots.at(-1) ?? "").matchAll(/data-value="([^"]*)"/g),
+    ];
+    expect(values.map((m) => m[1])).toEqual(Array(4).fill("&quot;\\nx&quot;"));
   });
 
   it("renders a reactive class and a spread class/style as Marko does through live writes", () => {

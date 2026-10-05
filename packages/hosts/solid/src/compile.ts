@@ -43,9 +43,13 @@ import {
   MX_CLASS_BINDING,
   MX_IS_SERVER_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
+  MX_TEXTAREA_DYN_SPREAD_BINDING,
+  MX_TEXTAREA_DYN_VALUE_BINDING,
   MX_TEXTAREA_OMIT_BINDING,
   MX_TEXTAREA_PICK_BINDING,
   TEXTAREA_CONTENT_HELPER,
+  TEXTAREA_DYN_SPREAD_HELPER,
+  TEXTAREA_DYN_VALUE_HELPER,
   TEXTAREA_OMIT_HELPER,
   TEXTAREA_PICK_HELPER,
 } from "./attr-guard.ts";
@@ -382,13 +386,27 @@ export function compileSolidMx(
       binding: MX_ATTR_SPREAD_BINDING,
     });
   }
-  if (needsAttrGuard.textarea) {
+  if (needsAttrGuard.textarea || needsAttrGuard.dynTextarea) {
     hoistedImports.unshift({
       code: `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";`,
       binding: MX_IS_SERVER_BINDING,
       specifier: "@solidjs/web",
       resolvedPath: "@solidjs/web#mx-is-server",
     });
+  }
+  if (needsAttrGuard.dynTextarea) {
+    hoistedDefines.unshift(
+      {
+        code: TEXTAREA_DYN_SPREAD_HELPER,
+        binding: MX_TEXTAREA_DYN_SPREAD_BINDING,
+      },
+      {
+        code: TEXTAREA_DYN_VALUE_HELPER,
+        binding: MX_TEXTAREA_DYN_VALUE_BINDING,
+      },
+    );
+  }
+  if (needsAttrGuard.textarea) {
     hoistedDefines.unshift(
       { code: TEXTAREA_OMIT_HELPER, binding: MX_TEXTAREA_OMIT_BINDING },
       { code: TEXTAREA_PICK_HELPER, binding: MX_TEXTAREA_PICK_BINDING },
@@ -517,10 +535,19 @@ export function compileSolidUnit(
       `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
     );
   }
-  if (needsAttrGuard.textarea) {
+  if (needsAttrGuard.textarea || needsAttrGuard.dynTextarea) {
     parts.unshift(
       `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";\n`,
+    );
+  }
+  if (needsAttrGuard.textarea) {
+    parts.unshift(
       `${TEXTAREA_OMIT_HELPER}\n${TEXTAREA_PICK_HELPER}\n${TEXTAREA_CONTENT_HELPER}\n`,
+    );
+  }
+  if (needsAttrGuard.dynTextarea) {
+    parts.unshift(
+      `${TEXTAREA_DYN_SPREAD_HELPER}\n${TEXTAREA_DYN_VALUE_HELPER}\n`,
     );
   }
   if (needsAttrGuard.klass) parts.unshift(`${CLASS_PROP_HELPER}\n`);

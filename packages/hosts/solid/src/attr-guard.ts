@@ -58,6 +58,8 @@ export const MX_TEXTAREA_CONTENT_BINDING = "__mxTextareaContent";
 export const MX_TEXTAREA_PICK_BINDING = "__mxTextareaPick";
 export const MX_TEXTAREA_OMIT_BINDING = "__mxTextareaOmit";
 export const MX_IS_SERVER_BINDING = "__mxIsServer";
+export const MX_TEXTAREA_DYN_VALUE_BINDING = "__mxTextareaDynValue";
+export const MX_TEXTAREA_DYN_SPREAD_BINDING = "__mxTextareaDynSpread";
 
 /**
  * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.3.51
@@ -87,5 +89,23 @@ export const TEXTAREA_OMIT_HELPER = `function ${MX_TEXTAREA_OMIT_BINDING}<T,>(at
     has: (target, key) => key !== "value" && Reflect.has(target, key),
     ownKeys: (target) => Reflect.ownKeys(target).filter((key) => key !== "value"),
     getOwnPropertyDescriptor: (target, key) => (key === "value" ? undefined : Reflect.getOwnPropertyDescriptor(target, key)),
+  }) as T;
+}`;
+
+/**
+ * A runtime-resolved tag may turn out to be a `<textarea>`: Solid's `ssrElement`
+ * then writes its `value` prop as content, so the leading newline the HTML
+ * parser drops has to be doubled here, on the server only, as in
+ * {@link TEXTAREA_CONTENT_HELPER}. Any other target passes through untouched.
+ */
+export const TEXTAREA_DYN_VALUE_HELPER = String.raw`function ${MX_TEXTAREA_DYN_VALUE_BINDING}<T,>(value: T, tag: unknown): T {
+  return ${MX_IS_SERVER_BINDING} && tag === "textarea" && typeof value === "string" && value[0] === "\n" ? ("\n" + value) as T : value;
+}`;
+
+/** The same doubling for the `value` a spread (or the args object) contributes; a Proxy keeps Solid's lazy spread live. */
+export const TEXTAREA_DYN_SPREAD_HELPER = `function ${MX_TEXTAREA_DYN_SPREAD_BINDING}<T,>(attrs: T, tag: unknown): T {
+  if (tag !== "textarea" || attrs === null || typeof attrs !== "object") return attrs;
+  return new Proxy(attrs as object, {
+    get: (target, key) => (key === "value" ? ${MX_TEXTAREA_DYN_VALUE_BINDING}(Reflect.get(target, key), tag) : Reflect.get(target, key)),
   }) as T;
 }`;
