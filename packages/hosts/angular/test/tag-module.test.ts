@@ -8,14 +8,35 @@
  * inside it is syntax Angular accepts, which a string golden cannot show.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { angularOwnTargets } from "../src/own-targets.ts";
 import { compileTagModule } from "../src/tag-module.ts";
 import { assertAngularParses, assertModuleTypechecks } from "./helpers.ts";
+
+/**
+ * A temp project, removed when this file is done.
+ *
+ * TODO `test-tmpdir-leak`: these used to be plain `mkdtempSync` calls, and the
+ * two helpers below run once per test, so a day's runs left thousands of
+ * `mx-angular-tag-*` directories in the OS temp directory.
+ */
+const scratches: string[] = [];
+
+function scratchProject(): string {
+  const dir = mkdtempSync(join(tmpdir(), "mx-angular-tag-"));
+  scratches.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of scratches.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 /** Compiles a tag file's source, with tag discovery rooted at a real dir. */
 function compileTag(
@@ -24,7 +45,7 @@ function compileTag(
   siblings: Record<string, string> = {},
   tagSelectorPrefix?: string,
 ): { code: string; selector: string; className: string } {
-  const dir = mkdtempSync(join(tmpdir(), "mx-angular-tag-"));
+  const dir = scratchProject();
   mkdirSync(join(dir, "tags"), { recursive: true });
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
   for (const [name, content] of Object.entries(siblings)) {
@@ -50,7 +71,7 @@ function compileTagWithMappings(
   siblings: Record<string, string>,
   tagSelectorPrefix?: string,
 ) {
-  const dir = mkdtempSync(join(tmpdir(), "mx-angular-tag-"));
+  const dir = scratchProject();
   mkdirSync(join(dir, "tags"), { recursive: true });
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
   for (const [name, content] of Object.entries(siblings)) {
@@ -709,7 +730,7 @@ describe("compileTagModule: tagSelectorPrefix (R-d)", () => {
 
 describe("compileTagModule: event handlers", () => {
   it("writes the event invoker members into the generated class, typechecks, and drops the paste-it-yourself advice", () => {
-    const dir = mkdtempSync(join(tmpdir(), "mx-angular-tag-"));
+    const dir = scratchProject();
     mkdirSync(join(dir, "tags"), { recursive: true });
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
     const source =

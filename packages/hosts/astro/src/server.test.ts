@@ -1,11 +1,21 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile } from "@mxlang/html";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { check, renderToStaticMarkup } from "./server.ts";
 
+/**
+ * The temp project the compiled components are written into, removed when
+ * this file is done.
+ *
+ * TODO `test-tmpdir-leak`: it used to stay in the OS temp directory.
+ */
 const dir = mkdtempSync(join(tmpdir(), "mx-astro-"));
+
+afterAll(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
 
 /**
  * Compiles an MX template and imports the resulting module.

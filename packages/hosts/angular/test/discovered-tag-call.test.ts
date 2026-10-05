@@ -7,14 +7,28 @@
  * These tests pin that it now resolves to a component reference.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
 import { angularOwnTargets } from "../src/own-targets.ts";
 import { assertAngularParses } from "./helpers.ts";
+
+/**
+ * The temp projects this file makes, removed when the file is done.
+ *
+ * TODO `test-tmpdir-leak`: `compilePage` below ran once per test and used to
+ * leave its project behind in the OS temp directory.
+ */
+const scratches: string[] = [];
+
+afterAll(() => {
+  for (const dir of scratches.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 /** Compiles `page` in a project whose `tags/` holds `tags`. */
 function compilePage(
@@ -23,6 +37,7 @@ function compilePage(
   options: { tagSelectorPrefix?: string } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), "mx-angular-call-"));
+  scratches.push(dir);
   mkdirSync(join(dir, "tags"), { recursive: true });
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
   for (const [name, content] of Object.entries(tags)) {

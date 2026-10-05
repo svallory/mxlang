@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,26 @@ import { honoTargets } from "./index.ts";
  * dynamic `import()` of a `.mx` module, both Bun-runtime-only — the same
  * shape as `@mxlang/html`'s own `bun.test.ts`.
  */
+
+/**
+ * The temp projects this file makes, removed when the file is done.
+ *
+ * TODO `test-tmpdir-leak`: they used to stay in the OS temp directory.
+ */
+const scratches: string[] = [];
+
+function scratch(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratches.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of scratches.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 describe("@mxlang/hono/bun", () => {
   test("compiles a tag discovered beside the file, with no import", async () => {
     Bun.plugin(honoPlugin);
@@ -159,7 +179,7 @@ describe("@mxlang/hono/bun", () => {
     // `@mxlang/astro`. It ends in `.mx` but is not an MX page, and this
     // source would fail the string translator. Bun's default loader returns
     // the file's own path as the default export when no onLoad hook claims it.
-    const dir = mkdtempSync(join(tmpdir(), "mxlang-hono-bun-astro-"));
+    const dir = scratch("mxlang-hono-bun-astro-");
     const path = join(dir, "Card.astro.mx");
     writeFileSync(path, "---\nconst a = 1;\n---\n<p>{a}</p>\n");
 
@@ -208,7 +228,7 @@ describe("@mxlang/hono/bun", () => {
     // plugin. Bun's default loader for an unrecognized extension returns the
     // file's own path as the module's default export, which is what "the
     // onLoad hook declined this path" looks like from the caller's side.
-    const dir = mkdtempSync(join(tmpdir(), "mxlang-hono-bun-solid-"));
+    const dir = scratch("mxlang-hono-bun-solid-");
     const path = join(dir, "Counter.solid.mx");
     writeFileSync(
       path,

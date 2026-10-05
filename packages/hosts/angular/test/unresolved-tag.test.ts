@@ -7,11 +7,11 @@
  * used to emit `<mx-totally-undefined>` and a step-1 import warning.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
 import { angularOwnTargets } from "../src/own-targets.ts";
@@ -20,6 +20,26 @@ import { assertAngularParses, compileMx, emit } from "./helpers.ts";
 
 const MARKO_ERROR =
   "Unable to find entry point for custom tag `<TotallyUndefined>`.";
+
+/**
+ * The temp projects this file makes, removed when the file is done.
+ *
+ * TODO `test-tmpdir-leak`: these used to be plain `mkdtempSync` calls left
+ * behind in the OS temp directory.
+ */
+const scratches: string[] = [];
+
+function scratchProject(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratches.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of scratches.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("unresolved capitalized tag (decision 114)", () => {
   it("is Marko's compile error, self-closing", () => {
@@ -79,7 +99,7 @@ describe("resolvable tags still compile (decision 114)", () => {
   });
 
   it("a discovered custom tag resolves to its selector", () => {
-    const dir = mkdtempSync(join(tmpdir(), "mx-ng-unresolved-"));
+    const dir = scratchProject("mx-ng-unresolved-");
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "f" }));
     mkdirSync(join(dir, "tags"));
     writeFileSync(
@@ -101,7 +121,7 @@ describe("resolvable tags still compile (decision 114)", () => {
     // Not a `.mx` default import, so the callee is a runtime value: the call
     // emits ngComponentOutlet with the attributes as its inputs, and the tag
     // module imports NgComponentOutlet itself.
-    const dir = mkdtempSync(join(tmpdir(), "mx-ng-valueimport-"));
+    const dir = scratchProject("mx-ng-valueimport-");
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "f" }));
     const path = join(dir, "page.mx");
     const source = 'import { Cmp } from "./cmp.ts";\n<Cmp a=1/>\n';
@@ -117,7 +137,7 @@ describe("resolvable tags still compile (decision 114)", () => {
     // Covered exhaustively in tag-module.test.ts; restated here because this
     // change touched the same routing: a `.mx` default import is Marko's
     // statically-resolved component case and must NOT route dynamic.
-    const dir = mkdtempSync(join(tmpdir(), "mx-ng-mximport-"));
+    const dir = scratchProject("mx-ng-mximport-");
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "f" }));
     // The callee must exist: an import whose file cannot be read is an error
     // (its exported `selector` is part of the call site), not a guess.

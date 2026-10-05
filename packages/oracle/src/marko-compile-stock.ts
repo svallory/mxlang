@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,6 +32,21 @@ export async function renderStockMarko(
   input: unknown,
 ): Promise<string> {
   const scratch = mkdtempSync(join(tmpdir(), "mx-oracle-stock-"));
+  // TODO `test-tmpdir-leak`: the scratch copy is consumed here, so it is
+  // removed here. One per fixture per run used to accumulate in the OS temp
+  // directory, which is what filled netcup's `/tmp` (a tmpfs).
+  try {
+    return await renderStockMarkoIn(scratch, fixtureDir, input);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+async function renderStockMarkoIn(
+  scratch: string,
+  fixtureDir: string,
+  input: unknown,
+): Promise<string> {
   cpSync(fixtureDir, scratch, { recursive: true });
 
   for (const relative of markoFiles(scratch)) {

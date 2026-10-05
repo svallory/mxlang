@@ -8,11 +8,11 @@
  * asserting only "some mapping exists" would not catch.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { compile, compileTagModule } from "../src/index.ts";
 import {
   lineColumnAt,
@@ -50,6 +50,26 @@ function expectPair(
 ): void {
   expect(slicePairs(source)).toContainEqual({ generated, source: sourceText });
 }
+
+/**
+ * The temp projects this file makes, removed when the file is done.
+ *
+ * TODO `test-tmpdir-leak`: these used to be plain `mkdtempSync` calls left
+ * behind in the OS temp directory.
+ */
+const scratches: string[] = [];
+
+function scratchProject(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratches.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of scratches.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("mappings: expressions", () => {
   it("maps an interpolation expression to its source text", () => {
@@ -118,7 +138,7 @@ describe("mappings: names", () => {
   // the span of its *call site* is a core change (C4's writer half), not
   // something this host can do — see the report's open questions.
   it("emits the selector unmapped for a discovered tag, which carries no authored name span", () => {
-    const dir = mkdtempSync(join(tmpdir(), "mx-angular-map-"));
+    const dir = scratchProject("mx-angular-map-");
     mkdirSync(join(dir, "tags"), { recursive: true });
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
     writeFileSync(join(dir, "tags", "icon.mx"), "<i>*</i>\n");
@@ -142,7 +162,7 @@ describe("mappings: names", () => {
   it("maps an attribute name on a component call", () => {
     // The call's own attributes are authored text and do map, even though
     // the discovered selector above does not.
-    const dir = mkdtempSync(join(tmpdir(), "mx-angular-map-"));
+    const dir = scratchProject("mx-angular-map-");
     mkdirSync(join(dir, "tags"), { recursive: true });
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
     writeFileSync(join(dir, "tags", "icon.mx"), "<i>*</i>\n");
@@ -266,7 +286,7 @@ describe("compileTagModule(): mappings rebased onto the module", () => {
   function modulePairs(
     tagSource: string,
   ): Array<{ generated: string; source: string }> {
-    const dir = mkdtempSync(join(tmpdir(), "mx-angular-tagmap-"));
+    const dir = scratchProject("mx-angular-tagmap-");
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
     const path = join(dir, "badge.mx");
     writeFileSync(path, tagSource);

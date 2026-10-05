@@ -5,8 +5,23 @@ import { parseTemplate } from "@angular/compiler";
 import type { MxWarning } from "@mxlang/core";
 import { getCustomTags } from "@mxlang/core";
 import ts from "typescript";
+import { afterAll } from "vitest";
 import { compile } from "../src/index.ts";
 import { angularOwnTargets } from "../src/own-targets.ts";
+
+/**
+ * The temp projects `compileWithTags` makes, removed when the file is done.
+ *
+ * TODO `test-tmpdir-leak`: the project used to leak deliberately, once per
+ * call, into the OS temp directory.
+ */
+const tagProjects: string[] = [];
+
+afterAll(() => {
+  for (const dir of tagProjects.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 /** Compiles a `.mx` source string, returning both the template and any warnings. */
 export function compileMx(
@@ -46,8 +61,9 @@ export function emitWithTags(source: string, tagNames: string[]): string {
  * Marko's compile error, so a test for the resolved-call path (selector,
  * projection, the step-1 import warning) must give the tag a real home.
  *
- * The temp project leaks deliberately, like every other mkdtemp fixture in
- * this suite. `filename` is relative to the project dir and may be nested.
+ * The temp project lives until the test file is done, so a caller can keep
+ * reading `dir` while it asserts on the compile. `filename` is relative to
+ * the project dir and may be nested.
  */
 export function compileWithTags(
   source: string,
@@ -55,6 +71,7 @@ export function compileWithTags(
   filename = "x.mx",
 ): { code: string; warnings: MxWarning[]; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), "mx-ng-comptest-"));
+  tagProjects.push(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "f" }));
   mkdirSync(join(dir, "tags"));
   for (const name of tagNames) {

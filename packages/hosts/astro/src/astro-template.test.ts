@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -643,18 +643,24 @@ describe("components and slots", () => {
   });
 
   it("rejects a declared AttrTag[] even when no occurrence is passed", () => {
+    // TODO `test-tmpdir-leak`: the temp project is removed here, not left in
+    // the OS temp directory.
     const dir = mkdtempSync(join(tmpdir(), "mx-astro-attr-tags-"));
-    const card = join(dir, "Card.mx");
-    const caller = join(dir, "Caller.astro.mx");
-    writeFileSync(
-      card,
-      "export interface Input { item?: AttrTag[] }\n<section/>\n",
-    );
-    const source = 'import Card from "./Card.mx";\n<Card/>\n';
+    try {
+      const card = join(dir, "Card.mx");
+      const caller = join(dir, "Caller.astro.mx");
+      writeFileSync(
+        card,
+        "export interface Input { item?: AttrTag[] }\n<section/>\n",
+      );
+      const source = 'import Card from "./Card.mx";\n<Card/>\n';
 
-    expect(() => lowerAstroMx(source, caller)).toThrow(
-      "array attribute tag `<@item>` isn't supported by @mxlang/astro",
-    );
+      expect(() => lowerAstroMx(source, caller)).toThrow(
+        "array attribute tag `<@item>` isn't supported by @mxlang/astro",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -25,6 +25,21 @@ import { builtinLookup } from "@mxlang/target-registry";
 import ts from "typescript";
 
 /**
+ * The staged fixture copies this run makes, removed when the process exits.
+ *
+ * TODO `test-tmpdir-leak`: `stageWithTags`, `stageTag` and `stageNgMx` below
+ * each stage one copy per fixture, and those copies used to stay in the OS
+ * temp directory after the run (a tmpfs on netcup, which is what filled up).
+ */
+const staged: string[] = [];
+
+process.on("exit", () => {
+  for (const dir of staged.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
  * `oracle:angular`'s one table (design note A6): every fixture under
  * `packages/oracle/fixtures/angular/<name>/` compiles through
  * `@mxlang/angular`'s emitter, then the emitted template is checked two
@@ -122,6 +137,11 @@ interface Row {
   detail?: string;
 }
 
+/** Registers a staged copy for removal when the run ends. */
+function stageCleanup(dir: string): void {
+  staged.push(dir);
+}
+
 /**
  * Copies a fixture's `tags/` directory into a temp directory and writes its
  * template there as `FIXTURE_FILENAME`, returning that path.
@@ -132,6 +152,7 @@ interface Row {
  */
 function stageWithTags(fixtureDir: string, source: string): string {
   const staged = mkdtempSync(join(tmpdir(), "mx-angular-fixture-"));
+  stageCleanup(staged);
   cpSync(join(fixtureDir, "tags"), join(staged, "tags"), { recursive: true });
   // A package boundary stops the upward scan at the staged directory, so a
   // `tags/` directory above the temp dir can never leak into a fixture.
@@ -160,6 +181,7 @@ function stripStagedDir(message: string, stagedPath: string): string {
  */
 function stageTag(fixtureDir: string, filename: string): string {
   const staged = mkdtempSync(join(tmpdir(), "mx-angular-tagfix-"));
+  stageCleanup(staged);
   if (existsSync(join(fixtureDir, "tags"))) {
     cpSync(join(fixtureDir, "tags"), join(staged, "tags"), { recursive: true });
   }
@@ -178,6 +200,7 @@ function stageTag(fixtureDir: string, filename: string): string {
  */
 function stageNgMx(fixtureDir: string): string {
   const staged = mkdtempSync(join(tmpdir(), "mx-angular-ngmxfix-"));
+  stageCleanup(staged);
   cpSync(join(fixtureDir, "tags"), join(staged, "tags"), { recursive: true });
   writeFileSync(join(staged, "package.json"), JSON.stringify({ name: "f" }));
   const path = join(staged, "input.ng.mx");

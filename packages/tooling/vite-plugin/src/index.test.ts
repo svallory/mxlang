@@ -12,8 +12,22 @@ import {
   clearScanCache,
   type TargetCompiler,
 } from "@mxlang/core";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import mx, { MX_SUFFIX, readTemplateSource } from "./index";
+
+/**
+ * The temp directories `writeMx` makes, removed when this file is done.
+ *
+ * TODO `test-tmpdir-leak`: `writeMx` runs once per test across this file and
+ * used to leave every directory behind in the OS temp directory.
+ */
+const written: string[] = [];
+
+afterAll(() => {
+  for (const dir of written.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 const COUNTER = `import { createSignal } from "solid-js";
 
@@ -138,6 +152,7 @@ function transformOf(plugin: Hooks) {
 /** Writes `source` to a real temp file, since `load` reads from disk. */
 function writeMx(name: string, source: string): string {
   const dir = mkdtempSync(join(tmpdir(), "mx-vite-plugin-"));
+  written.push(dir);
   const path = join(dir, name);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, source);

@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { clearScanCache } from "@mxlang/core";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import {
   ASTRO_MX_EXT,
   ASTRO_SUFFIX,
@@ -109,9 +109,28 @@ function makeGraph(ids: string[]) {
   };
 }
 
+/**
+ * The temp directories this file makes, removed when the file is done.
+ *
+ * TODO `test-tmpdir-leak`: they used to stay in the OS temp directory.
+ */
+const scratches: string[] = [];
+
+function scratch(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratches.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of scratches.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 /** Writes `source` to a real temp file, since `load` reads from disk. */
 function writeAmx(name: string, source: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "mx-astro-templates-"));
+  const dir = scratch("mx-astro-templates-");
   const path = join(dir, name);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, source);
@@ -348,7 +367,7 @@ describe("mxTemplates()", () => {
       // `@mxlang/vite-plugin`; `.astro.mx` has its own `load`, so without the scan
       // wired in here it would be the one file kind where a `tags/` directory
       // is invisible.
-      const dir = mkdtempSync(join(tmpdir(), "mx-amx-tags-"));
+      const dir = scratch("mx-amx-tags-");
       writeFileSync(
         join(dir, "package.json"),
         '{"name":"a","mx":{"host":"astro"}}',
@@ -370,7 +389,7 @@ describe("mxTemplates()", () => {
 
     it("leaves an unmatched mx.tags host unresolved under its own-only lookup", () => {
       // PR 3 round-2 ruling: own-only lookups cannot validate peer names.
-      const dir = mkdtempSync(join(tmpdir(), "mx-amx-hosts-warning-"));
+      const dir = scratch("mx-amx-hosts-warning-");
       writeFileSync(
         join(dir, "package.json"),
         JSON.stringify({
@@ -404,7 +423,7 @@ describe("mxTemplates()", () => {
       // and the frame was built from the .astro.mx caller's own source — so the
       // error used to be reported at the template's line/column measured
       // against the wrong file's text.
-      const dir = mkdtempSync(join(tmpdir(), "mx-amx-tags-"));
+      const dir = scratch("mx-amx-tags-");
       writeFileSync(
         join(dir, "package.json"),
         '{"name":"a","mx":{"host":"astro"}}',
