@@ -56,6 +56,8 @@ export function activate(context: ExtensionContext) {
           { scheme: "untitled", language: "mx" },
           { scheme: "file", language: "solidmx" },
           { scheme: "untitled", language: "solidmx" },
+          { scheme: "file", language: "reactmx" },
+          { scheme: "untitled", language: "reactmx" },
           // astromx and ngmx are intentionally excluded as the LS does not
           // handle .astro.mx or .ng.mx yet. `.ng.mx` gets TypeScript semantics
           // through the TS server plugin (see `typescriptServerPlugins` in

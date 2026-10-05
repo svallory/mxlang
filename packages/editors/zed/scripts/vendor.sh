@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds languages/{mx,solid,ngmx}/*.scm from this monorepo's own grammar
+# Builds languages/{mx,solid,ngmx,reactmx}/*.scm from this monorepo's own grammar
 # packages plus hand-authored base content and overlays.
 #
 # MX (`.mx`) rides packages/editors/tree-sitter-mx, MX's own grammar (a
@@ -8,7 +8,7 @@
 # own queries/*.scm; its brackets and outline live in base/mx/*.scm (taken
 # from marko-js/zed, see their header comments).
 #
-# Solid and AngularMX (`.solid.mx` and `.ng.mx`) share one grammar package
+# Solid, AngularMX and ReactMX (`.solid.mx`, `.ng.mx`, `.react.mx`) share one grammar package
 # (packages/editors/tree-sitter-solid): a patched tree-sitter-typescript
 # tsx dialect whose only MX-specific addition is an opaque `mx_element`
 # external token in expression position — nothing about the grammar is
@@ -35,7 +35,7 @@
 # happen here, at build time, instead.
 #
 # Usage:
-#   scripts/vendor.sh              # (re)generate languages/{mx,solid,ngmx}/*.scm
+#   scripts/vendor.sh              # (re)generate languages/{mx,solid,ngmx,reactmx}/*.scm
 #
 # There is no `--check` mode: the highlights source is local (this
 # monorepo), so there is no networked upstream HEAD to drift against — a
@@ -44,7 +44,7 @@
 # job does the only check that matters for this script: regenerate and diff
 # against committed output.
 #
-# Never hand-edit languages/{mx,solid,ngmx}/*.scm — edit overlay/<lang>/*.scm,
+# Never hand-edit languages/{mx,solid,ngmx,reactmx}/*.scm — edit overlay/<lang>/*.scm,
 # base/<lang>/*.scm (or the grammar package's queries/) instead, then rerun
 # this script.
 
@@ -118,5 +118,8 @@ build_lang "solid" "Solid"
 echo "Building AngularMX queries..."
 build_lang "ngmx" "AngularMX"
 
+echo "Building ReactMX queries..."
+build_lang "reactmx" "ReactMX"
+
 echo "Done. languages/mx/*.scm regenerated from packages/editors/tree-sitter-mx + base/mx;"
-echo "      languages/{solid,ngmx}/*.scm from packages/editors/tree-sitter-solid + base/{solid,ngmx} + overlays."
+echo "      languages/{solid,ngmx,reactmx}/*.scm from packages/editors/tree-sitter-solid + base/{solid,ngmx,reactmx} + overlays."

@@ -23,11 +23,13 @@ Ships four languages:
   neither Solid- nor Angular-specific, so `languages/ngmx/config.toml`
   declares `grammar = "solid"` directly rather than this extension
   compiling a second, identical grammar.
+- `ReactMX` (`.react.mx`), on the same `solid` grammar for the same reason
+  (`languages/reactmx/config.toml`).
 - `AstroMX` (`.astro.mx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
 
 Also registers a language server: `src/lib.rs` (a minimal Rust extension,
 `Cargo.toml`) implements `zed::Extension::language_server_command` for
-`@mxlang/language-server` on `MX` and `Solid` — see "Language server"
+`@mxlang/language-server` on `MX`, `Solid` and `ReactMX` — see "Language server"
 below.
 
 ## Toolchain prerequisite: Rust + wasm32-wasip1
@@ -155,6 +157,9 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
   it reuses the same grammar and queries. No language server registration
   yet — `@mxlang/language-server` does not compile `.ng.mx` (see
   `AGENTS.md`'s Zed extension section).
+- `ReactMX` (`.react.mx`): the same as `Solid` above (grammar, queries and
+  injected `mx_element` highlighting), with React host diagnostics from
+  `@mxlang/language-server`.
 
 `.astro.mx` follows the same rule as `.solid.mx` and `.ng.mx` (decision 134):
 it also matches `MX`'s `.mx` suffix, and Zed's longest-suffix match picks

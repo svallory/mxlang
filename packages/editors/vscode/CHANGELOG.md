@@ -2,6 +2,10 @@
 
 ## 0.0.0 (unreleased)
 
+### Added: `.react.mx` (ReactMX, decision 154)
+
+A new `reactmx` language (alias `ReactMX`) for `.react.mx`, TSX with MX regions on React, contributed before `mx` so the suffix is not read as a whole-file `.mx`. Its grammar is a `source.reactmx` stub over `source.tsx`; it activates the extension, is in `typescriptServerPlugins.languages` and in the language server client's document selector. The Zed extension gains the `ReactMX` language (`languages/reactmx`, on the shared `solid` grammar, built by `scripts/vendor.sh` from `base/reactmx` and `overlay/reactmx`) and lists it in `[language_servers.mxlang]`.
+
 ### Changed: "SolidMX" is now "Solid" (solid-rename, decision 154)
 
 The product name SolidMX is retired; the host is "Solid". The VS Code language alias shown in the language picker is now `Solid` (the language id `solidmx`, the scope `source.solidmx` and the `.solid.mx` suffix are unchanged). The Zed extension's language is renamed the same way: its name is `Solid`, its grammar is `solid` and the grammar package is `packages/editors/tree-sitter-solid`. Zed settings keyed by `"SolidMX"` (`languages`, `file_types`) must now use `"Solid"`, and a vtsls or typescript-language-server `languages` entry that named Zed's lowercased language id `solidmx` must now be `solid`.

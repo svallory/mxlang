@@ -34,6 +34,38 @@ describe("Manifest", () => {
     expect(solidMxIndex).toBeLessThan(mxIndex);
   });
 
+  it("orders reactmx before mx in language contributions", () => {
+    // Same reasoning as solidmx: .react.mx must not be mistakenly matched as .mx
+    const mxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "mx",
+    );
+    const reactMxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "reactmx",
+    );
+    expect(reactMxIndex).toBeGreaterThanOrEqual(0);
+    expect(reactMxIndex).toBeLessThan(mxIndex);
+  });
+
+  it("gives reactmx a TSX grammar, activation and the language server", () => {
+    const grammar = pkg.contributes.grammars.find(
+      (g: { language: string }) => g.language === "reactmx",
+    );
+    const stub = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", grammar.path), "utf-8"),
+    );
+    expect(stub.scopeName).toBe("source.reactmx");
+    expect(stub.patterns).toEqual([{ include: "source.tsx" }]);
+    expect(pkg.activationEvents).toContain("onLanguage:reactmx");
+    const source = fs.readFileSync(
+      path.join(__dirname, "extension.ts"),
+      "utf-8",
+    );
+    const selector = source.slice(source.indexOf("documentSelector"));
+    expect(selector.slice(0, selector.indexOf("]"))).toContain(
+      'language: "reactmx"',
+    );
+  });
+
   it("orders ngmx before mx in language contributions", () => {
     // Same reasoning as solidmx: .ng.mx must not be mistakenly matched as .mx
     const mxIndex = pkg.contributes.languages.findIndex(
@@ -68,6 +100,7 @@ describe("Manifest", () => {
     expect(tsPlugin.name).toBe("@mxlang/typescript-plugin");
     expect(tsPlugin.languages).toContain("mx");
     expect(tsPlugin.languages).toContain("solidmx");
+    expect(tsPlugin.languages).toContain("reactmx");
     expect(tsPlugin.languages).toContain("ngmx");
     expect(tsPlugin.languages).toContain("astromx");
   });

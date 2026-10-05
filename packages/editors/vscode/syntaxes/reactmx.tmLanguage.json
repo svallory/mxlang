@@ -1,0 +1,8 @@
+{
+  "scopeName": "source.reactmx",
+  "patterns": [
+    {
+      "include": "source.tsx"
+    }
+  ]
+}
