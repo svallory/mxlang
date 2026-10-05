@@ -102,8 +102,8 @@ const BASE = { startOffset: 137, startLine: 9, startColumn: 14 };
 /**
  * HTML-mode source exercising the handler surface: declarations, doctype,
  * CDATA, comments, scriptlets, statements, tag shorthand, attribute tags,
- * arguments, params, type args, type params, methods, spreads, placeholders
- * and close tags.
+ * arguments, params, type args, type params, methods, spreads, placeholders,
+ * an atom (decision 156) and close tags.
  */
 const HTML_SOURCE = [
   '<?xml version="1.0"?>',
@@ -115,7 +115,7 @@ const HTML_SOURCE = [
   "static const statement = 1",
   "$ const scriptlet = 1;",
   "$ { block(); }",
-  "<div.cls#id/tagVar|p|(arg) a=1 b:=bound ...spread c(x) { body } d<T>(y) { body } f(1) /* in tag */>",
+  "<div.cls#id/tagVar|p|(arg) a=1 b:=bound ...spread c(x) { body } d<T>(y) { body } e=:atom f(1) /* in tag */>",
   "<typed <A, B = string> |data: A & B|>typed body</typed>",
   "  ${placeholder}",
   "  <!-- inner comment -->",
@@ -135,7 +135,7 @@ const CONCISE_SOURCE = [
   '<?xml version="1.0"?>',
   "<!DOCTYPE html>",
   "<![CDATA[raw]]>",
-  "div.cls#id/tagVar a=1 b:=bound ...spread onClick() { body } c(1) d<T>(y) { body }",
+  "div.cls#id/tagVar a=1 b:=bound ...spread onClick() { body } c(1) d<T>(y) { body } e=:atom",
   "  -- text",
   "  -- hi ${x} there",
   "  // line comment",
@@ -188,6 +188,7 @@ const HTML_HANDLERS = [
   "onDoctype",
   "onScriptlet",
   "onPlaceholder",
+  "onAtom",
 ];
 
 /**
@@ -231,6 +232,7 @@ const DECLARED_HANDLERS = [
   "onDoctype",
   "onScriptlet",
   "onPlaceholder",
+  "onAtom",
 ] as const;
 
 // Compile-time exhaustiveness: if `ParserOptions` ever gains a handler that
@@ -284,13 +286,36 @@ function assertBaseContract(source: string, base: ParseOptions): ParseRun {
   const { head, doc } = embed(source, line, column);
   const whole = parse(doc);
 
+  // read() stands each atom in with its same-length numeric stand-in
+  // (`0.` then zeros, decision 156), except for a read that starts at a tag
+  // name: that is the raw open tag, which reads the source.
+  const atoms = based.log
+    .filter((e) => e.handler === "onAtom")
+    .map((e) => e.ranges[0] as RangePair);
+  const tagNameStarts = new Set(
+    based.log
+      .filter((e) => e.handler === "onOpenTagName")
+      .map((e) => e.ranges[0]?.[0]),
+  );
+  const stoodIn = (start: number, end: number): string => {
+    let text = "";
+    let at = start;
+    for (const [atomStart, atomEnd] of atoms) {
+      if (atomStart < start || atomEnd > end) continue;
+      text += `${source.slice(at, atomStart)}0.${"0".repeat(atomEnd - atomStart - 2)}`;
+      at = atomEnd;
+    }
+    return text + source.slice(at, end);
+  };
+
   for (const entry of based.log) {
     for (const [start, end] of entry.ranges) {
       // read() reads the parsed string, not the enclosing document.
-      assert.equal(
-        based.parser.read({ start, end }),
-        source.slice(start, end),
-        `${entry.handler} ${start}-${end}`,
+      const read = based.parser.read({ start, end });
+      assert.ok(
+        read === stoodIn(start, end) ||
+          (tagNameStarts.has(start) && read === source.slice(start, end)),
+        `${entry.handler} ${start}-${end}: read ${JSON.stringify(read)}`,
       );
       // offsetAt is the raw rebasing, and nothing else moves.
       assert.equal(based.parser.offsetAt(start), start + offset);
