@@ -91,14 +91,22 @@ export {
   scanCached,
   TranslateError,
 } from "@mxlang/core";
+export { readJsxCalleeInput } from "./callee-reader.ts";
 export { type JsxDialect, preactDialect } from "./dialect.ts";
 export {
   createEmitter,
   createJsxDeclarations,
   emitPreact,
+  type JsxDeclarationsOptions,
   PreactEmitter,
   preactDeclarations,
 } from "./emitter.ts";
+export {
+  type CompileJsxRegionOptions,
+  type CompileJsxRegionResult,
+  compileJsxRegion,
+  type JsxHoistedImport,
+} from "./region.ts";
 export { MxErrorBoundary, MxPlaceholder, mxClass } from "./runtime.ts";
 export type {
   CompilePreactOptions,

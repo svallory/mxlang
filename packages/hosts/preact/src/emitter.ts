@@ -52,19 +52,33 @@ import { type JsxDialect, preactDialect } from "./dialect.ts";
  * holds — the message says what this target cannot express and where the
  * equivalent lives, never "not implemented".
  */
-function statefulErrors(dialectName: string): HostDeclarations["tags"] {
+function statefulErrors(
+  dialectName: string,
+  region: boolean,
+): HostDeclarations["tags"] {
+  // A region (`.react.mx`) rejects `<const>`, so the whole-file hint
+  // `<const/x=useState(0)/>` would recommend something the region refuses.
+  // There the hook lives in the component around the region, and only that is
+  // named.
+  const inComponent = " in the surrounding component";
   return {
     let: {
       kind: "error",
-      reason: `\`<let>\` is Marko reactive state; use ${dialectName}'s \`useState\` via \`<const/x=useState(0)/>\` or in the surrounding module`,
+      reason: region
+        ? `\`<let>\` is Marko reactive state; use ${dialectName}'s \`useState\`${inComponent}`
+        : `\`<let>\` is Marko reactive state; use ${dialectName}'s \`useState\` via \`<const/x=useState(0)/>\` or in the surrounding module`,
     },
     effect: {
       kind: "error",
-      reason: `\`<effect>\` is a Marko reactive effect; use ${dialectName}'s \`useEffect\` via \`<const/_=useEffect(...)/>\` or in the surrounding module`,
+      reason: region
+        ? `\`<effect>\` is a Marko reactive effect; use ${dialectName}'s \`useEffect\`${inComponent}`
+        : `\`<effect>\` is a Marko reactive effect; use ${dialectName}'s \`useEffect\` via \`<const/_=useEffect(...)/>\` or in the surrounding module`,
     },
     lifecycle: {
       kind: "error",
-      reason: `\`<lifecycle>\` is a Marko lifecycle hook; use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\` instead`,
+      reason: region
+        ? `\`<lifecycle>\` is a Marko lifecycle hook; use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\`${inComponent}`
+        : `\`<lifecycle>\` is a Marko lifecycle hook; use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\` instead`,
     },
     script: {
       kind: "error",
@@ -77,7 +91,7 @@ function statefulErrors(dialectName: string): HostDeclarations["tags"] {
     },
     id: {
       kind: "error",
-      reason: `\`<id>\` allocates an identifier for Marko's reactive runtime; use ${dialectName}'s \`useId\``,
+      reason: `\`<id>\` allocates an identifier for Marko's reactive runtime; use ${dialectName}'s \`useId\`${region ? inComponent : ""}`,
     },
     await: {
       kind: "error",
@@ -143,7 +157,22 @@ const ATTRIBUTE_SPREAD_EXPRESSION = "__mxAttrSpread";
 /** The JSX hosts' built-in `defaultTag`: their descriptors' field and the ladder's last rung. */
 export const DEFAULT_TAG = "div";
 
-export function createJsxDeclarations(dialectName: string): HostDeclarations {
+/** Options for {@link createJsxDeclarations}. */
+export interface JsxDeclarationsOptions {
+  /**
+   * Declarations for an MX region inside a `.<segment>.mx` TypeScript module
+   * rather than a whole-file `.mx`: the reactive-tag errors and the scriptlet
+   * fix point at the hook in the surrounding component, never at `<const>`,
+   * which a region rejects.
+   */
+  region?: boolean;
+}
+
+export function createJsxDeclarations(
+  dialectName: string,
+  options: JsxDeclarationsOptions = {},
+): HostDeclarations {
+  const region = options.region === true;
   const declarationName =
     dialectName === "Preact"
       ? "@mxlang/preact"
@@ -155,7 +184,7 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
   return {
     name: declarationName,
     attrTags: 2,
-    tags: statefulErrors(dialectName),
+    tags: statefulErrors(dialectName, region),
     // The ladder (decision 145): the parent's contract `defaultTag`, then
     // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
     // the host override into `configured`). This host permits the contract rung:
@@ -167,7 +196,11 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
     // `<let>` is not this host's state model. Never turn a mutable JS
     // declaration into an immutable `<const>` just to offer a fix.
     scriptletReplacement: (name, keyword) =>
-      keyword === "const" ? `declare a value with \`<const/${name}=…/>\`` : "",
+      keyword !== "const"
+        ? ""
+        : region
+          ? "declare it in the surrounding component"
+          : `declare a value with \`<const/${name}=…/>\``,
     // Element-vs-component follows Marko's own rule — what the taglib lookup
     // and the template's own bindings resolve the name to — not JSX's casing
     // rule, so a `tags/`-discovered `<badge/>` is the component it is in Marko.
@@ -490,6 +523,16 @@ export class PreactEmitter implements Emitter<string> {
    */
   readonly #typeCheck: string | undefined;
 
+  /**
+   * Region compiles only (`region.ts`): where a `<define>` nested in markup
+   * goes instead of being refused. A region has a single root element, so
+   * its `<define>`s are never at the template's top level; outside a callback
+   * they are still in the component body's own JavaScript scope (JSX opens
+   * none), so declaring them above the region's markup changes nothing they
+   * close over. `undefined` for a whole-file compile, which keeps refusing.
+   */
+  readonly #region: { segment: string; defines: MappedCode[] } | undefined;
+
   constructor(
     dialect: JsxDialect = preactDialect,
     runtimeImports?: Set<string>,
@@ -499,8 +542,10 @@ export class PreactEmitter implements Emitter<string> {
     callbackScope = false,
     typeCheck?: string,
     decodeText = true,
+    region?: { segment: string; defines: MappedCode[] },
   ) {
     this.#dialect = dialect;
+    this.#region = region;
     this.#typeCheck = typeCheck;
     this.#runtimeImports = runtimeImports ?? new Set();
     this.#aliases = aliases ?? new Set();
@@ -513,6 +558,11 @@ export class PreactEmitter implements Emitter<string> {
   /** Statements a `/var` call site needs above the component's `return`. */
   get varStatements(): string[] {
     return this.#varStatements;
+  }
+
+  /** `<define>` statements lifted out of a region's markup, in source order. */
+  get liftedDefines(): MappedCode[] {
+    return this.#region?.defines ?? [];
   }
 
   /** Component names that need a capitalized alias in the emitted module. */
@@ -539,6 +589,7 @@ export class PreactEmitter implements Emitter<string> {
       callbackScope,
       this.#typeCheck,
       decodeText,
+      this.#region,
     );
   }
 
@@ -1904,6 +1955,19 @@ export class PreactEmitter implements Emitter<string> {
    * declaration is a statement.
    */
   define(node: Extract<IrNode, { kind: "Define" }>): void {
+    if (this.#region && !this.#callbackScope) {
+      // The whole-file statement text (`emitModuleWithMappings`). The body is
+      // a function of its own, so it renders as a callback: a `/var` inside
+      // it has no statement position and is refused, as in any callback.
+      this.#region.defines.push(
+        concatMapped(
+          `const ${node.name} = (${node.params.join(", ")}) => (<>`,
+          this.#render(node.children, true),
+          "</>);",
+        ),
+      );
+      return;
+    }
     fail(
       "`<define>` must appear at the top level of the template; a block declared inside markup cannot be lifted without changing its scope",
       node,
@@ -1911,6 +1975,14 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
+    if (this.#region) {
+      // A hook in `<const>` would run inside the region, which may itself sit
+      // in a conditional: the surrounding component is where it belongs.
+      fail(
+        `\`<const>\` cannot declare a binding inside a \`.${this.#region.segment}.mx\` expression; declare it in the surrounding component`,
+        node,
+      );
+    }
     fail(
       "`<const>` must appear at the top level of the template; a binding declared inside markup cannot be lifted without changing its scope",
       node,
@@ -1994,6 +2066,28 @@ export class PreactEmitter implements Emitter<string> {
   result(): MappedCode {
     return concatMapped(...this.#out);
   }
+}
+
+/**
+ * An emitter for a region of a `.<segment>.mx` module: a `<define>` outside a
+ * callback is lifted (see `liftedDefines`) and `<const>` is refused naming
+ * the file kind.
+ */
+export function createRegionEmitter(
+  dialect: JsxDialect,
+  segment: string,
+): PreactEmitter {
+  return new PreactEmitter(
+    dialect,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false,
+    undefined,
+    true,
+    { segment, defines: [] },
+  );
 }
 
 export function createEmitter(

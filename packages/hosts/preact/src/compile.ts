@@ -124,6 +124,97 @@ function importLines(names: Set<string>, dialect: JsxDialect): string[] {
   return lines;
 }
 
+/** One runtime binding an emitted module (or region) imports. */
+export interface JsxRuntimeImport {
+  /** The single-binding `import { X as __mxX } from "m";` statement text. */
+  code: string;
+  /** The local binding the emitted JSX references. */
+  binding: string;
+  /** The module specifier, as written in `code`. */
+  specifier: string;
+}
+
+/**
+ * {@link importLines} one binding per statement, for a region: the parser
+ * bridge places and de-duplicates each import on its own, so two regions that
+ * both need `__mxFragment` share one declaration.
+ */
+export function runtimeImports(
+  names: Set<string>,
+  dialect: JsxDialect,
+): JsxRuntimeImport[] {
+  const entries: JsxRuntimeImport[] = [];
+  if (names.has("__mxFragment")) {
+    entries.push({
+      code: `import { Fragment as __mxFragment } from "${dialect.fragmentModule}";`,
+      binding: "__mxFragment",
+      specifier: dialect.fragmentModule,
+    });
+  }
+  for (const [name, binding] of [
+    [dialect.errorBoundaryName, "__mxErrorBoundary"],
+    [dialect.suspenseName, "__mxSuspense"],
+  ] as const) {
+    if (!names.has(name)) continue;
+    entries.push({
+      code: `import { ${name} as ${binding} } from "${dialect.errorBoundaryModule}";`,
+      binding,
+      specifier: dialect.errorBoundaryModule,
+    });
+  }
+  if (names.has("__mxClass")) {
+    const mxClassModule = dialect.mxClassModule ?? dialect.errorBoundaryModule;
+    entries.push({
+      code: `import { mxClass as __mxClass } from "${mxClassModule}";`,
+      binding: "__mxClass",
+      specifier: mxClassModule,
+    });
+  }
+  return entries;
+}
+
+/** One module-scope helper declaration the emitted JSX calls. */
+export interface JsxHelper {
+  /** The `const __mxX = …;` (or `function`) declaration text. */
+  code: string;
+  /** The binding it declares. */
+  binding: string;
+}
+
+/**
+ * The attribute and textarea helpers `text` calls, in the order a whole-file
+ * module declares them. Selected by a scan of the emitted text (the body,
+ * the lifted statements and, when present, `MX_DYNAMIC`, which calls two of
+ * them itself).
+ */
+export function attributeHelpers(
+  text: string,
+  dialect: JsxDialect,
+): JsxHelper[] {
+  const helpers: JsxHelper[] = [];
+  if (text.includes("__mxAttrValue(") || text.includes("__mxAttrSpread("))
+    helpers.push({
+      binding: "__mxAttrValue",
+      code: `const __mxAttrValue = ${jsxAttrValueExpression(dialect.reactBooleanAttributes === true)};`,
+    });
+  if (text.includes("__mxAttrSpread("))
+    helpers.push({
+      binding: "__mxAttrSpread",
+      code: `const __mxAttrSpread = ${JSX_ATTRIBUTE_SPREAD_EXPRESSION};`,
+    });
+  if (text.includes("__mxTextareaContent(") || text.includes("__mxTextarea("))
+    helpers.push({
+      binding: "__mxTextareaContent",
+      code: `const __mxTextareaContent = ${jsxTextareaContentExpression(dialect.textareaLeadingNewline)};`,
+    });
+  if (text.includes("__mxTextarea("))
+    helpers.push({
+      binding: "__mxTextarea",
+      code: `const __mxTextarea = ${jsxTextareaPropsExpression(dialect.textareaContent)};`,
+    });
+  return helpers;
+}
+
 /**
  * `mxDynamic`'s source, inlined into a module rather than imported.
  *
@@ -162,7 +253,7 @@ function importLines(names: Set<string>, dialect: JsxDialect): string[] {
  * \`payload\` where this dispatch could not tell a real trailing argument from
  * the synthesized props object.
  */
-const MX_DYNAMIC = `function __mxIsHostComponentObject(value: any): boolean {
+export const MX_DYNAMIC = `function __mxIsHostComponentObject(value: any): boolean {
   if (value === null || typeof value !== "object") return false;
   const marker = value.$$typeof;
   if (typeof marker !== "symbol") return false;
@@ -358,29 +449,9 @@ export function emitModuleWithMappings(
     ...statements.map((statement) => statement.code),
     ...(emitter.runtimeImports.has("__mxDynamic") ? [MX_DYNAMIC] : []),
   ].join("\n");
-  const attrHelpers: string[] = [];
-  if (
-    helperInput.includes("__mxAttrValue(") ||
-    helperInput.includes("__mxAttrSpread(")
-  )
-    attrHelpers.push(
-      `const __mxAttrValue = ${jsxAttrValueExpression(dialect.reactBooleanAttributes === true)};`,
-    );
-  if (helperInput.includes("__mxAttrSpread("))
-    attrHelpers.push(
-      `const __mxAttrSpread = ${JSX_ATTRIBUTE_SPREAD_EXPRESSION};`,
-    );
-  if (
-    helperInput.includes("__mxTextareaContent(") ||
-    helperInput.includes("__mxTextarea(")
-  )
-    attrHelpers.push(
-      `const __mxTextareaContent = ${jsxTextareaContentExpression(dialect.textareaLeadingNewline)};`,
-    );
-  if (helperInput.includes("__mxTextarea("))
-    attrHelpers.push(
-      `const __mxTextarea = ${jsxTextareaPropsExpression(dialect.textareaContent)};`,
-    );
+  const attrHelpers = attributeHelpers(helperInput, dialect).map(
+    (helper) => helper.code,
+  );
   const importedNames = new Set(ir.imports.flatMap((node) => node.bindings));
   const hoisted = [
     ...ir.imports.map((node) => node.code),
