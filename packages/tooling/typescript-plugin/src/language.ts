@@ -9,6 +9,7 @@ import {
 } from "@mxlang/angular";
 import {
   dropOwnParserPosition,
+  type HostFileKind,
   isTranslateError,
   type MxWarning,
   reportScanDiagnostics,
@@ -16,10 +17,12 @@ import {
   withCalleeInputSources,
 } from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
-import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
+import { print } from "@mxlang/parser";
 import {
+  builtinFileKinds,
   builtinLookup,
   defaultTagFor,
+  regionKindCompile,
   resolveTargetPolicy,
   scanCached,
 } from "@mxlang/target-registry";
@@ -40,24 +43,15 @@ import {
 import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
 
 /**
- * Adapts `compileSolidMx`'s own `(source, options)` signature to the
- * `MxRegionCompile` shape `print` calls — the parser no longer defaults to
- * this host, so every `.solid.mx` caller supplies it explicitly.
+ * The first built-in region file kind's compile (`.solid.mx`), in the
+ * `MxRegionCompile` shape `print` calls, for tests and the oracle.
  */
-export const solidRegionCompile = ({
-  source,
-  ...rest
-}: Parameters<MxRegionCompile>[0] & {
-  warnings?: MxWarning[];
-}): ReturnType<MxRegionCompile> => {
-  const compileRegion = fileKindForPipeline("region").compileRegion;
-  if (!compileRegion) throw new Error("missing region compiler");
-  return compileRegion(source, {
-    source,
-    ...rest,
+export const solidRegionCompile = (
+  input: Parameters<MxRegionCompile>[0] & { warnings?: MxWarning[] },
+): ReturnType<MxRegionCompile> =>
+  regionKindCompile(fileKindForPipeline("region"), {
     targets: builtinLookup(),
-  }) as ReturnType<MxRegionCompile>;
-};
+  })(input) as ReturnType<MxRegionCompile>;
 
 export const SOLID_MX_EXTENSION = `${fileKindForPipeline("region").segment}.mx`;
 export const SOLID_MX_LANGUAGE_ID =
@@ -135,10 +129,66 @@ export interface DependencyLanguagePluginOptions {
   readSource?: DependencySourceReader;
 }
 
+/** The plugin of the first built-in region file kind (`.solid.mx`). */
 export function createSolidMxLanguagePlugin(
   typescript: typeof ts,
   options: DependencyLanguagePluginOptions = {},
 ): SolidMxLanguagePlugin {
+  return createRegionLanguagePlugin(
+    typescript,
+    fileKindForPipeline("region"),
+    options,
+  );
+}
+
+/**
+ * The compound extensions of the module file kinds `mx-tsc` checks: every
+ * region kind and the Angular template kind, in registration order, each as
+ * `.<segment>.mx`.
+ */
+export function moduleFileExtensions(): string[] {
+  return builtinFileKinds
+    .filter(
+      (kind) => kind.pipeline === "region" || kind.pipeline === "ng-template",
+    )
+    .map((kind) => `.${kind.segment}.mx`);
+}
+
+/** One language plugin per built-in region file kind, in registration order. */
+export function createRegionLanguagePlugins(
+  typescript: typeof ts,
+  options: DependencyLanguagePluginOptions = {},
+): SolidMxLanguagePlugin[] {
+  return builtinFileKinds
+    .filter((kind) => kind.pipeline === "region")
+    .map((kind) => createRegionLanguagePlugin(typescript, kind, options));
+}
+
+/**
+ * The language plugin of one region file kind (TypeScript with MX regions,
+ * `.<segment>.mx`): it claims only that kind's suffix and language id, and
+ * lowers every region with that kind's `compileRegion`. One per registered
+ * region kind; nothing here names a host.
+ */
+export function createRegionLanguagePlugin(
+  typescript: typeof ts,
+  kind: HostFileKind,
+  options: DependencyLanguagePluginOptions = {},
+): SolidMxLanguagePlugin {
+  const extension = `${kind.segment}.mx`;
+  const languageId = kind.languageIds?.[0] ?? kind.diagnosticSource;
+  // The registry's hook for this kind; warnings travel on each input.
+  const regionCompile = regionKindCompile(kind, { targets: builtinLookup() });
+  const suffix = `.${extension}`;
+  // Claimed case-insensitively, as this plugin always has (e5dc0f40): Volar
+  // keys files case-insensitively where the filesystem is
+  // (`FileMap(ts.sys.useCaseSensitiveFileNames)`), and a segment is one
+  // lowercase word, so a canonical lower-cased name still matches exactly.
+  const isKind = (fileName: string) => fileName.toLowerCase().endsWith(suffix);
+  // The MX grammar, though, is on only for the exact suffix — the rule the
+  // language server, Vite and the registry apply, and the parser's old
+  // `.solid.mx` default: an `X.SOLID.mx` is claimed but not lowered.
+  const isRegionFile = (fileName: string) => fileName.endsWith(suffix);
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
@@ -147,11 +197,11 @@ export function createSolidMxLanguagePlugin(
 
   return {
     getLanguageId(fileName) {
-      return isSolidMx(fileName) ? SOLID_MX_LANGUAGE_ID : undefined;
+      return isKind(fileName) ? languageId : undefined;
     },
 
-    createVirtualCode(fileName, languageId, snapshot) {
-      if (languageId !== SOLID_MX_LANGUAGE_ID && !isSolidMx(fileName)) {
+    createVirtualCode(fileName, fileLanguageId, snapshot) {
+      if (fileLanguageId !== languageId && !isKind(fileName)) {
         return undefined;
       }
 
@@ -171,7 +221,7 @@ export function createSolidMxLanguagePlugin(
         // logged the same way `mx-language.ts` already does for this exact
         // case (tsserver's own log in an editor, stderr under `mx-tsc`).
         const scan = scanCached(fileName, {
-          host: fileKindHostFilter(fileKindForPipeline("region")),
+          host: fileKindHostFilter(kind),
         });
         reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
           console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
@@ -183,12 +233,16 @@ export function createSolidMxLanguagePlugin(
           () => {
             const warnings: MxWarning[] = [];
             const printed = print(source, fileName, {
+              mx: isRegionFile(fileName),
               defaultTag: defaultTagFor(
                 fileName,
                 resolveTargetPolicy(fileName, { quiet: true }),
               ),
               mxRegionCompile: (input) =>
-                solidRegionCompile({ ...input, warnings }),
+                regionCompile({
+                  ...input,
+                  warnings,
+                }) as ReturnType<MxRegionCompile>,
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
                 : undefined),
@@ -199,10 +253,14 @@ export function createSolidMxLanguagePlugin(
         const { warnings, ...printed } = compiled;
         dependencies.set(fileName, printed.dependencies);
         syntaxErrors.delete(fileName);
-        const { code: generated, warning: builtinImportWarning } =
-          appendSolidBuiltinImport(printed.code);
-        const allWarnings = builtinImportWarning
-          ? [...warnings, builtinImportWarning]
+        // What the host's own compiler stage adds that the type-check
+        // cannot see (Solid: imports for its auto-imported built-ins).
+        const { code: generated, warning: typecheckWarning } =
+          kind.completeTypecheckModule?.(printed.code) ?? {
+            code: printed.code,
+          };
+        const allWarnings = typecheckWarning
+          ? [...warnings, typecheckWarning]
           : warnings;
         compileDiagnostics.set(
           fileName,
@@ -270,7 +328,7 @@ export function createSolidMxLanguagePlugin(
       resolveHiddenExtensions: true,
       extraFileExtensions: [
         {
-          extension: SOLID_MX_EXTENSION,
+          extension,
           isMixedContent: false,
           scriptKind: typescript.ScriptKind.TSX,
         },
@@ -830,78 +888,6 @@ function createVirtualCode(
 }
 
 /**
- * Appends an import for every Solid JSX built-in (`SOLID_BUILTIN_TAGS`,
- * `@mxlang/parser`) the generated text uses as a bare tag and the source
- * does not already bind (`sourceBindings`, same package) — so a caller who
- * genuinely wrote `import { Show } from "./my-show.ts"` is left alone rather
- * than getting a colliding second `Show`. `@mxlang/solid`'s emitter prints
- * these built-ins (`<Show>`, `<For>`, …) as bare tags because the *runtime*
- * build pipeline gets them for free — `@solidjs/vite-plugin`'s compiler
- * stage (native or Babel) auto-imports every built-in it sees, per
- * `@mxlang/solid`'s own `AGENTS.md` — and that compiler stage never runs
- * inside the type-check projection: `createVirtualCode` here only prints JSX
- * text and hands it straight to `tsc`/tsserver, so without this, every
- * `<Show>` (from `<if>`/`<if|u|>`), `<For>`/`<Repeat>` (from `<for>`),
- * `<Switch>`/`<Match>` (from a 3+-branch `<if>`), `<Errored>`/`<Loading>`
- * (from `<try>`) and `<Dynamic>` (from a dynamic tag) is an unresolved
- * identifier (TS2304), which drowns every real diagnostic inside that JSX in
- * noise the negative test below guards against staying hidden.
- *
- * Appended at the end of the file, after every mapping is computed from the
- * unmodified generated text, so no existing line or offset shifts: an
- * appended, unmapped import cannot mis-position an earlier diagnostic.
- *
- * **`generated` failing to parse would mean the printer itself emitted
- * invalid TSX** — a bug in this package, not an author mistake, since
- * `generated` is our own emitted output rather than authored source (see
- * `source-bindings-silent-parse-failure`). On that failure every built-in is
- * appended unconditionally rather than silently treating it as "nothing
- * bound" — over-importing risks at worst a redundant import TypeScript
- * already tolerates; under-importing (the old behavior, if `sourceBindings`
- * happened to swallow a real binding) risks hiding every real diagnostic
- * inside the JSX behind TS2304 noise, which is exactly the failure class
- * this function exists to prevent. The failure is reported through the same
- * `warning` channel every other non-fatal diagnostic in this file uses
- * (`compile-deps-cap-warning`'s cap warning is the precedent: positioned at
- * the file's own start, line 1 column 1, since there is no more specific
- * author-facing position for a printer-internal failure) rather than only a
- * `console.warn`, which an editor user would never see.
- */
-export function appendSolidBuiltinImport(generated: string): {
-  code: string;
-  warning?: MxWarning;
-} {
-  const { bindings: bound, error } = sourceBindings(generated);
-  const warning: MxWarning | undefined = error
-    ? {
-        message:
-          "the printed .solid.mx module could not be parsed while checking " +
-          "Solid built-in imports, so they were added conservatively " +
-          `(${error.message})`,
-        line: 1,
-        column: 0,
-      }
-    : undefined;
-  const needed = SOLID_BUILTIN_TAGS.filter(
-    ({ name }) =>
-      new RegExp(`<${name}[\\s/>]`).test(generated) &&
-      (error || !bound.has(name)),
-  );
-  if (needed.length === 0) return { code: generated, warning };
-
-  const byModule = new Map<string, string[]>();
-  for (const { name, from } of needed) {
-    const names = byModule.get(from) ?? [];
-    names.push(name);
-    byModule.set(from, names);
-  }
-  const imports = [...byModule.entries()]
-    .map(([from, names]) => `import { ${names.join(", ")} } from "${from}";`)
-    .join("\n");
-  return { code: `${generated}\n${imports}\n`, warning };
-}
-
-/**
  * Maps each synthetic attribute-tag value object back to its authored tag
  * name, and each of that tag's own attributes back to its authored
  * `name=value` span. The Solid host's printer can map an attribute's *value*
@@ -1310,10 +1296,6 @@ export function isNgMx(fileName: string): boolean {
   return fileKindOf(fileName)?.pipeline === "ng-template";
 }
 
-function isSolidMx(fileName: string): boolean {
-  return fileKindOf(fileName)?.pipeline === "region";
-}
-
 function toSyntaxError(
   fileName: string,
   source: string,
@@ -1328,7 +1310,9 @@ function toSyntaxError(
   const column = Math.max(0, error.loc?.column ?? coreError?.column ?? 0);
   const lineStart = lineOffsets(source)[line - 1] ?? source.length;
 
-  const message = error.message ?? "Invalid `.solid.mx` source.";
+  // Names the file's own module suffix (`.solid.mx`, `.ng.mx`, …), never a host.
+  const suffix = /(\.[^./\\]+)?\.mx$/i.exec(fileName)?.[0] ?? ".mx";
+  const message = error.message ?? `Invalid \`${suffix}\` source.`;
   return {
     fileName,
     // Babel's `(L:C)` is dropped only when it repeats this position.

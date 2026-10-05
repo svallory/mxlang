@@ -8,11 +8,12 @@ import {
   createCompoundExtensionResolver,
   createMxLanguagePlugin,
   createNgMxLanguagePlugin,
-  createSolidMxLanguagePlugin,
+  createRegionLanguagePlugins,
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyText,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
+  moduleFileExtensions,
   type TargetPolicyDiagnostic,
 } from "@mxlang/typescript-plugin";
 import type { Language, LanguagePlugin } from "@volar/language-core";
@@ -38,11 +39,12 @@ import {
 } from "./watch-templates.ts";
 
 /**
- * The compound extensions `.solid.mx` and `.ng.mx` as `runTsc` wants them: no
- * leading dot, and both halves, because TypeScript's own module resolver appends the terminal
- * segment when probing for declaration files.
+ * The compound extensions of every registered module file kind (each region
+ * kind, e.g. `.solid.mx`, then `.ng.mx`) and the plain `.mx`, as `runTsc` wants
+ * them: both halves, because TypeScript's own module resolver appends the
+ * terminal segment when probing for declaration files.
  */
-const EXTRA_SUPPORTED_EXTENSIONS = [".solid.mx", ".ng.mx", ".mx"];
+const EXTRA_SUPPORTED_EXTENSIONS = [...moduleFileExtensions(), ".mx"];
 const ASTRO_SUPPORTED_EXTENSIONS = [
   ...EXTRA_SUPPORTED_EXTENSIONS,
   ".astro",
@@ -302,7 +304,7 @@ function runPatchedTsc(
       resolveTscPath(),
       astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
       (typescript, options) => {
-        const solidMx = createSolidMxLanguagePlugin(typescript);
+        const regionPlugins = createRegionLanguagePlugins(typescript);
         // `retainCompiled`: Angular template diagnostics run over the very
         // compiles the type-check used, not a second pass of them.
         const ngMx = createNgMxLanguagePlugin(typescript, {
@@ -313,8 +315,8 @@ function runPatchedTsc(
           getCompiledNgMx: () => ngMx.getCompiledNgMx(),
         });
         const mx = createMxLanguagePlugin(typescript);
-        diagnosticPlugins.push(solidMx, ngMx, mx);
-        const plugins: LanguagePlugin<string>[] = [solidMx, ngMx, mx];
+        diagnosticPlugins.push(...regionPlugins, ngMx, mx);
+        const plugins: LanguagePlugin<string>[] = [...regionPlugins, ngMx, mx];
         if (astro) {
           const amx = createAmxLanguagePlugin(typescript);
           diagnosticPlugins.push(amx);

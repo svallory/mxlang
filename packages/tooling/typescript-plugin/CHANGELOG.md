@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (bridge-host, decision 154):** one region language plugin per registered region file kind (`createRegionLanguagePlugin`, `createRegionLanguagePlugins`); `createSolidMxLanguagePlugin` is the first built-in region kind's. A region kind's `completeTypecheckModule` runs on its printed module, so Solid's built-in imports (`appendSolidBuiltinImport`, moved to `@mxlang/solid`) are Solid's hook, not a step every region file takes. `moduleFileExtensions()` lists the module file kinds `mx-tsc` checks. Output unchanged. A region plugin claims its own kind's suffix directly, case-insensitively as before (Volar keys files case-insensitively where the filesystem is), but turns the MX grammar on only for the exact-case suffix, so `X.SOLID.mx` is claimed and parsed as plain TSX exactly as at base (the language server, Vite and the registry treat it as whole-file `.mx`). The fallback syntax-error text names the file's own suffix, so a region kind other than Solid names its own (`.solid.mx`'s text is unchanged). Regions compile through the registry's `regionKindCompile`.
+
 - **Tests (name-sugar-tooling r2):** the mid-edit buffers assert exactly one compile diagnostic with an in-range offset.
 
 - **Tests/Docs (name-sugar-tooling, decision 146 PR 3):** the plugin builds its virtual code for a buffer mid-edit on a sugar sigil (`<input :`, `<input #`, `<input .`), and a sugar token maps to the generated `name`/`class`/`id` with its exact source range (documented on the TypeScript page).

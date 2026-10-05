@@ -20,7 +20,7 @@ import {
 import {
   createCompoundExtensionResolver,
   createNgMxLanguagePlugin,
-  createSolidMxLanguagePlugin,
+  createRegionLanguagePlugin,
   type DependencySourceReader,
   isNgMx,
   type NgMxLanguagePlugin,
@@ -45,7 +45,9 @@ function createBuiltinLanguagePlugins(
   for (const kind of builtinFileKinds) {
     switch (kind.pipeline) {
       case "region":
-        plugins.push(createSolidMxLanguagePlugin(typescript, { readSource }));
+        plugins.push(
+          createRegionLanguagePlugin(typescript, kind, { readSource }),
+        );
         break;
       case "ng-template":
         plugins.push(
@@ -342,7 +344,10 @@ export type {
 export {
   createCompoundExtensionResolver,
   createNgMxLanguagePlugin,
+  createRegionLanguagePlugin,
+  createRegionLanguagePlugins,
   createSolidMxLanguagePlugin,
+  moduleFileExtensions,
 } from "./language.ts";
 export {
   createAstroTypeSurface,

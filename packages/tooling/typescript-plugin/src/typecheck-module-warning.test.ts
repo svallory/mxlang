@@ -12,7 +12,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { fileKindForPipeline } from "./file-kinds.ts";
-import { createRegionLanguagePlugin, SOLID_MX_LANGUAGE_ID } from "./language.ts";
+import {
+  createRegionLanguagePlugin,
+  SOLID_MX_LANGUAGE_ID,
+} from "./language.ts";
 
 const ts = (await import("typescript")).default;
 
@@ -61,7 +64,10 @@ describe("a region kind's completeTypecheckModule warning reaches a real caller"
 
   it("runs Solid's real hook on a clean module: the import is added, no warning", () => {
     const fileName = "/fixtures/uses-show-clean.solid.mx";
-    const plugin = createRegionLanguagePlugin(ts, fileKindForPipeline("region"));
+    const plugin = createRegionLanguagePlugin(
+      ts,
+      fileKindForPipeline("region"),
+    );
     const virtual = plugin.createVirtualCode?.(
       fileName,
       SOLID_MX_LANGUAGE_ID,
@@ -70,10 +76,12 @@ describe("a region kind's completeTypecheckModule warning reaches a real caller"
     );
     if (!virtual) throw new Error("Expected region virtual code");
     expect(
-      plugin.getCompileDiagnostics(fileName).filter((d) => d.category === "warning"),
+      plugin
+        .getCompileDiagnostics(fileName)
+        .filter((d) => d.category === "warning"),
     ).toEqual([]);
-    expect(
-      virtual.snapshot.getText(0, virtual.snapshot.getLength()),
-    ).toContain('import { Show } from "solid-js";');
+    expect(virtual.snapshot.getText(0, virtual.snapshot.getLength())).toContain(
+      'import { Show } from "solid-js";',
+    );
   });
 });

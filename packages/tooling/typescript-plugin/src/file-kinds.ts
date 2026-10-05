@@ -1,3 +1,4 @@
+import type { HostFileKind } from "@mxlang/core";
 import {
   type BuiltinFileKind,
   builtinFileKinds,
@@ -22,7 +23,7 @@ export function fileKindOf(fileName: string): BuiltinFileKind | undefined {
 }
 
 /** Discovery follows the target owning the file kind, not the page policy. */
-export function fileKindHostFilter(kind: BuiltinFileKind): string | null {
+export function fileKindHostFilter(kind: HostFileKind): string | null {
   const target = builtinTargets.find((target) =>
     target.host?.fileKinds?.some((entry) => entry.segment === kind.segment),
   );

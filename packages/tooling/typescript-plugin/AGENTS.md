@@ -242,8 +242,10 @@ Four facts worth knowing before editing either:
 **`.solid.mx`'s virtual TSX gets a synthetic, unmapped import for the Solid
 JSX built-ins the emitter prints as a bare tag** (`Show`/`For`/`Switch`/
 `Match`/`Repeat`/`Errored`/`Loading` from `solid-js`, `Dynamic` from
-`@solidjs/web`) — `language.ts`'s `appendSolidBuiltinImport`, called from
-`createSolidMxLanguagePlugin`. `@mxlang/solid`'s own emitter never imports
+`@solidjs/web`) — `@mxlang/solid`'s `appendSolidBuiltinImport`, which is the
+`.solid.mx` file kind's `completeTypecheckModule` (decision 154): the region
+plugin (`createRegionLanguagePlugin`, one per region file kind) calls the
+kind's hook, never a Solid function by name. `@mxlang/solid`'s own emitter never imports
 these (see `packages/hosts/solid/AGENTS.md`): the real build pipeline gets
 them from `@solidjs/vite-plugin`'s compiler stage auto-importing every
 built-in it sees, a stage that runs *after* `createVirtualCode` and never
