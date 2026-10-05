@@ -61,7 +61,7 @@ languages = ["MX", "Solid"]
 # the split-off `tree-sitter-solid` repo's real GitHub URL and drop `path`
 # (that repo's root will already be the grammar root).
 repository = "file:///Users/svallory/work/mx"
-rev = "21993969d12c40faafb70b0e7141ad4ebe1e280a"
+rev = "c5ca88e13594da621bcf9856a908084c64080176"
 path = "packages/editors/tree-sitter-solid"
 
 [grammars.amx]
