@@ -112,7 +112,7 @@ const CASES: Record<string, Case> = {
     setup: "const input = { a: { classList: { x: true } } };",
   },
   colonName: {
-    fragment: "<div :foo=input.o/>",
+    fragment: "<div value:foo=input.o/>",
     setup: "const input = { o: { a: 1 } };",
   },
   attributeBeforeSpread: {

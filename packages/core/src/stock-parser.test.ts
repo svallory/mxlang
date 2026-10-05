@@ -1,5 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -37,6 +46,46 @@ Module._resolveFilename = function (request, ...rest) {
 };
 `;
 
+/**
+ * Reverses `patches/htmljs-parser@5.15.0.patch` in `dir`, in plain JS: the gate
+ * machine's PATH may have no `patch` binary. Every hunk is replaced by its
+ * pre-image: the "new" block (context and `+` lines) is searched for in the
+ * file and swapped for the "old" block (context and `-` lines).
+ */
+function reversePatch(dir: string, patchText: string): void {
+  for (const section of patchText.split(/^diff --git /m).slice(1)) {
+    const file = section.match(/^a\/(\S+) b\//)?.[1];
+    if (!file) throw new Error("unreadable patch section");
+    const path = join(dir, file);
+    let text = readFileSync(path, "utf8");
+    for (const hunk of section.split(/^@@ .* @@.*$/m).slice(1)) {
+      const lines = hunk.split("\n");
+      if (lines[lines.length - 1] === "") lines.pop();
+      const kept = lines.filter((line) => !line.startsWith("\\"));
+      const added = kept
+        .filter((line) => line[0] === " " || line[0] === "+")
+        .map((line) => line.slice(1))
+        .join("\n");
+      const removed = kept
+        .filter((line) => line[0] === " " || line[0] === "-")
+        .map((line) => line.slice(1))
+        .join("\n");
+      if (!text.includes(added)) throw new Error(`hunk not found in ${file}`);
+      text = text.replace(added, () => removed);
+    }
+    writeFileSync(path, text);
+  }
+}
+
+/** An installed package can be read-only; the copy must not be. */
+function makeWritable(dir: string): void {
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry);
+    chmodSync(path, 0o755);
+    if (statSync(path).isDirectory()) makeWritable(path);
+  }
+}
+
 let work = "";
 let stockDir = "";
 
@@ -45,13 +94,8 @@ beforeAll(() => {
   const installed = dirname(dirname(require.resolve("htmljs-parser")));
   stockDir = join(work, "htmljs-parser");
   cpSync(installed, stockDir, { recursive: true });
-  const reversed = spawnSync("patch", ["-R", "-p1", "-i", patchFile], {
-    cwd: stockDir,
-    encoding: "utf8",
-  });
-  if (reversed.status !== 0) {
-    throw new Error(`could not rebuild the stock parser: ${reversed.stderr}`);
-  }
+  makeWritable(stockDir);
+  reversePatch(stockDir, readFileSync(patchFile, "utf8"));
 });
 
 afterAll(() => {
