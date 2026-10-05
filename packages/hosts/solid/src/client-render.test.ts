@@ -198,6 +198,28 @@ describe("Solid client render: live signal updates through the real DOM", () => 
       '<ul><textarea>\nx</textarea><textarea class="c">\nx</textarea></ul>',
     ]);
   });
+
+  it("renders a reactive class and a spread class/style as Marko does through live writes", () => {
+    const { snapshots } = renderDomApp(
+      "<p class=v()/><p ...{class: v(), style: v()}/>",
+      'const [v, setV] = createSignal<unknown>("a"); (globalThis as any).setV = setV;',
+      "setV",
+      ['"x"', "false", "0", "true", "null", '""'],
+    );
+    const classes = snapshots.map((html) => html.match(/<p[^>]*><\/p>/g));
+    // Client DOM writes `style` through the CSSOM, so a string that is no CSS
+    // declaration (`a`, `x`, `true`) leaves `style=""` where Marko's SSR prints
+    // the text; falsy values are omitted as in Marko.
+    expect(classes).toEqual([
+      ['<p class="a"></p>', '<p class="a" style=""></p>'],
+      ['<p class="x"></p>', '<p class="x" style=""></p>'],
+      ["<p></p>", "<p></p>"],
+      ["<p></p>", "<p></p>"],
+      ['<p class="true"></p>', '<p class="true" style=""></p>'],
+      ["<p></p>", "<p></p>"],
+      ["<p></p>", "<p></p>"],
+    ]);
+  });
   it("preserves empty and multi-colon attribute names through JSX prop spreads", () => {
     const { snapshots } = renderDomApp(
       '<div :/><div value:foo:bar="y"/><div value:foo:baz=input.v/><div x:/><div x: = "s"/><div x: = input.v/>',

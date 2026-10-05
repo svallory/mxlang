@@ -52,6 +52,32 @@ import descriptor from "./descriptor.ts";
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
 const ATTRIBUTE_SPREAD_EXPRESSION = "__mxAttrSpread";
+const ATTRIBUTE_OUT_EXPRESSION = "__mxAttrOut";
+
+/**
+ * Marko's primitive attribute values on top of `addAttribute` (decision 149).
+ * Astro's own rules: null/undefined omit, `false`/`true` print as text, a name
+ * on its boolean-attribute list prints by truthiness only, `class`/`style`
+ * print any non-nullish primitive. Marko omits `false`, prints `true` bare, omits
+ * a falsy `class`/`style` and prints `true` there as "true". `""` is bare only
+ * outside Astro's boolean list, where `""` is falsy and omitted, so those names
+ * get `true`: presence is equal to Marko's, but the value text (`disabled="0"`)
+ * cannot be printed by `addAttribute`.
+ */
+const ATTRIBUTE_OUT_SOURCE = `((name: string, value: unknown): unknown => {
+  if (value == null) return null;
+  if (name === "class" || name === "style") return value === true ? "true" : value === false || value === 0 || value === "" || value !== value ? null : value;
+  if (/^(?:allowfullscreen|async|autofocus|autoplay|checked|controls|default|defer|disabled|disablepictureinpicture|disableremoteplayback|formnovalidate|inert|loop|muted|nomodule|novalidate|open|playsinline|readonly|required|reversed|scoped|seamless|selected|itemscope)$/i.test(name)) return value === false ? null : true;
+  return value === false ? null : value === true ? "" : value;
+})`;
+
+/** `__mxAttrSpread` plus the primitive normalization of every merged key. */
+const ATTRIBUTE_SPREAD_OUT_SOURCE = `((guard: (attrs: any, tag?: string) => any) => (attrs: any, tag?: string): any => {
+  const values: Record<string, unknown> | null | undefined = guard(attrs, tag);
+  if (values === null || values === undefined) return values;
+  for (const name of Object.keys(values)) values[name] = ${ATTRIBUTE_OUT_EXPRESSION}(name, values[name]);
+  return values;
+})(${ATTRIBUTE_SPREAD_SOURCE})`;
 
 /**
  * This package's own target lookup, for a direct entry that needs one and has
@@ -545,13 +571,19 @@ function emitAttrs(
           nativeName !== undefined &&
           attr.name !== "class" &&
           attr.name !== "style";
-        write(
-          checked
-            ? `={${ATTRIBUTE_VALUE_EXPRESSION}(${JSON.stringify(attr.name)}, (`
-            : "={",
-        );
+        // A structured class is rendered by `class:list`; every other native
+        // value goes through the primitive normalization.
+        const normalized = nativeName !== undefined && !structuredClass;
+        if (normalized)
+          write(`={${ATTRIBUTE_OUT_EXPRESSION}(${JSON.stringify(attr.name)}, `);
+        else write("={");
+        if (checked)
+          write(
+            `${ATTRIBUTE_VALUE_EXPRESSION}(${JSON.stringify(attr.name)}, (`,
+          );
         writeMapped(attr.value.code, attr.value.node);
-        write(checked ? `), ${JSON.stringify(nativeName)})}` : "}");
+        if (checked) write(`), ${JSON.stringify(nativeName)})`);
+        write(normalized ? ")}" : "}");
         break;
       }
     }
@@ -1186,8 +1218,14 @@ export function lowerAstroMx(
     ) {
       helpers.push(`const __mxAttrValue = ${ATTRIBUTE_VALUE_SOURCE};`);
     }
+    if (
+      templateCode.includes("__mxAttrOut(") ||
+      templateCode.includes("__mxAttrSpread(")
+    ) {
+      helpers.push(`const __mxAttrOut = ${ATTRIBUTE_OUT_SOURCE};`);
+    }
     if (templateCode.includes("__mxAttrSpread("))
-      helpers.push(`const __mxAttrSpread = ${ATTRIBUTE_SPREAD_SOURCE};`);
+      helpers.push(`const __mxAttrSpread = ${ATTRIBUTE_SPREAD_OUT_SOURCE};`);
     const emittedFence = emitFence(
       source,
       originalFence,

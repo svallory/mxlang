@@ -149,3 +149,25 @@ export function assertModuleTypechecks(
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/** The `@let` the emitter writes before a native element for one authored attribute expression. */
+export const attrLet = (n: number, expression: string): string =>
+  `@let __mxAttr${n} = $any(${expression});`;
+
+/** The binding value for `[attr.name]`, over the `@let` named `__mxAttr<n>`. */
+export const attrBinding = (n: number): string => {
+  const v = `__mxAttr${n}`;
+  return `${v} == null || ${v} === false ? null : ${v} === true ? '' : ${v}`;
+};
+
+/** The same for `class`/`style`, where a falsy primitive is omitted. */
+export const listBinding = (n: number): string => {
+  const v = `__mxAttr${n}`;
+  return `${v} ? (${v} === true ? 'true' : ${v}) : null`;
+};
+
+/** The same for a live `value` property. */
+export const textBinding = (n: number): string => {
+  const v = `__mxAttr${n}`;
+  return `${v} == null || ${v} === false || ${v} === true ? '' : ${v}`;
+};

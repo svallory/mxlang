@@ -1,6 +1,6 @@
 import { parseTemplate } from "@angular/compiler";
 import { describe, expect, it } from "vitest";
-import { emit } from "./helpers.ts";
+import { attrBinding, attrLet, emit } from "./helpers.ts";
 
 // Angular template syntax is the host's own vocabulary: the name check the
 // other hosts apply (Marko's "Invalid attribute name.") must not reach it.
@@ -35,7 +35,7 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
     );
     expect(emit(`<div value:foo/>`, "x.ng.mx")).toContain(`<div value:foo="">`);
     expect(emit(`<div value:foo=y/>`, "x.ng.mx")).toContain(
-      `<div [attr.value:foo]="y">`,
+      `${attrLet(0, "y")}<div [attr.value:foo]="${attrBinding(0)}">`,
     );
   });
 

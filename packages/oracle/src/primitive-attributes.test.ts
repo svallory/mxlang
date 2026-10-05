@@ -1,6 +1,6 @@
 /**
  * Primitive attribute values on native elements render as Marko 6.3.51's html
- * output does, on preact, react and hono (decision 149). Real renders of every
+ * output does, on preact, react, hono, solid and astro (decision 149). Real renders of every
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
  * compared as parsed DOM, over 8 attributes x 4 forms x 7 values.
  *
@@ -10,6 +10,9 @@
  *  - React cannot render a string `style` (`true`/"x"): it throws its own error.
  *  - A direct `style=expr` with a non-object expression is a compile error on
  *    every JSX host (the object-literal rule), so those forms are not cells.
+ *  - Astro prints a name on its boolean-attribute list by truthiness only
+ *    (`disabled=""` where Marko prints `disabled="0"`), so those cells compare
+ *    presence. Solid matches Marko exactly (SSR).
  */
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -47,8 +50,20 @@ function rows(host: string): Row[] {
 /** Names React renders as boolean presence under the name MX emits (value text is not printable). */
 const BOOLEAN = new Set(["disabled", "hidden", "required", "open"]);
 
+/** Astro's own boolean-attribute list, restricted to the names in the matrix. */
+const ASTRO_BOOLEAN = new Set([
+  "disabled",
+  "checked",
+  "autofocus",
+  "readonly",
+  "selected",
+  "required",
+  "open",
+  "allowfullscreen",
+]);
+
 /** The rendered elements as canonical JSON; `presence` drops boolean values. */
-function dom(row: Row | undefined, presence: boolean): string {
+function dom(row: Row | undefined, presence: boolean, host = "react"): string {
   if (!row) return "MISSING";
   if (row.error !== undefined) return `ERROR:${row.error}`;
   const out: string[] = [];
@@ -57,8 +72,10 @@ function dom(row: Row | undefined, presence: boolean): string {
       const attrs = (node.attrs ?? []).map((a): [string, string] => [
         a.name,
         presence &&
-        (BOOLEAN.has(a.name) ||
-          (a.name === "checked" && node.nodeName === "input"))
+        (host === "astro"
+          ? ASTRO_BOOLEAN.has(a.name)
+          : BOOLEAN.has(a.name) ||
+            (a.name === "checked" && node.nodeName === "input"))
           ? ""
           : a.value,
       ]);
@@ -96,18 +113,19 @@ const attributes = [
 const forms = ["direct", "spread", "merged", "mergedBefore"];
 const values = ["null", "undefined", "false", "true", "zero", "empty", "x"];
 
+const HOSTS = ["preact", "react", "hono", "solid", "astro"];
 let marko: Row[] = [];
 const hosts: Record<string, Row[]> = {};
 beforeAll(() => {
   marko = rows("marko");
-  for (const host of ["preact", "react", "hono"]) hosts[host] = rows(host);
+  for (const host of HOSTS) hosts[host] = rows(host);
   expect(marko.length).toBe(attributes.length * forms.length * values.length);
 }, 120_000); // Real compilers and renderers in separate Bun processes.
 
 const find = (list: Row[], form: string, value: string) =>
   list.find((row) => row.form === form && row.value === value);
 
-describe.each(["preact", "react", "hono"])(
+describe.each(HOSTS)(
   "%s primitive attribute values (real renders, Marko 6.3.51)",
   (host) => {
     for (const attribute of attributes)
@@ -115,9 +133,13 @@ describe.each(["preact", "react", "hono"])(
         it.each(values)(`${attribute} ${form} %s`, (value) => {
           const key = `${attribute}/${form}`;
           const actual = find(hosts[host] ?? [], key, value);
-          if (attribute === "style" && form !== "spread") {
+          if (host !== "astro" && attribute === "style" && form !== "spread") {
             // The object-literal rule: refused at compile time, unchanged.
-            expect(actual?.error).toContain("`style=` takes an object literal");
+            expect(actual?.error).toContain(
+              host === "solid"
+                ? "`style=` with a non-object value"
+                : "`style=` takes an object literal",
+            );
             return;
           }
           if (
@@ -130,9 +152,9 @@ describe.each(["preact", "react", "hono"])(
             );
             return;
           }
-          const presence = host === "react";
-          expect(dom(actual, presence)).toBe(
-            dom(find(marko, key, value), presence),
+          const presence = host === "react" || host === "astro";
+          expect(dom(actual, presence, host)).toBe(
+            dom(find(marko, key, value), presence, host),
           );
         });
   },

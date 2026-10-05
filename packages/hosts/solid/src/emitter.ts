@@ -29,6 +29,7 @@ import { decodeHTML } from "entities";
 import {
   MX_ATTR_SPREAD_BINDING,
   MX_ATTR_VALUE_BINDING,
+  MX_CLASS_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
   MX_TEXTAREA_OMIT_BINDING,
   MX_TEXTAREA_PICK_BINDING,
@@ -98,6 +99,7 @@ let escapeUse: { used: boolean } | null = null;
 let attrGuardUse: {
   value: boolean;
   spread: boolean;
+  klass: boolean;
   textarea: boolean;
 } | null = null;
 
@@ -537,7 +539,12 @@ export function collectReturnVars(
   code: string;
   vars: string[];
   needsEscapeImport: boolean;
-  needsAttrGuard: { value: boolean; spread: boolean; textarea: boolean };
+  needsAttrGuard: {
+    value: boolean;
+    spread: boolean;
+    klass: boolean;
+    textarea: boolean;
+  };
   hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
@@ -550,6 +557,7 @@ export function collectReturnVars(
   const collectedAttrGuardUse = {
     value: false,
     spread: false,
+    klass: false,
     textarea: false,
   };
   const collectedDefines: HoistedSolidDefine[] = [];
@@ -846,6 +854,7 @@ function renderAttr(
   attr: Attr,
   mapName = false,
   native?: NativeAttrs,
+  hasSpread = false,
 ): MappedCode {
   // JSX only permits one colon with a nonempty suffix. Preserve Marko's
   // `value:` and `value:foo:bar` names as string keys in a prop spread.
@@ -959,6 +968,39 @@ function renderAttr(
         );
       }
       const value = methodExpression(attr.value) ?? attr.value.code;
+      // Marko omits a falsy primitive class and prints `true`; Solid's own
+      // `class={v}` always prints the attribute, so a non-literal class on a
+      // native element becomes a one-key prop object that is empty when omitted.
+      if (
+        attr.name === "class" &&
+        native !== undefined &&
+        !isPrimitiveValue(attr.value) &&
+        attr.value.shape !== "object" &&
+        attr.value.shape !== "array"
+      ) {
+        if (attrGuardUse) attrGuardUse.klass = true;
+        return concatMapped(
+          " {...",
+          `${MX_CLASS_BINDING}(`,
+          mapped(value, attr.value.span ?? null),
+          `, ${nativeTagOf(native)})}`,
+        );
+      }
+      // `<input checked=expr>` (no spread on the element) is presence only in
+      // Marko: anything but null/undefined/false sets it, 0 and "x" included.
+      if (
+        attr.name === "checked" &&
+        native?.tag === '"input"' &&
+        !hasSpread &&
+        !isPrimitiveValue(attr.value)
+      ) {
+        if (attrGuardUse) attrGuardUse.value = true;
+        return concatMapped(
+          " ",
+          mapped(attr.name, mapName ? attr.nameSpan : null),
+          `={(${guardValue(attr.name, value, native)} ?? false) !== false}`,
+        );
+      }
       // A string-shaped value can never render as `[object Object]`, so it
       // compiles exactly as before.
       const guarded =
@@ -1047,6 +1089,7 @@ function renderAttrs(
   mapNames = false,
   native?: NativeAttrs,
 ): MappedCode {
+  const hasSpread = attrs.some((attr) => attr.kind === "spread");
   const classEntries = attrs
     .map((attr, index) => ({ attr, index }))
     .filter(({ attr }) => attr.kind !== "spread" && attr.name === "class");
@@ -1075,7 +1118,7 @@ function renderAttrs(
   );
   if (!structured) {
     return concatMapped(
-      ...attrs.map((attr) => renderAttr(attr, mapNames, native)),
+      ...attrs.map((attr) => renderAttr(attr, mapNames, native, hasSpread)),
     );
   }
 
@@ -1096,9 +1139,9 @@ function renderAttrs(
         return concatMapped();
       }
       if (index !== structured.index || attr.kind !== "dynamic") {
-        return renderAttr(attr, mapNames, native);
+        return renderAttr(attr, mapNames, native, hasSpread);
       }
-      if (merged === "") return renderAttr(attr, mapNames, native);
+      if (merged === "") return renderAttr(attr, mapNames, native, hasSpread);
       if (attr.value.shape === "array") {
         return concatMapped(
           " ",

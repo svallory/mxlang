@@ -576,6 +576,54 @@ function writeAttributeName(
  * punctuation and stays unmapped. Structural `*` prefixes get their own
  * mapped run, so a diagnostic on the directive name lands after the prefix.
  */
+/**
+ * Marko's primitive attribute values (decision 149) as an Angular template
+ * expression over a `@let` that holds the authored expression (`$any`, since a
+ * strict template rejects `=== false` on a `string`), so it is
+ * evaluated and type-checked once, at its authored position.
+ *
+ * - `attr`: `[attr.name]` removes the attribute on null/undefined only, so
+ *   `false` (Marko omits) and `true` (Marko prints bare) are folded in.
+ * - `present`: presence only, for a property that mirrors a boolean attribute.
+ * - `text`: the value text a property prints, for `value`.
+ * - `list`: `class`/`style`, where Marko also omits 0, "" and NaN and prints
+ *   `true` as "true".
+ */
+type PrimitiveForm = "attr" | "present" | "text" | "list";
+
+/** How a dynamic attribute on a native element renders, or null to keep the legacy binding. */
+function primitiveForm(
+  attr: Attr,
+  tagName: string | undefined,
+): PrimitiveForm | null {
+  if (attr.kind !== "dynamic") return null;
+  const name = attr.name;
+  if (name.includes(":") && name.toLowerCase().startsWith("on")) return null;
+  if (LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) return null;
+  if (name === "class" || name === "style") {
+    const shape = attr.value.shape;
+    return shape === "object" || shape === "array" ? null : "list";
+  }
+  if (name === "value") return "text";
+  if (name === "checked") return tagName === "input" ? "present" : "attr";
+  // A name starting `on` is never bound as an attribute (Angular refuses
+  // `[attr.on*]` for security), so `once`/`onto` keep the property binding.
+  return /[A-Z]/.test(name) || /^on/i.test(name) ? null : "attr";
+}
+
+function primitiveExpression(variable: string, form: PrimitiveForm): string {
+  switch (form) {
+    case "attr":
+      return `${variable} == null || ${variable} === false ? null : ${variable} === true ? '' : ${variable}`;
+    case "present":
+      return `${variable} != null && ${variable} !== false`;
+    case "text":
+      return `${variable} == null || ${variable} === false || ${variable} === true ? '' : ${variable}`;
+    case "list":
+      return `${variable} ? (${variable} === true ? 'true' : ${variable}) : null`;
+  }
+}
+
 function emitAttrs(
   out: TemplateWriter,
   attrs: Attr[],
@@ -586,6 +634,8 @@ function emitAttrs(
   // threaded in exactly like the core's `isElement` gate.
   isElement = false,
   onHandler?: () => string,
+  tagName?: string,
+  lets?: Map<Attr, string>,
 ): void {
   for (const attr of attrs) {
     // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
@@ -695,6 +745,14 @@ function emitAttrs(
             out.write(']="');
             out.writeMapped(esc(attr.value.code), attr.value.span);
             out.write('"');
+          } else if (isElement && lets?.has(attr)) {
+            // `class=expr` / `style=expr` on a native element: Marko omits a
+            // falsy primitive and prints `true` as "true".
+            out.write(" [");
+            out.writeMapped(name, attr.nameSpan);
+            out.write(']="');
+            out.write(primitiveExpression(lets.get(attr) as string, "list"));
+            out.write('"');
           } else {
             out.write(" [");
             out.writeMapped(name, attr.nameSpan);
@@ -702,6 +760,18 @@ function emitAttrs(
             out.writeMapped(esc(attr.value.code), attr.value.span);
             out.write('"');
           }
+        } else if (isElement && lets?.has(attr)) {
+          // Marko prints an attribute, never a property. `[attr.name]` is the
+          // attribute binding; `value`/`checked` on an `<input>` bind the live
+          // property so a typed value is not fought by a stale attribute; a
+          // camelCase name (`innerHTML`, `textContent`) is a DOM property and
+          // keeps the property binding below.
+          const form = primitiveForm(attr, tagName) as PrimitiveForm;
+          out.write(form === "attr" ? " [attr." : " [");
+          out.writeMapped(name, attr.nameSpan);
+          out.write(']="');
+          out.write(primitiveExpression(lets.get(attr) as string, form));
+          out.write('"');
         } else if (NO_PROPERTY_BINDING.test(name)) {
           // A1 (design note), decision 86: Angular property vs attribute
           // binding is the emitter's own call, not an author-written
@@ -1423,6 +1493,8 @@ class AngularEmitter implements Emitter<string> {
    * SVG switch from an attempted control-flow one.
    */
   private svgDepth = 0;
+  /** Names the `@let` that holds each primitive-normalized attribute expression. */
+  private attrLetSerial = 0;
 
   /**
    * A name guaranteed not to collide with any identifier the compiled
@@ -1541,6 +1613,16 @@ class AngularEmitter implements Emitter<string> {
     // The tag name stays unmapped (its generated text is the source name
     // verbatim, but a diagnostic lands on the `<`, not the name), so the
     // whole start tag is anchored to the authored name instead.
+    // Each primitive-normalized attribute binds its authored expression once.
+    const lets = new Map<Attr, string>();
+    for (const attr of node.attrs) {
+      if (attr.kind !== "dynamic" || !primitiveForm(attr, node.name)) continue;
+      const variable = `__mxAttr${this.attrLetSerial++}`;
+      lets.set(attr, variable);
+      this.out.write(`@let ${variable} = $any(`);
+      this.out.writeMapped(esc(attr.value.code), attr.value.span);
+      this.out.write(");");
+    }
     const tagStart = this.out.length;
     this.out.write(`<${node.name}`);
     emitAttrs(
@@ -1561,6 +1643,8 @@ class AngularEmitter implements Emitter<string> {
         );
         return this.ctx.source;
       },
+      node.name,
+      lets,
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);

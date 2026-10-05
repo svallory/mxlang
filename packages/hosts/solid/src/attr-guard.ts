@@ -3,6 +3,20 @@ import { ATTRIBUTE_VALUE_EXPRESSION } from "@mxlang/core";
 /** Module-scope bindings the emitted native-attribute guard calls. */
 export const MX_ATTR_VALUE_BINDING = "__mxAttrValue";
 export const MX_ATTR_SPREAD_BINDING = "__mxAttrSpread";
+export const MX_CLASS_BINDING = "__mxClassProp";
+
+/**
+ * Marko drops a falsy primitive `class`/`style` (null, undefined, false, 0, "",
+ * NaN), prints `true` as "true" and leaves structured values to its own
+ * serializer. Solid's SSR prints `class=""` for any undefined/null/false/""
+ * class value, so the attribute has to be absent from the props rather than
+ * set to something falsy: a one-key prop object for `class=expr`, and an
+ * `ownKeys` filter inside the spread proxy.
+ */
+export const CLASS_PROP_HELPER = `function ${MX_CLASS_BINDING}<T,>(value: T, tag: string | null = ""): { class?: unknown } {
+  if (tag === null || (typeof value === "object" && value !== null)) return { class: value };
+  return value ? { class: value === true ? "true" : value } : {};
+}`;
 
 /**
  * A `null` tag means "not a native element" (a dynamic tag whose target is a
@@ -31,7 +45,10 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
     get(target, key) {
       const value = Reflect.get(target, key);
       if (typeof key === "string" && !/^(?:(?:ref|children|class|style|\$mxReturn)$|on[A-Z:-]|oncapture:|prop:)/.test(key)) ${MX_ATTR_VALUE_BINDING}(key, value, tag);
-      return value;
+      return (key === "class" || key === "style") && value === true ? "true" : value;
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter((key) => (key !== "class" && key !== "style") || Boolean(Reflect.get(target, key)));
     },
   }) as T;
 }`;

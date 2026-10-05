@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (solid-astro-angular-primitive-attr-parity, decision 149) — visible emitted-template change:** a dynamic attribute on a native element binds its authored expression once in an `@let __mxAttrN = $any(expr);` written before the element, then renders Marko's primitive semantics: lowercase names emit `[attr.name]` (null/undefined/false omit, `true` bare, `0`/`""` kept), so `title` no longer prints `null`, data/aria `false` is omitted and `<div disabled=x>` no longer fails with NG8002; `class`/`style` omit falsy values and print `true` as `"true"`; `<input value=v>`/`<input checked=v>` stay live property bindings (`checked` is presence only). Unchanged: static attributes, component inputs, camelCase names (`innerHTML`), names starting `on` and object/array `class`/`style` (decision question 50). `style` strings that are no CSS declaration render no attribute (divergences.md).
+
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` is accepted, as the attribute Marko renders literally. A **static** one is carried into the template verbatim (`value:foo="lit"`); a **dynamic** one emits `[attr.value:foo]`, not `[value:foo]`, because a colon-named property binding names a property no element has (NG8002) — the same rule a dynamic `data-*`/`aria-*` attribute already took. `class:`/`style:`/`attr:` are still rejected as not Marko syntax.
 
 ## Unreleased

@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ATTR = "__mxAttrValue";
+/** A dynamic native attribute is the guard inside the primitive normalization. */
+const OUT = (guarded: string, name: string): string =>
+  `__mxAttrOut(${JSON.stringify(name)}, ${guarded})`;
 const SPREAD = "__mxAttrSpread";
 
 import { describe, expect, it } from "vitest";
@@ -313,7 +316,7 @@ describe("attributes", () => {
 
   it("wraps a dynamic attribute in braces", () => {
     expect(lower("<p title=name>x</p>")).toBe(
-      `<p title={${ATTR}("title", (name), "p")}>x</p>`,
+      `<p title={${OUT(`${ATTR}("title", (name), "p")`, "title")}}>x</p>`,
     );
   });
 
@@ -341,7 +344,7 @@ describe("attributes", () => {
 
   it("hoists value ahead of type on an input, as Marko does", () => {
     expect(lower('<input type="text" value=v>')).toBe(
-      `<input value={${ATTR}("value", (v), "input")} type="text" />`,
+      `<input value={${OUT(`${ATTR}("value", (v), "input")`, "value")}} type="text" />`,
     );
   });
 

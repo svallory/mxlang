@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   angularAstSnapshot,
   assertAngularParses,
+  attrBinding,
+  attrLet,
   compileMx,
   emit,
   emitWithTags,
+  listBinding,
+  textBinding,
 } from "./helpers.ts";
 
 describe("Element", () => {
@@ -28,7 +32,9 @@ describe("Element", () => {
 
   it("emits a dynamic property binding", () => {
     const out = emit("<a value=expr>x</a>");
-    expect(out).toBe('<a [value]="expr">x</a>');
+    expect(out).toBe(
+      `${attrLet(0, "expr")}<a [value]="${textBinding(0)}">x</a>`,
+    );
     assertAngularParses(out);
   });
 
@@ -154,7 +160,9 @@ describe("Element", () => {
 
   it("preserves ordinary attr: but rejects reserved class:/style: (decision 86 follow-up)", () => {
     const out = emit("<a attr:aria-label=l>x</a>");
-    expect(out).toBe('<a [attr.attr:aria-label]="l">x</a>');
+    expect(out).toBe(
+      `${attrLet(0, "l")}<a [attr.attr:aria-label]="${attrBinding(0)}">x</a>`,
+    );
     assertAngularParses(out);
     expect(() => emit("<a class:on=c>x</a>")).toThrow(
       /attribute modifier `class:on` is not Marko syntax.*\[ngClass\]/,
@@ -166,7 +174,9 @@ describe("Element", () => {
 
   it("binds a dynamic data-*/aria-* attribute as [attr.name]", () => {
     const out = emit("<div data-kind=k aria-label=l>x</div>");
-    expect(out).toBe('<div [attr.data-kind]="k" [attr.aria-label]="l">x</div>');
+    expect(out).toBe(
+      `${attrLet(0, "k")}${attrLet(1, "l")}<div [attr.data-kind]="${attrBinding(0)}" [attr.aria-label]="${attrBinding(1)}">x</div>`,
+    );
     assertAngularParses(out);
   });
 
@@ -217,13 +227,17 @@ describe("Element", () => {
 
   it("keeps [class]/[style] for a plain string value", () => {
     const out = emit("<div class=someExpr>x</div>");
-    expect(out).toBe('<div [class]="someExpr">x</div>');
+    expect(out).toBe(
+      `${attrLet(0, "someExpr")}<div [class]="${listBinding(0)}">x</div>`,
+    );
     assertAngularParses(out);
   });
 
   it("preserves an ordinary colon name instead of inventing a modifier policy", () => {
     const out = emit("<div prop:x=v>y</div>");
-    expect(out).toBe('<div [attr.prop:x]="v">y</div>');
+    expect(out).toBe(
+      `${attrLet(0, "v")}<div [attr.prop:x]="${attrBinding(0)}">y</div>`,
+    );
     assertAngularParses(out);
   });
 

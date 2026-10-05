@@ -37,8 +37,10 @@ import MagicString from "magic-string";
 import {
   ATTR_SPREAD_HELPER,
   ATTR_VALUE_HELPER,
+  CLASS_PROP_HELPER,
   MX_ATTR_SPREAD_BINDING,
   MX_ATTR_VALUE_BINDING,
+  MX_CLASS_BINDING,
   MX_IS_SERVER_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
   MX_TEXTAREA_OMIT_BINDING,
@@ -368,6 +370,12 @@ export function compileSolidMx(
       binding: MX_ATTR_VALUE_BINDING,
     });
   }
+  if (needsAttrGuard.klass) {
+    hoistedDefines.unshift({
+      code: CLASS_PROP_HELPER,
+      binding: MX_CLASS_BINDING,
+    });
+  }
   if (needsAttrGuard.spread) {
     hoistedDefines.unshift({
       code: ATTR_SPREAD_HELPER,
@@ -515,6 +523,7 @@ export function compileSolidUnit(
       `${TEXTAREA_OMIT_HELPER}\n${TEXTAREA_PICK_HELPER}\n${TEXTAREA_CONTENT_HELPER}\n`,
     );
   }
+  if (needsAttrGuard.klass) parts.unshift(`${CLASS_PROP_HELPER}\n`);
   if (needsAttrGuard.spread) parts.unshift(`${ATTR_SPREAD_HELPER}\n`);
   if (needsAttrGuard.value || needsAttrGuard.spread) {
     parts.unshift(`${ATTR_VALUE_HELPER}\n`);

@@ -342,11 +342,20 @@ describe.each(["ssr", "dom"] as const)(
 describe("emitted code", () => {
   it("leaves string and static attributes byte-identical", () => {
     const { code, hoistedDefines } = compileSolidMx(
-      '<div id="a" data-x="b" title="${input.t}" class=input.c/>',
+      '<div id="a" data-x="b" title="${input.t}" class="c"/>',
       { filename: "fixture.solid.mx" },
     );
     expect(code).not.toContain("__mxAttrValue");
     expect(hoistedDefines).toEqual([]);
+  });
+  it("routes a dynamic native class through the omit-when-falsy prop helper", () => {
+    const { code, hoistedDefines } = compileSolidMx("<div class=input.c/>", {
+      filename: "fixture.solid.mx",
+    });
+    expect(code).toContain('{...__mxClassProp(input.c, "div")}');
+    expect(hoistedDefines.map((entry) => entry.binding)).toEqual([
+      "__mxClassProp",
+    ]);
   });
   it("wraps a dynamic native attribute and hoists one helper", () => {
     const { code, hoistedDefines } = compileSolidMx(

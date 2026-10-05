@@ -1,4 +1,7 @@
 const ATTR = "__mxAttrValue";
+/** A dynamic native attribute is the guard inside the primitive normalization. */
+const OUT = (guarded: string, name: string): string =>
+  `__mxAttrOut(${JSON.stringify(name)}, ${guarded})`;
 
 import { describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
@@ -62,7 +65,7 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
 
   it("emits Marko's attribute, for every value kind", () => {
     expect(template(`<div value:foo=y/>`)).toContain(
-      `<div value:foo={${ATTR}("value:foo", (y), "div")}>`,
+      `<div value:foo={${OUT(`${ATTR}("value:foo", (y), "div")`, "value:foo")}}>`,
     );
     expect(template(`<div value:foo="lit"/>`)).toContain(
       `<div value:foo="lit">`,
@@ -72,12 +75,12 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
     // this host (`<div id={y}/>` emits `id={{y}}`: the outer braces are
     // Astro's interpolation, the inner ones the MX expression).
     expect(template(`<div value:foo={y}/>`)).toContain(
-      `<div value:foo={${ATTR}("value:foo", ({y}), "div")}>`,
+      `<div value:foo={${OUT(`${ATTR}("value:foo", ({y}), "div")`, "value:foo")}}>`,
     );
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(template(`<div value:foo=y/>`)).toContain(
-      `<div value:foo={${ATTR}("value:foo", (y), "div")}>`,
+      `<div value:foo={${OUT(`${ATTR}("value:foo", (y), "div")`, "value:foo")}}>`,
     );
   });
 
