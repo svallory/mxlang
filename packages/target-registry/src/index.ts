@@ -26,6 +26,8 @@ import {
   createTargetLookup,
   type HostFileKind,
   hostRestrictionDiagnostics,
+  type PolicyLocation,
+  readTargetDefaultTag,
   registerCalleeInputReader,
   type ScanDiagnostic,
   type ScanOptions,
@@ -33,6 +35,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
   type TargetPolicy,
+  type TargetPolicyDiagnostic,
   type TargetPolicyResolution,
   validateDefaultTag,
 } from "@mxlang/core";
@@ -272,10 +275,73 @@ export function effectiveDefaultTag(
 }
 
 /**
- * Checks every `defaultTag` the package's resolution rests on, once per
- * package and positioned where it is written: the package's own
- * `mx.<target>.defaultTag`, and, for a descriptor loaded from a package
- * specifier, the descriptor's host override and built-in (a built-in
+ * The built-in target a host module file kind (`.solid.mx`, `.ng.mx`,
+ * `.astro.mx`) compiles under, which is not the page policy's target.
+ */
+function fileKindTarget(filePath: string): TargetDescriptor | undefined {
+  return builtinTargets.find((target) =>
+    target.host?.fileKinds?.some((kind) =>
+      filePath.endsWith(`.${kind.segment}.mx`),
+    ),
+  );
+}
+
+/** The target `filePath` compiles under and its `mx.<target>.defaultTag`, validated or not. */
+function configFor(
+  filePath: string,
+  policy: TargetPolicy,
+): {
+  target: string;
+  value?: string;
+  at?: NonNullable<TargetPolicy["defaultTagAt"]>;
+  diagnostic?: TargetPolicyDiagnostic;
+} {
+  const kind = fileKindTarget(filePath);
+  if (!kind || kind.name === policy.target) {
+    return {
+      target: policy.target,
+      ...(policy.defaultTag === undefined
+        ? {}
+        : { value: policy.defaultTag, at: policy.defaultTagAt }),
+    };
+  }
+  return { target: kind.name, ...readTargetDefaultTag(filePath, kind.name) };
+}
+
+/**
+ * Why `name` cannot be the default tag of `descriptor` here, or `undefined`:
+ * core's check over the package's scanned custom tags and the Marko lookup
+ * the target compiles with.
+ */
+function defaultTagProblem(
+  name: string,
+  descriptor: TargetDescriptor,
+  lookup: TargetLookup,
+  filePath: string,
+): string | undefined {
+  const hostKey = lookup.hostFilterKey(descriptor.name);
+  const customTags = coreScanCached(filePath, {
+    targets: lookup,
+    ...(hostKey === undefined ? {} : { host: hostKey }),
+  }).customTags;
+  const translator = (descriptor.parseTranslator ??
+    descriptor.translator ??
+    html.translator) as unknown;
+  const markoLookup = buildMarkoLookup(dirname(filePath), translator);
+  return validateDefaultTag(name, {
+    customTags,
+    ...(markoLookup ? { lookup: markoLookup } : {}),
+    builtins: [descriptor.defaultTag, descriptor.host?.defaultTag].filter(
+      (value): value is string => value !== undefined,
+    ),
+  });
+}
+
+/**
+ * Checks every `defaultTag` the file's compile rests on, once per package and
+ * positioned where it is written: the package's `mx.<target>.defaultTag` for
+ * the target the file compiles under, and, for a descriptor loaded from a
+ * package specifier, the descriptor's host override and built-in (a built-in
  * descriptor's own values are this repo's to get right, and its tests pin
  * them). A user value that fails is dropped from the policy, so the compile
  * that follows uses the next rung and the one error is the only noise.
@@ -286,71 +352,88 @@ function checkDefaultTags(
 ): TargetPolicyResolution {
   const { policy } = resolution;
   const lookup = lookupFor(policy);
-  const descriptor = lookup.target(policy.target);
+  const config = configFor(filePath, policy);
+  const descriptor = lookup.target(config.target);
   if (!descriptor) return resolution;
-  const problems: Array<{
-    name: string;
-    at: NonNullable<TargetPolicy["defaultTagAt"]>;
-    owner: string;
-  }> = [];
-  if (policy.defaultTag !== undefined && policy.defaultTagAt) {
-    problems.push({
-      name: policy.defaultTag,
-      at: policy.defaultTagAt,
-      owner: `mx.${policy.target}.defaultTag`,
-    });
-  }
-  if (policy.descriptor && policy.descriptorAt) {
-    if (descriptor.host?.defaultTag !== undefined) {
-      problems.push({
-        name: descriptor.host.defaultTag,
-        at: policy.descriptorAt,
-        owner: `host.defaultTag of "${descriptor.name}"`,
-      });
-    }
-    problems.push({
-      name: descriptor.defaultTag,
-      at: policy.descriptorAt,
-      owner: `defaultTag of "${descriptor.name}"`,
-    });
-  }
-  if (problems.length === 0) return resolution;
-
-  const hostKey = lookup.hostFilterKey(policy.target);
-  const customTags = coreScanCached(filePath, {
-    targets: lookup,
-    ...(hostKey === undefined ? {} : { host: hostKey }),
-  }).customTags;
-  const translator = (descriptor.translator ?? html.translator) as unknown;
-  const markoLookup = buildMarkoLookup(dirname(filePath), translator);
-  const builtins = [descriptor.defaultTag, descriptor.host?.defaultTag].filter(
-    (name): name is string => name !== undefined,
-  );
-
   const diagnostics = [...resolution.diagnostics];
+  // Only the type error of a config read for a file-kind target: the policy's
+  // own target already reported its own.
+  if (config.diagnostic) diagnostics.push(config.diagnostic);
   let next = policy;
-  for (const { name, at, owner } of problems) {
-    const reason = validateDefaultTag(name, {
-      customTags,
-      ...(markoLookup ? { lookup: markoLookup } : {}),
-      builtins,
-    });
-    if (reason === undefined) continue;
+  const reject = (reason: string, at: PolicyLocation, owner?: string): void => {
     diagnostics.push({
       code: "invalid-default-tag",
       severity: "error",
       file: at.file,
-      message: `invalid \`defaultTag\` value: ${reason}${owner.startsWith("mx.") ? "" : ` (${owner})`}`,
+      message: `invalid \`defaultTag\` value: ${reason}${owner ? ` (${owner})` : ""}`,
       line: at.line,
       column: at.column,
       length: at.length,
     });
-    if (owner.startsWith("mx.")) {
-      const { defaultTag: _dropped, defaultTagAt: _at, ...rest } = next;
-      next = rest;
+  };
+  if (config.value !== undefined && config.at) {
+    const reason = defaultTagProblem(
+      config.value,
+      descriptor,
+      lookup,
+      filePath,
+    );
+    if (reason !== undefined) {
+      reject(reason, config.at);
+      if (config.target === policy.target) {
+        const { defaultTag: _value, defaultTagAt: _at, ...rest } = next;
+        next = rest;
+      }
     }
   }
-  return { ...resolution, policy: next, diagnostics };
+  if (
+    policy.descriptor &&
+    policy.descriptorAt &&
+    descriptor === policy.descriptor
+  ) {
+    const own: Array<[string, string]> = [
+      [descriptor.defaultTag, `defaultTag of "${descriptor.name}"`],
+    ];
+    if (descriptor.host?.defaultTag !== undefined) {
+      own.unshift([
+        descriptor.host.defaultTag,
+        `host.defaultTag of "${descriptor.name}"`,
+      ]);
+    }
+    for (const [name, owner] of own) {
+      const reason = defaultTagProblem(name, descriptor, lookup, filePath);
+      if (reason !== undefined) reject(reason, policy.descriptorAt, owner);
+    }
+  }
+  return diagnostics.length === resolution.diagnostics.length && next === policy
+    ? resolution
+    : { ...resolution, policy: next, diagnostics };
+}
+
+/**
+ * The name the unnamed tag takes in `filePath`, for a tool to hand to the
+ * compile as `defaultTag`: the ladder's registry rungs (config, host override,
+ * target built-in) for the target the file compiles under, with a rejected
+ * user value already out of the way.
+ */
+export function defaultTagFor(
+  filePath: string,
+  options: ResolveTargetPolicyOptions = {},
+): string {
+  const { policy } = resolveTargetPolicyDetailed(filePath, options);
+  const lookup = lookupFor(policy);
+  const config = configFor(filePath, policy);
+  const descriptor = lookup.target(config.target) ?? descriptorFor(policy);
+  const usable =
+    config.value !== undefined &&
+    (config.target === policy.target
+      ? true
+      : defaultTagProblem(config.value, descriptor, lookup, filePath) ===
+        undefined);
+  return effectiveDefaultTag(
+    usable ? { defaultTag: config.value } : {},
+    descriptor,
+  );
 }
 
 function resolveStaged(

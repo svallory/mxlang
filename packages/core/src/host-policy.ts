@@ -640,6 +640,63 @@ function loadSpecifiers(
   return loaded;
 }
 
+/** What one `package.json` says about `mx.<target>.defaultTag`. */
+export interface DefaultTagConfig {
+  /** The configured name, when it is a usable string. */
+  value?: string;
+  at?: PolicyLocation;
+  /** The type error, when the value is not a non-empty string. */
+  diagnostic?: TargetPolicyDiagnostic;
+}
+
+/** Reads `mx[target].defaultTag` from an already-read manifest; see {@link readTargetDefaultTag}. */
+function readDefaultTagConfig(
+  read: PackageJsonRead,
+  file: string,
+  target: string,
+): DefaultTagConfig {
+  const mx =
+    isObject(read.manifest) && isObject(read.manifest.mx)
+      ? read.manifest.mx
+      : undefined;
+  const configured = mx?.[target];
+  if (!isObject(configured) || configured.defaultTag === undefined) return {};
+  const value = configured.defaultTag;
+  const at = {
+    file,
+    ...locateMxValue(read.text, [target, "defaultTag"]),
+  };
+  if (typeof value === "string" && value !== "") return { value, at };
+  return {
+    diagnostic: {
+      code: "invalid-default-tag",
+      severity: "error",
+      file,
+      message: `invalid \`defaultTag\` value: mx.${target}.defaultTag is ${value === "" ? "an empty string" : describeJson(value)}, expected a tag name string`,
+      line: at.line,
+      column: at.column,
+      length: at.length,
+    },
+  };
+}
+
+/**
+ * The `mx.<target>.defaultTag` of the package that holds `filePath`, for a
+ * target other than the one the package's policy selects (a host module file
+ * kind compiles under its own target). `value` is a usable string; a value of
+ * any other type comes back as the one `invalid-default-tag` diagnostic. A
+ * package that cannot be read says nothing here: the policy walk already
+ * reported it.
+ */
+export function readTargetDefaultTag(
+  filePath: string,
+  target: string,
+): DefaultTagConfig {
+  const found = findNearestPackageJson(dirname(filePath));
+  if (!found || found.read.error || !isObject(found.read.manifest)) return {};
+  return readDefaultTagConfig(found.read, found.file, target);
+}
+
 /**
  * Resolves the `TargetPolicy` for `filePath` by walking upward from its
  * containing directory, together with the diagnostics the walk produced. See
@@ -702,26 +759,12 @@ export function resolveTargetPolicyDetailed(
     const key = loaded.target ? "target" : "host";
     resolved.policy.descriptorAt = { file, ...locateMxValue(read.text, key) };
   }
-  const configured = mx?.[resolved.policy.target];
-  if (isObject(configured) && configured.defaultTag !== undefined) {
-    const value = configured.defaultTag;
-    if (typeof value === "string" && value !== "") {
-      resolved.policy.defaultTag = value;
-      resolved.policy.defaultTagAt = {
-        file,
-        ...locateMxValue(read.text, [resolved.policy.target, "defaultTag"]),
-      };
-    } else {
-      const key = `mx.${resolved.policy.target}.defaultTag`;
-      diagnostics.push({
-        code: "invalid-default-tag",
-        severity: "error",
-        file,
-        message: `invalid \`defaultTag\` value: ${key} is ${value === "" ? "an empty string" : describeJson(value)}, expected a tag name string`,
-        ...locateMxValue(read.text, [resolved.policy.target, "defaultTag"]),
-      });
-    }
+  const config = readDefaultTagConfig(read, file, resolved.policy.target);
+  if (config.value !== undefined) {
+    resolved.policy.defaultTag = config.value;
+    resolved.policy.defaultTagAt = config.at;
   }
+  if (config.diagnostic) diagnostics.push(config.diagnostic);
   if (resolved.deprecatedValue !== undefined) {
     const target = lookup.hostTarget(resolved.deprecatedValue)?.target;
     console.warn(

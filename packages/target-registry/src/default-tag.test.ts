@@ -8,10 +8,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TargetDescriptor } from "@mxlang/core";
+import * as core from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  builtinLookup,
   builtinTargets,
+  defaultTagFor,
   effectiveDefaultTag,
+  getCustomTags,
+  lookupFor,
   resolveTargetPolicyDetailed,
 } from "./index.ts";
 
@@ -25,6 +30,7 @@ afterEach(() => {
 function project(
   manifest: object | string,
   files: Record<string, string> = {},
+  entry = "a.mx",
 ): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-default-tag-")));
   roots.push(root);
@@ -36,7 +42,7 @@ function project(
     mkdirSync(join(root, name, ".."), { recursive: true });
     writeFileSync(join(root, name), text);
   }
-  return join(root, "a.mx");
+  return join(root, entry);
 }
 
 const html = (defaultTag: unknown) => ({
@@ -196,5 +202,82 @@ describe("the ladder's lower rungs: config, then host override, then target buil
     expect(
       effectiveDefaultTag({ target: "t", defaultTag: "main" }, target()),
     ).toBe("main");
+  });
+});
+
+describe("a host module file kind reads its own target's config", () => {
+  const manifest = (value: unknown) => ({
+    mx: { target: "html", "solid-jsx": { defaultTag: value } },
+  });
+
+  it("defaultTagFor answers the file kind's target, not the page target's", () => {
+    const file = project(manifest("section"), {}, "a.solid.mx");
+    expect(defaultTagFor(file)).toBe("section");
+    expect(resolveTargetPolicyDetailed(file).diagnostics).toEqual([]);
+  });
+
+  it("a page file in the same package ignores the other target's key", () => {
+    const file = project(manifest("section"));
+    expect(defaultTagFor(file)).toBe("div");
+  });
+
+  it("an invalid value is reported for that file kind, and the built-in answers", () => {
+    const file = project(manifest("nope"), {}, "a.solid.mx");
+    const { diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toMatchObject([
+      {
+        code: "invalid-default-tag",
+        severity: "error",
+        message:
+          "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package",
+      },
+    ]);
+    expect(defaultTagFor(file)).toBe("div");
+  });
+
+  it("a non-string value for that target is core's one diagnostic", () => {
+    const file = project(manifest(4), {}, "a.solid.mx");
+    expect(
+      resolveTargetPolicyDetailed(file).diagnostics.map((d) => d.code),
+    ).toEqual(["invalid-default-tag"]);
+  });
+});
+
+describe("mx.html.defaultTag reaches the compile", () => {
+  /** What the real tool path does: policy, scan, ladder, then the target's compile. */
+  function compile(file: string, source: string): string {
+    const policy = resolveTargetPolicyDetailed(file).policy;
+    const targets = lookupFor(policy);
+    const descriptor = targets.target(policy.target);
+    const customTags = getCustomTags(file, { targets });
+    return descriptor?.load?.(core).compileModule(source, file, {
+      customTags,
+      defaultTag: defaultTagFor(file),
+      targets: builtinLookup(),
+    }).code as string;
+  }
+
+  const card = {
+    "tags/my-card.mx": "<section><${input.renderBody}/></section>\n",
+  };
+
+  it("resolves <#a> to the custom tag", () => {
+    const file = project(html("my-card"), card);
+    const code = compile(file, "<#a>hi</>\n");
+    expect(code).toMatch(/my-card|myCard|MyCard/);
+    expect(code).toContain("id");
+  });
+
+  it("without config the same source is a div, byte for byte", () => {
+    const file = project({ mx: { target: "html" } }, card);
+    const explicit = compile(file, '<div id="a">hi</div>\n');
+    expect(compile(file, "<#a>hi</>\n")).toBe(explicit);
+  });
+
+  it("an invalid config compiles with the built-in and the one error is the policy's", () => {
+    const file = project(html("input"), card);
+    expect(compile(file, "<#a>hi</>\n")).toBe(
+      compile(project({ mx: { target: "html" } }, card), "<#a>hi</>\n"),
+    );
   });
 });

@@ -10,8 +10,8 @@
  * kinds and no `mx.tags[].hosts` filter key, so a project selects it with
  * `mx.target: "data"` or by depending on `@mxlang/data`.
  *
- * A lazy `translator` for the registry's `defaultTag` check, and no
- * `mappings`: the mapping mode (with the TS plugin's guard for a target that
+ * A lazy `parseTranslator` for the registry's `defaultTag` check, but no
+ * `translator` and no `mappings`: the mapping mode (with the TS plugin's guard for a target that
  * returns no `map` and no `mappings`) is chosen in data PR 4.
  */
 import { createTargetLookup, type TargetDescriptor } from "@mxlang/core";
@@ -21,11 +21,12 @@ declare const require: (specifier: string) => unknown;
 
 const descriptor: TargetDescriptor = {
   ...dataTargetBase,
-  // Lazy, like `load`: the translator reaches `@marko/compiler`. It exists so
-  // the registry can ask the lookup a data compile uses (decision 145: is a
-  // `defaultTag` a plain tag here?); the mapping pass does not read it for
-  // data, which is not wired into tooling.
-  get translator() {
+  // Lazy, like `load`: the translator reaches `@marko/compiler`. Not
+  // `translator` (the mapping pass's, which data does not have): this is the
+  // translator whose taglib answers parse-shape questions, so the registry can
+  // ask the lookup a data compile really uses whether a `defaultTag` is a
+  // plain tag (decision 145).
+  get parseTranslator() {
     return (
       require("./translator.ts") as typeof import("./translator.ts")
     ).dataTranslator(createTargetLookup([dataTargetBase]));

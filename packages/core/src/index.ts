@@ -120,7 +120,9 @@ export {
   type RegionPosition,
 } from "./fragment.ts";
 export {
+  type DefaultTagConfig,
   type PolicyLocation,
+  readTargetDefaultTag,
   resolveTargetPolicy,
   resolveTargetPolicyDetailed,
   type TargetPolicy,

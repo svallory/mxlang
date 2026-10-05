@@ -237,6 +237,14 @@ export interface TargetDescriptor {
   };
   /** Marko translator whose taglib the mapping pass looks tags up in. */
   readonly translator?: unknown;
+  /**
+   * Marko translator whose taglib answers how a tag parses (void, text,
+   * whitespace-preserving) in this target's own compiles. Absent means
+   * `translator`, or the default target's, answers. Used to check that a
+   * `defaultTag` is a plain tag (decision 145); unlike `translator` it is
+   * never the mapping pass's.
+   */
+  readonly parseTranslator?: unknown;
 
   /**
    * Whole-file `.mx` to module. Absent means page compilation is not wired
