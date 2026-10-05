@@ -51,6 +51,12 @@ function slice(
   return source.slice(span.sourceStart, span.sourceEnd);
 }
 
+/** A name span the tree is expected to carry; the field is optional in the type. */
+function named(span: { sourceStart: number; sourceEnd: number } | undefined) {
+  if (!span) throw new Error("expected a nameSpan");
+  return span;
+}
+
 const RESERVED = (name: string) =>
   `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
 
@@ -759,8 +765,8 @@ describe("round 2 (rev-236)", () => {
       // The name span is the sigil plus the token, as for the spaced sugar
       // form (` .y`); the value span is measured from *after* the sigil, so
       // it is the class/id text itself.
-      expect(slice(source, cls.nameSpan)).toBe(".cls1.cls2");
-      expect(slice(source, id.nameSpan)).toBe("#myid");
+      expect(slice(source, named(cls.nameSpan))).toBe(".cls1.cls2");
+      expect(slice(source, named(id.nameSpan))).toBe("#myid");
       expect(slice(source, cls.valueSpan)).toBe("cls1.cls2");
       expect(slice(source, id.valueSpan)).toBe("myid");
       expect(cls.value).toBe("cls1 cls2");
@@ -777,9 +783,7 @@ describe("round 2 (rev-236)", () => {
         value: "foo",
       });
       if (attr.kind !== "string") throw new Error("expected a string attr");
-      expect(
-        slice(source, attr.nameSpan ?? { sourceStart: 0, sourceEnd: 0 }),
-      ).toBe(".foo");
+      expect(slice(source, named(attr.nameSpan))).toBe(".foo");
       expect(slice(source, attr.valueSpan)).toBe("foo");
     });
 
