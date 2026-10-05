@@ -39,8 +39,8 @@ import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
-import { markoBabel } from "./marko-frontend.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { markoBabel } from "./marko-frontend.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
 /**
