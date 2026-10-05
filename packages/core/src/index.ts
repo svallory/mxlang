@@ -257,10 +257,8 @@ export {
   type TemplateTag,
   templateCompileCount,
 } from "./template-tag.ts";
-export { WILDCARD_NEAR_EXPLICIT } from "./wildcard-children.ts";
 export {
   type ContractScope,
-  isWildcardEligible,
   matchWildcardChild,
   scopeForChildren,
   type WildcardContext,

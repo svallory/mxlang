@@ -47,7 +47,10 @@ const TSCONFIG = JSON.stringify({
   include: ["src"],
 });
 
-function project(moduleSource: string): string {
+function project(
+  moduleSource: string,
+  page = "<style>\n  .x { color: red }\n</style>\n",
+): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-tsc-contracts-")));
   created.push(dir);
   const files: Record<string, string> = {
@@ -57,7 +60,7 @@ function project(moduleSource: string): string {
       mx: { host: "html", contracts: "./contracts.ts" },
     }),
     "contracts.ts": moduleSource,
-    "src/pages/page.mx": "<style>\n  .x { color: red }\n</style>\n",
+    "src/pages/page.mx": page,
     "src/main.ts":
       'import render from "./pages/page.mx";\nconsole.log(render({}));\n',
   };
@@ -113,6 +116,26 @@ describe("mx-tsc reports mx.contracts module errors", () => {
       );
       expect(second.text).not.toContain("missing required attribute `nonce`");
       expect(second.status).not.toBe(0);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+});
+
+describe("mx-tsc on an html package: the wildcard guard (decision 147)", () => {
+  it(
+    "a wildcard child one typo from an explicit child is an error, not a warning, on a non-data target",
+    () => {
+      const dir = project(
+        'export default { attribute: {}, attributes: { children: { title: {}, "*": { contract: "attribute" } } } };\n',
+        "<attributes>\n  <titel/>\n</attributes>\n",
+      );
+
+      const { status, text } = check(dir);
+
+      expect(text).toContain(
+        "src/pages/page.mx(2,3): error TS80001: `<titel>` (as `attribute`) matched the wildcard of `<attributes>`; did you mean the explicit child `<title>`?",
+      );
+      expect(status).not.toBe(0);
     },
     SPAWN_TIMEOUT_MS,
   );

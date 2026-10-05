@@ -140,8 +140,8 @@ export type ChildNode =
       hint?: string;
       /** How a wildcard child was written (decision 147). */
       alias?: TagAlias;
-      /** A built-in or declared name, which no wildcard entry may claim. */
-      known?: boolean;
+      /** Why no wildcard entry may claim this name: a built-in or a registered tag. */
+      known?: "built-in" | "registered";
     }
   | { kind: "ChildText"; loc: Position }
   | { kind: "ChildDynamic"; loc: Position }
@@ -1010,19 +1010,38 @@ export function validateCustomTagChildren(
       .join(" or ");
     const catchAll = entries.some((entry) => entry.pattern === undefined);
     const names = explicit.filter(([name]) => name !== "#text");
+    const others = names.length > 0 ? "other names" : "names";
     const rule = patterns
-      ? `${names.length > 0 ? "other names" : "names"} must match ${patterns}${catchAll ? ", or be undeclared" : ""}`
-      : `${names.length > 0 ? "other names" : "names"} must be undeclared`;
-    const known =
-      node.known && matchWildcardEntry(declarations, node.name)
-        ? ` (${label} is a declared tag, so the wildcard does not apply to it)`
-        : "";
+      ? `${others} must match ${patterns}${catchAll ? ", or be a name that is not already a tag" : ""}`
+      : `${others} must be a name that is not already a tag`;
+    const known = node.known
+      ? matchWildcardEntry(declarations, node.name)
+        ? ` (${label} is ${node.known === "built-in" ? "a built-in tag" : "a registered tag"}, so the wildcard does not apply to it)`
+        : ""
+      : "";
     const listed =
       names.length > 0
         ? `allowed children: ${names.map(([name]) => `\`<${name}>\``).join(", ")}; `
         : "";
     return `${label} is not allowed here; ${listed}${rule}${known}${hint}`;
   };
+  // What a text child is told the parent does accept; a wildcard entry means
+  // tags are accepted even when no child is named.
+  const textRule =
+    entries.length > 0
+      ? `it accepts only child tags: ${[
+          ...explicit.flatMap(([name]) =>
+            name === "#text" ? [] : [`\`<${name}>\``],
+          ),
+          ...entries.map((entry) =>
+            entry.pattern === undefined
+              ? "any other name"
+              : `names matching \`${entry.pattern}\``,
+          ),
+        ].join(", ")}`
+      : allowed === "none"
+        ? "it accepts no child tags"
+        : `it accepts only the child tags ${allowed}`;
   const collect = (nodes: readonly ChildNode[]): void => {
     for (const node of nodes) {
       if (node.kind === "ChildFor") collect(node.nodes);
@@ -1041,9 +1060,7 @@ export function validateCustomTagChildren(
           failForOwner(
             owner,
             node.kind === "ChildText"
-              ? allowed === "none"
-                ? "text is not allowed here; it accepts no child tags"
-                : `text is not allowed here; it accepts only the child tags ${allowed}`
+              ? `text is not allowed here; ${textRule}`
               : notAllowed(node),
             node.loc,
           );
@@ -1947,9 +1964,15 @@ export function transformCustomTag(
   const contractOnly = isContractOnlyDelegated(ctx, call.name, definition);
   const owner = tagLabel(call.name, call.alias);
   if (!definition.transform && !hasTemplate(definition) && !contractOnly) {
+    // An inline `children["*"]` contract can carry no transform: it is
+    // validation-only, useful where the target delegates (data).
+    const inline =
+      call.alias !== undefined && call.alias.authored === call.name;
     failForOwner(
       owner,
-      "custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+      inline
+        ? `an inline \`children["*"]\` contract has no transform; on ${ctx.declarations.name ?? "this target"} a matched child needs \`contract:\` naming a tag with a transform or template`
+        : "custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
       call.loc,
     );
   }

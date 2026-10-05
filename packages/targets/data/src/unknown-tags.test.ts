@@ -617,7 +617,7 @@ describe("wildcard children (decision 147) under unknownTags: reject", () => {
     expect(diagnostics[0]?.message).toContain("is not a known tag");
   });
 
-  it("the guard warning's code reaches the diagnostic", () => {
+  it("the guard is an error diagnostic", () => {
     const withNear: Record<string, CustomTag> = {
       ...tags,
       resource: {
@@ -633,8 +633,9 @@ describe("wildcard children (decision 147) under unknownTags: reject", () => {
       {},
       withNear,
     );
-    expect(diagnostics.some((d) => d.code === "wildcard-near-explicit")).toBe(
-      true,
-    );
+    expect(diagnostics[0]).toMatchObject({
+      severity: "error",
+      message: expect.stringContaining("did you mean the explicit child"),
+    });
   });
 });

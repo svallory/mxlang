@@ -892,7 +892,7 @@ describe("mx-tsc on a data package: wildcard children (decision 147)", () => {
     expect(check(dir)).toEqual({ status: 0, output: "" });
   });
 
-  it("the near-explicit guard warning is promoted to an error here", () => {
+  it("the near-explicit guard is an error here, as on every target", () => {
     const dir = withContracts(
       wildcard("attribute: {}, "),
       '<resource>\n  <attribut value="a"/>\n</resource>\n',

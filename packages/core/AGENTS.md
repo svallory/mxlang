@@ -546,14 +546,14 @@ Five facts worth knowing before editing it:
   record (`activeWildcard`) and routes the child to `lowerCustomTag` with the
   canonical name, `alias` on the IR node. A name is claimable only when
   nothing else resolves it: not a core structural name, not a core-owned or
-  registered tag, not a *built-in of the target*, which is a tag in the
-  target's own `ctx.lookup` that is not an element or belongs to core's own
-  taglib (`isBuiltin`). Core holds no builtin list and no host literal; data's
-  taglib omits `let`, so it stays claimable there. A native element name is
+  registered tag, not a *built-in of the target*: an entry of core's own
+  taglib (`CORE_TAG_NAMES`, on every target, data included), a name the host
+  declares a disposition for, or a non-element in the target's `ctx.lookup`
+  (`isBuiltin`). Core holds no list and no host literal. A native element name is
   claimable (the contract decides inside a contract parent), and a
   PascalCase file-local binding beats a match. The parse-only data scan
   (`@mxlang/data` `scan.ts`) reuses `matchWildcardChild`/`scopeForChildren`
-  with no `lookup`. Cycle rule: only an inline entry object reachable from
+  with no `lookup`. A guard hit (`rejectNearExplicitChild`) is a compile error, not a warning. Cycle rule: only an inline entry object reachable from
   itself is non-terminating; recursion by `contract` reference is fine.
 - **A contract-only tag is a `DelegatedTag` on a claimed name (decision 130).** A
   definition with no `transform` and no template is contract-only whatever else

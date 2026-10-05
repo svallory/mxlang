@@ -11,7 +11,7 @@
 
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import type { Ctx, Node } from "./core.ts";
-import { CORE_TAGLIB_ID } from "./core-taglib.ts";
+import { CORE_TAG_NAMES } from "./core-taglib.ts";
 import type {
   CustomTag,
   CustomTagAttributeTag,
@@ -26,13 +26,21 @@ import {
   wildcardEntries,
 } from "./wildcard-children.ts";
 
-/** A contract in force at some point of the walk, with its owner's message label. */
+/**
+ * A contract in force at some point of the walk, with its owner's message label.
+ *
+ * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ */
 export interface ContractScope {
   declaration: CustomTag | CustomTagAttributeTag;
   label: string;
 }
 
-/** What a parent's `"*"` entry decided for one authored tag. */
+/**
+ * What a parent's `"*"` entry decided for one authored tag.
+ *
+ * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ */
 export interface WildcardMatch {
   /** The tag the child is checked as: the referenced tag, or the authored name for an inline contract. */
   canonical: string;
@@ -63,52 +71,67 @@ const CORE_NAMES = new Set([
   "static",
 ]);
 
-/** What eligibility reads of a compile: the registered tags and the target's taglib lookup. */
-export type WildcardContext = Pick<Ctx, "customTags" | "lookup">;
+/**
+ * What eligibility reads of a compile: the registered tags, the target's
+ * taglib lookup and its declarations.
+ *
+ * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ */
+export type WildcardContext = Pick<Ctx, "customTags" | "lookup"> &
+  Partial<Pick<Ctx, "declarations">>;
 
 /**
- * Whether the target's own taglib lookup holds `name` as a built-in: a tag
- * that is not an element of the target, or one of core's own tags (`script`
- * and `style` are core entries even though they render as elements). A native
- * element (`title`, `div`) is not a built-in, so a contract can claim it;
- * a target whose lookup omits a host-owned name (data's `let`) leaves it
- * ordinary. The answer is the lookup's, never a list kept here.
+ * Whether `name` is a built-in of the target, which no wildcard entry may
+ * claim: (a) an entry of core's own taglib (`let`, `effect`, `script`,
+ * `style`, ...), on every target; (b) a name the host declares a disposition
+ * for; (c) a name the target's taglib lookup holds as a non-element. A native
+ * element (`title`, `div`) is not a built-in, so a contract can claim it.
  */
 function isBuiltin(name: string, ctx: WildcardContext): boolean {
-  const def = ctx.lookup?.getTag(name) as
-    | { html?: unknown; taglibId?: unknown }
-    | undefined;
-  return (
-    def !== undefined && (def.html !== true || def.taglibId === CORE_TAGLIB_ID)
-  );
+  if (CORE_TAG_NAMES.has(name)) return true;
+  if (ctx.declarations && Object.hasOwn(ctx.declarations.tags, name)) {
+    return true;
+  }
+  const def = ctx.lookup?.getTag(name) as { html?: unknown } | undefined;
+  return def !== undefined && def.html !== true;
 }
 
 /**
- * Whether no rung of the target resolves `name`, so a parent's `"*"` may claim
- * it (decision 147, target-neutral): not a core structural name, not a
- * core-owned or registered custom tag, not a built-in of the target. A native
- * element is eligible: inside a contract parent the contract decides, and the
- * host's native-element fallback applies only outside one.
+ * Why a parent's `"*"` may not claim `name` (decision 147, target-neutral), or
+ * `undefined` when no rung of the target resolves it: not a core structural
+ * name, not a core-owned or registered custom tag, not a built-in of the
+ * target. A native element is eligible: inside a contract parent the contract
+ * decides, and the host's native-element fallback applies only outside one.
  */
-export function isWildcardEligible(
+export function wildcardIneligibility(
   name: string,
   ctx: WildcardContext,
-): boolean {
-  return !(
-    name === "" ||
-    name.startsWith("@") ||
-    CORE_NAMES.has(name) ||
+): "built-in" | "registered" | undefined {
+  if (name === "" || name.startsWith("@") || CORE_NAMES.has(name)) {
+    return "built-in";
+  }
+  if (
     Object.hasOwn(BUILTIN_CUSTOM_TAGS, name) ||
-    (ctx.customTags !== undefined && Object.hasOwn(ctx.customTags, name)) ||
-    isBuiltin(name, ctx)
-  );
+    (ctx.customTags !== undefined && Object.hasOwn(ctx.customTags, name))
+  ) {
+    return "registered";
+  }
+  return isBuiltin(name, ctx) ? "built-in" : undefined;
 }
 
-const matches = new WeakMap<Node, WildcardMatch>();
+/**
+ * One match per tag node, with the contract it was matched under. A node
+ * belongs to one parse, so the cache lives and dies with the compile; an entry
+ * answers only a later call under the same contract.
+ */
+const matches = new WeakMap<
+  Node,
+  { scope: ContractScope["declaration"]; match: WildcardMatch }
+>();
 
 /** The match recorded for this tag node, if a parent's `"*"` claimed it. */
 export function wildcardMatchOf(node: Node): WildcardMatch | undefined {
-  return node ? matches.get(node) : undefined;
+  return node ? matches.get(node)?.match : undefined;
 }
 
 /** The contract an entry validates its child with, when it can be reached. */
@@ -124,8 +147,10 @@ function entryDefinition(
 
 /**
  * Matches one authored tag against the contract in force at its position and
- * records the result; a tag matched once keeps its match (the walk can run
- * more than once over one tree).
+ * records the result; a tag matched once keeps its match under that contract
+ * (the walk can run more than once over one tree).
+ *
+ * @unstable plumbing for `@mxlang/data`'s parse-only scan.
  */
 export function matchWildcardChild(
   node: Node,
@@ -135,11 +160,11 @@ export function matchWildcardChild(
 ): WildcardMatch | undefined {
   const customTags = ctx.customTags;
   const known = matches.get(node);
-  if (known) return known;
+  if (known && known.scope === scope?.declaration) return known.match;
   const children = scope?.declaration.children;
   if (!scope || !children || wildcardEntries(children).length === 0) return;
   if (hasExplicitChild(children, name)) return;
-  if (!isWildcardEligible(name, ctx)) return;
+  if (wildcardIneligibility(name, ctx)) return;
   const found = matchWildcardEntry(children, name);
   if (!found) return;
   const definition = entryDefinition(found.entry, customTags);
@@ -156,7 +181,7 @@ export function matchWildcardChild(
         .filter((child) => child !== "#text"),
     },
   };
-  matches.set(node, match);
+  matches.set(node, { scope: scope.declaration, match });
   return match;
 }
 
@@ -165,6 +190,8 @@ export function matchWildcardChild(
  * flow passes its parent's through, as E2 sees through it; an attribute tag
  * reads its declaration in the owner's `attributeTags`; a matched wildcard
  * child, a core-owned custom tag and a registered tag bring their own.
+ *
+ * @unstable plumbing for `@mxlang/data`'s parse-only scan.
  */
 export function scopeForChildren(
   node: Node,
@@ -182,7 +209,7 @@ export function scopeForChildren(
       ? { declaration, label: `${scope.label}: \`<${name}>\`` }
       : undefined;
   }
-  const match = matches.get(node);
+  const match = matches.get(node)?.match;
   if (match) {
     return {
       declaration: match.definition,

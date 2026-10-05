@@ -118,10 +118,10 @@ import {
   registerTemplateMetadataCompiler,
   type TemplateTag,
 } from "./template-tag.ts";
-import { tagLabel, WILDCARD_NEAR_EXPLICIT } from "./wildcard-children.ts";
+import { tagLabel } from "./wildcard-children.ts";
 import {
-  isWildcardEligible,
   type WildcardMatch,
+  wildcardIneligibility,
   wildcardMatchOf,
 } from "./wildcard-resolve.ts";
 
@@ -2491,25 +2491,19 @@ function aliasOf(ctx: Ctx, node: Node, match: WildcardMatch): TagAlias {
 /**
  * The did-you-mean guard (decision 147): a wildcard child whose name is one
  * typo from an explicit child of the same parent most likely meant that
- * child. A warning (`wildcard-near-explicit`), which `mx-tsc`'s data check
- * promotes to an error.
+ * child, so it is an error on every target and in every tool.
  */
-function warnNearExplicitChild(
-  ctx: Ctx,
+function rejectNearExplicitChild(
   node: Node,
   match: WildcardMatch,
   label: string,
 ): void {
   const near = nearestName(match.authored, match.parent.explicit);
   if (near === undefined) return;
-  const at = posOf(node);
-  warn(ctx, {
-    code: WILDCARD_NEAR_EXPLICIT,
-    message: `${label} matched the wildcard of ${match.parent.label}; did you mean the explicit child \`<${near}>\`?`,
-    line: at.line,
-    column: at.column,
-    ...(at.file !== undefined ? { file: at.file } : {}),
-  });
+  fail(
+    `${label} matched the wildcard of ${match.parent.label}; did you mean the explicit child \`<${near}>\`?`,
+    node,
+  );
 }
 
 /** Retains authored names and groups transparent control flow without lowering its contents. */
@@ -2581,15 +2575,14 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
       } else {
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);
+        const known = wildcard ? undefined : wildcardIneligibility(name, ctx);
         tree.push({
           kind: "ChildTag",
           name: wildcard?.canonical ?? name,
           loc,
           ...(why ? { hint: why } : {}),
           ...(wildcard ? { alias: aliasOf(ctx, node, wildcard) } : {}),
-          ...(!wildcard && !isWildcardEligible(name, ctx)
-            ? { known: true }
-            : {}),
+          ...(known ? { known } : {}),
         });
       }
     }
@@ -2623,7 +2616,7 @@ function lowerCustomTag(
     ctx.authoredAncestors?.at(-2) ?? "#root",
     label,
   );
-  if (wildcard) warnNearExplicitChild(ctx, node, wildcard, label);
+  if (wildcard) rejectNearExplicitChild(node, wildcard, label);
   rejectUnsupportedFields(ctx, node, label, {
     attributeTags: true,
     params: true,

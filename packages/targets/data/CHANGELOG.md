@@ -7,7 +7,7 @@
 ## Unreleased
 
 - `unknownTags: "reject"` counts a child claimed by a parent's `children["*"]` as known, on the build path and on the parse-only scan used when core reports an earlier error (decision 147).
-- `DataDiagnostic.code` carries the core warning's code (`wildcard-near-explicit`).
+- `<let>`, `<style>` and the other core-taglib names are never claimed by a wildcard, like every target (decision 147 addendum 2).
 
 ## 0.1.0-alpha.2
 

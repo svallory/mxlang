@@ -14,13 +14,6 @@ import type {
   WildcardChildEntry,
 } from "./custom-tags.ts";
 
-/**
- * The code of the did-you-mean guard's warning (decision 147): a wildcard
- * child one typo from an explicit child of the same parent. `mx-tsc`'s data
- * check promotes it to an error.
- */
-export const WILDCARD_NEAR_EXPLICIT = "wildcard-near-explicit";
-
 /** The `children` key that holds the wildcard entries. */
 export const WILDCARD = "*";
 
@@ -85,6 +78,9 @@ export function entryRegExp(entry: WildcardChildEntry): RegExp | undefined {
   if (entry.pattern === undefined) return undefined;
   let regex = compiled.get(entry);
   if (!regex) {
+    // The source alone must be a whole regex: `a)|(?:b` is balanced once
+    // wrapped, but its anchors would bind to one alternative only.
+    new RegExp(entry.pattern);
     regex = new RegExp(`^(?:${entry.pattern})$`);
     compiled.set(entry, regex);
   }

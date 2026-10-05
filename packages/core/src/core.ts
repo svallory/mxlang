@@ -513,12 +513,6 @@ export interface Ctx {
 
 /** One positioned warning: a compile that succeeded while dropping something. */
 export interface MxWarning {
-  /**
-   * A stable identifier for warnings a tool may treat specially (e.g.
-   * `wildcard-near-explicit`, which `mx-tsc`'s data check promotes to an
-   * error). Absent on most warnings.
-   */
-  code?: string;
   message: string;
   line: number;
   column: number;

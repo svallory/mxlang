@@ -146,31 +146,119 @@ describe("outside a contract parent each target keeps its behaviour", () => {
   });
 });
 
-describe("a target's built-ins are never wildcard-matched", () => {
-  const catchAll: Record<string, CustomTag> = {
-    attribute: { attributes: { value: {} } },
-    resource: { children: { "*": [{ pattern: ".+", contract: "attribute" }] } },
-  };
+const catchAll: Record<string, CustomTag> = {
+  attribute: { attributes: { value: {} } },
+  resource: { children: { "*": [{ pattern: ".+", contract: "attribute" }] } },
+};
 
-  it.each(["let", "effect", "script", "style"])(
-    "html: <%s> inside a catch-all parent is the built-in, not the contract",
-    async (name) => {
-      const compile = byDescriptor("html", { customTags: catchAll });
+/** A compile of each family against `tags`: the descriptors, and Angular (no registry `load()`). */
+const compilersWith = (
+  tags: Record<string, CustomTag>,
+): [string, Compile][] => [
+  ...[
+    "html",
+    "astro-html",
+    "solid-jsx",
+    "preact-jsx",
+    "react-jsx",
+    "hono-jsx",
+  ].map((name): [string, Compile] => [
+    name,
+    byDescriptor(name, {
+      customTags: tags,
+      ...(name === "astro-html" ? { strict: true } : {}),
+    }),
+  ]),
+  [
+    "angular-template",
+    (source, file) =>
+      import("@mxlang/angular").then((m) =>
+        m.compile(source, file, { customTags: tags, targets: builtinLookup() }),
+      ),
+  ],
+];
+
+describe("a target's built-ins are never wildcard-matched", () => {
+  // Core's own taglib names are built-ins on every target (data included), so
+  // one `.mx` file validates identically everywhere.
+  const expected = (name: string) =>
+    `\`<resource>\`: \`<${name}>\` is not allowed here; names must match \`.+\` (\`<${name}>\` is a built-in tag, so the wildcard does not apply to it)`;
+
+  it.each(
+    ["let", "style", "effect", "script"].flatMap((name) =>
+      compilersWith(catchAll).map(
+        ([target, compile]) => [target, name, compile] as const,
+      ),
+    ),
+  )(
+    "%s: <%s> inside a catch-all parent is the built-in",
+    async (target, name, compile) => {
+      expect(
+        await run(
+          compile,
+          `<resource><${name} nope="a"/></resource>\n`,
+          page(`b-${target}-${name}`),
+        ),
+      ).toBe(expected(name));
+    },
+  );
+
+  it.each(["let", "style", "effect", "script"])(
+    "data: <%s> inside a catch-all parent is the built-in",
+    (name) => {
+      const { diagnostics } = parseData(
+        `<resource><${name} nope="a"/></resource>\n`,
+        "/d.mx",
+        { customTags: catchAll },
+      );
+      expect(diagnostics[0]?.message).toBe(expected(name));
+    },
+  );
+
+  it.each(
+    compilersWith(catchAll).filter(
+      ([t]) => t !== "angular-template" && t !== "astro-html",
+    ),
+  )(
+    "%s: a host disposition keeps the name its own (not claimed)",
+    async (target, compile) => {
+      // `<try>` is core's; the point is that the message never names the contract.
       const message = await run(
         compile,
-        `<resource><${name} nope="a"/></resource>\n`,
-        page(`html-b-${name}`),
+        "<resource><try/></resource>\n",
+        page(`d-${target}`),
       );
       expect(message).not.toContain("(as `attribute`)");
     },
   );
+});
 
-  it("data: a host-owned name its taglib omits (`let`) is an ordinary tag, so it matches", () => {
-    const { diagnostics } = parseData(
-      '<resource><let nope="a"/></resource>\n',
-      "/d.mx",
-      { customTags: catchAll },
-    );
-    expect(diagnostics[0]?.message).toContain("(as `attribute`)");
-  });
+describe("a by-reference contract with a transform lowers the matched child", () => {
+  const withTransform: Record<string, CustomTag> = {
+    attribute: {
+      attributes: { value: {} },
+      transform: (call) => [
+        {
+          kind: "Text",
+          value: `${call.name} from ${call.alias?.authored}`,
+          loc: call.loc,
+        },
+      ],
+    },
+    resource: {
+      children: { "*": [{ pattern: "[a-z]+", contract: "attribute" }] },
+      transform: (call) => call.content?.children ?? [],
+    },
+  };
+
+  it.each(compilersWith(withTransform))(
+    "%s: <title> becomes the transform's output under its canonical name",
+    async (target, compile) => {
+      const out = await compile(
+        '<resource><title value="a"/></resource>\n',
+        page(`t-${target}`),
+      );
+      expect((out as { code: string }).code).toContain("attribute from title");
+    },
+  );
 });

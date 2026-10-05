@@ -207,7 +207,7 @@ describe('children["*"] by contract reference (decision 147)', () => {
       ),
     );
     expect(error.message).toBe(
-      "`<attributes>`: `<hook>` is not allowed here; names must match `[a-z]+` (`<hook>` is a declared tag, so the wildcard does not apply to it)",
+      "`<attributes>`: `<hook>` is not allowed here; names must match `[a-z]+` (`<hook>` is a registered tag, so the wildcard does not apply to it)",
     );
     expect([error.line, error.column]).toEqual([2, 2]);
   });
@@ -451,6 +451,17 @@ describe('children["*"] inline contracts', () => {
     );
   });
 
+  it("a matched inline child on a target that needs a transform gets a targeted error", () => {
+    const error = failure(() =>
+      compile("<env><PORT secret=false>3000</PORT></env>\n", inline, {
+        host: { ...native, name: "html" },
+      }),
+    );
+    expect(error.message).toBe(
+      '`<PORT>` (inline contract): an inline `children["*"]` contract has no transform; on html a matched child needs `contract:` naming a tag with a transform or template',
+    );
+  });
+
   it("a nested inline contract recurses", () => {
     const ir = compile("<env><DB><HOST/></DB></env>\n", {
       env: {
@@ -490,18 +501,16 @@ describe("the did-you-mean guard (decision 147)", () => {
     attribute,
   };
 
-  it("warns when a wildcard child's name is near an explicit child of the same parent", () => {
-    const warnings: MxWarning[] = [];
-    compile("<attributes>\n  <titel/>\n</attributes>\n", near, { warnings });
-    expect(warnings).toEqual([
-      {
-        code: "wildcard-near-explicit",
-        message:
-          "`<titel>` (as `attribute`) matched the wildcard of `<attributes>`; did you mean the explicit child `<title>`?",
-        line: 2,
-        column: 2,
-      },
-    ]);
+  it("is an error when a wildcard child's name is near an explicit child of the same parent", () => {
+    const error = failure(() =>
+      compile("<attributes>\n  <titel/>\n</attributes>\n", near),
+    );
+    expect(error).toEqual({
+      message:
+        "`<titel>` (as `attribute`) matched the wildcard of `<attributes>`; did you mean the explicit child `<title>`?",
+      line: 2,
+      column: 2,
+    });
   });
 
   it("stays silent for a name no explicit child is near", () => {
@@ -511,9 +520,36 @@ describe("the did-you-mean guard (decision 147)", () => {
   });
 });
 
+describe("text under a parent whose only entry is a wildcard", () => {
+  it("says tags are accepted, not that there are none", () => {
+    const error = failure(() =>
+      compile("<resource>hello</resource>\n", {
+        attribute: {},
+        resource: {
+          children: { "*": [{ pattern: "[a-z]+", contract: "attribute" }] },
+        },
+      }),
+    );
+    expect(error.message).toBe(
+      "`<resource>`: text is not allowed here; it accepts only child tags: names matching `[a-z]+`",
+    );
+  });
+});
+
 describe('children["*"] registration errors', () => {
   const run = (tagsMap: Record<string, CustomTag>) =>
     failure(() => compile("<x/>\n", tagsMap));
+
+  it("a pattern whose unbalanced `)` would escape the anchors", () => {
+    expect(
+      run({
+        list: { children: { "*": { pattern: "a)|(?:b", contract: "x" } } },
+        x: {},
+      }).message,
+    ).toMatch(
+      /^`<list>`: `children\["\*"\]` entry 1 has an invalid `pattern` "a\)\|\(\?:b": /,
+    );
+  });
 
   it("an invalid regex", () => {
     expect(
