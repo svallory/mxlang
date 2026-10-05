@@ -611,7 +611,11 @@ function primitiveForm(
   if (name === "checked") return tagName === "input" ? "present" : "attr";
   // A name starting `on` is never bound as an attribute (Angular refuses
   // `[attr.on*]` for security), so `once`/`onto` keep the property binding.
-  return /[A-Z]/.test(name) || /^on/i.test(name) ? null : "attr";
+  // Only a plain lowercase attribute name: a camelCase name is a DOM property
+  // and an authored `[prop]`/`(event)`/`*directive` spelling is Angular syntax.
+  return /^[a-z][a-z0-9:_.-]*$/.test(name) && !/^on/.test(name)
+    ? "attr"
+    : null;
 }
 
 function primitiveExpression(variable: string, form: PrimitiveForm): string {
