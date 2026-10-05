@@ -1,5 +1,9 @@
 # @mxlang/core
 
+## 0.1.0-alpha.2
+
+2026-10-05. Identical to alpha.1; republished because the alpha.1 tarballs lacked `dist/` when installed by Bun. No code change.
+
 ## 0.1.0-alpha.1
 
 First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 below. `@mxlang/core` is no longer `private`; `exports["."]` now carries a `types` condition so a `moduleResolution: bundler` consumer finds `dist/index.d.ts`. No code change. Unstable API.
