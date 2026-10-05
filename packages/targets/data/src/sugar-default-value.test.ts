@@ -22,7 +22,9 @@ function summary(tag: Node): Record<string, string> {
   return Object.fromEntries(
     (tag.attrs ?? []).map((a) => [
       a.name,
-      a.kind === "string"
+      // A sugar-derived `name` is an atom (decision 156 addendum 1, item 2):
+      // its `value` is the atom's name.
+      a.kind === "string" || a.kind === "atom"
         ? String(a.value)
         : String((a.value as { code?: string } | undefined)?.code ?? ""),
     ]),
@@ -84,6 +86,16 @@ describe("each form, on the data target", () => {
   ])("%s", (source, expected) => {
     expect(summary(firstTag(`${source}\n`))).toEqual(expected);
   });
+
+  it.each(["<a :x=input.y/>", "a :x=input.y", "<a:x=1/>"])(
+    "%s: the sugar-derived name stays an atom",
+    (source) => {
+      const name = firstTag(`${source}\n`).attrs?.find(
+        (a) => a.name === "name",
+      );
+      expect(name?.kind).toBe("atom");
+    },
+  );
 
   it.each([
     "kind #name (p) { b }",
