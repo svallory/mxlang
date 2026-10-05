@@ -422,6 +422,26 @@ describe("misuse is a positioned MX error at the atom", () => {
       expect(message).toContain(`write \`${word.split(".").at(-1)} ? :yes\``);
     },
   );
+
+  // Decision 156 addendum 4: `(a<b> :c)` with no open `?` takes TypeScript's
+  // reading (`a<b>` is an instantiation expression), so `:c` is no atom and
+  // the compile fails. The lexer does not decide it; the hint names it.
+  it.each([["<div x=(a<b> :c)/>", "a<b>", ":c"]])(
+    "%j: type arguments before ` :name` get the ambiguity hint",
+    (source, typed, atom) => {
+      let message = "";
+      try {
+        lowerSource(source);
+      } catch (error) {
+        hintParseError(error, source);
+        message = (error as Error).message;
+      }
+      expect(message).toContain(
+        `\`${typed} ${atom}\` reads \`${typed}\` as type arguments (TypeScript's reading)`,
+      );
+      expect(message).toContain("ADR 156");
+    },
+  );
 });
 
 describe("the atom hint names only a lexed atom (review round 2)", () => {

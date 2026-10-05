@@ -337,8 +337,11 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
   });
 
   it("parse time grows linearly with the file (no scan to the end of file)", () => {
-    expect(parseScaling(mod)).toBeLessThan(25);
-  });
+    // 10x the input: linear parsing gives ~10, a scan to end of file ~100
+    // (3,135 ms vs 35 ms at 40k tags before the fix). 50 leaves room for a
+    // loaded machine without letting the quadratic case through.
+    expect(parseScaling(mod)).toBeLessThan(50);
+  }, 60_000);
 
   it("read()'s binary search agrees with a linear stand-in on every range", () => {
     expect(readMismatches(mod)).toEqual([]);

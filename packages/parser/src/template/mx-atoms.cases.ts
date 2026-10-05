@@ -251,6 +251,13 @@ export const ATOMS: [string, string][] = [
   [
     "<div x=(n === 0x1f? :a : :b)/>",
     '<div> @x atom(a@20-22) atom(b@25-27) ="(n === 0x1f? 0. : 0.)"',
+  ],  // Decision 156 addendum 4, pinned so a lexer change is a conscious one:
+  // MX reads a spaced `< >` as comparison, so these lex an atom where
+  // TypeScript would read type arguments. No type parser.
+  ["<div x=(c ? a < b > :z)/>", '<div> @x atom(z@20-22) ="(c ? a < b > 0.)"'],
+  [
+    "<div x=(c ? y as Foo<A extends B ? C : D> :z)/>",
+    '<div> @x atom(z@42-44) ="(c ? y as Foo<A extends B ? C : D> 0.)"',
   ],
 ];
 
@@ -382,6 +389,10 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=f(await :b)/>", '<div> @x ="f(await :b)"'],
   ["<div x=(yield :b)/>", '<div> @x ="(yield :b)"'],
   ["<div x=f(1, yield :b)/>", '<div> @x ="f(1, yield :b)"'],
+  // Decision 156 addendum 4, pinned: `(a<b> :c)` with no open `?` takes
+  // TypeScript's reading (type arguments), so no atom; core's hint names the
+  // ambiguity.
+  ["<div x=(a<b> :c)/>", '<div> @x ="(a<b> :c)"'],
   // Review round 5 (R3): TypeScript's reading wins at every nesting depth:
   // a type argument list's closing `>` and a run of postfix `!` end an
   // operand. Each expected value is the pre-atoms parse.

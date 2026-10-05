@@ -146,6 +146,32 @@ function optionalMarkerBefore(
   return found;
 }
 
+/**
+ * The last `word<args> :name` on the error's line starting at or before
+ * `offset` whose `:name` the installed parser did not lex as an atom:
+ * `[typed, ":name"]` (decision 156 addendum 4).
+ */
+function typeArgsBefore(
+  source: string,
+  offset: number,
+): [string, string] | undefined {
+  const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
+  const lineEnd = source.indexOf("\n", offset);
+  const line = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+  const atoms = lexedAtoms(source);
+  let found: [string, string] | undefined;
+  for (const m of line.matchAll(
+    /([A-Za-z_$][\w$]*<[^<>\n]*>)[ \t]+(:[A-Za-z_$][\w$]*(?:-[\w$]+)*)/g,
+  )) {
+    if (lineStart + m.index > offset) break;
+    const [written, typed = "", atom = ""] = m;
+    const atomStart = lineStart + m.index + written.length - atom.length;
+    if (atoms?.some((lexed) => lexed.start === atomStart)) continue;
+    found = [typed, atom];
+  }
+  return found;
+}
+
 /** Offset of a 1-based line and 0-based column in `source`. */
 function offsetOf(source: string, line: number, column: number): number {
   let start = 0;
@@ -181,6 +207,15 @@ function hintFor(
   if (marker) {
     const [written, word, atom] = marker;
     return `\`${written}\` is TypeScript's optional marker (a \`?\` touching \`${word}\`), so \`${atom}\` is not an atom there; write \`${word} ? ${atom}\` for a ternary`;
+  }
+
+  // Decision 156 addendum 4: `(a<b> :c)` with no open `?`. TypeScript reads
+  // `a<b>` as type arguments, so the parser lexed no atom and Babel trips on
+  // the `:`. The lexer does not decide this spelling; name the ambiguity.
+  const typedArgs = typeArgsBefore(source, offset);
+  if (typedArgs) {
+    const [typed, atom] = typedArgs;
+    return `\`${typed} ${atom}\` reads \`${typed}\` as type arguments (TypeScript's reading), so \`${atom}\` is not an atom there; this spelling is ambiguous (ADR 156, known limits)`;
   }
 
   // `<div id= class="a">`: the next attribute's name was read as `id`'s value,

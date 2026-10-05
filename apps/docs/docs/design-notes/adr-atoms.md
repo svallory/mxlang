@@ -339,6 +339,14 @@ Settled by the lead on 2026-10-05 in decision 156 addendum 1, on Mesh's review (
 - **Atom against `string`** is a type error, both ways. This replaces the earlier open question on string contracts.
 - **`parseData` shape** (addendum 1, item 10). An attribute whose entire value is one atom, the sugar-derived `name` included, is a `DataAttr` of kind `atom`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom`; each carries its own span.
 
+Known limits, settled by the lead in decision 156 addendum 4 (pinned by tests, not fixed; there is no type parser in the lexer). MX reads a spaced `< >` as comparison:
+
+- **`(a<b> :c)` with no open `?`** takes TypeScript's reading: `a<b>` is type arguments, `:c` is not an atom, and the compile fails. Core's error hint names the ambiguity and points here.
+- **A spaced `c ? a < b > :z`** lexes the atom `:z` (two comparisons), where TypeScript would read `a < b >` as type arguments.
+- **A conditional type inside inline-cast type arguments** (`c ? y as Foo<A extends B ? C : D> :z`) lexes the atom `:z`.
+
+Each has a `divergences.md` row and a case-table row, so a future lexer change is a conscious one.
+
 Still open:
 
 1. **Printing and round-trip.** A formatter and `parseData` consumers that re-emit source must keep `:x` as `:x`; the IR keeps the span, but no formatter exists to confirm it.
