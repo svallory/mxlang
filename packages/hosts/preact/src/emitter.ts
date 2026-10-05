@@ -638,6 +638,42 @@ export class PreactEmitter implements Emitter<string> {
     }
   }
 
+  /**
+   * React cannot render a string `style` (its renderer throws), and Marko
+   * accepts one. Where the spread is an object literal the compiler can see
+   * the value, so a string/`true` `style` is refused here with the fix instead
+   * of at render time; a value known only at run time keeps React's own error.
+   */
+  #rejectStringStyle(attr: Attr): void {
+    if (!this.#dialect.reactBooleanAttributes || attr.kind !== "spread") return;
+    const node = attr.value.node as unknown as {
+      type?: string;
+      properties?: {
+        type: string;
+        computed?: boolean;
+        key?: { type: string; name?: string; value?: unknown };
+        value?: { type: string; value?: unknown };
+      }[];
+    };
+    if (node?.type !== "ObjectExpression") return;
+    for (const prop of node.properties ?? []) {
+      if (prop.type !== "ObjectProperty" || prop.computed) continue;
+      const key =
+        prop.key?.type === "Identifier" ? prop.key.name : prop.key?.value;
+      if (key !== "style") continue;
+      const type = prop.value?.type;
+      if (
+        type === "StringLiteral" ||
+        type === "TemplateLiteral" ||
+        (type === "BooleanLiteral" && prop.value?.value === true)
+      )
+        fail(
+          "`style` in a spread must be an object on React (`...{style: {color: c}}`); React cannot render a string style",
+          attr,
+        );
+    }
+  }
+
   #attr(
     attr: Attr,
     mapName: boolean,
@@ -692,6 +728,7 @@ export class PreactEmitter implements Emitter<string> {
     }
     switch (attr.kind) {
       case "spread":
+        if (!isComponent) this.#rejectStringStyle(attr);
         return isComponent
           ? concatMapped(` {...${attr.value.code}}`)
           : concatMapped(
@@ -811,14 +848,9 @@ export class PreactEmitter implements Emitter<string> {
           mapped(name, mapName ? attr.nameSpan : null),
           "={",
           !isComponent &&
-            ![
-              "class",
-              this.#dialect.classAttr,
-              "style",
-              "ref",
-              "key",
-              this.#dialect.rawHtmlProp,
-            ].includes(attr.name)
+            !["style", "ref", "key", this.#dialect.rawHtmlProp].includes(
+              attr.name,
+            )
             ? concatMapped(
                 ATTRIBUTE_VALUE_EXPRESSION,
                 "(",
@@ -905,12 +937,14 @@ export class PreactEmitter implements Emitter<string> {
       // Validate after the authored merge: an overwritten object is never
       // serialized by Marko and must not throw just because it appeared first.
       const entries = attrs.flatMap((attr, index) => {
-        if (attr.kind === "spread")
+        if (attr.kind === "spread") {
+          this.#rejectStringStyle(attr);
           return [
             index ? ", " : "",
             "...",
             mapped(attr.value.code, attr.value.span ?? null),
           ];
+        }
         const name =
           attr.kind === "event"
             ? this.#eventPropName(attr)

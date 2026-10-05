@@ -237,6 +237,60 @@ try {
     });
     await new Promise(() => {});
   }
+  if (process.argv[3] === "--parity") {
+    // Primitive attribute values on direct / spread / merged paths (decision 149).
+    const parityValues: Record<string, unknown> = {
+      null: null,
+      undefined: undefined,
+      false: false,
+      true: true,
+      zero: 0,
+      empty: "",
+      x: "x",
+    };
+    for (const name of [
+      "title",
+      "data-x",
+      "aria-x",
+      "class",
+      "style",
+      "disabled",
+      "checked",
+      "value",
+    ]) {
+      const tag = name === "checked" || name === "value" ? "input" : "div";
+      const inputs = Object.fromEntries(
+        Object.entries(parityValues).map(([value, v]) => [
+          value,
+          { v, attrs: { [name]: v }, other: {} },
+        ]),
+      );
+      const forms: Record<string, string> = {
+        direct: `<${tag} ${name}=input.v/>`,
+        spread: `<${tag} ...input.attrs/>`,
+        merged: `<${tag} id="i" ...input.attrs ${name}=input.v/>`,
+        mergedBefore: `<${tag} ${name}=input.v ...input.other/>`,
+      };
+      for (const [form, source] of Object.entries(forms)) {
+        try {
+          await probe(`${name}/${form}`, source, inputs);
+        } catch (error) {
+          for (const value of Object.keys(parityValues))
+            results.push({
+              form: `${name}/${form}`,
+              value,
+              error: error instanceof Error ? error.message : String(error),
+            });
+        }
+      }
+    }
+    // Exit from the write callback: exiting first truncates a piped stdout.
+    process.stdout.write(JSON.stringify(results), () => {
+      rmSync(scratch, { recursive: true, force: true });
+      process.exit(0);
+    });
+    await new Promise(() => {});
+  }
   if (process.argv[3] === "--primitives") {
     const primitives = {
       null: null,

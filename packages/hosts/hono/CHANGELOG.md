@@ -1,5 +1,7 @@
 # @mxlang/hono
 
+- **Fix (jsx-primitive-attr-parity):** primitive attribute values on native elements render as Marko 6.3.51's html output does, on direct, merged and spread paths: `false`/`null`/`undefined` omit (`data-x=false` no longer prints `"false"`), `true` is a bare attribute, `class`/`style` falsy primitives omit, direct `input.checked` is presence-only, and Hono `style=null` no longer throws. Shared normalization in `@mxlang/preact`, reused by react and hono; component props are unchanged.
+
 - **Fix (jsx-text-entities, round 2):** shared JSX emission preserves decoded control references, including newline references at the start/end of text, instead of JSX-trimming or collapsing them. Pinned by real Hono rendering.
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to the JSX attribute `value:foo={y}`, Marko's own attribute (MX previously rejected it).

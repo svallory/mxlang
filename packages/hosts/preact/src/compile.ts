@@ -19,8 +19,6 @@
 
 import { readFileSync } from "node:fs";
 import {
-  ATTRIBUTE_SPREAD_EXPRESSION,
-  ATTRIBUTE_VALUE_EXPRESSION,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -37,6 +35,10 @@ import {
   type TargetLookup,
   TranslateError,
 } from "@mxlang/core";
+import {
+  JSX_ATTRIBUTE_SPREAD_EXPRESSION,
+  jsxAttrValueExpression,
+} from "./attribute-normalize.ts";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 import {
   componentAlias,
@@ -351,9 +353,13 @@ export function emitModuleWithMappings(
     helperInput.includes("__mxAttrValue(") ||
     helperInput.includes("__mxAttrSpread(")
   )
-    attrHelpers.push(`const __mxAttrValue = ${ATTRIBUTE_VALUE_EXPRESSION};`);
+    attrHelpers.push(
+      `const __mxAttrValue = ${jsxAttrValueExpression(dialect.reactBooleanAttributes === true)};`,
+    );
   if (helperInput.includes("__mxAttrSpread("))
-    attrHelpers.push(`const __mxAttrSpread = ${ATTRIBUTE_SPREAD_EXPRESSION};`);
+    attrHelpers.push(
+      `const __mxAttrSpread = ${JSX_ATTRIBUTE_SPREAD_EXPRESSION};`,
+    );
   const importedNames = new Set(ir.imports.flatMap((node) => node.bindings));
   const hoisted = [
     ...ir.imports.map((node) => node.code),

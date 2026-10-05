@@ -153,6 +153,7 @@ export const reactDialect: JsxDialect = {
   jsxImportSource: "react",
   attrTagModule: "@mxlang/react",
   classAttr: "className",
+  reactBooleanAttributes: true,
   forAttr: "htmlFor",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,

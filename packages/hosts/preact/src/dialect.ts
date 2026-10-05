@@ -32,6 +32,12 @@ export interface JsxDialect {
   classAttr: string;
   /** How this dialect spells HTML's `for` attribute in JSX. */
   forAttr: string;
+  /**
+   * True when the renderer treats HTML boolean attributes as presence-only
+   * properties (React): `true` is the only way to print one, so the
+   * primitive-attribute normalization passes `true` for them.
+   */
+  reactBooleanAttributes?: boolean;
   /** The prop that sets raw HTML from a sole `$!{expr}` child. */
   rawHtmlProp: string;
   /**
