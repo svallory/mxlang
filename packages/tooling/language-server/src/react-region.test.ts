@@ -34,7 +34,9 @@ export function Panel() {
         end: { line: 5, character: 7 },
       },
     });
-    expect(stripVTControlCharacters(diagnostics[0]?.message ?? "")).toContain(
+    expect(
+      stripVTControlCharacters(String(diagnostics[0]?.message ?? "")),
+    ).toContain(
       "`<let>` is Marko reactive state; use React's `useState` in the surrounding component",
     );
   });
@@ -44,7 +46,9 @@ export function Panel() {
       "export function Panel() {\n  return (\n    <div>\n      <const/n=1/>\n    </div>\n  );\n}\n";
     const [diagnostic] = diagnoseDocument(source, URI, policy);
     expect(diagnostic?.range.start).toEqual({ line: 3, character: 6 });
-    expect(stripVTControlCharacters(diagnostic?.message ?? "")).toContain(
+    expect(
+      stripVTControlCharacters(String(diagnostic?.message ?? "")),
+    ).toContain(
       "`<const>` cannot declare a binding inside a `.react.mx` expression",
     );
   });
