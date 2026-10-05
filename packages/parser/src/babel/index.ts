@@ -24,6 +24,7 @@ import {
   type InternalTokenTypes,
 } from "./tokenizer/types.ts";
 export type { Token } from "./tokenizer/index.ts";
+export type * from "./mx-hooks.ts";
 
 // TODO: Rather than type-casting the internal AST definitions to the
 // @babel/types one, we should actually unify them.

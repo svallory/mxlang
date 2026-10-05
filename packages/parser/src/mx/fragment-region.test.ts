@@ -4,7 +4,7 @@ import { parse, print } from "../index.ts";
 import type {
   MxRegionCompile,
   MxRegionCompileInput,
-} from "../babel/mx-hooks.ts";
+} from "../babel/index.ts";
 import { solidRegionCompile } from "./test-helpers.ts";
 
 /**

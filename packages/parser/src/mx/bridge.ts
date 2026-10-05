@@ -1,6 +1,5 @@
 import { parseExpression } from "../babel/index.ts";
-import { types as tc } from "../babel/tokenizer/context.ts";
-import { Position } from "../babel/util/location.ts";
+import { Position, tokenContextTypes as tc } from "../babel/internal.ts";
 import { MxErrors } from "./errors.ts";
 import type {
   HoistedDefine,
@@ -8,8 +7,8 @@ import type {
   MxHooks,
   MxParserHost,
   MxRegionCompile,
-} from "../babel/mx-hooks.ts";
-import type { MxRegionContext, MxRegionPositionCheck } from "../babel/mx-hooks.ts";
+} from "../babel/index.ts";
+import type { MxRegionContext, MxRegionPositionCheck } from "../babel/index.ts";
 import { computeMxRegionContext } from "./region-context.ts";
 import { type MxElement, type MxRange, walkMxRegion } from "./walk.ts";
 

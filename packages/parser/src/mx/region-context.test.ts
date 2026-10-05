@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PluginConfig } from "../babel/typings.d.ts";
+import type { ParserPlugin as PluginConfig } from "../babel/index.ts";
 import {
   computeMxRegionContext,
   type MxRegionContext,

@@ -18,7 +18,7 @@
  * is fine).
  */
 
-import type { HoistedDefine, HoistedImport } from "../babel/mx-hooks.ts";
+import type { HoistedDefine, HoistedImport } from "../babel/index.ts";
 
 export type { HoistedDefine, HoistedImport };
 
