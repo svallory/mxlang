@@ -174,6 +174,18 @@ export const ATOMS: [string, string][] = [
     "<div async x() { return await f(:a) }/>",
     '<div> @x atom(a@32-34) method:" return await f(0.) "',
   ],
+  // An atom named like an operator keyword is still an expression end
+  // (review round 2): the next ` :b` is name sugar or the ternary's `:`.
+  ["<div x=:delete :b/>", '<div> @x atom(delete@7-14) ="0.00000" @:b'],
+  ["<div x=:new :b/>", '<div> @x atom(new@7-11) ="0.00" @:b'],
+  ["<div x=:foo-new :b/>", '<div> @x atom(foo-new@7-15) ="0.000000" @:b'],
+  ["<div x=a ? :new :b/>", '<div> @x atom(new@11-15) ="a ? 0.00 :b"'],
+  [
+    "<div x=c ? :delete :keep/>",
+    '<div> @x atom(delete@11-18) ="c ? 0.00000 :keep"',
+  ],
+  ["<div x=:in :b/>", '<div> @x atom(in@7-10) ="0.0" @:b'],
+  ["<div x=:typeof :b/>", '<div> @x atom(typeof@7-14) ="0.00000" @:b'],
   // Row 12: an atom value followed by decision 146 name sugar.
   ["<div x=:a :b/>", '<div> @x atom(a@7-9) ="0." @:b'],
   ["<div :b x=:a/>", '<div> @:b @x atom(a@10-12) ="0."'],
@@ -227,6 +239,17 @@ export const NOT_ATOMS: [string, string][] = [
   // Stock htmljs-parser ends an unparenthesized value at a binary keyword
   // followed by `:`, so this is name sugar, as before atoms.
   ["<div x=a in :b/>", '<div> @x ="a" @in @:b'],
+  // A word written right against `:` is a key or label, keyword or not
+  // (review round 2): `{ new:a }` parsed before atoms and still does.
+  ["<div x={ new:a }/>", '<div> @x ="{ new:a }"'],
+  [
+    "<div x={ delete:x, in:y, of:z, do:w }/>",
+    '<div> @x ="{ delete:x, in:y, of:z, do:w }"',
+  ],
+  [
+    "<div x() { return { return:1 } }/>",
+    '<div> @x method:" return { return:1 } "',
+  ],
   // A `:` not followed by a name start.
   ["<div x=(a ? b : 1)/>", '<div> @x ="(a ? b : 1)"'],
   ["<div x=[a ?: 1]/>", '<div> @x ="[a ?: 1]"'],

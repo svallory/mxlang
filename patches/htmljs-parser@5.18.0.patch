@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49875ef9a2 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..7f00e2f058b02c58ffc8c7763205c5e2ec4ffe1c 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,17 @@ var Parser = class {
@@ -56,17 +56,18 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
          return;
        } else if (attr.stage === 0) {
          if (code === 60)
-@@ -1079,6 +1093,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1079,6 +1093,10 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
 +      atoms: !1,
++      atomEnd: -1,
 +      comments: void 0,
 +      regexEnd: -1,
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1147,12 +1164,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1147,12 +1165,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -90,7 +91,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1277,7 +1305,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1277,7 +1306,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -99,7 +100,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
    }
  };
  function checkForOperators(parser, expression, eol) {
-@@ -1382,11 +1410,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1382,11 +1411,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -114,7 +115,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1432,6 +1462,98 @@ function canFollowDivision(code) {
+@@ -1432,6 +1463,99 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -157,7 +158,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
 +  if (end === start + 1 || !expectsExpression(expression, data, start))
 +    return !1;
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
-+  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), parser.pos = end, !0;
++  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
 +}
 +function atomNameEnd(data, pos) {
 +  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
@@ -203,6 +204,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
 +      return i + 1 !== expression.regexEnd;
 +    default: {
 +      if (!isWordCode(code)) return !0;
++      if (i === pos - 1 || i + 1 === expression.atomEnd) return !1;
 +      let wordStart = i;
 +      for (; wordStart > expression.start && isWordCode(data.charCodeAt(wordStart - 1)); )
 +        wordStart--;
@@ -213,7 +215,15 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
-@@ -1981,7 +2103,9 @@ var OPEN_TAG = {
+@@ -1450,6 +1574,7 @@ function lookBehindWhile(match, data, pos) {
+   return 0;
+ }
+ function lookBehindForKeyword(expression, data, pos, keywords) {
++  if (pos + 1 === expression.atomEnd) return -1;
+   for (let keyword of keywords) {
+     let keywordPos = lookBehindFor(data, pos, keyword);
+     if (keywordPos !== -1)
+@@ -1981,7 +2106,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -224,7 +234,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
              return;
            }
            case 124: {
-@@ -2345,7 +2469,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2345,7 +2472,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -235,7 +245,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
      }
    }
    return !1;
-@@ -2587,7 +2713,9 @@ var TEMPLATE_STRING = {
+@@ -2587,7 +2716,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -247,7 +257,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49
            }
            this.pos++;
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c286761d157 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..b8ac6092719cb687c7b1649dd6a3f59ac4129241 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,17 @@ var Parser = class {
@@ -304,17 +314,18 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
          return;
        } else if (attr.stage === 0) {
          if (code === 60)
-@@ -1052,6 +1066,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1052,6 +1066,10 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
 +      atoms: !1,
++      atomEnd: -1,
 +      comments: void 0,
 +      regexEnd: -1,
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1120,12 +1137,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1120,12 +1138,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -338,7 +349,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1250,7 +1278,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1250,7 +1279,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -347,7 +358,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
    }
  };
  function checkForOperators(parser, expression, eol) {
-@@ -1355,11 +1383,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1355,11 +1384,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -362,7 +373,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1405,6 +1435,98 @@ function canFollowDivision(code) {
+@@ -1405,6 +1436,99 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -405,7 +416,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
 +  if (end === start + 1 || !expectsExpression(expression, data, start))
 +    return !1;
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
-+  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), parser.pos = end, !0;
++  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
 +}
 +function atomNameEnd(data, pos) {
 +  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
@@ -451,6 +462,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
 +      return i + 1 !== expression.regexEnd;
 +    default: {
 +      if (!isWordCode(code)) return !0;
++      if (i === pos - 1 || i + 1 === expression.atomEnd) return !1;
 +      let wordStart = i;
 +      for (; wordStart > expression.start && isWordCode(data.charCodeAt(wordStart - 1)); )
 +        wordStart--;
@@ -461,7 +473,15 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
-@@ -1954,7 +2076,9 @@ var OPEN_TAG = {
+@@ -1423,6 +1547,7 @@ function lookBehindWhile(match, data, pos) {
+   return 0;
+ }
+ function lookBehindForKeyword(expression, data, pos, keywords) {
++  if (pos + 1 === expression.atomEnd) return -1;
+   for (let keyword of keywords) {
+     let keywordPos = lookBehindFor(data, pos, keyword);
+     if (keywordPos !== -1)
+@@ -1954,7 +2079,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -472,7 +492,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
              return;
            }
            case 124: {
-@@ -2318,7 +2442,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2318,7 +2445,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -483,7 +503,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c28
      }
    }
    return !1;
-@@ -2560,7 +2686,9 @@ var TEMPLATE_STRING = {
+@@ -2560,7 +2689,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {

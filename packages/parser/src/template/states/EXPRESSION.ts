@@ -18,10 +18,13 @@ export interface ExpressionMeta extends Meta {
   /**
    * MX (decision 156): `:name` here is an atom where an expression is
    * expected. Set for attribute values, spreads and arguments, tag
-   * arguments, placeholders and the `${}` of a template inside one of those;
-   * never for statement tags, scriptlets or method bodies.
+   * arguments, placeholders, method-shorthand bodies (an attribute value,
+   * lead ruling 2026-10-05) and the `${}` of a template inside one of those;
+   * never for statement tags or scriptlets.
    */
   atoms: boolean;
+  /** MX: where the last atom lexed in this expression ends (-1: none). */
+  atomEnd: number;
   /** MX: the comments read so far, which atom lexing looks behind past. */
   comments: Meta[] | undefined;
   /** MX: where the last regular expression literal ended. */
@@ -93,6 +96,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
       operators: false,
       attrValue: false,
       atoms: false,
+      atomEnd: -1,
       comments: undefined,
       regexEnd: -1,
       wasComment: false,
@@ -747,6 +751,8 @@ function lookBehindForKeyword(
   pos: number,
   keywords: readonly string[],
 ) {
+  // MX: an atom's own name (`:delete`) is not an operator keyword.
+  if (pos + 1 === expression.atomEnd) return -1;
   for (const keyword of keywords) {
     const keywordPos = lookBehindFor(data, pos, keyword);
     if (keywordPos !== -1) {
@@ -867,6 +873,7 @@ function lexAtom(
     atoms.push({ start, end });
     parser.options.onAtom?.({ start, end, value: { start: start + 1, end } });
   }
+  expression.atomEnd = end;
   parser.pos = end;
   return true;
 }
@@ -891,7 +898,8 @@ function atomNameEnd(data: string, pos: number) {
  * Whether an expression is expected at `pos`: at the start of the
  * expression, or after an operator, punctuator or operator keyword; never
  * after an expression end (a word, literal, `)`, `]`, `}`), `.`, `?.`, a
- * postfix `++`/`--`, or TypeScript's `x?:` / `x!:` markers.
+ * postfix `++`/`--`, TypeScript's `x?:` / `x!:` markers, a word written
+ * right against the `:` (a key or label: `{ new:a }`), or an atom's own name.
  */
 function expectsExpression(
   expression: ExpressionMeta,
@@ -942,6 +950,10 @@ function expectsExpression(
       return i + 1 !== expression.regexEnd;
     default: {
       if (!isWordCode(code)) return true;
+      // A word directly before the `:` is an object key or a label, keyword
+      // or not (`{ new:a }`); and an atom's own name (`:delete :b`,
+      // `:foo-new :b`) is an expression end, never an operator keyword.
+      if (i === pos - 1 || i + 1 === expression.atomEnd) return false;
       let wordStart = i;
       while (
         wordStart > expression.start &&
