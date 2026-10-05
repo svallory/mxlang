@@ -22,7 +22,95 @@ function project(
   name: string,
   fence: string[],
 ): { status: number; output: string } {
+  return projectOf(name, ["---", ...fence, "---", "<h1>hi</h1>"].join("\n"));
+}
+
+/** The same one-file project, with the file's text given whole. */
+function projectOf(
+  name: string,
+  text: string,
+  host = "astro",
+): { status: number; output: string } {
   const dir = mkdtempSync(join(tmpdir(), "mx-astro-fence-return-"));
+  try {
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ mx: { host } }));
+    writeFileSync(
+      join(dir, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          noEmit: true,
+          skipLibCheck: true,
+          types: [],
+          module: "ESNext",
+          moduleResolution: "Bundler",
+        },
+        files: [name],
+      }),
+    );
+    writeFileSync(join(dir, name), text);
+    const result = runInProcess(
+      ["--noEmit", "-p", "tsconfig.json", "--astro"],
+      dir,
+    );
+    return {
+      status: result.status,
+      output: stripVTControlCharacters(result.stdout + result.stderr),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+it("does not report TS1108 for a top-level return in the fence", () => {
+  const { output, status } = project("page.astro.mx", ["return;"]);
+
+  expect(output).not.toContain("TS1108");
+  // Nothing printed means nothing counted: no "1 error" without a line.
+  expect(output).not.toMatch(/Found \d+ error/);
+  expect(status).toBe(0);
+});
+
+it("still reports TS1108 outside the fence, at its own position", () => {
+  // A `static` block in the template body is hoisted to module level too, so
+  // its `return` is a real TS1108 the author must see — only the fence is
+  // exempt. Template line 5 of the file, column 1 (whole-block mapping).
+  const { output, status } = projectOf(
+    "page.astro.mx",
+    ["---", "const a = 1;", "---", "<h1>hi</h1>", "static return;", ""].join(
+      "\n",
+    ),
+  );
+
+  expect(output).toContain("page.astro.mx(5,1): error TS1108");
+  expect(status).not.toBe(0);
+});
+
+it("still reports TS1108 for a fence return and a template one together", () => {
+  // The fence's own return is dropped, the template's is not: one line, and
+  // the count reflects only it.
+  const { output } = projectOf(
+    "page.astro.mx",
+    ["---", "return;", "---", "<h1>hi</h1>", "static return;", ""].join("\n"),
+  );
+
+  expect(output.match(/TS1108/g)).toHaveLength(1);
+  expect(output).toContain("page.astro.mx(5,1): error TS1108");
+  expect(output).not.toContain("page.astro.mx(2,");
+});
+
+it("still reports TS1108 in a non-Astro .mx file", () => {
+  const { output, status } = projectOf(
+    "page.mx",
+    "static return;\n<p>hi</p>",
+    "html",
+  );
+
+  expect(output).toContain("page.mx(1,8): error TS1108");
+  expect(status).not.toBe(0);
+});
+
+it("still reports TS1108 in a plain .ts file of the same program", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mx-astro-fence-ts-"));
   try {
     writeFileSync(
       join(dir, "package.json"),
@@ -38,50 +126,24 @@ function project(
           module: "ESNext",
           moduleResolution: "Bundler",
         },
-        files: [name],
+        files: ["page.astro.mx", "plain.ts"],
       }),
     );
-    writeFileSync(
-      join(dir, name),
-      ["---", ...fence, "---", "<h1>hi</h1>"].join("\n"),
-    );
+    writeFileSync(join(dir, "page.astro.mx"), "---\nreturn;\n---\n<h1>hi</h1>");
+    writeFileSync(join(dir, "plain.ts"), "export {};\nreturn;\n");
+
     const result = runInProcess(
       ["--noEmit", "-p", "tsconfig.json", "--astro"],
       dir,
     );
-    return {
-      status: result.status,
-      output: stripVTControlCharacters(result.stdout + result.stderr),
-    };
+    const output = stripVTControlCharacters(result.stdout + result.stderr);
+
+    expect(output).toContain("plain.ts(2,1): error TS1108");
+    expect(output.match(/TS1108/g)).toHaveLength(1);
+    expect(result.status).not.toBe(0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-
-/**
- * KNOWN GAP (`mx-tsc --astro` only; the editor is fixed).
- *
- * The editor path is closed: `createAmxLanguagePlugin.filterSemanticDiagnostics`
- * runs in the tsserver language-service proxy, so a fence `return` no longer
- * reports TS1108 there.
- *
- * `mx-tsc` cannot reach it. Volar's `runTsc` rewrites TypeScript's own source
- * so that its `createProgram` becomes a *local* binding
- * (`runTsc.js:88` — `var createProgram = require(...).proxyCreateProgram(...)`),
- * and `proxyCreateProgram` then decorates that program in place
- * (`decorateProgram`, `proxyCreateProgram.js:183`). The program is therefore
- * never handed to anything `mx-tsc` owns: `ts.createProgram` is not the binding
- * tsc calls, the compiler host does not carry diagnostics, and Volar exposes no
- * hook. Pinning this with `it.fails` so the gap stays visible and the suite
- * tells whoever closes it.
- *
- * Closing it needs one of: a diagnostics seam in Volar, or `mx-tsc` filtering
- * its own reporter's output. Both are decisions above this package.
- */
-it.fails("mx-tsc still reports TS1108 for a fence return (known gap)", () => {
-  const { output } = project("page.astro.mx", ["return;"]);
-
-  expect(output).not.toContain("TS1108");
 });
 
 it("still reports a type error after the fence's return, at its own position", () => {

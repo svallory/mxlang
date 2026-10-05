@@ -12,7 +12,11 @@ import {
   resolveTargetPolicy,
   scanCached,
 } from "@mxlang/target-registry";
-import type { CodeMapping, VirtualCode } from "@volar/language-core";
+import type {
+  CodeInformation,
+  CodeMapping,
+  VirtualCode,
+} from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { failedModuleStub } from "./failed-module-stub.ts";
@@ -72,6 +76,40 @@ const CANT_RETURN_OUTSIDE_FUNCTION = 1108;
 function fenceEndOffset(source: string): number | undefined {
   const fence = source.match(/^---\r?\n[\s\S]*?\r?\n---/);
   return fence ? fence[0].length : undefined;
+}
+
+/**
+ * `codeInformation` for a span inside the `---` fence: identical, except that
+ * TS1108 is not verified there.
+ *
+ * Volar applies `verification.shouldReport` to every diagnostic it maps back to
+ * the source, in tsserver and inside `runTsc` alike, so this is the one seam
+ * `mx-tsc --astro` has: it never holds the decorated program, and tsc's own
+ * reporter prints whatever the program returns. The mappings are the fence
+ * region, so a 1108 anywhere else in the file still reaches the author.
+ */
+const fenceCodeInformation: CodeInformation = {
+  ...codeInformation,
+  verification: {
+    shouldReport: (_source, code) =>
+      Number(code) !== CANT_RETURN_OUTSIDE_FUNCTION,
+  },
+};
+
+/** Gives every mapping that lies wholly inside the fence `fenceCodeInformation`. */
+function withFenceVerification(
+  mappings: CodeMapping[],
+  fenceEnd: number,
+): CodeMapping[] {
+  if (fenceEnd === 0) return mappings;
+  return mappings.map((mapping) => {
+    const start = mapping.sourceOffsets[0];
+    const length = mapping.lengths[0];
+    if (start === undefined || length === undefined) return mapping;
+    return start + length <= fenceEnd
+      ? { ...mapping, data: fenceCodeInformation }
+      : mapping;
+  });
 }
 
 export interface AmxLanguagePlugin extends MxDiagnosticLanguagePlugin {
@@ -142,14 +180,18 @@ export function createAmxLanguagePlugin(
           filename: fileName,
           sourcemap: "external",
         });
-        const mappings = composeAmxMappings(
-          lowered.mappings,
-          converted.map,
-          converted.code,
-          lowered.code,
+        const fenceEnd = fenceEndOffset(source) ?? 0;
+        const mappings = withFenceVerification(
+          composeAmxMappings(
+            lowered.mappings,
+            converted.map,
+            converted.code,
+            lowered.code,
+          ),
+          fenceEnd,
         );
         syntaxErrors.delete(fileName);
-        fenceEnds.set(fileName, fenceEndOffset(source) ?? 0);
+        fenceEnds.set(fileName, fenceEnd);
         compileDiagnostics.set(
           fileName,
           warnings.map((warning) =>
