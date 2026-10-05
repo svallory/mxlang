@@ -580,6 +580,14 @@ describe("for: ranges lower to <Repeat>", () => {
       params: { name: string }[];
     };
     expect(arrow.params[0]?.name).toBe("__mxIndex");
+    // The author's read of `mxIndex` became the row expression over the
+    // generated counter; nothing in the body still names the author's binding.
+    const bodyJson = JSON.stringify(
+      (arrow as unknown as { body: unknown }).body,
+      (key, value) => (key === "loc" || key === "extra" ? undefined : value),
+    );
+    expect(bodyJson).toContain('"name":"__mxIndex"');
+    expect(bodyJson).not.toContain('"name":"mxIndex"');
   });
 
   it("without step=, output is unchanged: no Repeat callback body block", () => {

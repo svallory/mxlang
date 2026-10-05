@@ -1595,6 +1595,8 @@ function rewriteForBody(
   node: Extract<IrNode, { kind: "For" }>,
   reads: readonly { name: string; read: string }[],
   generated: readonly string[] = [],
+  assignError: (name: string) => string = (name) =>
+    `\`<for>\`: \`${name}\` is bound by Solid as an accessor and cannot be assigned; compute a new value instead`,
 ): void {
   for (const name of generated) {
     if (!node.bindings.includes(name)) node.bindings.push(name);
@@ -1603,7 +1605,7 @@ function rewriteForBody(
   for (const { name, read } of reads) {
     rewrites.set(name, {
       read,
-      assignError: `\`<for>\`: \`${name}\` is bound by Solid as an accessor and cannot be assigned; compute a new value instead`,
+      assignError: assignError(name),
     });
   }
   rewriteAccessorReads(node.children, rewrites);
@@ -2236,6 +2238,21 @@ export class SolidEmitter implements Emitter<string> {
     if (stepValue === 0) {
       rawFail("`<for step=...>`: step must not be 0", step.node);
     }
+    // `from` and `step` are evaluated once per (re)render of the loop, like
+    // Marko's `_for_to(to, from, step, …)` head, so every read of the row
+    // value inside one row agrees even for an impure bound. Unless both are
+    // literals they are bound to constants in an IIFE around the `<Repeat>`:
+    // the IIFE re-runs when a signal they read changes, the rows read the
+    // constants, and `count` (a prop getter) tracks `to` on its own.
+    const literalHead = fromValue !== null && stepValue !== null;
+    const headNames = identifierNames(`${from} ${step.code} ${bound}`);
+    const counter = gensym("__mxIndex", node, [...headNames]);
+    const fromName = literalHead
+      ? from
+      : gensym("__mxFrom", node, [...headNames, counter]);
+    const stepName = literalHead
+      ? step.code
+      : gensym("__mxStep", node, [...headNames, counter, fromName]);
     let count: string;
     if (fromValue !== null && boundValue !== null && stepValue !== null) {
       const ratio = (boundValue - fromValue) / stepValue;
@@ -2246,29 +2263,39 @@ export class SolidEmitter implements Emitter<string> {
         ),
       );
     } else {
-      const rounded = `${node.source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${node.source.inclusive ? " + 1" : ""}`;
+      const rounded = `${node.source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${fromName})) / (${stepName}))${node.source.inclusive ? " + 1" : ""}`;
       count = `Number.isFinite(${rounded}) ? Math.max(0, ${rounded}) : 0`;
     }
     // The row value is not a callback-local `const`: Solid runs the callback
     // once per row and never again, so a value computed there would freeze
-    // `from`/`step` at their first reading. Reads of the param become the
-    // expression itself, which then evaluates inside the tracking scope of
-    // whatever reads it and follows a changed signal bound.
-    const counter = gensym("__mxIndex", node, [
-      ...identifierNames(`${from} ${step.code}`),
-    ]);
+    // the bounds at their first reading. Reads of the param become the
+    // expression over the hoisted head, evaluated in the reader's tracking
+    // scope.
     rewriteForBody(
       node,
-      readsForParam(node, first, `((${from}) + ${counter} * (${step.code}))`),
+      readsForParam(
+        node,
+        first,
+        `((${fromName}) + ${counter} * (${stepName}))`,
+      ),
       [counter],
+      (name) =>
+        `\`<for>\`: the row value \`${name}\` of a stepped range is computed from its bounds and cannot be assigned; derive a new value instead`,
     );
     const body = inLazyScope(() => jsxValue(blockExpression(node.children)));
+    const repeat = concatMapped(
+      `<Repeat count={${count}}>{(${counter}) => `,
+      body,
+      "}</Repeat>",
+    );
     this.#out.push(
-      concatMapped(
-        `<Repeat count={${count}}>{(${counter}) => `,
-        body,
-        "}</Repeat>",
-      ),
+      literalHead
+        ? repeat
+        : concatMapped(
+            `{(() => { const ${fromName} = (${from}); const ${stepName} = (${step.code}); return `,
+            repeat,
+            "; })()}",
+          ),
     );
   }
 

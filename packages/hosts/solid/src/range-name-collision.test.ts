@@ -1,16 +1,19 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: literal mx source
 /**
- * A `<for step=...>` mapper's own parameter is in scope for the author's own
- * `from`/`step` expressions: the row value is derived from the index *inside*
- * Solid's `<Repeat>` callback, so `<Repeat count={…}>{(mxIndex) => { const i
- * = (mxIndex) + mxIndex * (2); …`. A generated `mxIndex` therefore shadowed an
- * authored binding of the same name and the loop rendered `0, 3, 6` where the
- * author wrote `10, 12, 14`.
+ * A `<for step=...>` row value is derived from Solid's `<Repeat>` index, and
+ * the author's own `from`/`step` expressions are written in the same scope as
+ * the generated index binding. Two things are pinned here:
  *
- * The *unstepped* range was never affected on this host: it becomes Solid's
- * `from=`/`count=` props, which are evaluated outside the callback. Both forms
- * are asserted here so a future refactor cannot move the `from` expression
- * back inside.
+ * - **Names.** The generated index is `__mxIndex` (the `__mx` prefix is
+ *   reserved), so an authored `mxIndex` or `_` in `from=`/`to=` is never
+ *   shadowed: `from=mxIndex to=mxIndex+4 step=2` renders `10, 12, 14`.
+ * - **Reactivity and evaluation count.** Reads of the row value expand inline
+ *   over `from`/`step` bound once per (re)render of the loop (Marko's
+ *   `_for_to(to, from, step, …)` head evaluates them once), so a signal bound
+ *   follows a write and two reads in one row never disagree.
+ *
+ * The unstepped range is asserted too: it becomes Solid's `from=`/`count=`
+ * props and is unaffected.
  *
  * Rendered twice: through `renderToString` (SSR codegen) and mounted into a
  * real jsdom document (DOM codegen, a live signal write, a re-check). The
@@ -209,6 +212,59 @@ describe("<for> range bounds are not shadowed by the mapper's own counter", () =
       "<ul><b>1</b><b>3</b></ul>",
       "<ul><b>1</b><b>3</b><b>5</b><b>7</b></ul>",
     ]);
+  });
+
+  it("evaluates `from` and `step` once per render and keeps rows consistent (SSR)", () => {
+    // Marko 6.3.51 compiles this to `_for_to(20, nxt(), 2, …)` and renders
+    // `0-0, 2-2, …` with one call each.
+    expect(
+      renderSsr(
+        "<for|i| from=nxt() to=6 step=stp()><b>${i}-${i}:${calls}/${stepCalls}</b></for>",
+        "let calls = 0, stepCalls = 0;\nconst nxt = () => calls++;\nconst stp = () => { stepCalls++; return 2; };",
+      ),
+    ).toBe("<ul><b>0-0:1/1</b><b>2-2:1/1</b><b>4-4:1/1</b><b>6-6:1/1</b></ul>");
+  });
+
+  it("evaluates `from` once per change and keeps rows consistent (client)", () => {
+    const snapshots = renderDom(
+      "<for|i| from=nxt() to=9 step=2><b>${i}-${i}</b></for>",
+      "let calls = 0;\nconst [base, setBase] = createSignal(1);\nconst nxt = () => base() * (1 + calls++);\nglobalThis.__setBase = setBase;",
+      "__setBase",
+      "2",
+    );
+    // Both reads of a row agree; the second render evaluated `nxt()` once more
+    // (2 * 2 = 4), not once per row.
+    const clean = snapshots.map((html) => html.replaceAll("<!---->", ""));
+    expect(clean[0]).toBe(
+      "<ul><b>1-1</b><b>3-3</b><b>5-5</b><b>7-7</b><b>9-9</b></ul>",
+    );
+    expect(clean[1]).toBe("<ul><b>4-4</b><b>6-6</b><b>8-8</b></ul>");
+  });
+
+  it("rejects assigning a stepped row value with an accurate message", () => {
+    expect(() =>
+      compileSolidMx("<for|i| from=0 to=4 step=2>${i = 3}</for>", {
+        filename: "fixture.solid.mx",
+      }),
+    ).toThrow(/computed from its bounds and cannot be assigned/);
+  });
+
+  it("re-renders a stepped range inside an attribute tag when a bound changes (client)", () => {
+    // `attributeTagFor` builds one array inside the prop expression, which is
+    // a getter, so the whole array follows the signal.
+    const snapshots = renderDom(
+      "<Probe><@item|x| from=base() to=base()+4 step=2>${x}</@item></Probe>",
+      [
+        "const [base, setBase] = createSignal(10);",
+        "globalThis.__setBase = setBase;",
+        "function Probe(props: { item?: unknown }) { return <>{JSON.stringify(props.item)}</>; }",
+      ].join("\n"),
+      "__setBase",
+      "20",
+    );
+    expect(snapshots[0]).toContain("10");
+    expect(snapshots[1]).toContain("20");
+    expect(snapshots[1]).not.toContain("10");
   });
 
   it("re-renders an unstepped range when a signal bound changes (client)", () => {
