@@ -12,6 +12,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./descriptor": "./src/descriptor.ts",
+    "./runtime": "./src/runtime.ts",
     "./server": "./src/server.ts",
     "./template": "./src/astro-template.ts"
   },

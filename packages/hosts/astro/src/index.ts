@@ -24,9 +24,6 @@ import type {
 } from "@mxlang/core";
 import mx from "@mxlang/vite-plugin";
 
-export type { Out } from "@mxlang/html/runtime";
-export { createOut } from "@mxlang/html/runtime";
-
 import { mxHtmlResolve } from "./html-resolve.ts";
 import { assertNoAstroMxPages } from "./pages-guard.ts";
 import { mxPages } from "./vite-pages.ts";

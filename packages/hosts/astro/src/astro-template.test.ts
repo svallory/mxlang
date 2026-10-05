@@ -846,7 +846,7 @@ describe("a tag that returns a value", () => {
     ).toThrow(
       // The route it names must be one that works since decision 155: the
       // default export returns markup only, so the value comes from `render`.
-      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/astro"; const value = \$mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
+      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/astro\/runtime"; const value = \$mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
     );
   });
 });

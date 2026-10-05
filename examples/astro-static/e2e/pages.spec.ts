@@ -255,6 +255,11 @@ describe("astro-static", () => {
     expect(html).toContain('<span class="counter">40</span>');
     expect(html).not.toContain("[object Object]");
     expect(html).not.toContain("41");
+    // The fence calls the unit's sink entry with `createOut` from
+    // `@mxlang/astro/runtime` and gets the `<return>` value (50 + 1).
+    expect(await page.locator(".fence-value").textContent()).toBe(
+      "fence value: 51",
+    );
   });
 
   it("ships no renderer script: the pages are static markup", async () => {

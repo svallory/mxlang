@@ -167,7 +167,7 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   one to. The error message explains the ordering and points at the
   workaround: call the unit directly from the fence's own TypeScript, an
   ordinary function call: `X.render(input, createOut())` returns the value, and
-  `createOut` is re-exported from `@mxlang/astro`.
+  `createOut` comes from `@mxlang/astro/runtime`.
 
 The lowering table and the full error list live in
 `packages/hosts/astro/README.md` "AstroMX templates (`.astro.mx`)". Nothing silently

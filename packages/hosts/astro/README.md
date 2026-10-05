@@ -307,7 +307,7 @@ build error naming the construct, the reason, and the line in the `.astro.mx` fi
   ```astro
   ---
   import Counter from "./tags/counter.mx";
-  import { createOut } from "@mxlang/astro";
+  import { createOut } from "@mxlang/astro/runtime";
   const value = Counter.render({ start: 1 }, createOut());
   ---
   <p>{value}</p>

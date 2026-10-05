@@ -1,5 +1,8 @@
 ---
+import { createOut } from "@mxlang/astro/runtime";
 import Counter from "../components/counter.mx";
+
+const value = Counter.render({ start: 50 }, createOut());
 ---
 
 <html lang="en">
@@ -10,6 +13,7 @@ import Counter from "../components/counter.mx";
   <body>
     <h1>Return in Astro</h1>
     <Counter start={40} />
+    <p class="fence-value">fence value: {value}</p>
     <p><a href="/">Home</a></p>
   </body>
 </html>
