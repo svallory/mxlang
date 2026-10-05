@@ -24,6 +24,7 @@ export interface CustomTagAttribute {
 }
 
 export interface CustomTagAttributeTag {
+  defaultTag?: string;
   repeatable?: boolean;
   required?: boolean;
   attributes?: Record<string, CustomTagAttribute>;
@@ -71,6 +72,7 @@ export interface TransformContext {
 }
 
 export interface CustomTag {
+  defaultTag?: string;
   parseOptions?: CustomTagParseOptions;
   attributes?: Record<string, CustomTagAttribute>;
   attributeTags?: Record<string, CustomTagAttributeTag>;
@@ -123,6 +125,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `parseOptions` | Static parser behavior that discovery reads before parsing the caller. |
 | `attributes` | Closed attribute contract, validated before hooks; omit it to leave attributes open. |
 | `attributeTags` | Closed `<@name>` contract with required/repeatable controls and recursive `attributes`, `attributeTags` and `children` maps. |
+| `defaultTag` | The tag name that `<#id>` and `<.class>` (an unnamed tag) written directly inside this tag stand for. Also accepted on every `attributeTags` declaration. A non-empty string naming a plain tag reachable from the package; see [Name the unnamed tag](/custom-tags/sidecars/#sidecars-declare-the-call-contract-name-the-unnamed-tag-defaulttag). |
 | `analyze` | Non-mutating pass over every call of this tag in one file, before transforms. |
 | `transform` | Expands one validated call into ordinary IR; optional only when a template exists. |
 | `finalize` | Adds nodes once per file after expansion; returned nodes are prepended. |

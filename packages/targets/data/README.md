@@ -84,3 +84,92 @@ Marko's HTML parse rules are neutralized through the target's own taglib
 derived from Marko's own lookup), so a data tag named `source`, `input`,
 `title` or `script` may have child tags. The trade: a tag-like `<name` in a
 `script`/`style`/`textarea`/`title` body parses as a tag, not text.
+
+## The unnamed tag
+
+`<#id>`, `<.class>` and concise `#id` / `.class` carry no tag name (decision
+145, [ADR 145](../../../apps/docs/docs/design-notes/adr-default-tag.md)). On the
+data target `div` means nothing, so the name is resolved through `defaultTag`.
+The first of these that answers wins:
+
+1. **The parent's contract**: `defaultTag` beside `children`, in a sidecar or
+   an `mx.contracts` module (also on attribute-tag declarations).
+2. **`defaultTag` in `package.json#mx.data`**, or the `defaultTag` option of
+   `parseData` (already validated; `parseData` itself never reads
+   `package.json`).
+3. **The built-in `object`**, the anonymous node.
+
+`object` is a built-in tag of this target: an open contract, always known, never
+an unknown-tag error under `unknownTags: "reject"`, no declaration needed. `id`
+and `class` arrive as ordinary attributes. An authored `<object>` is the same
+tag, and a declared `object` contract replaces the built-in.
+
+```mx
+<#a/>
+<.b/>
+```
+
+`parseData` gives two tags named `object`; the first has `id="a"`, the second
+`class="b"`. With `parseData(source, file, { defaultTag: "item", customTags: {
+item: {} } })` (what `mx-tsc` passes for `{ "mx": { "data": { "defaultTag":
+"item" } } }`) both are tags named `item`.
+
+**Mesh.** `attributes` declares `defaultTag: "attribute"`, so a bare shorthand
+under it is an `attribute`:
+
+```ts
+// contracts.ts
+export default {
+  attributes: {
+    defaultTag: "attribute",
+    children: { attribute: { repeatable: true } },
+  },
+  attribute: { attributes: { id: {}, type: {} } },
+};
+```
+
+```mx
+<attributes><#title type="string"/></attributes>
+```
+
+is `<attribute id="title" type="string">` inside `<attributes>` in the tree (a tag
+named `attribute` carrying `type="string"` and `id="title"`). The parent's
+`defaultTag` beats `mx.data.defaultTag`, which would apply anywhere else.
+
+After the name is resolved the tag is ordinary, so the parent's closed `children`
+and the tag's own closed `attributes` apply, positioned at the shorthand. With
+`children: { other: {} }`:
+
+```text
+doc.mx(2,3): error TS80001: `<attributes>`: `<attribute>` is not allowed here; allowed children: `<other>`
+```
+
+and with `attribute: { attributes: { type: {} } }` (no `id`):
+
+```text
+doc.mx(2,3): error TS80001: `<attribute>`: unknown attribute `id`
+```
+
+A closed parent `children` that lists neither the resolved name nor `object` is
+the same E2 error.
+
+**Invalid values.** A `defaultTag` must be `object` or a custom tag of the
+package, and must parse as a plain tag. Any html name, `div` and `input`
+included, is not an element of this target:
+
+```text
+package.json(1,45): error TS80003: invalid `defaultTag` value: `<input>` is not an element of this target
+contracts.ts(1,1): error TS80003: invalid `defaultTag` value: `<nope>` is not a tag reachable from this package (contract of `<attributes>`)
+```
+
+An invalid value is dropped and the next rung answers. When a parent
+contract's value was invalid and `object` then fails the parent's closed
+`children`, the use-site error says so:
+
+```text
+doc.mx(1,13): error TS80001: `<attributes>`: `<object>` is not allowed here; allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)
+```
+
+**Tooling.** `mx.data.defaultTag` is read by `mx-tsc`'s data check and passed to
+`parseData` by its caller. The language server, the TypeScript plugin and Vite
+do not compile data files yet (TODO `data-target-tooling-dispatch`).

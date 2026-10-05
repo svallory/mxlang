@@ -75,6 +75,10 @@ Attributes come in four kinds: `string` (a string literal), `boolean` (`required
 
 Expressions are Marko's Babel nodes plus a printed `code` and a UTF-16 `span`. **`code` is the printed form, not the authored text; slice the source by `span` for what the author wrote.**
 
+## The unnamed tag
+
+`<#id>` and `<.class>` with no tag name resolve to the built-in `object` tag: the anonymous node, with an open contract, carrying `id` and `class` as ordinary attributes. It is always known, so it is never an unknown-tag error. A parent's contract can name another tag (`defaultTag: "attribute"` beside `children`), and `package.json#mx.data.defaultTag` changes the answer everywhere no parent declares one. `<attributes><#title type="string"/></attributes>` with `attributes` declaring `defaultTag: "attribute"` is a tag named `attribute` with `type="string"` and `id="title"`. The ladder, the errors and the invalid-value reasons are in [The unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag) and the `@mxlang/data` README.
+
 ## What is rejected
 
 Always rejected, each with a positioned message: `<define>` and calls to it, `<return>`, tag variables (`/v`), dynamic tags (`<${x}>`), calls to an imported component, `<!doctype>`, CDATA and XML declarations.

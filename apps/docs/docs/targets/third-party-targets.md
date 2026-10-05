@@ -27,6 +27,7 @@ module.exports = {
   descriptorVersion: 0,
   name: "vue-sfc", // the mx.target value; distinct from every host and target name
   packageName: "@acme/mx-vue",
+  defaultTag: "div", // required: what <#id> and <.class> stand for on this target
   host: { name: "vue" }, // optional: the framework; required under mx.host
   load(core) {
     // `core` is the TOOL's @mxlang/core: use it, do not import your own.
@@ -41,6 +42,42 @@ module.exports = {
 
 The loader is synchronous: no top-level `await`, and relative imports need explicit extensions (`./compile.js`, not `./compile`). Bun loads TypeScript directly; under Node the package must be loadable by `require`.
 
+### The unnamed tag
+
+`<#id>` and `<.class>` with no tag name are an **unnamed tag** ([specification](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag), [ADR 145](/design-notes/adr-default-tag/)). Core recognises one and asks the target which tag it stands for; a target supplies the answer in four places.
+
+**`TargetDescriptor.defaultTag` (required).** A non-empty string: the built-in tag the shorthand stands for in your output (`div` for an HTML-emitting target). It is the last rung of the ladder. The registry refuses a descriptor without it, positioned at the `mx.target` (or `mx.host`) value:
+
+```text
+`defaultTag` is missing: the tag `<#id>`/`<.class>` stands for on this target, expected a string
+```
+
+The name has to be a tag of your target: the registry checks a loaded descriptor's `defaultTag` (and `host.defaultTag`) against the Marko lookup built from your `translator`, and a name that lookup does not know is an error at the `mx.target` value naming the owner. The optional `parseTranslator` is the Marko translator whose taglib answers how a tag parses (void, text, whitespace-preserving) in your compiles; absent means `translator`, or the default target's, answers. It is used for this check only, never for the mapping pass.
+
+**`TargetHost.defaultTag?`.** Optional, on the descriptor's `host` part: a host that emits the shorthand as something other than its target's built-in. It outranks the target's `defaultTag` and is outranked by the package's `mx.<target>.defaultTag` and by a parent contract.
+
+**`HostDeclarations.allowContractDefaultTag?`.** Optional boolean, on `declarations.default`. Absent means `true`. Set it to `false` when your target cannot honour a per-tag default: a contract that declares `defaultTag` is then a registration error naming the host (or the target, if it has no host part), and the contract rung is never consulted. This is the only place the flag lives.
+
+**`HostDeclarations.resolveDefaultTag?(node, parents, context)`.** The hook core calls once per unnamed tag, top-down, after the parse and before lowering; it returns the tag name, which then lowers exactly like an authored tag of that name (`#x` stays `id="x"`, `.a.b` stays `class="a b"`). Without it, using the shorthand is a positioned error ("no default tag is declared…"); the built-in targets all implement it, so a third-party target that wants the ladder implements it too.
+
+```ts
+import { contractDefaultTag, type DefaultTagContext, type DefaultTagParent } from "@mxlang/core";
+
+const BUILT_IN = "div"; // the same value as the descriptor's defaultTag
+
+// in your HostDeclarations
+resolveDefaultTag(node, parents: readonly DefaultTagParent[], context: DefaultTagContext) {
+  return contractDefaultTag(parents, context, [BUILT_IN]) ?? context.configured ?? BUILT_IN;
+}
+```
+
+- `parents` is the authored ancestor chain, **nearest first**. Each entry has `name` (an attribute tag keeps its `@`), `attributeTag`, the Marko `node`, and `tagDef` (Marko's tag def for that name in this compile's lookup, when it has one). Control-flow tags (`if`, `for`, …) are in the chain as ordinary entries; an unnamed ancestor appears under the name it was already resolved to.
+- `context.configured` is `package.json#mx.<target>.defaultTag` already validated, **with the registry's host override folded in** (config, then `host.defaultTag`), or `undefined`. The fall-back to your descriptor's own `defaultTag` is yours.
+- `context.customTags` are the compile's custom tags: a parent's contract lives there.
+- `context.contractRung` is `false` when your declarations set `allowContractDefaultTag: false`; `contractDefaultTag` honours it.
+- `context.scope` carries what the compile can say about reachable names (custom tags, Marko's lookup, the host's `isElement`); `contractDefaultTag` uses it to check the contract's value, and returns `undefined` for a rejected one so the next rung answers. `context.onContractRejected` is how the use-site error learns the declaration was the problem.
+
+**`contractDefaultTag(parents, context, builtins?)`** is the exported helper for rung 1: the nearest authored parent's declared `defaultTag` (reading attribute-tag declarations at any depth, skipping control flow by the tag's own definition, never climbing past a parent that declares none), or `undefined`. `builtins` lists names your target provides without a taglib entry. The same module exports `validateDefaultTag(name, scope)` (the reason a value is invalid, or `undefined`), used by the registry for every rung.
 ### Use the injected core
 
 The tool passes its own `@mxlang/core` to `load(core)`. Use it. That gives you the tool's scan cache and its unsaved-buffer overrides (so a callee edited in the editor is seen before it is saved), and one `TranslateError` class. A target that imports its own copy still works, and a positioned error it throws stays positioned (the class is recognised by a `Symbol.for` brand, not `instanceof`); declare `@mxlang/core` as a **peer** dependency in that case, so the project installs one copy.

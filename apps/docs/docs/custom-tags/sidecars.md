@@ -89,6 +89,68 @@ The reserved contract-vocabulary key `"#text"` permits non-whitespace text and `
 
 Dynamic children (`<${input.tag}/>`), unlisted names, disallowed text, repetitions and missing required children produce positioned errors; compilation stops at the first. The rule runs before children lower and applies equally to transform tags, template tags with declaration-only sidecars and contract-only tags on a target that delegates their names. `children` cannot be combined with `parseOptions.text: true` or `parseOptions.openTagOnly: true`.
 
+### Name the unnamed tag: `defaultTag`
+
+`defaultTag` sits beside `children` and says what `<#id>` and `<.class>`, written
+with no tag name directly inside this tag, stand for ([the unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag), decision 145). It is the first rung of the ladder: it beats `package.json#mx.<target>.defaultTag`, the host and the target's built-in. A sidecar declares it like `children`, and `mx.contracts` modules take the same key:
+
+```ts
+// tags/my-list.tag.ts
+export default {
+  defaultTag: "li",
+  transform: (call) => call.content?.children ?? [],
+} satisfies CustomTag;
+```
+
+With that sidecar on the html target, `<my-list><.a>one</><#b>two</></my-list>` renders `<li class="a">one</li><li id="b">two</li>`. Nothing else changes: after the name is resolved the tag is ordinary, so a closed `children` of `my-list` must list `li` (otherwise the usual unlisted-child error is positioned at the shorthand), and a closed `attributes` on a tag that lacks `class` rejects `<.x>`.
+
+The key works on attribute-tag declarations at any depth. An unnamed tag directly inside `<@head>` reads `head`'s own declaration:
+
+```ts
+// tags/panel.tag.ts
+export default {
+  attributeTags: { head: { defaultTag: "header" } },
+  transform: (call) => call.attributeTags.flatMap((t) => t.block?.children ?? []),
+} satisfies CustomTag;
+```
+
+`<panel><@head><.t>title</></@head></panel>` renders `<header class="t">title</header>`. Three rules decide which declaration answers:
+
+- The parent is the nearest *authored tag*. Control flow between the two is skipped, so `<my-list><if=ok><.a/></if></my-list>` still reads `my-list`.
+- A parent that declares no `defaultTag` answers "none"; the question does not climb to the grandparent, and the next rung of the ladder decides.
+- Each declaration speaks only for its own direct children: `body` does not borrow the `defaultTag` of an attribute tag nested inside it.
+
+The same contract on the data target (Mesh's `attributes` and `attribute`):
+
+```ts
+// contracts.ts, named by "mx": { "target": "data", "contracts": "./contracts.ts" }
+export default {
+  attributes: {
+    defaultTag: "attribute",
+    children: { attribute: { repeatable: true } },
+  },
+  attribute: { attributes: { id: {}, type: {} } },
+};
+```
+
+`<attributes><#title type="string"/></attributes>` is then a tag named `attribute` with the attributes `type="string"` and `id="title"` in the tree, and `mx-tsc` reports nothing.
+
+**The value is checked at registration.** It must be a non-empty string naming a tag the target knows or a custom tag of the package, and the tag must parse as a plain tag (not void, text, statement, control-flow or whitespace-preserving). One error per bad declaration, positioned at the file that writes it (the sidecar or the contracts module), at 1:0, naming the owner chain for an attribute-tag declaration:
+
+```text
+contracts.ts(1,1): error TS80003: invalid `defaultTag` value: `<nope>` is not a tag reachable from this package (contract of `<attributes>`)
+```
+
+A rejected value is skipped when the file compiles, so the next rung answers. If that answer is then not in the parent's closed `children`, the use-site error carries a hint: ``…allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)``. The full list of reasons is in the [specification](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag).
+
+**The permit flag.** A target whose declarations set `allowContractDefaultTag: false` does not allow per-tag default tags at all (the built-in targets all allow them). On such a target every `defaultTag` in a contract is a registration error, not a silent no-op, and the compile ignores the contract rung:
+
+```text
+`defaultTag` in the contract of `<my-list>` is not allowed: host `fake-forbid-host` does not permit per-tag default tags
+```
+
+(`host` is `target` when the target has no host part; the name is the one from the descriptor.) The flag is documented for [target authors](/hosts/third-party-targets/#third-party-targets-what-the-package-exports-the-unnamed-tag).
+
 ### Restrict direct parents
 
 Use `parents` when a tag must appear only in particular containers. A parent's `children` list alone does not restrict where its children may appear elsewhere.

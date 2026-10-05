@@ -23,6 +23,8 @@ A host supplies one `HostDeclarations` object to `@mxlang/core`. Every member an
 | `orderAttrs?(tagName, attrs)` | Reorders an element's attributes, for a target that must emit them in an order other than the author wrote them — no shipped host implements it now: `@mxlang/html` and `@mxlang/astro` reproduce Marko's `<input>` `value`-first and spread ordering at emission, because a reordered IR moves an attribute across a spread it was written after. |
 | `checkBinding?(target, what)` | Inspects a name a construct is about to bind at render scope — not called for tag params, which open their own nested scope. |
 | `keepComments?` | Whether an HTML comment reaches the compiled output. |
+| `resolveDefaultTag?(node, parents, context)` | Which tag an unnamed tag (`<#id>`, `<.class>`) stands for; called once per unnamed tag with the authored ancestors and a `DefaultTagContext`. See [Third-party targets](/hosts/third-party-targets/#third-party-targets-what-the-package-exports-the-unnamed-tag). |
+| `allowContractDefaultTag?` | A flag, not a hook: whether a parent contract's `defaultTag` may decide the unnamed tag. Absent means yes; `false` turns every contract `defaultTag` into a registration error. |
 
 `Policy` still exists as a name, but only as a compatibility alias of `HostDeclarations`.
 

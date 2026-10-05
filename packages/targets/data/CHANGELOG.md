@@ -6,6 +6,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Docs (default-tag-docs, decision 145):** the README documents the built-in `object` tag, `mx.data.defaultTag`, the ladder and the Mesh example (`<attributes><#title type="string"/></attributes>` with `attributes` declaring `defaultTag: "attribute"`).
+
 - **Fix (default-tag-contracts r3):** when an invalid contract `defaultTag` falls through, the E2 at the use site says so.
 
 - **Fix (default-tag-contracts r2):** an invalid contract `defaultTag` falls through to `mx.data.defaultTag`/`object` instead of erroring at every use; control flow between the parent and the shorthand is seen through.

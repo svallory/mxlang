@@ -5,6 +5,55 @@ description: "Attribute forms on elements and components, and how event handlers
 
 # Attributes
 
+## `#id` and `.class` without a tag name
+
+`#id` and `.class` are shorthands for the `id` and `class` attributes. Written
+without a tag name (`<#main>`, `<.card.wide>`, or a concise-mode line starting
+with `#` or `.`), they stand on an **unnamed tag**, and the *target* decides
+which tag that is. On every HTML target it is `div`, so nothing changes for a
+web page:
+
+```mx
+<#main>
+  <.card.wide>hello</>
+</>
+```
+
+```html
+<div id="main"><div class="card wide">hello</div></div>
+```
+
+On the [data target](/specification/#the-mx-language-13-host-semantics-table-137-the-data-target) there is no `div`; the
+unnamed tag is the built-in `object`, a tag with an open contract that carries
+`id` and `class` as ordinary attributes:
+
+```mx
+<#a/>
+<.b/>
+```
+
+`parseData` returns two tags named `object`, the first with `id="a"`, the second
+with `class="b"`.
+
+You can change the answer. In the order they win:
+
+1. **The parent tag's contract.** A tag declares `defaultTag` beside `children`
+   ([custom tags](/custom-tags/reference/)), so everything shorthand-only under it
+   is that tag.
+2. **Your package**: `package.json#mx.<target>.defaultTag`, for example
+   `{ "mx": { "html": { "defaultTag": "section" } } }` makes the first example
+   `<section id="main"><section class="card wide">hello</section></section>`.
+3. **The host**, if it overrides its target.
+4. **The target's built-in**: `div` or `object`.
+
+The name must be a tag the target knows (an element, or one of your custom tags)
+and must be a plain tag: `input`, `pre`, `title` and `script` are refused with
+``invalid `defaultTag` value: …`` at the declaration. After the name is resolved
+the tag is an ordinary one, so the parent's `children` list and the tag's own
+`attributes` contract apply to it. The full rules are in
+[The unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag) and
+[ADR 145](/design-notes/adr-default-tag/).
+
 ## Event attributes
 
 An attribute on an **element** whose name starts with `on` followed by a capital

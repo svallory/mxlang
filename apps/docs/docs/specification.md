@@ -697,6 +697,181 @@ front — otherwise the attribute is emitted twice and the second wins
 `style=` accepts an **object literal only**: `style={color: c()}` →
 `style={{color: c()}}`. Any other `style=` expression is a parse error in MX 1.
 
+### The unnamed tag
+
+**Decision 145; [ADR 145](/design-notes/adr-default-tag/).** A tag with a
+shorthand and no name, `<#main>`, `<.card>`, `<#a.b>`, or concise `#main` and
+`.card`, is an **unnamed tag**. `#x` still becomes `id="x"` and `.a.b` still
+becomes `class="a b"`; what changed from Marko is the tag they sit on. Marko
+always writes `div` there, because it has one host. MX resolves the name by
+vocabulary, so on a target where `div` means nothing (the data target) the
+shorthand is still meaningful.
+
+**The empty-name rule.** Marko's parser writes `div` into the AST but leaves the
+name's source span empty, which no authored name has. Core recognises that,
+asks the target once per unnamed tag, and from then on lowers an ordinary tag of
+the answered name. `<div#x>` is not an unnamed tag (the name is written), and a
+dynamic name (`<${tag}.a>`) is not either.
+
+**The ladder.** The first rung that answers wins:
+
+| # | Rung | Where it is set |
+|---|---|---|
+| 1 | the parent's contract `defaultTag` | beside `children`, in a sidecar or `mx.contracts`; honoured only when the target's declarations permit it (the built-in targets do) |
+| 2 | the package's override | `package.json#mx.<target>.defaultTag` (`mx.html`, `mx.solid-jsx`, `mx.data`, …) |
+| 3 | the host's override | the host's optional `defaultTag` on its descriptor |
+| 4 | the target's built-in | `div` on every html-family target, `object` on the data target; required on every target descriptor |
+
+For example, with `package.json#mx.html.defaultTag` set to `"section"` and these
+two tags (`tags/my-list.tag.ts` declares `defaultTag: "li"`,
+`tags/panel.tag.ts` declares it on its `head` attribute tag):
+
+```mx
+<my-list>
+  <if=true>
+    <.a>one</>
+  </if>
+  <#b>two</>
+</my-list>
+<div><.c>in div</></div>
+```
+
+```html
+<li class="a">one</li><li id="b">two</li><div><section class="c">in div</section></div>
+```
+
+```mx
+<panel>
+  <@head><.t>title</></@head>
+</panel>
+```
+
+```html
+<header class="t">title</header>
+```
+
+Without any of the three overrides the same shorthand is `div`
+(`<#main><.card.wide>hello</></>` renders
+`<div id="main"><div class="card wide">hello</div></div>`); with
+`mx.html.defaultTag: "section"` it renders
+`<section id="main"><section class="card wide">hello</section></section>`.
+
+**Which parent counts.** The parent for rung 1 is the nearest *authored tag*.
+Control-flow tags between the two are skipped (`<if>`, `<else>`, `<else-if>`,
+`<for>`, `<try>`, `<await>`, `<define>` and their attribute tags such as
+`@catch` and `@then`), as the `<if>` above shows. An unnamed tag in an attribute
+tag reads that attribute tag's own declaration in its owner's `attributeTags`,
+at any depth. A parent that declares no `defaultTag` does **not** pass the
+question up to its own parent: its answer is "none", and the ladder moves to rung
+2. A plain element (`<div>`) has no contract, so it also answers "none".
+An unnamed tag inside another unnamed tag sees the parent under the name it was
+resolved to.
+
+**After resolution the tag is ordinary.** The parent's closed `children` applies
+(the resolved name missing from it is the usual E2 error, positioned at the
+shorthand), and so does the tag's own `attributes` contract (`<.x>` under a tag
+whose closed attributes lack `class` is the usual E1 error, positioned at the
+shorthand). On the data target, with `attributes` declaring
+`defaultTag: "attribute"` and `children: { other: {} }`:
+
+```text
+doc.mx(2,3): error TS80001: `<attributes>`: `<attribute>` is not allowed here; allowed children: `<other>`
+```
+
+and with `attribute` declaring `attributes: { type: {} }` only:
+
+```text
+doc.mx(2,3): error TS80001: `<attribute>`: unknown attribute `id`
+```
+
+**The one error: an invalid `defaultTag` value.** It is reported at the
+declaration (the `package.json` value, or the contract module or sidecar that
+declares it), never at the use site, and reads
+``invalid `defaultTag` value: <reason>``. The reasons:
+
+| Reason | When |
+|---|---|
+| ``mx.html.defaultTag is a number, expected a tag name string`` (also `an empty string`, `an array`, …) | the package value is not a non-empty string |
+| ``` `<my-list>`: `defaultTag` must be a tag name string, got … ``` | a contract's value is not a non-empty string (a registration error of the contract) |
+| ``` `<nope>` is not a tag reachable from this package ``` | no element of the target and no custom tag by that name |
+| ``` `<await>` is not an element of this target ``` | a name the lookup knows, but that is Marko core or translator vocabulary, not an element of this target (`await`, `try`, `define`, `effect`; on data, every html name) |
+| ``` `<input>` is a void tag, not a plain tag ``` | `openTagOnly`; also `a text tag` (`title`, `textarea`, `script`, `style`), `a statement tag` (`import`, `export`, `static`, `class`), `a control-flow tag` (`if`, `else`, `else-if`, `for`) and `a whitespace-preserving tag` (`pre`) |
+| ``` `defaultTag` in the contract of `<my-list>` is not allowed: host `…` does not permit per-tag default tags ``` | a contract declares one, but the target's declarations set `allowContractDefaultTag: false` |
+
+The parse-shape reasons exist because Marko resolved the parse options (void,
+text, statement, whitespace) for the placeholder name it wrote, so the answered
+tag must parse the same way; they are read from the target's own Marko lookup,
+never from a list in MX.
+
+What counts as an element is per target:
+
+- **html and `astro-html`:** the elements Marko's html, svg and math taglibs
+  define (193 of the 236 names in the lookup; the rest are void, text,
+  statement, control-flow or whitespace-preserving tags, or core vocabulary). A
+  dashed custom-element name (`sl-card`) is **not** valid here, because an
+  unknown dashed name is an error on these targets (the `unknown-element`
+  divergence).
+- **JSX hosts (`solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`) and
+  `angular-template`:** the same set, plus a dashed custom-element name such as
+  `sl-card`, because there an unknown dashed name compiles to a native element.
+- **data:** `object` and the package's custom tags. Every html name, `div`
+  included, is rejected.
+
+A custom tag reachable from the package (a `tags/` file, a sidecar, an
+`mx.contracts` entry) is valid on every target as long as it parses as a plain
+tag. A package whose tags cannot be read keeps the parse-shape verdicts and skips
+the verdicts a custom tag could overturn.
+
+On the package value, for `mx.html.defaultTag` set to `"input"` the compile warns
+and the built-in answers (the file still compiles as `div`):
+
+```text
+@mxlang/html: …/package.json:1:71: invalid `defaultTag` value: `<input>` is a void tag, not a plain tag
+```
+
+and on a data package (`mx-tsc`, `TS80003` at the value):
+
+```text
+package.json(1,45): error TS80003: invalid `defaultTag` value: `<input>` is not an element of this target
+```
+
+**An invalid value falls through.** A rejected package value is dropped, so the
+next rung answers and the file compiles; a rejected contract value is skipped the
+same way. The declaration error is the one to fix. When a parent contract's value
+was rejected and the rung that answered instead is not in the parent's closed
+`children`, the use-site E2 says why (here the contract declared `nope` and
+`object` answered):
+
+```text
+doc.mx(1,13): error TS80001: `<attributes>`: `<object>` is not allowed here; allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)
+```
+
+**The data target.** `object` is a built-in tag of the data target: the
+anonymous node, carrying the shorthand's `id` and `class` as ordinary attributes,
+with an open contract. It is always known, so it is never an unknown-tag error
+under `unknownTags: "reject"` and needs no declaration; an authored
+`<object>` is the same tag, and a declared `object` contract replaces the
+built-in. A closed parent `children` that lists neither `object` nor a
+`defaultTag` gives the ordinary E2 error. See §13.7 and `packages/targets/data/README.md`.
+
+**Divergence.** Marko always resolves the unnamed tag to `div`; MX resolves it by
+vocabulary. Every html-family built-in is `div`, so every existing file and the
+Marko oracle are unchanged. Recorded in `divergences.md`.
+
+**Known limits.**
+
+- **`.astro.mx` templates share a key with Astro pages.** A `.astro.mx` template
+  reads `mx.astro-html.defaultTag`, the same key as an Astro page, and takes the
+  stricter page verdict: a dashed custom-element name is refused in both (the
+  template would compile it natively, the page target would not).
+- **A rejected value is reported once per position** by the tools that compile
+  without a registry (the html and hono Bun loaders, the Astro Vite template
+  plugin, Angular `build()`); the Vite plugin aborts the build on it, like any
+  other policy error, and the other tools compile with the built-in meanwhile.
+- **The data target is not wired into the language server, the TypeScript
+  plugin, Vite or the Bun loader yet** (§13.7); `parseData` and `mx-tsc` use
+  `mx.data.defaultTag`.
+
 ### `class:foo` / `style:foo` modifiers
 
 **Reserved on native elements** — not "something MX cannot express" (decision 67b,
@@ -2998,9 +3173,12 @@ path. The exit code is 1 when any diagnostic is an error
 and 0 otherwise; a clean package prints nothing.
 
 `package.json#mx.data` is `{ "structural"?: "pass" | "reject", "unknownTags"?:
-"allow" | "reject" }`. Both default to `"reject"` here; `parseData`'s own
-defaults stay `"pass"` and `"allow"`, and only `mx-tsc` reads the key. An
-invalid value is an error at the value and the strict default applies. The
+"allow" | "reject", "defaultTag"?: string }`. The first two default to
+`"reject"` here; `parseData`'s own defaults stay `"pass"` and `"allow"`, and only
+`mx-tsc` reads the key. `defaultTag` names what `<#id>` and `<.class>` stand for
+(default `object`; see "The unnamed tag" in §4). An invalid value is an error at
+the value and the strict default applies (for `defaultTag`, the built-in
+`object`). The
 language server, the TypeScript plugin and Vite keep the staged error of §13.5
 until `data-target-tooling-dispatch` lands.
 
