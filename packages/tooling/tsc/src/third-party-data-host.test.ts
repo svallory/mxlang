@@ -6,8 +6,6 @@
  */
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { clearScanCache } from "@mxlang/core";
-import { builtinLookup } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   type MeshOptions,
@@ -15,10 +13,10 @@ import {
   setupMesh,
   teardownMesh,
 } from "../../../../test-fixtures/third-party-targets/mesh.ts";
+import { builtinLookup } from "../../../target-registry/src/index.ts";
 import { runInProcess } from "./in-process.ts";
 
 afterEach(() => {
-  clearScanCache();
   teardownMesh();
 });
 
@@ -73,7 +71,7 @@ describe("mx-tsc on a third-party host built on data", () => {
       fileKinds: MESH_KIND,
     });
     expect(status).toBe(1);
-    expect(output).toContain(join("src", "post.mesh.mx") + "(2,");
+    expect(output).toContain(`${join("src", "post.mesh.mx")}(2,`);
     expect(output).toContain("render-time macro");
   });
 

@@ -7,7 +7,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { TargetDescriptor } from "@mxlang/core";
 
 /**
  * A faithful Mesh-style third-party host (decision 148), written as a package
@@ -35,7 +34,7 @@ export interface MeshOptions {
 }
 
 export interface MeshGlobals {
-  __mxDataDescriptor?: TargetDescriptor;
+  __mxDataDescriptor?: object;
   __mxMeshOptions?: MeshOptions;
   /** Every file the host compiled. */
   __mxMeshCompiles?: string[];
@@ -76,7 +75,7 @@ const projects: string[] = [];
 
 /** Hands the data descriptor over and resets the recordings; call before `meshProject`. */
 export function setupMesh(
-  data: TargetDescriptor | undefined,
+  data: object | undefined,
   options: MeshOptions = {},
 ): void {
   if (!data) throw new Error("missing data descriptor");

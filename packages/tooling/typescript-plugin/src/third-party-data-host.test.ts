@@ -76,7 +76,8 @@ describe("`.mesh.mx` in the TS plugin", () => {
     });
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.message).toContain("render-time macro");
-    expect(diagnostics[0]).toMatchObject({ line: 2 });
+    // `<define` starts line 2, after the 9 characters of line 1.
+    expect(diagnostics[0]?.offset).toBe(9);
   });
 
   it("advertises the `.mx` extension that covers it", () => {
