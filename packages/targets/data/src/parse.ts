@@ -20,7 +20,7 @@ import {
   type MxWarning,
 } from "@mxlang/core";
 import { buildDataDocument, lineStartsOf, unknownTagMessage } from "./build.ts";
-import { dataDeclarations } from "./declarations.ts";
+import { DEFAULT_TAG, dataDeclarations } from "./declarations.ts";
 import { scanAuthoredTags } from "./scan.ts";
 import { dataTaglib } from "./taglib.ts";
 import { dataTargetBase } from "./target-base.ts";
@@ -211,6 +211,13 @@ function toDiagnostic(
   };
 }
 
+/** The names `unknownTags: "reject"` accepts: the built-in `object`, then every `customTags` key. */
+function declaredTagNames(
+  customTags: Record<string, CustomTag> | undefined,
+): Set<string> {
+  return new Set([DEFAULT_TAG, ...Object.keys(customTags ?? {})]);
+}
+
 /**
  * The unknown authored tag that a core error must yield to, if any.
  *
@@ -234,7 +241,7 @@ function unknownTagBefore(
   if (error.file !== undefined && error.file !== filename) return null;
   const tags = scanAuthoredTags(source, filename, options.customTags);
   if (!tags) return null;
-  const declared = new Set(Object.keys(options.customTags ?? {}));
+  const declared = declaredTagNames(options.customTags);
   // The earliest by position, not the first in the scan's walk order (which
   // visits a tag's attribute tags before its children).
   let unknown: (typeof tags)[number] | undefined;
@@ -336,7 +343,7 @@ export function parseData(
     const tree = buildDataDocument(document, source, filename, {
       structural: options.structural ?? "pass",
       unknownTags: options.unknownTags ?? "allow",
-      declaredTags: new Set(Object.keys(options.customTags ?? {})),
+      declaredTags: declaredTagNames(options.customTags),
     });
     return {
       tree,

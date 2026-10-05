@@ -54,6 +54,24 @@ describe("builtinTargets", () => {
   });
 });
 
+describe("defaultTag (decision 145)", () => {
+  it("every built-in declares one: `div` for the html family, `object` for data", () => {
+    expect(
+      Object.fromEntries(builtinTargets.map((t) => [t.name, t.defaultTag])),
+    ).toEqual({
+      ...Object.fromEntries(
+        builtinTargets
+          .filter((t) => t.name !== "data")
+          .map((t) => [t.name, "div"]),
+      ),
+      data: "object",
+    });
+    expect(builtinTargets.filter((t) => t.defaultTag === "div")).toHaveLength(
+      7,
+    );
+  });
+});
+
 describe("shape of each descriptor", () => {
   it("html: no host, legacy host values, lazy translator, strict follows policy", () => {
     const html = byName("html");

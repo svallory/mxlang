@@ -52,11 +52,18 @@ export function reservedNameMessage(name: string): string {
   return `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
 }
 
+/**
+ * The data target's built-in tag: the anonymous node (decision 145,
+ * addendum 2). The unnamed tag (`<#id>`, `<.class>`) is this tag unless a
+ * `defaultTag` says otherwise. It is always known, has no contract of its own
+ * and carries the shorthand's `id`/`class` as ordinary attributes.
+ */
+export const DEFAULT_TAG = "object";
+
 export const dataDeclarations: HostDeclarations = {
   name: "data",
   attrTags: 2,
-  // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
-  resolveDefaultTag: () => "div",
+  resolveDefaultTag: () => DEFAULT_TAG,
   tags: {
     else: { kind: "error", reason: reservedNameMessage("else") },
     "else-if": { kind: "error", reason: reservedNameMessage("else-if") },

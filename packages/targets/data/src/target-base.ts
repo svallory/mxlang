@@ -8,12 +8,12 @@
  * with `dist/index.js`, see `targets/html/src/descriptor.ts`).
  */
 import type { TargetDescriptor } from "@mxlang/core";
-import { dataDeclarations } from "./declarations.ts";
+import { DEFAULT_TAG, dataDeclarations } from "./declarations.ts";
 
 export const dataTargetBase: TargetDescriptor = {
   descriptorVersion: 0,
   name: "data",
   packageName: "@mxlang/data",
-  defaultTag: "object",
+  defaultTag: DEFAULT_TAG,
   declarations: { default: dataDeclarations },
 };

@@ -14,7 +14,7 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import type { CustomTag } from "@mxlang/core";
-import { RESERVED_NAMES } from "./declarations.ts";
+import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
 
 const require = createRequire(import.meta.url);
@@ -29,7 +29,14 @@ export interface AuthoredTag {
 
 interface MarkoNode {
   type: string;
-  name?: { type: string; value?: string };
+  name?: {
+    type: string;
+    value?: string;
+    loc?: {
+      start: { line: number; column: number };
+      end: { line: number; column: number };
+    };
+  };
   body?: { body?: MarkoNode[] };
   attributeTags?: MarkoNode[];
   loc?: { start: { line: number; column: number } };
@@ -148,8 +155,20 @@ export function scanAuthoredTags(
   const visit = (nodes: MarkoNode[] | undefined) => {
     for (const node of nodes ?? []) {
       if (node.type !== "MarkoTag") continue;
-      const name =
-        node.name?.type === "StringLiteral" ? node.name.value : undefined;
+      // Marko writes `div` into an unnamed tag (`<#a>`, `.x`) with an empty
+      // name span; the real compile resolves it, so this pass names it the
+      // same way instead of reporting an unknown `div`.
+      const nameLoc = node.name?.loc;
+      const unnamed =
+        node.name?.type === "StringLiteral" &&
+        nameLoc !== undefined &&
+        nameLoc.start.line === nameLoc.end.line &&
+        nameLoc.start.column === nameLoc.end.column;
+      const name = unnamed
+        ? DEFAULT_TAG
+        : node.name?.type === "StringLiteral"
+          ? node.name.value
+          : undefined;
       const start = node.loc?.start;
       if (
         name !== undefined &&
