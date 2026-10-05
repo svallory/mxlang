@@ -132,6 +132,7 @@ extension selects a compilation model, not a flavour of one language.
 | `.mx` | A whole-file MX template | The host's module (`(input) => string`, a JSX component, an Angular template) | Shipped |
 | `.solid.mx` | A TypeScript module with **MX regions** in expression position | Solid 2 JSX text | Shipped |
 | `.astro.mx` | An Astro component whose template is MX | An `.astro` module | Shipped |
+| `.react.mx`, `.preact.mx`, `.hono.mx` | A TSX module with **MX regions** in expression position (decision 154) | A JSX expression per region, in the host's own JSX dialect | Shipped |
 | `.ng.mx` | An Angular region file | `.ts` with an inline `template` | **Not built** (decisions 96, 99) |
 
 ### Whole files vs region files
@@ -140,7 +141,7 @@ A **whole file** (`.mx`, `.astro.mx`) is parsed by `@marko/compiler` from the fi
 byte. Its module level is real module scope, so `import`/`static`/`export`
 place statements there (§2).
 
-A **region file** (`.solid.mx`, and `.ng.mx` when built) is a TypeScript module
+A **region file** (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`, and `.ng.mx` when built) is a TypeScript module
 in which `<` in expression position opens an MX region. The region is an
 *expression*, so it has **no module scope of its own**. This is the single fact
 that makes region files behave differently everywhere it matters:
@@ -158,7 +159,7 @@ that makes region files behave differently everywhere it matters:
 **`.mx` is the only template extension.** No product path accepts or advertises
 `.marko` (decision 86, superseding decision 72's alias). Every loader — the Bun
 loaders, `@mxlang/vite-plugin`, the language server, the TypeScript plugin,
-`mx-tsc`, the editor extensions — accepts `.mx`, `.solid.mx` and `.astro.mx` only,
+`mx-tsc`, the editor extensions — accepts `.mx`, the region kinds (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`) and `.astro.mx` only,
 and `mx()`/`mxAstro()` **reject** `.marko` in their `extensions` option.
 
 Porting a Marko component that stays inside the MX 1 subset is therefore a

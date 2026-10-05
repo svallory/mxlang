@@ -109,4 +109,4 @@ A file that tries to redefine a core-owned name such as `try` is also omitted wi
 
 Case is significant and preserved: `tags/Icon.tag.ts` defines `<Icon>`, not `<icon>`. A name must match `^[A-Za-z0-9_][A-Za-z0-9_.-]*$`. Dotfiles are skipped; other invalid tag filenames produce a positioned diagnostic.
 
-Only `.mx` is a tag-template extension. A `.solid.mx` file is a TypeScript module containing MX regions, not a template definition, and placing one under a scanned tag directory is an error rather than a silent ignore.
+Only `.mx` is a tag-template extension. A `.solid.mx`, `.react.mx`, `.preact.mx` or `.hono.mx` file is a TypeScript module containing MX regions, not a template definition, and placing one under a scanned tag directory is an error rather than a silent ignore.

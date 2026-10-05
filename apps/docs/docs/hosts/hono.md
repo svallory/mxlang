@@ -174,6 +174,39 @@ reaches the catch:
 </ErrorBoundary>
 ```
 
+## Region files (`.hono.mx`)
+
+A `.hono.mx` file is a TSX module with MX regions in it, the way `.solid.mx` is for [Solid](/hosts/solid/). The component is still a Hono function: props, `useState` and every other hook, imports and your own TypeScript stay as you wrote them. MX markup goes where JSX would, and each region compiles to a JSX expression in the same position.
+
+```mx title="Page.hono.mx"
+import { useState } from "hono/jsx";
+
+export default function Page() {
+  const [label] = useState("from-state");
+  return (
+    <ul>
+      <define/Row|n: number|><li>${label} ${n}</li></define>
+      <Row(1)/>
+      <Row(2)/>
+    </ul>
+  );
+}
+```
+
+This is the fixture `packages/hosts/hono/src/fixtures/region/define-reads-state`. It renders `<ul><li>from-state 1</li><li>from-state 2</li></ul>`.
+
+**Behaviour change.** A `*.hono.mx` file is no longer a whole-file `.mx`. It is a region file: the Bun loaders decline it, and the Vite plugin, the language server, the TypeScript plugin and `mx-tsc` route it as a region file. Whole-file templates keep the plain `.mx` extension, and their output is unchanged.
+
+- **One root element per region.** A region is one MX element. A TSX fragment `<>…</>` is not a region: each child element of it becomes its own region, as in `.solid.mx`. Markup that belongs together (`<if>`/`<else>` siblings, a `<define>` and its callers) goes inside one element.
+- **What may appear inside.** The markup the Hono host lowers in a whole-file `.mx`: native elements, components, `<if>`/`<else-if>`/`<else>`, `<for>`, attribute tags, dynamic tags, `<define>` and a `/var` tag variable. A region renders what the same markup renders in a whole-file `.mx`.
+- **Hooks stay in the component.** `<let>`, `<effect>`, `<id>` and `<lifecycle>` are errors that name only the hook to call in the surrounding component. Each message begins with the Marko meaning: "`<let>` is Marko reactive state; use Hono's `useState` in the surrounding component", and likewise `<effect>` with `useEffect`, `<id>` with `useId`, and `<lifecycle>` with `useEffect`/`useLayoutEffect`. `<const>` cannot declare a binding either: "`<const>` cannot declare a binding inside a `.hono.mx` expression; declare it in the surrounding component".
+- **Module-level MX is refused.** `import`, `static`, `export`, `Input` and `<return>` handed to a region fail with "module-level MX statements cannot appear inside a `.hono.mx` expression; write them in the surrounding TypeScript module", positioned at the statement. Ordinary TypeScript imports and exports around the region are yours to write.
+- **`<define>` and `/var` placement.** A `<define>` and a `/var` met directly in the region's markup are lifted into one arrow function that wraps the region (`<>{(() => { const Row = …; return <>…</>; })()}</>`), so they see the component's hooks and props. Every call site is a plain call, `{Row(1)}`, never `<Row/>`, so a define has no component identity of its own and does not remount. Inside `<for>`, `<if>`, an attribute-tag body or another `<define>` body, they are errors: "`<define>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body cannot be lifted out of it in a `.hono.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies" (and the matching `/var` text, "is not supported in a `.hono.mx` region").
+- **Duplicate declarations.** One region is one arrow, so two `<define>`s of a name, two `/var`s of a name, or a `<define>` and a `/var` of the same name (in either order, including a name inside a destructured `/var`) fail with Marko's text, `Duplicate declaration "Row"`, positioned at the second name. The same name in two different regions of one file is fine.
+- **Hoisted imports.** A region is an expression and has no module scope, so what it needs at module level is placed in the surrounding module for you: the runtime imports (`@mxlang/hono/runtime`), the import of a discovered `tags/*.mx` tag, and the attribute, `<textarea>` and dynamic-tag helpers. Each lands once per module. See [Custom tag templates](/custom-tags/templates/).
+
+Type errors inside a region are reported at the authored position by the TypeScript plugin and `mx-tsc`. The language server does not run TypeScript, so it reports only the MX errors above.
+
 ## What each construct lowers to
 
 Every structural kind becomes a plain JSX expression — Hono's JSX has no
@@ -233,7 +266,7 @@ response contains no `<script>` tag at all.
 `loader: "tsx"` — the same shape as `@mxlang/html/bun`'s Bun loader, but
 `"tsx"` instead of `"ts"` since this host's compiled output contains JSX. Bun
 honors the emitted `/** @jsxImportSource hono/jsx */` pragma per file, so no
-bundler is required for a plain Bun server. A hand-written `.tsx` sibling
+bundler is required for a plain Bun server. The loader declines region files (`.react.mx`, `.preact.mx`, `.hono.mx`): they are TypeScript modules with MX regions, not whole-file templates. A hand-written `.tsx` sibling
 without its own pragma still needs the running script's *own* project
 `tsconfig.json` to set `jsxImportSource: "hono/jsx"` — running it under a
 different project's tsconfig (or an override pointing elsewhere) makes Bun's

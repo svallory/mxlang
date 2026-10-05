@@ -131,7 +131,7 @@ Node-only caveats: `stripTypeScriptTypes` prints one `ExperimentalWarning` per p
 
 Two loaders make `import page from "./page.mx"` (or `"./page.marko"`) resolve, one per runtime.
 
-**Bun** — `@mxlang/html/bun` is a plugin that intercepts `.mx` and `.marko` imports and compiles them on the fly (`.solid.mx` is excluded; that is a different file kind handled separately). Register it once:
+**Bun** — `@mxlang/html/bun` is a plugin that intercepts `.mx` and `.marko` imports and compiles them on the fly (`.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` are excluded; each is a region file kind handled separately). Register it once:
 
 ```toml
 # bunfig.toml

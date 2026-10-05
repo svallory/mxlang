@@ -20,6 +20,7 @@ MX (Markup eXtended) is a template language born from Marko. It takes Marko's sy
   - **React** — a React function component with MX in place of the JSX; hooks go through `<const>` and `<try>` through a class error boundary.
   - **Preact** — a Preact function component with MX in place of the JSX: the same structural lowering, on Preact's runtime and native prop vocabulary.
   - **Solid** (`.solid.mx`) — MX in JSX's position inside a Solid component file, lowered to Solid's own JSX. See [Solid](/hosts/solid/).
+  - **React / Preact / Hono region files** (`.react.mx`, `.preact.mx`, `.hono.mx`) — TSX files with MX in JSX's position, each region lowered to a JSX expression. See [React](/hosts/react/#region-files-reactmx), [Preact](/hosts/preact/#region-files-preactmx) and [Hono](/hosts/hono/#region-files-honomx).
 
 ## What MX is not
 

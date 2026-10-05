@@ -54,7 +54,7 @@ The three host oracles are CI jobs rather than part of `verify`: the Marko toolc
 
 A Marko-parity fixture is a directory under the html target's `fixtures-marko/` holding `input.marko`, `input.json` (the props) and `expected.html`. **Generate `expected.html` from real Marko; never hand-write it** — a hand-written expectation records what you believed, not what Marko does. If a construct is deliberately out of scope for a host, add a `meta.json` naming the reason instead of deleting the fixture.
 
-A Solid fixture is a directory holding `input.solid.mx` and a hand-written `twin.tsx`. The twin must not introduce whitespace MX drops: MX follows Marko's rule that a whitespace-only run containing a newline disappears, so `text<p>…` goes on one line in the twin wherever the MX source separates them only by indentation.
+A JSX region fixture (`packages/hosts/{react,preact,hono}/src/fixtures/region/<name>/`) holds `input.<host>.mx`, an `expected.html` rendered with the host's own renderer and a `__golden__/output.txt` of the emitted TSX; regenerate goldens with vitest `-u`. A Solid fixture is a directory holding `input.solid.mx` and a hand-written `twin.tsx`. The twin must not introduce whitespace MX drops: MX follows Marko's rule that a whitespace-only run containing a newline disappears, so `text<p>…` goes on one line in the twin wherever the MX source separates them only by indentation.
 
 ## How to add a host
 
