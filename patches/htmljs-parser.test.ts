@@ -240,38 +240,28 @@ describe.each(builds)("statement tags (%s)", (_name, mod) => {
 });
 
 // Default-attribute values (`<if=…>`, `<const/x=…>`, `<let/x=…>`, `<a/x=…>`)
-// go through the same ATTRIBUTE branch, so the rule applies to them. This pins
-// that behaviour; whether to exempt them is the lead's ruling (review finding
-// 2). To exempt, set RULING to "stock" here AND exempt the default attribute
-// in the patch (a one-line change in the test, a flag check in the patch).
-const RULING: "patched" | "stock" = "patched";
-const DEFAULT_ATTRIBUTE: [string, string, string][] = [
-  // [input, patched (today), stock]
-  ["<if=a .b>x</if>", '<if> @ ="a" @.b', '<if> @ ="a .b"'],
-  ["<if=a ?? b :c>x</if>", '<if> @ ="a ?? b" @:c', '<if> @ ="a ?? b :c"'],
-  [
-    "<if=foo\n  .bar()>x</if>",
-    '<if> @ ="foo" @.bar aargs:""',
-    '<if> @ ="foo\n  .bar()"',
-  ],
+// are exempt (decision 151, ruling 2): a multi-line chain in an `<if>`,
+// `<const>` or `<let` value keeps Marko's meaning, and sugar right after a
+// default value is not supported. The patch leaves `attrValue` unset for an
+// attribute with no name; named attributes and spreads keep the rule.
+const DEFAULT_ATTRIBUTE: [string, string][] = [
+  ["<if=a .b>x</if>", '<if> @ ="a .b"'],
+  ["<if=a :b>x</if>", '<if> @ ="a :b"'],
+  ["<if=a ?? b :c>x</if>", '<if> @ ="a ?? b :c"'],
+  ["<if=foo\n  .bar()>x</if>", '<if> @ ="foo\\n  .bar()"'],
   [
     "<const/x=items\n  .filter(Boolean)/>",
-    '<const> var:"x" @ ="items" @.filter aargs:"Boolean"',
-    '<const> var:"x" @ ="items\n  .filter(Boolean)"',
+    '<const> var:"x" @ ="items\\n  .filter(Boolean)"',
   ],
-  ["<let/x=a .b/>", '<let> var:"x" @ ="a" @.b', '<let> var:"x" @ ="a .b"'],
-  [
-    "<a/x=a ?? b :c/>",
-    '<a> var:"x" @ ="a ?? b" @:c',
-    '<a> var:"x" @ ="a ?? b :c"',
-  ],
+  ["<let/x=a .b/>", '<let> var:"x" @ ="a .b"'],
+  ["<a/x=a ?? b :c/>", '<a> var:"x" @ ="a ?? b :c"'],
+  ["<a :=x .b/>", '<a> @ ="x .b"(bound)'],
+  // A named attribute right after the default value still splits.
+  ["<if=a b=1 .c>x</if>", '<if> @ ="a" @b ="1" @.c'],
 ];
 
-describe.each(builds)(
-  "default attribute (pending lead ruling) (%s)",
-  (_name, mod) => {
-    it.each(DEFAULT_ATTRIBUTE)("%j", (input, patched, stock) => {
-      expect(render(mod, input)).toBe(RULING === "patched" ? patched : stock);
-    });
-  },
-);
+describe.each(builds)("default attribute (exempt) (%s)", (_name, mod) => {
+  it.each(DEFAULT_ATTRIBUTE)("%j", (input, expected) => {
+    expect(render(mod, input)).toBe(expected);
+  });
+});

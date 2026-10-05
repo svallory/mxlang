@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index 36e76264848ac190749322bf199405fb4cc32afa..78db52a65b7594e5c10c9d16a826ed781196cb65 100644
+index 36e76264848ac190749322bf199405fb4cc32afa..c8fab054831451257808520e5e9f66e8b6c67fb9 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -306,7 +306,7 @@ var ATTRIBUTE = {
@@ -7,7 +7,7 @@ index 36e76264848ac190749322bf199405fb4cc32afa..78db52a65b7594e5c10c9d16a826ed78
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
 -        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
-+        expr.attrValue = !0, expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
++        expr.attrValue = !!(attr.name || attr.spread), expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
          return;
        } else if (code === 40) {
          attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
@@ -51,7 +51,7 @@ index 36e76264848ac190749322bf199405fb4cc32afa..78db52a65b7594e5c10c9d16a826ed78
    return code === 46 || isWordCode(code);
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index b07a38424560be0d52c9c402b39bac73eff1d47e..4d46a2c53abf86a7db9d466657484cca9ebf86df 100644
+index b07a38424560be0d52c9c402b39bac73eff1d47e..31135dfe4d3337a63ec8d698f244ae430b75bf79 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -280,7 +280,7 @@ var ATTRIBUTE = {
@@ -59,7 +59,7 @@ index b07a38424560be0d52c9c402b39bac73eff1d47e..4d46a2c53abf86a7db9d466657484cca
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
 -        expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
-+        expr.attrValue = !0, expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
++        expr.attrValue = !!(attr.name || attr.spread), expr.operators = !0, expr.terminatedByWhitespace = !0, expr.shouldTerminate = this.isConcise ? this.activeTag.stage === 5 ? shouldTerminateConciseGroupedAttrValue : shouldTerminateConciseAttrValue : shouldTerminateHtmlAttrValue;
          return;
        } else if (code === 40) {
          attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
