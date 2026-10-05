@@ -1428,7 +1428,8 @@ Per-host lowering is in §13. Notably `<try>` with `<@placeholder>` is an error 
 the html target (it needs a second render pass), while `<try>` with only `<@catch>`
 lowers to an ordinary `try`/`catch` whose body renders into a buffered sub-sink
 (§13.8): when the body throws, its partial output is dropped and `<@catch>`
-renders in its place, as in Marko 6.3.51 (decision 155).
+renders in its place, as in Marko 6.3.51 (decision 155). A `<try>` with no
+`<@catch>` rethrows, as Marko does.
 
 **Decisions:** 8, 28, 51, 65, 85, 91, 93.
 
@@ -2808,7 +2809,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `define` | local render function | same | **error** — no local component form in a JSX expression | `const R = (p) => (<>…</>)` hoisted | **error** — extract to its own `.astro.mx` | `<ng-template #R let-p>` |
 | `const` | `const x = …` | same | **error** in a region | `const` at component-body top | **error** — declare it in the fence | `@let x = …;` |
 | `let` | initial value only | **error** (strict) | **error** — use `createSignal` | **error** — use `useState` | **error** | error — fixed 2026-09-17, `<let>`-specific message; was **the wrong error** (bug 1, only the generic `/var` field guard fired) |
-| `try` | `try`/`catch` | same | `<Loading>` | body inline | **error** | **error** |
+| `try` | the body inline in a block; a throw propagates, as in Marko | same | `<Loading>` | body inline | **error** | **error** |
 | `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React) / native `ErrorBoundary` with `fallbackRender` (Hono) | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
 | `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | `$mxReturn` callback prop; `/var` top-level only | `{ value, output }`; `/var` top-level only; **hook imports are a compile error** | **error** | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
@@ -3318,7 +3319,7 @@ return value of `render`:
 |---|---|
 | Discovered tag, self-recursive tag, or an imported `.mx` unit known to declare `<return>` | `Name.render(props, out)`; with `/var`, `const n = Name.render(props, out)` |
 | Any other statically named tag (an imported `.mx` unit without `<return>`, a hand-written function, a `.ts` barrel re-export) | Run-time dispatch: `.render(props, out)` when the callee has it, otherwise the callee is called and its string written |
-| Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`) |
+| Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`). Called with tag arguments (`<${x}(a)/>`), a callee with `.render` receives `a` (args[0]) as its input, as Marko 6.3.51 does, and `/var` still binds its return value |
 | `<define>` call, `content`, a renderable attribute tag | Unchanged: a block is `(…params) => string`, rendered into its own sink and written |
 
 A hand-written `.ts` function used as a tag keeps returning a string; it never
@@ -3330,8 +3331,11 @@ tag binds (it was once silently dropped).
 committed to `out` only when the body finishes. When the body throws, the
 buffered output is dropped and `<@catch>` renders into `out` instead, so a
 half-rendered body never reaches the page (verified against Marko 6.3.51). A
-nested `<try>` commits into its enclosing one. `<@placeholder>` stays an error
-on this target (§6).
+nested `<try>` commits into its enclosing one. A `<try>` **without**
+`<@catch>` catches nothing: the error propagates out of the render, or to an
+enclosing `<try>`, as in Marko (it was once swallowed). `<@placeholder>` stays
+an error on this target (§6). The `try-*` fixtures in
+`packages/targets/html/fixtures-marko` lock all of this against Marko.
 
 **Decisions:** 95, 155.
 

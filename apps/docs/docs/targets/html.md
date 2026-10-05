@@ -260,7 +260,7 @@ function __mxRender(input: Input, __mxOut: __MxOut): void {
 }
 ```
 
-The body's output reaches the page only when the body finishes. When it throws, the partial output is dropped and the `catch` branch renders in its place, as Marko 6.3.51 does (before decision 155 this target kept the partial output). A `<try>` carrying `<@placeholder>` is a compile error: showing a placeholder and then replacing it needs a second pass this target does not have.
+The body's output reaches the page only when the body finishes. When it throws, the partial output is dropped and the `catch` branch renders in its place, as Marko 6.3.51 does (before decision 155 this target kept the partial output). A `<try>` without `<@catch>` catches nothing: the error propagates out of the render, as in Marko. A `<try>` carrying `<@placeholder>` is a compile error: showing a placeholder and then replacing it needs a second pass this target does not have.
 
 ## Structured `class` and `style`
 

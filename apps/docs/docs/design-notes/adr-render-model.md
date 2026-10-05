@@ -27,7 +27,13 @@ Between units the emitter always passes the caller's sink down, and `/var` is `r
 
 `out` is `@mxlang/html/runtime`'s `Out`, which has two members, `write` and `toString`, so a streaming implementation can replace it later without touching emitted code. `<try>` renders its body into a buffered sub-sink (`createBufferedOut`) that is committed when the body finishes and dropped when it throws.
 
-Rendered HTML is byte-identical for every template that does not throw inside a `<try>`: the oracles stay green and only emitted-code goldens change. A `<try>` body that throws after writing now drops the partial output, which is what Marko renders. Before this decision the target kept it.
+Rendered HTML is byte-identical except where the old emitter diverged from Marko; each such case is oracle-locked in this PR. There are three:
+
+- A `<try>` body that throws after writing output now drops that partial output and renders `<@catch>`, which is what Marko renders. The old emitter kept the partial body.
+- A `<try>` without `<@catch>` now rethrows, as Marko does. The old emitter swallowed the error with `catch {}`.
+- `/var` on a dynamic tag binds the callee's return value, including when the tag is called with arguments. The old emitter dropped it.
+
+The `try-catch-partial`, `try-no-catch`, `try-nested` and `try-child-throw` fixtures in `packages/targets/html/fixtures-marko` hold Marko's own output. The JSX hosts skip three of them under TODO `jsx-try-ssr-error-boundary`.
 
 ## Alternatives considered
 
