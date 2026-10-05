@@ -143,6 +143,18 @@
         {
           "title": "Custom tags build spec",
           "path": "/design-notes/custom-tags/"
+        },
+        {
+          "title": "ADR 145: the unnamed tag and defaultTag",
+          "path": "/design-notes/adr-default-tag/"
+        },
+        {
+          "title": "ADR 146: the :name sugar",
+          "path": "/design-notes/adr-name-sugar/"
+        },
+        {
+          "title": "ADR 147: wildcard children and tag aliases",
+          "path": "/design-notes/adr-wildcard-children/"
         }
       ]
     },
