@@ -133,11 +133,12 @@ describe("source copy vs patched npm htmljs-parser", () => {
         }
       }
     }
-    // Files that use atoms on purpose: the ADR's examples and the atom
-    // fixtures of PR 1's tests.
+    // Files that use atoms on purpose: the ADR's examples, the atom
+    // fixtures of PR 1's tests and tree-sitter-mx's Mesh fixture (#339).
     expect([...new Set(hits)]).toEqual([
       "apps/docs/docs/design-notes/adr-atoms.md#fence3",
       "apps/docs/docs/design-notes/adr-atoms.md#fence4",
+      "packages/editors/tree-sitter-mx/test/fixtures/mesh-invoice.mx",
       "packages/tooling/tsc/src/fixtures/atoms/preact/page.mx",
     ]);
   });
