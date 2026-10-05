@@ -86,10 +86,16 @@ const TEXTAREA_CONTENT_SOURCE = String.raw`(v: unknown): string => {
   const text = v === null || v === undefined || v === false || v === true ? "" : v + "";
   return text[0] === "\n" ? "\n" + text : text;
 }`;
-/** Marko's `_escape_comment` / `_unescaped`: falsy renders nothing except `0`; objects throw. */
+/** Marko's `_escape_comment` / `_unescaped`: falsy renders nothing except `0`; unrenderable values throw Marko's debug text. */
 const COMMENT_VALUE_SOURCE = String.raw`(v: any, escaped: boolean) => {
   if (typeof v === "symbol") throw new Error("Text content cannot be a symbol.");
-  if (typeof v === "object" && v !== null && /^\[object \w+\]$/.test("" + v)) throw new Error("Text content cannot be a value that renders as " + v + ".");
+  if (typeof v === "object" && v !== null) {
+    let text;
+    try { text = "" + v; } catch { text = "[object Object]"; }
+    if (/^\[object \w+\]$/.test(text)) {
+      throw new Error("Text content cannot be " + (text === "[object Promise]" ? "a promise (use the \u0060<await>\u0060 tag to render its resolved value)" : text === "[object Object]" ? "a plain object (it would render as \u0060[object Object]\u0060)" : "a value that renders as \u0060" + text + "\u0060") + ".");
+    }
+  }
   const text = v ? v + "" : v === 0 ? "0" : "";
   return escaped ? text.replace(/>/g, "&gt;") : text;
 }`;
@@ -767,7 +773,10 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
       if (child.kind === "Text") parts.push({ text: child.value });
       else if (child.kind === "Interpolation") {
         parts.push({ expr: child.expr, escaped: child.escaped });
-      } else if (child.kind !== "Comment") {
+      } else if (child.kind === "Comment") {
+        // Marko keeps a nested `<!-- -->` as text, so its `>` is escaped too.
+        if (child.html) parts.push({ text: `<!--${child.value}-->` });
+      } else {
         fail(
           "`<html-comment>` takes only text and placeholders; a comment cannot contain markup",
           child,
@@ -810,6 +819,8 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
    */
   const emitTextarea = (node: Extract<IrNode, { kind: "Element" }>): void => {
     const attrs = node.attrs;
+    // As `emitElementAttrs` does, before any attribute folds into a spread.
+    validatePlainAstroAttrs(attrs, "textarea");
     const hasSpread = attrs.some((attr) => attr.kind === "spread");
     const isValue = (attr: Attr): boolean =>
       (attr.kind === "static" ||

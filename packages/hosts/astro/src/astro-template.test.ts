@@ -963,6 +963,18 @@ describe("<textarea value> (Marko 6.3.51 parity)", () => {
     );
   });
 
+  it("refuses a directive-named attribute next to a spread, as on every element", () => {
+    for (const template of [
+      '<textarea ...x set:html="<b>x</b>"/>',
+      '<textarea set:html="<b>x</b>"/>',
+      '<div ...x set:html="<b>x</b>"/>',
+    ]) {
+      expect(errorFor(template).message, template).toContain(
+        "attribute `set:html` cannot be preserved as a plain Marko attribute",
+      );
+    }
+  });
+
   it("leaves a plain textarea alone", () => {
     expect(lower("<textarea>hi</textarea>")).toBe("<textarea>hi</textarea>");
   });

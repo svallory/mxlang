@@ -256,7 +256,7 @@ describe("<html-comment> (astro, rendered)", () => {
     await expect(
       render("<html-comment>${v}</html-comment>", "const v = {};"),
     ).rejects.toThrow(
-      "Text content cannot be a value that renders as [object Object].",
+      "Text content cannot be a plain object (it would render as `[object Object]`).",
     );
   });
 
@@ -267,6 +267,12 @@ describe("<html-comment> (astro, rendered)", () => {
         join(dir, "markup.astro.mx"),
       ),
     ).toThrow();
+  });
+
+  it("keeps a nested comment as text with its `>` escaped, as Marko does", async () => {
+    expect(await render("<html-comment>a<!-- b -->c</html-comment>")).toBe(
+      "<!--a<!-- b --&gt;c-->",
+    );
   });
 
   it("is not a literal element", async () => {
