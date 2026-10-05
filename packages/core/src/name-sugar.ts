@@ -332,18 +332,30 @@ function mergeClassTokens(
     return;
   }
   const value = existing.value;
-  const append = (node: Node) => {
-    node.value = `${node.value} ${text}`;
+  const append = (node: Node, before = false) => {
+    node.value = before ? `${text} ${node.value}` : `${node.value} ${text}`;
     if (node.extra) {
       node.extra.raw = JSON.stringify(node.value);
       node.extra.rawValue = node.value;
     }
+  };
+  // A diagnostic on the merged `class` names the sugar the author wrote and
+  // sits on the first sugar token (a shorthand-only attribute has no source
+  // position of its own, so it would otherwise point at the tag).
+  const mark = (words: string[]) => {
+    existing.sugarLabel = [...words, ...tokens.map((token) => token.value)]
+      .map((word) => `.${word}`)
+      .join(" ");
+    existing.sugarNameSpan = { start: first.start - 1, end: last.end };
+    existing.sugarAt = positionAt(ctx, first.start - 1);
   };
   // The shorthand part of the class, wherever Marko merged it: the sugar is
   // appended THERE, so `<div.c class="x" .d>` is `<div.c.d class="x">`. The
   // tokens are not contiguous (`<a.c #m .b>`), so no single span is honest:
   // the value keeps its first token's span.
   if (!existing.loc) {
+    const shorthandWords =
+      value?.type === "StringLiteral" ? String(value.value).split(" ") : [];
     if (value?.type === "StringLiteral") {
       append(value);
     } else if (value?.type === "ArrayExpression") {
@@ -351,10 +363,15 @@ function mergeClassTokens(
     } else {
       existing.value = { type: "ArrayExpression", elements: [value, sugar] };
     }
+    mark(shorthandWords);
     return;
   }
   const parts = shorthandClassParts(ctx, existing, regionEnd);
   if (parts.length > 0) {
+    const shorthandWords =
+      parts[0]?.type === "StringLiteral"
+        ? String(parts[0].value).split(" ")
+        : [];
     if (value?.type === "ArrayExpression") {
       const lastPart = parts[parts.length - 1];
       const index = value.elements.indexOf(lastPart);
@@ -367,35 +384,43 @@ function mergeClassTokens(
       // `${shorthand} ${class}`: the shorthand string grows.
       append(parts[0]);
     }
+    mark(shorthandWords);
     return;
   }
-  // No shorthand: an authored class with the sugar after it, in written order.
+  mark([]);
+  // No shorthand and an authored literal: the value stays a literal (so the
+  // contract checks judge what it is) and keeps its span; the sugar goes where
+  // it was written, before or after the authored `class`.
   if (value?.type === "StringLiteral") {
-    existing.value = {
-      type: "TemplateLiteral",
-      quasis: [
-        {
-          type: "TemplateElement",
-          value: { raw: "", cooked: "" },
-          tail: false,
-        },
-        {
-          type: "TemplateElement",
-          value: { raw: " ", cooked: " " },
-          tail: false,
-        },
-        { type: "TemplateElement", value: { raw: "", cooked: "" }, tail: true },
-      ],
-      expressions: [value, sugar],
-    };
+    append(value, first.start < startOf(ctx, existing));
     return;
   }
+  // `class=1 .b`: a primitive literal is the string "1 b" once merged.
+  if (value?.type === "NumericLiteral" || value?.type === "BooleanLiteral") {
+    const joined =
+      first.start < startOf(ctx, existing)
+        ? `${text} ${value.value}`
+        : `${value.value} ${text}`;
+    existing.value = stringLiteral(
+      ctx,
+      joined,
+      startOf(ctx, value),
+      endOf(ctx, value),
+    );
+    return;
+  }
+  // A dynamic authored class keeps the expression form, in written order.
+  const sugarFirst = first.start < startOf(ctx, existing);
   existing.value = {
     type: "ArrayExpression",
     elements:
       value?.type === "ArrayExpression"
-        ? [...value.elements, sugar]
-        : [value, sugar],
+        ? sugarFirst
+          ? [sugar, ...value.elements]
+          : [...value.elements, sugar]
+        : sugarFirst
+          ? [sugar, value]
+          : [value, sugar],
   };
 }
 

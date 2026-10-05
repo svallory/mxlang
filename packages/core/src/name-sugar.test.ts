@@ -245,10 +245,11 @@ describe("`#id`, `.class` and `:name` in attribute position", () => {
       shape("<div.${y}.d class=x/>"),
     );
     // No shorthand: the written order is kept.
-    expect(shape('<a class="z" .b/>')).toBe('a class=<`${"z"} ${"b"}`>');
+    expect(shape('<a class="z" .b/>')).toBe('a class="z b"');
     expect(shape("<a class=x .b/>")).toBe('a class=<[x, "b"]>');
     expect(shape('<div class=["x"] .d/>')).toBe('div class=<["x", "d"]>');
-    expect(shape('<div class="x" .d/>')).toBe('div class=<`${"x"} ${"d"}`>');
+    expect(shape('<div class="x" .d/>')).toBe('div class="x d"');
+    expect(shape('<div .d class="x"/>')).toBe('div class="d x"');
   });
 
   it("follows the duplicate rule (decision 135), last one wins", () => {

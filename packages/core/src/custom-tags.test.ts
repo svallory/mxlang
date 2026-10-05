@@ -2600,3 +2600,121 @@ describe("E1 errors name the sugar the author wrote", () => {
     );
   });
 });
+
+// Review (PR 3 round 2), finding 1: an authored literal `class` plus a `.x`
+// sugar stays a literal, so the contract checks judge the value it really is
+// ("a b"), and the E1 names the sugar. A dynamic authored value keeps the
+// template-literal/array form.
+describe("E1 on a literal class with a `.x` sugar", () => {
+  const en: CustomTag = {
+    attributes: { class: { type: "string", enum: ["a b", "b a", "a", "b"] } },
+    transform: () => [],
+  };
+  const enStrict: CustomTag = {
+    attributes: { class: { type: "string", enum: ["a", "b"] } },
+    transform: () => [],
+  };
+  const lit: CustomTag = {
+    attributes: { class: { type: "string", literalOnly: true } },
+    transform: () => [],
+  };
+  const num: CustomTag = {
+    attributes: { class: { type: "number" } },
+    transform: () => [],
+  };
+  const messageOf = (source: string, tags: Record<string, CustomTag>) => {
+    try {
+      lowerWithTags(source, tags);
+    } catch (error) {
+      return error as { message: string; line: number; column: number };
+    }
+    return null;
+  };
+
+  it.each([['\n<en class="a" .b/>\n'], ['\n<en .b class="a"/>\n']])(
+    "%j: a static class is a static value, no false error",
+    (source) => {
+      expect(messageOf(source, { en })).toBeNull();
+    },
+  );
+
+  it.each([['\n<lit class="a" .b/>\n'], ['\n<lit .b class="a"/>\n']])(
+    "%j: it is still a literal (`literalOnly` passes)",
+    (source) => {
+      expect(messageOf(source, { lit })).toBeNull();
+    },
+  );
+
+  it("an enum miss names the sugar, with the merged value", () => {
+    const error = messageOf('\n<enStrict class="a" .b/>\n', { enStrict });
+    expect(error?.message).toContain("`.b` (`class`)");
+    expect(error?.message).toContain('got "a b"');
+    const before = messageOf('\n<enStrict .b class="a"/>\n', { enStrict });
+    expect(before?.message).toContain("`.b` (`class`)");
+    expect(before?.message).toContain('got "b a"');
+  });
+
+  it.each([
+    ["\n<num class=1 .b/>\n"],
+    ['\n<num class="1" .b/>\n'],
+    ['\n<num .b class="1"/>\n'],
+  ])("%j: a type mismatch is reported, naming the sugar", (source) => {
+    const error = messageOf(source, { num });
+    expect(error?.message).toContain("must be number");
+    expect(error?.message).toContain("`.b`");
+  });
+
+  it("a dynamic authored class keeps the expression form", () => {
+    const free: CustomTag = {
+      attributes: { class: { type: "string" } },
+      transform: () => [],
+    };
+    expect(() =>
+      lowerWithTags("\n<free class=input.c .b/>\n", { free }),
+    ).not.toThrow();
+    // ...and a contract that needs a static value still rejects it.
+    expect(messageOf("\n<en class=input.c .b/>\n", { en })?.message).toContain(
+      "must be a static value",
+    );
+  });
+});
+
+// Review (PR 3 round 2), finding 2: a sugar merged onto a tag-adjacent class
+// carries a label (`.a .z`) and the error sits on the sugar token, not the tag.
+describe("E1 on a sugar merged into a tag-adjacent class", () => {
+  const closed: CustomTag = {
+    attributes: { title: { type: "string" } },
+    transform: () => [],
+  };
+  const en: CustomTag = {
+    attributes: { class: { type: "string", enum: ["a", "b"] } },
+    transform: () => [],
+  };
+  const messageOf = (source: string, tags: Record<string, CustomTag>) => {
+    try {
+      lowerWithTags(source, tags);
+    } catch (error) {
+      return error as { message: string; line: number; column: number };
+    }
+    throw new Error("expected an error");
+  };
+
+  it("an unknown attribute names `.a .b` and points at `.b`", () => {
+    const error = messageOf("\n<closed.a .b/>\n", { closed });
+    expect(error.message).toContain("unknown attribute `.a .b` (`class`)");
+    expect([error.line, error.column]).toEqual([2, 10]);
+  });
+
+  it("an enum miss names `.a .z` and points at `.z`", () => {
+    const error = messageOf("\n<en.a .z/>\n", { en });
+    expect(error.message).toContain("`.a .z` (`class`)");
+    expect(error.message).toContain('got "a z"');
+    expect([error.line, error.column]).toEqual([2, 6]);
+  });
+
+  it("a plain tag-adjacent class keeps the plain wording and the tag position", () => {
+    const error = messageOf("\n<closed.a/>\n", { closed });
+    expect(error.message).toContain("unknown attribute `class`");
+    expect([error.line, error.column]).toEqual([2, 0]);
+  });
+});

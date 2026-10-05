@@ -556,7 +556,13 @@ function lowerAttrNamed(
   // A shorthand `#id`/`.class` attribute has no position of its own in
   // Marko's AST; it belongs to its tag, so an error about it points there
   // instead of at 0:0.
-  const loc = attr?.loc || attr?.start ? posOf(attr) : (tagLoc ?? posOf(attr));
+  // A merged sugar `class` reports at its first sugar token, even when the
+  // attribute is the tag's own shorthand (no position of its own).
+  const loc = attr?.sugarAt
+    ? attr.sugarAt
+    : attr?.loc || attr?.start
+      ? posOf(attr)
+      : (tagLoc ?? posOf(attr));
   const nameSpan = attrNameSpan(ctx, attr);
 
   if (attr.type === "MarkoSpreadAttribute") {
