@@ -42,12 +42,12 @@ export type DataAttr =
   /**
    * `type="string"`, `<x="post">`: a string literal.
    *
-   * `nameSpan` is **absent** for a shorthand attribute — `#myid` and
-   * `.cls1.cls2`, written right after the tag name — because core carries no
-   * name span for one (its offsets arrive `NaN`; the core-side fix is TODO
-   * `core-shorthand-attr-spans`) and the `name` is synthesized from the
-   * shorthand token rather than written. `valueSpan` still slices what core
-   * measured for it: the class/id text itself, without the `#`/`.` sigil.
+   * For a shorthand attribute — `#myid` and `.cls1.cls2`, written right after
+   * the tag name — the `name` is synthesized from the shorthand token rather
+   * than written: `nameSpan` covers the sigil and the token (`#myid`), and
+   * `valueSpan` the class/id text itself, without the `#`/`.` sigil. The field
+   * stays optional in the type so a tree never has to carry a non-finite
+   * offset.
    */
   | {
       kind: "string";

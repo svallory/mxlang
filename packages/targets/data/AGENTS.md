@@ -75,9 +75,8 @@ names — a leading `$` or `!`, or a `{`/`}`/whitespace — because Marko parses
 a concise `$!{x}` line or a `$const x = 1` scriptlet as a tag, and MX has no
 scriptlets (decision 54).
 
-Shorthand: `#id` and `.cls` arrive with **no** `nameSpan` (core records no
-name for a name that is not written; TODO `core-shorthand-attr-spans` would
-give it a real span). A shorthand `class` **together with** an authored
+Shorthand: `#id` and `.cls` carry a `nameSpan` over the sigil plus the token
+(`#myid`), like the spaced name-sugar form; `valueSpan` is the token alone. A shorthand `class` **together with** an authored
 `class` on the same tag (`<x.a class="b"/>`) is one positioned reject —
 core merges them into a synthesized `class` with no span, so there is no
 source range for the tree to carry. That reject also lifts under the same

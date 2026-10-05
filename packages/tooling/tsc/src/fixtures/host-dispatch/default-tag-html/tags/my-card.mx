@@ -1,3 +1,3 @@
-export interface Input { content?: unknown }
+export interface Input { content?: unknown; id?: string }
 
 <section><${input.content}/></section>

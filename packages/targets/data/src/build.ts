@@ -111,12 +111,11 @@ type NamedAttr = Exclude<Attr, { kind: "spread" }>;
 /**
  * An attribute's `nameSpan`, or `undefined` when core has none.
  *
- * A shorthand attribute (`#myid`, `.cls`) reaches the IR with a `nameSpan`
- * whose offsets are `NaN` — core records no name for a name that is not
- * written, and `JSON.stringify` renders `NaN` as `null`, so it reads like a
- * null offset until something slices it. The tree never emits a non-finite
- * offset: the field is omitted instead. Core-side, that should become a real
- * span (TODO `core-shorthand-attr-spans`).
+ * Core gives a tag shorthand (`#myid`, `.cls`) the span of the sigil plus the
+ * token, like the spaced sugar form. This guard is kept for the invariant it
+ * states: the tree never emits a non-finite offset (`JSON.stringify` renders
+ * `NaN` as `null`, which reads like a null offset until something slices it),
+ * so the field is omitted rather than written as `NaN`.
  */
 function optionalNameSpan(attr: NamedAttr): SourceSpan | undefined {
   const span = attr.nameSpan as SourceSpan | null | undefined;
@@ -183,9 +182,9 @@ function checkTagName(name: string, at: Position): void {
  * author never wrote), and the alternative — a silent drop or a crash out of
  * `parseData` — is worse, so it is one positioned diagnostic at the tag.
  *
- * A shorthand `class` alone is fine: core gives that one a real `valueSpan`.
- * This lifts when TODO `core-shorthand-attr-spans` gives core a real span for
- * a merged attribute; then the union of the two written ranges is the span,
+ * A shorthand `class` alone is fine: core gives that one a real `valueSpan`
+ * and `nameSpan`. This lifts when TODO `core-shorthand-attr-spans` gives core
+ * a real span for a merged attribute; then the union of the two written ranges is the span,
  * and the tree can carry it.
  */
 const MERGED_SHORTHAND_CLASS =

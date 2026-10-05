@@ -126,6 +126,46 @@ describe("a default attribute's nameSpan", () => {
   });
 });
 
+describe("a tag shorthand attribute's nameSpan", () => {
+  // `#id` and `.cls` written right after the tag name have no attribute node
+  // of their own in Marko's AST; the span is the sigil plus the token, as for
+  // the spaced name-sugar form (` .y`), and `valueSpan` is the token alone.
+  function shorthand(source: string, name: string): [string, string] {
+    let el = irOf(source, elements).body[0];
+    // The innermost element is the one carrying the shorthand.
+    while (el?.kind === "Element" && el.children[0]?.kind === "Element") {
+      el = el.children[0];
+    }
+    if (el?.kind !== "Element") throw new Error("expected an Element");
+    const a = attr(el.attrs, name);
+    const nameSpan = nameSpanOf(a);
+    expect(Number.isFinite(nameSpan.sourceStart)).toBe(true);
+    expect(Number.isFinite(nameSpan.sourceEnd)).toBe(true);
+    if (a.kind !== "static") throw new Error("expected a static attribute");
+    return [slice(source, nameSpan), slice(source, a.valueSpan)];
+  }
+
+  it.each([
+    ["<a#x.y/>", "id", "#x", "x"],
+    ["<a#x.y/>", "class", ".y", "y"],
+    ["<a#x.y.z k=1/>", "id", "#x", "x"],
+    ["<a#x.y.z k=1/>", "class", ".y.z", "y.z"],
+    ["<div.card/>", "class", ".card", "card"],
+    ["a#x.y", "id", "#x", "x"],
+    ["a#x.y", "class", ".y", "y"],
+    ["a#x.y k=1", "class", ".y", "y"],
+    ["ul\n  li.item#n1", "class", ".item", "item"],
+    ["ul\n  li.item#n1", "id", "#n1", "n1"],
+  ])("%j: %s is spelled %j, value %j", (source, name, spelled, value) => {
+    expect(shorthand(source, name)).toEqual([spelled, value]);
+  });
+
+  it("agrees with the spaced form on what the name span covers", () => {
+    expect(shorthand("<a .y #x/>", "class")).toEqual([".y", "y"]);
+    expect(shorthand("<a .y #x/>", "id")).toEqual(["#x", "x"]);
+  });
+});
+
 describe("a static attribute's valueSpan", () => {
   it("covers the string literal, quotes included, like `Expr.span`", () => {
     const source = '<x="post" type="strng">\n</x>\n';

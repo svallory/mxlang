@@ -14,6 +14,7 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Fix:** a shorthand attribute (`#id`, `.cls`) now carries its `nameSpan` (sigil plus token) in the tree; it was omitted while core gave it `NaN` offsets. The field stays optional in the type.
 - **Docs/Tests (name-sugar-tooling, decision 146 PR 3):** the README documents `:name` for Mesh (`<attributes><:title type="string"/></attributes>` is `<attribute name="title" type="string">`) and E1 naming the token; tests pin the HTML and concise forms and the E1 messages and positions.
 
 - **Fix (name-sugar-core, Mesh):** a valueless modifier attribute (`x:foo`, `value:foo`) no longer trips "core IR invariant broken — static attribute … carries no span" under `structural: "reject"`; core gives it a zero-width `valueSpan`. `<:title/>` resolves to the target's `object` tag with `name="title"` and `entity :Todo table="todos"` is `name="Todo"` (decision 146, `@mxlang/core`).

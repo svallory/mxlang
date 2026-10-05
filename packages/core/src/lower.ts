@@ -208,6 +208,22 @@ function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
       sourceEnd: attr.sugarNameSpan.end,
     };
   }
+  // A tag's own shorthand (`<a#x.y/>`, `a#x.y`) has no attribute position in
+  // Marko's AST, only its value does, and that value is the token without its
+  // sigil. The name is spelled as the sigil plus the token, the same span the
+  // spaced name-sugar form (` .y`) reports.
+  if (!attr?.loc && attr?.start == null) {
+    const value = exprSpan(ctx, attr?.value);
+    if (value) {
+      const sigilAt = value.sourceStart - 1;
+      const sigil = ctx.source[sigilAt];
+      return {
+        sourceStart:
+          sigil === "#" || sigil === "." ? sigilAt : value.sourceStart,
+        sourceEnd: value.sourceEnd,
+      };
+    }
+  }
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});
   const sourceName =
     attr.modifier != null

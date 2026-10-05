@@ -740,7 +740,7 @@ describe("round 2 (rev-236)", () => {
   });
 
   describe("finding 2: shorthand `#id` / `.class` attributes", () => {
-    it("carry no name span, and never a null one", () => {
+    it("carry a name span over the sigil and token, and never a null one", () => {
       const source = `<a#myid.cls1.cls2 x=1/>\n`;
       const tag = firstTag(ok(source));
       // Core hands the synthesized attributes over after the authored ones,
@@ -756,18 +756,18 @@ describe("round 2 (rev-236)", () => {
       if (cls?.kind !== "string" || id?.kind !== "string") {
         throw new Error("expected shorthand attributes");
       }
-      expect("nameSpan" in cls).toBe(false);
-      expect("nameSpan" in id).toBe(false);
-      // Core measures a shorthand's value span from *after* the sigil, so
-      // the slice is the class/id text itself — the `#`/`.` is not in it.
-      // Part of the same core-side TODO (`core-shorthand-attr-spans`).
+      // The name span is the sigil plus the token, as for the spaced sugar
+      // form (` .y`); the value span is measured from *after* the sigil, so
+      // it is the class/id text itself.
+      expect(slice(source, cls.nameSpan)).toBe(".cls1.cls2");
+      expect(slice(source, id.nameSpan)).toBe("#myid");
       expect(slice(source, cls.valueSpan)).toBe("cls1.cls2");
       expect(slice(source, id.valueSpan)).toBe("myid");
       expect(cls.value).toBe("cls1 cls2");
       expect(id.value).toBe("myid");
     });
 
-    it("`<div.foo/>` carries the one shorthand class with no name span", () => {
+    it("`<div.foo/>` carries the one shorthand class with its name span", () => {
       const source = `<div.foo/>\n`;
       const attr = firstTag(ok(source)).attrs[0];
       if (!attr) throw new Error("expected an attribute");
@@ -776,8 +776,10 @@ describe("round 2 (rev-236)", () => {
         name: "class",
         value: "foo",
       });
-      expect("nameSpan" in attr).toBe(false);
       if (attr.kind !== "string") throw new Error("expected a string attr");
+      expect(
+        slice(source, attr.nameSpan ?? { sourceStart: 0, sourceEnd: 0 }),
+      ).toBe(".foo");
       expect(slice(source, attr.valueSpan)).toBe("foo");
     });
 
