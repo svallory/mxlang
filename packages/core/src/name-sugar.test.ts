@@ -556,3 +556,40 @@ describe("a bare `:` in attribute position", () => {
     expect(shape('<div x: = "s"/>')).toBe('div x:="s"');
   });
 });
+
+// Review (PR 3 round 2), finding 6: the duplicate-attribute warning names the
+// sugar for the dropped and the winning occurrence, like an E1 error does.
+describe("the duplicate-attribute warning names the sugar", () => {
+  const warningsOf = (source: string) => {
+    const warnings: MxWarning[] = [];
+    lowerSource(source, policy(), warnings);
+    return warnings.map((w) => w.message);
+  };
+
+  it.each([
+    [
+      '<input name="a" :z/>',
+      "duplicate attribute `name`: the later one (`:z` (`name`)) at 1:17 wins, so this one is dropped",
+    ],
+    [
+      '<input :z name="a"/>',
+      "duplicate attribute `:z` (`name`): the later one at 1:11 wins, so this one is dropped",
+    ],
+    [
+      "<field #a #b/>",
+      "duplicate attribute `#a` (`id`): the later one (`#b` (`id`)) at 1:11 wins, so this one is dropped",
+    ],
+    [
+      "<input :a :b/>",
+      "duplicate attribute `:a` (`name`): the later one (`:b` (`name`)) at 1:11 wins, so this one is dropped",
+    ],
+  ])("%s", (source, message) => {
+    expect(warningsOf(source)).toEqual([message]);
+  });
+
+  it("an attribute written out keeps the plain wording", () => {
+    expect(warningsOf('<input name="a" name="b"/>')).toEqual([
+      "duplicate attribute `name`: the later one at 1:17 wins, so this one is dropped",
+    ]);
+  });
+});

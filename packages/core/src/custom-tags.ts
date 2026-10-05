@@ -7,6 +7,7 @@
  * custom tag existed.
  */
 
+import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
   unifyNestedAttrTagPlanGroups,
@@ -756,17 +757,6 @@ function attrShape(attr: Attr): string | null {
   if (attr.kind === "boolean") return "boolean";
   if (attr.kind !== "dynamic" && attr.kind !== "bound") return null;
   return nodeShape(attr.value.node);
-}
-
-/**
- * An attribute as a diagnostic names it: `name`, or, for one the name sugar
- * made (decision 146), the token the author wrote and what it stands for,
- * `:email` (`name`).
- */
-function attrLabel(attr: Exclude<Attr, { kind: "spread" }>): string {
-  return attr.sugar
-    ? `\`${attr.sugar}\` (\`${attr.name}\`)`
-    : `\`${attr.name}\``;
 }
 
 /**

@@ -25,6 +25,7 @@
 
 import { readFileSync } from "node:fs";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
+import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
   unifyNestedAttrTagPlanGroups,
@@ -806,7 +807,7 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
     const at = positionAtOffset(ctx, attr.nameSpan.sourceStart);
     const wins = positionAtOffset(ctx, winner.nameSpan.sourceStart);
     warn(ctx, {
-      message: `duplicate attribute \`${attr.name}\`: the later one at ${wins.line}:${wins.column + 1} wins, so this one is dropped`,
+      message: `duplicate attribute ${attrLabel(attr)}: the later one${winner.sugar ? ` (${attrLabel(winner)})` : ""} at ${wins.line}:${wins.column + 1} wins, so this one is dropped`,
       line: at.line,
       column: at.column,
       file: ctx.filename,
