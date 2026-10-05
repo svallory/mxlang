@@ -6,6 +6,7 @@ import { Component } from "@angular/core";
     <app-chld></app-chld>
     <input [value]=title/>
     <input labelText=title/>
+    <p title=title.nmae/>
     <widget=title><case="a">a</case></widget>
   </div>,
 })

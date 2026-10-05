@@ -1,6 +1,6 @@
 [
   {
-    "name": "__mxAttr0",
+    "name": "__mxAttr",
     "value": {
       "ast": {
         "receiver": {
@@ -129,7 +129,7 @@
                 "operation": "==",
                 "left": {
                   "receiver": {},
-                  "name": "__mxAttr0"
+                  "name": "__mxAttr"
                 },
                 "right": {
                   "value": null
@@ -139,7 +139,7 @@
                 "operation": "===",
                 "left": {
                   "receiver": {},
-                  "name": "__mxAttr0"
+                  "name": "__mxAttr"
                 },
                 "right": {
                   "value": false
@@ -154,7 +154,7 @@
                 "operation": "===",
                 "left": {
                   "receiver": {},
-                  "name": "__mxAttr0"
+                  "name": "__mxAttr"
                 },
                 "right": {
                   "value": true
@@ -165,7 +165,7 @@
               },
               "falseExp": {
                 "receiver": {},
-                "name": "__mxAttr0"
+                "name": "__mxAttr"
               }
             }
           }

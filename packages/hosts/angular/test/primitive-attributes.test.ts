@@ -15,7 +15,7 @@
 import "@angular/compiler";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { NgClass, NgStyle } from "@angular/common";
+import { NgClass, NgFor, NgIf, NgStyle } from "@angular/common";
 import { Component } from "@angular/core";
 import { getTestBed, TestBed } from "@angular/core/testing";
 import {
@@ -103,7 +103,7 @@ function render(template: string, v: unknown): HTMLElement {
   Component({
     selector: "mx-primitive-probe",
     template,
-    imports: [NgClass, NgStyle],
+    imports: [NgClass, NgStyle, NgFor, NgIf],
   })(Probe);
   TestBed.configureTestingModule({ errorOnUnknownProperties: true });
   const fixture = TestBed.createComponent(Probe);
@@ -162,4 +162,32 @@ describe("angular primitive attribute values (real renders, Marko 6.3.51)", () =
         attributes(expected?.html ?? ""),
       );
     });
+});
+
+describe("a structural attribute keeps its variable in scope for the bound expression", () => {
+  function items(form: string, list: unknown): string {
+    const template = templates.find((t) => t.form === form)?.template ?? "";
+    class Probe {
+      input = { items: list };
+    }
+    Component({
+      selector: "mx-structural-probe",
+      template,
+      imports: [NgFor, NgIf],
+    })(Probe);
+    TestBed.configureTestingModule({ errorOnUnknownProperties: true });
+    const fixture = TestBed.createComponent(Probe);
+    fixture.detectChanges();
+    return fixture.nativeElement.innerHTML.replace(/<!--[\s\S]*?-->/g, "");
+  }
+
+  it("*ngFor let", () => {
+    expect(items("structural/ngFor", ["a", false, "b"])).toBe(
+      '<li class="a" title="a" data-x="a"></li><li></li><li class="b" title="b" data-x="b"></li>',
+    );
+  });
+
+  it("*ngIf as", () => {
+    expect(items("structural/ngIf", ["a", "b"])).toBe('<li title="2"></li>');
+  });
 });

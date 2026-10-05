@@ -32,10 +32,20 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
       expect(result.output).toContain(
         at("[value]=title", "-998002: Can't bind to '[value]'"),
       );
-      // A plain dynamic attribute (`labelText=title`, emitted `[labelText]`): the
+      // A camelCase attribute (`labelText=title`, emitted `[labelText]`; a plain
+      // lowercase name is `[attr.x]` and has no NG8002, see
+      // apps/docs/docs/hosts/angular.md): the
       // authored name.
       expect(result.output).toContain(
         at("labelText=title", "-998002: Can't bind to 'labelText'"),
+      );
+      // A plain lowercase dynamic attribute on a native element has no
+      // property to bind: it is `[attr.title]` over an `@let`, so a type error
+      // in its expression is reported once, at the authored expression.
+      const typeErrors = result.output.split("error TS2339").length - 1;
+      expect(typeErrors).toBe(1);
+      expect(result.output).toContain(
+        at("title.nmae", "2339: Property 'nmae' does not exist"),
       );
       // A default attribute (`<widget=title>`) has no spelled name: its
       // value is where the diagnostic lands.

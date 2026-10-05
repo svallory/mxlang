@@ -314,6 +314,8 @@ describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
       expect(found.find((d) => d.code === 2339)?.start).toEqual(
         before("title.nmae"),
       );
+      // `labelText` is camelCase on purpose: a plain lowercase native attribute
+      // is `[attr.x]` and has no NG8002 (apps/docs/docs/hosts/angular.md).
       expect(found.find((d) => d.code === -998002)?.start).toEqual(
         before("labelText=title"),
       );

@@ -168,7 +168,22 @@ A few of Angular's own idioms:
 | `<define>` | an `<ng-template>` with `let-` params |
 | a component call | an Angular component element |
 | a dynamic `data-*`/`aria-*` attribute | `[attr.data-x]`/`[attr.aria-x]` (no DOM property to bind) |
-| every other dynamic attribute | `[x]` |
+| a dynamic attribute with a plain lowercase name on a native element | `@let __mxAttr = $any(expr);` before the element, then `[attr.x]="__mxAttr == null \|\| __mxAttr === false ? null : __mxAttr === true ? '' : __mxAttr"` (Marko's primitive rules: `null`/`undefined`/`false` omit, `true` is bare, `0` and `""` are kept) |
+| a dynamic `class`/`style` on a native element | `[class]`/`[style]` with a falsy value omitted and `true` printed as `"true"` |
+| `<input value=v>` / `<input checked=v>` | live property bindings with the same primitive rules (`checked` is presence only) |
+| every other dynamic attribute (a component's or dashed tag's input, a camelCase name such as `innerHTML`, a name starting `on`) | `[x]` |
+
+A misspelled attribute on a **native** element (`<input lable=title>`) is no
+longer an Angular NG8002 error: Marko prints any attribute name, and MX now binds
+it as an attribute (`[attr.lable]`). A dashed tag (`<app-child lable=title>`) is
+an Angular component selector, so its attributes stay input bindings and keep
+NG8001/NG8002 and the "did you mean" hint. A camelCase name still binds a
+property.
+
+When an element carries a structural attribute (`*ngFor="let p of xs"`) and a
+dynamic attribute that needs the `@let`, the structural attribute moves to a
+wrapping `<ng-container>` so the `@let` sits inside the directive's template and
+sees its `let`/`as` variables.
 
 A structural directive written as an attribute (`*ngIf="x"`, `*ngFor="…"`,
 `*transloco="…"`) passes through to Angular only as the **first** attribute of

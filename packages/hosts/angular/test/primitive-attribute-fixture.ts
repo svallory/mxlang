@@ -34,4 +34,11 @@ for (const name of names) {
     });
   }
 }
+for (const [form, source] of Object.entries({
+  "structural/ngFor":
+    '<li *ngFor="let p of input.items" title=p data-x=p class=p/>',
+  "structural/ngIf": '<li *ngIf="input.items as list" title=list.length/>',
+})) {
+  templates.push({ form, template: compile(source, "primitive.mx").code });
+}
 process.stdout.write(JSON.stringify(templates));

@@ -64,7 +64,7 @@ const ATTRIBUTE_OUT_EXPRESSION = "__mxAttrOut";
  * get `true`: presence is equal to Marko's, but the value text (`disabled="0"`)
  * cannot be printed by `addAttribute`.
  */
-const ATTRIBUTE_OUT_SOURCE = `((name: string, value: unknown): unknown => {
+export const ATTRIBUTE_OUT_SOURCE = `((name: string, value: unknown): unknown => {
   if (value == null) return null;
   if (name === "class" || name === "style") return value === true ? "true" : value === false || value === 0 || value === "" || value !== value ? null : value;
   if (/^(?:allowfullscreen|async|autofocus|autoplay|checked|controls|default|defer|disabled|disablepictureinpicture|disableremoteplayback|formnovalidate|inert|loop|muted|nomodule|novalidate|open|playsinline|readonly|required|reversed|scoped|seamless|selected|itemscope)$/i.test(name)) return value === false ? null : true;

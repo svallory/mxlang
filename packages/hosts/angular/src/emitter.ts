@@ -1498,8 +1498,6 @@ class AngularEmitter implements Emitter<string> {
    * SVG switch from an attempted control-flow one.
    */
   private svgDepth = 0;
-  /** Names the `@let` that holds each primitive-normalized attribute expression. */
-  private attrLetSerial = 0;
 
   /**
    * A name guaranteed not to collide with any identifier the compiled
@@ -1618,11 +1616,34 @@ class AngularEmitter implements Emitter<string> {
     // The tag name stays unmapped (its generated text is the source name
     // verbatim, but a diagnostic lands on the `<`, not the name), so the
     // whole start tag is anchored to the authored name instead.
+    const warn = (directive: "ngClass" | "ngStyle"): void => {
+      this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
+    };
     // Each primitive-normalized attribute binds its authored expression once.
+    const normalized = node.attrs.filter(
+      (attr) => attr.kind === "dynamic" && primitiveForm(attr, node.name),
+    );
+    // A `*` structural attribute is sugar for a template around the element,
+    // and a `let`/`as` variable it declares is visible only inside that
+    // template. The `@let` must sit inside it too, so the structural attribute
+    // moves to a wrapping `<ng-container>` (Angular's own desugaring, minus
+    // the element's other attributes).
+    const structural =
+      normalized.length > 0
+        ? node.attrs.filter(
+            (attr) => attr.kind !== "spread" && attr.name.startsWith("*"),
+          )
+        : [];
+    const wrapped = structural.length > 0;
+    if (wrapped) {
+      this.out.write("<ng-container");
+      emitAttrs(this.out, structural, warn, true);
+      this.out.write(">");
+    }
     const lets = new Map<Attr, string>();
-    for (const attr of node.attrs) {
-      if (attr.kind !== "dynamic" || !primitiveForm(attr, node.name)) continue;
-      const variable = `__mxAttr${this.attrLetSerial++}`;
+    for (const attr of normalized) {
+      if (attr.kind !== "dynamic") continue;
+      const variable = this.gensym("__mxAttr");
       lets.set(attr, variable);
       this.out.write(`@let ${variable} = $any(`);
       this.out.writeMapped(esc(attr.value.code), attr.value.span);
@@ -1632,10 +1653,10 @@ class AngularEmitter implements Emitter<string> {
     this.out.write(`<${node.name}`);
     emitAttrs(
       this.out,
-      node.attrs,
-      (directive) => {
-        this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
-      },
+      wrapped
+        ? node.attrs.filter((attr) => !structural.includes(attr))
+        : node.attrs,
+      warn,
       true,
       // Also hands back the source text, which the handler's sub-mapping is
       // checked against.
@@ -1653,7 +1674,10 @@ class AngularEmitter implements Emitter<string> {
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
-    if (node.void) return;
+    if (node.void) {
+      if (wrapped) this.out.write("</ng-container>");
+      return;
+    }
     // `<style>`/`<script>` bodies are code, not template text: braces and
     // `@` there are CSS/JS, so the literal-syntax lint skips them.
     const code =
@@ -1667,6 +1691,7 @@ class AngularEmitter implements Emitter<string> {
     if (node.name === "svg") this.svgDepth--;
     if (code) this.codeDepth--;
     this.out.write(`</${node.name}>`);
+    if (wrapped) this.out.write("</ng-container>");
   }
 
   component(node: Extract<IrNode, { kind: "Component" }>): void {
