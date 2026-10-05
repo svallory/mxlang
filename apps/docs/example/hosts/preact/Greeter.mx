@@ -1,0 +1,19 @@
+import { useState } from "preact/hooks";
+
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+<const/state=useState(0)/>
+<const/count=state[0]/>
+<const/setCount=state[1]/>
+
+<section>
+  <h1>${input.label}</h1>
+  <button onClick() { setCount(count + 1); }>clicked ${count}</button>
+  <if=(count > 2)><p>That is plenty.</p></if>
+  <ul>
+    <for|name| of=input.names by="id"><li>${name.text}</li></for>
+  </ul>
+</section>

@@ -14,11 +14,11 @@ MX (Markup eXtended) is a template language born from Marko. It takes Marko's sy
 - **The language.** A markup grammar plus a small set of structural tags: `<if>` / `<else if>` / `<else>`, every `<for>` form, attribute tags, tag params, `<define>`, `<const>`, `static`, `import`. These work identically on every host and render exactly the way Marko renders them.
 - **Custom tags.** Define project vocabulary as an MX template or a TypeScript sidecar. Calls are discovered without imports and expand to ordinary IR before any emitter runs, so one definition works on all six hosts. Start with [Custom tags](/custom-tags/).
 - **The core.** One package (`@mxlang/core`) that consumes Marko's AST, applies structural and custom-tag lowerings, and exposes `HostDeclarations` plus hooks so a host can add its own stateful tags.
-- **The hosts.** Each host is a policy over the core, plus the integration that makes it usable in that ecosystem:
-  - **HTML** — a `.mx` file compiles to a pure `(input) => string` function. No runtime, no framework.
-  - **Astro** — `.mx` components and pages render to static markup at build time, no islands, no client JavaScript.
-  - **React** — `.mx` templates compile to native React component modules with hooks through `<const>` and `<try>` through a class error boundary.
-  - **Preact** — the same structural JSX lowering targeted at Preact's runtime and native prop vocabulary.
+- **Targets and hosts.** A target is a policy over the core; a host is a target plus the integration that makes it usable in a framework's ecosystem, where the component stays a native component of that framework and MX takes the place of its JSX or template:
+  - **HTML** (a [target](/targets/html/), not a host) — a `.mx` file compiles to a pure `(input) => string` function. No runtime, no framework.
+  - **Astro** — `.astro.mx` is an Astro component with MX as its template; plain `.mx` components and pages render to static markup at build time, no islands, no client JavaScript.
+  - **React** — a React function component with MX in place of the JSX; hooks go through `<const>` and `<try>` through a class error boundary.
+  - **Preact** — a Preact function component with MX in place of the JSX: the same structural lowering, on Preact's runtime and native prop vocabulary.
   - **SolidMX** (`.solid.mx`) — MX in JSX's position inside a Solid component file, lowered to Solid's own JSX. See [SolidMX](/hosts/solidmx/).
 
 ## What MX is not

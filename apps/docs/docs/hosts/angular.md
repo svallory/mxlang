@@ -1,9 +1,59 @@
 ---
 title: "Angular"
-description: "The Angular host — a .mx page template compiles to a plain Angular template string, kept in sync by the mx-angular CLI."
+description: "The Angular host — an Angular component with MX in place of its template; a .mx page template compiles to a plain Angular template string, kept in sync by the mx-angular CLI."
 ---
 
 # Angular
+
+An Angular component with MX in place of the Angular template. In a `.ng.mx` file the component is still an ordinary Angular class: the `@Component` decorator, `@Input()`, signals, injection and the Angular compiler all stay as Angular provides them. MX replaces only the value of `template:`, lowering it to Angular's own template syntax (`@if`, `@for`, `{{ }}`, `(click)`). A plain `.mx` page template does the same for a hand-written component's `templateUrl`; see [the idea](#the-idea).
+
+```ts title="greeter.component.ts"
+import { Component, Input, signal } from "@angular/core";
+
+@Component({
+  selector: "app-greeter",
+  template: `
+    <section>
+      <h1>{{ label }}</h1>
+      <button (click)="count.update((n) => n + 1)">clicked {{ count() }}</button>
+      @if (count() > 2) {
+        <p>That is plenty.</p>
+      }
+      <ul>
+        @for (name of names; track name.id) {
+          <li>{{ name.text }}</li>
+        }
+      </ul>
+    </section>
+  `,
+})
+export class Greeter {
+  @Input() label = "";
+  @Input() names: { id: number; text: string }[] = [];
+  protected count = signal(0);
+}
+```
+
+```mx title="greeter.component.ng.mx"
+import { Component, Input, signal } from "@angular/core";
+
+@Component({
+  selector: "app-greeter",
+  template: <section>
+    <h1>${label}</h1>
+    <button onClick() { count.update((n) => n + 1); }>clicked ${count()}</button>
+    <if=(count() > 2)><p>That is plenty.</p></if>
+    <ul>
+      <for|name| of=names by=(name => name.id)><li>${name.text}</li></for>
+    </ul>
+  </section>,
+})
+export class Greeter {
+  @Input() label = "";
+  @Input() names: { id: number; text: string }[] = [];
+  protected count = signal(0);
+}
+```
 
 **Preview.** This host is not yet a complete "Angular host" by the same bar
 every other host meets: `.ng.mx` has TypeScript semantics in the editor and

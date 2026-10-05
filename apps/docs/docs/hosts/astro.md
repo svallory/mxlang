@@ -5,6 +5,44 @@ description: "Render .mx components and pages, and .astro.mx templates, to stati
 
 # Astro host
 
+An Astro component with MX in place of the template. An `.astro.mx` file is an Astro component: the `---` frontmatter fence, `Astro.props`, imports and `getStaticPaths` pass through untouched with ordinary Astro semantics, and Astro's own compiler still builds the component. MX replaces only the markup after the fence, which it lowers to Astro template syntax. Astro renders at build time, so the example has no event handler.
+
+Plain `.mx` files on this host are a different thing, described [below](#mx-components): a runtime-free function that Astro's renderer calls, not an Astro component.
+
+```astro title="Greeter.astro"
+---
+export interface Props {
+  label: string;
+  names: { id: number; text: string }[];
+}
+const { label, names } = Astro.props as Props;
+---
+<section>
+  <h1>{label}</h1>
+  {names.length > 2 && <p>That is plenty.</p>}
+  <ul>
+    {names.map((name) => <li>{name.text}</li>)}
+  </ul>
+</section>
+```
+
+```mx title="Greeter.astro.mx"
+---
+export interface Props {
+  label: string;
+  names: { id: number; text: string }[];
+}
+const { label, names } = Astro.props as Props;
+---
+<section>
+  <h1>${label}</h1>
+  <if=(names.length > 2)><p>That is plenty.</p></if>
+  <ul>
+    <for|name| of=names><li>${name.text}</li></for>
+  </ul>
+</section>
+```
+
 `@mxlang/astro` renders `.mx` components inside an Astro project as static markup at build time. An MX component compiles to a runtime-free `(input) => string` function, is called during Astro's build, and never reaches a browser. No islands, no hydration, no client JavaScript from this renderer.
 
 ## Selecting the host
@@ -130,7 +168,7 @@ Pages compile under the same strict policy as components, and have no `Astro.slo
 
 ## `.astro.mx` templates
 
-An `.astro.mx` file is an Astro component whose template is written in MX instead of JSX. This is a different kind of file from `.mx`: a `.mx` component compiles to a runtime-free function and is *called through* this host's renderer, while an `.astro.mx` component *becomes* a real Astro component. Its `---` frontmatter fence passes through untouched, with ordinary Astro semantics — `Astro.props`, imports, `getStaticPaths` — and only the markup after the fence is MX.
+An `.astro.mx` file is an Astro component whose template is written in MX instead of JSX. This is a different kind of file from `.mx`: a `.mx` component compiles to a runtime-free function and is *called through* this host's renderer, while an `.astro.mx` component *is* an Astro component, with MX writing only its template. Its `---` frontmatter fence passes through untouched, with ordinary Astro semantics — `Astro.props`, imports, `getStaticPaths` — and only the markup after the fence is MX.
 
 ```astro
 ---

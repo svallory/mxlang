@@ -1,9 +1,47 @@
 ---
 title: "Hono host"
-description: "Compile .mx templates to Hono JSX component modules on the shared JSX emitter."
+description: "A Hono JSX component with MX in place of JSX: the .mx file compiles to an ordinary hono/jsx function component module."
 ---
 
 # Hono host
+
+A Hono JSX component with MX in place of JSX. The file below is an ordinary `hono/jsx` function component: it returns Hono JSX, takes props, and is rendered by Hono's own runtime in your routes. MX replaces only the JSX. Because the template is the whole file, there is no function wrapper to write: the compiler emits the default-exported function component and your `export interface Input` becomes its props type. Hono renders on the server, so the example has no event handler.
+
+```tsx title="Greeter.tsx"
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+export default function Greeter({ label, names }: Input) {
+  return (
+    <section>
+      <h1>{label}</h1>
+      {names.length > 2 && <p>That is plenty.</p>}
+      <ul>
+        {names.map((name) => (
+          <li key={name.id}>{name.text}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+```
+
+```mx title="Greeter.mx"
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+<section>
+  <h1>${input.label}</h1>
+  <if=(input.names.length > 2)><p>That is plenty.</p></if>
+  <ul>
+    <for|name| of=input.names by="id"><li>${name.text}</li></for>
+  </ul>
+</section>
+```
 
 `@mxlang/hono` compiles a `.mx` or `.marko` template to a Hono JSX component
 module. Structural MX becomes ordinary `hono/jsx` TSX: `<if>` becomes a

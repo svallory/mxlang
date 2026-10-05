@@ -1,0 +1,19 @@
+import { createSignal } from "solid-js";
+
+export function Greeter(props: {
+  label: string;
+  names: { id: number; text: string }[];
+}) {
+  const [count, setCount] = createSignal(0);
+
+  return (
+    <section>
+      <h1>${props.label}</h1>
+      <button onClick() { setCount(count() + 1); }>clicked ${count()}</button>
+      <if=(count() > 2)><p>That is plenty.</p></if>
+      <ul>
+        <for|name| of=props.names by="id"><li>${name.text}</li></for>
+      </ul>
+    </section>
+  );
+}

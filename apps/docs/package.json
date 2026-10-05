@@ -17,8 +17,15 @@
     "@docmd/core": "0.9.5"
   },
   "devDependencies": {
+    "@mxlang/angular": "workspace:*",
+    "@mxlang/astro": "workspace:*",
     "@mxlang/core": "workspace:*",
+    "@mxlang/hono": "workspace:*",
     "@mxlang/html": "workspace:*",
+    "@mxlang/parser": "workspace:*",
+    "@mxlang/preact": "workspace:*",
+    "@mxlang/react": "workspace:*",
+    "@mxlang/solid": "workspace:*",
     "@mxlang/tree-sitter-mx": "workspace:*",
     "tree-sitter-javascript": "0.23.1",
     "vitest": "3.2.7",

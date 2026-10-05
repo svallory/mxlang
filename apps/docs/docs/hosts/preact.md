@@ -1,9 +1,58 @@
 ---
 title: "Preact host"
-description: "The Preact host — a .mx template compiles to a Preact component module, with every structural tag lowered to plain JSX."
+description: "The Preact host — a Preact component with MX in place of JSX: a .mx template compiles to an ordinary Preact component module, with every structural tag lowered to plain JSX."
 ---
 
 # Preact host
+
+A Preact component with MX in place of JSX. The file below is an ordinary Preact function component: props, the `preact/hooks` hooks, the `preact` runtime and `@preact/preset-vite` stay as Preact provides them, and MX replaces only the JSX. Because the template is the whole file, there is no function wrapper to write: the compiler emits the default-exported function component, your `export interface Input` becomes its props type, and hooks go in `<const>` tags, which lower to statements in the component body.
+
+```tsx title="Greeter.tsx"
+import { useState } from "preact/hooks";
+
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+export default function Greeter({ label, names }: Input) {
+  const [count, setCount] = useState(0);
+  return (
+    <section>
+      <h1>{label}</h1>
+      <button onClick={() => setCount(count + 1)}>clicked {count}</button>
+      {count > 2 && <p>That is plenty.</p>}
+      <ul>
+        {names.map((name) => (
+          <li key={name.id}>{name.text}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+```
+
+```mx title="Greeter.mx"
+import { useState } from "preact/hooks";
+
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+<const/state=useState(0)/>
+<const/count=state[0]/>
+<const/setCount=state[1]/>
+
+<section>
+  <h1>${input.label}</h1>
+  <button onClick() { setCount(count + 1); }>clicked ${count}</button>
+  <if=(count > 2)><p>That is plenty.</p></if>
+  <ul>
+    <for|name| of=input.names by="id"><li>${name.text}</li></for>
+  </ul>
+</section>
+```
 
 The Preact host compiles a `.mx` (or `.marko`) template to a **Preact component module**: JSX text carrying its own `@jsxImportSource` pragma, with the author's imports and `static` blocks at module scope and their `export interface Input` as the component's props type.
 

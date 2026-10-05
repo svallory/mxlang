@@ -1,0 +1,14 @@
+---
+export interface Props {
+  label: string;
+  names: { id: number; text: string }[];
+}
+const { label, names } = Astro.props as Props;
+---
+<section>
+  <h1>${label}</h1>
+  <if=(names.length > 2)><p>That is plenty.</p></if>
+  <ul>
+    <for|name| of=names><li>${name.text}</li></for>
+  </ul>
+</section>

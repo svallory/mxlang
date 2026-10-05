@@ -1,0 +1,12 @@
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+<section>
+  <h1>${input.label}</h1>
+  <if=(input.names.length > 2)><p>That is plenty.</p></if>
+  <ul>
+    <for|name| of=input.names by="id"><li>${name.text}</li></for>
+  </ul>
+</section>

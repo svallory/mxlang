@@ -5,6 +5,54 @@ description: "The .solid.mx host — MX markup in JSX's position inside a Solid 
 
 # SolidMX
 
+A Solid component with MX in place of JSX. In a `.solid.mx` file the component is still a Solid function: signals, props, `For` and `Show` from `solid-js`, and Solid's own compiler all stay as Solid provides them. MX markup goes where JSX would, and the compiler lowers it back to Solid JSX in the same position. Everything outside the markup is your own TypeScript, passed through untouched.
+
+```tsx title="Greeter.tsx"
+import { createSignal, For, Show } from "solid-js";
+
+export function Greeter(props: {
+  label: string;
+  names: { id: number; text: string }[];
+}) {
+  const [count, setCount] = createSignal(0);
+
+  return (
+    <section>
+      <h1>{props.label}</h1>
+      <button onClick={() => setCount(count() + 1)}>clicked {count()}</button>
+      <Show when={count() > 2}>
+        <p>That is plenty.</p>
+      </Show>
+      <ul>
+        <For each={props.names}>{(name) => <li>{name.text}</li>}</For>
+      </ul>
+    </section>
+  );
+}
+```
+
+```mx title="Greeter.solid.mx"
+import { createSignal } from "solid-js";
+
+export function Greeter(props: {
+  label: string;
+  names: { id: number; text: string }[];
+}) {
+  const [count, setCount] = createSignal(0);
+
+  return (
+    <section>
+      <h1>${props.label}</h1>
+      <button onClick() { setCount(count() + 1); }>clicked ${count()}</button>
+      <if=(count() > 2)><p>That is plenty.</p></if>
+      <ul>
+        <for|name| of=props.names by="id"><li>${name.text}</li></for>
+      </ul>
+    </section>
+  );
+}
+```
+
 SolidMX (`.solid.mx`) is MX markup written directly inside a Solid component file, in the same position JSX would go, lowered to Solid's own JSX at compile time. A `.solid.mx` file is otherwise an ordinary TypeScript module — imports, functions, hooks — with MX markup wherever an expression is expected.
 
 SolidMX ships as `@mxlang/solid`, the third emitter over `@mxlang/core`'s shared IR alongside the HTML and Astro hosts. The MX parser's vendored Babel fork finds each MX region inside a `.solid.mx` file and hands it to `compileSolidMx`, which resolves the region through the same Marko-syntax core every host shares and emits Solid JSX text back into the surrounding TypeScript module, at the same span — so positions and source maps stay anchored to the original file.

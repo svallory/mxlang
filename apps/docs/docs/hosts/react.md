@@ -1,9 +1,58 @@
 ---
 title: "React host"
-description: "Compile .mx templates to native React component modules on the shared JSX emitter."
+description: "A React component with MX in place of JSX: the .mx file compiles to an ordinary React function component module."
 ---
 
 # React host
+
+A React component with MX in place of JSX. The file below is an ordinary React function component: props, `useState` and the rest of the hooks, the `react` runtime, `@vitejs/plugin-react` and every React tool stay exactly as React provides them. The only thing MX replaces is the JSX. Because the template is the whole file, there is no function wrapper to write: the compiler emits the default-exported function component, your `export interface Input` becomes its props type, and hooks go in `<const>` tags, which lower to statements in the component body.
+
+```tsx title="Greeter.tsx"
+import { useState } from "react";
+
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+export default function Greeter({ label, names }: Input) {
+  const [count, setCount] = useState(0);
+  return (
+    <section>
+      <h1>{label}</h1>
+      <button onClick={() => setCount(count + 1)}>clicked {count}</button>
+      {count > 2 && <p>That is plenty.</p>}
+      <ul>
+        {names.map((name) => (
+          <li key={name.id}>{name.text}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+```
+
+```mx title="Greeter.mx"
+import { useState } from "react";
+
+export interface Input {
+  label: string;
+  names: { id: number; text: string }[];
+}
+
+<const/state=useState(0)/>
+<const/count=state[0]/>
+<const/setCount=state[1]/>
+
+<section>
+  <h1>${input.label}</h1>
+  <button onClick() { setCount(count + 1); }>clicked ${count}</button>
+  <if=(count > 2)><p>That is plenty.</p></if>
+  <ul>
+    <for|name| of=input.names by="id"><li>${name.text}</li></for>
+  </ul>
+</section>
+```
 
 `@mxlang/react` compiles a `.mx` or `.marko` template to a React component
 module. Structural MX becomes ordinary React TSX: `<if>` becomes a ternary,
