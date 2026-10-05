@@ -278,6 +278,8 @@ registered page extension, pages follow with no language change.
 | `<@name>` on a component | `<Fragment slot="name">…</Fragment>` | an attribute tag is a named slot; `<if>` branches emit a conditional slot |
 | children | the default slot | |
 | HTML comments | HTML comments | |
+| `<html-comment>…</html-comment>` | a real `<!--…-->`; only `>` is escaped, as Marko does | a placeholder makes the comment one `set:html` string |
+| `<textarea value=expr/>` | `<textarea>{content}</textarea>` | the value is content, never an attribute; a spread's `value` is split out at render time |
 | several root elements | several root elements | Astro allows a fragment at top level |
 
 ### Errors

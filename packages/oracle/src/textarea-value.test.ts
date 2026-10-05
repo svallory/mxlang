@@ -68,11 +68,13 @@ function textareas(row: Row | undefined): string {
 
 let marko: Row[] = [];
 let html: Row[] = [];
+let astro: Row[] = [];
 const jsx: Record<string, Row[]> = {};
 const JSX_HOSTS = ["preact", "react", "hono", "solid"] as const;
 beforeAll(() => {
   marko = rows("marko");
   html = rows("html");
+  astro = rows("astro");
   for (const host of JSX_HOSTS) jsx[host] = rows(host);
   expect(marko.length).toBeGreaterThan(100);
 }, 240_000); // Real compiler/renderer startup in separate Bun processes.
@@ -136,6 +138,45 @@ describe("html target <textarea value> (real renders, Marko 6.3.51)", () => {
         textareas(find(marko, "spreadBody", value)),
       );
     }
+  });
+});
+
+describe("astro <textarea value> (real renders, Marko 6.3.51)", () => {
+  // A dynamic tag (`<${"textarea"} …>`) is unsupported by this host.
+  const supported = (m: Row) => !m.form.startsWith("dynamicTag");
+
+  it("matches Marko's parsed DOM for every measured case", () => {
+    const diffs = marko
+      .filter((m) => m.form !== "valueAndBody" && supported(m))
+      .filter((m) => textareas(m) !== textareas(find(astro, m.form, m.value)))
+      .map((m) => `${m.form}/${m.value}`);
+    expect(diffs).toEqual([]);
+  });
+
+  it("renders the value as content, never as an attribute", () => {
+    for (const form of ["static", "dynamic", "spread", "spreadThenValue"]) {
+      for (const value of ["zero", "str", "special"]) {
+        const dom = JSON.parse(
+          textareas(find(astro, form, value)).split("|")[0] ?? "",
+        );
+        expect(dom.attrs.value, `${form}/${value}`).toBeUndefined();
+        expect(dom.text, `${form}/${value}`).not.toBe("");
+      }
+    }
+  });
+
+  it("refuses a value together with body content, as Marko does", () => {
+    for (const row of astro.filter((r) => r.form === "valueAndBody"))
+      expect(stripAnsi(row.error ?? ""), `astro ${row.value}`).toContain(
+        "A textarea cannot have both a value attribute and body content.",
+      );
+  });
+
+  it("refuses a dynamic tag, which this host does not support", () => {
+    for (const row of astro.filter((r) => r.form.startsWith("dynamicTag")))
+      expect(row.error, `astro ${row.form}/${row.value}`).toContain(
+        "a dynamic tag name",
+      );
   });
 });
 

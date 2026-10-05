@@ -208,9 +208,17 @@ const { title, members } = Astro.props as Props;
 | Text containing `{` or `}` | escaped to `&#123;` / `&#125;` |
 | Ordinary children of a component | the default slot |
 | HTML comments | HTML comments |
+| `<html-comment>text ${expr}</html-comment>` | a real `<!--…-->`, as Marko renders it (see below) |
+| `<textarea value=expr/>` | `<textarea>{content}</textarea>` (see below) |
 | Several root elements | several root elements |
 
 The `---` fence passes through byte for byte, with Astro's own semantics: `Astro.props`, imports, and `getStaticPaths` all work exactly as they do in a `.astro` file. `static` statements from the MX template are hoisted into that fence.
+
+### `<html-comment>` and `<textarea value>`
+
+`<html-comment>` renders a real `<!-- -->` comment, not a literal `<html-comment>` element. It takes text and placeholders only. Like Marko, it escapes only `>` (as `&gt;`, so a value cannot close the comment early), renders `null`, `undefined`, `false` and `""` as nothing but keeps `0`, and writes `<!-- -->` when the comment holds only placeholders that all render empty. A placeholder that would render as `[object Object]` throws, as in Marko. `<!-- -->` written directly in the template is a different thing: it is kept as written.
+
+`<textarea value=expr/>` renders the value as the textarea's escaped content, never as a `value` attribute, as Marko does. `null`, `undefined`, `false` and `true` render nothing, `0` is kept, and a leading newline is doubled so the HTML parser's dropped first newline restores it. A spread's `value` is read the same way, the later of an explicit `value` and a spread's wins, and a spread's `value` yields to a body. A `value` together with a body is a build error, as in Marko.
 
 ### Not supported
 

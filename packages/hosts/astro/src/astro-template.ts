@@ -33,6 +33,7 @@ import {
   type Node,
   newCtx,
   parseFragment,
+  rejectUnsupportedFields,
   type TargetLookup,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
@@ -78,6 +79,20 @@ const ATTRIBUTE_SPREAD_OUT_SOURCE = `((guard: (attrs: any, tag?: string) => any)
   for (const name of Object.keys(values)) values[name] = ${ATTRIBUTE_OUT_EXPRESSION}(name, values[name]);
   return values;
 })(${ATTRIBUTE_SPREAD_SOURCE})`;
+const COMMENT_VALUE_EXPRESSION = "__mxCommentValue";
+const TEXTAREA_CONTENT_EXPRESSION = "__mxTextareaContent";
+/** Marko's `_textarea_value`: nullish/boolean render nothing, and a leading newline is doubled (a parser drops the first). */
+const TEXTAREA_CONTENT_SOURCE = String.raw`(v: unknown): string => {
+  const text = v === null || v === undefined || v === false || v === true ? "" : v + "";
+  return text[0] === "\n" ? "\n" + text : text;
+}`;
+/** Marko's `_escape_comment` / `_unescaped`: falsy renders nothing except `0`; objects throw. */
+const COMMENT_VALUE_SOURCE = String.raw`(v: any, escaped: boolean) => {
+  if (typeof v === "symbol") throw new Error("Text content cannot be a symbol.");
+  if (typeof v === "object" && v !== null && /^\[object \w+\]$/.test("" + v)) throw new Error("Text content cannot be a value that renders as " + v + ".");
+  const text = v ? v + "" : v === 0 ? "0" : "";
+  return escaped ? text.replace(/>/g, "&gt;") : text;
+}`;
 
 /**
  * This package's own target lookup, for a direct entry that needs one and has
@@ -223,7 +238,9 @@ function rejectUnknownTag(name: string, node: Node, ctx: Ctx): void {
   );
 }
 
-type DelegatedTagData = { kind: "interpolation"; expr: Expr };
+type DelegatedTagData =
+  | { kind: "interpolation"; expr: Expr }
+  | { kind: "html-comment" };
 
 /** Questions the Astro host answers while Marko nodes are still available. */
 /** Astro's built-in `defaultTag`: the descriptor's field and the ladder's last rung. */
@@ -257,8 +274,14 @@ export const astroTemplateDeclarations: HostDeclarations = {
   scriptletReplacement: (name, keyword) =>
     `declare it in the \`---\` fence (\`${keyword} ${name} = …;\`)`,
   keepComments: true,
-  isDelegatedTag: (name) => name === DYNAMIC_TAG,
-  resolveDelegatedTag: (name, node): DelegatedTagData => {
+  isDelegatedTag: (name) => name === DYNAMIC_TAG || name === "html-comment",
+  resolveDelegatedTag: (name, node, ctx): DelegatedTagData => {
+    // `<html-comment>` lowers to a real `<!-- -->`, as Marko and the html
+    // target do, rather than falling through to a literal element.
+    if (name === "html-comment") {
+      rejectUnsupportedFields(ctx, node, "`<html-comment>`");
+      return { kind: "html-comment" };
+    }
     if (name !== DYNAMIC_TAG) {
       fail(`unknown Astro host tag ${JSON.stringify(name)}`, node);
     }
@@ -320,6 +343,12 @@ const CLASS_LIST =
 
 function escapeText(text: string): string {
   return text.replace(/[{}]/g, (char) => `&#${char.charCodeAt(0)};`);
+}
+
+/** Static textarea content as the parser reads it: `&`, `<` escaped and a leading newline doubled. */
+function escapeTextareaStatic(value: string): string {
+  const text = value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return text[0] === "\n" ? `\n${text}` : text;
 }
 
 function escapeAttr(value: string): string {
@@ -419,7 +448,18 @@ function emitElementAttrs(
     emitAttrs(attrs, write, writeMapped, name);
     return;
   }
-  write(` {...${ATTRIBUTE_SPREAD_EXPRESSION}({ `);
+  write(` {...${ATTRIBUTE_SPREAD_EXPRESSION}(`);
+  emitFoldedAttrObject(attrs, write, writeMapped);
+  write(`, ${JSON.stringify(name)})}`);
+}
+
+/** The element's attributes folded into one object literal, authored order, later writes winning. */
+function emitFoldedAttrObject(
+  attrs: Attr[],
+  write: (code: string) => void,
+  writeMapped: (code: string, node: Node) => void,
+): void {
+  write("{ ");
   attrs.forEach((attr, index) => {
     if (index > 0) write(", ");
     switch (attr.kind) {
@@ -462,9 +502,8 @@ function emitElementAttrs(
       }
     }
   });
-  write(` }, ${JSON.stringify(name)})}`);
+  write(" }");
 }
-
 function emitAttrs(
   attrs: Attr[],
   write: (code: string) => void,
@@ -715,6 +754,119 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
     write(")");
   };
 
+  /**
+   * `<html-comment>`: Marko's `<!--…-->`, escaping only `>` (as `_escape_comment`).
+   *
+   * Astro never interpolates inside a comment, so a placeholder makes the whole
+   * comment one `set:html` string; a static one stays a literal comment.
+   */
+  const emitHtmlComment = (children: IrNode[]): void => {
+    const parts: Array<{ text: string } | { expr: Expr; escaped: boolean }> =
+      [];
+    for (const child of children) {
+      if (child.kind === "Text") parts.push({ text: child.value });
+      else if (child.kind === "Interpolation") {
+        parts.push({ expr: child.expr, escaped: child.escaped });
+      } else if (child.kind !== "Comment") {
+        fail(
+          "`<html-comment>` takes only text and placeholders; a comment cannot contain markup",
+          child,
+        );
+      }
+    }
+    if (parts.every((part) => "text" in part)) {
+      const text = parts
+        .map((part) => ("text" in part ? part.text : ""))
+        .join("");
+      write(`<!--${text.replace(/>/g, "&gt;")}-->`);
+      return;
+    }
+    // Marko writes a lone-placeholder comment that renders nothing as `<!-- -->`.
+    const onlyPlaceholders = parts.every((part) => "expr" in part);
+    write('<Fragment set:html={"<!--" + ');
+    if (onlyPlaceholders) write("(");
+    parts.forEach((part, index) => {
+      if (index > 0) write(" + ");
+      if ("text" in part) {
+        write(JSON.stringify(part.text.replace(/>/g, "&gt;")));
+        return;
+      }
+      write(`${COMMENT_VALUE_EXPRESSION}(`);
+      writeExpr(part.expr);
+      write(`, ${part.escaped})`);
+    });
+    if (onlyPlaceholders) write(' || " ")');
+    write(' + "-->"} />');
+  };
+
+  /**
+   * `<textarea value=x>`: Marko renders the value as escaped content, never as
+   * a `value` attribute. An authored `value` and a spread (which may carry one)
+   * are handled, and a body's text is escaped as raw text.
+   *
+   * With no spread the value is lifted at compile time. With one, the merged
+   * attribute object is split at render time: `value` becomes the content (or
+   * is dropped when a body is written, as Marko's body wins over a spread value).
+   */
+  const emitTextarea = (node: Extract<IrNode, { kind: "Element" }>): void => {
+    const attrs = node.attrs;
+    const hasSpread = attrs.some((attr) => attr.kind === "spread");
+    const isValue = (attr: Attr): boolean =>
+      (attr.kind === "static" ||
+        attr.kind === "dynamic" ||
+        attr.kind === "boolean") &&
+      attr.name === "value";
+    const value = attrs.find(isValue);
+    const hasBody = node.children.length > 0;
+    if (value && hasBody) {
+      fail(
+        "A textarea cannot have both a value attribute and body content.",
+        value,
+      );
+    }
+    // A textarea body is raw text in Marko, so a literal `<` is text; Astro
+    // would otherwise open an element at it.
+    const writeBody = (): void => {
+      for (const child of node.children) {
+        if (child.kind === "Text") {
+          write(escapeText(child.value.replace(/</g, "&lt;")));
+        } else {
+          drive(emitter, [child]);
+        }
+      }
+    };
+    if (!hasSpread) {
+      write("<textarea");
+      emitElementAttrs(
+        node.name,
+        attrs.filter((attr) => attr !== value),
+        write,
+        writeMapped,
+      );
+      write(">");
+      if (hasBody) writeBody();
+      else if (value?.kind === "static") {
+        write(escapeText(escapeTextareaStatic(value.value)));
+      } else if (value?.kind === "dynamic") {
+        write(`{${TEXTAREA_CONTENT_EXPRESSION}(`);
+        writeExpr(value.value);
+        write(")}");
+      }
+      write("</textarea>");
+      return;
+    }
+    write("{(($mxTa: Record<string, any>) => (<textarea");
+    write(
+      ` {...${ATTRIBUTE_SPREAD_EXPRESSION}((({ value: __mxValue, ...$mxRest }) => $mxRest)($mxTa), "textarea")}>`,
+    );
+    if (hasBody) writeBody();
+    else write(`{${TEXTAREA_CONTENT_EXPRESSION}($mxTa.value)}`);
+    write("</textarea>))(");
+    emitFoldedAttrObject(attrs, write, writeMapped);
+    write(")}");
+    return;
+  };
+
   const emitter: Emitter<string> = {
     text(node) {
       write(escapeText(node.value));
@@ -727,6 +879,10 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
     },
 
     element(node) {
+      if (node.name === "textarea") {
+        emitTextarea(node);
+        return;
+      }
       write(`<${node.name}`);
       emitElementAttrs(node.name, node.attrs, write, writeMapped);
       if (node.void) {
@@ -926,6 +1082,10 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
 
     delegatedTag(node) {
       const data = node.tag.data as DelegatedTagData;
+      if (data.kind === "html-comment") {
+        emitHtmlComment(node.tag.children);
+        return;
+      }
       if (data.kind !== "interpolation") {
         fail("unknown Astro host-tag lowering", node);
       }
@@ -1223,6 +1383,16 @@ export function lowerAstroMx(
       templateCode.includes("__mxAttrSpread(")
     ) {
       helpers.push(`const __mxAttrOut = ${ATTRIBUTE_OUT_SOURCE};`);
+    }
+    if (templateCode.includes(`${COMMENT_VALUE_EXPRESSION}(`)) {
+      helpers.push(
+        `const ${COMMENT_VALUE_EXPRESSION} = ${COMMENT_VALUE_SOURCE};`,
+      );
+    }
+    if (templateCode.includes(`${TEXTAREA_CONTENT_EXPRESSION}(`)) {
+      helpers.push(
+        `const ${TEXTAREA_CONTENT_EXPRESSION} = ${TEXTAREA_CONTENT_SOURCE};`,
+      );
     }
     if (templateCode.includes("__mxAttrSpread("))
       helpers.push(`const __mxAttrSpread = ${ATTRIBUTE_SPREAD_OUT_SOURCE};`);

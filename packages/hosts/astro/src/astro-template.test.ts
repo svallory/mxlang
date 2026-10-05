@@ -884,3 +884,86 @@ describe("event error positions", () => {
     expect(error).toMatchObject({ line: 5, column: 7 });
   });
 });
+
+describe("<html-comment> (Marko 6.3.51 parity)", () => {
+  it("lowers a static comment to a real comment, escaping only `>`", () => {
+    expect(lower("<html-comment>a > b &amp; c</html-comment>")).toBe(
+      "<!--a &gt; b &amp; c-->",
+    );
+    expect(lower("<html-comment></html-comment>")).toBe("<!---->");
+  });
+
+  it("lowers a placeholder to one set:html string through the comment helper", () => {
+    expect(lower("<html-comment>a ${x} b</html-comment>")).toBe(
+      '<Fragment set:html={"<!--" + "a " + __mxCommentValue(x, true) + " b" + "-->"} />',
+    );
+    expect(lower("<html-comment>$!{x}</html-comment>")).toBe(
+      '<Fragment set:html={"<!--" + (__mxCommentValue(x, false) || " ") + "-->"} />',
+    );
+  });
+
+  it("declares the helper only when a placeholder uses it", () => {
+    const helper = "const __mxCommentValue =";
+    expect(
+      lowerAstroMx(
+        "---\n---\n<html-comment>${x}</html-comment>",
+        "Test.astro.mx",
+      ).code,
+    ).toContain(helper);
+    expect(
+      lowerAstroMx("---\n---\n<html-comment>x</html-comment>", "Test.astro.mx")
+        .code,
+    ).not.toContain(helper);
+  });
+
+  it("refuses a /var and tag arguments, as the html target does", () => {
+    expect(() => lower("<html-comment/v>x</html-comment>")).toThrow(
+      "tag variable",
+    );
+    expect(() => lower("<html-comment(1)>x</html-comment>")).toThrow(
+      "tag arguments",
+    );
+  });
+});
+
+describe("<textarea value> (Marko 6.3.51 parity)", () => {
+  it("lifts a static value into escaped content", () => {
+    expect(lower('<textarea value="a<b" class="c"/>')).toBe(
+      '<textarea class="c">a&lt;b</textarea>',
+    );
+  });
+
+  it("lifts a dynamic value into content through the helper, keeping other attributes", () => {
+    expect(lower('<textarea value=x class="c"/>')).toBe(
+      '<textarea class="c">{__mxTextareaContent(x)}</textarea>',
+    );
+  });
+
+  it("splits a spread's value out at render time", () => {
+    expect(lower("<textarea ...x value=y/>")).toBe(
+      `{(($mxTa: Record<string, any>) => (<textarea {...${SPREAD}((({ value: __mxValue, ...$mxRest }) => $mxRest)($mxTa), "textarea")}>{__mxTextareaContent($mxTa.value)}</textarea>))({ ...x, "value": (y) })}`,
+    );
+  });
+
+  it("keeps a body when a spread is present", () => {
+    expect(lower("<textarea ...x>b</textarea>")).toContain(
+      '"textarea")}>b</textarea>))({ ...x })}',
+    );
+  });
+
+  it("escapes a body's `<` as raw text", () => {
+    expect(lower("<textarea>a &amp; <b></textarea>")).toBe(
+      "<textarea>a &amp; &lt;b></textarea>",
+    );
+  });
+
+  it("refuses a value together with a body", () => {
+    expect(errorFor("<textarea value=x>b</textarea>").message).toContain(
+      "A textarea cannot have both a value attribute and body content.",
+    );
+  });
+
+  it("leaves a plain textarea alone", () => {
+    expect(lower("<textarea>hi</textarea>")).toBe("<textarea>hi</textarea>");
+  });
+});

@@ -2,6 +2,10 @@
 
 - **Fix (solid-astro-angular-primitive-attr-parity, decision 149):** dynamic native attributes and spread keys in `.astro.mx` go through `__mxAttrOut`, so primitives render as Marko does: `false` omitted and `true` bare on data/aria/title/value, falsy `class`/`style` omitted and `true` printed as `"true"`, and Astro's boolean-attribute names present for everything but null/undefined/false (presence only, see divergences.md). Static attributes are unchanged.
 
+- **Fix (astro-html-comment-literal-element):** `<html-comment>` lowers to a real `<!--…-->` instead of a literal `<html-comment>` element (with `${x}` left as `{input.x}`). It matches Marko 6.3.51: only `>` is escaped, falsy values render nothing except `0`, an all-placeholder comment that renders empty is `<!-- -->`, and a value that renders as `[object Object]` throws.
+
+- **Fix (astro-textarea-value-content):** `<textarea value=x/>` renders the value as escaped content, as Marko does, instead of a `value` attribute on an empty textarea. A spread's `value` is split out at render time, a spread's `value` yields to a body, `value` with a body is a build error, and a textarea body is raw text (a literal `<` no longer crashes the Astro compiler). Dynamic tags stay unsupported on this host.
+
 - **Test (html-imported-return-tag-object-object):** `imported-return-render.test.ts` renders an `.astro.mx` page that imports a `.mx` tag declaring `<return>` and calls it without `/var`, through Astro's compiler, container and the MX renderer: markup rendered, value dropped. `server.test.ts` pins the renderer's own unwrap. No code change.
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` in a template body emits `value:foo={y}`, which the real Astro compiler renders as `value:foo="y"`; MX previously rejected the form.
