@@ -681,9 +681,11 @@ const TEXTAREA_CONTENT = `function __mxTextareaContent(__mxValue: unknown): stri
   return __mxText[0] === "\\n" ? "\\n" + __mxText : __mxText;
 }`;
 
-const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue) {
-  if (__mxValue === null || __mxValue === undefined) return "";
-  return String(__mxValue).replace(/>/g, "&gt;");
+// Marko 6.3.51's `_escape_comment` / `_unescaped`: falsy renders nothing except
+// `0`, and only `>` is escaped (not at all for `$!{}`).
+const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
+  const __mxText = __mxValue ? String(__mxValue) : __mxValue === 0 ? "0" : "";
+  return __mxEscaped ? __mxText.replace(/>/g, "&gt;") : __mxText;
 }`;
 
 const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]) {

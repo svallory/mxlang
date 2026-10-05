@@ -1112,20 +1112,35 @@ export function createEmitter(): StringEmitter {
       }
       case "html-comment": {
         literal("<!--");
+        // Marko's `_escape_comment`/`_unescaped` render nothing for a falsy
+        // value except `0`, and a comment with placeholders but no static
+        // text at all falls back to `" "`, so it never emits `<!---->`.
+        const hasText = tag.children.some((child) => child.kind === "Text");
+        const values: string[] = [];
         for (const child of tag.children) {
           if (child.kind === "Text") {
             // A static run is escaped at compile time by the same rule, and
             // merged into the surrounding literal so a fully static comment
             // stays one `out +=`.
+            if (values.length > 0) {
+              push(`__mxOut += ${values.join(" + ")};`);
+              values.length = 0;
+            }
             literal(escapeComment(child.value));
           } else if (child.kind === "Interpolation") {
-            push(`__mxOut += __mxEscapeComment(${child.expr.code});`);
+            values.push(
+              `__mxEscapeComment(${child.expr.code}, ${child.escaped})`,
+            );
           } else if (child.kind !== "Comment") {
             fail(
               "`<html-comment>` takes only text and placeholders; a comment cannot contain markup",
               child,
             );
           }
+        }
+        if (values.length > 0) {
+          const joined = values.join(" + ");
+          push(`__mxOut += ${hasText ? joined : `(${joined}) || " "`};`);
         }
         literal("-->");
         return;

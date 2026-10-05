@@ -367,8 +367,33 @@ describe("<html-comment> lowers placeholders", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const body = "<html-comment>build ${input.sha}</html-comment>";
     const { code } = compile(src(body), file);
-    expect(code).toContain("__mxEscapeComment(input.sha)");
+    expect(code).toContain("__mxEscapeComment(input.sha, true)");
     expect(code).toContain("function __mxEscapeComment");
+  });
+
+  it("falls back to a space only when the comment has no static text", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const only = compile(
+      src("<html-comment>${input.a}${input.b}</html-comment>"),
+      file,
+    ).code;
+    expect(only).toContain(
+      '(__mxEscapeComment(input.a, true) + __mxEscapeComment(input.b, true)) || " "',
+    );
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    const mixed = compile(
+      src("<html-comment>a ${input.a}</html-comment>"),
+      file,
+    ).code;
+    expect(mixed).not.toContain('|| " "');
+  });
+
+  it("passes the raw flag for $!{} so `>` stays unescaped", () => {
+    const { code } = compile(
+      src("<html-comment>$!{input.a}</html-comment>"),
+      file,
+    );
+    expect(code).toContain("__mxEscapeComment(input.a, false)");
   });
 
   it("escapes only `>`, as Marko's own _escape_comment does", () => {
