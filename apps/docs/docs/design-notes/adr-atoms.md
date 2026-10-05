@@ -71,13 +71,13 @@ The kinds Mesh refers to: an *attribute* (`accept`, `require`, `sort`, the left 
 
 | # | requirement | status |
 |---|---|---|
-| 1 | **Declare by tag set.** An attribute is declared by any of ten type tags (`uuid`, `string`, `integer`, ...) under `attributes`, and a `belongs-to` under `relationships` also declares an attribute (`listId`, derived, not written). `declares` must attach one kind to many tags | proposed here (not in 156): a kind is declared by a *set* of tags; each tag's contract says `declares: "<kind>"`, so any number of tags declare the same kind. The derived `listId` from `belongs-to` is open question 4 |
+| 1 | **Declare by tag set.** An attribute is declared by any of ten type tags (`uuid`, `string`, `integer`, ...) under `attributes`, and a `belongs-to` under `relationships` also declares an attribute (`listId`, derived, not written). `declares` must attach one kind to many tags | proposed here (not in 156): a kind is declared by a *set* of tags; each tag's contract says `declares: "<kind>"`, so any number of tags declare the same kind. The derived `listId` from `belongs-to` is open question 2 |
 | 2 | **Declare by `id` or by `name`.** `declares.from` accepts `"id"` as well as `"name"` | decided by the lead: `from` is `"id"` or `"name"` (the tag's `#id` sugar or its `name`, including `:name`) |
 | 3 | **Scope.** References resolve within the enclosing `entity`, and declarations sit in a sibling section (`attributes` against `actions`), not in an ancestor of the reference | decided by the lead: the scope of a `ref` is the **enclosing tag's whole subtree**, so sibling sections are in scope |
 | 4 | **Cross-entity references** (`belongs-to=Customer`) | out of scope for the single-file checker. A name that is not declared in the enclosing subtree is checked by the vocabulary's own build step (Mesh checks at model build). Core does not resolve across files |
-| 5 | **Union of kinds.** `load` may name a relationship or a computed field, so one attribute must accept either | proposed here: `ref` takes one kind or a list: `{ type: "atom", ref: ["relationship", "computed"] }`. The name must be declared as one of them. Open question 3 |
-| 6 | **Derived declarations from `analyze`.** Mesh needs a way to add names that no tag declares by itself, or the check stays with Mesh | open question 4 (until settled the check stays with Mesh) |
-| 7 | **Extensions add kinds.** Mesh ADR-0037 has extensions add tags and sections in one generated contracts module; an extension must declare new kinds and reference existing ones | proposed here: kinds are plain names in the contracts module, so a generated module can declare a new kind with `declares` and reference an existing one with `ref` without a registry. Collisions between extensions are open question 4 |
+| 5 | **Union of kinds.** `load` may name a relationship or a computed field, so one attribute must accept either | proposed here: `ref` takes one kind or a list: `{ type: "atom", ref: ["relationship", "computed"] }`. The name must be declared as one of them. Open question 1 |
+| 6 | **Derived declarations from `analyze`.** Mesh needs a way to add names that no tag declares by itself, or the check stays with Mesh | open question 2 (until settled the check stays with Mesh) |
+| 7 | **Extensions add kinds.** Mesh ADR-0037 has extensions add tags and sections in one generated contracts module; an extension must declare new kinds and reference existing ones | proposed here: kinds are plain names in the contracts module, so a generated module can declare a new kind with `declares` and reference an existing one with `ref` without a registry. Collisions between extensions are open question 2 |
 | 8 | **`parseData` shape.** An atom list arrives as a list whose items are atom nodes with their own spans | follows from section 2: `accept=[:title, :body]` is a list node whose items are `atom { name, span }` nodes, each with its own span |
 | 9 | **A read action for `on:load`.** Mesh checks it in `analyze` if the contract cannot express it | stays with Mesh. A contract names a kind, not a property of the declaration (read against write); a kind per property (`read-action`) is the contract-only answer if Mesh wants it |
 
@@ -193,7 +193,7 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 | option | what | why not |
 |---|---|---|
 | (a) | a Babel rule in the compiler fork's bundled `@babel/parser` | a Babel patch to maintain through the compiler bundle on every Babel bump; also needs a tokenizer patch for `::`; `a ? :b :c` still mis-splits |
-| **(b′)** | **htmljs fork lexes, same-length stand-in, core converts** | **chosen**: exact positions, fixes `a ? :b :c`, Babel and the compiler fork stay byte-identical to upstream |
+| **(b′)** | **htmljs fork lexes, same-length stand-in, core converts** | **recommended**: exact positions, fixes `a ? :b :c`, Babel and the compiler fork stay byte-identical to upstream |
 | (b) | the fork pre-scans and hands Babel a string literal | positions shift by one per preceding atom in the same expression |
 | (c) | core rewrites the source text before Babel | decision 151 rejected core re-scanning attribute source; Marko's code frames would show the stand-in; every entry point must rewrite |
 
@@ -209,12 +209,17 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 
 Decision 156 does not settle these; they are recorded, not decided. The ref scope (the enclosing tag's whole subtree) and `declares.from` accepting `"id"` and `"name"` are decided and are not listed here. The lexer rule and the name token are proposed in Grammar, so they are no longer open.
 
-1. **Stand-in leak.** Anything that drives the fork compiler without core's conversion (Marko's own translator on an MX file, a formatter built on the fork) would silently see `0.`. Recommendation: accept it, since core is the only supported driver, and keep a core assertion that no stand-in survives the conversion. The alternative is an opt-in flag on the fork's parser, which the compiler cannot pass today.
-2. **Member, call and unary on an atom.** `:a.length`, `:a(1)` and `-:a` are accepted by the stand-in (member or call on a string). Should core reject them as "an atom is a name, not a value to operate on"? Recommendation: reject member and call access; allow comparison (`x === :a`).
-3. **Sequencing with squad-targets' fork PR.** `feat/parser-forks` waits on #328; Phase B should land on the fork's htmljs commit and not add a second patch file (htmljs-parser is 5.15.0 on main and 5.18.0 on `marko-compiler-5.42.10`).
-4. **Union `ref`.** Mesh needs `load` to accept a relationship or a computed field. 156 gives `ref: "<kind>"`; whether `ref` may be a list (`["relationship", "computed"]`) is a contract-format extension this ADR proposes and 156 does not state.
-5. **Derived declarations, and extension kinds.** (a) Names that no single tag declares, such as the `listId` a `belongs-to` derives: whether a contract can express it (`declares` with a name transform) or the vocabulary adds them from its `analyze` hook, and what the hook's API is. (b) When two extensions in one generated contracts module declare the same kind, whether they merge or collide.
-6. **How a context is declared.** The scope is settled (the enclosing tag's whole subtree). Not specified: which tag's contract opens a context (an `entity`-like tag marks itself as the boundary, or the nearest tag that declares anything), and what happens when two nested tags could both be the enclosing one.
-7. **Atom against a string contract.** `type: "string"` with `:x`: accepted as its string, or a type error? 156 says an atom without a contract is never an error; it is silent on a contract of another type.
-8. **`parseData` shape.** 156 says it exposes the atom as such, and Mesh needs a list of atoms with a span per item; the concrete result shape (a tagged object, a wrapper class, a side table) and its stability as public API are not specified. Public API changes go to the lead per the standing rule.
-9. **Printing and round-trip.** A formatter and `parseData` consumers that re-emit source must keep `:x` as `:x`; the IR keeps the span, but no formatter exists to confirm it.
+Settled by the lead on 2026-10-05, when approving the parser research (recorded here, built in Phase B):
+
+- **Stand-in leak.** Accepted: core is the only supported driver of the fork compiler, and core asserts that no stand-in survives its conversion.
+- **Operations on an atom.** Member access, calls and unary operators on an atom (`:a.length`, `:a(1)`, `-:a`) are positioned errors: an atom is a name, not a value to operate on. Comparison (`x === :a`), array and object elements, template placeholders and function arguments are allowed.
+- **Sequencing.** Phase B lands on squad-targets' htmljs-parser fork (`feat/parser-forks`) as one patch series after that PR merges; no second patch file.
+
+Still open:
+
+1. **Union `ref`.** Mesh needs `load` to accept a relationship or a computed field. 156 gives `ref: "<kind>"`; whether `ref` may be a list (`["relationship", "computed"]`) is a contract-format extension this ADR proposes and 156 does not state.
+2. **Derived declarations, and extension kinds.** (a) Names that no single tag declares, such as the `listId` a `belongs-to` derives: whether a contract can express it (`declares` with a name transform) or the vocabulary adds them from its `analyze` hook, and what the hook's API is. (b) When two extensions in one generated contracts module declare the same kind, whether they merge or collide.
+3. **How a context is declared.** The scope is settled (the enclosing tag's whole subtree). Not specified: which tag's contract opens a context (an `entity`-like tag marks itself as the boundary, or the nearest tag that declares anything), and what happens when two nested tags could both be the enclosing one.
+4. **Atom against a string contract.** `type: "string"` with `:x`: accepted as its string, or a type error? 156 says an atom without a contract is never an error; it is silent on a contract of another type.
+5. **`parseData` shape.** 156 says it exposes the atom as such, and Mesh needs a list of atoms with a span per item; the concrete result shape (a tagged object, a wrapper class, a side table) and its stability as public API are not specified. Public API changes go to the lead per the standing rule.
+6. **Printing and round-trip.** A formatter and `parseData` consumers that re-emit source must keep `:x` as `:x`; the IR keeps the span, but no formatter exists to confirm it.
