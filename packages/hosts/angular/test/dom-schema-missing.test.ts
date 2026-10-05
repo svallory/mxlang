@@ -51,6 +51,7 @@ describe("a missing @angular/compiler", () => {
     expect(message).toContain("@angular/compiler was not found from");
     expect(message).toContain("bun add -d @angular/compiler");
     expect(message).toContain("[attr.name]");
+    expect(message).toContain("Restart the editor's TypeScript server");
     expect([line, column]).toEqual([2, 9]);
   });
 });

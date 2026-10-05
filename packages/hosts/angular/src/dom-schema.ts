@@ -53,7 +53,7 @@ interface Schema {
   lowercased: Set<string>;
 }
 
-const HOW_TO_FIX = `install a supported @angular/compiler (${SUPPORTED_COMPILER_RANGE}) in your project (\`bun add -d @angular/compiler\`); @mxlang/angular reads Angular's DOM schema from it to decide between \`[name]\` and \`[attr.name]\` for a dynamic attribute on a native element`;
+const HOW_TO_FIX = `install a supported @angular/compiler (${SUPPORTED_COMPILER_RANGE}) in your project (\`bun add -d @angular/compiler\`); @mxlang/angular reads Angular's DOM schema from it to decide between \`[name]\` and \`[attr.name]\` for a dynamic attribute on a native element. Restart the editor's TypeScript server or the dev server after installing it`;
 
 /** One schema per resolved `@angular/compiler` package. */
 const schemas = new Map<string, Schema>();
@@ -85,7 +85,7 @@ function load(fromFile: string): Schema {
   if (cached) return cached;
   const requireCompiler = createRequire(packageJson);
   const { version } = requireCompiler(packageJson) as { version?: unknown };
-  if (typeof version !== "string" || !/^22\./.test(version)) {
+  if (typeof version !== "string" || !inSupportedRange(version)) {
     throw new AngularCompilerUnavailableError(
       `@angular/compiler ${String(version)} (${packageJson}) is outside the supported range ${SUPPORTED_COMPILER_RANGE}: ${HOW_TO_FIX}.`,
     );
@@ -109,6 +109,27 @@ function load(fromFile: string): Schema {
   const schema = { registry, types, lowercased };
   schemas.set(packageJson, schema);
   return schema;
+}
+
+/** `major.minor.patch` as one comparable number; a prerelease tag is ignored. */
+function versionKey(version: string): number | undefined {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  return m ? Number(m[1]) * 1e6 + Number(m[2]) * 1e3 + Number(m[3]) : undefined;
+}
+
+/** Whether `version` is inside {@link SUPPORTED_COMPILER_RANGE} (`>=low <high`). */
+function inSupportedRange(version: string): boolean {
+  const [low, high] = SUPPORTED_COMPILER_RANGE.split(" ").map((bound) =>
+    versionKey(bound.replace(/^[<>=]+/, "")),
+  );
+  const key = versionKey(version);
+  return (
+    key !== undefined &&
+    low !== undefined &&
+    high !== undefined &&
+    key >= low &&
+    key < high
+  );
 }
 
 /** The private map exists and still classifies two properties as it did when checked. */
