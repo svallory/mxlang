@@ -331,7 +331,7 @@ describe("the Mesh case with the `:name` sugar (decision 146 PR 3)", () => {
       children: { attribute: { repeatable: true } },
     },
     attribute: {
-      attributes: { name: { type: "atom" }, type: { type: "string" } },
+      attributes: { name: { type: "string" }, type: { type: "string" } },
     },
   };
 
@@ -415,7 +415,7 @@ describe("the Mesh case with the `:name` sugar (decision 146 PR 3)", () => {
     expect(diagnostics).toMatchObject([
       {
         message:
-          "`<attribute>`: attribute `:title` (`name`) must be number, got atom",
+          "`<attribute>`: attribute `:title` (`name`) must be number, got string",
         line: 2,
         column: 13,
       },

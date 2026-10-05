@@ -792,7 +792,12 @@ function listEnum(values: readonly string[]): string {
 
 function literalValue(attr: Attr): LiteralValue | null {
   if (attr.kind === "static") {
-    return { type: attr.atom ? "atom" : "string", value: attr.value };
+    // The name sugar's `:name` is stringified for every contract but an atom
+    // one (decision 156 addendum 6); an explicit `x=:a` stays an atom.
+    return {
+      type: attr.atom && !attr.sugar ? "atom" : "string",
+      value: attr.value,
+    };
   }
   if (attr.kind === "boolean") return { type: "boolean", value: true };
   if (attr.kind !== "dynamic") return null;
@@ -884,7 +889,8 @@ function nodeShape(node: Node | null | undefined): string | null {
 
 /** The written type of an attribute's value, or `null` when it cannot be known. */
 function attrShape(attr: Attr): string | null {
-  if (attr.kind === "static") return attr.atom ? "atom" : "string";
+  if (attr.kind === "static")
+    return attr.atom && !attr.sugar ? "atom" : "string";
   if (attr.kind === "boolean") return "boolean";
   if (attr.kind !== "dynamic" && attr.kind !== "bound") return null;
   return nodeShape(attr.value.node);
@@ -947,6 +953,8 @@ function checkAtomAttr(
   attr: Exclude<Attr, { kind: "spread" }>,
   locate?: Locate,
 ): void {
+  // An atom, the sugar-derived `name` included, satisfies an atom contract.
+  if (attr.kind === "static" && attr.atom) return;
   const shape = attrShape(attr);
   if (shape && shape !== "atom" && shape !== "array") {
     failForOwner(

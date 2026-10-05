@@ -222,6 +222,50 @@ describe("atom against string, both ways", () => {
   });
 });
 
+describe("the name sugar against string, enum and atom (decision 156 addendum 6)", () => {
+  const field = (name: object): Record<string, CustomTag> => ({
+    field: { attributes: { name, x: { type: "string" } } },
+  });
+
+  it("satisfies a string-typed name as its string", () => {
+    for (const source of ["<field :email/>", "<field:email/>"]) {
+      expect(() => compile(source, field({ type: "string" }))).not.toThrow();
+    }
+  });
+
+  it("satisfies an enum on name as its string, and a miss names the enum", () => {
+    const tags = field({ enum: ["email", "phone"] });
+    expect(() => compile("<field :email/>", tags)).not.toThrow();
+    expect(fails("<field :emial/>", tags).message).toMatch(/one of .*email/);
+  });
+
+  it("satisfies an atom-typed name as the atom", () => {
+    expect(() =>
+      compile("<field :email/>", field({ type: "atom" })),
+    ).not.toThrow();
+  });
+
+  it("is still a string for other types", () => {
+    expect(fails("<field :email/>", field({ type: "number" })).message).toMatch(
+      /must be number, got string/,
+    );
+  });
+
+  it("an explicit atom against string stays an error", () => {
+    const error = fails("<field name=:a x=:b/>", field({ type: "atom" }));
+    expect(error.message).toMatch(/attribute `x` must be string, got atom/);
+    expect(
+      fails("<field name=:a/>", field({ type: "string" })).message,
+    ).toMatch(/must be string, got atom/);
+  });
+
+  it('name="title" against an atom-typed name stays an error', () => {
+    expect(
+      fails('<field name="title"/>', field({ type: "atom" })).message,
+    ).toMatch(/must be atom, got string/);
+  });
+});
+
 describe("references", () => {
   it("accepts a declared name; a typo is a positioned did-you-mean error", () => {
     const ok = `<entity :invoice>

@@ -118,7 +118,7 @@ A new lowering over its own parser has no reason to reproduce the shift mechanic
 
 ### 3.5 What diagnostics require
 
-- A lowering error is a `TranslateError` with a 1-based `line`, 0-based `column`, and `file` when it is about another file (`cross-file-error.test.ts`). Each `fail(…, node)` reports the node's `loc.start`.
+- A lowering error is a `TranslateError` with a 1-based `line`, 0-based `column`, and `file` when it is about another file (`cross-file-error.test.ts`). Each `fail(…, node)` reports the node's `loc.start`. An error about several places also carries the optional `spans: SourceSpan[]` (file-absolute UTF-16 offsets, source order; `line`/`column` are the last span's): a duplicate atom-contract declaration holds the first and the second (decision 156).
 - An attribute diagnostic is positioned at the attribute **name** (`Attr.loc`, which for an authored, spelled attribute is the position of `nameSpan.sourceStart`; a shorthand `#id`/`.class` with no position of its own reports at its tag, a merged sugar `class` at its first sugar token). Hosts rely on this for event-attribute errors (pinned per host by position tests on solid/preact/html/astro).
 - Warnings (`MxWarning`) carry the same structured position; the message text prints columns 1-based.
 - The TypeScript plugin and language server map only through authored positions — spans, and for an expression today `Expr.node.loc` (section 4). A missing position means "no mapping", never a guessed one ([Spans and mappings](/architecture/spans-and-mappings/)).

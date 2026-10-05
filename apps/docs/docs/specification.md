@@ -812,14 +812,16 @@ attribute declared `{ type: "atom" }` accepts an atom or a literal list of
 atoms; `values` (a set of names), `pattern` (a regex source string) and `ref`
 (a declaration kind, or a list of kinds) restrict it. An atom where the
 contract says `string`, and a string where it says `atom`, are type errors, so
-the name sugar (`:title`) satisfies a `name` typed atom and `name="title"` does
-not. A tag's `declares` (`kind`, `from` `"id"`|`"name"`, `scope`, `under`,
+explicit `x=:a` against `string` stays an error and `name="title"` against an
+atom-typed `name` is an error. The **name sugar** (`:title`) is the exception
+(decision 156 addendum 6): its `name` satisfies `string` and `enum` contracts as
+its string, and `atom` contracts as the atom. A tag's `declares` (`kind`, `from` `"id"`|`"name"`, `scope`, `under`,
 `uniqueWith`) and `ctx.declare` from `analyze` state names; checking is two
 phases (every declaration, then every reference), a reference resolves against
 the enclosing scopes innermost first, `scope` is a tag name or a list (the
 nearest ancestor with one of those names; none is an error, addendum 5), and
 two declarations of one name and kind in a scope are an error carrying both
-spans. An unknown name is an error on the atom with a did-you-mean. `ref`
+spans (`TranslateError.spans`, see below). An unknown name is an error on the atom with a did-you-mean. `ref`
 checks the one file. Without a contract an atom is never an error. See
 [Custom tags: atoms in contracts](/custom-tags/sidecars/#atoms-in-contracts).
 
@@ -2763,6 +2765,10 @@ runtime, and a template using none of it imports none of it.
 ## 12. Positions and diagnostics
 
 ### The contract
+
+An error about more than one place (a duplicate declaration: the first and the
+second) also carries `TranslateError.spans`, the source spans in file offsets
+in source order; its `line`/`column` are the last one's.
 
 A `TranslateError` carries **1-based `line`** and **0-based `column`** — what
 Marko's nodes have, not byte offsets. Every IR node carries a position

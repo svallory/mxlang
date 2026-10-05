@@ -2561,7 +2561,7 @@ describe("E1 errors name the sugar the author wrote", () => {
   it.each([
     [
       "\n<field :email/>\n",
-      "`<field>`: attribute `:email` (`name`) must be number, got atom",
+      "`<field>`: attribute `:email` (`name`) must be number, got string",
     ],
     [
       "\n<field #main/>\n",

@@ -55,7 +55,7 @@ slug:   { type: "atom", pattern: "^[a-z]+$" },          // regex source; with or
 any:    { type: "atom" },                               // any atom
 ```
 
-An atom where the contract says `string` (or any other non-atom type), and a string where it says `atom`, are type errors (``attribute `x` must be atom, got string``), positioned at the value. A name outside `values`, failing `pattern`, or not declared as a `ref` kind is a positioned error on the atom, with a did-you-mean when one candidate is clearly nearest. Without a contract an atom is never an error. `ref` checks the one file: a name it cannot find is an error, so an attribute that refers across files is simply not typed with `ref`.
+An explicit atom where the contract says `string` (or any other non-atom type), and a string where it says `atom`, are type errors (``attribute `x` must be string, got atom``), positioned at the value. The one exception is the name sugar (decision 156 addendum 6): `<field :email/>` sets `name`, which satisfies a `string` or `enum` contract as its string and an `atom` contract as the atom; `name="email"` against an atom-typed `name` is still an error. A name outside `values`, failing `pattern`, or not declared as a `ref` kind is a positioned error on the atom, with a did-you-mean when one candidate is clearly nearest. Without a contract an atom is never an error. `ref` checks the one file: a name it cannot find is an error, so an attribute that refers across files is simply not typed with `ref`.
 
 A tag states what it declares with `declares`, one entry or an array:
 

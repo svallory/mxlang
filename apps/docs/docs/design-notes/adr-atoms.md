@@ -80,7 +80,7 @@ A contract attribute may be declared in these ways (decision 156 addendum 1, ite
 - `{ type: "atom", ref: "<kind>" }`: the name must be a `<kind>` declared in scope (for example, `accept=[:title]` must name an attribute declared in the same entity).
 - `{ type: "atom", ref: ["<kind>", ...] }`: a union; the name must be declared as one of the kinds (`load` is a relationship or a computed field).
 
-**Atom against string.** An atom where the contract declares `string` is a type error, as a string where the contract declares `atom` already is. The distinction is checked both ways.
+**Atom against string.** An atom where the contract declares `string` is a type error, as a string where the contract declares `atom` already is. The distinction is checked both ways. **The one exception is the name sugar** (decision 156 addendum 6): the `name` it sets satisfies `string` and `enum` contracts as its string (the symbol by itself in a tag is stringified and set as `name`) and `atom` contracts as the atom; an explicit `x=:a` against `string` stays an error, and `name="title"` against an atom-typed `name` stays an error.
 
 An unknown name is a positioned error on the atom with a did-you-mean suggestion, using the same distance rule as unknown tags. Editors complete the candidates. **Without a contract an atom is just its name: never an error**, so atoms cost nothing in a vocabulary that has not opted in.
 
@@ -150,7 +150,7 @@ boolean :isOverdue({ self }) { ... }   ->  name="isOverdue" value=function
 <input :email=expr/>                   ->  name="email" value=expr
 ```
 
-The `name` attribute the sugar sets keeps its atom-ness (section 2): the IR and `parseData` mark it as written-as-atom (`DataAttr` kind `atom`), so a contract that types `name` as an atom with a `ref` checks it, and `name="title"` is a type error there. It is an error only if the tag already has a default value. This replaces 146's "sugar takes no value" errors. The tag-adjacent forms (`<:atom>`, `<kind:atom>`) are unchanged and still resolved after parsing.
+The `name` attribute the sugar sets keeps its atom-ness (section 2): the IR and `parseData` mark it as written-as-atom (`DataAttr` kind `atom`), so a contract that types `name` as an atom with a `ref` checks it, and `name="title"` is a type error there. For contract checks the sugar-derived `name` is also a string where the contract says `string` or `enum` (decision 156 addendum 6). It is an error only if the tag already has a default value. This replaces 146's "sugar takes no value" errors. The tag-adjacent forms (`<:atom>`, `<kind:atom>`) are unchanged and still resolved after parsing.
 
 ### 6. Invariants
 
