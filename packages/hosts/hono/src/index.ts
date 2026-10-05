@@ -53,7 +53,12 @@ export function compileHonoMx(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
+    | "customTags"
+    | "defaultTag"
+    | "resolveImport"
+    | "warnings"
+    | "targets"
+    | "typeCheck"
   > = {},
 ): CompilePreactResult {
   return compileHonoMxWith(source, filename, {
@@ -67,7 +72,12 @@ export function compileHonoFile(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
+    | "customTags"
+    | "defaultTag"
+    | "resolveImport"
+    | "warnings"
+    | "targets"
+    | "typeCheck"
   > = {},
 ): CompileResult {
   return compileHonoFileWith(filename, {

@@ -327,8 +327,3 @@ describe("DefaultTagParent carries what the helper needs", () => {
     expect(parent.name).toBe("x");
   });
 });
-
-describe("contractDefaultTag on every target's lookup (review round 2)", () => {
-  // `asked` is the describe-local helper above; re-declared access via closure
-  // is not possible, so the cases live in the describe that owns it.
-});

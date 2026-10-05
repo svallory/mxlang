@@ -44,7 +44,12 @@ export function compileReactMx(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
+    | "customTags"
+    | "defaultTag"
+    | "resolveImport"
+    | "warnings"
+    | "targets"
+    | "typeCheck"
   > = {},
 ): CompilePreactResult {
   return compileReactMxWith(source, filename, {
@@ -58,7 +63,12 @@ export function compileReactFile(
   filename: string,
   options: Pick<
     CompilePreactOptions,
-    "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
+    | "customTags"
+    | "defaultTag"
+    | "resolveImport"
+    | "warnings"
+    | "targets"
+    | "typeCheck"
   > = {},
 ): CompileResult {
   return compileReactFileWith(filename, {
