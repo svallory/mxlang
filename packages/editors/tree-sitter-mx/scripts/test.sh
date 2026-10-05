@@ -12,6 +12,9 @@
 #      branch mx/shorthand-anywhere's suite).
 #   4. __tests__/fixtures.bun-test.mts — every htmljs-parser fixture at the
 #      pinned HTMLJS_REV, compared event by event (fetched once into .cache/).
+#   4b. test/highlights.bun-test.mts — MX's own: the shorthand captures of
+#      queries/highlights.scm and of the Zed extension's languages/mx copy, in
+#      both positions and both modes.
 #   5. tools/check-wasm.mts — the wasm parses a sample and both queries load.
 #   6. scripts/zed-compile-check.sh — compiles src/ from a clean clone of
 #      HEAD, the same way Zed's file:// dev install does.
@@ -38,8 +41,8 @@ echo "==> build tree-sitter-mx.wasm"
 bun run build:wasm
 
 echo
-echo "==> mx shorthand trees and htmljs-parser fixtures"
-bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts
+echo "==> mx shorthand trees, htmljs-parser fixtures, shorthand highlights"
+bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts
 
 echo
 echo "==> wasm smoke and queries"

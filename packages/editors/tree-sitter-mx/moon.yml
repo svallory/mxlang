@@ -15,6 +15,8 @@ tasks:
       - "queries/**/*"
       - "src/**/*"
       - "__tests__/**/*"
+      - "test/**/*"
+      - "/packages/editors/zed/languages/mx/highlights.scm"
       - "tools/**/*"
       - "scripts/**/*"
       - "tree-sitter.json"
