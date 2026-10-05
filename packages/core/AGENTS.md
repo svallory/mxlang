@@ -1006,3 +1006,13 @@ stable version.
   parser `stockAtomError` turns Babel's failure at a `:name` into the
   "atoms need the MX parser" error, in `compileSource`, `parseFragment` and
   `exprOf`'s recovered-parse path.
+- **Atom contracts are two phases at the end of a unit's lowering**
+  (`src/atom-contracts.ts`, decision 156 PR 2). `transformCustomTag` records a
+  `ContractFact` (definition, call, authored ancestor nodes) per call in
+  `ctx.contractFacts`, `ctx.declare` from `analyze` fills `ctx.contractDerived`,
+  and `checkAtomContracts` (called from `lowerTemplate`) declares everything,
+  then checks every `values`/`pattern`/`ref`. Scopes are tag *instances* (Marko
+  nodes in `ctx.authoredAncestorNodes`, pushed beside `authoredAncestors`);
+  the default scope is the outermost authored tag, so two top-level siblings do
+  not share names. A call's own atom-vs-string type check stays in
+  `validateAttributes` (`checkAtomAttr`), not here.

@@ -5,7 +5,7 @@ description: "Why `:name` in an expression position is a value that represents i
 
 # ADR 156: atoms
 
-**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, `parseData`); contracts in PR 2.
+**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review) and addendum 5 (`scope` takes a list). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, `parseData`); contracts implemented in PR 2 (`feat/atoms-contracts`, `packages/core/src/atom-contracts.ts`).
 
 ## Context
 
@@ -95,7 +95,7 @@ A tag's contract declares a name with:
 
 ```text
 declares: Entry | Entry[]
-Entry = { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>", under?: "<parent tag>" | ["<parent tag>", ...], uniqueWith?: ["<kind>", ...] }
+Entry = { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>" | ["<ancestor tag name>", ...], under?: "<parent tag>" | ["<parent tag>", ...], uniqueWith?: ["<kind>", ...] }
 ```
 
 `declares` is one entry or an array of entries (decision 156 addendum 1, item 10). Entries may differ in kind and scope.
@@ -103,7 +103,7 @@ Entry = { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>", un
 - `under` (optional) limits the entry to a tag whose **parent** is one of the named tags. An entry without `under` applies under any parent. When several entries match, the **most specific wins**: an entry whose `under` names the parent beats one without.
 - `kind` is a plain name. Any number of tags may declare the same kind (the ten type tags all declare `attribute`).
 - `from` is where the name comes from: the tag's `#id` sugar (`"id"`) or its `name`, including `:name` (`"name"`).
-- `scope` is the **nearest ancestor tag with that name** that the declaration belongs to; when it is omitted, the scope is the file's **root tag**. A tag such as `string` declares an `argument` with `scope: "action"` when it sits under `arguments`, so the argument is visible only inside its action, and an `attribute` with the default scope when it sits under `attributes`, visible across the whole entity.
+- `scope` is the **nearest ancestor tag with that name** (or, as a list, with any of those names; decision 156 addendum 5) that the declaration belongs to; when it is omitted, the scope is the file's **root tag**, the outermost authored tag. **No such ancestor is a positioned error** at the declaration, never a silent fallback to the root: "`newTitle` declares an `argument` scoped to `create`, `read`, `update`, `destroy` or `action`, but has no such ancestor". A list is how a vocabulary whose actions are several tags (`create`, `read`, `update`, `destroy`, `action`) names "the enclosing action". A tag such as `string` declares an `argument` with `scope: ["create", "read", "update", "destroy", "action"]` when it sits under `arguments`, so the argument is visible only inside its action, and an `attribute` with the default scope when it sits under `attributes`, visible across the whole entity.
 - A reference resolves against every enclosing scope, **innermost first**; the first scope that declares the name decides. **No tag "opens a context"**: a scope is an ancestor tag a declaration names, and a contract never says it is a boundary.
 - `uniqueWith` (optional): a declaration also collides with a same-named declaration of the listed kinds in its scope, not just with its own kind.
 
@@ -246,7 +246,8 @@ so `load=[:items, :total]` is checked against both kinds, and a name declared as
 ```text
 string: { declares: [
   { kind: "attribute", from: "name", under: "attributes" },
-  { kind: "argument",  from: "name", under: "arguments", scope: "action" },
+  { kind: "argument",  from: "name", under: "arguments",
+    scope: ["create", "read", "update", "destroy", "action"] },
 ] }
 ```
 

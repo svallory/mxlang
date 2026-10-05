@@ -807,6 +807,22 @@ sets `name="email"` (above), and that `name` keeps its atom-ness in the IR and i
 `parseData` (addendum 1, item 2). `x=:a :b` is the atom value `x="a"` plus
 `name="b"`.
 
+**Atoms in contracts (decision 156 PR 2; ADR 156 section 4).** A contract
+attribute declared `{ type: "atom" }` accepts an atom or a literal list of
+atoms; `values` (a set of names), `pattern` (a regex source string) and `ref`
+(a declaration kind, or a list of kinds) restrict it. An atom where the
+contract says `string`, and a string where it says `atom`, are type errors, so
+the name sugar (`:title`) satisfies a `name` typed atom and `name="title"` does
+not. A tag's `declares` (`kind`, `from` `"id"`|`"name"`, `scope`, `under`,
+`uniqueWith`) and `ctx.declare` from `analyze` state names; checking is two
+phases (every declaration, then every reference), a reference resolves against
+the enclosing scopes innermost first, `scope` is a tag name or a list (the
+nearest ancestor with one of those names; none is an error, addendum 5), and
+two declarations of one name and kind in a scope are an error carrying both
+spans. An unknown name is an error on the atom with a did-you-mean. `ref`
+checks the one file. Without a contract an atom is never an error. See
+[Custom tags: atoms in contracts](/custom-tags/sidecars/#atoms-in-contracts).
+
 **Errors core owns**, each positioned at the atom: member access (`:a.length`,
 `:a[0]`), a call (`:a(1)`), a unary operator (`-:a`, `!:a`, `typeof :a`),
 spreading (`f(...:a)`, `[...:a]`) and a non-computed object key (`{:a: 1}`;

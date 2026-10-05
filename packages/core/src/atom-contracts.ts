@@ -235,10 +235,10 @@ function declare(
 
   const scopes: Scopes = new Map();
   for (const { owner, decl } of pending) {
-    let names = scopes.get(owner);
-    if (!names) scopes.set(owner, (names = new Map()));
-    let same = names.get(decl.name);
-    if (!same) names.set(decl.name, (same = []));
+    const names = scopes.get(owner) ?? new Map<string, Declaration[]>();
+    scopes.set(owner, names);
+    const same = names.get(decl.name) ?? [];
+    names.set(decl.name, same);
     const clash = same.find(
       (other) =>
         other.kind === decl.kind ||

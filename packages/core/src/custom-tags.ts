@@ -2008,7 +2008,8 @@ export function runAnalyzeHooks(
       store: storeFor(ctx, name),
       fail: (message, at) => failAt(name, message, at ?? first.loc),
       declare: (kind, declaredName, options) => {
-        (ctx.contractDerived ??= []).push({
+        ctx.contractDerived ??= [];
+        ctx.contractDerived.push({
           kind,
           name: declaredName,
           span: options.span,
@@ -2200,7 +2201,8 @@ export function transformCustomTag(
 
   validateCustomTagCall(definition, call, (offset) => positionAt(ctx, offset));
   // Decision 156: remembered for the file-level declare and check phases.
-  (ctx.contractFacts ??= new Map()).set(node, {
+  ctx.contractFacts ??= new Map();
+  ctx.contractFacts.set(node, {
     definition,
     call,
     chain: [...(ctx.authoredAncestorNodes ?? [])],

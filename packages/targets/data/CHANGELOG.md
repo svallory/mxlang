@@ -4,6 +4,7 @@
 
 - `unknownTags: "reject"` counts a child claimed by a parent's `children["*"]` as known, on the build path and on the parse-only scan used when core reports an earlier error (decision 147).
 - `<let>`, `<style>` and the other core-taglib names are never claimed by a wildcard, like every target (decision 147 addendum 2).
+- The data fixtures that typed the sugar's `name` as `string` now type it `atom` (`:title` is an atom, decision 156 PR 2); no code change.
 
 ## 0.1.0-alpha.3
 

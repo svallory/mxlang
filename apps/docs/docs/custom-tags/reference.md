@@ -15,8 +15,18 @@ export interface CustomTagParseOptions {
 }
 
 export interface CustomTagAttribute {
-  type?: "string" | "number" | "boolean" | "expression" | "array" | "function";
+  type?:
+    | "string"
+    | "number"
+    | "boolean"
+    | "expression"
+    | "array"
+    | "function"
+    | "atom";
   items?: "string" | "number" | "boolean";
+  values?: string[]; // type: "atom" only
+  pattern?: string; // type: "atom" only
+  ref?: string | string[]; // type: "atom" only
   required?: boolean;
   enum?: string[];
   default?: unknown;
@@ -126,6 +136,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `attributes` | Closed attribute contract, validated before hooks; omit it to leave attributes open. |
 | `attributeTags` | Closed `<@name>` contract with required/repeatable controls and recursive `attributes`, `attributeTags` and `children` maps. |
 | `defaultTag` | The tag name that `<#id>` and `<.class>` (an unnamed tag) written directly inside this tag stand for. Also accepted on every `attributeTags` declaration. A non-empty string naming a plain tag reachable from the package; see [Name the unnamed tag](/custom-tags/sidecars/#sidecars-declare-the-call-contract-name-the-unnamed-tag-defaulttag). |
+| `declares` | The names this tag declares for atom references: one entry or an array of `{ kind, from: "id" \| "name", scope?, under?, uniqueWith? }` (decision 156, see [Atoms in contracts](/custom-tags/sidecars/#atoms-in-contracts)). |
 | `analyze` | Non-mutating pass over every call of this tag in one file, before transforms. |
 | `transform` | Expands one validated call into ordinary IR; optional only when a template exists. |
 | `finalize` | Adds nodes once per file after expansion; returned nodes are prepended. |
@@ -141,6 +152,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `items` | With `type: "array"`, checks each literal element as `"string"`, `"number"` or `"boolean"`. |
 | `required` | Requires the attribute or attribute tag. |
 | `enum` | Restricts an attribute to listed string literals. |
+| `values`, `pattern`, `ref` | With `type: "atom"`: the allowed names, a regex they must match, and the declaration kind (or kinds) they must name. |
 | `default` | Supplies an omitted string, number, or boolean attribute on the custom tag after validation; not applied to attribute-tag attributes (decision 138 E4). |
 | `literalOnly` | Requires a compile-time scalar, array, or object literal. |
 | `repeatable` | Allows an attribute tag name to appear more than once. |
@@ -171,6 +183,7 @@ is a positioned compile error.
 | `gensym` | Produces a hygienic file-unique binding, optionally using a hint. |
 | `fail` | Creates a positioned `TranslateError`; always write `throw ctx.fail(...)`. |
 | `hoist` | Moves code to the head of the nearest enclosing function. |
+| `declare` | In `analyze`: `declare(kind, name, { span, scope? })` adds a derived declaration for atom references. |
 | `store` | Private per-tag, per-file state shared by `analyze`, `transform`, and `finalize`. |
 | `get` | Reads one typed store key. |
 | `set` | Writes one store key. |
@@ -225,6 +238,10 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | An enum receives a non-literal expression. | `` `<name>`: attribute `x` must be a static value from … `` |
 | An enum receives a non-string literal. | `` `<name>`: attribute `x` must be a string from …, got TYPE `` |
 | An enum string is not a member. | `` `<name>`: attribute `x` must be one of …, got VALUE `` |
+| An atom meets a non-atom type, or a non-atom meets `type: "atom"`. | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`) |
+| An atom is outside `values`, fails `pattern`, or names no declaration of its `ref` kind. | `` `<name>`: attribute `x`: `:a` is not one of …`` / `does not match the pattern /…/` / `is not a declared KIND here; did you mean `:b`?` |
+| Two declarations of one name and kind (or `uniqueWith` kinds) share a scope. | `` `a` is already declared as `kind` at L:C `` (positioned at the second, `spans` holds both) |
+| A `declares` `scope` has no such ancestor. | `` `a` declares a `kind` scoped to `x` or `y`, but has no such ancestor `` |
 | A required attribute is absent. | `` `<name>`: missing required attribute `x` `` |
 | A declared default is not a string, number, or boolean. | `` `<name>`: attribute `x` declares a `default` that … has no attribute spelling `` |
 

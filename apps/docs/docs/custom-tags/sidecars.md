@@ -31,16 +31,51 @@ const icon: CustomTag = {
 
 An attribute declaration supports:
 
-- `type`: `"string"`, `"number"`, `"boolean"`, `"expression"`, `"array"` or `"function"`. `array` accepts a literal array and `function` accepts an arrow function, a function expression or the method shorthand (a function expression and the method shorthand reach the contract only on a host that resolves attribute methods, `resolveAttributeMethod`; any other host rejects them before the contract runs); a literal of another type is an error, while an identifier, call, member or conditional is accepted because its type is unknowable.
+- `type`: `"string"`, `"number"`, `"boolean"`, `"expression"`, `"array"`, `"function"` or `"atom"`. `array` accepts a literal array and `function` accepts an arrow function, a function expression or the method shorthand (a function expression and the method shorthand reach the contract only on a host that resolves attribute methods, `resolveAttributeMethod`; any other host rejects them before the contract runs); a literal of another type is an error, while an identifier, call, member or conditional is accepted because its type is unknowable.
 - `items`: with `type: "array"`, the literal element type (`"string"`, `"number"` or `"boolean"`). A non-literal element passes. `items` without `type: "array"`, and `enum` with `array` or `function`, are registration errors.
 - `required`: reject a call that omits the attribute.
 - `enum`: accept only one of the listed string literals.
 - `default`: append a string, number, or boolean value when the call omits it.
 - `literalOnly`: reject values that cannot be read at compile time. Literal arrays and objects are accepted as well as scalar literals.
+- `values`, `pattern`, `ref`: with `type: "atom"` only (see [Atoms in contracts](#atoms-in-contracts)); on any other type they are registration errors.
 
 Declaring `attributes` makes a closed contract: undeclared attributes and spreads are errors. Omitting `attributes` leaves attributes open.
 
 `attributeTags` is a map from the name after `@` to `{ required?, repeatable?, attributes?, attributeTags?, children? }`. Once present, it is closed: undeclared names are errors, required names must occur on every path, and a name repeats only when `repeatable: true`.
+
+### Atoms in contracts
+
+Decision 156 (ADR 156 section 4). `type: "atom"` accepts an atom (`mode=:strict`, the `:name` sugar) or a literal list of atoms (`accept=[:title, :body]`):
+
+```ts
+accept: { type: "atom", ref: "attribute" },            // must name a declared attribute
+load:   { type: "atom", ref: ["relationship", "computed"] }, // one of several kinds
+types:  { type: "atom", values: ["create", "read", "update", "destroy"] },
+slug:   { type: "atom", pattern: "^[a-z]+$" },          // regex source; with or without values
+any:    { type: "atom" },                               // any atom
+```
+
+An atom where the contract says `string` (or any other non-atom type), and a string where it says `atom`, are type errors (``attribute `x` must be atom, got string``), positioned at the value. A name outside `values`, failing `pattern`, or not declared as a `ref` kind is a positioned error on the atom, with a did-you-mean when one candidate is clearly nearest. Without a contract an atom is never an error. `ref` checks the one file: a name it cannot find is an error, so an attribute that refers across files is simply not typed with `ref`.
+
+A tag states what it declares with `declares`, one entry or an array:
+
+```ts
+string: {
+  attributes: { name: { type: "atom" } },
+  declares: [
+    { kind: "attribute", from: "name", under: "attributes" },
+    { kind: "argument", from: "name", under: "arguments",
+      scope: ["create", "read", "update", "destroy", "action"] },
+  ],
+},
+```
+
+- `from`: `"name"` (the `name` attribute, including `:name`) or `"id"` (the `#id` sugar).
+- `under`: the parent tag name, or a list; an entry without `under` applies under any parent, and the entry whose `under` names the parent wins.
+- `scope`: a tag name or list; the declaration belongs to the nearest ancestor with one of those names (default: the file's root tag, the outermost authored tag). No such ancestor is an error: ``` `x` declares an `argument` scoped to `update` or `action`, but has no such ancestor ```.
+- `uniqueWith`: kinds that also clash with this name in the scope.
+
+A reference resolves against every enclosing scope, innermost first; no tag "opens a context". Declarations are collected before references are checked, so source order does not matter, and a name `analyze` adds with `ctx.declare(kind, name, { span, scope })` is visible to every reference (`span` anchors the scope: the tag whose span holds it). Two declarations of one name and kind in one scope are an error positioned at the second and carrying both spans (`TranslateError.spans`). A kind is a plain name, so contract modules that use the same kind name share one namespace.
 
 ### Declare an attribute tag's own contract
 
