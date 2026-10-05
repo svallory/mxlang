@@ -12,8 +12,8 @@
  *    tag changes the list with no edit here. (An empty override `{}` merges
  *    nothing and fails; scalars overwrite, which is why `false` wins.)
  *
- * 2. **Structural entries**, copied from the html host's
- *    `taglib/marko.json`: `if`/`else`/`else-if`/`for`/`const`/`define`/
+ * 2. **Structural entries**, copied from core's
+ *    `taglib/core-tags.json` (`CORE_TAGLIB`): `if`/`else`/`else-if`/`for`/`const`/`define`/
  *    `return`/`import`/`static`/`export`. They are not derivable from
  *    `marko-html.json`. The host-owned entries (`let`, `id`, `effect`,
  *    `lifecycle`, `log`, `debug`, `await`, `class`, `client`, `server`,

@@ -507,8 +507,8 @@ that nothing failed.
 
 ## Pins
 
-`@marko/compiler` 5.42.5 exactly, matching the rest of the repo. The taglib in
-`taglib/marko.json` declares the core tags' parse options (statement tags,
+`@marko/compiler` 5.42.5 exactly, matching the rest of the repo. The core taglib
+(`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`) declares the core tags' parse options (statement tags,
 control flow, `openTagOnly`, raw-text bodies) so the compiler parses stock
 Marko the same way it does for `marko/translator`; the HTML, SVG and MathML
 element taglibs load on their own.

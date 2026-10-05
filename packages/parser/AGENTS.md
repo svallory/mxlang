@@ -93,7 +93,7 @@ covered by the `.marko` alias in the first place.
   template (`.mx`, stock Marko syntax with no dialect layered on top).
   `@marko/compiler` parses, validates and supplies the tag registry; the
   package supplies only a translator (`packages/targets/html/src/translate.ts`)
-  and its own taglib (`packages/targets/html/taglib/marko.json`).
+  and its own taglib (`packages/core/src/taglib/core-tags.json`, exported as `CORE_TAGLIB`).
   `@mxlang/parser` is not on this path at all. `compile()`/`compileFile()`
   themselves do not gate on the filename extension (it is inert in
   `@mxlang/core`'s `compileSource` too — the extension check lives at the
