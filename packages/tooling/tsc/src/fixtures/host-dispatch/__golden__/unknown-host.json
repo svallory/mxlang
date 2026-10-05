@@ -67,14 +67,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<div></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCard.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              54
+              103
             ],
             "lengths": [
               49
@@ -100,7 +100,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<div></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCard.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card;\n",
         "map": null,
         "warnings": [
           "@mxlang/vite-plugin: <root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."
@@ -176,14 +176,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  const count = 0;\n  __mxOut += Card({ tab: () => {\n    let __mxOut = \"\";\n    return __mxOut;\n  } });\n  __mxOut += \"<p>\";\n  __mxOut += __mxEscape(count);\n  __mxOut += \"</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): F {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as F;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  const count = 0;\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n  __mxOut.write(\"<p>\");\n  __mxOut.write(__mxEscape(count));\n  __mxOut.write(\"</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "mappings": [
           {
             "sourceOffsets": [
               0
             ],
             "generatedOffsets": [
-              54
+              103
             ],
             "lengths": [
               28
@@ -200,7 +200,7 @@
               41
             ],
             "generatedOffsets": [
-              185
+              829
             ],
             "lengths": [
               1
@@ -217,7 +217,7 @@
               46
             ],
             "generatedOffsets": [
-              201
+              857
             ],
             "lengths": [
               4
@@ -234,7 +234,7 @@
               53
             ],
             "generatedOffsets": [
-              208
+              865
             ],
             "lengths": [
               3
@@ -251,7 +251,7 @@
               71
             ],
             "generatedOffsets": [
-              315
+              1005
             ],
             "lengths": [
               5
@@ -277,7 +277,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  const count = 0;\n  __mxOut += Card({ tab: () => {\n    let __mxOut = \"\";\n    return __mxOut;\n  } });\n  __mxOut += \"<p>\";\n  __mxOut += __mxEscape(count);\n  __mxOut += \"</p>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nimport Card from \"./Card.mx\"\n\nexport interface Input {}\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): F {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as F;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  const count = 0;\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n  __mxOut.write(\"<p>\");\n  __mxOut.write(__mxEscape(count));\n  __mxOut.write(\"</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "map": null,
         "warnings": [
           "@mxlang/vite-plugin: <root>/unknown-host/package.json:3:13: unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead."

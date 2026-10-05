@@ -12,14 +12,14 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<input name=\\\"email\\\" type=\\\"email\\\"><input type=\\\"email\\\" name=\\\"email\\\" class=\\\"big\\\" id=\\\"main\\\"><div name=\\\"b\\\" class=\\\"c\\\"></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<input name=\\\"email\\\" type=\\\"email\\\"><input type=\\\"email\\\" name=\\\"email\\\" class=\\\"big\\\" id=\\\"main\\\"><div name=\\\"b\\\" class=\\\"c\\\"></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "mappings": [],
         "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
       },
       "vite": {
-        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<input name=\\\"email\\\" type=\\\"email\\\"><input type=\\\"email\\\" name=\\\"email\\\" class=\\\"big\\\" id=\\\"main\\\"><div name=\\\"b\\\" class=\\\"c\\\"></div>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<input name=\\\"email\\\" type=\\\"email\\\"><input type=\\\"email\\\" name=\\\"email\\\" class=\\\"big\\\" id=\\\"main\\\"><div name=\\\"b\\\" class=\\\"c\\\"></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
         "map": null,
         "warnings": []
       }
