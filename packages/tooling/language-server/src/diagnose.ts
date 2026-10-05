@@ -16,6 +16,7 @@ import {
   isTranslateError,
   type MxWarning,
   type ScanDiagnostic,
+  type TargetLookup,
   type TargetPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
@@ -23,9 +24,13 @@ import { type PrintOptions, print } from "@mxlang/parser";
 import {
   type BuiltinFileKind,
   builtinFileKinds,
+  builtinLookup,
   defaultTagFor,
   getCustomTags,
   lookupFor,
+  type RegionFileKind,
+  regionCompileFor,
+  regionFileKinds,
   scanCached,
 } from "@mxlang/target-registry";
 import {
@@ -43,11 +48,18 @@ const LOAD_FAILURE_CODES: ReadonlySet<string> = new Set([
   "host-invalid-descriptor",
 ]);
 
-export const SOLID_MX_LANGUAGE_IDS = new Set(
-  builtinFileKinds
-    .filter((kind) => kind.pipeline === "region")
-    .flatMap((kind) => kind.languageIds ?? []),
+/** Every editor language id of a built-in region file kind (`.solid.mx`, …). */
+export const REGION_LANGUAGE_IDS = new Set(
+  regionFileKinds().flatMap((kind) => kind.languageIds ?? []),
 );
+
+/** {@link REGION_LANGUAGE_IDS}, under its name from when Solid's was the only region kind. */
+export const SOLID_MX_LANGUAGE_IDS = REGION_LANGUAGE_IDS;
+
+/** A document's file kind: a region kind of the lookup, or a built-in template kind. */
+type DocumentKind =
+  | (RegionFileKind & { pipeline: "region" })
+  | (BuiltinFileKind & { pipeline: "ng-template" | "astro-template" });
 
 /**
  * File kinds take precedence over page policy. Silent template suffixes keep
@@ -55,18 +67,31 @@ export const SOLID_MX_LANGUAGE_IDS = new Set(
  * region language id also identifies an untitled or mis-suffixed buffer, but
  * cannot override a silent template suffix. Silent kinds match suffixes only:
  * changing a page's language mode must never suppress its diagnostics.
+ *
+ * Region kinds come from `lookup` (the document's own, `lookupFor(policy)`):
+ * a kind is a region kind only if it has a `compileRegion`, so a file kind
+ * without one, or a `.<word>.mx` no kind registers, is never routed to the
+ * region bridge and compiles whole-file under the page policy.
  */
-function fileKindOf(uri: string, languageId = ""): BuiltinFileKind | undefined {
+function fileKindOf(
+  uri: string,
+  languageId = "",
+  lookup: TargetLookup = builtinLookup(),
+): DocumentKind | undefined {
+  const regions = regionFileKinds(lookup).map((kind) => ({
+    ...kind,
+    pipeline: "region" as const,
+  }));
+  const templates = builtinFileKinds.filter(
+    (kind): kind is DocumentKind & BuiltinFileKind =>
+      kind.pipeline !== "region",
+  );
   return (
-    builtinFileKinds.find((kind) =>
-      (kind.pipeline === "region" ? uri : uri.toLowerCase()).endsWith(
-        `.${kind.segment}.mx`,
-      ),
+    regions.find((kind) => uri.endsWith(`.${kind.segment}.mx`)) ??
+    templates.find((kind) =>
+      uri.toLowerCase().endsWith(`.${kind.segment}.mx`),
     ) ??
-    builtinFileKinds.find(
-      (kind) =>
-        kind.pipeline === "region" && kind.languageIds?.includes(languageId),
-    )
+    regions.find((kind) => kind.languageIds?.includes(languageId))
   );
 }
 
@@ -372,7 +397,7 @@ export function diagnoseDocument(
       return scanWarnings;
     }
 
-    const kind = fileKindOf(path, languageId);
+    const kind = fileKindOf(path, languageId, lookup);
     if (
       kind?.pipeline === "astro-template" ||
       kind?.pipeline === "ng-template"
@@ -382,23 +407,25 @@ export function diagnoseDocument(
       return scanWarnings;
     }
     if (kind?.pipeline === "region") {
-      const compileRegion = kind.compileRegion;
-      if (!compileRegion) return scanWarnings;
       // A language id can identify an untitled/mis-suffixed buffer. Supply
-      // the registered suffix so the parser opts into its region bridge.
+      // the registered suffix: the host reads it for diagnostics and for
+      // resolving callees, and the registry routes the file by it.
       const suffix = `.${kind.segment}.mx`;
       const filename = path.endsWith(suffix) ? path : `${path}${suffix}`;
+      const regionCompile = regionCompileFor(filename, {
+        targets: lookup,
+        warnings,
+      });
+      if (!regionCompile) return scanWarnings;
       const result = print(text, filename, {
+        mx: true,
         customTags,
         defaultTag: defaultTagFor(filename, hostPolicy),
-        mxRegionCompile: (input) => {
-          const regionInput = { ...input, warnings, targets: lookup };
-          // Core keeps the parser's hoisted AST nodes opaque to avoid a
-          // dependency cycle. This built-in pipeline supplies parser nodes.
-          return compileRegion(input.source, regionInput) as ReturnType<
-            NonNullable<PrintOptions["mxRegionCompile"]>
-          >;
-        },
+        // Core keeps the parser's hoisted AST nodes opaque to avoid a
+        // dependency cycle. This built-in pipeline supplies parser nodes.
+        mxRegionCompile: regionCompile as NonNullable<
+          PrintOptions["mxRegionCompile"]
+        >,
       });
       for (const dependency of result.dependencies)
         dependencies?.add(dependency);

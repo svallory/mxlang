@@ -15,10 +15,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withCalleeInputSources } from "@mxlang/core";
-import {
-  builtinFileKinds,
-  resolveTargetPolicyDetailed,
-} from "@mxlang/target-registry";
+import { resolveTargetPolicyDetailed } from "@mxlang/target-registry";
 import {
   createConnection,
   type Diagnostic,
@@ -28,7 +25,11 @@ import {
   TextDocuments,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { diagnoseDocument, type RelatedDiagnostics } from "./diagnose.ts";
+import {
+  diagnoseDocument,
+  REGION_LANGUAGE_IDS,
+  type RelatedDiagnostics,
+} from "./diagnose.ts";
 
 /** Milliseconds to wait after the last edit before compiling (brief §3). */
 const DEBOUNCE_MS = 150;
@@ -38,12 +39,7 @@ const DEBOUNCE_MS = 150;
  * addition to the file suffix, since some clients open a buffer with no
  * `file://` URI (e.g. `untitled:`) — the suffix check alone would miss it.
  */
-const MX_LANGUAGE_IDS = new Set([
-  "mx",
-  ...builtinFileKinds
-    .filter((kind) => kind.pipeline === "region")
-    .flatMap((kind) => kind.languageIds ?? []),
-]);
+const MX_LANGUAGE_IDS = new Set(["mx", ...REGION_LANGUAGE_IDS]);
 
 function isMxDocument(uri: string, languageId: string): boolean {
   return MX_LANGUAGE_IDS.has(languageId) || uri.endsWith(".mx");

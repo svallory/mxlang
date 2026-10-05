@@ -15,6 +15,7 @@ import { clearScanCache, type TargetPolicy } from "@mxlang/core";
 import {
   builtinFileKinds,
   builtinLookup,
+  builtinTargets,
   defaultTarget,
   hostOf,
   hostTarget,
@@ -93,7 +94,10 @@ describe("target-table dispatch", () => {
   });
 
   it("uses the registered region compiler for an untitled language id", () => {
-    const kind = builtinFileKinds.find((kind) => kind.pipeline === "region");
+    // The descriptor's own file kind: dispatch reads the lookup's descriptors.
+    const kind = builtinTargets
+      .flatMap((target) => target.host?.fileKinds ?? [])
+      .find((kind) => kind.compileRegion);
     if (!kind?.compileRegion) throw new Error("missing region compiler");
     const compileRegion = vi.spyOn(kind, "compileRegion");
     expect(
