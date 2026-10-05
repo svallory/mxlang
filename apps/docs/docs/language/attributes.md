@@ -134,7 +134,10 @@ boolean ({ self }) { return self.x } #isOverdue
 
 (on the [data target](/specification/#the-mx-language-13-host-semantics-table-137-the-data-target):
 a tag `boolean` with `id="isOverdue"` and a function `value`). A tag takes **one**
-default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second.
+default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second. A bound
+`value:=y` counts as the default value too. On Angular an attribute-position
+`#x=1` stays the template reference (it emits `[#x]="1"`, not `id` plus `value`);
+`:n=1`, `.c=1` and tag-adjacent `<div#x=1>` set the default value there.
 
 ### What stays what Marko does
 
@@ -143,7 +146,7 @@ default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second.
 | `<a class="hover:x"/>` | `class="hover:x"`, untouched |
 | `<a.hover:x/>` | class `hover` plus `name="x"`: a shorthand class cannot contain `:` |
 | `<div value:foo="y"/>` | Marko's attribute `value:foo`, untouched (the explicit `value:x` spelling) |
-| `<a :x=1/>` | `name="x"` plus `value=1`: a sugar followed by `=value` sets the default attribute (see below) |
+| `<a :x=1/>` | `name="x"` plus `value=1`: a sugar followed by `=value` sets the default attribute (see [A sugar followed by a value](#attributes-name-and-id-and-class-after-an-attribute-a-sugar-followed-by-a-value)) |
 | `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
 | `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a .2xl/>` is `id="1a"`, `class="2xl"`) |
 

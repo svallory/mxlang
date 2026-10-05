@@ -745,8 +745,8 @@ directly by `=value` or `(params) { body }` sets the tag's default attribute**
 tag, `id="name"` plus `value=function`; `:name` and `.class` work the same way.
 (`(` and `=` cannot be part of a sugar, so the space after it is optional.) A tag
 that already has a default value (`kind=1 #x=2`, `<if=a #x=b>`, two sugars with
-values) is a positioned error at the second one. A `:name` that is not an identifier, and `:b:c` (two names) or
-`:b(x)` (arguments), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors.
+values) is a positioned error at the second one (a bound `value:=y` is a default value too; two authored `value=` alone stay decision 135's warning, but with any sugar value beside them the error lands on the second authored one). On Angular, attribute-position `#x=1` is still the template reference, not this sugar. A `:name` that is not an identifier, and `:b:c` (two names) or
+`:b(x)`, `#x(p)` and `.c(p)` (arguments without a body), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors.
 
 **Left alone:** the named forms (`class:x`, `style:x`, `value:fn:=x`, and the
 explicit `value:x`), a dynamic tag name
