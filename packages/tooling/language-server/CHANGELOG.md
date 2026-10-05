@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Tests (name-sugar-tooling r2):** the mid-edit buffers pin an exact diagnostic count each; `input :` is 1 (the bare `:` is now an error).
+
 - **Tests/Docs (name-sugar-tooling, decision 146 PR 3):** the sugar sigils right after whitespace inside a tag (`<input :`, `<input #`, `<input .`) never crash the server or report more than one error; the server page says it offers no completion or hover of its own, so there is no sugar hover.
 
 - **Added (default-tag-ladder, decision 145):** a package's `mx.<target>.defaultTag` reaches the page compile and each `.solid.mx` region; an invalid one is the one error the policy diagnostics report, positioned at the `package.json` value, and the built-in answers meanwhile.

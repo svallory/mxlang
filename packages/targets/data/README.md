@@ -148,7 +148,9 @@ attributes
 
 is `<attribute name="title" type="string">` and `<attribute name="year"
 type="number">` under `<attributes>` (the concise line is the same). An E1 error on
-the sugar names the token and the attribute, positioned at the token:
+the sugar names the token and the attribute, positioned at the token. For the
+document `attributes` / `  :title type="string"` with `name` left out of
+`attribute`'s declared `attributes` (`attribute: { attributes: { type: {} } }`):
 
 ```text
 doc.mx(2,3): error TS80001: `<attribute>`: unknown attribute `:title` (`name`)

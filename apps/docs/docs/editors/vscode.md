@@ -38,7 +38,7 @@ This requires `prettier` and `prettier-plugin-marko` to be installed in your pro
 
 :::warning Do not format files that use sugar after a value
 `prettier-plugin-marko` bundles a stock `htmljs-parser`, which does not know the
-[name sugar](/language/attributes/#attributes-name-and-id-and-class-after-an-attribute-after-a-value-what-changes) (decision 146).
+[name sugar](/language/attributes/#attributes-name-and-id-and-class-after-an-attribute-needs-the-patched-parser-a-limit-in-plain-words) (decision 146).
 On a `.mx` file that writes `:name`, `#id` or `.class` **after an attribute
 value**, it rewrites `<a x=a .b/>` to `<a x=a.b/>`: a class becomes member access,
 with no error. Do not run it on such files (exclude them in your Prettier

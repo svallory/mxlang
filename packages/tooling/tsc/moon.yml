@@ -20,4 +20,12 @@ tasks:
       - "/packages/tooling/language-server/src/**/*"
       # host-dispatch-golden.test.ts imports the built Vite plugin bundle.
       - "/packages/tooling/vite-plugin/dist/**/*"
+      # sugar-stock-parser.test.ts runs each tool's built dist in a child
+      # process (the language server, the TypeScript plugin, Vite, mx-tsc) and
+      # core's dist, against a stock htmljs-parser rebuilt from the patch.
+      - "/packages/tooling/language-server/dist/**/*"
+      - "/packages/tooling/typescript-plugin/dist/**/*"
+      - "/packages/tooling/tsc/dist/**/*"
+      - "/packages/core/dist/**/*"
+      - "/patches/htmljs-parser@5.15.0.patch"
       - "/vitest.config.ts"

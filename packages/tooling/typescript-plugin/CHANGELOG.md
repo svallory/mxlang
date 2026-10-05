@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Tests (name-sugar-tooling r2):** the mid-edit buffers assert exactly one compile diagnostic with an in-range offset.
+
 - **Tests/Docs (name-sugar-tooling, decision 146 PR 3):** the plugin builds its virtual code for a buffer mid-edit on a sugar sigil (`<input :`, `<input #`, `<input .`), and a sugar token maps to the generated `name`/`class`/`id` with its exact source range (documented on the TypeScript page).
 
 ### Fixed: no TS1108 for a top-level return in an `.astro.mx` `---` fence (astro-fence-top-level-return)

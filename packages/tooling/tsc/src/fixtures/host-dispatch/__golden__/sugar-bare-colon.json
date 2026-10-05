@@ -1,0 +1,177 @@
+{
+  "files": {
+    "after-value.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 13
+              },
+              "end": {
+                "line": 0,
+                "character": 14
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/sugar-bare-colon/after-value.mx",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "offset": 13,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+          "id": "<root>/sugar-bare-colon/after-value.mx",
+          "loc": {
+            "file": "<root>/sugar-bare-colon/after-value.mx",
+            "line": 1,
+            "column": 13
+          },
+          "frame": "1 | <input x=\"1\" :/>\n                 ^"
+        },
+        "warnings": []
+      }
+    },
+    "concise.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 6
+              },
+              "end": {
+                "line": 0,
+                "character": 7
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/sugar-bare-colon/concise.mx",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "offset": 6,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+          "id": "<root>/sugar-bare-colon/concise.mx",
+          "loc": {
+            "file": "<root>/sugar-bare-colon/concise.mx",
+            "line": 1,
+            "column": 6
+          },
+          "frame": "1 | input :\n          ^"
+        },
+        "warnings": []
+      }
+    },
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 7
+              },
+              "end": {
+                "line": 0,
+                "character": 8
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/sugar-bare-colon/page.mx",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "offset": 7,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+          "id": "<root>/sugar-bare-colon/page.mx",
+          "loc": {
+            "file": "<root>/sugar-bare-colon/page.mx",
+            "line": 1,
+            "column": 7
+          },
+          "frame": "1 | <input :/>\n           ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/sugar-bare-colon/after-value.mx(1,14): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+    "<root>/sugar-bare-colon/concise.mx(1,7): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+    "<root>/sugar-bare-colon/page.mx(1,8): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name"
+  ]
+}

@@ -15,42 +15,44 @@ import { diagnoseDocument } from "./diagnose.ts";
 const target = defaultTarget();
 const policy = { target, host: hostOf(target) };
 
-const PARTIAL = [
-  "<input :",
-  "<input #",
-  "<input .",
-  '<input type="email" :',
-  '<input type="email" #',
-  '<input type="email" .',
-  "<input:",
-  "<:",
-  "input :",
-  "input #",
-  'input type="email" .',
-  "<input :e",
-  "<input #m .b :",
+/**
+ * The exact number of diagnostics each buffer gives: a parse error or a sugar
+ * error at the cursor. `input :` is 1 since the bare `:` in attribute position
+ * became a positioned error ("`:` is name sugar and needs a name", PR 3 round
+ * 2, leader ruling); before that it was Marko's `value:` and gave 0, so an
+ * author who typed `:` and stopped got no diagnostic at all.
+ */
+const PARTIAL: [string, number][] = [
+  ["<input :", 1],
+  ["<input #", 1],
+  ["<input .", 1],
+  ['<input type="email" :', 1],
+  ['<input type="email" #', 1],
+  ['<input type="email" .', 1],
+  ["<input:", 1],
+  ["<:", 1],
+  ["input :", 1],
+  ["input #", 1],
+  ['input type="email" .', 1],
+  ["<input :e", 1],
+  ["<input #m .b :", 1],
 ];
 
 describe("the language server on a buffer mid-edit", () => {
-  it.each(PARTIAL)(
-    "%j does not throw and reports at most one error",
-    (text) => {
-      const unexpected: unknown[] = [];
-      const diagnostics = diagnoseDocument(
-        `${text}\n`,
-        "file:///work/page.mx",
-        policy,
-        (error) => unexpected.push(error),
-        "mx",
-      );
-      expect(unexpected).toEqual([]);
-      expect(diagnostics.length).toBeLessThanOrEqual(1);
-      for (const diagnostic of diagnostics) {
-        expect(diagnostic.range.start.line).toBe(0);
-        expect(diagnostic.range.start.character).toBeLessThanOrEqual(
-          text.length,
-        );
-      }
-    },
-  );
+  it.each(PARTIAL)("%j gives exactly %i diagnostic(s)", (text, count) => {
+    const unexpected: unknown[] = [];
+    const diagnostics = diagnoseDocument(
+      `${text}\n`,
+      "file:///work/page.mx",
+      policy,
+      (error) => unexpected.push(error),
+      "mx",
+    );
+    expect(unexpected).toEqual([]);
+    expect(diagnostics).toHaveLength(count);
+    for (const diagnostic of diagnostics) {
+      expect(diagnostic.range.start.line).toBe(0);
+      expect(diagnostic.range.start.character).toBeLessThanOrEqual(text.length);
+    }
+  });
 });

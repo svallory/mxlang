@@ -167,6 +167,9 @@ const ROWS = [
   "sugar-value",
   "sugar-default-attr",
   "sugar-dynamic-shorthand",
+  // A bare `:` in attribute position (leader ruling, PR 3 round 2): one error
+  // at the `:`, first, after a value and in concise mode.
+  "sugar-bare-colon",
   // The Mesh case with the sugar: `<:title/>` under `<attributes>` is the
   // parent's `defaultTag` with `name="title"`; the data check is clean, and an
   // E1 error on it names the token (`:title` (`name`)) at the sugar.

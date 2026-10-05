@@ -34,22 +34,33 @@ describe("the TypeScript plugin on a buffer mid-edit", () => {
       snapshot: ts.IScriptSnapshot,
       ctx: unknown,
     ): { snapshot: ts.IScriptSnapshot } | undefined;
+    getCompileDiagnostics(
+      fileName: string,
+    ): { message: string; offset?: number }[];
   };
 
-  it.each(PARTIAL)("%j builds its virtual code without throwing", (text) => {
-    const warn = console.warn;
-    console.warn = () => {};
-    try {
-      expect(() =>
-        plugin.createVirtualCode(
-          "/work/page.mx",
-          "mx",
-          ts.ScriptSnapshot.fromString(`${text}\n`),
-          { getAssociatedScript: () => undefined },
-        ),
-      ).not.toThrow();
-    } finally {
-      console.warn = warn;
-    }
-  });
+  it.each(PARTIAL)(
+    "%j builds its virtual code and reports exactly one compile diagnostic",
+    (text) => {
+      const file = "/work/page.mx";
+      const warn = console.warn;
+      console.warn = () => {};
+      try {
+        expect(() =>
+          plugin.createVirtualCode(
+            file,
+            "mx",
+            ts.ScriptSnapshot.fromString(`${text}\n`),
+            { getAssociatedScript: () => undefined },
+          ),
+        ).not.toThrow();
+        const diagnostics = plugin.getCompileDiagnostics(file);
+        expect(diagnostics).toHaveLength(1);
+        expect(diagnostics[0]?.offset).toBeGreaterThanOrEqual(0);
+        expect(diagnostics[0]?.offset).toBeLessThanOrEqual(text.length);
+      } finally {
+        console.warn = warn;
+      }
+    },
+  );
 });

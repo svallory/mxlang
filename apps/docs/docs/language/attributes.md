@@ -80,6 +80,7 @@ positions, in HTML and concise mode alike:
 - **After any attribute** (`<input type="email" :email>`, `<input x="1" #main .big>`):
   the attribute lands where you wrote it. In concise mode,
   `input x="1" #main .big :email` is `<input x="1" id="main" class="big" name="email">`.
+- **On Angular**, attribute-position `#x` stays Angular's template reference (`<div #ref>`; see the [Angular host](/hosts/angular/#angular-name-sugar)); tag-adjacent `<div#x>` is the `id` sugar there too, and `:name` and `.class` apply in every position.
 
 `name` is then an ordinary attribute, so a tag's declared `attributes` apply to
 it, and a type or "unknown attribute" error names what you wrote, with what it
@@ -121,6 +122,7 @@ the later one wins, with a warning (`<input name="a" :b/>` renders
 | `<a.hover:x/>` | class `hover` plus `name="x"`: a shorthand class cannot contain `:` |
 | `<div value:foo="y"/>` | Marko's attribute `value:foo`, untouched (the explicit `value:x` spelling) |
 | `<a :x=1/>` | an error: the sugar takes no value |
+| `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
 | `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a .2xl/>` is `id="1a"`, `class="2xl"`) |
 
 An attribute tag's name (`<@svg:rect>`) is a property key and is not split;
