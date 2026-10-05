@@ -149,7 +149,7 @@ A rejected value is skipped when the file compiles, so the next rung answers. If
 `defaultTag` in the contract of `<my-list>` is not allowed: host `fake-forbid-host` does not permit per-tag default tags
 ```
 
-(`host` is `target` when the target has no host part; the name is the one from the descriptor.) The flag is documented for [target authors](/hosts/third-party-targets/#third-party-targets-what-the-package-exports-the-unnamed-tag).
+(`host` is `target` when the target has no host part; the name is the one from the descriptor.) The flag is documented for [target authors](/targets/third-party-targets/#third-party-targets-what-the-package-exports-the-unnamed-tag).
 
 ### Restrict direct parents
 
