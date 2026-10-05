@@ -97,10 +97,10 @@ index bb889be7a..26b2e0352 100644
      const values = (src: string) =>
        parse(src)
 diff --git a/src/scanner.c b/src/scanner.c
-index 277e07fe1..d316571d1 100644
+index 51882c919..d07584e76 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
-@@ -2645,12 +2645,12 @@ static bool is_attr_shorthand_start(int32_t c, int32_t n1) {
+@@ -2658,12 +2658,12 @@ static bool is_attr_shorthand_start(int32_t c, int32_t n1) {
    }
  }
  
@@ -117,7 +117,7 @@ index 277e07fe1..d316571d1 100644
  }
  
  // Scan one tag name fragment / shorthand-start / interp-start token.
-@@ -2736,7 +2736,9 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+@@ -2749,7 +2749,9 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
        *result = TAG_NAME_EMPTY;
        return valid[TAG_NAME_EMPTY] ? 1 : 0;
      }
@@ -128,7 +128,7 @@ index 277e07fe1..d316571d1 100644
      finalize_tag_name(s, c);
      return 2;
    }
-@@ -2767,7 +2769,7 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+@@ -2780,7 +2782,7 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
      t->type = classify_tag_name(s);
    }
  
