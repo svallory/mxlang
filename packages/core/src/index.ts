@@ -107,6 +107,8 @@ export {
   type DefaultTagScopeSource,
   defaultTagDiagnostic,
   defaultTagScopeFor,
+  type OwnDefaultTagInput,
+  ownDefaultTag,
 } from "./default-tag-check.ts";
 export {
   type DefaultTagLookup,

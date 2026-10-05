@@ -132,6 +132,7 @@ import {
   TranslateError,
 } from "@mxlang/core";
 import type { PluginBuilder } from "bun";
+import { configuredDefaultTag } from "./default-tag.ts";
 import { type CompileOptions, compile, htmlTargets } from "./index.ts";
 
 /**
@@ -499,6 +500,10 @@ function rewriteImports(
  * `.mx` files would otherwise recurse forever before either finishes
  * compiling once.
  */
+function nestedKey(path: string, defaultTag: string | undefined): string {
+  return `${path}\u0000${defaultTag ?? ""}`;
+}
+
 function loadNestedMx(
   path: string,
   callerDeps: Map<string, number>,
@@ -513,10 +518,18 @@ function loadNestedMx(
     );
   }
 
-  const cached = pathCache.get(path);
-  const cachedUrl = urlForPath.get(path);
+  // The package's defaultTag shapes the compile, so it is part of the key: a
+  // changed `mx.html.defaultTag` must not reuse the module the old one made.
+  const defaultTag = configuredDefaultTag(
+    path,
+    getCustomTags(path, { host: "html", targets }),
+    targets,
+  );
+  const cacheKey = nestedKey(path, defaultTag);
+  const cached = pathCache.get(cacheKey);
+  const cachedUrl = urlForPath.get(cacheKey);
   if (cached && cachedUrl && fresh(cached.deps)) {
-    touch(pathCache, path, cached);
+    touch(pathCache, cacheKey, cached);
     for (const [depPath, mtimeMs] of cached.deps) {
       callerDeps.set(depPath, mtimeMs);
     }
@@ -535,7 +548,11 @@ function loadNestedMx(
   let code: string;
   let dependencies: readonly string[];
   try {
-    ({ code, dependencies } = compile(source, path, { customTags, targets }));
+    ({ code, dependencies } = compile(source, path, {
+      customTags,
+      ...(defaultTag === undefined ? {} : { defaultTag }),
+      targets,
+    }));
   } catch (error) {
     if (isTranslateError(error) && !error.file) {
       // A nested compile error must carry the nested file's own path and
@@ -553,8 +570,8 @@ function loadNestedMx(
   const rewritten = rewriteImports(code, path, deps, nextSeen, targets);
   const url = `mx-virtual:${path}#v${virtualVersion++}`;
   registerVirtual(url, rewritten);
-  urlForPath.set(path, url);
-  pathCache.set(path, { renderer: null as never, deps });
+  urlForPath.set(cacheKey, url);
+  pathCache.set(cacheKey, { renderer: null as never, deps });
   evictOldest(pathCache, MAX_CACHE_ENTRIES);
 
   for (const [depPath, mtimeMs] of deps) callerDeps.set(depPath, mtimeMs);
@@ -590,8 +607,22 @@ function evaluate(
  */
 export function mx<I = Record<string, unknown>>(
   source: string,
-  options: MxOptions = {},
+  rawOptions: MxOptions = {},
 ): MxRenderer<I> {
+  // A `filename` places the source in a package, whose `mx.html.defaultTag`
+  // shapes the compile and so belongs in the key. An explicit option wins.
+  const configured =
+    rawOptions.defaultTag === undefined && rawOptions.filename
+      ? configuredDefaultTag(
+          rawOptions.filename,
+          rawOptions.customTags,
+          rawOptions.targets ?? htmlTargets,
+        )
+      : undefined;
+  const options: MxOptions =
+    configured === undefined
+      ? rawOptions
+      : { ...rawOptions, defaultTag: configured };
   const key = createHash("sha256")
     .update(options.filename ?? "")
     .update("\u0000")
@@ -662,7 +693,21 @@ export function loadMx<I = Record<string, unknown>>(
   // `loadMx(path, { customTags: b })` calls compile identically regardless
   // — including a caller-supplied `customTags` in the key would only ever
   // create spurious cache misses for options that were never honored.
-  const { customTags: _ignoredForLoadMx, ...fingerprintableOptions } = options;
+  const targets = options.targets ?? htmlTargets;
+  // The package's `defaultTag` (decision 145) shapes the compile, so it is in
+  // the key: an edited config recompiles. An explicit option wins over it.
+  const configured =
+    options.defaultTag === undefined && existsSync(abs)
+      ? configuredDefaultTag(
+          abs,
+          getCustomTags(abs, { host: "html", targets }),
+          targets,
+        )
+      : undefined;
+  const effective: CompileOptions =
+    configured === undefined ? options : { ...options, defaultTag: configured };
+  const { customTags: _ignoredForLoadMx, ...fingerprintableOptions } =
+    effective;
   const key = `${abs}\u0000${fingerprintOptions(fingerprintableOptions)}`;
   const cached = topLevelPathCache.get(key) as CacheEntry<I> | undefined;
   if (cached?.renderer && fresh(cached.deps)) {
@@ -681,7 +726,7 @@ export function loadMx<I = Record<string, unknown>>(
   });
   const warnings: MxWarning[] = [];
   const { code } = compile(source, abs, {
-    ...options,
+    ...effective,
     customTags,
     warnings,
   });
@@ -726,11 +771,14 @@ export function loadMx<I = Record<string, unknown>>(
   // at 1 (never re-evaluated) after a page nested A following a
   // `resolveImport`-bearing standalone `loadMx(A, ...)` call, before this
   // fix.
-  if (
-    fingerprintOptions(fingerprintableOptions) === NESTED_DEFAULT_FINGERPRINT
-  ) {
-    pathCache.set(abs, { renderer: renderer as never, deps });
-    urlForPath.set(abs, url);
+  //
+  // The package's own `defaultTag` is not a caller option: a nested compile
+  // reads the same config, so it stays eligible and keys on the value.
+  const { customTags: _ownTags, ...callerOptions } = options;
+  if (fingerprintOptions(callerOptions) === NESTED_DEFAULT_FINGERPRINT) {
+    const nested = nestedKey(abs, configured);
+    pathCache.set(nested, { renderer: renderer as never, deps });
+    urlForPath.set(nested, url);
     evictOldest(pathCache, MAX_CACHE_ENTRIES);
   }
 
@@ -757,7 +805,10 @@ export function loadMx<I = Record<string, unknown>>(
 export const __testing = {
   /** Whether the shared nested-tag cache (`pathCache`) holds an entry for `path`. */
   hasNested(path: string): boolean {
-    return pathCache.has(path);
+    for (const key of pathCache.keys()) {
+      if (key.startsWith(`${path}\u0000`)) return true;
+    }
+    return false;
   },
   /** `fingerprintOptions`, exposed so a test can assert on it directly. */
   fingerprintOptions,

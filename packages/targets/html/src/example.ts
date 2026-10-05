@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanCached } from "@mxlang/core";
+import { configuredDefaultTag } from "./default-tag.ts";
 import { compileFile, htmlTargets } from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -62,5 +63,9 @@ function compileWithTags(file: string) {
     host: "html",
     targets: htmlTargets,
   });
-  return compileFile(file, { customTags });
+  const defaultTag = configuredDefaultTag(file, customTags, htmlTargets);
+  return compileFile(file, {
+    customTags,
+    ...(defaultTag === undefined ? {} : { defaultTag }),
+  });
 }

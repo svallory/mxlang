@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import {
-  readTargetDefaultTag,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
 } from "@mxlang/core";
 import type { BunPlugin } from "bun";
+import { configuredDefaultTag } from "./default-tag.ts";
 import { compile, htmlTargets } from "./index.ts";
 
 /**
@@ -64,7 +64,7 @@ export function createHtmlBunPlugin(
           reportedScanDiagnostics,
           (d) => console.warn(`@mxlang/html: ${d.file}: ${d.message}`),
         );
-        const { value: defaultTag } = readTargetDefaultTag(path, "html");
+        const defaultTag = configuredDefaultTag(path, scan.customTags, targets);
         const { code } = compile(source, path, {
           customTags: scan.customTags,
           ...(defaultTag === undefined ? {} : { defaultTag }),

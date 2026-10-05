@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import { buildMarkoLookup } from "./compile.ts";
 import type { Ctx } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
@@ -79,6 +80,45 @@ export function checkConfiguredDefaultTag(
     options.scope,
   );
   return diagnostic ? { diagnostic } : { value: config.value };
+}
+
+/** What a compile entry that scans for itself knows about its target. */
+export interface OwnDefaultTagInput {
+  /** The target whose `mx.<target>.defaultTag` this compile reads. */
+  target: string;
+  /** The custom tags this compile scanned for the file. */
+  customTags?: Readonly<Record<string, CustomTag>>;
+  /** The Marko translator the target compiles with. */
+  translator: unknown;
+  declarations?: HostDeclarations;
+  builtins?: readonly string[];
+  /** Where a rejected value is reported; once per call, positioned in the `package.json`. */
+  report: (diagnostic: TargetPolicyDiagnostic) => void;
+}
+
+/**
+ * The validated `mx.<target>.defaultTag` for `file`, or `undefined`, for a
+ * compile entry that reads the config itself because it scans for itself: the
+ * Bun loaders, the Astro Vite template plugin, Angular's `build()`, `loadMx`.
+ * It is the registry's check, over this entry's own scan and translator. A
+ * rejected value is dropped (the built-in answers) and handed to `report`.
+ */
+export function ownDefaultTag(
+  file: string,
+  input: OwnDefaultTagInput,
+): string | undefined {
+  const { value, diagnostic } = checkConfiguredDefaultTag(file, input.target, {
+    scope: () =>
+      defaultTagScopeFor({
+        dir: dirname(file),
+        translator: input.translator,
+        ...(input.customTags ? { customTags: input.customTags } : {}),
+        ...(input.declarations ? { declarations: input.declarations } : {}),
+        ...(input.builtins ? { builtins: input.builtins } : {}),
+      }),
+  });
+  if (diagnostic) input.report(diagnostic);
+  return value;
 }
 
 /**
