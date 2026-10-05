@@ -89,14 +89,14 @@ The kinds Mesh refers to: an *attribute* (`accept`, `require`, `sort`, the left 
 
 ADR 146's `:name` in attribute position is this rule: **an atom standing alone in attribute position sets `name`.**
 
-```mx
+```text
 <input :email/>        ->  <input name="email"/>
 <input type=:email/>   ->  atom as a value, no name set
 ```
 
 Decision 146 addendum 4 carries over: when `=value` or `(params) { body }` follows the atom directly, the rest is the tag's default attribute (`value`), and the space after the atom is optional.
 
-```mx
+```text
 boolean :isOverdue({ self }) { ... }   ->  name="isOverdue" value=function
 <input :email=expr/>                   ->  name="email" value=expr
 ```
