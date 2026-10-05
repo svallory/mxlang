@@ -19,6 +19,11 @@ tracked here) — deliverables live at `docs/upstream/` instead, as the brief's
   `packages/core/package.json` dependency), branch `mx/fragment-offset`, one
   commit on top of the tag (see "Round 2" below for why this is one commit,
   not two).
+> **Status**: this design has since been applied as ordinary source in
+> `packages/parser/src/template/` (MX's own copy of htmljs-parser, at 5.18.0),
+> which is what that package's consumers use — see
+> `packages/parser/src/template/PROVENANCE.md`.
+
 - `marko-js/htmljs-parser` at tag `v5.15.0` (the pinned root `package.json`
   dependency, resolved transitively through `@marko/compiler`), branch
   `mx/fragment-offset`, one commit on top of the tag.

@@ -32,8 +32,8 @@ export interface ParseOptions {
   /** Zero-based line of the substring's first character in the document. */
   startLine?: number;
   /**
-   * Column of the substring's first character in the document. Applied only
-   * to positions on the substring's own first line.
+   * Zero-based column of the substring's first character in the document.
+   * Applied only to positions on the substring's own first line.
    */
   startColumn?: number;
 }

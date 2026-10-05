@@ -23,7 +23,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createParser, type ParseOptions } from "../index.ts";
+import { createParser, type Handlers, type ParseOptions } from "../index.ts";
 
 type RangePair = [number, number];
 
@@ -137,6 +137,7 @@ const CONCISE_SOURCE = [
   "<![CDATA[raw]]>",
   "div.cls#id/tagVar a=1 b:=bound ...spread onClick() { body } c(1) d<T>(y) { body }",
   "  -- text",
+  "  -- hi ${x} there",
   "  // line comment",
   "  /* block comment */",
   "  $ const scriptlet = 1;",
@@ -149,6 +150,11 @@ const CONCISE_SOURCE = [
   "  -- body",
   "tagArgs(1) f=1",
   "  -- tag args body",
+  "div [",
+  "  a=1 // c",
+  "  /* b */ b=2",
+  "]",
+  "  -- attributed group",
 ].join("\n");
 
 /** Concise-mode error at end of input (an unclosed HTML tag at EOF). */
@@ -185,21 +191,76 @@ const HTML_HANDLERS = [
 ];
 
 /**
- * The subset concise mode can produce. Five handlers are HTML-mode-only by
- * the language's own shape, not by this change: a concise tag has no `<`
- * (`onOpenTagStart`), no `</name>` (`onCloseTagStart`, `onCloseTagName`), no
- * comment position inside it (`onOpenTagComment`), and a bare `${expr}`
- * concise line is a dynamic tag, not a placeholder (`onPlaceholder`).
+ * Handlers the interface declares that concise mode cannot produce. Each one
+ * is listed with the input that was run to establish that, and each claim is
+ * re-tested at runtime by "unreachable handlers really do not fire in concise
+ * mode" below — nothing here is inferred.
+ *
+ * A concise tag is written without `<` and closes implicitly at end of line,
+ * so there is no open-tag start and no close tag to report.
  */
-const CONCISE_HANDLERS = HTML_HANDLERS.filter(
+// `Handlers` is the interface index.ts re-exports under that name.
+type ParserOptionName = keyof Handlers;
+
+/** Every handler `ParserOptions` (util/constants.ts) declares. */
+const DECLARED_HANDLERS = [
+  "onError",
+  "onText",
+  "onOpenTagStart",
+  "onOpenTagName",
+  "onTagShorthandId",
+  "onTagShorthandClass",
+  "onTagTypeArgs",
+  "onTagVar",
+  "onTagArgs",
+  "onTagTypeParams",
+  "onTagParams",
+  "onAttrName",
+  "onAttrArgs",
+  "onAttrValue",
+  "onAttrMethod",
+  "onAttrSpread",
+  "onOpenTagComment",
+  "onOpenTagEnd",
+  "onCloseTagStart",
+  "onCloseTagName",
+  "onCloseTagEnd",
+  "onComment",
+  "onCDATA",
+  "onDeclaration",
+  "onDoctype",
+  "onScriptlet",
+  "onPlaceholder",
+] as const;
+
+// Compile-time exhaustiveness: if `ParserOptions` ever gains a handler that
+// DECLARED_HANDLERS does not name, this stops typechecking, because
+// `Record<Undeclared, never>` demands a property `{}` does not have.
+type Undeclared = Exclude<ParserOptionName, (typeof DECLARED_HANDLERS)[number]>;
+const _everyDeclaredHandlerIsListed: Record<Undeclared, never> = {};
+
+const CONCISE_UNREACHABLE: Array<
+  [handler: string, input: string, why: string]
+> = [
+  [
+    "onOpenTagStart",
+    "div\na=1",
+    "a concise tag is written without `<`, so there is nothing to mark a start with",
+  ],
+  [
+    "onCloseTagStart",
+    "div</div>",
+    "a concise tag closes implicitly at end of line; there is no `</`",
+  ],
+  ["onCloseTagName", "div</div>", "a concise close tag has no name to report"],
+];
+
+/** Everything concise mode can produce: the declared handlers minus the
+ * unreachable ones above. `onError` is covered by CONCISE_ERROR_SOURCE. */
+const CONCISE_HANDLERS = DECLARED_HANDLERS.filter(
   (handler) =>
-    ![
-      "onOpenTagStart",
-      "onCloseTagStart",
-      "onCloseTagName",
-      "onOpenTagComment",
-      "onPlaceholder",
-    ].includes(handler),
+    handler !== "onError" &&
+    !CONCISE_UNREACHABLE.some(([unreachable]) => unreachable === handler),
 );
 
 /**
@@ -281,12 +342,100 @@ describe("base offset: handler ranges", () => {
     );
   });
 
+  it("accounts for every handler the interface declares", () => {
+    // The compile-time exhaustiveness guard, exercised here so it is used:
+    // if ParserOptions gains a handler DECLARED_HANDLERS omits, the
+    // `Record<Undeclared, never>` annotation above stops typechecking.
+    assert.deepEqual(_everyDeclaredHandlerIsListed, {});
+    const declared = new Set<string>(DECLARED_HANDLERS);
+    const html = new Set<string>(HTML_HANDLERS);
+    const concise = new Set<string>(CONCISE_HANDLERS);
+    const unreachable = new Set(CONCISE_UNREACHABLE.map(([h]) => h));
+
+    // Nothing may be asserted in a mode, or declared unreachable, unless the
+    // interface actually declares it.
+    for (const handler of [...html, ...concise, ...unreachable]) {
+      assert.ok(
+        declared.has(handler),
+        `${handler} is listed but ParserOptions does not declare it`,
+      );
+    }
+    // Every declared handler is accounted for: exercised in a mode, or listed
+    // unreachable with a reason. onError is covered by the error sources.
+    for (const handler of declared) {
+      assert.ok(
+        handler === "onError" ||
+          html.has(handler) ||
+          concise.has(handler) ||
+          unreachable.has(handler),
+        `${handler} is neither exercised nor listed unreachable`,
+      );
+    }
+  });
+
+  it("unreachable handlers really do not fire in concise mode", () => {
+    // Each claim was established by running the input, not inferred; this
+    // keeps that honest.
+    for (const [handler, input, why] of CONCISE_UNREACHABLE) {
+      const seen = new Set(parse(input).log.map((e) => e.handler));
+      assert.ok(!seen.has(handler), `${handler} fired for ${why}`);
+      // The input is a real concise parse, not an immediate error.
+      assert.ok(parse(input).log.length > 0, `no events for ${handler}`);
+    }
+  });
+
   it("reports a concise-mode error at end of input unchanged", () => {
     const run = assertBaseContract(CONCISE_ERROR_SOURCE, BASE);
     assert.ok(run.errors.length > 0, "no error was reported");
     assert.deepEqual(run.errors, parse(CONCISE_ERROR_SOURCE).errors);
   });
 });
+
+/**
+ * One tag event, with everything a consumer might derive from a node read
+ * *inside* the handler: the raw fragment-relative range it was handed, the
+ * `offsetAt` rebasing of it, the text, and the position/location.
+ */
+interface TagEvent {
+  at: string;
+  nodeStart: number;
+  nodeEnd: number;
+  offStart: number;
+  offEnd: number;
+  text: string;
+  pos: unknown;
+  loc: unknown;
+}
+
+/**
+ * Parses `source`, recording those reads from inside the tag handlers, while
+ * the parse is still running.
+ */
+function tagEvents(source: string, options?: ParseOptions): TagEvent[] {
+  const seen: TagEvent[] = [];
+
+  function record(at: string, node: { start: number; end: number }): void {
+    seen.push({
+      at,
+      nodeStart: node.start,
+      nodeEnd: node.end,
+      offStart: parser.offsetAt(node.start),
+      offEnd: parser.offsetAt(node.end),
+      text: parser.read(node),
+      pos: parser.positionAt(node.start),
+      loc: parser.locationAt(node),
+    });
+  }
+
+  const parser = createParser({
+    onOpenTagStart: (node) => record("openStart", node),
+    onOpenTagEnd: (node) => record("openEnd", node),
+    onCloseTagStart: (node) => record("closeStart", node),
+    onCloseTagEnd: (node) => record("closeEnd", node),
+  });
+  parser.parse(source, options);
+  return seen;
+}
 
 describe("base offset: positions and locations", () => {
   const SOURCE = "<div>\n  hi\n</div>";
@@ -470,66 +619,49 @@ describe("base offset: positions and locations", () => {
     // `@marko/compiler`'s onCloseTagEnd reads the tag's own start/end back
     // through locationAt *during* the parse to compute the node's loc. Since
     // handler ranges stay fragment-relative and positionAt/locationAt are
-    // rebased, that read shifts once, not twice. Every call below happens
-    // inside the handler, before parse() returns.
+    // rebased, that read shifts once, not twice.
+    //
+    // Every expectation is the corresponding offset, position and location
+    // from an independent parse of the whole embedding document, which has no
+    // base options and therefore reports absolute values directly. Nothing
+    // here is derived from the values under test.
+    //
+    // The base column is 0 so the fragment starts at the start of a line and
+    // the whole document yields the same events: an embedding that indents the
+    // fragment with leading spaces changes how the document parses (the
+    // indented fragment becomes an HTML block and the parse errors), which
+    // would leave nothing to correspond the events to. The column shift is
+    // covered by the first-line, startColumn-only and embedding tests above.
     const source = '<div class="a">\n  <span>hi</span>\n</div>';
-    const { head, doc } = embed(source, BASE.startLine, BASE.startColumn);
-    const whole = parse(doc);
+    const startLine = 9;
+    const { head, doc } = embed(source, startLine, 0);
+    // `offsetAt` shifts by the *declared* startOffset, so for its results to
+    // line up with the whole document's own offsets that offset has to be
+    // where the fragment really starts in `doc` — nine newlines in, offset 9.
+    const base = { startOffset: head.length, startLine, startColumn: 0 };
+    assert.equal(base.startOffset, 9);
 
-    type Node = { start: number; end: number };
-    interface Read {
-      at: string;
-      text: string;
-      loc: unknown;
-      pos: unknown;
-      start: number;
-      end: number;
-    }
-    const seen: Read[] = [];
+    const based = tagEvents(source, base);
+    const whole = tagEvents(doc);
 
-    function record(at: string, node: Node): void {
-      seen.push({
-        at,
-        text: parser.read(node),
-        loc: parser.locationAt(node),
-        pos: parser.positionAt(node.start),
-        start: parser.offsetAt(node.start),
-        end: parser.offsetAt(node.end),
-      });
-    }
+    assert.ok(based.length >= 6, `only ${based.length} tag events`);
+    assert.equal(based.length, whole.length);
 
-    const parser = createParser({
-      onOpenTagStart: (node) => record("openStart", node),
-      onOpenTagEnd: (node) => record("openEnd", node),
-      onCloseTagStart: (node) => record("closeStart", node),
-      onCloseTagEnd: (node) => record("closeEnd", node),
-    });
-    parser.parse(source, BASE);
-
-    assert.ok(seen.length >= 6, `only ${seen.length} tag events`);
-    for (const entry of seen) {
-      const { start, end } = { start: entry.start, end: entry.end };
-      const at = start - BASE.startOffset;
-      assert.equal(
-        entry.text,
-        source.slice(at, end - BASE.startOffset),
-        entry.at,
-      );
-      assert.equal(start, at + BASE.startOffset, entry.at);
-      assert.equal(end, end, entry.at);
-      assert.deepEqual(
-        entry.pos,
-        whole.parser.positionAt(at + head.length),
-        entry.at,
-      );
-      assert.deepEqual(
-        entry.loc,
-        whole.parser.locationAt({
-          start: at + head.length,
-          end: end - BASE.startOffset + head.length,
-        }),
-        entry.at,
-      );
+    for (let i = 0; i < based.length; i++) {
+      const b = based[i] as TagEvent;
+      const w = whole[i] as TagEvent;
+      assert.equal(b.at, w.at, "event order");
+      // offsetAt, read inside the handler, lands on the whole document's own
+      // offsets for the same characters.
+      assert.equal(b.offStart, w.nodeStart, b.at);
+      assert.equal(b.offEnd, w.nodeEnd, b.at);
+      // The raw range the handler was handed is the same text, shifted back
+      // into the fragment.
+      assert.equal(b.nodeStart + head.length, w.nodeStart, b.at);
+      assert.equal(b.nodeEnd + head.length, w.nodeEnd, b.at);
+      assert.equal(b.text, source.slice(b.nodeStart, b.nodeEnd), b.at);
+      assert.deepEqual(b.pos, w.pos, b.at);
+      assert.deepEqual(b.loc, w.loc, b.at);
     }
   });
 });
