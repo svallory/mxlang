@@ -199,11 +199,17 @@ function rejectUnknownTag(name: string, node: Node, ctx: Ctx): void {
 type DelegatedTagData = { kind: "interpolation"; expr: Expr };
 
 /** Questions the Astro host answers while Marko nodes are still available. */
+/** Astro's built-in `defaultTag`: the descriptor's field and the ladder's last rung. */
+export const DEFAULT_TAG = "div";
+
 const declarations: HostDeclarations = {
   name: "@mxlang/astro",
   attrTags: 2,
-  // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
-  resolveDefaultTag: () => "div",
+  // The ladder (decision 145): `mx.<target>.defaultTag`, then the target's
+  // built-in. A parent contract's rung (PR 3) reads `context.customTags`,
+  // gated by the host's `allowContractDefaultTag`, and goes first.
+  resolveDefaultTag: (_node, _parents, { configured }) =>
+    configured ?? DEFAULT_TAG,
   tags: TAGS,
   isElement: (name) => !isComponentName(name),
   isComponent,
@@ -1031,6 +1037,8 @@ export function lowerAstroMx(
   options: {
     /** Custom tags already discovered and loaded by the calling integration. */
     customTags?: Record<string, CustomTag>;
+    /** `package.json#mx.astro-html.defaultTag`, already validated (decision 145). */
+    defaultTag?: string;
     /** Positioned non-fatal diagnostics collected by editor/build tooling. */
     warnings?: MxWarning[];
     /**
@@ -1066,6 +1074,7 @@ export function lowerAstroMx(
       options.targets ?? ownTargets,
     );
     ctx.customTags = options.customTags;
+    ctx.defaultTag = options.defaultTag;
     ctx.warnings = options.warnings;
     // An `.astro.mx` file is an Astro component module, so it has a declaration to
     // name and a tag may call itself without importing itself.

@@ -18,7 +18,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
-import { policy, strictPolicy } from "./translate.ts";
+import { DEFAULT_TAG, policy, strictPolicy } from "./translate.ts";
 
 /**
  * The CommonJS `require` this descriptor uses to reach the compile entry,
@@ -46,7 +46,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "html",
   packageName: "@mxlang/html",
-  defaultTag: "div",
+  defaultTag: DEFAULT_TAG,
   // `translator` is `host-policy.ts`'s deprecated alias (the warning text lives there).
   legacyHostValues: [
     { value: "html" },
@@ -71,6 +71,7 @@ const descriptor: TargetDescriptor = {
           customTags: options.customTags,
           warnings: options.warnings,
           strict: options.strict,
+          defaultTag: options.defaultTag,
           resolveImport: options.resolveImport,
           targets: options.targets ?? targets(),
         }),

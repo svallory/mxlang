@@ -14,9 +14,11 @@
  * `load()`). The imports are static so a bundler inlines them.
  */
 
+import { dirname } from "node:path";
 import angular from "@mxlang/angular/descriptor";
 import astro from "@mxlang/astro/descriptor";
 import {
+  buildMarkoLookup,
   type CustomTag,
   hostModuleSegment as coreHostModuleSegment,
   resolveTargetPolicyDetailed as coreResolveTargetPolicyDetailed,
@@ -32,6 +34,7 @@ import {
   type TargetLookup,
   type TargetPolicy,
   type TargetPolicyResolution,
+  validateDefaultTag,
 } from "@mxlang/core";
 import data from "@mxlang/data/descriptor";
 import hono from "@mxlang/hono/descriptor";
@@ -248,6 +251,111 @@ export interface ResolveTargetPolicyOptions {
 export function resolveTargetPolicyDetailed(
   filePath: string,
   options: ResolveTargetPolicyOptions = {},
+): TargetPolicyResolution {
+  return checkDefaultTags(resolveStaged(filePath, options), filePath);
+}
+
+/**
+ * The ladder's rungs the registry owns (decision 145): the package's
+ * `mx.<target>.defaultTag`, then the host's override on its descriptor, then
+ * the target's built-in. A tool hands the result to the target's compile as
+ * `defaultTag`; the target's own `resolveDefaultTag` ends with the same
+ * built-in, and a parent contract's rung (later) goes in front of all three.
+ */
+export function effectiveDefaultTag(
+  policy: Pick<TargetPolicy, "defaultTag">,
+  descriptor: TargetDescriptor,
+): string {
+  return (
+    policy.defaultTag ?? descriptor.host?.defaultTag ?? descriptor.defaultTag
+  );
+}
+
+/**
+ * Checks every `defaultTag` the package's resolution rests on, once per
+ * package and positioned where it is written: the package's own
+ * `mx.<target>.defaultTag`, and, for a descriptor loaded from a package
+ * specifier, the descriptor's host override and built-in (a built-in
+ * descriptor's own values are this repo's to get right, and its tests pin
+ * them). A user value that fails is dropped from the policy, so the compile
+ * that follows uses the next rung and the one error is the only noise.
+ */
+function checkDefaultTags(
+  resolution: TargetPolicyResolution,
+  filePath: string,
+): TargetPolicyResolution {
+  const { policy } = resolution;
+  const lookup = lookupFor(policy);
+  const descriptor = lookup.target(policy.target);
+  if (!descriptor) return resolution;
+  const problems: Array<{
+    name: string;
+    at: NonNullable<TargetPolicy["defaultTagAt"]>;
+    owner: string;
+  }> = [];
+  if (policy.defaultTag !== undefined && policy.defaultTagAt) {
+    problems.push({
+      name: policy.defaultTag,
+      at: policy.defaultTagAt,
+      owner: `mx.${policy.target}.defaultTag`,
+    });
+  }
+  if (policy.descriptor && policy.descriptorAt) {
+    if (descriptor.host?.defaultTag !== undefined) {
+      problems.push({
+        name: descriptor.host.defaultTag,
+        at: policy.descriptorAt,
+        owner: `host.defaultTag of "${descriptor.name}"`,
+      });
+    }
+    problems.push({
+      name: descriptor.defaultTag,
+      at: policy.descriptorAt,
+      owner: `defaultTag of "${descriptor.name}"`,
+    });
+  }
+  if (problems.length === 0) return resolution;
+
+  const hostKey = lookup.hostFilterKey(policy.target);
+  const customTags = coreScanCached(filePath, {
+    targets: lookup,
+    ...(hostKey === undefined ? {} : { host: hostKey }),
+  }).customTags;
+  const translator = (descriptor.translator ?? html.translator) as unknown;
+  const markoLookup = buildMarkoLookup(dirname(filePath), translator);
+  const builtins = [descriptor.defaultTag, descriptor.host?.defaultTag].filter(
+    (name): name is string => name !== undefined,
+  );
+
+  const diagnostics = [...resolution.diagnostics];
+  let next = policy;
+  for (const { name, at, owner } of problems) {
+    const reason = validateDefaultTag(name, {
+      customTags,
+      ...(markoLookup ? { lookup: markoLookup } : {}),
+      builtins,
+    });
+    if (reason === undefined) continue;
+    diagnostics.push({
+      code: "invalid-default-tag",
+      severity: "error",
+      file: at.file,
+      message: `invalid \`defaultTag\` value: ${reason}${owner.startsWith("mx.") ? "" : ` (${owner})`}`,
+      line: at.line,
+      column: at.column,
+      length: at.length,
+    });
+    if (owner.startsWith("mx.")) {
+      const { defaultTag: _dropped, defaultTagAt: _at, ...rest } = next;
+      next = rest;
+    }
+  }
+  return { ...resolution, policy: next, diagnostics };
+}
+
+function resolveStaged(
+  filePath: string,
+  options: ResolveTargetPolicyOptions,
 ): TargetPolicyResolution {
   const lookup = builtinLookup();
   // A tool that checks data files itself asks for the unmasked answer: the

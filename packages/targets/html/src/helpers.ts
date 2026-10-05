@@ -210,6 +210,9 @@ function functionId(fn: (...args: never[]) => unknown): number {
  */
 function fingerprintOptions(options: CompileOptions): string {
   const parts: string[] = [`strict:${options.strict ? 1 : 0}`];
+  if (options.defaultTag !== undefined) {
+    parts.push(`defaultTag:${JSON.stringify(options.defaultTag)}`);
+  }
 
   if (options.resolveImport) {
     parts.push(`resolveImport:${functionId(options.resolveImport)}`);

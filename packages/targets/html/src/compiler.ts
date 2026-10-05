@@ -92,6 +92,8 @@ export interface CompileOptions {
    * constructs to be a compile error rather than silently accepted.
    */
   strict?: boolean;
+  /** `package.json#mx.html.defaultTag`, already validated; the unnamed tag's name when set (decision 145). */
+  defaultTag?: string;
   /**
    * Collects positioned warnings — constructs that compile while dropping
    * something the author wrote (content a tag template never placed, an
@@ -136,6 +138,7 @@ export function compileHtml(
     {
       ...host,
       customTags: options.customTags,
+      defaultTag: options.defaultTag,
       warnings: options.warnings,
       resolveImport: options.resolveImport,
       targets: options.targets,

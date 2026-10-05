@@ -98,3 +98,52 @@ describe("the unnamed tag in a data file resolves to the built-in `object`", () 
     expect(diagnostics[0]?.message).not.toContain("div");
   });
 });
+
+describe("a configured defaultTag (mx.data.defaultTag)", () => {
+  const tags: Record<string, CustomTag> = {
+    item: { attributes: { class: { type: "string" }, id: { type: "string" } } },
+    strict: { attributes: { name: { type: "string" } } },
+  };
+
+  it("makes the shorthand that tag, in place of `object`", () => {
+    const { tree, diagnostics } = parseData("<#a.b/>", "/d.mx", {
+      customTags: tags,
+      defaultTag: "item",
+    });
+    expect(diagnostics).toEqual([]);
+    expect(tree?.children[0]).toMatchObject({ kind: "tag", name: "item" });
+  });
+
+  it("applies that tag's contract: closed attributes lacking class give E1", () => {
+    const { tree, diagnostics } = parseData("<.x/>", "/d.mx", {
+      customTags: tags,
+      defaultTag: "strict",
+    });
+    expect(tree).toBeUndefined();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      severity: "error",
+      line: 1,
+      column: 0,
+    });
+    expect(diagnostics[0]?.message).toContain("`class`");
+  });
+
+  it("is known under unknownTags: reject because it is declared", () => {
+    const { diagnostics } = parseData("<#a/>", "/d.mx", {
+      customTags: tags,
+      defaultTag: "item",
+      unknownTags: "reject",
+    });
+    expect(diagnostics).toEqual([]);
+  });
+
+  it("the parse-only scan names the shorthand by the configured tag", () => {
+    const { diagnostics } = parseData("<card><#a/></card>", "/d.mx", {
+      customTags: { ...tags, card: { children: { item: {} } } },
+      defaultTag: "strict",
+      unknownTags: "reject",
+    });
+    expect(diagnostics[0]?.message).toContain("`<strict>` is not allowed here");
+  });
+});

@@ -14,6 +14,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
+import { DEFAULT_TAG } from "@mxlang/preact/emitter";
 import { reactDeclarations } from "./dialect.ts";
 
 /**
@@ -41,7 +42,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "react-jsx",
   packageName: "@mxlang/react",
-  defaultTag: "div",
+  defaultTag: DEFAULT_TAG,
   declarations: { default: reactDeclarations },
   load() {
     const { compileReactMx } =
@@ -50,6 +51,7 @@ const descriptor: TargetDescriptor = {
       compileModule: (source, filename, options) =>
         compileReactMx(source, filename, {
           customTags: options.customTags,
+          defaultTag: options.defaultTag,
           warnings: options.warnings,
           typeCheck: options.typeCheck,
           resolveImport: options.resolveImport,

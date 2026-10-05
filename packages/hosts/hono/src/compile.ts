@@ -29,7 +29,12 @@ import { honoDeclarations, honoDialect } from "./dialect.ts";
 /** This host's compile options: the preact emitter's surface, minus the dialect, which is always hono's here. */
 export type HonoCompileOptions = Pick<
   CompilePreactOptions,
-  "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
+  | "customTags"
+  | "defaultTag"
+  | "resolveImport"
+  | "warnings"
+  | "targets"
+  | "typeCheck"
 >;
 
 /** Compiles a whole-file MX template to a Hono JSX component module, under an explicit `targets` lookup. */
@@ -42,6 +47,7 @@ export function compileHonoMx(
     dialect: honoDialect,
     declarations: honoDeclarations,
     customTags: options.customTags,
+    defaultTag: options.defaultTag,
     resolveImport: options.resolveImport,
     warnings: options.warnings,
     typeCheck: options.typeCheck,

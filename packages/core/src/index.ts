@@ -39,6 +39,7 @@ export {
   withCalleeInputSources,
 } from "./callee-input.ts";
 export {
+  buildMarkoLookup,
   type CompileResult,
   compileSource,
   createTranslator,
@@ -119,6 +120,7 @@ export {
   type RegionPosition,
 } from "./fragment.ts";
 export {
+  type PolicyLocation,
   resolveTargetPolicy,
   resolveTargetPolicyDetailed,
   type TargetPolicy,

@@ -134,6 +134,7 @@ export function scanAuthoredTags(
   source: string,
   filename: string,
   customTags: Record<string, CustomTag> | undefined,
+  defaultTag: string = DEFAULT_TAG,
 ): AuthoredTag[] | null {
   let program: { body: MarkoNode[] };
   try {
@@ -165,7 +166,7 @@ export function scanAuthoredTags(
         nameLoc.start.line === nameLoc.end.line &&
         nameLoc.start.column === nameLoc.end.column;
       const name = unnamed
-        ? DEFAULT_TAG
+        ? defaultTag
         : node.name?.type === "StringLiteral"
           ? node.name.value
           : undefined;

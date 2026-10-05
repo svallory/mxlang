@@ -613,11 +613,17 @@ function rejectUnknownTag(
 }
 
 /** Resolve-time questions for Solid's JSX target. */
+/** Solid's built-in `defaultTag`: the descriptor's field and the ladder's last rung. */
+export const DEFAULT_TAG = "div";
+
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/solid",
   attrTags: 2,
-  // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
-  resolveDefaultTag: () => "div",
+  // The ladder (decision 145): `mx.<target>.defaultTag`, then the target's
+  // built-in. A parent contract's rung (PR 3) reads `context.customTags`,
+  // gated by the host's `allowContractDefaultTag`, and goes first.
+  resolveDefaultTag: (_node, _parents, { configured }) =>
+    configured ?? DEFAULT_TAG,
   tags: STATEFUL_ERRORS,
   isElement: (name) => !/^[A-Z]/.test(name),
   isComponent,

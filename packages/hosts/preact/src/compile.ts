@@ -59,6 +59,8 @@ export const host = {
 export interface CompilePreactOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /** `package.json#mx.<target>.defaultTag`, already validated (decision 145). */
+  defaultTag?: string;
   /**
    * The registered targets this compile runs under. Defaults to this
    * package's own descriptor (right for a direct entry); a tool that
@@ -564,6 +566,7 @@ export function compilePreactMx(
     {
       ...host,
       customTags: options.customTags,
+      defaultTag: options.defaultTag,
       resolveImport: options.resolveImport,
       warnings: options.warnings,
       ...(options.typeCheck ? { stripTypes: false } : {}),

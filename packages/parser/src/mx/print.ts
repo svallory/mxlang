@@ -33,6 +33,8 @@ export interface PrintOptions {
    */
   // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
   customTags?: Record<string, any>;
+  /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
+  defaultTag?: string;
   /**
    * Lowers each MX region the bridge finds. Required whenever the grammar is
    * on (`.solid.mx` by name, or `mx: true`) — the parser has no host of its
@@ -140,6 +142,7 @@ export function print(
   return printAst(
     parse(source, filename, {
       mxCustomTags: options.customTags,
+      mxDefaultTag: options.defaultTag,
       mxRegionCompile: options.mxRegionCompile,
       mx: options.mx,
     }),

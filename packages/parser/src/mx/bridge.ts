@@ -275,6 +275,7 @@ export function mxParseElementAt(
         // Registered custom tags reach a host only through here, for the same
         // reason the hook itself does.
         customTags: parser.options?.mxCustomTags,
+        defaultTag: parser.options?.mxDefaultTag,
         importSpecifiers: visibleImportSpecifiers(parser),
         moduleBindings: moduleBindings(parser),
         importDefaultFromMarkoOrMx: visibleImportDefaultFromMarkoOrMx(parser),

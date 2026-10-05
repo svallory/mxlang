@@ -14,7 +14,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
-import { preactDeclarations } from "./emitter.ts";
+import { DEFAULT_TAG, preactDeclarations } from "./emitter.ts";
 
 /**
  * The CommonJS `require` this descriptor uses to reach its own compile entry,
@@ -41,7 +41,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "preact-jsx",
   packageName: "@mxlang/preact",
-  defaultTag: "div",
+  defaultTag: DEFAULT_TAG,
   declarations: { default: preactDeclarations },
   load() {
     const { compilePreactMx } =
@@ -50,6 +50,7 @@ const descriptor: TargetDescriptor = {
       compileModule: (source, filename, options) =>
         compilePreactMx(source, filename, {
           customTags: options.customTags,
+          defaultTag: options.defaultTag,
           warnings: options.warnings,
           typeCheck: options.typeCheck,
           resolveImport: options.resolveImport,

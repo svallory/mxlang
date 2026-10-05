@@ -303,6 +303,23 @@ function sameFilePath(a: string, b: string): boolean {
 }
 
 /**
+ * Marko's tag lookup for `translator` as seen from `dir`: what a compile of a
+ * file there would resolve a tag name through. `undefined` when Marko builds
+ * none. The tag map is made prototype-free, as `compileSource` does.
+ */
+export function buildMarkoLookup(
+  dir: string,
+  translator: unknown,
+): Lookup | undefined {
+  const compiler = require("@marko/compiler");
+  const lookup = compiler.taglib.buildLookup(dir, translator) as
+    | Lookup
+    | undefined;
+  nullPrototypeTags(lookup);
+  return lookup;
+}
+
+/**
  * Compiles one Marko template under `policy`.
  *
  * The returned map is a placeholder identity map: the emitter builds text

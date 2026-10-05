@@ -2,7 +2,8 @@ import type { CustomTag } from "./custom-tags.ts";
 
 /** The slice of a Marko taglib lookup this check reads. */
 export interface DefaultTagLookup {
-  getTag(name: string): { parseOptions?: unknown } | undefined;
+  /** A tag def; its `parseOptions`, when present, say how the tag parses. */
+  getTag(name: string): object | undefined;
 }
 
 /** What a `defaultTag` may resolve to in one package. */
@@ -48,7 +49,11 @@ export function validateDefaultTag(
   const known = Object.hasOwn(Object.prototype, name)
     ? undefined
     : scope.lookup?.getTag(name);
-  if (known) return shapeReason(name, known.parseOptions);
+  if (known)
+    return shapeReason(
+      name,
+      (known as { parseOptions?: unknown }).parseOptions,
+    );
   if (scope.builtins?.includes(name)) return undefined;
   return `\`<${name}>\` is not a tag reachable from this package`;
 }

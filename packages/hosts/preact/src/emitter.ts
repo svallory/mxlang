@@ -138,6 +138,9 @@ function isComponentName(name: string): boolean {
 const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
 const ATTRIBUTE_SPREAD_EXPRESSION = "__mxAttrSpread";
 
+/** The JSX hosts' built-in `defaultTag`: their descriptors' field and the ladder's last rung. */
+export const DEFAULT_TAG = "div";
+
 export function createJsxDeclarations(dialectName: string): HostDeclarations {
   const declarationName =
     dialectName === "Preact"
@@ -151,8 +154,11 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
     name: declarationName,
     attrTags: 2,
     tags: statefulErrors(dialectName),
-    // Interim (decision 145): PR 2 replaces this with the target's registry ladder.
-    resolveDefaultTag: () => "div",
+    // The ladder (decision 145): `mx.<target>.defaultTag`, then the target's
+    // built-in. A parent contract's rung (PR 3) reads `context.customTags`,
+    // gated by the host's `allowContractDefaultTag`, and goes first.
+    resolveDefaultTag: (_node, _parents, { configured }) =>
+      configured ?? DEFAULT_TAG,
     // `<let>` is not this host's state model. Never turn a mutable JS
     // declaration into an immutable `<const>` just to offer a fix.
     scriptletReplacement: (name, keyword) =>

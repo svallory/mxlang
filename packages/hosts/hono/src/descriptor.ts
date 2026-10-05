@@ -14,6 +14,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
+import { DEFAULT_TAG } from "@mxlang/preact/emitter";
 import { honoDeclarations } from "./dialect.ts";
 
 /**
@@ -41,7 +42,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "hono-jsx",
   packageName: "@mxlang/hono",
-  defaultTag: "div",
+  defaultTag: DEFAULT_TAG,
   declarations: { default: honoDeclarations },
   load() {
     const { compileHonoMx } =
@@ -50,6 +51,7 @@ const descriptor: TargetDescriptor = {
       compileModule: (source, filename, options) =>
         compileHonoMx(source, filename, {
           customTags: options.customTags,
+          defaultTag: options.defaultTag,
           warnings: options.warnings,
           // Preserve the editor-only checks; ordinary builds leave this unset.
           typeCheck: options.typeCheck,

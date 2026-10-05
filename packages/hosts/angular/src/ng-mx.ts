@@ -164,6 +164,8 @@ export interface NgMxRegion {
 export interface CompileNgMxOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /** `package.json#mx.angular-template.defaultTag`, already validated (decision 145). */
+  defaultTag?: string;
   /**
    * Collects positioned warnings. Unset, the per-region warnings are still
    * reported on each `NgMxRegion` and on the result.
@@ -307,6 +309,7 @@ function lowerRegion(
     options.targets ?? angularOwnTargets,
   );
   ctx.customTags = options.customTags;
+  ctx.defaultTag = options.defaultTag;
   ctx.warnings = warnings;
   // Seed the module's own bindings exactly as `compileSolidMx` does, so a
   // capitalized tag bound by the surrounding module (an authored

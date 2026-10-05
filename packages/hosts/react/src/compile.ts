@@ -29,7 +29,12 @@ import { reactDeclarations, reactDialect } from "./dialect.ts";
 /** This host's compile options: the preact emitter's surface, minus the dialect, which is always react's here. */
 export type ReactCompileOptions = Pick<
   CompilePreactOptions,
-  "customTags" | "resolveImport" | "warnings" | "targets" | "typeCheck"
+  | "customTags"
+  | "defaultTag"
+  | "resolveImport"
+  | "warnings"
+  | "targets"
+  | "typeCheck"
 >;
 
 /** Compiles a whole-file MX template to a React component module, under an explicit `targets` lookup. */
@@ -42,6 +47,7 @@ export function compileReactMx(
     dialect: reactDialect,
     declarations: reactDeclarations,
     customTags: options.customTags,
+    defaultTag: options.defaultTag,
     resolveImport: options.resolveImport,
     warnings: options.warnings,
     typeCheck: options.typeCheck,

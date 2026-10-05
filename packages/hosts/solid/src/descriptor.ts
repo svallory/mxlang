@@ -11,7 +11,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
-import { solidDeclarations } from "./emitter.ts";
+import { DEFAULT_TAG, solidDeclarations } from "./emitter.ts";
 
 /**
  * The CommonJS `require` this descriptor uses to reach its own compile entry,
@@ -34,7 +34,7 @@ const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "solid-jsx",
   packageName: "@mxlang/solid",
-  defaultTag: "div",
+  defaultTag: DEFAULT_TAG,
   declarations: { default: solidDeclarations },
   // `typescript-plugin/src/mx-language.ts`: Solid merges the decoded map with
   // the recorded mappings; every other target re-lowers.
@@ -52,6 +52,7 @@ const descriptor: TargetDescriptor = {
         compileSolidUnit(source, {
           filename,
           customTags: options.customTags,
+          defaultTag: options.defaultTag,
           warnings: options.warnings,
           targets: options.targets ?? targets(),
         }) as TargetCompileResult,

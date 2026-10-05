@@ -68,6 +68,8 @@ export interface MxRegionCompileInput {
    */
   // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
   customTags?: Record<string, any>;
+  /** `package.json#mx.<target>.defaultTag` the caller resolved (decision 145). */
+  defaultTag?: string;
   /**
    * Where this region appeared, the same context `mxRegionPositionCheck`
    * was given (C3). Handed over so a host that needs the enclosing syntax

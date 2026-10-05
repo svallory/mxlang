@@ -20,6 +20,7 @@
  */
 
 import type { Ctx, Disposition, Node } from "./core.ts";
+import type { CustomTag } from "./custom-tags.ts";
 import type { Attr, DelegatedTag } from "./ir.ts";
 
 export type { Disposition };

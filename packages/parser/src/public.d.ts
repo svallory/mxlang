@@ -91,6 +91,8 @@ declare module "@mxlang/parser" {
     /** Custom tag definitions the caller registered, opaque here. */
     // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
     customTags?: Record<string, any>;
+    /** `package.json#mx.<target>.defaultTag` the caller resolved (decision 145). */
+    defaultTag?: string;
     /** Where this region appeared, the same context `mxRegionPositionCheck`
      *  was given. Undefined when no `mxRegionPositionCheck` is set. */
     context?: MxRegionContext;
@@ -141,6 +143,8 @@ declare module "@mxlang/parser" {
      * the P1 review hit when the option was first added.
      */
     mxCustomTags?: Record<string, unknown>;
+    /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
+    mxDefaultTag?: string;
     /**
      * A host's veto on where an MX region may appear (e.g. Angular's
      * `.ng.mx` only allowing one as `@Component({ template: … })`'s value).
@@ -364,6 +368,8 @@ declare module "@mxlang/parser" {
      * without it a registered tag is unknown inside the region.
      */
     customTags?: Record<string, unknown>;
+    /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
+    defaultTag?: string;
     /**
      * Lowers each MX region the bridge finds. Required whenever the grammar
      * is on. For `.solid.mx`, pass `compileSolidMx` from `@mxlang/solid`.

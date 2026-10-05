@@ -53,6 +53,8 @@ export interface CompileSolidMxOptions {
   baseColumn?: number;
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /** `package.json#mx.<target>.defaultTag`, already validated (decision 145). */
+  defaultTag?: string;
   /** Surrounding `.solid.mx` module imports, local binding -> specifier. */
   importSpecifiers?: ReadonlyMap<string, string>;
   /**
@@ -247,6 +249,7 @@ export function compileSolidMx(
     options.targets,
   );
   ctx.customTags = options.customTags;
+  ctx.defaultTag = options.defaultTag;
   ctx.warnings = options.warnings;
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
@@ -393,6 +396,7 @@ export function compileSolidUnit(
     options.targets,
   );
   ctx.customTags = options.customTags;
+  ctx.defaultTag = options.defaultTag;
   ctx.warnings = options.warnings;
   // A tag unit is a whole file compiling to a module, unlike the region path
   // above: it has a `export default function <Name>` to name, so a tag that

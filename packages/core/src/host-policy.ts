@@ -97,6 +97,21 @@ export interface TargetPolicy {
    * never carried here.
    */
   defaultTag?: string;
+  /** Where `defaultTag` is written in the `package.json` (1-based line, 0-based column, UTF-16 length). */
+  defaultTagAt?: PolicyLocation;
+  /**
+   * Where the `mx.target`/`mx.host` specifier that loaded `descriptor` is
+   * written, for a problem with the descriptor's own values.
+   */
+  descriptorAt?: PolicyLocation;
+}
+
+/** A value's place in the `package.json` that set it. */
+export interface PolicyLocation {
+  file: string;
+  line: number;
+  column: number;
+  length: number;
 }
 
 /** Why a {@link TargetPolicyDiagnostic} was raised. */
@@ -683,11 +698,19 @@ export function resolveTargetPolicyDetailed(
     ? loadSpecifiers(mx, dir, lookup, { file, text: read.text }, diagnostics)
     : NO_SPECIFIERS;
   const resolved = policyOf(read.manifest, lookup, loaded);
+  if (resolved.policy.descriptor) {
+    const key = loaded.target ? "target" : "host";
+    resolved.policy.descriptorAt = { file, ...locateMxValue(read.text, key) };
+  }
   const configured = mx?.[resolved.policy.target];
   if (isObject(configured) && configured.defaultTag !== undefined) {
     const value = configured.defaultTag;
     if (typeof value === "string" && value !== "") {
       resolved.policy.defaultTag = value;
+      resolved.policy.defaultTagAt = {
+        file,
+        ...locateMxValue(read.text, [resolved.policy.target, "defaultTag"]),
+      };
     } else {
       const key = `mx.${resolved.policy.target}.defaultTag`;
       diagnostics.push({

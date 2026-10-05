@@ -110,6 +110,11 @@ export interface Options {
    */
   // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
   mxCustomTags?: Record<string, any>;
+  /**
+   * MX FORK: `package.json#mx.<target>.defaultTag`, handed to the host that
+   * lowers each MX region (decision 145). Opaque here.
+   */
+  mxDefaultTag?: string;
 
   /**
    * MX FORK: a host's veto on where an MX region may appear, computed from
@@ -247,6 +252,7 @@ type KeepOptionalKeys =
   | "sourceFilename"
   | "strictMode"
   | "mxCustomTags"
+  | "mxDefaultTag"
   | "mxRegionPositionCheck"
   | "mxRegionFragment"
   | "mxSiblingHints"
@@ -273,6 +279,7 @@ function createDefaultOptions(): OptionsWithDefaults {
     // caller's values by iterating over *this* object's keys — a key with no
     // default entry is silently never read.
     mxCustomTags: undefined,
+    mxDefaultTag: undefined,
     // MX FORK: same "must default to undefined, not be left out" reasoning
     // as mxCustomTags above.
     mxRegionPositionCheck: undefined,

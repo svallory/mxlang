@@ -86,6 +86,9 @@ export function compileModule(
   try {
     parsed = parseData(source, filename, {
       customTags: options.customTags,
+      ...(options.defaultTag === undefined
+        ? {}
+        : { defaultTag: options.defaultTag }),
       warnings,
     });
   } finally {

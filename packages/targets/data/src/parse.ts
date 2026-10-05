@@ -49,6 +49,12 @@ export interface ParseDataOptions {
   /** Contract-only custom tags (decision 130), by call name. */
   customTags?: Record<string, CustomTag>;
   /**
+   * `package.json#mx.data.defaultTag`, already validated: what the unnamed
+   * tag (`<#id>`, `<.class>`) stands for in place of the built-in `object`
+   * (decision 145).
+   */
+  defaultTag?: string;
+  /**
    * `"pass"` (default) keeps the structural constructs — text, `${}`,
    * `<if>`/`<for>`/`<const>`, comments, `import`/`export`/`static` — in the
    * tree for the consumer to interpret. `"reject"` makes each one a
@@ -239,7 +245,12 @@ function unknownTagBefore(
   options: ParseDataOptions,
 ): { message: string; at: { line: number; column: number } } | null {
   if (error.file !== undefined && error.file !== filename) return null;
-  const tags = scanAuthoredTags(source, filename, options.customTags);
+  const tags = scanAuthoredTags(
+    source,
+    filename,
+    options.customTags,
+    options.defaultTag,
+  );
   if (!tags) return null;
   const declared = declaredTagNames(options.customTags);
   // The earliest by position, not the first in the scan's walk order (which
@@ -304,6 +315,7 @@ export function parseData(
       taglibs: [dataTaglib()],
       tagDiscoveryDirs: [],
       customTags: options.customTags,
+      defaultTag: options.defaultTag,
       warnings,
       emitIr: (lowered) => {
         ir = lowered;
