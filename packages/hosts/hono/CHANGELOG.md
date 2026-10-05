@@ -1,5 +1,7 @@
 # @mxlang/hono
 
+- **Changed (bridge-host, decision 154):** the Bun loader's filter is built from its lookup (`mxFilter`), as `@mxlang/html`'s; unchanged with the package's own lookup.
+
 - **Fix (html-imported-return-tag-object-object):** an imported `.mx` tag that declares `<return>`, called without `/var`, renders its body and drops the value on this host too (the call now carries `returnsValue`, so the shared emitter unwraps `.output`). Render-locked by `imported-return-render.test.ts`.
 
 - **Fix (jsx-textarea-value-content, decision 149):** `<textarea value=x/>` renders the value as escaped content, as Marko 6.3.51 does: `null`/`undefined`/`false`/`true` render nothing, `0` and `""` are kept, a leading newline is doubled for the server, a later `value` beats an earlier spread's, and a spread's `value` yields to a body. An explicit `value` together with body content is the compile error "A textarea cannot have both a value attribute and body content." A runtime-resolved `<${tag} value=…/>` that is a textarea takes `value` as content and rejects `content`. Hono doubles the leading newline only where no `document` exists (`hono/jsx/dom`'s `render` accepts the emitted nodes and must not double); see divergences.md.

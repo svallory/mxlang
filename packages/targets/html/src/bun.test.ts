@@ -8,7 +8,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import markoPlugin from "./bun.ts";
+import { createTargetLookup, type TargetDescriptor } from "@mxlang/core";
+import markoPlugin, { mxFilter } from "./bun.ts";
+import { htmlTargets } from "./index.ts";
 
 /**
  * Runs under `bun test`, not vitest: it exercises `Bun.plugin` and Bun's
@@ -329,5 +331,46 @@ describe("@mxlang/html/bun", () => {
       warn.mockRestore();
       rmSync(pkgDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the onLoad filter (decision 154: hosts claim .<segment>.mx)", () => {
+  const fake: TargetDescriptor = {
+    descriptorVersion: 0,
+    name: "fake-jsx",
+    packageName: "@test/mx-fake",
+    defaultTag: "div",
+    host: {
+      name: "fake",
+      fileKinds: [
+        {
+          segment: "fake",
+          diagnosticSource: "fakemx",
+          compileRegion: () => ({ code: "null" }),
+        },
+      ],
+    },
+  };
+
+  test("with the package's own lookup it is today's filter", () => {
+    const filter = mxFilter(htmlTargets);
+    expect(filter.source).toBe(String.raw`(?<!\.(?:solid|astro))\.mx$`);
+    for (const file of ["/a/page.mx", "/a/my.icon.mx", "/a/page.nope.mx"])
+      expect(filter.test(file)).toBe(true);
+    for (const file of ["/a/x.solid.mx", "/a/x.astro.mx", "/a/x.fake.mx"])
+      expect(filter.test(file)).toBe(file.endsWith(".fake.mx"));
+  });
+
+  test("declines every host module file kind of the lookup it is given", () => {
+    const filter = mxFilter(
+      createTargetLookup([
+        ...[htmlTargets.target(htmlTargets.defaultTarget())!],
+        fake,
+      ]),
+    );
+    expect(filter.test("/a/x.fake.mx")).toBe(false);
+    expect(filter.test("/a/x.solid.mx")).toBe(false);
+    expect(filter.test("/a/page.mx")).toBe(true);
+    expect(filter.test("/a/page.nope.mx")).toBe(true);
   });
 });

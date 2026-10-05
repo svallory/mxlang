@@ -25,7 +25,25 @@ import { compileHonoMx, honoTargets } from "./index.ts";
  * `@mxlang/html/bun`: which tags a template may call follows from where the
  * template lives, not from plugin configuration.
  */
-const MX_FILTER = /(?<!\.(?:solid|astro))\.mx$/;
+/**
+ * Other hosts' module file kinds this loader declines even when its own
+ * lookup does not register them: the default lookup knows only this package's
+ * target, and this package cannot import the registry (the registry depends
+ * on it). A host that adds a module file kind adds its segment here.
+ */
+const FOREIGN_SEGMENTS: readonly string[] = ["solid", "astro"];
+
+/**
+ * The `onLoad` filter: every `.mx` except a host module file (`.<segment>.mx`)
+ * of `targets` or of {@link FOREIGN_SEGMENTS}. An unregistered `.<word>.mx`
+ * is an ordinary `.mx` and stays claimed. Exported for its tests.
+ */
+export function mxFilter(targets: TargetLookup): RegExp {
+  const segments = [
+    ...new Set([...FOREIGN_SEGMENTS, ...targets.moduleSegments()]),
+  ];
+  return new RegExp(`(?<!\\.(?:${segments.join("|")}))\\.mx$`);
+}
 
 /**
  * Builds the loader over `targets`: the registered targets it scans and
@@ -43,7 +61,7 @@ export function createHonoBunPlugin(
   return {
     name: "mxlang-hono",
     setup(build) {
-      build.onLoad({ filter: MX_FILTER }, ({ path }) => {
+      build.onLoad({ filter: mxFilter(targets) }, ({ path }) => {
         const source = readFileSync(path, "utf8");
         const scan = scanCached(path, { host: "hono", targets });
         reportScanDiagnostics(

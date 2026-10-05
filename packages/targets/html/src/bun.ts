@@ -35,7 +35,25 @@ import { compile, htmlTargets } from "./index.ts";
  * answer in the wrong place. The scan is cached, so the repeated `onLoad`
  * calls a build makes over one directory cost one filesystem walk.
  */
-const MX_FILTER = /(?<!\.(?:solid|astro))\.mx$/;
+/**
+ * Other hosts' module file kinds this loader declines even when its own
+ * lookup does not register them: the default lookup knows only this package's
+ * target, and this package cannot import the registry (the registry depends
+ * on it). A host that adds a module file kind adds its segment here.
+ */
+const FOREIGN_SEGMENTS: readonly string[] = ["solid", "astro"];
+
+/**
+ * The `onLoad` filter: every `.mx` except a host module file (`.<segment>.mx`)
+ * of `targets` or of {@link FOREIGN_SEGMENTS}. An unregistered `.<word>.mx`
+ * is an ordinary `.mx` and stays claimed. Exported for its tests.
+ */
+export function mxFilter(targets: TargetLookup): RegExp {
+  const segments = [
+    ...new Set([...FOREIGN_SEGMENTS, ...targets.moduleSegments()]),
+  ];
+  return new RegExp(`(?<!\\.(?:${segments.join("|")}))\\.mx$`);
+}
 
 /**
  * Builds the loader over `targets`: the registered targets it scans and
@@ -55,7 +73,7 @@ export function createHtmlBunPlugin(
   return {
     name: "mxlang-translator",
     setup(build) {
-      build.onLoad({ filter: MX_FILTER }, ({ path }) => {
+      build.onLoad({ filter: mxFilter(targets) }, ({ path }) => {
         const source = readFileSync(path, "utf8");
         const scan = scanCached(path, { host: "html", targets });
         reportScanDiagnostics(
