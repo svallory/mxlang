@@ -412,10 +412,11 @@ was not expected`), and a line in a concise region cannot start with a single
 hyphen — see **Text lines (`--`)** below for the `--` rule, and **A bare
 `${expr}` line** for that line's own trap.
 
-Inherited from Marko under the subset rule: no MX decision fixes this, and no
-oracle or conformance fixture exercises it. The one MX source that does is the
-landing page's example (`apps/docs/example/home-example.mx`), which holds a
-concise block that every docs build compiles on the html target and renders.
+Inherited from Marko under the subset rule: no MX decision fixes this. Concise
+blocks are exercised in MX source by the landing page's example
+(`apps/docs/example/home-example.mx`, compiled on the html target and rendered
+by every docs build) and by the `data-check` violation fixture
+(`packages/tooling/tsc/src/fixtures/host-dispatch/data-check/violation.mx`).
 Every rule in this section was read off
 htmljs-parser's `CONCISE_HTML_CONTENT`/`HTML_CONTENT` states by compiling the
 snippets above and their variants on the html target; the behaviour is the
@@ -427,9 +428,9 @@ parser's, and no host changes it.
 ### Text lines (`--`)
 
 Concise mode's delimited text block. Inherited from Marko under the subset rule;
-no MX decision fixes it, and no oracle or conformance fixture exercises it (the
-landing page's example does use `--` lines, and is compiled and rendered on
-every docs build). The parser's own
+no MX decision fixes it. `--` lines are exercised by the angular oracle's
+`text-*` fixtures (run by `oracle:angular` in CI) and by the landing page's
+example, which every docs build compiles and renders. The parser's own
 constraint, verbatim from htmljs-parser's `CONCISE_HTML_CONTENT`:
 
 > `A line in concise mode cannot start with a single hyphen. Use "--" instead.`

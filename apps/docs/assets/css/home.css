@@ -297,9 +297,11 @@
    replacing dots with dashes (`punctuation.bracket` -> `ts-punctuation-bracket`);
    `@none` ("deliberately unstyled") and the JavaScript query's `@embedded` get
    none. The TypeScript names (`function.method`, `number`, `operator`, ...) come
-   from the injected expressions, see `scripts/build-ts-grammar.sh`. The values are docmd's own
-   highlight palette (`docmd-highlight-light.css` / `-dark.css`), keyed on the
-   same `data-theme` attribute the theme switch sets on <html>. */
+   from the injected expressions, see `scripts/build-ts-grammar.sh`. The values start from
+   docmd's highlight palette (`docmd-highlight-light.css` / `-dark.css`); the tag,
+   punctuation and operator colours and the dark comment colour are One Dark Pro
+   values instead. They are keyed on the same `data-theme` attribute the theme
+   switch sets on <html>. */
 
 :root {
   --ts-comment: #a0a1a7;
