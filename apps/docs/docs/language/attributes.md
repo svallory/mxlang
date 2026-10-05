@@ -88,7 +88,7 @@ stands for: ``attribute `:email` (`name`) must be number, got string``.
 ### Composition
 
 Tag-adjacent sugars combine in any order. With no tag name the tag is the
-[unnamed tag](#id-and-class-without-a-tag-name), so `<:email/>` is the target's
+[unnamed tag](#attributes-id-and-class-without-a-tag-name), so `<:email/>` is the target's
 default tag with a name:
 
 ```mx
@@ -109,7 +109,7 @@ they do next to the tag name: `<div.a #m .b/>` and `<div.a.b#m/>` are the same
 tag, and `.x` beside an authored `class` is appended to the shorthand part
 (`<div.c class="x" .d/>` renders `class="c d x"`). A repeated `#x` or `:x`, or one
 beside an explicit `id=` or `name=`, follows the
-[duplicate-attribute rule](/specification/#name-sugar-name-id-and-class-anywhere-on-a-tag):
+[duplicate-attribute rule](/specification/#the-mx-language-4-elements-and-attributes-name-sugar-name-id-and-class-anywhere-on-a-tag):
 the later one wins, with a warning (`<input name="a" :b/>` renders
 `<input name="b">`).
 
@@ -183,9 +183,9 @@ gets the stock parser through `@marko/compiler`, and there:
 
 Do not run `prettier-plugin-marko` on a file that uses sugar after a value: it
 bundles a stock parser and rewrites `<a x=a .b/>` to `<a x=a.b/>`, which turns a
-class into member access without any error. See [formatting](/editors/vscode/#formatting).
+class into member access without any error. See [formatting](/editors/vscode/#vs-code-formatting).
 
-The rules, in full: [Name sugar](/specification/#name-sugar-name-id-and-class-anywhere-on-a-tag)
+The rules, in full: [Name sugar](/specification/#the-mx-language-4-elements-and-attributes-name-sugar-name-id-and-class-anywhere-on-a-tag)
 and [ADR 146](/design-notes/adr-name-sugar/).
 
 ## Event attributes
