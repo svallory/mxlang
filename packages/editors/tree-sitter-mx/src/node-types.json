@@ -23,6 +23,25 @@
     }
   },
   {
+    "type": "args_expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "atom",
+          "named": true
+        },
+        {
+          "type": "reserved_atom",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "attr_bound_value",
     "named": true,
     "fields": {},
@@ -145,6 +164,25 @@
         },
         {
           "type": "attr_value_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "attr_value_expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "atom",
+          "named": true
+        },
+        {
+          "type": "reserved_atom",
           "named": true
         }
       ]
@@ -482,6 +520,25 @@
     }
   },
   {
+    "type": "method_body_expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "atom",
+          "named": true
+        },
+        {
+          "type": "reserved_atom",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "param",
     "named": true,
     "fields": {},
@@ -564,6 +621,25 @@
         },
         {
           "type": "placeholder_start_raw",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "placeholder_expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "atom",
+          "named": true
+        },
+        {
+          "type": "reserved_atom",
           "named": true
         }
       ]
@@ -780,11 +856,11 @@
     "named": true
   },
   {
-    "type": "args_expr",
+    "type": "args_open",
     "named": true
   },
   {
-    "type": "args_open",
+    "type": "atom",
     "named": true
   },
   {
@@ -805,10 +881,6 @@
   },
   {
     "type": "attr_name",
-    "named": true
-  },
-  {
-    "type": "attr_value_expr",
     "named": true
   },
   {
@@ -864,10 +936,6 @@
     "named": true
   },
   {
-    "type": "method_body_expr",
-    "named": true
-  },
-  {
     "type": "method_body_open",
     "named": true
   },
@@ -908,15 +976,15 @@
     "named": true
   },
   {
-    "type": "placeholder_expr",
-    "named": true
-  },
-  {
     "type": "placeholder_start",
     "named": true
   },
   {
     "type": "placeholder_start_raw",
+    "named": true
+  },
+  {
+    "type": "reserved_atom",
     "named": true
   },
   {

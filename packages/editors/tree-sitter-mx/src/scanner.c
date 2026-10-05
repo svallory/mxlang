@@ -100,6 +100,9 @@ enum TokenType {
   ELEMENT_END,              // zero-width
   TAG_COMMENT,              // hidden: comments inside open tags (no events)
   ESCAPE,                   // hidden: omitted backslashes before "${"
+  ATOM,                     // MX (decision 156): `:name` in an expression
+  RESERVED_ATOM,            // MX: `::name`, reserved for Symbol.for sugar
+  EXPR_MORE,                // MX: hidden: an expression resumed after an atom
   ERROR_SENTINEL,
 };
 
@@ -180,6 +183,57 @@ typedef struct {
 #define MAX_TAGS 24
 #define MAX_CONTENTS 12
 
+// Expression scanning state (see "Expression scanning" below). Declared
+// here because the scanner keeps one across tokens around an atom (MX).
+enum Term {
+  TERM_NONE = 0,
+  TERM_CLOSE_PAREN,
+  TERM_CLOSE_CURLY,
+  TERM_CLOSE_ANGLE,
+  TERM_PIPE,
+  TERM_HTML_ATTR_NAME,
+  TERM_CONCISE_ATTR_NAME,
+  TERM_CONCISE_GROUPED_ATTR_NAME,
+  TERM_HTML_ATTR_VALUE,
+  TERM_CONCISE_ATTR_VALUE,
+  TERM_CONCISE_GROUPED_ATTR_VALUE,
+  TERM_HTML_TAG_VAR,
+  TERM_CONCISE_TAG_VAR,
+  TERM_PARAM_PATTERN,  // "|" "," ":" "=" at depth 0
+  TERM_PARAM_TYPE,     // "|" "," "=" at depth 0
+  TERM_PARAM_DEFAULT,  // "|" "," at depth 0
+};
+
+typedef struct {
+  bool operators;
+  bool terminated_by_eol;
+  bool terminated_by_whitespace;
+  bool consume_indented;
+  bool in_type;
+  bool force_type;
+  bool split_at_type_colon;  // stop before the ":" that enters type mode
+  bool resume_lookbehind;    // token resumes a split expression: operator
+                             // lookbehind may cross the token start
+  bool split_at_shorthand;   // MX: ws + `.ident`/`:ident` ends the value
+  bool atoms;                // MX: stop before an atom (decision 156)
+  uint8_t terminator;
+} ExprCfg;
+
+typedef struct {
+  ExprCfg cfg;
+  uint8_t group[128];
+  uint32_t group_len;
+  int32_t ternary_depth;
+  // MX: open conditional `?`s only. ternary_depth mirrors the parser and
+  // also counts the `?` of `??` and `?.`, which no `:` ever closes.
+  int32_t cond_depth;
+  bool in_type;
+  bool force_type;
+  bool was_comment;
+  bool resumed;  // MX: this token continues an expression after an atom
+  bool at_atom;  // MX: the scan stopped before an atom
+} ExprState;
+
 // Position bookkeeping replacing the parser's backwards reads of the source.
 // Committed in lock-step with mark_end (see `mark`).
 typedef struct {
@@ -226,6 +280,14 @@ typedef struct {
   uint8_t expect_method_open;  // attr-level <T> closed; "(" must follow
   uint8_t block_after_tag;     // "--" ended a concise tag: indent extension
 
+  // MX (decision 156): an expression token split around an atom. The scan
+  // stops before the atom's ":"; the atom is its own token; then the same
+  // expression resumes from `atom_expr` (see scan_atom_piece).
+  uint8_t atom_state;   // ATOM_STATE_*
+  uint8_t atom_owner;   // the expression token that was split (TokenType)
+  uint16_t atom_pre;    // chars scanned before the atom but not yet emitted
+  ExprState atom_expr;  // the expression state at the atom
+
   uint8_t tag_len;
   uint8_t content_len;
   TagFrame tags[MAX_TAGS];
@@ -235,6 +297,13 @@ typedef struct {
   char *buf;
   uint32_t buf_len, buf_cap;
 } Scanner;
+
+enum {
+  ATOM_STATE_NONE = 0,
+  ATOM_STATE_PRE,     // emit the atom_pre chars before the atom (EXPR_MORE)
+  ATOM_STATE_ATOM,    // the atom itself is next
+  ATOM_STATE_RESUME,  // the expression continues after the atom
+};
 
 // ATTR_STAGE mirror of states/ATTRIBUTE.ts
 enum {
@@ -429,51 +498,6 @@ static int32_t es_prev_nonws(EStream *es) {
 // Expression scanning (port of states/EXPRESSION.ts)
 // --------------------------------------------------------------------------
 
-enum Term {
-  TERM_NONE = 0,
-  TERM_CLOSE_PAREN,
-  TERM_CLOSE_CURLY,
-  TERM_CLOSE_ANGLE,
-  TERM_PIPE,
-  TERM_HTML_ATTR_NAME,
-  TERM_CONCISE_ATTR_NAME,
-  TERM_CONCISE_GROUPED_ATTR_NAME,
-  TERM_HTML_ATTR_VALUE,
-  TERM_CONCISE_ATTR_VALUE,
-  TERM_CONCISE_GROUPED_ATTR_VALUE,
-  TERM_HTML_TAG_VAR,
-  TERM_CONCISE_TAG_VAR,
-  TERM_PARAM_PATTERN,  // "|" "," ":" "=" at depth 0
-  TERM_PARAM_TYPE,     // "|" "," "=" at depth 0
-  TERM_PARAM_DEFAULT,  // "|" "," at depth 0
-};
-
-typedef struct {
-  bool operators;
-  bool terminated_by_eol;
-  bool terminated_by_whitespace;
-  bool consume_indented;
-  bool in_type;
-  bool force_type;
-  bool split_at_type_colon;  // stop before the ":" that enters type mode
-  bool resume_lookbehind;    // token resumes a split expression: operator
-                             // lookbehind may cross the token start
-  bool split_at_shorthand;   // MX: ws + `.ident`/`:ident` ends the value
-  uint8_t terminator;
-} ExprCfg;
-
-typedef struct {
-  ExprCfg cfg;
-  uint8_t group[128];
-  uint32_t group_len;
-  int32_t ternary_depth;
-  // MX: open conditional `?`s only. ternary_depth mirrors the parser and
-  // also counts the `?` of `??` and `?.`, which no `:` ever closes.
-  int32_t cond_depth;
-  bool in_type;
-  bool force_type;
-  bool was_comment;
-} ExprState;
 
 // shouldTerminate(code, data, pos, expression); `k` is how far ahead of the
 // logical position `code` sits (0 = current char).
@@ -790,6 +814,65 @@ static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
   return false;
 }
 
+// MX (decision 156): keywords after which an expression is expected, so a
+// following `:name` is an atom (`return :a`, `case :a:`). `as`/`satisfies`
+// are not here: what follows them is a type.
+static const char *const ATOM_KEYWORDS[] = {
+    "await", "case",   "delete", "do",   "else",  "in",    "instanceof",
+    "new",   "return", "throw",  "typeof", "void", "yield", "of", NULL,
+};
+
+// MX (decision 156): does the ":" at the logical position start an atom?
+// Only where an expression is expected: at the start of the expression, or
+// after an operator, punctuator or keyword. Never after the end of an
+// expression (`a ? b :c` is a ternary, `(x :number)` a type), after `.`, or
+// after `/` (a regex or a comment may end there). Strings, template text,
+// regexes and comments never reach here: their sub-scanners consume them.
+// `::name` is one reserved token wherever it appears (`{k::a}` and
+// `a?b::c` are errors, decision 156), so it is reported as an atom start.
+static bool atom_starts_here(EStream *es, ExprState *e) {
+  int32_t n1 = es_peek(es, 1);
+  bool reserved = n1 == ':' && is_ident_start_code(es_peek(es, 2));
+  if (!reserved && !is_ident_start_code(n1)) return false;
+  // The resumed state is serialized; a deeper bracket nest is not split.
+  if (e->group_len > 64) return false;
+  if (reserved) return true;
+
+  Scanner *s = es->s;
+  int64_t i = (int64_t)s->buf_len - 1;
+  while (i >= 0 && is_ws((int32_t)(uint8_t)s->buf[i])) i--;
+  if (i < 0) {
+    // Nothing but whitespace in this token: at the start of the expression
+    // (after `=`, `${`, `(`, `{` or `...`) it is an atom; a resumed token
+    // follows an atom, which ends an expression.
+    return !e->resumed;
+  }
+
+  int32_t prev = (int32_t)(uint8_t)s->buf[i];
+  switch (prev) {
+    case '(': case '[': case '{': case ',': case ';': case '=': case '!':
+    case '&': case '|': case '^': case '~': case '+': case '-': case '*':
+    case '%': case '<': case '>': case '?': case ':':
+      return true;
+    default:
+      break;
+  }
+  if (!is_word_code(prev)) return false;
+  int64_t end = i;
+  while (i >= 0 && is_word_code((int32_t)(uint8_t)s->buf[i])) i--;
+  // A word reaching the token start of a resumed token is an atom's tail.
+  if (i < 0 && e->resumed) return false;
+  if (i >= 0 && s->buf[i] == '.') return false;  // `a.return`
+  int64_t len = end - i;
+  for (int k = 0; ATOM_KEYWORDS[k]; k++) {
+    if ((int64_t)strlen(ATOM_KEYWORDS[k]) == len &&
+        memcmp(s->buf + i + 1, ATOM_KEYWORDS[k], (size_t)len) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool scan_expr_inner(EStream *es, ExprState *e);
 
 // STRING state
@@ -925,6 +1008,11 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
     if (is_word_code(code)) {
       es_next(es);
       continue;
+    }
+
+    if (code == ':' && e->cfg.atoms && atom_starts_here(es, e)) {
+      e->at_atom = true;
+      return true;
     }
 
     if (!e->group_len) {
@@ -1126,7 +1214,14 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
 // lookahead). `*empty` reports whether nothing was consumed. The committed
 // token end is maintained by automark; callers must have marked the token
 // start/end fallback before queueing any lookahead.
+static bool scan_expr_es_state(EStream *es, ExprCfg cfg, bool *empty,
+                               ExprState *out);
 static bool scan_expr_es(EStream *es, ExprCfg cfg, bool *empty) {
+  return scan_expr_es_state(es, cfg, empty, NULL);
+}
+
+static bool scan_expr_es_state(EStream *es, ExprCfg cfg, bool *empty,
+                               ExprState *out) {
   bool prev_automark = es->automark;
   uint32_t start = es->s->buf_len;
   if (start == 0) {
@@ -1145,6 +1240,7 @@ static bool scan_expr_es(EStream *es, ExprCfg cfg, bool *empty) {
   bool ok = scan_expr_inner(es, &e);
   if (empty) *empty = es->s->buf_len == start;
   es->automark = prev_automark;
+  if (out) *out = e;
   return ok;
 }
 
@@ -1506,13 +1602,40 @@ static void accumulate_tag_name_hash(Scanner *s) {
   }
 }
 
+// MX (decision 156): the expression scan stopped before an atom. The token
+// being emitted ends at the last committed mark; whatever was scanned after
+// it (`atom_pre` chars, held in lookahead) is emitted next as EXPR_MORE, then
+// the atom, then the expression resumes from `e`.
+static void begin_atom_split(EStream *es, ExprState *e, uint8_t owner) {
+  Scanner *s = es->s;
+  s->atom_expr = *e;
+  s->atom_expr.at_atom = false;
+  s->atom_expr.resumed = true;
+  s->atom_owner = owner;
+  s->atom_pre = (uint16_t)(s->buf_len - es->marked_len);
+  s->atom_state = s->atom_pre ? ATOM_STATE_PRE : ATOM_STATE_ATOM;
+  s->buf_len = es->marked_len;  // only the emitted chars (tag name hash)
+}
+
+static ExprCfg with_atoms(ExprCfg cfg) {
+  cfg.atoms = true;
+  return cfg;
+}
+
 static bool scan_placeholder_expr(Scanner *s, TSLexer *lexer,
                                   TSSymbol *result) {
   bool empty = false;
-  if (!scan_expr_token(s, lexer, cfg_enclosed(TERM_CLOSE_CURLY), &empty)) {
-    return false;
-  }
-  if (empty) return false;  // MALFORMED_PLACEHOLDER: expression missing
+  EStream es;
+  es_init(&es, s, lexer, true);
+  mark(s, lexer);  // empty expression: zero-width token
+  ExprState e;
+  bool ok = scan_expr_es_state(&es, with_atoms(cfg_enclosed(TERM_CLOSE_CURLY)),
+                               &empty, &e);
+  if (ok && e.at_atom) begin_atom_split(&es, &e, PLACEHOLDER_EXPR);
+  es_free(&es);
+  if (!ok) return false;
+  // MALFORMED_PLACEHOLDER: expression missing (`${:a}` starts with an atom)
+  if (empty && !e.at_atom) return false;
   accumulate_tag_name_hash(s);
   *result = PLACEHOLDER_EXPR;
   return true;
@@ -2851,10 +2974,13 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   // ---- grammar-position expressions (no trivia before them)
   if (valid[ARGS_EXPR] && !valid[ATTR_NAME]) {
     bool empty = false;
-    if (!scan_expr_es(es, cfg_enclosed(TERM_CLOSE_PAREN), &empty)) {
+    ExprState e;
+    if (!scan_expr_es_state(es, with_atoms(cfg_enclosed(TERM_CLOSE_PAREN)),
+                            &empty, &e)) {
       return false;
     }
-    if (!empty) {
+    if (e.at_atom) begin_atom_split(es, &e, ARGS_EXPR);
+    if (!empty || e.at_atom) {
       lexer->result_symbol = ARGS_EXPR;
       return true;
     }
@@ -3004,10 +3130,13 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   }
   if (valid[METHOD_BODY_EXPR] && !valid[ATTR_NAME]) {
     bool empty = false;
-    if (!scan_expr_es(es, cfg_enclosed(TERM_CLOSE_CURLY), &empty)) {
+    ExprState e;
+    if (!scan_expr_es_state(es, with_atoms(cfg_enclosed(TERM_CLOSE_CURLY)),
+                            &empty, &e)) {
       return false;
     }
-    if (!empty) {
+    if (e.at_atom) begin_atom_split(es, &e, METHOD_BODY_EXPR);
+    if (!empty || e.at_atom) {
       lexer->result_symbol = METHOD_BODY_EXPR;
       return true;
     }
@@ -3076,7 +3205,17 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
       es_mark(es);
     }
     bool empty = false;
-    if (!scan_expr_es(es, cfg_attr_value(s), &empty)) return false;
+    ExprState e;
+    if (!scan_expr_es_state(es, with_atoms(cfg_attr_value(s)), &empty, &e)) {
+      return false;
+    }
+    if (e.at_atom) {
+      // The value continues after the atom; the attribute exits when the
+      // last piece is scanned (finish_atom_split).
+      begin_atom_split(es, &e, ATTR_VALUE_EXPR);
+      lexer->result_symbol = ATTR_VALUE_EXPR;  // may be zero-width
+      return true;
+    }
     if (empty) return false;  // INVALID_ATTRIBUTE_VALUE / missing value
     // The attribute exits after its value.
     s->attr_active = 0;
@@ -3510,6 +3649,98 @@ static bool scan_content(Scanner *s, TSLexer *lexer, const bool *valid) {
 // Entry points
 // --------------------------------------------------------------------------
 
+// MX (decision 156): the pieces of an expression token split around atoms
+// (begin_atom_split). Every piece but the atom is the hidden EXPR_MORE.
+static void finish_atom_split(Scanner *s, TSLexer *lexer) {
+  uint8_t owner = s->atom_owner;
+  s->atom_state = ATOM_STATE_NONE;
+  s->atom_owner = 0;
+  s->atom_pre = 0;
+  if (owner == ATTR_VALUE_EXPR) {
+    // The attribute exits after its value (as in scan_open_tag_es).
+    s->attr_active = 0;
+    s->attr_stage = ATTR_UNKNOWN;
+    s->attr_has_args = 0;
+    s->attr_has_type_params = 0;
+    concise_tag_epilogue(s, lexer);
+  }
+}
+
+static bool scan_atom_piece(Scanner *s, TSLexer *lexer, const bool *valid) {
+  if (s->atom_state == ATOM_STATE_PRE) {
+    // Chars the split token scanned past its last mark: re-read them raw.
+    if (!valid[EXPR_MORE]) return false;
+    for (uint16_t i = 0; i < s->atom_pre; i++) {
+      if (at_eof(lexer)) return false;
+      buf_push(s, lexer->lookahead);
+      cursor_advance(&s->cur, lexer->lookahead);
+      lexer->advance(lexer, false);
+    }
+    mark(s, lexer);
+    if (s->atom_owner == PLACEHOLDER_EXPR) accumulate_tag_name_hash(s);
+    s->atom_pre = 0;
+    s->atom_state = ATOM_STATE_ATOM;
+    lexer->result_symbol = EXPR_MORE;
+    return true;
+  }
+
+  if (s->atom_state == ATOM_STATE_ATOM) {
+    if (!valid[ATOM] && !valid[RESERVED_ATOM]) return false;
+    if (at_eof(lexer) || lexer->lookahead != ':') return false;
+    bool reserved = false;
+    buf_push(s, ':');
+    cursor_advance(&s->cur, ':');
+    lexer->advance(lexer, false);
+    if (lexer->lookahead == ':') {
+      reserved = true;
+      buf_push(s, ':');
+      cursor_advance(&s->cur, ':');
+      lexer->advance(lexer, false);
+    }
+    if (!is_ident_start_code(lexer->lookahead)) return false;
+    // [A-Za-z_$][\w$]*(-[\w$]+)*: a trailing "-" is not part of the name.
+    for (;;) {
+      while (!at_eof(lexer) && is_word_code(lexer->lookahead)) {
+        buf_push(s, lexer->lookahead);
+        cursor_advance(&s->cur, lexer->lookahead);
+        lexer->advance(lexer, false);
+      }
+      mark(s, lexer);
+      if (at_eof(lexer) || lexer->lookahead != '-') break;
+      cursor_advance(&s->cur, '-');
+      lexer->advance(lexer, false);
+      if (at_eof(lexer) || !is_word_code(lexer->lookahead)) break;
+      buf_push(s, '-');
+    }
+    s->cur = s->saved;  // drop a peeked "-"
+    if (s->atom_owner == PLACEHOLDER_EXPR) accumulate_tag_name_hash(s);
+    s->atom_state = ATOM_STATE_RESUME;
+    lexer->result_symbol = reserved ? RESERVED_ATOM : ATOM;
+    return true;
+  }
+
+  // ATOM_STATE_RESUME: the rest of the expression, possibly up to another
+  // atom. An empty rest is a zero-width EXPR_MORE that ends the split.
+  if (!valid[EXPR_MORE]) return false;
+  EStream es;
+  es_init(&es, s, lexer, true);
+  mark(s, lexer);
+  ExprState e = s->atom_expr;
+  e.cfg.resume_lookbehind = true;
+  es.before_token = s->cur.prev_char;
+  es.start = 0;
+  bool ok = scan_expr_inner(&es, &e);
+  if (ok && e.at_atom) {
+    begin_atom_split(&es, &e, s->atom_owner);
+  }
+  es_free(&es);
+  if (!ok) return false;
+  if (s->atom_owner == PLACEHOLDER_EXPR) accumulate_tag_name_hash(s);
+  if (!e.at_atom) finish_atom_split(s, lexer);
+  lexer->result_symbol = EXPR_MORE;
+  return true;
+}
+
 static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
   if (valid[ERROR_SENTINEL]) return false;  // error recovery: give up
   if (s->fail_next) return false;           // deferred error
@@ -3520,6 +3751,9 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
     s->cur.line_only_ws = 1;
     s->cur.cur_indent_hash = HASH_INIT;
   }
+
+  // MX: an expression split around an atom continues before anything else.
+  if (s->atom_state) return scan_atom_piece(s, lexer, valid);
 
   // Structural pendings first.
   if (s->pending_element_ends) {
@@ -3633,6 +3867,21 @@ unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
   WRITE(s->types_was_args);
   WRITE(s->expect_method_open);
   WRITE(s->block_after_tag);
+  WRITE(s->atom_state);
+  if (s->atom_state) {
+    ExprState *e = &s->atom_expr;
+    WRITE(s->atom_owner);
+    WRITE(s->atom_pre);
+    WRITE(e->cfg);
+    WRITE(e->group_len);
+    memcpy(buffer + n, e->group, e->group_len);
+    n += e->group_len;
+    WRITE(e->ternary_depth);
+    WRITE(e->cond_depth);
+    WRITE(e->in_type);
+    WRITE(e->force_type);
+    WRITE(e->was_comment);
+  }
   WRITE(s->tag_len);
   WRITE(s->content_len);
   for (uint8_t i = 0; i < s->tag_len; i++) WRITE(s->tags[i]);
@@ -3691,6 +3940,22 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
     READ(s->types_was_args);
     READ(s->expect_method_open);
     READ(s->block_after_tag);
+    READ(s->atom_state);
+    if (s->atom_state) {
+      ExprState *e = &s->atom_expr;
+      READ(s->atom_owner);
+      READ(s->atom_pre);
+      READ(e->cfg);
+      READ(e->group_len);
+      memcpy(e->group, buffer + n, e->group_len);
+      n += e->group_len;
+      READ(e->ternary_depth);
+      READ(e->cond_depth);
+      READ(e->in_type);
+      READ(e->force_type);
+      READ(e->was_comment);
+      e->resumed = true;
+    }
     READ(s->tag_len);
     READ(s->content_len);
     for (uint8_t i = 0; i < s->tag_len; i++) READ(s->tags[i]);
@@ -3720,7 +3985,7 @@ static const char *const TOKEN_NAMES[] = {
     "METHOD_BODY_EXPR", "METHOD_BODY_CLOSE", "OPEN_TAG_END",
     "OPEN_TAG_END_SELF", "CONCISE_OPEN_TAG_END", "CLOSE_TAG_START",
     "CLOSE_TAG_NAME", "CLOSE_TAG_END", "ELEMENT_END", "TAG_COMMENT",
-    "ESCAPE", "ERROR_SENTINEL",
+    "ESCAPE", "ATOM", "RESERVED_ATOM", "EXPR_MORE", "ERROR_SENTINEL",
 };
 #endif
 

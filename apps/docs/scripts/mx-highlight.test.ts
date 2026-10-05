@@ -115,7 +115,7 @@ describe("the capture classes", () => {
       ["ts-punctuation-bracket", "<"],
       ["ts-tag", "a"],
       ["ts-property", ".c"],
-      ["ts-label", ":b"],
+      ["ts-name", ":b"],
       ["ts-attribute", "x"],
       // highlights.scm captures the `=` as an operator.
       ["ts-operator", "="],
@@ -124,7 +124,7 @@ describe("the capture classes", () => {
       ["ts-string", '"1"'],
       ["ts-constant", "#d"],
       ["ts-property", ".e"],
-      ["ts-label", ":f"],
+      ["ts-name", ":f"],
       ["ts-punctuation-bracket", ">"],
     ]);
   });
@@ -134,9 +134,34 @@ describe("the capture classes", () => {
     expect(spans(html)).toEqual([
       ["ts-tag", "a"],
       ["ts-property", ".c"],
-      ["ts-label", ":b"],
+      ["ts-name", ":b"],
       ["ts-constant", "#d"],
     ]);
+  });
+
+  it("colours atoms ts-atom and the name sugar ts-name, in TypeScript too", () => {
+    const html = renderMx(
+      "enum :status values=[:draft, :sent] default=:draft\n" +
+        "boolean :isOverdue({ self }) { return self.status === :sent && self.n }\n",
+    );
+    const classed = spans(html);
+    expect(classed.filter(([cls]) => cls === "ts-atom")).toEqual([
+      ["ts-atom", ":draft"],
+      ["ts-atom", ":sent"],
+      ["ts-atom", ":draft"],
+      ["ts-atom", ":sent"],
+    ]);
+    expect(classed.filter(([cls]) => cls === "ts-name")).toEqual([
+      ["ts-name", ":status"],
+      ["ts-name", ":isOverdue"],
+    ]);
+    // The injected TypeScript parses a stand-in where the atom is, so the
+    // rest of the comparison keeps its colours.
+    expect(classed).toContainEqual(["ts-operator", "==="]);
+    expect(classed).toContainEqual(["ts-operator", "&&"]);
+    expect(classed).toContainEqual(["ts-property", "n"]);
+    expect(classOf("string.special.symbol")).toBe("ts-atom");
+    expect(classOf("label")).toBe("ts-name");
   });
 
   it("maps every capture name the query can produce to a class", () => {

@@ -65,19 +65,45 @@ const injectable = new Map([
 ]);
 
 /**
+ * Capture names whose class is a name of MX's own rather than the capture's.
+ * The query uses the editor-theme names so Zed colours them, and pages get a
+ * class that says what the text is: an atom value (`:draft` in
+ * `default=:draft`, decision 156) is `ts-atom`, and every name-sugar form
+ * (`:name`, tag-adjacent or in attribute position, decision 146) is `ts-name`.
+ */
+const RENAMED = new Map([
+  ["string.special.symbol", "ts-atom"],
+  ["label", "ts-name"],
+]);
+
+/**
  * Capture name -> CSS class. Dots are not valid in a bare class selector, so
  * `punctuation.bracket` becomes `ts-punctuation-bracket`. `none` is the
  * grammar's "deliberately unstyled" (`(text) @none`) and gets no class, and
  * neither does `embedded` (the JavaScript query's template-substitution
- * marker, which only says "inner captures decide").
+ * marker, which only says "inner captures decide"). `RENAMED` names the two
+ * MX classes, `ts-atom` and `ts-name`.
  *
  * @param {string} name
  * @returns {string | null}
  */
 export function classOf(name) {
-  return name === "none" || name === "embedded"
-    ? null
-    : `ts-${name.replace(/\./g, "-")}`;
+  if (name === "none" || name === "embedded") return null;
+  return RENAMED.get(name) ?? `ts-${name.replace(/\./g, "-")}`;
+}
+
+/** MX nodes inside an injected expression that the injected language never sees. */
+const ATOMS = new Set(["atom", "reserved_atom"]);
+
+/**
+ * A numeric literal as long as `text` (`:a` -> `0.`, `:sent` -> `0.000`), so
+ * the injected TypeScript parses an expression where an atom stands, with
+ * every later offset unchanged (the ADR 156 parser's stand-in).
+ *
+ * @param {string} text
+ */
+function standIn(text) {
+  return text.length < 2 ? "0" : `0.${"0".repeat(text.length - 2)}`;
 }
 
 /** Every capture name the MX and the injected-language queries can produce. */
@@ -131,9 +157,13 @@ function injectedSpans(tree, source) {
     /** @type {Array<[number, number]>} */
     let ranges = [[content.startIndex, content.endIndex]];
     if (!("injection.include-children" in (match.setProperties ?? {}))) {
+      // An atom is a child too, but it stays in the range: the injected
+      // parse sees a same-length stand-in there (see `standIn`) instead of a
+      // hole that would break the expression around it.
       ranges = [];
       let from = content.startIndex;
       for (const child of content.children) {
+        if (ATOMS.has(child.type)) continue;
         if (child.startIndex > from) ranges.push([from, child.startIndex]);
         from = Math.max(from, child.endIndex);
       }
@@ -160,6 +190,16 @@ function injectedSpans(tree, source) {
     return { row, column: index - (lineStarts[row] ?? 0) };
   };
 
+  // The source the injected languages parse: every atom replaced by its
+  // stand-in, so `self.status === :sent` reads as a whole comparison.
+  let standInSource = source;
+  for (const atom of atomsOf(tree)) {
+    standInSource =
+      standInSource.slice(0, atom.startIndex) +
+      standIn(atom.text) +
+      standInSource.slice(atom.endIndex);
+  }
+
   const spans = [];
   for (const { language, ranges } of regions.values()) {
     const target = injectable.get(language);
@@ -167,7 +207,7 @@ function injectedSpans(tree, source) {
     const parser = new Parser();
     try {
       parser.setLanguage(target.language);
-      const injected = parser.parse(source, null, {
+      const injected = parser.parse(standInSource, null, {
         includedRanges: ranges.map(([start, end]) => ({
           startIndex: start,
           endIndex: end,
@@ -188,6 +228,15 @@ function injectedSpans(tree, source) {
     }
   }
   return spans;
+}
+
+/**
+ * Every atom node of `tree` (`atom` and the reserved `::name`).
+ *
+ * @param {import("web-tree-sitter").Tree} tree
+ */
+function atomsOf(tree) {
+  return tree.rootNode.descendantsOfType([...ATOMS]);
 }
 
 /**
@@ -219,12 +268,20 @@ export function classesOf(source, tree = parseMx(source)) {
     const cls = classOf(span.name);
     for (let at = span.start; at < span.end; at++) classes[at] = cls;
   }
+  // An atom is MX's own: the injected parse saw only its stand-in, so no
+  // injected capture (the stand-in's `number`, or a node around it) paints it.
+  /** @type {boolean[]} */
+  const isAtom = new Array(source.length).fill(false);
+  for (const atom of atomsOf(tree)) {
+    for (let at = atom.startIndex; at < atom.endIndex; at++) isAtom[at] = true;
+  }
   // The JavaScript query's catch-all `(identifier) @variable` would otherwise
   // repaint a binding the MX query already knows is a parameter or a type, so
   // an injected plain `variable` only fills text that has no class yet.
   for (const span of injected.sort(narrowestFirst)) {
     const cls = classOf(span.name);
     for (let at = span.start; at < span.end; at++) {
+      if (isAtom[at]) continue;
       if (span.name === "variable" && classes[at]) continue;
       classes[at] = cls;
     }

@@ -1,6 +1,6 @@
 {
   "name": "@mxlang/tree-sitter-mx",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Tree-sitter grammar for MX (.mx): wasm build, highlight and injection queries, and a docmd plugin that highlights ```mx fences at build time",
   "license": "MIT",
   "repository": {

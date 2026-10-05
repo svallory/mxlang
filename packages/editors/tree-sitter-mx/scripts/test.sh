@@ -17,6 +17,9 @@
 #   4c. test/highlights.bun-test.mts — MX's own: the shorthand captures of
 #      queries/highlights.scm and of the Zed extension's languages/mx copy, in
 #      both positions and both modes.
+#   4d. test/atoms.bun-test.mts — MX's own: decision 156 atoms (the brief's
+#      sample, every line of Mesh's Invoice entity, the ADR positions) and
+#      their captures in both query copies.
 #   5. tools/check-wasm.mts — the wasm parses a sample and both queries load.
 #   6. scripts/zed-compile-check.sh — compiles src/ from a clean clone of
 #      HEAD, the same way Zed's file:// dev install does.
@@ -43,8 +46,8 @@ echo "==> build tree-sitter-mx.wasm"
 bun run build:wasm
 
 echo
-echo "==> mx shorthand trees, htmljs-parser fixtures, shorthand highlights"
-bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts ./test/indentation.bun-test.mts
+echo "==> mx shorthand trees, htmljs-parser fixtures, shorthand highlights, atoms"
+bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts ./test/indentation.bun-test.mts ./test/atoms.bun-test.mts
 
 echo
 echo "==> wasm smoke and queries"

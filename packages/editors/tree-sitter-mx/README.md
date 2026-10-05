@@ -6,7 +6,8 @@ its highlight and injection queries, the compiled wasm, and a
 time.
 
 MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
-`:name` anywhere in a tag). The grammar is a vendored snapshot of
+`:name` anywhere in a tag) and decision 156 atoms (`:name` as a value:
+`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`). The grammar is a vendored snapshot of
 [`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
 patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
 The same grammar and `queries/highlights.scm` are what MX's Zed extension
@@ -37,10 +38,13 @@ browser. Add it to `docmd.config.json`:
 
 Capture names become classes by prefixing `ts-` and replacing dots with dashes
 (`punctuation.bracket` is `ts-punctuation-bracket`; the grammar's `none` and
-the JavaScript query's `embedded` get none). The package ships no CSS: style
+the JavaScript query's `embedded` get none), except two MX classes: an atom
+(`@string.special.symbol`) is `ts-atom` and the `:name` sugar (`@label`) is
+`ts-name`. The package ships no CSS: style
 the `ts-*` classes in your theme. Ranges that `queries/injections.scm` hands to
 TypeScript (placeholders, attribute values, `static` bodies, `import`/`export`
-statements) are highlighted with the TypeScript grammar; CSS and HTML
+statements) are highlighted with the TypeScript grammar, which parses a
+same-length numeric stand-in where an atom is (the atom keeps its own class); CSS and HTML
 injections render as plain code text.
 
 There is no fallback: if a wasm file is missing the module throws at import, so

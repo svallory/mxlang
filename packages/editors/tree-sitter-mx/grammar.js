@@ -27,7 +27,7 @@ module.exports = grammar({
     $.placeholder_start, // "${" (escape=true placeholders)
     $.placeholder_start_raw, // "$!{"
     $._interp_start, // "${" within tag names / shorthands
-    $.placeholder_expr,
+    $._placeholder_text, // MX: placeholder_expr up to its first atom
     $._placeholder_end, // "}"
     $.html_comment, // "<!--" ... "->"
     $.line_comment, // "//" ...
@@ -58,7 +58,7 @@ module.exports = grammar({
     $._var_colon, // ":" between a tag var pattern and its type
     $.var_type, // tag variable type annotation
     $._args_open, // "("
-    $.args_expr,
+    $._args_text, // MX: args_expr up to its first atom
     $._args_close, // ")"
     $._params_open, // "|"
     $.param_pattern, // parameter binding pattern
@@ -78,9 +78,9 @@ module.exports = grammar({
     $.attr_eq, // "="
     $.attr_bound_eq, // ":="
     $._attr_spread_start, // "..."
-    $.attr_value_expr,
+    $._attr_value_text, // MX: attr_value_expr up to its first atom
     $._method_body_open, // "{"
-    $.method_body_expr,
+    $._method_body_text, // MX: method_body_expr up to its first atom
     $._method_body_close, // "}"
     $.open_tag_end, // ">"
     $.open_tag_end_self, // "/>"
@@ -91,6 +91,9 @@ module.exports = grammar({
     $.element_end, // zero-width: dedent, void, self-closed, EOF, after </x>
     $._tag_comment, // "//..." or "/*...*/" inside an open tag (no events)
     $.escape, // backslash run before an escaped/double-escaped "${"
+    $.atom, // MX (decision 156): `:name` where an expression is expected
+    $.reserved_atom, // MX: `::name`, reserved (decision 156)
+    $._expr_more, // MX: an expression resumed after an atom
     $._error_sentinel, // never emitted; detects error recovery
   ],
 
@@ -278,5 +281,15 @@ module.exports = grammar({
     html_block: ($) => seq($._block_open, repeat($._child), $._block_close),
 
     close_tag: ($) => seq($.close_tag_start, $.close_tag_name, $.close_tag_end),
+
+    // MX (decision 156): an expression that holds atoms is split by the
+    // scanner around each one; the hidden pieces are the expression text, so
+    // an injection of the whole node (minus its children) never sees an atom.
+    placeholder_expr: ($) => seq($._placeholder_text, repeat($._atom_piece)),
+    args_expr: ($) => seq($._args_text, repeat($._atom_piece)),
+    attr_value_expr: ($) => seq($._attr_value_text, repeat($._atom_piece)),
+    method_body_expr: ($) =>
+      seq($._method_body_text, repeat($._atom_piece)),
+    _atom_piece: ($) => choice($.atom, $.reserved_atom, $._expr_more),
   },
 });

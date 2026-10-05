@@ -133,6 +133,33 @@ is MX's own (decision 146 addendum 4):
   flip to trees, and rows are added for the Mesh line, params first, class and
   concise (51 cases).
 
+`patches/0007-feat-grammar-atoms-are-nodes-inside-the-expressions-that-hold-them.patch`
+is MX's own (decision 156, atoms):
+
+- `src/scanner.c`: `scan_expr_inner` stops before a `:` that starts an atom
+  (`atom_starts_here`: the start of the expression, or after an operator,
+  punctuator or one of `ATOM_KEYWORDS`; never after the end of an expression,
+  `.`, `/`, `as` or `satisfies`; `::name` always). `begin_atom_split` saves the
+  `ExprState` (serialized: the scanner resumes it on the next call) and how
+  many chars were scanned past the token's last mark; `scan_atom_piece` then
+  emits those chars, the `ATOM` / `RESERVED_ATOM` token, and the rest of the
+  expression as `EXPR_MORE` (zero-width when the expression ended at the
+  atom), possibly up to the next atom. Only the four expression tokens below
+  split (`cfg.atoms`); a `${}` nested in a template literal does not (its
+  nested `ExprState` is not kept). `ExprCfg`/`ExprState` moved above `Scanner`
+  for the new fields.
+- `grammar.js`: the externals `placeholder_expr`, `args_expr`,
+  `attr_value_expr` and `method_body_expr` became hidden `_*_text` tokens, and
+  rules of those names wrap them with `repeat(atom | reserved_atom |
+  _expr_more)`, so trees without atoms print as before and injections (which
+  drop children) never pass an atom to TypeScript.
+- `queries/highlights.scm`: `(atom) @string.special.symbol`.
+- `README.md`: atoms and the docmd plugin's `ts-atom` / `ts-name` classes.
+- Tests: `test/atoms.bun-test.mts` (MX's own, not vendored): the brief's
+  sample as trees, every line of Mesh's Invoice entity
+  (`test/fixtures/mesh-invoice.mx`), the ADR 156 positions and the captures of
+  both query copies.
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and
@@ -143,6 +170,8 @@ the root `bun run test:grammar`):
 3. `bun test` over `__tests__/mx-shorthand.bun-test.mts` (51) and
    `__tests__/fixtures.bun-test.mts` (374 htmljs-parser fixtures plus one
    consistency check). The fixtures are fetched with git into `.cache/` once.
+   Then MX's own `test/highlights.bun-test.mts`, `test/indentation.bun-test.mts`
+   and `test/atoms.bun-test.mts`.
 4. `tools/check-wasm.mts`: the wasm parses a sample, and both queries load.
 5. `scripts/zed-compile-check.sh`: compiles `src/` from a clean clone of
    HEAD, as Zed's `file://` dev install does (CI: the `zed-compile-check` job,

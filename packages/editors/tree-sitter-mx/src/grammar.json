@@ -908,6 +908,87 @@
           "name": "close_tag_end"
         }
       ]
+    },
+    "placeholder_expr": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_placeholder_text"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_atom_piece"
+          }
+        }
+      ]
+    },
+    "args_expr": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_args_text"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_atom_piece"
+          }
+        }
+      ]
+    },
+    "attr_value_expr": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_attr_value_text"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_atom_piece"
+          }
+        }
+      ]
+    },
+    "method_body_expr": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_method_body_text"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_atom_piece"
+          }
+        }
+      ]
+    },
+    "_atom_piece": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "atom"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "reserved_atom"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_expr_more"
+        }
+      ]
     }
   },
   "extras": [],
@@ -932,7 +1013,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "placeholder_expr"
+      "name": "_placeholder_text"
     },
     {
       "type": "SYMBOL",
@@ -1056,7 +1137,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "args_expr"
+      "name": "_args_text"
     },
     {
       "type": "SYMBOL",
@@ -1136,7 +1217,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "attr_value_expr"
+      "name": "_attr_value_text"
     },
     {
       "type": "SYMBOL",
@@ -1144,7 +1225,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "method_body_expr"
+      "name": "_method_body_text"
     },
     {
       "type": "SYMBOL",
@@ -1185,6 +1266,18 @@
     {
       "type": "SYMBOL",
       "name": "escape"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "atom"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "reserved_atom"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_expr_more"
     },
     {
       "type": "SYMBOL",
