@@ -150,8 +150,11 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         ensureAttrName(this, attr);
         attr.stage = ATTR_STAGE.BLOCK;
         this.pos++; // skip {
-        this.enterState(STATE.EXPRESSION).shouldTerminate =
-          matchesCloseCurlyBrace;
+        const body = this.enterState(STATE.EXPRESSION);
+        body.shouldTerminate = matchesCloseCurlyBrace;
+        // MX: a method-shorthand body is an attribute value (it lowers to a
+        // function), so it lexes atoms (decision 156; lead ruling 2026-10-05).
+        body.atoms = true;
         return;
       } else if (attr.stage === ATTR_STAGE.UNKNOWN) {
         if (code === CODE.OPEN_ANGLE_BRACKET) {

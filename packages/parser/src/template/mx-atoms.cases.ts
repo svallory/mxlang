@@ -144,6 +144,36 @@ export const ATOMS: [string, string][] = [
     "<div x=:a ? :b : :c/>",
     '<div> @x atom(a@7-9) atom(b@12-14) atom(c@17-19) ="0. ? 0. : 0."',
   ],
+  // A method-shorthand body is an attribute value: it lowers to a function
+  // (lead ruling 2026-10-05). TypeScript inside it keeps its colons.
+  [
+    "<div onClick() { return :a; }/>",
+    '<div> @onClick atom(a@24-26) method:" return 0.; "',
+  ],
+  [
+    "boolean :isOverdue({ self }) { return self.status === :sent }\n",
+    '<boolean> @:isOverdue atom(sent@54-59) method:" return self.status === 0.000 "',
+  ],
+  [
+    "<div x() { switch (k) { case :a: return 1; default: return 2 } }/>",
+    '<div> @x atom(a@29-31) method:" switch (k) { case 0.: return 1; default: return 2 } "',
+  ],
+  [
+    "<div x(a: T) { const y: string = :b; return { k: :c, y } }/>",
+    '<div> @x atom(b@33-35) atom(c@49-51) method:" const y: string = 0.; return { k: 0., y } "',
+  ],
+  [
+    "<div x() { return a ? :b : c }/>",
+    '<div> @x atom(b@22-24) method:" return a ? 0. : c "',
+  ],
+  [
+    "<div x() { return `t :a ${:b}` /* :c */ }/>",
+    '<div> @x atom(b@26-28) method:" return `t :a ${0.}` /* :c */ "',
+  ],
+  [
+    "<div async x() { return await f(:a) }/>",
+    '<div> @x atom(a@32-34) method:" return await f(0.) "',
+  ],
   // Row 12: an atom value followed by decision 146 name sugar.
   ["<div x=:a :b/>", '<div> @x atom(a@7-9) ="0." @:b'],
   ["<div :b x=:a/>", '<div> @:b @x atom(a@10-12) ="0."'],
@@ -201,11 +231,10 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=(a ? b : 1)/>", '<div> @x ="(a ? b : 1)"'],
   ["<div x=[a ?: 1]/>", '<div> @x ="[a ?: 1]"'],
   ["<div x=[:1]/>", '<div> @x ="[:1]"'],
-  // Statement tags, scriptlets, method bodies, tag variables, tag params.
+  // Statement tags, scriptlets, tag variables, tag params.
   ["static const s = :a;\n<div/>", "<static> <div>"],
   ["$ const y = :a;\n<div/>", '$"const y = :a;" <div>'],
   ["$ { const y = :a; }\n<div/>", '$" const y = :a; " <div>'],
-  ["<div onClick() { return :a; }/>", '<div> @onClick method:" return :a; "'],
   ["<for|:a| of=x>y</for>", '<for> params:":a" @of ="x"'],
   // The attribute name position is never a value (decision 146 sugar).
   ["<div :a/>", "<div> @:a"],

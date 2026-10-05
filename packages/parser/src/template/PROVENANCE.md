@@ -105,7 +105,7 @@ identical JavaScript for it):
 | `states/EXPRESSION.ts`, `case CODE.COLON`, first | `lexAtom` runs before the ternary/type handling, so an atom's `:` never counts as a ternary's |
 | `states/EXPRESSION.ts`, `return` | records comment and regular-expression children while `atoms` is on |
 | `states/EXPRESSION.ts`, end of file | `atomKeywords`, `lexAtom`, `atomNameEnd`, `expectsExpression` |
-| `states/ATTRIBUTE.ts` (value and argument `EXPRESSION`), `states/OPEN_TAG.ts` (tag arguments), `states/PLACEHOLDER.ts` (`checkForPlaceholder`) | set `atoms = true` |
+| `states/ATTRIBUTE.ts` (value, argument and method-shorthand body `EXPRESSION`; a method body is an attribute value, lead ruling 2026-10-05), `states/OPEN_TAG.ts` (tag arguments), `states/PLACEHOLDER.ts` (`checkForPlaceholder`) | set `atoms = true` |
 | `states/TEMPLATE_STRING.ts` | a template's `${}` inherits `atoms` from the template's own expression |
 | `core/Parser.ts` | `atoms` (reset by `parse`), `read()` stands atoms in, `standInAtoms` |
 | `util/constants.ts` | the `onAtom` handler |
@@ -113,9 +113,10 @@ identical JavaScript for it):
 Behaviour:
 
 - Atoms are lexed only in attribute values (named, default, bound and spread),
-  attribute arguments, tag arguments, placeholders (`${}`, `$!{}`) and the
-  `${}` of a template literal inside one of those. Never in statement tags
-  (`static`, `import`, …), scriptlets, method bodies, tag variables, tag
+  attribute arguments, tag arguments, placeholders (`${}`, `$!{}`),
+  method-shorthand bodies (`x(v) { … }`, an attribute value; lead ruling
+  2026-10-05) and the `${}` of a template literal inside one of those. Never
+  in statement tags (`static`, `import`, …), scriptlets, tag variables, tag
   parameters or type arguments, and never in string, template or regex text
   or comments (those are other states).
 - A `:` starts an atom only where an expression is expected: at the start of

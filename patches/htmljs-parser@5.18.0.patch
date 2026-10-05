@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b29248a62 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..fb08dbd8bfb3fdb76ef4cce24bf65e49875ef9a2 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,17 @@ var Parser = class {
@@ -45,7 +45,18 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
          return;
        } else if (code === 60 && // A pending `async` leaves the stage UNKNOWN, but type params can
        // still follow it for a default attribute method.
-@@ -1079,6 +1091,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -324,7 +336,9 @@ var ATTRIBUTE = {
+         expr.inType = !0, expr.forceType = !0, expr.shouldTerminate = matchesCloseAngleBracket;
+         return;
+       } else if (code === 123 && attr.args) {
+-        ensureAttrName(this, attr), attr.stage = 5, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace;
++        ensureAttrName(this, attr), attr.stage = 5, this.pos++;
++        let body = this.enterState(states_exports.EXPRESSION);
++        body.shouldTerminate = matchesCloseCurlyBrace, body.atoms = !0;
+         return;
+       } else if (attr.stage === 0) {
+         if (code === 60)
+@@ -1079,6 +1093,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
@@ -55,7 +66,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1147,12 +1162,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1147,12 +1164,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -79,7 +90,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1277,7 +1303,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1277,7 +1305,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -88,7 +99,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
    }
  };
  function checkForOperators(parser, expression, eol) {
-@@ -1382,11 +1408,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1382,11 +1410,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -103,7 +114,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1432,6 +1460,98 @@ function canFollowDivision(code) {
+@@ -1432,6 +1462,98 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -202,7 +213,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
-@@ -1981,7 +2101,9 @@ var OPEN_TAG = {
+@@ -1981,7 +2103,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -213,7 +224,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
              return;
            }
            case 124: {
-@@ -2345,7 +2467,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2345,7 +2469,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -224,7 +235,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
      }
    }
    return !1;
-@@ -2587,7 +2711,9 @@ var TEMPLATE_STRING = {
+@@ -2587,7 +2713,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -236,7 +247,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..926bc2e06850021dfb974d8222ae5d2b
            }
            this.pos++;
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbbe96f86ff 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c052e4ca44e64d6f7282f7b518308c286761d157 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,17 @@ var Parser = class {
@@ -282,7 +293,18 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
          return;
        } else if (code === 60 && // A pending `async` leaves the stage UNKNOWN, but type params can
        // still follow it for a default attribute method.
-@@ -1052,6 +1064,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -297,7 +309,9 @@ var ATTRIBUTE = {
+         expr.inType = !0, expr.forceType = !0, expr.shouldTerminate = matchesCloseAngleBracket;
+         return;
+       } else if (code === 123 && attr.args) {
+-        ensureAttrName(this, attr), attr.stage = 5, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseCurlyBrace;
++        ensureAttrName(this, attr), attr.stage = 5, this.pos++;
++        let body = this.enterState(states_exports.EXPRESSION);
++        body.shouldTerminate = matchesCloseCurlyBrace, body.atoms = !0;
+         return;
+       } else if (attr.stage === 0) {
+         if (code === 60)
+@@ -1052,6 +1066,9 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
@@ -292,7 +314,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1120,12 +1135,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1120,12 +1137,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -316,7 +338,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1250,7 +1276,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1250,7 +1278,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -325,7 +347,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
    }
  };
  function checkForOperators(parser, expression, eol) {
-@@ -1355,11 +1381,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1355,11 +1383,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -340,7 +362,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1405,6 +1433,98 @@ function canFollowDivision(code) {
+@@ -1405,6 +1435,98 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -439,7 +461,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
-@@ -1954,7 +2074,9 @@ var OPEN_TAG = {
+@@ -1954,7 +2076,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -450,7 +472,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
              return;
            }
            case 124: {
-@@ -2318,7 +2440,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2318,7 +2442,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -461,7 +483,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..fc4b044575dfc9738d53335773c2ebbb
      }
    }
    return !1;
-@@ -2560,7 +2684,9 @@ var TEMPLATE_STRING = {
+@@ -2560,7 +2686,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
