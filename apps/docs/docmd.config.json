@@ -209,6 +209,10 @@
         { "title": "IR specification", "path": "/architecture/ir-spec/" },
         { "title": "The MX AST", "path": "/architecture/ast/" },
         {
+          "title": "The parser grammar",
+          "path": "/architecture/parser-grammar/"
+        },
+        {
           "title": "Declarations and hooks",
           "path": "/architecture/policy-and-hooks/"
         },
