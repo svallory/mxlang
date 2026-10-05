@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-ladder r2):** the `.astro.mx` Vite plugin validates `mx.astro-html.defaultTag` (`astroDefaultTag`) and warns once at the `package.json` value.
+
 - **Added (default-tag-ladder, decision 145):** the descriptor declares the html target's `defaultTag`; the `.astro.mx` template lowering answers `mx.astro-html.defaultTag` first, then `div` (`lowerAstroMx` takes `defaultTag`; the Vite template plugin reads the package's key, unchecked: it cannot reach the registry's `invalid-default-tag` check).
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

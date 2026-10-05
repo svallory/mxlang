@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (default-tag-ladder r2):** the Bun loader validates `mx.hono-jsx.defaultTag`; a rejected value is dropped and warned once at the `package.json` value.
+
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag: "div"` (shared constant with Preact); `compileHonoMx` takes `defaultTag` and the Bun loader reads `mx.hono-jsx.defaultTag`.
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

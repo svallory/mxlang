@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-ladder r2):** `build()` and the virtual tag reader (the editor and `angular-checker`) read the validated `mx.angular-template.defaultTag`, so they emit and type-check the same tree; the reader's cache follows the value and reports a rejected one through its warning sink.
+
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag` (`DEFAULT_TAG`, `div`); `angularDeclarations` answers `mx.angular-template.defaultTag` first, then `div`; `compileNgMx`, `compile` and `compileTagModule` take `defaultTag`, and `build` reads the package's key.
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

@@ -12,6 +12,8 @@ The suppression is deliberately narrower than Astro's own language tools, which 
 
 `mx-tsc --astro` still reports it: Volar's `runTsc` rewrites TypeScript's own source so `createProgram` is a local binding, and `proxyCreateProgram` then decorates that program in place, so nothing `mx-tsc` owns ever sees the program. `packages/tooling/tsc/src/astro-fence-return.test.ts` pins the gap with `it.fails`; closing it needs a Volar diagnostics seam or a filter on `mx-tsc`'s own reporter, both above this package.
 
+- **Fix (default-tag-ladder r2):** an invalid `defaultTag` is no longer reported as `target not loaded` on every file; its `package.json` diagnostic carries the error.
+
 - **Added (default-tag-ladder, decision 145):** the package's `defaultTag` reaches the page compile, the mapping pass (`createHtmlMappings` takes a trailing `defaultTag`, so the second lowering agrees with the compile) and the `.solid.mx`, `.ng.mx` and `.astro.mx` pipelines.
 
 ### Test: offsets after an escaped text character map to the shifted generated positions (jsx-text-lt-unescaped)
