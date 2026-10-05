@@ -170,24 +170,24 @@ declare module "@mxlang/parser" {
     /**
      * Lowers each MX region the bridge finds. The parser has no host of its
      * own: with the grammar on, an absent hook is a compile error at the
-     * first region naming this option. For `.solid.mx`, pass `compileSolidMx`
-     * from `@mxlang/solid`. Declared explicitly for the same reason as
-     * `mxCustomTags` above.
+     * first region naming this option. Pass the region entry of the host whose
+     * file kind is parsed (its `HostFileKind.compileRegion`). Declared
+     * explicitly for the same reason as `mxCustomTags` above.
      */
     mxRegionCompile?: MxRegionCompile;
     /** Internal bridge input populated from the surrounding module. */
     mxImportSpecifiers?: ReadonlyMap<string, string>;
     /**
-     * Turns the MX grammar on explicitly, for a caller owning a file kind
-     * whose extension `parse`'s own `.solid.mx` test would not match. Unset,
-     * that test still decides.
+     * Turns the MX grammar on explicitly. Unset, the grammar is on exactly
+     * when `mxRegionCompile` is given; the parser names no file suffix.
      */
     mx?: boolean;
     [option: string]: unknown;
   }
 
   /**
-   * Parses a `.solid.mx` file into a Babel `File` of standard node types.
+   * Parses a region file (TypeScript with MX regions, `.<host>.mx`) into a
+   * Babel `File` of standard node types.
    *
    * Whole-file `.mx` templates are not parsed here: `@mxlang/html`
    * drives `@marko/compiler` with its own translator instead (ADR 0001).
@@ -374,8 +374,8 @@ declare module "@mxlang/parser" {
     /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
     defaultTag?: string;
     /**
-     * Lowers each MX region the bridge finds. Required whenever the grammar
-     * is on. For `.solid.mx`, pass `compileSolidMx` from `@mxlang/solid`.
+     * Lowers each MX region the bridge finds: the host's region entry
+     * (`HostFileKind.compileRegion`). Required whenever the grammar is on.
      */
     mxRegionCompile?: MxRegionCompile;
     /**

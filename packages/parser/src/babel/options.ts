@@ -104,8 +104,8 @@ export interface Options {
   mx?: boolean;
 
   /**
-   * MX FORK: custom tag definitions the MX bridge hands to `compileSolidMx`
-   * when lowering each MX region. Carried on the parser options because the
+   * MX FORK: custom tag definitions the MX bridge hands to the host's region
+   * compile (`mxRegionCompile`) when lowering each MX region. Carried on the parser options because the
    * bridge runs inside the tokenizer and has no other channel to the caller.
    * The parser never inspects it; typed as core's `CustomTag` (type-only
    * import, no runtime edge).
@@ -145,13 +145,12 @@ export interface Options {
 
   /**
    * MX FORK: lowers each MX region the bridge finds, carried on the options
-   * bag for the same reason as the two above. Absent means the Solid host
-   * (`compileSolidMx`), which is what every `.solid.mx` parse has always
-   * used — so leaving this unset is byte-for-byte the previous behavior.
+   * bag for the same reason as the two above. The parser has no host of its
+   * own: absent, the first region is `MissingRegionCompile`.
    *
-   * A host supplies it to claim its own file kind: `.ng.mx` lowers a region
-   * to an Angular template string, which shares nothing with Solid's JSX
-   * beyond being text the surrounding grammar can parse.
+   * Each host supplies its own: Solid's region entry emits JSX text, while
+   * `.ng.mx` lowers a region to an Angular template string — both only text
+   * the surrounding grammar can parse.
    */
   mxRegionCompile?: import("../mx/region-compile.ts").MxRegionCompile;
 

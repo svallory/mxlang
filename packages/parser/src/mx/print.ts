@@ -36,15 +36,15 @@ export interface PrintOptions {
   /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
   defaultTag?: string;
   /**
-   * Lowers each MX region the bridge finds. Required whenever the grammar is
-   * on (`.solid.mx` by name, or `mx: true`) — the parser has no host of its
-   * own, so an absent hook is a compile error at the first region. For
-   * `.solid.mx`, pass `compileSolidMx` from `@mxlang/solid`.
+   * Lowers each MX region the bridge finds: the region entry of the host whose
+   * file kind this is (its `HostFileKind.compileRegion`). Required whenever the
+   * grammar is on (`mx: true`) — the parser has no host of its own, so an
+   * absent hook is a compile error at the first region.
    */
   mxRegionCompile?: MxRegionCompile;
   /**
    * Turns the MX grammar on explicitly, forwarded to `parse` unchanged. Unset,
-   * `parse`'s own `.solid.mx` filename test decides.
+   * the grammar is on exactly when `mxRegionCompile` is given.
    */
   mx?: boolean;
 }

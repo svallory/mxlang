@@ -29,13 +29,16 @@ describe("MX parser diagnostic text", () => {
   });
 
   it("drops the raw suffix from a surrounding-module failure in the prepass", () => {
-    const error = caught(() => parse("\nconst value = ;", "broken.solid.mx"));
+    const error = caught(() =>
+      parse("\nconst value = ;", "broken.solid.mx", { mx: true }),
+    );
     expect(error.message).toBe("Unexpected token");
     expect(error.loc).toMatchObject({ line: 2, column: 14, index: 15 });
   });
 
   it("drops the raw suffix from recovered MX-module errors too", () => {
     const ast = parse("let x; let x;", "broken.solid.mx", {
+      mx: true,
       errorRecovery: true,
     }) as unknown as { errors: SyntaxError[] };
     expect(ast.errors.map((error) => error.message)).toEqual([

@@ -21,6 +21,6 @@ export const MxErrors = ParseErrorEnum`mx`({
   PositionRejected: ({ message }: { message: string }) => message,
   MissingRegionCompile: ({ filename }: { filename: string }) =>
     `An MX region needs \`mxRegionCompile\` to lower it, but none was given for "${filename}". ` +
-    "Pass a `mxRegionCompile` hook when calling `parse`/`print` — for `.solid.mx`, that is " +
-    '`compileSolidMx` from "@mxlang/solid".',
+    "Pass the region entry of the host whose file kind this is (its `HostFileKind.compileRegion`) " +
+    "as `mxRegionCompile` when calling `parse`/`print`.",
 });

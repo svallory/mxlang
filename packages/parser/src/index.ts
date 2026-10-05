@@ -56,7 +56,8 @@ export interface MxParseOptions extends ParserOptions {}
 const MX_DEFAULT_PLUGINS: ParserOptions["plugins"] = ["typescript", "jsx"];
 
 /**
- * Parses a `.solid.mx` file and returns a Babel `File`.
+ * Parses a region file (TypeScript with MX regions, `.<host>.mx`) and
+ * returns a Babel `File`.
  *
  * The AST contains only standard Babel node types — MX elements come back as
  * ordinary lowered `JSXElement`s, so `@babel/traverse`, `@babel/generator` and
@@ -68,7 +69,7 @@ export function parse(
   filename: string,
   options: MxParseOptions = {},
 ): File {
-  const mx = options.mx ?? filename.endsWith(".solid.mx");
+  const mx = options.mx ?? options.mxRegionCompile !== undefined;
   // Validate the authored module before any host lowering can introduce
   // declarations. This also catches let/var, nested bindings and Unicode
   // escapes, even when the caller supplied the module binding sets.
@@ -96,10 +97,12 @@ export function parse(
     // Turns the forked `jsxParseElementAt` on. Without it the vendored parser
     // is byte-for-byte upstream Babel.
     //
-    // An explicit `mx` wins, so a caller owning another file kind (`.ng.mx`,
-    // whose regions this extension test would never match) can turn the
-    // grammar on for itself. Left unset it is the `.solid.mx` test that has
-    // always been here, so every existing caller is unaffected.
+    // An explicit `mx` wins. Left unset, the grammar is on exactly when a
+    // host's region compile is supplied: the parser names no host and no
+    // file suffix, so which file is a region file is the caller's answer
+    // (the target registry's region file kinds). A tool passes `mx: true`
+    // as well, so a forgotten hook is `MissingRegionCompile` at the first
+    // region rather than a plain TSX parse.
     mx,
     mxImportSpecifiers: importSpecifiers,
     mxModuleBindings: moduleBindings,

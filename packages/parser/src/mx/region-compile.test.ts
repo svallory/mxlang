@@ -36,9 +36,10 @@ function regionNode(file: File): {
  * The compile hook, from the outside: a caller supplying `mxRegionCompile`
  * lowers regions with its own host instead of Solid's.
  *
- * There is no default path any more: the parser imports no host, so an
- * absent `mxRegionCompile` with the grammar on is itself a compile error —
- * see `describe("mxRegionCompile: required when the grammar is on")` below.
+ * There is no default path any more: the parser imports no host and names no
+ * file suffix. The grammar is on when `mx: true` is passed or a hook is
+ * supplied; with the grammar on and no hook, the first region is a compile
+ * error — see `describe("mxRegionCompile: required when the grammar is on")`.
  * Every other test in this package supplies the hook explicitly (via
  * `test-helpers.ts`'s `parseSolid`), which is what keeps the *behavior* of
  * `compileSolidMx` itself covered as a regression gate.
@@ -340,18 +341,38 @@ describe("mxRegionCompile", () => {
     expect(calls[0]?.context).toBeUndefined();
   });
 
-  it("leaves the grammar off for a non-.solid.mx filename without `mx`", () => {
+  it("turns the grammar on for any file name when a hook is given", () => {
     const { hook, calls } = recordingHook();
-    // Without the gate this is ordinary JSX, so the bridge never runs and the
-    // hook is never called — the behavior every non-MX file relies on.
-    parse("const view = <div>hi</div>;", "x.ng.mx", { mxRegionCompile: hook });
+    // The parser names no suffix: a host's region file (`.fake.mx` here) is
+    // a region file because its caller supplies that host's region compile.
+    parse("const view = <div>hi</div>;", "x.fake.mx", {
+      mxRegionCompile: hook,
+    });
+
+    expect(calls.map((call) => call.source)).toEqual(["<div>hi</div>"]);
+  });
+
+  it("leaves the grammar off with `mx: false`, hook or not", () => {
+    const { hook, calls } = recordingHook();
+    // Ordinary JSX, so the bridge never runs and the hook is never called.
+    parse("const view = <div>hi</div>;", "x.solid.mx", {
+      mx: false,
+      mxRegionCompile: hook,
+    });
 
     expect(calls).toHaveLength(0);
+  });
+
+  it("parses a .solid.mx name with no hook and no `mx` as plain TSX", () => {
+    // The suffix alone no longer turns the grammar on: a tool says `mx: true`.
+    expect(() =>
+      parse("const view = <div>hi</div>;", "x.solid.mx"),
+    ).not.toThrow();
   });
 });
 
 describe("mxRegionCompile: required when the grammar is on", () => {
-  it("raises a positioned error at the first region of a .solid.mx file with no hook", () => {
+  it("raises a positioned error at the first region with mx: true and no hook", () => {
     // Two regions: the error must land at the first one's own start, not the
     // file start or the second region's — the same "no fallback to a wrong
     // line" discipline the throwing-hook tests above pin.
@@ -362,7 +383,7 @@ describe("mxRegionCompile: required when the grammar is on", () => {
 
     let error: unknown;
     try {
-      parse(source, "x.solid.mx");
+      parse(source, "x.solid.mx", { mx: true });
     } catch (err) {
       error = err;
     }
@@ -372,7 +393,9 @@ describe("mxRegionCompile: required when the grammar is on", () => {
       loc?: { line: number; column: number; index: number };
     };
     expect(err.message).toContain("mxRegionCompile");
-    expect(err.message).toContain("compileSolidMx");
+    // Host-free: it names the contract, never one host's entry.
+    expect(err.message).toContain("HostFileKind.compileRegion");
+    expect(err.message).not.toContain("compileSolidMx");
     expect(err.loc?.index).toBe(regionStart);
   });
 
@@ -386,15 +409,16 @@ describe("mxRegionCompile: required when the grammar is on", () => {
 
     expect(error).toBeInstanceOf(SyntaxError);
     expect((error as Error).message).toContain("mxRegionCompile");
-    expect((error as Error).message).toContain("compileSolidMx");
+    expect((error as Error).message).toContain("HostFileKind.compileRegion");
   });
 
   it("never invokes a hook when the grammar is off", () => {
     let called = false;
-    // No `.solid.mx` name and no `mx: true`, so the grammar never turns on:
-    // the hook must not run even though one is supplied and would throw.
+    // `mx: false` wins over the hook: the grammar never turns on, so the
+    // hook must not run even though one is supplied and would throw.
     expect(() =>
       parse("const view = <div>hi</div>;", "x.ng.mx", {
+        mx: false,
         mxRegionCompile: () => {
           called = true;
           throw new Error("must not run");
