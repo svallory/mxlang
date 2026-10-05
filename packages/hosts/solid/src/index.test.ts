@@ -226,6 +226,33 @@ describe("Solid IR lowering", () => {
       ["<Repeat count={4}>", "<p>{2 + __mxIndex * 2}</p>"],
     ],
     [
+      "stepped range, non-literal from and step: bound once in an IIFE",
+      `<for|n| from=a() to=20 step=b()><p>\${n}</p></for>`,
+      [
+        "{(() => { const __mxFrom = (a()); const __mxStep = (b()); return <Repeat",
+        "<p>{__mxFrom + __mxIndex * __mxStep}</p>",
+        "; })()}",
+      ],
+    ],
+    [
+      "stepped range, non-literal from only: step stays inline",
+      `<for|n| from=a() to=20 step=2><p>\${n}</p></for>`,
+      [
+        "{(() => { const __mxFrom = (a()); return <Repeat",
+        "<p>{__mxFrom + __mxIndex * 2}</p>",
+      ],
+      ["__mxStep"],
+    ],
+    [
+      "stepped range, non-literal step only: no dead from constant",
+      `<for|n| from=0 to=20 step=b()><p>\${n}</p></for>`,
+      [
+        "{(() => { const __mxStep = (b()); return <Repeat",
+        "<p>{0 + __mxIndex * __mxStep}</p>",
+      ],
+      ["__mxFrom"],
+    ],
+    [
       "try boundary",
       `<try><@placeholder>wait</@placeholder><Risky/><@catch|error, reset|><p>\${error.message}</p></@catch></try>`,
       [

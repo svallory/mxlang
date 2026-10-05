@@ -249,22 +249,20 @@ describe("<for> range bounds are not shadowed by the mapper's own counter", () =
     ).toThrow(/computed from its bounds and cannot be assigned/);
   });
 
-  it("re-renders a stepped range inside an attribute tag when a bound changes (client)", () => {
+  it("re-renders a stepped range feeding an attribute tag when a bound changes (client)", () => {
     // `attributeTagFor` builds one array inside the prop expression, which is
     // a getter, so the whole array follows the signal.
     const snapshots = renderDom(
-      "<Probe><@item|x| from=base() to=base()+4 step=2>${x}</@item></Probe>",
+      "<Row><for|x| from=base() to=base()+4 step=2><@item id=x>row</@item></for></Row>",
       [
         "const [base, setBase] = createSignal(10);",
         "globalThis.__setBase = setBase;",
-        "function Probe(props: { item?: unknown }) { return <>{JSON.stringify(props.item)}</>; }",
+        "function Row(props: { item?: { id: number }[] }) { return <>{(props.item ?? []).map((entry) => entry.id).join(',')}</>; }",
       ].join("\n"),
       "__setBase",
       "20",
     );
-    expect(snapshots[0]).toContain("10");
-    expect(snapshots[1]).toContain("20");
-    expect(snapshots[1]).not.toContain("10");
+    expect(snapshots).toEqual(["<ul>10,12,14</ul>", "<ul>20,22,24</ul>"]);
   });
 
   it("re-renders an unstepped range when a signal bound changes (client)", () => {

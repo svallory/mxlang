@@ -2240,17 +2240,19 @@ export class SolidEmitter implements Emitter<string> {
     }
     // `from` and `step` are evaluated once per (re)render of the loop, like
     // Marko's `_for_to(to, from, step, …)` head, so every read of the row
-    // value inside one row agrees even for an impure bound. Unless both are
-    // literals they are bound to constants in an IIFE around the `<Repeat>`:
+    // value inside one row agrees even for an impure bound. A
+    // non-literal one is bound to constants in an IIFE around the `<Repeat>`:
     // the IIFE re-runs when a signal they read changes, the rows read the
     // constants, and `count` (a prop getter) tracks `to` on its own.
-    const literalHead = fromValue !== null && stepValue !== null;
+    const literalFrom = fromValue !== null;
+    const literalStep = stepValue !== null;
+    const literalHead = literalFrom && literalStep;
     const headNames = identifierNames(`${from} ${step.code} ${bound}`);
     const counter = gensym("__mxIndex", node, [...headNames]);
-    const fromName = literalHead
+    const fromName = literalFrom
       ? from
       : gensym("__mxFrom", node, [...headNames, counter]);
-    const stepName = literalHead
+    const stepName = literalStep
       ? step.code
       : gensym("__mxStep", node, [...headNames, counter, fromName]);
     let count: string;
@@ -2292,7 +2294,10 @@ export class SolidEmitter implements Emitter<string> {
       literalHead
         ? repeat
         : concatMapped(
-            `{(() => { const ${fromName} = (${from}); const ${stepName} = (${step.code}); return `,
+            `{(() => { ${[
+              literalFrom ? "" : `const ${fromName} = (${from}); `,
+              literalStep ? "" : `const ${stepName} = (${step.code}); `,
+            ].join("")}return `,
             repeat,
             "; })()}",
           ),
