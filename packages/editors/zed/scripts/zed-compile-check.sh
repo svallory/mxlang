@@ -33,6 +33,11 @@ if ! rustup target list --installed 2>/dev/null | grep -q '^wasm32-wasip1$'; the
   exit 2
 fi
 
+# The grammars Zed compiles come from extension.toml's pinned revs, not from
+# HEAD; check that each file:// rev exists, holds its grammar, and matches
+# HEAD's src/ before building the Rust half.
+"$HERE/scripts/check-grammar-revs.sh"
+
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 CLONE_DIR="$TMP_DIR/clone"

@@ -251,6 +251,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # scripts/check-grammar-revs.sh (run by zed-compile-check.sh) reads
+          # extension.toml's pinned grammar revs, which a shallow clone lacks.
+          fetch-depth: 0
       - name: rustup target add wasm32-wasip1
         run: rustup target add wasm32-wasip1
       - name: zed-compile-check.sh

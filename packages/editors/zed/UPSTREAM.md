@@ -124,7 +124,10 @@ they can reach Zed at all (see "A note on the `file://` dev loop" below).
    query, `base/solidmx/*.scm`, and `overlay/solidmx/*.scm`.
 3. If the grammar itself changed (new commit under
    `packages/editors/tree-sitter-solidmx`): `git rev-parse HEAD` and update
-   `extension.toml`'s `[grammars.solidmx]` `rev` to the new sha — see
+   `extension.toml`'s `[grammars.solidmx]` `rev` to the new sha
+   (`scripts/check-grammar-revs.sh`, run by `scripts/zed-compile-check.sh`
+   and CI, fails while any `file://` grammar's `rev` lacks its
+   `path/src/parser.c` or differs from HEAD's `src/`) — see
    `README.md`'s "Dev install (Zed) — SolidMX" for the full commit-then-bump
    loop.
 4. Reinstall the dev extension in Zed and spot-check highlighting, bracket
