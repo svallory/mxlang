@@ -59,6 +59,11 @@ export interface CustomTagAttribute {
 }
 
 export interface CustomTagAttributeTag {
+  /**
+   * What an unnamed tag (`<#id>`, `<.class>`) directly inside this attribute
+   * tag stands for (decision 145). The same key as on a tag's own contract.
+   */
+  defaultTag?: string;
   repeatable?: boolean;
   required?: boolean;
   /** Closed attributes; omitted attributes remain open on an extended declaration. Defaults are not applied. */
@@ -346,6 +351,13 @@ export interface TransformContext {
 
 /** The default export of an `x.tag.ts` sidecar. */
 export interface CustomTag {
+  /**
+   * What an unnamed tag (`<#id>`, `<.class>`) directly inside this tag stands
+   * for (decision 145): the parent contract, the top rung of the ladder. A
+   * tag that is a reachable, plain-parsing tag of the target; the registry
+   * checks it, and a host that forbids per-tag default tags refuses it.
+   */
+  defaultTag?: string;
   parseOptions?: CustomTagParseOptions;
   attributes?: Record<string, CustomTagAttribute>;
   attributeTags?: Record<string, CustomTagAttributeTag>;
@@ -1229,6 +1241,7 @@ const ATTRIBUTE_KEYS = [
 const CHILD_KEYS = ["repeatable", "required"] as const;
 const ATTRIBUTE_TAG_KEYS = [
   ...CHILD_KEYS,
+  "defaultTag",
   "attributes",
   "attributeTags",
   "children",
@@ -1333,6 +1346,7 @@ export function rejectUnknownDeclarationKeys(
         );
       }
     }
+    rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
     rejectRecursiveContractKeys(`tag "${tagName}"`, definition);
   }
   for (const [tagName, definition] of Object.entries(customTags)) {
@@ -1392,6 +1406,31 @@ function rejectAttributeTagParentConflicts(
   }
 }
 
+/** `defaultTag` is a tag name: any other type is a registration error at the declaration. */
+function rejectNonStringDefaultTag(
+  owner: string,
+  declaration: { defaultTag?: unknown },
+): void {
+  const value = declaration.defaultTag;
+  if (value === undefined) return;
+  if (typeof value === "string" && value !== "") return;
+  const found =
+    value === ""
+      ? "an empty string"
+      : value === null
+        ? "null"
+        : Array.isArray(value)
+          ? "an array"
+          : typeof value === "object"
+            ? "an object"
+            : `a ${typeof value}`;
+  throw new TranslateError(
+    `${owner}: \`defaultTag\` must be a tag name string, got ${found}`,
+    0,
+    0,
+  );
+}
+
 /** Registration uses the same key vocabulary at every attribute-tag depth. */
 function rejectRecursiveContractKeys(
   owner: string,
@@ -1431,6 +1470,7 @@ function rejectRecursiveContractKeys(
       ATTRIBUTE_TAG_KEYS,
       `"${name}" attribute tag declaration`,
     );
+    rejectNonStringDefaultTag(`${owner}: \`<@${name}>\``, declaration);
     rejectRecursiveContractKeys(`${owner}: "<@${name}>"`, declaration);
   }
 }

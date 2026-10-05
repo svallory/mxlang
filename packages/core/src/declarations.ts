@@ -33,6 +33,13 @@ export interface DefaultTagParent {
   readonly attributeTag: boolean;
   /** The Marko tag node. */
   readonly node: Node;
+  /**
+   * Marko's tag def for `name` in this compile's lookup (its `html` flag and
+   * `parseOptions`), when it has one: how a parent's kind is read without a
+   * name list. Absent for an attribute tag and for a name the lookup does not
+   * know.
+   */
+  readonly tagDef?: object;
 }
 
 /**

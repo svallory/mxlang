@@ -50,6 +50,7 @@ export {
   type Translator,
   type TranslatorOptions,
 } from "./compile.ts";
+export { contractDefaultTag } from "./contract-default-tag.ts";
 export {
   attrByName,
   type BindingRegistry,

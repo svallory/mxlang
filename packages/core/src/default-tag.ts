@@ -54,10 +54,13 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
         });
       }
       const name = String(node.name?.value ?? "");
+      const attributeTag = name.startsWith("@");
+      const tagDef = attributeTag ? undefined : ctx.lookup?.getTag(name);
       const self: DefaultTagParent = {
         name,
-        attributeTag: name.startsWith("@"),
+        attributeTag,
         node,
+        ...(tagDef ? { tagDef } : {}),
       };
       walk(
         [...(node.body?.body ?? []), ...(node.attributeTags ?? [])],

@@ -929,6 +929,7 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
     "attributeTags",
     "children",
     "parents",
+    "defaultTag",
   ] as const) {
     Object.defineProperty(definition, key, {
       enumerable: true,
@@ -1308,6 +1309,7 @@ function indexMxContractsEntries(
               "attributeTags",
               "children",
               "parents",
+              "defaultTag",
               "analyze",
             ].includes(key)
           ) {
