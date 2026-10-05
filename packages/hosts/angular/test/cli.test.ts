@@ -1651,3 +1651,50 @@ describe("discovery: core's host-module extension rule", () => {
     }
   });
 });
+
+describe("build: the package's defaultTag (decision 145)", () => {
+  const manifest = (value: unknown) =>
+    JSON.stringify({
+      mx: {
+        host: "angular",
+        angular: { include: ["src/**/*.mx"] },
+        "angular-template": { defaultTag: value },
+      },
+    });
+
+  it("a page compiles the unnamed tag to the configured tag", () => {
+    writeProject({
+      "package.json": manifest("section"),
+      "src/page.mx": "<.x>hi</>",
+    });
+    const result = build(projectDir);
+    expect(result.ok).toBe(true);
+    expect(readFileSync(join(projectDir, "src/page.html"), "utf8")).toContain(
+      '<section class="x">hi</section>',
+    );
+  });
+
+  it("an invalid value falls back to the built-in and warns once at the package.json value", () => {
+    writeProject({
+      "package.json": manifest("input"),
+      "src/a.mx": "<.x>hi</>",
+      "src/b.mx": "<.y>hi</>",
+    });
+    const result = build(projectDir);
+    expect(result.ok).toBe(true);
+    expect(readFileSync(join(projectDir, "src/a.html"), "utf8")).toContain(
+      '<div class="x">hi</div>',
+    );
+    const own = result.warnings.filter((w) =>
+      w.message.includes("invalid `defaultTag` value"),
+    );
+    expect(own).toHaveLength(1);
+    expect(own[0]?.message).toContain(
+      "`<input>` is a void tag, not a plain tag",
+    );
+    expect(own[0]).toMatchObject({
+      file: join(projectDir, "package.json"),
+      line: 1,
+    });
+  });
+});

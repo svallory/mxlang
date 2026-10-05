@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { scanCached } from "@mxlang/core";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
+import { angularDefaultTag } from "./default-tag.ts";
 import { isInside } from "./discover.ts";
 import { hasGeneratedHeader } from "./header.ts";
 import { angularOwnTargets } from "./own-targets.ts";
@@ -37,8 +38,13 @@ export function createVirtualTagModuleReader(
   let config: AngularConfig | undefined;
   const compiled = new Map<
     string,
-    { source: string; result: CompileTagModuleResult }
+    {
+      source: string;
+      defaultTag: string | undefined;
+      result: CompileTagModuleResult;
+    }
   >();
+  const reported = new Set<string>();
   const targets = options.targets ?? angularOwnTargets;
 
   return (filename, source) => {
@@ -79,19 +85,38 @@ export function createVirtualTagModuleReader(
       source ??
       options.readSource?.(template) ??
       readFileSync(template, "utf8");
+    const customTags = options.customTags ?? scan.customTags;
+    // The package's validated `defaultTag`, as `build()` reads it, so the
+    // editor and the checker see the tree the build emits. It is part of the
+    // cache entry: an edited config must not serve the old module.
+    const defaultTag =
+      options.defaultTag ??
+      angularDefaultTag(template, customTags, targets, (diagnostic) => {
+        const key = `${diagnostic.file}\0${diagnostic.line}\0${diagnostic.message}`;
+        if (reported.has(key)) return;
+        reported.add(key);
+        options.warnings?.push({
+          file: diagnostic.file,
+          line: diagnostic.line,
+          column: diagnostic.column,
+          message: diagnostic.message,
+        });
+      });
     const previous = compiled.get(template);
-    if (previous?.source === text) return previous.result;
+    if (previous?.source === text && previous.defaultTag === defaultTag)
+      return previous.result;
     const result = compileTagModule(text, template, {
       ...options,
       targets,
+      ...(defaultTag === undefined ? {} : { defaultTag }),
       // The build's customTagsFor uses this same per-file cached scan. In
       // particular, nested calls must not fall through to native elements.
-      customTags: options.customTags ?? scan.customTags,
+      customTags,
       tagSelectorPrefix: options.tagSelectorPrefix ?? config.tagSelectorPrefix,
       // The caller owns warning delivery. Never log while resolving a module.
       warnings: options.warnings ?? [],
     });
-    compiled.set(template, { source: text, result });
+    compiled.set(template, { source: text, defaultTag, result });
     return result;
   };
 }

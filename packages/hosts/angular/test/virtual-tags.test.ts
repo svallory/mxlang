@@ -199,3 +199,54 @@ describe("virtual Angular tag modules", () => {
     expect(() => createVirtualTagModuleReader(dir)(tag)).toThrow();
   });
 });
+
+describe("the virtual reader reads the package's validated defaultTag (decision 145)", () => {
+  const withConfig = (value: unknown) => ({
+    mx: { host: "angular", "angular-template": { defaultTag: value } },
+  });
+  const unnamed = "<.x>hi</>";
+
+  it("applies mx.angular-template.defaultTag, as the build does", () => {
+    const { dir, put } = project(withConfig("section"));
+    const tag = put("tags/my-card.mx", unnamed);
+    const read = createVirtualTagModuleReader(dir);
+    expect(read(tag)?.code).toContain('<section class=\\"x\\">');
+    const built = compileTagModule(unnamed, tag, { defaultTag: "section" });
+    expect(read(tag)?.code).toBe(built.code);
+  });
+
+  it("without config the built-in answers", () => {
+    const { dir, put } = project({ mx: { host: "angular" } });
+    const tag = put("tags/my-card.mx", unnamed);
+    expect(createVirtualTagModuleReader(dir)(tag)?.code).toContain(
+      '<div class=\\"x\\">',
+    );
+  });
+
+  it("an edited config recompiles: the cache does not outlive the value", () => {
+    const { dir, put } = project(withConfig("section"));
+    const tag = put("tags/my-card.mx", unnamed);
+    const read = createVirtualTagModuleReader(dir);
+    expect(read(tag)?.code).toContain("<section");
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify(withConfig("article")),
+    );
+    expect(read(tag)?.code).toContain("<article");
+  });
+
+  it("an invalid value is dropped (the built-in answers) and reported once, positioned in package.json", () => {
+    const { dir, put } = project(withConfig("input"));
+    const tag = put("tags/my-card.mx", unnamed);
+    const warnings: core.MxWarning[] = [];
+    const read = createVirtualTagModuleReader(dir, { warnings });
+    expect(read(tag)?.code).toContain('<div class=\\"x\\">');
+    read(tag);
+    const own = warnings.filter((w) =>
+      w.message.includes("invalid `defaultTag` value"),
+    );
+    expect(own).toHaveLength(1);
+    expect(own[0]).toMatchObject({ file: join(dir, "package.json"), line: 1 });
+    expect(own[0]?.message).toContain("`<input>` is a void tag");
+  });
+});

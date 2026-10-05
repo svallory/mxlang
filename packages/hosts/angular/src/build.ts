@@ -21,12 +21,12 @@ import {
   hostModuleSegment,
   isTranslateError,
   type MxWarning,
-  readTargetDefaultTag,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
 } from "@mxlang/core";
 import { type AngularConfig, readAngularConfig } from "./config.ts";
+import { angularDefaultTag } from "./default-tag.ts";
 import { discoverFiles, isInside } from "./discover.ts";
 import {
   EVENT_HELPER_ADVICE_CODE,
@@ -290,9 +290,23 @@ function customTagsFor(
       message: d.message,
     }),
   );
-  const { value: defaultTag } = readTargetDefaultTag(
+  const defaultTag = angularDefaultTag(
     mxPath,
-    "angular-template",
+    scan.customTags,
+    targets,
+    (d) => {
+      // Once per package.json position, like the scan's own diagnostics: the
+      // same invalid value would otherwise warn on every file the build compiles.
+      const key = `${d.file}\0${d.line}\0${d.message}`;
+      if (reportedScanDiagnostics.has(key)) return;
+      reportedScanDiagnostics.add(key);
+      scanWarnings.push({
+        file: d.file,
+        line: d.line,
+        column: d.column,
+        message: d.message,
+      });
+    },
   );
   return {
     customTags: scan.customTags,
