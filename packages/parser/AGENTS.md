@@ -179,3 +179,10 @@ vendored copy byte-comparable with upstream. `biome check` on those paths
 reports them as ignored and checks nothing, so "lint clean" is vacuous there:
 match the repo's formatting by hand or via
 `biome format --stdin-file-path=x.ts < <file>`.
+
+`.pi-lens.json` at the repo root exempts `packages/parser/src/template/**` from
+pi-lens's SAFETY-comment rule for `as unknown as`, for the same reason: the
+directory is copied upstream source kept byte-identical except the two patched
+state files and MX's own patches, so the rule asks every editor to change lines
+that are outside their task and that upstream owns. The exemption was requested
+by the repo's lead, who owns the tooling.
