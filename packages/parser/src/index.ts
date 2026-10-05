@@ -250,7 +250,7 @@ function hoistRegionImports(file: File, filename: string): void {
   // so the collision pass below can rename both the declaration and its
   // in-region reference together.
   const hoistedDefineNodes: HoistedDefine[] = [];
-  const defineRange = new Map<HoistedDefine, [number, number]>();
+  const defineRange = new Map<HoistedDefine, Array<[number, number]>>();
   // A `/var` inside a region binds a value the region's own JSX has no
   // statement position for, so the module declares the `let` and the
   // region's callback prop assigns it (design §2.4). Same channel as the
@@ -285,15 +285,16 @@ function hoistRegionImports(file: File, filename: string): void {
     for (const entry of mx?.hoistedDefines ?? []) {
       // A host helper shared by every region (a fixed binding with identical
       // text) is declared once, not renamed into a copy per region.
-      if (
-        hoistedDefineNodes.some(
-          (one) => one.binding === entry.binding && one.code === entry.code,
-        )
-      ) {
+      const kept = hoistedDefineNodes.find(
+        (one) => one.binding === entry.binding && one.code === entry.code,
+      );
+      if (kept) {
+        // Its references still need the collision rename if `kept` is renamed.
+        if (mx?.range) defineRange.get(kept)?.push(mx.range);
         continue;
       }
       hoistedDefineNodes.push(entry);
-      if (mx?.range) defineRange.set(entry, mx.range);
+      defineRange.set(entry, mx?.range ? [mx.range] : []);
     }
     for (const name of mx?.returnVars ?? []) returnVars.add(name);
     for (const key of Object.keys(record)) {
@@ -410,17 +411,19 @@ function hoistRegionImports(file: File, filename: string): void {
       takenBindings.add(entry.binding);
       return;
     }
-    const range = defineRange.get(entry);
+    const ranges = defineRange.get(entry) ?? [];
     const fresh = freshDefineBinding(entry.binding, takenBindings);
     takenBindings.add(fresh);
     const fn = parsedDefines[index]?.program.body[0] as
       | { id?: { name?: string } }
       | undefined;
     if (fn?.id) fn.id.name = fresh;
-    if (range) {
-      renameRegionReferences(program.body, new Map([[entry.binding, fresh]]), [
-        range,
-      ]);
+    if (ranges.length > 0) {
+      renameRegionReferences(
+        program.body,
+        new Map([[entry.binding, fresh]]),
+        ranges,
+      );
     }
     entry.binding = fresh;
   });

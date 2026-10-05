@@ -1,2 +1,3 @@
 .ssr-render-tmp-*
 .client-render-tmp-*
+.attr-guard-tmp-*

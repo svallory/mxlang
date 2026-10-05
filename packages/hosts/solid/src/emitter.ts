@@ -91,16 +91,26 @@ let escapeUse: { used: boolean } | null = null;
 /** Which native-attribute guard helpers the current module needs. */
 let attrGuardUse: { value: boolean; spread: boolean } | null = null;
 
-/** Native attributes with their own structured or non-attribute semantics. */
-const UNGUARDED_ATTRS = new Set([
-  "class",
-  "style",
-  "ref",
-  "children",
-  "classList",
-  "innerHTML",
-  "textContent",
-]);
+/**
+ * Native props with genuine non-attribute semantics on Solid. Everything else
+ * is validated like Marko, which exempts no name: `innerHTML`, `textContent`,
+ * `classList` (not a Solid prop, so a plain attribute) and `:foo` (`value:foo`)
+ * all render `[object Object]` unguarded.
+ */
+const UNGUARDED_ATTRS = new Set(["class", "style", "ref", "children"]);
+
+/** Solid's own prop namespaces; none is a plain attribute write. */
+const UNGUARDED_NAMESPACE = /^(?:on|oncapture|use|prop|attr|bool):/;
+
+/**
+ * What a native-attribute guard needs: the JS expression for the tag name, and
+ * (for a dynamic tag whose target is only sometimes a string) the condition
+ * under which the target is a native element.
+ */
+interface NativeAttrs {
+  tag: string;
+  when?: string;
+}
 
 /** Hygienic-enough alias shared by emitted expressions and module assembly. */
 export const MX_ESCAPE_BINDING = "__mxEscape";
@@ -787,10 +797,24 @@ function methodExpression(expr: Expr): string | null {
   return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
 }
 
+/** The guard's tag argument: `null` when the target is not a native element. */
+function nativeTagOf(native: NativeAttrs): string {
+  return native.when ? `(${native.when} ? ${native.tag} : null)` : native.tag;
+}
+
+function guardValue(
+  name: string,
+  value: string,
+  native: NativeAttrs | undefined,
+): string {
+  if (!native) return value;
+  return `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(name)}, ${value}, ${nativeTagOf(native)})`;
+}
+
 function renderAttr(
   attr: Attr,
   mapName = false,
-  nativeTag?: string,
+  native?: NativeAttrs,
 ): MappedCode {
   // JSX only permits one colon with a nonempty suffix. Preserve Marko's
   // `value:` and `value:foo:bar` names as string keys in a prop spread.
@@ -813,25 +837,35 @@ function renderAttr(
         : attr.kind === "dynamic"
           ? attr.value.span
           : undefined;
+    const guardedColon =
+      native !== undefined &&
+      attr.kind === "dynamic" &&
+      attr.value.shape !== "string" &&
+      !UNGUARDED_NAMESPACE.test(attr.name);
+    if (guardedColon && attrGuardUse) attrGuardUse.value = true;
     return concatMapped(
       " {...{",
       // Unlike an ordinary intrinsic prop, this authored string key must
       // retain its name mapping even when native prop-name mapping is off.
       mapped(JSON.stringify(attr.name), attr.nameSpan ?? null),
       ": (",
-      mapped(value, valueSpan ?? null),
+      mapped(
+        guardedColon ? guardValue(attr.name, value, native) : value,
+        valueSpan ?? null,
+      ),
       ")}}",
     );
   }
   switch (attr.kind) {
-    case "spread":
-      if (nativeTag === undefined) {
+    case "spread": {
+      if (native === undefined) {
         return concatMapped(` {...${attr.value.code}}`);
       }
       if (attrGuardUse) attrGuardUse.spread = true;
       return concatMapped(
-        ` {...${MX_ATTR_SPREAD_BINDING}(${attr.value.code}, ${JSON.stringify(nativeTag)})}`,
+        ` {...${MX_ATTR_SPREAD_BINDING}(${attr.value.code}, ${nativeTagOf(native)})}`,
       );
+    }
     case "boolean":
       return concatMapped(
         " ",
@@ -894,17 +928,15 @@ function renderAttr(
       // A string-shaped value can never render as `[object Object]`, so it
       // compiles exactly as before.
       const guarded =
-        nativeTag !== undefined &&
+        native !== undefined &&
         attr.value.shape !== "string" &&
         !UNGUARDED_ATTRS.has(attr.name) &&
-        !attr.name.includes(":");
+        !UNGUARDED_NAMESPACE.test(attr.name);
       if (guarded && attrGuardUse) attrGuardUse.value = true;
       return concatMapped(
         " ",
         mapped(attr.name, mapName ? attr.nameSpan : null),
-        guarded
-          ? `={${MX_ATTR_VALUE_BINDING}(${JSON.stringify(attr.name)}, ${value}, ${JSON.stringify(nativeTag)})}`
-          : `={${value}}`,
+        `={${guarded ? guardValue(attr.name, value, native) : value}}`,
       );
     }
   }
@@ -913,7 +945,7 @@ function renderAttr(
 function renderAttrs(
   attrs: Attr[],
   mapNames = false,
-  nativeTag?: string,
+  native?: NativeAttrs,
 ): MappedCode {
   const classEntries = attrs
     .map((attr, index) => ({ attr, index }))
@@ -943,7 +975,7 @@ function renderAttrs(
   );
   if (!structured) {
     return concatMapped(
-      ...attrs.map((attr) => renderAttr(attr, mapNames, nativeTag)),
+      ...attrs.map((attr) => renderAttr(attr, mapNames, native)),
     );
   }
 
@@ -964,9 +996,9 @@ function renderAttrs(
         return concatMapped();
       }
       if (index !== structured.index || attr.kind !== "dynamic") {
-        return renderAttr(attr, mapNames, nativeTag);
+        return renderAttr(attr, mapNames, native);
       }
-      if (merged === "") return renderAttr(attr, mapNames, nativeTag);
+      if (merged === "") return renderAttr(attr, mapNames, native);
       if (attr.value.shape === "array") {
         return concatMapped(
           " ",
@@ -1429,15 +1461,26 @@ function attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
     : value;
 }
 
-function attributeTagProps(props: AttrTagProp[], owner?: string): MappedCode {
+function attributeTagProps(
+  props: AttrTagProp[],
+  owner?: string,
+  native?: NativeAttrs,
+): MappedCode {
   return concatMapped(
     ...props.map((prop) => {
       const first = firstAttributeTag(prop.source);
+      if (native && attrGuardUse) attrGuardUse.value = true;
       return concatMapped(
         " ",
         mapped(prop.name, first?.nameSpan ?? null),
         "={",
-        attributeTagProp(prop, owner),
+        native
+          ? concatMapped(
+              `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(prop.name)}, `,
+              attributeTagProp(prop, owner),
+              `, ${nativeTagOf(native)})`,
+            )
+          : attributeTagProp(prop, owner),
         "}",
       );
     }),
@@ -1666,7 +1709,9 @@ export class SolidEmitter implements Emitter<string> {
         raw,
       );
     }
-    const attrs = renderAttrs(node.attrs, false, node.name);
+    const attrs = renderAttrs(node.attrs, false, {
+      tag: JSON.stringify(node.name),
+    });
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     if (node.void) {
       this.#out.push(concatMapped(`<${node.name}`, attrs, `${innerHtml} />`));
@@ -1892,7 +1937,6 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
 
-    const attrs = renderAttrs(node.attrs, true);
     // A decision-116-routed dynamic target (`valueImportBinding` set) still
     // names a real, in-scope import — the emitted call is
     // `mxDyn0 = AttrCallee; ... <Dynamic component={mxDyn0} .../>`, with
@@ -1904,7 +1948,6 @@ export class SolidEmitter implements Emitter<string> {
       node.target.kind === "dynamic"
         ? node.target.valueImportBinding
         : undefined;
-    const tags = attributeTagProps(node.attrTagProps, owner);
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     if (node.var && lazyScope) {
       fail(
@@ -1924,6 +1967,14 @@ export class SolidEmitter implements Emitter<string> {
         ? ` const ${value} = typeof ${temp} === "function" ? ${temp}(${node.args.map((arg) => arg.code).join(", ")}) : ${temp};`
         : "";
     const component = ` component={${value}}`;
+    // Only a string target is a native element: its attributes get the
+    // native-attribute guard, a component target's props are forwarded as is.
+    const native: NativeAttrs = {
+      tag: value,
+      when: `typeof ${value} === "string"`,
+    };
+    const attrs = renderAttrs(node.attrs, true, native);
+    const tags = attributeTagProps(node.attrTagProps, owner, native);
     // decision 112 (lead ruling 2026-09-28): 109 governs a function/
     // component target called with arguments (`renderer(...args, props)`);
     // 112 governs only a *string* (native-element) target — the two are
@@ -1937,8 +1988,11 @@ export class SolidEmitter implements Emitter<string> {
     // Which branch applies is a run-time fact (`value`'s resolved type), so
     // this emits two `<Dynamic>` elements behind the existing type-switch
     // rather than trying to make one JSX attribute list conditional.
+    if (node.args.length > 0 && attrGuardUse) attrGuardUse.spread = true;
     const stringArgsAttrs =
-      node.args.length > 0 ? ` {...(${node.args[0]?.code} || {})}` : "";
+      node.args.length > 0
+        ? ` {...${MX_ATTR_SPREAD_BINDING}(${node.args[0]?.code} || {}, ${value})}`
+        : "";
     // decision 116, Marko parity (`runtime-tags/src/html/dynamic-tag.ts`'s
     // `_dynamic_tag`, `normalizeDynamicRenderer`): a target that is neither
     // a string nor a function has no renderer, so the tag itself renders

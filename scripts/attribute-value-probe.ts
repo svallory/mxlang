@@ -99,7 +99,7 @@ async function compile(
         ? emitted.code.slice(1, -1)
         : emitted.code;
     const transformed = transformSync(
-      `import { Dynamic } from "@solidjs/web"; ${emitted.hoistedImports.map((entry) => entry.code).join("\n")} export function App(input) { return ${jsx}; }`,
+      `import { Dynamic } from "@solidjs/web"; ${emitted.hoistedImports.map((entry) => entry.code).join("\n")}\n${emitted.hoistedDefines.map((entry) => entry.code).join("\n")}\nexport function App(input) { return ${jsx}; }`,
       {
         filename: "case.tsx",
         presets: [[typescript, {}]],

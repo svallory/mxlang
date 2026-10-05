@@ -70,6 +70,43 @@ const CASES: Record<string, Case> = {
     setup:
       "const input = { o: { a: 1 } }; function Box(props: { data: object }) { return <p>{typeof props.data}</p>; }",
   },
+  innerHtml: {
+    fragment: "<div innerHTML=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  textContent: {
+    fragment: "<div textContent=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  classList: {
+    fragment: "<div classList=input.o/>",
+    setup: "const input = { o: { x: true } };",
+  },
+  classListSpread: {
+    fragment: "<div ...input.a/>",
+    setup: "const input = { a: { classList: { x: true } } };",
+  },
+  colonName: {
+    fragment: "<div :foo=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  attributeBeforeSpread: {
+    fragment: "<div data-x=input.o ...input.a/>",
+    setup: 'const input = { o: { a: 1 }, a: { "data-x": "ok" } };',
+  },
+  dynamicTagString: {
+    fragment: "<${input.tag} data-x=input.o/>",
+    setup: 'const input = { tag: "div", o: { a: 1 } };',
+  },
+  dynamicTagSpread: {
+    fragment: "<${input.tag} ...input.s/>",
+    setup: 'const input = { tag: "div", s: { "data-x": { a: 1 } } };',
+  },
+  dynamicTagComponent: {
+    fragment: "<${input.tag} data-x=input.o/>",
+    setup:
+      "const input = { o: { a: 1 }, tag: function Box(props: { 'data-x': object }) { return <p>{typeof props['data-x']}</p>; } };",
+  },
   functionValue: {
     fragment: "<div data-x=input.f/>",
     setup: "const input = { f: () => 1 };",
@@ -202,6 +239,31 @@ describe.each(["ssr", "dom"] as const)(
       expect(get("spreadOverwritten").error).toBeUndefined();
       expect(get("spreadOverwritten").html).toContain('data-x="ok"');
     });
+    it("matches Marko for an attribute a later spread overwrites", () => {
+      expect(get("attributeBeforeSpread").error).toBeUndefined();
+      expect(get("attributeBeforeSpread").html).toContain('data-x="ok"');
+    });
+    it("validates innerHTML, textContent, classList and colon names", () => {
+      for (const name of [
+        "innerHtml",
+        "textContent",
+        "classList",
+        "classListSpread",
+        "colonName",
+      ]) {
+        const error = get(name).error;
+        expect(error ?? `${name} did not throw`).toMatch(
+          /^The `[^`]+` attribute cannot be a plain object \(it would render as `\[object Object\]`\)\.$/,
+        );
+      }
+      expect(get("colonName").error).toContain("`value:foo`");
+    });
+    it("guards a string-target dynamic tag but not a component target", () => {
+      expect(get("dynamicTagString").error).toBe(PLAIN);
+      expect(get("dynamicTagSpread").error).toBe(PLAIN);
+      expect(get("dynamicTagComponent").error).toBeUndefined();
+      expect(get("dynamicTagComponent").html).toContain("object");
+    });
     it("renders ordinary spread values", () => {
       expect(get("spreadSafe").error).toBeUndefined();
       expect(get("spreadSafe").html).toContain('data-x="s"');
@@ -209,11 +271,12 @@ describe.each(["ssr", "dom"] as const)(
     });
     it("leaves arrays, 0, null and strings as they render", () => {
       expect(get("array").error).toBeUndefined();
-      expect(get("array").html).toContain("data-x");
+      expect(get("array").html).toContain('data-x="1,2"');
       expect(get("zero").error).toBeUndefined();
       expect(get("zero").html).toContain('data-x="0"');
       expect(get("nullValue").error).toBeUndefined();
       expect(get("nullValue").html).not.toContain("data-x");
+      expect(get("string").error).toBeUndefined();
       expect(get("string").html).toContain('data-x="s"');
     });
     it("leaves class and style objects alone", () => {

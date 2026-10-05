@@ -35,16 +35,21 @@ Real-render regression coverage: `packages/{targets/html,hosts/preact,hosts/reac
 **Solid** (decision 149) throws at render like the other hosts, with the same
 text, on both SSR and DOM output. Dynamic native attributes of unknown type
 compile to `name={__mxAttrValue("name", expr, "tag")}` and spreads on native
-elements to `{...__mxAttrSpread(expr, "tag")}`; string-shaped values, class,
-style, ref, `prop:`/`on:`/`use:`-style names and component props are not
-wrapped. The spread helper is a Proxy that validates each key as Solid reads
-it, so reactivity is preserved and a key a later spread overwrites is never
-validated. A dynamic attribute written before a spread that overwrites it
-still validates (stricter than Marko). Dynamic tags with a string target are
-not guarded yet. The wrapper cannot byte-match a hand-written twin, so the
+elements to `{...__mxAttrSpread(expr, "tag")}`; string-valued dynamic tags
+(`<${tag} .../>`, including attribute tags and the args spread) are guarded
+when the target resolves to a string and pass through for a component target.
+Only names with genuine non-attribute semantics on Solid are exempt: `class`,
+`style`, `ref`, `children` and the `on:`/`oncapture:`/`use:`/`prop:`/`attr:`/
+`bool:` namespaces. `innerHTML`, `textContent`, `classList` and `:foo`
+(`value:foo`) are validated like Marko, which exempts no name. String-shaped
+values and component props are not wrapped. The spread helper is a Proxy that
+validates each key as Solid reads it, so reactivity is preserved and an
+attribute or spread key that a later source overwrites is never validated,
+which matches Marko. The wrapper cannot byte-match a hand-written twin, so the
 oracle rows `attrs` and `todos` (dom, ssr-hydratable; both backends) are
 recorded in `fixtures/divergences.md`. Coverage:
-`packages/hosts/solid/src/attr-guard.test.ts`.
+`packages/hosts/solid/src/attribute-value.test.ts` (shared real-render probe)
+and `attr-guard.test.ts`.
 
 **On Solid, `prop:name` is Solid's own opt-in, and MX emits the name
 verbatim (lead ruling 47).** `<div prop:foo=y/>` compiles to

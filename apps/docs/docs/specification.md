@@ -612,7 +612,7 @@ checked. A superseded object value does not cause an error, and authored
 expressions are evaluated once, retaining the host's existing evaluation order. String-valued dynamic tags use the
 native rule; component-valued dynamic tags still forward props unchanged.
 
-**Known gaps:** Solid now validates dynamic native attributes at render (SSR and DOM) with the same messages; see `divergences.md` for its oracle rows and the dynamic-tag exception. Angular's existing attribute bindings still stringify plain
+**Known gaps:** Solid now validates dynamic native attributes at render (SSR and DOM) with the same messages; see `divergences.md` for its oracle rows. Angular's existing attribute bindings still stringify plain
 objects or raise Angular's own coercion error. All Angular host paths,
 including `.ng.mx` and generated tag classes, remain unchanged pending a
 lead ruling on the compatibility of requiring runtime helpers on authored
