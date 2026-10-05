@@ -119,6 +119,7 @@ A `<return>` in a page is legal and means the same thing — a page is a module 
 - **The tag must declare `<return>`.** `/var` on a tag whose template returns nothing is an error, rather than a binding that silently reads `undefined`.
 - **The binding is scoped to the block the call is in**, like any `let`. Reading it from outside that block is an error rather than a binding hoisted somewhere the reader cannot see.
 - **The call has to come first.** Reading a `/var` earlier in the same block than the call that binds it is an error, not a run-time crash.
+- **The tag must be a discovered one.** `/var` binds what a *discovered* tag (`tags/counter.mx`, called as `<counter/n/>`) returns. On a tag you `import` and call by binding (`import Counter from "./lib/counter.mx"`, then `<Counter/n/>`), `/var` is rejected, even when that file declares `<return>`: ``tag variable `/n` on `<Counter>` is not supported in a standalone template``. To bind a returned value, put the file under a `tags/` directory and call it by its discovered name.
 
 ### Where `/var` can be written, per host
 
