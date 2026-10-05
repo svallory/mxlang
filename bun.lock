@@ -59,9 +59,7 @@
         "@mxlang/react": "workspace:*",
         "@mxlang/solid": "workspace:*",
         "@mxlang/tree-sitter-mx": "workspace:*",
-        "tree-sitter-javascript": "0.23.1",
         "vitest": "3.2.7",
-        "web-tree-sitter": "0.26.9",
       },
     },
     "examples/angular-app": {
@@ -244,10 +242,19 @@
     "packages/editors/tree-sitter-mx": {
       "name": "@mxlang/tree-sitter-mx",
       "version": "0.1.0",
-      "devDependencies": {
-        "tree-sitter-cli": "0.26.9",
+      "dependencies": {
         "web-tree-sitter": "0.26.9",
       },
+      "devDependencies": {
+        "tree-sitter-cli": "0.26.9",
+        "tree-sitter-javascript": "0.23.1",
+      },
+      "peerDependencies": {
+        "@types/emscripten": "^1.40.0",
+      },
+      "optionalPeers": [
+        "@types/emscripten",
+      ],
     },
     "packages/editors/tree-sitter-solidmx": {
       "name": "@mxlang/tree-sitter-solidmx",

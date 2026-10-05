@@ -11,7 +11,7 @@
     "validate": "docmd validate",
     "test": "bun run build:wasm && vitest run",
     "preview": "npx serve site",
-    "build:wasm": "bun run --cwd ../../packages/editors/tree-sitter-mx build:wasm && bash scripts/build-ts-grammar.sh"
+    "build:wasm": "bun run --cwd ../../packages/editors/tree-sitter-mx prepack"
   },
   "dependencies": {
     "@docmd/core": "0.9.5"
@@ -27,8 +27,6 @@
     "@mxlang/react": "workspace:*",
     "@mxlang/solid": "workspace:*",
     "@mxlang/tree-sitter-mx": "workspace:*",
-    "tree-sitter-javascript": "0.23.1",
-    "vitest": "3.2.7",
-    "web-tree-sitter": "0.26.9"
+    "vitest": "3.2.7"
   }
 }

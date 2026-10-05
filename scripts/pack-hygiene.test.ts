@@ -52,18 +52,30 @@ for (const p of PACKED_PACKAGES) {
   const pkg = readPackageJson(dir);
 
   describe(`${p.name} tarball`, () => {
-    const packed = packedFiles(dir);
+    const packed = p.assets
+      ? [
+          ...new Set([
+            ...packedFiles(dir, { needsDist: false, ignoreScripts: true }),
+            ...p.assets.built,
+          ]),
+        ]
+      : packedFiles(dir);
     const allowedTop = new Set(["package.json", "README.md", "LICENSE"]);
+    // `dist/` for most packages; an assets package names its own top levels.
+    const shippedTop = p.assets
+      ? p.assets.files.map((f) => f.split("/")[0] ?? f)
+      : ["dist", ...p.extraTopLevel];
 
     it("declares a `files` allowlist", () => {
-      expect(pkg.files).toEqual(["dist", ...p.extraTopLevel, "README.md"]);
+      expect(pkg.files).toEqual(
+        p.assets?.files ?? ["dist", ...p.extraTopLevel, "README.md"],
+      );
     });
 
     it("packs only package.json, README, dist/** and its named extras", () => {
       const stray = packed.filter((f) => {
-        if (allowedTop.has(f)) return false;
-        const top = f.split("/")[0] ?? f;
-        return top !== "dist" && !p.extraTopLevel.includes(top);
+        if (allowedTop.has(f) || shippedTop.includes(f)) return false;
+        return !shippedTop.includes(f.split("/")[0] ?? f);
       });
       expect(stray).toEqual([]);
     });
@@ -80,7 +92,11 @@ for (const p of PACKED_PACKAGES) {
     it("ships no tests, fixtures, source maps of declarations or config", () => {
       const junk = packed.filter(
         (f) =>
-          /(^|\/)(src|fixtures?|test)\//.test(f) ||
+          // The assets package ships `src/`: it is the C sources Zed and
+          // node-gyp compile, not TypeScript.
+          (p.assets
+            ? /(^|\/)(fixtures?|test)\//.test(f)
+            : /(^|\/)(src|fixtures?|test)\//.test(f)) ||
           /\.test\.[cm]?[jt]s(\.map)?$/.test(f) ||
           /\.d\.ts\.map$/.test(f) ||
           /(^|\/)(moon\.yml|tsconfig[^/]*\.json)$/.test(f),
@@ -101,9 +117,21 @@ for (const p of PACKED_PACKAGES) {
       expect(targets.filter((t) => !packed.includes(t))).toEqual([]);
     });
 
+    if (p.assets) {
+      it("builds the wasm and the injected TypeScript grammar in `prepack`", () => {
+        // A tarball without them throws on the first import of /docmd.
+        const prepack = (pkg as { scripts?: Record<string, string> }).scripts
+          ?.prepack;
+        expect(prepack).toContain("build:wasm");
+        expect(prepack).toContain("build:ts-grammar");
+      });
+    }
+
     if (p.declarations) {
       it("points `types` at an emitted declaration", () => {
-        expect(pkg.types).toMatch(/^dist\/.*\.d\.ts$/);
+        expect(pkg.types).toMatch(
+          p.assets ? /^highlight\/.*\.d\.mts$/ : /^dist\/.*\.d\.ts$/,
+        );
       });
     } else {
       it("has no `types` entry (no declarations are emitted)", () => {
@@ -114,14 +142,21 @@ for (const p of PACKED_PACKAGES) {
 
   describe(`${p.name} shipped runtime`, () => {
     it("imports only declared deps, its own name or node builtins", () => {
-      expect(undeclaredRuntimeImports(dir, pkg, p.name)).toEqual([]);
+      expect(
+        undeclaredRuntimeImports(
+          dir,
+          pkg,
+          p.name,
+          p.assets?.runtimeDir ?? "dist",
+        ),
+      ).toEqual([]);
     });
   });
 
   if (!p.declarations) continue;
 
   describe(`${p.name} emitted declarations`, () => {
-    const distDir = join(dir, "dist");
+    const distDir = join(dir, p.assets?.runtimeDir ?? "dist");
     const files = declarationFiles(distDir);
     const declared = declaredNames(pkg);
     const aliases = p.specifierAliases ?? {};
@@ -155,7 +190,7 @@ for (const p of PACKED_PACKAGES) {
       expect(builtins).toEqual([]);
     });
 
-    it("never reach outside dist/", () => {
+    it("never reach outside the shipped directory", () => {
       const escapes = files.flatMap((file) =>
         moduleSpecifiers(file)
           .filter(({ specifier }) => escapesRoot(file, specifier, distDir))

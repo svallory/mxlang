@@ -12,9 +12,11 @@ tasks:
       - "assets/**/*"
       - "example/**/*"
       - "scripts/**/*"
-      - "plugins/**/*"
-      # The highlighter's grammar: the wasm is built from these and is not itself
-      # an input (it is gitignored), so a grammar change must invalidate here.
+      # The highlighter (the docmd plugin) and its grammar: the wasm is built
+      # from these and is not itself an input (it is gitignored), so a grammar
+      # change must invalidate here.
+      - "/packages/editors/tree-sitter-mx/highlight/*.mjs"
+      - "/packages/editors/tree-sitter-mx/highlight/*.sh"
       - "/packages/editors/tree-sitter-mx/grammar.js"
       - "/packages/editors/tree-sitter-mx/src/**/*"
       - "/packages/editors/tree-sitter-mx/queries/**/*"

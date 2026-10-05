@@ -11,7 +11,6 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
 import plugin, {
   captureNames,
   classOf,
@@ -19,7 +18,8 @@ import plugin, {
   renderFence,
   renderMx,
   spansOf,
-} from "../plugins/mx-highlight.mjs";
+} from "@mxlang/tree-sitter-mx/docmd";
+import { describe, expect, it } from "vitest";
 import {
   docsRoot,
   highlightExample,

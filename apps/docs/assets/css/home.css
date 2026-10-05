@@ -292,12 +292,12 @@
 }
 
 /* Syntax colours for the tree-sitter MX grammar's captures
-   (`packages/editors/tree-sitter-mx/queries/highlights.scm`). `plugins/
-   mx-highlight.mjs` turns a capture name into a class by prefixing `ts-` and
+   (`packages/editors/tree-sitter-mx/queries/highlights.scm`). `@mxlang/tree-sitter-mx/docmd`
+   (`highlight/mx-highlight.mjs`) turns a capture name into a class by prefixing `ts-` and
    replacing dots with dashes (`punctuation.bracket` -> `ts-punctuation-bracket`);
    `@none` ("deliberately unstyled") and the JavaScript query's `@embedded` get
    none. The TypeScript names (`function.method`, `number`, `operator`, ...) come
-   from the injected expressions, see `scripts/build-ts-grammar.sh`. The values start from
+   from the injected expressions, see `highlight/build-ts-grammar.sh` in that package. The values start from
    docmd's highlight palette (`docmd-highlight-light.css` / `-dark.css`); the tag,
    punctuation and operator colours and the dark comment colour are One Dark Pro
    values instead. They are keyed on the same `data-theme` attribute the theme

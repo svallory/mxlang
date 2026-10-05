@@ -1,14 +1,14 @@
 /**
- * Build-time MX highlighting for the docs site: the tree-sitter MX grammar
- * (`packages/editors/tree-sitter-mx`), the same grammar and the same
- * `queries/highlights.scm` Zed ships, run through web-tree-sitter while the
- * docs build. Nothing parses in the browser; the page gets static spans.
+ * Build-time MX highlighting for docmd sites (`@mxlang/tree-sitter-mx/docmd`):
+ * the tree-sitter MX grammar (`packages/editors/tree-sitter-mx`), the same
+ * grammar and the same `queries/highlights.scm` Zed ships, run through
+ * web-tree-sitter while the docs build. Nothing parses in the browser; the page gets static spans.
  *
  * This file is two things on purpose, so the landing page's annotated example
  * and an ordinary ```mx fence cannot drift apart:
  *
  *   1. the highlighter (`renderMx`, `spansOf`, `parseMx`), imported by
- *      `scripts/home-example.ts` and by the tests;
+ *      the mx docs' `scripts/home-example.ts` and its tests;
  *   2. a docmd plugin (default export, capability `markdown`) that routes every
  *      ```mx fence through `renderMx`. docmd 0.9.5 has no highlight-function
  *      option; `markdownSetup` is the supported way to reach the markdown-it
@@ -25,31 +25,21 @@ import { fileURLToPath } from "node:url";
 import { Language, Parser, Query } from "web-tree-sitter";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const grammarDir = join(
-  here,
-  "..",
-  "..",
-  "..",
-  "packages",
-  "editors",
-  "tree-sitter-mx",
-);
+const grammarDir = join(here, "..");
 const wasmPath = join(grammarDir, "tree-sitter-mx.wasm");
 const highlightsPath = join(grammarDir, "queries", "highlights.scm");
 const injectionsPath = join(grammarDir, "queries", "injections.scm");
-/** Built by `scripts/build-ts-grammar.sh`. */
-const tsDir = join(here, "..", ".cache", "ts");
+/** Built by `build-ts-grammar.sh` (the package's `prepack` runs it). */
+const tsDir = join(here, "ts");
 const tsWasmPath = join(tsDir, "tree-sitter-typescript.wasm");
 const tsHighlightsPath = join(tsDir, "highlights.scm");
 
-for (const [path, build] of [
-  [wasmPath, "bun run --cwd packages/editors/tree-sitter-mx build:wasm"],
-  [tsWasmPath, "bash apps/docs/scripts/build-ts-grammar.sh"],
-  [tsHighlightsPath, "bash apps/docs/scripts/build-ts-grammar.sh"],
-]) {
+const BUILD =
+  "bun run --cwd packages/editors/tree-sitter-mx build:wasm && bash packages/editors/tree-sitter-mx/highlight/build-ts-grammar.sh";
+for (const path of [wasmPath, tsWasmPath, tsHighlightsPath]) {
   if (!existsSync(path)) {
     throw new Error(
-      `${path} is missing. The docs highlight \`mx\` code with the tree-sitter grammars and do not fall back to plain text. Build it: \`${build}\` (apps/docs' build, dev and test scripts do this for you via \`build:wasm\`).`,
+      `${path} is missing. MX code is highlighted with the tree-sitter grammars and there is no fallback to plain text. A published @mxlang/tree-sitter-mx ships these files, so reinstall it; in the mx repository build them with \`${BUILD}\` (apps/docs' build, dev and test scripts do this for you via \`build:wasm\`).`,
     );
   }
 }

@@ -45,6 +45,24 @@ export interface PackedPackage {
   /** True when the package emits `.d.ts` (a `types` entry, `dist/**.d.ts`). */
   declarations: boolean;
   /**
+   * A package with no `dist/`: it ships hand-written files plus artifacts its
+   * `prepack` builds, so `bun run build` is not a prerequisite for its tarball
+   * and the `dist`-shaped checks read `runtimeDir` instead.
+   */
+  assets?: {
+    /** The exact `files` allowlist in package.json. */
+    files: string[];
+    /** Directory holding the shipped `.mjs` and `.d.mts`. */
+    runtimeDir: string;
+    /**
+     * Gitignored files `prepack` builds into the tarball. The unit lane lists
+     * the tarball with `--ignore-scripts` (a prepack is a wasm toolchain and a
+     * git clone), so these are added to the list; `pack-probe` runs the real
+     * `npm pack` and proves they are there.
+     */
+    built: string[];
+  };
+  /**
    * Bare specifiers in the shipped `.d.ts` that are satisfied by a package
    * other than their own name. Every entry needs a comment saying why.
    */
@@ -146,6 +164,31 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     distFiles: ["dist/index.cjs", "dist/index.d.ts", "dist/index.js"],
     declarations: true,
   },
+  // The grammar: no `dist/`. Ships the wasm (built by `prepack`), the queries,
+  // the C sources and the docmd plugin with a hand-written `.d.mts` each.
+  {
+    name: "@mxlang/tree-sitter-mx",
+    dir: "packages/editors/tree-sitter-mx",
+    extraTopLevel: [],
+    declarations: true,
+    assets: {
+      files: [
+        "tree-sitter-mx.wasm",
+        "queries",
+        "highlight",
+        "src",
+        "grammar.js",
+        "README.md",
+        "LICENSE",
+      ],
+      runtimeDir: "highlight",
+      built: [
+        "tree-sitter-mx.wasm",
+        "highlight/ts/tree-sitter-typescript.wasm",
+        "highlight/ts/highlights.scm",
+      ],
+    },
+  },
   // A CLI bundle only: `bun build` emits no declarations, so there is no `types`.
   {
     name: "@mxlang/tsc",
@@ -164,13 +207,23 @@ export function readPackageJson(dir: string): PackageJson {
 }
 
 /** The paths `bun pm pack` would put in the tarball, without writing one. */
-export function packedFiles(dir: string): string[] {
-  if (!existsSync(join(dir, "dist"))) {
+export function packedFiles(
+  dir: string,
+  opts: { needsDist?: boolean; ignoreScripts?: boolean } = {},
+): string[] {
+  const { needsDist = true, ignoreScripts = false } = opts;
+  if (needsDist && !existsSync(join(dir, "dist"))) {
     throw new Error(
       `${dir}/dist is missing: run \`bun run build\` first (the tarball is only meaningful after a build)`,
     );
   }
-  const out = execFileSync("bun", ["pm", "pack", "--dry-run"], {
+  const args = [
+    "pm",
+    "pack",
+    "--dry-run",
+    ...(ignoreScripts ? ["--ignore-scripts"] : []),
+  ];
+  const out = execFileSync("bun", args, {
     cwd: dir,
     encoding: "utf8",
   });
@@ -292,7 +345,7 @@ export function declarationFiles(dir: string): string[] {
     for (const name of readdirSync(d)) {
       const p = join(d, name);
       if (statSync(p).isDirectory()) walk(p);
-      else if (name.endsWith(".d.ts")) out.push(p);
+      else if (/\.d\.[cm]?ts$/.test(name)) out.push(p);
     }
   };
   if (existsSync(dir)) walk(dir);

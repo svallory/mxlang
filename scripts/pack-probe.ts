@@ -105,7 +105,9 @@ const tarballs = new Map<string, string>();
 function tarballOf(name: string, dir: string): string {
   const cached = tarballs.get(name);
   if (cached) return cached;
-  if (!existsSync(join(dir, "dist"))) {
+  // An assets package has no `dist/`: its `prepack` builds what it ships.
+  const assets = PACKED_PACKAGES.find((p) => p.name === name)?.assets;
+  if (!assets && !existsSync(join(dir, "dist"))) {
     fail(`${dir}/dist is missing: run \`bun run build\` first`);
   }
   const dest = join(work, "tarballs");
@@ -181,6 +183,49 @@ interface ConsumerOptions {
   label: string;
 }
 
+/** An `exports` subpath that names a data file, not a module. */
+function isFileExport(specifier: string): boolean {
+  return /\.(?:wasm|scm|json)$/.test(specifier);
+}
+
+/**
+ * `@mxlang/tree-sitter-mx`: the data exports resolve to real files in the
+ * installed tarball, and the docmd subpath is a working highlighter (it loads
+ * the shipped grammar wasm and the TypeScript grammar built by `prepack`, so a
+ * tarball missing either throws at import).
+ */
+function smokeTreeSitterMx(dir: string): string | undefined {
+  const script = `
+    import { existsSync } from "node:fs";
+    import { fileURLToPath } from "node:url";
+    import plugin, { renderMx, spansOf } from "@mxlang/tree-sitter-mx/docmd";
+    import { highlightsPath, injectionsPath, wasmPath } from "@mxlang/tree-sitter-mx";
+    for (const spec of [
+      "@mxlang/tree-sitter-mx/tree-sitter-mx.wasm",
+      "@mxlang/tree-sitter-mx/queries/highlights.scm",
+      "@mxlang/tree-sitter-mx/queries/injections.scm",
+      "@mxlang/tree-sitter-mx/package.json",
+    ]) {
+      const path = fileURLToPath(import.meta.resolve(spec));
+      if (!existsSync(path)) throw new Error(spec + " resolves to a missing file: " + path);
+    }
+    for (const path of [wasmPath, highlightsPath, injectionsPath]) {
+      if (!existsSync(path)) throw new Error("index.mjs exports a missing path: " + path);
+    }
+    const html = renderMx("<div.panel>\${count}</div>");
+    if (!/<span class="ts-/.test(html)) throw new Error("no highlighted span: " + html);
+    // The injected TypeScript grammar is what colours the placeholder.
+    const spans = spansOf("<let/count: number = 0/>");
+    if (!spans.some((s) => s.cls && s.text.includes("number"))) throw new Error("TypeScript injection did not highlight: " + JSON.stringify(spans));
+    if (plugin.plugin.name !== "mx-highlight" || typeof plugin.markdownSetup !== "function") throw new Error("not a docmd plugin");
+    console.log("tree-sitter-mx docmd plugin ok");
+  `;
+  const r = run("node", ["--input-type=module", "-e", script], dir);
+  return r.status === 0
+    ? undefined
+    : `@mxlang/tree-sitter-mx packed smoke failed\n${r.out}`;
+}
+
 function optionalPeers(pkg: PackageJson): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [name, range] of Object.entries(pkg.peerDependencies ?? {})) {
@@ -235,7 +280,9 @@ function makeConsumer(opts: ConsumerOptions): string {
   if (install.status !== 0)
     fail(`bun install failed for ${opts.label}:\n${install.out}`);
 
-  const specs = exportSpecifiers(rootPkg);
+  // Data subpaths (`/queries/highlights.scm`, `/tree-sitter-mx.wasm`,
+  // `/package.json`) are files, not modules: `fileExports` checks them at runtime.
+  const specs = exportSpecifiers(rootPkg).filter((s) => !isFileExport(s));
   // An ambient-declaration file (`types/marko.d.ts`, `declare module "*.mx"`)
   // is not a module: it can only be side-effect imported.
   const ambient = specs.filter((s) => s.includes("/types/"));
@@ -367,6 +414,8 @@ function smokeMxTsc(): string | undefined {
  * - `@mxlang/language-server`: `vscode-languageserver/node` needs
  *   `@types/node` (installed AND loaded: `types: []` would hide its globals).
  *   Documented in that package's README.
+ * - `@mxlang/tree-sitter-mx`: `web-tree-sitter`'s declarations use the global
+ *   `EmscriptenModule`, so the optional peer `@types/emscripten` must be loaded.
  * - `@mxlang/vite-plugin`: `Plugin` comes from `vite`, a required peer (only
  *   optional peers are installed by default). Vite's declarations need
  *   `@types/node` and an `esnext` lib (`Symbol.asyncDispose`, via rolldown).
@@ -380,6 +429,13 @@ function nodeTypes(
     return {
       extraDeps: { "@types/node": "26.5.1" },
       compilerOptions: { ...compilerOptions, types: ["node"] },
+    };
+  }
+  if (name === "@mxlang/tree-sitter-mx") {
+    // `web-tree-sitter.d.ts` uses the global `EmscriptenModule`: the optional
+    // peer `@types/emscripten`, installed by the probe, loaded here.
+    return {
+      compilerOptions: { ...compilerOptions, types: ["emscripten"] },
     };
   }
   if (name === "@mxlang/vite-plugin") {
@@ -492,6 +548,14 @@ try {
       else
         problems.push(
           `packed plugin Node target dispatch failed\n${smoke.out}`,
+        );
+    }
+    if (p.name === "@mxlang/tree-sitter-mx") {
+      const problem = smokeTreeSitterMx(dir);
+      if (problem) problems.push(problem);
+      else
+        console.log(
+          "[pack-probe] PASS packed tree-sitter-mx files and docmd plugin",
         );
     }
     if (p.name === "@mxlang/vite-plugin") {

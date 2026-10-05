@@ -16,6 +16,13 @@ two local patches (see `UPSTREAM.md`):
   stylesheet dialect; only the tag-adjacent `<style.scss>` does.
 - The grammar is named `mx` (`tree_sitter_mx`, `source.mx`, file type `mx`),
   so it never collides with the `marko` grammar of Marko's own Zed extension.
+- Publishable: `private` is gone. The tarball holds the wasm, `queries/`, the C
+  sources (`src/`, `grammar.js`) and `highlight/`; `prepack` builds the wasm
+  and the TypeScript grammar. Exports: `.` (absolute paths of the wasm and the
+  queries), `./docmd` (the build-time highlighter and docmd plugin, moved here
+  from `apps/docs/plugins/mx-highlight.mjs`, with its `.d.mts`),
+  `./tree-sitter-mx.wasm`, `./queries/*.scm`. `web-tree-sitter` is a dependency;
+  `@types/emscripten` an optional peer for typed consumers.
 - Tests run on bun through web-tree-sitter, and compare against htmljs-parser
   fixtures pinned to v5.12.0 instead of its unpinned HEAD.
 - Tag-param patterns/types/defaults, tag-var types and type arguments start at

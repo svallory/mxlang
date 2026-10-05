@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import type { MxWarning } from "@mxlang/core";
 import { scanCached } from "@mxlang/core";
 import { compileFile, htmlTargets } from "@mxlang/html";
-import { escapeHtml, parseMx, renderMx } from "../plugins/mx-highlight.mjs";
+import { escapeHtml, parseMx, renderMx } from "@mxlang/tree-sitter-mx/docmd";
 
 const here = dirname(fileURLToPath(import.meta.url));
 

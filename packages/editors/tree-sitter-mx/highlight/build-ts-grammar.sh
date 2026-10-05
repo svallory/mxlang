@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Build the TypeScript grammar the docs inject into MX code.
+# Build the TypeScript grammar the docmd plugin injects into MX code.
 #
-# `packages/editors/tree-sitter-mx/queries/injections.scm` says which ranges of
+# `queries/injections.scm` says which ranges of
 # an MX file hold TypeScript (placeholders, attribute values, `static` bodies,
 # `import`/`export`/`class` statements, ...). Highlighting them needs a
 # TypeScript wasm and a highlights query; neither is in the repo, so this
@@ -10,7 +10,8 @@
 # vendors (`UPSTREAM.md`): tree-sitter-typescript v0.23.2, the plain
 # `typescript` dialect (not `tsx`: an injected expression is never JSX).
 #
-# Outputs, all under the gitignored `apps/docs/.cache/ts/`:
+# Outputs, all under the gitignored `highlight/ts/`, which the package ships
+# (`prepack` runs this script):
 #   tree-sitter-typescript.wasm   built with `tree-sitter build --wasm`
 #   highlights.scm                tree-sitter-javascript's query, then upstream
 #                                 TypeScript's (later patterns win), because the
@@ -22,8 +23,7 @@ set -euo pipefail
 
 PIN_SHA="f975a621f4e7f532fe322e13c4f79495e0a7b2e7" # tree-sitter-typescript v0.23.2
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ROOT="$(cd "$HERE/../.." && pwd)"
-CACHE="$HERE/.cache/ts"
+CACHE="$HERE/highlight/ts"
 SRC="$CACHE/src"
 
 if [[ -f "$CACHE/.pin" && "$(cat "$CACHE/.pin")" == "$PIN_SHA" \
@@ -41,10 +41,13 @@ git -C "$SRC" checkout -q "$PIN_SHA"
 
 # Same lock and CLI as the grammar package's own build:wasm, so two builds
 # never race on the tree-sitter cache.
-(cd "$ROOT/packages/editors/tree-sitter-mx" &&
+(cd "$HERE" &&
   flock /tmp/mx-zed-generate.lock \
     bunx tree-sitter build --wasm -o "$CACHE/tree-sitter-typescript.wasm" "$SRC/typescript")
 
+# The clone is only the build input; it is not shipped.
+
 cat "$JS_DIR/queries/highlights.scm" "$SRC/queries/highlights.scm" >"$CACHE/highlights.scm"
+rm -rf "$SRC"
 echo "$PIN_SHA" >"$CACHE/.pin"
 echo "typescript grammar: built tree-sitter-typescript.wasm at $PIN_SHA"
