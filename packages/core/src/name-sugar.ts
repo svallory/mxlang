@@ -488,6 +488,18 @@ function splitShorthandChain(
   return parts;
 }
 
+const ALREADY_HAS_DEFAULT = (form: string, first: number): string =>
+  `${form} would set the default attribute (\`value\`), but the tag already has a default value (at offset ${first}); a sugar followed by \`=value\` or \`(params) { body }\` sets it (decision 146 addendum 4), so write \`value=…\` once`;
+
+/** How many source characters the sugar token itself takes (`#x`, `:x`, `.c#d`, `.c:y`). */
+function authoredTokenLength(attr: Node, kind: "#" | "." | ":"): number {
+  if (kind === ":") return 1 + String(attr.modifier).length;
+  const name = String(attr.name);
+  return typeof attr.modifier === "string"
+    ? name.length + 1 + attr.modifier.length
+    : name.length;
+}
+
 const shorthandProbe = new Map<string, boolean>();
 
 /** The probe cache is cleared past this many words (a long-lived server). */
@@ -576,6 +588,17 @@ function checkNearSugar(ctx: Ctx, attr: Node): void {
     );
   }
   if (
+    attr.arguments &&
+    typeof attr.name === "string" &&
+    /^[#.][^#.]/.test(attr.name)
+  ) {
+    failAt(
+      ctx,
+      `arguments are not allowed on \`${attr.name}\`: it is name sugar; a \`(params) { body }\` after it sets the default value`,
+      start,
+    );
+  }
+  if (
     attr.default === true &&
     attr.name === "value" &&
     typeof attr.modifier === "string" &&
@@ -601,11 +624,41 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
   let classAt = -1;
   let sawId = false;
   const out: Node[] = [];
+  // The offsets of the tag's default values so far (an authored default value,
+  // or a sugar's `=value` / `(params) { body }`): a second one is an error.
+  const defaults: number[] = [];
+  const sawSugarValue = attrs.some(
+    (attr) =>
+      sugarKind(attr) &&
+      !(attr.value?.type === "BooleanLiteral" && !attr.value?.loc),
+  );
 
   for (const attr of attrs) {
     const kind = sugarKind(attr);
     if (!kind) {
       checkNearSugar(ctx, attr);
+      // An authored default value counts only when a sugar also brings one:
+      // two authored `value=` stay decision 135's duplicate warning.
+      if (
+        sawSugarValue &&
+        attr?.type === "MarkoAttribute" &&
+        attr.name === "value" &&
+        attr.modifier == null &&
+        !attr.bound
+      ) {
+        const at = startOf(ctx, attr);
+        if (defaults.length > 0) {
+          failAt(
+            ctx,
+            ALREADY_HAS_DEFAULT(
+              `\`${ctx.source.slice(at, endOf(ctx, attr))}\``,
+              defaults[0] as number,
+            ),
+            at,
+          );
+        }
+        defaults.push(at);
+      }
       out.push(attr);
       continue;
     }
@@ -619,13 +672,39 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
     const end = endOf(ctx, attr);
     const authored = ctx.source.slice(start, end);
     const form = `\`${authored}\``;
-    // The sugar takes no value: `:x=1`, `#x=1`, `.x=1`.
-    if (attr.value?.loc || attr.value?.type !== "BooleanLiteral") {
-      failAt(
-        ctx,
-        `${form} is name sugar and takes no value; write \`${kind === ":" ? "name" : kind === "#" ? "id" : "class"}="…"\` to give one`,
-        start,
-      );
+    // Decision 146 addendum 4: `(` and `=` cannot be part of a sugar, so a
+    // sugar followed directly by `=value` or `(params) { body }` sets the
+    // tag's default attribute (`value`). Marko already parsed it as the value
+    // of the sugar attribute; it moves to a default attribute of its own.
+    const hasValue = !(
+      attr.value?.type === "BooleanLiteral" && !attr.value?.loc
+    );
+    let defaultAttr: Node | undefined;
+    if (hasValue) {
+      let at = end;
+      const tokenEnd = start + authoredTokenLength(attr, kind);
+      at = tokenEnd;
+      while (/\s/.test(ctx.source[at] ?? "")) at++;
+      if (ctx.source[at] === "=") {
+        at++;
+        while (/\s/.test(ctx.source[at] ?? "")) at++;
+      }
+      if (defaults.length > 0) {
+        failAt(ctx, ALREADY_HAS_DEFAULT(form, defaults[0] as number), at);
+      }
+      defaults.push(at);
+      defaultAttr = {
+        type: "MarkoAttribute",
+        name: "value",
+        value: attr.value,
+        modifier: null,
+        default: true,
+        bound: false,
+        arguments: undefined,
+        start: at,
+        end,
+        loc: loc(ctx, at, end),
+      };
     }
     if (kind === ":") {
       // `:x` has its word in the modifier and follows the identifier rule.
@@ -638,6 +717,7 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
         );
       }
       out.push(sugarAttr(ctx, "name", { start, end }, start + 1, word));
+      if (defaultAttr) out.push(defaultAttr);
       continue;
     }
     // `#x` and `.x` keep the sigil in the parser's attribute name, and a
@@ -702,6 +782,7 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
         ),
       );
     }
+    if (defaultAttr) out.push(defaultAttr);
   }
 
   node.attributes = out;

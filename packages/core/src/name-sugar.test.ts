@@ -270,21 +270,6 @@ describe("`#id`, `.class` and `:name` in attribute position", () => {
   });
 
   it.each([
-    ["<a :b=1/>", "`:b=1`", 3],
-    ["<a #b=1/>", "`#b=1`", 3],
-    ['<a x=1 .b="c"/>', '`.b="c"`', 7],
-  ])(
-    "%s: a value on the sugar is a positioned error",
-    (source, token, column) => {
-      const error = errorOf(source);
-      expect(error.message).toContain(token);
-      expect(error.message).toContain("takes no value");
-      expect(error.line).toBe(1);
-      expect(error.column).toBe(column);
-    },
-  );
-
-  it.each([
     ["<a :1/>", "`:1`"],
     ["<a :b.c/>", "`:b.c`"],
   ])("%s: the token must be an identifier", (source, token) => {
@@ -688,5 +673,119 @@ describe("a literal class folded with a `.x` sugar", () => {
     ['<div class="a" .b/>', 'div class="a b"'],
   ])("%s stringifies", (source, expected) => {
     expect(shape(source)).toBe(expected);
+  });
+});
+
+// Decision 146 addendum 4 (PR 4): `(` and `=` cannot be part of a sugar, so a
+// sugar followed directly by `=value` or `(params) { body }` sets the tag's
+// default attribute (`value`). It replaces PR 2's "sugar takes no value" errors.
+describe("a sugar followed by =value or (params) { body } sets the default attribute", () => {
+  const withMethods = policy({ resolveAttributeMethod: () => true });
+  const parts = (source: string) =>
+    shape(source)
+      .replace(/^\S+ ?/, "")
+      .split(" ")
+      .sort();
+
+  it.each([
+    ["<a #x=1/>", ['id="x"', "value=<1>"]],
+    ["<a :x=input.y/>", ['name="x"', "value=<input.y>"]],
+    ["<a .c=1/>", ['class="c"', "value=<1>"]],
+    ['<a .c="s"/>', ['class="c"', 'value="s"']],
+    ["<a x=1 #y=2/>", ["x=<1>", 'id="y"', "value=<2>"]],
+    ["<a #x=1 y=2/>", ['id="x"', "value=<1>", "y=<2>"]],
+    ["a #x=1", ['id="x"', "value=<1>"]],
+    ["a :x=input.y", ['name="x"', "value=<input.y>"]],
+    ["a .c=1", ['class="c"', "value=<1>"]],
+    ["<a:x=1/>", ['name="x"', "value=<1>"]],
+    ["<a#x=1/>", ['id="x"', "value=<1>"]],
+    ["<a.c=1/>", ['class="c"', "value=<1>"]],
+  ])("%s", (source, expected) => {
+    expect(parts(source)).toEqual([...expected].sort());
+  });
+
+  it.each([
+    "kind #name (p) { b }",
+    "kind #name(p) { b }",
+    "kind (p) { b } #name",
+    "<kind #name(p){b}/>",
+    "<kind (p){b} #name/>",
+  ])("%s is id plus a function value, in either order", (source) => {
+    const [element] = elements(lowerSource(source, withMethods).body);
+    const attrs = element?.attrs ?? [];
+    expect(
+      attrs.map((a) => (a.kind === "spread" ? "..." : a.name)).sort(),
+    ).toEqual(["id", "value"]);
+    const value = attrs.find((a) => a.kind !== "spread" && a.name === "value");
+    expect(value?.kind).toBe("dynamic");
+    expect((value as { value: { code: string } }).value.code).toMatch(
+      /^function \(p\)/,
+    );
+    expect(
+      attrs.find((a) => a.kind !== "spread" && a.name === "id"),
+    ).toMatchObject({ kind: "static", value: "name" });
+  });
+
+  it("`:name` and `.class` take a method too", () => {
+    for (const source of ["a :x(p) { b }", "a .x (p) { b }"]) {
+      const [element] = elements(lowerSource(source, withMethods).body);
+      const names = (element?.attrs ?? []).map((a) =>
+        a.kind === "spread" ? "..." : a.name,
+      );
+      expect(names.sort()).toEqual([
+        source.includes(":") ? "name" : "class",
+        "value",
+      ]);
+    }
+  });
+
+  it("the value is positioned at the sugar's value", () => {
+    const [element] = elements(lowerSource("<a #x=input.y/>").body);
+    const value = element?.attrs.find(
+      (a) => a.kind === "dynamic" && a.name === "value",
+    ) as {
+      value: { span: { sourceStart: number; sourceEnd: number } };
+      loc: { column: number };
+    };
+    expect(value.value.span).toEqual({ sourceStart: 6, sourceEnd: 13 });
+    expect(value.loc.column).toBe(6);
+  });
+
+  it.each([
+    ["<if=input.a #x=1>y</if>", 1, 15],
+    ["kind=1 #x=2", 1, 10],
+    ["kind (p) { b } #x(q) { c }", 1, 17],
+    ["<a #x=1 #y=2/>", 1, 11],
+    ["<a value=1 #x=2/>", 1, 14],
+    ["<a:x=1 #y=2/>", 1, 10],
+  ])(
+    "%s: a second default value is a positioned error at the second",
+    (source, line, column) => {
+      const error = errorOf(source);
+      expect(error.message).toContain("already has a default value");
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
+
+  it("the default-attribute exemption still holds", () => {
+    // `.b` after a default value is still member access (decision 151 ruling 2).
+    expect(shape("<a=input.o .c/>", withMethods)).toContain(
+      "value=<input.o .c>",
+    );
+  });
+
+  it("the bare-sugar errors stay", () => {
+    expect(errorOf("<a #/>").message).toContain("needs a name");
+    expect(errorOf("<a :/>").message).toContain("needs a name");
+    expect(errorOf("<a ./>").message).toContain("needs a name");
+  });
+
+  it("arguments without a body are still an error", () => {
+    expect(errorOf("<a #x(p)/>").message).toContain(
+      "arguments are not allowed",
+    );
+    expect(errorOf("<a :x(p)/>").message).toContain(
+      "arguments are not allowed",
+    );
   });
 });
