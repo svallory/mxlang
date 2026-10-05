@@ -30,13 +30,13 @@ Four ways to give the reference reading a spelling were weighed (see Alternative
 | attribute value | `mode=:strict` |
 | placeholder | `${:strict}` |
 | tag arguments | `<if(kind === :primary)>` |
-| function argument, comparison, spread | `f(:a)`, `x === :a`, `...{ k: :a }` |
+| function argument, comparison, object value | `f(:a)`, `x === :a`, `{ k: :a }` |
 | attribute-tag value | `<@opt=:a/>` |
 | inside an array or object in any of the above | `accept=[:title, :body]` |
 
 An atom is never read inside `static`, `import` or script blocks, which stay plain TypeScript, and never inside strings, template literal text (the `${}` parts are scanned), regular expressions or comments. `"a :b"` is text, `/:b/` is a regex.
 
-**Operations on an atom.** An atom is a name, not a value to operate on. Member access, calls and unary operators on it (`:a.length`, `:a(1)`, `-:a`) are positioned errors. Comparison (`x === :a`), array and object elements, spread arguments, template placeholders, function arguments and attribute-tag values are allowed (settled by the lead on 2026-10-05; see Open questions and settled points).
+**Operations on an atom.** An atom is a name, not a value to operate on. Member access, calls and unary operators on it (`:a.length`, `:a(1)`, `-:a`) and an atom in object-key position (`{:a: 1}`) are positioned errors **detected by core, not by Babel**: the numeric stand-in (Parser approach) makes each of them valid JavaScript, so core finds them from the stand-in's atom mark. A computed key, `{[:a]: 1}`, is allowed. Comparison (`x === :a`), array and object elements, template placeholders, function arguments and attribute-tag values are allowed (settled by the lead on 2026-10-05; see Open questions and settled points).
 
 A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-key`. This is the 146 sugar token without a trailing dash, so `:a-b` is the atom `a-b`, `:a - b` is subtraction, and a trailing `-` is not part of the name. (Proposed by the parser research; decision 156 says only "names may contain `-`".)
 
@@ -50,9 +50,9 @@ An atom is its own IR node, `atom { name, span }`, distinct from `string`. It is
 
 **An atom inside an expression** (decision 156 addendum 1, item 1). Where an atom sits inside any expression, nested cases included (array element, object value, call argument, ternary branch, template placeholder, comparison, function body), the `DataExpr.node` Babel node is a `StringLiteral` whose `extra.mxAtom` is `{ span }`, the atom's own span. The node's value is the atom's name, so code that only reads strings still works, and code that cares checks `extra.mxAtom`. This node shape is **public API** of `@mxlang/core` and `@mxlang/data`, stable like the rest of the IR; the Parser approach section builds it, and Phase B PR 1 documents it in `apps/docs/docs/architecture/ir-spec.md`. A consumer that translates an expression (Mesh turns `filter=({ self }) => self.status === :sent` into SQL) recognises an atom by `extra.mxAtom` and reads its span from there.
 
-**Atom-ness survives the name sugar** (addendum 1, item 2). The `name` attribute that the sugar sets (`<string :title/>`, `:status="paid"` under `set`) is marked as written-as-atom in the IR, and `parseData` reports it as a `DataAttr` of kind `atom`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied, checked and completed by it, and `name="title"` is a type error where `name` is typed atom.
+**Atom-ness survives the name sugar** (addendum 1, item 2). The `name` attribute that the sugar sets (`<string :title/>`, `<:status="paid"/>` under `set`) is marked as written-as-atom in the IR. The `parseData` shape is one rule (addendum 1, item 10): **any attribute whose entire value is one atom is `DataAttr { kind: "atom", name, span }`**, which covers `mode=:strict` and the sugar-derived `name` alike; an atom nested anywhere in an expression (an array item, an object value, a call argument) stays a `StringLiteral` with `extra.mxAtom = { span }`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied, checked and completed by it, and `name="title"` is a type error where `name` is typed atom.
 
-An atom list (`accept=[:title, :body]`) arrives in `parseData` as a list whose items are such atom nodes, each with its own span.
+An atom list (`accept=[:title, :body]` is an expression, not a whole-value atom) arrives in `parseData` as a `DataExpr` whose array items are `StringLiteral` nodes with `extra.mxAtom`, each with its own span.
 
 ### 3. Lowering
 
@@ -87,40 +87,44 @@ Checking is **two phases** (addendum 1, item 4):
 A tag's contract declares a name with:
 
 ```text
-declares: { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>", uniqueWith?: ["<kind>", ...] }
+declares: Entry | Entry[]
+Entry = { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>", under?: "<parent tag>" | ["<parent tag>", ...], uniqueWith?: ["<kind>", ...] }
 ```
 
+`declares` is one entry or an array of entries (decision 156 addendum 1, item 10). Entries may differ in kind and scope.
+
+- `under` (optional) limits the entry to a tag whose **parent** is one of the named tags. An entry without `under` applies under any parent. When several entries match, the **most specific wins**: an entry whose `under` names the parent beats one without.
 - `kind` is a plain name. Any number of tags may declare the same kind (the ten type tags all declare `attribute`).
 - `from` is where the name comes from: the tag's `#id` sugar (`"id"`) or its `name`, including `:name` (`"name"`).
-- `scope` is the **nearest ancestor tag with that name** that the declaration belongs to; when it is omitted, the scope is the file's **root tag**. Mesh's `arguments` declare with `scope: "action"`, so an argument is visible only inside its action; attributes declare with the default and are visible across the whole entity.
+- `scope` is the **nearest ancestor tag with that name** that the declaration belongs to; when it is omitted, the scope is the file's **root tag**. A tag such as `string` declares an `argument` with `scope: "action"` when it sits under `arguments`, so the argument is visible only inside its action, and an `attribute` with the default scope when it sits under `attributes`, visible across the whole entity.
 - A reference resolves against every enclosing scope, **innermost first**; the first scope that declares the name decides. **No tag "opens a context"**: a scope is an ancestor tag a declaration names, and a contract never says it is a boundary.
 - `uniqueWith` (optional): a declaration also collides with a same-named declaration of the listed kinds in its scope, not just with its own kind.
 
-This refines the earlier wording "the enclosing tag's whole subtree" (decision 156 and the first draft of this ADR). A declaration in a sibling section is still in scope, because the default scope is the root tag and the root's whole subtree is searched. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
+This refines the earlier wording "the enclosing tag's whole subtree" (the lead's earlier ruling and the first draft of this ADR; decision 156 item 3 says only "declared in the context the contract defines"). A declaration in a sibling section is still in scope, because the default scope is the root tag and the root's whole subtree is searched. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
 
 **Derived declarations** (item 6). A name that no tag states, such as the `listId` a `belongs-to` derives, is added from the vocabulary's `analyze` hook with `ctx.declare(kind, name, { span, scope })`, in the declare phase. It is not a name transform in `declares`. `span` is where an error or go-to for that name should point (the tag that caused the derivation); `scope` has the same meaning and default as above.
 
-**Duplicates** (item 7). Two declarations of the same name and kind in one scope are a **core error**, positioned on the second and carrying both spans. This holds for declarations from `declares` and from `ctx.declare` alike.
+**Duplicates** (item 7). Two declarations of the same name and kind in one scope are a **core error**, a positioned error carrying both spans. This holds for declarations from `declares` and from `ctx.declare` alike.
 
 **Kinds merge across modules** (item 8). A kind is a plain name. Two contract modules (Mesh's core module and an extension's generated module) that declare the same kind name mean the same kind: their declarations and references share one namespace, and nothing collides between modules unless two declarations are the same name and kind in one scope (the duplicate rule).
 
 #### What a reference needs from the contract system
 
-Mesh (the first vocabulary to use references) listed what its contracts must express; the lead settled every item in decision 156 addendum 1.
+Mesh (the first vocabulary to use references) listed what its contracts must express; each item was settled in decision 156 addendum 1 or accepted as Mesh-side in its review (rows 4 and 10).
 
 The kinds Mesh refers to: an *attribute* (`accept`, `require`, `sort`, the left side of a `set` line), a *relationship* (`load`, which may also name a computed field), an *action* (`actions=[...]` on a policy and on `always`; `on:load`), an *argument* (`require`), and fixed sets (`auto` and `types`: `create`, `read`, `update`, `destroy`; `on` on a timestamp: `create`, `update`). The fixed sets are `{ type: "atom", values: [...] }`; the rest are `ref` kinds.
 
 | # | requirement | resolution |
 |---|---|---|
-| 1 | **Declare by tag set.** An attribute is declared by any of ten type tags (`uuid`, `string`, `integer`, ...) under `attributes`, and a `belongs-to` under `relationships` also declares an attribute (`listId`, derived, not written) | each tag's contract says `declares: { kind: "attribute", from: "name" }`. The derived `listId` comes from `ctx.declare` in `analyze` |
+| 1 | **Declare by tag set.** An attribute is declared by any of ten type tags (`uuid`, `string`, `integer`, ...) under `attributes`, and a `belongs-to` under `relationships` also declares an attribute (`listId`, derived, not written) | each tag's contract says `declares: { kind: "attribute", from: "name" }` (`string` adds a second entry, `under: "arguments"`, see the arguments example). The derived `listId` comes from `ctx.declare` in `analyze` |
 | 2 | **Declare by `id` or by `name`** | `declares.from` is `"id"` or `"name"` (the tag's `#id` sugar or its `name`, including `:name`) |
-| 3 | **Scope.** Declarations sit in a sibling section (`attributes` against `actions`), and `arguments` are visible only inside their action | `scope` names an ancestor tag, default the root; resolution is innermost first (see above) |
+| 3 | **Scope.** Declarations sit in a sibling section (`attributes` against `actions`), and `arguments` are visible only inside their action | `scope` names an ancestor tag, default the root; `under` picks the entry by parent tag; resolution is innermost first (see above) |
 | 4 | **Cross-entity references** (`belongs-to=Customer`) | out of scope for the single-file checker. A name that is not declared in scope is checked by the vocabulary's own build step (Mesh checks at model build). Core does not resolve across files |
 | 5 | **Union of kinds.** `load` is a relationship or a computed field; `sort` an attribute or a computed field; `require` an attribute or an argument | `ref` takes a list of kinds |
 | 6 | **Derived declarations from `analyze`** | `ctx.declare(kind, name, { span, scope })` |
 | 7 | **Extensions add kinds** (Mesh ADR-0037: extensions add tags and sections in one generated contracts module) | kinds merge by name across contract modules |
 | 8 | **Duplicate declarations** | a positioned core error with both spans; optional `uniqueWith` |
-| 9 | **`parseData` shape.** An atom list arrives as a list of atom nodes with their own spans | section 2: items are atom nodes (`extra.mxAtom` inside an expression, `DataAttr` kind `atom` for the name sugar) |
+| 9 | **`parseData` shape.** An atom list arrives as a list of atom nodes with their own spans | section 2: items are `StringLiteral` nodes with `extra.mxAtom`; a whole-value atom (`mode=:strict`, the name sugar) is `DataAttr` kind `atom` |
 | 10 | **A read action for `on:load`** | stays with Mesh's `analyze`. A contract names a kind, not a property of the declaration (read against write); a kind per property (`read-action`) is the contract-only answer if Mesh wants it |
 
 ### 5. The name sugar, restated
@@ -203,7 +207,7 @@ With atoms:
 
 ### Mesh's worked examples
 
-**A `set` line** (shown as text: the tree-sitter grammar does not yet parse the addendum-4 form `:name=value`). Under `set`, `:status="paid"` is the name sugar on the default tag, so it sets `name="status"` with the value `"paid"`. That `name` is a reference to an attribute: the contract types it `{ type: "atom", ref: "attribute" }`, the sugar form satisfies it, `parseData` reports it as a `DataAttr` of kind `atom`, and `:statuss="paid"` is an error with a suggestion.
+**A `set` line** (shown as text: the tree-sitter grammar does not yet parse the addendum-4 form `:name=value`). Inside `<set>`, each line is the default tag with the name sugar: `<:status="paid"/>` sets `name="status"` and `value="paid"` on the default tag (decision 146 addendum 4), not on `set` itself. That `name` is a reference to an attribute: the contract types it `{ type: "atom", ref: "attribute" }`, the sugar form satisfies it, `parseData` reports it as a `DataAttr` of kind `atom`, and `<:statuss="paid"/>` is an error with a suggestion.
 
 ```text
 <entity :invoice>
@@ -212,7 +216,9 @@ With atoms:
   </attributes>
   <actions>
     <update :pay>
-      <set :status="paid"/>
+      <set>
+        <:status="paid"/>
+      </set>
     </update>
   </actions>
 </entity>
@@ -228,7 +234,16 @@ load: { type: "atom", ref: ["relationship", "computed"] }
 
 so `load=[:items, :total]` is checked against both kinds, and a name declared as neither is an error. `sort` (attribute or computed) and `require` (attribute or argument) are the same shape.
 
-**Arguments scoped to an action.** `arguments` declare with `scope: "action"`:
+**Arguments scoped to an action.** `string` declares two things by its parent (addendum 1, item 10):
+
+```text
+string: { declares: [
+  { kind: "attribute", from: "name", under: "attributes" },
+  { kind: "argument",  from: "name", under: "arguments", scope: "action" },
+] }
+```
+
+so `string :title` under `attributes` is an attribute visible across the entity, and `string :newTitle` under `arguments` is an argument visible only in its action:
 
 ```mx
 <entity :invoice>
@@ -277,7 +292,7 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 2. Its `read()` hands Babel a **same-length numeric stand-in** for each atom (`:a` is `0.`, `:rename-all` is `0.000000000`).
 3. Core turns each stand-in back into a `StringLiteral` with `extra.mxAtom = { span }` (the public node shape of section 2), after checking that the source character at the node's start is `:` (no authored numeric literal starts with `:`, so the check cannot be forged), and keeps the node's `loc` as the atom span.
 
-**Why a number.** Babel cannot be given a string literal of the same length (`:a` is 2 characters, `"a"` is 3), and a longer literal shifts every later position in that expression by one per atom. A numeric literal of the same length keeps every offset exact, and it cannot be assigned to, bound, or used as a shorthand key, so misuse (`:a = 1`, `(:a) => 1`, `{:a}`, `o.:a`) is a Babel error at the atom. An identifier stand-in would be accepted as a binding and bind a phantom name.
+**Why a number.** Babel cannot be given a string literal of the same length (`:a` is 2 characters, `"a"` is 3), and a longer literal shifts every later position in that expression by one per atom. A numeric literal of the same length keeps every offset exact, and it cannot be assigned to, bound, or used as a shorthand property, so that misuse (`:a = 1`, `(:a) => 1`, `{:a}`, `o.:a`) is a Babel error at the atom. Other misuse is valid JavaScript on a number (`:a.length`, `:a(1)`, `-:a`, and `{:a: 1}`, which is the numeric key `0.`), so Babel does not reject it and **core** does, from the atom mark. An identifier stand-in would be accepted as a binding and bind a phantom name.
 
 | option | what | why not |
 |---|---|---|
@@ -292,7 +307,7 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 
 **`x= :b` is the atom, `x="b"`**, the same as `x=:b` and `x = :b`. Measured: htmljs-parser, stock and patched, runs `consumeWhitespace()` after `=` before it enters the value, so Marko already reads `x= y` as `x=y`; `<t x= :b/>`, `<t x = :b/>` and concise `t x= :b` all give the value `:b`, and under (b′) `<div x= :b/>` gives `x="b"`. The 146 sugar needs a *finished* value before it (`x=a :b` is value `a` plus `name="b"`); reading `x= :b` as sugar would leave `x=` without a value, which no Marko spelling means.
 
-**Misuse errors.** `[:a :b]` ("Did not expect a type annotation here", as `[a :b]` today), `:a = 1`, `(:a) => 1`, `{:a}`, `o.:a` and `:1` are positioned errors at the atom or its neighbour; core rewrites the wording where it can. Delivery lands as the same change in two places (decision 158): the root htmljs-parser patch, so MX 1 consumers get atoms through `@marko/compiler` now, and `packages/parser/src/template/`, the copy-in kept for the MX 2 front end; no GitHub fork; a stock parser gives a positioned "atoms need the MX parser" error, detected by a probe in the style of `installedParserSplits`.
+**Misuse errors.** `[:a :b]` ("Did not expect a type annotation here", as `[a :b]` today), `:a = 1`, `(:a) => 1`, `{:a}`, `o.:a` and `:1` are positioned Babel errors at the atom or its neighbour (core rewrites the wording where it can); `:a.length`, `:a(1)`, `-:a` and `{:a: 1}` are positioned core errors, since Babel accepts them. Delivery lands as the same change in two places (decision 158): the root htmljs-parser patch, so atoms work wherever the patched parser is installed (this repo and link checkouts), and `packages/parser/src/template/`, the copy-in kept for the MX 2 front end; no GitHub fork; published consumers get stock htmljs-parser through `@marko/compiler`, so they (and any stock parser) get a positioned "atoms need the MX parser" error, detected by a probe in the style of `installedParserSplits`, until the MX AST replaces `@marko/compiler` (decisions 151 §1, 158 §2).
 
 ## Open questions and settled points
 
@@ -302,7 +317,7 @@ Settled by the lead on 2026-10-05 alongside the parser research; option (b′) i
 
 - **Stand-in leak.** Accepted: core is the only supported driver of MX's parser, and core asserts that no stand-in survives its conversion.
 - **Operations on an atom.** Member access, calls and unary operators on an atom (`:a.length`, `:a(1)`, `-:a`) are positioned errors (see "Operations on an atom" in Grammar). Comparison, array and object elements, template placeholders and function arguments are allowed.
-- **Sequencing.** Phase B PR 1 opens after squad-targets' copy-in of htmljs-parser merges and carries the parser change twice, identically (decision 158): in the root htmljs-parser patch, which `@marko/compiler` (still the npm dependency) uses so MX 1 consumers get atoms now, and in `packages/parser/src/template/` for the MX 2 front end, until the front end switches to MX's own AST in `@mxlang/babel`. Core's stand-in conversion is the same for both. No GitHub fork.
+- **Sequencing.** Phase B PR 1 opens after squad-targets' copy-in of htmljs-parser merges and carries the parser change twice, identically (decision 158): in the root htmljs-parser patch, which `@marko/compiler` (still the npm dependency) uses in this repo and link checkouts (published consumers get the positioned "atoms need the MX parser" error until the MX AST lands, decision 158 §2), and in `packages/parser/src/template/` for the MX 2 front end, until the front end switches to MX's own AST in `@mxlang/babel`. Core's stand-in conversion is the same for both. No GitHub fork.
 
 Settled by the lead on 2026-10-05 in decision 156 addendum 1, on Mesh's review (all nine items accepted):
 
@@ -315,7 +330,7 @@ Settled by the lead on 2026-10-05 in decision 156 addendum 1, on Mesh's review (
 - **Duplicates** are a positioned core error with both spans; `uniqueWith` is optional.
 - **Kinds merge** across modules. This replaces the earlier open question 2(b).
 - **Atom against `string`** is a type error, both ways. This replaces the earlier open question on string contracts.
-- **`parseData` shape.** An atom is a `DataAttr` of kind `atom` (name sugar) or an atom node with `extra.mxAtom` (inside an expression), each with its own span.
+- **`parseData` shape** (addendum 1, item 10). An attribute whose entire value is one atom, the sugar-derived `name` included, is a `DataAttr` of kind `atom`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom`; each carries its own span.
 
 Still open:
 
