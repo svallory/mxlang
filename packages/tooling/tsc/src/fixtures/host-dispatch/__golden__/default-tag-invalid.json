@@ -87,14 +87,7 @@
             }
           }
         ],
-        "compileDiagnostics": [
-          {
-            "fileName": "<root>/default-tag-invalid/page.mx",
-            "offset": 0,
-            "category": "error",
-            "message": "target not loaded: see <root>/default-tag-invalid/package.json(5,21)"
-          }
-        ],
+        "compileDiagnostics": [],
         "hostPolicyDiagnostics": [
           {
             "code": "invalid-default-tag",
@@ -125,7 +118,6 @@
     }
   },
   "mxTsc": [
-    "<root>/default-tag-invalid/page.mx(1,1): error TS80001: target not loaded: see <root>/default-tag-invalid/package.json(5,21)",
     "<root>/default-tag-invalid/package.json(5,21): error TS80003: invalid `defaultTag` value: `<input>` is a void tag, not a plain tag"
   ]
 }

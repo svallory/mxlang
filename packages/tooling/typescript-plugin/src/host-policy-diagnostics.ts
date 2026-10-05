@@ -78,7 +78,15 @@ export function createTargetPolicyRecorder(): TargetPolicyRecorder {
           : [[fileName, byFile.get(fileName) ?? []] as const];
       return entries.flatMap(([name, diagnostics]) =>
         diagnostics
-          .filter((diagnostic) => diagnostic.severity === "error")
+          // An invalid `defaultTag` does not stop the target loading and the
+          // page still compiles with the next rung: the `package.json`
+          // diagnostic carries the error, and a per-file pointer saying
+          // "target not loaded" would be false (once per file).
+          .filter(
+            (diagnostic) =>
+              diagnostic.severity === "error" &&
+              diagnostic.code !== "invalid-default-tag",
+          )
           .map((diagnostic) => ({
             fileName: name,
             source: sources.get(name) ?? "",
