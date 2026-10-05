@@ -39,6 +39,22 @@ describe("addPageExtension guard", () => {
     expect(extensions).not.toContain(".astro.mx");
   });
 
+  it("registers the resolver that finds @mxlang/html for compiled modules", () => {
+    let config: { vite?: { plugins?: Array<{ name: string }> } } = {};
+    mxAstro().hooks["astro:config:setup"]!({
+      config: { srcDir: new URL("file:///src/") },
+      addRenderer: () => {},
+      addPageExtension: () => {},
+      updateConfig: (c) => {
+        config = c as typeof config;
+      },
+    });
+
+    expect(config.vite?.plugins?.map((p) => p.name)).toContain(
+      "mx-astro-html-resolve",
+    );
+  });
+
   it("errors on every .astro.mx file under the pages directory, and still accepts .mx pages", () => {
     const root = mkdtempSync(join(tmpdir(), "mx-astro-integration-pages-"));
     try {

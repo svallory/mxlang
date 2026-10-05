@@ -59,6 +59,20 @@ describe("mxHtmlResolve", () => {
     );
   });
 
+  it("defers (null) instead of throwing when the package cannot resolve the id", () => {
+    expect(
+      resolveIn()("@mxlang/html/not-exported", "/p/src/a.mx.tsx"),
+    ).toBeNull();
+  });
+
+  it.each([
+    ["an .astro.mx importer", "@mxlang/html", "/p/src/a.astro.mx", true],
+  ])("answers %s", (_name, id, importer) => {
+    expect(resolveIn()(id, importer)).toMatch(
+      /targets\/html\/dist\/index\.js$/,
+    );
+  });
+
   it.each([
     ["a plain .ts importer", "@mxlang/html", "/p/src/a.ts"],
     ["a .astro importer", "@mxlang/html", "/p/src/a.astro"],

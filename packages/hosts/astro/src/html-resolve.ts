@@ -10,10 +10,19 @@
  * so the integration answers for the package itself: `@mxlang/html` is one of
  * `@mxlang/astro`'s own `dependencies`.
  *
- * Only importers that are compiled MX modules (`x.mx`, `x.mx.ts`, `x.mx.tsx`)
- * are answered, and only for `@mxlang/html` and its subpaths such as
- * `@mxlang/html/runtime`; a project's own import of the package resolves as it
- * did before.
+ * Only importers whose id ends in `.mx`, `.mx.ts` or `.mx.tsx` (an optional
+ * `?query` aside) are answered. That includes `.astro.mx`, `.solid.mx` and
+ * `.ng.mx`, wherever they live; none of the others imports the specifier.
+ * Only `@mxlang/html` and its subpaths such as `@mxlang/html/runtime` are
+ * answered. A compiled `.mx` module therefore always gets *this* package's
+ * copy, even when the project has its own: the compiled modules and their
+ * runtime then agree, and the sink API (`Out`, `createOut`, `escape`) is
+ * structural, so a project importing the package itself alongside is
+ * unaffected. Any other importer resolves the package as it did before.
+ *
+ * This is the bundler half only. TypeScript (`mx-tsc`, the language server)
+ * resolves the same specifier from the project's own tree and does not use
+ * this resolver (TODO `astro-isolated-install-ts-resolution`).
  */
 
 import { createRequire } from "node:module";
@@ -31,7 +40,14 @@ export function mxHtmlResolve(): Plugin {
     resolveId(id: string, importer: string | undefined) {
       if (!importer || !MX_IMPORTER_RE.test(importer)) return null;
       if (!HTML_SPECIFIER_RE.test(id)) return null;
-      return require.resolve(id);
+      try {
+        return require.resolve(id);
+      } catch {
+        // Not resolvable from here (a subpath the package does not export, a
+        // broken install): defer to Vite's own resolution instead of failing
+        // the build with a stack.
+        return null;
+      }
     },
   };
 }
