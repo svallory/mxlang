@@ -1211,7 +1211,6 @@ export function validateCustomTagChildren(
 /** Offset to line and column in the file being compiled. */
 type Locate = (offset: number) => { line: number; column: number };
 
-/** Where a value error points: at a whole-value atom when the offset can be located, else the attribute. */
 /** Where an attribute's value starts: the string, the expression or the atom; the attribute when it has none. */
 function valueLoc(attr: Attr, locate?: Locate): Position {
   if (!locate || attr.kind === "spread") return attr.loc;
@@ -1224,6 +1223,7 @@ function valueLoc(attr: Attr, locate?: Locate): Position {
   return offset === undefined ? attr.loc : { ...attr.loc, ...locate(offset) };
 }
 
+/** Where a value error points: at a whole-value atom when the offset can be located, else the attribute. */
 function valueAt(attr: Attr, locate?: Locate): Position {
   if (attr.kind === "static" && attr.atom && locate) {
     return { ...attr.loc, ...locate(attr.atom.span.sourceStart) };

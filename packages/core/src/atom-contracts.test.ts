@@ -163,8 +163,18 @@ describe("open atom, values and pattern", () => {
       at(source, ":ab-c"),
     );
     expect(() => compile("<box both=:a1/>", tags)).not.toThrow();
-    expect(() => compile("<box both=:c3/>", tags)).toThrow(/values|one of/);
-    expect(() => compile("<box both=:b9/>", tags)).toThrow(/values|one of|b9/);
+    // `values` and `pattern` together: a name must pass both; `:b9` matches
+    // the pattern but is not one of the values.
+    for (const [bad, name] of [
+      ["<box both=:c3/>", ":c3"],
+      ["<box both=:b9/>", ":b9"],
+    ] as const) {
+      const error = fails(bad, tags);
+      expect(error.message).toContain(
+        `\`<box>\`: attribute \`both\`: \`${name}\` is not one of :a1, :b2`,
+      );
+      expect({ line: error.line, column: error.column }).toEqual(at(bad, name));
+    }
   });
 
   it("checks every atom of a list at its own position", () => {
