@@ -15,6 +15,16 @@ After whitespace inside an attribute value, `:name` and `.name` start a new attr
 
 The patch edits both published builds (`dist/index.js`, `dist/index.mjs`). Tests: `patches/htmljs-parser.test.ts` (vitest project `patches`). It also changes how stock Marko in `packages/oracle` parses the same input.
 
-To regenerate on a version bump (or change the rule): `git rm` the old patch, `bun install`, `bun patch htmljs-parser@<version>`, re-apply the edits to both dist files (`patch -p1 < <old patch>` inside the folder, then fix rejects), `bun patch --commit 'node_modules/htmljs-parser'`, and run `bunx vitest run --project patches`. The edits: an `attrValue` flag set where an attribute value expression is entered; `lookAheadForOperator` ends the value at ` :ident` (no open `?`) and ` .ident`; `?` handling skips `??` and `?.` so they do not count as ternaries.
+To regenerate on a version bump (or to change the rule), in this order (`bun install` aborts while `patchedDependencies` points at a missing file):
+
+1. `TMP=$(mktemp -d) && git show HEAD:patches/htmljs-parser@<old>.patch > "$TMP/old.patch"`
+2. Delete the `patchedDependencies` entry from the root `package.json` (don't bump it) and `git rm` the old patch file.
+3. Bump the version, then `bun install`.
+4. `bun patch htmljs-parser@<new>`, then inside the printed folder `patch -p1 < "$TMP/old.patch"` (fix rejects by hand; it edits both dist files).
+5. `bun patch --commit 'node_modules/htmljs-parser'` (re-adds the entry), then `bunx vitest run --project patches`.
+
+The edits: an `attrValue` flag set where an attribute value expression is entered; `?` handling skips `??` and `?.` so they do not count as ternaries; `lookAheadForOperator` ends the value at ` :ident` (no open `?`) and ` .ident`; a small `isIdentStartCode` helper.
+
+Known changes to valid input: the `.` half changes `x=a.b .c` and html-mode multi-line chains (`x=foo\n  .bar()`), including default attributes (`<if=a .b>`, `<const/x=items\n  .filter()/>`). The `:` half changes one valid TS spelling, a return type written `(a) :T => a` (space before the colon, none after); `(a): T` and `(a) : T` are unchanged.
 
 Published `@mxlang/*` packages do not carry this patch; a consumer install resolves stock `htmljs-parser`.

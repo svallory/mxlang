@@ -21,11 +21,26 @@ type Parser = typeof esm;
 
 const cjs = createRequire(import.meta.url)("htmljs-parser") as Parser;
 
-function render(mod: Parser, code: string): string {
+// What Marko and `close-tag-opener.ts` return from `onOpenTagName`.
+const STATEMENT_TAGS = new Set([
+  "static",
+  "import",
+  "export",
+  "server",
+  "client",
+]);
+
+function render(mod: Parser, code: string, statements = false): string {
   const out: string[] = [];
   const parser = mod.createParser({
     onError: (e) => out.push(`ERR(${e.message.slice(0, 70)})`),
-    onOpenTagName: (t) => out.push(`<${parser.read(t)}>`),
+    onOpenTagName: (t) => {
+      const name = parser.read(t);
+      out.push(`<${name}>`);
+      if (statements && STATEMENT_TAGS.has(name)) return mod.TagType.statement;
+    },
+    onAttrArgs: (t) =>
+      out.push(`aargs:${JSON.stringify(parser.read(t.value))}`),
     onTagShorthandId: (t) => out.push(`#${parser.read(t)}`),
     onTagShorthandClass: (t) => out.push(`.${parser.read(t)}`),
     onTagVar: (t) => out.push(`var:${JSON.stringify(parser.read(t.value))}`),
@@ -96,6 +111,32 @@ const CHANGED: [string, string][] = [
   ["<a x=a ? b : c .d/>", '<a> @x ="a ? b : c" @.d'],
   ["<a ...x .b/>", '<a> ..."x" @.b'],
   ["<a x=foo\n  .bar/>", '<a> @x ="foo" @.bar'],
+  // A ternary inside a group / template expression / comment holds no depth.
+  ["<a x=(a ? b : c) :d/>", '<a> @x ="(a ? b : c)" @:d'],
+  ["<a x=[a ? b : c] :d/>", '<a> @x ="[a ? b : c]" @:d'],
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: the input is MX source, not a JS template
+  ["<a x=`${a ? b : c}` :d/>", '<a> @x ="`${a ? b : c}`" @:d'],
+  ["<a x=a /* ? */ :d/>", '<a> @x ="a /* ? */" @:d'],
+  ["<a x=a ? b : (c) :d/>", '<a> @x ="a ? b : (c)" @:d'],
+  // `?.(`, `??=`, `?.` / `??` inside a ternary arm.
+  ["<a x=a?.() :d/>", '<a> @x ="a?.()" @:d'],
+  ["<a x=a ?.() :d/>", '<a> @x ="a ?.()" @:d'],
+  ["<a x=a ??= b :d/>", '<a> @x ="a ??= b" @:d'],
+  ["<a x=a ? b?.c : d :e/>", '<a> @x ="a ? b?.c : d" @:e'],
+  ["<a x=a ? b??c : d :e/>", '<a> @x ="a ? b??c : d" @:e'],
+  // TS operators.
+  ["<a x=a satisfies T :d/>", '<a> @x ="a satisfies T" @:d'],
+  ["<a x=[1] as const :d/>", '<a> @x ="[1] as const" @:d'],
+  // CRLF is whitespace too.
+  ["<a x=a\r\n :b/>", '<a> @x ="a" @:b'],
+  ["<a x=a\r\n .b/>", '<a> @x ="a" @.b'],
+  // A valid TS return type with a space before `:` and none after splits
+  // (same token shape as `x=(a) :email`). `(a) : T` and `(a): T` do not.
+  ["<a x=(a) :T => a/>", '<a> @x ="(a)" @:T ERR(Missing value for attribute)'],
+  [
+    "<a x=function (a) :T { return a }/>",
+    '<a> @x ="function (a)" @:T @{ return a }',
+  ],
   // Concise mode.
   ["input x=a.b .c", '<input> @x ="a.b" @.c'],
   ["input x=1 ? y : z :b", '<input> @x ="1 ? y : z" @:b'],
@@ -104,7 +145,6 @@ const CHANGED: [string, string][] = [
   ["input x=1 .b -- text", '<input> @x ="1" @.b'],
   ["input x={a: 1} .b", '<input> @x ="{a: 1}" @.b'],
   ["input x=a ? b : c .d", '<input> @x ="a ? b : c" @.d'],
-  ["input x=1 #b .c :d", '<input> @x ="1" @#b @.c @:d'],
   ["input [x=1 .b y=2 :c]", '<input> @x ="1" @.b @y ="2" @:c'],
   ['input x="1" :b=2', '<input> @x ="\\"1\\"" @:b ="2"'],
   ["div.a x=1 :b", '<div> ..a @x ="1" @:b'],
@@ -175,3 +215,63 @@ describe.each(builds)("htmljs-parser patch (%s)", (_name, mod) => {
     expect(render(mod, input)).toBe(expected);
   });
 });
+
+describe.each(builds)("statement tags (%s)", (_name, mod) => {
+  // Statement tags keep their text when the host returns `TagType.statement`.
+  it.each([
+    "static const x = a .b",
+    "static const x = a ?? b :c",
+    "static const x = a ? b : c :d",
+    'import x from "a" .b',
+    "export const x = a .b",
+    "server const x = a .b",
+    "client const x = a .b",
+  ])("no attributes are parsed: %j", (input) => {
+    const name = input.split(" ")[0];
+    expect(render(mod, input, true)).toBe(`<${name}>`);
+  });
+
+  // Without it the line is an ordinary tag and the rule applies.
+  it("a non-statement host sees attributes", () => {
+    expect(render(mod, "static const x = a .b")).toBe(
+      '<static> @const @x ="a" @.b',
+    );
+  });
+});
+
+// Default-attribute values (`<if=…>`, `<const/x=…>`, `<let/x=…>`, `<a/x=…>`)
+// go through the same ATTRIBUTE branch, so the rule applies to them. This pins
+// that behaviour; whether to exempt them is the lead's ruling (review finding
+// 2). To exempt, set RULING to "stock" here AND exempt the default attribute
+// in the patch (a one-line change in the test, a flag check in the patch).
+const RULING: "patched" | "stock" = "patched";
+const DEFAULT_ATTRIBUTE: [string, string, string][] = [
+  // [input, patched (today), stock]
+  ["<if=a .b>x</if>", '<if> @ ="a" @.b', '<if> @ ="a .b"'],
+  ["<if=a ?? b :c>x</if>", '<if> @ ="a ?? b" @:c', '<if> @ ="a ?? b :c"'],
+  [
+    "<if=foo\n  .bar()>x</if>",
+    '<if> @ ="foo" @.bar aargs:""',
+    '<if> @ ="foo\n  .bar()"',
+  ],
+  [
+    "<const/x=items\n  .filter(Boolean)/>",
+    '<const> var:"x" @ ="items" @.filter aargs:"Boolean"',
+    '<const> var:"x" @ ="items\n  .filter(Boolean)"',
+  ],
+  ["<let/x=a .b/>", '<let> var:"x" @ ="a" @.b', '<let> var:"x" @ ="a .b"'],
+  [
+    "<a/x=a ?? b :c/>",
+    '<a> var:"x" @ ="a ?? b" @:c',
+    '<a> var:"x" @ ="a ?? b :c"',
+  ],
+];
+
+describe.each(builds)(
+  "default attribute (pending lead ruling) (%s)",
+  (_name, mod) => {
+    it.each(DEFAULT_ATTRIBUTE)("%j", (input, patched, stock) => {
+      expect(render(mod, input)).toBe(RULING === "patched" ? patched : stock);
+    });
+  },
+);
