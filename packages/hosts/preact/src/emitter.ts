@@ -1482,8 +1482,8 @@ export class PreactEmitter implements Emitter<string> {
       node.name,
       node.children.length > 0,
     );
-    if (content && this.#dialect.textareaContent === "defaultValue") {
-      attrs = concatMapped(attrs, " defaultValue={", content, "}");
+    if (content && this.#dialect.textareaContent === "value") {
+      attrs = concatMapped(attrs, " value={", content, "}");
     }
     const rawHtml = raw
       ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`

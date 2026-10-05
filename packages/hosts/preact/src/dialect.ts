@@ -41,10 +41,11 @@ export interface JsxDialect {
   /**
    * How a native `<textarea>`'s content (Marko renders `value` as content) is
    * handed to the renderer. `"children"` (Preact, Hono) passes a text child;
-   * `"defaultValue"` (React) passes the `defaultValue` prop, which react-dom
-   * renders as content on the server and treats as uncontrolled on the client.
+   * `"value"` (React) passes the controlled `value` prop, which react-dom
+   * renders as content on the server and keeps in sync on a client update
+   * (`defaultValue` is write-once, so a client update would change nothing).
    */
-  textareaContent: "children" | "defaultValue";
+  textareaContent: "children" | "value";
   /**
    * When the doubled leading newline Marko writes (the HTML parser drops a
    * textarea's first one) must be added: `"ssr"` only where no `document`

@@ -156,9 +156,7 @@ export function jsxTextareaContentExpression(
  * `value` is dropped (Marko: a body wins over a spread). Needs
  * `__mxTextareaContent` hoisted first.
  */
-export function jsxTextareaPropsExpression(
-  prop: "children" | "defaultValue",
-): string {
+export function jsxTextareaPropsExpression(prop: "children" | "value"): string {
   return `(<T extends object | null | undefined,>(attrs: T, body = false): T => {
   const { value, ...rest } = { ...attrs } as Record<string, unknown>;
   if (!body) rest[${JSON.stringify(prop)}] = __mxTextareaContent(value);
