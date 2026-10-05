@@ -777,6 +777,57 @@ is not detected. Tag-adjacent and first-position sugars work everywhere.
 Divergences from Marko: four rows in `divergences.md` (a `:` in a tag name, bare
 `:x` as `name`, the parser's after-value rule, a `:` in a shorthand class or id).
 
+### Atoms: `:name` as a value
+
+**Decision 156 and its addendum 1; [ADR 156](/design-notes/adr-atoms/).** In an
+expression position `:name` is an **atom**: a value that represents itself.
+Its runtime value is the name as a string literal on every target, so
+`mode=:strict` is `mode="strict"` and `accept=[:title, :body]` is
+`accept=["title", "body"]`. TypeScript literal typing checks and completes it.
+At runtime `:a === "a"`: the distinction lives in the source, the IR and
+contracts, and ends at lowering.
+
+| Position | Example |
+|---|---|
+| attribute value | `mode=:strict`, `x= :b`, `x = :b` (all `"b"`-valued atoms) |
+| placeholder | `${:strict}` |
+| tag and attribute arguments, default values | `<if=kind === :primary>`, `<const/x=:a/>` |
+| inside any expression | `[:a, :b]`, `{ k: :a }`, `f(:a)`, `x === :a`, `` `${:a}` ``, `() => :a`, `{[:a]: 1}` |
+
+A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*` (`:rename-all`; a trailing `-` is not
+part of it). A `:` starts an atom only where an expression is expected, so
+`a ? b :c` stays a ternary and `(x :number) => x` a type annotation; an atom's
+own `:` is never the ternary's, so `a ? :b :c` is `a ? "b" : c`. Atoms are never
+read in `static`/`import`/`export` blocks, scriptlets, method bodies, tag
+params, strings, template text, regular expressions or comments.
+
+**The name sugar is an atom standing alone in attribute position**: `:email`
+sets `name="email"` (above), and that `name` keeps its atom-ness in the IR and in
+`parseData` (addendum 1, item 2). `x=:a :b` is the atom value `x="a"` plus
+`name="b"`.
+
+**Errors core owns**, each positioned at the atom: member access (`:a.length`,
+`:a[0]`), a call (`:a(1)`), a unary operator (`-:a`, `!:a`, `typeof :a`),
+spreading (`f(...:a)`, `[...:a]`) and a non-computed object key (`{:a: 1}`;
+write `{[:a]: 1}`). An atom where a binding, an assignment target or a
+shorthand property must stand (`:a = 1`, `(:a) => 1`, `{:a}`) is a positioned
+parse error naming the atom. `::name` is reserved for a future `Symbol.for`
+sugar (decision 156.5): "`::a` is reserved (decision 156)…", positioned at the
+`::`. A published package resolving a stock htmljs-parser reports "`:a` is an
+atom (decision 156), and atoms need the MX parser" at the atom (decisions 151 §1
+and 158 §2).
+
+**IR and data.** An attribute whose whole value is one atom is a `static`
+attribute carrying `atom: { kind: "atom", name, span }`; in `parseData` it is
+`DataAttr { kind: "atom", name, value, nameSpan?, span }`, the sugar `name`
+included. An atom nested in an expression is a `StringLiteral` whose
+`extra.mxAtom` is `{ span }` and whose `Expr.atoms` lists it (see
+[the IR spec](/architecture/ir-spec/)).
+
+**Not yet:** an atom default value followed by `:name` (`belongs-to=:Customer
+:customer`) is the decision-151 "right after a default value" error; contracts
+over atoms (`{ type: "atom" }`, `ref`, `declares`) are Phase B PR 2.
+
 ### The unnamed tag
 
 **Decision 145; [ADR 145](/design-notes/adr-default-tag/).** A tag with a

@@ -132,6 +132,13 @@ interface Expr {
   node: Node;
   span?: SourceSpan;
   file?: string;
+  atoms?: Atom[];
+}
+
+interface Atom {
+  kind: "atom";
+  name: string;
+  span: SourceSpan; // the whole atom, `:` included
 }
 ```
 
@@ -142,11 +149,12 @@ interface Expr {
 | `node` | The parser's (Babel) expression node, with `loc.start`/`loc.end` as `{ line, column, index? }`. `null` on a synthesized `Expr` (section 2.2). Decision 79 is that emitters read `code` and `shape`, but three consumers still read `node` today, so a new lowering **must** supply it, positioned, for every authored expression: `@mxlang/typescript-plugin` maps an expression only when `source.slice(node.loc) === code` (`mx-language.ts`; `index.test.ts` › "builds exact expression mappings from positioned HTML IR"); `@mxlang/angular`'s tag module rewrites `node` and reassigns `code`; the Preact and Solid emitters read a `by=` string key's `node.value`. `Expr.span` carries the same range and is the field a new consumer should use. |
 | `span` | Section 3.3. Absent exactly when the expression has no authored source. Distinct sibling expressions get distinct spans (`lower.test.ts` › "Expr.span" › "sibling-sharing case: four byte-identical exprs get four distinct spans"). |
 | `file` | Reserved. Nothing in `packages/core` sets it today; a tag unit compiles under its own `Ctx`, so its spans are already absolute in its own file. |
+| `atoms` | Decision 156: the atoms (`:name`) written inside the expression, in source order; absent when there are none. `code` holds each one as its string literal (`[:a]` is `["a"]`): core splices `JSON.stringify(name)` at each atom's span on both `expr()` paths (`atoms.test.ts`). In `node`, each atom is a `StringLiteral` whose `value` is the name and whose `extra.mxAtom` is `{ span }` (`MxAtomMark`). That node shape is **public API** of `@mxlang/core` and `@mxlang/data` (addendum 1, item 1): a consumer translating an expression recognises an atom by `extra.mxAtom`. `mappedExpr` maps each atom to its literal and the text between one to one, so a type error on a nested atom lands on it. |
 
 What an emitter may assume:
 
 - `code` is a complete JavaScript/TypeScript expression and may be emitted verbatim inside parentheses.
-- The only rewriting core performs on `code` is the binding-registry rewrite above, which is a host's own request. Core does not rename, hygienize or reformat expressions. Name sugar (decision 146) rewrites the **tree** before lowering and never touches an expression's text.
+- The only rewritings core performs on `code` are the binding-registry rewrite above, which is a host's own request, and the atom splice (`:a` is `"a"`, decision 156). Core does not rename, hygienize or reformat expressions. Name sugar (decision 146) rewrites the **tree** before lowering and never touches an expression's text.
 - Hosts may rewrite `code` further when emitting; the lowering does not. Section 10.3 lists who does.
 - Consumers recognize an `Expr` structurally — an object with a string `code` and a `shape` (`rewrite-codes.ts`) or a `node` (`mx-language.ts`, Angular's `tag-module.ts`). The statement kinds also carry `code`; they must never carry `shape` or `node`.
 
@@ -291,7 +299,7 @@ Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name,
 
 | Kind | Fields | Produced for |
 | --- | --- | --- |
-| `static` | `value: string`, `valueSpan?` | A string-literal value. Also `<div :foo/>` (Marko's `value:foo`), with `value: ""`. |
+| `static` | `value: string`, `valueSpan?`, `atom?: Atom` | A string-literal value. Also `<div :foo/>` (Marko's `value:foo`), with `value: ""`. `atom` is set when the whole value is one atom (`mode=:strict`) and on the `name` the `:name` sugar sets (decision 156 addendum 1, item 2); `value` is then the atom's name, which every target emits, and `valueSpan` is the atom's span. |
 | `boolean` | — | A bare attribute (`disabled`), HTML's `true`. |
 | `dynamic` | `value: Expr` | Any other expression value; also a host-resolved modifier (`resolveModifier` returns the name) and every `on*` off a native element. |
 | `bound` | `value: Expr` | `name:=expr`. `name` is the base name (Marko uses the modifier as a value conversion). A host with no update path emits the initial value. |
