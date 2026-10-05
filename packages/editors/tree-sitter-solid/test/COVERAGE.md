@@ -35,7 +35,7 @@ constructs remain current**; the corpus does not have a dedicated case per
 numbered entry (many entries share one corpus case), so "N/M covered" is not
 tracked as a literal count — the differential test (Z25, `scripts/
 differential.ts`) is the stronger guarantee: every fixture's tree-sitter
-`mx_element` ranges are asserted byte-identical to `@mxlang/parser`'s own
+`mx_element` ranges are asserted byte-identical to `@mxlang/tsx-bridge`'s own
 region walk, not just "parses without ERROR/MISSING."
 -->
 

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { $ } from "bun";
-import { collectMxRegions } from "../../../parser/src/index.ts";
+import { collectMxRegions } from "../../../tsx-bridge/src/index.ts";
 
 // Emulate the find command used in parse-all.sh
 const HERE = import.meta.dir;

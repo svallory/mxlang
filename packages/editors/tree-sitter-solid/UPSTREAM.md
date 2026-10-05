@@ -233,7 +233,7 @@ token, so a construct's test pins **that the scanner finds the right region end*
 — not that the construct is semantically valid. The legacy namespaces
 (`on:`/`oncapture:`/`attr:`/`bool:`/`use:`, checklist 20-24), `fallback=<Spin/>`
 (32, 68) and `<for step=>` (46) are all specified as *parse errors*, but they are
-errors raised by `@mxlang/parser` during lowering, not by this grammar:
+errors raised by `@mxlang/tsx-bridge` during lowering, not by this grammar:
 `test/corpus/legacy-namespaces.txt` pins that each still scans as a
 well-formed `mx_element` so the editor highlights the line instead of collapsing
 the rest of the file into an error node. Diagnosing them is the parser's job.
@@ -320,7 +320,7 @@ and `</>` are their own tokens, `mx_fragment_open`/`mx_fragment_close`
 (`common/define-grammar.js`'s new `mx_fragment` rule; scanned in
 `src/scanner_mx.c`'s `mx_scan_at_lt`), and each child `<tag>...</tag>` is
 independently scanned as its own ordinary `mx_element` — matching
-`collectMxRegions` (`packages/parser/src/babel/plugins/jsx/index.ts`
+`collectMxRegions` (`packages/babel/src/plugins/jsx/index.ts`
 `jsxParseElementAt`: `<>` falls through to ordinary Babel JSX-fragment
 parsing since the tokenizer is already sitting on `tt.jsxTagEnd`, and only
 each child's own `<tag>` recursion re-enters the MX bridge). No `jsx_text`,
@@ -352,6 +352,6 @@ that `<>` written *inside* an MX region's own text body is still literal MX
 text (scanner-rules §9.2), not a fragment delimiter. `scripts/differential.ts`
 confirms `fixtures/fragments/input.solid.mx` produces the exact same
 `mx_element` region set from tree-sitter and from
-`@mxlang/parser`'s `collectMxRegions` — one region per fragment child, none
+`@mxlang/tsx-bridge`'s `collectMxRegions` — one region per fragment child, none
 for the fragment shell itself, since the shell is plain Babel `JSXFragment`
 with no `node.extra.mx` stamp of its own.
