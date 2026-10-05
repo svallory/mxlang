@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds languages/{mx,solid,ngmx,reactmx,preactmx}/*.scm from this monorepo's own grammar
+# Builds languages/{mx,solid,ngmx,reactmx,preactmx,honomx}/*.scm from this monorepo's own grammar
 # packages plus hand-authored base content and overlays.
 #
 # MX (`.mx`) rides packages/editors/tree-sitter-mx, MX's own grammar (a
@@ -35,7 +35,7 @@
 # happen here, at build time, instead.
 #
 # Usage:
-#   scripts/vendor.sh              # (re)generate languages/{mx,solid,ngmx,reactmx,preactmx}/*.scm
+#   scripts/vendor.sh              # (re)generate languages/{mx,solid,ngmx,reactmx,preactmx,honomx}/*.scm
 #
 # There is no `--check` mode: the highlights source is local (this
 # monorepo), so there is no networked upstream HEAD to drift against — a
@@ -44,7 +44,7 @@
 # job does the only check that matters for this script: regenerate and diff
 # against committed output.
 #
-# Never hand-edit languages/{mx,solid,ngmx,reactmx,preactmx}/*.scm — edit overlay/<lang>/*.scm,
+# Never hand-edit languages/{mx,solid,ngmx,reactmx,preactmx,honomx}/*.scm — edit overlay/<lang>/*.scm,
 # base/<lang>/*.scm (or the grammar package's queries/) instead, then rerun
 # this script.
 
@@ -124,5 +124,8 @@ build_lang "reactmx" "ReactMX"
 echo "Building PreactMX queries..."
 build_lang "preactmx" "PreactMX"
 
+echo "Building HonoMX queries..."
+build_lang "honomx" "HonoMX"
+
 echo "Done. languages/mx/*.scm regenerated from packages/editors/tree-sitter-mx + base/mx;"
-echo "      languages/{solid,ngmx,reactmx,preactmx}/*.scm from packages/editors/tree-sitter-solid + base/{solid,ngmx,reactmx,preactmx} + overlays."
+echo "      languages/{solid,ngmx,reactmx,preactmx,honomx}/*.scm from packages/editors/tree-sitter-solid + base/{solid,ngmx,reactmx,preactmx,honomx} + overlays."

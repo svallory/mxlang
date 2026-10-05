@@ -1,6 +1,6 @@
 id = "mxlang"
 name = "MX"
-description = "MX (.mx, Marko syntax), AstroMX (.astro.mx, Marko syntax in an Astro component), Solid (.solid.mx, Marko syntax with Solid host-language expressions), ReactMX (.react.mx, Marko syntax with React host-language expressions), PreactMX (.preact.mx, Marko syntax with Preact host-language expressions) and AngularMX (.ng.mx, Marko syntax with Angular host-language expressions) language support for Zed."
+description = "MX (.mx, Marko syntax), AstroMX (.astro.mx, Marko syntax in an Astro component), Solid (.solid.mx, Marko syntax with Solid host-language expressions), ReactMX (.react.mx, Marko syntax with React host-language expressions), PreactMX (.preact.mx, Marko syntax with Preact host-language expressions), HonoMX (.hono.mx, Marko syntax with Hono host-language expressions) and AngularMX (.ng.mx, Marko syntax with Angular host-language expressions) language support for Zed."
 version = "0.2.0"
 schema_version = 1
 authors = ["Saulo Vallory <me@saulo.engineer>"]
@@ -36,11 +36,12 @@ path = "packages/editors/tree-sitter-mx"
 # does not compile that file kind.
 [language_servers.mxlang]
 name = "MX Language Server"
-languages = ["MX", "Solid", "ReactMX", "PreactMX"]
+languages = ["MX", "Solid", "ReactMX", "PreactMX", "HonoMX"]
 
 [grammars.solid]
 # Also backs the AngularMX language (`languages/ngmx/config.toml`,
-# `path_suffixes = ["ng.mx"]`), ReactMX (`languages/reactmx/config.toml`) and PreactMX (`languages/preactmx/config.toml`): this grammar is a patched
+# `path_suffixes = ["ng.mx"]`), ReactMX (`languages/reactmx/config.toml`),
+# PreactMX (`languages/preactmx/config.toml`) and HonoMX (`languages/honomx/config.toml`): this grammar is a patched
 # tree-sitter-typescript tsx dialect whose only MX-specific addition is an
 # opaque `mx_element` external token in expression position — nothing about
 # it is Solid-specific, so AngularMX declares `grammar = "solid"` directly

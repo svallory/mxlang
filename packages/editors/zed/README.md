@@ -1,6 +1,6 @@
 # `mxlang` — Zed extension
 
-Ships four languages:
+Ships seven languages:
 
 - `MX` (`.mx`, the only extension this language registers) on MX's own
   tree-sitter grammar, `[grammars.mx]` from `packages/editors/tree-sitter-mx`:
@@ -27,11 +27,13 @@ Ships four languages:
   (`languages/reactmx/config.toml`).
 - `PreactMX` (`.preact.mx`), likewise on the `solid` grammar
   (`languages/preactmx/config.toml`).
+- `HonoMX` (`.hono.mx`), on the same `solid` grammar for the same reason
+  (`languages/honomx/config.toml`).
 - `AstroMX` (`.astro.mx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
 
 Also registers a language server: `src/lib.rs` (a minimal Rust extension,
 `Cargo.toml`) implements `zed::Extension::language_server_command` for
-`@mxlang/language-server` on `MX`, `Solid`, `ReactMX` and `PreactMX` — see "Language server"
+`@mxlang/language-server` on `MX`, `Solid`, `ReactMX`, `PreactMX` and `HonoMX` — see "Language server"
 below.
 
 ## Toolchain prerequisite: Rust + wasm32-wasip1
@@ -164,6 +166,8 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
   `@mxlang/language-server`.
 - `PreactMX` (`.preact.mx`): the same as `ReactMX`, with Preact host
   diagnostics.
+- `HonoMX` (`.hono.mx`): the same again, with Hono host diagnostics from
+  `@mxlang/language-server`.
 
 `.astro.mx` follows the same rule as `.solid.mx` and `.ng.mx` (decision 134):
 it also matches `MX`'s `.mx` suffix, and Zed's longest-suffix match picks

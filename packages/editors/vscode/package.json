@@ -37,6 +37,7 @@
     "onLanguage:solidmx",
     "onLanguage:reactmx",
     "onLanguage:preactmx",
+    "onLanguage:honomx",
     "onLanguage:astromx",
     "onLanguage:ngmx"
   ],
@@ -75,6 +76,17 @@
         ],
         "extensions": [
           ".preact.mx"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "honomx",
+        "aliases": [
+          "HonoMX",
+          "honomx"
+        ],
+        "extensions": [
+          ".hono.mx"
         ],
         "configuration": "./language-configuration.json"
       },
@@ -139,6 +151,11 @@
         "path": "./syntaxes/preactmx.tmLanguage.json"
       },
       {
+        "language": "honomx",
+        "scopeName": "source.honomx",
+        "path": "./syntaxes/honomx.tmLanguage.json"
+      },
+      {
         "language": "ngmx",
         "scopeName": "source.ngmx",
         "path": "./syntaxes/ngmx.tmLanguage.json"
@@ -153,6 +170,7 @@
           "solidmx",
           "reactmx",
           "preactmx",
+          "honomx",
           "ngmx",
           "astromx"
         ]

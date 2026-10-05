@@ -1,0 +1,8 @@
+{
+  "scopeName": "source.honomx",
+  "patterns": [
+    {
+      "include": "source.tsx"
+    }
+  ]
+}

@@ -98,6 +98,38 @@ describe("Manifest", () => {
     );
   });
 
+  it("orders honomx before mx in language contributions", () => {
+    // Same reasoning as solidmx: .hono.mx must not be mistakenly matched as .mx
+    const mxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "mx",
+    );
+    const honoMxIndex = pkg.contributes.languages.findIndex(
+      (l: { id: string }) => l.id === "honomx",
+    );
+    expect(honoMxIndex).toBeGreaterThanOrEqual(0);
+    expect(honoMxIndex).toBeLessThan(mxIndex);
+  });
+
+  it("gives honomx a TSX grammar, activation and the language server", () => {
+    const grammar = pkg.contributes.grammars.find(
+      (g: { language: string }) => g.language === "honomx",
+    );
+    const stub = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", grammar.path), "utf-8"),
+    );
+    expect(stub.scopeName).toBe("source.honomx");
+    expect(stub.patterns).toEqual([{ include: "source.tsx" }]);
+    expect(pkg.activationEvents).toContain("onLanguage:honomx");
+    const source = fs.readFileSync(
+      path.join(__dirname, "extension.ts"),
+      "utf-8",
+    );
+    const selector = source.slice(source.indexOf("documentSelector"));
+    expect(selector.slice(0, selector.indexOf("]"))).toContain(
+      'language: "honomx"',
+    );
+  });
+
   it("orders ngmx before mx in language contributions", () => {
     // Same reasoning as solidmx: .ng.mx must not be mistakenly matched as .mx
     const mxIndex = pkg.contributes.languages.findIndex(
@@ -134,6 +166,7 @@ describe("Manifest", () => {
     expect(tsPlugin.languages).toContain("solidmx");
     expect(tsPlugin.languages).toContain("reactmx");
     expect(tsPlugin.languages).toContain("preactmx");
+    expect(tsPlugin.languages).toContain("honomx");
     expect(tsPlugin.languages).toContain("ngmx");
     expect(tsPlugin.languages).toContain("astromx");
   });
