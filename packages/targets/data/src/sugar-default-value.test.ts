@@ -149,7 +149,8 @@ describe("contracts see the default value", () => {
     });
     expect(diagnostics).toMatchObject([
       {
-        message: "`<boolean>`: attribute `value` must be function, got number",
+        message:
+          "`<boolean>`: attribute `value` (set by `#isOverdue=…`) must be function, got number",
         line: 1,
         column: 19,
       },
