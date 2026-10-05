@@ -32,9 +32,10 @@ Four ways to give the reference reading a spelling were weighed (see Alternative
 | tag arguments | `<if(kind === :primary)>` |
 | function argument, comparison, object value | `f(:a)`, `x === :a`, `{ k: :a }` |
 | attribute-tag value | `<@opt=:a/>` |
+| method-shorthand body | `boolean :isOverdue({ self }) { return self.status === :sent }` (an attribute value: it lowers to a function; lead ruling 2026-10-05) |
 | inside an array or object in any of the above | `accept=[:title, :body]` |
 
-An atom is never read inside `static`, `import` or script blocks, which stay plain TypeScript, and never inside strings, template literal text (the `${}` parts are scanned), regular expressions or comments. `"a :b"` is text, `/:b/` is a regex.
+An atom is never read inside `static`, `import` or script blocks (scriptlets), which stay plain TypeScript; a method-shorthand body is not one of them, it is an attribute value, and never inside strings, template literal text (the `${}` parts are scanned), regular expressions or comments. `"a :b"` is text, `/:b/` is a regex.
 
 **Operations on an atom.** An atom is a name, not a value to operate on. Member access, calls and unary operators on it (`:a.length`, `:a(1)`, `-:a`) and an atom in object-key position (`{:a: 1}`) are positioned errors **detected by core, not by Babel**: the numeric stand-in (Parser approach) makes each of them valid JavaScript, so core finds them from the stand-in's atom mark. A computed key, `{[:a]: 1}`, is allowed. Comparison (`x === :a`), array and object elements, template placeholders, function arguments and attribute-tag values are allowed (settled by the lead on 2026-10-05; see Open questions and settled points).
 
@@ -288,7 +289,7 @@ so `string :title` under `attributes` is an attribute visible across the entity,
 
 Today htmljs-parser passes every atom through intact in every position (attribute value, default attribute, `${}`, tag arguments, concise mode, attribute tags), and Babel rejects every one with "Unexpected token". Babel has no parser plugin API: an unknown plugin name is silently ignored. So atoms are lexed where MX already owns the lexer, htmljs-parser as MX carries it (the root patch today, the in-repo copy for the future; decisions 157 addendum 2 and 158):
 
-1. htmljs-parser's `EXPRESSION` state, as MX carries it (the root `patches/htmljs-parser` patch and the in-repo copy in `packages/parser/src/template/`, the same change in both; decision 158) lexes atoms in value, placeholder, tag-argument, attribute-argument (`<t x(:a)>`) and spread ranges only (never statement tags such as `static`, scriptlets or method bodies, which stay TypeScript errors), using the rule in Grammar. It records each atom's span.
+1. htmljs-parser's `EXPRESSION` state, as MX carries it (the root `patches/htmljs-parser` patch and the in-repo copy in `packages/parser/src/template/`, the same change in both; decision 158) lexes atoms in value, placeholder, tag-argument, attribute-argument (`<t x(:a)>`) and spread ranges and method-shorthand bodies (`x(v) { return v === :a }`: method-shorthand bodies are attribute values, so atoms are allowed there, lead ruling 2026-10-05), and never in statement tags such as `static`, scriptlets or `import`, which stay TypeScript errors, using the rule in Grammar. It records each atom's span.
 2. Its `read()` hands Babel a **same-length numeric stand-in** for each atom (`:a` is `0.`, `:rename-all` is `0.000000000`).
 3. Core turns each stand-in back into a `StringLiteral` with `extra.mxAtom = { span }` (the public node shape of section 2), after checking that the source character at the node's start is `:` (no authored numeric literal starts with `:`, so the check cannot be forged), and keeps the node's `loc` as the atom span.
 

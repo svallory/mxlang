@@ -792,13 +792,14 @@ contracts, and ends at lowering.
 | attribute value | `mode=:strict`, `x= :b`, `x = :b` (all `"b"`-valued atoms) |
 | placeholder | `${:strict}` |
 | tag and attribute arguments, default values | `<if=kind === :primary>`, `<const/x=:a/>` |
+| method-shorthand body (an attribute value; lead ruling 2026-10-05) | `that({ self }) { return self.status === :sent }` |
 | inside any expression | `[:a, :b]`, `{ k: :a }`, `f(:a)`, `x === :a`, `` `${:a}` ``, `() => :a`, `{[:a]: 1}` |
 
 A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*` (`:rename-all`; a trailing `-` is not
 part of it). A `:` starts an atom only where an expression is expected, so
 `a ? b :c` stays a ternary and `(x :number) => x` a type annotation; an atom's
 own `:` is never the ternary's, so `a ? :b :c` is `a ? "b" : c`. Atoms are never
-read in `static`/`import`/`export` blocks, scriptlets, method bodies, tag
+read in `static`/`import`/`export` blocks, scriptlets, tag
 params, strings, template text, regular expressions or comments.
 
 **The name sugar is an atom standing alone in attribute position**: `:email`

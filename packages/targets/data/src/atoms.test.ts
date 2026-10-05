@@ -112,6 +112,38 @@ describe("a nested atom is a StringLiteral with extra.mxAtom", () => {
   });
 });
 
+describe("atoms in a method-shorthand body (lead ruling 2026-10-05)", () => {
+  it("convert like an arrow body's, each with its own span", () => {
+    const source =
+      "check that({ self }) {\n  return self.k === :a ? [:b] : :c\n}\n";
+    const a = attr(tag(source, "check"), "that");
+    if (a.kind !== "expression") throw new Error(a.kind);
+    expect(a.value.code).toBe(
+      'function ({ self }) { return self.k === "a" ? ["b"] : "c"; }',
+    );
+    const test = (
+      a.value.node as unknown as {
+        body: { body: { argument: { test: { right: unknown } } }[] };
+      }
+    ).body.body[0]?.argument.test.right;
+    expect(test).toMatchObject({
+      type: "StringLiteral",
+      value: "a",
+      extra: { mxAtom: { span: span(43, 45) } },
+    });
+    expect(source.slice(43, 45)).toBe(":a");
+  });
+
+  it("HTML mode", () => {
+    const a = attr(
+      tag("<check that(v) { return v === :a }/>", "check"),
+      "that",
+    );
+    if (a.kind !== "expression") throw new Error(a.kind);
+    expect(a.value.code).toBe('function (v) { return v === "a"; }');
+  });
+});
+
 /**
  * Mesh's syntax-v3 probe (`scratch/reports/mesh-syntax-v3-probe.md` §A): every
  * line `@mxlang/data@0.1.0-alpha.2` rejected with "Unexpected token".
