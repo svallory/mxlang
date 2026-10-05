@@ -1,8 +1,8 @@
 # @mxlang/vite-plugin
 
-- **Docs (render-consumers, decision 155):** the comment on the Astro page pipeline describes the default export as `(input) => string`, not `{ value, output }`.
-
 ## 0.1.0 (unreleased)
+
+- **Docs (render-consumers, decision 155):** the comment on the Astro page pipeline describes the default export as `(input) => string`, not `{ value, output }`.
 
 - **Changed (bridge-host, decision 154):** the default `extensions` are the registry's region file kinds then `.mx` (`defaultExtensions()`, today `.solid.mx, .mx`), resolved lazily by the async hooks; a user's `extensions` still replaces them. A region file is printed with `mx: true` and lowered by the region entry its suffix names, not by the first region kind. Behaviour change: a user-listed extension no region kind serves (`extensions: [".foo.mx"]`, or an opt-in `".astro.mx"`) used to compile through Solid's region entry; it is now the error `no registered host compiles MX regions for "<file>"`. Region kinds are looked up in the file's project lookup (`lookupFor(policy)`), as the language server does.
 

@@ -38,13 +38,13 @@ import { compile } from "@mxlang/html";
  * change to `postEmit` previously reported every fixture as a translator
  * bug).
  *
- * The emitted `escape` import (`from "@mxlang/html"`, a bare workspace
- * specifier) is rewritten to the package's resolved absolute entry point: a
+ * The emitted `@mxlang/html` imports (`from "@mxlang/html"` and
+ * `from "@mxlang/html/runtime"`, bare workspace specifiers) are rewritten to the package's resolved absolute entry point: a
  * bare specifier resolves by walking up from the *importing file* to a
  * `node_modules`, and the scratch copy lives under the OS tmpdir, outside
  * this repo's `node_modules` ancestry, so it would otherwise fail to
- * resolve. Only the specifier is touched — a plain string substitution on
- * one known import, not a regex over the module's shape.
+ * resolve. Only the specifier is touched — a global regex on those two
+ * `from "…"` clauses, not on the module's shape.
  */
 export async function renderTranslator(
   dir: string,

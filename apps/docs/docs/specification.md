@@ -3432,6 +3432,14 @@ receives `out`. A `.mx` unit reached through a dynamic tag or a `.ts` barrel
 renders its body (it once rendered `[object Object]`), and `/var` on a dynamic
 tag binds (it was once silently dropped).
 
+`/var` on a tag that is *resolved through a `.ts` module* (a barrel re-export
+or a hand-written function imported by name) is refused at compile time, as it
+has been since the core extraction: "tag variable `/c` on `<X>` is not
+supported in a standalone template". The workaround is the dynamic form,
+`<${X}/c/>`, which binds the `render` value. The props of an imported `.ts`
+tag are not type-checked (`__mxRenderDynamic` takes `Record<string, any>`);
+only a callee declared in the same file is.
+
 **`<try>` renders its body into a buffered sub-sink**, `createBufferedOut(out)`,
 committed to `out` only when the body finishes. When the body throws, the
 buffered output is dropped and `<@catch>` renders into `out` instead, so a
