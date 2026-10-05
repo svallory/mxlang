@@ -5,7 +5,7 @@ description: "Why `:name` in an expression position is a value that represents i
 
 # ADR 156: atoms
 
-**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR <n>. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, `parseData`); contracts in PR 2.
+**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, `parseData`); contracts in PR 2.
 
 ## Context
 
