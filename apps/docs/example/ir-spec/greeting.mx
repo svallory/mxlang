@@ -1,0 +1,17 @@
+export interface Input {
+  name: string;
+  items: string[];
+}
+
+<const/count=input.items.length/>
+<h1 class="title">Hello, ${input.name}!</h1>
+<if=count>
+  <ul>
+    <for|item| of=input.items>
+      <li>${item}</li>
+    </for>
+  </ul>
+</if>
+<else>
+  <p hidden>Nothing yet.</p>
+</else>

@@ -123,6 +123,7 @@
       "children": [
         { "title": "Core and hosts", "path": "/architecture/core-and-hosts/" },
         { "title": "The IR", "path": "/architecture/ir/" },
+        { "title": "IR specification", "path": "/architecture/ir-spec/" },
         {
           "title": "Declarations and hooks",
           "path": "/architecture/policy-and-hooks/"

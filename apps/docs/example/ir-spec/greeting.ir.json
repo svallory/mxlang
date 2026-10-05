@@ -1,0 +1,320 @@
+{
+  "imports": [],
+  "hoisted": [],
+  "inputInterface": {
+    "kind": "InputInterface",
+    "code": "export interface Input {\n  name: string;\n  items: string[];\n}",
+    "loc": {
+      "line": 1,
+      "column": 0
+    },
+    "end": {
+      "line": 4,
+      "column": 1
+    }
+  },
+  "needsAttrTagImport": false,
+  "prelude": [],
+  "body": [
+    {
+      "kind": "Const",
+      "name": "count",
+      "init": {
+        "code": "input.items.length",
+        "shape": "other",
+        "span": {
+          "sourceStart": 76,
+          "sourceEnd": 94
+        }
+      },
+      "span": {
+        "sourceStart": 63,
+        "sourceEnd": 96
+      },
+      "loc": {
+        "line": 6,
+        "column": 0
+      }
+    },
+    {
+      "kind": "Element",
+      "name": "h1",
+      "nameSpan": {
+        "sourceStart": 98,
+        "sourceEnd": 100
+      },
+      "span": {
+        "sourceStart": 97,
+        "sourceEnd": 141
+      },
+      "attrs": [
+        {
+          "kind": "static",
+          "name": "class",
+          "value": "title",
+          "valueSpan": {
+            "sourceStart": 107,
+            "sourceEnd": 114
+          },
+          "nameSpan": {
+            "sourceStart": 101,
+            "sourceEnd": 106
+          },
+          "loc": {
+            "line": 7,
+            "column": 4
+          }
+        }
+      ],
+      "children": [
+        {
+          "kind": "Text",
+          "value": "Hello, ",
+          "span": {
+            "sourceStart": 115,
+            "sourceEnd": 122
+          },
+          "loc": {
+            "line": 7,
+            "column": 18
+          }
+        },
+        {
+          "kind": "Interpolation",
+          "expr": {
+            "code": "input.name",
+            "shape": "other",
+            "span": {
+              "sourceStart": 124,
+              "sourceEnd": 134
+            }
+          },
+          "escaped": true,
+          "span": {
+            "sourceStart": 122,
+            "sourceEnd": 135
+          },
+          "loc": {
+            "line": 7,
+            "column": 25
+          }
+        },
+        {
+          "kind": "Text",
+          "value": "!",
+          "span": {
+            "sourceStart": 135,
+            "sourceEnd": 136
+          },
+          "loc": {
+            "line": 7,
+            "column": 38
+          }
+        }
+      ],
+      "void": false,
+      "loc": {
+        "line": 7,
+        "column": 0
+      }
+    },
+    {
+      "kind": "IfChain",
+      "branches": [
+        {
+          "condition": {
+            "code": "count",
+            "shape": "other",
+            "span": {
+              "sourceStart": 146,
+              "sourceEnd": 151
+            }
+          },
+          "children": [
+            {
+              "kind": "Element",
+              "name": "ul",
+              "nameSpan": {
+                "sourceStart": 156,
+                "sourceEnd": 158
+              },
+              "span": {
+                "sourceStart": 155,
+                "sourceEnd": 232
+              },
+              "attrs": [],
+              "children": [
+                {
+                  "kind": "For",
+                  "source": {
+                    "kind": "of",
+                    "list": {
+                      "code": "input.items",
+                      "shape": "other",
+                      "span": {
+                        "sourceStart": 178,
+                        "sourceEnd": 189
+                      }
+                    }
+                  },
+                  "params": [
+                    "item"
+                  ],
+                  "bindings": [
+                    "item"
+                  ],
+                  "paramSpans": [
+                    {
+                      "sourceStart": 169,
+                      "sourceEnd": 173
+                    }
+                  ],
+                  "key": null,
+                  "children": [
+                    {
+                      "kind": "Element",
+                      "name": "li",
+                      "nameSpan": {
+                        "sourceStart": 198,
+                        "sourceEnd": 200
+                      },
+                      "span": {
+                        "sourceStart": 197,
+                        "sourceEnd": 213
+                      },
+                      "attrs": [],
+                      "children": [
+                        {
+                          "kind": "Interpolation",
+                          "expr": {
+                            "code": "item",
+                            "shape": "other",
+                            "span": {
+                              "sourceStart": 203,
+                              "sourceEnd": 207
+                            }
+                          },
+                          "escaped": true,
+                          "span": {
+                            "sourceStart": 201,
+                            "sourceEnd": 208
+                          },
+                          "loc": {
+                            "line": 11,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "void": false,
+                      "loc": {
+                        "line": 11,
+                        "column": 6
+                      }
+                    }
+                  ],
+                  "span": {
+                    "sourceStart": 164,
+                    "sourceEnd": 224
+                  },
+                  "loc": {
+                    "line": 10,
+                    "column": 4
+                  }
+                }
+              ],
+              "void": false,
+              "loc": {
+                "line": 9,
+                "column": 2
+              }
+            }
+          ],
+          "span": {
+            "sourceStart": 142,
+            "sourceEnd": 238
+          },
+          "loc": {
+            "line": 8,
+            "column": 0
+          }
+        },
+        {
+          "condition": null,
+          "children": [
+            {
+              "kind": "Element",
+              "name": "p",
+              "nameSpan": {
+                "sourceStart": 249,
+                "sourceEnd": 250
+              },
+              "span": {
+                "sourceStart": 248,
+                "sourceEnd": 274
+              },
+              "attrs": [
+                {
+                  "kind": "boolean",
+                  "name": "hidden",
+                  "nameSpan": {
+                    "sourceStart": 251,
+                    "sourceEnd": 257
+                  },
+                  "loc": {
+                    "line": 16,
+                    "column": 5
+                  }
+                }
+              ],
+              "children": [
+                {
+                  "kind": "Text",
+                  "value": "Nothing yet.",
+                  "span": {
+                    "sourceStart": 258,
+                    "sourceEnd": 270
+                  },
+                  "loc": {
+                    "line": 16,
+                    "column": 12
+                  }
+                }
+              ],
+              "void": false,
+              "loc": {
+                "line": 16,
+                "column": 2
+              }
+            }
+          ],
+          "span": {
+            "sourceStart": 239,
+            "sourceEnd": 282
+          },
+          "loc": {
+            "line": 15,
+            "column": 0
+          }
+        }
+      ],
+      "span": {
+        "sourceStart": 142,
+        "sourceEnd": 282
+      },
+      "loc": {
+        "line": 8,
+        "column": 0
+      }
+    }
+  ],
+  "tagMetadata": {
+    "readsContent": false,
+    "attributeTags": [
+      "items",
+      "name"
+    ],
+    "inputCode": "export interface Input {\n  name: string;\n  items: string[];\n}"
+  },
+  "exportName": "Greeting",
+  "returnValue": null
+}

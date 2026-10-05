@@ -12,6 +12,7 @@
       "!**/fixtures/**/__golden__",
       "!**/fixtures/**/*.solid.mx",
       "!apps/docs/example/hosts",
+      "!apps/docs/example/ir-spec",
       "!**/fixtures/host-dispatch/bad-package-json",
       "!packages/core/src/fixtures/callee-input/parse-error.ts",
       "!**/fixtures-marko",
