@@ -206,6 +206,27 @@ describe.each(JSX_HOSTS)(
         );
     });
 
+    it("the later of an explicit value and a spread's wins, whatever the order", () => {
+      const text = (form: string) =>
+        JSON.parse(
+          textareas(find(jsx[host] ?? [], form, "str")).split("|")[0] ?? "",
+        ).text;
+      expect(text("valueThenSpreadInput")).toBe("hello"); // the spread's value
+      expect(text("spreadThenValueInput")).toBe("explicit");
+      expect(text("valueThenSpreadOther")).toBe("spread");
+    });
+
+    it("refuses a runtime-resolved textarea with a body, as Marko does", () => {
+      const bodies = (jsx[host] ?? []).filter(
+        (r) => r.form === "dynamicTagBody",
+      );
+      expect(bodies.length).toBeGreaterThan(0);
+      for (const row of bodies)
+        expect(stripAnsi(row.error ?? ""), `${host} ${row.value}`).toContain(
+          "A dynamic tag rendering a `<textarea>` cannot have `content`",
+        );
+    });
+
     it("a spread's value yields to the body, as in Marko", () => {
       for (const value of ["zero", "str", "special", "newline"]) {
         expect(textareas(find(jsx[host] ?? [], "spreadBody", value))).toBe(

@@ -201,7 +201,7 @@ try {
     const inputs = Object.fromEntries(
       Object.entries(textareaValues).map(([value, v]) => [
         value,
-        { v, tag: "textarea", attrs: { value: v } },
+        { v, w: "explicit", tag: "textarea", attrs: { value: v } },
       ]),
     );
     const forms: Record<string, string> = {
@@ -216,8 +216,13 @@ try {
       valueBetweenSpreads:
         '<textarea ...{value:"a"} value=input.v ...{title:"t"}/>',
       valueAndBody: "<textarea value=input.v>body</textarea>",
+      // Two different values: the later source wins, in either order.
+      valueThenSpreadOther: '<textarea value=input.v ...{value:"spread"}/>',
+      spreadThenValueInput: "<textarea ...input.attrs value=input.w/>",
+      valueThenSpreadInput: "<textarea value=input.w ...input.attrs/>",
       dynamicTag: `<\${input.tag} value=input.v/>`,
       dynamicTagArgs: `<\${input.tag}(input.attrs)/>`,
+      dynamicTagBody: `<\${input.tag} value=input.v>body</>`,
     };
     for (const [form, source] of Object.entries(forms)) {
       try {

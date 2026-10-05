@@ -2106,6 +2106,10 @@ export class SolidEmitter implements Emitter<string> {
         `{(() => { const ${temp} = `,
         expr.code,
         `;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); `,
+        // Marko: a runtime-resolved textarea takes `value`, never content.
+        node.content && !raw
+          ? `if (${value} === "textarea") throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead."); `
+          : "",
         node.args.length > 0
           ? concatMapped(
               `return typeof ${value} === "string" ? `,

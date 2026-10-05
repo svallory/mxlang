@@ -1466,13 +1466,17 @@ export class PreactEmitter implements Emitter<string> {
         );
       }
     }
-    const content = explicitValue ? this.#textareaContent(explicitValue) : null;
+    // With a spread the explicit `value` stays in the merged object, so the
+    // later of the two wins (as Marko); `__mxTextarea` turns the winner into
+    // the content. Lifted into the content only when nothing can override it.
+    const lifted = node.attrs.some((attr) => attr.kind === "spread")
+      ? undefined
+      : explicitValue;
+    const content = lifted ? this.#textareaContent(lifted) : null;
     // IR elements include hyphenated custom elements, whose arbitrary
     // props are not native contracts. CamelCase SVG tags are native too.
     let attrs = this.#attrs(
-      explicitValue
-        ? node.attrs.filter((attr) => attr !== explicitValue)
-        : node.attrs,
+      lifted ? node.attrs.filter((attr) => attr !== lifted) : node.attrs,
       !node.name.includes("-"),
       false,
       node.name,
