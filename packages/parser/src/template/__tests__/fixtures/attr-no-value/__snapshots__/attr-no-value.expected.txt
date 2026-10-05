@@ -1,0 +1,9 @@
+1╭─ <a b>test</a>
+ │  ││ │││   │ │╰─ closeTagEnd(a)
+ │  ││ │││   │ ╰─ closeTagName
+ │  ││ │││   ╰─ closeTagStart "</"
+ │  ││ ││╰─ text "test"
+ │  ││ │╰─ openTagEnd
+ │  ││ ╰─ attrName
+ │  │╰─ tagName
+ ╰─ ╰─ openTagStart

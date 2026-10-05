@@ -1,0 +1,12 @@
+1╭─ <for(var i = 0; i < 10; i++) if(x > y)></for>
+ │  ││  ││                       │ ││     ││ │  ╰─ closeTagEnd(for)
+ │  ││  ││                       │ ││     ││ ╰─ closeTagName "for"
+ │  ││  ││                       │ ││     │╰─ closeTagStart "</"
+ │  ││  ││                       │ ││     ╰─ openTagEnd
+ │  ││  ││                       │ │╰─ attrArgs.value "x > y"
+ │  ││  ││                       │ ╰─ attrArgs "(x > y)"
+ │  ││  ││                       ╰─ attrName "if"
+ │  ││  │╰─ tagArgs.value "var i = 0; i < 10; i++"
+ │  ││  ╰─ tagArgs "(var i = 0; i < 10; i++)"
+ │  │╰─ tagName "for"
+ ╰─ ╰─ openTagStart

@@ -1,0 +1,6 @@
+1╭─ div#foo
+ │  │  ││  ├─ closeTagEnd(div)
+ │  │  ││  ╰─ openTagEnd
+ │  │  │╰─ tagShorthandId.quasis[0] "foo"
+ │  │  ╰─ tagShorthandId "#foo"
+ ╰─ ╰─ tagName "div"

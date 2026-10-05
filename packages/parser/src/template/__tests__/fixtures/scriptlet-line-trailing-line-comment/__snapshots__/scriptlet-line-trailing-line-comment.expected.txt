@@ -1,0 +1,14 @@
+1╭─ $ var str = '' // a string
+ │  │ ╰─ scriptlet.value "var str = '' // a string"
+ ╰─ ╰─ scriptlet "$ var str = '' // a string"
+2├─ 
+3╭─ <div>
+ │  ││  ╰─ openTagEnd
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart
+4╭─   Hello
+ ╰─ ╰─ text "\n  Hello\n"
+5╭─ </div>
+ │  │ │  ╰─ closeTagEnd(div)
+ │  │ ╰─ closeTagName "div"
+ ╰─ ╰─ closeTagStart "</"

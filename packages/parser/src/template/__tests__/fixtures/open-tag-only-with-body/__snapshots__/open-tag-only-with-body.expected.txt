@@ -1,0 +1,14 @@
+1╭─ ---
+2╭─ <img src="marko.png">
+ │  ││   │  ││          ╰─ openTagEnd
+ │  ││   │  │╰─ attrValue.value "\"marko.png\""
+ │  ││   │  ╰─ attrValue "=\"marko.png\""
+ │  ││   ╰─ attrName "src"
+ │  │╰─ tagName "img"
+ ╰─ ╰─ openTagStart
+3╭─     This is not allowed!
+ ╰─ ╰─ text "\n    This is not allowed!\n"
+4╭─ </img>
+ │  ├─ error(EXTRA_CLOSING_TAG:The closing "img" tag was not expected) "</img>"
+ ╰─ ╰─ closeTagStart "</"
+5╰─ ---

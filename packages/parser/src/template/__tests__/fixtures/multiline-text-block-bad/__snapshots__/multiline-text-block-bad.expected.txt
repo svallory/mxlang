@@ -1,0 +1,7 @@
+1╭─ --
+2╭─ A
+ ╰─ ╰─ text
+3╭─ ---
+ ╰─   ╰─ error(INVALID_CHARACTER:A concise mode closing block delimiter can only be followed by whitespace.)
+4├─ B
+5╰─ --

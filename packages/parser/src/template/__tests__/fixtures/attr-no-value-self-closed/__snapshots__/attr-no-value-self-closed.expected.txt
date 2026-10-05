@@ -1,0 +1,5 @@
+1╭─ <var foo/>
+ │  ││   │  ╰─ openTagEnd:selfClosed "/>"
+ │  ││   ╰─ attrName "foo"
+ │  │╰─ tagName "var"
+ ╰─ ╰─ openTagStart

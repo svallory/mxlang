@@ -1,0 +1,24 @@
+1╭─ <!DOCTYPE html>
+ │  │ ╰─ doctype.value "DOCTYPE html"
+ ╰─ ╰─ doctype "<!DOCTYPE html>"
+2╭─ html [lang="en"]
+ │  │     │   │╰─ attrValue.value "\"en\""
+ │  │     │   ╰─ attrValue "=\"en\""
+ │  │     ╰─ attrName "lang"
+ ╰─ ╰─ tagName "html"
+3╭─   body
+ │  │ ╰─ tagName "body"
+ ╰─ ╰─ openTagEnd
+4╭─     h1 -- Title
+ │  │   │  │  ╰─ text "Title"
+ │  │   │  ╰─ openTagEnd
+ │  │   ╰─ tagName "h1"
+ ╰─ ╰─ openTagEnd
+5╭─     script -- var a = 'marko';
+ │  │   │      │  │               ├─ closeTagEnd(html)
+ │  │   │      │  │               ├─ closeTagEnd(body)
+ │  │   │      │  │               ╰─ closeTagEnd(script)
+ │  │   │      │  ╰─ text "var a = 'marko';"
+ │  │   │      ╰─ openTagEnd
+ │  │   ╰─ tagName "script"
+ ╰─ ╰─ closeTagEnd(h1)

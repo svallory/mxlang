@@ -1,0 +1,7 @@
+1╭─ var colors=['red', 'green', 'blue']
+ │  │   │     ││                       ├─ closeTagEnd(var)
+ │  │   │     ││                       ╰─ openTagEnd
+ │  │   │     │╰─ attrValue.value "['red', 'green', 'blue']"
+ │  │   │     ╰─ attrValue "=['red', 'green', 'blue']"
+ │  │   ╰─ attrName "colors"
+ ╰─ ╰─ tagName "var"

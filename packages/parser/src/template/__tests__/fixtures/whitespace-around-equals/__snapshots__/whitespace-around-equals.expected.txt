@@ -1,0 +1,10 @@
+1╭─ <div foo = bar></div>
+ │  ││   │   │ │  ││ │  ╰─ closeTagEnd(div)
+ │  ││   │   │ │  ││ ╰─ closeTagName "div"
+ │  ││   │   │ │  │╰─ closeTagStart "</"
+ │  ││   │   │ │  ╰─ openTagEnd
+ │  ││   │   │ ╰─ attrValue.value "bar"
+ │  ││   │   ╰─ attrValue "= bar"
+ │  ││   ╰─ attrName "foo"
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart

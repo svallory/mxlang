@@ -1,0 +1,11 @@
+1╭─ <div>Hello ${xyz}!</div>
+ │  ││  ││     │ │   ││ │  ╰─ closeTagEnd(div)
+ │  ││  ││     │ │   ││ ╰─ closeTagName "div"
+ │  ││  ││     │ │   │╰─ closeTagStart "</"
+ │  ││  ││     │ │   ╰─ text
+ │  ││  ││     │ ╰─ placeholder:escape.value "xyz"
+ │  ││  ││     ╰─ placeholder:escape "${xyz}"
+ │  ││  │╰─ text "Hello "
+ │  ││  ╰─ openTagEnd
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart

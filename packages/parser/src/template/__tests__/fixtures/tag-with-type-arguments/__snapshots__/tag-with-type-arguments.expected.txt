@@ -1,0 +1,176 @@
+1╭─ <foo<A>>
+ │  ││  ││ ╰─ openTagEnd
+ │  ││  │╰─ tagTypeArgs.value
+ │  ││  ╰─ tagTypeArgs "<A>"
+ │  │╰─ tagName "foo"
+ ╰─ ╰─ openTagStart
+2╭─   hi
+ ╰─ ╰─ text "\n  hi\n"
+3╭─ </>
+ │  │ ├─ closeTagEnd(foo)
+ │  │ ╰─ closeTagName
+ ╰─ ╰─ closeTagStart "</"
+4├─ 
+5╭─ <foo<A> >
+ │  ││  ││  ╰─ openTagEnd
+ │  ││  │╰─ tagTypeArgs.value
+ │  ││  ╰─ tagTypeArgs "<A>"
+ │  │╰─ tagName "foo"
+ ╰─ ╰─ openTagStart
+6╭─   hi
+ ╰─ ╰─ text "\n  hi\n"
+7╭─ </>
+ │  │ ├─ closeTagEnd(foo)
+ │  │ ╰─ closeTagName
+ ╰─ ╰─ closeTagStart "</"
+8├─ 
+9╭─ <foo<A, B = string>>
+ │  ││  ││             ╰─ openTagEnd
+ │  ││  │╰─ tagTypeArgs.value "A, B = string"
+ │  ││  ╰─ tagTypeArgs "<A, B = string>"
+ │  │╰─ tagName "foo"
+ ╰─ ╰─ openTagStart
+10╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+11╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+12├─ 
+13╭─ <foo<A, B = string> >
+  │  ││  ││              ╰─ openTagEnd
+  │  ││  │╰─ tagTypeArgs.value "A, B = string"
+  │  ││  ╰─ tagTypeArgs "<A, B = string>"
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+14╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+15╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+16├─ 
+17╭─ <foo<A>(bar)>
+  │  ││  ││ ││   ╰─ openTagEnd
+  │  ││  ││ │╰─ tagArgs.value "bar"
+  │  ││  ││ ╰─ tagArgs "(bar)"
+  │  ││  │╰─ tagTypeArgs.value
+  │  ││  ╰─ tagTypeArgs "<A>"
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+18╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+19╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+20├─ 
+21╭─ <foo<A> (bar)>
+  │  ││  ││  ││   ╰─ openTagEnd
+  │  ││  ││  │╰─ tagArgs.value "bar"
+  │  ││  ││  ╰─ tagArgs "(bar)"
+  │  ││  │╰─ tagTypeArgs.value
+  │  ││  ╰─ tagTypeArgs "<A>"
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+22╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+23╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+24├─ 
+25╭─ <foo<A, B = string>(bar)>
+  │  ││  ││             ││   ╰─ openTagEnd
+  │  ││  ││             │╰─ tagArgs.value "bar"
+  │  ││  ││             ╰─ tagArgs "(bar)"
+  │  ││  │╰─ tagTypeArgs.value "A, B = string"
+  │  ││  ╰─ tagTypeArgs "<A, B = string>"
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+26╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+27╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+28├─ 
+29╭─ <foo<A, B = string> (bar)>
+  │  ││  ││              ││   ╰─ openTagEnd
+  │  ││  ││              │╰─ tagArgs.value "bar"
+  │  ││  ││              ╰─ tagArgs "(bar)"
+  │  ││  │╰─ tagTypeArgs.value "A, B = string"
+  │  ││  ╰─ tagTypeArgs "<A, B = string>"
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+30╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+31╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+32├─ 
+33├─ 
+34╭─ <foo<A> (bar) {
+  │  ││  ││  ││    ╰─ attrMethod.body "{\n  \n}"
+  │  ││  ││  │╰─ attrMethod.params.value "bar"
+  │  ││  ││  ├─ attrMethod.params "(bar)"
+  │  ││  ││  ├─ attrMethod "(bar) {\n  \n}"
+  │  ││  ││  ╰─ attrName
+  │  ││  │╰─ tagTypeArgs.value
+  │  ││  ╰─ tagTypeArgs "<A>"
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+35╭─   
+  ╰─ ╰─ attrMethod.body.value "\n  \n"
+36╭─ }>
+  ╰─  ╰─ openTagEnd
+37╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+38╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+39├─ 
+40╭─ <foo <A> (bar) {
+  │  ││   ││  ││    ╰─ attrMethod.body "{\n  \n}"
+  │  ││   ││  │╰─ attrMethod.params.value "bar"
+  │  ││   ││  ╰─ attrMethod.params "(bar)"
+  │  ││   │╰─ attrMethod.typeParams.value
+  │  ││   ├─ attrMethod.typeParams "<A>"
+  │  ││   ├─ attrMethod "<A> (bar) {\n  \n}"
+  │  ││   ╰─ attrName
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+41╭─   
+  ╰─ ╰─ attrMethod.body.value "\n  \n"
+42╭─ }>
+  ╰─  ╰─ openTagEnd
+43╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+44╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+45├─ 
+46╭─ <foo <A>(bar) {
+  │  ││   ││ ││    ╰─ attrMethod.body "{\n  \n}"
+  │  ││   ││ │╰─ attrMethod.params.value "bar"
+  │  ││   ││ ╰─ attrMethod.params "(bar)"
+  │  ││   │╰─ attrMethod.typeParams.value
+  │  ││   ├─ attrMethod.typeParams "<A>"
+  │  ││   ├─ attrMethod "<A>(bar) {\n  \n}"
+  │  ││   ╰─ attrName
+  │  │╰─ tagName "foo"
+  ╰─ ╰─ openTagStart
+47╭─   
+  ╰─ ╰─ attrMethod.body.value "\n  \n"
+48╭─ }>
+  ╰─  ╰─ openTagEnd
+49╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+50╭─ </>
+  │  │ ├─ closeTagEnd(foo)
+  │  │ ╰─ closeTagName
+  ╰─ ╰─ closeTagStart "</"
+51╰─ 

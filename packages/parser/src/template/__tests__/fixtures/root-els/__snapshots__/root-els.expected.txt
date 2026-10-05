@@ -1,0 +1,14 @@
+1╭─ div class="foo"
+ │  │   │    │╰─ attrValue.value "\"foo\""
+ │  │   │    ╰─ attrValue "=\"foo\""
+ │  │   ╰─ attrName "class"
+ ╰─ ╰─ tagName "div"
+2╭─ span class="bar"
+ │  │    │    ││    ├─ closeTagEnd(span)
+ │  │    │    ││    ╰─ openTagEnd
+ │  │    │    │╰─ attrValue.value "\"bar\""
+ │  │    │    ╰─ attrValue "=\"bar\""
+ │  │    ╰─ attrName "class"
+ │  ├─ closeTagEnd(div)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "span"

@@ -1,0 +1,10 @@
+1╭─ <div data=true></div>
+ │  ││   │   ││   ││ │  ╰─ closeTagEnd(div)
+ │  ││   │   ││   ││ ╰─ closeTagName "div"
+ │  ││   │   ││   │╰─ closeTagStart "</"
+ │  ││   │   ││   ╰─ openTagEnd
+ │  ││   │   │╰─ attrValue.value "true"
+ │  ││   │   ╰─ attrValue "=true"
+ │  ││   ╰─ attrName "data"
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart

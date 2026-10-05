@@ -1,0 +1,148 @@
+1╭─ span.a -- hi
+ │  │   ││ │  ╰─ text "hi"
+ │  │   ││ ╰─ openTagEnd
+ │  │   │╰─ tagShorthandClass.quasis[0]
+ │  │   ╰─ tagShorthandClass ".a"
+ ╰─ ╰─ tagName "span"
+2├─ 
+3╭─ span.b
+ │  │   │╰─ tagShorthandClass.quasis[0]
+ │  │   ╰─ tagShorthandClass ".b"
+ │  ├─ closeTagEnd(span)
+ ╰─ ╰─ tagName "span"
+4╭─   -- hi
+ │  │    ╰─ text "hi"
+ ╰─ ╰─ openTagEnd
+5├─ 
+6╭─ span.c
+ │  │   │╰─ tagShorthandClass.quasis[0]
+ │  │   ╰─ tagShorthandClass ".c"
+ │  ├─ closeTagEnd(span)
+ ╰─ ╰─ tagName "span"
+7╭─   -- hi
+ │  │    ╰─ text "hi"
+ ╰─ ╰─ openTagEnd
+8╭─   -- you
+ ╰─      ╰─ text "you"
+9├─ 
+10╭─ span.d --
+  │  │   ││ ╰─ openTagEnd
+  │  │   │╰─ tagShorthandClass.quasis[0]
+  │  │   ╰─ tagShorthandClass ".d"
+  │  ├─ closeTagEnd(span)
+  ╰─ ╰─ tagName "span"
+11╭─   hi
+  ╰─   ╰─ text "hi"
+12├─ 
+13╭─ span.e --
+  │  │   ││ ╰─ openTagEnd
+  │  │   │╰─ tagShorthandClass.quasis[0]
+  │  │   ╰─ tagShorthandClass ".e"
+  │  ├─ closeTagEnd(span)
+  ╰─ ╰─ tagName "span"
+14╭─   hi
+  ╰─   ╰─ text "hi\n"
+15╭─   you
+  ╰─   ╰─ text "you"
+16├─ 
+17╭─ span.f
+  │  │   │╰─ tagShorthandClass.quasis[0]
+  │  │   ╰─ tagShorthandClass ".f"
+  │  ├─ closeTagEnd(span)
+  ╰─ ╰─ tagName "span"
+18╭─   --
+  ╰─ ╰─ openTagEnd
+19╭─   hi
+  ╰─   ╰─ text "hi"
+20├─   --
+21├─ 
+22╭─ span.g
+  │  │   │╰─ tagShorthandClass.quasis[0]
+  │  │   ╰─ tagShorthandClass ".g"
+  │  ├─ closeTagEnd(span)
+  ╰─ ╰─ tagName "span"
+23╭─   --
+  ╰─ ╰─ openTagEnd
+24╭─   hi
+  ╰─   ╰─ text "hi\n"
+25╭─   you
+  ╰─   ╰─ text "you"
+26├─   --
+27├─ 
+28╭─ <span.h>hi</span>
+  │  ││   ││││ │ │   ╰─ closeTagEnd(span)
+  │  ││   ││││ │ ╰─ closeTagName "span"
+  │  ││   ││││ ╰─ closeTagStart "</"
+  │  ││   │││╰─ text "hi"
+  │  ││   ││╰─ openTagEnd
+  │  ││   │╰─ tagShorthandClass.quasis[0]
+  │  ││   ╰─ tagShorthandClass ".h"
+  │  │╰─ tagName "span"
+  │  ├─ closeTagEnd(span)
+  ╰─ ╰─ openTagStart
+29├─ 
+30╭─ <span.i>
+  │  ││   ││╰─ openTagEnd
+  │  ││   │╰─ tagShorthandClass.quasis[0]
+  │  ││   ╰─ tagShorthandClass ".i"
+  │  │╰─ tagName "span"
+  ╰─ ╰─ openTagStart
+31╭─   hi</span>
+  │  │   │ │   ╰─ closeTagEnd(span)
+  │  │   │ ╰─ closeTagName "span"
+  │  │   ╰─ closeTagStart "</"
+  ╰─ ╰─ text "\n  hi"
+32├─ 
+33╭─ <span.j>
+  │  ││   ││╰─ openTagEnd
+  │  ││   │╰─ tagShorthandClass.quasis[0]
+  │  ││   ╰─ tagShorthandClass ".j"
+  │  │╰─ tagName "span"
+  ╰─ ╰─ openTagStart
+34╭─   hi
+  ╰─ ╰─ text "\n  hi\n"
+35╭─ </span>
+  │  │ │   ╰─ closeTagEnd(span)
+  │  │ ╰─ closeTagName "span"
+  ╰─ ╰─ closeTagStart "</"
+36├─ 
+37╭─ <span.k>
+  │  ││   ││╰─ openTagEnd
+  │  ││   │╰─ tagShorthandClass.quasis[0]
+  │  ││   ╰─ tagShorthandClass ".k"
+  │  │╰─ tagName "span"
+  ╰─ ╰─ openTagStart
+38╭─   hi
+  ╰─ ╰─ text "\n  hi\n  "
+39╭─   </span>
+  │    │ │   ╰─ closeTagEnd(span)
+  │    │ ╰─ closeTagName "span"
+  ╰─   ╰─ closeTagStart "</"
+40├─ 
+41╭─ <span.l>  
+  │  ││   │││╰─ text "  \nhi\n"
+  │  ││   ││╰─ openTagEnd
+  │  ││   │╰─ tagShorthandClass.quasis[0]
+  │  ││   ╰─ tagShorthandClass ".l"
+  │  │╰─ tagName "span"
+  ╰─ ╰─ openTagStart
+42├─ hi
+43╭─ </span>
+  │  │ │   ╰─ closeTagEnd(span)
+  │  │ ╰─ closeTagName "span"
+  ╰─ ╰─ closeTagStart "</"
+44├─ 
+45╭─ <span.m>
+  │  ││   ││╰─ openTagEnd
+  │  ││   │╰─ tagShorthandClass.quasis[0]
+  │  ││   ╰─ tagShorthandClass ".m"
+  │  │╰─ tagName "span"
+  ╰─ ╰─ openTagStart
+46╭─   hi
+  ╰─ ╰─ text "\n  hi\n  you\n"
+47├─   you
+48╭─ </span>
+  │  │ │   ╰─ closeTagEnd(span)
+  │  │ ╰─ closeTagName "span"
+  ╰─ ╰─ closeTagStart "</"
+49╰─ 

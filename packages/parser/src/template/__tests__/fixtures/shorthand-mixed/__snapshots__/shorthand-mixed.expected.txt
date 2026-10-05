@@ -1,0 +1,53 @@
+1╭─ <#foo>Hello</>
+ │  │││  ││    │ ├─ closeTagEnd()
+ │  │││  ││    │ ╰─ closeTagName
+ │  │││  ││    ╰─ closeTagStart "</"
+ │  │││  │╰─ text "Hello"
+ │  │││  ╰─ openTagEnd
+ │  ││╰─ tagShorthandId.quasis[0] "foo"
+ │  │├─ tagShorthandId "#foo"
+ │  │╰─ tagName
+ ╰─ ╰─ openTagStart
+2╭─ <#foo.bar name="Frank"></>
+ │  │││  ││   │   ││      ││ ├─ closeTagEnd()
+ │  │││  ││   │   ││      ││ ╰─ closeTagName
+ │  │││  ││   │   ││      │╰─ closeTagStart "</"
+ │  │││  ││   │   ││      ╰─ openTagEnd
+ │  │││  ││   │   │╰─ attrValue.value "\"Frank\""
+ │  │││  ││   │   ╰─ attrValue "=\"Frank\""
+ │  │││  ││   ╰─ attrName "name"
+ │  │││  │╰─ tagShorthandClass.quasis[0] "bar"
+ │  │││  ╰─ tagShorthandClass ".bar"
+ │  ││╰─ tagShorthandId.quasis[0] "foo"
+ │  │├─ tagShorthandId "#foo"
+ │  │╰─ tagName
+ ╰─ ╰─ openTagStart
+3╭─ <.bar.baz></.bar.baz>
+ │  │││  ││  ││ │       ╰─ closeTagEnd()
+ │  │││  ││  ││ ╰─ closeTagName ".bar.baz"
+ │  │││  ││  │╰─ closeTagStart "</"
+ │  │││  ││  ╰─ openTagEnd
+ │  │││  │╰─ tagShorthandClass.quasis[0] "baz"
+ │  │││  ╰─ tagShorthandClass ".baz"
+ │  ││╰─ tagShorthandClass.quasis[0] "bar"
+ │  │├─ tagShorthandClass ".bar"
+ │  │╰─ tagName
+ ╰─ ╰─ openTagStart
+4╭─ <div.foo></>
+ │  ││  ││  ││ ├─ closeTagEnd(div)
+ │  ││  ││  ││ ╰─ closeTagName
+ │  ││  ││  │╰─ closeTagStart "</"
+ │  ││  ││  ╰─ openTagEnd
+ │  ││  │╰─ tagShorthandClass.quasis[0] "foo"
+ │  ││  ╰─ tagShorthandClass ".foo"
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart
+5╭─ <span.foo></span.foo>
+ │  ││   ││  ││ │       ╰─ closeTagEnd(span)
+ │  ││   ││  ││ ╰─ closeTagName "span.foo"
+ │  ││   ││  │╰─ closeTagStart "</"
+ │  ││   ││  ╰─ openTagEnd
+ │  ││   │╰─ tagShorthandClass.quasis[0] "foo"
+ │  ││   ╰─ tagShorthandClass ".foo"
+ │  │╰─ tagName "span"
+ ╰─ ╰─ openTagStart

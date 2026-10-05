@@ -1,0 +1,13 @@
+1╭─ ---
+2╭─ <if(notEmpty(data.colors))>
+ │  ││ ││                     ╰─ openTagEnd
+ │  ││ │╰─ tagArgs.value "notEmpty(data.colors)"
+ │  ││ ╰─ tagArgs "(notEmpty(data.colors))"
+ │  │╰─ tagName "if"
+ ╰─ ╰─ openTagStart
+3╭─ </if>
+ │  │ │ ╰─ closeTagEnd(if)
+ │  │ ╰─ closeTagName "if"
+ │  ├─ text "\n"
+ ╰─ ╰─ closeTagStart "</"
+4╰─ ---

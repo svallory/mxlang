@@ -1,0 +1,15 @@
+1╭─ <script>
+ │  ││     ╰─ openTagEnd
+ │  │╰─ tagName "script"
+ ╰─ ╰─ openTagStart
+2╭─     var foo = `Text 1: ${content}`;
+ ╰─ ╰─ text "\n    var foo = `Text 1: ${content}`;\n    // ${foo}\n    /*\n        ${bar}\n    */\n"
+3├─     // ${foo}
+4├─     /*
+5├─         ${bar}
+6├─     */
+7╭─ </script>
+ │  │ │     ╰─ closeTagEnd(script)
+ │  │ ╰─ closeTagName "script"
+ ╰─ ╰─ closeTagStart "</"
+8╰─ 

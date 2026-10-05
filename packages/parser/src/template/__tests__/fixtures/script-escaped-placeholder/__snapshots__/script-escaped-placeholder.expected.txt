@@ -1,0 +1,15 @@
+1╭─ <script>
+ │  ││     ╰─ openTagEnd
+ │  │╰─ tagName "script"
+ ╰─ ╰─ openTagStart
+2╭─ \${test}
+ │  │╰─ text "${test}\n\\"
+ ╰─ ╰─ text "\n"
+3╭─ \\${test}
+ │    │ ╰─ placeholder:escape.value "test"
+ ╰─   ╰─ placeholder:escape "${test}"
+4╭─ </script>
+ │  │ │     ╰─ closeTagEnd(script)
+ │  │ ╰─ closeTagName "script"
+ │  ├─ text "\n"
+ ╰─ ╰─ closeTagStart "</"

@@ -1,0 +1,37 @@
+1╭─ <div data=/foo//>
+ │  ││   │   ││    ╰─ openTagEnd:selfClosed "/>"
+ │  ││   │   │╰─ attrValue.value "/foo/"
+ │  ││   │   ╰─ attrValue "=/foo/"
+ │  ││   ╰─ attrName "data"
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart
+2╭─ <div data=/foo/></div>
+ │  ││   │   ││    ││ │  ╰─ closeTagEnd(div)
+ │  ││   │   ││    ││ ╰─ closeTagName "div"
+ │  ││   │   ││    │╰─ closeTagStart "</"
+ │  ││   │   ││    ╰─ openTagEnd
+ │  ││   │   │╰─ attrValue.value "/foo/"
+ │  ││   │   ╰─ attrValue "=/foo/"
+ │  ││   ╰─ attrName "data"
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart
+3╭─ <div data=/flag/i></div>
+ │  ││   │   ││      ││ │  ╰─ closeTagEnd(div)
+ │  ││   │   ││      ││ ╰─ closeTagName "div"
+ │  ││   │   ││      │╰─ closeTagStart "</"
+ │  ││   │   ││      ╰─ openTagEnd
+ │  ││   │   │╰─ attrValue.value "/flag/i"
+ │  ││   │   ╰─ attrValue "=/flag/i"
+ │  ││   ╰─ attrName "data"
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart
+4╭─ <div data=/with space/></div>
+ │  ││   │   ││           ││ │  ╰─ closeTagEnd(div)
+ │  ││   │   ││           ││ ╰─ closeTagName "div"
+ │  ││   │   ││           │╰─ closeTagStart "</"
+ │  ││   │   ││           ╰─ openTagEnd
+ │  ││   │   │╰─ attrValue.value "/with space/"
+ │  ││   │   ╰─ attrValue "=/with space/"
+ │  ││   ╰─ attrName "data"
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart

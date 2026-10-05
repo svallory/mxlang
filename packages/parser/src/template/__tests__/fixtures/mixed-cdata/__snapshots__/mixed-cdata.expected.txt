@@ -1,0 +1,20 @@
+1╭─ p class="foo"
+ │  │ │    │╰─ attrValue.value "\"foo\""
+ │  │ │    ╰─ attrValue "=\"foo\""
+ │  │ ╰─ attrName "class"
+ ╰─ ╰─ tagName
+2╭─     <![CDATA[Hello World]]> This is after CDATA
+ │  │   │        │             ╰─ text " This is after CDATA"
+ │  │   │        ╰─ cdata.value "Hello World"
+ │  │   ╰─ cdata "<![CDATA[Hello World]]>"
+ ╰─ ╰─ openTagEnd
+3╭─ div class="bar" -- <![CDATA[Hello World]]>
+ │  │   │    ││     │  │        │             ╰─ closeTagEnd(div)
+ │  │   │    ││     │  │        ╰─ cdata.value "Hello World"
+ │  │   │    ││     │  ╰─ cdata "<![CDATA[Hello World]]>"
+ │  │   │    ││     ╰─ openTagEnd
+ │  │   │    │╰─ attrValue.value "\"bar\""
+ │  │   │    ╰─ attrValue "=\"bar\""
+ │  │   ╰─ attrName "class"
+ │  ├─ closeTagEnd(p)
+ ╰─ ╰─ tagName "div"

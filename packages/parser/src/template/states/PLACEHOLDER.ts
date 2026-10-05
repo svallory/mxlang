@@ -1,0 +1,106 @@
+import {
+  matchesCloseCurlyBrace,
+  type Meta,
+  Parser,
+  STATE,
+  type StateDefinition,
+} from "../internal.ts";
+import * as CODE from "../util/codes.ts";
+import * as ErrorCode from "../util/error-code.ts";
+
+interface PlaceholderMeta extends Meta {
+  escape: boolean;
+}
+export const PLACEHOLDER: StateDefinition<PlaceholderMeta> = {
+  name: "PLACEHOLDER",
+
+  enter(parent, start) {
+    return {
+      state: PLACEHOLDER as StateDefinition,
+      parent,
+      start,
+      end: start,
+      escape: false,
+    };
+  },
+
+  exit(placeholder) {
+    this.options.onPlaceholder?.({
+      start: placeholder.start,
+      end: placeholder.end,
+      escape: placeholder.escape,
+      value: {
+        start: placeholder.start + (placeholder.escape ? 2 : 3), // ignore ${ or $!{
+        end: placeholder.end - 1, // ignore }
+      },
+    });
+  },
+
+  // Never parses directly: checkForPlaceholder immediately stacks EXPRESSION
+  // on top, and return() exits this state as soon as the expression finishes.
+  /* node:coverage ignore next */
+  parse() {},
+
+  return(child) {
+    if (child.start === child.end) {
+      return this.emitError(
+        child,
+        ErrorCode.MALFORMED_PLACEHOLDER,
+        "Invalid placeholder, the expression cannot be missing",
+      );
+    }
+    this.pos++; // skip }
+    this.exitState();
+  },
+};
+
+export function checkForPlaceholder(parser: Parser, code: number) {
+  let ahead = 0;
+  let curCode = code;
+
+  while (curCode === CODE.BACK_SLASH) {
+    curCode = parser.lookAtCharCodeAhead(++ahead);
+  }
+
+  if (curCode === CODE.DOLLAR) {
+    let escape = true;
+    curCode = parser.lookAtCharCodeAhead(ahead + 1);
+
+    if (curCode === CODE.EXCLAMATION) {
+      escape = false;
+      curCode = parser.lookAtCharCodeAhead(ahead + 2);
+    }
+
+    if (curCode === CODE.OPEN_CURLY_BRACE) {
+      if (ahead) {
+        const remainder = ahead % 2;
+        const extra = (ahead + remainder) / 2; // Number of backslashes to omit from output.
+
+        if (remainder) {
+          // Odd backslashes: the $ is escaped, treat ${...} as literal text.
+          parser.endText();
+          parser.pos += extra;
+          parser.startText();
+          // the kept half of the backslashes, then the ${ or $!{
+          parser.pos += ahead - extra + (escape ? 2 : 3);
+          return true;
+        }
+
+        // Even backslashes: emit half as text, skip other half, then enter placeholder.
+        parser.startText();
+        parser.pos += extra; // include half of the backslashes.
+        parser.endText();
+        parser.pos += extra;
+      }
+
+      parser.endText();
+      parser.enterState(PLACEHOLDER).escape = escape;
+      parser.pos += escape ? 2 : 3; // skip ${ or $!{
+      parser.enterState(STATE.EXPRESSION).shouldTerminate =
+        matchesCloseCurlyBrace;
+      return true;
+    }
+  }
+
+  return false;
+}

@@ -1,0 +1,64 @@
+1╭─ tag a = function (x) { console.log("y") } b
+ │  │   │ │ │                                 ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "function (x) { console.log(\"y\") }"
+ │  │   │ ╰─ attrValue "= function (x) { console.log(\"y\") }"
+ │  │   ╰─ attrName
+ ╰─ ╰─ tagName "tag"
+2╭─ tag a = (x) => { console.log("y") } b
+ │  │   │ │ │                           ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "(x) => { console.log(\"y\") }"
+ │  │   │ ╰─ attrValue "= (x) => { console.log(\"y\") }"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(tag)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "tag"
+3╭─ tag a = x => { console.log("y") } b
+ │  │   │ │ │                         ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "x => { console.log(\"y\") }"
+ │  │   │ ╰─ attrValue "= x => { console.log(\"y\") }"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(tag)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "tag"
+4╭─ tag a = x => y b
+ │  │   │ │ │      ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "x => y"
+ │  │   │ ╰─ attrValue "= x => y"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(tag)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "tag"
+5╭─ tag a = x => y + 1 b
+ │  │   │ │ │          ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "x => y + 1"
+ │  │   │ ╰─ attrValue "= x => y + 1"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(tag)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "tag"
+6╭─ tag a = x => y = 1 b
+ │  │   │ │ │          ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "x => y = 1"
+ │  │   │ ╰─ attrValue "= x => y = 1"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(tag)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "tag"
+7╭─ tag a = async x => { console.log("y") } b
+ │  │   │ │ │                               ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "async x => { console.log(\"y\") }"
+ │  │   │ ╰─ attrValue "= async x => { console.log(\"y\") }"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(tag)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "tag"
+8╭─ tag a = async function (x) { console.log("y") } b
+ │  │   │ │ │                                       │├─ closeTagEnd(tag)
+ │  │   │ │ │                                       │╰─ openTagEnd
+ │  │   │ │ │                                       ╰─ attrName
+ │  │   │ │ ╰─ attrValue.value "async function (x) { console.log(\"y\") }"
+ │  │   │ ╰─ attrValue "= async function (x) { console.log(\"y\") }"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(tag)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "tag"

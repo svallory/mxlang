@@ -1,0 +1,18 @@
+1╭─ div a=class Test extends Other { hello() {} }
+ │  │   ││╰─ attrValue.value "class Test extends Other { hello() {} }"
+ │  │   │╰─ attrValue "=class Test extends Other { hello() {} }"
+ │  │   ╰─ attrName
+ ╰─ ╰─ tagName "div"
+2╭─ div a=input.class Test extends Other { hello() {} }
+ │  │   │││           │    │       │     │             ├─ closeTagEnd(div)
+ │  │   │││           │    │       │     │             ╰─ openTagEnd
+ │  │   │││           │    │       │     ╰─ attrName "{ hello() {} }"
+ │  │   │││           │    │       ╰─ attrName "Other"
+ │  │   │││           │    ╰─ attrName "extends"
+ │  │   │││           ╰─ attrName "Test"
+ │  │   ││╰─ attrValue.value "input.class"
+ │  │   │╰─ attrValue "=input.class"
+ │  │   ╰─ attrName
+ │  ├─ closeTagEnd(div)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "div"

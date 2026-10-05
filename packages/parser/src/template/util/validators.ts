@@ -1,0 +1,109 @@
+import { type Meta, Parser, STATE, type StateDefinition } from "../internal.ts";
+import {
+  prepareScriptlet,
+  prepareStatement,
+  shouldTerminateConciseAttrValue,
+  shouldTerminateHtmlAttrValue,
+} from "../states/index.ts";
+import * as CODE from "../util/codes.ts";
+import * as VALIDITY from "../util/validity.ts";
+
+// The stubs only satisfy the StateDefinition interface; the root state is
+// assigned directly (never entered) and the driving loop stops it from parsing.
+/* node:coverage disable */
+const ROOT_STATE: StateDefinition = {
+  name: "ROOT",
+  enter() {
+    return ROOT_RANGE;
+  },
+  exit() {},
+  parse() {},
+  return() {},
+};
+/* node:coverage enable */
+const ROOT_RANGE = {
+  state: ROOT_STATE,
+  parent: undefined as unknown as Meta,
+  start: 0,
+  end: 0,
+};
+
+export const Validity = VALIDITY;
+export type Validity = (typeof VALIDITY)[keyof typeof VALIDITY];
+
+export function isValidStatement(code: string): Validity {
+  return isValid(code, true, prepareStatement);
+}
+
+export function isValidScriptlet(code: string): Validity {
+  return isValid(code, true, prepareScriptlet);
+}
+
+export function isValidAttrValue(code: string, concise: boolean): Validity {
+  return isValid(code, concise, prepareAttrValue);
+}
+
+function prepareAttrValue(expr: STATE.ExpressionMeta, parser: Parser) {
+  expr.operators = true;
+  expr.terminatedByWhitespace = true;
+  expr.shouldTerminate = parser.isConcise
+    ? shouldTerminateConciseAttrValue
+    : shouldTerminateHtmlAttrValue;
+}
+
+function isValid(
+  data: string,
+  concise: boolean,
+  prepare: (expr: STATE.ExpressionMeta, parser: Parser) => void,
+): Validity {
+  let hasError = false;
+  const parser = new Parser({
+    onError: () => {
+      // Error counts as invalid only when not at EOF (mid-expression errors).
+      // Non-terminatedByEOL expressions trigger a generic emitError at EOF that
+      // is not a real error for validation purposes.
+      if (parser.pos < parser.maxPos) hasError = true;
+    },
+  });
+  const maxPos = (parser.maxPos = data.length);
+  parser.pos = 0;
+  parser.data = data;
+  parser.textPos = -1;
+  parser.indent = "";
+  parser.isConcise = concise;
+  parser.beginMixedMode = parser.endingMixedModeAtEOL = false;
+  parser.lines = parser.activeTag = parser.activeAttr = undefined;
+  parser.activeState = ROOT_STATE;
+  parser.activeRange = ROOT_RANGE;
+  const expr = parser.enterState(STATE.EXPRESSION);
+  prepare(expr, parser);
+
+  while (parser.pos <= maxPos) {
+    const childActive = parser.activeRange !== expr;
+    const startPos = parser.pos;
+    parser.activeState.parse.call(parser, data, maxPos, parser.activeRange);
+
+    if (parser.activeRange === ROOT_RANGE) {
+      // expr exited: valid only if it consumed all the input
+      if (parser.pos >= maxPos && !expr.groupStack.length) break;
+      return VALIDITY.invalid;
+    }
+
+    // Newlines consumed by child states (template literals, comments, escaped
+    // string continuations) still count as unguarded while no group is open.
+    if (childActive && !expr.hadUnguardedNewline && !expr.groupStack.length) {
+      for (let i = startPos; i < parser.pos; i++) {
+        if (data.charCodeAt(i) === CODE.NEWLINE) {
+          expr.hadUnguardedNewline = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!hasError && !expr.groupStack.length) {
+    return expr.hadUnguardedNewline ? VALIDITY.valid : VALIDITY.enclosed;
+  }
+
+  return VALIDITY.invalid;
+}

@@ -1,0 +1,29 @@
+1╭─ div /* c */ a=1
+ │  │   │ │     ││╰─ attrValue.value
+ │  │   │ │     │╰─ attrValue "=1"
+ │  │   │ │     ╰─ attrName
+ │  │   │ ╰─ openTagComment.value " c "
+ │  │   ╰─ openTagComment "/* c */"
+ ╰─ ╰─ tagName "div"
+2╭─ span // d
+ │  │    │ ╰─ openTagComment.value " d"
+ │  │    ╰─ openTagComment "// d"
+ │  ├─ closeTagEnd(div)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "span"
+3╭─ input
+ │  ├─ closeTagEnd(span)
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "input"
+4╭─   // e
+ │    │ ╰─ openTagComment.value " e"
+ ╰─   ╰─ openTagComment "// e"
+5╭─   /* f */
+ │    │ ╰─ openTagComment.value " f "
+ ╰─   ╰─ openTagComment "/* f */"
+6╭─   ,type="text"
+ │     │   │╰─ attrValue.value "\"text\""
+ │     │   ╰─ attrValue "=\"text\""
+ ╰─    ╰─ attrName "type"
+7╭─ 
+ ╰─ ╰─ openTagEnd

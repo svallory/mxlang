@@ -1,0 +1,12 @@
+1╭─ span -- Hello <b>test</b>
+ │  │    │  │     ││││   │ ││╰─ closeTagEnd(span)
+ │  │    │  │     ││││   │ │╰─ closeTagEnd(b)
+ │  │    │  │     ││││   │ ╰─ closeTagName
+ │  │    │  │     ││││   ╰─ closeTagStart "</"
+ │  │    │  │     │││╰─ text "test"
+ │  │    │  │     ││╰─ openTagEnd
+ │  │    │  │     │╰─ tagName
+ │  │    │  │     ╰─ openTagStart
+ │  │    │  ╰─ text "Hello "
+ │  │    ╰─ openTagEnd
+ ╰─ ╰─ tagName "span"

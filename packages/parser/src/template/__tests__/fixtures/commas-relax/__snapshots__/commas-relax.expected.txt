@@ -1,0 +1,27 @@
+1╭─ static const x = {
+ ╰─ ╰─ tagName "static"
+2├─   hello: true
+3├─ };
+4╭─ 
+ ╰─ ╰─ openTagEnd
+5╭─ import mod, { b as bar } from "./bar"
+ ╰─ ╰─ tagName "import"
+6╭─ export interface Input
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "export"
+7├─   extends Pick<StarRatingInput, "value" | "a11y-text">,
+8├─     Link,
+9├─     BaseInput {
+10├─   reviewCount: number;
+11├─ }
+12╭─ 
+  ╰─ ╰─ openTagEnd
+13╭─ export interface Input {
+  ╰─ ╰─ tagName "export"
+14├─   foo: string;
+15├─ }
+16╭─ $ const bar = "bar"
+  │  │ ╰─ scriptlet.value "const bar = \"bar\""
+  │  ├─ openTagEnd
+  ╰─ ╰─ scriptlet "$ const bar = \"bar\""
+17╰─ 

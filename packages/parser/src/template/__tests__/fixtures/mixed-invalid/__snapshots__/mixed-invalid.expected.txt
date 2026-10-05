@@ -1,0 +1,57 @@
+1╭─ var colors=['red', 'green', 'blue']
+ │  │   │     │╰─ attrValue.value "['red', 'green', 'blue']"
+ │  │   │     ╰─ attrValue "=['red', 'green', 'blue']"
+ │  │   ╰─ attrName "colors"
+ ╰─ ╰─ tagName "var"
+2╭─ <div>
+ │  ││  ╰─ openTagEnd
+ │  │╰─ tagName "div"
+ │  ├─ closeTagEnd(var)
+ │  ├─ openTagEnd
+ ╰─ ╰─ openTagStart
+3╭─     <span class="foo">
+ │  │   ││    │    ││    ╰─ openTagEnd
+ │  │   ││    │    │╰─ attrValue.value "\"foo\""
+ │  │   ││    │    ╰─ attrValue "=\"foo\""
+ │  │   ││    ╰─ attrName "class"
+ │  │   │╰─ tagName "span"
+ │  │   ╰─ openTagStart
+ ╰─ ╰─ text "\n    "
+4╭─         Hello ${data.name}!
+ │  │             │ │         ╰─ text "!\n        "
+ │  │             │ ╰─ placeholder:escape.value "data.name"
+ │  │             ╰─ placeholder:escape "${data.name}"
+ ╰─ ╰─ text "\n        Hello "
+5╭─         </span>
+ │          │ │   ╰─ closeTagEnd(span)
+ │          │ ╰─ closeTagName "span"
+ ╰─         ╰─ closeTagStart "</"
+6╭─ </div> <b>This is not
+ │  │ │  │││││╰─ text "This is not\n    allowed"
+ │  │ │  ││││╰─ openTagEnd
+ │  │ │  │││╰─ tagName
+ │  │ │  ││╰─ openTagStart
+ │  │ │  │╰─ text " "
+ │  │ │  ╰─ closeTagEnd(div)
+ │  │ ╰─ closeTagName "div"
+ │  ├─ text "\n"
+ ╰─ ╰─ closeTagStart "</"
+7╭─     allowed</b>
+ │             │ │╰─ closeTagEnd(b)
+ │             │ ╰─ closeTagName
+ ╰─            ╰─ closeTagStart "</"
+8╭─ p class="foo"
+ │  │ │    │╰─ attrValue.value "\"foo\""
+ │  │ │    ╰─ attrValue "=\"foo\""
+ │  │ ╰─ attrName "class"
+ ╰─ ╰─ tagName
+9╭─     <span>Test</span>
+ │  │   ││   ││   │ │   │╰─ closeTagEnd(p)
+ │  │   ││   ││   │ │   ╰─ closeTagEnd(span)
+ │  │   ││   ││   │ ╰─ closeTagName "span"
+ │  │   ││   ││   ╰─ closeTagStart "</"
+ │  │   ││   │╰─ text "Test"
+ │  │   ││   ╰─ openTagEnd
+ │  │   │╰─ tagName "span"
+ │  │   ╰─ openTagStart
+ ╰─ ╰─ openTagEnd

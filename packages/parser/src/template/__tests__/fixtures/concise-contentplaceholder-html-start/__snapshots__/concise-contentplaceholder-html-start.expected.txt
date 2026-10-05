@@ -1,0 +1,11 @@
+1╭─ -- ${data.name} some html - <b>bold</b>
+ │     │ │         │            ││││   │ │╰─ closeTagEnd(b)
+ │     │ │         │            ││││   │ ╰─ closeTagName
+ │     │ │         │            ││││   ╰─ closeTagStart "</"
+ │     │ │         │            │││╰─ text "bold"
+ │     │ │         │            ││╰─ openTagEnd
+ │     │ │         │            │╰─ tagName
+ │     │ │         │            ╰─ openTagStart
+ │     │ │         ╰─ text " some html - "
+ │     │ ╰─ placeholder:escape.value "data.name"
+ ╰─    ╰─ placeholder:escape "${data.name}"

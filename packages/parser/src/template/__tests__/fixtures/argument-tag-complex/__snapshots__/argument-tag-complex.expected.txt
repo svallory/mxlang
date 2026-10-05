@@ -1,0 +1,9 @@
+1╭─ <for (x in ["Hello ${name}!", "(World)"])></for>
+ │  ││   ││                                  ││ │  ╰─ closeTagEnd(for)
+ │  ││   ││                                  ││ ╰─ closeTagName "for"
+ │  ││   ││                                  │╰─ closeTagStart "</"
+ │  ││   ││                                  ╰─ openTagEnd
+ │  ││   │╰─ tagArgs.value "x in [\"Hello ${name}!\", \"(World)\"]"
+ │  ││   ╰─ tagArgs "(x in [\"Hello ${name}!\", \"(World)\"])"
+ │  │╰─ tagName "for"
+ ╰─ ╰─ openTagStart

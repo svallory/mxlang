@@ -1,0 +1,5 @@
+1╭─ span -- Hello World
+ │  │    │  │          ╰─ closeTagEnd(span)
+ │  │    │  ╰─ text "Hello World"
+ │  │    ╰─ openTagEnd
+ ╰─ ╰─ tagName "span"

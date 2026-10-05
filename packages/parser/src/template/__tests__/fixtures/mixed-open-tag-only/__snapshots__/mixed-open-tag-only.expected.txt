@@ -1,0 +1,27 @@
+1╭─ var colors=['red', 'green', 'blue']
+ │  │   │     │╰─ attrValue.value "['red', 'green', 'blue']"
+ │  │   │     ╰─ attrValue "=['red', 'green', 'blue']"
+ │  │   ╰─ attrName "colors"
+ ╰─ ╰─ tagName "var"
+2╭─ <img src="marko.png">
+ │  ││   │  ││          ╰─ openTagEnd
+ │  ││   │  │╰─ attrValue.value "\"marko.png\""
+ │  ││   │  ╰─ attrValue "=\"marko.png\""
+ │  ││   ╰─ attrName "src"
+ │  │╰─ tagName "img"
+ │  ├─ closeTagEnd(var)
+ │  ├─ openTagEnd
+ ╰─ ╰─ openTagStart
+3╭─ img src="marko2.png"
+ │  │   │  │╰─ attrValue.value "\"marko2.png\""
+ │  │   │  ╰─ attrValue "=\"marko2.png\""
+ │  │   ╰─ attrName "src"
+ ╰─ ╰─ tagName "img"
+4╭─ div class="foo"
+ │  │   │    ││    ├─ closeTagEnd(div)
+ │  │   │    ││    ╰─ openTagEnd
+ │  │   │    │╰─ attrValue.value "\"foo\""
+ │  │   │    ╰─ attrValue "=\"foo\""
+ │  │   ╰─ attrName "class"
+ │  ├─ openTagEnd
+ ╰─ ╰─ tagName "div"

@@ -1,0 +1,16 @@
+1╭─ <span>
+ │  ││   ╰─ openTagEnd
+ │  │╰─ tagName "span"
+ ╰─ ╰─ openTagStart
+2╭─     <div.color/>
+ │  │   ││  ││    ╰─ openTagEnd:selfClosed "/>"
+ │  │   ││  │╰─ tagShorthandClass.quasis[0] "color"
+ │  │   ││  ╰─ tagShorthandClass ".color"
+ │  │   │╰─ tagName "div"
+ │  │   ╰─ openTagStart
+ ╰─ ╰─ text "\n    "
+3╭─ </span>
+ │  │ │   ╰─ closeTagEnd(span)
+ │  │ ╰─ closeTagName "span"
+ │  ├─ text "\n"
+ ╰─ ╰─ closeTagStart "</"

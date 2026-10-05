@@ -1,0 +1,18 @@
+1╭─ p
+ ╰─ ╰─ tagName
+2╭─     ---
+ ╰─ ╰─ openTagEnd
+3╭─     Hello <strong>Frank</strong>
+ │      │     ││     ││    │ │     ╰─ closeTagEnd(strong)
+ │      │     ││     ││    │ ╰─ closeTagName "strong"
+ │      │     ││     ││    ╰─ closeTagStart "</"
+ │      │     ││     │╰─ text "Frank"
+ │      │     ││     ╰─ openTagEnd
+ │      │     │╰─ tagName "strong"
+ │      │     ╰─ openTagStart
+ ╰─     ╰─ text "Hello "
+4╭─     Line 2
+ │  │   ╰─ text "Line 2"
+ ╰─ ╰─ text "\n"
+5╭─     ---
+ ╰─        ╰─ closeTagEnd(p)

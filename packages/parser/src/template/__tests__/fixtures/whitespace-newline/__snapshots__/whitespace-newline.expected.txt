@@ -1,0 +1,19 @@
+1╭─ <div></div>
+ │  ││  ││ │  ╰─ closeTagEnd(div)
+ │  ││  ││ ╰─ closeTagName "div"
+ │  ││  │╰─ closeTagStart "</"
+ │  ││  ╰─ openTagEnd
+ │  │╰─ tagName "div"
+ ╰─ ╰─ openTagStart
+2├─ 
+3├─ 
+4╭─ <span>
+ │  ││   ╰─ openTagEnd
+ │  │╰─ tagName "span"
+ ╰─ ╰─ openTagStart
+5╭─ 
+ ╰─ ╰─ text "\n\n"
+6╭─ </span>
+ │  │ │   ╰─ closeTagEnd(span)
+ │  │ ╰─ closeTagName "span"
+ ╰─ ╰─ closeTagStart "</"

@@ -1,0 +1,181 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import {
+  isValidAttrValue,
+  isValidScriptlet,
+  isValidStatement,
+} from "../index.ts";
+
+describe("validation helpers", () => {
+  describe("isValidStatement", () => {
+    it("accepts single-line expressions", () => {
+      assert.equal(isValidStatement("foo + bar"), 2);
+    });
+
+    it("accepts indented continuation lines", () => {
+      assert.equal(isValidStatement("foo\n  + bar"), 1);
+    });
+
+    it("rejects unindented continuation lines", () => {
+      assert.equal(isValidStatement("foo\nbar"), 0);
+    });
+
+    it("accepts indented ternary continuation", () => {
+      assert.equal(isValidStatement("foo ?\n  bar : baz"), 2);
+    });
+
+    it("rejects unterminated groups", () => {
+      assert.equal(isValidStatement("(foo"), 0);
+    });
+
+    it("rejects mismatched closing groups", () => {
+      assert.equal(isValidStatement(")"), 0);
+    });
+
+    it("treats newlines in template literals as unguarded", () => {
+      assert.equal(isValidStatement("`foo\nbar`"), 1);
+    });
+
+    it("treats newlines in enclosed template literals as guarded", () => {
+      assert.equal(isValidStatement("(`foo\nbar`)"), 2);
+    });
+
+    it("reads type arguments in a type statement as a group", () => {
+      assert.equal(
+        isValidStatement("type A = Record<\n  string,\n  number\n>"),
+        2,
+      );
+    });
+
+    it("ends a type statement at an unindented newline", () => {
+      assert.equal(isValidStatement("type A = B<C>\nfoo"), 0);
+    });
+
+    it("reads a type statement after extra whitespace", () => {
+      assert.equal(isValidStatement("  type A = B<C>\nfoo"), 0);
+    });
+  });
+
+  describe("isValidScriptlet", () => {
+    it("accepts single-line expressions", () => {
+      assert.equal(isValidScriptlet("foo + bar"), 2);
+    });
+
+    it("ends a type scriptlet at a line-final void", () => {
+      assert.equal(isValidScriptlet("type H = () => void\nfoo"), 0);
+    });
+
+    it("reads an assignment to a variable named type as JavaScript", () => {
+      assert.equal(isValidScriptlet("type = a < b"), 2);
+    });
+
+    it("rejects indented continuation lines", () => {
+      assert.equal(isValidScriptlet("foo\n  + bar"), 0);
+    });
+
+    it("rejects unindented continuation lines", () => {
+      assert.equal(isValidScriptlet("foo\nbar"), 0);
+    });
+
+    it("accepts indented ternary continuation", () => {
+      assert.equal(isValidScriptlet("foo ?\n  bar : baz"), 2);
+    });
+
+    it("rejects unterminated groups", () => {
+      assert.equal(isValidScriptlet("(foo"), 0);
+    });
+
+    it("rejects mismatched closing groups", () => {
+      assert.equal(isValidScriptlet(")"), 0);
+    });
+  });
+
+  describe("isValidAttrValue", () => {
+    it("accepts html attr values with operators", () => {
+      assert.equal(isValidAttrValue("foo + bar", false), 2);
+    });
+
+    it("accepts html attr values containing =>", () => {
+      assert.equal(isValidAttrValue("foo=>bar", false), 2);
+    });
+
+    it("rejects html attr values terminated by >", () => {
+      assert.equal(isValidAttrValue("foo >", false), 0);
+    });
+
+    it("accepts concise attr values with >", () => {
+      assert.equal(isValidAttrValue("foo > bar", true), 2);
+    });
+
+    it("rejects html attr values terminated by commas", () => {
+      assert.equal(isValidAttrValue("foo, bar", false), 0);
+    });
+
+    it("accepts html attr values containing semicolons", () => {
+      assert.equal(isValidAttrValue("foo;", false), 2);
+    });
+
+    it("rejects concise attr values terminated by semicolons", () => {
+      assert.equal(isValidAttrValue("foo;", true), 0);
+    });
+
+    it("accepts html attr values with decrement operator", () => {
+      assert.equal(isValidAttrValue("foo --", false), 2);
+    });
+
+    it("rejects concise attr values with decrement operator", () => {
+      assert.equal(isValidAttrValue("foo --", true), 0);
+    });
+
+    it("rejects attr values separated only by whitespace", () => {
+      assert.equal(isValidAttrValue("foo bar", false), 0);
+    });
+
+    it("accepts continued multiline logical expression", () => {
+      assert.equal(isValidAttrValue("a &&\nb", true), 1);
+    });
+
+    it("accepts continued multiline enclosed logical expression", () => {
+      assert.equal(isValidAttrValue("a && (\nb\n)", true), 2);
+    });
+
+    it("accepts keyword operator operand ending the input", () => {
+      assert.equal(isValidAttrValue("a as b", true), 2);
+    });
+
+    it("rejects keyword operator with no operand", () => {
+      assert.equal(isValidAttrValue("a as ", true), 0);
+    });
+
+    it("treats a trailing line comment as unguarded", () => {
+      assert.equal(isValidAttrValue('"hello" // c', false), 1);
+      assert.equal(isValidAttrValue('"hello" // c', true), 1);
+      assert.equal(isValidAttrValue("foo // c", false), 1);
+      assert.equal(isValidAttrValue("1 + 2 // c", false), 1);
+      assert.equal(isValidAttrValue('"hello" /* c */ // d', false), 1);
+    });
+
+    it("keeps a self-closing block comment enclosed", () => {
+      assert.equal(isValidAttrValue('"hello" /* c */', false), 2);
+    });
+
+    it("keeps a line comment guarded by a group enclosed", () => {
+      assert.equal(isValidAttrValue('("hello" // c\n)', false), 2);
+    });
+
+    it("treats a newline after a value as unguarded", () => {
+      assert.equal(isValidAttrValue('"hello"\n// c', false), 1);
+    });
+  });
+
+  describe("trailing line comments", () => {
+    it("downgrades statements with a trailing line comment", () => {
+      assert.equal(isValidStatement("foo // c"), 1);
+    });
+
+    it("downgrades scriptlets with a trailing line comment", () => {
+      assert.equal(isValidScriptlet("foo // c"), 1);
+    });
+  });
+});
