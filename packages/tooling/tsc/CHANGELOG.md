@@ -4,6 +4,8 @@
 
 - **Tests (render-consumers, decision 155):** a dynamic tag over a `<return>` unit types `/var` as `number` (`undefined` for a plain function), and the diagnostic for an html unit's default export prints `((input: Input) => string) & { render: … }`. Host-dispatch goldens: only the `export default` lines moved.
 
+- **Added:** `mx-tsc`'s data check honours `package.json#mx.data.imports` (`"pass"` | `"reject"`; invalid value: error at the value, strict).
+
 - **Changed (bridge-host, decision 154):** the extra extensions and region plugins come from the registry's file kinds (`moduleFileExtensions()`, `createRegionLanguagePlugins`) instead of a literal `.solid.mx`; same list and order today.
 
 - **Tests (name-sugar-default-value):** host-dispatch row `sugar-default-value` (preact: the sugar tokens and each value expression map exactly); `sugar-value` is now the second-default-value error row.

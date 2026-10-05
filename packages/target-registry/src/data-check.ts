@@ -69,9 +69,11 @@ export interface DataCheckResult {
 
 type Structural = NonNullable<ParseDataOptions["structural"]>;
 type UnknownTags = NonNullable<ParseDataOptions["unknownTags"]>;
+type Imports = NonNullable<ParseDataOptions["imports"]>;
 
 const STRUCTURAL: readonly Structural[] = ["pass", "reject"];
 const UNKNOWN_TAGS: readonly UnknownTags[] = ["allow", "reject"];
+const IMPORTS: readonly Imports[] = ["pass", "reject"];
 
 interface Manifest {
   file: string;
@@ -117,6 +119,8 @@ export function isDataProject(dir: string): boolean {
 interface DataOptions {
   structural: Structural;
   unknownTags: UnknownTags;
+  /** Absent: `parseData` defaults it to the effective `structural`. */
+  imports?: Imports;
 }
 
 type Report = (diagnostic: DataCheckDiagnostic) => void;
@@ -153,7 +157,7 @@ function dataOptions(manifest: Manifest, report: Report): DataOptions {
   ) {
     fail(
       undefined,
-      'mx.data must be an object: { "structural"?: "pass" | "reject", "unknownTags"?: "allow" | "reject", "defaultTag"?: string }',
+      'mx.data must be an object: { "structural"?: "pass" | "reject", "unknownTags"?: "allow" | "reject", "imports"?: "pass" | "reject", "defaultTag"?: string }',
     );
     return options;
   }
@@ -161,6 +165,7 @@ function dataOptions(manifest: Manifest, report: Report): DataOptions {
   const spec = [
     ["structural", STRUCTURAL],
     ["unknownTags", UNKNOWN_TAGS],
+    ["imports", IMPORTS],
   ] as const;
   for (const [key, allowed] of spec) {
     const value = given[key];
@@ -171,6 +176,8 @@ function dataOptions(manifest: Manifest, report: Report): DataOptions {
     ) {
       (options as unknown as Record<string, string>)[key] = value;
     } else {
+      // An invalid `imports` is strict too, whatever `structural` says.
+      if (key === "imports") options.imports = "reject";
       fail(
         key,
         `mx.data.${key} must be ${allowed.map((v) => `"${v}"`).join(" or ")}, got ${JSON.stringify(value)}; using "reject"`,
@@ -179,13 +186,18 @@ function dataOptions(manifest: Manifest, report: Report): DataOptions {
   }
   for (const key of Object.keys(given)) {
     // `defaultTag` is read and checked with the policy (decision 145).
-    if (key === "structural" || key === "unknownTags" || key === "defaultTag")
+    if (
+      key === "structural" ||
+      key === "unknownTags" ||
+      key === "imports" ||
+      key === "defaultTag"
+    )
       continue;
     report({
       file: manifest.file,
       ...locateData(manifest, key),
       severity: "warning",
-      message: `unknown mx.data key ${JSON.stringify(key)}; known keys: structural, unknownTags, defaultTag`,
+      message: `unknown mx.data key ${JSON.stringify(key)}; known keys: structural, unknownTags, imports, defaultTag`,
       origin: "manifest",
     });
   }
@@ -388,6 +400,9 @@ export function checkDataPackage(dir: string): DataCheckResult {
       customTags: scan.customTags,
       structural: pkg.options.structural,
       unknownTags: pkg.options.unknownTags,
+      ...(pkg.options.imports === undefined
+        ? {}
+        : { imports: pkg.options.imports }),
       ...(pkg.defaultTag === undefined ? {} : { defaultTag: pkg.defaultTag }),
     });
     for (const d of result.diagnostics) {

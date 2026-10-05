@@ -38,6 +38,7 @@ export type {
   DataDocument,
   DataExpr,
   DataForHead,
+  DataImport,
   DataNode,
   DataStatement,
   DataTag,
@@ -67,6 +68,15 @@ export interface ParseDataOptions {
    * the structural hit always won.
    */
   structural?: "pass" | "reject";
+  /**
+   * Whether a top-level `import` passes. Defaults to the effective
+   * `structural` value, so nothing changes unless it is set. `"pass"` with
+   * `structural: "reject"` keeps control flow, `export` and `static`
+   * rejected and returns the imports verbatim as `tree.imports` (file order,
+   * UTF-16 spans); an `import` inside a tag body stays an error. `"reject"`
+   * with `structural: "pass"` rejects only the `import`s.
+   */
+  imports?: "pass" | "reject";
   /**
    * `"allow"` (default) keeps the open set of decision 131: a tag with no
    * entry in `customTags` is accepted. `"reject"` closes it: any tag, at any
@@ -355,6 +365,7 @@ export function parseData(
   try {
     const tree = buildDataDocument(document, source, filename, {
       structural: options.structural ?? "pass",
+      imports: options.imports ?? options.structural ?? "pass",
       unknownTags: options.unknownTags ?? "allow",
       declaredTags: declaredTagNames(options.customTags),
     });

@@ -201,10 +201,22 @@ export interface DataStatement {
   span: SourceSpan;
 }
 
+export interface DataImport {
+  code: string;
+  span: SourceSpan;
+}
+
 export interface DataDocument {
   kind: "document";
   filename: string;
   statements: DataStatement[];
+  /**
+   * Only with `structural: "reject"` and `imports: "pass"`: each top-level
+   * `import`, verbatim, in file order (UTF-16 `span`, like every span). They
+   * are not in `statements` then, where every other kind would have been
+   * rejected.
+   */
+  imports?: DataImport[];
   children: DataNode[];
 }
 

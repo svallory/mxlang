@@ -152,6 +152,69 @@ describe("mx-tsc on a data package", () => {
     expect(check(dir)).toEqual({ status: 0, output: "" });
   });
 
+  describe("mx.data.imports", () => {
+    const source = 'import a from "a"\nservice="api"\n';
+    const manifest = (data: object) =>
+      JSON.stringify({ mx: { target: "data", data } });
+
+    it("defaults to reject: a top-level import is the structural error", () => {
+      const dir = emptyPackage({
+        mx: { target: "data", data: { unknownTags: "allow" } },
+      });
+      writeFileSync(join(dir, "imp.mx"), source);
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("imp.mx(1,1): error TS80001:");
+      expect(output).toContain("does not evaluate `import`");
+    });
+
+    it('"pass" lets the import through while control flow stays rejected', () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        manifest({ unknownTags: "allow", imports: "pass" }),
+      );
+      writeFileSync(join(dir, "imp.mx"), source);
+      expect(check(dir)).toEqual({ status: 0, output: "" });
+      writeFileSync(
+        join(dir, "imp.mx"),
+        `${source}<if=true>\n  port="1"\n</if>\n`,
+      );
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("does not evaluate `<if>`");
+    });
+
+    it('"reject" is the explicit strict value', () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        manifest({ unknownTags: "allow", imports: "reject" }),
+      );
+      writeFileSync(join(dir, "imp.mx"), source);
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("does not evaluate `import`");
+    });
+
+    it("an invalid value is a positioned error in package.json and stays strict", () => {
+      const dir = emptyPackage({});
+      writeFileSync(
+        join(dir, "package.json"),
+        `{\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "allow", "imports": "yes" }\n  }\n}\n`,
+      );
+      writeFileSync(join(dir, "imp.mx"), source);
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("package.json(4,50): error TS80003:");
+      expect(output).toContain(
+        'mx.data.imports must be "pass" or "reject", got "yes"',
+      );
+      expect(output).toContain("does not evaluate `import`");
+      expect(output).not.toContain("unknown mx.data key");
+    });
+  });
+
   it("an invalid mx.data value is a positioned error in package.json", () => {
     const dir = copyOfFixture(["clean.mx"]);
     writeFileSync(

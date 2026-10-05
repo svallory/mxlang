@@ -40,6 +40,13 @@ return `{ tree, diagnostics }`. Options:
   `"reject"` makes each structural construct a positioned error ("the data
   tree is static; this file's consumer does not evaluate `<if>`"), for a
   consumer that wants tags and attributes only.
+- `imports: "pass" | "reject"` (default: the effective `structural` value, so
+  nothing changes unless it is set). With `structural: "reject"` and
+  `imports: "pass"`, control flow, `export` and `static` stay rejected and the
+  top-level `import`s come back verbatim as `tree.imports`
+  (`Array<{ code, span }>`, file order, UTF-16 spans); they are not in
+  `tree.statements` then. An `import` inside a tag body is still an error. With
+  `structural: "pass"` and `imports: "reject"`, only the `import`s are errors.
 - `unknownTags: "allow" | "reject"` (default `"allow"`). `"reject"` makes a
   tag at any depth with no entry in `customTags` a positioned error naming
   the tag (with a nearest-declared-name hint when one is close), so a typo at

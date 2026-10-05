@@ -53,6 +53,8 @@ import type {
 
 export interface BuildOptions {
   structural: "pass" | "reject";
+  /** Effective `imports`: `structural` unless the caller said otherwise. */
+  imports: "pass" | "reject";
   /**
    * With `"reject"`, a tag whose name is not in `declaredTags` is an error.
    * `declaredTags` is the key set of `customTags`.
@@ -812,9 +814,17 @@ function structuralInNodes(nodes: IrNode[]): StructuralHit | null {
 function firstStructural(
   ir: Ir,
   stmts: DataStatement[],
+  options: BuildOptions,
 ): { message: string; at: Position } | null {
-  let best: StructuralHit | null = structuralInNodes(ir.body);
+  let best: StructuralHit | null =
+    options.structural === "reject" ? structuralInNodes(ir.body) : null;
   for (const stmt of stmts) {
+    // `imports` decides an `import` on its own; the rest follow `structural`.
+    if (stmt.kind === "import") {
+      if (options.imports !== "reject") continue;
+    } else if (options.structural !== "reject") {
+      continue;
+    }
     if (!best || stmt.span.sourceStart < best.offset) {
       best = {
         construct: `\`${stmt.kind}\``,
@@ -845,8 +855,7 @@ export function buildDataDocument(
   const stmts = statements(ir);
   // The two document-wide rejects compete by position, earliest first. A
   // tags-and-attributes file builds the same under either option.
-  const structural =
-    options.structural === "reject" ? firstStructural(ir, stmts) : null;
+  const structural = firstStructural(ir, stmts, options);
   const unknown =
     options.unknownTags === "reject"
       ? firstUnknownTag(ir, options.declaredTags)
@@ -872,6 +881,19 @@ export function buildDataDocument(
     throw error;
   }
   if (first) fail(first.message, first.at);
+  // `structural: "reject"` with `imports: "pass"`: the imports leave
+  // `statements` (every other kind was just rejected) for their own list.
+  if (options.structural === "reject" && options.imports === "pass") {
+    return {
+      kind: "document",
+      filename,
+      statements: stmts.filter((stmt) => stmt.kind !== "import"),
+      imports: stmts
+        .filter((stmt) => stmt.kind === "import")
+        .map(({ code, span }) => ({ code, span })),
+      children,
+    };
+  }
   return {
     kind: "document",
     filename,

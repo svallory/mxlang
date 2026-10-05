@@ -62,7 +62,7 @@ violation.mx(1,1): error TS80001: `<service>`: missing required attribute `value
 Positions are 1-based line and column. The exit code is 1 when anything is an error and 0 otherwise. A clean package prints nothing.
 
 - **The tag map** is the one the other tools scan: `tags/` sidecars and `mx.contracts` (see [Writing a dialect package](/custom-tags/dialect-package/)). A problem in the policy, the scan or `package.json` is printed against the `package.json` (`TS80003`), even when the package has no `.mx` file; a missing or invalid `mx.contracts` module is an error at its position, never an empty tag map.
-- **Defaults are strict.** `structural` and `unknownTags` both default to `"reject"` here, because an agent wants a typo or an `<if>` to fail the run. Loosen either in `package.json`: `{ "mx": { "data": { "structural": "pass", "unknownTags": "allow" } } }`. The `parseData` library API keeps its own defaults (`"pass"` and `"allow"`); only `mx-tsc` reads `mx.data`. An invalid value is an error at the value, and the strict default applies.
+- **Defaults are strict.** `structural` and `unknownTags` both default to `"reject"` here, because an agent wants a typo or an `<if>` to fail the run. Loosen either in `package.json`: `{ "mx": { "data": { "structural": "pass", "unknownTags": "allow" } } }`. `imports` is the third key: `"imports": "pass"` keeps the strict `structural` while letting top-level imports through. The `parseData` library API keeps its own defaults (`"pass"` and `"allow"`); only `mx-tsc` reads `mx.data`. An invalid value is an error at the value, and the strict default applies.
 - **Which files.** Every `*.mx` under the directory, skipping `node_modules` and dot directories, whose nearest `package.json` resolves to `data` (a nested package for another target is not walked). A broken or looping `.mx` link, or an unreadable directory, is an error naming the path. Other file types, including `.ts`, are not checked: use `tsc` for those.
 - **Only plain runs.** `-p`/`--project` (a directory or a tsconfig path), `--pretty` and `--noEmit` are understood. Anything else (`-b`, `-w`, `--version`, a file list) is a normal `tsc` run, and a data package under it still gets the staged error above.
 - A `tsc` program that spans several packages (a monorepo root) is not a data project: a data package inside it still gets the staged error. Run `mx-tsc -p <data package>`.
@@ -94,11 +94,13 @@ parseData(source, filename, {
   customTags, // contract-only tags by name
   structural: "reject", // "pass" (default) | "reject"
   unknownTags: "reject", // "allow" (default) | "reject"
+  imports: "pass", // default: whatever `structural` is
 });
 ```
 
 - **`customTags`** declares a vocabulary: required attributes, attribute types, allowed children and parents. `parseData` does not scan `tags/` or `package.json`; this map is all it knows. See [Writing a dialect package](/custom-tags/dialect-package/) for how to write and share one.
 - **`structural`**: `"pass"` keeps text, `${}`, `<if>`, `<for>`, `<const>`, comments and `import`/`export`/`static` in the tree. `"reject"` makes the first of them an error, so a consumer that only reads tags and attributes cannot silently ignore an `<if>`.
+- **`imports`**: `"pass"` or `"reject"`, defaulting to the effective `structural` value. `"pass"` under `structural: "reject"` lets top-level `import` declarations through while `<if>`, `export` and the rest stay errors; the tree gains `imports: Array<{ code, span }>` (verbatim, file order, UTF-16 spans) in place of those entries in `statements`. An `import` inside a tag body is still an error. `mx-tsc` reads the same values from `package.json#mx.data.imports`; an invalid value is an error at the value and `"reject"` applies.
 - **`unknownTags`**: `"allow"` accepts a tag with no contract. `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/dialect-package/#closing-the-vocabulary) has an example.
 
 `parseDataFile(path, options)` reads the file for you.

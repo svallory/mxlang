@@ -8,6 +8,10 @@
 - **Added:** a sugar after a single-atom default value (`belongs-to=:Customer :customer`, decision 146 addendum 5) and a sugar followed by `=value` or `(params) { body }` (decision 146 addendum 4) parse on the data target.
 - **Fixed:** shorthand attributes carry a real `nameSpan`.
 
+## Unreleased
+
+- **Added:** `parseData` option `imports: "pass" | "reject"` (default: the effective `structural` value). With `structural: "reject"` and `imports: "pass"`, control flow, `export` and `static` stay rejected and the tree gains `imports: DataImport[]` (`{ code, span }`, each top-level `import` verbatim, file order, UTF-16 spans); those imports leave `statements`. `structural: "pass"` with `imports: "reject"` rejects only imports. `DataImport` is exported; additive.
+
 ## 0.1.0-alpha.3
 
 - **Changed (decision 159):** `@marko/compiler` is no longer a dependency. The scan and the data taglib use `@mxlang/core`'s `markoCompiler()`, so data parses with core's bundled Marko front end and MX's own template parser: after-value sugar (`<field type="email" :email/>`) works in a registry install. Requires `@mxlang/core` 0.1.0-alpha.3.
