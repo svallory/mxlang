@@ -711,13 +711,17 @@ describe("a host that forbids the contract rung, through a compile (review round
     });
     // The contract says `div`; the config says `main`. A forbidding host
     // answers the config, never the contract.
-    const out = (
-      descriptor?.load?.(core) as { compileModule: Function }
-    ).compileModule("<my-list><.a>x</></my-list>", file, {
-      customTags,
-      defaultTag: "main",
-      targets: lookupFor(resolution.policy),
-    }) as { code: string };
+    const load = descriptor?.load;
+    if (!load) throw new Error("fixture has no load");
+    const out = (load(core) as { compileModule: Function }).compileModule(
+      "<my-list><.a>x</></my-list>",
+      file,
+      {
+        customTags,
+        defaultTag: "main",
+        targets: lookupFor(resolution.policy),
+      },
+    ) as { code: string };
     expect(out.code).toBe("elements:main");
   });
 });
