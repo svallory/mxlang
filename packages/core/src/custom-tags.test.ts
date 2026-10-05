@@ -2718,3 +2718,58 @@ describe("E1 on a sugar merged into a tag-adjacent class", () => {
     expect([error.line, error.column]).toEqual([2, 0]);
   });
 });
+
+// Round 2 of PR 4, review finding 4: a contract that rejects the `value` a
+// sugar produced says which sugar set it.
+describe("E1 on the default value a sugar produced names the sugar", () => {
+  const closed: CustomTag = {
+    attributes: {
+      id: { type: "string" },
+      name: { type: "string" },
+      class: { type: "string" },
+    },
+    transform: () => [],
+  };
+  const fn: CustomTag = {
+    attributes: { id: { type: "string" }, value: { type: "function" } },
+    transform: () => [],
+  };
+  const messageOf = (source: string, tags: Record<string, CustomTag>) => {
+    try {
+      lowerWithTags(source, tags, {
+        tags: {},
+        isElement: () => true,
+        isComponent: (name, ctx) => ctx.defines.has(name),
+        resolveAttributeMethod: () => true,
+      });
+    } catch (error) {
+      return error as { message: string; line: number; column: number };
+    }
+    throw new Error("expected an error");
+  };
+
+  it.each([
+    ["\n<closed #x=1/>\n", "unknown attribute `value` (set by `#x=…`)"],
+    ["\n<closed :n=1/>\n", "unknown attribute `value` (set by `:n=…`)"],
+    ["\n<closed .c(p) { b }/>\n", "unknown attribute `value` (set by `.c(…)`)"],
+  ])("%j", (source, text) => {
+    expect(messageOf(source, { closed }).message).toContain(text);
+  });
+
+  it("a wrong type names it too, at the value", () => {
+    const error = messageOf("\n<fn #x=1/>\n", { fn });
+    expect(error.message).toContain(
+      "attribute `value` (set by `#x=…`) must be function",
+    );
+    expect([error.line, error.column]).toEqual([2, 7]);
+  });
+
+  it("an authored `value=` keeps the plain wording", () => {
+    expect(messageOf("\n<closed value=1/>\n", { closed }).message).toContain(
+      "unknown attribute `value`",
+    );
+    expect(
+      messageOf("\n<closed value=1/>\n", { closed }).message,
+    ).not.toContain("set by");
+  });
+});

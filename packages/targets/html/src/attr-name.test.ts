@@ -428,6 +428,9 @@ describe("a sugar followed by =value sets the default attribute (html)", () => {
     ["<if=input.a #x=1>y</if>", 1, 15],
     ["<input=1 #x=2/>", 1, 12],
     ["input=1 #x=2", 1, 11],
+    // A bound `value:=` is the default value too (round 2, finding 2).
+    ["<input value:=input.v #x=1/>", 1, 25],
+    ["<input #x=1 value:=input.v/>", 1, 12],
   ])(
     "%s: a second default value is a positioned error at the second",
     (source, line, column) => {

@@ -131,6 +131,12 @@ export interface IrBase {
  */
 export interface AttrSugar {
   sugar?: string;
+  /**
+   * Set on the default attribute (`value`) a sugar produced
+   * (`#x=1`, `kind #x(p) { b }`): the sugar that set it (`#x=…`, `#x(…)`), so
+   * a contract error says "`value` (set by `#x=…`)".
+   */
+  sugarValueOf?: string;
 }
 
 /**

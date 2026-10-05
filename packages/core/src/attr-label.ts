@@ -7,6 +7,9 @@ import type { Attr } from "./ir.ts";
  * duplicate-attribute warning.
  */
 export function attrLabel(attr: Exclude<Attr, { kind: "spread" }>): string {
+  if (attr.sugarValueOf) {
+    return `\`${attr.name}\` (set by \`${attr.sugarValueOf}\`)`;
+  }
   return attr.sugar
     ? `\`${attr.sugar}\` (\`${attr.name}\`)`
     : `\`${attr.name}\``;

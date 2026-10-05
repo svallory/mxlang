@@ -789,3 +789,49 @@ describe("a sugar followed by =value or (params) { body } sets the default attri
     );
   });
 });
+
+// Round 2 of PR 4 (review findings 1, 2, 4, 5).
+describe("default value: Angular, bound, naming, position", () => {
+  const withMethods = policy({ resolveAttributeMethod: () => true });
+  const angular = policy({
+    acceptsForeignAttrNames: true,
+    claimsAttributeHash: true,
+  });
+
+  it("on Angular, `#ref=x` is the template reference: two plain `value=` stay decision 135's warning", () => {
+    const warnings: MxWarning[] = [];
+    expect(() =>
+      lowerSource("<input value=1 value=2 #r=x/>", angular, warnings),
+    ).not.toThrow();
+    expect(warnings.map((w) => w.message)).toEqual([
+      expect.stringContaining("duplicate attribute `value`"),
+    ]);
+  });
+
+  it("on Angular, `:n=1` still sets the default value", () => {
+    expect(shape("<input :n=1/>", angular)).toContain("name");
+    expect(errorOf("<input value=1 :n=2/>", angular).message).toContain(
+      "already has a default value",
+    );
+  });
+
+  it.each([
+    ["<a value:=y #x=1/>", 1, 15],
+    ["<a #x=1 value:=y/>", 1, 8],
+    ["<a value:=y :n=1/>", 1, 15],
+  ])(
+    "a bound `value:=` is the default value: %s is a positioned error",
+    (source, line, column) => {
+      const error = errorOf(source, withMethods);
+      expect(error.message).toContain("already has a default value");
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
+
+  it("the double-default message gives the first one as line:column", () => {
+    const error = errorOf("<input\n  value=1\n  #x=2/>", withMethods);
+    expect(error.message).toContain("(at 2:3)");
+    expect(error.message).not.toContain("offset");
+    expect(errorOf("kind=1 #x=2", withMethods).message).toContain("(at 1:5)");
+  });
+});

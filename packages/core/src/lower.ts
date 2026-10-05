@@ -560,6 +560,9 @@ function lowerAttr(
   if (attr?.sugarLabel && lowered.kind !== "spread") {
     lowered.sugar = attr.sugarLabel;
   }
+  if (attr?.sugarValueOf && lowered.kind !== "spread") {
+    lowered.sugarValueOf = attr.sugarValueOf;
+  }
   return lowered;
 }
 

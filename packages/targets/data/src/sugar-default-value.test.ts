@@ -99,6 +99,9 @@ describe("each form, on the data target", () => {
     ["<item=a #x=b/>", 1, 11],
     ["kind=1 #x=2", 1, 10],
     ["kind (p) { b } #x(q) { c }", 1, 17],
+    // A bound `value:=y` is the tag's default value too (round 2, finding 2).
+    ["<item value:=y #x=1/>", 1, 18],
+    ["<item #x=1 value:=y/>", 1, 11],
   ])(
     "%s: a second default value is a positioned error at the second",
     (source, line, column) => {
@@ -114,6 +117,14 @@ describe("each form, on the data target", () => {
       ]);
     },
   );
+});
+
+describe("the message gives the first default as line:column", () => {
+  it("names a position, not an offset", () => {
+    const { diagnostics } = parseData("kind=1 #x=2\n", "/d.mx", {});
+    expect(diagnostics[0]?.message).toContain("(at 1:5)");
+    expect(diagnostics[0]?.message).not.toContain("offset");
+  });
 });
 
 describe("contracts see the default value", () => {
@@ -150,7 +161,11 @@ describe("contracts see the default value", () => {
       customTags: { item: { attributes: { id: { type: "string" } } } },
     });
     expect(diagnostics).toMatchObject([
-      { message: "`<item>`: unknown attribute `value`", line: 1, column: 8 },
+      {
+        message: "`<item>`: unknown attribute `value` (set by `#x=…`)",
+        line: 1,
+        column: 8,
+      },
     ]);
   });
 });

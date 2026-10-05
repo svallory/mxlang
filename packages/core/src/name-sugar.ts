@@ -127,6 +127,12 @@ function endOf(ctx: Ctx, node: Node): number {
   return rangeOf(ctx, node).end;
 }
 
+/** `line:column` of an offset, 1-based like the duplicate-attribute warning. */
+function lineColumn(ctx: Ctx, offset: number): string {
+  const at = positionAt(ctx, offset);
+  return `${at.line}:${at.column + 1}`;
+}
+
 function failAt(ctx: Ctx, message: string, offset: number): never {
   const at = positionAt(ctx, offset);
   throw new TranslateError(message, at.line, at.column);
@@ -488,8 +494,8 @@ function splitShorthandChain(
   return parts;
 }
 
-const ALREADY_HAS_DEFAULT = (form: string, first: number): string =>
-  `${form} would set the default attribute (\`value\`), but the tag already has a default value (at offset ${first}); a sugar followed by \`=value\` or \`(params) { body }\` sets it (decision 146 addendum 4), so write \`value=…\` once`;
+const ALREADY_HAS_DEFAULT = (form: string, first: string): string =>
+  `${form} would set the default attribute (\`value\`), but the tag already has a default value (at ${first}); a sugar followed by \`=value\` or \`(params) { body }\` sets it (decision 146 addendum 4), so write \`value=…\` once`;
 
 /** How many source characters the sugar token itself takes (`#x`, `:x`, `.c#d`, `.c:y`). */
 function authoredTokenLength(attr: Node, kind: "#" | "." | ":"): number {
@@ -627,11 +633,15 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
   // The offsets of the tag's default values so far (an authored default value,
   // or a sugar's `=value` / `(params) { body }`): a second one is an error.
   const defaults: number[] = [];
-  const sawSugarValue = attrs.some(
-    (attr) =>
-      sugarKind(attr) &&
-      !(attr.value?.type === "BooleanLiteral" && !attr.value?.loc),
-  );
+  const sawSugarValue = attrs.some((attr) => {
+    const kind = sugarKind(attr);
+    // Attribute-position `#x` is the host's own on a host that claims it
+    // (Angular's `#ref=x`): not a sugar, so it brings no default value.
+    if (!kind || (kind === "#" && ctx.declarations.claimsAttributeHash)) {
+      return false;
+    }
+    return !(attr.value?.type === "BooleanLiteral" && !attr.value?.loc);
+  });
 
   for (const attr of attrs) {
     const kind = sugarKind(attr);
@@ -643,8 +653,8 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
         sawSugarValue &&
         attr?.type === "MarkoAttribute" &&
         attr.name === "value" &&
-        attr.modifier == null &&
-        !attr.bound
+        // An authored `value=`, or a bound `value:=` (modifier "" in Marko).
+        (attr.modifier == null || (attr.bound && attr.modifier === ""))
       ) {
         const at = startOf(ctx, attr);
         if (defaults.length > 0) {
@@ -652,7 +662,7 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
             ctx,
             ALREADY_HAS_DEFAULT(
               `\`${ctx.source.slice(at, endOf(ctx, attr))}\``,
-              defaults[0] as number,
+              lineColumn(ctx, defaults[0] as number),
             ),
             at,
           );
@@ -681,16 +691,20 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
     );
     let defaultAttr: Node | undefined;
     if (hasValue) {
-      let at = end;
       const tokenEnd = start + authoredTokenLength(attr, kind);
-      at = tokenEnd;
+      let at = tokenEnd;
       while (/\s/.test(ctx.source[at] ?? "")) at++;
+      const valueSeparator = ctx.source[at] === "=" ? "=" : "(";
       if (ctx.source[at] === "=") {
         at++;
         while (/\s/.test(ctx.source[at] ?? "")) at++;
       }
       if (defaults.length > 0) {
-        failAt(ctx, ALREADY_HAS_DEFAULT(form, defaults[0] as number), at);
+        failAt(
+          ctx,
+          ALREADY_HAS_DEFAULT(form, lineColumn(ctx, defaults[0] as number)),
+          at,
+        );
       }
       defaults.push(at);
       defaultAttr = {
@@ -701,6 +715,12 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
         default: true,
         bound: false,
         arguments: undefined,
+        // A contract that rejects this `value` says which sugar set it.
+        sugarValueOf:
+          `${ctx.source.slice(start, tokenEnd)}${valueSeparator}…`.replace(
+            /\(…$/,
+            "(…)",
+          ),
         start: at,
         end,
         loc: loc(ctx, at, end),
