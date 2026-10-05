@@ -182,7 +182,10 @@ describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", ()
   });
 
   it("the parent's default beats mx.data.defaultTag; elsewhere the config answers", () => {
-    const tags = { ...mesh, item: { attributes: { id: { type: "string" } } } };
+    const tags: Record<string, CustomTag> = {
+      ...mesh,
+      item: { attributes: { id: { type: "string" } } },
+    };
     const { tree, diagnostics } = parseData(
       "<attributes><#a/></attributes>\n<#b/>",
       "/m.mx",
@@ -193,13 +196,15 @@ describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", ()
       (n) => (n as { name: string }).name,
     );
     expect(names).toEqual(["attributes", "item"]);
-    const inner = (tree?.children[0] as { children: Array<{ name: string }> })
-      .children[0];
+    const first = tree?.children[0] as
+      | { children: Array<{ name: string }> }
+      | undefined;
+    const inner = first?.children[0];
     expect(inner?.name).toBe("attribute");
   });
 
   it("a closed children that does not list the resolved name is E2, at the shorthand", () => {
-    const tags = {
+    const tags: Record<string, CustomTag> = {
       ...mesh,
       attributes: { defaultTag: "attribute", children: { other: {} } },
     };
@@ -223,7 +228,7 @@ describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", ()
   });
 
   it("a closed attributes without id is E1, at the shorthand", () => {
-    const tags = {
+    const tags: Record<string, CustomTag> = {
       ...mesh,
       attribute: { attributes: { type: { type: "string" } } },
     };
