@@ -20,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@angular/compiler": "22.1.7",
     "@astrojs/compiler": "2.13.1",
     "@jridgewell/sourcemap-codec": "1.6.0",
     "@marko/compiler": "5.42.5",

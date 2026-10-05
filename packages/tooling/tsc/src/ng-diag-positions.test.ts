@@ -45,7 +45,8 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
       expect(result.output).toContain(
         at("title.nmae", "2339: Property 'nmae' does not exist"),
       );
-      // A default attribute (`<widget=title>`) has no spelled name: its
+      // A default attribute (`<my-widget=title>`; a dashed tag, whose attributes
+      // are inputs) has no spelled name: its
       // value is where the diagnostic lands.
       expect(result.output).toContain(
         at("title><case", "-998002: Can't bind to 'value'"),

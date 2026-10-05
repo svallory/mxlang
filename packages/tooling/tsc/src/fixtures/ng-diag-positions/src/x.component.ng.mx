@@ -7,7 +7,7 @@ import { Component } from "@angular/core";
     <input [value]=title/>
     <input lable=title/>
     <p title=title.nmae/>
-    <widget=title><case="a">a</case></widget>
+    <my-widget=title><case="a">a</case></my-widget>
   </div>,
 })
 export class XComponent { title = "hi"; }
