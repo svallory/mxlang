@@ -118,7 +118,7 @@ describe("atom contracts on attribute-tag attributes through parseData (decision
     ],
     [
       "<box><@row to=:nope/></box>",
-      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here (one of :k)",
+      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here (none declared)",
       14,
     ],
     [
