@@ -21,6 +21,7 @@
 
 import type { Ctx, Disposition, Node } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
+import type { DefaultTagScope } from "./default-tag-validate.ts";
 import type { Attr, DelegatedTag } from "./ir.ts";
 
 export type { Disposition };
@@ -58,9 +59,28 @@ export interface DefaultTagContext {
   readonly configured?: string;
   /** The custom tags of this compile (scan, `mx.contracts`): a parent's contract lives here. */
   readonly customTags?: Readonly<Record<string, CustomTag>>;
+  /**
+   * False when the host forbids per-tag default tags (its declarations set
+   * `allowContractDefaultTag: false`): the parent contract's rung is then
+   * never consulted. Absent means permitted.
+   */
+  readonly contractRung?: boolean;
+  /**
+   * What this compile can say about whether a tag name is a usable default:
+   * the custom tags, Marko's lookup and the host's own `isElement`. A target
+   * adds its built-in names. The parent contract's value is checked with it,
+   * so an invalid one falls through to the next rung.
+   */
+  readonly scope?: DefaultTagScope;
 }
 
 export interface HostDeclarations {
+  /**
+   * Whether a parent contract's `defaultTag` may decide the unnamed tag on
+   * this host (decision 145). Absent means yes; `false` makes the rung
+   * unavailable and a contract declaring one a registration error.
+   */
+  allowContractDefaultTag?: boolean;
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;
   /** Attribute-tag IR/emission contract implemented by this host. */

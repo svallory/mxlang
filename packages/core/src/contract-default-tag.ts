@@ -1,18 +1,22 @@
+import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import type { CustomTag, CustomTagAttributeTag } from "./custom-tags.ts";
-import type { DefaultTagParent } from "./declarations.ts";
+import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
   type DefaultTagScope,
   validateDefaultTag,
 } from "./default-tag-validate.ts";
 import type { TargetPolicyDiagnostic } from "./host-policy.ts";
+import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 
 /**
  * Whether a parent is structure rather than an authored tag: control flow
- * (`if`, `for`), `try`, `await` and the like. Decided from Marko's own tag
- * def on the node, never from a name: a tag Marko's lookup knows that is not
- * an element (it lacks the taglib's `html` flag, read from `parent.tagDef`) and that no custom tag
- * registered under its name is a core or translator tag, and has no contract
- * a child could read. A dynamic name has no def and counts as authored.
+ * (`if`, `else-if`, `else`, `for`: the tags core lowers itself), `try` (a
+ * core-owned custom tag) and any other tag Marko's lookup knows that is not
+ * an element (it lacks the taglib's `html` flag, read from `parent.tagDef`:
+ * `await`, `define`). A target's lookup may know none of them (the JSX, Solid,
+ * Astro and Angular hosts have no core taglib), so core's own sets decide
+ * first; a registered custom tag of the same name is an authored tag. A
+ * dynamic name has no def and counts as authored.
  */
 function isStructural(
   parent: DefaultTagParent,
@@ -20,6 +24,11 @@ function isStructural(
 ): boolean {
   if (parent.attributeTag) return false;
   if (customTags && Object.hasOwn(customTags, parent.name)) return false;
+  if (
+    CONTROL_FLOW_TAGS.includes(parent.name) ||
+    Object.hasOwn(BUILTIN_CUSTOM_TAGS, parent.name)
+  )
+    return true;
   const def = parent.tagDef as { html?: unknown } | undefined;
   return def !== undefined && def.html !== true;
 }
@@ -36,6 +45,25 @@ function isStructural(
  * Ordering of the ladder stays in the targets; this is only the lookup.
  */
 export function contractDefaultTag(
+  parents: readonly DefaultTagParent[],
+  context: DefaultTagContext,
+  builtins: readonly string[] = [],
+): string | undefined {
+  if (context.contractRung === false) return undefined;
+  const customTags = context.customTags;
+  const found = lookupDeclared(parents, customTags);
+  if (found === undefined) return undefined;
+  // An invalid value falls through to the next rung, as an invalid config
+  // value does: the registration error is the one reported, never a use-site one.
+  return validateDefaultTag(found, {
+    ...context.scope,
+    builtins: [...(context.scope?.builtins ?? []), ...builtins],
+  }) === undefined
+    ? found
+    : undefined;
+}
+
+function lookupDeclared(
   parents: readonly DefaultTagParent[],
   customTags: Readonly<Record<string, CustomTag>> | undefined,
 ): string | undefined {
@@ -60,13 +88,15 @@ export function contractDefaultTag(
         chain.push(entry.name.replace(/^@/, ""));
         i++;
       } else if (isStructural(entry, customTags)) {
-        // `try`/`await` own attribute tags of their own (`@catch`): the whole
-        // chain belongs to structure, so it is skipped with its owner.
-        if (chain.length > 0 && ownsChainStructurally(parents, i)) {
-          chain.length = 0;
-        }
+        // Control flow between the attribute tags and their owner is seen
+        // through. Any other structural parent (`try`, `await`) owns attribute
+        // tags of its own (`@catch`): the whole chain belongs to it, so it is
+        // skipped with its owner.
         i++;
-        if (chain.length === 0) break;
+        if (!CONTROL_FLOW_TAGS.includes(entry.name)) {
+          chain.length = 0;
+          break;
+        }
       } else break;
     }
     if (chain.length === 0) continue;
@@ -84,14 +114,6 @@ export function contractDefaultTag(
     return stringOrUndefined(declaration?.defaultTag);
   }
   return undefined;
-}
-
-/** Whether the structural parent at `index` is the owner of the attribute-tag chain just gathered. */
-function ownsChainStructurally(
-  parents: readonly DefaultTagParent[],
-  index: number,
-): boolean {
-  return parents[index] !== undefined && !parents[index]?.attributeTag;
 }
 
 function stringOrUndefined(value: unknown): string | undefined {

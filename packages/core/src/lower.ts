@@ -102,6 +102,7 @@ import {
   scriptletSentence,
 } from "./parse-error-hints.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
+import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -2359,7 +2360,7 @@ function validateCustomAttributeTagBodies(
   for (const child of children) {
     if (
       child.type === "MarkoTag" &&
-      ["if", "else-if", "else", "for"].includes(child.name?.value) &&
+      CONTROL_FLOW_TAGS.includes(child.name?.value) &&
       !directTags.includes(child)
     ) {
       validateCustomAttributeTagBodies(

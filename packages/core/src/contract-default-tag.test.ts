@@ -142,6 +142,12 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
     tagDiscoveryDirs: [],
     targets: lookup,
   });
+  /** A lookup with no core taglib: `if`, `for`, `try` have no tag def, as on the JSX, Solid, Astro and Angular hosts. */
+  const bareTranslator = createTranslator({
+    taglibs: [],
+    tagDiscoveryDirs: [],
+    targets: lookup,
+  });
   const customTags: Record<string, CustomTag> = {
     "my-list": {
       defaultTag: "item",
@@ -155,10 +161,19 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
       transform: () => [],
     },
     "no-default": { transform: () => [] },
+    // The names the contracts above resolve to must be tags: an invalid
+    // value falls through.
+    item: { transform: () => [] },
+    entry: { transform: () => [] },
+    leaf: { transform: () => [] },
   };
 
   /** What the resolver is asked for each unnamed tag, in source order. */
-  function asked(source: string, tags = customTags): Array<string | undefined> {
+  function asked(
+    source: string,
+    tags = customTags,
+    options: { bare?: boolean; policy?: Partial<Policy> } = {},
+  ): Array<string | undefined> {
     const answers: Array<string | undefined> = [];
     const policy: Policy = {
       tags: {},
@@ -166,8 +181,9 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
       attrTags: 2,
       isDelegatedTag: () => true,
       isComponent: (name) => name in tags,
+      ...options.policy,
       resolveDefaultTag: (_node, parents, context) => {
-        const found = contractDefaultTag(parents, context.customTags);
+        const found = contractDefaultTag(parents, context);
         answers.push(found);
         return found ?? "div";
       },
@@ -183,7 +199,10 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
                 source,
                 () => "",
                 policy,
-                buildMarkoLookup(tmpdir(), translator),
+                buildMarkoLookup(
+                  tmpdir(),
+                  options.bare ? bareTranslator : translator,
+                ),
                 "a.mx",
                 lookup,
               );
@@ -254,6 +273,45 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
     ]);
   });
 
+  it("skips if, else, for and try on a lookup that has no core taglib", () => {
+    expect(
+      asked(
+        "<my-list><if=x><.a/></if><else><.b/></else><for|i| of=xs><.c/></for><try><.d/></try></my-list>",
+        customTags,
+        { bare: true },
+      ),
+    ).toEqual(["item", "item", "item", "item"]);
+  });
+
+  it("an invalid contract value falls through: the answer is none", () => {
+    const bad: Record<string, CustomTag> = {
+      "my-list": { defaultTag: "input", transform: () => [] },
+      nope: { defaultTag: "not-a-tag", transform: () => [] },
+      awaited: { defaultTag: "await", transform: () => [] },
+    };
+    expect(asked("<my-list><.a/></my-list>", bad)).toEqual([undefined]);
+    expect(asked("<nope><.a/></nope>", bad)).toEqual([undefined]);
+    expect(asked("<awaited><.a/></awaited>", bad)).toEqual([undefined]);
+  });
+
+  it("a valid value is still answered (an element, a declared tag, the built-ins)", () => {
+    const good: Record<string, CustomTag> = {
+      a: { defaultTag: "section", transform: () => [] },
+      b: { defaultTag: "item", transform: () => [] },
+      item: { transform: () => [] },
+    };
+    expect(asked("<a><.x/></a>", good)).toEqual(["section"]);
+    expect(asked("<b><.x/></b>", good)).toEqual(["item"]);
+  });
+
+  it("a host that forbids the rung never consults the contract", () => {
+    expect(
+      asked("<my-list><.a/></my-list>", customTags, {
+        policy: { allowContractDefaultTag: false },
+      }),
+    ).toEqual([undefined]);
+  });
+
   it("the top level has no parent contract", () => {
     expect(asked("<.a/>")).toEqual([undefined]);
   });
@@ -268,4 +326,9 @@ describe("DefaultTagParent carries what the helper needs", () => {
     };
     expect(parent.name).toBe("x");
   });
+});
+
+describe("contractDefaultTag on every target's lookup (review round 2)", () => {
+  // `asked` is the describe-local helper above; re-declared access via closure
+  // is not possible, so the cases live in the describe that owns it.
 });

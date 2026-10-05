@@ -68,8 +68,10 @@ export const dataDeclarations: HostDeclarations = {
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
   // it sets no `allowContractDefaultTag: false`.
-  resolveDefaultTag: (_node, parents, { configured, customTags }) =>
-    contractDefaultTag(parents, customTags) ?? configured ?? DEFAULT_TAG,
+  resolveDefaultTag: (_node, parents, context) =>
+    contractDefaultTag(parents, context, [DEFAULT_TAG]) ??
+    context.configured ??
+    DEFAULT_TAG,
   tags: {
     else: { kind: "error", reason: reservedNameMessage("else") },
     "else-if": { kind: "error", reason: reservedNameMessage("else-if") },

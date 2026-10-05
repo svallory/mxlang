@@ -158,21 +158,7 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
   } else customTags = input.customTags;
   const lookup = buildMarkoLookup(input.dir, input.translator);
   const declarations = input.declarations;
-  // An element needs the host's say AND Marko's own `html` flag on the tag
-  // def. The flag is a taglib property (every element of marko-html, -svg and
-  // -math has it, no core or translator tag does), so a host whose own
-  // `isElement` is casing-only (Solid) cannot let `await` or `define` through,
-  // and a target with no declarations is covered too.
-  const flagged = (name: string): boolean =>
-    (lookup?.getTag(name) as { html?: unknown } | undefined)?.html === true;
-  const isElement = (name: string): boolean =>
-    (!declarations?.isElement ||
-      declarations.isElement(name, {
-        lookup,
-        defines: new Set<string>(),
-        imports: new Set<string>(),
-      } as unknown as Ctx)) &&
-    flagged(name);
+  const isElement = elementPredicate(lookup, declarations);
   return {
     ...(customTags ? { customTags } : {}),
     ...(customTagsUnknown ? { customTagsUnknown } : {}),
@@ -180,4 +166,28 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
     ...(input.builtins ? { builtins: input.builtins } : {}),
     isElement,
   };
+}
+
+/**
+ * Whether a name is an element of the target: the host's own `isElement` says
+ * so AND Marko's own `html` flag is on the tag def. The flag is a taglib
+ * property (every element of marko-html, -svg and -math has it, no core or
+ * translator tag does), so a host whose own `isElement` is casing-only
+ * (Solid) cannot let `await` or `define` through, and a target with no
+ * declarations is covered too.
+ */
+export function elementPredicate(
+  lookup: { getTag(name: string): object | undefined } | undefined,
+  declarations: HostDeclarations | undefined,
+): (name: string) => boolean {
+  const flagged = (name: string): boolean =>
+    (lookup?.getTag(name) as { html?: unknown } | undefined)?.html === true;
+  return (name) =>
+    (!declarations?.isElement ||
+      declarations.isElement(name, {
+        lookup,
+        defines: new Set<string>(),
+        imports: new Set<string>(),
+      } as unknown as Ctx)) &&
+    flagged(name);
 }
