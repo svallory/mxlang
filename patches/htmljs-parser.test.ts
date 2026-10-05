@@ -14,18 +14,31 @@
  * `var:"…"`, `@name`, `="value"`, `..."spread"`, `ERR(…)`.
  */
 import { createRequire } from "node:module";
+import { parseExpression as parseBabelExpression } from "@babel/parser";
 import * as esm from "htmljs-parser";
 import { describe, expect, it } from "vitest";
 import {
   ATOMS,
   type AtomParserModule,
   NOT_ATOMS,
+  parseScaling,
   RESERVED,
   rawOpenTagReads,
   readMismatches,
   renderAtoms,
   SUGAR_FORMS,
+  tagNameReads,
+  tsMarkerViolations,
 } from "../packages/parser/src/template/mx-atoms.cases.ts";
+
+const isValidTs = (expression: string) => {
+  try {
+    parseBabelExpression(expression, { plugins: ["typescript"] });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 type Parser = typeof esm;
 
@@ -308,6 +321,23 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
 
   it("a raw open-tag read is the source; the value keeps its stand-in", () => {
     expect(rawOpenTagReads(mod)).toEqual({ raw: "style x=:a", value: "0." });
+  });
+
+  it("a mixed tag name reads its stand-in; only the raw open tag reads the source", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX source, not a JS template
+    const expected = { name: "foo-${0.}", raw: "foo-${:a} x=:b" };
+    expect(tagNameReads(mod)).toEqual(expected);
+  });
+
+  it("no TypeScript marker or type end is followed by an atom, at any depth", () => {
+    const { total, ran, bad } = tsMarkerViolations(mod, isValidTs);
+    expect(total).toBe(11_520);
+    expect(ran).toBeGreaterThan(9_000);
+    expect(bad).toEqual([]);
+  });
+
+  it("parse time grows linearly with the file (no scan to the end of file)", () => {
+    expect(parseScaling(mod)).toBeLessThan(25);
   });
 
   it("read()'s binary search agrees with a linear stand-in on every range", () => {

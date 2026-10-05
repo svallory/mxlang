@@ -187,9 +187,11 @@ Review round 4 on PR #342 (both dist builds carry the same JavaScript):
 - **`read()`** binary-searches the first atom at or after the range start
   (it was a linear scan: 627 ms at 40k atoms). Reading exactly an atom's own
   range returns its stand-in, by design: that is how `x=:a`'s value reaches
-  Babel. A read that starts at a tag name (`tagNameStarts`, the raw open tag
-  `@marko/compiler` builds `rawValue` from, which `<style>` uses) returns the
-  source. `read()`'s consumers in `@marko/compiler` parse expressions from
+  Babel. A read of exactly the raw open tag (`rawOpenTags`: tag-name start
+  to open-tag-end start, which `@marko/compiler` builds `rawValue` from and
+  `<style>` uses) returns the source; round 5 narrowed this from "any read
+  starting at a tag name", which also left a mixed tag name's template
+  (`<foo-${:a}>`) unconverted. `read()`'s consumers in `@marko/compiler` parse expressions from
   value, argument, placeholder and method ranges (stand-ins wanted) and slice
   the raw open tag (source wanted).
 - **Decision 156 addendum 2.** Every `${}` is an expression position: tag
@@ -197,3 +199,18 @@ Review round 4 on PR #342 (both dist builds carry the same JavaScript):
   placeholders in `<script>`/`<style>`/`<textarea>` bodies. `::` in a tag
   name or an attribute name is the reserved-token error, positioned at the
   `::` (`rejectReservedName`, from `TAG_NAME.ts` and `ATTRIBUTE.ts`).
+
+Review round 5 on PR #342 (both dist builds carry the same JavaScript):
+
+- **`::` check is local.** `rejectReservedName` reads only the name's own
+  range, one character past each `:`; it used `indexOf` to the end of the
+  file, which made every parse quadratic. Tag names and shorthands check
+  their static quasis only, so `<${"a::b"}>` is legal and `<div.a::b>` is
+  reserved (decision 156 addendum 3).
+- **Look-behind at every depth.** A type argument list's closing `>`
+  (`closesTypeArguments`: the matching `<` written right after a word, in
+  the same group) and a run of postfix `!` (`a!!`, `a! !`) end an operand
+  inside groups, placeholders, tag arguments and method bodies too; the old
+  rule relied on `inType`, which only a top-level value sets. A number
+  before `?` is never TypeScript's optional marker (`n === 1? :a : :b`).
+  `:a-é` is no atom, like `:aé`.

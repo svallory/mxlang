@@ -67,11 +67,12 @@ export class Parser {
   /** MX (decision 156): the span of every atom lexed so far, in source order. */
   declare public atoms: Range[];
   /**
-   * MX (decision 156): where each tag name starts. A read from there is raw
-   * open-tag text (`@marko/compiler`'s `rawValue`, which `<style>` uses), so
-   * it gets the source, never stand-ins.
+   * MX (decision 156): each raw open tag, as tag-name start -> open-tag-end
+   * start. A read of exactly that range (`@marko/compiler`'s `rawValue`,
+   * which `<style>` uses) gets the source, never stand-ins; any other read,
+   * a mixed tag name's template (`<foo-${:a}>`) included, gets stand-ins.
    */
-  declare public tagNameStarts: Set<number>;
+  declare public rawOpenTags: Map<number, number>;
 
   constructor(options: Options) {
     this.options = options;
@@ -93,14 +94,14 @@ export class Parser {
    * at the atom's exact offsets. A consumer tells the stand-in from an
    * authored number by the source character at its start, which is `:`.
    *
-   * A read that starts at a tag name (the raw open tag) gets the source.
+   * A read of exactly a raw open tag (`rawOpenTags`) gets the source.
    * Reading exactly an atom's own range does get the stand-in, by design:
    * that is how `x=:a`'s value reaches Babel. A consumer that wants the
    * atom's text slices the source (or reads `value`, the name).
    * The first candidate atom is found by binary search.
    */
   standInAtoms(text: string, range: Range) {
-    if (this.tagNameStarts.has(range.start)) return text;
+    if (this.rawOpenTags.get(range.start) === range.end) return text;
     const { atoms } = this;
     let lo = 0;
     let hi = atoms.length;
@@ -384,7 +385,7 @@ export class Parser {
     this.beginMixedMode = this.endingMixedModeAtEOL = false;
     this.lines = this.activeTag = this.activeAttr = undefined;
     this.atoms = [];
-    this.tagNameStarts = new Set();
+    this.rawOpenTags = new Map();
     // Drop any state left over from a previous parse so reusing a parser
     // does not chain (and retain) the old state metas via parent references.
     this.activeRange = undefined as unknown as Meta;

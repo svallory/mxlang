@@ -4,17 +4,30 @@
  * against the patched npm build.
  */
 import { describe, expect, it } from "vitest";
+import { parseBabelExpression } from "../index.ts";
 import * as template from "./index.ts";
 import {
   ATOMS,
   type AtomParserModule,
   NOT_ATOMS,
+  parseScaling,
   RESERVED,
   rawOpenTagReads,
   readMismatches,
   renderAtoms,
   SUGAR_FORMS,
+  tagNameReads,
+  tsMarkerViolations,
 } from "./mx-atoms.cases.ts";
+
+const isValidTs = (expression: string) => {
+  try {
+    parseBabelExpression(expression, { plugins: ["typescript"] });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const mod = template as unknown as AtomParserModule;
 
@@ -29,6 +42,23 @@ describe("atoms (src/template)", () => {
 
   it("a raw open-tag read is the source; the value keeps its stand-in", () => {
     expect(rawOpenTagReads(mod)).toEqual({ raw: "style x=:a", value: "0." });
+  });
+
+  it("a mixed tag name reads its stand-in; only the raw open tag reads the source", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX source, not a JS template
+    const expected = { name: "foo-${0.}", raw: "foo-${:a} x=:b" };
+    expect(tagNameReads(mod)).toEqual(expected);
+  });
+
+  it("no TypeScript marker or type end is followed by an atom, at any depth", () => {
+    const { total, ran, bad } = tsMarkerViolations(mod, isValidTs);
+    expect(total).toBe(11_520);
+    expect(ran).toBeGreaterThan(9_000);
+    expect(bad).toEqual([]);
+  });
+
+  it("parse time grows linearly with the file (no scan to the end of file)", () => {
+    expect(parseScaling(mod)).toBeLessThan(25);
   });
 
   it("read()'s binary search agrees with a linear stand-in on every range", () => {

@@ -866,9 +866,12 @@ function lexAtom(
   const end = atomNameEnd(data, start + 1);
   if (
     end === start + 1 ||
-    // A non-ASCII letter right after the name (`:aé`) is not part of it, and
-    // a stand-in there would reach Babel's message; leave `:` to Babel.
+    // A non-ASCII letter right after the name (`:aé`, or `:a-é`, which
+    // would silently read as subtraction) is not part of it, and a stand-in
+    // there would reach Babel's message; leave `:` to Babel.
     data.charCodeAt(end) >= 0x80 ||
+    (data.charCodeAt(end) === CODE.HYPHEN &&
+      data.charCodeAt(end + 1) >= 0x80) ||
     !expectsExpression(expression, data, start)
   ) {
     return false;
@@ -892,17 +895,28 @@ export function reservedMessage(name: string) {
   return `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
 }
 
-/** MX (decision 156): reports a `::` in a tag or attribute name, if any. */
+/**
+ * MX (decision 156): reports a `::` in a tag or attribute name's static
+ * text, if any. Only `range` is read, one character past each `:`; never a
+ * scan to the end of the file (review round 5, R1).
+ */
 export function rejectReservedName(parser: Parser, range: Range): boolean {
-  const at = parser.data.indexOf("::", range.start);
-  if (at === -1 || at + 2 > range.end) return false;
-  const end = atomNameEnd(parser.data, at + 2);
-  parser.emitError(
-    { start: at, end },
-    ErrorCode.INVALID_EXPRESSION,
-    reservedMessage(parser.data.slice(at + 2, end)),
-  );
-  return true;
+  const { data } = parser;
+  for (let at = range.start; at + 1 < range.end; at++) {
+    if (
+      data.charCodeAt(at) === CODE.COLON &&
+      data.charCodeAt(at + 1) === CODE.COLON
+    ) {
+      const end = atomNameEnd(data, at + 2);
+      parser.emitError(
+        { start: at, end },
+        ErrorCode.INVALID_EXPRESSION,
+        reservedMessage(data.slice(at + 2, end)),
+      );
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -953,6 +967,61 @@ function isOperatorWord(
     );
   }
   return true;
+}
+
+/**
+ * Whether the `>` at `end` closes a type argument list: scanning back, the
+ * matching `<` is written right after a word (`Array<T>`, `Map<K, V>`,
+ * `Array<() => T>`, `a<b >`), within the same group. `a < b >` (space
+ * before `<`), `a >> b`, `a < b && c >` and a `<` beyond the group's own
+ * opener are comparisons. Stops at `;`, `&&`, `||`, and at a `?` or `:` of
+ * this group, so a run of atoms never rescans the expression.
+ */
+function closesTypeArguments(
+  expression: ExpressionMeta,
+  data: string,
+  end: number,
+): boolean {
+  let angles = 0;
+  let groups = 0;
+  for (let j = end; j >= expression.start; j--) {
+    const code = data.charCodeAt(j);
+    switch (code) {
+      case CODE.CLOSE_ANGLE_BRACKET:
+        if (data.charCodeAt(j - 1) !== CODE.EQUAL) angles++;
+        break;
+      case CODE.OPEN_ANGLE_BRACKET:
+        if (--angles === 0) {
+          return (
+            groups === 0 &&
+            j > expression.start &&
+            isWordCode(data.charCodeAt(j - 1))
+          );
+        }
+        break;
+      case CODE.CLOSE_PAREN:
+      case CODE.CLOSE_SQUARE_BRACKET:
+      case CODE.CLOSE_CURLY_BRACE:
+        groups++;
+        break;
+      case CODE.OPEN_PAREN:
+      case CODE.OPEN_SQUARE_BRACKET:
+      case CODE.OPEN_CURLY_BRACE:
+        if (--groups < 0) return false;
+        break;
+      case CODE.SEMICOLON:
+        return false;
+      case CODE.QUESTION:
+      case CODE.COLON:
+        if (groups === 0) return false;
+        break;
+      case CODE.AMPERSAND:
+      case CODE.PIPE:
+        if (data.charCodeAt(j - 1) === code) return false;
+        break;
+    }
+  }
+  return false;
 }
 
 /** Where an atom name `[A-Za-z_$][\w$]*(-[\w$]+)*` starting at `pos` ends. */
@@ -1010,22 +1079,41 @@ function expectsExpression(
     case CODE.QUESTION: {
       // A `?` written right after a word or `]` is TypeScript's optional
       // marker (`a?:T`, `a? :T`), whatever follows it; a ternary's `?` has
-      // whitespace before it (`a ? :b`).
+      // whitespace before it (`a ? :b`), or follows a number, which never
+      // carries a marker (`n === 1? :a : :b`).
       if (i === expression.start) return true;
       const owner = data.charCodeAt(i - 1);
+      if (isWordCode(owner)) {
+        let wordStart = i - 1;
+        while (
+          wordStart > expression.start &&
+          isWordCode(data.charCodeAt(wordStart - 1))
+        ) {
+          wordStart--;
+        }
+        return isDigitCode(data.charCodeAt(wordStart));
+      }
       return !(
-        isWordCode(owner) ||
         owner === CODE.CLOSE_SQUARE_BRACKET ||
         owner === CODE.HYPHEN ||
         owner === CODE.PLUS
       );
     }
     case CODE.EXCLAMATION: {
-      // A `!` right after an operand is postfix (non-null `a!`, `(a)!`, or
-      // definite assignment `x!:`), and an operand ends there; after an
-      // operator keyword (`typeof!x`) or anything else it is unary.
-      if (i === expression.start) return true;
-      const owner = data.charCodeAt(i - 1);
+      // A `!` right after an operand is postfix (non-null `a!`, `a!!`,
+      // `a! !`, `(a)!`, or definite assignment `x!:`), and an operand ends
+      // there; after an operator keyword (`typeof!x`) or anything else it is
+      // unary (`!!x`).
+      let j = i - 1;
+      while (
+        j >= expression.start &&
+        (data.charCodeAt(j) === CODE.EXCLAMATION ||
+          isWhitespaceCode(data.charCodeAt(j)))
+      ) {
+        j--;
+      }
+      if (j < expression.start) return true;
+      const owner = data.charCodeAt(j);
       if (
         owner === CODE.CLOSE_PAREN ||
         owner === CODE.CLOSE_SQUARE_BRACKET ||
@@ -1035,12 +1123,16 @@ function expectsExpression(
         return false;
       }
       if (!isWordCode(owner)) return true;
-      return isOperatorWord(expression, data, i - 1);
+      return isOperatorWord(expression, data, j);
     }
     case CODE.CLOSE_ANGLE_BRACKET:
-      // A type's closing `>` (`y as Array<T> :z`) ends an operand; `=>` and
-      // a comparison `>` expect an expression.
-      return !(expression.inType && data.charCodeAt(i - 1) !== CODE.EQUAL);
+      // A type argument list's closing `>` (`y as Array<T> :z`, `a<b> :z`)
+      // ends an operand at any depth; `=>`, a comparison and a shift expect
+      // an expression.
+      return (
+        data.charCodeAt(i - 1) === CODE.EQUAL ||
+        !closesTypeArguments(expression, data, i)
+      );
     case CODE.PLUS:
     case CODE.HYPHEN:
       // A `++`/`--` before a `:` is postfix.

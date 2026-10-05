@@ -234,6 +234,24 @@ export const ATOMS: [string, string][] = [
   ["<div:b x=[:c]/>", '<div:b> @x atom(c@10-12) ="[0.]"'],
   ["<div x=:a .b/>", '<div> @x atom(a@7-9) ="0." @.b'],
   ["div x=:a :b", '<div> @x atom(a@6-8) ="0." @:b'],
+  // Review round 5 (PR #342): a comparison or shift `>` and a unary run of
+  // `!` still expect an expression; a numeric literal never carries
+  // TypeScript's `?` marker (N2).
+  ["<div x=(a > :b)/>", '<div> @x atom(b@12-14) ="(a > 0.)"'],
+  ["<div x=(a >> :b)/>", '<div> @x atom(b@13-15) ="(a >> 0.)"'],
+  ["<div x=(a < b > :c)/>", '<div> @x atom(c@16-18) ="(a < b > 0.)"'],
+  ["<div x=(a => :b)/>", '<div> @x atom(b@13-15) ="(a => 0.)"'],
+  ["<div x=!!:a/>", '<div> @x atom(a@9-11) ="!!0."'],
+  ["<div x=(c && !! :a)/>", '<div> @x atom(a@16-18) ="(c && !! 0.)"'],
+  ["<div x=typeof !!:a/>", '<div> @x atom(a@16-18) ="typeof !!0."'],
+  [
+    "<div x=n === 1? :a : :b/>",
+    '<div> @x atom(a@16-18) atom(b@21-23) ="n === 1? 0. : 0."',
+  ],
+  [
+    "<div x=(n === 0x1f? :a : :b)/>",
+    '<div> @x atom(a@20-22) atom(b@25-27) ="(n === 0x1f? 0. : 0.)"',
+  ],
 ];
 
 /** [input, rendered events] — `::name` is reserved: a positioned error. */
@@ -261,6 +279,13 @@ export const RESERVED: [string, string][] = [
     "<div :: />",
     "<div> ERR(5-7 `::` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom)",
   ],
+  // A shorthand is tag-name position too (decision 156 addendum 3, Q1), on
+  // its static text only.
+  ["<div.a::b/>", `<div> ${reserved("b", "6-9")}`],
+  ["<div#a::b/>", `<div> ${reserved("b", "6-9")}`],
+  ["<div.${x}::b/>", `<div> ${reserved("b", "9-12")}`],
+  ["<foo-${x}::b/>", reserved("b", "9-12")],
+  ["div.a::b", `<div> ${reserved("b", "5-8")}`],
 ];
 
 /** [input, rendered events] — never atoms (research §5 rows 8, 9). */
@@ -345,6 +370,46 @@ export const NOT_ATOMS: [string, string][] = [
   // The attribute name position is never a value (decision 146 sugar).
   ["<div :a/>", "<div> @:a"],
   ["<div:a/>", "<div:a>"],
+  // Review round 5 (PR #342, R2): `::` inside a tag-name placeholder's
+  // string is the expression's text, not tag-name text.
+  ['<${"a::b"}/>', '<${"a::b"}>'],
+  ["<${`a::b`}/>", "<${`a::b`}>"],
+  ['<div.${"a::b"}/>', "<div>"],
+  ['<div class="a::b" x=`::c`/>', '<div> @class ="\\"a::b\\"" @x ="`::c`"'],
+  // Review round 5 (Q2, decision 156 addendum 3): `await`/`yield` after `(`,
+  // `,`, `?` or `:` are identifiers; awaiting or yielding an atom is
+  // meaningless.
+  ["<div x=f(await :b)/>", '<div> @x ="f(await :b)"'],
+  ["<div x=(yield :b)/>", '<div> @x ="(yield :b)"'],
+  ["<div x=f(1, yield :b)/>", '<div> @x ="f(1, yield :b)"'],
+  // Review round 5 (R3): TypeScript's reading wins at every nesting depth:
+  // a type argument list's closing `>` and a run of postfix `!` end an
+  // operand. Each expected value is the pre-atoms parse.
+  ["<div x=(c ? y as Array<T> :z)/>", '<div> @x ="(c ? y as Array<T> :z)"'],
+  ["<p>${c ? y as Array<T> :z}</p>", '<p> ${"c ? y as Array<T> :z"}'],
+  ["<div x=[c ? y as Map<K, V> :z]/>", '<div> @x ="[c ? y as Map<K, V> :z]"'],
+  [
+    "<div x=f(1, c ? x satisfies Foo<T> :d)/>",
+    '<div> @x ="f(1, c ? x satisfies Foo<T> :d)"',
+  ],
+  [
+    "<if(c ? y as Array<Array<T>> :z)>a</if>",
+    '<if> args:"c ? y as Array<Array<T>> :z"',
+  ],
+  [
+    "<div x=`${c ? y as Array< T > :z}`/>",
+    '<div> @x ="`${c ? y as Array< T > :z}`"',
+  ],
+  [
+    "<div x() { return c ? y as Array<() => T> :z }/>",
+    '<div> @x method:" return c ? y as Array<() => T> :z "',
+  ],
+  ["<div x={k: c ? f<T>() :z}/>", '<div> @x ="{k: c ? f<T>() :z}"'],
+  ["<div x={k: c ? a<b> :z}/>", '<div> @x ="{k: c ? a<b> :z}"'],
+  ["<div x=c ? a!! :z/>", '<div> @x ="c ? a!! :z"'],
+  ["<p>${c ? a!! :b}</p>", '<p> ${"c ? a!! :b"}'],
+  ["<div x=(c ? a! ! :z)/>", '<div> @x ="(c ? a! ! :z)"'],
+  ["<div x=[c ? a[0]!! :z]/>", '<div> @x ="[c ? a[0]!! :z]"'],
 ];
 
 /**
@@ -446,4 +511,146 @@ export function readMismatches(mod: AtomParserModule): string[] {
     }
   }
   return bad;
+}
+
+/**
+ * Review round 5 (R4): `@marko/compiler` reads a mixed tag name as one
+ * template (`quasis[0].start` to the name's end), which must get the
+ * stand-in; only the exact raw open-tag read (name start to the open tag's
+ * end) gets the source. Returns both reads of `<foo-${:a} x=:b/>`.
+ */
+export function tagNameReads(mod: AtomParserModule): {
+  name: string;
+  raw: string;
+} {
+  const code = "<foo-${:a} x=:b/>";
+  let nameStart = -1;
+  let name = "";
+  let raw = "";
+  const parser = mod.createParser({
+    onOpenTagName: (t: { quasis: { start: number; end: number }[] }) => {
+      const first = t.quasis[0];
+      const last = t.quasis[t.quasis.length - 1];
+      if (!first || !last) return;
+      nameStart = first.start;
+      name = parser.read({ start: nameStart, end: last.end });
+    },
+    onOpenTagEnd: (t: { start: number }) => {
+      raw = parser.read({ start: nameStart, end: t.start });
+    },
+  });
+  parser.parse(code);
+  return { name, raw };
+}
+
+/**
+ * Review round 5 (R3): the systematic TypeScript-marker set. Each input puts
+ * an operand TypeScript can end with a marker or a type (`a!!`,
+ * `y as Array<T>`, `x satisfies Foo<T>`, …) before ` :z` in a ternary, in
+ * every wrapper an atom is lexed in, with three tails (plain, a later `:name`
+ * sugar, a later real atom). 24 × 4 × 4 × 10 × 3 = 11,520 inputs. Inputs
+ * whose atom-free expression `isValidTs` rejects are skipped. Returns the
+ * inputs that lex `:z` as an atom (none expected) and how many ran.
+ */
+export function tsMarkerViolations(
+  mod: AtomParserModule,
+  isValidTs: (expression: string) => boolean,
+): { total: number; ran: number; bad: string[] } {
+  const operands = [
+    "a!",
+    "(a)!",
+    "a!!",
+    "a[0]!",
+    "a.b!",
+    "a! !",
+    "y as Array<T>",
+    "y as Map<K, V>",
+    "y as Array<Array<T>>",
+    "x satisfies Foo<T>",
+    "y as T[]",
+    "y as (T)",
+    "y as T",
+    "of",
+    "yield",
+    "await",
+    "1",
+    '"s"',
+    "a?.b",
+    "f<T>()",
+    "new A<T>()",
+    "<T>(a)",
+    "a++",
+    "x.of",
+  ];
+  const conds = ["c ? ", "c ?\n", "(c) ? ", "c  ?  "];
+  const seps = [" :", "  :", "\n:", "\t:"];
+  // [source prefix, source suffix, expression prefix, expression suffix]
+  const wraps: [string, string, string, string][] = [
+    ["<div x=", "/>", "", ""],
+    ["<div x=(", ")/>", "(", ")"],
+    ["<div x=[", "]/>", "[", "]"],
+    ["<p>${", "}</p>", "", ""],
+    ["<if(", ")>a</if>", "", ""],
+    ["<div x=`${", "}`/>", "", ""],
+    ["div x=", "\n", "", ""],
+    ["<div x=f(1, ", ")/>", "f(1, ", ")"],
+    ["<div x() { return ", "}/>", "", ""],
+    ["<div x={k: ", "}/>", "{k: ", "}"],
+  ];
+  const tails = ["z", "z :name", "z === :k"];
+  let total = 0;
+  let ran = 0;
+  const bad: string[] = [];
+  for (const o of operands) {
+    for (const c of conds) {
+      for (const s of seps) {
+        for (const [pre, post, ePre, ePost] of wraps) {
+          for (const t of tails) {
+            total++;
+            const v = c + o + s + t;
+            const expr = v.replace(/ :name$/, "").replace(":k", "k");
+            if (!isValidTs(ePre + expr + ePost)) continue;
+            ran++;
+            const src = pre + v + post;
+            let wrong = false;
+            mod
+              .createParser({
+                onAtom: (a: { start: number; end: number }) => {
+                  if (src.slice(a.start, a.end) === ":z") wrong = true;
+                },
+                onError() {},
+              })
+              .parse(src);
+            if (wrong) bad.push(src);
+          }
+        }
+      }
+    }
+  }
+  return { total, ran, bad };
+}
+
+/**
+ * Review round 5 (R1): parse time must grow linearly with the file. Parses
+ * 4,000 and 40,000 tags of `<div x=[aN, {k: b}] y=1 z=2/>` (no `::`, no
+ * atom; each tag and attribute name used to scan to the end of the file)
+ * and returns the ratio of the best of three runs (linear is about 10).
+ */
+export function parseScaling(mod: AtomParserModule): number {
+  const best = (n: number) => {
+    const code = Array.from(
+      { length: n },
+      (_, i) => `<div x=[a${i}, {k: b}] y=1 z=2/>\n`,
+    ).join("");
+    let min = Infinity;
+    for (let run = 0; run < 3; run++) {
+      const parser = mod.createParser({});
+      const t = performance.now();
+      parser.parse(code);
+      min = Math.min(min, performance.now() - t);
+    }
+    return min;
+  };
+  best(4_000); // warm up
+  return best(40_000) / Math.max(best(4_000), 0.5);
 }

@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d8161e76d 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..13dcbd97a16fcf72f781a9e7ead462a1bc9d6533 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -11,7 +11,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
 +    return this.atoms.length ? this.standInAtoms(text, range) : text;
 +  }
 +  standInAtoms(text, range) {
-+    if (this.tagNameStarts.has(range.start)) return text;
++    if (this.rawOpenTags.get(range.start) === range.end) return text;
 +    let { atoms } = this, lo = 0, hi = atoms.length;
 +    for (; lo < hi; ) {
 +      let mid = lo + hi >>> 1;
@@ -32,7 +32,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
    parse(data) {
      let maxPos = this.maxPos = data.length;
 -    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
-+    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.atoms = [], this.tagNameStarts = /* @__PURE__ */ new Set(), this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
++    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.atoms = [], this.rawOpenTags = /* @__PURE__ */ new Map(), this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
        this.activeState.parse.call(this, data, maxPos, this.activeRange);
    }
  };
@@ -131,7 +131,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1432,6 +1470,132 @@ function canFollowDivision(code) {
+@@ -1432,6 +1470,182 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -171,9 +171,10 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
 +    ), !0;
 +  }
 +  let end = atomNameEnd(data, start + 1);
-+  if (end === start + 1 || // A non-ASCII letter right after the name (`:aé`) is not part of it, and
-+  // a stand-in there would reach Babel's message; leave `:` to Babel.
-+  data.charCodeAt(end) >= 128 || !expectsExpression(expression, data, start))
++  if (end === start + 1 || // A non-ASCII letter right after the name (`:aé`, or `:a-é`, which
++  // would silently read as subtraction) is not part of it, and a stand-in
++  // there would reach Babel's message; leave `:` to Babel.
++  data.charCodeAt(end) >= 128 || data.charCodeAt(end) === 45 && data.charCodeAt(end + 1) >= 128 || !expectsExpression(expression, data, start))
 +    return !1;
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
 +  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
@@ -212,15 +213,25 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
 +    case 63: {
 +      if (i === expression.start) return !0;
 +      let owner = data.charCodeAt(i - 1);
-+      return !(isWordCode(owner) || owner === 93 || owner === 45 || owner === 43);
++      if (isWordCode(owner)) {
++        let wordStart = i - 1;
++        for (; wordStart > expression.start && isWordCode(data.charCodeAt(wordStart - 1)); )
++          wordStart--;
++        let first = data.charCodeAt(wordStart);
++        return first >= 48 && first <= 57;
++      }
++      return !(owner === 93 || owner === 45 || owner === 43);
 +    }
 +    case 33: {
-+      if (i === expression.start) return !0;
-+      let owner = data.charCodeAt(i - 1);
-+      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isWordCode(owner) ? isOperatorWord(expression, data, i - 1) : !0;
++      let j = i - 1;
++      for (; j >= expression.start && (data.charCodeAt(j) === 33 || isWhitespaceCode(data.charCodeAt(j))); )
++        j--;
++      if (j < expression.start) return !0;
++      let owner = data.charCodeAt(j);
++      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
 +    }
 +    case 62:
-+      return !(expression.inType && data.charCodeAt(i - 1) !== 61);
++      return data.charCodeAt(i - 1) === 61 || !closesTypeArguments(expression, data, i);
 +    case 43:
 +    case 45:
 +      return data.charCodeAt(i - 1) !== code;
@@ -235,14 +246,53 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
 +  return `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
 +}
 +function rejectReservedName(parser, range) {
-+  let at = parser.data.indexOf("::", range.start);
-+  if (at === -1 || at + 2 > range.end) return !1;
-+  let end = atomNameEnd(parser.data, at + 2);
-+  return parser.emitError(
-+    { start: at, end },
-+    6,
-+    reservedMessage(parser.data.slice(at + 2, end))
-+  ), !0;
++  let { data } = parser;
++  for (let at = range.start; at + 1 < range.end; at++)
++    if (data.charCodeAt(at) === 58 && data.charCodeAt(at + 1) === 58) {
++      let end = atomNameEnd(data, at + 2);
++      return parser.emitError(
++        { start: at, end },
++        6,
++        reservedMessage(data.slice(at + 2, end))
++      ), !0;
++    }
++  return !1;
++}
++function closesTypeArguments(expression, data, end) {
++  let angles = 0, groups = 0;
++  for (let j = end; j >= expression.start; j--) {
++    let code = data.charCodeAt(j);
++    switch (code) {
++      case 62:
++        data.charCodeAt(j - 1) !== 61 && angles++;
++        break;
++      case 60:
++        if (--angles === 0)
++          return groups === 0 && j > expression.start && isWordCode(data.charCodeAt(j - 1));
++        break;
++      case 41:
++      case 93:
++      case 125:
++        groups++;
++        break;
++      case 40:
++      case 91:
++      case 123:
++        if (--groups < 0) return !1;
++        break;
++      case 59:
++        return !1;
++      case 63:
++      case 58:
++        if (groups === 0) return !1;
++        break;
++      case 38:
++      case 124:
++        if (data.charCodeAt(j - 1) === code) return !1;
++        break;
++    }
++  }
++  return !1;
 +}
 +function isOperatorWord(expression, data, end) {
 +  if (end + 1 === expression.atomEnd) return !1;
@@ -264,7 +314,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
-@@ -1450,6 +1614,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1450,6 +1664,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -272,7 +322,20 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1981,7 +2146,9 @@ var OPEN_TAG = {
+@@ -1805,9 +2020,9 @@ var OPEN_TAG = {
+   },
+   exit(tag) {
+     var _a, _b;
+-    let { selfClosed } = tag;
+-    switch ((_b = (_a = this.options).onOpenTagEnd) == null || _b.call(_a, {
+-      start: this.pos - (this.isConcise ? 0 : selfClosed ? 2 : 1),
++    let { selfClosed } = tag, start = this.pos - (this.isConcise ? 0 : selfClosed ? 2 : 1);
++    switch (tag.tagName && this.rawOpenTags.set(tag.tagName.start, start), (_b = (_a = this.options).onOpenTagEnd) == null || _b.call(_a, {
++      start,
+       end: this.pos,
+       selfClosed
+     }), selfClosed ? 2 : tag.type) {
+@@ -1981,7 +2196,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -283,7 +346,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
              return;
            }
            case 124: {
-@@ -2345,7 +2512,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2345,7 +2562,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -294,16 +357,19 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
      }
    }
    return !1;
-@@ -2492,6 +2661,8 @@ var TAG_NAME = {
-         });
-         break;
-       default: {
-+        if (rejectReservedName(this, { start, end })) return;
-+        this.tagNameStarts.add(start);
-         let tag = this.activeTag, tagType = (_f = (_e = this.options).onOpenTagName) == null ? void 0 : _f.call(_e, {
-           start,
-           end,
-@@ -2533,7 +2704,9 @@ var TAG_NAME = {
+@@ -2468,7 +2687,10 @@ var TAG_NAME = {
+   exit(tagName) {
+     var _a, _b, _c, _d, _e, _f;
+     let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
+-    switch (last.end < end && (last.end = end), tagName.shorthandCode) {
++    last.end < end && (last.end = end);
++    for (let quasi of quasis)
++      if (rejectReservedName(this, quasi)) return;
++    switch (tagName.shorthandCode) {
+       case 35:
+         if (this.activeTag.hasShorthandId)
+           return this.emitError(
+@@ -2533,7 +2755,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -314,7 +380,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2587,7 +2760,9 @@ var TEMPLATE_STRING = {
+@@ -2587,7 +2811,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -326,7 +392,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..55c4d896af33a6d615443e3d69a73a3d
            }
            this.pos++;
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9b18f57b8 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..af8b691ff50624e57d280ffb71551112afb55afd 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -338,7 +404,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
 +    return this.atoms.length ? this.standInAtoms(text, range) : text;
 +  }
 +  standInAtoms(text, range) {
-+    if (this.tagNameStarts.has(range.start)) return text;
++    if (this.rawOpenTags.get(range.start) === range.end) return text;
 +    let { atoms } = this, lo = 0, hi = atoms.length;
 +    for (; lo < hi; ) {
 +      let mid = lo + hi >>> 1;
@@ -359,7 +425,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
    parse(data) {
      let maxPos = this.maxPos = data.length;
 -    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
-+    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.atoms = [], this.tagNameStarts = /* @__PURE__ */ new Set(), this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
++    for (this.data = data, this.indent = "", this.textPos = -1, this.isConcise = !0, this.beginMixedMode = this.endingMixedModeAtEOL = !1, this.lines = this.activeTag = this.activeAttr = void 0, this.atoms = [], this.rawOpenTags = /* @__PURE__ */ new Map(), this.activeRange = void 0, this.pos = data.charCodeAt(0) === 65279 ? 1 : 0, this.enterState(states_exports.CONCISE_HTML_CONTENT); this.pos <= maxPos; )
        this.activeState.parse.call(this, data, maxPos, this.activeRange);
    }
  };
@@ -458,7 +524,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1405,6 +1443,132 @@ function canFollowDivision(code) {
+@@ -1405,6 +1443,182 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -498,9 +564,10 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
 +    ), !0;
 +  }
 +  let end = atomNameEnd(data, start + 1);
-+  if (end === start + 1 || // A non-ASCII letter right after the name (`:aé`) is not part of it, and
-+  // a stand-in there would reach Babel's message; leave `:` to Babel.
-+  data.charCodeAt(end) >= 128 || !expectsExpression(expression, data, start))
++  if (end === start + 1 || // A non-ASCII letter right after the name (`:aé`, or `:a-é`, which
++  // would silently read as subtraction) is not part of it, and a stand-in
++  // there would reach Babel's message; leave `:` to Babel.
++  data.charCodeAt(end) >= 128 || data.charCodeAt(end) === 45 && data.charCodeAt(end + 1) >= 128 || !expectsExpression(expression, data, start))
 +    return !1;
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
 +  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
@@ -539,15 +606,25 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
 +    case 63: {
 +      if (i === expression.start) return !0;
 +      let owner = data.charCodeAt(i - 1);
-+      return !(isWordCode(owner) || owner === 93 || owner === 45 || owner === 43);
++      if (isWordCode(owner)) {
++        let wordStart = i - 1;
++        for (; wordStart > expression.start && isWordCode(data.charCodeAt(wordStart - 1)); )
++          wordStart--;
++        let first = data.charCodeAt(wordStart);
++        return first >= 48 && first <= 57;
++      }
++      return !(owner === 93 || owner === 45 || owner === 43);
 +    }
 +    case 33: {
-+      if (i === expression.start) return !0;
-+      let owner = data.charCodeAt(i - 1);
-+      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isWordCode(owner) ? isOperatorWord(expression, data, i - 1) : !0;
++      let j = i - 1;
++      for (; j >= expression.start && (data.charCodeAt(j) === 33 || isWhitespaceCode(data.charCodeAt(j))); )
++        j--;
++      if (j < expression.start) return !0;
++      let owner = data.charCodeAt(j);
++      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
 +    }
 +    case 62:
-+      return !(expression.inType && data.charCodeAt(i - 1) !== 61);
++      return data.charCodeAt(i - 1) === 61 || !closesTypeArguments(expression, data, i);
 +    case 43:
 +    case 45:
 +      return data.charCodeAt(i - 1) !== code;
@@ -562,14 +639,53 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
 +  return `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
 +}
 +function rejectReservedName(parser, range) {
-+  let at = parser.data.indexOf("::", range.start);
-+  if (at === -1 || at + 2 > range.end) return !1;
-+  let end = atomNameEnd(parser.data, at + 2);
-+  return parser.emitError(
-+    { start: at, end },
-+    6,
-+    reservedMessage(parser.data.slice(at + 2, end))
-+  ), !0;
++  let { data } = parser;
++  for (let at = range.start; at + 1 < range.end; at++)
++    if (data.charCodeAt(at) === 58 && data.charCodeAt(at + 1) === 58) {
++      let end = atomNameEnd(data, at + 2);
++      return parser.emitError(
++        { start: at, end },
++        6,
++        reservedMessage(data.slice(at + 2, end))
++      ), !0;
++    }
++  return !1;
++}
++function closesTypeArguments(expression, data, end) {
++  let angles = 0, groups = 0;
++  for (let j = end; j >= expression.start; j--) {
++    let code = data.charCodeAt(j);
++    switch (code) {
++      case 62:
++        data.charCodeAt(j - 1) !== 61 && angles++;
++        break;
++      case 60:
++        if (--angles === 0)
++          return groups === 0 && j > expression.start && isWordCode(data.charCodeAt(j - 1));
++        break;
++      case 41:
++      case 93:
++      case 125:
++        groups++;
++        break;
++      case 40:
++      case 91:
++      case 123:
++        if (--groups < 0) return !1;
++        break;
++      case 59:
++        return !1;
++      case 63:
++      case 58:
++        if (groups === 0) return !1;
++        break;
++      case 38:
++      case 124:
++        if (data.charCodeAt(j - 1) === code) return !1;
++        break;
++    }
++  }
++  return !1;
 +}
 +function isOperatorWord(expression, data, end) {
 +  if (end + 1 === expression.atomEnd) return !1;
@@ -591,7 +707,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
  function isWordOrPeriodCode(code) {
    return code === 46 || isWordCode(code);
  }
-@@ -1423,6 +1587,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1423,6 +1637,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -599,7 +715,20 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1954,7 +2119,9 @@ var OPEN_TAG = {
+@@ -1778,9 +1993,9 @@ var OPEN_TAG = {
+   },
+   exit(tag) {
+     var _a, _b;
+-    let { selfClosed } = tag;
+-    switch ((_b = (_a = this.options).onOpenTagEnd) == null || _b.call(_a, {
+-      start: this.pos - (this.isConcise ? 0 : selfClosed ? 2 : 1),
++    let { selfClosed } = tag, start = this.pos - (this.isConcise ? 0 : selfClosed ? 2 : 1);
++    switch (tag.tagName && this.rawOpenTags.set(tag.tagName.start, start), (_b = (_a = this.options).onOpenTagEnd) == null || _b.call(_a, {
++      start,
+       end: this.pos,
+       selfClosed
+     }), selfClosed ? 2 : tag.type) {
+@@ -1954,7 +2169,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -610,7 +739,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
              return;
            }
            case 124: {
-@@ -2318,7 +2485,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2318,7 +2535,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -621,16 +750,19 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
      }
    }
    return !1;
-@@ -2465,6 +2634,8 @@ var TAG_NAME = {
-         });
-         break;
-       default: {
-+        if (rejectReservedName(this, { start, end })) return;
-+        this.tagNameStarts.add(start);
-         let tag = this.activeTag, tagType = (_f = (_e = this.options).onOpenTagName) == null ? void 0 : _f.call(_e, {
-           start,
-           end,
-@@ -2506,7 +2677,9 @@ var TAG_NAME = {
+@@ -2441,7 +2660,10 @@ var TAG_NAME = {
+   exit(tagName) {
+     var _a, _b, _c, _d, _e, _f;
+     let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
+-    switch (last.end < end && (last.end = end), tagName.shorthandCode) {
++    last.end < end && (last.end = end);
++    for (let quasi of quasis)
++      if (rejectReservedName(this, quasi)) return;
++    switch (tagName.shorthandCode) {
+       case 35:
+         if (this.activeTag.hasShorthandId)
+           return this.emitError(
+@@ -2506,7 +2728,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -641,7 +773,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..83f169fe6d0dec3dd0edb3547d78eaa9
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2560,7 +2733,9 @@ var TEMPLATE_STRING = {
+@@ -2560,7 +2784,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {

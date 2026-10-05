@@ -39,6 +39,13 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
     const last = quasis[quasis.length - 1];
     if (last.end < end) last.end = end;
 
+    // MX (decision 156 addenda 2, 3): `::` is reserved in a tag name and in
+    // its shorthands, in their static text only: a `${}` is an expression
+    // (`<${"a::b"}>`).
+    for (const quasi of quasis) {
+      if (rejectReservedName(this, quasi)) return;
+    }
+
     switch (tagName.shorthandCode) {
       case CODE.NUMBER_SIGN:
         if (this.activeTag!.hasShorthandId) {
@@ -67,9 +74,6 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         break;
       default: {
         const tag = this.activeTag!;
-        // MX (decision 156 addendum 2): `::` is reserved in a tag name too.
-        if (rejectReservedName(this, { start, end })) return;
-        this.tagNameStarts.add(start);
         const tagType = this.options.onOpenTagName?.({
           start,
           end,

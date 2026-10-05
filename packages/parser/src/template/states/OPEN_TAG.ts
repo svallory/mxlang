@@ -69,9 +69,14 @@ export const OPEN_TAG: StateDefinition<OpenTagMeta> = {
 
   exit(tag) {
     const { selfClosed } = tag;
+    const start = this.pos - (this.isConcise ? 0 : selfClosed ? 2 : 1);
+
+    // MX (decision 156): the raw open tag (`@marko/compiler`'s `rawValue`)
+    // reads the source, not stand-ins; see `Parser.standInAtoms`.
+    if (tag.tagName) this.rawOpenTags.set(tag.tagName.start, start);
 
     this.options.onOpenTagEnd?.({
-      start: this.pos - (this.isConcise ? 0 : selfClosed ? 2 : 1),
+      start,
       end: this.pos,
       selfClosed,
     });

@@ -49,6 +49,8 @@ A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-
 
 **TypeScript markers win** (PR #342 review). A `?` right after a word or `]` (`a? :T`), a postfix `!` (`c ? a! :b`) and a type's closing `>` (`y as Array<T> :z`) end an operand whether or not whitespace comes before the `:`, so no atom starts there; `of`, `yield` and `await` used as identifiers stay identifiers.
 
+**Decision 156 addendum 3** (mx-lead, 2026-10-05, PR #342 review round 5). A `:` that TypeScript could own in the current expression context is TypeScript's, at every nesting depth: in a group, a placeholder, a tag argument, a method body or a template's `${}` as at the top level of a value. A type argument list's closing `>` (`(c ? y as Array<T> :z)`, `${c ? a<b> :z}`: its `<` is written right after a word) and a run of postfix `!` (`a!!`, `a! !`) end an operand; a comparison or shift `>` (`a > :b`, `a < b > :c`, `a >> :b`) and a unary `!!` (`!!:a`) do not. A number is never followed by TypeScript's `?` marker, so `n === 1? :a : :b` is a ternary of two atoms. A `:` is also never an atom after `await` or `yield` written after `(`, `,`, `?` or `:` (`f(await :b)`, `(yield :b)`): there they are read as identifiers, and awaiting or yielding an atom is meaningless. `::` is the reserved token in a shorthand's static text too (`<div.a::b>`, `<div#a::b>`), but never inside a `${}` of a tag name or shorthand (`<${"a::b"}>` is legal: the tag name there is an expression).
+
 ### 2. IR
 
 An atom is its own IR node, `atom { name, span }`, distinct from `string`. It is not a string literal in the tree; it lowers to one (next section). `parseData` exposes it as an atom, so data consumers can tell `:title` from `"title"` and tools can offer completion and go-to on it.

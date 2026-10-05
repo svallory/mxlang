@@ -391,12 +391,37 @@ describe("misuse is a positioned MX error at the atom", () => {
     // Decision 156 addendum 2: in an attribute name and a tag name too.
     ["<b ::a/>", 3],
     ["<b::a/>", 2],
+    // Decision 156 addendum 3: in a shorthand's static text too.
+    ["<b.c::a/>", 4],
+    ["<b#c::a/>", 4],
   ])("%j: the reserved `::` is positioned", (source, column) => {
     const error = errorOf(source);
     expect(error.message).toContain("`::a` is reserved (decision 156)");
     expect(error.line).toBe(1);
     expect(error.column).toBe(column);
   });
+
+  // Review round 5 (N4): `cond? :yes` reads as TypeScript's optional marker
+  // (`?` touching the word), so `:yes` is no atom; the hint says so.
+  it.each([
+    ["<div x=cond? :yes : :no/>", "cond"],
+    ["<p>${a.b? :yes : :no}</p>", "a.b"],
+  ])(
+    "%j: a `?` touching its condition gets the marker hint",
+    (source, word) => {
+      let message = "";
+      try {
+        lowerSource(source);
+      } catch (error) {
+        hintParseError(error, source);
+        message = (error as Error).message;
+      }
+      expect(message).toContain(
+        `\`${word.split(".").at(-1)}? :yes\` is TypeScript's optional marker`,
+      );
+      expect(message).toContain(`write \`${word.split(".").at(-1)} ? :yes\``);
+    },
+  );
 });
 
 describe("the atom hint names only a lexed atom (review round 2)", () => {
