@@ -4,7 +4,7 @@ module.exports = {
   descriptorVersion: 0,
   name: "fake-hostless",
   packageName: "@fake/mx-hostless",
-  defaultTag: "node",
+  defaultTag: "div",
   load(core) {
     if (typeof core.TranslateError !== "function") {
       throw new Error("the injected core has no TranslateError");

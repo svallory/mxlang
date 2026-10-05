@@ -25,6 +25,8 @@ import { join } from "node:path";
  * - `throws`    its module throws on evaluation
  * - `invalid`   exports something that is not a descriptor
  * - `no-default-tag` a valid descriptor without the required `defaultTag`
+ * - `host-override` a host overriding `defaultTag`; its compile echoes the one it got
+ * - `bad-default-tag` a descriptor whose own `defaultTag` is no tag its target has
  * - `version`   exports `descriptorVersion: 1`
  *
  * `missing` has no package: a specifier no project installs.
@@ -39,6 +41,8 @@ export type FakeTarget =
   | "throws"
   | "invalid"
   | "no-default-tag"
+  | "host-override"
+  | "bad-default-tag"
   | "version";
 
 const here = import.meta.dirname;

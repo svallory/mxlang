@@ -24,6 +24,12 @@ function loadRegistry(): Promise<RegistryModule> {
   return registryModule;
 }
 
+/** The unnamed tag's name for a file the Vite plugin prints (a `.solid.mx`), resolved quietly: the page transform already reported the policy's warnings. */
+async function regionDefaultTag(file: string): Promise<string> {
+  const { defaultTagFor, resolveTargetPolicy } = await loadRegistry();
+  return defaultTagFor(file, resolveTargetPolicy(file, { quiet: true }));
+}
+
 async function loadRegionCompile(
   dependencies?: Set<string>,
 ): Promise<MxRegionCompile> {
@@ -73,7 +79,7 @@ async function compileMarko(
     // D1: build strictness is caller-owned, even for an always-strict target.
     strict,
     customTags,
-    defaultTag: defaultTagFor(filename),
+    defaultTag: defaultTagFor(filename, policy),
     // D2: descriptors decide which compile leaves receive the Vite resolver.
     resolveImport,
     targets: lookup,
@@ -1104,7 +1110,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         const dependencies = new Set<string>();
         const { code: printed, map } = print(code, source, {
           customTags: await tagsFor(source, warn, policyError),
-          defaultTag: (await loadRegistry()).defaultTagFor(source),
+          defaultTag: await regionDefaultTag(source),
           mxRegionCompile: await loadRegionCompile(dependencies),
         });
         recordDependencies(source, [...dependencies]);

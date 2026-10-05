@@ -9,6 +9,7 @@ import type { RawSourceMap } from "@mxlang/parser";
 import {
   builtinLookup,
   defaultTagFor,
+  resolveTargetPolicy,
   scanCached,
 } from "@mxlang/target-registry";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
@@ -125,7 +126,10 @@ export function createAmxLanguagePlugin(
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
                 : undefined),
-              defaultTag: defaultTagFor(fileName),
+              defaultTag: defaultTagFor(
+                fileName,
+                resolveTargetPolicy(fileName, { quiet: true }),
+              ),
               warnings,
               targets: builtinLookup(),
             });

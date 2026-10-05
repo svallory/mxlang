@@ -390,7 +390,7 @@ export function diagnoseDocument(
       const filename = path.endsWith(suffix) ? path : `${path}${suffix}`;
       const result = print(text, filename, {
         customTags,
-        defaultTag: defaultTagFor(filename),
+        defaultTag: defaultTagFor(filename, hostPolicy),
         mxRegionCompile: (input) => {
           const regionInput = { ...input, warnings, targets: lookup };
           // Core keeps the parser's hoisted AST nodes opaque to avoid a
@@ -410,7 +410,7 @@ export function diagnoseDocument(
       const result = load(core).compileModule(text, path, {
         strict: descriptor.strict === "always" || hostPolicy.strict === true,
         customTags,
-        defaultTag: defaultTagFor(path),
+        defaultTag: defaultTagFor(path, hostPolicy),
         warnings,
         targets: lookup,
       });

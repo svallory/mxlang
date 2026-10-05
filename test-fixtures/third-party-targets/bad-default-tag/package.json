@@ -1,0 +1,6 @@
+{
+  "name": "@fake/mx-bad-default-tag",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs"
+}

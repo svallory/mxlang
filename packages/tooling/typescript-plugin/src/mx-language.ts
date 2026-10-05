@@ -369,7 +369,7 @@ export function createMxLanguagePlugin(
     // be the whole registered set, not one target's own descriptor, or a
     // callee importing `AttrTag` from another registered target's package
     // would stop being recognised.
-    const defaultTag = defaultTagFor(fileName);
+    const defaultTag = defaultTagFor(fileName, hostPolicy);
     const compiled = load(core).compileModule(source, fileName, {
       strict,
       customTags,

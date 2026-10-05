@@ -11,6 +11,11 @@ import type { TargetDescriptor } from "@mxlang/core";
 import * as core from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  cleanupProjects,
+  fakeProject,
+  specifier,
+} from "../../../test-fixtures/third-party-targets/support.ts";
+import {
   builtinLookup,
   builtinTargets,
   defaultTagFor,
@@ -19,6 +24,10 @@ import {
   lookupFor,
   resolveTargetPolicyDetailed,
 } from "./index.ts";
+
+/** The registry's rungs for a file, resolving its policy first, as a tool does. */
+const tagFor = (file: string): string =>
+  defaultTagFor(file, resolveTargetPolicyDetailed(file).policy);
 
 const roots: string[] = [];
 afterEach(() => {
@@ -118,26 +127,27 @@ describe("mx.<target>.defaultTag validation, once per package", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["invalid-default-tag"]);
   });
 
-  it("answers the same on the data target, which has its own taglib", () => {
-    const accept = resolveTargetPolicyDetailed(
-      project({ mx: { target: "data", data: { defaultTag: "object" } } }),
-      { dataWired: true },
-    );
+  it("on data, reachable means the built-in `object` plus the custom tags", () => {
+    const dataPackage = (name: string) =>
+      resolveTargetPolicyDetailed(
+        project({ mx: { target: "data", data: { defaultTag: name } } }),
+        { dataWired: true },
+      );
+    const accept = dataPackage("object");
     expect(accept.diagnostics).toEqual([]);
     expect(accept.policy.defaultTag).toBe("object");
 
-    // The data taglib makes `input` an ordinary tag, so it is a legal default there.
-    const plain = resolveTargetPolicyDetailed(
-      project({ mx: { target: "data", data: { defaultTag: "input" } } }),
-      { dataWired: true },
-    );
-    expect(plain.diagnostics).toEqual([]);
-
-    const reject = resolveTargetPolicyDetailed(
-      project({ mx: { target: "data", data: { defaultTag: "nope" } } }),
-      { dataWired: true },
-    );
-    expect(reject.diagnostics[0]?.message).toBe(
+    // Marko's lookup answers parse shape only: html's elements are no data tags.
+    for (const name of ["div", "section", "pre", "input", "nope"]) {
+      const { policy, diagnostics } = dataPackage(name);
+      expect(policy.defaultTag).toBeUndefined();
+      expect(diagnostics[0]).toMatchObject({
+        code: "invalid-default-tag",
+        severity: "error",
+      });
+      expect(diagnostics[0]?.message).toContain("not");
+    }
+    expect(dataPackage("nope").diagnostics[0]?.message).toBe(
       "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package",
     );
   });
@@ -203,13 +213,13 @@ describe("a host module file kind reads its own target's config", () => {
 
   it("defaultTagFor answers the file kind's target, not the page target's", () => {
     const file = project(manifest("section"), {}, "a.solid.mx");
-    expect(defaultTagFor(file)).toBe("section");
+    expect(tagFor(file)).toBe("section");
     expect(resolveTargetPolicyDetailed(file).diagnostics).toEqual([]);
   });
 
   it("a page file in the same package ignores the other target's key", () => {
     const file = project(manifest("section"));
-    expect(defaultTagFor(file)).toBe("div");
+    expect(tagFor(file)).toBe("div");
   });
 
   it("an invalid value is reported for that file kind, and the built-in answers", () => {
@@ -223,7 +233,7 @@ describe("a host module file kind reads its own target's config", () => {
           "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package",
       },
     ]);
-    expect(defaultTagFor(file)).toBe("div");
+    expect(tagFor(file)).toBe("div");
   });
 
   it("a non-string value for that target is core's one diagnostic", () => {
@@ -243,7 +253,7 @@ describe("mx.html.defaultTag reaches the compile", () => {
     const customTags = getCustomTags(file, { targets });
     return descriptor?.load?.(core).compileModule(source, file, {
       customTags,
-      defaultTag: defaultTagFor(file),
+      defaultTag: tagFor(file),
       targets: builtinLookup(),
     }).code as string;
   }
@@ -270,5 +280,155 @@ describe("mx.html.defaultTag reaches the compile", () => {
     expect(compile(file, "<#a>hi</>\n")).toBe(
       compile(project({ mx: { target: "html" } }, card), "<#a>hi</>\n"),
     );
+  });
+});
+
+describe("only elements of the target are valid built-ins", () => {
+  it.each(["await", "try", "define", "effect", "let", "id", "log", "return"])(
+    "html rejects the core tag <%s> at the value",
+    (name) => {
+      const { policy, diagnostics } = resolveTargetPolicyDetailed(
+        project(html(name)),
+      );
+      expect(policy.defaultTag).toBeUndefined();
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]?.code).toBe("invalid-default-tag");
+      expect(diagnostics[0]?.message).toMatch(
+        /not an element of this target|void tag/,
+      );
+    },
+  );
+
+  it("enumerating html's whole lookup: accepted exactly the plain elements Marko flags html", () => {
+    const lookup = builtinLookup();
+    const descriptor = lookup.target("html");
+    const dir = project({ mx: { target: "html" } });
+    const markoLookup = core.buildMarkoLookup(
+      join(dir, ".."),
+      descriptor?.translator,
+    ) as unknown as {
+      merged: {
+        tags: Record<
+          string,
+          { html?: boolean; parseOptions?: Record<string, unknown> }
+        >;
+      };
+    };
+    const accepted: string[] = [];
+    const rejected: string[] = [];
+    for (const [name, tag] of Object.entries(markoLookup.merged.tags)) {
+      const plain =
+        !tag.parseOptions ||
+        !(
+          tag.parseOptions.openTagOnly ||
+          tag.parseOptions.text ||
+          tag.parseOptions.preserveWhitespace ||
+          tag.parseOptions.statement ||
+          tag.parseOptions.controlFlow
+        );
+      const expected = tag.html === true && plain;
+      const scope = core.defaultTagScopeFor({
+        dir: join(dir, ".."),
+        translator: descriptor?.translator,
+        declarations: descriptor?.declarations?.default,
+      });
+      const reason = core.validateDefaultTag(name, scope);
+      (reason === undefined ? accepted : rejected).push(name);
+      expect(reason === undefined, name).toBe(expected);
+    }
+    // The lookup has 109 html + 59 svg + 42 math elements and 26 core tags;
+    // every core tag is rejected (script/style/html-script/html-style by shape).
+    expect(accepted).toContain("div");
+    expect(accepted).toContain("svg");
+    for (const name of ["await", "try", "define", "effect", "if", "import"]) {
+      expect(rejected).toContain(name);
+    }
+    expect(accepted.length + rejected.length).toBeGreaterThan(200);
+  });
+});
+
+describe("a scan failure never escapes a policy call (reviewer finding 1)", () => {
+  const broken = (target: string) => ({
+    mx: {
+      target,
+      contracts: { item: {} },
+      [target]: { defaultTag: target === "data" ? "object" : "section" },
+    },
+  });
+
+  it("html: returns the policy, keeps the value, throws nothing", () => {
+    const file = project(broken("html"));
+    expect(() => resolveTargetPolicyDetailed(file)).not.toThrow();
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(policy.defaultTag).toBe("section");
+    expect(diagnostics.map((d) => d.code)).not.toContain("invalid-default-tag");
+    expect(() => defaultTagFor(file, policy)).not.toThrow();
+  });
+
+  it("data: the policy call does not throw either", () => {
+    const file = project(broken("data"));
+    expect(() =>
+      resolveTargetPolicyDetailed(file, { dataWired: true }),
+    ).not.toThrow();
+  });
+});
+
+describe("a loaded descriptor's own values are checked against the target's lookup", () => {
+  afterEach(() => cleanupProjects());
+
+  it('`defaultTag: "nonexistent"` is an error at the mx.target value, not a tautology', () => {
+    const text = `{\n  "mx": { "target": "${specifier("bad-default-tag")}" }\n}`;
+    const proj = fakeProject({
+      manifestText: text,
+      install: ["bad-default-tag"],
+    });
+    const { diagnostics } = resolveTargetPolicyDetailed(proj.path("a.mx"));
+    const own = diagnostics.filter((d) => d.code === "invalid-default-tag");
+    expect(own).toHaveLength(1);
+    expect(own[0]).toMatchObject({ severity: "error", line: 2 });
+    expect(own[0]?.message).toBe(
+      'invalid `defaultTag` value: `<nonexistent>` is not a tag reachable from this package (defaultTag of "fake-bad-default")',
+    );
+  });
+});
+
+describe("a host override reaches the compile through defaultTagFor", () => {
+  afterEach(() => cleanupProjects());
+
+  const setup = (extra: Record<string, unknown> = {}) => {
+    const proj = fakeProject({
+      mx: { target: specifier("host-override"), ...extra },
+      install: ["host-override"],
+    });
+    const file = proj.path("a.mx");
+    const resolution = resolveTargetPolicyDetailed(file);
+    const descriptor = lookupFor(resolution.policy).target(
+      resolution.policy.target,
+    );
+    const compile = (): string =>
+      (
+        descriptor?.load?.(core).compileModule("", file, {
+          defaultTag: defaultTagFor(file, resolution.policy),
+          targets: lookupFor(resolution.policy),
+        }) as { code: string }
+      ).code;
+    return { file, resolution, compile };
+  };
+
+  it("the host override beats the target's built-in", () => {
+    const { file, resolution, compile } = setup();
+    expect(
+      resolution.diagnostics.filter((d) => d.code === "invalid-default-tag"),
+    ).toEqual([]);
+    expect(defaultTagFor(file, resolution.policy)).toBe("section");
+    expect(compile()).toBe("default-tag:section");
+  });
+
+  it("the user's config beats the host override", () => {
+    const { file, resolution, compile } = setup({
+      "fake-override": { defaultTag: "main" },
+    });
+    expect(defaultTagFor(file, resolution.policy)).toBe("main");
+    expect(compile()).toBe("default-tag:main");
   });
 });

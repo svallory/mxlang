@@ -20,6 +20,7 @@ import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
 import {
   builtinLookup,
   defaultTagFor,
+  resolveTargetPolicy,
   scanCached,
 } from "@mxlang/target-registry";
 import type {
@@ -182,7 +183,10 @@ export function createSolidMxLanguagePlugin(
           () => {
             const warnings: MxWarning[] = [];
             const printed = print(source, fileName, {
-              defaultTag: defaultTagFor(fileName),
+              defaultTag: defaultTagFor(
+                fileName,
+                resolveTargetPolicy(fileName, { quiet: true }),
+              ),
               mxRegionCompile: (input) =>
                 solidRegionCompile({ ...input, warnings }),
               ...(Object.keys(discovered).length > 0
@@ -409,7 +413,10 @@ export function createNgMxLanguagePlugin(
         );
         const result = compileNgMx(source, fileName, {
           customTags: scan.customTags,
-          defaultTag: defaultTagFor(fileName),
+          defaultTag: defaultTagFor(
+            fileName,
+            resolveTargetPolicy(fileName, { quiet: true }),
+          ),
           tagSelectorPrefix,
           targets: builtinLookup(),
         });
