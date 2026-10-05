@@ -101,6 +101,48 @@ function filterAfterVirtualCode(
   );
 }
 
+describe("fence mapping verification (the seam mx-tsc depends on)", () => {
+  const source = "---\nreturn;\n---\n<h1>hi</h1>\nstatic return;\n";
+  const fenceEnd = source.indexOf("\n---", 4) + "\n---".length;
+
+  function mappings() {
+    const virtual = createAmxLanguagePlugin(ts).createVirtualCode?.(
+      "/project/page.astro.mx",
+      AMX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    if (!virtual) throw new Error("expected AMX virtual code");
+    return virtual.mappings;
+  }
+
+  it("rejects TS1108 and accepts other codes in a fence mapping", () => {
+    const fence = mappings().filter(
+      (m) => (m.sourceOffsets[0] ?? Infinity) < fenceEnd,
+    );
+
+    expect(fence.length).toBeGreaterThan(0);
+    for (const mapping of fence) {
+      const verification = mapping.data.verification;
+      expect(typeof verification).toBe("object");
+      if (typeof verification !== "object" || !verification) continue;
+      expect(verification.shouldReport?.(undefined, 1108)).toBe(false);
+      expect(verification.shouldReport?.(undefined, 2322)).toBe(true);
+    }
+  });
+
+  it("keeps plain verification on a mapping outside the fence", () => {
+    const template = mappings().filter(
+      (m) => (m.sourceOffsets[0] ?? 0) >= fenceEnd,
+    );
+
+    expect(template.length).toBeGreaterThan(0);
+    for (const mapping of template) {
+      expect(mapping.data.verification).toBe(true);
+    }
+  });
+});
+
 describe("fence top-level return vs TS1108 (astro-template projection)", () => {
   it("puts the fence's return at TSX module top level, where TS1108 fires", () => {
     // The premise. `convertToTSX` emits the frontmatter ahead of the generated

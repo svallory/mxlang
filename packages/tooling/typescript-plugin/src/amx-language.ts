@@ -87,6 +87,13 @@ function fenceEndOffset(source: string): number | undefined {
  * `mx-tsc --astro` has: it never holds the decorated program, and tsc's own
  * reporter prints whatever the program returns. The mappings are the fence
  * region, so a 1108 anywhere else in the file still reaches the author.
+ *
+ * Only this object form is new to Volar's readers, and the pinned
+ * @volar/language-core 2.4.28 (`lib/editor.js`) reads it in two ways:
+ * `isDiagnosticsEnabled` and `isCodeActionsEnabled` are both `!!verification`
+ * (an object is truthy, so diagnostics and quick fixes stay on in the fence),
+ * and `shouldReportDiagnostics` is the only reader of `shouldReport`. A Volar
+ * that adds a required key to the object form must be revisited here.
  */
 const fenceCodeInformation: CodeInformation = {
   ...codeInformation,
@@ -96,13 +103,21 @@ const fenceCodeInformation: CodeInformation = {
   },
 };
 
-/** Gives every mapping that lies wholly inside the fence `fenceCodeInformation`. */
+/**
+ * Gives every mapping that lies wholly inside the fence `fenceCodeInformation`.
+ *
+ * Only single-span mappings are judged: `sourceOffsets[0]`/`lengths[0]` are the
+ * whole mapping only when there is exactly one span, so any other shape is left
+ * untouched (plain `codeInformation`) rather than guessed from span 0.
+ * `composeAmxMappings` emits one span per mapping today.
+ */
 function withFenceVerification(
   mappings: CodeMapping[],
   fenceEnd: number,
 ): CodeMapping[] {
   if (fenceEnd === 0) return mappings;
   return mappings.map((mapping) => {
+    if (mapping.sourceOffsets.length !== 1) return mapping;
     const start = mapping.sourceOffsets[0];
     const length = mapping.lengths[0];
     if (start === undefined || length === undefined) return mapping;

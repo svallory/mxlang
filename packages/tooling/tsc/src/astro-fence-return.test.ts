@@ -30,6 +30,7 @@ function projectOf(
   name: string,
   text: string,
   host = "astro",
+  extraArgs: string[] = [],
 ): { status: number; output: string } {
   const dir = mkdtempSync(join(tmpdir(), "mx-astro-fence-return-"));
   try {
@@ -49,7 +50,7 @@ function projectOf(
     );
     writeFileSync(join(dir, name), text);
     const result = runInProcess(
-      ["--noEmit", "-p", "tsconfig.json", "--astro"],
+      ["--noEmit", "-p", "tsconfig.json", "--astro", ...extraArgs],
       dir,
     );
     return {
@@ -62,12 +63,38 @@ function projectOf(
 }
 
 it("does not report TS1108 for a top-level return in the fence", () => {
-  const { output, status } = project("page.astro.mx", ["return;"]);
+  // `--pretty`: tsc prints its `Found N errors` summary only in pretty mode, so
+  // that is the only mode in which an absent summary proves anything.
+  const { output, status } = projectOf(
+    "page.astro.mx",
+    "---\nreturn;\n---\n<h1>hi</h1>",
+    "astro",
+    ["--pretty"],
+  );
 
   expect(output).not.toContain("TS1108");
-  // Nothing printed means nothing counted: no "1 error" without a line.
-  expect(output).not.toMatch(/Found \d+ error/);
+  expect(output).not.toMatch(/Found \d+ errors?/);
   expect(status).toBe(0);
+});
+
+it("counts only the unfiltered errors: a fence return plus two type errors is 2", () => {
+  const { output, status } = projectOf(
+    "page.astro.mx",
+    [
+      "---",
+      "return;",
+      'const a: number = "x";',
+      'const b: number = "y";',
+      "---",
+      "<h1>hi</h1>",
+    ].join("\n"),
+    "astro",
+    ["--pretty"],
+  );
+
+  expect(output).not.toContain("TS1108");
+  expect(output).toContain("Found 2 errors");
+  expect(status).not.toBe(0);
 });
 
 it("still reports TS1108 outside the fence, at its own position", () => {
