@@ -1,5 +1,9 @@
 # @mxlang/data
 
+## 0.1.0-alpha.3
+
+- **Changed (decision 159):** `@marko/compiler` is no longer a dependency. The scan and the data taglib use `@mxlang/core`'s `markoCompiler()`, so data parses with core's bundled Marko front end and MX's own template parser: after-value sugar (`<field type="email" :email/>`) works in a registry install. Requires `@mxlang/core` 0.1.0-alpha.3.
+
 ## 0.1.0-alpha.2
 
 2026-10-05. Identical to alpha.1; republished because the alpha.1 tarballs lacked `dist/` when installed by Bun. No code change.

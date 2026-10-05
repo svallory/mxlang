@@ -11,13 +11,15 @@
  * the real compile too, so the caller keeps its own error.
  */
 
-import { createRequire } from "node:module";
 import { dirname } from "node:path";
-import { type CustomTag, sugarTagName } from "@mxlang/core";
+import {
+  type CustomTag,
+  markoCompiler as coreMarkoCompiler,
+  type MarkoCompiler,
+  sugarTagName,
+} from "@mxlang/core";
 import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
-
-const require = createRequire(import.meta.url);
 
 /** A tag the author wrote, with the position of its `<`. */
 export interface AuthoredTag {
@@ -108,7 +110,7 @@ function parseTaglib(
  * runs on a cold or a warm cache alike and is idempotent.
  */
 function hardenLookup(
-  markoCompiler: typeof import("@marko/compiler"),
+  markoCompiler: MarkoCompiler,
   filename: string,
   translator: unknown,
 ): void {
@@ -138,8 +140,7 @@ export function scanAuthoredTags(
 ): AuthoredTag[] | null {
   let program: { body: MarkoNode[] };
   try {
-    const markoCompiler =
-      require("@marko/compiler") as typeof import("@marko/compiler");
+    const markoCompiler = coreMarkoCompiler();
     const translator = translatorFor(customTags);
     hardenLookup(markoCompiler, filename, translator);
     const result = markoCompiler.compileSync(source, filename, {

@@ -27,9 +27,7 @@
  * or an attribute instead.
  */
 
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
+import { markoCompiler } from "@mxlang/core";
 
 export const DATA_TAGLIB_ID = "mx-data";
 
@@ -86,12 +84,10 @@ const STRUCTURAL_ENTRIES: Record<string, unknown> = {
  * rules fails loudly here.
  */
 export function neutralizations(): Map<string, ParseOptionsOverride> {
-  // Required lazily: importing the descriptor must not load `@marko/compiler`
-  // (the registry's light-import invariant), and in `dist/` a static import
-  // would be hoisted to the top of the bundle.
-  const markoCompiler =
-    require("@marko/compiler") as typeof import("@marko/compiler");
-  const lookup = markoCompiler.taglib.buildLookup("/", {
+  // Loaded lazily, through core's one compiler instance: importing the
+  // descriptor must not load the compiler (the registry's light-import
+  // invariant).
+  const lookup = markoCompiler().taglib.buildLookup("/", {
     taglibs: [],
     tagDiscoveryDirs: [],
     translate: {},

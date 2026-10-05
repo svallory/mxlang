@@ -31,10 +31,10 @@
 
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { isTranslateError } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
+import { markoCompiler } from "./marko-frontend.ts";
 import {
   dottedTagFileDiagnostics,
   type ScanDiagnostic,
@@ -42,8 +42,6 @@ import {
   type ScanResult,
   scanCustomTags,
 } from "./scan.ts";
-
-const require = createRequire(import.meta.url);
 
 interface CacheEntry {
   result: ScanResult;
@@ -199,7 +197,7 @@ function loadedSignatureOf(entry: CacheEntry): string {
  */
 export function evictTaglibCaches(): void {
   try {
-    const { taglib } = require("@marko/compiler");
+    const { taglib } = markoCompiler();
     taglib?.clearCaches?.();
   } catch {
     // The compiler is a lazy dependency of this package; a caller that never

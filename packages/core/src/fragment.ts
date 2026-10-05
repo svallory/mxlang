@@ -33,7 +33,6 @@
  *   array; `MarkoComment` nodes in the body are shifted like any other node.
  */
 
-import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { type Node, TranslateError } from "./core.ts";
@@ -44,9 +43,8 @@ import {
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
+import { markoCompiler } from "./marko-frontend.ts";
 import { stockParserError, sugarAfterDefaultError } from "./stock-parser.ts";
-
-const require = createRequire(import.meta.url);
 
 /**
  * A translator that translates nothing: the parse-only configuration.
@@ -398,7 +396,7 @@ export function parseFragment(
     baseColumn: base.baseColumn ?? 0,
   };
 
-  const compiler = require("@marko/compiler");
+  const compiler = markoCompiler();
   const translator = parseOnlyTranslator(base.customTags);
   prepareLookup(compiler, resolved.filename, translator);
   let ast: Node;
@@ -458,7 +456,7 @@ export function parseFragmentNative(
 ): FragmentResult {
   const filename = base.filename ?? "fragment.mx";
   assertBaseContract(base, filename);
-  const compiler = require("@marko/compiler");
+  const compiler = markoCompiler();
   const translator = parseOnlyTranslator(base.customTags);
   prepareLookup(compiler, filename, translator);
   const ast: Node = compiler.compileSync(source, filename, {

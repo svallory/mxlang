@@ -6,7 +6,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +15,7 @@ import {
   type CustomTag,
   clearScanCache,
   type MxWarning,
+  markoCompiler,
   readCalleeInput,
   resetCalleeInputCache,
   type TemplateBackedTag,
@@ -2673,7 +2673,7 @@ describe("MX language plugin", () => {
     // parsing, out of this task's scope (`packages/core/src/**`).
     // biome-ignore lint/suspicious/noExplicitAny: probing Marko's internal AST shape, not this package's types
     const compileSync: (source: string, filename: string, opts: any) => void =
-      createRequire(import.meta.url)("@marko/compiler").compileSync;
+      markoCompiler().compileSync;
     let valueType: string | undefined;
     compileSync("<if=pick<string>(3 as number)>x</if>", "gap.mx", {
       output: "html",

@@ -86,7 +86,26 @@ Five facts worth knowing before editing it:
   constructor arguments) and Astro (no local component form at all) keep
   their own positioned errors, unrelated to and unaffected by this change.
 
-- **Its parser dependencies are `@marko/compiler` and `@babel/parser`.**
+- **Marko's parse layer is loaded in one place, `src/marko-frontend.ts`, and
+  bundled into the dist (decision 159).** `markoCompiler()`, `markoBabel()`
+  and `markoHtmljsParser()` (all public) are the only way core, the hosts,
+  data and the tools reach `@marko/compiler`, its Babel or its parser: never
+  `require("@marko/compiler...")` elsewhere, or a second compiler instance
+  loads (separate taglib caches, compile state and Babel nodes). From source
+  they resolve the workspace's `@marko/compiler` (patched npm `htmljs-parser`).
+  In the dist, `build/frontend.ts` bundles `@marko/compiler` into
+  `dist/marko-frontend.cjs` with `htmljs-parser` resolved to
+  `packages/parser/src/template/`, and the main build defines
+  `MX_MARKO_FRONTEND` so the loader requires that file; `@marko/compiler` and
+  `htmljs-parser` are devDependencies only. The build fails if the bundle
+  requires any package, carries an npm `htmljs-parser`, or `dist/index.js`
+  imports either specifier statically. The bundle stubs Babel's
+  `browserslist` (no config file found: MX passes no targets) and leaves out
+  `@babel/preset-typescript` (only for a `.cts` Babel config file). A bundle
+  that inlines core's dist (the VSIX builds) gets `marko-frontend.cjs` copied
+  beside it by `scripts/bundled-build.ts`. Deleted with the switch to the MX
+  AST (decision 158).
+- **Its JS parsers are Marko's own Babel (`markoBabel()`) and `@babel/parser`.**
   `core.ts` used to parse
   an `import` line with `@mxlang/parser` — the *Solid parser* package — for a
   single `parse` call. It now asks `@marko/compiler/internal/babel`

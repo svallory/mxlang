@@ -9,7 +9,12 @@
 //      repo, once with npm and run by Node, once with Bun;
 //   3. runs a `parseData` probe (`customTags`, `structural: "reject"`,
 //      `unknownTags: "reject"`) that must return a tree for a valid file and
-//      the unknown-tag diagnostic, with no tree, for a typo.
+//      the unknown-tag diagnostic, with no tree, for a typo;
+//   4. decision 159: proves the install parses with MX's own template parser
+//      (core's bundled Marko front end): `<input type="email" :email/>` and
+//      `x=a.b .c` split after the value, the process loaded core's
+//      `marko-frontend.cjs`, and no npm `htmljs-parser` or `@marko/compiler`
+//      is installed or loaded.
 //
 // It must be able to fail: any step that exits non-zero, an unrewritten
 // `workspace:*`, a missing tree, or a missing diagnostic fails the run.
@@ -124,6 +129,9 @@ if (dataPkg.dependencies["@mxlang/core"] !== corePkg.version) {
 }
 
 const PROBE = `
+import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
+import { parseFragment } from "@mxlang/core";
 import { parseData } from "@mxlang/data";
 
 const customTags = {
@@ -164,6 +172,32 @@ for (const [name, result, text] of [
   if (result.diagnostics.length !== 1 || result.diagnostics[0].severity !== "error" || !result.diagnostics[0].message.includes(text)) {
     fail("the " + name + " file has the wrong diagnostic: " + JSON.stringify(result.diagnostics));
   }
+}
+
+// Decision 159: the after-value sugar parses in a registry install.
+const sugar = parseData('<field type="email" :email/>\\n', "/probe/sugar.mx", {
+  customTags: { field: { parents: ["#root"], attributes: { type: { type: "string" }, name: { type: "string" } } } },
+  structural: "reject",
+  unknownTags: "reject",
+});
+const field = sugar.tree?.children[0];
+const sugarAttrs = field ? field.attrs.map((a) => a.name) : null;
+console.log("after-value sugar:", JSON.stringify({ attrs: sugarAttrs, diagnostics: sugar.diagnostics }));
+if (sugar.diagnostics.length !== 0 || !same(sugarAttrs, ["type", "name"])) {
+  fail("<field type=\\"email\\" :email/> did not parse as type + name: " + JSON.stringify({ attrs: sugarAttrs, diagnostics: sugar.diagnostics }));
+}
+const member = parseFragment("<div x=a.b .c/>").body[0].attributes.map((a) => a.name);
+if (!same(member, ["x", ".c"])) fail("x=a.b .c did not split after the value: " + JSON.stringify(member));
+const require = createRequire(import.meta.url);
+const loaded = Object.keys(require.cache);
+console.log("loaded parse layer:", JSON.stringify(loaded.filter((k) => /marko|htmljs/.test(k))));
+if (!loaded.some((k) => k.endsWith("/@mxlang/core/dist/marko-frontend.cjs"))) fail("core's marko-frontend.cjs was not loaded");
+for (const name of ["htmljs-parser", "@marko/compiler"]) {
+  if (loaded.some((k) => k.includes("/node_modules/" + name + "/"))) fail("an npm " + name + " was loaded");
+  if (existsSync("node_modules/" + name)) fail("an npm " + name + " is installed at node_modules/" + name);
+  let resolved = null;
+  try { resolved = createRequire(require.resolve("@mxlang/core"))(name) && name; } catch {}
+  if (resolved) fail(name + " resolves from the installed @mxlang/core");
 }
 console.log("probe passed");
 `;

@@ -15,7 +15,7 @@ const work = mkdtempSync(join(tmpdir(), "mx-registry-light-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
 /** Bun's install layout nests a package as `.bun/@marko+compiler@x/node_modules/@marko/compiler`. */
-const COMPILERS = String.raw`/node_modules\/(\.bun\/)?(@marko[+/]compiler|@astrojs[+/]compiler)/`;
+const COMPILERS = String.raw`/node_modules\/(\.bun\/)?(@marko[+/]compiler|@astrojs[+/]compiler)|\/marko-frontend\.cjs$/`;
 
 /**
  * A host's compile entry: `src/index.ts` of a source-loaded host, or
@@ -72,7 +72,11 @@ describe("light import", () => {
        html.load!({} as never).compileModule("<p>hi</p>", ${JSON.stringify(page)}, {});
        return null;`,
     );
-    expect(loaded.some((k) => k.includes("@marko"))).toBe(true);
+    expect(
+      loaded.some(
+        (k) => k.includes("@marko") || k.endsWith("marko-frontend.cjs"),
+      ),
+    ).toBe(true);
   });
 
   it("data compiles a data file through the registry (under Bun, where load() can require)", () => {

@@ -16,14 +16,12 @@ export const BUNDLED_OUTDIR = "bundle";
 
 /**
  * Left external AND shipped beside the plugin (copied with their dependency
- * closure): the plugin loads them at run time through `createRequire`, or they
- * read files next to themselves (`@astrojs/compiler`'s wasm), so they cannot
- * be inlined.
+ * closure): they read files next to themselves (`@astrojs/compiler`'s wasm),
+ * so they cannot be inlined. The Marko parse layer is not here: it comes with
+ * `@mxlang/core`'s dist as `marko-frontend.cjs` (decision 159), which
+ * `scripts/bundled-build.ts` copies into the bundle directory.
  */
-export const BUNDLED_INSTALLED = [
-  "@marko/compiler",
-  "@astrojs/compiler",
-] as const;
+export const BUNDLED_INSTALLED = ["@astrojs/compiler"] as const;
 
 /**
  * Left external and NOT shipped: resolved from the user's project (the Angular

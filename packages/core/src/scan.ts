@@ -58,6 +58,7 @@ import {
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
+import { markoBabel } from "./marko-frontend.ts";
 import {
   clearPackageJsonCache,
   type PackageJsonParseError,
@@ -638,7 +639,7 @@ export function readParseOptions(
   source: string,
   file: string,
 ): CustomTagParseOptions | undefined {
-  const babel = require("@marko/compiler/internal/babel");
+  const babel = markoBabel();
   let ast: {
     program: { body: Array<Record<string, unknown>> };
   };

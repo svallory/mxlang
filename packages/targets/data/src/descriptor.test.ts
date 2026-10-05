@@ -86,7 +86,9 @@ describe("the lookup over data", () => {
 
 describe("light import", () => {
   // A fresh `bun` process lists the compiler modules left in `require.cache`.
-  const COMPILERS = String.raw`/node_modules\/(\.bun\/)?@marko[+/]compiler/`;
+  // The npm compiler (core from source) or core's bundled one (core's dist,
+  // decision 159).
+  const COMPILERS = String.raw`/node_modules\/(\.bun\/)?@marko[+/]compiler\/|\/marko-frontend\.cjs$/`;
 
   function probe(body: string): { loaded: string[]; value: unknown } {
     const file = join(work, `probe-${Math.random().toString(36).slice(2)}.ts`);
@@ -119,6 +121,10 @@ console.log(JSON.stringify({ loaded: compilers(), value }));
     const { loaded } = probe(
       `descriptor.load!({} as never).compileModule("<x a=1/>\\n", "a.mx", {}); return null;`,
     );
-    expect(loaded.some((k) => k.includes("@marko"))).toBe(true);
+    expect(
+      loaded.some(
+        (k) => k.includes("@marko") || k.endsWith("marko-frontend.cjs"),
+      ),
+    ).toBe(true);
   });
 });

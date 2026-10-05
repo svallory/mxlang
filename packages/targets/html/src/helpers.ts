@@ -128,6 +128,7 @@ import {
   isMarkoOrMxSpecifier,
   isTranslateError,
   type MxWarning,
+  markoBabel,
   scanCached,
   type TargetLookup,
   TranslateError,
@@ -137,18 +138,17 @@ import { configuredDefaultTag } from "./default-tag.ts";
 import { type CompileOptions, compile, htmlTargets } from "./index.ts";
 
 /**
- * `@marko/compiler`'s own Babel instance, the same one `@mxlang/core`'s own
- * (unexported) `markoBabel()` uses internally — already a real dependency of
- * this package (`@marko/compiler` is in `package.json`), so this adds
- * nothing new. Round 2, finding 3: the original rewrite pass scanned the
+ * `@marko/compiler`'s own Babel instance, through `@mxlang/core`'s
+ * `markoBabel()`: the instance core compiles with (decision 159: bundled in
+ * core's dist), so this adds no second Babel. Round 2, finding 3: the original rewrite pass scanned the
  * compiled module line by line with `importedNames` (a single-*line* parse),
  * which silently skipped an author-written multi-line import and never even
  * attempted an `export … from` re-export (`importedNames` only recognizes
  * `ImportDeclaration`). A real whole-module parse sees both, plus a
  * side-effect import (`import "./x.ts"`, no specifiers at all).
  */
-const markoBabel = () =>
-  createRequire(import.meta.url)("@marko/compiler/internal/babel") as {
+const babelModule = () =>
+  markoBabel() as unknown as {
     parse: (
       code: string,
       options?: Record<string, unknown>,
@@ -409,7 +409,7 @@ function rewriteImports(
   seen: Set<string>,
   targets: TargetLookup,
 ): string {
-  const { parse } = markoBabel();
+  const { parse } = babelModule();
   // Compiled MX output is TypeScript (an `export interface Input {}`, a
   // typed parameter), so the parse needs the `typescript` plugin — the same
   // combination `@mxlang/core`'s own `scan.ts` uses for a whole-file TS

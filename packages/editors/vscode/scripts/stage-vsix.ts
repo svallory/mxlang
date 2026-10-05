@@ -11,17 +11,17 @@
 // (`typescript-plugin`'s `bun run build:bundled`, output `bundle/`; entries and
 // externals are defined once in its `build/bundled-config.ts`), so the shipped
 // plugin gets the same factory-function export as the published build. The
-// packages that build leaves external and ships (`@marko/compiler`,
-// `@astrojs/compiler`) are copied in with their dependency closure from the
-// workspace install: no registry access and exactly the versions `bun.lock`
-// pins. The project-resolved ones (`typescript`, `@angular/compiler-cli`,
+// packages that build leaves external and ships (`@astrojs/compiler`) are
+// copied in with their dependency closure from the workspace install: no
+// registry access and exactly the versions `bun.lock` pins. The Marko parse
+// layer is `@mxlang/core`'s `marko-frontend.cjs` (decision 159), which the
+// bundled build already copied into each `bundle/`. The project-resolved ones (`typescript`, `@angular/compiler-cli`,
 // `@astrojs/language-server`) are never shipped.
 //
 // The language server ships the same way: its own self-contained build
 // (`bun ../../tooling/language-server/build/bundled.ts`, output `bundle/`,
 // `build/bundled-config.ts` the one list) copied to
-// `node_modules/@mxlang/language-server/dist/`, with `@marko/compiler` (shared
-// with the plugin, placed once) beside it. The extension runs it with VS
+// `node_modules/@mxlang/language-server/dist/`. The extension runs it with VS
 // Code's own Node (`src/server-command.ts`).
 
 import { execFileSync } from "node:child_process";
@@ -135,7 +135,7 @@ writeFileSync(
 // workspace install so the shipped versions are the ones bun.lock pins. Each
 // is resolved from the package that declares it.
 const fromPlugin = createRequire(join(pluginDir, "package.json"));
-// The server reaches @marko/compiler through @mxlang/core, which declares it.
+// Whatever the server ships is resolved through @mxlang/core, which it inlines.
 const fromLs = createRequire(join(repoRoot, "packages/core/package.json"));
 for (const [name, from] of [
   ...BUNDLED_INSTALLED.map((n) => [n, fromPlugin] as const),

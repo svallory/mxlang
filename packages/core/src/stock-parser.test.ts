@@ -314,14 +314,49 @@ describe("sugar right after a default value", () => {
 // position is shifted by baseLine/baseColumn like every other; the sugar error
 // is built from it and so lands at the shifted `:`. Core's built `dist` runs
 // under the stock parser in a child process.
+/**
+ * Core's dist loads its bundled Marko front end (decision 159), whose parser
+ * is MX's own: a stock `htmljs-parser` in the install never reaches it. The
+ * decision 151 diagnostic is for a caller that bypasses that bundle and hands
+ * core a stock compiler; `bypass` simulates one by resolving the dist's
+ * `./marko-frontend.cjs` to the npm compiler, which then gets the stock parser
+ * through `hook`.
+ */
+const bypass = (shim: string) => `
+const BypassModule = require("node:module");
+const bypassResolve = BypassModule._resolveFilename;
+BypassModule._resolveFilename = function (request, ...rest) {
+  if (request === "./marko-frontend.cjs") return ${JSON.stringify(shim)};
+  return bypassResolve.call(this, request, ...rest);
+};
+`;
+
 describe("parseFragment on a stock parser", () => {
   const distEntry = join(here, "../dist/index.js");
 
-  function recovered(source: string, base: object, stock = true) {
-    const script = join(work, stock ? "fragment.cjs" : "fragment-patched.cjs");
+  function recovered(
+    source: string,
+    base: object,
+    stock = true,
+    viaBundle = false,
+  ) {
+    const script = join(
+      work,
+      `${stock ? "fragment" : "fragment-patched"}${viaBundle ? "-bundle" : ""}.cjs`,
+    );
+    const shim = join(work, "stock-frontend.cjs");
+    writeFileSync(
+      shim,
+      `module.exports = {
+  compiler: require(${JSON.stringify(require.resolve("@marko/compiler"))}),
+  babel: require(${JSON.stringify(require.resolve("@marko/compiler/internal/babel"))}),
+  htmljsParser: require("node:module").createRequire(${JSON.stringify(require.resolve("@marko/compiler"))})("htmljs-parser"),
+};
+`,
+    );
     writeFileSync(
       script,
-      `${stock ? hook(stockDir) : ""}
+      `${stock ? hook(stockDir) : ""}${viaBundle ? "" : bypass(shim)}
 import(${JSON.stringify(`file://${distEntry}`)}).then(({ parseFragment }) => {
   const { body } = parseFragment(${JSON.stringify(source)}, ${JSON.stringify(base)});
   const bad = [];
@@ -346,6 +381,10 @@ import(${JSON.stringify(`file://${distEntry}`)}).then(({ parseFragment }) => {
 
   it("the failing value is a recovered node, not a throw", () => {
     expect(recovered('<a x="1" :b/>', {})).toHaveLength(1);
+  });
+
+  it("core's own bundle parses with MX's parser, a stock one installed or not", () => {
+    expect(recovered('<a x="1" :b/>', {}, true, true)).toEqual([]);
   });
 
   it.each([

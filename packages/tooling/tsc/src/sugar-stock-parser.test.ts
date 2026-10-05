@@ -25,6 +25,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * committed patch (plain JS: the gate PATH has no `patch`), and each tool's
  * built `dist` runs against it in a child process. This is why the error has no
  * `host-dispatch` row: the tools cannot reach it in-process.
+ *
+ * Decision 159: core's dist parses with its bundled Marko front end and MX's
+ * own template parser, so a stock `htmljs-parser` in the install no longer
+ * reaches any tool (the second `describe`). The decision 151 error is left for
+ * a core that bypasses its bundle; `hook` simulates one by resolving core's
+ * `./marko-frontend.cjs` to the npm compiler on the stock parser.
  */
 
 const here = import.meta.dirname;
@@ -72,6 +78,7 @@ let work = "";
 let project = "";
 let page = "";
 let hook = "";
+let stockOnlyHook = "";
 
 beforeAll(() => {
   work = mkdtempSync(join(tmpdir(), "mx-sugar-stock-"));
@@ -84,13 +91,38 @@ beforeAll(() => {
     stock,
     readFileSync(join(repo, "patches/htmljs-parser@5.18.0.patch"), "utf8"),
   );
-  hook = join(work, "hook.cjs");
+  stockOnlyHook = join(work, "stock-only-hook.cjs");
   writeFileSync(
-    hook,
+    stockOnlyHook,
     `const Module = require("node:module");
 const resolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
   if (request === "htmljs-parser") return ${JSON.stringify(join(stock, "dist/index.js"))};
+  return resolve.call(this, request, ...rest);
+};
+`,
+  );
+  const shim = join(work, "stock-frontend.cjs");
+  const compiler = require.resolve("@marko/compiler", {
+    paths: [dist("core")],
+  });
+  writeFileSync(
+    shim,
+    `module.exports = {
+  compiler: require(${JSON.stringify(compiler)}),
+  babel: require(${JSON.stringify(require.resolve("@marko/compiler/internal/babel", { paths: [dist("core")] }))}),
+  htmljsParser: require("node:module").createRequire(${JSON.stringify(compiler)})("htmljs-parser"),
+};
+`,
+  );
+  hook = join(work, "hook.cjs");
+  writeFileSync(
+    hook,
+    `require(${JSON.stringify(stockOnlyHook)});
+const Module = require("node:module");
+const resolve = Module._resolveFilename;
+Module._resolveFilename = function (request, ...rest) {
+  if (request === "./marko-frontend.cjs") return ${JSON.stringify(shim)};
   return resolve.call(this, request, ...rest);
 };
 `,
@@ -122,9 +154,9 @@ afterAll(() => {
   if (work) rmSync(work, { recursive: true, force: true });
 });
 
-function run(script: string): Record<string, unknown> {
+function run(script: string, hookFile = hook): Record<string, unknown> {
   const file = join(work, `leg-${Math.random().toString(36).slice(2)}.cjs`);
-  writeFileSync(file, `require(${JSON.stringify(hook)});\n${script}`);
+  writeFileSync(file, `require(${JSON.stringify(hookFile)});\n${script}`);
   const result = spawnSync(process.execPath, [file], {
     encoding: "utf8",
     cwd: project,
@@ -208,5 +240,46 @@ plugin.transform.call({ warn() {}, error(e) { throw e; } }, ${JSON.stringify(SOU
     expect(result.status).not.toBe(0);
     expect(output).toContain("page.mx(1,21): error TS80001:");
     expect(output).toContain(MESSAGE_PART);
+  });
+});
+
+describe("with core's bundled front end, a stock htmljs-parser in the install changes nothing", () => {
+  it("language server: no diagnostic", () => {
+    const out = run(
+      `
+const lsRequire = require("node:module").createRequire(${JSON.stringify(dist("tooling/language-server/package.json"))});
+Promise.all([
+  import(${JSON.stringify(`file://${dist("tooling/language-server/dist/index.js")}`)}),
+  import("file://" + lsRequire.resolve("@mxlang/target-registry")),
+]).then(([{ diagnoseDocument }, { resolveTargetPolicy }]) => {
+  const policy = resolveTargetPolicy(${JSON.stringify(page)});
+  const diagnostics = diagnoseDocument(${JSON.stringify(SOURCE)}, ${JSON.stringify(`file://${page}`)}, policy, () => {}, "mx");
+  console.log(JSON.stringify({ diagnostics }));
+});`,
+      stockOnlyHook,
+    ) as { diagnostics: unknown[] };
+    expect(out.diagnostics).toEqual([]);
+  });
+
+  it("mx-tsc: no TS80001", () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--require",
+        stockOnlyHook,
+        dist("tooling/tsc/dist/bin.cjs"),
+        "--noEmit",
+        "--pretty",
+        "false",
+        "-p",
+        join(project, "tsconfig.json"),
+      ],
+      { encoding: "utf8", cwd: project },
+    );
+    const output = stripVTControlCharacters(
+      `${result.stdout}\n${result.stderr}`,
+    );
+    expect(output).not.toContain("TS80001");
+    expect(output).not.toContain(MESSAGE_PART);
   });
 });

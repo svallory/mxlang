@@ -16,7 +16,6 @@
  */
 
 import { realpathSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
@@ -38,11 +37,10 @@ import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
+import { markoBabel, markoCompiler } from "./marko-frontend.ts";
 import { hintParseError } from "./parse-error-hints.ts";
 import { stockParserError, sugarAfterDefaultError } from "./stock-parser.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
-
-const require = createRequire(import.meta.url);
 
 export interface RawSourceMap {
   version: number;
@@ -183,7 +181,7 @@ let current: {
  * shape and options across a version bump.
  */
 export function printExpression(node: Node): string {
-  const { generator } = require("@marko/compiler/internal/babel");
+  const { generator } = markoBabel();
   return generator(node, { concise: true }).code;
 }
 
@@ -312,7 +310,7 @@ export function buildMarkoLookup(
   dir: string,
   translator: unknown,
 ): Lookup | undefined {
-  const compiler = require("@marko/compiler");
+  const compiler = markoCompiler();
   const lookup = compiler.taglib.buildLookup(dir, translator) as
     | Lookup
     | undefined;
@@ -336,7 +334,7 @@ export function compileSource(
 ): CompileResult {
   // Required lazily and by CJS: `@marko/compiler` is a large dependency and
   // only this function needs it, so importing the type surface stays free.
-  const compiler = require("@marko/compiler");
+  const compiler = markoCompiler();
   const translator = createTranslator(host);
 
   const lookup = compiler.taglib.buildLookup(dirname(filename), translator) as

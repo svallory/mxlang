@@ -138,8 +138,10 @@ try {
     ),
   );
 
+  // No `@marko/compiler`: core's dist carries its own Marko front end
+  // (decision 159), so the tarballs alone must be enough.
   console.log("[consumer-check] installing packed tarballs (no workspace)...");
-  run(["bun", "add", tarballPath, "@marko/compiler@5.42.10"], scratchDir);
+  run(["bun", "add", tarballPath], scratchDir);
 
   writeFileSync(
     join(scratchDir, "hello.mx"),

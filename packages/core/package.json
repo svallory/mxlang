@@ -1,6 +1,6 @@
 {
   "name": "@mxlang/core",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "MX core: compiles .mx templates on Marko's parser, shared by every target",
   "license": "MIT",
   "repository": {
@@ -35,12 +35,14 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/parser --external htmljs-parser && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/parser --external htmljs-parser --define MX_MARKO_FRONTEND='\"./marko-frontend.cjs\"' && bun build/frontend.ts && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@babel/parser": "7.29.8",
+    "@babel/parser": "7.29.8"
+  },
+  "devDependencies": {
     "@marko/compiler": "5.42.10",
     "htmljs-parser": "5.18.0"
   }

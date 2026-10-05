@@ -1,5 +1,11 @@
 # @mxlang/core
 
+## 0.1.0-alpha.3
+
+- **Changed (decision 159): core ships its own Marko parse layer.** The build bundles `@marko/compiler` (with its Babel) into `dist/marko-frontend.cjs`, with the `htmljs-parser` specifier resolved to MX's own template parser (`@mxlang/parser`'s `src/template/`, htmljs-parser 5.18.0 plus the decision 146 rule). A registry install of core therefore parses `.mx` with MX's rules: after-value sugar (`<input type="email" :email>`, `x=a.b .c`) works for consumers. `@marko/compiler` and `htmljs-parser` are no longer dependencies (devDependencies only, for this repo's source runs); the bundle requires only Node built-ins. Licence texts of the bundled code: `dist/marko-frontend.NOTICES.md`. Tarball 173,218 to 610,153 bytes (unpacked 613,385 to 3,047,048); a consumer no longer installs `@marko/compiler` and its dependency tree. Babel's `browserslist` lookup is stubbed to "no config file" (MX passes no targets); `@babel/preset-typescript` (only for a `.cts` Babel config file) is not bundled.
+- **Added:** `markoCompiler()`, `markoBabel()` (now exported from the index, previously internal) and `markoHtmljsParser()`, with types `MarkoCompiler`, `MarkoBabel`, `HtmljsParser`: the one compiler instance core compiles with. Every MX package that needs Marko's compiler or its Babel goes through them, so one compiler loads per process. From source they resolve the workspace's `@marko/compiler` as before. Additive, `@unstable`.
+- The decision 151 stock-parser diagnostic stays; it now fires only for a caller that bypasses core's bundle (for example a tool that hands core a stock compiler).
+
 ## 0.1.0-alpha.2
 
 2026-10-05. Identical to alpha.1; republished because the alpha.1 tarballs lacked `dist/` when installed by Bun. No code change.

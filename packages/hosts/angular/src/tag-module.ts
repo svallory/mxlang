@@ -19,6 +19,7 @@ import {
   type Ir,
   type IrNode,
   type MxWarning,
+  markoBabel,
   moduleExportName,
   type Position,
   type TargetLookup,
@@ -167,7 +168,7 @@ function collectAuthoredIdentifiers(statements: string[]): Set<string> {
   const names = new Set<string>();
   if (statements.length === 0) return names;
 
-  const babel = require("@marko/compiler/internal/babel") as {
+  const babel = markoBabel() as {
     parse(source: string, options: unknown): BabelFile;
   };
 
@@ -263,7 +264,7 @@ function parseInputProps(
   node: Extract<IrNode, { kind: "InputInterface" }>,
 ): InputProp[] {
   const code = node.code;
-  const babel = require("@marko/compiler/internal/babel") as {
+  const babel = markoBabel() as {
     parse(source: string, options: unknown): BabelFile;
   };
 
@@ -497,7 +498,7 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
     const text = params.filter((p) => typeof p === "string").join(", ");
     if (!text) return false;
     try {
-      const babel = require("@marko/compiler/internal/babel") as {
+      const babel = markoBabel() as {
         parseExpression(source: string, options?: unknown): unknown;
       };
       const arrow = babel.parseExpression(`(${text}) => 0`, {

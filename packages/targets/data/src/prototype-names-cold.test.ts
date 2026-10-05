@@ -2,18 +2,14 @@
 // clears Marko's lookup caches first, so no earlier parse can have hardened a
 // lookup the parse-only scanner would then reuse (Marko caches a lookup by
 // taglib ids, not by translator identity).
-import { createRequire } from "node:module";
-import type { CustomTag } from "@mxlang/core";
+import { type CustomTag, markoCompiler } from "@mxlang/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseData } from "./parse.ts";
 import { scanAuthoredTags } from "./scan.ts";
 
-const require = createRequire(import.meta.url);
-
 beforeEach(() => {
-  (
-    require("@marko/compiler") as typeof import("@marko/compiler")
-  ).taglib.clearCaches();
+  // Core's instance: the one `parseData` and the scanner compile with.
+  markoCompiler().taglib.clearCaches?.();
 });
 
 const NAMES = ["toString", "constructor", "__proto__"] as const;

@@ -1,5 +1,5 @@
-import { createRequire } from "node:module";
 import { TranslateError } from "./core.ts";
+import { markoHtmljsParser } from "./marko-frontend.ts";
 
 /**
  * Decision 146 PR 1 patches `htmljs-parser` (a bun `patchedDependencies`
@@ -48,13 +48,15 @@ type MarkoParser = ParserModule & { TagType: Record<string, number> };
 
 let markoParserModule: MarkoParser | undefined;
 
-/** The `htmljs-parser` that `@marko/compiler` resolves, the one that parses MX. */
+/**
+ * The `htmljs-parser` that `@marko/compiler` parses with, the one that parses
+ * MX: MX's own template parser in core's dist (decision 159), the workspace's
+ * patched npm copy from source.
+ */
 export function markoParser(): MarkoParser | undefined {
   if (markoParserModule) return markoParserModule;
   try {
-    const here = createRequire(import.meta.url);
-    const marko = createRequire(here.resolve("@marko/compiler"));
-    markoParserModule = marko("htmljs-parser") as MarkoParser;
+    markoParserModule = markoHtmljsParser();
   } catch {
     return undefined;
   }

@@ -4,7 +4,7 @@
 // left as bare requires, written to an output dir outside the package's
 // `files`. What differs per package (entries, externals, post-processing)
 // stays in that package's `build/`.
-import { readdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { bakedPathsIn } from "./baked-paths.ts";
 
@@ -70,12 +70,14 @@ export async function bundledBuild({
     naming: "[dir]/[name].cjs",
     external: [...externals],
     banner: RELOCATABLE_BANNER,
-    define: { ...RELOCATABLE_DEFINE },
+    // Core inlined from source takes the bundle branch too (decision 159).
+    define: { ...RELOCATABLE_DEFINE, ...CORE_FRONTEND_DEFINE },
   });
   if (!result.success) {
     for (const log of result.logs) console.error(String(log));
     throw new Error(`the bundled build of ${packageDir} failed`);
   }
+  copyCoreFrontend(out);
   assertRelocatable(
     readdirSync(out)
       .filter((f) => f.endsWith(".cjs"))
@@ -83,6 +85,34 @@ export async function bundledBuild({
   );
   return out;
 }
+
+/**
+ * `@mxlang/core` loads its bundled Marko parse layer (decision 159) from
+ * `./marko-frontend.cjs` beside the module that inlines it: its dist does, and
+ * so does its source once `CORE_FRONTEND_DEFINE` is applied (the VSIX builds
+ * inline some `@mxlang/*` packages' core imports from source). A bundle that
+ * inlines core therefore needs that file next to it: copied, with its licence
+ * notices, into `out` whenever an output names it.
+ */
+export function copyCoreFrontend(out: string): void {
+  const outputs = readdirSync(out).filter((f) => f.endsWith(".cjs"));
+  const named = outputs.some((f) =>
+    readFileSync(path.join(out, f), "utf8").includes(
+      `"./${CORE_FRONTEND_FILE}"`,
+    ),
+  );
+  if (!named) return;
+  for (const file of [CORE_FRONTEND_FILE, CORE_FRONTEND_NOTICES]) {
+    copyFileSync(path.join(CORE_DIST, file), path.join(out, file));
+  }
+}
+
+const CORE_DIST = path.resolve(import.meta.dirname, "../packages/core/dist");
+const CORE_FRONTEND_FILE = "marko-frontend.cjs";
+const CORE_FRONTEND_NOTICES = "marko-frontend.NOTICES.md";
+const CORE_FRONTEND_DEFINE = {
+  MX_MARKO_FRONTEND: JSON.stringify(`./${CORE_FRONTEND_FILE}`),
+};
 
 if (import.meta.main) {
   // `bun scripts/bundled-build.ts <file.cjs>...`: the guard alone, for builds

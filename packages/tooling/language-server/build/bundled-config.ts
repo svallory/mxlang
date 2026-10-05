@@ -21,10 +21,11 @@ export const BUNDLED_MAIN = "bin.cjs";
 
 /**
  * Left external AND shipped beside the server (copied with their dependency
- * closure): `@marko/compiler` loads its own translators and runtime files at
- * run time, so it cannot be inlined.
+ * closure). None: the Marko parse layer comes with `@mxlang/core`'s dist as
+ * `marko-frontend.cjs` (decision 159), which `scripts/bundled-build.ts`
+ * copies into the bundle directory.
  */
-export const BUNDLED_INSTALLED = ["@marko/compiler"] as const;
+export const BUNDLED_INSTALLED = [] as const;
 
 /**
  * Left external and NOT shipped: resolved from the user's project at run time.

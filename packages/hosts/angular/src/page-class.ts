@@ -15,11 +15,9 @@
  * a redundant hint is cheaper than a silent missing member.
  */
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { basename } from "node:path";
+import { markoBabel } from "@mxlang/core";
 import { EVENT_HELPER_NAMES, RUNTIME_SPECIFIER } from "./emitter.ts";
-
-const require = createRequire(import.meta.url);
 
 /** One component class in the file, and which invoker members it lacks. */
 export interface PageClassReport {
@@ -73,7 +71,7 @@ function memberName(member: Node): string | undefined {
 export function inspectPageClass(classFile: string): PageClassInspection {
   try {
     const source = readFileSync(classFile, "utf8");
-    const babel = require("@marko/compiler/internal/babel") as {
+    const babel = markoBabel() as {
       parse(source: string, options: unknown): unknown;
     };
     const file = babel.parse(source, {

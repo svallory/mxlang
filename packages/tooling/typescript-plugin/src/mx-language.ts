@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { createVirtualTagModuleReader } from "@mxlang/angular";
 import * as core from "@mxlang/core";
@@ -485,12 +484,7 @@ export function createHtmlMappings(
   targets: TargetLookup = builtinLookup(),
   defaultTag?: string,
 ): CodeMapping[] {
-  const require = createRequire(import.meta.url);
-  const compiler = require("@marko/compiler") as {
-    taglib: {
-      buildLookup(directory: string, translator: unknown): Lookup | undefined;
-    };
-  };
+  const compiler = core.markoCompiler();
   const { body } = parseFragment(source, {
     filename: fileName,
     customTags,

@@ -1,4 +1,5 @@
-import { createParser, TagType } from "htmljs-parser";
+import type * as HtmljsParser from "htmljs-parser";
+import { markoHtmljsParser } from "./marko-frontend.ts";
 
 /**
  * htmljs-parser (through `@marko/compiler`) reports a mismatched closing tag
@@ -87,6 +88,9 @@ function findOpener(
   const stack: { name: string; start: number }[] = [];
   let pending: { name: string; start: number } | null = null;
   let opener: number | null = null;
+  // The parser Marko parses with (decision 159: MX's own in core's dist).
+  const { createParser, TagType } =
+    markoHtmljsParser() as unknown as typeof HtmljsParser;
   const parser = createParser({
     onOpenTagStart(range) {
       pending = { name: "", start: range.start };

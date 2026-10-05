@@ -172,6 +172,20 @@ export {
   replaceMapped,
   type SourceSpan,
 } from "./mapping.ts";
+/**
+ * Marko's parse layer, the one instance core compiles with (decision 159: in
+ * core's dist, `@marko/compiler` bundled with MX's own template parser). Every
+ * package that needs the compiler, its Babel or its parser asks here, so one
+ * compiler loads per process.
+ */
+export {
+  type HtmljsParser,
+  type MarkoBabel,
+  type MarkoCompiler,
+  markoBabel,
+  markoCompiler,
+  markoHtmljsParser,
+} from "./marko-frontend.ts";
 export { sugarTagName } from "./name-sugar.ts";
 export { dropOwnParserPosition } from "./parse-error-position.ts";
 export {

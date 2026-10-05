@@ -33,15 +33,13 @@
  *   text is sliced back out by `loc` and re-parsed.
  */
 
-import { createRequire } from "node:module";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import type { Expr, IrNode, Position } from "./ir.ts";
+import { markoBabel } from "./marko-frontend.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
-
-const require = createRequire(import.meta.url);
 
 /**
  * Marko's own bundled Babel — parser, traverse and types in one module.
@@ -50,23 +48,11 @@ const require = createRequire(import.meta.url);
  * expression whose identifier references a host may rewrite). Both used
  * `@mxlang/parser`'s vendored Babel while this file lived in the translator,
  * which made the string host depend on the *Solid host parser* package for a
- * plain `parse` call. `@marko/compiler` is already this package's only
- * dependency and already bundles a full Babel, and these nodes belong to that
- * instance anyway — so the core asks it, and `@mxlang/core` depends on
- * nothing else.
- *
- * Required lazily so the type surface stays importable without pulling in a
- * 1.7MB bundle.
+ * plain `parse` call. `@marko/compiler` already bundles a full Babel, and
+ * these nodes belong to that instance anyway — so the core asks it. Loaded
+ * lazily through `marko-frontend.ts` (decision 159: bundled into core's dist).
  */
-export function markoBabel(): {
-  parse: (code: string, options?: Node) => Node;
-  parseExpression: (code: string, options?: Node) => Node;
-  traverse: Node;
-  types: Node;
-  generator: (node: Node, options?: Node) => { code: string };
-} {
-  return require("@marko/compiler/internal/babel");
-}
+export { markoBabel };
 
 /**
  * Raised for a construct that parses as Marko but has no string lowering.

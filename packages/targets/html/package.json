@@ -55,7 +55,6 @@
     "example": "bun src/example.ts"
   },
   "dependencies": {
-    "@marko/compiler": "5.42.10",
     "@mxlang/core": "workspace:*"
   },
   "peerDependencies": {

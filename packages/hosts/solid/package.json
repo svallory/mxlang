@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@babel/parser": "7.29.8",
-    "@marko/compiler": "5.42.10",
     "@mxlang/core": "workspace:*",
     "@mxlang/parser": "workspace:*",
     "entities": "6.0.1",

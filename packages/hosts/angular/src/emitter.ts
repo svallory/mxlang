@@ -26,6 +26,7 @@ import {
   type IrNode,
   isTranslateError,
   type MxWarning,
+  markoBabel,
   metadataForTemplate,
   type Position,
   resolveSpecifier,
@@ -460,7 +461,7 @@ function handlerShape(code: string):
   | { form: "other" } {
   let node: HandlerNode;
   try {
-    const babel = require("@marko/compiler/internal/babel") as {
+    const babel = markoBabel() as {
       parseExpression(source: string, options: unknown): HandlerNode;
     };
     node = babel.parseExpression(code, { plugins: [["typescript", {}]] });
@@ -946,7 +947,7 @@ export function unreadableSelectorMessage(fallback: string): string {
  */
 function authoredImportSpecifier(code: string): string | undefined {
   try {
-    const babel = require("@marko/compiler/internal/babel") as {
+    const babel = markoBabel() as {
       parse(
         source: string,
         options: unknown,

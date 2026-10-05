@@ -22,6 +22,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * a `mkdtemp` copy by reversing the committed patch, and `@mxlang/html`'s built
  * `dist` runs against it in a child process (the repo's own install is
  * patched, so it cannot show the failure in-process).
+ *
+ * Decision 159: core's dist parses with its bundled Marko front end and MX's
+ * own template parser, so a stock `htmljs-parser` in the install no longer
+ * reaches it (the last `describe`). The error is left for a core that
+ * bypasses its bundle: `stock` runs simulate one by resolving core's
+ * `./marko-frontend.cjs` to the npm compiler on the stock parser.
  */
 
 const require = createRequire(import.meta.url);
@@ -86,20 +92,33 @@ afterAll(() => {
   if (work) rmSync(work, { recursive: true, force: true });
 });
 
-function compileWith(source: string, stock: boolean) {
-  const script = join(work, `run-${stock ? "stock" : "patched"}.cjs`);
+function compileWith(source: string, stock: boolean, viaBundle = false) {
+  const script = join(
+    work,
+    `run-${stock ? "stock" : "patched"}${viaBundle ? "-bundle" : ""}.cjs`,
+  );
+  const compiler = require.resolve("@marko/compiler", {
+    paths: [join(here, "../../../core")],
+  });
+  const shim = join(work, "stock-frontend.cjs");
+  writeFileSync(
+    shim,
+    `module.exports = {
+  compiler: require(${JSON.stringify(compiler)}),
+  babel: require(${JSON.stringify(require.resolve("@marko/compiler/internal/babel", { paths: [join(here, "../../../core")] }))}),
+  htmljsParser: require("node:module").createRequire(${JSON.stringify(compiler)})("htmljs-parser"),
+};
+`,
+  );
   writeFileSync(
     script,
-    `${
-      stock
-        ? `const Module = require("node:module");
+    `const Module = require("node:module");
 const resolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
-  if (request === "htmljs-parser") return ${JSON.stringify(join(stockDir, "dist/index.js"))};
+  ${stock ? `if (request === "htmljs-parser") return ${JSON.stringify(join(stockDir, "dist/index.js"))};` : ""}
+  ${viaBundle ? "" : `if (request === "./marko-frontend.cjs") return ${JSON.stringify(shim)};`}
   return resolve.call(this, request, ...rest);
-};`
-        : ""
-    }
+};
 import(${JSON.stringify(`file://${distEntry}`)}).then(({ compile }) => {
   try {
     compile(${JSON.stringify(source)}, ${JSON.stringify(join(work, "t.mx"))});
@@ -159,5 +178,13 @@ describe("`:name` after an attribute value on a stock htmljs-parser", () => {
   it("`<const/x=a .b/>` stays member access on both", () => {
     expect(compileWith("<const/x=input.a .b/>", true).ok).toBe(true);
     expect(compileWith("<const/x=input.a .b/>", false).ok).toBe(true);
+  });
+});
+
+describe("core's bundled front end ignores a stock htmljs-parser in the install", () => {
+  it("compiles `:name` after an attribute value", () => {
+    expect(compileWith('<input type="email" :email/>', true, true).ok).toBe(
+      true,
+    );
   });
 });
