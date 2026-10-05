@@ -20,9 +20,12 @@ This page is the catalogue those three pieces are built from.
 `node_modules/.bun/@marko+compiler@5.42.10/node_modules/@marko/compiler/dist/`.
 `[H]` is the installed template parser,
 `node_modules/.bun/htmljs-parser@5.18.0/node_modules/htmljs-parser/dist/`.
-`[Hs]` is the htmljs-parser source clone at `~/work/htmljs-parser` (version
-5.18.0 in its `package.json`). Paths without a prefix are relative to the repo
-root. "Probe" means a script run on 2026-10-05 against the installed
+Template-parser source is cited in this repository, under
+`packages/parser/src/template/` (htmljs-parser 5.18.0 copied in, byte-identical
+to upstream except `states/ATTRIBUTE.ts` and `states/EXPRESSION.ts`, which
+carry the MX patch as source; see its `PROVENANCE.md`). "The IR spec" is
+[the IR specification](/architecture/ir-spec/). Paths without a prefix are
+relative to the repo root. "Probe" means a script run on 2026-10-05 against the installed
 compiler, kept outside the repo under `~/tmp/mx2-ast/` (`raw.ts`: parse-only
 translator, as `parseFragment` uses; `core.ts`: MX's core taglib registered
 the way `packages/targets/html/src/compiler.ts:53` registers it).
@@ -325,8 +328,7 @@ each `MxTag.concise` records it per tag.
 
 Spans: `start = base.offset`, `end = base.offset + source.length` (not
 `length - 1`, unlike `[C]chunk-src.js:6241`). A leading byte-order mark is
-skipped by the parser (`packages/parser/src/template/core/Parser.ts:296` on
-`main`), so the first node can start at offset 1.
+skipped by the parser (`packages/parser/src/template/core/Parser.ts:296`), so the first node can start at offset 1.
 
 Example: the document for `<p>x</p>` is `[0, 8)` with `body` one `MxTag`
 `[0, 8)`, `errors` empty, `complete: true`.
@@ -437,7 +439,7 @@ type MxTagName =
   (`specification.md:729-731`). Which table decides self-closing after
   `@marko/compiler` is dropped (today its `self-closing-tags` dependency,
   `bun.lock:1050`) is part of Q21.
-- `dynamic`: htmljs reports a `Template` (`[Hs]src/util/constants.ts:37-40`).
+- `dynamic`: htmljs reports a `Template` (`packages/parser/src/template/util/constants.ts:37-40`).
   `quasis` are its static parts' spans, `expressions` one container per
   `${…}` (span inside the braces), `expression` the whole name as one
   container: a Babel `TemplateLiteral`, or the single expression when both
@@ -455,7 +457,7 @@ Examples (`<input:email>`, `<${x}>`, `<.card>`): `static` `[1, 6)`;
 Each is an expression container (§4) with a specific Babel payload. One span
 rule for all five: **`start`/`end` cover the text inside the delimiters
 (htmljs's `value` range); `outer: Span` covers the delimiters too (htmljs's
-event range)** (`Ranges.Value`, `[Hs]src/util/constants.ts:33-35`).
+event range)** (`Ranges.Value`, `packages/parser/src/template/util/constants.ts:33-35`).
 
 | Type | Source | Babel payload | Delimiters (`outer`) |
 |---|---|---|---|
@@ -466,8 +468,7 @@ event range)** (`Ranges.Value`, `[Hs]src/util/constants.ts:33-35`).
 | `MxTypeParameters` | `<T>` before tag params or a method's params | `TSTypeParameterDeclaration` | `<` `>` |
 
 For a method, htmljs's `AttrMethod.params` range includes the parentheses and
-its `value` excludes them (`packages/parser/src/template/states/ATTRIBUTE.ts:242-262`
-on `main`), so `MxParameterList` for `onInput(e) { … }` has span `(e)`'s
+its `value` excludes them (`packages/parser/src/template/states/ATTRIBUTE.ts:242-262`), so `MxParameterList` for `onInput(e) { … }` has span `(e)`'s
 inside and `outer` the parenthesised text.
 
 ### 3.5 `MxAttribute`
@@ -485,7 +486,7 @@ Purpose: one named attribute, or the tag's default value.
 Spans, one rule: `start = min(nameSpan.start, value?.start)` and `end =` the
 end of `value`, of `args`, or of `nameSpan`, whichever is last. The `min`
 matters for an `async` method, whose range starts at `async`, before the name
-(`[Hs]src/util/constants.ts:51-53`; `ATTRIBUTE.ts:287-292` on `main`; probe:
+(`packages/parser/src/template/util/constants.ts:51-53`; `ATTRIBUTE.ts:287-292`; probe:
 `<div async onLoad<T>(e: T) { a() }/>` gives the method `1:5-1:34` and the
 name `1:11`). For the default value, `start` is the `=` (or `(`) and
 `nameSpan` is zero-width there (htmljs reports an empty `onAttrName` range).
@@ -525,8 +526,7 @@ sugar's default (`onAttrMethod`).
 | `source` | `string` | no | `source.slice(start, end)` |
 
 Spans: htmljs's `AttrMethod` range: from `async` when written, else from the
-type parameters' `<`, else from `(`, through `}` (`ATTRIBUTE.ts:284-308` on
-`main`). There is no Babel `FunctionExpression` in the AST; lowering builds
+type parameters' `<`, else from `(`, through `}` (`ATTRIBUTE.ts:284-308`). There is no Babel `FunctionExpression` in the AST; lowering builds
 the one `Attr` needs from `params`, `typeParams` and `body` (Marko builds it in
 the front end, `[C]chunk-src.js:6131-6138`).
 
@@ -543,7 +543,7 @@ Purpose: `...expr` in the attribute list (`onAttrSpread`).
 | `value` | `MxExpression` | no | the expression after `...` |
 
 Spans: `start` at the first `.`, `end` at the end of the expression
-(`onAttrSpread` range, `ATTRIBUTE.ts:351-359` on `main`); `value.span` is the
+(`onAttrSpread` range, `ATTRIBUTE.ts:351-359`); `value.span` is the
 expression only. Example: in `<b ...rest/>`, the node is `[3, 10)` and
 `value.span` `[6, 10)`. Invariants: no name, no `nameSpan`, no sugar (IR spec
 §6, `spread` row); it takes part in source order with the other attributes.
@@ -694,7 +694,7 @@ it is the statement entries of `core-tags.json:75-90`.
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
 | `type` | `"MxScriptlet"` | no | |
-| `block` | `boolean` | no | `$ { … }` form (htmljs reports it, `[Hs]src/states/INLINE_SCRIPT.ts:37-40`; Marko ignores it) |
+| `block` | `boolean` | no | `$ { … }` form (htmljs reports it, `packages/parser/src/template/states/INLINE_SCRIPT.ts:37-40`; Marko ignores it) |
 | `code` | `MxStatements` | no | the statements (inside the braces for the block form) |
 
 Spans: from `$` to the end of the statement or `}`. Example: `$ const z = 1;`
@@ -771,8 +771,7 @@ Three producers, with different consequences:
 
 1. **The template parser (htmljs) stops at its first error.**
    `Parser.emitError` calls `onError` and then sets `this.pos = this.maxPos +
-   1` (`packages/parser/src/template/core/Parser.ts:171-188` on `main`;
-   `[Hs]src/core/Parser.ts`), and `parse` loops `while (this.pos <= maxPos)`
+   1` (`packages/parser/src/template/core/Parser.ts:171-188`), and `parse` loops `while (this.pos <= maxPos)`
    (`Parser.ts:299-301`), so no event follows `onError`: no close events for
    open tags, no further text. One parse therefore yields **at most one**
    template error. (Marko throws on it, `[C]chunk-src.js:5975-5984`, so MX
@@ -951,8 +950,8 @@ implementation of `copy`.
 ### 4.2 Compared with the IR's `Expr`
 
 `Expr` is `{ code, shape, node, span?, file? }` (`packages/core/src/ir.ts:75-108`;
-normative contract in the IR spec §4, `apps/docs/docs/architecture/ir-spec.md`
-on `main` at `4053b158`, not on this branch's base).
+normative contract in [the IR spec §4](/architecture/ir-spec/),
+`apps/docs/docs/architecture/ir-spec.md`).
 
 | `Expr` | Expression container | Difference |
 |---|---|---|
@@ -985,7 +984,7 @@ Offsets: atom `title` `[15, 21)`, atom `rename-all` `[23, 34)` (the `:` included
 Every MX node has `start` and `end`: **0-based offsets into the original file,
 in UTF-16 code units, half-open `[start, end)`** — the unit of a JavaScript
 string index, which htmljs-parser already reports (`Range.start`/`end`,
-`[Hs]src/util/constants.ts:22-31`) and which the IR's `SourceSpan` uses
+`packages/parser/src/template/util/constants.ts:22-31`) and which the IR's `SourceSpan` uses
 (`packages/core/src/mapping.ts:4-7`, documented as UTF-16 in
 `packages/core/src/fragment.ts:117-122`). This is the IR spec's `SourceSpan`
 rule exactly: half-open, UTF-16, file-absolute, CRLF's `\r` belonging to its
@@ -1007,11 +1006,11 @@ name **after** the `@`, IR spec §3.3, so lowering trims one unit off
 
 Obtained on demand from the document: `MxDocument` keeps (or lazily builds) a
 line-start index, one entry per `\n`, as htmljs's `getLines` does
-(`[Hs]src/util/util.ts:55-64`). `lineColumnAt(offset)` returns a **1-based
+(`packages/parser/src/template/util/util.ts:55-64`). `lineColumnAt(offset)` returns a **1-based
 line and 0-based column** (Babel's convention, and what `TranslateError` and
 the spec's structured fields carry, `apps/docs/docs/specification.md:2667-2672`
 and `:2705-2711`). htmljs's own positions are LSP-style, 0-based line and
-`character` (`[Hs]src/util/constants.ts:4-14`); Marko adds 1 to the line
+`character` (`packages/parser/src/template/util/constants.ts:4-14`); Marko adds 1 to the line
 (`toBabelPosition`, `[C]chunk-src.js:6300-6303`), and MX does the same. A `\r`
 is an ordinary column character (only `\n` starts a line), as in htmljs.
 
@@ -1040,7 +1039,7 @@ lowering over its own parser "has no reason to reproduce the shift mechanics"
 
 ## 6. Mapping to the IR
 
-IR kinds on `main`: `packages/core/src/ir.ts:396-628` defines **16** `IrNode`
+IR kinds today: `packages/core/src/ir.ts:396-628` defines **16** `IrNode`
 kinds (Text, Interpolation, Element, Component, IfChain, For, Define, Const,
 Static, Import, Export, InputInterface, Hoisted, DelegatedTag, DocumentType,
 Comment), plus `Attr` (`:135-204`), `AttributeTag` (`:305-319`), `Block`
@@ -1104,7 +1103,7 @@ unnamed name is resolved before step 5. Steps 2 to 6 are unchanged.
 | `MxDoctype` | DocumentType |
 | `MxScriptlet`, `MxCDATA`, `MxDeclaration` | none: errors (`lower.ts:3339-3359`) |
 | `MxParseError` | none: a diagnostic |
-| `MxAtom` | none on `main` (see below) |
+| `MxAtom` | none today (see below) |
 
 ### 6.3 Gaps
 
@@ -1124,7 +1123,7 @@ The AST carries, and no IR kind reads:
 - `MxTag.openTag`/`closeTag` spans, `concise`, `selfClosed` (tools only).
 - `MxCDATA`, `MxDeclaration`, `MxScriptlet` (errors only).
 - `MxAtom`: decision 156 §1 names an IR node `atom { name, span }`, but
-  `ir.ts` on `main` has none (`rg -i atom packages/core/src/ir.ts` returns
+  `ir.ts` has none (`rg -i atom packages/core/src/ir.ts` returns
   nothing). See Q3.
 
 ### 6.4 Who sees the AST and who sees the IR
@@ -1163,7 +1162,7 @@ declarations is open question Q19.
 ## 7. Mapping from parser events
 
 htmljs-parser 5.18.0 defines 27 handlers (`[H]util/constants.d.ts:64-90`;
-source `[Hs]src/util/constants.ts:79-105`).
+source `packages/parser/src/template/util/constants.ts:79-105`).
 
 | Event | Payload | MX node or field |
 |---|---|---|
@@ -1190,7 +1189,7 @@ source `[Hs]src/util/constants.ts:79-105`).
 | `onOpenTagComment` | `Value` | `MxComment` in `MxTag.attributes` |
 | `onOpenTagEnd` | `OpenTagEnd { selfClosed }` | `openTag.end`, `selfClosed`; no merge |
 | `onCloseTagStart` | `Range` | `closeTag.start` |
-| `onCloseTagName` | `Range` | `closeTag.name`/`nameSpan`, the written name with sugar (`</div:x>` → `"div:x"`); for `</>` htmljs emits it with an empty range (`packages/parser/src/template/states/CLOSE_TAG.ts:97-100`, `core/Parser.ts:196` on `main`), which gives `name: null`, `nameSpan: null`. Never re-checked: htmljs reports `MISMATCHED_CLOSING_TAG` (21) itself |
+| `onCloseTagName` | `Range` | `closeTag.name`/`nameSpan`, the written name with sugar (`</div:x>` → `"div:x"`); for `</>` htmljs emits it with an empty range (`packages/parser/src/template/states/CLOSE_TAG.ts:97-100`, `core/Parser.ts:196`), which gives `name: null`, `nameSpan: null`. Never re-checked: htmljs reports `MISMATCHED_CLOSING_TAG` (21) itself |
 | `onCloseTagEnd` | `Range` | `closeTag.span.end`, `MxTag.end`; ends a preserving body started by this tag; nothing moves |
 | `onError` | `Error { code, message }` | `MxParseError` (`source: "template"`, code by name); the last event of the parse: open tags become `incomplete`, `complete: false` (§3.13) |
 
@@ -1223,7 +1222,7 @@ table once `@marko/compiler` is dropped is Q21.
 
 **Events the MX patch adds or changes.** None added. The patch
 (`patches/htmljs-parser@5.18.0.patch`, hunks at `dist/index.js` 311, 1147,
-1382, 1432, mirrored in `index.mjs`; on `main` the same rules live as source in
+1382, 1432, mirrored in `index.mjs`; the same rules live as source in
 `packages/parser/src/template/states/ATTRIBUTE.ts:116` and
 `packages/parser/src/template/states/EXPRESSION.ts:194-200`, `:601-612`,
 `:766-780`) changes **where `onAttrValue` ends**:
