@@ -207,6 +207,7 @@
         { "title": "Core and hosts", "path": "/architecture/core-and-hosts/" },
         { "title": "The IR", "path": "/architecture/ir/" },
         { "title": "IR specification", "path": "/architecture/ir-spec/" },
+        { "title": "The MX AST", "path": "/architecture/ast/" },
         {
           "title": "Declarations and hooks",
           "path": "/architecture/policy-and-hooks/"
