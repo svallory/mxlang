@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (default-tag-contracts r2):** the Bun loader reports an invalid contract `defaultTag` once at its declaration.
+
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag (through `@mxlang/preact`).
 
 - **Fix (default-tag-ladder r2):** the Bun loader validates `mx.hono-jsx.defaultTag`; a rejected value is dropped and warned once at the `package.json` value.

@@ -6,6 +6,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (default-tag-contracts r2):** `loadMx`, nested tags, the Bun loader and the example runner run the contracts' `defaultTag` registration check and warn once at the declaring file; an invalid contract value no longer compiles to the wrong element (`input`) and the next rung answers.
+
 - **Added (default-tag-contracts, decision 145):** the unnamed tag resolves through the parent's contract `defaultTag` first, then `mx.html.defaultTag`, then `div`.
 
 - **Fix (default-tag-ladder r2):** `loadMx`, `mx` (with a `filename`) and nested tags read the package's validated `mx.html.defaultTag` and put it in their cache keys, so an edited config recompiles; the Bun loader and the example runner validate it (core's `ownDefaultTag`) and warn once at the `package.json` value.

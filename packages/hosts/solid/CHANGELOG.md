@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-contracts r2):** the parent contract's `defaultTag` is seen through `if`/`for`/`try`; an invalid value falls through.
+
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag, in the page compile and `.solid.mx` regions.
 
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag` (`DEFAULT_TAG`, `div`); `solidDeclarations` answers `mx.solid-jsx.defaultTag` first, then `div`, for the page compile, `compileSolidUnit` and each `.solid.mx` region (`HostRegionInput.defaultTag`).

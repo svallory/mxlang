@@ -721,3 +721,57 @@ describe("a host that forbids the contract rung, through a compile (review round
     expect(out.code).toBe("elements:main");
   });
 });
+
+describe("a dependency's contract (review round 2, the unprobed note)", () => {
+  /** A consumer whose mx.contracts names a library module; the library holds a private tag. */
+  function library(contractBody: string, extra: Record<string, string> = {}) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-lib-contract-")));
+    roots.push(root);
+    const lib = join(root, "node_modules", "lib");
+    mkdirSync(join(lib, "tags"), { recursive: true });
+    writeFileSync(
+      join(lib, "package.json"),
+      '{"name":"lib","exports":{"./contracts":"./index.mjs"}}',
+    );
+    writeFileSync(
+      join(lib, "index.mjs"),
+      `export default {\n${contractBody}\n};\n`,
+    );
+    for (const [name, text] of Object.entries(extra))
+      writeFileSync(join(lib, name), text);
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ mx: { target: "html", contracts: "lib/contracts" } }),
+    );
+    return { file: join(root, "a.mx"), libIndex: join(lib, "index.mjs") };
+  }
+  const own = (file: string) =>
+    resolveTargetPolicyDetailed(file).diagnostics.filter(
+      (d) => d.code === "invalid-default-tag",
+    );
+
+  it("a library contract naming a tag the library's own module declares is valid for the consumer", () => {
+    const { file } = library(
+      `  "lib-list": { defaultTag: "lib-item" },\n  "lib-item": {},`,
+    );
+    expect(own(file)).toEqual([]);
+  });
+
+  it("a library contract naming a library-private element is judged by the consuming compile's tags", () => {
+    // `lib-private` lives only in the library's tags/ and is not registered by
+    // the consumer: a compile in the consumer cannot resolve it, so the error
+    // is real, and it points at the library's declaring module.
+    const { file, libIndex } = library(
+      `  "lib-list": { defaultTag: "lib-private" },`,
+      {
+        "tags/lib-private.mx": "<div/>\n",
+      },
+    );
+    const found = own(file);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.file).toBe(libIndex);
+    expect(found[0]?.message).toContain(
+      "`<lib-private>` is not a tag reachable",
+    );
+  });
+});

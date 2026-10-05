@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Fix (default-tag-contracts r2):** `build()` and the virtual tag reader report an invalid contract `defaultTag` once at its declaration.
+
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag.
 
 - **Fix (default-tag-ladder r2):** `build()` and the virtual tag reader (the editor and `angular-checker`) read the validated `mx.angular-template.defaultTag`, so they emit and type-check the same tree; the reader's cache follows the value and reports a rejected one through its warning sink.

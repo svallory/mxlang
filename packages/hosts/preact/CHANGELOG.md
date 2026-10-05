@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (default-tag-contracts r2):** the parent contract's `defaultTag` is seen through `if`/`for`/`try` (shared with React and Hono); an invalid value falls through.
+
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag (shared with React and Hono).
 
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag` (`DEFAULT_TAG`, `div`) and `createJsxDeclarations` answers `mx.<target>.defaultTag` first, then `div`; `compilePreactMx` takes `defaultTag`. Shared with React and Hono. Byte-identical for every existing template.
