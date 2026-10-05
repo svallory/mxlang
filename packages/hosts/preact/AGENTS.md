@@ -109,3 +109,30 @@ this one: a Preact component's body is JSX, and parsed as plain TS its
 no exports ("File '…/Counter.mx' is not a module"). TSX is a superset for the
 other hosts' JSX-free output, whose one narrowing (`<T>x` as a type assertion)
 none of them emits.
+
+**The shared JSX region engine (`src/region.ts`, decision 154).**
+`compileJsxRegion` compiles one region of a `.<segment>.mx` TSX module for a
+dialect; `@mxlang/react` wraps it (`compileReactRegion`), and the Preact and
+Hono region kinds are meant to be the same thin wrapper. Facts before editing:
+
+- The markup is the whole-file emitter's (`createRegionEmitter`, a
+  `PreactEmitter` with a region sink); only the module assembly differs.
+  Runtime imports, synthesized tag imports and `tags/*.marko` aliases go back
+  as `hoistedImports`, the attribute helpers and `__mxDynamic` as fixed-binding
+  `hoistedDefines` (the bridge declares identical ones once per module).
+- A bridge-found region is **one root element** (a TSX `<>…</>` is not a
+  region: each child element is its own region), so `<if>`/`<else>` siblings
+  and a `<define>` with its callers sit inside one element. The region emitter
+  therefore lifts a `<define>` met outside a callback (the component body's own
+  JS scope) instead of refusing it, and the region code becomes
+  `<>{(() => { <defines> <var statements> return (<>…</>); })()}</>` so they
+  still close over the surrounding component's `useState` values. Always a
+  fragment: a bare call or `{…}` in JSX-child position prints as text.
+- `<const>` is refused in a region (a hook there could be conditional), and
+  module-level MX (`import`/`static`/`export`/`Input`/`<return>`) is reachable
+  only through a direct call of the hook; both are positioned at the statement.
+- Region declarations come from `createJsxDeclarations(name, { region: true })`:
+  reactive-tag errors name only the hook in the surrounding component.
+- `src/callee-reader.ts` (`readJsxCalleeInput`) is the JSX hosts' one callee
+  reader and this package's only `@mxlang/parser` import; keep it there.
+

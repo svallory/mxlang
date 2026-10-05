@@ -31,3 +31,16 @@ bugs**. React 19 automatically prepends image preload links during static
 rendering; `react-render.ts` strips only those transport hints before the same
 semantic HTML comparison. The live error-boundary and hook behavior is covered
 by `examples/react-app`'s Chromium e2e.
+
+**`.react.mx` region files (decision 154).** The descriptor's `react` file
+kind (language id `reactmx`) routes each region to `compileReactRegion`, which
+is `@mxlang/preact`'s `compileJsxRegion` with `reactDialect`,
+`reactRegionDeclarations` and segment `react` (see `packages/hosts/preact/AGENTS.md`
+for the engine). Region tests: `src/region.test.ts` (fixtures under
+`src/fixtures/region/<name>/`: `input.react.mx`, `__golden__/output.txt`
+regenerated with vitest `-u`, `expected.html`, optional `props.json` and sibling
+`.mx` tags), `region-errors.test.ts`, `region-client.test.ts` (a live root;
+it installs jsdom by hand after printing, because `@marko/compiler`'s module
+resolution fails under a global `window`). `examples/react-region-app` is the
+Vite + Playwright check.
+
