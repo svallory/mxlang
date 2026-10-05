@@ -99,23 +99,19 @@ else
     echo "zed-compile-check.sh: no wasi-sdk clang and no bunx to fall back to tree-sitter build" >&2
     exit 2
   fi
-  # ZED_COMPILE_CHECK_WASM_BUILD_ARGS: extra flags for `tree-sitter build`,
-  # e.g. "--docker" on a runner with no local emsdk (CI ships Docker, not a
-  # local emscripten install). Unset/empty locally, where a working emsdk or
-  # a running Docker/Podman daemon may already be on the machine.
+  # ZED_COMPILE_CHECK_WASM_BUILD_ARGS: extra flags for `tree-sitter build`.
   #
-  # This bunx pin (0.24.7) is DELIBERATELY older than package.json's own
-  # tree-sitter-cli (0.26.9, used for `generate`/`test`/`parse` above and
-  # elsewhere in this package): 0.26.9 dropped `build --wasm`'s `--docker`
-  # flag, which CI's ZED_COMPILE_CHECK_WASM_BUILD_ARGS relies on (no local
-  # emsdk on CI runners). See ../tree-sitter-solidmx/UPSTREAM.md "tree-sitter-cli version split"
-  # for the full story and the sibling defect this pin was copied from
-  # (tree-sitter-amx's own zed-compile-check.sh, commit 11d1acaf). Do not
-  # "fix" this to match package.json's 0.26.9 without first confirming
-  # --docker is back or CI no longer needs it.
+  # Unlike the solidmx/amx copies (tree-sitter-cli 0.24.7 with --docker), this
+  # fallback uses package.json's own tree-sitter-cli 0.26.9: it downloads its
+  # own wasi-sdk (no Docker or emsdk needed on CI) and compiles the clone's
+  # committed src/ as-is. 0.24.7 regenerates src/parser.c from grammar.js
+  # first, so it never compiles the committed parser (PR #301 review: a junk
+  # line appended to parser.c built fine with 0.24.7, and fails with 0.26.9).
+  # The export check below then proves the wasm carries tree_sitter_mx, the
+  # symbol `[grammars.mx]` makes Zed look up.
   set +e
   # shellcheck disable=SC2086 # deliberately unquoted: a flag list, not one value
-  (cd "$CLONE_DIR/$PKG_REL" && bunx --package "tree-sitter-cli@0.24.7" tree-sitter build --wasm ${ZED_COMPILE_CHECK_WASM_BUILD_ARGS:-} -o "$WASM_OUT") \
+  (cd "$CLONE_DIR/$PKG_REL" && bunx --package "tree-sitter-cli@0.26.9" tree-sitter build --wasm ${ZED_COMPILE_CHECK_WASM_BUILD_ARGS:-} -o "$WASM_OUT") \
     2> "$TMP_DIR/tsbuild-stderr.log"
   rc=$?
   set -e
@@ -131,4 +127,19 @@ if [[ ! -s "$WASM_OUT" ]]; then
   exit 1
 fi
 
-echo "zed-compile-check.sh: OK — $(basename "$WASM_OUT") compiled from a clean clone of HEAD ($(wc -c < "$WASM_OUT") bytes)"
+# Zed loads the language through this export; a grammar still named `marko`
+# (or a fallback that compiled something else) fails here on either branch.
+if ! bun -e '
+  const exports = WebAssembly.Module.exports(
+    new WebAssembly.Module(await Bun.file(process.argv[1]).arrayBuffer()),
+  ).map((e) => e.name);
+  if (!exports.includes(`tree_sitter_${process.argv[2]}`)) {
+    console.error(`exports: ${exports.join(", ")}`);
+    process.exit(1);
+  }
+' "$WASM_OUT" "$GRAMMAR_NAME"; then
+  echo "zed-compile-check.sh: $(basename "$WASM_OUT") does not export tree_sitter_${GRAMMAR_NAME}" >&2
+  exit 1
+fi
+
+echo "zed-compile-check.sh: OK — $(basename "$WASM_OUT") compiled from a clean clone of HEAD, exports tree_sitter_${GRAMMAR_NAME} ($(wc -c < "$WASM_OUT") bytes)"

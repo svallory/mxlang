@@ -17,7 +17,9 @@ repository = "https://github.com/mxlang/mx"
 #
 # DEV FORM. Same rules as solidmx below: Zed fetches the committed `rev`
 # (never the working tree), and `path` points at the grammar's subdirectory
-# of this monorepo. After a grammar commit, move `rev` to it.
+# of this monorepo. After a grammar commit, move `rev` to it. Merge by
+# fast-forward only: a squash or rebase merge orphans this sha, and
+# scripts/check-grammar-revs.sh then fails on main.
 # AT PUBLISH TIME: swap to the split-off grammar repo's real URL and drop `path`.
 repository = "file:///Users/svallory/work/mx"
 rev = "22849ac3663cc45190d5fd7939fececb86b2ff4a"

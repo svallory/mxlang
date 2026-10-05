@@ -39,6 +39,20 @@ git -C "$FETCH" archive FETCH_HEAD "${FILES[@]}" | tar -x -C "$OUT"
 
 for patch in "$HERE"/patches/*.patch; do
   echo "Applying $(basename "$patch")"
+  # Only FILES are compared below, so a patch touching any other path would
+  # apply and never be checked. Refuse it instead.
+  while IFS=$'\t' read -r _ _ touched; do
+    touched="${touched##*=> }"
+    touched="${touched%\}}"
+    covered=0
+    for path in "${FILES[@]}"; do
+      if [[ "$touched" == "$path" || "$touched" == "$path"/* ]]; then covered=1; fi
+    done
+    if [[ "$covered" -eq 0 ]]; then
+      echo "vendor-check.sh: $(basename "$patch") touches $touched, outside the compared FILES" >&2
+      exit 1
+    fi
+  done < <(git -C "$OUT" apply --numstat "$patch")
   if ! git -C "$OUT" apply --verbose "$patch" > "$TMP_DIR/apply.log" 2>&1; then
     cat "$TMP_DIR/apply.log" >&2
     echo "vendor-check.sh: $(basename "$patch") does not apply to $PIN_SHA" >&2

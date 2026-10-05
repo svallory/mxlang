@@ -233,13 +233,15 @@ jobs:
           ZED_COMPILE_CHECK_WASM_BUILD_ARGS: "--docker"
         run: ./scripts/zed-compile-check.sh
 
+      # mx's fallback uses tree-sitter-cli 0.26.9, which fetches its own
+      # wasi-sdk and compiles the committed src/ (0.24.7 regenerates it), so
+      # no --docker; the script then asserts the tree_sitter_mx export.
       - name: >-
           mx: zed-compile-check.sh
-          (forced fallback: tree-sitter build --wasm --docker)
+          (forced fallback: tree-sitter build --wasm, cli 0.26.9)
         working-directory: packages/editors/tree-sitter-mx
         env:
           ZED_COMPILE_CHECK_FORCE_FALLBACK: "1"
-          ZED_COMPILE_CHECK_WASM_BUILD_ARGS: "--docker"
         run: ./scripts/zed-compile-check.sh
 
   zed-extension-compile-check:

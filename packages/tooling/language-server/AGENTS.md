@@ -117,7 +117,8 @@ adding this server's registration was therefore new scope (a Rust crate) for
 that package, tracked as follow-up rather than done in this task (time
 budget) — see the update note below for the scaffold that now exists.
 `extension.toml` gained a comment
-documenting this finding at `[grammars.marko]`. Both VS Code
+documenting this finding at `[grammars.marko]` (gone since extension 0.2.0,
+where `[grammars.mx]` replaced it). Both VS Code
 (`LanguageClient` targeting `language: "marko"`, a second registration
 alongside Marko's own) and Zed (`[language_servers.<key>]`, once the Rust
 scaffold exists) support the second-server pattern once wired; see the
