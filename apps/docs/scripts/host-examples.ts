@@ -15,9 +15,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { MxWarning } from "@mxlang/core";
 import { compileNgMx } from "@mxlang/angular";
 import { lowerAstroMx } from "@mxlang/astro/template";
+import type { MxWarning } from "@mxlang/core";
 import { compileHonoMx } from "@mxlang/hono";
 import { print } from "@mxlang/parser";
 import { compilePreactMx } from "@mxlang/preact";
@@ -36,15 +36,14 @@ export interface HostExample {
   /** The same component with MX in place of the JSX or template. */
   mx: string;
   /** Compiles the MX file through the host's own entry point. */
-  compile: (
-    source: string,
-    filename: string,
-    warnings: MxWarning[],
-  ) => string;
+  compile: (source: string, filename: string, warnings: MxWarning[]) => string;
 }
 
 function wholeFile(
-  compile: typeof compileReactMx | typeof compilePreactMx | typeof compileHonoMx,
+  compile:
+    | typeof compileReactMx
+    | typeof compilePreactMx
+    | typeof compileHonoMx,
 ): HostExample["compile"] {
   return (source, filename, warnings) =>
     compile(source, filename, { warnings }).code;
