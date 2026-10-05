@@ -200,8 +200,14 @@ export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
  * Every identifier a `/var` pattern declares, with its authored span, for a
  * host that has to point at one (a region refusing a duplicate binding).
  * Empty for a call without `/var`.
+ *
+ * A pattern the parser could not read (`{ a, b: a }`, Marko's "Argument name
+ * clash.") arrives as a `MarkoParseError` node holding no identifiers; it
+ * fails here at the parser's own position rather than yielding `[]`, which a
+ * region would take for "binds nothing" and report at a generated position.
  */
 function varBindingsOf(ctx: Ctx, pattern: Node | null | undefined) {
+  if (pattern?.type === "MarkoParseError") exprOf(ctx, pattern);
   return bindingIdentifierNodes(pattern as Node).map((id) => ({
     name: id.name as string,
     span: exprSpan(ctx, id),

@@ -261,7 +261,12 @@ export interface TagCall {
   attrTagProps?: AttrTagProp[];
   params: string[];
   var: string | null;
-  /** Each identifier `var` declares, with its authored span. */
+  /**
+   * Each identifier `var` declares, with its authored span. Filled by
+   * `lower.ts` `varBindingsOf`; `template-tag.ts` carries it onto the routed
+   * `Component`. Serves an emitter that lifts bindings into one scope and must
+   * refuse a duplicate at the authored name. Optional: ignoring it is safe.
+   */
   varBindings?: VarBinding[];
 }
 

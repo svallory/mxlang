@@ -212,6 +212,7 @@ A module-level kind in a body is a malformed IR: `drive()` throws ("unexpected m
 | `attributeTags`, `attributeTagTree`, `attrTagProps` | The three views of the call's attribute tags (section 8). |
 | `args` | Tag arguments `<Row(a, b)/>`, in order; `[]` when none. |
 | `var?` | The `/var` binding as source text. Only ever non-null on a call whose target declares `<return>`; core rejects `/var` on any other call ("does not return a value"). |
+| `varBindings?` | Each identifier the `/var` pattern declares (`{ a, b: c }` gives `a` and `c`), as `{ name, span? }` with its authored span; empty or absent without `/var`. Populated by `lower.ts` `varBindingsOf` (on `lowerCustomTag` and `lowerComponent`) and by `template-tag.ts` for a routed template call; also on `TagCall`, so custom-tag transforms see it. It serves one invariant: an emitter that lifts bindings into one scope (a `.react.mx`/`.solid.mx` region arrow) can refuse a duplicate at the authored name. A `/var` pattern the parser cannot read fails in lowering at the parser's position instead of yielding `[]`. Optional: an emitter that ignores it needs no change. |
 | `returnsValue?` | `true` when the target unit declares `<return>`, resolved from the callee's cached metadata; set even without a `/var`, because the output must still be unwrapped from `{ value, output }`. Absent otherwise. |
 | `authoredName?` | The tag name as written, set only when it differs from the target's name (a discovered tag routed to `$mx_Name1`). Use it in diagnostics. |
 

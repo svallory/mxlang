@@ -29,6 +29,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Added (react-region):** `Component.varBindings?` and `TagCall.varBindings?`: each identifier a `/var` pattern declares, with its authored span (empty without `/var`), filled by `lower.ts` and carried by `template-tag.ts`, so an emitter that lifts bindings into one scope can refuse a duplicate at the authored name. Additive, optional, `@unstable`; documented in `ir-spec.md` §5.6. A `/var` pattern the parser cannot read (`{ a, b: a }`) now fails in lowering at the parser's position.
+
 - **Added (bridge-host, decision 154):** `HostFileKind.completeTypecheckModule?(code)`, an optional hook a region file kind uses to rewrite its printed module for type-checking only (what the host's own compiler stage adds that the type-check cannot see), validated by `createTargetLookup`; and `HostRegionInput.warnings`, the warning sink tools already passed to a region compile, now declared. Additive, `@unstable`.
 
 - **Fix (shorthand-attr-name-span):** a tag's own shorthand attributes (`<a#x.y/>`, `a#x.y`) now carry a real `nameSpan` over the sigil and the token (`#x`, `.y.z`), like the spaced name-sugar form (` .y`); they used to carry `NaN` offsets. Editor mappings and diagnostics now reach shorthand attributes. A shorthand `class` merged with an authored `class` still has no span.

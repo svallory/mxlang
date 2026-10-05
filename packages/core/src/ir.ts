@@ -527,7 +527,13 @@ export type IrNode =
        * decide what an unbackable binding means. Null for every other call.
        */
       var?: string | null;
-      /** Each identifier `var` declares, with its authored span (empty without `/var`). */
+      /**
+       * Each identifier `var` declares, with its authored span (empty without
+       * `/var`). Filled by `lower.ts` `varBindingsOf` and carried through
+       * `template-tag.ts`. Lets an emitter that lifts bindings into one scope
+       * refuse a duplicate at the authored name. Optional: an emitter that
+       * ignores it needs no change.
+       */
       varBindings?: Array<{ name: string; span?: SourceSpan }>;
       /**
        * This call's target returns `{ value, output }` rather than output

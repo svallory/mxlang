@@ -235,6 +235,18 @@ describe("region rule", () => {
       });
     });
 
+    it("refuses a name a /var pattern declares twice, at the second one (Marko: Argument name clash)", () => {
+      // The parser cannot read `{ a, b: a }`, so lowering sees no bindings;
+      // it must fail at the parser's position, not let Babel report 1:0.
+      expect(
+        errorOf(withCounter("<Counter/{ a, b: a } start=1/>"), file),
+      ).toEqual({
+        message: "Argument name clash.",
+        line: 5,
+        column: 23,
+      });
+    });
+
     it("compiles the same name in two different regions of one file", () => {
       const source = `import Counter from "./counter.mx";\nexport function A() {\n  return (\n    <div><Counter/x start=1/></div>\n  );\n}\nexport function B() {\n  return (\n    <div><Counter/x start=2/></div>\n  );\n}\n`;
       const out = print(source, file, {
