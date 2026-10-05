@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index 36e76264848ac190749322bf199405fb4cc32afa..c8fab054831451257808520e5e9f66e8b6c67fb9 100644
+index 36e76264848ac190749322bf199405fb4cc32afa..21ab88c9d3c64d8290596cce6a98df93c1b652d4 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -306,7 +306,7 @@ var ATTRIBUTE = {
@@ -33,17 +33,21 @@ index 36e76264848ac190749322bf199405fb4cc32afa..c8fab054831451257808520e5e9f66e8
      case 61:
        return pos;
 +    case 58:
-+      return expression.attrValue && !expression.ternaryDepth && isIdentStartCode(data.charCodeAt(pos + 1)) ? -1 : pos;
++      return expression.attrValue && !expression.ternaryDepth && (isIdentStartCode(data.charCodeAt(pos + 1)) || isBareColonEnd(data, pos + 1)) ? -1 : pos;
      // defers to base expression state to track block groups.
      case 46: {
 +      if (expression.attrValue && isIdentStartCode(data.charCodeAt(pos + 1))) return -1;
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1428,6 +1437,9 @@ function canFollowDivision(code) {
+@@ -1428,6 +1437,13 @@ function canFollowDivision(code) {
        return !1;
    }
  }
++function isBareColonEnd(data, at) {
++  let code = data.charCodeAt(at);
++  return code !== code || code === 62 || code === 10 || code === 13 || code === 47 && data.charCodeAt(at + 1) === 62;
++}
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}
@@ -51,7 +55,7 @@ index 36e76264848ac190749322bf199405fb4cc32afa..c8fab054831451257808520e5e9f66e8
    return code === 46 || isWordCode(code);
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index b07a38424560be0d52c9c402b39bac73eff1d47e..31135dfe4d3337a63ec8d698f244ae430b75bf79 100644
+index b07a38424560be0d52c9c402b39bac73eff1d47e..95b560ad36f821b8d45283eeccb24859ca63a78e 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -280,7 +280,7 @@ var ATTRIBUTE = {
@@ -85,17 +89,21 @@ index b07a38424560be0d52c9c402b39bac73eff1d47e..31135dfe4d3337a63ec8d698f244ae43
      case 61:
        return pos;
 +    case 58:
-+      return expression.attrValue && !expression.ternaryDepth && isIdentStartCode(data.charCodeAt(pos + 1)) ? -1 : pos;
++      return expression.attrValue && !expression.ternaryDepth && (isIdentStartCode(data.charCodeAt(pos + 1)) || isBareColonEnd(data, pos + 1)) ? -1 : pos;
      // defers to base expression state to track block groups.
      case 46: {
 +      if (expression.attrValue && isIdentStartCode(data.charCodeAt(pos + 1))) return -1;
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1402,6 +1411,9 @@ function canFollowDivision(code) {
+@@ -1402,6 +1411,13 @@ function canFollowDivision(code) {
        return !1;
    }
  }
++function isBareColonEnd(data, at) {
++  let code = data.charCodeAt(at);
++  return code !== code || code === 62 || code === 10 || code === 13 || code === 47 && data.charCodeAt(at + 1) === 62;
++}
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}

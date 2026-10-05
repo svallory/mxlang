@@ -137,6 +137,16 @@ const CHANGED: [string, string][] = [
     "<a x=function (a) :T { return a }/>",
     '<a> @x ="function (a)" @:T @{ return a }',
   ],
+  // A bare `:` (no name) right before the end of the tag or the line starts a
+  // new attribute, so core can say it needs a name (leader addition, PR 3
+  // round 2). `:` followed by whitespace and more text stays the value's.
+  ["<a x=1 :/>", '<a> @x ="1" @:'],
+  ["<a x=1 :>y</a>", '<a> @x ="1" @:'],
+  ['<a x="1" :/>', '<a> @x ="\\"1\\"" @:'],
+  ["<a x=a.b :/>", '<a> @x ="a.b" @:'],
+  ["<a x=1 :\n/>", '<a> @x ="1" @:'],
+  ["a x=1 :", '<a> @x ="1" @:'],
+  ["div x=1 :\n  span", '<div> @x ="1" @: <span>'],
   // Concise mode.
   ["input x=a.b .c", '<input> @x ="a.b" @.c'],
   ["input x=1 ? y : z :b", '<input> @x ="1 ? y : z" @:b'],
@@ -188,7 +198,6 @@ const PINNED: [string, string][] = [
   ["<a :=x/>", '<a> @ ="x"(bound)'],
   ["<a x=1 :=y/>", '<a> @x ="1 :=y"'],
   ["<a x=1 : b/>", '<a> @x ="1 : b"'],
-  ["<a x=1 :/>", "<a> @x ERR(EOF reached while parsing regular expression)"],
   ["<a x=1 value:b/>", '<a> @x ="1" @value:b'],
   ["<a x=1 class:x=2/>", '<a> @x ="1" @class:x ="2"'],
   ["<a x=1, :b/>", '<a> @x ="1" @:b'],
