@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (solid-object-attr-value-silent, decision 149):** a plain-object (or null-prototype, function, symbol) value on a dynamic native attribute now throws Marko's `The `data-x` attribute cannot be a plain object (it would render as `[object Object]`).` at render, on SSR and DOM output. Unknown-typed dynamic attributes compile to `__mxAttrValue(...)` and native-element spreads to a lazy validating Proxy (`__mxAttrSpread`); string-valued, class/style/ref, namespaced and component attributes compile as before. Oracle rows `attrs` and `todos` are recorded divergences.
+
 - **Fix (jsx-text-entities, round 2; supersedes the earlier parity claim below):** browser-only decoding is correct for intrinsic-element templates, **not** for component/control-flow text. Such bodies now HTML5-decode with `entities@6.0.1` (including surrogate references → U+FFFD) and use a lazy build-conditioned escape: escaped HTML in SSR, decoded text nodes in the DOM build. `<if>`/`<else>`, `<for>`, fragments, component children and `<try>` no longer turn authored `&lt;b&gt;` into live markup or double-decode `&amp;copy;`. Real `renderToString` and jsdom DOM tests check text and element structure against live Marko/parse5 evidence. Intrinsic templates and attributes retain their existing behavior.
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles to `value:foo={y}`, which both Solid 2 backends lower to `setAttribute(el, "value:foo", …)`; MX previously rejected the form as a malformed namespaced attribute.

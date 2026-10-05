@@ -21,9 +21,9 @@ comments beside whitespace and mixed bodies are pinned by the rendered
 not a new divergence. The present-but-empty **placeholder** body / `<if>`
 divergence below is unchanged.
 
-## Native attribute object values: Solid and Angular gaps
+## Native attribute object values: Angular gap
 
-Html, Preact, React, Hono and Astro now match Marko 6.3.51's debug render-time
+Html, Preact, React, Hono, Astro and Solid now match Marko 6.3.51's debug render-time
 error for unrenderable object-valued ordinary native attributes, including
 final merged spreads. The guard is always on and stricter than optimized
 Marko output, which renders ordinary plain objects as `[object Object]`
@@ -32,10 +32,19 @@ debug errors too. Arrays, Dates and custom `toString` remain valid;
 structured class/style and controlled writers retain their existing behavior.
 Real-render regression coverage: `packages/{targets/html,hosts/preact,hosts/react,hosts/hono,hosts/astro}/src/attribute-value.test.ts`.
 
-**Solid's attribute-rendering implementation is unchanged.** Its candidate
-passed render checks but failed eight compiler byte-parity oracle rows; it
-was left out under the lead's scoped-completion instruction rather than
-silencing the oracle. Plain/default-object coercion remains a known gap.
+**Solid** (decision 149) throws at render like the other hosts, with the same
+text, on both SSR and DOM output. Dynamic native attributes of unknown type
+compile to `name={__mxAttrValue("name", expr, "tag")}` and spreads on native
+elements to `{...__mxAttrSpread(expr, "tag")}`; string-shaped values, class,
+style, ref, `prop:`/`on:`/`use:`-style names and component props are not
+wrapped. The spread helper is a Proxy that validates each key as Solid reads
+it, so reactivity is preserved and a key a later spread overwrites is never
+validated. A dynamic attribute written before a spread that overwrites it
+still validates (stricter than Marko). Dynamic tags with a string target are
+not guarded yet. The wrapper cannot byte-match a hand-written twin, so the
+oracle rows `attrs` and `todos` (dom, ssr-hydratable; both backends) are
+recorded in `fixtures/divergences.md`. Coverage:
+`packages/hosts/solid/src/attr-guard.test.ts`.
 
 **On Solid, `prop:name` is Solid's own opt-in, and MX emits the name
 verbatim (lead ruling 47).** `<div prop:foo=y/>` compiles to

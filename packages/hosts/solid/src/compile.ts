@@ -33,6 +33,13 @@ import {
   TranslateError,
 } from "@mxlang/core";
 import MagicString from "magic-string";
+/** Local names for the body-channel helpers a unit imports from `solid-js`. */
+import {
+  ATTR_SPREAD_HELPER,
+  ATTR_VALUE_HELPER,
+  MX_ATTR_SPREAD_BINDING,
+  MX_ATTR_VALUE_BINDING,
+} from "./attr-guard.ts";
 import {
   collectReturnVars,
   emitSolidWithMappings,
@@ -41,7 +48,6 @@ import {
   solidDeclarations,
 } from "./emitter.ts";
 
-/** Local names for the body-channel helpers a unit imports from `solid-js`. */
 const MX_CHILDREN_BINDING = "__mxChildren";
 const MX_MERGE_BINDING = "__mxMerge";
 
@@ -333,6 +339,7 @@ export function compileSolidMx(
   const {
     vars: returnVars,
     needsEscapeImport,
+    needsAttrGuard,
     hoistedDefines,
   } = collectReturnVars(() => {
     emitted = emitSolidWithMappings(ir);
@@ -344,6 +351,20 @@ export function compileSolidMx(
       binding: MX_ESCAPE_BINDING,
       specifier: "@solidjs/web",
       resolvedPath: "@solidjs/web#mx-escape",
+    });
+  }
+  // Identical text and binding in every region of a module: the parser bridge
+  // collapses the repeats into one declaration.
+  if (needsAttrGuard.value || needsAttrGuard.spread) {
+    hoistedDefines.unshift({
+      code: ATTR_VALUE_HELPER,
+      binding: MX_ATTR_VALUE_BINDING,
+    });
+  }
+  if (needsAttrGuard.spread) {
+    hoistedDefines.unshift({
+      code: ATTR_SPREAD_HELPER,
+      binding: MX_ATTR_SPREAD_BINDING,
     });
   }
   const code = emitted.code;
@@ -459,7 +480,7 @@ export function compileSolidUnit(
   // One emit, with the `/var` names and mappings collected together, the
   // same reasoning `compileSolidMx` gives for its own single emit above.
   let emittedBody!: ReturnType<typeof emitSolidWithMappings>;
-  const { vars, needsEscapeImport } = collectReturnVars(() => {
+  const { vars, needsEscapeImport, needsAttrGuard } = collectReturnVars(() => {
     emittedBody = emitSolidWithMappings(ir);
     return emittedBody.code;
   }, false);
@@ -467,6 +488,10 @@ export function compileSolidUnit(
     parts.unshift(
       `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
     );
+  }
+  if (needsAttrGuard.spread) parts.unshift(`${ATTR_SPREAD_HELPER}\n`);
+  if (needsAttrGuard.value || needsAttrGuard.spread) {
+    parts.unshift(`${ATTR_VALUE_HELPER}\n`);
   }
   // Declared above the JSX that fills them: the callback prop assigns during
   // the child's synchronous setup, which happens as the JSX is evaluated.

@@ -1,5 +1,7 @@
 # @mxlang/parser changelog
 
+- **Fix:** a host helper hoisted with an identical binding and text by several regions of one file (Solid's attribute guard) is declared once instead of being renamed into a copy per region.
+
 - **Fix (marko-parity-trio, `:modifier`):** `:foo=1` in an MX region is no longer a syntax error. It is Marko's attribute named `value:foo`, so it now parses to the JSXNamespacedName `value:foo` (and a valueless `:foo` to `value:foo=""`, HTML's empty attribute); `a:b:c=1` is still refused as malformed.
 
 ## Unreleased

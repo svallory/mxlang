@@ -26,6 +26,7 @@ import {
 } from "@mxlang/core";
 import { SOLID_BUILTIN_TAGS } from "@mxlang/parser";
 import { decodeHTML } from "entities";
+import { MX_ATTR_SPREAD_BINDING, MX_ATTR_VALUE_BINDING } from "./attr-guard.ts";
 import { solidEventPropName } from "./event-names.ts";
 
 const STATEFUL_ERRORS: HostDeclarations["tags"] = {
@@ -86,6 +87,20 @@ let returnVars: Set<string> | null = null;
 
 /** Whether the current module needs Solid's server-only HTML escape helper. */
 let escapeUse: { used: boolean } | null = null;
+
+/** Which native-attribute guard helpers the current module needs. */
+let attrGuardUse: { value: boolean; spread: boolean } | null = null;
+
+/** Native attributes with their own structured or non-attribute semantics. */
+const UNGUARDED_ATTRS = new Set([
+  "class",
+  "style",
+  "ref",
+  "children",
+  "classList",
+  "innerHTML",
+  "textContent",
+]);
 
 /** Hygienic-enough alias shared by emitted expressions and module assembly. */
 export const MX_ESCAPE_BINDING = "__mxEscape";
@@ -498,17 +513,21 @@ export function collectReturnVars(
   code: string;
   vars: string[];
   needsEscapeImport: boolean;
+  needsAttrGuard: { value: boolean; spread: boolean };
   hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
   const outerEscapeUse = escapeUse;
+  const outerAttrGuardUse = attrGuardUse;
   const outerHoistedDefines = hoistedDefines;
   const outerDefineBindings = defineBindings;
   const collected = new Set<string>();
   const collectedEscapeUse = { used: false };
+  const collectedAttrGuardUse = { value: false, spread: false };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
   escapeUse = collectedEscapeUse;
+  attrGuardUse = collectedAttrGuardUse;
   hoistedDefines = allowHoist ? collectedDefines : null;
   defineBindings = allowHoist ? new Map() : null;
   try {
@@ -516,11 +535,13 @@ export function collectReturnVars(
       code: emit(),
       vars: [...collected],
       needsEscapeImport: collectedEscapeUse.used,
+      needsAttrGuard: collectedAttrGuardUse,
       hoistedDefines: collectedDefines,
     };
   } finally {
     returnVars = outer;
     escapeUse = outerEscapeUse;
+    attrGuardUse = outerAttrGuardUse;
     hoistedDefines = outerHoistedDefines;
     defineBindings = outerDefineBindings;
   }
@@ -766,7 +787,11 @@ function methodExpression(expr: Expr): string | null {
   return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
 }
 
-function renderAttr(attr: Attr, mapName = false): MappedCode {
+function renderAttr(
+  attr: Attr,
+  mapName = false,
+  nativeTag?: string,
+): MappedCode {
   // JSX only permits one colon with a nonempty suffix. Preserve Marko's
   // `value:` and `value:foo:bar` names as string keys in a prop spread.
   if (
@@ -800,7 +825,13 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
   }
   switch (attr.kind) {
     case "spread":
-      return concatMapped(` {...${attr.value.code}}`);
+      if (nativeTag === undefined) {
+        return concatMapped(` {...${attr.value.code}}`);
+      }
+      if (attrGuardUse) attrGuardUse.spread = true;
+      return concatMapped(
+        ` {...${MX_ATTR_SPREAD_BINDING}(${attr.value.code}, ${JSON.stringify(nativeTag)})}`,
+      );
     case "boolean":
       return concatMapped(
         " ",
@@ -859,16 +890,31 @@ function renderAttr(attr: Attr, mapName = false): MappedCode {
           `="${escapeAttribute(fixed)}"`,
         );
       }
+      const value = methodExpression(attr.value) ?? attr.value.code;
+      // A string-shaped value can never render as `[object Object]`, so it
+      // compiles exactly as before.
+      const guarded =
+        nativeTag !== undefined &&
+        attr.value.shape !== "string" &&
+        !UNGUARDED_ATTRS.has(attr.name) &&
+        !attr.name.includes(":");
+      if (guarded && attrGuardUse) attrGuardUse.value = true;
       return concatMapped(
         " ",
         mapped(attr.name, mapName ? attr.nameSpan : null),
-        `={${methodExpression(attr.value) ?? attr.value.code}}`,
+        guarded
+          ? `={${MX_ATTR_VALUE_BINDING}(${JSON.stringify(attr.name)}, ${value}, ${JSON.stringify(nativeTag)})}`
+          : `={${value}}`,
       );
     }
   }
 }
 
-function renderAttrs(attrs: Attr[], mapNames = false): MappedCode {
+function renderAttrs(
+  attrs: Attr[],
+  mapNames = false,
+  nativeTag?: string,
+): MappedCode {
   const classEntries = attrs
     .map((attr, index) => ({ attr, index }))
     .filter(({ attr }) => attr.kind !== "spread" && attr.name === "class");
@@ -896,7 +942,9 @@ function renderAttrs(attrs: Attr[], mapNames = false): MappedCode {
       (attr.value.shape === "object" || attr.value.shape === "array"),
   );
   if (!structured) {
-    return concatMapped(...attrs.map((attr) => renderAttr(attr, mapNames)));
+    return concatMapped(
+      ...attrs.map((attr) => renderAttr(attr, mapNames, nativeTag)),
+    );
   }
 
   const strings = classEntries.flatMap(({ attr }) => {
@@ -916,9 +964,9 @@ function renderAttrs(attrs: Attr[], mapNames = false): MappedCode {
         return concatMapped();
       }
       if (index !== structured.index || attr.kind !== "dynamic") {
-        return renderAttr(attr, mapNames);
+        return renderAttr(attr, mapNames, nativeTag);
       }
-      if (merged === "") return renderAttr(attr, mapNames);
+      if (merged === "") return renderAttr(attr, mapNames, nativeTag);
       if (attr.value.shape === "array") {
         return concatMapped(
           " ",
@@ -1618,7 +1666,7 @@ export class SolidEmitter implements Emitter<string> {
         raw,
       );
     }
-    const attrs = renderAttrs(node.attrs);
+    const attrs = renderAttrs(node.attrs, false, node.name);
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
     if (node.void) {
       this.#out.push(concatMapped(`<${node.name}`, attrs, `${innerHtml} />`));

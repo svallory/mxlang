@@ -283,6 +283,15 @@ function hoistRegionImports(file: File, filename: string): void {
     if (mx?.range) regions.push(mx.range);
     for (const entry of mx?.hoistedImports ?? []) hoisted.push(entry);
     for (const entry of mx?.hoistedDefines ?? []) {
+      // A host helper shared by every region (a fixed binding with identical
+      // text) is declared once, not renamed into a copy per region.
+      if (
+        hoistedDefineNodes.some(
+          (one) => one.binding === entry.binding && one.code === entry.code,
+        )
+      ) {
+        continue;
+      }
       hoistedDefineNodes.push(entry);
       if (mx?.range) defineRange.set(entry, mx.range);
     }
