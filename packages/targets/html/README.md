@@ -35,23 +35,34 @@ const { code } = compile(source, "greeting.mx");
 ```
 
 ```ts
-import { escape } from "@mxlang/html";
+import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";
 
 export interface Input {}
 
-export default function (input: Input): string {
-  let out = "";
-  out += "<h1";
-  {
-    const value = classValue({ greeting: true });
-    if (value !== "") out += " class=\"" + value + "\"";
-  }
-  out += ">Hello, ";
-  out += escape(input.name);
-  out += "!</h1>";
-  return out;
+function Greeting(input: Input): string {
+  const __mxOut = __mxCreateOut();
+  __mxRender(input, __mxOut);
+  return __mxOut.toString();
 }
+Greeting.render = __mxRender;
+
+function __mxRender(input: Input, __mxOut: __MxOut): void {
+  __mxOut.write("<h1");
+  {
+    const __mxValue = __mxClassValue({greeting: true});
+    if (__mxValue !== "") __mxOut.write(" class=\"" + __mxValue + "\"");
+  }
+  __mxOut.write(">Hello, ");
+  __mxOut.write(__mxEscape(input.name));
+  __mxOut.write("!</h1>");
+}
+export { __mxRender as render };
+Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
+
+export default Greeting;
 ```
+
+(Helpers such as `__mxClassValue` are omitted.) The default export is `(input) => string`. `render(input, out)` is the sink entry: it writes into `out` and returns the template's `<return>` value. The sink comes from `@mxlang/html/runtime` (decision 155).
 
 This is **stock Marko**, not a dialect: tag discovery through taglibs and
 `tags/` directories, Marko's own HTML/SVG/MathML element registry, Marko's
@@ -376,7 +387,7 @@ byte-identical with and without the construct.
 | `attr:=expr` | The initial value renders; there is no write-back path. |
 | `<define>`, `static`, `import`, `export interface Input` | Bound / hoisted to module scope. |
 | a `server` block | **Runs.** This *is* the server render, so its statements execute and its bindings are readable from the template — verified against Marko, where `server const S = 41 + 1` then `${S}` renders `42`. Hoisted exactly as `static` is. (Its counterpart, a `client` block, is inert.) |
-| `<return>` | **Not** an error. Under the unit model a tag compiles to its own module and its caller invokes it, so a returning unit's export is `{ value, output }`, unwrapped at the call site. `/var` is supported in any scope. |
+| `<return>` | **Not** an error. Under the unit model a tag compiles to its own module and its caller invokes it, so a returning unit's `render(input, out)` writes into the caller's sink and returns the value (decision 155). `/var` is supported in any scope, dynamic tags included. |
 
 ### Lowered — everything with output bytes
 

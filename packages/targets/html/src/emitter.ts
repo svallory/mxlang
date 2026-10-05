@@ -20,8 +20,9 @@
  * Two of those are worth naming because they look accidental and are not:
  *
  * - **Literals merge across node boundaries.** An element's tag, its
- *   attributes and the text after it become one `out += "…"`, because
- *   `emitLiteral` folds into the preceding line when it is a literal append.
+ *   attributes and the text after it become one `__mxOut.write("…")`,
+ *   because `literal` folds into the preceding line when it is a literal
+ *   write.
  *   Emitting one line per IR node would be correct JavaScript and a different
  *   file.
  * - **`$forN` counts emitted lines, not loops.** The old walk named a loop's

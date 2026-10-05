@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { MxWarning } from "@mxlang/core";
-import { escape as htmlEscape } from "@mxlang/html";
+import { createOut, escape as htmlEscape } from "@mxlang/html";
 import { describe, expect, it } from "vitest";
 import { fencedBlocks } from "./host-examples.ts";
 import {
@@ -33,18 +33,22 @@ describe("the IR specification's worked example", () => {
 
   it("renders what the page says it renders", () => {
     const code = readExample(files.html).replace(
-      /^import \{ escape as __mxEscape \} from "@mxlang\/html";$/m,
+      /^import \{ escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut \} from "@mxlang\/html";$/m,
       "",
     );
-    // The emitted module is TypeScript; strip its one interface and the
-    // parameter annotation, then evaluate the render function.
+    // The emitted module is TypeScript; strip its one interface, the
+    // parameter annotations and the named `render` export, then evaluate it
+    // and call its default export.
     const js = code
       .replace(/export interface Input \{[\s\S]*?\n\}\n/, "")
       .replace("(input: Input): string", "(input)")
+      .replace("(input: Input, __mxOut: __MxOut): void", "(input, __mxOut)")
+      .replace("export { __mxRender as render };", "")
       .replace(/export default Greeting;\s*$/, "return Greeting;");
-    const render = new Function("__mxEscape", js)(htmlEscape) as (
-      input: unknown,
-    ) => string;
+    const render = new Function("__mxEscape", "__mxCreateOut", js)(
+      htmlEscape,
+      createOut,
+    ) as (input: unknown) => string;
     expect(render({ name: "<Ada>", items: ["a", "b"] })).toBe(
       '<h1 class="title">Hello, &lt;Ada&gt;!</h1><ul><li>a</li><li>b</li></ul>',
     );

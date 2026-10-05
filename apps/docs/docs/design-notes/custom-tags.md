@@ -282,8 +282,9 @@ emits an import plus a call.*
   path — a unit cannot see its callers, so no call site can widen it.
   `<return>` in a page is legal and means the same thing.
 
-  A returning unit's export shape is the host's business: `{ value, output }` on
-  html and the JSX hosts; on Solid a generated callback prop the unit
+  A returning unit's export shape is the host's business: on html, `render(input, out)`
+  writes into the caller's sink and returns the value (decision 155, the Marko render
+  model); `{ value, output }` on the JSX hosts; on Solid a generated callback prop the unit
   calls during setup, because a Solid component's return value is its view. The
   Solid binding is **one-shot, not reactive** — it holds the value from that one
   invocation, which matches `/var` everywhere else; a tag wanting reactivity

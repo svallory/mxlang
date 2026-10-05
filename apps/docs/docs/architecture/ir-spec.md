@@ -800,7 +800,7 @@ Its IR, `greeting.ir.json`. `Expr.node` and `For.paramNodes` are elided (section
 The module `@mxlang/html` emits from it, `greeting.html.ts`:
 
 ```ts
-import { escape as __mxEscape } from "@mxlang/html";
+import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";
 
 export interface Input {
   name: string;
@@ -808,29 +808,35 @@ export interface Input {
 }
 
 function Greeting(input: Input): string {
-  let __mxOut = "";
+  const __mxOut = __mxCreateOut();
+  __mxRender(input, __mxOut);
+  return __mxOut.toString();
+}
+Greeting.render = __mxRender;
+
+function __mxRender(input: Input, __mxOut: __MxOut): void {
   const count = input.items.length;
-  __mxOut += "<h1 class=\"title\">Hello, ";
-  __mxOut += __mxEscape(input.name);
-  __mxOut += "!</h1>";
+  __mxOut.write("<h1 class=\"title\">Hello, ");
+  __mxOut.write(__mxEscape(input.name));
+  __mxOut.write("!</h1>");
   if (count) {
-    __mxOut += "<ul>";
+    __mxOut.write("<ul>");
     const __mxFor6 = input.items;
     const __mxFor7 = __mxFor6 ? __mxFor6 : [];
     for (const item of __mxFor7) {
-      __mxOut += "<li>";
-      __mxOut += __mxEscape(item);
-      __mxOut += "</li>";
+      __mxOut.write("<li>");
+      __mxOut.write(__mxEscape(item));
+      __mxOut.write("</li>");
     }
-    __mxOut += "</ul>";
+    __mxOut.write("</ul>");
   } else {
-    __mxOut += "<p hidden>Nothing yet.</p>";
+    __mxOut.write("<p hidden>Nothing yet.</p>");
   }
-  return __mxOut;
 }
+export { __mxRender as render };
 Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 
 export default Greeting;
 ```
 
-Called with `{ name: "<Ada>", items: ["a", "b"] }` it returns `<h1 class="title">Hello, &lt;Ada&gt;!</h1><ul><li>a</li><li>b</li></ul>`; with an empty `items` it takes the `<else>` branch. The test asserts both.
+The default export renders into a fresh sink through `render(input, out)`, the module's sink entry (decision 155). Called with `{ name: "<Ada>", items: ["a", "b"] }` it returns `<h1 class="title">Hello, &lt;Ada&gt;!</h1><ul><li>a</li><li>b</li></ul>`; with an empty `items` it takes the `<else>` branch. The test asserts both.
