@@ -482,11 +482,15 @@ divergence in the bare `${expr}` line."
 strips comment delimiters too, so an HTML comment and a `//` line comment are
 told apart by re-reading the source at the node's `loc`.
 
-`<html-comment>` renders a literal HTML comment and **lowers placeholders inside
-it**, through a comment-safe escape that escapes **only `>`** — `<`, `&` and
-quotes pass through raw, matching Marko's `_escape_comment`. Filtering the
-placeholders out instead (an early bug) turned
+On the **html** host, `<html-comment>` renders a literal HTML comment and
+**lowers placeholders inside it**, through a comment-safe escape that escapes
+**only `>`** — `<`, `&` and quotes pass through raw, matching Marko's
+`_escape_comment`. Filtering the placeholders out instead (an early bug) turned
 `<html-comment>build ${input.sha}</html-comment>` into `<!--build -->`.
+
+On **Angular** it renders a plain-text comment, and a `${…}` inside it is a
+positioned compile error: Angular does not interpolate inside a comment, so the
+placeholder would render literally.
 
 On the JSX hosts (Preact, React, Hono, Solid) `<html-comment>` is instead a
 positioned compile error — JSX has no comment node, so the tag would silently
