@@ -47,7 +47,7 @@ const VOID = new Set([
  *   `script.ts:164`, `style.ts:114`; `textarea` is HTML's own text element.
  * All under `packages/runtime-tags/src/translator/core/` in data/marko.
  */
-const STATEMENT = new Set([
+export const STATEMENT = new Set([
   "class",
   "client",
   "export",
@@ -64,7 +64,7 @@ const OPEN_TAG_ONLY = new Set([
   "log",
   "return",
 ]);
-const TEXT = new Set([
+export const TEXT = new Set([
   "html-comment",
   "html-script",
   "html-style",

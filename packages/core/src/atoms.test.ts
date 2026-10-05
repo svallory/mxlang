@@ -330,6 +330,8 @@ describe("misuse is a positioned MX error at the atom", () => {
     ["<div x=typeof :a/>", 14, "the unary operator `typeof`"],
     ["<div x=f(...:a)/>", 12, "spreading"],
     ["<div x=[...:a]/>", 11, "spreading"],
+    // Review round 2, finding 3: a tag's own spread too.
+    ["<div ...:a/>", 8, "spreading"],
   ])("%j", (source, column, what) => {
     const error = errorOf(source);
     expect(error.message).toContain("is an atom (decision 156)");
@@ -381,6 +383,16 @@ describe("misuse is a positioned MX error at the atom", () => {
     expect(error.line).toBe(1);
     expect(error.column).toBe(column);
   });
+});
+
+describe("the atom hint names only a lexed atom (review round 2)", () => {
+  it.each(["$ const o = { a: :b };\n<div/>"])(
+    "%j gets no atom hint",
+    (source) => {
+      const error = errorOf(source);
+      expect(error.message).not.toContain("is an atom (decision 156)");
+    },
+  );
 });
 
 describe("never an atom", () => {
@@ -447,10 +459,24 @@ describe("no stand-in survives", () => {
     expect("atoms" in value).toBe(false);
   });
 
-  it("convertAtoms is idempotent", () => {
-    const ir = lowerSource("<div x=[:a]/>", (ctx) => {
-      convertAtoms(ctx, []);
+  it("convertAtoms over an already-converted tree changes nothing", () => {
+    let seen: Ctx | undefined;
+    const ir = lowerSource("<div x=[:a, :b] y=:c/>", (ctx) => {
+      seen = ctx;
     });
-    expect(ir.body.length).toBe(1);
+    const ctx = seen as Ctx;
+    const element = ir.body[0] as IrNode & { kind: "Element" };
+    const value = (element.attrs[0] as Attr & { kind: "dynamic" }).value;
+    const before = structuredClone(ctx.atoms);
+    const nodes = (value.node as Node).elements as Node[];
+    const marks = nodes.map((n) => structuredClone(n.extra));
+    // Walk the converted expression again, and a whole-value atom's node.
+    convertAtoms(ctx, [value.node]);
+    expect(ctx.atoms).toEqual(before);
+    expect(ctx.atoms?.map((a) => a.span.sourceStart)).toEqual([8, 12, 18]);
+    nodes.forEach((n, index) => {
+      expect(n.type).toBe("StringLiteral");
+      expect(n.extra).toEqual(marks[index]);
+    });
   });
 });

@@ -20,3 +20,26 @@ describe("atoms on html", () => {
     expect(code).not.toMatch(/[=[(,{\s]:(?:a|b|c|hello|on)\b/);
   });
 });
+
+// Review round 2, finding 5: the atom hint names only an atom the parser
+// lexed, never a `:` in a scriptlet or a statement tag.
+describe("no atom hint where atoms are not read", () => {
+  it.each([
+    "$ const o = { a: :b };\n<div/>",
+    "static const o = { a: :b };\n<div/>",
+  ])("%j", (source) => {
+    let message = "";
+    try {
+      compile(source, "/fixtures/atoms.mx");
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).not.toContain("is an atom (decision 156)");
+  });
+
+  it("an atom where a shorthand property must stand gets it", () => {
+    expect(() => compile("<div x=f({:a})/>", "/fixtures/atoms.mx")).toThrow(
+      "`:a` is an atom (decision 156): a value, not a binding",
+    );
+  });
+});

@@ -964,7 +964,10 @@ export class PreactEmitter implements Emitter<string> {
               mapped("satisfies", shorthand ? attr.nameSpan : (span ?? null)),
               ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}">`,
             )
-          : mapped(value, span ?? null);
+          : (attr.kind === "dynamic" || attr.kind === "event") &&
+              value === attr.value.code
+            ? mappedExpr(attr.value)
+            : mapped(value, span ?? null);
         const nameSpan =
           mapNames &&
           attr.kind !== "event" &&
@@ -1015,9 +1018,12 @@ export class PreactEmitter implements Emitter<string> {
         : attr.kind === "static"
           ? attr.valueSpan
           : null;
+    const value = this.#attrValue(attr);
     return concatMapped(
       "__mxTextareaContent(",
-      mapped(this.#attrValue(attr), span ?? null),
+      attr.kind === "dynamic" && value === attr.value.code
+        ? mappedExpr(attr.value)
+        : mapped(value, span ?? null),
       ")",
     );
   }

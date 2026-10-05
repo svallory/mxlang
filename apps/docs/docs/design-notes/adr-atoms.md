@@ -285,7 +285,7 @@ so `string :title` under `attributes` is an attribute visible across the entity,
 
 ## Parser approach
 
-**Proposed, pending lead approval.** Source: `scratch/reports/squad-atoms/parser-approach.md` (option b′), measured by a simulation inside the real `@marko/compiler` 5.42.5 with htmljs-parser 5.15.0 patched. Main now pins 5.42.10 / 5.18.0; the simulation is **not** re-run on them here and is re-run on 5.18.0 at the start of Phase B.
+**Approved by the lead (2026-10-05); re-measured on htmljs-parser 5.18.0 / @marko/compiler 5.42.10 in PR 1.** Source: `scratch/reports/squad-atoms/parser-approach.md` (option b′), first measured by a simulation inside `@marko/compiler` 5.42.5 with htmljs-parser 5.15.0 patched. In PR 1 the simulation and the real patched parser give the same output on every row but `a ? :b :c`, where the real lexer gives the predicted `a ? "b" : c`, and the 31 decision-146 forms are byte-identical against main (31/31).
 
 Today htmljs-parser passes every atom through intact in every position (attribute value, default attribute, `${}`, tag arguments, concise mode, attribute tags), and Babel rejects every one with "Unexpected token". Babel has no parser plugin API: an unknown plugin name is silently ignored. So atoms are lexed where MX already owns the lexer, htmljs-parser as MX carries it (the root patch today, the in-repo copy for the future; decisions 157 addendum 2 and 158):
 
@@ -340,5 +340,6 @@ Still open:
 ## Phase B
 
 1. **PR 1: parser, IR, lowering, public node shape.** The parser change in both places (decision 158), the `atom` IR node, lowering to string literals, `extra.mxAtom = { span }` on atoms inside expressions with the node shape documented in `apps/docs/docs/architecture/ir-spec.md` in that same PR, and `DataAttr` kind `atom` (including for the name sugar). Re-measures the invariants table and the parser simulation on 5.18.0, and adds the `divergences.md` rows.
-2. **PR 2: contracts.** The open atom type with `values` and `pattern`; the two phases; `declares` with `from`, `scope` and `uniqueWith`; union `ref`; `ctx.declare` from `analyze`; the duplicate-declaration error; kind merging across modules; atom-against-string type errors.
-3. **PR 3: docs and grammar.** User docs for atoms and contracts, and the tree-sitter grammar.
+2. **Ruled follow-up, decision 146 addendum 5 (a separate PR after PR 1).** When a tag's default attribute value is a single atom, a following whitespace and `:name` is the name sugar: `belongs-to=:Customer :customer` is `belongs-to` with `value="Customer"` (an atom) and `name="customer"`. Decision 151 ruling 2 (sugar right after a default value is not supported) stays for every other default value. Tests that come with that PR: `belongs-to=:Customer :customer`, and `<const/x=(a) :T => a/>` stays a type annotation.
+3. **PR 2: contracts.** The open atom type with `values` and `pattern`; the two phases; `declares` with `from`, `scope` and `uniqueWith`; union `ref`; `ctx.declare` from `analyze`; the duplicate-declaration error; kind merging across modules; atom-against-string type errors.
+4. **PR 3: docs and grammar.** User docs for atoms and contracts, and the tree-sitter grammar.

@@ -1019,7 +1019,9 @@ function renderAttr(
         return concatMapped(
           " {...",
           `${MX_CLASS_BINDING}(`,
-          mapped(value, attr.value.span ?? null),
+          value === attr.value.code
+            ? mappedExpr(attr.value)
+            : mapped(value, attr.value.span ?? null),
           `, ${nativeTagOf(native)})}`,
         );
       }

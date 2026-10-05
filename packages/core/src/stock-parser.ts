@@ -1,3 +1,4 @@
+import { STATEMENT, TEXT } from "./close-tag-opener.ts";
 import { TranslateError } from "./core.ts";
 import { markoHtmljsParser } from "./marko-frontend.ts";
 
@@ -122,6 +123,47 @@ export function installedParserLexesAtoms(): boolean | undefined {
     return undefined;
   }
   return installedAtoms;
+}
+
+let lexedFor: { source: string; atoms: { start: number; end: number }[] } = {
+  source: "",
+  atoms: [],
+};
+
+/**
+ * The atoms the installed parser lexes in `source` (decision 156), for a
+ * diagnostic that must name only a real atom: never a `:` in a scriptlet, a
+ * statement tag or a ternary. Empty on a stock parser; `undefined` when the
+ * parser cannot be loaded. Remembers the last source, since one failure may
+ * ask more than once.
+ */
+export function lexedAtoms(
+  source: string,
+): { start: number; end: number }[] | undefined {
+  if (lexedFor.source === source) return lexedFor.atoms;
+  const parser = markoParser();
+  if (!parser) return undefined;
+  const atoms: { start: number; end: number }[] = [];
+  try {
+    const instance = parser.createParser({
+      // Statement and text tags as Marko's taglib types them, so a `static`
+      // line or a `<script>` body is never read as attributes.
+      onOpenTagName: (range: { start: number; end: number }) => {
+        const name = source.slice(range.start, range.end);
+        if (STATEMENT.has(name)) return parser.TagType.statement;
+        if (TEXT.has(name)) return parser.TagType.text;
+        return undefined;
+      },
+      onAtom: (atom: { start: number; end: number }) =>
+        atoms.push({ start: atom.start, end: atom.end }),
+      onError: () => {},
+    });
+    instance.parse(source);
+  } catch {
+    // A parse that throws still reported the atoms before it.
+  }
+  lexedFor = { source, atoms };
+  return atoms;
 }
 
 /** Test seam: forget the probe. */

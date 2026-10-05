@@ -88,6 +88,8 @@ function rejectMisuse(name: string, node: Node, parent: Node, key: string) {
       fail(misuse(name, `the unary operator \`${parent.operator}\``), node);
       return;
     case "SpreadElement":
+    case "MarkoSpreadAttribute":
+      // `f(...:a)`, `[...:a]` and a tag's `<div ...:a/>` alike.
       fail(misuse(name, "spreading"), node);
       return;
     default:
