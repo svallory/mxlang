@@ -26,11 +26,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
-const patchFile = join(here, "../../../../patches/htmljs-parser@5.15.0.patch");
+const patchFile = join(here, "../../../../patches/htmljs-parser@5.18.0.patch");
 const distEntry = join(here, "../dist/index.js");
 
 /**
- * Reverses `patches/htmljs-parser@5.15.0.patch` in `dir`, in plain JS: the gate
+ * Reverses `patches/htmljs-parser@5.18.0.patch` in `dir`, in plain JS: the gate
  * machine's PATH may have no `patch` binary. Every hunk is replaced by its
  * pre-image: the "new" block (context and `+` lines) is searched for in the
  * file and swapped for the "old" block (context and `-` lines).

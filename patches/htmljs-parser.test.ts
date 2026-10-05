@@ -1,5 +1,5 @@
 /**
- * Pins the `patches/htmljs-parser@5.15.0.patch` rule (decision 146) at the
+ * Pins the `patches/htmljs-parser@5.18.0.patch` rule (decision 146) at the
  * parser level, against both published builds (`index.mjs` and `index.js`).
  *
  * After whitespace inside an attribute value:
@@ -8,7 +8,7 @@
  *   (b) a `.` immediately followed by an identifier start starts a new
  *       attribute.
  * Everything else keeps stock htmljs-parser behaviour; the PINNED table is
- * what stock 5.15.0 produced, measured before the patch existed.
+ * what stock 5.18.0 produced, measured before the patch existed.
  *
  * Events are rendered compactly: `<tag>`, `.cls`/`#id` shorthands,
  * `var:"…"`, `@name`, `="value"`, `..."spread"`, `ERR(…)`.
@@ -168,7 +168,7 @@ const CHANGED: [string, string][] = [
   ["input/b x=1 :c", '<input> var:"b" @x ="1" @:c'],
 ];
 
-/** [input, rendered events] — stock 5.15.0 behaviour that must not move. */
+/** [input, rendered events] — stock 5.18.0 behaviour that must not move. */
 const PINNED: [string, string][] = [
   ["<a x=1 ? y : z/>", '<a> @x ="1 ? y : z"'],
   ["<a x=a.b/>", '<a> @x ="a.b"'],

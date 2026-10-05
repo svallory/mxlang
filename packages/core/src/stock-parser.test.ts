@@ -39,7 +39,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
-const patchFile = join(here, "../../../patches/htmljs-parser@5.15.0.patch");
+const patchFile = join(here, "../../../patches/htmljs-parser@5.18.0.patch");
 const hook = (stockDir: string) => `
 const Module = require("node:module");
 const resolve = Module._resolveFilename;
@@ -50,7 +50,7 @@ Module._resolveFilename = function (request, ...rest) {
 `;
 
 /**
- * Reverses `patches/htmljs-parser@5.15.0.patch` in `dir`, in plain JS: the gate
+ * Reverses `patches/htmljs-parser@5.18.0.patch` in `dir`, in plain JS: the gate
  * machine's PATH may have no `patch` binary. Every hunk is replaced by its
  * pre-image: the "new" block (context and `+` lines) is searched for in the
  * file and swapped for the "old" block (context and `-` lines).
@@ -170,7 +170,11 @@ describe("a stock parser's failure becomes a positioned MX error", () => {
 
   it.each(SOURCES)("%j", (source, line, column, token) => {
     const failure = markoFailure(source);
-    expect(failure.message).toContain("unexpected character `:`");
+    // htmljs-parser 5.15 said "first expression is followed by the unexpected
+    // character `:`"; 5.18 says "Expected a single expression, but found `:`".
+    expect(failure.message).toMatch(
+      /unexpected character `:`|Expected a single expression, but found `:`/,
+    );
     const error = stockParserError(failureError(failure), source, false);
     expect(error).toBeInstanceOf(TranslateError);
     expect(error?.message).toBe(STOCK_PARSER_MESSAGE(token));

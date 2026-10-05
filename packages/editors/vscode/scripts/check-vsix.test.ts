@@ -77,7 +77,7 @@ function fixture(options: Options = {}) {
     [`${PLUGIN}/dist/ng-worker.cjs`]: "",
     "node_modules/@marko/compiler/package.json": pkg(
       "@marko/compiler",
-      "5.42.5",
+      "5.42.10",
     ),
     "node_modules/@marko/compiler/index.js": "",
   };
@@ -89,7 +89,7 @@ function fixture(options: Options = {}) {
   }
 
   const lockfile = join(tmp(), "bun.lock");
-  const locked = options.locked ?? ["@marko/compiler@5.42.5"];
+  const locked = options.locked ?? ["@marko/compiler@5.42.10"];
   writeFileSync(
     lockfile,
     `{\n  "packages": {\n${locked
@@ -248,7 +248,7 @@ describe("checkExtensionRoot", () => {
         [`${PLUGIN}/dist/ng-worker.cjs`]: "",
         "node_modules/@marko/compiler/package.json": pkg(
           "@marko/compiler",
-          "5.42.5",
+          "5.42.10",
         ),
         "node_modules/@marko/compiler/index.js": "",
       },
@@ -370,7 +370,7 @@ describe("checkExtensionRoot", () => {
           files: withIndex('require("@marko/compiler")', {
             "node_modules/@marko/compiler/package.json": pkg(
               "@marko/compiler",
-              "5.42.5",
+              "5.42.10",
             ),
             "node_modules/@marko/compiler/index.js": "",
           }),
@@ -441,7 +441,7 @@ describe("checkExtensionRoot", () => {
       const problems = check({ locked: ["@marko/compiler@5.41.0"] });
       expect(problems).toEqual([
         expect.stringContaining(
-          "@marko/compiler@5.42.5 is not a version bun.lock pins (5.41.0)",
+          "@marko/compiler@5.42.10 is not a version bun.lock pins (5.41.0)",
         ),
       ]);
     });
@@ -455,7 +455,9 @@ describe("checkExtensionRoot", () => {
 
     it("accepts any of several locked versions of the same name", () => {
       expect(
-        check({ locked: ["@marko/compiler@5.41.0", "@marko/compiler@5.42.5"] }),
+        check({
+          locked: ["@marko/compiler@5.41.0", "@marko/compiler@5.42.10"],
+        }),
       ).toEqual([]);
     });
 

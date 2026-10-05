@@ -2,7 +2,7 @@
 
 Bun `patchedDependencies` (root `package.json`). `bun install` applies them; `bun.lock` records them.
 
-## `htmljs-parser@5.15.0.patch`
+## `htmljs-parser@5.18.0.patch`
 
 After whitespace inside an attribute value, `:name` and `.name` start a new attribute instead of continuing the value (decision 146, `divergences.md`):
 
@@ -28,3 +28,5 @@ The edits: an `attrValue` flag set where a named attribute's (or a spread's) val
 Known changes to valid input: the `.` half changes `x=a.b .c` and html-mode multi-line chains (`x=foo\n  .bar()`), but not default attributes (`<if=a .b>`, `<const/x=items\n  .filter()/>`), which keep Marko's meaning (decision 151). The `:` half changes two valid TS spellings, a return type written with a space before the colon and no space after it (`(a) :T => a`) or a newline after it (`(a) :\n T => a`); `(a): T` and `(a) : T` are unchanged.
 
 Published `@mxlang/*` packages do not carry this patch; a consumer install resolves stock `htmljs-parser`.
+
+Bumped 5.15.0 to 5.18.0 with `@marko/compiler` 5.42.10 (which depends on `htmljs-parser ^5.17.1`): the original hunks applied with line offsets only, no hand porting.

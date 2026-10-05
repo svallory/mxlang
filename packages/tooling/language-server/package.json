@@ -42,7 +42,7 @@
     "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/parser --external vscode-languageserver --external vscode-languageserver-textdocument && bun build src/bin.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/parser --external vscode-languageserver --external vscode-languageserver-textdocument && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
-    "@marko/compiler": "5.42.5",
+    "@marko/compiler": "5.42.10",
     "@mxlang/core": "workspace:*",
     "@mxlang/parser": "workspace:*",
     "@mxlang/target-registry": "workspace:*",

@@ -1,8 +1,8 @@
 diff --git a/dist/index.js b/dist/index.js
-index 36e76264848ac190749322bf199405fb4cc32afa..21ab88c9d3c64d8290596cce6a98df93c1b652d4 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..a913063ea445d178357bc72491ab680185a12601 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -306,7 +306,7 @@ var ATTRIBUTE = {
+@@ -311,7 +311,7 @@ var ATTRIBUTE = {
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
@@ -11,7 +11,7 @@ index 36e76264848ac190749322bf199405fb4cc32afa..21ab88c9d3c64d8290596cce6a98df93
          return;
        } else if (code === 40) {
          attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
-@@ -1160,6 +1160,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1147,6 +1147,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -25,7 +25,7 @@ index 36e76264848ac190749322bf199405fb4cc32afa..21ab88c9d3c64d8290596cce6a98df93
              expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
              continue;
            }
-@@ -1378,11 +1385,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1382,11 +1389,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -40,7 +40,7 @@ index 36e76264848ac190749322bf199405fb4cc32afa..21ab88c9d3c64d8290596cce6a98df93
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1428,6 +1437,13 @@ function canFollowDivision(code) {
+@@ -1432,6 +1441,13 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -55,10 +55,10 @@ index 36e76264848ac190749322bf199405fb4cc32afa..21ab88c9d3c64d8290596cce6a98df93
    return code === 46 || isWordCode(code);
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index b07a38424560be0d52c9c402b39bac73eff1d47e..95b560ad36f821b8d45283eeccb24859ca63a78e 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a8b0d3f8604008792ebcd37c206b5ec082db8150 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -280,7 +280,7 @@ var ATTRIBUTE = {
+@@ -284,7 +284,7 @@ var ATTRIBUTE = {
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
@@ -67,7 +67,7 @@ index b07a38424560be0d52c9c402b39bac73eff1d47e..95b560ad36f821b8d45283eeccb24859
          return;
        } else if (code === 40) {
          attr.async || ensureAttrName(this, attr), attr.stage = 3, this.pos++, this.enterState(states_exports.EXPRESSION).shouldTerminate = matchesCloseParen;
-@@ -1134,6 +1134,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1120,6 +1120,13 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -81,7 +81,7 @@ index b07a38424560be0d52c9c402b39bac73eff1d47e..95b560ad36f821b8d45283eeccb24859
              expression.ternaryDepth++, this.pos++, this.consumeWhitespace();
              continue;
            }
-@@ -1352,11 +1359,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1355,11 +1362,13 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -96,7 +96,7 @@ index b07a38424560be0d52c9c402b39bac73eff1d47e..95b560ad36f821b8d45283eeccb24859
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
        return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1402,6 +1411,13 @@ function canFollowDivision(code) {
+@@ -1405,6 +1414,13 @@ function canFollowDivision(code) {
        return !1;
    }
  }

@@ -36,8 +36,8 @@ All dependencies below are pinned to an exact version (no `^`/`~`) at the root `
 | `@babel/generator` | 7.29.8 |
 | `@babel/traverse` | 7.29.8 |
 | `@babel/types` | 7.29.8 |
-| `htmljs-parser` | 5.15.0 |
-| `@marko/compiler` | 5.42.5 |
+| `htmljs-parser` | 5.18.0 |
+| `@marko/compiler` | 5.42.10 |
 | `solid-js` | 2.0.0-rc.7 |
 | `@solidjs/web` | 2.0.0-rc.7 |
 | `@solidjs/babel-plugin` | 2.0.0-rc.7 |
@@ -57,7 +57,7 @@ All dependencies below are pinned to an exact version (no `^`/`~`) at the root `
 | `vite` | 8.2.2 |
 | `playwright` | 1.63.0 |
 | `marko` | 6.3.51 |
-| `@marko/compiler` | 5.42.5 |
+| `@marko/compiler` | 5.42.10 |
 | `@marko/runtime-tags` | 6.3.51 |
 | `parse5` | 7.3.0 |
 | `react` / `react-dom` | 19.3.0 |

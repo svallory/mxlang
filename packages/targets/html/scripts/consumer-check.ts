@@ -139,7 +139,7 @@ try {
   );
 
   console.log("[consumer-check] installing packed tarballs (no workspace)...");
-  run(["bun", "add", tarballPath, "@marko/compiler@5.42.5"], scratchDir);
+  run(["bun", "add", tarballPath, "@marko/compiler@5.42.10"], scratchDir);
 
   writeFileSync(
     join(scratchDir, "hello.mx"),

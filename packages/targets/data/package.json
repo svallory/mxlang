@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@babel/types": "7.29.8",
-    "@marko/compiler": "5.42.5",
+    "@marko/compiler": "5.42.10",
     "@mxlang/core": "workspace:*"
   }
 }

@@ -22,7 +22,7 @@
   "dependencies": {
     "@astrojs/compiler": "2.13.1",
     "@jridgewell/sourcemap-codec": "1.6.0",
-    "@marko/compiler": "5.42.5",
+    "@marko/compiler": "5.42.10",
     "@mxlang/angular": "workspace:*",
     "@mxlang/astro": "workspace:*",
     "@mxlang/core": "workspace:*",

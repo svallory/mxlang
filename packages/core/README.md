@@ -134,7 +134,7 @@ second Babel dependency:
   second instance updates the mutable registries but not the derived `is*`,
   generator or traverse tables). Asking a second Babel to walk these nodes is
   not "safer", it is broken.
-- **The version is pinned exactly.** `@marko/compiler` is `5.42.5` with no
+- **The version is pinned exactly.** `@marko/compiler` is `5.42.10` with no
   range, here and in every consumer (AGENTS.md "Exact-pin policy"), so the
   surface cannot shift under us without a deliberate bump — and a bump is the
   moment to re-check it, which is true of the AST shapes this package consumes
