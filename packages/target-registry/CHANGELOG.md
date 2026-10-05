@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (bridge-host, decision 154):** a file kind is a region kind because it has a `compileRegion`, not because its segment is `solid`: `builtinFileKinds` derives `pipeline: "region"` from it, and `regionFileKinds(lookup?)`, `regionFileKind(file, lookup?)` and `regionCompileFor(file, options)` route a `.<segment>.mx` file to its host's region entry through any lookup, `lookupFor(policy)` included. An unregistered `.<word>.mx`, and a file kind without a region entry, are never region files. `regionKindCompile(kind, options)` is the same hook for a kind already in hand (the TS plugin's per-kind plugins).
+
 - **Fix (default-tag-contracts r3):** a target's declarations decide whether contracts may declare `defaultTag`, host or not: a target with no host that forbids it is refused too (naming the target), and a host whose declarations permit it is no longer refused.
 
 - **Fix (default-tag-contracts r2):** `sl-card` is accepted as `mx.<target>.defaultTag` and as a contract value on solid-jsx, preact-jsx, react-jsx, hono-jsx and angular-template, and refused on html, astro-html (Marko rejects an unresolved dashed tag there) and data.

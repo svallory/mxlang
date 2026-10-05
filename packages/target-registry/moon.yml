@@ -17,3 +17,5 @@ tasks:
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
+      # region.test.ts imports the parser's built entry (`print`).
+      - "/packages/parser/dist/**/*"

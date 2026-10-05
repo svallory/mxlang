@@ -16,8 +16,16 @@ package's `./descriptor` subpath and exports:
 - `BuiltinFileKind` and `builtinFileKinds`: core's `HostFileKind` plus
   `pipeline: "region" | "ng-template" | "astro-template"`, the key of the editor pipeline that
   serves the file kind. The pipeline key is tool glue and never goes into
-  core; `PIPELINES` maps a segment to it, and a built-in file kind with no
-  entry throws at import.
+  core. A kind with a `compileRegion` is `region` whatever its segment;
+  `PIPELINES` maps the template segments (`ng`, `astro`), and a built-in
+  file kind with neither throws at import.
+- `regionFileKinds(lookup?)`, `regionFileKind(file, lookup?)`,
+  `regionCompileFor(file, options)` (decision 154): the region file kinds of
+  a lookup (the built-in one, or `lookupFor(policy)`), the one a file's exact
+  `.<segment>.mx` suffix names, and the parser hook that lowers its regions.
+  Every tool routes region files through these, never by a segment name. An
+  unregistered `.<word>.mx` and a kind without `compileRegion` (a template
+  kind, or a third-party host such as Mesh's on data) are never region files.
 
 **The registry is the only dispatch table.** Core's former closed lists
 (`HOST_NAMES`, `HOST_PACKAGES`, `HOST_MODULE_SEGMENTS`, `MX_ATTR_TAG_SOURCES`,

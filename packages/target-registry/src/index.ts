@@ -27,7 +27,10 @@ import {
   defaultTagDiagnostic,
   defaultTagScopeFor,
   type HostFileKind,
+  type HostRegionInput,
+  type HostRegionResult,
   hostRestrictionDiagnostics,
+  type MxWarning,
   type PolicyLocation,
   readTargetDefaultTag,
   registerCalleeInputReader,
@@ -148,8 +151,12 @@ export function descriptorFor(policy: TargetPolicy): TargetDescriptor {
   return found;
 }
 
+/**
+ * The template pipelines, by segment. A region file kind needs no entry: a
+ * kind with a `compileRegion` is a region file whatever its segment, so a new
+ * region host is served by the region pipeline without an edit here.
+ */
 const PIPELINES: Readonly<Record<string, BuiltinFileKind["pipeline"]>> = {
-  solid: "region",
   ng: "ng-template",
   astro: "astro-template",
 };
@@ -158,7 +165,7 @@ const PIPELINES: Readonly<Record<string, BuiltinFileKind["pipeline"]>> = {
 export const builtinFileKinds: readonly BuiltinFileKind[] = builtinTargets
   .flatMap((target) => target.host?.fileKinds ?? [])
   .map((kind) => {
-    const pipeline = PIPELINES[kind.segment];
+    const pipeline = kind.compileRegion ? "region" : PIPELINES[kind.segment];
     if (!pipeline) {
       throw new Error(
         `@mxlang/target-registry: built-in file kind "${kind.segment}" has no editor pipeline`,
@@ -166,6 +173,109 @@ export const builtinFileKinds: readonly BuiltinFileKind[] = builtinTargets
     }
     return { ...kind, pipeline };
   });
+
+/**
+ * A region file kind: TypeScript with MX regions (`.<segment>.mx`), lowered
+ * region by region through the parser's bridge. `target` is the descriptor
+ * that declares it, the target the regions compile under.
+ */
+export interface RegionFileKind extends HostFileKind {
+  readonly compileRegion: NonNullable<HostFileKind["compileRegion"]>;
+  readonly target: string;
+}
+
+/**
+ * Every region file kind `lookup` registers, in registration order: the
+ * built-in set unless a project's lookup (`lookupFor(policy)`) is given. A
+ * file kind is a region kind only if it has a `compileRegion`; a kind without
+ * one (a template kind, or a third-party kind on a hostless target) is never
+ * routed to the region bridge.
+ */
+export function regionFileKinds(
+  lookup: TargetLookup = builtinLookup(),
+): readonly RegionFileKind[] {
+  const kinds: RegionFileKind[] = [];
+  for (const name of lookup.targetNames()) {
+    const descriptor = lookup.target(name);
+    for (const kind of descriptor?.host?.fileKinds ?? []) {
+      const { compileRegion } = kind;
+      if (compileRegion) kinds.push({ ...kind, compileRegion, target: name });
+    }
+  }
+  return kinds;
+}
+
+/**
+ * The region file kind `filePath` belongs to in `lookup`, by its exact
+ * `.<segment>.mx` suffix. Undefined for every other file, an unregistered
+ * `.<word>.mx` included: that stays a whole-file `.mx`, the rule core's
+ * `hostModuleSegment` already applies.
+ */
+export function regionFileKind(
+  filePath: string,
+  lookup: TargetLookup = builtinLookup(),
+): RegionFileKind | undefined {
+  return regionFileKinds(lookup).find((kind) =>
+    filePath.endsWith(`.${kind.segment}.mx`),
+  );
+}
+
+/** What {@link regionCompileFor} binds into every region's compile. */
+export interface RegionCompileOptions {
+  /** The set the host resolves callees against; default the built-in lookup. */
+  targets?: TargetLookup;
+  /** Collects the host's positioned warnings. */
+  warnings?: MxWarning[];
+  /** Called with every file a region's compile read. */
+  onDependency?: (file: string) => void;
+}
+
+/**
+ * The parser's `mxRegionCompile` hook for `filePath`: the compile of the
+ * region file kind its suffix names, with `targets` and `warnings` bound.
+ * Undefined when `filePath` is not a region file in `targets`.
+ *
+ * Typed against core's structural mirror of the parser's region contract;
+ * a caller hands it to `parse`/`print` with the parser's own type (core
+ * keeps hoisted AST nodes opaque to avoid a dependency cycle).
+ */
+export function regionCompileFor(
+  filePath: string,
+  options: RegionCompileOptions = {},
+): ((input: HostRegionInput) => HostRegionResult) | undefined {
+  const targets = options.targets ?? builtinLookup();
+  const kind = regionFileKind(filePath, targets);
+  return kind && regionKindCompile(kind, { ...options, targets });
+}
+
+/**
+ * {@link regionCompileFor} for a kind already in hand: the parser hook that
+ * lowers every region with `kind`'s `compileRegion`, `targets` (default the
+ * built-in lookup) and `warnings` bound. Throws for a kind with no region
+ * entry, which no region file kind is.
+ */
+export function regionKindCompile(
+  kind: Pick<HostFileKind, "segment" | "compileRegion">,
+  options: RegionCompileOptions = {},
+): (input: HostRegionInput) => HostRegionResult {
+  const { compileRegion } = kind;
+  if (!compileRegion)
+    throw new Error(
+      `@mxlang/target-registry: file kind ".${kind.segment}.mx" has no compileRegion`,
+    );
+  const targets = options.targets ?? builtinLookup();
+  return (input) => {
+    const result = compileRegion(input.source, {
+      ...input,
+      ...(options.warnings === undefined ? {} : { warnings: options.warnings }),
+      targets,
+    });
+    if (options.onDependency)
+      for (const dependency of result.dependencies ?? [])
+        options.onDependency(dependency);
+    return result;
+  };
+}
 
 /**
  * Installs every built-in file kind's callee reader into *this* core copy,
