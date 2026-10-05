@@ -16,7 +16,7 @@ site and the code disagreed, **the code won** and the docs claim is recorded in
 [§16 Docs to fix](#16-docs-to-fix) rather than repeated here.
 
 **This file lives in the repo at `apps/docs/docs/specification.md` and is served
-on the docs site at [`/specification/`](https://mxlang.dev/specification/).** The
+on the docs site at [`/specification/`](https://mx.saulo.tech/specification/).** The
 process rule that keeps it current is in the repo's `AGENTS.md` under "Language
 spec": a PR that changes syntax or semantics updates this file in the same
 change, citing the decision number; a decision entry that changes the language
@@ -1713,7 +1713,7 @@ the first occurrence). Decision 108 restores Marko-compatible bare renderables
 for untyped body-only tags while retaining MX arrays for fallback repeats. MX
 also passes every authored attribute, while Marko may tree-shake attributes the
 callee never reads. The user-facing side-by-side table and migration guidance
-are in [`/language/attr-tag/`](https://mxlang.dev/language/attr-tag/).
+are in [`/language/attr-tag/`](https://mx.saulo.tech/language/attr-tag/).
 
 A **custom tag** with its own declared `attributeTags` schema restricts
 repeats: unless a name's declaration sets `repeatable: true`, a second
@@ -1748,7 +1748,7 @@ registration (§13.1).
 Custom tags are **discovered, not configured**, and a template tag is a
 **compilation unit**, not an inlined fragment. Decision 95 settled the model;
 decisions 97 and 98 shipped it. The full feature spec is
-[`/design-notes/custom-tags/`](https://mxlang.dev/design-notes/custom-tags/); this section is the language-level contract.
+[`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/); this section is the language-level contract.
 
 ### 9.1 Layers
 
@@ -3200,7 +3200,7 @@ custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 - `notes/decisions-2026-09-10.md` — decisions 1–99
 - `worktrees/main/divergences.md` — the subset rule, deferred-to-MX-2 table
 - `worktrees/main/AGENTS.md` — per-package and per-host contracts
-- [`/design-notes/custom-tags/`](https://mxlang.dev/design-notes/custom-tags/) — the custom-tags feature spec
+- [`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/) — the custom-tags feature spec
 - `notes/solidmx-spec.md` — SolidMX (note §5.1's `<if=cond|u|>` is wrong; see §5.2)
 - `packages/core/src/{lower,core,custom-tags,builtin-tags,template-tag,scan,ir}.ts`
 - `packages/hosts/*/README.md` and their emitters
