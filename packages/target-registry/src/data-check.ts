@@ -22,6 +22,7 @@ import {
   clearScanCache,
   isTranslateError,
   type TargetPolicyDiagnostic,
+  WILDCARD_NEAR_EXPLICIT,
 } from "@mxlang/core";
 import { type ParseDataOptions, parseData } from "@mxlang/data";
 import { resolveTargetPolicyDetailed, scanCached } from "./index.ts";
@@ -395,7 +396,9 @@ export function checkDataPackage(dir: string): DataCheckResult {
         file: d.file ?? file,
         line: d.line,
         column: d.column,
-        severity: d.severity,
+        // The tooling check is strict: a child the author very likely meant as
+        // an explicit one (decision 147's guard) fails it rather than warns.
+        severity: d.code === WILDCARD_NEAR_EXPLICIT ? "error" : d.severity,
         message: d.message,
         origin: "data",
         // `-1` is "another file's text": the coordinates are the only answer.

@@ -869,3 +869,36 @@ describe("mx-tsc on a data package", () => {
     });
   });
 });
+
+describe("mx-tsc on a data package: wildcard children (decision 147)", () => {
+  const withContracts = (contracts: string, doc: string) => {
+    const dir = emptyPackage({ mx: DATA });
+    writeFileSync(join(dir, "contracts.ts"), contracts);
+    writeFileSync(join(dir, "doc.mx"), doc);
+    return dir;
+  };
+  const wildcard = (explicit: string) => `export default {
+  attribute: { attributes: { value: {} } },
+  resource: {
+    children: { ${explicit}"*": [{ pattern: "[a-z]+", contract: "attribute" }] },
+  },
+};\n`;
+
+  it("a claimed child passes, and unknownTags: reject counts it as known", () => {
+    const dir = withContracts(
+      wildcard(""),
+      '<resource>\n  <title value="a"/>\n</resource>\n',
+    );
+    expect(check(dir)).toEqual({ status: 0, output: "" });
+  });
+
+  it("the near-explicit guard warning is promoted to an error here", () => {
+    const dir = withContracts(
+      wildcard("attribute: {}, "),
+      '<resource>\n  <attribut value="a"/>\n</resource>\n',
+    );
+    const { status, output } = check(dir);
+    expect(status).toBe(1);
+    expect(output).toContain("doc.mx(2,3): error TS80001:");
+  });
+});
