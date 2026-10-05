@@ -944,7 +944,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
         // the markup string — not a place any binding could land. Refused
         // rather than dropped.
         fail(
-          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; import { createOut } from "@mxlang/html"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
+          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; import { createOut } from "@mxlang/astro"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
           node,
         );
       }

@@ -158,15 +158,16 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   no statement position left anywhere — the fence has already finished, and
   the template is markup, not statements — to bind a value into. Calling the
   same tag *without* `/var` already works today: `server.ts`'s
-  `renderToStaticMarkup` unwraps its `{ value, output }` pair itself, deep in
-  Astro's own render pass, long after the fence ran. This is not the same gap
+  `renderToStaticMarkup` calls the unit's default export, which returns the
+  markup (the `<return>` value lives only in `render`), deep in Astro's own
+  render pass, long after the fence ran. This is not the same gap
   as the JSX-host/Solid `/var`-in-callback-scope restriction (spec's `/var`
   section, MX 2 `tag-var-in-callback-scope`) — that one is liftable by giving
   a callback scope a statement position; `.astro.mx` has no callback scope to give
   one to. The error message explains the ordering and points at the
   workaround: call the unit directly from the fence's own TypeScript, an
-  ordinary function call since a `.mx` unit compiled for this host still
-  exports the plain `{ value, output }` shape.
+  ordinary function call: `X.render(input, createOut())` returns the value, and
+  `createOut` is re-exported from `@mxlang/astro`.
 
 The lowering table and the full error list live in
 `packages/hosts/astro/README.md` "AstroMX templates (`.astro.mx`)". Nothing silently

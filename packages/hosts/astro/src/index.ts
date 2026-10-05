@@ -23,6 +23,11 @@ import type {
   CustomTag,
 } from "@mxlang/core";
 import mx from "@mxlang/vite-plugin";
+
+export type { Out } from "@mxlang/html/runtime";
+export { createOut } from "@mxlang/html/runtime";
+
+import { mxHtmlResolve } from "./html-resolve.ts";
 import { assertNoAstroMxPages } from "./pages-guard.ts";
 import { mxPages } from "./vite-pages.ts";
 import { mxTemplates } from "./vite-templates.ts";
@@ -186,6 +191,9 @@ export default function mxAstro(
               // extension itself, so the order is documentation rather than a
               // tie-break.
               mxTemplates(options.customTags),
+              // Compiled modules import `@mxlang/html`; resolve it from this
+              // package's own dependency, not the user's tree.
+              mxHtmlResolve(),
               mx({
                 extensions,
                 strict: true,

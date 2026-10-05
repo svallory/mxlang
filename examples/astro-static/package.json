@@ -12,8 +12,7 @@
     "e2e": "vitest run --config e2e/vitest.config.ts"
   },
   "dependencies": {
-    "@mxlang/astro": "workspace:*",
-    "@mxlang/html": "workspace:*"
+    "@mxlang/astro": "workspace:*"
   },
   "devDependencies": {
     "@astrojs/language-server": "2.16.16",

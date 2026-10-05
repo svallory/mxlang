@@ -89,7 +89,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@mxlang/astro": "workspace:*",
-        "@mxlang/html": "workspace:*",
       },
       "devDependencies": {
         "@astrojs/language-server": "2.16.16",
