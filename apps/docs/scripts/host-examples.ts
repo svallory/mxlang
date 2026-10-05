@@ -21,10 +21,10 @@ import { compileNgMx } from "@mxlang/angular";
 import { lowerAstroMx } from "@mxlang/astro/template";
 import type { MxWarning } from "@mxlang/core";
 import { compileHonoRegion } from "@mxlang/hono";
-import { print } from "@mxlang/tsx-bridge";
 import { compilePreactRegion } from "@mxlang/preact";
 import { compileReactRegion } from "@mxlang/react";
 import { compileSolidMx } from "@mxlang/solid";
+import { print } from "@mxlang/tsx-bridge";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const docsRoot = join(here, "..");

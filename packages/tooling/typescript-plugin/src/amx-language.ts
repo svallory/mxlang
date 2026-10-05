@@ -5,13 +5,13 @@ import {
   type MxWarning,
   reportScanDiagnostics,
 } from "@mxlang/core";
-import type { RawSourceMap } from "@mxlang/tsx-bridge";
 import {
   builtinLookup,
   defaultTagFor,
   resolveTargetPolicy,
   scanCached,
 } from "@mxlang/target-registry";
+import type { RawSourceMap } from "@mxlang/tsx-bridge";
 import type {
   CodeInformation,
   CodeMapping,

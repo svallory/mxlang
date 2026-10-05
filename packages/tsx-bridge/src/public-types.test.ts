@@ -1,3 +1,8 @@
+import type {
+  MxRegionCompile as RealMxRegionCompile,
+  MxRegionCompileInput as RealMxRegionCompileInput,
+  MxRegionCompileResult as RealMxRegionCompileResult,
+} from "@mxlang/babel";
 import type { CustomTag } from "@mxlang/core";
 import type {
   MxParseOptions as PublicMxParseOptions,
@@ -15,11 +20,6 @@ import type {
   HoistedDefine as RealHoistedDefine,
   HoistedImport as RealHoistedImport,
 } from "./mx/hoist-imports.ts";
-import type {
-  MxRegionCompile as RealMxRegionCompile,
-  MxRegionCompileInput as RealMxRegionCompileInput,
-  MxRegionCompileResult as RealMxRegionCompileResult,
-} from "@mxlang/babel";
 import type {
   MxRegionContext as RealMxRegionContext,
   MxRegionPositionCheck as RealMxRegionPositionCheck,

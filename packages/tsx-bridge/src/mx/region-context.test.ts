@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { ParserPlugin as PluginConfig } from "@mxlang/babel";
+import { describe, expect, it } from "vitest";
 import {
   computeMxRegionContext,
   type MxRegionContext,

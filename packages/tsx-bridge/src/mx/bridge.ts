@@ -1,17 +1,17 @@
-import { parseExpression } from "@mxlang/babel";
-import { Position, tokenContextTypes as tc } from "@mxlang/babel/internal";
-import { MxErrors } from "./errors.ts";
 import type {
   HoistedDefine,
   HoistedImport,
   MxHooks,
   MxParserHost,
   MxRegionCompile,
+  MxRegionContext,
+  MxRegionPositionCheck,
 } from "@mxlang/babel";
-import type { MxRegionContext, MxRegionPositionCheck } from "@mxlang/babel";
+import { parseExpression } from "@mxlang/babel";
+import { Position, tokenContextTypes as tc } from "@mxlang/babel/internal";
+import { MxErrors } from "./errors.ts";
 import { computeMxRegionContext } from "./region-context.ts";
 import { type MxElement, type MxRange, walkMxRegion } from "./walk.ts";
-
 
 function visibleImportSpecifiers(
   parser: MxParserHost,
@@ -854,6 +854,5 @@ function parseRegionCode(
  */
 export const mxHooks: MxHooks = {
   parseRegion: mxParseElementAt,
-  multipleRootsError: (position) =>
-    MxErrors.MultipleRoots(position, undefined),
+  multipleRootsError: (position) => MxErrors.MultipleRoots(position, undefined),
 };

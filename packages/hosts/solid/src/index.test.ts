@@ -1235,7 +1235,9 @@ describe("compileSolidUnit", () => {
             paths: {
               "@mxlang/solid": [join(HERE, "index.ts")],
               "@mxlang/core": [join(HERE, "../../../core/dist/index.d.ts")],
-              "@mxlang/tsx-bridge": [join(HERE, "../../../tsx-bridge/src/public.d.ts")],
+              "@mxlang/tsx-bridge": [
+                join(HERE, "../../../tsx-bridge/src/public.d.ts"),
+              ],
             },
           },
           include: ["*.tsx"],

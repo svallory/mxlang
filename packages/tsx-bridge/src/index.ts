@@ -1,15 +1,15 @@
 import { dirname, resolve } from "node:path";
 import type { File } from "@babel/types";
 import {
+  type ParserOptions,
+  parse as rawBabelParse,
+  parseExpression as rawBabelParseExpression,
+} from "@mxlang/babel";
+import {
   checkReservedBindings,
   dropOwnParserPosition,
   isMarkoOrMxSpecifier,
 } from "@mxlang/core";
-import {
-  parse as rawBabelParse,
-  parseExpression as rawBabelParseExpression,
-  type ParserOptions,
-} from "@mxlang/babel";
 import { mxHooks } from "./mx/bridge.ts";
 import {
   type AuthoredImport,

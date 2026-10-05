@@ -1,10 +1,7 @@
 import type { File } from "@babel/types";
+import type { MxRegionCompile, MxRegionCompileInput } from "@mxlang/babel";
 import { describe, expect, it } from "vitest";
 import { parse, print } from "../index.ts";
-import type {
-  MxRegionCompile,
-  MxRegionCompileInput,
-} from "@mxlang/babel";
 import { solidRegionCompile } from "./test-helpers.ts";
 
 /**

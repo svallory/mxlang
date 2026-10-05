@@ -20,7 +20,6 @@ import {
   type TargetPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import { type PrintOptions, print } from "@mxlang/tsx-bridge";
 import {
   type BuiltinFileKind,
   builtinFileKinds,
@@ -33,6 +32,7 @@ import {
   regionFileKinds,
   scanCached,
 } from "@mxlang/target-registry";
+import { type PrintOptions, print } from "@mxlang/tsx-bridge";
 import {
   type Diagnostic,
   DiagnosticSeverity,

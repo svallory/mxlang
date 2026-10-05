@@ -1,7 +1,7 @@
+import type { MxRegionCompile } from "@mxlang/babel";
 import { compileSolidMx } from "@mxlang/solid";
 import type { MxParseOptions } from "../index.ts";
 import { parse } from "../index.ts";
-import type { MxRegionCompile } from "@mxlang/babel";
 
 /**
  * Adapts `compileSolidMx`'s own `(source, options)` signature to the

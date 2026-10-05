@@ -23,8 +23,8 @@ import {
   type TargetDescriptor,
   type TemplateBackedTag,
 } from "@mxlang/core";
-import { print } from "@mxlang/tsx-bridge";
 import { builtinLookup } from "@mxlang/target-registry";
+import { print } from "@mxlang/tsx-bridge";
 import ts from "typescript";
 import {
   afterAll,

@@ -1,8 +1,8 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { compileSolidMx } from "@mxlang/solid";
 import type { MxRegionCompile } from "@mxlang/tsx-bridge";
 import { parse } from "@mxlang/tsx-bridge";
-import { compileSolidMx } from "@mxlang/solid";
 import { compare } from "./compare";
 import { discoverFixtures } from "./fixtures";
 import { runAngularTable } from "./report-angular";

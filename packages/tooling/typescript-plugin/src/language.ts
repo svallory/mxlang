@@ -16,8 +16,6 @@ import {
   type TargetPolicyDiagnostic,
   withCalleeInputSources,
 } from "@mxlang/core";
-import type { MxRegionCompile, RawSourceMap } from "@mxlang/tsx-bridge";
-import { print } from "@mxlang/tsx-bridge";
 import {
   builtinFileKinds,
   builtinLookup,
@@ -26,6 +24,8 @@ import {
   resolveTargetPolicy,
   scanCached,
 } from "@mxlang/target-registry";
+import type { MxRegionCompile, RawSourceMap } from "@mxlang/tsx-bridge";
+import { print } from "@mxlang/tsx-bridge";
 import type {
   CodeInformation,
   CodeMapping,

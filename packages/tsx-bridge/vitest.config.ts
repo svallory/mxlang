@@ -6,9 +6,6 @@ import { defineConfig } from "vitest/config";
 // Node it would pass against the very bug it exists to catch.
 export default defineConfig({
   test: {
-    exclude: [
-      "**/node_modules/**",
-      "src/mx/region-compile.bun.test.ts",
-    ],
+    exclude: ["**/node_modules/**", "src/mx/region-compile.bun.test.ts"],
   },
 });

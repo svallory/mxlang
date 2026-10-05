@@ -1,6 +1,6 @@
 import type { File } from "@babel/types";
-import { isFunctionLikeValue } from "@mxlang/core";
 import { parse as babelParse } from "@mxlang/babel";
+import { isFunctionLikeValue } from "@mxlang/core";
 
 /**
  * Solid JSX built-ins that resolve with no import of their own inside a

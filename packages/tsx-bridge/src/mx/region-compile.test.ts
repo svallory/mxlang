@@ -1,10 +1,7 @@
 import type { File } from "@babel/types";
+import type { MxRegionCompile, MxRegionCompileInput } from "@mxlang/babel";
 import { describe, expect, it } from "vitest";
 import { parse } from "../index.ts";
-import type {
-  MxRegionCompile,
-  MxRegionCompileInput,
-} from "@mxlang/babel";
 
 /** The spliced region node of `const view = <…>;`, the shape these assert on. */
 function regionNode(file: File): {
