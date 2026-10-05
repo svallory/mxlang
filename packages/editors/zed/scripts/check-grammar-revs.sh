@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Checks every `file://` grammar in extension.toml against this repo:
-#   1. `rev` is a commit this repo has (Zed fetches exactly that sha);
+#   1. `rev` is a commit this repo has and an ancestor of HEAD (Zed fetches
+#      exactly that sha; a commit left behind by a rebase would vanish from
+#      the merged history);
 #   2. `<path>/src/parser.c` exists at `rev` (Zed's depth-1 clone compiles
 #      only what is there);
 #   3. `<path>/src` at `rev` is the same tree as at HEAD, so Zed compiles the
@@ -27,6 +29,11 @@ status=0
 while IFS=$'\t' read -r name rev path; do
   if ! git cat-file -e "$rev^{commit}" 2>/dev/null; then
     echo "check-grammar-revs: [grammars.$name] rev $rev is not a commit in this repository" >&2
+    status=1
+    continue
+  fi
+  if ! git merge-base --is-ancestor "$rev" HEAD; then
+    echo "check-grammar-revs: [grammars.$name] rev $rev is not an ancestor of HEAD (rebased away?); move rev to $(git log -1 --format=%H HEAD -- "$path/src")" >&2
     status=1
     continue
   fi
