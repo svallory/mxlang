@@ -1,3 +1,4 @@
+import type { CustomTag } from "@mxlang/core";
 import type { Plugin } from "./plugin-utils.ts";
 
 // A second optional argument can be given to further configure
@@ -106,10 +107,10 @@ export interface Options {
    * MX FORK: custom tag definitions the MX bridge hands to `compileSolidMx`
    * when lowering each MX region. Carried on the parser options because the
    * bridge runs inside the tokenizer and has no other channel to the caller.
-   * Opaque here — the parser never inspects it.
+   * The parser never inspects it; typed as core's `CustomTag` (type-only
+   * import, no runtime edge).
    */
-  // biome-ignore lint/suspicious/noExplicitAny: `@mxlang/core`'s CustomTag would be a cycle
-  mxCustomTags?: Record<string, any>;
+  mxCustomTags?: Record<string, CustomTag>;
   /**
    * MX FORK: `package.json#mx.<target>.defaultTag`, handed to the host that
    * lowers each MX region (decision 145). Opaque here.

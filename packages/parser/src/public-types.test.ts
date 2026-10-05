@@ -1,5 +1,6 @@
 import type { CustomTag } from "@mxlang/core";
 import type {
+  MxParseOptions as PublicMxParseOptions,
   MxRegionCompile as PublicMxRegionCompile,
   MxRegionCompileInput as PublicMxRegionCompileInput,
   MxRegionCompileResult as PublicMxRegionCompileResult,
@@ -48,6 +49,13 @@ it("types customTags as core's CustomTag, so a wrong shape is rejected", () => {
   type Tags = NonNullable<PublicPrintOptions["customTags"]>;
   expectTypeOf<Tags>().toEqualTypeOf<Record<string, CustomTag>>();
   expectTypeOf<Tags>().not.toBeAny();
+  type InputTags = NonNullable<PublicMxRegionCompileInput["customTags"]>;
+  expectTypeOf<InputTags>().toEqualTypeOf<Record<string, CustomTag>>();
+  expectTypeOf<InputTags>().not.toBeAny();
+  type ParseTags = NonNullable<PublicMxParseOptions["mxCustomTags"]>;
+  expectTypeOf<ParseTags>().toEqualTypeOf<Record<string, CustomTag>>();
+  expectTypeOf<ParseTags>().not.toBeAny();
+  expectTypeOf<{ box: { attributes: 1 } }>().not.toMatchTypeOf<ParseTags>();
   expectTypeOf<{ box: { attributes: 1 } }>().not.toMatchTypeOf<Tags>();
   expectTypeOf<{ box: { transform: string } }>().not.toMatchTypeOf<Tags>();
   expectTypeOf<{

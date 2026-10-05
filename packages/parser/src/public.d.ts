@@ -8,7 +8,9 @@
  */
 declare module "@mxlang/parser" {
   import type { Expression, File } from "@babel/types";
-  // Type-only, so no runtime cycle: `@mxlang/core` does not depend on the parser.
+  // Type-only. `@mxlang/core` has no runtime dependency on the parser and
+  // nothing in core's emitted declarations references it (the only core -> parser
+  // edge is a type-only test fixture, excluded from core's build).
   import type { CustomTag } from "@mxlang/core";
 
   // Declared inline rather than re-exported through a relative import: a
@@ -143,7 +145,7 @@ declare module "@mxlang/parser" {
      * would otherwise be accepted and silently never read — the exact failure
      * the P1 review hit when the option was first added.
      */
-    mxCustomTags?: Record<string, unknown>;
+    mxCustomTags?: Record<string, CustomTag>;
     /** `package.json#mx.<target>.defaultTag`, forwarded to the host that lowers each region. */
     mxDefaultTag?: string;
     /**

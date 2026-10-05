@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Types (public-dts-customtags-any):** `PrintOptions.customTags`, `MxRegionCompileInput.customTags` and `MxParseOptions.mxCustomTags` are now `Record<string, CustomTag>` (type-only `@mxlang/core` import; no runtime or declaration cycle). They were `any`/`unknown`, so a loose tag definition that used to typecheck can now fail to build.
+
 - **Fix (astro-fence-top-level-return):** `sourceBindings` and `unknownSourceBindings` take an optional `allowReturnOutsideFunction` for source a host compiles *inside a function body*, where a top-level `return` is legal — Astro's `---` frontmatter is the case. Default is off, so every other caller (`.solid.mx`, `.ng.mx`, `appendSolidBuiltinImport`) keeps rejecting a stray `return` in real module scope. New export: `SourceBindingsOptions`. `sourceBindings` still reports a parse failure rather than swallowing it.
 
 - **Added (default-tag-ladder, decision 145):** `print`/`parse` accept `defaultTag` (`mxDefaultTag`), forwarded to the host that lowers each MX region as `MxRegionCompileInput.defaultTag`.
