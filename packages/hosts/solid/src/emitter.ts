@@ -695,10 +695,13 @@ function escapeText(value: string): string {
 function textExpression(value: string): MappedCode {
   if (escapeUse) escapeUse.used = true;
   const literal = JSON.stringify(decodeHTML(value));
+  // Both locals are fresh to this arrow's own scope and never read an
+  // authored name, so the reserved `__mx` prefix needs no serial here
+  // (unlike `escapedBlockValue`'s, which spans a define body).
   return concatMapped(
-    "{() => { const $mxText = ",
+    "{() => { const __mxText = ",
     literal,
-    `; const $mxEscaped = ${MX_ESCAPE_BINDING}($mxText); return $mxEscaped === undefined ? $mxText : $mxEscaped; }}`,
+    `; const __mxEscaped = ${MX_ESCAPE_BINDING}(__mxText); return __mxEscaped === undefined ? __mxText : __mxEscaped; }}`,
   );
 }
 
