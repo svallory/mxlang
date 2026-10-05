@@ -160,9 +160,7 @@ describe("every built-in descriptor's own default is a plain tag", () => {
       expect(
         diagnostics.filter((d) => d.code === "invalid-default-tag"),
       ).toEqual([]);
-      expect(effectiveDefaultTag({ target: descriptor.name }, descriptor)).toBe(
-        descriptor.defaultTag,
-      );
+      expect(effectiveDefaultTag({}, descriptor)).toBe(descriptor.defaultTag);
     },
   );
 });
@@ -179,29 +177,22 @@ describe("the ladder's lower rungs: config, then host override, then target buil
     target({ host: { name: "h", ...(defaultTag ? { defaultTag } : {}) } });
 
   it("the target's built-in answers when nothing else does", () => {
-    expect(effectiveDefaultTag({ target: "t" }, target())).toBe("div");
-    expect(effectiveDefaultTag({ target: "t" }, hosted())).toBe("div");
+    expect(effectiveDefaultTag({}, target())).toBe("div");
+    expect(effectiveDefaultTag({}, hosted())).toBe("div");
   });
 
   it("a host override beats the target's built-in", () => {
-    expect(effectiveDefaultTag({ target: "t" }, hosted("section"))).toBe(
-      "section",
-    );
+    expect(effectiveDefaultTag({}, hosted("section"))).toBe("section");
   });
 
   it("the user's config beats the host override", () => {
-    expect(
-      effectiveDefaultTag(
-        { target: "t", defaultTag: "main" },
-        hosted("section"),
-      ),
-    ).toBe("main");
+    expect(effectiveDefaultTag({ defaultTag: "main" }, hosted("section"))).toBe(
+      "main",
+    );
   });
 
   it("the user's config beats the built-in", () => {
-    expect(
-      effectiveDefaultTag({ target: "t", defaultTag: "main" }, target()),
-    ).toBe("main");
+    expect(effectiveDefaultTag({ defaultTag: "main" }, target())).toBe("main");
   });
 });
 

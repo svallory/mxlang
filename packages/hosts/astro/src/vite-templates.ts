@@ -47,6 +47,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import {
   type CustomTag,
+  readTargetDefaultTag,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
@@ -173,6 +174,10 @@ export function mxTemplates(
    */
   const reportedScanDiagnostics = new Set<string>();
 
+  const defaultTagOf = (file: string): { defaultTag?: string } => {
+    const { value } = readTargetDefaultTag(file, "astro-html");
+    return value === undefined ? {} : { defaultTag: value };
+  };
   const tagsFor = (file: string): Record<string, CustomTag> | undefined => {
     const scan = scanCached(file, { host: "astro", targets });
     reportScanDiagnostics(
@@ -252,6 +257,11 @@ export function mxTemplates(
       try {
         return lowerAstroMx(source, real, {
           customTags: tagsFor(real),
+          // This plugin cannot reach the registry (it depends on this
+          // package), so it reads the package's own key and leaves the
+          // target's built-in as the fallback. The value is checked by the
+          // registry's policy diagnostics wherever those are reported.
+          ...defaultTagOf(real),
           targets,
         }).code;
       } catch (error) {

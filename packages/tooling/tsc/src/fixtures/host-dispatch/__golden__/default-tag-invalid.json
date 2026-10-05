@@ -1,0 +1,131 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "<root>/default-tag-invalid/package.json:5:21: invalid `defaultTag` value: `<input>` is a void tag, not a plain tag",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            },
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file://<root>/default-tag-invalid/package.json",
+                  "range": {
+                    "start": {
+                      "line": 4,
+                      "character": 20
+                    },
+                    "end": {
+                      "line": 4,
+                      "character": 27
+                    }
+                  }
+                },
+                "message": "invalid `defaultTag` value: `<input>` is a void tag, not a plain tag"
+              }
+            ]
+          }
+        ],
+        "related": [
+          {
+            "uri": "file://<root>/default-tag-invalid/package.json",
+            "diagnostics": [
+              {
+                "severity": 1,
+                "source": "mxlang",
+                "message": "invalid `defaultTag` value: `<input>` is a void tag, not a plain tag",
+                "range": {
+                  "start": {
+                    "line": 4,
+                    "character": 20
+                  },
+                  "end": {
+                    "line": 4,
+                    "character": 27
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += \"<div id=\\\"main\\\">hello</div>\";\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              54
+            ],
+            "lengths": [
+              25
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/default-tag-invalid/page.mx",
+            "offset": 0,
+            "category": "error",
+            "message": "target not loaded: see <root>/default-tag-invalid/package.json(5,21)"
+          }
+        ],
+        "hostPolicyDiagnostics": [
+          {
+            "code": "invalid-default-tag",
+            "severity": "error",
+            "file": "<root>/default-tag-invalid/package.json",
+            "message": "invalid `defaultTag` value: `<input>` is a void tag, not a plain tag",
+            "line": 5,
+            "column": 20,
+            "length": 7
+          }
+        ],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "Error",
+          "message": "<root>/default-tag-invalid/package.json:5:21: invalid `defaultTag` value: `<input>` is a void tag, not a plain tag",
+          "id": "<root>/default-tag-invalid/package.json",
+          "loc": {
+            "file": "<root>/default-tag-invalid/package.json",
+            "line": 5,
+            "column": 20
+          },
+          "frame": "5 |       \"defaultTag\": \"input\"\n                        ^"
+        },
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/default-tag-invalid/page.mx(1,1): error TS80001: target not loaded: see <root>/default-tag-invalid/package.json(5,21)",
+    "<root>/default-tag-invalid/package.json(5,21): error TS80003: invalid `defaultTag` value: `<input>` is a void tag, not a plain tag"
+  ]
+}

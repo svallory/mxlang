@@ -21,6 +21,7 @@ import {
   hostModuleSegment,
   isTranslateError,
   type MxWarning,
+  readTargetDefaultTag,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
@@ -275,6 +276,8 @@ function customTagsFor(
   targets: TargetLookup,
 ): {
   customTags: ReturnType<typeof scanCached>["customTags"];
+  /** `mx.angular-template.defaultTag`; the target's built-in answers when absent. */
+  defaultTag?: string;
   scanWarnings: PositionedMessage[];
 } {
   const scan = scanCached(mxPath, { host: "angular", targets });
@@ -287,7 +290,15 @@ function customTagsFor(
       message: d.message,
     }),
   );
-  return { customTags: scan.customTags, scanWarnings };
+  const { value: defaultTag } = readTargetDefaultTag(
+    mxPath,
+    "angular-template",
+  );
+  return {
+    customTags: scan.customTags,
+    ...(defaultTag === undefined ? {} : { defaultTag }),
+    scanWarnings,
+  };
 }
 
 export interface CompileOneResult {
@@ -337,9 +348,13 @@ function compileTagFile(
   const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
 
   try {
-    const { customTags, scanWarnings } = customTagsFor(mxPath, targets);
+    const { customTags, defaultTag, scanWarnings } = customTagsFor(
+      mxPath,
+      targets,
+    );
     const result = compileTagModuleFile(mxPath, {
       customTags,
+      defaultTag,
       tagSelectorPrefix: config.tagSelectorPrefix,
       targets,
     });
@@ -452,10 +467,14 @@ function compileNgMxFile(
   const header = buildHeader(sourceBasename, sourceBasename, [], "ts");
 
   try {
-    const { customTags, scanWarnings } = customTagsFor(mxPath, targets);
+    const { customTags, defaultTag, scanWarnings } = customTagsFor(
+      mxPath,
+      targets,
+    );
     const result = compileNgMx(readFileSync(mxPath, "utf8"), mxPath, {
       targets,
       customTags,
+      defaultTag,
       tagSelectorPrefix: config.tagSelectorPrefix,
     });
     const content = `${header + result.code}\n//# sourceMappingURL=${basename(mapPath)}\n`;
@@ -592,9 +611,13 @@ export function compileOne(
   const outputs = [outputPath, mapPath];
 
   try {
-    const { customTags, scanWarnings } = customTagsFor(mxPath, targets);
+    const { customTags, defaultTag, scanWarnings } = customTagsFor(
+      mxPath,
+      targets,
+    );
     const result = compileFile(mxPath, {
       customTags,
+      defaultTag,
       tagSelectorPrefix: config.tagSelectorPrefix,
       targets,
     });

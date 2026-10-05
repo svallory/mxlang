@@ -164,6 +164,56 @@ describe("mx-tsc on a data package", () => {
     expect(output).toContain('mx.data.unknownTags must be "allow" or "reject"');
   });
 
+  describe("mx.data.defaultTag (decision 145)", () => {
+    const manifest = (value: unknown) =>
+      `{\n  "mx": {\n    "target": "data",\n    "contracts": "./contracts.ts",\n    "data": { "defaultTag": ${JSON.stringify(value)} }\n  }\n}\n`;
+
+    it("a shorthand with no config is the built-in `object`, known under reject", () => {
+      const dir = copyOfFixture();
+      writeFileSync(join(dir, "shorthand.mx"), "<#a.b/>\n");
+      expect(check(dir)).toEqual({ status: 0, output: "" });
+    });
+
+    it("an unreachable value is a positioned TS80003 error at the package.json value", () => {
+      const dir = copyOfFixture();
+      writeFileSync(join(dir, "shorthand.mx"), "<#a/>\n");
+      writeFileSync(join(dir, "package.json"), manifest("nope"));
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("package.json(5,29): error TS80003:");
+      expect(output).toContain(
+        "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package",
+      );
+    });
+
+    it("is a known mx.data key: no unknown-key warning beside the real error", () => {
+      const dir = copyOfFixture(["clean.mx"]);
+      writeFileSync(join(dir, "package.json"), manifest("nope"));
+      expect(check(dir).output).not.toContain("unknown mx.data key");
+      writeFileSync(join(dir, "package.json"), manifest("port"));
+      expect(check(dir)).toEqual({ status: 0, output: "" });
+    });
+
+    it("is reported even when no file uses the shorthand", () => {
+      const dir = copyOfFixture(["clean.mx"]);
+      writeFileSync(join(dir, "package.json"), manifest("nope"));
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("invalid `defaultTag` value");
+    });
+
+    it("a declared contract tag becomes the shorthand's tag, with its contract applied", () => {
+      const dir = copyOfFixture();
+      writeFileSync(join(dir, "package.json"), manifest("port"));
+      // `port` declares parents: ["service"], so at the root the shorthand
+      // is a parent-contract error naming `port`.
+      writeFileSync(join(dir, "shorthand.mx"), '<#a value="x"/>\n');
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("`<port>`");
+    });
+  });
+
   it("includes tags/ sidecars in the tag map", () => {
     const dir = emptyPackage({ mx: { target: "data" } });
     mkdirSync(join(dir, "tags"));

@@ -1,0 +1,8 @@
+{
+  "mx": {
+    "target": "data",
+    "data": {
+      "defaultTag": "nope"
+    }
+  }
+}

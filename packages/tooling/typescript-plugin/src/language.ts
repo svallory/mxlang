@@ -17,7 +17,11 @@ import {
 } from "@mxlang/core";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/parser";
 import { print, SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/parser";
-import { builtinLookup, scanCached } from "@mxlang/target-registry";
+import {
+  builtinLookup,
+  defaultTagFor,
+  scanCached,
+} from "@mxlang/target-registry";
 import type {
   CodeInformation,
   CodeMapping,
@@ -178,6 +182,7 @@ export function createSolidMxLanguagePlugin(
           () => {
             const warnings: MxWarning[] = [];
             const printed = print(source, fileName, {
+              defaultTag: defaultTagFor(fileName),
               mxRegionCompile: (input) =>
                 solidRegionCompile({ ...input, warnings }),
               ...(Object.keys(discovered).length > 0
@@ -404,6 +409,7 @@ export function createNgMxLanguagePlugin(
         );
         const result = compileNgMx(source, fileName, {
           customTags: scan.customTags,
+          defaultTag: defaultTagFor(fileName),
           tagSelectorPrefix,
           targets: builtinLookup(),
         });

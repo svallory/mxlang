@@ -153,7 +153,7 @@ function dataOptions(manifest: Manifest, report: Report): DataOptions {
   ) {
     fail(
       undefined,
-      'mx.data must be an object: { "structural"?: "pass" | "reject", "unknownTags"?: "allow" | "reject" }',
+      'mx.data must be an object: { "structural"?: "pass" | "reject", "unknownTags"?: "allow" | "reject", "defaultTag"?: string }',
     );
     return options;
   }
@@ -178,12 +178,14 @@ function dataOptions(manifest: Manifest, report: Report): DataOptions {
     }
   }
   for (const key of Object.keys(given)) {
-    if (key === "structural" || key === "unknownTags") continue;
+    // `defaultTag` is read and checked with the policy (decision 145).
+    if (key === "structural" || key === "unknownTags" || key === "defaultTag")
+      continue;
     report({
       file: manifest.file,
       ...locateData(manifest, key),
       severity: "warning",
-      message: `unknown mx.data key ${JSON.stringify(key)}; known keys: structural, unknownTags`,
+      message: `unknown mx.data key ${JSON.stringify(key)}; known keys: structural, unknownTags, defaultTag`,
       origin: "manifest",
     });
   }
@@ -202,6 +204,8 @@ function policyText(diagnostic: TargetPolicyDiagnostic): string {
 interface Package {
   manifest: Manifest | undefined;
   options: DataOptions;
+  /** `mx.data.defaultTag`, after the registry's check (decision 145). */
+  defaultTag?: string;
 }
 
 function errorCode(error: unknown): string {
@@ -262,7 +266,13 @@ export function checkDataPackage(dir: string): DataCheckResult {
         lfCoordinates: true,
       });
     }
-    return { manifest, options: dataOptions(manifest, reportManifest) };
+    return {
+      manifest,
+      options: dataOptions(manifest, reportManifest),
+      ...(policy.defaultTag === undefined
+        ? {}
+        : { defaultTag: policy.defaultTag }),
+    };
   };
 
   const entry = enter(dir, true) ?? {
@@ -378,6 +388,7 @@ export function checkDataPackage(dir: string): DataCheckResult {
       customTags: scan.customTags,
       structural: pkg.options.structural,
       unknownTags: pkg.options.unknownTags,
+      ...(pkg.defaultTag === undefined ? {} : { defaultTag: pkg.defaultTag }),
     });
     for (const d of result.diagnostics) {
       reportFile({

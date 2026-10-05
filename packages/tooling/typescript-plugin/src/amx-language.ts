@@ -6,7 +6,11 @@ import {
   reportScanDiagnostics,
 } from "@mxlang/core";
 import type { RawSourceMap } from "@mxlang/parser";
-import { builtinLookup, scanCached } from "@mxlang/target-registry";
+import {
+  builtinLookup,
+  defaultTagFor,
+  scanCached,
+} from "@mxlang/target-registry";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
@@ -121,6 +125,7 @@ export function createAmxLanguagePlugin(
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
                 : undefined),
+              defaultTag: defaultTagFor(fileName),
               warnings,
               targets: builtinLookup(),
             });

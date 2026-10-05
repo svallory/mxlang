@@ -54,7 +54,8 @@ async function compileMarko(
     | ((specifier: string, importer: string) => string | undefined)
     | undefined,
 ): Promise<core.TargetCompileResult> {
-  const { lookupFor, resolveTargetPolicy } = await loadRegistry();
+  const { defaultTagFor, lookupFor, resolveTargetPolicy } =
+    await loadRegistry();
   const policy = resolveTargetPolicy(filename);
   // The project's lookup: a target loaded from a package specifier included.
   const lookup = lookupFor(policy);
@@ -72,6 +73,7 @@ async function compileMarko(
     // D1: build strictness is caller-owned, even for an always-strict target.
     strict,
     customTags,
+    defaultTag: defaultTagFor(filename),
     // D2: descriptors decide which compile leaves receive the Vite resolver.
     resolveImport,
     targets: lookup,
@@ -1102,6 +1104,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         const dependencies = new Set<string>();
         const { code: printed, map } = print(code, source, {
           customTags: await tagsFor(source, warn, policyError),
+          defaultTag: (await loadRegistry()).defaultTagFor(source),
           mxRegionCompile: await loadRegionCompile(dependencies),
         });
         recordDependencies(source, [...dependencies]);

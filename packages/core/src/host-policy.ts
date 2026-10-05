@@ -716,6 +716,7 @@ export function readTargetDefaultTag(
 export function resolveTargetPolicyDetailed(
   filePath: string,
   lookup: TargetLookup,
+  options: { quiet?: boolean } = {},
 ): TargetPolicyResolution {
   const diagnostics: TargetPolicyDiagnostic[] = [];
   const defaultPolicy = (): TargetPolicy => {
@@ -765,7 +766,7 @@ export function resolveTargetPolicyDetailed(
     resolved.policy.defaultTagAt = config.at;
   }
   if (config.diagnostic) diagnostics.push(config.diagnostic);
-  if (resolved.deprecatedValue !== undefined) {
+  if (resolved.deprecatedValue !== undefined && !options.quiet) {
     const target = lookup.hostTarget(resolved.deprecatedValue)?.target;
     console.warn(
       `Warning: The '${resolved.deprecatedValue}' mx.host alias is deprecated and will be removed in a future release. Use '${target}' instead.`,

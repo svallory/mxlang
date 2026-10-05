@@ -145,6 +145,13 @@ const ROWS = [
   // target without declarations), and a bare mx.host naming the loaded host.
   "third-party-ok-let",
   "third-party-host-name",
+  // Decision 145 (the unnamed tag): the package's `mx.<target>.defaultTag`
+  // reaches every tool's compile (`my-card` from `tags/`), an invalid value
+  // is one positioned error at the package.json value in each tool and the
+  // built-in answers meanwhile, and the data check reports an unreachable one.
+  "default-tag-html",
+  "default-tag-invalid",
+  "default-tag-data",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
@@ -490,7 +497,9 @@ describe("dispatch goldens", () => {
         // bad-package-json: the host-policy warning only (see its leg above).
         (block) => row !== "bad-package-json" || block.includes("TS80003"),
       ),
-      ...(row === "data-check" ? { mxTscDataCheck: dataCheckLeg(row) } : {}),
+      ...(row === "data-check" || row === "default-tag-data"
+        ? { mxTscDataCheck: dataCheckLeg(row) }
+        : {}),
     });
     await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(
       join(goldens, `${row}.json`),

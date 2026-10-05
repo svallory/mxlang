@@ -244,6 +244,11 @@ export interface ResolveTargetPolicyOptions {
    * the Bun loader still get (TODO `data-target-tooling-dispatch`).
    */
   dataWired?: boolean;
+  /**
+   * Print nothing for the deprecated `mx.host` alias. For a caller that asks
+   * about a file's policy again after another call already reported it.
+   */
+  quiet?: boolean;
 }
 
 /**
@@ -420,7 +425,10 @@ export function defaultTagFor(
   filePath: string,
   options: ResolveTargetPolicyOptions = {},
 ): string {
-  const { policy } = resolveTargetPolicyDetailed(filePath, options);
+  const { policy } = resolveTargetPolicyDetailed(filePath, {
+    ...options,
+    quiet: true,
+  });
   const lookup = lookupFor(policy);
   const config = configFor(filePath, policy);
   const descriptor = lookup.target(config.target) ?? descriptorFor(policy);
@@ -444,16 +452,20 @@ function resolveStaged(
   // A tool that checks data files itself asks for the unmasked answer: the
   // registry's staged error and fallback stay the default for every other tool.
   if (options.dataWired)
-    return coreResolveTargetPolicyDetailed(filePath, lookup);
+    return coreResolveTargetPolicyDetailed(filePath, lookup, options);
   // Decision 131 addendum: explicit data is not yet wired into tooling.
   // Mask selection and suggestions, not registration or package inference,
   // so core's generic unknown-target path positions it and hands on the
   // same fallback without advertising a target that tools cannot use.
-  const resolution = coreResolveTargetPolicyDetailed(filePath, {
-    ...lookup,
-    hasTarget: (name) => name !== "data" && lookup.hasTarget(name),
-    targetNames: () => lookup.targetNames().filter((name) => name !== "data"),
-  });
+  const resolution = coreResolveTargetPolicyDetailed(
+    filePath,
+    {
+      ...lookup,
+      hasTarget: (name) => name !== "data" && lookup.hasTarget(name),
+      targetNames: () => lookup.targetNames().filter((name) => name !== "data"),
+    },
+    options,
+  );
   for (const diagnostic of resolution.diagnostics) {
     if (diagnostic.code === "unknown-target" && diagnostic.value === "data") {
       diagnostic.message =

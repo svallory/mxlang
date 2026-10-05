@@ -1,0 +1,49 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [
+          "<root>/default-tag-html/tags/my-card.mx"
+        ],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport $mx_My_card1 from \"./tags/my-card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += $mx_My_card1({ id: \"main\", content: () => {\n    let __mxOut = \"\";\n    __mxOut += \"hello\";\n    return __mxOut;\n  } });\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              100
+            ],
+            "lengths": [
+              25
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "import { escape as __mxEscape } from \"@mxlang/html\";\n\nimport $mx_My_card1 from \"./tags/my-card.mx\"\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  let __mxOut = \"\";\n  __mxOut += $mx_My_card1({ id: \"main\", content: () => {\n    let __mxOut = \"\";\n    __mxOut += \"hello\";\n    return __mxOut;\n  } });\n  return __mxOut;\n}\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page;\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": []
+}

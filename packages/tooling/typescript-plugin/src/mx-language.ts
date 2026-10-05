@@ -24,6 +24,7 @@ import {
   builtinFileKinds,
   builtinLookup,
   builtinTargets,
+  defaultTagFor,
   getCustomTags,
   lookupFor,
   scanCached,
@@ -368,9 +369,11 @@ export function createMxLanguagePlugin(
     // be the whole registered set, not one target's own descriptor, or a
     // callee importing `AttrTag` from another registered target's package
     // would stop being recognised.
+    const defaultTag = defaultTagFor(fileName);
     const compiled = load(core).compileModule(source, fileName, {
       strict,
       customTags,
+      defaultTag,
       warnings,
       typeCheck: true,
       targets,
@@ -409,6 +412,7 @@ export function createMxLanguagePlugin(
           // compile already reported, so they are not reported again.
           [],
           targets,
+          defaultTag,
         );
     return {
       generated,
@@ -479,6 +483,7 @@ export function createHtmlMappings(
   customTags?: Record<string, CustomTag>,
   warnings?: MxWarning[],
   targets: TargetLookup = builtinLookup(),
+  defaultTag?: string,
 ): CodeMapping[] {
   const require = createRequire(import.meta.url);
   const compiler = require("@marko/compiler") as {
@@ -509,6 +514,7 @@ export function createHtmlMappings(
   // This is the second lowering of the same source. It must see the same tag
   // map as compilation or a custom tag can make the entire mapping pass fail.
   ctx.customTags = customTags;
+  if (defaultTag !== undefined) ctx.defaultTag = defaultTag;
   ctx.warnings = warnings;
   const ir = lower(ctx, body);
   const mappedCode = collectMappedCode(ir);

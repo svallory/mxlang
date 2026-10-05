@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import {
+  readTargetDefaultTag,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
@@ -63,8 +64,10 @@ export function createHtmlBunPlugin(
           reportedScanDiagnostics,
           (d) => console.warn(`@mxlang/html: ${d.file}: ${d.message}`),
         );
+        const { value: defaultTag } = readTargetDefaultTag(path, "html");
         const { code } = compile(source, path, {
           customTags: scan.customTags,
+          ...(defaultTag === undefined ? {} : { defaultTag }),
           targets,
         });
         return { contents: code, loader: "ts" };

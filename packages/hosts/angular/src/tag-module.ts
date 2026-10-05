@@ -51,6 +51,8 @@ import { compileSourceWithHint } from "./structural-attr-hint.ts";
 export interface CompileTagModuleOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /** `package.json#mx.angular-template.defaultTag`, already validated (decision 145). */
+  defaultTag?: string;
   /** Collects positioned warnings; unset, they print to `console.warn`. */
   warnings?: MxWarning[];
   /**
@@ -947,6 +949,7 @@ export function compileTagModule(
 
   const result = compileSourceWithHint(source, filename, angularDeclarations, {
     customTags: options.customTags,
+    defaultTag: options.defaultTag,
     targets: options.targets ?? angularOwnTargets,
     warnings,
     emitIr: (ir: Ir, ctx: Ctx) => {

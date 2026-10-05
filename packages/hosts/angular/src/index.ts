@@ -84,6 +84,8 @@ export {
 export interface CompileOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
+  /** `package.json#mx.angular-template.defaultTag`, already validated (decision 145). */
+  defaultTag?: string;
   /**
    * Collects positioned warnings — constructs that compile while diverging
    * from an exact Angular equivalent, or dropping something the author wrote.
@@ -150,6 +152,7 @@ export function compile(
   const mappings: AngularMapping[] = [];
   const result = compileSourceWithHint(source, filename, angularDeclarations, {
     customTags: options.customTags,
+    defaultTag: options.defaultTag,
     targets: options.targets ?? angularOwnTargets,
     warnings,
     emitIr: (ir, ctx) => {
