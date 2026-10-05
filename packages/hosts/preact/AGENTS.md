@@ -135,4 +135,12 @@ Hono region kinds are meant to be the same thin wrapper. Facts before editing:
   reactive-tag errors name only the hook in the surrounding component.
 - `src/callee-reader.ts` (`readJsxCalleeInput`) is the JSX hosts' one callee
   reader and this package's only `@mxlang/parser` import; keep it there.
+  Core finds it through the compile's lookup (`readersFor` in
+  `core/src/callee-input.ts`: registered readers, then the lookup's file
+  kinds), so a direct region compile under the host's own lookup reads
+  `.<segment>.mx` callees with nothing registered at import.
+- Lifted `<define>`s share one arrow, so a repeated name is Marko's
+  `Duplicate declaration "Row"` at the second name. Region-only refusals name
+  the file kind; core's "not supported in …" texts use `Ctx.unsupportedIn`,
+  which the engine sets (unset keeps "a standalone template").
 
