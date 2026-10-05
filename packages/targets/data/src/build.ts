@@ -53,8 +53,8 @@ import type {
 
 export interface BuildOptions {
   structural: "pass" | "reject";
-  /** Effective `imports`: `structural` unless the caller said otherwise. */
-  imports: "pass" | "reject";
+  /** Absent: the `structural` value decides `import`s too. */
+  imports?: "pass" | "reject";
   /**
    * With `"reject"`, a tag whose name is not in `declaredTags` is an error.
    * `declaredTags` is the key set of `customTags`.
@@ -821,7 +821,7 @@ function firstStructural(
   for (const stmt of stmts) {
     // `imports` decides an `import` on its own; the rest follow `structural`.
     if (stmt.kind === "import") {
-      if (options.imports !== "reject") continue;
+      if ((options.imports ?? options.structural) !== "reject") continue;
     } else if (options.structural !== "reject") {
       continue;
     }
