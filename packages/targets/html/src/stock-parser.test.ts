@@ -142,4 +142,22 @@ describe("`:name` after an attribute value on a stock htmljs-parser", () => {
     expect(compileWith("<input.big:email/>", true).ok).toBe(true);
     expect(compileWith("<input :email/>", true).ok).toBe(true);
   });
+
+  it.each([
+    ["the patched parser", false],
+    ["a stock parser", true],
+  ])("sugar after a default value is one MX error on %s", (_name, stock) => {
+    const result = compileWith("<if=input.x :b>y</if>", stock);
+    expect(result.ok).toBeUndefined();
+    expect(result.name).toBe("TranslateError");
+    expect(result.message).toContain("`:b` right after a default value");
+    expect(result.message).not.toContain("patched htmljs-parser");
+    expect(result.line).toBe(1);
+    expect(result.column).toBe(12);
+  });
+
+  it("`<const/x=a .b/>` stays member access on both", () => {
+    expect(compileWith("<const/x=input.a .b/>", true).ok).toBe(true);
+    expect(compileWith("<const/x=input.a .b/>", false).ok).toBe(true);
+  });
 });

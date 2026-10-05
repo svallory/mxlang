@@ -44,7 +44,7 @@ import {
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
-import { stockParserError } from "./stock-parser.ts";
+import { stockParserError, sugarAfterDefaultError } from "./stock-parser.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -420,7 +420,8 @@ export function parseFragment(
     const positioned = error as PositionedError;
     // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
     // The fragment's own coordinates are shifted like Marko's error's.
-    const stock = stockParserError(error, source);
+    const stock =
+      sugarAfterDefaultError(error, source) ?? stockParserError(error, source);
     if (stock) {
       const at = { line: stock.line, column: stock.column };
       shiftPosition(at, resolved);

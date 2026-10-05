@@ -20,7 +20,9 @@ import {
   parserSplitsAfterValue,
   resetInstalledParserProbe,
   STOCK_PARSER_MESSAGE,
+  SUGAR_AFTER_DEFAULT_MESSAGE,
   stockParserError,
+  sugarAfterDefaultError,
 } from "./stock-parser.ts";
 
 /**
@@ -126,15 +128,18 @@ describe("the probe", () => {
 });
 
 /** Marko's own failure on a stock parser, from a child process. */
-function markoFailure(source: string): {
+function markoFailure(
+  source: string,
+  stock = true,
+): {
   message: string;
   label: string;
   loc: { line: number; column: number; index: number };
 } {
-  const script = join(work, "run.cjs");
+  const script = join(work, stock ? "run.cjs" : "run-patched.cjs");
   writeFileSync(
     script,
-    `${hook(stockDir)}
+    `${stock ? hook(stockDir) : ""}
 const compiler = require(${JSON.stringify(require.resolve("@marko/compiler"))});
 try {
   compiler.compileSync(${JSON.stringify(source)}, "/tmp/x.mx", {
@@ -165,7 +170,7 @@ describe("a stock parser's failure becomes a positioned MX error", () => {
   it.each(SOURCES)("%j", (source, line, column, token) => {
     const failure = markoFailure(source);
     expect(failure.message).toContain("unexpected character `:`");
-    const error = stockParserError(failure_error(failure), source, false);
+    const error = stockParserError(failureError(failure), source, false);
     expect(error).toBeInstanceOf(TranslateError);
     expect(error?.message).toBe(STOCK_PARSER_MESSAGE(token));
     expect(error?.line).toBe(line);
@@ -183,14 +188,14 @@ describe("a stock parser's failure becomes a positioned MX error", () => {
   it("does nothing when the installed parser splits", () => {
     const failure = markoFailure('<a x="1" :b/>');
     expect(
-      stockParserError(failure_error(failure), '<a x="1" :b/>', true),
+      stockParserError(failureError(failure), '<a x="1" :b/>', true),
     ).toBeUndefined();
   });
 
   it("does nothing when the probe could not run", () => {
     const failure = markoFailure('<a x="1" :b/>');
     expect(
-      stockParserError(failure_error(failure), '<a x="1" :b/>', undefined),
+      stockParserError(failureError(failure), '<a x="1" :b/>', undefined),
     ).toBeUndefined();
   });
 
@@ -198,14 +203,14 @@ describe("a stock parser's failure becomes a positioned MX error", () => {
     const source = "<a x=1 ? y :/>";
     const failure = markoFailure(source);
     expect(
-      stockParserError(failure_error(failure), source, false),
+      stockParserError(failureError(failure), source, false),
     ).toBeUndefined();
     expect(stockParserError(new Error("boom"), "<a/>", false)).toBeUndefined();
     expect(stockParserError("not an error", "<a/>", false)).toBeUndefined();
   });
 
   it("only rewrites a `:` that follows whitespace", () => {
-    const error = failure_error({
+    const error = failureError({
       message: "first expression is followed by the unexpected character `:`",
       label: "first expression is followed by the unexpected character `:`",
       loc: { line: 1, column: 6, index: 6 },
@@ -214,7 +219,7 @@ describe("a stock parser's failure becomes a positioned MX error", () => {
   });
 
   it("finds it inside an aggregate", () => {
-    const inner = failure_error(markoFailure('<a x="1" :b/>'));
+    const inner = failureError(markoFailure('<a x="1" :b/>'));
     const aggregate = Object.assign(new Error("2 errors"), {
       errors: [new Error("other"), inner],
     });
@@ -222,7 +227,7 @@ describe("a stock parser's failure becomes a positioned MX error", () => {
   });
 });
 
-function failure_error(failure: {
+function failureError(failure: {
   message: string;
   label?: string;
   loc?: { line: number; column: number; index?: number };
@@ -232,3 +237,68 @@ function failure_error(failure: {
     loc: failure.loc ? { start: failure.loc } : undefined,
   });
 }
+
+// Decision 151, ruling 2: the default attribute is exempt from the after-value
+// rule on BOTH parsers, so sugar right after its value is one MX error, not
+// the patched-parser advice (which would be wrong: the patch exempts it too).
+describe("sugar right after a default value", () => {
+  const CASES: [string, number, number, string][] = [
+    ["<if=x :b>y</if>", 1, 6, ":b"],
+    ["<let/x=1 :b/>", 1, 9, ":b"],
+    ["if=x :b", 1, 5, ":b"],
+    ["<const/x=a ? b : c :d/>", 1, 19, ":d"],
+  ];
+
+  describe.each([
+    ["the patched parser", false],
+    ["a stock parser", true],
+  ])("%s", (_name, stock) => {
+    it.each(CASES)("%j", (source, line, column, token) => {
+      const failure = markoFailure(source, stock);
+      const error = sugarAfterDefaultError(failureError(failure), source);
+      expect(error).toBeInstanceOf(TranslateError);
+      expect(error?.message).toBe(SUGAR_AFTER_DEFAULT_MESSAGE(token));
+      expect(error?.line).toBe(line);
+      expect(error?.column).toBe(column);
+    });
+
+    it("`<const/x=a .b/>` stays member access, with no error", () => {
+      expect(markoFailure("<const/x=a .b/>", stock)).toEqual({ parsed: true });
+    });
+  });
+
+  it("names the rule and the way out, not the parser", () => {
+    const message = SUGAR_AFTER_DEFAULT_MESSAGE(":b");
+    expect(message).toContain("`:b` right after a default value");
+    expect(message).toContain("decision 151, ruling 2");
+    expect(message).toContain("before the value or on the tag");
+    expect(message).not.toContain("patched");
+  });
+
+  it("the stock-parser advice does not fire for a default attribute", () => {
+    for (const [source] of CASES) {
+      const failure = markoFailure(source, true);
+      expect(
+        stockParserError(failureError(failure), source, false),
+      ).toBeUndefined();
+    }
+  });
+
+  it("still gives the stock advice for a named attribute", () => {
+    const source = '<a x="1" :b/>';
+    expect(
+      sugarAfterDefaultError(failureError(markoFailure(source)), source),
+    ).toBeUndefined();
+    expect(
+      stockParserError(failureError(markoFailure(source)), source, false),
+    ).toBeInstanceOf(TranslateError);
+    // A default attribute first, a named one carrying the sugar: stock advice.
+    const mixed = "<if=x y=1 :b>z</if>";
+    expect(
+      sugarAfterDefaultError(failureError(markoFailure(mixed)), mixed),
+    ).toBeUndefined();
+    expect(
+      stockParserError(failureError(markoFailure(mixed)), mixed, false),
+    ).toBeInstanceOf(TranslateError);
+  });
+});
