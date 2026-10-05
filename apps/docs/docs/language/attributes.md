@@ -198,6 +198,12 @@ and sugar right after such a value is not supported:
 1:12 `:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type="email">`). See "the parser after-value rule" in divergences.md.
 ```
 
+The one exception (decision 146 addendum 5): when the default value is a single
+atom, a `:name` after it is the name sugar, because an atom takes no member
+access or operator and nothing else can follow it. `belongs-to=:Customer
+:customer` sets the default value to the atom `:Customer` and `name` to the atom
+`:customer`; `belongs-to=a :customer` is still the error above.
+
 ### Needs the patched parser (a limit, in plain words)
 
 Sugar after an attribute value needs a small patch to `htmljs-parser`, which this

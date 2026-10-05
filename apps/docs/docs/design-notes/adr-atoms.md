@@ -166,7 +166,7 @@ Everything ADR 146 ships keeps its meaning. This table is the test list for the 
 | sugar followed by `=value` (`#id=x`, `:name=x`, `.class=x`) | the sugar plus `value=x` (addendum 4; unmeasured) |
 | sugar followed by `(params) { body }` | the sugar plus `value=function` (addendum 4; unmeasured) |
 | a bare `:` (no name) | positioned error: `:` needs a name; write `value:` for Marko's attribute |
-| the default-attribute exemption: `<if=a\n .b>`, `<const/x=items\n .filter()/>` | Marko's meaning; sugar right after a default value is not supported |
+| the default-attribute exemption: `<if=a\n .b>`, `<const/x=items\n .filter()/>` | Marko's meaning; sugar right after a default value is not supported, except after a default value that is a single atom (`belongs-to=:Customer :customer`, decision 146 addendum 5) |
 | `class:x`, `style:x`, `value:fn:=x` | Marko's named modifiers, untouched |
 | `x=a :b` | `x=a` then `name="b"`; the after-value split already ships in the 146 parser rule |
 | `x=:b` | the attribute `x` with the atom `:b` as its value (new; was a parse error) |

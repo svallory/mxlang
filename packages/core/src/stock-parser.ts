@@ -265,7 +265,10 @@ function colonFailure(
  * attribute (`<if=x …>`, `<let/x=1 …>`; no name before its `=`)? Decided with
  * the parser `@marko/compiler` resolves: a default attribute has an empty name
  * and is exempt from the after-value rule on every parser, so a `:` inside its
- * value never starts an attribute. `undefined` when the probe cannot run.
+ * value never starts an attribute — except, on the MX parser, ` :name` after a
+ * default value that is one atom (decision 146 addendum 5), which a stock
+ * parser never reaches because it lexes no atoms. `undefined` when the probe
+ * cannot run.
  */
 function offsetInDefaultValue(
   source: string,
