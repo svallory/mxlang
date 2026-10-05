@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
+            "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at 1:4); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
             "range": {
               "start": {
                 "line": 0,
@@ -33,7 +33,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/sugar-value/page.mx",
-            "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
+            "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at 1:4); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
             "offset": 15,
             "category": "error"
           }
@@ -44,7 +44,7 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
+          "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at 1:4); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
           "id": "<root>/sugar-value/page.mx",
           "loc": {
             "file": "<root>/sugar-value/page.mx",
@@ -58,6 +58,6 @@
     }
   },
   "mxTsc": [
-    "<root>/sugar-value/page.mx(1,16): error TS80001: `#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once"
+    "<root>/sugar-value/page.mx(1,16): error TS80001: `#y=1` would set the default attribute (`value`), but the tag already has a default value (at 1:4); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once"
   ]
 }
