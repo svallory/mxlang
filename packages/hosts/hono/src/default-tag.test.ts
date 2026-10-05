@@ -84,3 +84,17 @@ describe("the contracts' defaultTag from the hono path that scans for itself (re
     expect(reports).toEqual([]);
   });
 });
+
+describe("dashed Marko core tags as config on the hono path (review round 3)", () => {
+  it.each(["else-if", "html-script", "html-style", "html-comment"])(
+    "%s is dropped and reported once",
+    (name) => {
+      const reports: Array<{ code: string }> = [];
+      const result = honoDefaultTag(file(name), undefined, (d) =>
+        reports.push(d),
+      );
+      expect(result).toBeUndefined();
+      expect(reports).toHaveLength(1);
+    },
+  );
+});

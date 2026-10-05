@@ -82,4 +82,29 @@ describe("the parent contract's defaultTag on the JSX hosts (decision 145 PR 3)"
       '<sl-card class="a">',
     );
   });
+
+  it("a dashed Marko core tag as a contract value falls through: no error, no raw element (else-if, html-script, html-style, html-comment)", () => {
+    for (const name of [
+      "else-if",
+      "html-script",
+      "html-style",
+      "html-comment",
+    ]) {
+      const bad: Record<string, CustomTag> = {
+        "my-list": {
+          defaultTag: name,
+          transform: (call) => call.content?.children ?? [],
+        },
+      };
+      const tags = bad;
+      const run = (src: string) =>
+        compilePreactMx(src, "/tmp/a.mx", {
+          customTags: tags,
+          defaultTag: "section",
+        }).code;
+      const out = run("<my-list><.a>x</></my-list>");
+      expect(out, name).not.toContain("<" + name);
+      expect(out, name).toContain("<section");
+    }
+  });
 });

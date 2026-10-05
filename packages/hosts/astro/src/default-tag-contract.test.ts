@@ -51,30 +51,47 @@ describe("the parent contract's defaultTag on Astro templates (decision 145 PR 3
     expect(out).toContain("<section");
   });
 
-  it("a dashed custom-element name compiles as a native element, from config and from a contract (sl-card)", () => {
-    const run = (src: string, cfg?: string) =>
-      lowerAstroMx(src, "/tmp/a.astro.mx", {
-        customTags: tags,
-        defaultTag: cfg,
-      }).code;
-    expect(run("---\n---\n<.a>x</>", "sl-card")).toContain(
-      '<sl-card class="a">',
-    );
+  it("a dashed custom-element name: the contract's is refused (it falls through), as astro-html's registration does", () => {
     const dashed: Record<string, CustomTag> = {
       "my-list": {
         defaultTag: "sl-card",
         transform: (call) => call.content?.children ?? [],
       },
     };
-    const out = run("---\n---\n<my-list><.a>x</></my-list>", undefined).length;
-    expect(out).toBeGreaterThan(0);
-    const viaContract = (src: string) =>
-      lowerAstroMx(src, "/tmp/a.astro.mx", {
+    const out = lowerAstroMx(
+      "---\n---\n<my-list><.a>x</></my-list>",
+      "/tmp/a.astro.mx",
+      {
         customTags: dashed,
-        defaultTag: undefined,
-      }).code;
-    expect(viaContract("---\n---\n<my-list><.a>x</></my-list>")).toContain(
-      '<sl-card class="a">',
-    );
+        defaultTag: "section",
+      },
+    ).code;
+    expect(out).not.toContain("<sl-card");
+    expect(out).toContain("<section");
+  });
+
+  it("a dashed Marko core tag as a contract value falls through: no error, no raw element (else-if, html-script, html-style, html-comment)", () => {
+    for (const name of [
+      "else-if",
+      "html-script",
+      "html-style",
+      "html-comment",
+    ]) {
+      const bad: Record<string, CustomTag> = {
+        "my-list": {
+          defaultTag: name,
+          transform: (call) => call.content?.children ?? [],
+        },
+      };
+      const tags = bad;
+      const run = (src: string) =>
+        lowerAstroMx(src, "/tmp/a.astro.mx", {
+          customTags: tags,
+          defaultTag: "section",
+        }).code;
+      const out = run("---\n---\n<my-list><.a>x</></my-list>");
+      expect(out, name).not.toContain("<" + name);
+      expect(out, name).toContain("<section");
+    }
   });
 });

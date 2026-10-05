@@ -927,3 +927,59 @@ describe("one source for the permit flag: the declarations (review round 3)", ()
     expect(elements).toBe("elements:span");
   });
 });
+
+describe("dashed Marko core tags: registration and compile agree on every non-html target (review round 3)", () => {
+  const NAMES = ["else-if", "html-script", "html-style", "html-comment"];
+  const TARGETS = builtinTargets
+    .map((t) => t.name)
+    .filter((n) => n !== "html" && n !== "data");
+
+  it.each(TARGETS)(
+    "%s rejects them as config and as a contract value",
+    (target) => {
+      for (const name of NAMES) {
+        const config = project({
+          mx: { target, [target]: { defaultTag: name } },
+        });
+        expect(
+          resolveTargetPolicyDetailed(config).diagnostics.map((d) => d.code),
+          `${target} config ${name}`,
+        ).toEqual(["invalid-default-tag"]);
+        expect(tagFor(config)).toBe("div");
+        const contract = project(
+          { mx: { target, contracts: "./contracts.ts" } },
+          {
+            "contracts.ts": `export default { list: { defaultTag: "${name}" } };\n`,
+          },
+        );
+        expect(
+          resolveTargetPolicyDetailed(contract).diagnostics.map((d) => d.code),
+          `${target} contract ${name}`,
+        ).toEqual(["invalid-default-tag"]);
+      }
+    },
+  );
+
+  it("sl-card on .astro.mx: registration refuses it, config and contract, as the template's compile does", () => {
+    const config = project(
+      { mx: { target: "html", "astro-html": { defaultTag: "sl-card" } } },
+      {},
+      "a.astro.mx",
+    );
+    expect(
+      resolveTargetPolicyDetailed(config).diagnostics.map((d) => d.code),
+    ).toEqual(["invalid-default-tag"]);
+    const contract = project(
+      { mx: { target: "html", contracts: "./contracts.ts" } },
+      {
+        "contracts.ts": `export default { list: { defaultTag: "sl-card" } };\n`,
+      },
+      "a.astro.mx",
+    );
+    // The page target (html) refuses a dashed name; the template's compile
+    // refuses it too (astro's own test), so the two agree.
+    expect(
+      resolveTargetPolicyDetailed(contract).diagnostics.map((d) => d.code),
+    ).toEqual(["invalid-default-tag"]);
+  });
+});

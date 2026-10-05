@@ -5,6 +5,7 @@ import {
   contractDefaultTagDiagnostics,
 } from "./contract-default-tag.ts";
 import type { Ctx } from "./core.ts";
+import { CORE_TAGLIB } from "./core-taglib.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import {
@@ -187,7 +188,10 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
       customTagsUnknown = true;
     }
   } else customTags = input.customTags;
-  const lookup = buildMarkoLookup(input.dir, input.translator);
+  const lookup = judgingLookup(
+    buildMarkoLookup(input.dir, input.translator),
+    input.dir,
+  );
   const declarations = input.declarations;
   const isElement = elementPredicate(lookup, declarations);
   const isNativeElement = nativeElementPredicate(lookup, declarations);
@@ -198,6 +202,33 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
     ...(input.builtins ? { builtins: input.builtins } : {}),
     isElement,
     isNativeElement,
+  };
+}
+
+let coreTranslator: unknown;
+
+/**
+ * The lookup a default tag is judged in: the compile's or the target's own,
+ * with Marko's core tags (`CORE_TAGLIB`) always behind it. A host whose
+ * translator registers no core taglib (the JSX, Solid, Angular and Astro
+ * hosts) would otherwise not know `html-script` or `else-if` as tags at all and
+ * judge them natively; registration, the compile and every entry that scans
+ * for itself build their view here, so they cannot disagree.
+ */
+export function judgingLookup(
+  primary: { getTag(name: string): object | undefined } | undefined,
+  dir: string,
+): { getTag(name: string): object | undefined } | undefined {
+  coreTranslator ??= {
+    taglibs: [["mx-translator-core", CORE_TAGLIB]],
+    tagDiscoveryDirs: [],
+    translate: {},
+  };
+  const core = buildMarkoLookup(dir, coreTranslator);
+  if (!primary) return core;
+  if (!core) return primary;
+  return {
+    getTag: (name: string) => primary.getTag(name) ?? core.getTag(name),
   };
 }
 

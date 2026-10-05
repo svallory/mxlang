@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTranslator } from "./compile.ts";
+import { CORE_TAGLIB } from "./core-taglib.ts";
 import {
   checkConfiguredDefaultTag,
   defaultTagScopeFor,
@@ -12,12 +13,7 @@ import { lookup as targets } from "./test-targets.ts";
 
 /** A real translator over Marko's html taglibs plus the core tags (await, try, define, effect). */
 const translator = createTranslator({
-  taglibs: [
-    [
-      "mx-translator-core",
-      createRequire(import.meta.url)("../../targets/html/taglib/marko.json"),
-    ],
-  ],
+  taglibs: [["mx-translator-core", CORE_TAGLIB]],
   tagDiscoveryDirs: [],
   targets,
 });

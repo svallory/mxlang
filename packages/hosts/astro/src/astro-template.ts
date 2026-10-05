@@ -211,7 +211,17 @@ export const astroTemplateDeclarations: HostDeclarations = {
   // the host override into `configured`). This host permits the contract rung:
   // it sets no `allowContractDefaultTag: false`.
   resolveDefaultTag: (_node, parents, context) =>
-    contractDefaultTag(parents, context, [DEFAULT_TAG]) ??
+    // The template shares `mx.astro-html.defaultTag` with the page target,
+    // where an unresolved dashed name is a Marko error: a contract's dashed
+    // name is refused here too, so registration and compile agree.
+    contractDefaultTag(
+      parents,
+      {
+        ...context,
+        scope: { ...context.scope, isNativeElement: () => false },
+      },
+      [DEFAULT_TAG],
+    ) ??
     context.configured ??
     DEFAULT_TAG,
   tags: TAGS,

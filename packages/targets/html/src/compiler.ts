@@ -17,6 +17,7 @@
 
 import { readFileSync } from "node:fs";
 import {
+  CORE_TAGLIB,
   type CompileResult,
   type CustomTag,
   compileSource,
@@ -27,7 +28,6 @@ import {
   type TargetLookup,
   type Translator,
 } from "@mxlang/core";
-import markoTaglib from "../taglib/marko.json" with { type: "json" };
 import { emitModuleWithMappings } from "./emitter.ts";
 import {
   escapeFrom,
@@ -50,7 +50,7 @@ import {
  * host advertises.
  */
 const host = {
-  taglibs: [["mx-translator-core", markoTaglib]] as Array<[string, unknown]>,
+  taglibs: [["mx-translator-core", CORE_TAGLIB]] as Array<[string, unknown]>,
   tagDiscoveryDirs: ["tags"],
 };
 

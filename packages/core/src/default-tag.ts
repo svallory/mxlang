@@ -1,17 +1,12 @@
 import { dirname } from "node:path";
-import {
-  buildMarkoLookup,
-  createTranslator,
-  type Translator,
-} from "./compile.ts";
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import type { DefaultTagParent } from "./declarations.ts";
 import {
   elementPredicate,
+  judgingLookup,
   nativeElementPredicate,
 } from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
-import type { TargetLookup } from "./target-descriptor.ts";
 
 /**
  * Marko's parser writes `div` into the name of every tag that has only a
@@ -34,34 +29,9 @@ function isUnnamedTag(node: Node): boolean {
 
 const resolved = new WeakSet<Node>();
 
-const fallbackTranslators = new WeakMap<TargetLookup, Translator>();
-
-/**
- * The lookup a default tag is judged in: the compile's own, or, for a host
- * that compiles without one (Solid, Astro templates), Marko's own element
- * taglibs, which a translator with no taglibs of its own still registers.
- * Elements and their parse shape are known; core and translator tags are not.
- */
-function lookupOf(ctx: Ctx): Ctx["lookup"] {
-  if (ctx.lookup) return ctx.lookup;
-  let translator = fallbackTranslators.get(ctx.targets);
-  if (!translator) {
-    translator = createTranslator({
-      taglibs: [],
-      tagDiscoveryDirs: [],
-      targets: ctx.targets,
-    });
-    fallbackTranslators.set(ctx.targets, translator);
-  }
-  return buildMarkoLookup(
-    dirname(ctx.filename),
-    translator,
-  ) as unknown as Ctx["lookup"];
-}
-
 /** The scope this compile can judge a default tag in; a target adds its built-ins. */
 function scopeOf(ctx: Ctx): DefaultTagScope {
-  const lookup = lookupOf(ctx);
+  const lookup = judgingLookup(ctx.lookup, dirname(ctx.filename));
   return {
     ...(ctx.customTags ? { customTags: ctx.customTags } : {}),
     ...(lookup ? { lookup } : {}),

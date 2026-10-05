@@ -47,4 +47,20 @@ describe("the parent contract's defaultTag on react (decision 145 PR 3)", () => 
       '<sl-card className="a">',
     );
   });
+
+  it("a dashed Marko core tag as a contract value falls through: no error, no raw element", () => {
+    for (const name of [
+      "else-if",
+      "html-script",
+      "html-style",
+      "html-comment",
+    ]) {
+      const badTags: Record<string, CustomTag> = {
+        "my-list": { defaultTag: name, transform: pass as never },
+      };
+      const out = run("<my-list><.a>x</></my-list>", badTags);
+      expect(out, name).not.toContain("<" + name);
+      expect(out, name).toContain("<section");
+    }
+  });
 });

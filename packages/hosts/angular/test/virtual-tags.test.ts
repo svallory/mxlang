@@ -287,3 +287,24 @@ describe("the contracts' defaultTag from the Angular paths that scan for themsel
     );
   });
 });
+
+describe("dashed Marko core tags as config on the Angular paths (review round 3)", () => {
+  it.each(["else-if", "html-script", "html-style", "html-comment"])(
+    "%s is dropped, reported once, and the built-in answers",
+    (name) => {
+      const { dir, put } = project({
+        mx: { host: "angular", "angular-template": { defaultTag: name } },
+      });
+      const tag = put("tags/my-card.mx", "<.x>hi</>");
+      const warnings: core.MxWarning[] = [];
+      const read = createVirtualTagModuleReader(dir, { warnings });
+      expect(read(tag)?.code).toContain('<div class=\\"x\\">');
+      read(tag);
+      expect(
+        warnings.filter((w) =>
+          w.message.includes("invalid `defaultTag` value"),
+        ),
+      ).toHaveLength(1);
+    },
+  );
+});

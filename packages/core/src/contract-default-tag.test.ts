@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildMarkoLookup, createTranslator } from "./compile.ts";
 import { contractDefaultTag } from "./contract-default-tag.ts";
 import { type Ctx, type Node, newCtx, TranslateError } from "./core.ts";
+import { CORE_TAGLIB } from "./core-taglib.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { DefaultTagParent, Policy } from "./declarations.ts";
 import { lower } from "./lower.ts";
@@ -133,12 +134,7 @@ describe("the defaultTag declaration key", () => {
 
 describe("contractDefaultTag: the nearest authored parent's contract", () => {
   const translator = createTranslator({
-    taglibs: [
-      [
-        "mx-translator-core",
-        createRequire(import.meta.url)("../../targets/html/taglib/marko.json"),
-      ],
-    ],
+    taglibs: [["mx-translator-core", CORE_TAGLIB]],
     tagDiscoveryDirs: [],
     targets: lookup,
   });
