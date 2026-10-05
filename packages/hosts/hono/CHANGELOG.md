@@ -2,9 +2,6 @@
 
 - **Fix (html-imported-return-tag-object-object):** an imported `.mx` tag that declares `<return>`, called without `/var`, renders its body and drops the value on this host too (the call now carries `returnsValue`, so the shared emitter unwraps `.output`). Render-locked by `imported-return-render.test.ts`.
 
-
-- **Fix (jsx-textarea-value-content, decision 149):** `<textarea value=x/>` renders the value as escaped content, as Marko 6.3.51 does: `null`/`undefined`/`false`/`true` render nothing, `0` and `""` are kept, a leading newline is doubled for the server, a later `value` beats an earlier spread's, and a spread's `value` yields to a body. An explicit `value` together with body content is the compile error "A textarea cannot have both a value attribute and body content." A runtime-resolved `<${tag} value=…/>` that is a textarea takes `value` as content and rejects `content`. Hono doubles the leading newline always (`hono/jsx` is the string renderer).
-
 - **Fix (jsx-textarea-value-content, decision 149):** `<textarea value=x/>` renders the value as escaped content, as Marko 6.3.51 does: `null`/`undefined`/`false`/`true` render nothing, `0` and `""` are kept, a leading newline is doubled for the server, a later `value` beats an earlier spread's, and a spread's `value` yields to a body. An explicit `value` together with body content is the compile error "A textarea cannot have both a value attribute and body content." A runtime-resolved `<${tag} value=…/>` that is a textarea takes `value` as content and rejects `content`. Hono doubles the leading newline only where no `document` exists (`hono/jsx/dom`'s `render` accepts the emitted nodes and must not double); see divergences.md.
 
 - **Fix (jsx-primitive-attr-parity):** primitive attribute values on native elements render as Marko 6.3.51's html output does, on direct, merged and spread paths: `false`/`null`/`undefined` omit (`data-x=false` no longer prints `"false"`), `true` is a bare attribute, `class`/`style` falsy primitives omit, direct `input.checked` is presence-only, and Hono `style=null` no longer throws. Shared normalization in `@mxlang/preact`, reused by react and hono; component props are unchanged.
@@ -47,7 +44,6 @@
 - **Changed (refactor/target-open-set, decisions 129 and 132):** `compileHonoMx`/`compileHonoFile` accept `options.targets`, defaulting to this package's own descriptor (`honoTargets`).
 
 - **Added (fix-hints-batch, audit item 14):** the unresolved-tag, event-binding, scriptlet and missing-attribute-value hints reach this host through the shared `@mxlang/preact` emitter and `@mxlang/core`.
-
 
 - **Changed (amx-to-astro-mx, decision 134):** the Bun loader's file filter also declines `x.astro.mx`, Astro's template kind, as it already declines `x.solid.mx`.
 
