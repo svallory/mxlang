@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Tests/Docs (name-sugar-tooling, decision 146 PR 3):** the plugin builds its virtual code for a buffer mid-edit on a sugar sigil (`<input :`, `<input #`, `<input .`), and a sugar token maps to the generated `name`/`class`/`id` with its exact source range (documented on the TypeScript page).
+
 ### Fixed: no TS1108 for a top-level return in an `.astro.mx` `---` fence (astro-fence-top-level-return)
 
 A fence `return` is valid Astro, but `convertToTSX` emits the frontmatter at the top level of a TSX module, ahead of the generated component function, so TypeScript reported `1108 A 'return' statement can only be used within a function body` for a page the build accepts. `createAmxLanguagePlugin` now implements a new optional `filterSemanticDiagnostics` on `MxDiagnosticLanguagePlugin`, and the tsserver language-service proxy applies it, so the editor no longer flags a valid fence.

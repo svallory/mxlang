@@ -11,6 +11,16 @@ description: "@mxlang/language-server: diagnostics-only, for what a host's polic
 
 It does exactly one thing: watch `.mx`, `.marko`, and `.solid.mx` documents, compile or parse each one through its host, and publish one diagnostic per positioned error. No completion, no hover, no go-to-definition, no formatting, no semantic tokens — Marko's own language server already provides those features for `.mx`/`.marko`, and this server is meant to run *alongside* it, not replace it. Running two language servers against one file type is an ordinary pattern in both VS Code and Zed (the same way ESLint and TypeScript's own server coexist).
 
+## Name sugar
+
+The [name sugar](/language/attributes/) (`:email`, `#id`, `.class`) needs nothing from
+this server beyond what it already does: an error on it (a second `:` in a tag
+head, a value on the sugar, sugar right after a default value, a dynamic shorthand
+in attribute position, a stock parser that cannot read it) is one diagnostic at the
+exact token. The server offers no completion or hover of its own, so there is no
+sugar hover here; typing a bare `:`, `#` or `.` after whitespace in a tag never
+crashes it.
+
 ## Why it exists
 
 Marko's own language server compiles with a fixed configuration that carries no host policy. A construct like `<let>` is valid Marko syntax, so Marko's server reports nothing for it — even in a project whose host forbids `<let>` under a `strict` policy. This server closes that gap: it knows which host and which policy apply to a given file, and flags what that policy rejects.

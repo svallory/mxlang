@@ -28,6 +28,13 @@ export const el = <button onClick() { setCount(count() + "x") }>x</button>;
 // TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
 ```
 
+## Name sugar
+
+A [name sugar](/language/attributes/) token (`:email`, `.big`, `#main`) maps to the
+generated attribute it stands for (`name`, `class`, `id`) with the token's exact
+source range, so a TypeScript error on that prop is reported on the token you
+wrote.
+
 ## In an editor
 
 Add the plugin to the project's `tsconfig.json`:

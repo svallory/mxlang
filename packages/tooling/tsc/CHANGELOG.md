@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Tests (name-sugar-tooling, decision 146 PR 3):** nine host-dispatch rows for the name sugar (valid sugar on a string and a JSX host, a typed template tag, one row per reachable PR 2 error, and the Mesh data check clean and with an E1 error at the sugar); `sugar-stock-parser.test.ts` pins the stock-parser error at the exact token in the language server, the TS plugin, Vite and `mx-tsc`; `sugar-mappings.test.ts` reads the sugar mappings as text. No code change: PR 2's spans already give every tool the exact range.
+
 - **Fix (default-tag-contracts r3):** the E2 after an invalid contract `defaultTag` carries "(the parent's `defaultTag` `x` is invalid; see the declaration)".
 
 - **Fix (default-tag-contracts r2):** an invalid contract `defaultTag` is one TS80003 at its declaration however many files use the parent.

@@ -256,6 +256,14 @@ No packages ship for these — MX 1.0 being a strict Marko subset (decision
   `prettier-plugin-marko` as devDependencies of this package. No test
   depends on this, so no dependency was added.
 
+  **Warning (decision 151, ruling 4): do not run it on a file that uses the
+  `:name`/`#id`/`.class` sugar after an attribute value.** `prettier-plugin-marko`
+  bundles a stock `htmljs-parser`, which does not know the sugar, and rewrites
+  `<a x=a .b/>` to `<a x=a.b/>`: a class becomes member access, with no error.
+  Tag-adjacent sugar (`<input:email>`) and a sugar in the first attribute
+  position are not affected. Exclude such files from the `overrides` above until
+  the parser change lands upstream or MX ships its own.
+
 - **Zed**: `packages/editors/zed` ships an `MX` language on Marko's own
   unmodified tree-sitter grammar (`path_suffixes = ["mx"]`), queries copied
   verbatim from the official `marko-js/zed` extension. See that package's

@@ -36,6 +36,17 @@ Format `.mx` files with `prettier-plugin-marko`'s Marko parser. Add this to your
 
 This requires `prettier` and `prettier-plugin-marko` to be installed in your project.
 
+:::warning Do not format files that use sugar after a value
+`prettier-plugin-marko` bundles a stock `htmljs-parser`, which does not know the
+[name sugar](/language/attributes/#after-a-value-what-changes) (decision 146).
+On a `.mx` file that writes `:name`, `#id` or `.class` **after an attribute
+value**, it rewrites `<a x=a .b/>` to `<a x=a.b/>`: a class becomes member access,
+with no error. Do not run it on such files (exclude them in your Prettier
+`overrides`) until the parser change lands upstream or MX ships its own.
+Tag-adjacent sugar (`<input:email>`) and a sugar in the first attribute position
+are not affected.
+:::
+
 ## Diagnostics
 
 The extension automatically starts `@mxlang/language-server` for `.mx` and `.solid.mx` files. (Note: The language server does not currently handle `.astro.mx` or `.ng.mx` files.)

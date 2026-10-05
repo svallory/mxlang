@@ -136,6 +136,24 @@ is `<attribute id="title" type="string">` inside `<attributes>` in the tree (a t
 named `attribute` carrying `type="string"` and `id="title"`). The parent's
 `defaultTag` beats `mx.data.defaultTag`, which would apply anywhere else.
 
+**`:name` for Mesh** (decision 146). `:title` sets `name="title"` where `#title` sets
+`id`, which is the attribute a vocabulary of named things wants. With `name` declared
+on `attribute` (`attribute: { attributes: { name: {}, type: {} } }`):
+
+```mx
+<attributes><:title type="string"/></attributes>
+attributes
+  :year type="number"
+```
+
+is `<attribute name="title" type="string">` and `<attribute name="year"
+type="number">` under `<attributes>` (the concise line is the same). An E1 error on
+the sugar names the token and the attribute, positioned at the token:
+
+```text
+doc.mx(2,3): error TS80001: `<attribute>`: unknown attribute `:title` (`name`)
+```
+
 After the name is resolved the tag is ordinary, so the parent's closed `children`
 and the tag's own closed `attributes` apply, positioned at the shorthand. With
 `children: { other: {} }`:

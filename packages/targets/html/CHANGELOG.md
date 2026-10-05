@@ -8,6 +8,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Docs (name-sugar-tooling, decision 151 ruling 4):** the README warns that `prettier-plugin-marko` bundles a stock htmljs-parser and rewrites `<a x=a .b/>` to `<a x=a.b/>`; do not run it on files that use the name sugar after an attribute value.
+
 - **Changed (name-sugar-core, decision 146):** bare `:x` is `name="x"` sugar, as `#x` is `id` and `.x` is `class`, in every position (`<input type="email" :email>`, `<input:email>`). Marko's `value:x` is still written `value:x`. The `attr-value-modifier` oracle fixture now writes it that way. See `divergences.md`.
 
 - **Changed (default-tag-contracts r3):** the Marko core taglib moved to `@mxlang/core` (`CORE_TAGLIB`); no behaviour change.

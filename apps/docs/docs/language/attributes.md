@@ -1,6 +1,6 @@
 ---
 title: "Attributes"
-description: "Attribute forms on elements and components, and how event handlers are named."
+description: "Attribute forms on elements and components: the #id, .class and :name sugars, and how event handlers are named."
 ---
 
 # Attributes
@@ -53,6 +53,140 @@ the tag is an ordinary one, so the parent's `children` list and the tag's own
 `attributes` contract apply to it. The full rules are in
 [The unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag) and
 [ADR 145](/design-notes/adr-default-tag/).
+
+## `:name`, and `#id` and `.class` after an attribute
+
+`:email` sets `name="email"`, the way `#main` sets `id` and `.big` sets `class`.
+A great many tags carry a `name` (`<input>`, `<select>`, `<button>`, and every
+entry of a data vocabulary), and this is the short spelling. It works in three
+positions, in HTML and concise mode alike:
+
+```mx
+<input:email type="email"/>
+<input type="email" :email/>
+<input :email type="email"/>
+<input x="1" #main .big/>
+```
+
+```html
+<input name="email" type="email">
+<input type="email" name="email">
+<input name="email" type="email">
+<input x="1" id="main" class="big">
+```
+
+- **Tag-adjacent** (`<input:email>`): the sugar sits on the tag name.
+- **First attribute** (`<input :email type="email">`).
+- **After any attribute** (`<input type="email" :email>`, `<input x="1" #main .big>`):
+  the attribute lands where you wrote it. In concise mode,
+  `input x="1" #main .big :email` is `<input x="1" id="main" class="big" name="email">`.
+
+`name` is then an ordinary attribute, so a tag's declared `attributes` apply to
+it, and a type or "unknown attribute" error names what you wrote, with what it
+stands for: ``attribute `:email` (`name`) must be number, got string``.
+
+### Composition
+
+Tag-adjacent sugars combine in any order. With no tag name the tag is the
+[unnamed tag](#id-and-class-without-a-tag-name), so `<:email/>` is the target's
+default tag with a name:
+
+```mx
+<a.c:b#d/>
+<a#d:b.c/>
+<:b.c/>
+```
+
+```html
+<a name="b" class="c" id="d"></a>
+<a name="b" class="c" id="d"></a>
+<div name="b" class="c"></div>
+```
+
+A tag takes **one** `:name`. `<a:b.c:d/>` is an error at the second colon (write
+the second as `name="…"`). In attribute position `#x` and `.x` merge exactly as
+they do next to the tag name: `<div.a #m .b/>` and `<div.a.b#m/>` are the same
+tag, and `.x` beside an authored `class` is appended to the shorthand part
+(`<div.c class="x" .d/>` renders `class="c d x"`). A repeated `#x` or `:x`, or one
+beside an explicit `id=` or `name=`, follows the
+[duplicate-attribute rule](/specification/#name-sugar-name-id-and-class-anywhere-on-a-tag):
+the later one wins, with a warning (`<input name="a" :b/>` renders
+`<input name="b">`).
+
+### What stays what Marko does
+
+| You write | You get |
+|---|---|
+| `<a class="hover:x"/>` | `class="hover:x"`, untouched |
+| `<a.hover:x/>` | class `hover` plus `name="x"`: a shorthand class cannot contain `:` |
+| `<div value:foo="y"/>` | Marko's attribute `value:foo`, untouched (the explicit `value:x` spelling) |
+| `<a :x=1/>` | an error: the sugar takes no value |
+| `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a .2xl/>` is `id="1a"`, `class="2xl"`) |
+
+An attribute tag's name (`<@svg:rect>`) is a property key and is not split;
+sugar inside one applies. `<svg:rect>` is the tag `svg` plus `name="rect"`, on
+every target.
+
+### After a value: what changes
+
+A `:name`, `#id` or `.class` after whitespace inside an attribute value starts a
+new attribute. That changes one thing Marko reads differently: `.c` after a space
+is no longer member access.
+
+```mx
+<a x=input.s .c/>
+<a x=input.o.c/>
+<a x=(input.o .c)/>
+```
+
+```html
+<a x="S" class="c"></a>
+<a x="C"></a>
+<a x="C"></a>
+```
+
+Write a member chain without the space, or in parentheses. A multi-line chain in
+an attribute value (`x=foo\n  .bar()`) is split the same way.
+
+**The default attribute is exempt.** A value written right after the tag name
+(`<if=cond>`, `<const/x=items>`, `<let/x=…/>`) keeps Marko's meaning, so a chain
+across lines is still a chain:
+
+```mx
+<const/x=input.items
+  .filter(Boolean)/>
+<p>${x.length}</p>
+```
+
+```html
+<p>2</p>
+```
+
+and sugar right after such a value is not supported:
+
+```text
+<if=input.x :b>y</if>
+1:12 `:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type="email">`). See "the parser after-value rule" in divergences.md.
+```
+
+### Needs the patched parser (a limit, in plain words)
+
+Sugar after an attribute value needs a small patch to `htmljs-parser`, which this
+repository installs. A project that installs the published `@mxlang/*` packages
+gets the stock parser through `@marko/compiler`, and there:
+
+- `<input type="email" :email>` is a positioned MX error that says so and points
+  at the tag-adjacent spelling (`<input:email type="email">`), which works with
+  any parser, as does the first-attribute spelling (`<input :email type="email">`);
+- `x=a.b .c` is **silently** member access. MX cannot see that per use, so on a
+  stock parser keep `.c` out of attribute position after a value.
+
+Do not run `prettier-plugin-marko` on a file that uses sugar after a value: it
+bundles a stock parser and rewrites `<a x=a .b/>` to `<a x=a.b/>`, which turns a
+class into member access without any error. See [formatting](/editors/vscode/#formatting).
+
+The rules, in full: [Name sugar](/specification/#name-sugar-name-id-and-class-anywhere-on-a-tag)
+and [ADR 146](/design-notes/adr-name-sugar/).
 
 ## Event attributes
 
