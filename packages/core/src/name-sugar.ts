@@ -583,8 +583,13 @@ function checkNearSugar(ctx: Ctx, attr: Node): void {
   if (attr.bound) {
     // `:n:=y`, `#x:=y`, `.c:=y`: `:=` is not a value separator for a sugar
     // (only `=` is), and the sugar is not the attribute to bind.
+    // An empty modifier is Marko's own `:=y` (`value:=y`), and a value that
+    // cannot be bound keeps Marko's own binding error.
+    const bindable =
+      attr.value?.type === "Identifier" ||
+      attr.value?.type === "MemberExpression";
     const authoredSugar =
-      ctx.source[start] === ":" ||
+      (ctx.source[start] === ":" && attr.modifier !== "" && bindable) ||
       (/^[#.]/.test(ctx.source[start] ?? "") &&
         !(ctx.source[start] === "#" && ctx.declarations.claimsAttributeHash));
     if (authoredSugar) failAt(ctx, BOUND_ON_SUGAR, start);
