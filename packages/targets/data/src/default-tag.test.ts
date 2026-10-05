@@ -319,3 +319,106 @@ describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", ()
     expect(plain.diagnostics[0]?.message).not.toContain("is invalid");
   });
 });
+
+// Decision 146 (PR 3): `:name` is the sugar Mesh wants. Under `<attributes>`,
+// `<:title/>` is the unnamed tag, resolves through the parent's `defaultTag`
+// (decision 145) and carries `name="title"`, instead of the `id` the `#title`
+// shorthand sets.
+describe("the Mesh case with the `:name` sugar (decision 146 PR 3)", () => {
+  const mesh: Record<string, CustomTag> = {
+    attributes: {
+      defaultTag: "attribute",
+      children: { attribute: { repeatable: true } },
+    },
+    attribute: {
+      attributes: { name: { type: "string" }, type: { type: "string" } },
+    },
+  };
+
+  it('<attributes><:title type="string"/></attributes> is <attribute name="title" type="string">', () => {
+    const { tree, diagnostics } = parseData(
+      '<attributes><:title type="string"/></attributes>',
+      "/m.mx",
+      { customTags: mesh },
+    );
+    expect(diagnostics).toEqual([]);
+    const attributes = tree?.children[0] as {
+      name: string;
+      children: unknown[];
+    };
+    expect(attributes.name).toBe("attributes");
+    const attribute = attributes.children[0] as {
+      name: string;
+      attrs: Array<{ name: string; value?: string }>;
+    };
+    expect(attribute.name).toBe("attribute");
+    expect(
+      Object.fromEntries(attribute.attrs.map((a) => [a.name, a.value])),
+    ).toEqual({ name: "title", type: "string" });
+  });
+
+  it('the concise line `:title type="string"` is the same', () => {
+    const { tree, diagnostics } = parseData(
+      'attributes\n  :title type="string"\n  :year type="number"\n',
+      "/m.mx",
+      { customTags: mesh },
+    );
+    expect(diagnostics).toEqual([]);
+    const attributes = tree?.children[0] as {
+      children: Array<{
+        name: string;
+        attrs: Array<{ name: string; value?: string }>;
+      }>;
+    };
+    expect(
+      attributes.children.map((child) => [
+        child.name,
+        child.attrs.find((a) => a.name === "name")?.value,
+      ]),
+    ).toEqual([
+      ["attribute", "title"],
+      ["attribute", "year"],
+    ]);
+  });
+
+  it("the name sugar is positioned at the token, and so is E1 on it", () => {
+    const tags: Record<string, CustomTag> = {
+      ...mesh,
+      attribute: { attributes: { type: { type: "string" } } },
+    };
+    const { tree, diagnostics } = parseData(
+      "<attributes>\n  <:title/>\n</attributes>",
+      "/m.mx",
+      { customTags: tags },
+    );
+    expect(tree).toBeUndefined();
+    expect(diagnostics).toMatchObject([
+      {
+        severity: "error",
+        message: "`<attribute>`: unknown attribute `:title` (`name`)",
+        line: 2,
+        column: 3,
+      },
+    ]);
+  });
+
+  it("a wrong type on the sugar names the token and the attribute", () => {
+    const tags: Record<string, CustomTag> = {
+      ...mesh,
+      attribute: { attributes: { name: { type: "number" } } },
+    };
+    const { diagnostics } = parseData(
+      "<attributes>\n  <attribute :title/>\n</attributes>",
+      "/m.mx",
+      { customTags: tags },
+    );
+    expect(diagnostics).toMatchObject([
+      {
+        message:
+          "`<attribute>`: attribute `:title` (`name`) must be number, got string",
+        line: 2,
+        column: 13,
+      },
+    ]);
+  });
+});

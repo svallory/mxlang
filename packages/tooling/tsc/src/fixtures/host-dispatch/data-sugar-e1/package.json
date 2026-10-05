@@ -1,0 +1,8 @@
+{
+  "name": "data-sugar-fixture",
+  "private": true,
+  "mx": {
+    "target": "data",
+    "contracts": "./contracts.ts"
+  }
+}

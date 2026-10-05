@@ -167,6 +167,11 @@ const ROWS = [
   "sugar-value",
   "sugar-default-attr",
   "sugar-dynamic-shorthand",
+  // The Mesh case with the sugar: `<:title/>` under `<attributes>` is the
+  // parent's `defaultTag` with `name="title"`; the data check is clean, and an
+  // E1 error on it names the token (`:title` (`name`)) at the sugar.
+  "data-sugar",
+  "data-sugar-e1",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
@@ -512,7 +517,10 @@ describe("dispatch goldens", () => {
         // bad-package-json: the host-policy warning only (see its leg above).
         (block) => row !== "bad-package-json" || block.includes("TS80003"),
       ),
-      ...(row === "data-check" || row === "default-tag-data"
+      ...(row === "data-check" ||
+      row === "default-tag-data" ||
+      row === "data-sugar" ||
+      row === "data-sugar-e1"
         ? { mxTscDataCheck: dataCheckLeg(row) }
         : {}),
     });
